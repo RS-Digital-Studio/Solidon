@@ -87,17 +87,27 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Jeder hervorgehobene Name im Satz (Knopf, Feld, Baustein, Titel) ist in
   jeder Sprache gegen den Katalog geprüft
   (`test_a_name_in_a_step_is_the_one_the_interface_shows`).
-- **Fertig für `main` und der Release-Sitzung gemeldet**, samt den Punkten
-  im Changelog 0.5.1 (Gruppe *Handbuch und Website*, dazu unter *Bedienung
-  und System* das Auswahlfenster ohne Auswahl). Den Merge setzt die
-  Release-Sitzung vor dem Tag, wie jedes Paket
-  (`F:\3D Druck.review-051\UEBERGABE.md`, „Übernahme“); die Meldung liegt im
-  Hauptbaum unter `.claude/.state/handbuch-umbau-2026-09-27/MELDUNG.md`.
-  Beim Release läuft `make_guides.py` in allen Sprachen vor `make_manual.py`.
-- **Als Nächstes:** HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
-  wenn Robert es noch in 0.5.1 will; sonst weiter nach §9. Gearbeitet wird
-  weiter auf diesem Zweig. Was nach der Meldung dazukommt, geht mit einer
-  neuen Meldung nach `main`, und vorher wird `main` hereingeholt.
+- **Teil 1 ist auf `main`:** Die Release-Sitzung hat den gemeldeten Stand
+  `db9c350f6` gemergt (`6a952cf81`), samt den Punkten im Changelog 0.5.1
+  (Gruppe *Handbuch und Website*, dazu unter *Bedienung und System* das
+  Auswahlfenster ohne Auswahl). Die Meldung liegt im Hauptbaum unter
+  `.claude/.state/handbuch-umbau-2026-09-27/MELDUNG.md`; jede weitere kommt
+  dorthin. Beim Release läuft `make_guides.py` in allen Sprachen vor
+  `make_manual.py`.
+- **Alles Offene kommt in 0.5.1** (Robert, 27.09.2026 abends: „alle punkte
+  davon sollen noch in 0.5.1“): HB-5, HB-7, der Rest von HB-8, HB-9, der
+  Rest von HB-10, HB-11 und HB-12. **Der Tag v0.5.1 wartet auf die Meldung
+  „Handbuch fertig“** an die Release-Sitzung; so steht es auch in ihrer
+  Übergabe (`F:\3D Druck.review-051\UEBERGABE.md`, „JETZT“).
+- **Grundlage dafür gebaut:** Verweise zwischen Seiten,
+  `[Text](manual:schlüssel)` (`markup.MANUAL_LINK`). Das Fenster schlägt die
+  Seite auf, Website und PDF springen zum Anker, Text und Suche behalten nur
+  den Text; `test_manual` prüft, dass jeder Verweis in jeder Sprache auf eine
+  Seite führt und keine Übersetzung einen verliert.
+- **Als Nächstes, in einer neuen Sitzung (Robert):** der Plan in §12. Zuerst
+  `main` hereinholen, dann die Arbeitsbäume der Stränge B und C anlegen und
+  ihre Agenten mit den Aufträgen aus §12.2 und §12.3 starten, danach Strang A
+  selbst.
 
 ## §1 Befund
 
@@ -499,3 +509,131 @@ Nachweis.
 - Feldabnahme: Ein Kunde ohne CAD-Kenntnisse geht *Das erste eigene Teil*
   ohne Hilfe durch. Der Interessent aus dem Anlass ist dafür der natürliche
   erste Leser.
+
+## §12 Plan bis 0.5.1
+
+Robert, 27.09.2026 abends: „alle punkte davon sollen noch in 0.5.1“ — alle
+offenen Pakete aus §9. Weil das viel ist, laufen drei Stränge nebeneinander.
+Nur Strang A braucht den echten Bildschirm; zwei Aufnahmen gleichzeitig
+stören sich, deshalb liegen alle Aufnahmen in einem Strang.
+
+| Strang | Pakete | Arbeitsbaum, Zweig | Wer |
+|---|---|---|---|
+| A | HB-5, HB-7, HB-8, HB-12 | `F:\3D Druck.handbuch`, `handbuch-umbau` | die Handbuch-Sitzung selbst |
+| B | HB-11, dann HB-9 | `F:\3D Druck.handbuch-texte`, `handbuch-texte` | Agent `oberflaechentexte` |
+| C | Rest von HB-10 | `F:\3D Druck.handbuch-pdf`, `handbuch-pdf` | allgemeiner Agent |
+
+**Anlegen,** nachdem `main` im Zweig ist:
+`git worktree add -b handbuch-texte "F:/3D Druck.handbuch-texte" handbuch-umbau`,
+ebenso `handbuch-pdf`. Jeder Agent bekommt seinen Auftrag aus §12.2 oder
+§12.3 wörtlich und legt seinen Bericht als Datei ab.
+
+**Zusammenführen:** B und C per Merge in `handbuch-umbau`, die Kataloge
+schlüsselweise vereinigt; dann das Tor, dann eine Meldung an die
+Release-Sitzung wie die erste (Endcommit, Tor, Changelog-Sätze in sechs
+Sprachen, was beim Release zu tun ist). Die letzte Meldung heißt
+ausdrücklich „Handbuch fertig“.
+
+**Regeln für alle Stränge:** Tor vor jedem Commit, keine Fenstertests und
+keine Erzeuger außer im Wegwerf-Arbeitsbaum, erzeugte Dateien nie
+einchecken, kein Revert, kein Rebase. Jeder neue Oberflächentext in allen
+sechs Sprachen.
+
+### §12.1 Strang A — Reihenfolge und Entwurf
+
+1. **HB-5.** „Wo fange ich an?“ ersetzt die Seite `start` („Die ersten
+   fünfzehn Minuten“) als erste Seite: wenige Sätze, dann Verweise auf die
+   Anleitungen der Ersten Schritte und auf die Teile. Was die alte Seite
+   allein weiß, wandert in eine Anleitung oder bleibt kurz. Der
+   Handbuchknopf des Startbildschirms öffnet sie; Knopftext und Seitentitel
+   hält `test_the_start_screen_button_opens_the_chapter_it_names`
+   zusammen. Das Handbuchfenster zeigt je Teil eine Gruppenzeile, die sich
+   nicht wählen lässt; bei einer Suche bleibt die Rangliste ohne Gruppen.
+   Das Hilfe-Menü beschreibt das Handbuch als Lernweg statt als
+   „Jede Operation mit ihren Werten“.
+2. **HB-7.** F1 im Operationsdialog öffnet die Anleitung, die diese
+   Operation lehrt, sonst ihren Eintrag in der Referenz an der Fundstelle;
+   F1 im Hauptfenster öffnet „Wo fange ich an?“. Welche Anleitung eine
+   Operation lehrt, steht als Feld an `Guide` und wird nicht aus den
+   Markierungen geraten.
+3. **HB-8.** *Ein Teil, das nicht auf das Bett passt* (Erste Schritte) und
+   die Aufgaben aus §4: verschieben und drehen, ein Maß nachträglich ändern,
+   einen Schritt zurücknehmen oder ändern, ein Gewinde in eine Bohrung,
+   Kanten abrunden oder anfasen, beschriften, zeichnen und herausziehen,
+   zweifarbig drucken, reparieren. Baustein einsetzen, aushöhlen mit Deckel,
+   bohren und an den Slicer übergeben zeigen die vorhandenen Anleitungen;
+   die Gruppe *Anleitungen* verweist auf sie, statt sie zu doppeln. Je
+   Anleitung erst aufnehmen und ansehen, dann Sätze und Übersetzungen
+   festschreiben (§5.3); drei bis sechs Schritte je Aufgabe, damit das
+   Bildbudget hält. Die Namen im Satz prüft `test_guides` in jeder Sprache.
+   Jede neue Anleitung kommt als Verweis in „Wo fange ich an?“ oder in die
+   Gruppe *Anleitungen*.
+4. **HB-12.** Das Video-Tutorial aus denselben Geschichten, wenn HB-8 steht.
+
+### §12.2 Strang B — Auftrag (HB-11, HB-9)
+
+Arbeitsbaum `F:\3D Druck.handbuch-texte`, nur dort. Lesen: §1 bis §4, §6,
+§8, §10 dieses Konzepts, `nachweise-handbuch-2026-09/leserblick.md` und den
+Teil über die geschriebenen Seiten in `findbarkeit.md`; `AGENTS.md`,
+`CLAUDE.md`, die Karte `app/core/CLAUDE.md`, die Regeln `kern.md`,
+`uebersetzung.md` (Glossare verbindlich), `oberflaeche.md` („Texte, die der
+Kunde liest“), `tests.md`; Roberts Vorgaben zum Ton in der Erinnerung
+`kundentexte-und-uebersetzung` (kurz, nicht nach KI, „Version“, neu
+übersetzen statt flicken, Genus).
+
+1. **HB-11:** Ein Test in `tests/test_manual.py`, je Sprache: Jeder Weg
+   *A → B → …* in einer geschriebenen Seite besteht aus Texten, die die
+   Oberfläche in dieser Sprache zeigt; endet er auf einer Operation, ist er
+   ihr Menüweg (`registry.surfaces.menu_path`). Vorbilder in
+   `tests/test_guides.py`. Gegenprobe mit einem umbenannten Menüteil und
+   einem falschen Weg; was der Test heute findet, in allen Sprachen beheben.
+2. **HB-9:** Alle Seiten aus `manual.INTRODUCTION` außer `start` und
+   `glossary`. Die deutsche Wortzahl (Kurzfassung und Text, gezählt wie in
+   §1.1) sinkt insgesamt um mindestens ein Drittel, ohne Wissen zu
+   verlieren: Wegfallen dürfen Wiederholung, Entwicklersicht und Klickwege,
+   die eine Anleitung zeigt — dann steht dort ein Verweis
+   `[Titel](manual:schlüssel)`, nur auf Schlüssel, die es im Zweig gibt.
+   Den Widerspruch zwischen `remote` und `remote-tools` in der Seite
+   `remote` auflösen; `remote-tools` bleibt, wo es ist. Jede gekürzte Seite
+   in allen fünf Katalogen neu übersetzen, als ganze Seite; alte Schlüssel
+   hinaus (`python -m app.i18n.extract`). `test_manual_search` bleibt grün;
+   fällt ein Kundenwort aus dem Text, gehört es zurück oder in
+   `CUSTOMER_WORDS`. Kein Test wird gelockert, der eine Aussage prüft.
+   Nachweis `nachweise-handbuch-2026-09/kuerzung.md` (Wörter je Seite vorher
+   und nachher, was wohin wanderte), HB-9 und HB-11 in §9 fortschreiben.
+3. Nicht anfassen: `guides.py`, `make_guides.py`, `make_manual.py`,
+   `app/ui/`, `manual.OUTLINE`, die Seite `start`, die Anleitungen.
+
+### §12.3 Strang C — Auftrag (Rest von HB-10)
+
+Arbeitsbaum `F:\3D Druck.handbuch-pdf`, nur dort. Lesen: §4, §5.4, §9
+(HB-10) und §10 dieses Konzepts, `AGENTS.md`, `CLAUDE.md`, die Karte
+`tools/CLAUDE.md`, die Regeln `auslieferung.md` und `tests.md`.
+
+1. **Gliederung:** Das Inhaltsverzeichnis von Website und PDF
+   (`tools/make_manual.py`, `contents`) zeigt die fünf Teile aus
+   `manual.pages()` (`Page.part`, Titel aus `manual.PART_TITLES`), und vor
+   dem ersten Kapitel eines Teils steht im Text eine Teilüberschrift. Die
+   erzeugten Kapitel bleiben am Ende; ob sie mit Wörterbuch und Wissensseiten
+   unter „Nachschlagen“ zusammengehören, begründet entscheiden. Keine zweite
+   Liste der Zuordnung. Anker und Verzeichnis dürfen nicht brechen
+   (`test_the_contents_lead_to_the_chapter_they_name`,
+   `test_no_manual_page_promises_a_chapter_it_cannot_reach`).
+2. **Lesezeichen im PDF:** Teile oben, Kapitel darunter, jedes springt auf
+   seine erste Seite; gebaut aus den benannten Zielen, die
+   `_chapter_of_each_page` schon liest, im selben Schritt wie `_stamp`.
+3. **Leichteres PDF:** Den Druck die Bildschirmfotos als JPEG einbetten
+   lassen, die Website behält ihre Dateien. Qualität so, dass die Schrift im
+   Bild scharf bleibt, am gerenderten PDF angesehen. Vorher und nachher
+   messen: Größe je Sprache und Zahl der eingebetteten Bilder; die Zahl darf
+   nicht sinken.
+4. **Seitenverweise** springen im Ergebnis zum Anker (gebaut, im
+   Erzeugnis mit einem Probeverweis nachsehen, der nicht eingecheckt wird).
+
+Prüfen: Kerntests für alles, was ohne Erzeuger prüfbar ist, Tests mit
+Marker `rendered` für die erzeugten Dateien. Den Erzeuger nur in einem
+Wegwerf-Arbeitsbaum fahren, mit Schrittbildern aus einem Probelauf von
+`make_guides.py` (`--ziel`) in allen sechs Sprachordnern; danach dort
+`-m "rendered and not windowed"` von `test_manual` und `test_guides`,
+den Wegwerfbaum wieder entfernen. Nicht anfassen: die Texte der Seiten,
+`manual.OUTLINE`, `app/ui/`, Anleitungen.
