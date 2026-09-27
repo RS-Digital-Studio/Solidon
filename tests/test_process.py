@@ -472,3 +472,47 @@ def test_the_posix_teardown_waits_for_the_group_after_the_parent(
     process.terminate_process_tree(Parent(), grace_seconds=0.5)  # type: ignore[arg-type]
 
     assert finished == [4711]
+
+
+def test_a_process_that_stays_after_its_result_is_ended(tmp_path: Path) -> None:
+    """Bambu Studio schreibt Druckdatei und ``result.json`` und endet manchmal
+    nicht mehr (Gesamtprüfung, 27.09.2026). Sagt ``finished`` ja, wartet der
+    Lauf nur noch ``linger`` Sekunden und beendet den Prozess — statt bis zum
+    Zeitlimit, nach dem der Kunde eine Absage über einer fertigen Datei las."""
+    result = tmp_path / "result.json"
+    ended = tmp_path / "von-selbst-fertig"
+    script = (
+        "import time; from pathlib import Path; "
+        f"Path({str(result)!r}).write_text('{{}}'); time.sleep(20); "
+        f"Path({str(ended)!r}).touch()"
+    )
+    started = time.monotonic()
+
+    process.run_limited(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        timeout=25.0,
+        output_limit=4096,
+        finished=result.exists,
+        linger=0.3,
+    )
+
+    assert time.monotonic() - started < 15.0, "nicht bis zum Zeitlimit"
+    assert result.exists()
+    time.sleep(0.5)
+    assert not ended.exists(), "beendet, nicht von selbst fertig geworden"
+
+
+def test_a_process_that_ends_on_its_own_keeps_its_return_code(tmp_path: Path) -> None:
+    """Wer von selbst endet, bleibt unberührt — auch mit ``finished``."""
+    answer = process.run_limited(
+        [sys.executable, "-c", "print('fertig')"],
+        cwd=tmp_path,
+        timeout=10.0,
+        output_limit=4096,
+        finished=lambda: True,
+        linger=5.0,
+    )
+
+    assert answer.returncode == 0
+    assert answer.stdout.decode("utf-8").strip() == "fertig"

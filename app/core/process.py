@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import codecs
 import ctypes
+import logging
 import os
 import queue
 import signal
@@ -124,6 +125,10 @@ _SANDBOX_BRIDGE_NAMES: Final = (
 DEFAULT_OUTPUT_LIMIT: Final = 1024 * 1024
 PROCESS_POLL_SECONDS: Final = 0.05
 PROCESS_STOP_SECONDS: Final = 0.5
+#: Wie lange ein Prozess nach seinem gemeldeten Ergebnis noch enden darf
+#: (:func:`run_limited`, ``finished``). Bambu Studio endet gemessen eine
+#: Zehntelsekunde nach seiner ``result.json`` — oder gar nicht mehr.
+FINISHED_LINGER_SECONDS: Final = 10.0
 _READ_SIZE: Final = 64 * 1024
 _WINDOWS_CREATE_SUSPENDED: Final = 0x00000004
 #: Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen. Zur
@@ -670,12 +675,26 @@ def run_limited(
     timeout: float,
     output_limit: int = DEFAULT_OUTPUT_LIMIT,
     cancelled: Callable[[], bool] | None = None,
+    finished: Callable[[], bool] | None = None,
+    linger: float = FINISHED_LINGER_SECONDS,
 ) -> subprocess.CompletedProcess[bytes]:
-    """Führt einen Befehl mit Zeit-, Ausgabe- und Prozessbaumgrenze aus."""
+    """Führt einen Befehl mit Zeit-, Ausgabe- und Prozessbaumgrenze aus.
+
+    ``finished`` sagt, ob der Prozess sein Ergebnis vollständig abgelegt hat.
+    Von da an wartet der Lauf höchstens ``linger`` Sekunden auf das Ende und
+    beendet den Prozessbaum dann selbst — das Ergebnis gilt, der Rückgabewert
+    ist der des beendeten Prozesses. Bambu Studio schreibt Druckdatei und
+    ``result.json`` und endet manchmal nicht mehr: gemessen an drei von rund
+    hundert Läufen, auch auf gesunden Kernen (Gesamtprüfung, 27.09.2026). Ohne
+    diese Frage wartete der Kunde bis zum Zeitlimit und bekam eine Absage über
+    einer fertigen Druckdatei.
+    """
     if timeout <= 0:
         raise ValueError("timeout")
     if output_limit <= 0:
         raise ValueError("output_limit")
+    if linger < 0:
+        raise ValueError("linger")
 
     launched = list(command)
     process = subprocess.Popen(
@@ -722,6 +741,8 @@ def run_limited(
 
     deadline = time.monotonic() + timeout
     problem: BaseException | None = None
+    done_at: float | None = None
+    lingered = False
     cancellation = _CancellationWatcher(cancelled)
     cancellation.start()
     while process.poll() is None:
@@ -734,14 +755,28 @@ def run_limited(
         if exceeded.is_set():
             problem = ProcessOutputLimitExceeded(launched, output_limit)
             break
-        remaining = deadline - time.monotonic()
+        now = time.monotonic()
+        if done_at is None and finished is not None and finished():
+            done_at = now
+        if done_at is not None and now - done_at >= linger:
+            lingered = True
+            break
+        remaining = deadline - now
         if remaining <= 0:
             problem = subprocess.TimeoutExpired(launched, timeout)
             break
         time.sleep(min(PROCESS_POLL_SECONDS, remaining))
 
     cancellation.stop()
-    if problem is not None or exceeded.is_set():
+    if problem is not None or exceeded.is_set() or lingered:
+        if lingered:
+            # Ohne ``app.core.log``: Dieses Modul hängt an keinem anderen der
+            # Anwendung; der Eintrag erreicht das Protokoll über die Wurzel.
+            logging.getLogger(__name__).warning(
+                "%s did not end %.0f s after its result; stopping it",
+                Path(launched[0]).name,
+                linger,
+            )
         terminate_process_tree(process)
     else:
         _stop_remaining_descendants(process)
