@@ -444,9 +444,9 @@ ORCA: Final[tuple[Row, ...]] = (
     ("support.z_gap", "support_top_z_distance", _number),
     ("support.xy_gap", "support_object_xy_distance", _number),
     ("support.interface_layers", "support_interface_top_layers", _integer),
-    # ``auto`` ist Orcas ``auto_brim``: Es entscheidet aus Material, Geometrie
-    # und Tempo selbst und ist die Vorgabe jedes Herstellerprofils. Bis zum
-    # 27.09.2026 kannte Solidon es nicht und schrieb ``no_brim`` darüber.
+    # ``auto`` ist Orcas ``auto_brim`` (``advise.AUTO_BRIM_FLAVOURS``) und die
+    # Vorgabe jedes Herstellerprofils. Bis zum 27.09.2026 kannte Solidon es
+    # nicht und schrieb ``no_brim`` darüber.
     (
         "adhesion.kind",
         "brim_type",

@@ -684,7 +684,14 @@ def _adhesion_for(
     bekam Cura einen Skirt mit null Linien und PrusaSlicer an jedem Teil einen
     Brim (Review Stufe A+B, F5).
     """
-    if settings.adhesion.kind != "auto" or flavour not in ("prusa", "cura"):
+    from app.core.slice import advise
+
+    # „other“ übersetzt Solidon nicht; dort bleibt die Art, wie sie ist.
+    if (
+        settings.adhesion.kind != "auto"
+        or flavour in advise.AUTO_BRIM_FLAVOURS
+        or flavour == "other"
+    ):
         return settings
     table = print_settings.resolve(profile, settings.quality).adhesion
     measures = {

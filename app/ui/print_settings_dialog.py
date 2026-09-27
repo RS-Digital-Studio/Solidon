@@ -1953,6 +1953,7 @@ class _AdviceWorker(Worker):
                     bounds=mesh.bounds,
                     fit_kinds=self.fit_kinds,
                     connectors=self.connectors,
+                    flavour=self.flavour,
                 )
                 common.append(
                     (
@@ -2070,6 +2071,7 @@ class _AdviceWorker(Worker):
                 self.slot_profiles,
                 result=results[body.id][2],
                 fit_kinds=self.part_fits.get(body.id, ()),
+                flavour=self.flavour,
             ):
                 if entry.path in candidates:
                     wanted.setdefault(entry.path, []).append(str(body.name))

@@ -481,6 +481,49 @@ def test_a_tall_slim_part_asks_for_a_brim() -> None:
     assert "adhesion.kind" in _paths(entries)
 
 
+@pytest.mark.parametrize(("flavour", "asks"), [("orca", False), ("prusa", True), ("cura", True)])
+def test_the_orca_auto_brim_already_holds_a_part(flavour: str, asks: bool) -> None:
+    """Orcas Auto-Brim rechnet aus Höhe, Grundfläche und Tempo selbst und hielt
+    mehr als Solidons Brim fester Breite: 1,9 statt 0,9 m Randbahn an den
+    200 mm hohen Schäften der Minigolf-Platte, 0,93 statt 0,40 m an der
+    Waschschüssel (ElegooSlicer, 27.09.2026). Über ihm schweigen die drei
+    Brim-Regeln — kleine Standfläche, kleine Füße, hoch und schmal. PrusaSlicer
+    und Cura haben keinen; dort heißt „automatisch“ die Art aus der Tabelle,
+    und die Regeln bleiben."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    slim = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 200.0))
+    cases = (
+        advise.advise(settings, profile, _layers(80.0, 80.0, 80.0), flavour=flavour),
+        advise.advise(
+            settings, profile, _standing_on(242.8, 198.6, 2.8, *[108.1] * 9), flavour=flavour
+        ),
+        advise.advise(settings, profile, _layers(*[600.0] * 6), bounds=slim, flavour=flavour),
+        advise.for_part(settings, slim, 400.0, flavour=flavour),
+        advise.for_part(
+            settings,
+            BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0)),
+            60.0,
+            flavour=flavour,
+        ),
+    )
+
+    assert [("adhesion.kind" in _paths(entries)) for entries in cases] == [asks] * len(cases)
+
+
+def test_without_a_known_slicer_automatic_adhesion_stays_unanchored() -> None:
+    """Ohne Slicer ist offen, ob „automatisch“ etwas rechnet — dann bleibt es
+    bei der Vorsicht, und ein Skirt hält auch unter Orca nichts fest."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    table = print_settings.resolve(profile)
+    automatic = print_settings.with_path(table, "adhesion.kind", "auto")
+    skirt = print_settings.with_path(table, "adhesion.kind", "skirt")
+    slim = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 200.0))
+
+    assert "adhesion.kind" in _paths(advise.for_part(automatic, slim, 400.0))
+    assert "adhesion.kind" in _paths(advise.for_part(skirt, slim, 400.0, flavour="orca"))
+
+
 def test_warping_material_on_an_open_printer_is_a_finding_not_a_change() -> None:
     """Die Materialtabelle setzt für ABS schon Brim und wenig Lüfter — es gibt
     nichts zu ändern. Gesagt werden muss es trotzdem."""

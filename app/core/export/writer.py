@@ -1141,6 +1141,7 @@ def part_advice(
     *,
     result: SliceResult | None,
     fit_kinds: Sequence[str],
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1155,7 +1156,8 @@ def part_advice(
     Die Grundfläche kommt aus einem Schnitt knapp über dem Boden, nicht aus dem
     Hüllquader: Ein Teil auf drei schmalen Armen hat eine große Grundfläche und
     kaum Halt. Passungen (``fit_kinds``) und Zapfen zählen nur, wenn dieses
-    Teil sie trägt.
+    Teil sie trägt. ``flavour`` sagt, ob der Slicer unter „automatisch“ seinen
+    Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`).
     """
     # Erst hier: ``handover`` zieht die G-Code-Auswertung mit, und ein Export
     # soll nicht davon abhängen, dass ein Slicer im Spiel ist.
@@ -1178,6 +1180,7 @@ def part_advice(
                 result=result,
                 fit_kinds=fit_kinds,
                 connectors=connectors,
+                flavour=flavour,
             ),
         )
         for process in handover.slot_processes(entry, settings, profile, setup, slot_profiles)
@@ -1238,6 +1241,7 @@ def _part_values(
         slot_profiles,
         result=result,
         fit_kinds=fit_kinds_for(document, {entry.id}) if document is not None else (),
+        flavour=flavour,
     )
     applied = [item for item in advice if item.path in split.per_part]
     unavailable = [item for item in advice if item.path in split.unavailable]

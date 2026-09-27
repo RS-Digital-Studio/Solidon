@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import replace
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from app.core.errors import (
     CALIBRATE_MATERIAL,
@@ -60,6 +60,9 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM, is_close
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.export.slicer_keys import SlicerFlavour
 
 _log = get_logger(__name__)
 
@@ -219,6 +222,7 @@ def advise(
     bounds: BoundingBox | None = None,
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -244,7 +248,7 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds)
+        advice += _from_geometry(settings, profile, result, bounds, flavour)
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -640,10 +644,36 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     return advice
 
 
-#: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: der Skirt
-#: berührt es nicht, und der Auto-Brim des Slicers fragt seine eigene Regel,
-#: nicht die Füße und nicht die Höhe, die Solidon misst.
+#: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: Der Skirt
+#: berührt es nicht, und „automatisch“ heißt bei PrusaSlicer und Cura die Art
+#: aus Solidons Tabelle, die das Teil nicht kennt. Wo der Slicer seinen Brim
+#: selbst aus dem Teil rechnet, gilt „automatisch“ als gehalten
+#: (:func:`_unanchored`).
 UNANCHORED: Final = frozenset({"skirt", "auto"})
+
+#: Die Slicerfamilien, deren „automatisch“ den Brim aus dem Teil rechnet: Orcas
+#: ``auto_brim`` aus Höhe, Flächenmomenten der Grundfläche und Tempo, bis 18 mm
+#: breit (OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups``).
+#: PrusaSlicer und CuraEngine kennen keinen; dort heißt „automatisch“ die Art
+#: aus Solidons Tabelle (``handover._adhesion_for`` fragt dieselbe Menge).
+AUTO_BRIM_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"orca"})
+
+
+def _unanchored(settings: PrintSettings, flavour: SlicerFlavour | None) -> bool:
+    """Hält die Haftungsart ein Teil auf wenig Fläche nicht sicher?
+
+    **Über Orcas Auto-Brim nicht** (:data:`AUTO_BRIM_FLAVOURS`): Er
+    rechnet aus Höhe und Grundfläche selbst, und Solidons Brim ersetzte ihn
+    durch die feste Breite des Profils — mit weniger Halt: den 200 mm hohen
+    Schäften der Minigolf-Platte im ElegooSlicer 0,9 statt 1,9 m Randbahn, der
+    Waschschüssel auf zwölf Füßen 0,40 statt 0,93 m. Ohne bekannten Slicer
+    bleibt es bei der Vorsicht, denn dann ist offen, ob „automatisch“ etwas
+    rechnet.
+    """
+    kind = settings.adhesion.kind
+    if kind == "auto" and flavour in AUTO_BRIM_FLAVOURS:
+        return False
+    return kind in UNANCHORED
 
 
 def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]:
@@ -725,6 +755,7 @@ def _from_geometry(
     profile: Profile,
     result: SliceResult,
     bounds: BoundingBox | None,
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -878,9 +909,10 @@ def _from_geometry(
             )
         )
 
-    # **Auch über dem Auto-Brim des Slicers** (Entscheidung J): Er entscheidet
-    # nach seiner Regel, Solidon nach der Geometrie.
-    unanchored = settings.adhesion.kind in UNANCHORED
+    # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
+    # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
+    # und hält mehr als Solidons Brim fester Breite.
+    unanchored = _unanchored(settings, flavour)
     if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and unanchored:
         advice.append(
             _advice(
@@ -1378,6 +1410,7 @@ def for_part(
     result: SliceResult | None = None,
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
@@ -1392,6 +1425,7 @@ def for_part(
     braucht, und die übrigen drucken wie die Platte. Die Haftungsregeln hier
     kommen danach und behalten beim Brim das letzte Wort: Sie kennen die
     Grundfläche aus dem Schnitt, die Regel der Platte nur den Hüllquader.
+    Über Orcas Auto-Brim schweigen sie (:func:`_unanchored`).
     """
     advice: list[SettingAdvice] = []
     if profile is not None:
@@ -1404,10 +1438,11 @@ def for_part(
                 bounds=bounds,
                 fit_kinds=fit_kinds,
                 connectors=connectors,
+                flavour=flavour,
             )
             if entry.path in PART_PATHS
         ]
-    if settings.adhesion.kind in UNANCHORED:
+    if _unanchored(settings, flavour):
         if 0.0 < footprint < SMALL_FOOTPRINT:
             reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
         elif _slender(bounds):
