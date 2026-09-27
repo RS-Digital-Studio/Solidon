@@ -630,3 +630,22 @@ def test_a_quoted_control_is_named_as_the_control_says() -> None:
     assert not wrong, "Knopf anders zitiert, als er heißt:\n" + "\n".join(wrong)
     unused = sorted(set(ZITAT_DARF_ABWEICHEN) - used)
     assert not unused, f"Ausnahmen ohne Treffer — austragen: {unused}"
+
+
+@pytest.mark.parametrize("language", [entry for entry in available_languages() if entry != "de"])
+def test_the_sketch_figure_says_the_word_of_the_status_line(language: str) -> None:
+    """Das Bild des Skizzeneditors zeigt dasselbe Wort wie seine Statuszeile.
+
+    Durchsicht 0.5.1: Die Abbildung ``sketch-editor`` sagte es/fr/it/pt
+    „Determinado“, „Déterminée“, „Determinato“, die Statuszeile und das
+    Handbuch „Totalmente definido“, „Entièrement défini“, „Completamente
+    definito“. Wer das Wort aus dem Bild in der Anwendung sucht, findet es
+    nicht.
+    """
+    catalog = json.loads(
+        (Path("app/i18n/locales") / f"{language}.json").read_text(encoding="utf-8")
+    )
+    figure = catalog["Bestimmt — jedes Maß steht fest."]
+    status = catalog["{state} · Bestimmt — jedes Maß steht fest, nichts wackelt mehr. {advice}"]
+    word = status.removeprefix("{state} · ").split(" — ")[0]
+    assert figure.split(" — ")[0] == word, f"Bild {figure!r}, Statuszeile {word!r}"
