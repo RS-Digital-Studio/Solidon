@@ -1243,7 +1243,8 @@ def test_several_cuts_say_once_that_the_parts_lie_together(
     findings = result.scene.report.findings
     halves = [entry for entry in findings if entry.code == "prepare.halves_in_place"]
     assert len(halves) == 1, [str(entry.message) for entry in findings]
-    assert str(halves[0].message).startswith("Die Teile liegen im Modell noch aneinander"), "Mehrzahl"
+    plural = "Die Teile liegen im Modell noch aneinander"
+    assert str(halves[0].message).startswith(plural), "Mehrzahl"
     assert not [entry for entry in findings if entry.code == "perceive.orphaned"]
 
 
