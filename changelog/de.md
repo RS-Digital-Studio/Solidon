@@ -121,9 +121,13 @@ Nutzen da und sonst nichts.
 - Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
 - Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, damit die Düse unterwegs weniger ausläuft.
 - Den Überhangwinkel nimmt Solidon aus dem Herstellerprofil Ihres Druckers, bei Elegoo, Bambu und Creality 60 statt 45 Grad. Fasen und flache Schrägen bekommen keine unnötigen Stützen mehr.
+- Auch der Prüfbericht rechnet Überhänge jetzt mit dem Winkel, ab dem Ihr Slicerprofil stützt.
 - Der Druckdialog zeigt, was gedruckt wird: Grundlage ist das Herstellerprofil, Ihre eigenen Werte sind markiert und lassen sich einzeln zurücksetzen.
 - Die Druckplatte wählen Sie im Druckdialog, und die Betttemperatur folgt ihr. Gibt der Hersteller die Platte für Ihr Filament nicht frei, sagt Solidon es vor dem Druck.
 - Ohne *Vorschläge übernehmen* bekommt kein Teil mehr ungefragt einen Brim, weder beim Export noch bei der Übergabe an den Slicer.
+- Reicht ein Brim, Skirt oder Raft über das Bett hinaus, sagt Solidon es bei der Übergabe an den Slicer und bietet *Auf dem Bett anordnen* an.
+- Lehnt der Slicer ein zu hohes Teil ab, nennt Solidon beide Höhen und bietet *Modell teilen*, *Auf den Bauraum verkleinern* und einen anderen Drucker an.
+- Bleibt Bambu Studio nach dem Slicen hängen, übernimmt Solidon die fertige Druckdatei, statt nach fünf Minuten abzusagen.
 - Projekte aus 0.5.0 drucken mit dem Tempo Ihres Druckers. Was Sie darin selbst eingestellt hatten, bleibt erhalten.
 - Das Tempo der ersten Schicht gilt jetzt auch für ihre Füllung. Vorher legte der Slicer den Boden mit dem Tempo des Herstellers, am Centauri Carbon 2 mit 105 mm/s.
 - Mit PrusaSlicer beginnt der Druck jetzt wie bei Prusa selbst, mit Bettvermessung, Spüllinie und Druckerprüfung.
