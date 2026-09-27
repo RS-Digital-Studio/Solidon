@@ -162,6 +162,9 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         overhang_speed_factors=_shares(
             table.get("overhang_speed_factors"), f"{identifier}.overhang_speed_factors"
         ),
+        first_layer_line_factor=_positive_or_none(
+            table.get("first_layer_line_factor"), f"{identifier}.first_layer_line_factor"
+        ),
     )
     printable_area(result)
     printable_height(result)

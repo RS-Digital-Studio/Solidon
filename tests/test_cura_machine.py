@@ -517,3 +517,60 @@ def test_cura_is_not_offered_a_flow_limit_it_does_not_read() -> None:
 
     assert "material_max_flowrate" not in _cura_values("creality-k1-max")
     assert not slicer_keys.takes("cura", "filament.max_flow")
+
+
+@pytest.mark.parametrize(
+    ("printer", "width"),
+    [
+        # Aus demselben Standardprozess wie die Tempi: 0,5 mm an der 0,4er Düse
+        # bei Elegoo, Bambu, Creality und Prusa, 0,8 am Kobra 2, 0,42 am SV06.
+        ("centauri-carbon-2", 0.5),
+        ("anycubic-kobra-2", 0.8),
+        ("sovol-sv06", 0.42),
+        # Ohne Angabe bleibt Solidons 1,07-fache Bahnbreite.
+        ("generic-220", round(0.42 * 1.07, 3)),
+    ],
+)
+def test_the_first_line_is_as_wide_as_at_the_manufacturer(printer: str, width: float) -> None:
+    """Die erste Bahn war 1,07 Bahnbreiten breit, schmaler als in jedem Werksprofil.
+
+    Bei Cura ist Solidons Satz die Grundlage: Die 106,9 % gingen unverändert
+    hinaus, wo Creality, Elegoo und Bambu 119 %, Sovol in Cura 150 % fahren
+    (Prüfbericht Cura, B7).
+    """
+    profile = profiles.make_profile(printer, "pla")
+    settings = print_settings.resolve(profile)
+
+    assert settings.layers.first_layer_line_width == pytest.approx(width)
+    factor = float(
+        handover.values_for(settings, profile, "cura")["initial_layer_line_width_factor"]
+    )
+    assert factor == pytest.approx(width / settings.layers.line_width * 100.0, abs=1e-3)
+
+
+def test_a_changed_nozzle_takes_the_first_line_along() -> None:
+    """Der Druckdialog kopiert das Profil mit anderer Düse — die erste Bahn wächst mit."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    wider = replace(profile.printer, nozzle_diameter=0.6, extrusion_width=0.63)
+
+    settings = print_settings.resolve(replace(profile, printer=wider))
+
+    assert settings.layers.first_layer_line_width == pytest.approx(0.75)
+
+
+def test_the_first_layer_does_not_travel_at_walking_pace() -> None:
+    """Kobra 2: 16,9 mm/s Leerfahrt in Schicht 1 (20 × 120 / 142, Curas Formel).
+
+    Dieselbe Formel, aber nie unter dem Tempo, das die Werksprofile in der
+    ersten Schicht fahren — 100 mm/s, oder die Leerfahrt selbst, wenn sie
+    langsamer ist.
+    """
+    assert float(_cura_values("anycubic-kobra-2")["speed_travel_layer_0"]) == pytest.approx(100.0)
+    slow = _cura_values("generic-220", speed__travel=80.0)
+    assert float(slow["speed_travel_layer_0"]) == pytest.approx(80.0)
+    fast = _cura_values("creality-k1-max")
+    formula = (
+        float(fast["speed_layer_0"]) * float(fast["speed_travel"]) / float(fast["speed_print"])
+    )
+    # Sechs geltende Ziffern, wie jede geschriebene Zahl (``:g``).
+    assert float(fast["speed_travel_layer_0"]) == pytest.approx(max(formula, 100.0), rel=1e-5)

@@ -213,7 +213,18 @@ def resolve(profile: Profile, quality: QualityPreset = DEFAULT_QUALITY) -> Print
         layer_height = min(float(stage["layer_height"]) * scale, ceiling)
         first_layer = min(float(stage["first_layer_height"]) * scale, ceiling)
         line_width = printer.extrusion_width
-        first_layer_line_width = round(printer.extrusion_width * 1.07, 3)
+        # Die erste Bahn so breit wie beim Hersteller, als Vielfaches der Düse
+        # (``PrinterProfile.first_layer_line_factor``): 0,5 mm am Centauri
+        # Carbon 2, 0,8 am Kobra 2. Solidons 1,07-fache Bahnbreite war
+        # schmaler als jedes Werksprofil und bleibt der Rückfall. Die eine
+        # Stelle, an der ``resolve`` für Stufe D anders rechnet: Bei Cura ist
+        # dieser Satz die Grundlage, und die anderen Slicer bekommen damit den
+        # Wert, den ihr Herstellerprofil ohnehin trägt.
+        first_layer_line_width = (
+            round(printer.nozzle_diameter * printer.first_layer_line_factor, 3)
+            if printer.first_layer_line_factor is not None
+            else round(printer.extrusion_width * 1.07, 3)
+        )
 
     settings = PrintSettings(
         id=f"{quality}-{profile.material.id}",

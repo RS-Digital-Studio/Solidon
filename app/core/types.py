@@ -861,6 +861,16 @@ class PrinterProfile:
     die Stützgrenze mit dem Herstellerprofil auf 60 Grad stieg: Wände
     zwischen 45 und 60 Grad druckten dort ohne Stütze und mit voller
     Wandgeschwindigkeit. Leer heißt, der Hersteller nennt keine."""
+    first_layer_line_factor: float | None = None
+    """Die Breite der ersten Bahn als Vielfaches der Düse, aus demselben
+    Standardprozess wie die Tempi (Orca ``initial_layer_line_width``,
+    PrusaSlicer ``first_layer_extrusion_width``: 0,5 mm an der 0,4er Düse sind
+    1,25; der Kobra 2 legt 0,8 mm, also 2,0).
+
+    Als Vielfaches und nicht in Millimetern, weil der Druckdialog das Profil
+    mit einer anderen Düse kopiert — die erste Bahn geht dann mit. Ohne Angabe
+    bleibt Solidons 1,07-fache Bahnbreite (``print_settings.resolve``); sie war
+    schmaler als jedes Werksprofil (Prüfbericht Cura, B7)."""
 
     @property
     def is_resin(self) -> bool:

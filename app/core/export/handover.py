@@ -180,6 +180,11 @@ _OVERHANG_ONSET: Final = 0.25
 _COMBING_LIMIT: Final = 30.0
 _COMBING_LIMIT_STRINGING: Final = 10.0
 _STRINGING_MATERIALS: Final = frozenset({"petg", "petg-cf"})
+#: Die Leerfahrt der ersten Schicht nie langsamer als die Werksprofile in
+#: Cura sie fahren (Elegoo 100 bis 120, Kobra 2 125, Creality 150 mm/s) —
+#: oder die Leerfahrt selbst, wenn sie langsamer ist. Curas Formel gab dem
+#: Kobra 2 16,9 mm/s (Prüfbericht Cura, B7).
+_FIRST_LAYER_TRAVEL: Final = 100.0
 #: Die Beschleunigung der ersten Schicht, wenn der Drucker keine eigene trägt
 #: (``PrinterProfile.first_layer_acceleration``), in mm/s²: der Wert der
 #: Werksprozesse von Elegoo, Bambu, Prusa und Creality-Orca am Ender-3 V3.
@@ -982,7 +987,9 @@ def _for_speeds(written: dict[str, str], settings: PrintSettings, profile: Profi
         first_layer = _as_float(written.get("speed_layer_0"))
         travel = _as_float(written.get("speed_travel"))
         if first_layer and travel:
-            written["speed_travel_layer_0"] = f"{first_layer * travel / printing:g}"
+            formula = first_layer * travel / printing
+            floor = min(travel, _FIRST_LAYER_TRAVEL)
+            written["speed_travel_layer_0"] = f"{max(formula, floor):g}"
 
     surface = _as_float(written.get("speed_topbottom"))
     if surface:
