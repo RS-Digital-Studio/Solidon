@@ -1484,13 +1484,19 @@ def _plate_config(
 
     Gemessen, nicht vermutet: eine 3MF mit dieser Beilage, ohne ``--load``
     geslict, ergab sieben Wände und 15 Prozent Füllung — Solidons Werte.
+
+    Seit Stufe C des Konzepts Herstellerprofil trägt sie dieselbe Kette wie
+    der Konsolenlauf (:func:`handover.prusa_values`), mit den Namen der drei
+    Profile: Das Fenster wählt dann das installierte Profil und zeigt nur
+    Solidons Abweichung als „geändert". Das binäre Format des Herstellers
+    bleibt — das Fenster schreibt die Druckdatei, nicht Solidon.
     """
     if settings is None or flavour != "prusa":
         return {}
     from app.core.export import handover
 
-    effective = handover.settings_for_handover(settings, profile, flavour, slots, setup)
-    return handover.values_for(effective, profile, flavour)
+    values, _expected = handover.prusa_values(settings, profile, setup, slots, console=False)
+    return values
 
 
 def _cura_meshes(

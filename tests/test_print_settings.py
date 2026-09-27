@@ -5672,38 +5672,35 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     assert dialog.process_choice.count() == 0, "das Prozessprofil auch"
 
 
-def test_prusa_is_not_warned_about_a_machine_it_never_takes() -> None:
-    """Der Befund galt weiter, als er gemeint war — einen halben Tag lang.
+def test_prusa_is_warned_only_since_it_prints_on_its_bundle() -> None:
+    """Der Befund galt am 03.09.2026 weiter, als er gemeint war — und heute
+    gilt er für PrusaSlicer mit Grund.
 
     ``machine_missing`` entstand für die Orca-Familie, die ihre Maschine als
-    Profil aus dem eigenen Bestand lädt. PrusaSlicer tut das nie: Seine
-    Maschinenseite baut ``_machine_keys`` aus Solidons eigenem Druckerprofil,
-    und eine ``.ini`` ist damit eigenständig lauffähig. Gemessen am
-    03.09.2026, bevor das hier stand:
+    Profil aus dem eigenen Bestand lädt. Gemessen am 03.09.2026:
 
         orca   -> nichts
         cura   -> ['slicer.machine_unset']
         prusa  -> ['slicer.machine_unset']
 
-    Beide bekamen bei **jedem** Export den Rat, im Slicer einen Drucker
-    einzurichten, den sie dafür nicht brauchen. Eine Warnung, die nicht
-    stimmt, ist teurer als keine — der Kunde lernt, sie zu übersehen, und
-    übersieht die richtige mit.
+    Damals schrieb Solidon für PrusaSlicer eine eigenständige ``.ini`` ohne
+    Profil, und der Rat, einen Drucker einzurichten, stimmte nicht. Seit Stufe
+    C des Konzepts Herstellerprofil (27.09.2026) druckt PrusaSlicer auf
+    Drucker, Prozess und Filament seines Bündels; fehlt der Drucker dort,
+    kommt der eingebaute Startcode ohne Bettvermessung und Spüllinie — das
+    sagt der Befund jetzt. Den Weg mit Bündel prüft ``tests/test_manufacturer.py``.
 
     Cura stand bis zum 27.09.2026 mit hier, und dort war das Schweigen falsch:
     Ohne Druckerdefinition druckte CuraEngine mit dem Startcode von
     ``fdmprinter``. Was Cura jetzt gesagt bekommt, prüft
     ``tests/test_cura_machine.py``.
-
-    Die eigenen Tests trugen den Fehler nicht, weil alle drei ``flavour="orca"``
-    setzten: die richtige Regel mit ungeprüftem Rand.
     """
     from pathlib import Path
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
 
     setup = handover.SlicerSetup(executable=Path("prusa.exe"), flavour="prusa")
-    assert handover.machine_missing(setup, profile) == []
+    assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.printer_unknown"]
     assert not handover.takes_a_machine_profile("prusa")
     assert not handover.takes_a_machine_profile("cura")
     assert handover.takes_a_machine_profile("orca")

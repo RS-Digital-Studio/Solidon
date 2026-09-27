@@ -3968,17 +3968,10 @@ class PrintSettingsDialog(QDialog):
             self.slicer_box.setVisible(False)
             self._show_slicer_state()
             return
-        if flavour == "prusa":
-            # §29: eine PrusaSlicer-ini läuft eigenständig, sobald Düse und
-            # Bettform darin stehen — und die schreibt Solidon selbst.
-            self.profile_note.setText(
-                tr(
-                    "Dieser Slicer braucht kein Grundprofil — Solidon schreibt eine vollständige "
-                    "Konfiguration."
-                )
-            )
-            self._show_slicer_state()
-            return
+        # PrusaSlicer bekommt seit Stufe C des Konzepts Herstellerprofil dieselbe
+        # Wahl wie die Orca-Familie: Drucker samt Düsenvariante, Prozess und
+        # Filament aus seinem Bündel. Bis dahin stand hier „braucht kein
+        # Grundprofil", und PrusaSlicer druckte mit seinen eingebauten Vorgaben.
         if flavour == "cura":
             # CuraEngine hat keinen wählbaren Profilbestand: seine Ordner
             # heißen definitions, variants und quality — `find_profiles`
@@ -4072,7 +4065,9 @@ class PrintSettingsDialog(QDialog):
             # macht es an derselben Stelle richtig.
             self.machine_choice.clear()
             for entry in self._machines_worth_showing(machines):
-                self.machine_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+                self.machine_choice.addItem(
+                    entry.title(tr("eigenes")), slicer_profiles.identity(entry)
+                )
             # **Eine Wahl, die der neue Fund nicht kennt, bleibt trotzdem stehen.**
             # Das Leeren darf nur den Bestand ersetzen, nicht die Entscheidung des
             # Nutzers wegwerfen: Wer wählt, während die Suche noch läuft, hätte
@@ -4097,7 +4092,7 @@ class PrintSettingsDialog(QDialog):
         remembered = already or self.ui_settings.slicer_machine_profile
         index = self.machine_choice.findData(remembered) if remembered else -1
         if index < 0 and chosen is not None:
-            index = self.machine_choice.findData(str(chosen.path))
+            index = self.machine_choice.findData(slicer_profiles.identity(chosen))
         # **Kein Rückfall auf den ersten Eintrag.** Der war „Afinia H+1(HS) 0.4
         # nozzle" — der erste des installierten Bestands, und mit ihm hätte
         # gesliced, wer den Hinweis darunter überliest. Passt nichts, steht
@@ -4135,15 +4130,27 @@ class PrintSettingsDialog(QDialog):
                 # sagt die Lage. Zwei Sätze, die dasselbe Wort tragen, laufen
                 # irgendwann auseinander — bei den Auswahlnamen hat das zwei
                 # Tabellen gekostet (Hinweis 3d-druck-7f).
-                self.profile_note.setText(
-                    str(
-                        tr(
-                            "Für {printer} bringt {slicer} kein eigenes Profil mit — "
-                            "wählen Sie das Profil Ihres Druckers."
-                        )
+                #
+                # PrusaSlicer verlangt kein Profil (``_profile_gap``): Ohne
+                # Drucker seines Bündels gehen Solidons Werte hinaus. Der Satz
+                # sagt deshalb, was dann gilt, statt zu einer Wahl zu drängen,
+                # für die es kein richtiges Profil gibt.
+                flavour = (
+                    slicer_keys.flavour_of(self._slicer_path.name) if self._slicer_path else None
+                )
+                note = (
+                    tr(
+                        "Für {printer} bringt {slicer} kein eigenes Profil mit — es gelten "
+                        "Solidons Werte, ohne den Startcode des Herstellers."
                     )
-                    .replace("{printer}", printer)
-                    .replace("{slicer}", slicer)
+                    if flavour is not None and not takes_a_machine_profile(flavour)
+                    else tr(
+                        "Für {printer} bringt {slicer} kein eigenes Profil mit — "
+                        "wählen Sie das Profil Ihres Druckers."
+                    )
+                )
+                self.profile_note.setText(
+                    str(note).replace("{printer}", printer).replace("{slicer}", slicer)
                 )
             else:
                 self.profile_note.setText(
@@ -4166,7 +4173,9 @@ class PrintSettingsDialog(QDialog):
 
     def _current_machine(self) -> slicer_profiles.SlicerProfile | None:
         wanted = self.machine_choice.currentData()
-        return next((entry for entry in self._profiles if str(entry.path) == wanted), None)
+        return next(
+            (entry for entry in self._profiles if slicer_profiles.identity(entry) == wanted), None
+        )
 
     def _fill_processes(self, preferred: slicer_profiles.SlicerProfile | None) -> None:
         """Nur die Prozessprofile, die zum gewählten Drucker passen.
@@ -4183,16 +4192,16 @@ class PrintSettingsDialog(QDialog):
         fitting = slicer_profiles.processes(self._profiles, machine) if machine else []
         self.process_choice.clear()
         for entry in fitting:
-            self.process_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+            self.process_choice.addItem(entry.title(tr("eigenes")), slicer_profiles.identity(entry))
 
         wanted = self.ui_settings.slicer_base_process
         index = self.process_choice.findData(wanted) if wanted else -1
         if index < 0 and preferred is not None:
-            index = self.process_choice.findData(str(preferred.path))
+            index = self.process_choice.findData(slicer_profiles.identity(preferred))
         if index < 0 and machine is not None:
             named = [entry for entry in fitting if entry.name == machine.default_process]
             if named:
-                index = self.process_choice.findData(str(named[0].path))
+                index = self.process_choice.findData(slicer_profiles.identity(named[0]))
         self.process_choice.setCurrentIndex(max(index, 0))
         self._fill_filaments(machine)
 
@@ -4244,7 +4253,8 @@ class PrintSettingsDialog(QDialog):
             for entry in machines
             if slicer_profiles.printer_for(entry.name, known) == mine
             or (
-                str(entry.path) == remembered and not slicer_profiles.printer_for(entry.name, known)
+                slicer_profiles.identity(entry) == remembered
+                and not slicer_profiles.printer_for(entry.name, known)
             )
         ]
         if fitting:
@@ -4253,7 +4263,7 @@ class PrintSettingsDialog(QDialog):
         same_nozzle = [
             entry
             for entry in machines
-            if is_close(entry.nozzle, nozzle) or str(entry.path) == remembered
+            if is_close(entry.nozzle, nozzle) or slicer_profiles.identity(entry) == remembered
         ]
         return same_nozzle or machines
 
@@ -4318,7 +4328,7 @@ class PrintSettingsDialog(QDialog):
             for position, (_label, box) in enumerate(self.slot_rows):
                 box.clear()
                 for entry in fitting:
-                    box.addItem(entry.title(tr("eigenes")), str(entry.path))
+                    box.addItem(entry.title(tr("eigenes")), slicer_profiles.identity(entry))
                 name = remembered[position] if position < len(remembered) else ""
                 found = self._filament_index(box, name)
                 if name and found < 0:
@@ -4356,7 +4366,9 @@ class PrintSettingsDialog(QDialog):
         wanted = self.ui_settings.slicer_filament_per_material.get(
             material, self.ui_settings.slicer_base_filament
         )
-        chosen = next((entry for entry in fitting if str(entry.path) == wanted), None)
+        chosen = next(
+            (entry for entry in fitting if slicer_profiles.identity(entry) == wanted), None
+        )
         if chosen is None and wanted:
             # Ein Projekt kann den **Namen** tragen statt des Pfades (Regel 12);
             # dann gilt er genauso.
@@ -4410,7 +4422,12 @@ class PrintSettingsDialog(QDialog):
 
     def _remember_filament_profile(self, entry: slicer_profiles.SlicerProfile) -> None:
         """Das zugeordnete Profil festhalten, anzeigen und übernehmbar machen."""
-        self._filament_profile = str(entry.path)
+        previous = self._filament_source
+        if previous is not None and slicer_profiles.identity(previous) != slicer_profiles.identity(
+            entry
+        ):
+            self._release_adopted_values(previous)
+        self._filament_profile = slicer_profiles.identity(entry)
         self._filament_source = entry
         self._filament_title = entry.title(tr("eigenes"))
         self.filament_shown.setText(self._filament_title)
@@ -4429,6 +4446,8 @@ class PrintSettingsDialog(QDialog):
         Der Knopf wird gesperrt und nicht bloß wirkungslos: Alle drei Kanäle
         (Regel 18), und der Grund steht am Zustand statt an der Handlung.
         """
+        if self._filament_source is not None:
+            self._release_adopted_values(self._filament_source)
         self._filament_profile = ""
         self._filament_source = None
         self._filament_title = ""
@@ -4506,7 +4525,7 @@ class PrintSettingsDialog(QDialog):
             return ""
         wanted = str(path)
         for entry in self._profiles:
-            if str(entry.path) == wanted:
+            if slicer_profiles.identity(entry) == wanted:
                 return entry.name
         return ""
 
@@ -4530,7 +4549,7 @@ class PrintSettingsDialog(QDialog):
             return -1
         for entry in self._profiles:
             if entry.name == name:
-                found = box.findData(str(entry.path))
+                found = box.findData(slicer_profiles.identity(entry))
                 if found >= 0:
                     return found
         found = box.findData(name)
@@ -4807,6 +4826,40 @@ class PrintSettingsDialog(QDialog):
         )
         _log.info("adopted %d values from %s", len(values), chosen)
 
+    def _release_adopted_values(self, previous: slicer_profiles.SlicerProfile) -> None:
+        """Übernommene Werte des vorigen Filaments gelten nicht für das nächste.
+
+        Ohne Herstellergrundlage macht *Werte übernehmen* die Werte eines
+        Filamentprofils zur eigenen Wahl — sonst ersetzte die Grundlage sie beim
+        nächsten Abgleich. Wechselte danach das Filament, blieben sie stehen,
+        und ein PETG fuhr mit den Temperaturen des PLA davor (Review Stufe A+B,
+        H12). Zurückgenommen wird, was noch genau dem vorigen Profil gleicht;
+        was der Kunde danach selbst geändert hat, bleibt seine Wahl. Mit
+        Herstellergrundlage entsteht beim Übernehmen keine eigene Wahl, also
+        ist dort nichts zurückzunehmen.
+        """
+        if self._settling or not self._built:
+            return
+        if self._foundation is not None and self._foundation.has_profile:
+            return
+        try:
+            values = slicer_profiles.filament_values(previous, self._profile_roots())
+        except AppError as problem:
+            _log.warning("previous filament values could not be read: %s", problem)
+            return
+        settings = self.settings
+        for path, value in values.items():
+            if path in settings.chosen and print_settings.same_value(
+                print_settings.read_path(settings, path), value
+            ):
+                settings = print_settings.without_choice(settings, path, self._base())
+        if settings == self.settings:
+            return
+        self.settings = settings
+        self._load_into_editors()
+        self._mark_origins()
+        self._refresh_advice()
+
     def _profile_search_finished(self) -> None:
         if isinstance(self.sender(), _ProfileWorker) and self.sender() is not self._profile_worker:
             return
@@ -4968,16 +5021,23 @@ class PrintSettingsDialog(QDialog):
     def _profile_gap(self) -> str:
         """Was der Profilwahl noch fehlt — leer, wenn das Slicen starten darf.
 
-        Nur die Orca-Familie verlangt Profile (`_start_profile_search`);
-        PrusaSlicer und CuraEngine kommen ohne aus. Solange die Suche läuft,
-        heißt die Antwort „wird durchgesehen" — kein Zustand ohne Erhebung,
-        und ein Knopf, der „bitte wählen" sagt, während die Liste noch gar
-        nicht da sein kann, schickt in eine leere Auswahl.
+        Nur die Orca-Familie verlangt Profile (`_start_profile_search`).
+        PrusaSlicer bekommt die Auswahl, verlangt aber keine: Ohne Drucker
+        seines Bündels geht Solidons eigener Satz hinaus, und der Befund
+        ``slicer.printer_unknown`` sagt, was dann fehlt. CuraEngine kommt ohne
+        aus. Solange die Suche läuft, heißt die Antwort „wird durchgesehen" —
+        kein Zustand ohne Erhebung, und ein Knopf, der „bitte wählen" sagt,
+        während die Liste noch gar nicht da sein kann, schickt in eine leere
+        Auswahl. Das gilt auch für PrusaSlicer: Wer vor der Antwort slicte,
+        bekäme sonst Solidons Satz statt des Bündels, je nach Zeitpunkt.
         """
         if not self._needs_profiles:
             return ""
         if self._profiles_pending:
             return str(tr("Der Profilbestand wird durchgesehen …"))
+        flavour = slicer_keys.flavour_of(self._slicer_path.name) if self._slicer_path else None
+        if flavour is None or not takes_a_machine_profile(flavour):
+            return ""
         if not str(self.machine_choice.currentData() or ""):
             return self._machine_missing_line()
         if not str(self.process_choice.currentData() or ""):
@@ -6597,10 +6657,11 @@ class PrintSettingsDialog(QDialog):
         setup = self._current_setup()
         if setup is None:
             return
-        # Nur die Orca-Familie: PrusaSlicer läuft mit Solidons vollständiger
-        # ini, und CuraEngine bekommt die Maschine aus dem Kern selbst
-        # (`_machine_keys`) — für Cura gibt es strukturell keine Profile zu
-        # wählen, und die Forderung war eine Wahl aus einer leeren Liste.
+        # Nur die Orca-Familie: PrusaSlicer druckt ohne Drucker des Bündels
+        # mit Solidons vollständiger ini (der Befund sagt es), und CuraEngine
+        # bekommt die Maschine aus der Druckerdefinition — für Cura gibt es
+        # strukturell keine Profile zu wählen, und die Forderung war eine Wahl
+        # aus einer leeren Liste.
         if takes_a_machine_profile(setup.flavour) and not setup.machine_profile:
             self._open_slicer_section()
             self.state.setText(self._machine_missing_line())

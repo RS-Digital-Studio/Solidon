@@ -478,6 +478,43 @@ def test_adopting_a_prusa_filament_keeps_the_selected_bundle_section(
     assert dialog.settings.filament.max_flow == pytest.approx(5.0)
     assert "Prusament PLA Silk" in dialog.state.text()
     dialog._forget_filament_profile()
+
+
+def test_adopted_values_leave_with_their_filament(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review Stufe A+B, H12: Ohne Herstellergrundlage macht *Werte
+    übernehmen* die Werte zur eigenen Wahl. Wechselte das Filament, blieben
+    sie stehen — ein PETG fuhr mit den Temperaturen des PLA davor. Was noch
+    genau dem vorigen Profil gleicht, geht mit ihm; eine spätere eigene
+    Änderung bleibt."""
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[filament:Prusament PLA]\nfilament_type = PLA\ntemperature = 218\n"
+        "filament_max_volumetric_speed = 15\n"
+        "[filament:Prusament PETG]\nfilament_type = PETG\ntemperature = 240\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    pla = sp.profile_by_name(executable, "prusa", "Prusament PLA", "filament")
+    petg = sp.profile_by_name(executable, "prusa", "Prusament PETG", "filament")
+    assert pla is not None and petg is not None
+    dialog._slicer_path = executable
+    dialog._remember_filament_profile(pla)
+    dialog.adopt_filament.click()
+    assert "temperature.nozzle" in dialog.settings.chosen
+    dialog.settings = print_settings.with_choice(dialog.settings, "filament.max_flow", 12.0)
+
+    dialog._remember_filament_profile(petg)
+
+    assert "temperature.nozzle" not in dialog.settings.chosen, "das PLA ist gegangen"
+    assert dialog.settings.temperature.nozzle != 218
+    assert dialog.settings.filament.max_flow == pytest.approx(12.0), "die eigene Änderung bleibt"
+    dialog._forget_filament_profile()
     assert not dialog.adopt_filament.isEnabled()
 
 
@@ -2756,6 +2793,83 @@ def test_the_found_profiles_fill_both_choices(dialog: PrintSettingsDialog) -> No
     assert dialog.process_choice.count() == 2
 
 
+_PRUSA_BUNDLE = """[vendor]
+name = Prusa Research
+
+[printer_model:MK4S]
+name = Original Prusa MK4S
+variants = HF0.4; 0.4
+default_materials = Prusament PLA @MK4S HF0.4
+
+[printer:*common*]
+printer_technology = FFF
+nozzle_diameter = 0.4
+
+[printer:Original Prusa MK4S HF0.4 nozzle]
+inherits = *common*
+printer_model = MK4S
+nozzle_high_flow = 1
+default_print_profile = 0.20mm SPEED @MK4S HF0.4
+
+[printer:Original Prusa MK4S 0.4 nozzle]
+inherits = *common*
+printer_model = MK4S
+nozzle_high_flow = 0
+default_print_profile = 0.20mm SPEED @MK4S 0.4
+
+[print:0.20mm SPEED @MK4S HF0.4]
+layer_height = 0.2
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+
+[print:0.20mm SPEED @MK4S 0.4]
+layer_height = 0.2
+compatible_printers_condition = printer_model=="MK4S" and ! nozzle_high_flow[0]
+
+[filament:Prusament PLA @MK4S HF0.4]
+filament_type = PLA
+compatible_printers_condition = printer_model=="MK4S" and nozzle_high_flow[0]
+"""
+
+
+def test_prusa_gets_the_profile_choice_and_its_sections_are_told_apart(
+    dialog: PrintSettingsDialog, session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stufe C des Konzepts Herstellerprofil: PrusaSlicer bekommt dieselbe
+    Profilwahl wie die Orca-Familie, vorgewählt wie PrusaSlicer selbst wählt.
+
+    Alle Profile eines Bündels teilen eine Datei. Am Pfad erkannt, war jeder
+    Eintrag derselbe, und die Auswahl zeigte den gewählten Drucker über dem
+    ersten Abschnitt der Datei (``slicer_profiles.identity``). Verlangt wird
+    keine Wahl: Ohne Drucker des Bündels gehen Solidons Werte hinaus.
+    """
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _select_printer(dialog, "prusa-mk4s")
+    assert session.wait_for_idle()
+    dialog._slicer_path = executable
+
+    dialog._profiles_found(
+        sp.find_profiles(executable, "prusa", kinds=("machine", "process", "filament"))
+    )
+
+    assert dialog.machine_choice.currentData() == "Original Prusa MK4S HF0.4 nozzle"
+    assert dialog.process_choice.currentData() == "0.20mm SPEED @MK4S HF0.4"
+    assert dialog.process_choice.count() == 1, "der Prozess der Standarddüse passt nicht"
+    setup = dialog._current_setup()
+    assert setup is not None
+    assert setup.base_filament == "Prusament PLA @MK4S HF0.4"
+    assert dialog._profile_gap() == ""
+
+    dialog.machine_choice.setCurrentIndex(-1)
+    assert dialog._profile_gap() == "", "ohne Drucker gilt Solidons Satz"
+
+
 def test_switching_the_slicer_empties_the_profile_choice(
     dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -2763,8 +2877,8 @@ def test_switching_the_slicer_empties_the_profile_choice(
 
     Gemessen: Mit gefüllter Orca-Auswahl und danach eingestelltem CuraEngine
     ging ein ``-j`` auf eine Orca-Datei hinaus, und der Slicer war nach einer
-    Zehntelsekunde tot. ``_start_profile_search`` kehrt für ``cura`` und
-    ``prusa`` früh zurück; geleert wird deshalb am Anfang, nicht am Ende.
+    Zehntelsekunde tot. ``_start_profile_search`` kehrt für ``cura`` früh
+    zurück; geleert wird deshalb am Anfang, nicht am Ende.
 
     Und die gemerkte Wahl bleibt: das Leere zu merken löschte das Profil, das
     zum nächsten Orca-Lauf gehört.

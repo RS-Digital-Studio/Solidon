@@ -10,10 +10,10 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 |---|---|
 | `writer.py` | Export und **die Prüfung, die davor läuft** (§29, §16.3); `default_scheme` nennt das Namensmuster, nach dem ohne eigene Angabe benannt wird — das Fenster zeigt es im Dateidialog (RM-141). `mesh_for_export` vernetzt einen exakten Körper so fein, wie das Verfahren des Druckers es verlangt (`Profile.export_deflection`: ein Achtel des kleinsten Details, gedeckelt von der Zahl des Kerns — FDM bleibt bei 0,05 mm, ein Resin-Drucker mit 50-µm-Pixeln bekommt 0,006), an allen drei Stellen des Schreibers; `export.tessellated` nennt das Maß. Bei einem Resin-Drucker lässt `write_assembly` den FDM-Satz fallen: keine Haftungs- und Filamentbefunde, keine Beilage |
 | `threemf.py` | 3MF **schreiben** — ein Körper oder eine Baugruppe, mit Farbgruppen und Slicer-Beilagen (§20, §29); `AssemblyPart.support_blocker` legt eine Stützsperre an — für die Orca-Familie als eigenes Teil (`support_blocker` in `model_settings.config`), für PrusaSlicer als Bereich im Netz (`SupportBlocker` in der Prusa-Beilage, dazu `slic3rpe:Version3mf`), je nach `blocker_as_part`. Gelesen wird in `ingest/threemf.py` |
-| `handover.py` | Übergabe an den Slicer (§29, §28.1) |
-| `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, dazu `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); die Platten, für die das Filament eine Betttemperatur nennt (`plate_temperatures`), ob der Drucker eine Plattenwahl hat (`offers_plates`); `written_paths` sagt, was die Übergabe davon schreibt, `findings`, was der Kunde über Platte und unlesbares Profil wissen muss |
+| `handover.py` | Übergabe an den Slicer (§29, §28.1); `prusa_values` schreibt für PrusaSlicer die Kette seines Bündels samt Abweichung, für Konsole und 3MF-Beilage |
+| `manufacturer.py` | **Die Grundlage aus dem Herstellerprofil**: `base_settings` liest Prozess, Filament und Maschine des gewählten Slicerprofils in Solidons Felder zurück (`ORCA_PROCESS`, dazu `slicer_profiles.FILAMENT_READBACK`), mit den eingebauten Vorgaben der vier Orca-Programme (`PROGRAM_DEFAULTS`, gemessen), der Druckplatte (`default_plate`, `PLATE_TEMPERATURES`) und dem Gemessenen (`Foundation.measured`); über dem Standardprozess die Werte der gewählten Stufe (`STAGE_PATHS`, `Foundation.staged`); die Platten, für die das Filament eine Betttemperatur nennt (`plate_temperatures`), ob der Drucker eine Plattenwahl hat (`offers_plates`); `written_paths` sagt, was die Übergabe davon schreibt, `findings`, was der Kunde über Platte und unlesbares Profil wissen muss. Für PrusaSlicer löst `prusa_chain` Drucker, Prozess und Filament des Bündels auf (`PrusaChain`), `PRUSA_PROCESS` und `PRUSA_PROGRAM_DEFAULTS` lesen sie zurück, samt Tempi in Prozent, erster Schicht, Stützwinkel „automatisch" und Rückzug am Filament |
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt |
-| `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette) |
+| `slicer_profiles.py` | Die Profile finden, die ein installierter Slicer mitbringt; ein Durchgang liest jede Datei einmal (`ProfileDocuments`, geteilt von Auswahl, Namensindex und Erbkette). Den Prusa-Bestand hält `_prusa_store` über Aufrufe hinweg, solange keine Bündeldatei sich ändert; `identity` ist die Kennung eines Profils in einer Auswahl |
 | `prusa_conditions.py` | PrusaSlicers Verträglichkeitsbedingungen (`printer_model=~/…/ and nozzle_diameter[0]!=0.8`) mit eigenem Parser, ohne `eval` (Regel 10); `slicer_profiles` bindet damit Prusa-Prozesse und -Filamente an den Drucker (`_prusa_fits`) |
 
 STEP geht über `brep/step.py`, nicht von hier.
@@ -35,11 +35,17 @@ Betttemperatur bekommt deren Schlüssel (`_on_the_plate`). Der Druckdialog,
 Menüexport legen dieselbe Grundlage unter die eigene Wahl
 (`print_settings.on_base`). Was ohne Partner nicht wirkt, geht mit ihm
 (`COUPLED_PATHS`: Haftungsart mit allen Maßen, Lüfter-Obergrenze mit dem
-unteren Ende); „Automatisch" als Haftung heißt bei PrusaSlicer und Cura
-die Art aus Solidons Tabelle (`_adhesion_for`). Die Gegenprobe hält die
-eigenen Werte und eine Stichprobe der Grundlage (`FOUNDATION_SAMPLE`,
-Listen je Düsenvariante über `_printed`); `foundation_findings` meldet
-Platte und unlesbares Profil in Slicen und Export.
+unteren Ende); „Automatisch" als Haftung heißt bei PrusaSlicer ohne Bündel
+und bei Cura die Art aus Solidons Tabelle (`_adhesion_for`), über Prusas
+Bündel die Vorgabe des Profils. Für PrusaSlicer schreibt `prusa_values` die
+aufgelöste Kette von Drucker, Prozess und Filament samt Abweichung — in
+`write_config` für die Konsole, in `writer._plate_config` für die Beilage;
+ohne Drucker des Bündels Solidons ganzen Satz wie bisher. Die Gegenprobe
+hält die eigenen Werte und eine Stichprobe der Grundlage
+(`FOUNDATION_SAMPLE`, bei PrusaSlicer `PRUSA_FOUNDATION_SAMPLE` und
+`PRUSA_IDENTITY`; Listen je Düsenvariante über `_printed`);
+`foundation_findings` meldet Platte und unlesbares Profil in Slicen und
+Export.
 
 **Die Stützsperre reist nur mit, wenn sie übernommen ist**
 (`support.block_channels`) — und nur in der direkten Übergabe

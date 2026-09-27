@@ -1570,7 +1570,7 @@ def test_every_flavour_answers_every_property() -> None:
             "other": False,
         },
         "names_its_own_output": {"prusa": False, "orca": True, "cura": False, "other": False},
-        "has_readable_profiles": {"prusa": False, "orca": True, "cura": True, "other": False},
+        "has_readable_profiles": {"prusa": True, "orca": True, "cura": True, "other": False},
         "reads_assembly_file": {"prusa": True, "orca": True, "cura": False, "other": False},
         "takes_a_machine_profile": {"prusa": False, "orca": True, "cura": False, "other": False},
         # **Die einzige Zeile, in der Cura allein steht**, und sie fehlte hier,
