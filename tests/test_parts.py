@@ -3337,6 +3337,68 @@ def test_a_part_that_hits_the_body_stays_quiet(profile: Profile) -> None:
     assert "boolean.without_effect" not in codes
 
 
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_a_pocket_that_opens_away_from_the_part_says_so_on_both_kernels(
+    profile: Profile, box: str
+) -> None:
+    """Eine Magnettasche, eingetippt auf der Unterseite eines Deckels 80 × 60 × 5
+    (z = 0), ohne angeklickte Fläche: Ihre Richtung ist dann die Achse Z, die
+    Öffnung zeigt nach oben, und die Tasche hing unter dem Deckel in der Luft.
+    Abgetragen wurden 0,5 mm³ — die Haut von einem Hundertstel, mit der jede
+    Öffnung über ihre Fläche reicht —, und weil das mehr ist als ein Stück
+    Extrusionsbahn, sagte ``boolean.without_effect`` nichts, an beiden Kernen
+    (Durchsicht 0.5.1, Prüfer bohrung).
+
+    Gemessen wird die Wirkung, nicht der Treffer (``operationen.md``): Über den
+    Querschnitt des Bausteins verteilt ist das keine Schicht tief, und was
+    unter einer Schicht bleibt, entsteht im Druck nicht. Gegenproben: dieselbe
+    Stelle mit der Richtung der Unterseite trägt die ganze Tasche ab und
+    schweigt, ebenso die Tasche von oben.
+    """
+    from app.core.errors import CORRECT_INPUT
+    from app.core.geom.mesh import as_mesh_data
+
+    def inserted(**placement: float) -> tuple[float, list[Any]]:
+        project = new_project("centauri-carbon-2", "petg")
+        history = History(project.document)
+        history.apply(
+            "Deckel",
+            [OperationDraft(op=box, params={"width": 80.0, "depth": 60.0, "height": 5.0})],
+        )
+        history.apply(
+            "Magnet",
+            [
+                OperationDraft(
+                    op="insert_magnet_pocket",
+                    inputs=("obj_1",),
+                    params={"size": "8x3", "x": -30.0, "y": -20.0, **placement},
+                )
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        volume = float(as_mesh_data(result.scene.objects["obj_1"].mesh).volume)
+        return 80.0 * 60.0 * 5.0 - volume, list(result.scene.report.findings)
+
+    removed, findings = inserted(z=0.0)
+    assert removed < 1.0, removed
+    warned = [finding for finding in findings if finding.code == "parts.cuts_no_layer"]
+    assert len(warned) == 1, [finding.code for finding in findings]
+    assert warned[0].severity == "warning"
+    assert CORRECT_INPUT in warned[0].suggestions
+    assert "boolean.without_effect" not in {finding.code for finding in findings}
+
+    # Eine Richtung, die ebenso hinauszeigt, sagt dasselbe.
+    _removed, findings = inserted(z=0.0, nz=1.0)
+    assert "parts.cuts_no_layer" in {finding.code for finding in findings}
+
+    for placement in ({"z": 0.0, "nz": -1.0}, {"z": 5.0}):
+        removed, findings = inserted(**placement)
+        assert removed > 150.0, (placement, removed)
+        codes = {finding.code for finding in findings}
+        assert not codes & {"parts.cuts_no_layer", "boolean.without_effect"}, (placement, codes)
+
+
 # --- versioning (§24.4) -------------------------------------------------------------
 
 

@@ -381,6 +381,17 @@ Rechenepsilon und trotzdem nichts, was jemand je zu sehen bekommt. Ohne
 `profile` bleibt es beim Epsilon: ein Aufrufer, der keinen Drucker kennt, soll
 keinen erfinden (Regel 7).
 
+**Und ein abtragender Baustein fragt die Tiefe** (`parts.ops._cuts_no_layer`,
+Durchsicht 0.5.1). Eine Magnettasche, auf der Unterseite eines Deckels
+eingetippt und ohne Fläche nach oben geöffnet, hing unter dem Deckel in der
+Luft und trug nur die Haut über ihrer Öffnung ab: 0,5 mm³, mehr als ein Stück
+Bahn, und kein Kern sagte etwas. Das Abgetragene über den mittleren
+Querschnitt des Bausteins verteilt ist eine Tiefe; unter einer Schichthöhe
+entsteht davon nichts, und `parts.cuts_no_layer` nennt beide Wege — die
+Fläche anklicken oder Position und Richtung im Schritt prüfen. Die Richtung
+wird nicht aus der nächsten Fläche geraten (Regel 21): Auf einer Kante sind
+es zwei, im Material keine, und gespeicherte Schritte rechneten still anders.
+
 **Was ein späterer Schritt behoben hat, warnt nicht mehr.** `SETTLED_BY`
 (`scene/evaluate.py`) streicht einen Befund, sobald einer aus seiner Menge an
 einem **späteren** Schritt und am **selben Körper** steht. Beides gehört zur

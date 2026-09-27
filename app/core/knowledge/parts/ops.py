@@ -463,7 +463,9 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         name=op_name(spec.name),
         title=title,
         category="parts",
-        cache_version=f"{_result_version(spec)}:targets:3",
+        # targets:4 — ein abtragender Baustein, der keine Schicht wegnimmt,
+        # sagt es (``parts.cuts_no_layer``, Durchsicht 0.5.1).
+        cache_version=f"{_result_version(spec)}:targets:4",
         params=params,
         consumes=1,
         produces=1,
@@ -598,6 +600,63 @@ def _loose_advice(spec: PartSpec) -> TranslatableText:
         "Ein Teil des Bausteins sitzt neben dem Objekt und hängt in der Luft — "
         "gedruckt würden lose Stücke. Setzen Sie den Baustein an ein Merkmal des "
         "Objekts oder rücken Sie seine Position näher heran."
+    )
+
+
+def _cuts_no_layer(
+    before: Mesh, after: Mesh, built: Mesh, spec: PartSpec, profile: Profile | None
+) -> Finding | None:
+    """Schneidet ein abtragender Baustein nicht einmal eine Schicht tief ins Teil?
+
+    **Der Fall, den der Prüfer bohrung gemessen hat** (Durchsicht 0.5.1): eine
+    Magnettasche, auf der Unterseite eines Deckels 80 x 60 x 5 eingetippt
+    (z = 0), ohne angeklickte Fläche. Ihre Richtung ist dann die Achse Z, die
+    Öffnung zeigt nach oben, und die Tasche hing unter dem Deckel in der Luft.
+    Abgetragen wurden 0,5 mm³: die Haut von ``BOOLEAN_OVERLAP``, mit der jede
+    Öffnung über ihre Fläche reicht. Das ist mehr als ein Stück Extrusionsbahn,
+    also schwieg ``boolean.without_effect`` — an beiden Kernen.
+
+    **Gemessen wird die Wirkung, nicht der Treffer** (``operationen.md``): Das
+    Abgetragene über den mittleren Querschnitt des Bausteins verteilt — sein
+    Volumen durch seine Länge entlang der eigenen Achse — ist eine Tiefe, und
+    was unter einer Schichthöhe bleibt, entsteht im Druck nicht (dieselbe
+    Grenze wie ``sculpt.no_effect``). Eine Durchgangsbohrung, die länger ist als
+    die Platte, schneidet die ganze Plattendicke tief und schweigt; eine Tasche
+    an einer Kante, die zur Hälfte hinausragt, auch.
+
+    **Keine geratene Richtung** (Regel 21): Die Fläche unter der eingetippten
+    Stelle gäbe hier die richtige, aber schon auf einer Kante sind es zwei, und
+    eine Stelle im Material hat keine. Gespeicherte Schritte, die ihre Lage so
+    eintragen, rechneten danach still anders. Der Befund sagt, was geschah,
+    und nennt beide Wege: die Fläche anklicken oder im Schritt Position und
+    Richtung prüfen.
+
+    Ein Baustein, der gar nichts abträgt, bleibt bei ``boolean.without_effect``
+    (der Aufrufer fragt diese Funktion nur, wenn jener schweigt). Ohne Profil
+    gibt es keine Schichthöhe und keine Aussage.
+    """
+    if profile is None:
+        return None
+    tool = as_mesh_data(built)
+    length = float(tool.bounds.maximum[2]) - float(tool.bounds.minimum[2])
+    if length <= EPS_GEOM:
+        return None
+    section = abs(float(tool.volume)) / length
+    removed = float(as_mesh_data(before).volume) - float(as_mesh_data(after).volume)
+    if removed > section * profile.printer.layer_height:
+        return None
+    return Finding(
+        code="parts.cuts_no_layer",
+        severity="warning",
+        message=_(
+            "Dieser Baustein nimmt hier nicht einmal eine Schicht Material weg — von "
+            "dieser Stelle aus liegt er außerhalb des Objekts. Klicken Sie die Fläche an, "
+            "in die er soll: Sie gibt ihm Ort und Richtung. Oder prüfen Sie im Schritt "
+            "Position und Richtung."
+        ),
+        values={"part": spec.name, "removed_mm3": round(max(removed, 0.0), 3)},
+        # Regel 17: Position und Richtung stehen im Schritt.
+        suggestions=(CORRECT_INPUT,),
     )
 
 
@@ -923,7 +982,9 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             solver = cut.solver
             findings.extend(cut.findings)
             findings.extend(host_cut.findings)
-            nothing = without_effect(body, prepared, "difference", ctx.profile)
+            nothing = without_effect(body, prepared, "difference", ctx.profile) or _cuts_no_layer(
+                body, prepared, cutter, spec, ctx.profile
+            )
             host_features = _placed_features(
                 host_cut,
                 spec,
@@ -948,8 +1009,11 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
         findings = outcome.findings
         # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
         # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
-        # Antwort steht im Volumen (§2.7).
+        # Antwort steht im Volumen (§2.7). Ein abtragender, der ihn nur mit der
+        # Haut über seiner Öffnung streift, auch (:func:`_cuts_no_layer`).
         nothing = without_effect(body, mesh, kind, ctx.profile)
+        if nothing is None and subtractive:
+            nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
 
     features = _merged_features(
         source,
@@ -1289,8 +1353,9 @@ def _insert_at_exact(
             host_cut = spec.host_cut(part_params) if spec.host_cut is not None else None
         findings.extend(notes)
         if host_cut is not None:
+            cutter = _exact_form(spec, host_cut)
             placed_cutter = _place_solid(
-                _exact_form(spec, host_cut),
+                cutter,
                 ctx.params,
                 anchor,
                 0.0,
@@ -1301,7 +1366,9 @@ def _insert_at_exact(
             )
             prepared = edit.unified(edit.boolean("difference", [body, placed_cutter]))
             findings.extend(host_cut.findings)
-            nothing = without_effect(body, prepared, "difference", ctx.profile)
+            nothing = without_effect(body, prepared, "difference", ctx.profile) or _cuts_no_layer(
+                body, prepared, cutter, spec, ctx.profile
+            )
             host_features = _placed_features(
                 host_cut, spec, ctx.params, anchor, 0.0, direction, spec.keeps_up, False
             )
@@ -1312,6 +1379,8 @@ def _insert_at_exact(
         kind: BooleanKind = "difference" if subtractive else "union"
         mesh = edit.unified(edit.boolean(kind, [body, placed]))
         nothing = without_effect(body, mesh, kind, ctx.profile)
+        if nothing is None and subtractive:
+            nothing = _cuts_no_layer(body, mesh, built, spec, ctx.profile)
     _exact_result_checked(mesh)
     features = _merged_features(
         source,
