@@ -108,12 +108,15 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
 
 **Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten,
 Bildanleitungen und Referenz aus dem Register, gegliedert in fünf Teile über
-`OUTLINE`; `spacemouse_access_help`, USB-Regel nur bei bekannter
+`OUTLINE`; die erste Seite „Wo fange ich an?“ listet die Anleitungen aus
+`guides.GUIDES`; `help_for` sagt F1, wo eine Operation erklärt ist;
+`spacemouse_access_help`, USB-Regel nur bei bekannter
 Hersteller-/Produktkennung) · `manual_search.py` (die Suche im Handbuch:
 Rangfolge nach Titel, Kurzfassung, Stichwort und Text, Fundstelle je Seite;
 Faltung, Trefferstärke und Kundenwörter aus `registry/search.py`) ·
 `guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf
-die ein Bild zeigt; aufgenommen beim Release in der echten Oberfläche,
+die ein Bild zeigt, dazu die Operationen, die eine Anleitung lehrt;
+aufgenommen beim Release in der echten Oberfläche,
 Konzept `konzepte/konzept-handbuch-2026-09.md`) · `figures.py`
 (Abbildungskatalog, dazu je Anleitungsschritt ein Bildschirmfoto) ·
 `drawing.py` (SVG; lange Beschriftungen umbricht `Canvas.wrapped`, der Text

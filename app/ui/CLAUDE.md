@@ -133,7 +133,7 @@ Karte, dort das Gesetz.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | **aus dem Parameterschema erzeugt** (§10, §2.4) — kein Dialog wird von Hand gebaut; wer einen tippt, hat das Register umgangen. Feldarten (`ValueField`, `CountField`, …), `offer_naming` (§13), `aim_again` zurück in die Platzierung |
+| `op_dialog.py` | **aus dem Parameterschema erzeugt** (§10, §2.4) — kein Dialog wird von Hand gebaut; wer einen tippt, hat das Register umgangen. Feldarten (`ValueField`, `CountField`, …), `offer_naming` (§13), `aim_again` zurück in die Platzierung; F1 → `manualRequested` |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link` |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
@@ -226,7 +226,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `manual_window.py` | das Handbuchfenster (§2.7, §19.2); Rangfolge und Fundstelle aus `core/manual_search.py` |
+| `manual_window.py` | das Handbuchfenster (§2.7, §19.2), Teile als Überschriften; Rangfolge und Fundstelle aus `core/manual_search.py` |
 | `guide_targets.py` | was ein Name der Bildanleitungen meint (`widget_for`, `area_for`, `action_for`) — für Tour und `tools/make_guides.py`; ein fehlendes Ziel ist `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |

@@ -641,6 +641,20 @@ def story_drill_a_hole(run: GuideRun) -> None:
     run.capture(6, rings={"viewport": hole})
     run.capture(7)
 
+    # Der Doppelklick aus Schritt 7, wie ihn der Kunde macht, und im wieder
+    # geöffneten Dialog die Lage: Die Kurzfassung verspricht das Verschieben.
+    history = run.window.history_panel.list
+    history.itemDoubleClicked.emit(history.item(history.count() - 1))
+    run.settle(40)
+    dialog = run.window._op_dialog
+    if dialog is None or not dialog.isVisible():
+        raise SystemExit("Der Schritt „Bohrung setzen“ ging im Verlauf nicht wieder auf")
+    dialog._editors["x"].set_value(float(chosen["x"]) + 15.0)
+    run.settle(40)
+    run.capture(8)
+    dialog.reject()
+    run.settle(20)
+
 
 def story_print_a_model(run: GuideRun) -> None:
     """Vom Startbildschirm über den Prüfbericht in den Druckdialog."""

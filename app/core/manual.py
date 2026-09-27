@@ -94,18 +94,15 @@ class Page:
 #: Ein Bildverweis im Fließtext einer Seite.
 FIGURE_PATTERN: Final = re.compile(r"!\[\]\(figure:([a-z0-9-]+)\)")
 
-#: Das Kapitel, auf das der Startbildschirm zeigt.
-#:
-#: Sein Knopf heißt „Handbuch — die ersten fünfzehn Minuten" und öffnete „Was
-#: Solidon ist", den ersten von über vierzig Einträgen: ``pages()`` liefert die
-#: Einführung zuerst, und das Handbuchfenster stellte auf Zeile null. Wer den
-#: einzigen Hilfe-Knopf des Startbildschirms drückt, musste das zugesagte
-#: Kapitel danach selbst suchen.
+#: Die erste Seite, „Wo fange ich an?": Auf sie zeigen der Handbuchknopf des
+#: Startbildschirms und F1 im Hauptfenster (Konzept Handbuch §4, §7).
 #:
 #: Der Schlüssel steht hier und nicht in der Oberfläche: Welche Seite gemeint
-#: ist, weiß das Handbuch. ``tests/test_manual.py`` hält Knopftext und
-#: Seitentitel zusammen.
-FIRST_MINUTES: Final = "start"
+#: ist, weiß das Handbuch. ``tests/test_manual.py`` hält Knopfhinweis und
+#: Seitentitel zusammen. Er heißt ``start`` wie die frühere erste Seite, die sie
+#: ersetzt, damit ein Verweis auf ``handbuch.html#start`` weiter an den Anfang
+#: führt.
+WHERE_TO_START: Final = "start"
 SPACEMOUSE_ACCESS: Final = "spacemouse-access"
 
 _SPACEMOUSE_LINUX = _(
@@ -167,6 +164,107 @@ def spacemouse_access_help(platform: str, device: tuple[int, int] | None = None)
     return text
 
 
+def _where_to_start_page() -> Page:
+    """Die erste Seite: welche Anleitung zu welchem Vorhaben führt.
+
+    Die zwei Listen entstehen aus :data:`guides.GUIDES` und nicht aus einem
+    Satz, der sie aufzählt: Eine neue Anleitung steht ohne Nachtrag hier, und
+    jeder Verweis heißt in jeder Sprache wie die Seite, auf die er führt. Was
+    die frühere erste Seite als einzige wusste, steht kurz darunter, mit ihren
+    vier Bildschirmfotos: die Fragen beim ersten Start, welche Dateien Solidon
+    liest, das Auswählen in zwei Stufen, der Dialog einer Handlung und der
+    Prüfbericht. ``main-window`` ist zugleich das Vorschaubild der Website
+    (``og:image`` in ``tools/make_manual.py``).
+    """
+
+    def listed(part: guides.GuidePart) -> str:
+        return "\n".join(
+            f"* [{guide.title}](manual:{guide.key}): {guide.summary}"
+            for guide in guides.GUIDES
+            if guide.part == part
+        )
+
+    blocks = [
+        str(
+            _(
+                "Jede Anleitung zeigt ihre Schritte an Bildern der echten Oberfläche. "
+                "Eine Nummer und ein Rahmen markieren, wohin Sie klicken. Nehmen Sie "
+                "die, die zu Ihrem Vorhaben passt."
+            )
+        ),
+        f"**{_('Vom Start bis zum Druck')}**\n\n{listed('start')}",
+    ]
+    tasks = listed("tasks")
+    if tasks:
+        blocks.append(f"**{_('Einzelne Aufgaben')}**\n\n{tasks}")
+    blocks += [
+        str(
+            _(
+                "**Beim ersten Start** fragt Solidon nach Sprache und Drucker. Steht Ihr "
+                "Drucker nicht in der Liste, nehmen Sie einen ähnlichen; die Maße lassen "
+                "sich später ändern. *Später einstellen* geht auch. Beides ändern Sie "
+                "jederzeit in den Einstellungen. Filamente aus Ihrem Slicer übernehmen "
+                "Sie im Filamentlager als eigene Spulen."
+            )
+        ),
+        "![](figure:start-screen)",
+        str(
+            _(
+                "**Welche Dateien Solidon öffnet:** STL, 3MF, OBJ, PLY, OFF, GLB, GLTF, "
+                "STEP und STP als Modell, SVG und DXF als Zeichnung zum Hochziehen. Steht "
+                "in der Datei keine Einheit, wie bei STL, fragt Solidon nach; fast alles "
+                "im Netz ist in Millimetern. Große Dateien liest Solidon im Hintergrund, "
+                "das Fenster bleibt bedienbar. Eine Datei aus dem Netz ziehen Sie als "
+                "Verweis aus dem Browser auf das Fenster, oder Sie öffnen *Datei → Modell "
+                "aus dem Netz …*."
+            )
+        ),
+        "![](figure:main-window)",
+        str(
+            _(
+                "**Der Prüfbericht** rechts sagt, was am Modell nicht stimmt. Ein Klick "
+                "auf einen Befund zeigt darunter, was Sie dagegen tun können."
+            )
+        ),
+        "![](figure:report)",
+        str(
+            _(
+                "**Auswählen geht in zwei Stufen.** Der erste Klick wählt das ganze Teil, "
+                "der zweite die Fläche darin; `Esc` geht eine Stufe zurück. Rechts unter "
+                "*Auswahl* stehen dann die Handlungen, die dazu passen. Der Rechtsklick "
+                "zeigt, was es nur an dieser Stelle gibt: den Schritt, aus dem sie stammt, "
+                "das Zeichnen auf der Fläche und das Ausblenden des Körpers."
+            )
+        ),
+        str(
+            _(
+                "**Jede Handlung öffnet einen Dialog.** Vorn stehen die Werte, die man "
+                "meistens ändert. Der Rest liegt hinter *Weitere Einstellungen* und passt "
+                "in aller Regel schon."
+            )
+        ),
+        "![](figure:op-dialog)",
+        str(
+            _(
+                "**Der Rest des Handbuchs:** *{topics}* erklärt die Bereiche des Programms "
+                "im Einzelnen, *{help}* hilft, wenn etwas nicht geht, und *{reference}* "
+                "führt jedes Fachwort und jede Operation mit ihren Werten. Die Suche im "
+                "Handbuchfenster versteht auch eigene Wörter wie „abrunden“."
+            )
+        ).format(
+            topics=PART_TITLES["topics"],
+            help=PART_TITLES["help"],
+            reference=PART_TITLES["reference"],
+        ),
+    ]
+    return Page(
+        key=WHERE_TO_START,
+        title=_("Wo fange ich an?"),
+        summary=_("Welche Anleitung zu Ihrem Vorhaben passt, und was Sie vorher wissen sollten."),
+        body="\n\n".join(blocks),
+    )
+
+
 def _spacemouse_page() -> Page:
     """Dieselbe Hilfe im Handbuch und im kopierbaren Gerätehinweis."""
     return Page(
@@ -211,79 +309,6 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "lässt sich das abschalten.\n\n"
             "Ohne Netz, ohne Konto und ohne Sprachmodell bleibt alles außer dem "
             "Chat benutzbar."
-        ),
-    ),
-    Page(
-        key="start",
-        summary=_("Der erste Durchlauf von der heruntergeladenen Datei bis zur Druckdatei."),
-        title=_("Die ersten fünfzehn Minuten"),
-        body=_(
-            "Wer noch nie mit einem Konstruktionsprogramm gearbeitet hat, fängt "
-            "hier an. Ein heruntergeladenes Modell bekommt ein Loch und wird "
-            "danach gedruckt — der häufigste aller Fälle, in acht "
-            "Schritten.\n\n"
-            "**1. Beim ersten Start zwei Fragen beantworten.** Sprache und Drucker. "
-            "Im Filamentlager lassen sich eingelegte Slicer-Filamente samt Typ und Farbe "
-            "bewusst als eigene Spulen übernehmen. Steht der eigene Drucker nicht dabei, "
-            "tut es ein ähnlicher "
-            "— die Maße lassen sich später ändern. *Später einstellen* geht auch, "
-            "dann gelten Vorgaben. Beides lässt sich in den Einstellungen "
-            "wechseln; die Sprache wirkt dort sofort, Ihre übrigen Eingaben "
-            "bleiben stehen, und *Abbrechen* stellt die vorherige wieder her.\n\n"
-            "![](figure:start-screen)\n\n"
-            "**2. Eine Datei auf das Fenster ziehen.** STL, 3MF, OBJ, PLY, "
-            "OFF, GLB oder GLTF und STEP oder STP; dazu SVG und DXF für "
-            "Zeichnungen, die extrudiert werden sollen. Ist in der Datei keine Einheit "
-            "vermerkt — bei STL nie —, fragt Solidon nach, statt zu raten. Im "
-            "Zweifel Millimeter: fast alles im Netz ist in Millimetern.\n\n"
-            "Große Dateien werden im Hintergrund gelesen: Ab etwa acht Megabyte "
-            "steht eine Ladeanzeige mit „Modell wird gelesen“ im Bild, und das "
-            "Fenster bleibt bedienbar. Kleinere sind da längst geladen.\n\n"
-            "Liegt die Datei noch nicht auf der Platte, geht auch ihre Adresse: "
-            "den Herunterladen-Verweis aus dem Browser auf das Fenster ziehen, "
-            "oder *Datei → Modell aus dem Netz* — das Feld ist mit dem gefüllt, "
-            "was in der Zwischenablage steht. Wer dabei die Adresse der "
-            "Modellseite erwischt statt der Datei, bekommt es gesagt.\n\n"
-            "**3. In den Prüfbericht schauen.** Rechts steht, was mit dem Modell "
-            "nicht stimmt. Löcher, doppelte Flächen, verkehrt herum liegende "
-            "Dreiecke — bei heruntergeladenen Modellen ist das die Regel, nicht "
-            "die Ausnahme. Die häufigsten Befunde tragen eine Schaltfläche, die "
-            "sie behebt; wo keine dasteht, sagt der Bericht wenigstens, was der "
-            "Befund bedeutet.\n\n"
-            "![](figure:report)\n\n"
-            "**4. Reparieren.** Meist genügt die vorgeschlagene Handlung im "
-            "Bericht. Das Modell bleibt dabei, was es war — die Reparatur ist ein "
-            "Schritt im Verlauf und lässt sich zurücknehmen.\n\n"
-            "![](figure:main-window)\n\n"
-            "**5. Die Fläche wählen, in die das Loch soll.** Zwei Klicks, und "
-            "das mit Absicht: Der erste wählt das **ganze Teil**, der zweite die "
-            "Stelle darin — eine Fläche, eine Bohrung. So kommt man auch an das "
-            "Teil selbst heran, um es zu verschieben oder zu drehen; `Esc` geht "
-            "wieder eine Stufe zurück. Sobald die Fläche gewählt ist, stehen "
-            "rechts im Auswahlfenster die Handlungen, die zu ihr passen — vorn "
-            "*Bohrung setzen*.\n\n"
-            "Der Rechtsklick führt keine Operationen aus. Er zeigt, was es nur "
-            "dort gibt: den Schritt, aus dem die Stelle stammt, das Zeichnen "
-            "auf dieser Fläche und das Ausblenden des Körpers.\n\n"
-            "**6. Den Durchmesser eintragen und übernehmen.** Ort und Richtung "
-            "stehen schon da, weil die Fläche ausgewählt war. Soll die Schraube "
-            "darin noch Spiel zum Ausrichten haben, setzt der Haken *Langloch* "
-            "Länge und Richtung dazu, und die Vorschau zeigt beides mit. Alles "
-            "Weitere — Toleranz, Auflösung — liegt hinter *Weitere "
-            "Einstellungen* und bleibt in aller Regel unberührt.\n\n"
-            "![](figure:op-dialog)\n\n"
-            "Das Ergebnis: derselbe Körper, ein Loch mehr.\n\n"
-            "![](figure:drill)\n\n"
-            "**7. Sitzt das Loch falsch, wird es verschoben, nicht neu gebohrt.** "
-            "Ein Doppelklick auf den Schritt im Verlauf öffnet ihn wieder. Zahl "
-            "ändern, übernehmen, fertig. Das gilt auch noch nächste Woche.\n\n"
-            "**8. Drucken.** *Datei → Drucken vorbereiten*, dann *Slicen*: Der "
-            "Slicer rechnet die Druckdatei, ohne dass man ihn zu sehen "
-            "bekommt, und *Druckdatei speichern* legt sie ab. Wer lieber im "
-            "Slicer weiterarbeitet, nimmt *Im Slicer öffnen* — oder "
-            "*Datei → Exportieren* für eine 3MF ohne alles.\n\n"
-            "Mehr braucht der erste Durchgang nicht. Alles Übrige in diesem "
-            "Handbuch ist Ausbau davon."
         ),
     ),
     Page(
@@ -2861,13 +2886,13 @@ OUTLINE: Final[tuple[tuple[Part, tuple[str, ...]], ...]] = (
     (
         "start",
         (
+            WHERE_TO_START,
             "what",
             "window-overview",
             "print-a-model",
             "drill-a-hole",
             "first-part",
             "housing-with-lid",
-            "start",
             "ways",
         ),
     ),
@@ -2952,6 +2977,7 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
     written = {
         page.key: page
         for page in (
+            _where_to_start_page(),
             *INTRODUCTION,
             _spacemouse_page(),
             *(guide_page(guide) for guide in guides.GUIDES),
@@ -2967,6 +2993,23 @@ def find(key: str, registry: Registry | None = None) -> Page | None:
         if page.key == key:
             return page
     return None
+
+
+def help_for(operation: str, registry: Registry | None = None) -> tuple[str, str]:
+    """Wo das Handbuch eine Operation erklärt: Seite und Stelle (Konzept Handbuch §7).
+
+    Lehrt eine Anleitung die Operation (``Guide.teaches``), ist es ihre Seite,
+    von oben. Sonst ist es der Eintrag in der Referenz ihrer Kategorie, an
+    seiner Überschrift, so wie das Handbuchfenster sie zeigt: Titel und
+    Registername, ohne die Auszeichnung des Namens. F1 im Operationsdialog
+    fragt hier und nicht in der Oberfläche, damit die Antwort ohne Fenster
+    prüfbar ist.
+    """
+    for guide in guides.GUIDES:
+        if operation in guide.teaches:
+            return guide.key, ""
+    spec = (registry or REGISTRY).get(operation)
+    return spec.category, f"{spec.title} ({spec.name})"
 
 
 def titled(page: Page, text: str) -> str:
@@ -3046,11 +3089,12 @@ def as_html(
 def without_figures(body: str) -> str:
     """Bildverweise durch ihren Alt-Text ersetzen."""
     from app.core import figures
+    from app.core.markup import plain
 
     def describe(match: re.Match[str]) -> str:
         figure = figures.find(match.group(1))
         if figure is None or not figure.in_text:
             return ""
-        return f"*{_('Abbildung')}: {figure.alt}*"
+        return f"*{_('Abbildung')}: {plain(str(figure.alt))}*"
 
     return FIGURE_PATTERN.sub(describe, body)

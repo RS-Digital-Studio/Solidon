@@ -318,6 +318,8 @@ class LocalRecognitionDialog(QDialog):
     pickRequested = Signal()
     operationRequested = Signal(str, str)
     """Eine Operation am Körper der Suche statt eines weiteren Suchlaufs (Name, Körper)."""
+    manualRequested = Signal(str, str)
+    """F1 im Bearbeitungsdialog: Seite und Stelle im Handbuch, durchgereicht."""
 
     def __init__(
         self,
@@ -611,6 +613,7 @@ class LocalRecognitionDialog(QDialog):
         self.editor.valuesChanged.connect(self._edit_changed)
         self.editor.accepted.connect(self._edit_accepted)
         self.editor.rejected.connect(self._edit_rejected)
+        self.editor.manualRequested.connect(self.manualRequested)
         self.editor.show()
         self._edit_changed()
 

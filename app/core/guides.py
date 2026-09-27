@@ -151,6 +151,14 @@ class Guide:
     summary: TranslatableText | str
     part: GuidePart
     steps: tuple[GuideStep, ...]
+    teaches: tuple[str, ...] = ()
+    """Die Operationen, die diese Anleitung lehrt, mit ihrem Registernamen.
+
+    F1 in ihrem Dialog schlägt diese Anleitung auf (``manual.help_for``). Ein
+    eigenes Feld und keine Ableitung aus den Markierungen: Der Zwilling im
+    anderen Rechenkern (``drill_brep_hole`` neben ``drill_hole``) öffnet
+    denselben Dialog, ohne dass ein Bild ihn markiert. Jede markierte Operation
+    steht hier auch, das prüft ``tests/test_guides.py``."""
 
     def figure_key(self, number: int) -> str:
         """Der Schlüssel der Abbildung zu Schritt ``number`` (gezählt ab 1)."""
@@ -186,7 +194,10 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 _("Jede Nummer im Bild steht für einen Bereich des Fensters."),
                 (
                     "toolbar",
-                    _("Werkzeugleiste: neu, öffnen, speichern, Modell einfügen, zeichnen."),
+                    _(
+                        "Werkzeugleiste: neu, öffnen, speichern, Modell einfügen, "
+                        "zeichnen, formen, Skelett."
+                    ),
                 ),
                 ("tree", _("Objekte: alle Teile und was Solidon darin erkennt.")),
                 ("parameters", _("Parameter: benannte Maße wie Wandstärke oder Lochabstand.")),
@@ -235,7 +246,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
     Guide(
         key="drill-a-hole",
         title=_("Ein Loch bohren"),
-        summary=_("Eine Bohrung in ein vorhandenes Modell setzen und später verschieben."),
+        summary=_("Löcher in ein vorhandenes Modell bohren und später verschieben."),
         part="start",
         steps=(
             step(_("Klicken Sie auf das Teil. Es ist jetzt gewählt."), "viewport"),
@@ -260,12 +271,24 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 ),
                 "history.last",
             ),
+            step(
+                _(
+                    "Ändern Sie *Position X* oder *Position Y* "
+                    "und klicken Sie auf *Bohrung setzen*."
+                ),
+                "field:x",
+                "field:y",
+                "dialog.accept",
+            ),
         ),
+        teaches=("drill_hole", "drill_brep_hole"),
     ),
     Guide(
         key="first-part",
         title=_("Das erste eigene Teil"),
-        summary=_("Eine Platte mit gesenktem Schraubenloch, vom leeren Projekt bis zum Druck."),
+        summary=_(
+            "Vom leeren Projekt zur fertigen Platte, mit einem Baustein für das Schraubenloch."
+        ),
         part="start",
         steps=(
             step(_("Klicken Sie auf dem Startbildschirm auf *Neues Projekt*."), "start.new"),
@@ -301,17 +324,21 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "dialog.accept",
             ),
             step(
-                _("Die Platte ist fertig. Gedruckt wird wie in *Ein Modell prüfen und drucken*."),
+                _(
+                    "Die Platte ist fertig. Gedruckt wird wie in "
+                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
+                ),
                 "viewport",
                 "report.slicer",
             ),
         ),
+        teaches=("create_brep_box", "create_box", "insert_screw_hole"),
     ),
     Guide(
         key="housing-with-lid",
         title=_("Ein Gehäuse mit Deckel"),
         summary=_(
-            "Eine Dose mit passendem Deckel: aushöhlen, Deckel erzeugen, druckfertig hinlegen."
+            "Eine Dose aushöhlen, den passenden Deckel erzeugen und beides druckfertig hinlegen."
         ),
         part="start",
         steps=(
@@ -320,8 +347,8 @@ GUIDES: Final[tuple[Guide, ...]] = (
             # (Probelauf 27.09.2026).
             step(
                 _(
-                    "Legen Sie wie in *Das erste eigene Teil* einen Quader an "
-                    "und klicken Sie darauf."
+                    "Legen Sie wie in [Das erste eigene Teil](manual:first-part) "
+                    "einen Quader an und klicken Sie darauf."
                 ),
                 "viewport",
             ),
@@ -363,12 +390,13 @@ GUIDES: Final[tuple[Guide, ...]] = (
             step(
                 _(
                     "Dose und Deckel liegen druckfertig nebeneinander. Gedruckt wird wie in "
-                    "*Ein Modell prüfen und drucken*."
+                    "[Ein Modell prüfen und drucken](manual:print-a-model)."
                 ),
                 "viewport",
                 "report.slicer",
             ),
         ),
+        teaches=("hollow_object", "create_lid", "orient_for_print"),
     ),
 )
 

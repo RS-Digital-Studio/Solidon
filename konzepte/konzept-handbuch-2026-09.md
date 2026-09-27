@@ -104,10 +104,32 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Seite auf, Website und PDF springen zum Anker, Text und Suche behalten nur
   den Text; `test_manual` prüft, dass jeder Verweis in jeder Sprache auf eine
   Seite führt und keine Übersetzung einen verliert.
-- **Als Nächstes, in einer neuen Sitzung (Robert):** der Plan in §12. Zuerst
-  `main` hereinholen, dann die Arbeitsbäume der Stränge B und C anlegen und
-  ihre Agenten mit den Aufträgen aus §12.2 und §12.3 starten, danach Strang A
-  selbst.
+- **Stränge B und C laufen** (27.09.2026 abends): Arbeitsbäume
+  `F:\3D Druck.handbuch-texte` (`handbuch-texte`) und `F:\3D Druck.handbuch-pdf`
+  (`handbuch-pdf`), beide vom Stand `8fa13081f`, die Agenten mit den Aufträgen
+  aus §12.2 und §12.3. Ihre Berichte kommen nach
+  `F:\3D Druck\.claude\.state\handbuch-umbau-2026-09-27\strang-b-bericht.md` und
+  `strang-c-bericht.md`. Die Probebilder für Strang C (alle Anleitungen, sechs
+  Sprachen) liegen unter `F:\3D Druck\output\review\handbuch-probe-2026-09-27\`.
+  Die Release-Sitzung heißt „Release 0.5.1“ und prüft jede Lieferung, auch B
+  und C vor dem Merge.
+- **Aufnahme auf einem belegten Schirm:** `make_guides.py` legt sein Fenster
+  für die Dauer des Laufs in die oberste Ebene. Liegt auf dem Aufnahmeschirm
+  ein Fenster des Nutzers, brach der Lauf sonst nach 300 s ab.
+- **HB-5 und HB-7 gebaut:** „Wo fange ich an?“ ersetzt *Die ersten fünfzehn
+  Minuten* (Schlüssel bleibt `start`, Konstante `manual.WHERE_TO_START`); die
+  Listen der Anleitungen entstehen aus `guides.GUIDES`, und die vier
+  Bildschirmfotos der alten Seite stehen jetzt dort (`main-window` ist auch
+  das Vorschaubild der Website). Das Handbuchfenster
+  zeigt die Teile als Überschriften, die Suche nicht. F1 im Hauptfenster öffnet
+  „Wo fange ich an?“, im Operationsdialog die Anleitung (`Guide.teaches`) oder
+  den Eintrag in der Referenz (`manual.help_for`). Dazu die drei Befunde der
+  Release-Sitzung zu Teil 1: Legende der Werkzeugleiste mit allen sieben
+  Knöpfen, *Ein Loch bohren* zeigt das Verschieben als Schritt 8, Verweise in
+  Schrittsätzen sind echte Seitenverweise, Alt-Texte ohne Auszeichnung.
+- **Als Nächstes:** HB-8 (§12.1, Punkt 3), dann HB-12; danach B und C
+  zusammenführen, `tools/make_manual.py` Zeile ~722/~728 (Texte „von den ersten
+  fünfzehn Minuten“) auf „Wo fange ich an?“ nachziehen, Tor, Meldung.
 
 ## §1 Befund
 
@@ -461,9 +483,9 @@ Nachweis.
 | HB-2 | `app/ui/guide_targets.py`: Namen → Widget/Rechteck; `_flash_area` benutzt sie | Test: jedes Wort des Vokabulars wird aufgelöst (Fenstertest, läuft beim Release) | [x] Auflösung und Tour gebaut; Kerntest: Wortschatz und Auflösung decken sich. Der Fenstertest über alle festen Namen läuft beim Release |
 | HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. Bildbudget gemessen (§5.3): 30 KB je Bild, rund 11 MB für sechzig Schritte in sechs Sprachen. `/erzeugen` nimmt die Anleitungen bei jedem Release in allen Sprachen auf, nach dem Versionssprung und vor `make_manual.py`; `test_guides` steht bei den Wächtern vor dem Tag. [x] |
 | HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [x] alle vier gebaut, auf Deutsch aufgenommen und gesichtet, Sätze in sechs Sprachen; der Menüweg im Satz ist gegen das Menü geprüft, jeder andere hervorgehobene Name gegen den Katalog, in jeder Sprache (`test_a_menu_path_in_a_step_is_the_one_the_menu_shows`, `test_a_name_in_a_step_is_the_one_the_interface_shows`); auf Englisch aufgenommen und gesichtet |
-| HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [ ] |
+| HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [x] „Wo fange ich an?“ als erste Seite, Listen aus `guides.GUIDES`; Teilüberschriften im Fenster, gesperrt und von den Pfeiltasten übersprungen, in voller Schriftfarbe; Hilfe-Menü und Startknopf sprechen vom Lernweg. Kerntests `test_the_manual_begins_where_to_start`, `test_where_to_start_leads_to_every_guide_by_its_title` (sechs Sprachen); Fenstertests für Gruppen und Startknopf laufen beim Release, das Verhalten ist per Sonde am Stand belegt |
 | HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [x] 38 von 38 unter den ersten drei (vorher 25), 35 ganz oben (vorher 7), keine ohne Treffer (vorher 4); `tests/test_manual_search.py`, Nachweis `suche.md`. Der Fenstertest über Rangfolge und Fundstelle läuft beim Release |
-| HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [ ] |
+| HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [x] F1 im Operationsdialog meldet `manual.help_for` (Anleitung aus `Guide.teaches`, sonst Referenzeintrag an seiner Überschrift, markiert); verdrahtet in `_open_operation_dialog` und im Bearbeitungsdialog der lokalen Suche. F1 im Hauptfenster: neu geöffnet „Wo fange ich an?“, offen bleibt die Leseseite, minimiert kommt es zurück. Kerntest über alle 142 Operationen; Fenstertests laufen beim Release, per Sonde belegt |
 | HB-8 | Weitere Anleitungen (Liste in §4) | je Anleitung wie HB-4 | [~] *Ein Gehäuse mit Deckel* gebaut, auf Deutsch aufgenommen und gesichtet, Sätze in sechs Sprachen; offen: *Ein Teil, das nicht auf das Bett passt* und die Aufgaben aus dem Teil *Anleitungen* |
 | HB-9 | Erklärseiten kürzen und neu übersetzen | Wortzahl der Erklärseiten um mindestens ein Drittel kleiner, kein Wissen verloren (verschoben in Anleitungen oder Referenz) | [ ] |
 | HB-10 | Website und PDF nach Teilen gegliedert, Referenz am Ende; PDF mit Lesezeichen und **ohne tote Verweise auf den Bau-Rechner** | Seiten erzeugt beim Release, Tests `rendered` grün, im PDF kein Verweis mit `file:` | [~] Die Verweise um die Bildschirmfotos fallen vor dem Druck weg; `test_the_pdf_links_nowhere_outside_itself_but_the_website` hält es beim Release. Mit den Anleitungen wiegt das deutsche PDF 21,5 statt 13,9 MB: Chromium bettet jedes Rasterbild verlustfrei ein, ein Schrittbild mit rund 210 kB, so viel wie ein bisheriges Bildschirmfoto. Die PDFs liegen nur im Repository, nicht im Paket und nicht auf der Website. Offen: Gliederung, Lesezeichen, Bildschirmfotos als JPEG in den Druck geben |
@@ -488,13 +510,19 @@ Nachweis.
 - **Beispielprojekte und Touren** bleiben vorerst unberührt (Robert,
   27.09.2026: „die beispielprojekte erstmal ignorieren", gesagt zu einer
   Kundenmail). Die Anleitungen hängen nicht an ihnen.
-- **Zu entscheiden (Robert):** ob *Die Werkzeuge der Fernsteuerung* ganz aus
-  dem Kundenhandbuch in eine eigene Seite für Entwickler wandert. Heute ist
-  sie bei 30 von 38 Kundensuchen ein Treffer, wiederholt 142
-  Operationsbeschreibungen und widerspricht der Seite *Fernsteuerung*.
-  Die Suche behandelt sie seit HB-6 nachrangig (ihre Wertung wird geviertelt);
-  in keiner der 50 Kundensuchen steht sie mehr vor der richtigen Seite. Der
-  Widerspruch zur Seite *Fernsteuerung* wird in jedem Fall aufgelöst.
+- **Entschieden (27.09.2026, nach Kundensicht):** *Die Werkzeuge der
+  Fernsteuerung* bleibt als erzeugte Seite unter *Nachschlagen*. Wer ein
+  Programm per MCP anbindet, ist auch Kunde, und die Seite ist die Liste, die
+  er dafür braucht; die Suche stellt sie seit HB-6 nachrangig (ihre Wertung
+  wird geviertelt), in keiner der 50 Kundensuchen steht sie vor der richtigen
+  Seite. Den Widerspruch zur Seite *Fernsteuerung* löst Strang B auf (§12.2).
+- **Die Gruppe *Anleitungen* verweist nicht mit eigenen Zeilen** auf Aufgaben,
+  die schon eine Anleitung der Ersten Schritte zeigt (Baustein einsetzen,
+  aushöhlen mit Deckel, bohren, an den Slicer übergeben). Eine Verweiszeile in
+  der Seitenliste risse die Pfeiltasten in den anderen Teil. Diese Aufgaben
+  nennt die Kurzfassung ihrer Anleitung, und „Wo fange ich an?“ listet alle
+  Anleitungen beider Teile mit Kurzfassung: jede Aufgabe in zwei Klicks vom
+  Startbildschirm (§11).
 
 ## §11 Abnahme des Ganzen
 
@@ -562,7 +590,7 @@ sechs Sprachen.
    Kanten abrunden oder anfasen, beschriften, zeichnen und herausziehen,
    zweifarbig drucken, reparieren. Baustein einsetzen, aushöhlen mit Deckel,
    bohren und an den Slicer übergeben zeigen die vorhandenen Anleitungen;
-   die Gruppe *Anleitungen* verweist auf sie, statt sie zu doppeln. Je
+   „Wo fange ich an?“ führt zu ihnen, statt sie zu doppeln (§10). Je
    Anleitung erst aufnehmen und ansehen, dann Sätze und Übersetzungen
    festschreiben (§5.3); drei bis sechs Schritte je Aufgabe, damit das
    Bildbudget hält. Die Namen im Satz prüft `test_guides` in jeder Sprache.

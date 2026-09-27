@@ -28,8 +28,17 @@ from __future__ import annotations
 
 import re
 
-from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
+from PySide6.QtCore import (
+    QByteArray,
+    QModelIndex,
+    QPersistentModelIndex,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+)
 from PySide6.QtGui import (
+    QFont,
     QImage,
     QKeySequence,
     QPainter,
@@ -44,17 +53,21 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QSplitter,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
 from app.branding import APP_NAME, WEBSITE_URL
-from app.core import drawing, figures, manual, manual_search
+from app.core import drawing, figures, manual, manual_search, markup
 from app.core.log import get_logger
 from app.i18n import get_language, tr
 from app.ui.dialogs import open_link
 from app.ui.icons import OVERSAMPLING
+from app.ui.style import SPACE
 
 _log = get_logger(__name__)
 
@@ -62,6 +75,14 @@ _log = get_logger(__name__)
 #: Ohne diesen Abzug läge eine Zeichnung genau auf der Kante und der
 #: Rollbalken schnitte ihren rechten Rand ab.
 COLUMN_MARGIN = 40
+
+#: Unter dieser Rolle trägt eine Zeile der Seitenliste den Index ihrer Seite.
+#: Eine Teilüberschrift trägt keinen; daran erkennen Fenster und Zeichner sie.
+PAGE_ROLE = Qt.ItemDataRole.UserRole
+
+#: Der Abstand über einer Teilüberschrift, damit die Teile als Gruppen lesbar
+#: sind und nicht als eine Liste mit fetten Zeilen darin.
+HEADING_GAP = 3 * SPACE
 
 
 #: Markdown-Bild, dessen Ziel nicht der eigene Abbildungskatalog ist. Der
@@ -272,6 +293,47 @@ class PageView(QTextBrowser):
         return self.palette().window().color().lightness() < 128
 
 
+class _Headings(QStyledItemDelegate):
+    """Zeichnet die Teilüberschriften der Seitenliste als Überschriften.
+
+    Die Zeile ist gesperrt, damit die Pfeiltasten über sie hinweggehen und ein
+    Klick nichts wählt, wie im Bausteinkatalog. Gesperrt heißt in der Palette
+    aber grau, und grau hieße „nicht verfügbar"; die Überschrift ist der
+    Wegweiser durch die Liste und steht deshalb in voller Schriftfarbe, ohne
+    Hervorhebung unter dem Mauszeiger und mit Abstand davor.
+    """
+
+    def initStyleOption(  # noqa: N802 — Qt gibt den Namen vor
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> None:
+        super().initStyleOption(option, index)
+        if index.data(PAGE_ROLE) is None:
+            option.state |= QStyle.StateFlag.State_Enabled
+            option.state &= ~QStyle.StateFlag.State_MouseOver
+
+    def sizeHint(  # noqa: N802 — Qt gibt den Namen vor
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> QSize:
+        size = super().sizeHint(option, index)
+        if index.data(PAGE_ROLE) is None and index.row() > 0:
+            size.setHeight(size.height() + HEADING_GAP)
+        return size
+
+
+def _part_heading(title: str) -> QListWidgetItem:
+    """Die Überschrift eines Teils in der Seitenliste: nicht wählbar, fett, unten bündig."""
+    heading = QListWidgetItem(title)
+    heading.setFlags(Qt.ItemFlag.NoItemFlags)
+    font = QFont(heading.font())
+    font.setBold(True)
+    heading.setFont(font)
+    # Unten bündig, damit der Abstand aus ``_Headings.sizeHint`` über der
+    # Überschrift steht und sie an ihren Seiten darunter hängt.
+    heading.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+    heading.setData(Qt.ItemDataRole.AccessibleDescriptionRole, tr("Teil des Handbuchs"))
+    return heading
+
+
 class ManualWindow(QMainWindow):
     """Das Handbuch: Seiten links, Text rechts, Suche darüber."""
 
@@ -290,6 +352,7 @@ class ManualWindow(QMainWindow):
         self.search.setAccessibleName(tr("Handbuch durchsuchen"))
 
         self.contents = QListWidget(self)
+        self.contents.setItemDelegate(_Headings(self.contents))
         self.contents.currentRowChanged.connect(self._show_current)
         self.contents.setAccessibleName(tr("Seiten des Handbuchs"))
 
@@ -358,35 +421,50 @@ class ManualWindow(QMainWindow):
     # --- Inhalt ---------------------------------------------------------------
 
     def _fill(
-        self, pages: list[manual.Page] | tuple[manual.Page, ...], spots: list[str] | None = None
+        self,
+        pages: list[manual.Page] | tuple[manual.Page, ...],
+        spots: list[str] | None = None,
+        *,
+        grouped: bool = True,
     ) -> None:
-        """Die Seitenliste neu setzen und die erste zeigen.
+        """Die Seitenliste neu setzen und die erste Seite zeigen.
 
         ``spots`` nennt je Seite die Stelle, an der sie nach einer Suche
-        aufschlägt; ohne Suche beginnt jede oben.
+        aufschlägt; ohne Suche beginnt jede oben. ``grouped`` setzt über jeden
+        Teil des Handbuchs eine Überschrift (Konzept Handbuch §4). Eine Suche
+        zeigt ihre Rangliste ohne: Dort zählt, was am besten passt, und eine
+        Überschrift zwischen Rang eins und zwei risse zusammen, was die Suche
+        geordnet hat.
         """
         self._visible = list(pages)
         self._spots = spots or []
         self.contents.clear()
-        for page in self._visible:
+        part = None
+        for index, page in enumerate(self._visible):
+            if grouped and page.part != part:
+                part = page.part
+                self.contents.addItem(_part_heading(str(manual.PART_TITLES[part])))
             item = QListWidgetItem(str(page.title))
+            item.setData(PAGE_ROLE, index)
             # Die erzeugten Kapitel bilden die zweite Hälfte des Handbuchs; der
             # Hinweis sagt, dass dort die vollständige Liste steht.
             # **Der volle Name im Hinweis, die Art dahinter.** „Ausprobieren
             # statt raten: Varianten und Kalibriere" stand im Verzeichnis —
             # mitten im Wort zu Ende und ohne Auslassungszeichen, also wie ein
             # kurzer Titel (Befund B34). Die Kürzung selbst ist richtig; was
-            # fehlte, war der Weg zum ganzen Namen.
+            # fehlte, war der Weg zum ganzen Namen. Die Art ist der Teil des
+            # Handbuchs: In einer Rangliste ohne Überschriften sagt er, ob die
+            # Seite eine Anleitung, eine Erklärung oder Nachschlagewerk ist.
             art = (
                 tr("Alle Operationen dieses Bereichs")
                 if page.generated
-                else tr("Erklärung, kein Nachschlagewerk")
+                else str(manual.PART_TITLES[page.part])
             )
             item.setToolTip(str(page.title))
             item.setStatusTip(f"{page.title} — {art}")
             self.contents.addItem(item)
         if self._visible:
-            self.contents.setCurrentRow(0)
+            self.contents.setCurrentRow(self._row_of(0))
         else:
             # Mit dem nächsten Schritt, nicht mit dem Ende (Regel 17).
             self.text.setMarkdown(
@@ -396,18 +474,38 @@ class ManualWindow(QMainWindow):
                 )
             )
 
+    def _index_at(self, row: int) -> int | None:
+        """Welche Seite in dieser Zeile steht — ``None`` für eine Überschrift."""
+        item = self.contents.item(row)
+        index = item.data(PAGE_ROLE) if item is not None else None
+        return index if isinstance(index, int) else None
+
+    def _row_of(self, index: int) -> int:
+        """In welcher Zeile die Seite mit diesem Index steht."""
+        for row in range(self.contents.count()):
+            if self._index_at(row) == index:
+                return row
+        return -1
+
+    def current_page(self) -> manual.Page | None:
+        """Die Seite, die gerade aufgeschlagen ist."""
+        index = self._index_at(self.contents.currentRow())
+        return None if index is None else self._visible[index]
+
     def _show_current(self, row: int) -> None:
-        if 0 <= row < len(self._visible):
-            page = self._visible[row]
-            # ``manual.titled`` und nicht ``if not page.generated``: Die vier
-            # Wissensseiten sind erzeugt und bringen doch keine Überschrift mit
-            # — über ihnen stand hier keine, und der Text fing mitten im Satz
-            # an. Dieselbe Regel gilt für das erzeugte Handbuch; sie steht
-            # deshalb im Kern und nicht zweimal.
-            self.text.setMarkdown(manual.titled(page, self._with_figures(page)))
-            self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
-            if row < len(self._spots) and self._spots[row]:
-                self._show_spot(self._spots[row])
+        index = self._index_at(row)
+        if index is None:
+            return
+        page = self._visible[index]
+        # ``manual.titled`` und nicht ``if not page.generated``: Die vier
+        # Wissensseiten sind erzeugt und bringen doch keine Überschrift mit
+        # — über ihnen stand hier keine, und der Text fing mitten im Satz
+        # an. Dieselbe Regel gilt für das erzeugte Handbuch; sie steht
+        # deshalb im Kern und nicht zweimal.
+        self.text.setMarkdown(manual.titled(page, self._with_figures(page)))
+        self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
+        if index < len(self._spots) and self._spots[index]:
+            self._show_spot(self._spots[index])
 
     def _show_spot(self, spot: str) -> None:
         """Die Seite an der Stelle aufschlagen, die zur Suche passt, und sie markieren.
@@ -444,10 +542,13 @@ class ManualWindow(QMainWindow):
             figure = figures.find(key)
             if figure is None:
                 return ""
+            # Ohne Auszeichnung: Ein Stern im kursiven Ersatz beendete ihn
+            # mitten im Satz, eine Klammer im Alt-Text das Bild.
+            alt = markup.plain(str(figure.alt))
             if not figure.available(language):
-                return f"*{figure.alt}*"
+                return f"*{alt}*"
             caption = f"\n\n*{figure.caption}*" if figure.caption else ""
-            return f"![{figure.alt}](figure:{key}){caption}"
+            return f"![{alt}](figure:{key}){caption}"
 
         # ``page.text()`` und nicht ``page.body``: Die Kurzfassung steht der
         # Seite voran, im Fenster wie im erzeugten Handbuch.
@@ -467,15 +568,29 @@ class ManualWindow(QMainWindow):
         if index is None:
             index = self._index = manual_search.SearchIndex(self._pages)
         found = index.search(needle)
-        self._fill([hit.page for hit in found], [hit.spot for hit in found])
+        self._fill([hit.page for hit in found], [hit.spot for hit in found], grouped=False)
 
-    def show_page(self, key: str) -> None:
-        """Eine bestimmte Seite zeigen — der Weg von einer Operation ins Kapitel."""
+    def show_page(self, key: str, spot: str = "") -> None:
+        """Eine bestimmte Seite zeigen — der Weg von einer Operation ins Kapitel.
+
+        ``spot`` schlägt sie an dieser Stelle auf, markiert: F1 im
+        Operationsdialog meint den Eintrag der Operation, nicht den Anfang
+        eines Referenzkapitels mit zwanzig anderen.
+        """
         self.search.clear()
-        for row, page in enumerate(self._visible):
-            if page.key == key:
+        for index, page in enumerate(self._visible):
+            if page.key != key:
+                continue
+            row = self._row_of(index)
+            if row == self.contents.currentRow():
+                # Schon offen: Qt meldet keinen Wechsel, und die Stelle wird
+                # vom Anfang der Seite aus gesucht, nicht von der letzten.
+                self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
+            else:
                 self.contents.setCurrentRow(row)
-                return
+            if spot:
+                self._show_spot(spot)
+            return
 
 
 # ``OVERSAMPLING`` stand hier bis zum 07.09.2026 als eigene Kopie, mit

@@ -93,7 +93,9 @@ def test_the_manual_has_pages_at_all() -> None:
 def test_the_manual_intro_reads_like_product_documentation(language: str) -> None:
     """Die Einführung verweist auf Rechtstexte, sie wiederholt keine Warnliste."""
     html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
-    intro = html.split('<h3 id="what">', 1)[1].split('<h3 id="start">', 1)[0]
+    # Die Seite „Was Solidon ist", bis zur nächsten Kapitelüberschrift — seit
+    # „Wo fange ich an?" vorn steht, folgt ihr nicht mehr ``start``.
+    intro = html.split('<h3 id="what">', 1)[1].split("<h3 ", 1)[0]
     present = [marker for marker in PUBLIC_WARNING_MARKERS if marker in intro.casefold()]
     assert not present, f"{language}: rechtliche Warnliste im Handbuch: {present}"
 
@@ -525,6 +527,34 @@ def test_a_chapter_can_be_asked_for_on_its_own() -> None:
     assert "drill_hole" in str(holes.body)
 
 
+def test_f1_on_a_taught_operation_opens_its_guide() -> None:
+    """F1 im Dialog *Bohrung setzen* öffnet die Anleitung, nicht die Referenz
+    (Konzept Handbuch §7) — in beiden Rechenkernen, der Dialog ist derselbe."""
+    assert manual.help_for("drill_hole") == ("drill-a-hole", "")
+    assert manual.help_for("drill_brep_hole") == ("drill-a-hole", "")
+
+
+def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
+    """Ohne Anleitung schlägt F1 den Eintrag der Operation in der Referenz auf,
+    an seiner Überschrift — für jede Operation im Register, in jeder Kategorie.
+
+    Die Stelle wird im Text gesucht, wie das Fenster ihn zeigt: ohne die
+    Auszeichnung des Registernamens.
+    """
+    from app.core import guides, markup
+
+    taught = {name for guide in guides.GUIDES for name in guide.teaches}
+    pages = {page.key: markup.plain(page.text()) for page in manual.pages()}
+    lost = []
+    for spec in REGISTRY.all():
+        if spec.name in taught:
+            continue
+        key, spot = manual.help_for(spec.name)
+        if key not in pages or f"### {spot}" not in pages[key]:
+            lost.append(f"{spec.name} → {key}: {spot!r}")
+    assert not lost, "\n".join(lost)
+
+
 def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
     """Vorgabe und Bereich stehen im Trennzeichen der jeweiligen Sprache.
 
@@ -708,6 +738,17 @@ def test_a_link_to_another_page_leads_where_the_output_says_and_else_stays_text(
     assert markup.unlinked("Erst [das](manual:what), dann das.") == "Erst das, dann das."
 
 
+def test_the_alt_text_of_a_picture_carries_no_markup() -> None:
+    """Ein Schrittsatz steht als Alt-Text am Bild; Sternchen und Verweisklammern
+    darin läse ein Bildschirmleser vor."""
+    text = "Klicken Sie auf *Bohrung setzen*, **dann** `Esc`, wie in [Ein Loch bohren](manual:x)."
+    assert markup.plain(text) == "Klicken Sie auf Bohrung setzen, dann Esc, wie in Ein Loch bohren."
+    html = markup.to_html(
+        "![](figure:probe)", lambda key: markup.FigureSource("probe.webp", text, "")
+    )
+    assert 'alt="Klicken Sie auf Bohrung setzen, dann Esc, wie in Ein Loch bohren."' in html
+
+
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_every_link_between_pages_leads_to_a_page(language: str) -> None:
     """Ein Verweis auf eine Seite, die es nicht gibt, führte ins Leere.
@@ -808,10 +849,75 @@ def test_no_page_prints_its_own_markup(language: str) -> None:
 # --- das Fenster ------------------------------------------------------------------
 
 
+def _page_rows(window: ManualWindow) -> list[int]:
+    """Die Zeilen der Seitenliste, in denen eine Seite steht — ohne Teilüberschriften."""
+    from app.ui.manual_window import PAGE_ROLE
+
+    return [
+        row
+        for row in range(window.contents.count())
+        if window.contents.item(row).data(PAGE_ROLE) is not None
+    ]
+
+
 def test_the_window_lists_every_page(qt_app: QApplication) -> None:
     window = ManualWindow()
 
-    assert window.contents.count() == len(manual.pages())
+    assert len(_page_rows(window)) == len(manual.pages())
+
+
+def test_the_window_groups_the_pages_under_their_parts(qt_app: QApplication) -> None:
+    """Über jedem Teil eine Überschrift, die sich nicht wählen lässt; die Pfeiltasten
+    gehen über sie hinweg, und eine Suche zeigt ihre Rangliste ohne sie
+    (Konzept Handbuch §4, §7)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window = ManualWindow()
+    try:
+        pages = manual.pages()
+        rows = _page_rows(window)
+        headings = [row for row in range(window.contents.count()) if row not in rows]
+        parts = list(dict.fromkeys(page.part for page in pages))
+        assert [window.contents.item(row).text() for row in headings] == [
+            str(manual.PART_TITLES[part]) for part in parts
+        ]
+        for row in headings:
+            flags = window.contents.item(row).flags()
+            assert not flags & Qt.ItemFlag.ItemIsSelectable, window.contents.item(row).text()
+        # Geöffnet wird die erste Seite, nicht die Überschrift über ihr.
+        page = window.current_page()
+        assert page is not None and page.key == manual.WHERE_TO_START
+
+        # Von der letzten Seite eines Teils führt ↓ auf die erste des nächsten.
+        boundary = headings[1]
+        window.contents.setCurrentRow(boundary - 1)
+        QTest.keyClick(window.contents, Qt.Key.Key_Down)
+        assert window.contents.currentRow() == boundary + 1
+        QTest.keyClick(window.contents, Qt.Key.Key_Up)
+        assert window.contents.currentRow() == boundary - 1
+
+        window.search.setText("Loch")
+        assert len(_page_rows(window)) == window.contents.count(), "Überschriften in der Suche"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_a_page_opens_at_the_entry_it_was_asked_for(qt_app: QApplication) -> None:
+    """F1 im Dialog *Verrunden*: das Referenzkapitel, aufgeschlagen und markiert
+    an seinem Eintrag — auch wenn das Kapitel schon offen war."""
+    window = ManualWindow()
+    try:
+        page, spot = manual.help_for("fillet_edges")
+        for _attempt in range(2):
+            window.show_page(page, spot)
+            shown = window.current_page()
+            assert shown is not None and shown.key == page
+            assert window.text.textCursor().selectedText() == spot
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def test_searching_looks_inside_the_pages(qt_app: QApplication) -> None:
@@ -887,7 +993,7 @@ def test_clearing_the_search_brings_everything_back(qt_app: QApplication) -> Non
 
     window.search.setText("")
 
-    assert window.contents.count() == len(manual.pages())
+    assert len(_page_rows(window)) == len(manual.pages())
 
 
 def test_a_page_can_be_opened_by_name(qt_app: QApplication) -> None:
@@ -1423,14 +1529,13 @@ def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> N
         opened = window._manual
         assert opened is not None, "der Knopf öffnete kein Handbuch"
 
-        row = opened.contents.currentRow()
-        assert row >= 0
-        page = opened._visible[row]
-        assert page.key == manual_module.FIRST_MINUTES, (
+        page = opened.current_page()
+        assert page is not None
+        assert page.key == manual_module.WHERE_TO_START, (
             f"geoeffnet wurde {page.title} statt des zugesagten Kapitels"
         )
-        # Ohne Rücksicht auf die Großschreibung: Der Knopf schreibt „… die
-        # ersten fünfzehn Minuten" mitten im Satz, die Seite „Die ersten …".
+        # Ohne Rücksicht auf die Großschreibung: Der Hinweis darf den Titel
+        # mitten im Satz tragen.
         #
         # **Und seit B27 im Hinweis statt auf dem Knopf**: Der ganze Satz
         # machte ihn mehr als doppelt so breit wie seine Nachbarn, er heißt
@@ -1442,6 +1547,77 @@ def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> N
             f"der Knopf sagt {knopf.text()!r} mit Hinweis {knopf.toolTip()!r}, "
             f"die Seite heisst {page.title}"
         )
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def _help_action(window: object) -> object:
+    """Der Menüeintrag *Hilfe → Handbuch …*, der F1 trägt."""
+    from PySide6.QtGui import QAction, QKeySequence
+
+    help_key = QKeySequence(QKeySequence.StandardKey.HelpContents)
+    return next(
+        action
+        for action in window.findChildren(QAction)  # type: ignore[attr-defined]
+        if action.shortcut() == help_key
+    )
+
+
+def test_f1_opens_where_to_start_and_keeps_the_page_being_read(qt_app: QApplication) -> None:
+    """F1 im Hauptfenster: Ein neu geöffnetes Handbuch beginnt bei „Wo fange ich
+    an?"; ein offenes bleibt auf der Seite, die gerade gelesen wird. Der Weg
+    durch eine Bildanleitung ist Schritt lesen, im Hauptfenster tun, mit F1
+    zurück (Konzept Handbuch §7)."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        action = _help_action(window)
+        action.trigger()  # type: ignore[attr-defined]
+        opened = window._manual
+        assert opened is not None
+        assert opened.current_page().key == manual.WHERE_TO_START  # type: ignore[union-attr]
+
+        opened.show_page("drill-a-hole")
+        action.trigger()  # type: ignore[attr-defined]
+        assert opened.current_page().key == "drill-a-hole", "F1 riss die Leseseite weg"  # type: ignore[union-attr]
+
+        opened.close()
+        action.trigger()  # type: ignore[attr-defined]
+        assert opened.isVisible()
+        assert opened.current_page().key == manual.WHERE_TO_START  # type: ignore[union-attr]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_f1_in_an_operation_dialog_opens_the_guide_that_teaches_it(qt_app: QApplication) -> None:
+    """Das F1 des Hauptfensters kommt im Dialog nicht an, er ist ein eigenes
+    Fenster (gemessen: null Auslösungen, Konzept Handbuch §1.2). Geprüft wird
+    der Weg, den das Fenster für jeden Operationsdialog legt."""
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.ui.main_window import MainWindow
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        dialog = OperationDialog(REGISTRY.get("drill_hole"), {}, window)
+        window._open_operation_dialog(dialog, lambda: None)
+        assert window._op_dialog is dialog
+        help_key = QKeySequence(QKeySequence.StandardKey.HelpContents)
+        shortcut = next(item for item in dialog.findChildren(QShortcut) if item.key() == help_key)
+        shortcut.activated.emit()
+
+        opened = window._manual
+        assert opened is not None and opened.isVisible()
+        page = opened.current_page()
+        assert page is not None and page.key == "drill-a-hole"
     finally:
         window.close()
         window.deleteLater()

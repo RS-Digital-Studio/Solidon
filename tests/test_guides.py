@@ -37,7 +37,59 @@ def test_guide_keys_are_unique_and_differ_from_every_page() -> None:
     keys = [guide.key for guide in guides.GUIDES]
     assert len(keys) == len(set(keys))
     written = {page.key for page in manual.INTRODUCTION}
+    written |= {manual.WHERE_TO_START, manual.SPACEMOUSE_ACCESS}
     assert not written & set(keys), "eine Anleitung heißt wie eine geschriebene Seite"
+
+
+def test_every_marked_operation_is_taught_by_its_guide() -> None:
+    """Wer eine Operation im Bild zeigt, lehrt sie — F1 in ihrem Dialog führt hierher.
+
+    Vergisst eine neue Anleitung ``teaches``, schlüge F1 im Dialog ihrer
+    Operation die Referenz auf, obwohl es eine Anleitung dafür gibt.
+    """
+    for guide in guides.GUIDES:
+        marked = {
+            mark.target.partition(":")[2]
+            for one in guide.steps
+            for mark in one.marks
+            if mark.target.startswith("operation:")
+        }
+        assert marked <= set(guide.teaches), f"{guide.key}: {sorted(marked - set(guide.teaches))}"
+
+
+def test_every_taught_operation_exists_and_has_one_guide() -> None:
+    """Eine Operation, die zwei Anleitungen lehren, hätte für F1 zwei Antworten."""
+    from app.core.registry import REGISTRY
+
+    taught = [name for guide in guides.GUIDES for name in guide.teaches]
+    assert len(taught) == len(set(taught)), f"doppelt gelehrt: {sorted(taught)}"
+    unknown = [name for name in taught if not REGISTRY.has(name)]
+    assert not unknown, f"nicht im Register: {unknown}"
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_a_link_in_a_step_names_the_page_it_leads_to(language: str) -> None:
+    """„Gedruckt wird wie in [Ein Modell prüfen und drucken]": Der Verweis heißt
+    in jeder Sprache wie die Seite, die er aufschlägt, sonst sucht der Kunde in
+    der Seitenliste einen Titel, den es nicht gibt."""
+    from app.core import markup
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    try:
+        titles = {page.key: str(page.title) for page in manual.pages()}
+        wrong = [
+            f"{guide.key} Schritt {number}: {label!r} statt {titles.get(target)!r}"
+            for guide in guides.GUIDES
+            for number, one in enumerate(guide.steps, 1)
+            for label, target in markup.MANUAL_LINK.findall(str(one.text))
+            if label != titles.get(target)
+        ]
+    finally:
+        set_language(SOURCE_LANGUAGE)
+    assert not wrong, f"{language}:\n" + "\n".join(wrong)
 
 
 @pytest.mark.parametrize("guide", guides.GUIDES, ids=lambda guide: guide.key)
@@ -181,11 +233,40 @@ def test_every_step_has_its_figure_in_the_catalogue() -> None:
 def test_the_outline_holds_every_written_page_and_guide_exactly_once() -> None:
     placed = [key for _part, keys in manual.OUTLINE for key in keys]
     expected = [
+        manual.WHERE_TO_START,
         *(page.key for page in manual.INTRODUCTION),
         manual.SPACEMOUSE_ACCESS,
         *(guide.key for guide in guides.GUIDES),
     ]
     assert sorted(placed) == sorted(expected)
+
+
+def test_the_manual_begins_where_to_start() -> None:
+    """Die erste Seite ist „Wo fange ich an?" — dorthin zeigen Startbildschirm und F1."""
+    first = manual.pages()[0]
+    assert first.key == manual.WHERE_TO_START
+    assert first.part == "start"
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_where_to_start_leads_to_every_guide_by_its_title(language: str) -> None:
+    """Jede Anleitung steht auf der ersten Seite, verlinkt und in jeder Sprache
+    unter dem Titel, unter dem sie in der Seitenliste steht (Konzept Handbuch
+    §11: jede Aufgabe in höchstens zwei Klicks vom Startbildschirm)."""
+    from app.core import markup
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+
+    install_language(language)
+    set_language(language)
+    try:
+        page = manual.find(manual.WHERE_TO_START)
+        assert page is not None
+        links = {target: label for label, target in markup.MANUAL_LINK.findall(page.text())}
+        expected = {guide.key: str(guide.title) for guide in guides.GUIDES}
+    finally:
+        set_language(SOURCE_LANGUAGE)
+    assert links == expected, f"{language}: {links}"
 
 
 def test_the_outline_names_every_part_once_in_the_order_of_the_titles() -> None:

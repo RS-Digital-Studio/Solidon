@@ -121,6 +121,32 @@ def test_cancel_restores_committed_view_and_selection(local_window, qt_app, monk
     assert len(window.session.project.document.ops) == 1
 
 
+def test_f1_in_the_local_editor_opens_the_manual_at_its_operation(local_window, qt_app):
+    """Der Bearbeitungsdialog der lokalen Suche ist ein eigenes Fenster; sein F1
+    geht über die Suche an das Hauptfenster und schlägt die Operation auf
+    (Konzept Handbuch §7)."""
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.core import manual
+
+    window = local_window
+    _flow, dialog = start(window, qt_app)
+    choose_action(dialog, "resize_hole")
+    help_key = QKeySequence(QKeySequence.StandardKey.HelpContents)
+    shortcut = next(
+        item for item in dialog.editor.findChildren(QShortcut) if item.key() == help_key
+    )
+    shortcut.activated.emit()
+
+    page, spot = manual.help_for("resize_hole")
+    opened = window._manual
+    assert opened is not None and opened.isVisible()
+    assert opened.current_page().key == page
+    if spot:
+        assert opened.text.textCursor().selectedText() == spot
+    dialog.reject()
+
+
 def test_source_snapshot_does_not_read_later_embedded_payload(local_window, qt_app, monkeypatch):
     import app.ui.local_recognition_flow as module
 

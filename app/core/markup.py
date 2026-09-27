@@ -116,6 +116,17 @@ def unlinked(text: str) -> str:
     return MANUAL_LINK.sub(r"\1", text)
 
 
+def plain(text: str) -> str:
+    """Der Text ohne jede Auszeichnung — für den Alt-Text eines Bildes.
+
+    Ein Schrittsatz hebt Namen hervor (``*Bohrung setzen*``) und verweist auf
+    Seiten. Im ``alt`` eines Bildes wird nichts davon gesetzt; dort stünden
+    Sternchen und Klammern, und ein Bildschirmleser läse sie vor.
+    """
+    text = _CODE.sub(r"\1", unlinked(text))
+    return _EMPHASIS.sub(r"\1", _STRONG.sub(r"\1", text))
+
+
 def to_html(
     markdown: str, figure: FigureResolver | None = None, link: LinkResolver | None = None
 ) -> str:
@@ -232,7 +243,7 @@ def _figure_html(key: str, resolve: FigureResolver | None) -> str:
         # die Aussage ersatzlos verschwindet (Regel 18).
         return f'<p class="figure-text">{inline(alt)}</p>'
     text = f"<figcaption>{inline(caption)}</figcaption>" if caption else ""
-    image = f'<img src="{escape(source, quote=True)}" alt="{escape(alt, quote=True)}">'
+    image = f'<img src="{escape(source, quote=True)}" alt="{escape(plain(alt), quote=True)}">'
     if dark:
         # ``<picture>`` und nicht zwei Bilder mit CSS: der Browser lädt genau
         # eine Datei, und beim Drucken greift die helle — Papier ist hell.

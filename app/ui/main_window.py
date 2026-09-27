@@ -3327,7 +3327,7 @@ class MainWindow(QMainWindow):
         self.start_screen.forgetRequested.connect(self._forget_recent)
         # Mit Kapitel: Der Knopf nennt es, also schlägt er es auf.
         self.start_screen.manualRequested.connect(
-            weak_slot(self, lambda view: view.action_manual(manual.FIRST_MINUTES))
+            weak_slot(self, lambda view: view.action_manual(manual.WHERE_TO_START))
         )
         self.start_screen.feedbackRequested.connect(self._open_survey)
         self.start_screen.supportRequested.connect(self.action_donate)
@@ -4384,7 +4384,7 @@ class MainWindow(QMainWindow):
             tr("Handbuch …"),
             QKeySequence.StandardKey.HelpContents,
             self.action_manual,
-            tr("Jede Operation mit ihren Werten, nach Bereichen sortiert."),
+            tr("Anleitungen in Bildern, vom ersten Schritt bis zum Nachschlagen jeder Operation."),
             symbol="manual",
         )
         self._add_action(
@@ -6891,7 +6891,7 @@ class MainWindow(QMainWindow):
             self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText),
         ).exec()
 
-    def action_manual(self, page: str = "") -> None:
+    def action_manual(self, page: str = "", spot: str = "") -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
 
         Es bleibt offen, während gearbeitet wird; ein Handbuch, das man zum
@@ -6899,24 +6899,29 @@ class MainWindow(QMainWindow):
         wird wiederverwendet, damit nicht bei jedem Aufruf eines mehr auf dem
         Bildschirm steht.
 
-        ``page`` schlägt das Kapitel auf, das der Aufrufer meint. Ohne Angabe
-        bleibt es beim ersten Eintrag — richtig für *Hilfe → Handbuch*, falsch
-        für einen Knopf, der ein bestimmtes Kapitel verspricht: Der
-        Startbildschirm bot „Handbuch — die ersten fünfzehn Minuten" an und
-        öffnete „Was Solidon ist", den ersten von über vierzig Einträgen. Wer den
-        einzigen Hilfe-Knopf des Startbildschirms drückt, hat das zugesagte
-        Kapitel danach selbst gesucht. ``ManualWindow.show_page`` konnte das seit
-        je und wurde von keiner Stelle der Anwendung gerufen — nur vom Test.
+        ``page`` schlägt das Kapitel auf, das der Aufrufer meint, ``spot`` die
+        Stelle darin (F1 im Operationsdialog: der Eintrag in der Referenz).
+        Ohne Angabe gilt *Hilfe → Handbuch* und F1 im Hauptfenster: Wer das
+        Handbuch neu aufmacht, fängt bei „Wo fange ich an?" an; wer es offen
+        hat und nur zurückholt, bleibt auf der Seite, die er liest. Das ist der
+        Weg durch eine Bildanleitung: Schritt lesen, im Hauptfenster tun, mit
+        F1 zurück zum nächsten Schritt.
         """
         window = self._manual
         if window is None:
             window = ManualWindow(self)
             self._manual = window
+        opening = not window.isVisible()
+        # Ein minimiertes Fenster kommt mit ``show`` und ``raise_`` nicht
+        # zurück, und F1 sähe aus, als täte es nichts.
+        window.setWindowState(window.windowState() & ~Qt.WindowState.WindowMinimized)
         window.show()
+        # Nach ``show``, denn erst dort steht die Liste der sichtbaren Seiten;
+        # davor wäre die Zeile eine, die es noch nicht gibt.
         if page:
-            # Nach ``show``, denn erst dort steht die Liste der sichtbaren
-            # Seiten; davor wäre die Zeile eine, die es noch nicht gibt.
-            window.show_page(page)
+            window.show_page(page, spot)
+        elif opening:
+            window.show_page(manual.WHERE_TO_START)
         window.raise_()
         window.activateWindow()
 
@@ -17868,6 +17873,10 @@ class MainWindow(QMainWindow):
 
         self.session.projectChanged.connect(project_changed)
         dialog.finished.connect(finished)
+        # F1 im Dialog: die Anleitung zu dieser Operation oder ihr Eintrag in
+        # der Referenz (Konzept Handbuch §7). Das F1 des Hauptfensters kommt
+        # hier nicht an, der Dialog ist ein eigenes Fenster.
+        dialog.manualRequested.connect(self.action_manual)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._op_dialog = dialog
         if dialog.spec.name == "apply_texture":

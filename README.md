@@ -118,15 +118,17 @@ frei formen.
 
 ## Hilfe im Programm
 
-**Hilfe → Handbuch** (F1) öffnet zwei Sorten Seiten. Geschriebene über die
-ersten fünfzehn Minuten, das Fenster, das Zeichnen, Verlauf, Parameter,
-Toleranzen, Bausteine, den Chat und ein Wörterbuch — dazu je eine erzeugte
-Seite pro Kategorie des Registers, mit jeder Operation, jedem Wert und jedem
-Bereich. Die zweite Hälfte kommt aus demselben Register wie die
-Bedienelemente. Im Programm werden neue Operationen dadurch automatisch
-aufgeführt; die Website-Fassung wird beim Release neu erzeugt und geprüft.
-Gesucht wird über den Text, nicht nur über die Überschriften.
-Abbildungen gehören dazu; keine davon wird von Hand gepflegt.
+**Hilfe → Handbuch** (F1) beginnt bei „Wo fange ich an?“. Bildanleitungen
+zeigen jeden Schritt an einem Bild der echten Oberfläche, mit Nummer und Rahmen
+auf dem Knopf, um den es geht. Danach folgen Erklärseiten zu den Bereichen des
+Programms, Hilfe bei Problemen und zum Nachschlagen ein Wörterbuch und je eine
+erzeugte Seite pro Kategorie des Registers, mit jeder Operation, jedem Wert und
+jedem Bereich. Die erzeugte Hälfte kommt aus demselben Register wie die
+Bedienelemente; neue Operationen stehen dadurch von selbst darin. F1 im Dialog
+einer Operation schlägt ihre Anleitung auf oder ihren Eintrag im
+Nachschlageteil. Die Suche ordnet nach Treffern und versteht auch eigene Wörter
+wie „abrunden“. Bilder und Website-Fassung entstehen bei jedem Release neu;
+keine Abbildung wird von Hand gepflegt.
 
 **Hilfe → Solidon3D unterstützen** öffnet zunächst nur einen lokalen Dialog.
 Er erklärt die freiwillige Zahlung und ihre Bedingungen; erst der Knopf darin

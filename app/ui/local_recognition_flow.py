@@ -187,6 +187,7 @@ class LocalRecognitionFlow(QObject):
         dialog.draftsReady.connect(self._remember_drafts)
         dialog.pickRequested.connect(self._pick_again)
         dialog.operationRequested.connect(self._run_on_the_body)
+        dialog.manualRequested.connect(self.view.action_manual)
         dialog.finished.connect(self._finished)
         self.view.viewport.set_feature_gizmo_blocked(True)
         self.view.viewport.set_placement_pointer(self.pointer)

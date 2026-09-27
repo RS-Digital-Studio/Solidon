@@ -882,17 +882,18 @@ class StartScreen(QWidget):
         drop.leftOut.connect(self.leftOut)
         drop.clicked.connect(self.importRequested)
 
-        # Die ersten fünfzehn Minuten stehen im Handbuch — aber der Weg
-        # dorthin führte über das Hilfemenü des Hauptfensters, das beim ersten
-        # Start noch niemand gesehen hat. Der Verweis gehört hierher, und zwar
-        # neben die Knöpfe: am anderen Fensterrand gehörte er sichtbar zu
-        # nichts.
+        # „Wo fange ich an?" steht im Handbuch — aber der Weg dorthin führte
+        # über das Hilfemenü des Hauptfensters, das beim ersten Start noch
+        # niemand gesehen hat. Der Verweis gehört hierher, und zwar neben die
+        # Knöpfe: am anderen Fensterrand gehörte er sichtbar zu nichts.
         # **Der Knopf nennt seine Handlung, der Zusatz steht daneben** (B27):
         # Mit dem ganzen Satz maß er 249 Punkte gegen 99 und 113 seiner zwei
         # Nachbarn — mehr als doppelt so breit, und eine Knopfzeile, in der
         # einer heraussticht, sieht nach Rangordnung aus, wo keine ist.
         self.manual_button = QPushButton(tr("Handbuch"), self)
-        self.manual_button.setToolTip(tr("Die ersten fünfzehn Minuten, von vorn erklärt."))
+        self.manual_button.setToolTip(
+            tr("Wo fange ich an? Anleitungen in Bildern, vom ersten Klick bis zum Druck.")
+        )
         self.manual_button.setStatusTip(self.manual_button.toolTip())
         self.manual_button.setFlat(True)
         make_large_target(self.manual_button)

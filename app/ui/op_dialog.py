@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -42,7 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import expressions
+from app.core import expressions, manual
 from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line, inactive_dependency
 from app.core.registry.surfaces import normal_fields_of
@@ -1453,6 +1454,10 @@ class OperationDialog(QDialog):
     spoolChosen = Signal(object)
     """Eine örtliche Spulenwahl reist separat, niemals als Operationsparameter."""
 
+    manualRequested = Signal(str, str)
+    """F1: Seite und Stelle des Handbuchs, die diese Operation erklären
+    (``manual.help_for``). Das Fenster, das den Dialog öffnet, schlägt sie auf."""
+
     placement_flow: PlacementFlow | None = None
     seal_flow: SealFlow | None = None
     preview_required = False
@@ -1519,6 +1524,9 @@ class OperationDialog(QDialog):
         self.spec = spec
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
+        # Das F1 des Hauptfensters kommt in einem eigenen Fenster nicht an:
+        # Gemessen löste es im offenen Dialog nichts aus (Konzept Handbuch §1.2).
+        QShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents), self, self._ask_manual)
         self._editors: dict[str, QWidget] = {}
         self._feature_focus = ""
         self.source_objects = tuple(source_objects)
@@ -1904,6 +1912,16 @@ class OperationDialog(QDialog):
         # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
         # selben Blickfeld (Befund B8).
         align_forms(self)
+
+    def _ask_manual(self) -> None:
+        """F1: die Stelle im Handbuch zu dieser Operation melden.
+
+        Zur Zeit des Drucks gefragt und nicht beim Bau des Dialogs: Ein
+        Variantenwechsel tauscht ``spec`` aus, und die Hilfe gilt der Operation,
+        die gerade dasteht.
+        """
+        page, spot = manual.help_for(self.spec.name)
+        self.manualRequested.emit(page, spot)
 
     def _follow_source_pending(self, _pending: bool = False) -> None:
         """Während des Lesens keine Operation mit einem alten Leerwert anwenden."""
