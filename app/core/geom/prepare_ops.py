@@ -16763,13 +16763,17 @@ def _halves_still_together(source: SceneObject) -> Finding:
     Ein Hinweis und keine Warnung: Nichts ist schiefgegangen, und wer gleich
     exportiert, bekommt zwei richtige Dateien. Die Handlung daneben ist
     *Auf dem Bett anordnen* — dieselbe, die auch die Nachbarbefunde tragen.
+
+    Der Satz sagt „im Modell“ und beschreibt nicht das Bild: Nach *Modell
+    teilen* zieht die Explosionsansicht die Stücke auseinander, und „sieht aus
+    wie ein Teil“ stand dort neben sichtbar getrennten Hälften (Release 0.5.1).
+    Der Zwilling für mehrere Schnitte steht in ``scene.evaluate``.
     """
     return Finding(
         code="prepare.halves_in_place",
         severity="info",
         message=_(
-            "Die zwei Hälften liegen noch aneinander — im Bild sieht das aus wie ein Teil. "
-            "Zum Drucken nebeneinander legen."
+            "Die zwei Hälften liegen im Modell noch aneinander. Zum Drucken nebeneinander legen."
         ),
         object_id=source.id,
     )

@@ -1769,8 +1769,7 @@ def _without_split_echoes(findings: Sequence[Finding], scene: Scene) -> list[Fin
                 entry = dataclasses.replace(
                     entry,
                     message=_(
-                        "Die Teile liegen noch aneinander — im Bild sieht das aus wie ein Teil. "
-                        "Zum Drucken nebeneinander legen."
+                        "Die Teile liegen im Modell noch aneinander. Zum Drucken nebeneinander legen."
                     ),
                 )
         elif (
