@@ -19,8 +19,8 @@ Tokens und nicht das AST: Erst die Schreibweise unterscheidet ``\\x03`` von
 from __future__ import annotations
 
 import io
-import os
 import re
+import subprocess
 import tokenize
 from pathlib import Path
 
@@ -106,10 +106,22 @@ def control_characters(data: bytes) -> list[int]:
 
 
 def _markdown() -> list[Path]:
-    found: list[Path] = []
-    for folder, directories, files in os.walk(ROOT):
-        directories[:] = [name for name in directories if name not in _NOT_OURS]
-        found.extend(Path(folder) / name for name in files if name.endswith(".md"))
+    """Die Markdown-Dateien des Repositorys — versioniert oder neu, nie
+    ignoriert — und die Erinnerungen, die nur auf der Maschine liegen.
+
+    Ignorierte Ordner (`.codex-tmp/`, `tmp/`, die Nachweise unter `Releases/`)
+    sind Arbeitsreste einzelner Maschinen: Ein Steuerzeichen dort machte das
+    Tor nur auf dieser einen rot und in der CI nie.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "-co", "--exclude-standard", "--", "*.md"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    found = {ROOT / name for name in listed if not set(Path(name).parts) & _NOT_OURS}
+    found |= set((ROOT / ".claude" / "memory").glob("*.md"))
     # Eine leere Menge wäre ein grüner Lauf ohne Prüfung.
     assert len(found) > 100, f"nur {len(found)} Markdown-Dateien gefunden"
     return sorted(found)
