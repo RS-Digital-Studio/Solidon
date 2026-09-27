@@ -1,5 +1,5 @@
 ---
-description: "Paket, Version, Lizenznachweis, Signierung und die verteilte Menge — die Entscheidungen hinter dem Release-Weg"
+description: "Paket, Version, Lizenznachweis, Signierung und die verteilte Menge — was auf dem Release-Weg einzuhalten ist"
 paths:
   - "tools/**/*.py"
   - "packaging/**"
@@ -8,43 +8,49 @@ paths:
 
 # Regeln für Paket, Version und Veröffentlichung
 
-Die CI-Prüfjobs folgen `konzepte/konzept-ci-testlaufzeiten-2026-09.md`.
-Paketbau wartet auf Qualität, jeden Teil der Kernmatrix auf jeder Plattform,
-die plattformübergreifenden Fensterverträge und jede Windows-Fenstergruppe.
-Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
-wer Teile dazunimmt, ändert beides zusammen. **Ein Release-Lauf trägt
-höchstens 100 Artefakte**: `tools/windows_signed_installer.py` liest die
-Liste mit `per_page=100` und hält fail-closed an, wenn sie unvollständig ist.
-Am 25.09.2026 waren es rund 45; wer Teile oder Berichte dazunimmt, zählt
-nach oder baut dort das Blättern. Ein übersprungener,
-abgebrochener oder roter Pflichtjob darf keine Paketfreigabe ergeben.
-Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
+Was **wo liegt**, sagen `tools/CLAUDE.md` und `packaging/CLAUDE.md`; den Weg
+eines Releases in seiner Reihenfolge der Skill `/erzeugen`. Hier steht, was
+dabei **einzuhalten** ist; das Warum steht unter denselben Überschriften in
+`konzepte/begruendungen/regel-auslieferung.md`.
 
-Was **wo liegt**, sagen `tools/CLAUDE.md` und `packaging/CLAUDE.md`; der
-Weg eines Releases in seiner Reihenfolge steht im Skill `/erzeugen`. Hier
-steht, was dabei **einzuhalten** ist — die Entscheidungen, jede mit ihrem
-Anlass. Bis zum 14.09.2026 gab es diese Datei nicht; die Regeln lagen in
-Karten, Erinnerungen und Commit-Meldungen verstreut (RM-098).
+## Die Pflichtprüfungen geben das Paket frei
+
+Die CI-Prüfjobs folgen `konzepte/konzept-ci-testlaufzeiten-2026-09.md`. Der
+Paketbau wartet auf Qualität, jeden Teil der Kernmatrix auf jeder Plattform,
+die plattformübergreifenden Fensterverträge und jede Windows-Fenstergruppe;
+ein übersprungener, abgebrochener oder roter Pflichtjob ergibt keine
+Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
+
+- Die Teilmatrix eines Jobs ist genau `0 … N−1` für das `N` in seinem Aufruf;
+  wer Teile dazunimmt, ändert beides zusammen.
+- **Ein Release-Lauf trägt höchstens 100 Artefakte**:
+  `tools/windows_signed_installer.py` liest die Liste mit `per_page=100` und
+  hält fail-closed an, wenn sie unvollständig ist. Wer Teile oder Berichte
+  dazunimmt, zählt nach oder baut dort das Blättern.
+- Alle CI-Jobs haben einheitlich zwei Stunden, einschließlich Paketbau,
+  Signierfolge, Releaseaktenprüfung und Diagnose; ausdrücklich begrenzte
+  Prüfschritte nutzen dieselbe Frist und verlängern die Jobfrist nicht. Die
+  vollständige Windows-Fenstergruppe protokolliert die Testnamen, bei einem
+  stehenden Test liefert `faulthandler` nach zwei Minuten den Stapel. Ein
+  Fristablauf ist ein roter Lauf und sperrt die Paketierung.
 
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 
 `tools/bump_version.py` fasst beide Orte an, die die Zahl tragen —
-`app/branding.py` und `pyproject.toml` —, und läuft **vor** dem Prüfmodul
-und dem Bau. Danach trüge das Paket eine Nummer, die es schon gab.
-`website/version.json` bleibt dabei liegen: Sie sagt, was veröffentlicht
-*ist*, und wird zuletzt hochgeladen. Ein Bau, der ausgeliefert wird, erhöht
-die Version, ohne zu fragen (Robert); ein Bau zum Messen nicht.
+`app/branding.py` und `pyproject.toml` —, und läuft **vor** dem Prüfmodul und
+dem Bau; danach trüge das Paket eine Nummer, die es schon gab.
+`website/version.json` bleibt liegen: Sie sagt, was veröffentlicht *ist*, und
+wird zuletzt hochgeladen. Ein Bau, der ausgeliefert wird, erhöht die Version
+ohne Nachfrage (Robert); ein Bau zum Messen nicht.
 
 **Der Changelog-Abschnitt der nächsten Version entsteht vor dem Sprung** und
 nimmt auch unfertige Arbeit auf — `changelog/<sprache>.md`, sechs Sprachen,
-Kundensprache, kein Verzeichnis der Änderungen. Der Wächter
-`test_changelog` prüft nur den Abschnitt von `APP_VERSION`; seine Grenzen
-(höchstens 200 Zeichen je Punkt, Großbuchstabe am Anfang, keine Bausteine mit
-„test" im Namen) greifen also erst nach `bump_version` — wer vorher
-schreibt, zählt selbst. Und vor jedem Punkt über einen behobenen Fehler
-fragt man `git tag --contains <ursache>`: Ein Fehler, den keine
-veröffentlichte Version hatte, gehört nicht in den Changelog — der Kunde
-suchte ihn sonst bei sich.
+Kundensprache, kein Verzeichnis der Änderungen. `test_changelog` prüft nur den
+Abschnitt von `APP_VERSION`; seine Grenzen (höchstens 200 Zeichen je Punkt,
+Großbuchstabe am Anfang, keine Bausteine mit „test" im Namen) greifen also
+erst nach `bump_version` — wer vorher schreibt, zählt selbst. Vor jedem Punkt
+über einen behobenen Fehler steht `git tag --contains <ursache>`: Ein Fehler,
+den keine veröffentlichte Version hatte, gehört nicht in den Changelog.
 
 ## Kein Release ohne frischen Bausteinnachweis
 
@@ -55,46 +61,40 @@ alle Bausteine, gleich ob ihr Abdruck passt, denn der Abdruck enthält den
 Netzkern nicht (`parts/range_proof.py`), und eine Änderung dort sieht nur ein
 frischer Lauf. Exit 0 und eine unveränderte oder eingecheckte
 `data/part_ranges.toml` sind die Bedingung; ein gebrochener Baustein hält den
-Release an, statt mit Warnung im Katalog hinauszugehen. Seit dem 22.09.2026
-dauert der Lauf mit vier Prozessen Minuten statt der halben Stunde, die ihn
-am 03.09.2026 aus der Suite nahm.
+Release an, statt mit Warnung im Katalog hinauszugehen.
 
 ## Keine Abhängigkeit ohne Lizenz, keine Lizenz ohne Nachweis am Artefakt
 
-Regel 15 und 22 aus `AGENTS.md` gelten hier wörtlich; dazu kommt, was sie im
-Paket bedeuten:
+Regeln 15 und 22 und die Checkliste „neue Abhängigkeit" aus `AGENTS.md` gelten
+wörtlich; im Paket heißt das zusätzlich:
 
-- **Untergrenze in `pyproject.toml`, feste Version in `constraints.txt`** —
-  sonst installiert der nächste Klon etwas anderes als die CI. Prüfen mit
-  `tools/check_env.py`; `--freeze` übernimmt lokale Versionen und erhält nur
-  die in `PLATFORM_PINS` belegten Abhängigkeiten anderer Plattformen.
-- **Die Stückliste kommt aus dem Kundenartefakt**, nicht aus `pip`: Eine SBOM
-  aus der Entwicklungsumgebung ist eine Vorschau. `tools/make_sbom.py` liest
-  PyInstallers Zielanalyse und das fertige Paket; jede native Kundendatei
-  hat dort einen ausgewiesenen Besitzer, Bauwerkzeuge fehlen. Nach einer
-  Änderung an Abhängigkeiten, Hooks, `hiddenimports`, `datas`, `binaries`
-  oder `excludes` muss jede Zielplattform nativ bauen — der Vorschautest
-  reicht nicht.
-- **Vor dem Paketieren müssen Lizenzmanifest und Prüfmodul die aktuellen
-  Grenzdateien abdecken.** Nach einer Änderung wird dieses Paar für den
-  Paketbau gemeinsam neu erzeugt; ein altes Manifest wird weder passend
-  geschrieben noch seine Prüfung umgangen. Entwicklungstests prüfen den
-  echten Manifestprüfer mit isolierten aktuellen und manipulierten Manifesten
-  gegen die tatsächlichen Grenzdateien. Sie laufen auch ohne lokalen Build
-  und verändern kein vorhandenes Release-Artefakt.
-- **Eine Abhängigkeitsrechnung darf sagen, dass etwas fehlt — nie, dass
-  etwas weg darf.** Was aus dem Paket entfernt wird (der GTK-Stapel hinter
-  Qts GTK-Erscheinungsbild, die GPL-Terminalmodule), wird **benannt** und
-  begründet (`make_linux_packages.ORPHANED_LIBRARIES`); die Rechnung
-  prüft nur die Gegenrichtung gegen den eingecheckten Korpus, und eine
-  offene Kante ist ein Fehler. „Ist überall vorhanden" ist keine Messung.
+- `tools/check_env.py --freeze` übernimmt lokale Versionen in
+  `constraints.txt` und erhält nur die in `PLATFORM_PINS` belegten
+  Abhängigkeiten anderer Plattformen.
+- **Die Stückliste kommt aus dem Kundenartefakt**, nicht aus `pip`:
+  `tools/make_sbom.py` liest PyInstallers Zielanalyse und das fertige Paket;
+  jede native Kundendatei hat einen ausgewiesenen Besitzer, Bauwerkzeuge
+  fehlen. Nach einer Änderung an Abhängigkeiten, Hooks, `hiddenimports`,
+  `datas`, `binaries` oder `excludes` muss jede Zielplattform nativ bauen —
+  der Vorschautest reicht nicht.
+- **Vor dem Paketieren decken Lizenzmanifest und Prüfmodul die aktuellen
+  Grenzdateien.** Nach einer Änderung wird das Paar gemeinsam neu erzeugt; ein
+  altes Manifest wird weder passend geschrieben noch seine Prüfung umgangen.
+  Entwicklungstests prüfen den echten Manifestprüfer mit isolierten aktuellen
+  und manipulierten Manifesten gegen die tatsächlichen Grenzdateien — auch
+  ohne lokalen Build und ohne ein Release-Artefakt zu verändern.
+- **Eine Abhängigkeitsrechnung darf sagen, dass etwas fehlt — nie, dass etwas
+  weg darf.** Was aus dem Paket entfernt wird (der GTK-Stapel hinter Qts
+  GTK-Erscheinungsbild, die GPL-Terminalmodule), wird **benannt** und
+  begründet (`make_linux_packages.ORPHANED_LIBRARIES`); die Rechnung prüft nur
+  die Gegenrichtung gegen den eingecheckten Korpus, und eine offene Kante ist
+  ein Fehler. „Ist überall vorhanden" ist keine Messung.
 
 ## Signieren ist ein eigener Vertrauensraum
 
 Signiergeheimnisse gehören nicht in den Baujob. Eine prüfsummengebundene
-Übergabe trennt Bauen, Freigeben und Signieren; auf Windows geht der Weg
-bis auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
-Was daraus folgt:
+Übergabe trennt Bauen, Freigeben und Signieren; auf Windows geht der Weg bis
+auf Roberts Rechner (`tools/sign_release.py`), in die CI kommt er nicht.
 
 - Neue Actions nur mit vollständiger 40-stelliger Commit-ID.
 - Downloads im Workflow nur von einer unveränderlichen Veröffentlichung und
@@ -103,8 +103,8 @@ Was daraus folgt:
   (`make_licence_notices --release-check`) läuft **nach** der Signatur und
   ungeschützt, und `sign_release.py` schreibt die Evidenz danach neu — der
   äußere Installer ist dann ein anderer als der, den die CI geprüft hat.
-- Ein Prüfschritt, der nur am Tag läuft, ist bis zum ersten Tag eine
-  Behauptung: Wer einen anbindet, fährt ihn **einmal über ein echtes
+- **Ein Prüfschritt, der nur am Tag läuft, ist bis zum ersten Tag eine
+  Behauptung**: Wer einen anbindet, fährt ihn **einmal über ein echtes
   Artefakt** (die alten Pakete liegen in `website/dl/`), und Prüfer und
   Erzeuger gehören in denselben Commit.
 
@@ -112,40 +112,31 @@ Was daraus folgt:
 
 - **Der Download-Kasten zeigt die fünf Plätze aus `DELIVERED`** — Setup,
   AppImage, Flatpak, beide macOS-Pakete —, nicht die Artefakte des Baulaufs;
-  `tools/make_download.py` erzwingt es. Hochgeladen wird in dieser Folge:
-  die Pakete einzeln und zuerst, dann die Seiten, `website/version.json`
-  zuletzt — sie ist das Register, und ein Register vor der Datei verspricht
-  etwas, das noch nicht liegt.
-- **Vor einer Auslieferung die verteilte Menge gegen die geprüfte halten:**
-  Was liegt in `website/dl/`, was verlinken die Seiten, was steht im
-  Manifest? Wo die Zahlen auseinandergehen, steht eine Datei ohne Prüfer
-  (die AppImage stand in keiner `version.json`).
-- **Ein Fix im Manifest eines Paketformats ist kein Fix der Anwendung.** Er
-  reist in den anderen Formaten weiter; die Regel gehört in den Startpfad
-  (`app/ui/qt_platform.py` ist das Muster), das Manifest trägt sie zusätzlich.
-- **Wer täglich baut, sieht den Cache-Fehler nie.** Der Ergebniscache trägt
+  `tools/make_download.py` erzwingt es. Hochgeladen wird in dieser Folge: die
+  Pakete einzeln und zuerst, dann die Seiten, `website/version.json` zuletzt —
+  sie ist das Register, und ein Register vor der Datei verspricht etwas, das
+  noch nicht liegt.
+- **Vor einer Auslieferung die verteilte Menge gegen die geprüfte halten**:
+  Was liegt in `website/dl/`, was verlinken die Seiten, was steht im Manifest?
+  Wo die Zahlen auseinandergehen, steht eine Datei ohne Prüfer.
+- **Ein Fix im Manifest eines Paketformats ist kein Fix der Anwendung** — der
+  Fehler reist in den anderen Formaten weiter. Die Regel gehört in den
+  Startpfad (`app/ui/qt_platform.py` ist das Muster); das Manifest trägt sie
+  zusätzlich.
+- **Wer täglich baut, sieht den Cache-Fehler nie**: Der Ergebniscache trägt
   den Code-Hash im Pfad, der Kunde fährt denselben Stand wochenlang. Bei
-  Verdacht den Cache absichtlich warm fahren: dieselbe Lage zweimal, mit einer
+  Verdacht den Cache absichtlich warm fahren — dieselbe Lage zweimal, mit einer
   Änderung dazwischen, die den Op-Hash nicht berührt.
 
 ## Erzeugtes läuft nicht in der CI
 
-Alle CI-Jobs haben einheitlich zwei Stunden Zeit, einschließlich Paketbau,
-Signierfolge, Releaseaktenprüfung und Diagnose. Explizit begrenzte
-Prüfschritte verwenden dieselbe Frist; sie verlängern die gemeinsame
-Jobfrist nicht. Die vollständige Windows-Fenstergruppe protokolliert die
-Testnamen; bei einem länger stehenden Test liefert `faulthandler` nach zwei
-Minuten den Stapel. Ein Fristablauf bleibt ein roter Lauf und sperrt die
-Paketierung.
-
 Bilder, Handbuch, Website-Bilder, SEO-Dateien und PDFs entstehen beim
-Paketbau, nicht nach jedem Schritt — und nur die Sprachen und Bilder, deren
+Paketbau, nicht nach jedem Schritt — und nur für die Sprachen und Bilder, deren
 Grundlage sich geändert hat. Ein Test, dessen Grün an einem Erzeugerlauf
-hängt, trägt `@pytest.mark.rendered` **und** einen Eintrag in
-`RENDERED_TESTS` (`tests/test_toolchain.py`); `build.yml` wählt den Marker
-ab. Zwischen zwei Releases ist ein rotes `test_manual` oder `test_wording`
-deshalb ein Zustand, kein Fund.
+hängt, trägt `@pytest.mark.rendered` **und** einen Eintrag in `RENDERED_TESTS`
+(`tests/test_toolchain.py`); `build.yml` wählt den Marker ab. Zwischen zwei
+Releases ist ein rotes `test_manual` oder `test_wording` deshalb ein Zustand,
+kein Fund.
 
-Drei Fallen der Werkzeuge stehen in `tools/CLAUDE.md` („Drei Dinge, die man
-einmal falsch macht"); die Karte des Pakets sagt, was in die `.spec` muss,
-wenn sich etwas ändert.
+Die Fallen der Werkzeuge stehen in `tools/CLAUDE.md`; was in die `.spec` muss,
+wenn sich etwas ändert, sagt die Karte des Pakets.

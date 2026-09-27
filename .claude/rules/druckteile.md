@@ -6,23 +6,19 @@ paths:
 
 # Regeln für den Ordner „3D Drucker"
 
-Hier liegen die echten Druckprojekte — **kein Programmcode, und nicht Teil
-dieses Repositorys:** Der Ordner hat sein eigenes `.git` und steht hier in
-`.gitignore` (`3ce454f9`, 23.08.2026: „Der Ordner der Druckprojekte war nie in
-diesem Repository"). Wer dort committet, tut es in seinem eigenen Repository.
-Am 22.08.2026 war er für einen Tag aufgenommen, damit er auf allen drei
-Maschinen liegt; die Karte in `CLAUDE.md` nennt den heutigen Stand.
-
+Hier liegen die echten Druckprojekte — **kein Programmcode und nicht Teil
+dieses Repositorys**: Der Ordner hat sein eigenes `.git` und steht hier in
+`.gitignore`; wer dort committet, tut es in seinem eigenen Repository.
 `3D Drucker/CLAUDE.md` ist die Referenz für Drucker, Filamentbestand, Zubehör
-und laufende Projekte; sie wird mitgeladen, sobald hier gearbeitet wird. Was
-dort steht, wird hier nicht wiederholt.
+und laufende Projekte und lädt mit; was dort steht, wird hier nicht
+wiederholt.
 
-**Was hier nicht abgelegt wird:** erzeugte STL- und G-Code-Dateien, die ein
-Skript wiederherstellt. Das parametrische Skript ist die Quelle, die Datei
-daraus ist das Ergebnis — dieselbe Regel wie beim Referenzkorpus, und sie zählt
-hier doppelt, weil Netze schnell hundert Megabyte wiegen und aus der Historie
-nicht mehr herausgehen. Ein Netz gehört dazu, wenn es **nicht** reproduzierbar
-ist: ein eingescanntes Bauteil, ein heruntergeladenes Fremdmodell, ein von Hand
+**Nicht abgelegt werden erzeugte STL- und G-Code-Dateien, die ein Skript
+wiederherstellt.** Das parametrische Skript ist die Quelle, die Datei daraus
+das Ergebnis — dieselbe Regel wie beim Referenzkorpus, und sie zählt hier
+doppelt, weil Netze schnell hundert Megabyte wiegen und aus der Historie nicht
+mehr herausgehen. Ein Netz gehört dazu, wenn es **nicht** reproduzierbar ist:
+ein eingescanntes Bauteil, ein heruntergeladenes Fremdmodell, ein von Hand
 nachgebessertes Ergebnis.
 
 ## Immer an die eigene Werkstatt denken
@@ -30,10 +26,8 @@ nachgebessertes Ergebnis.
 Elegoo Centauri Carbon 2, Bauraum **256 × 256 × 256 mm**, 0,4-mm-Düse aus
 gehärtetem Stahl. Ein Entwurf, der nicht auf diese Platte passt oder ein
 Filament braucht, das nicht im Bestand ist, ist kein Entwurf, sondern eine
-Bestellung — dann das sagen.
-
-Materialwahl in einem Satz: draußen ASA, flexibel TPU 95A, innen PLA,
-technisch/abrasiv PETG-CF mit gehärteter Düse.
+Bestellung — dann das sagen. Materialwahl in einem Satz: draußen ASA, flexibel
+TPU 95A, innen PLA, technisch/abrasiv PETG-CF mit gehärteter Düse.
 
 ## Konstruieren
 
@@ -42,19 +36,19 @@ technisch/abrasiv PETG-CF mit gehärteter Düse.
   Maschine **nicht installiert** — `.scad` bleibt Referenz, gerechnet wird in
   Python.
 - **Jedes Teil wird vor dem Export geprüft**: wasserdicht, eine Komponente,
-  Wandstärke über dem Mindestmaß, keine Selbstdurchdringung. Ein STL, das
-  nicht geprüft wurde, wird nicht als fertig gemeldet.
-- **Passmaße gehören gemessen, nicht geschätzt.** Wo ein Maß aus einer Quelle
-  stammt, steht die Quelle im Kommentar; wo es geschätzt ist, steht das auch
-  — und dann kommt zuerst ein kleines Prüfstück, nicht das ganze Teil.
+  Wandstärke über dem Mindestmaß, keine Selbstdurchdringung. Ein STL, das nicht
+  geprüft wurde, wird nicht als fertig gemeldet.
+- **Passmaße werden gemessen, nicht geschätzt.** Stammt ein Maß aus einer
+  Quelle, steht sie im Kommentar; ist es geschätzt, steht auch das da — und
+  dann kommt zuerst ein kleines Prüfstück, nicht das ganze Teil.
 - **Verschrauben statt kleben** (M3/M4), Dichtung über TPU-Einlage in einer
   Nut. PEI-Flüssigkleber ist Betthaftung, kein Bauteilkleber.
-- Druckgerecht denken: Überhänge unter 45°, keine Stützen wo vermeidbar,
+- Druckgerecht denken: Überhänge unter 45°, keine Stützen, wo vermeidbar,
   Belastungsrichtung quer zur Schichtebene meiden, Elefantenfuß einplanen.
 
 ## Ordnung
 
-Ein Projekt je nummeriertem Ordner, Iterationen als `Versuch N/`, aktueller
+Ein Projekt je nummeriertem Ordner, Iterationen als `Versuch N/`, der aktuelle
 Stand im Projekt-Root. Zu jedem eigenen Teil eine
 `*_Bauteil-Spezifikation.md`: Maße, Materialwahl, Druckhinweise, offene
 Messungen. `_material.3mf` ist eine fertig geslicte Datei.
@@ -64,4 +58,4 @@ Messungen. `_material.3mf` ist eine fertig geslicte Datei.
 Der Drucker ist keine Simulation. Ein Teil, das erst nach acht Stunden Druck
 als falsch auffällt, kostet echtes Material — lieber ein Prüfstück, eine
 Rückfrage oder eine Messung mehr. Wo ein Druckteil Sicherheit betrifft, wird
-das ausdrücklich benannt und die Sicherung bleibt zusätzlich dran.
+das ausdrücklich benannt, und die Sicherung bleibt zusätzlich dran.
