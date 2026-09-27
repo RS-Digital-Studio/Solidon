@@ -559,7 +559,9 @@ CURA: Final[tuple[Row, ...]] = (
     ("retraction.avoid_crossing_walls", "retraction_combing", _mapped({"True": "noskin"}, "off")),
     ("filament.diameter", "material_diameter", _number),
     ("filament.flow_ratio", "material_flow", _percent),
-    ("filament.max_flow", "material_max_flowrate", _number),
+    # **Kein ``material_max_flowrate``.** CuraEngine liest den Schlüssel nicht
+    # (null Treffer in ``CuraEngine.exe`` 5.13, in ``fdmprinter`` abgeschaltet);
+    # den Volumenstrom hält Solidon über die Tempi (``print_settings._within_flow``).
 )
 
 #: Was ``CuraEngine`` aus einem geschriebenen Wert **nicht** selbst ableitet.
@@ -911,6 +913,9 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
             "retraction.wipe",
             "filament.density",
             "filament.cost_per_kg",
+            # Den Volumenstrom liest CuraEngine nicht; er wirkt nur über die
+            # Tempi, die Solidon danach deckelt.
+            "filament.max_flow",
             # CuraEngine bekommt ein STL, und darin reist keine Stützsperre.
             "support.block_channels",
         }

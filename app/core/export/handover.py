@@ -173,6 +173,13 @@ _OVERHANG_FACTORS: Final = (50.0, 25.0)
 #: gebremst wird (``overhang_2_4_speed``: 25 bis 50 %; die Stufe 1/4 steht
 #: bei jedem Hersteller auf 0, also ungebremst).
 _OVERHANG_ONSET: Final = 0.25
+#: Wie weit der Kopf ohne Rückzug durch das Teil kämmt, in mm: 30 wie
+#: Creality in Cura; 10 für ein Filament, das Fäden zieht (Elegoo 9 bis 14,
+#: der KE 5). ``fdmprinter`` kennt keine Grenze, und ohne sie kämmte der Kopf
+#: beliebig weit ohne Rückzug.
+_COMBING_LIMIT: Final = 30.0
+_COMBING_LIMIT_STRINGING: Final = 10.0
+_STRINGING_MATERIALS: Final = frozenset({"petg", "petg-cf"})
 #: Die Beschleunigung der ersten Schicht, wenn der Drucker keine eigene trägt
 #: (``PrinterProfile.first_layer_acceleration``), in mm/s²: der Wert der
 #: Werksprozesse von Elegoo, Bambu, Prusa und Creality-Orca am Ender-3 V3.
@@ -819,6 +826,7 @@ def _cura_computed(written: dict[str, str], settings: PrintSettings, profile: Pr
     _for_supports(written, settings)
     _for_speeds(written, settings, profile)
     _for_overhangs(written, profile.printer)
+    _factory_habits(written, profile)
     _full_fan_layer(written)
 
 
@@ -1017,6 +1025,29 @@ def _for_overhangs(written: dict[str, str], printer: PrinterProfile) -> None:
     written["wall_overhang_speed_factors"] = (
         "[" + ",".join(f"{round(step)}" for step in steps) + "]"
     )
+
+
+def _factory_habits(written: dict[str, str], profile: Profile) -> None:
+    """Was ``fdmprinter`` anders vorgibt als die Werksprofile in Cura (B6, B11, B12).
+
+    Creality, Anycubic, Sovol und Elegoo setzen diese Werte in Cura als
+    Formel, und Formeln liest die Konsole nicht — ohne Solidons Zeile gälte
+    ``fdmprinter``, nicht das Profil des Herstellers.
+    """
+    # Die Füllung nach den Wänden. ``fdmprinter`` druckt sie vorher, und ihr
+    # Muster zeichnet sich durch die Außenwand (gemessen: FILL, WALL-INNER,
+    # WALL-OUTER). Creality, Anycubic und Sovol stellen in Cura ``false``.
+    written["infill_before_walls"] = "false"
+    # Kämmen ohne Rückzug nur ein Stück weit, bei PETG kürzer.
+    stringing = profile.material.id in _STRINGING_MATERIALS
+    limit = _COMBING_LIMIT_STRINGING if stringing else _COMBING_LIMIT
+    written["retraction_combing_max_distance"] = f"{limit:g}"
+    # Der Z-Sprung nur über gedruckten Teilen, nicht bei jedem Rückzug, und
+    # die Fahrt umgeht Stützen (Creality, Anycubic in Cura).
+    written["retraction_hop_only_when_collides"] = "true"
+    written["travel_avoid_supports"] = "true"
+    # Die Naht bevorzugt verdeckte Ecken, wie Creality, Sovol und Elegoo.
+    written["z_seam_corner"] = "z_seam_corner_weighted"
 
 
 def _as_float(value: str | None) -> float | None:

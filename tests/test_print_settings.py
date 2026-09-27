@@ -755,6 +755,7 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "filament.density": "steht im Materialprofil des Fensters, nicht in der Rechenmaschine.",
         "filament.colour": "wie oben",
         "filament.cost_per_kg": "wie oben",
+        "filament.max_flow": "CuraEngine liest den Volumenstrom nicht; Solidon deckelt die Tempi.",
     },
 }
 
@@ -5429,6 +5430,10 @@ UNREACHED: Final[dict[tuple[str, str], str]] = {
         "entgegen; sie zum Slicer zu tragen brächte niemandem etwas."
     ),
     ("filament.cost_per_kg", "cura"): "Wie die Dichte darüber — Solidon rechnet, nicht der Slicer.",
+    ("filament.max_flow", "cura"): (
+        "CuraEngine liest ``material_max_flowrate`` nicht (null Treffer in ``CuraEngine.exe`` "
+        "5.13); den Volumenstrom hält Solidon über die Tempi (``print_settings._within_flow``)."
+    ),
     ("support.block_channels", "prusa"): (
         "Reist als Stützsperre in der 3MF, nicht als Wert (``slicer_keys.AS_GEOMETRY``); "
         "``test_threemf_assembly`` prüft den Bereich."

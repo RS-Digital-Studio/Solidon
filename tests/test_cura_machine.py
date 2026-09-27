@@ -480,3 +480,40 @@ def test_the_overhang_steps_are_read_from_the_printer_table(tmp_path: Path) -> N
         profiles._printer_from_table(
             "eigener", {**table, "overhang_speed_factors": [40, 0]}, Path("printers.toml")
         )
+
+
+def test_infill_comes_after_the_walls() -> None:
+    """``fdmprinter`` druckt die Füllung zuerst, und ihr Muster zeichnet sich durch.
+
+    Gemessen im Prüfbericht (§1.4): ``FILL``, ``WALL-INNER``, ``WALL-OUTER``.
+    Creality, Anycubic und Sovol stellen in Cura ``false``.
+    """
+    assert _cura_values("creality-k1-max")["infill_before_walls"] == "false"
+
+
+@pytest.mark.parametrize(("material", "distance"), [("pla", 30.0), ("petg", 10.0)])
+def test_travel_moves_retract_after_a_while_and_avoid_supports(
+    material: str, distance: float
+) -> None:
+    """Kämmen ohne Rückzug war unbegrenzt, der Z-Sprung kam bei jedem Rückzug."""
+    values = _cura_values("creality-k1-max", material)
+
+    assert float(values["retraction_combing_max_distance"]) == pytest.approx(distance)
+    assert values["retraction_hop_only_when_collides"] == "true"
+    assert values["travel_avoid_supports"] == "true"
+
+
+def test_the_seam_prefers_hidden_corners() -> None:
+    """``z_seam_corner_weighted`` wie Creality, Sovol und Elegoo in Cura."""
+    assert _cura_values("creality-k1-max")["z_seam_corner"] == "z_seam_corner_weighted"
+
+
+def test_cura_is_not_offered_a_flow_limit_it_does_not_read() -> None:
+    """``material_max_flowrate`` kommt in ``CuraEngine.exe`` nicht vor (Prüfbericht §3.6).
+
+    Eine Zeile, die nichts bewirkt, ist im Druckdialog eine Attrappe.
+    """
+    from app.core.export import slicer_keys
+
+    assert "material_max_flowrate" not in _cura_values("creality-k1-max")
+    assert not slicer_keys.takes("cura", "filament.max_flow")
