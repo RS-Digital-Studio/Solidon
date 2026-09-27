@@ -502,7 +502,7 @@ def sketched_plate() -> Project:
         ],
     )
     history.apply(
-        _("Tasche"),
+        _("Tasche schneiden"),
         [
             OperationDraft(
                 op="sketch_pocket",

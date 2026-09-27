@@ -567,12 +567,6 @@ ZITAT_DARF_ABWEICHEN: dict[tuple[str, str], str] = {
         "Alle Maße in Millimetern.",
         "Presssitz",
     ): "Begriff im Satz, nicht der Feldname; klein im Satz.",
-    ("Die Tasche ist derselbe Weg", "Tasche"): (
-        "Der Katalogschlüssel „Tasche“ trägt auch die Gummifuß-Tasche des Standfußes "
-        "(`labels.py`), die Übersetzungen folgen jener; der Verlaufsschritt des Beispiels "
-        "heißt nach `make_examples.py` ebenso. Aufgelöst wird das mit einem eigenen Schlüssel "
-        "beim nächsten Erzeugen der Beispiele (Registersatz der Durchsicht 0.5.1)."
-    ),
 }
 
 

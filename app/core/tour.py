@@ -592,8 +592,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="history",
                 text=_(
                     "Die Tasche ist derselbe Weg, nur abwärts: ein zweiter Umriss, "
-                    "in den Körper geschnitten. Mit einem Doppelklick auf „Tasche“ "
-                    "ändern Sie ihre Tiefe."
+                    "in den Körper geschnitten. Mit einem Doppelklick auf "
+                    "„Tasche schneiden“ ändern Sie ihre Tiefe."
                 ),
             ),
         ),
