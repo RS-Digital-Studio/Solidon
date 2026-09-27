@@ -37,9 +37,27 @@ einmal **still eine falsche Summe**: 9.599.875.422 statt 9.599.880.000, ohne
 jede Ausnahme.
 
 Die Maschine: i9-13900K (Raptor Lake, die Familie mit dem bekannten
-Instabilitätsproblem), Microcode 0x12F, 2×32 GB DDR5 auf 4800 MHz, zwei
-unerwartete Neustarts in dreißig Tagen, keine WHEA-Einträge, nie eine
-Speicherdiagnose gelaufen.
+Instabilitätsproblem), MSI MPG Z690 CARBON WIFI, 2×32 GB DDR5 auf 4800 MHz,
+zwei unerwartete Neustarts in dreißig Tagen, keine WHEA-Einträge, nie eine
+Speicherdiagnose gelaufen. Microcode im August 0x12F, am 27.09.2026 **0x133**
+(BIOS 1.O0 vom 01.04.2026) — die Fehler bleiben. Das passt zu Intels Aussage:
+Die Microcode-Stände verhindern weitere Schädigung, eine bereits geschädigte
+CPU reparieren sie nicht; dafür gibt es die um zwei auf fünf Jahre
+verlängerte Garantie der 13. und 14. Generation.
+
+**Wann sie falsch rechnet, gemessen am 27.09.2026** (Einzelheiten in
+[[ast-walk-reisst-im-torlauf]]): in Fenstern **niedriger Gesamtlast**, wenn
+ein einzelner rechnender Prozess auf einem der beiden bevorzugten P-Kerne
+läuft (logisch 8–11, Scheduling-Klasse 2) und die mit 184–188 % des
+Nenntakts takten. Unter Volllast (Takt 167–175 %) fiel dort nichts. Dieselbe
+Nachstellung aus reiner Standardbibliothek stürzte unter Python 3.14.7
+**und 3.13.14** ab — weder Solidon noch eine native Bibliothek noch eine
+CPython-Version ist nötig. Auf die übrigen P-Kerne gepinnt (Maske `F0FF`)
+blieben Nachstellung und Sprachprüfung in denselben Zeiträumen 0 von 204
+rot, frei geplant oder auf die bevorzugten Kerne gepinnt 22 von 384. Die
+Ereignisanzeige trägt passende Spuren: `STATUS_ILLEGAL_INSTRUCTION`
+(`c000001d`) mitten in OpenBLAS (23.09.2026) und eine Zugriffsverletzung mit
+einer Heapadresse als Befehlszeiger (24.09.2026).
 
 **Ein weiterer Fall, 13.08.2026** — diesmal *reproduzierbar*, was die Sache
 nicht zu einem Codefehler macht:
@@ -67,6 +85,10 @@ Familie: nicht die Zeile ansehen, sondern die Kombination.
   lassen den zweiten Fehlschlag durch. Gegen ein Symptom gebaut, nicht gegen
   die Ursache — und wenn die Maschine der Grund ist, ist das genau richtig.
 - Offen: MemTest86 oder die Windows-Speicherdiagnose über Nacht.
+- Offen, Roberts Entscheidung: Austausch über Intels Garantie, bis dahin im
+  BIOS die Intel Default Settings. Solange die CPU bleibt, entstehen
+  Release-Pakete auf dieser Maschine mit dem Risiko eines stillen
+  Rechenfehlers — doppelt bauen und vergleichen oder in der CI bauen.
 
 Siehe [[rtree-abstuerze-im-langen-lauf]], das denselben Cluster von außen
 beschreibt, und [[leistungstests-fremdlast]] für die andere Sorte
