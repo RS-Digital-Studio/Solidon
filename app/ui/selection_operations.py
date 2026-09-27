@@ -365,6 +365,16 @@ class SelectionOperationsPanel(QWidget):
         self._at_which_kind = {
             spec.name: frozenset(spec.applies_to) for spec in feature_operations(specs)
         }
+        """Und an **welcher Art** von Merkmal jede von ihnen etwas tut.
+
+        Dieselbe Quelle, einen Schritt genauer: ``applies_to`` nennt nicht nur
+        *dass* eine Handlung einem Merkmal gilt, sondern welchem. Ohne diesen
+        Schritt beantwortete :meth:`_fits_the_level` nur die gröbere Frage, und
+        an einer gewählten Bohrung standen alle 18 Merkmalshandlungen — auch
+        *Text aufbringen* und *Filament auf eine Fläche*, die beide nur an
+        ``face`` etwas tun. Zuständig sind an einer Bohrung neun, an einer
+        Senkung sechs (gemessen 09.09.2026; Robert: „bei einer Bohrung oder
+        Senkung brauchen wir Filament und die Körperliste gar nicht")."""
         self._on_body = frozenset(spec.name for spec in specs if spec.also_on_body)
         """Merkmalshandlungen, die auch am ganzen Körper gelten (``also_on_body``)."""
         self._for_all_bodies = frozenset(spec.name for spec in operations if spec.takes_whole_scene)
@@ -378,16 +388,6 @@ class SelectionOperationsPanel(QWidget):
         tat es nicht."""
         self._nothing_chosen = False
         """Ob gerade nichts gewählt ist — die Stufe der ganzen Szene."""
-        """Und an **welcher Art** von Merkmal jede von ihnen etwas tut.
-
-        Dieselbe Quelle, einen Schritt genauer: ``applies_to`` nennt nicht nur
-        *dass* eine Handlung einem Merkmal gilt, sondern welchem. Ohne diesen
-        Schritt beantwortete :meth:`_fits_the_level` nur die gröbere Frage, und
-        an einer gewählten Bohrung standen alle 18 Merkmalshandlungen — auch
-        *Text aufbringen* und *Filament auf eine Fläche*, die beide nur an
-        ``face`` etwas tun. Zuständig sind an einer Bohrung neun, an einer
-        Senkung sechs (gemessen 09.09.2026; Robert: „bei einer Bohrung oder
-        Senkung brauchen wir Filament und die Körperliste gar nicht")."""
         self._buttons: dict[str, QToolButton] = {}
         self._groups: dict[str, tuple[QWidget, QToolButton, tuple[QToolButton, ...]]] = {}
         """Je Gruppe ihr Abschnitt, sein Umschalter und ihre Knöpfe.
