@@ -17,6 +17,7 @@ import math
 import zipfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any, Final, cast
 
 import numpy as np
@@ -1092,7 +1093,9 @@ def on_surface(
     fragt, baut ihn einmal (:class:`_SurfaceIndex`); so misst
     :func:`max_distance_to_surface`. Wer ihn über mehrere Aufrufe hält, gibt
     ihn als ``index`` mit (:func:`surface_index`) — er muss zu ``body``
-    gehören.
+    gehören. Die Bäume der Größenbänder hält der Index mit
+    (:attr:`_SurfaceIndex.bands`); ein zweiter Aufruf baut keinen Baum über
+    dem Netz mehr.
     """
     built = index if index is not None and index.body is body else _SurfaceIndex.of(body)
     return _nearest_on(built, np.asarray(points, dtype=float).reshape(-1, 3))
@@ -1113,8 +1116,9 @@ class _SurfaceIndex:
 
     Dreiecke, Schwerpunkte, die Spanne je Dreieck (Schwerpunkt zur fernsten
     Ecke), die Quader um jedes Dreieck und der ``cKDTree`` über den
-    Schwerpunkten. Kein Zustand, der sich ändert; das Netz selbst wird nicht
-    angefasst.
+    Schwerpunkten; beim ersten Gebrauch dazu die Größenbänder mit ihren Bäumen
+    (:attr:`bands`). Kein Zustand, der sich danach ändert; das Netz selbst
+    wird nicht angefasst.
     """
 
     triangles: np.ndarray
@@ -1140,6 +1144,36 @@ class _SurfaceIndex:
             tree=cKDTree(centroids),
             body=body,
         )
+
+    @cached_property
+    def bands(self) -> tuple[tuple[np.ndarray, Any, float], ...]:
+        """Die Größenbänder der Dreiecke — je Band die Nummern, ihr Suchbaum und
+        die größte Spanne darin.
+
+        Ein Band sind die Dreiecke, deren Spanne in dieselbe Zweierpotenz fällt
+        (die Gründe stehen in :func:`_nearest_on`). Die Bänder hängen nur am
+        Netz, nicht an der Frage; bis zur Durchsicht 0.5.1 entstanden ihre
+        Bäume trotzdem in jedem Aufruf neu — am Gartenschlauchhalter
+        (392 532 Dreiecke) neunzehn Bäume und 66 ms je Frage, auch am
+        gemerkten Index und auch für zwei Punkte (RM-260). Gebaut beim ersten
+        Gebrauch: :meth:`bound` und eine Messung, die ohne exakte Frage
+        auskommt (:func:`beyond_surface` an einem heilen Netz), brauchen sie
+        nicht. Fragen zwei Fäden zugleich zum ersten Mal, bauen beide
+        dieselben Bänder, und einer davon bleibt.
+        """
+        from scipy.spatial import cKDTree
+
+        exponents = np.frexp(self.span)[1]
+        bands = []
+        for exponent in np.unique(exponents):
+            indices = np.flatnonzero(exponents == exponent)
+            band_tree = (
+                self.tree
+                if len(indices) == len(self.triangles)
+                else cKDTree(self.centroids[indices])
+            )
+            bands.append((indices, band_tree, float(self.span[indices].max())))
+        return tuple(bands)
 
     def bound(self, queries: np.ndarray, *, neighbours: int = 1) -> np.ndarray:
         """Je Punkt eine obere Schranke für seinen Abstand zur Oberfläche: der
@@ -1393,8 +1427,9 @@ def _nearest_on(
     # Alle Dreiecke, die sie noch unterbieten könnten. Pro Größenband genügt
     # dessen größte Spanne als Radius; ein großes Dreieck weitet damit nur die
     # Suche unter anderen großen Dreiecken. ``frexp`` liefert Zweierpotenzen
-    # ohne eine zweite, in Millimetern festgeschriebene Wahrheit.
-    exponents = np.frexp(span)[1]
+    # ohne eine zweite, in Millimetern festgeschriebene Wahrheit. Die Bänder
+    # und ihre Bäume hält der Index (:attr:`_SurfaceIndex.bands`, RM-260).
+    #
     # **Kein Gang je Abfragepunkt, und keine Python-Liste je Punkt.**
     # ``query_ball_point`` gab je Punkt eine Liste zurück — an 51 000 Ecken
     # der Lochplatte mit 204 000 Dreiecken sechzehn Millionen Zahlen als
@@ -1416,10 +1451,8 @@ def _nearest_on(
     lows = index.lows
     highs = index.highs
     budget = 2_000_000
-    for exponent in np.unique(exponents):
-        indices = np.flatnonzero(exponents == exponent)
-        band_tree = tree if len(indices) == len(triangles) else cKDTree(centroids[indices])
-        radius = bound + float(span[indices].max())
+    for indices, band_tree, band_span in index.bands:
+        radius = bound + band_span
         lengths = np.asarray(
             band_tree.query_ball_point(queries, radius, return_length=True), dtype=np.int64
         )
@@ -1433,7 +1466,6 @@ def _nearest_on(
         # reicht nur so weit, wie der Radius um höchstens eine Spanne wächst;
         # kleine Portionen (ferne, vereinzelte Punkte) gehen den alten
         # Listenweg, der dort schnell ist.
-        band_span = float(span[indices].max())
         by_radius = np.argsort(radius, kind="stable")
         sorted_radius = radius[by_radius]
         cumulative = np.cumsum(lengths[by_radius])

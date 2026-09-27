@@ -244,7 +244,7 @@ def _flank_is_open(body: MeshData, position: Vec3, unit: Any, radius: float) -> 
     )
     samples = np.asarray(position, dtype=float) + rim[None, :, :] + depths[:, None, None] * axis
     flat = samples.reshape(-1, 3)
-    closest, _distance, triangle = on_surface(body.raw, flat)
+    closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
     normals = np.asarray(body.raw.face_normals)[triangle]
     outward = np.einsum("ij,ij->i", flat - closest, normals)
     inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)
@@ -537,7 +537,7 @@ def mouth_over_the_edge(
     depths = radius * np.asarray(_MOUTH_DEPTHS, dtype=float)
     samples = mouth + rim[None, :, :] + depths[:, None, None] * unit
     flat = samples.reshape(-1, 3)
-    closest, _distance, triangle = on_surface(body.raw, flat)
+    closest, _distance, triangle = on_surface(body.raw, flat, index=surface_index_of(body))
     normals = np.asarray(body.raw.face_normals)[triangle]
     outward = np.einsum("ij,ij->i", flat - closest, normals)
     inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)

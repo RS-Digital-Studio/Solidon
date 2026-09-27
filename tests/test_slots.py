@@ -493,6 +493,59 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         assert triangle.dtype == np.int64
 
 
+def test_a_held_surface_index_builds_its_trees_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein gehaltener Index baut beim zweiten Aufruf keinen Suchbaum — und antwortet bitgleich.
+
+    ``on_surface`` sucht je Größenband der Dreiecke in einem eigenen Baum. Bis
+    zur Durchsicht 0.5.1 entstanden diese Bäume in jedem Aufruf neu, auch am
+    gemerkten Index (``prepare.surface_index_of``): am Gartenschlauchhalter
+    19 Bäume und 66 ms Grundlast je Frage, gleich ob sie zwei Punkte fragte
+    oder zweitausend (RM-260). Die Bänder gehören zum Netz und nicht zur
+    Frage; sie hängen jetzt am Index.
+
+    Gefragt wird mit weniger Punkten, als eine Portion braucht, um einen
+    eigenen Baum über den Fragepunkten zu bauen — jeder gezählte Baum ist
+    also einer über dem Netz.
+    """
+    import scipy.spatial
+
+    from app.core.geom.mesh import on_surface, surface_index
+
+    rng = np.random.default_rng(29)
+    body = trimesh.util.concatenate(
+        (
+            trimesh.creation.icosphere(subdivisions=3, radius=15.0),
+            trimesh.creation.cylinder(radius=8.0, height=40.0, sections=48),
+            trimesh.creation.box((60.0, 60.0, 2.0)),
+        )
+    )
+    triangles = np.asarray(body.triangles)
+    span = np.linalg.norm(triangles - triangles.mean(axis=1)[:, None, :], axis=2).max(axis=1)
+    assert len(np.unique(np.frexp(span)[1])) >= 3, "the body must have several size bands"
+    points = np.vstack((rng.uniform(-40.0, 40.0, size=(24, 3)), triangles.mean(axis=1)[:8]))
+    expected = on_surface(body, points)
+
+    original = scipy.spatial.cKDTree
+    built: list[int] = []
+
+    def counted(data: np.ndarray, *args: object, **kwargs: object) -> object:
+        built.append(len(data))
+        return original(data, *args, **kwargs)
+
+    monkeypatch.setattr(scipy.spatial, "cKDTree", counted)
+    held = surface_index(body)
+    first = on_surface(body, points, index=held)
+    after_first = len(built)
+    second = on_surface(body, points, index=held)
+
+    assert len(built) == after_first, (
+        f"the second call built {len(built) - after_first} trees of sizes {built[after_first:]}"
+    )
+    for fresh, again, answer in zip(first, second, expected, strict=True):
+        assert np.array_equal(fresh, answer), "a held index answers what a fresh one answers"
+        assert np.array_equal(again, answer), "and the second call answers the same bits"
+
+
 def test_the_largest_distance_is_the_largest_of_the_full_answer() -> None:
     """``max_distance_to_surface`` misst nicht jeden Punkt — und antwortet doch,
     was ``on_surface`` über alle Punkte als Maximum gibt.

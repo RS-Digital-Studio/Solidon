@@ -458,19 +458,29 @@ def _inward_direction(
     if not usable.any():
         return None
 
-    indices = np.flatnonzero(usable)
-    surface = mesh.raw
-    if len(indices) != mesh.triangle_count:
+    # Jeder Klick fragt am ganzen Netz denselben gemerkten Suchbaum (RM-260):
+    # am Gartenschlauchhalter 250 ms je Klick für einen Baum, der nur eine
+    # Frage beantwortete. Gewinnt dort ein tragendes Dreieck, ist es auch unter
+    # den tragenden das nächste — kleinster Abstand, darunter kleinste Nummer,
+    # und die tragenden sind eine Teilmenge.
+    from app.core.geom.prepare import surface_index_of
+
+    _closest, _distance, faces = on_surface(
+        mesh.raw, origin.reshape(1, 3), index=surface_index_of(mesh)
+    )
+    nearest = int(faces[0])
+    if not usable[nearest]:
         # Nullflächen sind im Viewport unsichtbar und besitzen keine Richtung.
         # Sie dürfen deshalb auch dann nicht gewinnen, wenn ihre Restkante
         # genau unter dem Klick liegt. Das nächste tragende Dreieck entscheidet.
+        indices = np.flatnonzero(usable)
         surface = trimesh.Trimesh(
             vertices=np.asarray(mesh.raw.vertices, dtype=float),
             faces=np.asarray(mesh.raw.faces, dtype=np.int64)[indices],
             process=False,
         )
-    _closest, _distance, faces = on_surface(surface, origin.reshape(1, 3))
-    nearest = int(indices[int(faces[0])])
+        _closest, _distance, faces = on_surface(surface, origin.reshape(1, 3))
+        nearest = int(indices[int(faces[0])])
     normal = normals[nearest]
     length = float(np.linalg.norm(normal))
     return -normal / length if length > EPS_GEOM else None

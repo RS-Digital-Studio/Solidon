@@ -3544,7 +3544,7 @@ def source_deviation(
     """
     from app.core.brep.kernel import _FACE_ATTRIBUTE
     from app.core.geom.deviation import SampledDeviation
-    from app.core.geom.mesh import on_surface
+    from app.core.geom.mesh import on_surface, surface_index
 
     def advance(fraction: float) -> None:
         _check(cancelled)
@@ -3574,9 +3574,13 @@ def source_deviation(
     points = samples.reshape(-1, 3)
     distances = np.empty(len(points))
     block = 65_536
+    # Ein Suchbaum je Netz für alle Portionen, nicht einer je Portion (RM-260).
+    reference_index = surface_index(reference.mesh.raw)
     for start in range(0, len(points), block):
         advance(0.1 + 0.4 * start / max(len(points), 1))
-        _spots, found, _hit = on_surface(reference.mesh.raw, points[start : start + block])
+        _spots, found, _hit = on_surface(
+            reference.mesh.raw, points[start : start + block], index=reference_index
+        )
         distances[start : start + block] = found
     per_sample = distances.reshape(count, len(_BODY_SAMPLES))
     values = per_sample.max(axis=1) if count else np.zeros(0)
@@ -3596,9 +3600,12 @@ def source_deviation(
     nearest = np.empty(len(probes), dtype=np.int64)
     gaps = np.empty(len(probes))
     spots = np.empty((len(probes), 3))
+    display_index = surface_index(display.raw)
     for start in range(0, len(probes), block):
         advance(0.5 + 0.4 * start / max(len(probes), 1))
-        spot, found, hit = on_surface(display.raw, probes[start : start + block])
+        spot, found, hit = on_surface(
+            display.raw, probes[start : start + block], index=display_index
+        )
         nearest[start : start + block] = hit
         gaps[start : start + block] = found
         spots[start : start + block] = spot

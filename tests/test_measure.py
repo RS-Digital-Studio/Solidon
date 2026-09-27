@@ -107,6 +107,43 @@ def test_wall_thickness_ignores_a_degenerate_face_on_the_clicked_surface() -> No
     assert wall_thickness(with_zero_face, (-30.0, 0.0, 1.0)) == pytest.approx(2.0, abs=1e-3)
 
 
+def test_a_second_click_measures_the_wall_without_a_new_search_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Jeder Klick *Wandstärke* fragt den gemerkten Suchbaum des Körpers (RM-260).
+
+    Bis zur Durchsicht 0.5.1 baute jeder Klick einen Baum über alle Dreiecke,
+    um ein einziges nächstes Dreieck zu finden — am Gartenschlauchhalter
+    250 von 315 ms je Klick, und an einem Netz mit einer Nullfläche irgendwo
+    sogar über einer Kopie ohne sie. Die Nullfläche liegt hier weit weg vom
+    Klick: Sie zwingt den alten Weg auf die Kopie und den neuen nicht.
+    """
+    import numpy as np
+    import scipy.spatial
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    plate = trimesh.creation.box(extents=(100.0, 100.0, 2.0)).subdivide().subdivide()
+    far = ((-50.0, 50.0, 1.0), (-40.0, 50.0, 1.0), (-40.0, 50.0, 1.0))
+    vertices = np.vstack((np.asarray(far), plate.vertices))
+    faces = np.vstack((np.asarray(((0, 1, 2),)), plate.faces + 3))
+    body = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+    original = scipy.spatial.cKDTree
+    built: list[int] = []
+
+    def counted(data: np.ndarray, *args: object, **kwargs: object) -> object:
+        built.append(len(data))
+        return original(data, *args, **kwargs)
+
+    monkeypatch.setattr(scipy.spatial, "cKDTree", counted)
+    assert wall_thickness(body, (10.0, 5.0, 1.0)) == pytest.approx(2.0, abs=1e-3)
+    after_first = len(built)
+    assert wall_thickness(body, (-20.0, -15.0, 1.0)) == pytest.approx(2.0, abs=1e-3)
+
+    assert len(built) == after_first, f"the second click built trees of sizes {built[after_first:]}"
+
+
 def test_wall_thickness_in_a_given_direction() -> None:
     assert wall_thickness(cube(), (0.0, 0.0, -10.0), (0.0, 0.0, 1.0)) == pytest.approx(
         20.0, abs=1e-3

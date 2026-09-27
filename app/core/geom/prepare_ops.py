@@ -2528,7 +2528,7 @@ def _toward_the_air(mesh: MeshData, feature: Feature) -> NDArray[np.float64] | N
     if depth <= EPS_GEOM:
         return None
     ends = centre + np.array([-1.0, 1.0])[:, None] * axis * (depth / 2.0 + 2.0 * FEATURE_OVERLAP)
-    closest, _distance, faces = on_surface(mesh.raw, ends)
+    closest, _distance, faces = on_surface(mesh.raw, ends, index=surface_index_of(mesh))
     signed = np.einsum("ij,ij->i", ends - closest, np.asarray(mesh.raw.face_normals)[faces])
     inside = signed < -EPS_GEOM
     if bool(inside[0]) == bool(inside[1]):
@@ -2715,10 +2715,13 @@ def _without_cavities(
     herausgeschnitten, bevor es vereinigt wird — mit seinem gemessenen Maß
     (``oversize=0``), damit kein zweites, um die Zugabe weiteres Loch entsteht.
     """
-    from app.core.geom.mesh import on_surface
+    from app.core.geom.mesh import on_surface, surface_index
 
     if not tool.raw.is_watertight:
         return tool
+    # Ein Suchbaum für alle Merkmale, gebaut, wenn das erste ihn braucht, und
+    # neu erst nach einem Schnitt ins Werkzeug (RM-260).
+    index: Any = None
     for identifier, other in features.items():
         if identifier == skip or other.kind not in ("hole", "slot"):
             continue
@@ -2737,7 +2740,8 @@ def _without_cavities(
         # Innen heißt: der nächste Punkt der Werkzeughaut liegt in Richtung
         # ihrer Normale — derselbe Weg wie in :func:`_feature_mount`, ohne
         # einen Strahlenschnitt, der eine weitere Abhängigkeit bräuchte.
-        closest, _distances, faces = on_surface(tool.raw, samples)
+        index = index if index is not None else surface_index(tool.raw)
+        closest, _distances, faces = on_surface(tool.raw, samples, index=index)
         signed = np.einsum("ij,ij->i", samples - closest, np.asarray(tool.raw.face_normals)[faces])
         if not bool(np.any(signed < -EPS_GEOM)):
             continue
@@ -2765,6 +2769,7 @@ def _without_cavities(
         tool = boolean(
             "difference", [tool, cutter], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
+        index = None
     return tool
 
 
@@ -2909,7 +2914,7 @@ def _feature_mount(
     from app.core.geom.mesh import on_surface
 
     ends = centre + np.array([-1.0, 1.0])[:, None] * outward * (depth / 2.0 + EPS_GEOM * 16.0)
-    closest, _, faces = on_surface(mesh.raw, ends)
+    closest, _, faces = on_surface(mesh.raw, ends, index=surface_index_of(mesh))
     signed = np.einsum("ij,ij->i", ends - closest, np.asarray(mesh.raw.face_normals)[faces])
     inside = signed < -EPS_GEOM
     if inside.all():
@@ -13681,9 +13686,10 @@ def _material_at(source: SceneObject, point: np.ndarray) -> bool:
         return classifier.State() in (TopAbs_IN, TopAbs_ON)
     from app.core.geom.mesh import on_surface
 
-    raw = as_mesh_data(source.mesh).raw
+    mesh = as_mesh_data(source.mesh)
+    raw = mesh.raw
     flat = np.asarray(point, dtype=float).reshape(1, 3)
-    closest, _distance, triangle = on_surface(raw, flat)
+    closest, _distance, triangle = on_surface(raw, flat, index=surface_index_of(mesh))
     outward = float(np.dot(flat[0] - closest[0], np.asarray(raw.face_normals)[triangle[0]]))
     return outward <= EPS_GEOM
 
