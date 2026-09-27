@@ -23,12 +23,28 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Final
+from dataclasses import dataclass, replace
+from typing import Final, Literal
 
+from app.core import guides
 from app.core.registry import documentation
 from app.core.registry.registry import CATEGORIES, REGISTRY, Registry
 from app.i18n import TranslatableText, _
+
+#: Die fünf Teile des Handbuchs (Konzept Handbuch §4). Gegliedert wird nach
+#: dem, was der Kunde vorhat, nicht nach den Bereichen des Programms: Wer
+#: anfängt, findet die ersten Schritte; wer eine Aufgabe hat, eine Anleitung;
+#: wer nachschlagen will, das Nachschlagewerk — und keiner muss durch die
+#: anderen hindurch.
+Part = Literal["start", "tasks", "topics", "help", "reference"]
+
+PART_TITLES: Final[dict[Part, TranslatableText]] = {
+    "start": _("Erste Schritte"),
+    "tasks": _("Anleitungen"),
+    "topics": _("Funktionen"),
+    "help": _("Hilfe bei Problemen"),
+    "reference": _("Nachschlagen"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +70,11 @@ class Page:
     zwanzigsten Kapitel niemand mehr. Die erzeugten Seiten haben keine: Was
     dort steht, sagt ihre Überschrift.
     """
+    part: Part = "reference"
+    """Der Teil des Handbuchs, in dem die Seite steht. Gesetzt wird er von
+    :func:`pages` aus der Gliederung (:data:`OUTLINE`), nicht an jeder Seite:
+    Welche Seite wohin gehört, ist eine Entscheidung über das Ganze und steht
+    deshalb an einer Stelle."""
 
     def figures(self) -> tuple[str, ...]:
         """Die Schlüssel der Abbildungen, in der Reihenfolge ihres Auftretens."""
@@ -2829,9 +2850,95 @@ def knowledge_pages() -> tuple[Page, ...]:
     )
 
 
+#: Die Gliederung: je Teil die geschriebenen Seiten und die Bildanleitungen in
+#: der Reihenfolge, in der jemand sie liest. Die erzeugten Seiten stehen nicht
+#: darin; sie folgen am Ende von „Nachschlagen", erst das Wissen, dann eine
+#: Seite je Kategorie des Registers.
+#:
+#: Eine Seite, die hier fehlt, fehlt im Handbuch. ``tests/test_guides.py``
+#: verlangt deshalb jede geschriebene Seite und jede Anleitung genau einmal.
+OUTLINE: Final[tuple[tuple[Part, tuple[str, ...]], ...]] = (
+    (
+        "start",
+        (
+            "what",
+            "window-overview",
+            "print-a-model",
+            "drill-a-hole",
+            "first-part",
+            "housing-with-lid",
+            "start",
+            "ways",
+        ),
+    ),
+    ("tasks", ()),
+    (
+        "topics",
+        (
+            "window",
+            "history",
+            "moving",
+            "tolerances",
+            "parts",
+            "sketch",
+            "looking",
+            "features",
+            "parameters",
+            "print",
+            "export",
+            "splitting",
+            "labels",
+            "surfaces",
+            "variants",
+            "resin",
+            "sculpting",
+            "own-parts",
+            "exchange",
+            "generating",
+            "chat",
+            "extras",
+            "remote",
+            "activation",
+        ),
+    ),
+    ("help", ("trouble", SPACEMOUSE_ACCESS)),
+    ("reference", ("glossary",)),
+)
+
+
+def guide_page(guide: guides.Guide) -> Page:
+    """Eine Bildanleitung als Handbuchseite: je Schritt ein Satz und sein Bild.
+
+    Hat eine Anleitung mehr als einen Schritt, trägt jeder Satz seine Nummer
+    vorn, wie im Bild. Ein Legendenschritt bekommt unter dem Bild die
+    nummerierte Liste dessen, worauf die Nummern im Bild zeigen.
+
+    Der Text entsteht beim Aufruf in der eingestellten Sprache, wie bei den
+    erzeugten Seiten: Die Sätze sind einzeln übersetzt, die Nummern und
+    Bildverweise gehören keiner Sprache.
+    """
+    numbered = len(guide.steps) > 1
+    blocks: list[str] = []
+    for number, (figure_key, one) in enumerate(
+        zip(guide.figure_keys(), guide.steps, strict=True), start=1
+    ):
+        blocks.append(f"**{number}.** {one.text}" if numbered else str(one.text))
+        blocks.append(f"![](figure:{figure_key})")
+        if one.is_legend:
+            blocks.append(
+                "\n".join(f"{index}. {mark.label}" for index, mark in enumerate(one.marks, 1))
+            )
+    return Page(
+        key=guide.key,
+        title=guide.title,
+        summary=guide.summary,
+        body="\n\n".join(blocks),
+        part=guide.part,
+    )
+
+
 def pages(registry: Registry | None = None) -> tuple[Page, ...]:
-    """Alle Seiten: erst die geschriebenen, dann das Wissen, dann eine je
-    Kategorie."""
+    """Alle Seiten in der Gliederung des Handbuchs, die erzeugten am Ende."""
     source = registry or REGISTRY
     generated = tuple(
         Page(
@@ -2842,7 +2949,16 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
         )
         for category in source.by_category()
     )
-    return (*INTRODUCTION, _spacemouse_page(), *knowledge_pages(), *generated)
+    written = {
+        page.key: page
+        for page in (
+            *INTRODUCTION,
+            _spacemouse_page(),
+            *(guide_page(guide) for guide in guides.GUIDES),
+        )
+    }
+    arranged = tuple(replace(written[key], part=part) for part, keys in OUTLINE for key in keys)
+    return (*arranged, *knowledge_pages(), *generated)
 
 
 def find(key: str, registry: Registry | None = None) -> Page | None:
@@ -2925,6 +3041,8 @@ def without_figures(body: str) -> str:
 
     def describe(match: re.Match[str]) -> str:
         figure = figures.find(match.group(1))
-        return f"*{_('Abbildung')}: {figure.alt}*" if figure else ""
+        if figure is None or not figure.in_text:
+            return ""
+        return f"*{_('Abbildung')}: {figure.alt}*"
 
     return FIGURE_PATTERN.sub(describe, body)

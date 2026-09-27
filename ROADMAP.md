@@ -82,6 +82,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-279 — „Alle waagerechten Kanten“ nimmt die Ränder einer Querbohrung mit](#rm-279) | Geometrie, Erkennung und Druckvorbereitung | `edges.choose` fragt `flat`, und das gilt an jedem Ring (Quader mit Querbohrung Ø 6: 10 Kanten, darunter beide Bohrungsränder); `edge_lie_of` steht seit `6bcffec39`. Zu entscheiden: alte Projekte über eine Migration wie gespeichert, oder das neue Verhalten ab einer Version mit Meldung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
+| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Geht mit 0.5.1 (Robert): fertig für `main` und der Release-Sitzung gemeldet, Changelog steht. Fertig: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Offen: HB-5 (Gruppen im Fenster), HB-7 (F1), weitere Anleitungen, kürzere Erklärseiten |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster gefahren (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge, Bildschirmleser und Trennstriche im dunklen Thema (2,30:1) gemessen; offen allein die Rampe der 3D-Maus am echten Gerät — ob dieser Rest in RM-070 aufgeht (dasselbe Gerät) und der Punkt damit schließt, entscheidet Robert |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Welle 2 (`9145aedc`) und die Gebietsdurchsichten haben die in der Sollliste benannten Stellen, Preise, Generatoraussage, Sicherheit, Agentenquote und Sprachkonsistenz nachgezogen; die Durchsicht 0.5.1 hat jeden Text seit 0.5.0 gelesen und Wächter gegen Konstrukteurswörter und falsch zitierte Knöpfe eingecheckt (`e8f9f574d`); offen ist der erschöpfende Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website, dazu Presse A16/A23 und die C12-Namen |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
@@ -2443,6 +2444,37 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   alte Projekte rechnen wie gespeichert oder melden die Änderung.
 
 ## Bedienung und Darstellung
+
+<a id="rm-283"></a>
+
+- [~] **RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht.** Ein
+  Interessent schrieb am 27.09.2026, aus dem Handbuch sei alles schwer zu
+  lernen und Ausprobieren führe nicht zum Ziel. Robert am selben Tag: „anscheinend ist
+  das Handbuch zu umständlich/unübersichtlich nicht verständlich, suche
+  optimierungen arbeite ein konzept aus und leg los", dazu „am besten auch an
+  bildern live von der oberfläche erklären als durch wörter mit
+  kommentaren/pfeilen usw", aktuell zu jeder neuen Version und nur dann, und
+  so, dass jede Sitzung übernehmen kann. Konzept, Befund und Pakete HB-0 bis
+  HB-12: [`konzepte/konzept-handbuch-2026-09.md`](konzepte/konzept-handbuch-2026-09.md),
+  §0 sagt, wie man weitermacht. Befund: 50 Seiten, 44 420 Wörter, zwei Drittel davon
+  erzeugt, eine flache Liste, kein Bild mit Markierung, 15 der 30
+  geschriebenen Seiten ohne Bild, 18 Klickwege in Worten; die Suche bringt
+  die richtige Seite nur bei der Hälfte von 38 Kundensuchen unter die ersten
+  drei, und F1 führt nie in das passende Kapitel. Gearbeitet wird auf dem Zweig `handbuch-umbau`
+  (Arbeitsbaum `F:\3D Druck.handbuch`), weil `main` das Release 0.5.1
+  vorbereitet. **Stand:** HB-1 bis HB-4, HB-6 und HB-13 fertig — fünfteilige
+  Gliederung, fünf Bildanleitungen (Fenster, Modell prüfen und drucken, Loch
+  bohren, erstes eigenes Teil, Gehäuse mit Deckel) aus der echten Oberfläche,
+  Suche mit Rangfolge und Fundstelle (38 von 38 Kundensuchen unter den ersten
+  drei, vorher 25), Ort je Operation in der Referenz; `/erzeugen` nimmt die
+  Anleitungen bei jedem Release auf. **Geht mit 0.5.1** (Robert, 27.09.2026:
+  „handbuch kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Der
+  Zweig ist fertig für `main`, samt den Punkten im Changelog 0.5.1, und der
+  Release-Sitzung gemeldet, die den Merge vor dem Tag setzt; beim Release
+  läuft `make_guides.py` in allen Sprachen vor `make_manual.py`. Weiter geht
+  es auf dem Zweig. **Offen:** HB-5 (Gruppen im
+  Handbuchfenster, „Wo fange ich an?"), HB-7 (F1 im Zusammenhang), der Rest
+  von HB-8, HB-9 bis HB-12. **Abnahme:** §11 des Konzepts.
 
 <a id="rm-197"></a>
 

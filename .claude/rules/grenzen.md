@@ -129,7 +129,14 @@ Robert).
   nicht `toggled`); ein Suchtreffer öffnet seine Gruppe.
 - **Der Knopf *Bausteine* ist ein Hauptknopf** an Körper und Fläche, nicht an
   Bohrung oder Verrundung (Entscheidung Robert). **Ohne Auswahl bleibt dieser
-  Weg** (Entscheidung Robert), die Operationsliste nicht.
+  Weg** (Entscheidung Robert), von der Operationsliste nur das Folgende.
+- **Handlungen für alle Körper stehen, wenn nichts gewählt ist — und nur dann**
+  (Entscheidung Robert): welche, sagt das Register (`takes_whole_scene`:
+  *Druckoptimal ausrichten*, *Auf dem Bett anordnen*, *Überschneidungen
+  prüfen*). Am gewählten Körper sagte der Knopf, er gelte diesem Körper, und
+  nahm doch alle. Darüber steht „Gilt für alle Körper.", ohne Suchfeld; ein
+  Suchtext von der letzten Auswahl filtert dort nichts weg
+  (`SelectionOperationsPanel._without_a_selection`).
 - **Eine Karte ohne Liste lädt nicht zum Suchen ein:** Das Suchfeld verschwindet
   mit der Liste, ein Satz nennt, wo die Handlungen stehen; wer sucht und nichts
   findet, behält es. Beide Leeren setzt eine Stelle
@@ -377,3 +384,12 @@ Kundenwort steht in allen Sprachen, ist kein Füllwort und meint über einen
 kurzen Stamm kein anderes Wort
 (`test_every_customer_word_belongs_to_a_row_of_the_palette` hält die Schlüssel
 am Register und an den Fensterbefehlen).
+
+**Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`):
+Es faltet mit `fold`, wägt mit `strength` und liest die Kundenwörter über
+`customer_phrases` und `says`; nennt eine Suche genau die Wendung einer
+Operation, sucht es zusätzlich deren Titel als Wortfolge. Ein neues Kundenwort
+ändert also auch, wo das Handbuch aufschlägt — `tests/test_manual_search.py`
+verlangt bei 50 Kundensuchen mindestens 80 Prozent richtige Seiten unter den
+ersten drei. Eine eigene Wortliste des Handbuchs wäre ein Zwilling dieser
+Tabelle (`zwillinge.md`).

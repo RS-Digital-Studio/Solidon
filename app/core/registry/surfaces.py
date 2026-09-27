@@ -638,7 +638,8 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
     zweite Quelle wäre eine, die veraltet.
     """
     lines: list[str] = []
-    for name, entries in (registry or REGISTRY).by_category().items():
+    source = registry or REGISTRY
+    for name, entries in source.by_category().items():
         if category and name != category:
             continue
         lines.append(f"## {CATEGORIES[name]}")
@@ -670,6 +671,13 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             if spec.doc:
                 lines.append(str(spec.doc))
                 lines.append("")
+            # **Wo man sie findet.** Von 142 Einträgen nannten zwei ihren Ort in
+            # der Oberfläche (konzepte/nachweise-handbuch-2026-09/findbarkeit.md,
+            # Teil 4) — wer in der Referenz liest, sucht als Nächstes den Knopf.
+            # ``menu_path`` antwortet aus denselben Daten wie Menü, Katalog und
+            # Auswahlfenster, dieselbe Auskunft, die der Chat bekommt.
+            lines.append(f"**{_('Ort')}:** {menu_path(spec, source)}")
+            lines.append("")
             if spec.caveat:
                 # Eigener Absatz mit eigenem Wort davor: In den doc-Satz
                 # gehängt liest sich eine Grenze wie ein Nachtrag. Das Wort

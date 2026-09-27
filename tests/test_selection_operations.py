@@ -219,17 +219,18 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
         assert button.width() >= button.sizeHint().width(), f"{button.text()} ist abgeschnitten"
         assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
 
-    # **Ohne Auswahl bleibt die Karte stehen, aber nur für die Bausteine**
-    # (Entscheidung Robert, 18.09.2026). Bis dahin verschwand sie ganz, und
-    # damit der einzige sichtbare Zugang zum Katalog.
+    # **Ohne Auswahl bleibt die Karte stehen: für die Bausteine** (Entscheidung
+    # Robert, 18.09.2026) **und für die Handlungen, die alle Körper nehmen**
+    # (Robert, 27.09.2026). Bis zum 18.09. verschwand sie ganz, und damit der
+    # einzige sichtbare Zugang zum Katalog.
     panel.set_context(0, _availability(0))
     QApplication.processEvents()
     assert not panel.isHidden()
     assert not panel.search.isVisible(), "ohne Auswahl gibt es nichts zu durchsuchen"
-    assert not panel.scroller.isVisible()
     assert panel.catalog_button.isVisible(), "der Weg zu den Bausteinen bleibt"
-    for section, _toggle, _buttons in panel._groups.values():
-        assert section.isHidden()
+    for_all = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
+    shown = {name for name, button in panel._buttons.items() if button.isVisible()}
+    assert shown == for_all, shown
 
 
 def test_quick_actions_reflow_when_the_selection_column_narrows(qt_app: QApplication) -> None:
@@ -324,6 +325,52 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
         assert button.isHidden(), name
         assert not button.isEnabled(), f"{name}: sie bleibt aber grau"
         assert "Körper" in button.toolTip(), f"{name}: und sie nennt den Grund"
+
+
+def test_actions_for_all_bodies_stand_without_a_selection_and_not_at_one(
+    qt_app: QApplication,
+) -> None:
+    """Robert, 27.09.2026: „sollten wir aber anzeigen, wenn keins ausgewählt
+    ist und nicht wenn eins ausgewählt ist, da es eine operation für alle ist".
+
+    Am gewählten Körper sagte *Druckoptimal ausrichten*, es gelte diesem
+    Körper — und richtete jeden aus.
+    """
+    from app.i18n import tr
+
+    load_operations()
+    for_all = {spec.name for spec in body_operations(REGISTRY.all()) if spec.takes_whole_scene}
+    assert for_all, "ohne solche Handlungen prüfte der Test nichts"
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(320, 520)
+    panel.show()
+
+    def shown() -> set[str]:
+        qt_app.processEvents()
+        return {name for name, button in panel._buttons.items() if button.isVisible()}
+
+    panel.set_context(0, _availability(0))
+    assert shown() == for_all
+    assert panel.chosen_level() == "scene"
+    assert panel._nothing.isVisible() and panel._nothing.text() == tr("Gilt für alle Körper.")
+    assert not panel.search.isVisible(), "drei Handlungen sucht niemand"
+
+    panel.set_context(1, _availability(1))
+    assert not shown() & for_all, "am gewählten Körper steht keine Handlung für alle"
+    panel.set_context(1, _availability(1), feature_kind="face")
+    assert not shown() & for_all, "an einer Fläche auch nicht"
+
+    # Ein Suchtext von der letzten Auswahl filtert ohne Auswahl nichts weg:
+    # Das Feld ist dann verborgen, und niemand sähe, warum etwas fehlt.
+    panel.set_context(1, _availability(1))
+    panel.search.setText("wortdasnichtvorkommt")
+    panel.set_context(0, _availability(0))
+    assert shown() == for_all
+
+    # In einer leeren Szene ist nichts freigegeben — dann steht der Satz da.
+    panel.set_context(0, lambda _name: (False, "Die Szene ist leer."))
+    assert not shown()
+    assert "Bausteine gehen auch so" in panel._nothing.text()
 
 
 def test_only_the_actions_of_that_kind_of_feature_stay(qt_app: QApplication) -> None:

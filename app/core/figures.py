@@ -66,10 +66,20 @@ class Figure:
     kind: FigureKind = "drawn"
     build: Callable[[Theme], str] | None = None
     """Erzeugt das SVG. Bei ``shot`` leer — dort liegt eine Datei."""
+    in_text: bool = True
+    """Ob der Alt-Text im reinen Text an die Stelle des Bildes tritt.
+
+    Ein Schrittbild einer Bildanleitung wiederholt den Satz, unter dem es
+    steht; in der Textausgabe stünde derselbe Satz dann zweimal hintereinander.
+    Dort entfällt es, und die Aussage bleibt trotzdem vollständig."""
+    suffix: str = "png"
+    """Die Dateiendung eines Bildschirmfotos. Die Schrittbilder der
+    Bildanleitungen sind WebP: Gemessen am Übersichtsbild 85 statt 408 KB bei
+    gleicher Schrift, und sie reisen zu Dutzenden je Sprache mit der Anwendung."""
 
     def path(self, language: str = SOURCE_LANGUAGE) -> Path:
         """Der Dateiort eines Bildschirmfotos."""
-        return IMAGE_ROOT / language / f"{self.key}.png"
+        return IMAGE_ROOT / language / f"{self.key}.{self.suffix}"
 
     def available(self, language: str = SOURCE_LANGUAGE) -> bool:
         """Ob diese Abbildung hier und jetzt entstehen kann.
@@ -1134,7 +1144,7 @@ def _parameter_field(theme: Theme) -> str:
     return canvas.svg()
 
 
-FIGURES: Final[tuple[Figure, ...]] = (
+_CATALOGUED: Final[tuple[Figure, ...]] = (
     Figure(
         key="window",
         alt=_(
@@ -1490,6 +1500,36 @@ FIGURES: Final[tuple[Figure, ...]] = (
         kind="shot",
     ),
 )
+
+
+def _guide_figures() -> tuple[Figure, ...]:
+    """Je Schritt einer Bildanleitung ein Bildschirmfoto (:mod:`app.core.guides`).
+
+    Nicht von Hand eingetragen: Die Anleitung weiß, wie viele Schritte sie hat,
+    und ein Eintrag hier, der das nachzählt, wäre eine zweite Liste. Der
+    Alt-Text nennt Anleitung, Schritt und Satz: Das Bild zeigt genau das, und
+    wer es vorgelesen bekommt, erfährt auch, wo er steht.
+    """
+    from app.core import guides
+
+    return tuple(
+        Figure(
+            key=key,
+            alt=_(
+                "{title}, Schritt {number}: {text}", title=guide.title, number=number, text=one.text
+            ),
+            kind="shot",
+            in_text=False,
+            suffix="webp",
+        )
+        for guide in guides.GUIDES
+        for number, (key, one) in enumerate(
+            zip(guide.figure_keys(), guide.steps, strict=True), start=1
+        )
+    )
+
+
+FIGURES: Final[tuple[Figure, ...]] = (*_CATALOGUED, *_guide_figures())
 
 _BY_KEY: Final[dict[str, Figure]] = {figure.key: figure for figure in FIGURES}
 

@@ -338,8 +338,8 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
             if not source.is_file():
                 print(f"  fehlt: {figure.key} ({source.name}) — tools/make_figures.py läuft nicht?")
                 continue
-            _write_stubbornly(target / f"{figure.key}.png", source.read_bytes())
-            sources[figure.key] = f"{figure.key}.png"
+            _write_stubbornly(target / source.name, source.read_bytes())
+            sources[figure.key] = source.name
             continue
         svg = figures.svg(figure.key, "light")
         if svg is None:
@@ -588,6 +588,8 @@ def _picture_size(source: str) -> tuple[int, int] | None:
     if path.suffix == ".png":
         width, height = struct.unpack(">II", path.read_bytes()[16:24])
         return int(width), int(height)
+    if path.suffix == ".webp":
+        return _webp_size(path.read_bytes()[:32])
     box = re.search(
         r'viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"',
         path.read_text(encoding="utf-8")[:2000],
@@ -623,6 +625,30 @@ def _defer_offscreen_pictures(html: str) -> str:
         return tag[:-1] + extra + ">"
 
     return re.sub(r'<img src="([^"]+)"[^>]*>', extend, html)
+
+
+def _webp_size(head: bytes) -> tuple[int, int] | None:
+    """Die Maße eines WebP aus seinem ersten Block — die Schrittbilder der Anleitungen.
+
+    Drei Bauarten, drei Orte: ``VP8X`` (erweitert) trägt Breite und Höhe minus
+    eins in je drei Bytes, ``VP8L`` (verlustfrei) in 14 Bits nach einem
+    Signaturbyte, ``VP8`` (verlustbehaftet) in 14 Bits hinter dem Startcode.
+    Was keins davon ist, bekommt keine Angabe.
+    """
+    if len(head) < 30 or head[:4] != b"RIFF" or head[8:12] != b"WEBP":
+        return None
+    kind = head[12:16]
+    if kind == b"VP8X":
+        width = int.from_bytes(head[24:27], "little") + 1
+        height = int.from_bytes(head[27:30], "little") + 1
+        return width, height
+    if kind == b"VP8L":
+        bits = int.from_bytes(head[21:25], "little")
+        return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+    if kind == b"VP8 ":
+        width, height = struct.unpack("<HH", head[26:30])
+        return width & 0x3FFF, height & 0x3FFF
+    return None
 
 
 def _staged(match: re.Match[str]) -> str:
@@ -674,14 +700,14 @@ def page_html(language: str, prefix: str) -> str:
     body = _classify(
         manual.as_html(
             figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}",
-            dark_source=lambda key: "" if _suffix(key) == "png" else f"{prefix}/{key}-dark.svg",
+            dark_source=lambda key: "" if _suffix(key) != "svg" else f"{prefix}/{key}-dark.svg",
         )
     )
     # Die Bildschirmfotos bekommen die Bühne der Startseite. Erkannt werden
     # sie an ihrer Endung: nur Aufnahmen sind PNG, alles Gezeichnete und
     # Gerenderte reist als SVG und bleibt ohne Bühne — ein Schema auf
     # dunklem Grund hat seinen Grund schon selbst.
-    body = re.sub(r'<figure><img (src="[^"]+\.png"[^>]*)>', _staged, body)
+    body = re.sub(r'<figure><img (src="[^"]+\.(?:png|webp)"[^>]*)>', _staged, body)
     body = _defer_offscreen_pictures(body)
     title = f"{site_text('Handbuch: 3D-Modelle für den Druck vorbereiten', language)} — {APP_NAME}"
     pages = len(manual.pages())
@@ -764,8 +790,9 @@ def _cover_block(language: str) -> str:
 
 
 def _suffix(key: str) -> str:
+    """Bildschirmfotos behalten ihre Endung (PNG, Anleitungen WebP), Zeichnungen sind SVG."""
     figure = figures.find(key)
-    return "png" if figure is not None and figure.kind == "shot" else "svg"
+    return figure.suffix if figure is not None and figure.kind == "shot" else "svg"
 
 
 def write_pdf(language: str, page_file: Path) -> Path:
@@ -843,7 +870,19 @@ def write_pdf(language: str, page_file: Path) -> Path:
             # Die Zahl daneben ist deshalb keine Zierde: Sie sagt, wie viele
             # Bilder die Seite kennt, und trennt „Seite ohne Abbildungen" von
             # „Abbildungen, die nicht mitgedruckt werden".
-            page.runJavaScript("document.images.length", count_then_print)
+            #
+            # **Vorher fallen die Verweise um die Bildschirmfotos weg.** Auf der
+            # Website öffnet ein Tippen das Bild in voller Größe (``_staged``);
+            # im Druck wurde daraus ein Verweis auf den Pfad des Bau-Rechners,
+            # ``file:///F:/3D%20Druck/website/handbuch/…`` — neun je Sprache,
+            # gemessen an den PDFs von 0.5.0. Beim Kunden führt er ins Leere
+            # und zeigt einen fremden Pfad. Das Bild bleibt, nur der Verweis geht.
+            page.runJavaScript(
+                "document.querySelectorAll('figure.screenshot .stage > a')"
+                ".forEach(link => link.replaceWith(...link.childNodes));"
+                "document.images.length",
+                count_then_print,
+            )
 
         page.loadFinished.connect(loaded)
         page.load(QUrl.fromLocalFile(str(page_file.resolve())))

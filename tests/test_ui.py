@@ -7949,7 +7949,9 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
         "am Körper sagt er, wie man zu einem Merkmal kommt"
     )
     assert panel.chosen_level() == "", "und die Stufe ist die des Körpers"
-    assert not panel._buttons["arrange_bed"].isHidden()
+    # Eine Handlung für alle Körper steht ohne Auswahl, nicht am gewählten
+    # Körper (Robert, 27.09.2026).
+    assert panel._buttons["arrange_bed"].isHidden(), "am Körper steht nichts für alle"
 
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
@@ -7960,6 +7962,11 @@ def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -
     assert panel._buttons["arrange_bed"].isHidden(), (
         "und *Auf dem Bett anordnen* verschwindet, statt bedienbar dazustehen"
     )
+
+    window.object_tree.select_object(None)
+    QApplication.processEvents()
+    assert panel.chosen_level() == "scene", "ohne Auswahl die Stufe der ganzen Szene"
+    assert not panel._buttons["arrange_bed"].isHidden(), "und dort steht die Handlung für alle"
 
 
 def test_the_selection_panel_uses_the_shared_launch_path() -> None:

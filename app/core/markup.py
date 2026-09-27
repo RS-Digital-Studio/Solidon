@@ -30,6 +30,11 @@ _BULLET: Final = re.compile(r"^[*-]\s+(.*)$")
 die erzeugten Referenzlisten ``- `` — wer nur eine kennt, klebt die andere
 zu einem Fließtextabsatz zusammen, und aus zwanzig Operationen wird ein
 Klumpen."""
+_NUMBERED: Final = re.compile(r"^(\d+)\.\s+(.*)$")
+"""Eine nummerierte Liste. Das Handbuchfenster kannte sie immer, denn es liest
+Qts Markdown; hier fehlte sie, und die drei Schritte der Seite über zusätzliche
+Programme klebten auf der Website zu einem Absatz zusammen. Die Legenden der
+Bildanleitungen brauchen sie: Ihre Nummern sind die Nummern im Bild."""
 _FIGURE: Final = re.compile(r"^!\[\]\(figure:([a-z0-9-]+)\)$")
 _ROW: Final = re.compile(r"^\|(.+)\|$")
 _SEPARATOR: Final = re.compile(r"^\|[\s:|-]+\|$")
@@ -84,6 +89,8 @@ def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
     out: list[str] = []
     table: list[list[str]] = []
     bullets: list[str] = []
+    numbered: list[str] = []
+    first_number = [1]
     paragraph: list[str] = []
 
     def flush_paragraph() -> None:
@@ -96,6 +103,11 @@ def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
             items = "".join(f"<li>{inline(entry)}</li>" for entry in bullets)
             out.append(f"<ul>{items}</ul>")
             bullets.clear()
+        if numbered:
+            items = "".join(f"<li>{inline(entry)}</li>" for entry in numbered)
+            start = f' start="{first_number[0]}"' if first_number[0] != 1 else ""
+            out.append(f"<ol{start}>{items}</ol>")
+            numbered.clear()
 
     def flush_table() -> None:
         if not table:
@@ -148,7 +160,18 @@ def to_html(markdown: str, figure: FigureResolver | None = None) -> str:
         bullet = _BULLET.match(line)
         if bullet:
             flush_paragraph()
+            if numbered:
+                flush_bullets()
             bullets.append(bullet.group(1))
+            continue
+        number = _NUMBERED.match(line)
+        if number:
+            flush_paragraph()
+            if bullets:
+                flush_bullets()
+            if not numbered:
+                first_number[0] = int(number.group(1))
+            numbered.append(number.group(2))
             continue
         flush_bullets()
 
