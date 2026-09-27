@@ -2803,6 +2803,34 @@ def test_every_remembered_question_is_either_shared_or_bound() -> None:
     assert asked >= module.SHARED_ANSWERS | module.BODY_BOUND_ANSWERS, "keine Leichen"
 
 
+def test_recognition_selects_triangles_and_corners_through_plain_arrays() -> None:
+    """Die Erkennung wählt nie direkt aus ``body.faces`` oder ``body.vertices``.
+
+    trimesh hält beide als ``TrackedArray``, und jede Auswahl daraus erklärt
+    die Prüfsumme des Netzes für ungültig — der nächste gemerkte Wert rechnet
+    sie neu (``.claude/rules/kern.md``). In den Schleifen über Flecken wurde
+    daraus die Wartezeit: am Gartenschlauchhalter (392 532 Dreiecke) kosteten
+    200 Achsspannen (``_axial_span``) 0,64 s statt 0,02 s und 200
+    Eckenschlüssel (``_corner_key``) 0,43 s statt 0,03 s (Durchsicht 0.5.1,
+    rest-erkennung2). In ``perceive`` steht
+    keine solche Auswahl mehr, und dieser Test hält den Stand: Wer eine
+    braucht, nimmt ``np.asarray(body.faces)[…]``.
+    """
+    import ast
+
+    root = Path(__file__).resolve().parents[1] / "app" / "core" / "perceive"
+    found = [
+        f"{path.name}:{node.lineno}: {ast.unparse(node)}"
+        for path in sorted(root.glob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Subscript)
+        and isinstance(node.value, ast.Attribute)
+        and node.value.attr in ("faces", "vertices")
+    ]
+    assert len(list(root.glob("*.py"))) >= 10, "die Suche findet die Erkennung"
+    assert found == [], found
+
+
 def test_a_reader_in_one_thread_keeps_its_key_while_a_writer_evicts_in_another(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

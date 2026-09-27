@@ -3097,7 +3097,7 @@ def _face_slots(shape: Any, faces: Sequence[Any], regions: Regions) -> tuple[int
 def _triangle_corners(mesh: MeshData, regions: Regions, region: int) -> tuple[int, ...]:
     """Die drei Netzecken eines Freiformdreiecks."""
     triangle = int(np.flatnonzero(regions.of_triangle == region)[0])
-    return tuple(int(index) for index in mesh.raw.faces[triangle])
+    return tuple(int(index) for index in np.asarray(mesh.raw.faces)[triangle])
 
 
 def _checked_body(shape: Any, slots: tuple[int, ...]) -> Solid:

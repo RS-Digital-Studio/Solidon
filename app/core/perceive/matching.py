@@ -1388,7 +1388,9 @@ def transformed_features(
                     float(value) for value in np.abs(linear) @ features[name].params["size"]
                 )
             if not aligned and mesh is not None and feature.face_indices:
-                vertices = mesh.raw.vertices[mesh.raw.faces[list(feature.face_indices)].ravel()]
+                vertices = np.asarray(mesh.raw.vertices)[
+                    np.asarray(mesh.raw.faces)[list(feature.face_indices)].ravel()
+                ]
                 low, high = vertices.min(axis=0), vertices.max(axis=0)
                 params["centre"] = tuple(float(value) for value in (low + high) / 2.0)
                 params["size"] = tuple(float(value) for value in high - low)

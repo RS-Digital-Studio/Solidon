@@ -10309,7 +10309,7 @@ def _mesh_bore_span(mesh: MeshData, feature: Feature, axis: Vec3) -> tuple[float
     if not valid or length <= EPS_GEOM:
         return None
     unit = tuple(value / length for value in axis)
-    vertices = raw.vertices[raw.faces[valid].reshape(-1)]
+    vertices = np.asarray(raw.vertices)[np.asarray(raw.faces)[valid].reshape(-1)]
     along = vertices[:, 0] * unit[0] + vertices[:, 1] * unit[1] + vertices[:, 2] * unit[2]
     lower, upper = float(along.min()), float(along.max())
     return (lower, upper) if math.isfinite(upper - lower) and upper - lower > EPS_GEOM else None

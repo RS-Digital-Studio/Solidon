@@ -6638,7 +6638,7 @@ def _fan_arcs(body: trimesh.Trimesh, patch: Sequence[int], used: np.ndarray) -> 
     # Ikosphäre hundert Millisekunden, das Halbieren nichts.
     rows = pair_rows[indices][inner]
     edges = np.asarray(body.face_adjacency_edges, dtype=np.int64)[rows]
-    corners = np.asarray(body.faces[indices], dtype=np.int64).ravel()
+    corners = np.asarray(body.faces)[indices].astype(np.int64).ravel()
     triangles = _counted_at(corners, used, len(body.vertices))
     inner_edges = _counted_at(edges.ravel(), used, len(body.vertices)) // 2
     return np.asarray(triangles - inner_edges, dtype=np.int64)
@@ -7169,7 +7169,7 @@ def _read_surface_support(
     # Millisekunden für 983 040 Ecken. Ein kleiner Fleck wird sortiert
     # (:data:`SORTED_CORNERS_SHARE`); beide Wege geben dieselben Ecken in
     # derselben aufsteigenden Folge.
-    flat_corners = np.asarray(body.faces[patch], dtype=np.int64).ravel()
+    flat_corners = np.asarray(body.faces)[patch].astype(np.int64).ravel()
     if len(flat_corners) < len(body.vertices) * SORTED_CORNERS_SHARE:
         used, corner_of = np.unique(flat_corners, return_inverse=True)
     else:
@@ -7963,8 +7963,8 @@ def _cone_vertices_are_consistent(
     if mean_radius <= EPS_GEOM:
         return False
 
-    vertex_indices = np.unique(np.asarray(body.faces[patch], dtype=np.intp))
-    relative = np.asarray(body.vertices[vertex_indices], dtype=float) - apex
+    vertex_indices = np.unique(np.asarray(body.faces)[patch].astype(np.intp))
+    relative = np.asarray(body.vertices, dtype=float)[vertex_indices] - apex
     along = relative @ axis
     radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
     expected = along * math.tan(math.radians(fit.half_angle))
@@ -8157,7 +8157,7 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
 
 def _axial_span(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
     """Von wo bis wo ein Fleck entlang einer Achse reicht."""
-    points = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float)
+    points = np.asarray(body.vertices, dtype=float)[np.unique(np.asarray(body.faces)[patch])]
     along = points @ np.asarray(axis, dtype=float)
     return float(along.min()), float(along.max())
 
@@ -8499,7 +8499,8 @@ def pair_radii(
 
     angles = np.asarray(body.face_adjacency_angles, dtype=float)
     edges = np.asarray(body.face_adjacency_edges)
-    along = body.vertices[edges[:, 1]] - body.vertices[edges[:, 0]]
+    points = np.asarray(body.vertices)
+    along = points[edges[:, 1]] - points[edges[:, 0]]
     along = along / np.maximum(np.linalg.norm(along, axis=1), EPS_GEOM)[:, None]
 
     middles = facet_middles(body, check_cancelled)
@@ -10416,7 +10417,7 @@ def _corner_key(body: trimesh.Trimesh, facet: np.ndarray) -> tuple[int, ...]:
     entscheidet bei gleich großen Flächen und darf sich deshalb weder beim
     Drehen des Körpers noch beim Umsortieren seiner Dreiecke ändern.
     """
-    return tuple(int(index) for index in np.unique(body.faces[facet]))
+    return tuple(int(index) for index in np.unique(np.asarray(body.faces)[facet]))
 
 
 #: Auf wie viele Nachkommastellen der Nummernschlüssel eine Länge in
@@ -10720,7 +10721,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
             # nimmt sie mit, das Merkmal nicht.
             continue
         at = original[members]
-        middle = np.asarray(body.vertices[at], dtype=float).mean(axis=0)
+        middle = np.asarray(body.vertices, dtype=float)[at].mean(axis=0)
         loops.append(
             (
                 count,
@@ -10813,7 +10814,7 @@ def _enclosed_volume(
     und ``np.einsum`` rechnet auf ARM mit FMA (RM-187).
     """
     if triangles is None:
-        triangles = body.vertices[body.faces[faces]]
+        triangles = np.asarray(body.vertices)[np.asarray(body.faces)[faces]]
     corners = np.asarray(triangles, dtype=np.float64)
     if not len(corners):
         return 0.0
@@ -11063,7 +11064,8 @@ def _shells_inside_the_material(
     # Felder, kein Paar greift noch einmal ins Netz.
     if corners is None:
         corners = [
-            np.asarray(body.vertices[body.faces[faces]], dtype=np.float64) for faces in components
+            np.asarray(body.vertices, dtype=np.float64)[np.asarray(body.faces)[faces]]
+            for faces in components
         ]
     triangle_bounds: list[tuple[np.ndarray, np.ndarray]] = []
     bounds = []
@@ -11197,7 +11199,7 @@ def _detect_voids(
     for faces in components:
         if check_cancelled is not None:
             check_cancelled()
-        triangles = np.asarray(body.vertices[body.faces[faces]], dtype=np.float64)
+        triangles = np.asarray(body.vertices, dtype=np.float64)[np.asarray(body.faces)[faces]]
         corners.append(triangles)
         volumes.append(_enclosed_volume(body, faces, triangles))
     if not all(math.isfinite(volume) for volume in volumes):
@@ -11220,7 +11222,7 @@ def _detect_voids(
         volume = -math.fsum(volumes[index] for index in group)
         if volume <= 0.0:
             continue
-        corners = body.vertices[body.faces[faces]].reshape(-1, 3)
+        corners = np.asarray(body.vertices)[np.asarray(body.faces)[faces]].reshape(-1, 3)
         lower, upper = corners.min(axis=0), corners.max(axis=0)
         middle = (lower + upper) / 2.0
         centre: Vec3 = (float(middle[0]), float(middle[1]), float(middle[2]))

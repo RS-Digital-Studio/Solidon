@@ -343,7 +343,7 @@ def find_helices(
     for edges in _sharp_chain_edges(body, check_cancelled=check_cancelled):
         if check_cancelled is not None:
             check_cancelled()
-        chain = np.asarray(body.vertices[edges].mean(axis=1), dtype=float)
+        chain = np.asarray(body.vertices, dtype=float)[edges].mean(axis=1)
         helix = _helix_of(body, chain, check_cancelled=check_cancelled)
         if helix is None:
             helix = _resolved_helix(body, edges, check_cancelled=check_cancelled)
@@ -399,7 +399,7 @@ def _sharp_chains(
     aus dem Zug allein die richtige (0,80 mm, Schärfe 15,8).
     """
     return [
-        np.asarray(body.vertices[edges].mean(axis=1), dtype=float)
+        np.asarray(body.vertices, dtype=float)[edges].mean(axis=1)
         for edges in _sharp_chain_edges(body, check_cancelled=check_cancelled)
     ]
 
@@ -449,7 +449,7 @@ def _candidate_axes(
     from app.core.perceive.features import _vertex_faces_index
 
     vertex_ids = np.unique(edges)
-    points = np.asarray(body.vertices[vertex_ids], dtype=float)
+    points = np.asarray(body.vertices, dtype=float)[vertex_ids]
     origin = points.mean(axis=0)
     local = points - origin
     _, _, principal = np.linalg.svd(local, full_matrices=False)
@@ -632,7 +632,7 @@ def _resolved_crest(
     # aufsteigend, Gruppen und Punkte kommen also in derselben Folge.
     corners, local_edges = np.unique(edges, return_inverse=True)
     edges = local_edges.reshape(edges.shape)
-    relative = np.asarray(body.vertices[corners], dtype=float) - centre
+    relative = np.asarray(body.vertices, dtype=float)[corners] - centre
     along = relative @ axis
     across = relative - np.outer(along, axis)
     radii = np.linalg.norm(across, axis=1)

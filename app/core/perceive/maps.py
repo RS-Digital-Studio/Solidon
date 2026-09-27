@@ -459,6 +459,10 @@ def deviation_map(
     report(0.1)
     values = np.full(mesh.triangle_count, np.nan, dtype=np.float64)
     raw = mesh.raw
+    # Ecken und Dreiecke als Felder der Grundklasse: Eine Auswahl aus trimeshs
+    # verfolgten Feldern erklärt die Prüfsumme des Netzes für ungültig, und die
+    # Zeugensuche unten wählt je Dreieck (``.claude/rules/kern.md``).
+    points, corners = np.asarray(raw.vertices), np.asarray(raw.faces)
     # Je Träger die Dreiecke, die er allein beansprucht — und dann alle Träger
     # zusammen in einen Aufruf: `deviation_bounds_grouped` rechnet je Trägerart
     # einen Stapel über alle Träger, nicht einen je Bohrung.
@@ -482,7 +486,7 @@ def deviation_map(
 
     tables = deviation_bounds_grouped(
         carriers,
-        [raw.vertices[raw.faces[indices]] for indices in selected_per_carrier],
+        [points[corners[indices]] for indices in selected_per_carrier],
         epsilon_mm=EPS_GEOM,
         cancelled=cancelled,
         progress=advance,
@@ -513,7 +517,7 @@ def deviation_map(
     for position in np.lexsort((face_indices, -lowers)):
         check()
         index = int(face_indices[position])
-        first, second, third = raw.vertices[raw.faces[index]]
+        first, second, third = points[corners[index]]
         u, v = (float(witnesses[position, 0]), float(witnesses[position, 1]))
         # Anzeige der belegten baryzentrischen Stelle. Die Untergrenze
         # gilt für die exakte Linearkombination im Rechner, nicht für
