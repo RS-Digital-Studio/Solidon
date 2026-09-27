@@ -96,9 +96,13 @@ it into `website/version.json`.
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
 - Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
+- The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
 - The print settings show what will be printed: the manufacturer's profile is the basis, and your own values are marked and can be reset one by one.
 - You choose the build plate in the print settings, and the bed temperature follows it. If the manufacturer does not approve the plate for your filament, Solidon says so before printing.
 - Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
+- If a brim, skirt or raft reaches beyond the bed, Solidon says so when handing over to the slicer and offers *Arrange on the bed*.
+- If the slicer refuses a part that is too tall, Solidon names both heights and offers *Split the model*, *Scale down to the build volume* or another printer.
+- If Bambu Studio hangs after slicing, Solidon takes the finished print file instead of giving up after five minutes.
 - Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
 - The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
 - With PrusaSlicer, printing now starts as it does with Prusa itself, with bed levelling, purge line and printer check.

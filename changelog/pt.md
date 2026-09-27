@@ -96,9 +96,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O nível «Standard» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.
 - A velocidade dos percursos em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s, para que o bico escorra menos pelo caminho.
 - O Solidon usa o ângulo de saliência do perfil do fabricante da sua impressora: 60 em vez de 45 graus na Elegoo, Bambu e Creality. Chanfros e inclinações suaves já não recebem suportes desnecessários.
+- Também o relatório calcula agora as saliências com o ângulo a partir do qual o seu perfil do slicer coloca suportes.
 - As definições de impressão mostram o que é impresso: a base é o perfil do fabricante, e os seus próprios valores ficam marcados e podem ser repostos um a um.
 - A placa de impressão escolhe-se nas definições de impressão, e a temperatura da mesa acompanha-a. Se o fabricante não autoriza a placa para o seu filamento, o Solidon avisa antes.
 - Sem «Aplicar as sugestões», nenhuma peça recebe mais um brim sem pedir, nem na exportação nem na entrega ao slicer.
+- Se um brim, skirt ou raft ultrapassa a mesa, o Solidon avisa na passagem para o slicer e oferece «Dispor na mesa».
+- Se o slicer recusa uma peça demasiado alta, o Solidon indica as duas alturas e oferece «Dividir o modelo», «Reduzir para o volume de impressão» ou outra impressora.
+- Se o Bambu Studio fica parado depois de fatiar, o Solidon aproveita o ficheiro de impressão terminado em vez de dar erro ao fim de cinco minutos.
 - Os projetos da 0.5.0 imprimem com a velocidade da sua impressora. O que tinha definido neles mantém-se.
 - A velocidade da primeira camada vale agora também para o seu enchimento. Antes, o slicer fazia o fundo à velocidade do fabricante, 105 mm/s na Centauri Carbon 2.
 - Com o PrusaSlicer, a impressão começa agora como na própria Prusa: com nivelamento da mesa, linha de purga e verificação da impressora.

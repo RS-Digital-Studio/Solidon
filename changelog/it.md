@@ -96,9 +96,13 @@ scrive in `website/version.json`.
 - Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, perché l'ugello coli meno lungo il tragitto.
 - Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
+- Anche il rapporto calcola ora gli sbalzi con l'angolo a partire dal quale il vostro profilo dello slicer mette i supporti.
 - Le impostazioni di stampa mostrano ciò che viene stampato: la base è il profilo del produttore, i vostri valori sono evidenziati e si ripristinano uno per uno.
 - Il piatto di stampa si sceglie nelle impostazioni di stampa e la temperatura del piano lo segue. Se il produttore non ammette il piatto per il vostro filamento, Solidon lo dice prima.
 - Senza «Applica i suggerimenti» nessun pezzo riceve più un brim senza chiederlo, né all'esportazione né nel passaggio allo slicer.
+- Se un brim, uno skirt o un raft sporge oltre il piano, Solidon lo segnala nel passaggio allo slicer e propone «Disponi sul piano».
+- Se lo slicer rifiuta un pezzo troppo alto, Solidon indica entrambe le altezze e propone «Dividi il modello», «Riduci al volume di stampa» o un'altra stampante.
+- Se Bambu Studio resta bloccato dopo lo slicing, Solidon prende il file di stampa finito invece di segnalare un errore dopo cinque minuti.
 - I progetti della 0.5.0 stampano alla velocità della vostra stampante. Ciò che avevate impostato voi resta.
 - La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
 - Con PrusaSlicer la stampa inizia ora come con Prusa stessa: con livellamento del piano, linea di spurgo e controllo della stampante.

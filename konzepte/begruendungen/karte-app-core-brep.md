@@ -819,8 +819,9 @@ F:\3D Dateien): Eine Ringnut in der Bohrung Ø9 meldete Erfolg, das Volumen
 sank um genau das Werkzeug, und der Körper war ungültig — die Luft der
 Bohrung galt danach als innen. Die Schnitte mit Werkzeug liefern ein solches
 Ergebnis nicht aus, sondern rechnen am Netz weiter und sagen es
-(`sketch.exact_cut_unsound`). *Tasche schneiden* an derselben Stelle gibt
-denselben ungültigen Körper still zurück — offen, nicht Teil von P6.5.
+(`sketch.exact_cut_unsound`). *Tasche schneiden* gab an derselben Stelle
+denselben ungültigen Körper still zurück; seit RM-227 nimmt sie denselben
+Rückweg.
 
 `loft(..., compatible=False)` schaltet die Eckenzuordnung von OpenCASCADE ab
 (`ThruSections.CheckCompatibility`). Nur wer die Zuordnung selbst entschieden
