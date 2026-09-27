@@ -748,6 +748,20 @@ class OperationSpec:
     ``load`` oder *Dreiecke verringern* gilt das ausdrücklich nicht — dort ist
     „neu erkannt" kein Beleg dafür, dass etwas entstanden ist.
     """
+    leaves_separate_parts: bool = False
+    """Die Operation legt gewollt ein eigenes, loses Teil neben ihren Träger.
+
+    Gesetzt von den Baustein-Einsätzen, deren Baustein ``separate_from_host``
+    trägt — gedruckte Schraube, gedruckte Mutter, separate Dichtung. Das ist
+    die eine Quelle; hier wird sie nur durchgereicht, damit Auswertung und
+    Assistentenprüfung die Operation fragen und keine Namensliste führen.
+
+    Gelesen von ``scene.evaluate`` und ``agent.checks``: Nach so einem Schritt
+    hat der Körper mehr Teile, und das ist kein Zerfall. Ob der **Träger**
+    zerfallen ist — eine Senkung, die einen schmalen Streifen durchschneidet
+    —, sagt die Operation selbst, denn nur sie weiß, welche Dreiecke Träger
+    und welche Baustein sind (``knowledge.parts.ops``, ``feature.body_split``).
+    """
     retriangulates: bool = False
     """Die Operation verteilt die Dreiecke neu und lässt die Form stehen — bis auf
     eine Abweichung, die sie selbst misst und meldet oder zusagt.
@@ -1015,6 +1029,7 @@ def register_op(
     produces_from: str | None = None,
     keeps_inputs: int = 0,
     touches_features: bool = False,
+    leaves_separate_parts: bool = False,
     retriangulates: bool = False,
     expected_triangles: Callable[[Any, Any], Any] | None = None,
     deterministic: bool = True,
@@ -1053,6 +1068,7 @@ def register_op(
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
                 touches_features=touches_features,
+                leaves_separate_parts=leaves_separate_parts,
                 retriangulates=retriangulates,
                 expected_triangles=expected_triangles,
                 deterministic=deterministic,

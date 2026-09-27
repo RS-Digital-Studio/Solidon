@@ -1417,6 +1417,58 @@ def test_the_check_passes_on_an_operation_without_effect(
     assert "boolean.without_effect" in {finding.code for finding in findings}
 
 
+@pytest.mark.parametrize(
+    ("depth", "falls_apart"),
+    [(40.0, False), (6.0, True)],
+    ids=["plate", "strip-cut-through"],
+)
+def test_a_printed_screw_is_not_a_body_falling_apart_for_the_model(
+    profile: Profile, depth: float, falls_apart: bool
+) -> None:
+    """Das Modell setzt eine gedruckte Schraube mit Senkkopf — kein Zerfall.
+
+    Durchsicht 0.5.1: Nach jeder gedruckten Schraube las das Modell „Das
+    Objekt zerfällt jetzt in mehr Teile als vorher" — ein Stolperdraht an der
+    Absicht des Schritts, und der nächste Zug hätte ihn zurückgenommen. Die
+    Schraube bleibt gewollt ein eigenes Teil (``leaves_separate_parts``).
+    Zerfällt dagegen der Träger — ein Streifen 40 × 6 × 1,5, den die Senkung
+    durchschneidet —, erfährt das Modell es aus dem Urteil der Operation.
+    """
+    made = new_project("centauri-carbon-2", "petg")
+    height = 10.0 if not falls_apart else 1.5
+    History(made.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": depth, "height": height})],
+    )
+    screw = {
+        "objects": ["obj_1"],
+        "size": "M5",
+        "length": 6.0,
+        "countersunk": True,
+        "x": 0.0,
+        "y": 0.0,
+        "z": height,
+        "nx": 0.0,
+        "ny": 0.0,
+        "nz": 1.0,
+    }
+    agent = session(
+        made,
+        profile,
+        [
+            Reply(tool_calls=(ToolCall(id="1", name="insert_printed_screw", arguments=screw),)),
+            Reply(text="fertig"),
+        ],
+    )
+
+    proposal = agent.propose("Setz eine Schraube M5 mit Senkkopf oben in die Mitte")
+
+    assert proposal.invalid_calls == 0, proposal.findings
+    codes = {finding.code for finding in proposal.findings}
+    assert "agent.components_grew" not in codes
+    assert ("feature.body_split" in codes) is falls_apart, codes
+
+
 def test_a_clean_result_has_nothing_to_report(project: Project, profile: Profile) -> None:
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     findings = checks.check(result)

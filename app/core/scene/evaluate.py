@@ -51,6 +51,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
+from app.core.geom.boolean import body_split
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
@@ -1082,7 +1083,10 @@ def _evaluate(
             if spec.touches_features and index < len(operation.inputs):
                 findings.extend(
                     _split_findings(
-                        objects.get(operation.inputs[index]), prepared_objects[object_id], operation
+                        objects.get(operation.inputs[index]),
+                        prepared_objects[object_id],
+                        operation,
+                        spec,
                     )
                 )
             prepared_hashes[object_id] = object_hash(
@@ -5008,13 +5012,8 @@ def _missing_inputs(
     return None
 
 
-MESSAGE_BODY_SPLIT: Final = _(
-    "Der Körper zerfällt nach diesem Schritt in lose Teile. Strg+Z nimmt ihn zurück."
-)
-
-
 def _split_findings(
-    before: SceneObject | None, after: SceneObject, operation: Operation
+    before: SceneObject | None, after: SceneObject, operation: Operation, spec: OperationSpec
 ) -> list[Finding]:
     """Ein Körper, der nach einer Merkmalsänderung in Teile zerfällt, sagt es.
 
@@ -5029,25 +5028,23 @@ def _split_findings(
 
     Gezählt werden die zusammenhängenden Teile vor und nach dem Schritt; ein
     Körper, der schon vorher aus mehreren bestand, meldet erst, wenn es mehr
-    werden. Die exakten Körper kennen die Zahl nicht — dort bleibt es still.
+    werden. Das Urteil selbst steht in :func:`geom.boolean.body_split`.
+
+    **Ein gewollt loses Teil ist kein Zerfall** (Durchsicht 0.5.1): Eine
+    gedruckte Schraube, Mutter oder separate Dichtung liegt als eigenes Teil
+    neben ihrem Träger, und der Satz riet dem Kunden, sie mit Strg+Z
+    zurückzunehmen. Welche Operation das tut, sagt ihr Registereintrag
+    (``leaves_separate_parts``, aus ``PartSpec.separate_from_host``); über
+    ihren Träger urteilt sie selbst, und hier bleibt es still.
     """
-    if before is None:
+    if before is None or spec.leaves_separate_parts:
         return []
     were = getattr(before.mesh, "component_count", None)
     are = getattr(after.mesh, "component_count", None)
-    if not isinstance(were, int) or not isinstance(are, int) or are <= were:
+    if not isinstance(were, int) or not isinstance(are, int):
         return []
-    return [
-        Finding(
-            code="feature.body_split",
-            severity="warning",
-            message=MESSAGE_BODY_SPLIT,
-            object_id=after.id,
-            op_id=operation.id,
-            values={"before": were, "after": are, "op": operation.op},
-            source="internal",
-        )
-    ]
+    split = body_split(were, are, op=operation.op, object_id=after.id)
+    return [] if split is None else [dataclasses.replace(split, op_id=operation.id)]
 
 
 def _object_count_finding(operation: Operation, produced: int) -> Finding:

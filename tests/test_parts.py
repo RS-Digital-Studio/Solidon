@@ -3424,6 +3424,94 @@ def test_a_pocket_that_opens_away_from_the_part_says_so_on_both_kernels(
         assert not codes & {"parts.cuts_no_layer", "boolean.without_effect"}, (placement, codes)
 
 
+#: Abtragende Bausteine mit dem Halbmesser, bis zu dem ihre Öffnung frei sein
+#: muss — die Magnettasche an ihrer Lippe (Ø 7,95), das Schraubenloch M3 an
+#: seiner Bohrung (Ø 3,4), der Lagersitz 608 an seinem Sitz (Ø 22).
+SLANTED_CASES: list[tuple[str, dict[str, Any], float]] = [
+    ("magnet_pocket", {"size": "8x3"}, 3.975),
+    ("screw_hole", {"size": "M3", "depth": 8.0}, 1.7),
+    ("bearing_seat", {"size": "608"}, 11.0),
+]
+
+
+def _slanted(
+    profile: Profile, box: str, name: str, values: dict[str, Any], angle: float, z: float = 10.0
+) -> tuple[MeshData, np.ndarray]:
+    """Quader 40 × 40 × 10, der Baustein bei (0, 0, ``z``), Richtung Z um ``angle`` um X gekippt."""
+    from app.core.geom.mesh import as_mesh_data
+
+    axis = np.array([0.0, -np.sin(np.radians(angle)), np.cos(np.radians(angle))])
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    placement = {"x": 0.0, "y": 0.0, "z": z, "nx": 0.0, "ny": float(axis[1]), "nz": float(axis[2])}
+    history.apply(
+        name,
+        [
+            OperationDraft(
+                op=part_ops.op_name(name), inputs=("obj_1",), params={**values, **placement}
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    return as_mesh_data(result.scene.objects["obj_1"].mesh), axis
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("case", SLANTED_CASES, ids=[case[0] for case in SLANTED_CASES])
+def test_a_pocket_set_at_a_slant_opens_to_the_face(
+    profile: Profile, box: str, case: tuple[str, dict[str, Any], float]
+) -> None:
+    """Schräg zur Fläche eingesetzt, bleibt die Öffnung frei — an beiden Kernen.
+
+    Durchsicht 0.5.1 (Prüfer rest-lippe, rest-schraube): Mit einer Richtung,
+    die nicht senkrecht auf der Fläche steht (von Hand, vom Assistenten, von
+    der Kommandozeile), reichte das Werkzeug nur ein Hundertstel über seine
+    Mündung. Die gekippte Fläche liegt auf der tiefen Seite um bis zu
+    R · tan 10° darüber, und dort blieb ein Keil Material über gut der Hälfte
+    der Öffnung stehen: 17 von 36 Strahlen entlang der Achse trafen Material,
+    an der Magnettasche, am Schraubenloch und am Lagersitz 608 (1,9 mm Keil),
+    ohne Befund. Der Magnet, die Schraube, das Lager kamen nicht hinein.
+    """
+    from tests.helpers import contains
+
+    name, values, radius = case
+    angle = 10.0
+    body, axis = _slanted(profile, box, name, values, angle)
+
+    first = np.cross(axis, [1.0, 0.0, 0.0])
+    first /= np.linalg.norm(first)
+    second = np.cross(axis, first)
+    mouth = np.array([0.0, 0.0, 10.0])
+    reach = radius * np.tan(np.radians(angle)) + 0.5
+    along = np.arange(-1.0, reach, 0.1)
+    blocked = []
+    for phi in np.linspace(0.0, 2.0 * np.pi, 12, endpoint=False):
+        offset = 0.85 * radius * (np.cos(phi) * first + np.sin(phi) * second)
+        if contains(body, mouth + offset + np.outer(along, axis)).any():
+            blocked.append(round(float(np.degrees(phi))))
+    assert not blocked, f"Material über der Öffnung bei {blocked}°"
+    assert body.is_watertight
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_a_slanted_pocket_below_the_face_stays_below_it(profile: Profile, box: str) -> None:
+    """Die Verlängerung gilt der Fläche **an der Mündung**, nicht dem Körper darüber.
+
+    Eine Tasche, deren Mündung 5 mm tief im Quader liegt, trifft keine Fläche;
+    sie bleibt ein eingeschlossener Hohlraum wie gerade eingesetzt und wird
+    nicht bis zur Deckfläche durchgezogen.
+    """
+    upright, _axis = _slanted(profile, box, "magnet_pocket", {"size": "8x3"}, 0.0, z=5.0)
+    slanted, _axis = _slanted(profile, box, "magnet_pocket", {"size": "8x3"}, 10.0, z=5.0)
+
+    assert slanted.volume == pytest.approx(upright.volume, abs=0.5)
+
+
 # --- versioning (§24.4) -------------------------------------------------------------
 
 
@@ -3493,6 +3581,109 @@ def test_an_added_part_has_the_component_count_it_declares(
     expected = 2 if spec.separate_from_host else 1
     assert body.component_count == expected, direction_ids(pair)
     assert body.is_watertight, direction_ids(pair)
+
+
+#: Die lösbaren Bausteine aus dem Register, je mit den Werten, unter denen sie
+#: eingesetzt werden — die Schraube zusätzlich mit Senkkopf, weil nur dann ihr
+#: Träger im selben Schritt gesenkt wird (``host_cut``).
+SEPARATE_CASES: list[tuple[str, dict[str, Any]]] = [
+    (spec.name, required_defaults(spec)) for spec in PARTS.all() if spec.separate_from_host
+] + [("printed_screw", {"size": "M5", "length": 6.0, "countersunk": True})]
+
+
+def _separate_ids(case: tuple[str, dict[str, Any]]) -> str:
+    name, values = case
+    return f"{name}-countersunk" if values.get("countersunk") else name
+
+
+def _with_a_separate_part(
+    profile: Profile,
+    box: str,
+    name: str,
+    values: dict[str, Any],
+    size: tuple[float, float, float] = (40.0, 40.0, 10.0),
+) -> tuple[Any, Any]:
+    """Quader, darauf mittig der lösbare Baustein — Auswertung davor und danach."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": size[0], "depth": size[1], "height": size[2]})],
+    )
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    op = part_ops.op_name(name)
+    top = {"x": 0.0, "y": 0.0, "z": size[2], "nx": 0.0, "ny": 0.0, "nz": 1.0}
+    history.apply(name, [OperationDraft(op=op, inputs=("obj_1",), params={**values, **top})])
+    after = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert after.complete, [str(f.message) for f in after.scene.report.findings]
+    return before, after
+
+
+def test_every_separate_part_is_named_in_the_cases() -> None:
+    """Die Fälle kommen aus dem Register — und es sind die drei, die es heute gibt."""
+    names = {name for name, _values in SEPARATE_CASES}
+    assert {"printed_screw", "printed_nut", "seal_gasket"} <= names
+
+
+def test_the_registry_says_which_operations_leave_separate_parts() -> None:
+    """Die Auskunft hat eine Quelle: ``PartSpec.separate_from_host``.
+
+    Die Auswertung fragt die Operation, nicht den Namen eines Bausteins — eine
+    Liste in ``evaluate`` wäre beim nächsten lösbaren Teil unvollständig.
+    """
+    for spec in PARTS.all():
+        operation = REGISTRY.get(part_ops.op_name(spec.name))
+        assert operation.leaves_separate_parts is spec.separate_from_host, spec.name
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("case", SEPARATE_CASES, ids=_separate_ids)
+def test_a_separate_part_does_not_say_the_body_falls_apart(
+    profile: Profile, box: str, case: tuple[str, dict[str, Any]]
+) -> None:
+    """Eine gedruckte Schraube ist gewollt ein eigenes Teil — kein Zerfall.
+
+    Durchsicht 0.5.1 (Prüfer rest-bohrung, rest-schraube): Schraube, Mutter
+    und separate Dichtung meldeten an beiden Kernen „Der Körper zerfällt nach
+    diesem Schritt in lose Teile. Strg+Z nimmt ihn zurück.“ Der Satz riet dem
+    Kunden, einen gewollten Schritt zurückzunehmen. Die Teilezahl steigt, und
+    genau darum geht es beim lösbaren Teil (``separate_from_host``).
+    """
+    name, values = case
+    _before, after = _with_a_separate_part(profile, box, name, values)
+
+    codes = [finding.code for finding in after.scene.report.findings]
+    assert "feature.body_split" not in codes, codes
+    body = after.scene.objects["obj_1"].mesh
+    assert body.component_count >= 2
+    # Träger und Teil bleiben je für sich geschlossen, auch wo sie sich
+    # berühren — der Senkkopf liegt bündig in seiner Senkung.
+    assert body.is_watertight, name
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_a_host_that_a_separate_part_cuts_apart_still_says_so(profile: Profile, box: str) -> None:
+    """Die gewollten Teile zählen nicht — der Träger zählt weiter.
+
+    Ein Streifen 40 × 6 × 1,5: Die Senkung einer M5 ist breiter als er und
+    reicht durch ihn hindurch, der Träger zerfällt in zwei Hälften. Das ist
+    der Zerfall, den der Satz meint, und er bleibt, auch wenn daneben eine
+    Schraube liegt.
+    """
+    _before, after = _with_a_separate_part(
+        profile,
+        box,
+        "printed_screw",
+        {"size": "M5", "length": 6.0, "countersunk": True},
+        size=(40.0, 6.0, 1.5),
+    )
+
+    split = [f for f in after.scene.report.findings if f.code == "feature.body_split"]
+    assert len(split) == 1, [f.code for f in after.scene.report.findings]
+    assert split[0].severity == "warning"
+    assert split[0].object_id == "obj_1"
+    assert split[0].op_id == 2, "am Schritt der Schraube, damit Strg+Z ihn meint"
+    assert split[0].values["before"] == 1 and split[0].values["after"] == 2
 
 
 def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:

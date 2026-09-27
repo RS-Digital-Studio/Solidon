@@ -13,7 +13,7 @@ es weitermacht.
 from __future__ import annotations
 
 from collections import Counter
-from typing import cast
+from typing import Final, cast
 
 from app.core.scene.evaluate import EvaluationResult
 from app.core.types import Finding, Mesh, ObjectId, Scene, SceneObject
@@ -53,10 +53,27 @@ PASSED_THROUGH = (
     "pose.no_armature",
 )
 
+#: Der Satz der Auswertung über einen zerfallenen Körper. Nach einer Operation,
+#: die gewollt lose Teile ablegt, ist er das Urteil über den Träger und ersetzt
+#: den eigenen Teilevergleich (:func:`check`); sonst sagt ``agent.components_grew``
+#: dasselbe, und das Modell läse es zweimal.
+BODY_SPLIT: Final = "feature.body_split"
 
-def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding]:
+
+def check(
+    result: EvaluationResult, before: Scene | None = None, *, separate_parts: bool = False
+) -> list[Finding]:
     """Was der Agent über den Zustand wissen muss, den seine Operation
     erzeugt hat.
+
+    ``separate_parts`` sagt, dass die Operation gewollt ein loses Teil neben
+    ihren Träger gelegt hat (``OperationSpec.leaves_separate_parts`` — eine
+    gedruckte Schraube, Mutter oder separate Dichtung). Dann ist „mehr Teile
+    als vorher" die Absicht und kein Stolperdraht; ob der **Träger** zerfallen
+    ist, hat die Operation selbst beurteilt, und ihr Befund
+    ``feature.body_split`` geht an das Modell. Bis zur Durchsicht 0.5.1 las
+    es nach jeder gedruckten Schraube „Das Objekt zerfällt jetzt in mehr
+    Teile als vorher".
     """
     findings: list[Finding] = []
     scene = result.scene
@@ -81,7 +98,7 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
         findings.extend(reasons)
 
     for object_id, entry in scene.objects.items():
-        findings.extend(_check_object(object_id, entry, before))
+        findings.extend(_check_object(object_id, entry, before, count_parts=not separate_parts))
 
     findings.extend(
         finding
@@ -90,7 +107,7 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
             finding.code in PASSED_THROUGH
             or finding.code.startswith("fit.")
             or (
-                finding.converts_exact_body
+                (finding.converts_exact_body or (separate_parts and finding.code == BODY_SPLIT))
                 and (before is None or finding not in before.report.findings)
             )
         )
@@ -99,7 +116,9 @@ def check(result: EvaluationResult, before: Scene | None = None) -> list[Finding
     return findings
 
 
-def _check_object(object_id: ObjectId, entry: SceneObject, before: Scene | None) -> list[Finding]:
+def _check_object(
+    object_id: ObjectId, entry: SceneObject, before: Scene | None, *, count_parts: bool = True
+) -> list[Finding]:
     mesh = entry.mesh
 
     findings: list[Finding] = []
@@ -115,11 +134,13 @@ def _check_object(object_id: ObjectId, entry: SceneObject, before: Scene | None)
 
     earlier = before.objects.get(object_id) if before is not None else None
     if earlier is not None:
-        findings.extend(_compare(object_id, earlier, mesh))
+        findings.extend(_compare(object_id, earlier, mesh, count_parts=count_parts))
     return findings
 
 
-def _compare(object_id: ObjectId, earlier: SceneObject, mesh: Mesh) -> list[Finding]:
+def _compare(
+    object_id: ObjectId, earlier: SceneObject, mesh: Mesh, *, count_parts: bool = True
+) -> list[Finding]:
     findings: list[Finding] = []
     old_mesh = earlier.mesh
 
@@ -138,7 +159,7 @@ def _compare(object_id: ObjectId, earlier: SceneObject, mesh: Mesh) -> list[Find
                 )
             )
 
-    if mesh.component_count > old_mesh.component_count:
+    if count_parts and mesh.component_count > old_mesh.component_count:
         findings.append(
             Finding(
                 code="agent.components_grew",

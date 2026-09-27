@@ -952,7 +952,7 @@ class AgentSession:
         draft = replace(draft, outputs=history.operation(applied.ops[-1]).outputs)
 
         result = self._evaluate(working)
-        findings = checks.check(result, before)
+        findings = checks.check(result, before, separate_parts=spec.leaves_separate_parts)
         proposal.findings.extend(findings)
 
         if result.stopped_at is not None:

@@ -49,7 +49,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components, lifted_caps
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ranked_orientations
 from app.core.geom.pins import (
@@ -6178,11 +6178,9 @@ def _past_the_mouths(
     """
     raw = cavity.raw
     points = np.asarray(raw.vertices, dtype=np.float64)
-    faces = np.asarray(raw.faces, dtype=np.int64).copy()
+    faces = np.asarray(raw.faces, dtype=np.int64)
     normals = np.asarray(raw.face_normals, dtype=np.float64)
-    added: list[NDArray[np.float64]] = [points]
-    collars: list[NDArray[np.int64]] = []
-    next_index = len(points)
+    lifts: list[tuple[Any, NDArray[np.float64], float]] = []
     candidates = []
     for facet in raw.facets:
         # Wandstreifen sind Paare von Dreiecken; ein Deckel ist ein Fächer.
@@ -6205,27 +6203,19 @@ def _past_the_mouths(
     shares = _shares_in_material(
         mesh, [(points[rim[:, 0]], normal) for _facet, _cap, normal, _members, rim in candidates]
     )
-    for (facet, cap, normal, members, rim), share in zip(candidates, shares, strict=True):
+    for (facet, _cap, normal, _members, _rim), share in zip(candidates, shares, strict=True):
         if share > 0.0:
             continue
-        lifted = np.full(int(members.max()) + 1, -1, dtype=np.int64)
-        lifted[members] = np.arange(next_index, next_index + len(members))
         reach = FEATURE_OVERLAP
         if travel is not None:
             along = units.dot3(normal, travel)
             if -MAX_FACET_SAG <= along < 0.0:
                 reach -= along
-        added.append(points[members] + normal * reach)
-        next_index += len(members)
-        faces[facet] = lifted[cap]
-        first, second = rim[:, 0], rim[:, 1]
-        collars.append(np.column_stack([first, second, lifted[second]]))
-        collars.append(np.column_stack([first, lifted[second], lifted[first]]))
-    if not collars:
+        lifts.append((facet, normal, reach))
+    if not lifts:
         return cavity
-    widened = trimesh.Trimesh(
-        vertices=np.vstack(added), faces=np.vstack([faces, *collars]), process=False
-    )
+    # Anheben und Wand ergänzen: der Netz-Zwilling von ``edit.collared``.
+    widened = lifted_caps(raw, lifts)
     if not widened.is_watertight or widened.volume <= raw.volume - EPS_GEOM:
         return cavity
     return MeshData.of(widened)

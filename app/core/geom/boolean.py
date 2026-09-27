@@ -1009,7 +1009,7 @@ def fell_apart(
     auflöste. Die Fälle bleiben getrennt, weil sie verschiedene Messungen und
     verschiedene Sätze tragen; die Regel steht jetzt hier.
     """
-    pieces_before, pieces_after = _pieces(before), _pieces(after)
+    pieces_before, pieces_after = pieces(before), pieces(after)
     if not applies or pieces_after <= pieces_before:
         return None
     loose = pieces_after - pieces_before
@@ -1031,7 +1031,7 @@ def fell_apart(
     )
 
 
-def _pieces(body: Any) -> int:
+def pieces(body: Any) -> int:
     """Wie viele Stücke ein Körper hat — topologisch am exakten, über die Dreiecke am Netz.
 
     Zwei exakte Körper, die sich nur berühren, sind zwei; vernetzt können
@@ -1042,6 +1042,40 @@ def _pieces(body: Any) -> int:
     if isinstance(body, BRepBody):
         return int(body.solid_count)
     return int(body.component_count)
+
+
+#: Der Satz, wenn ein Körper nach einem Schritt aus mehr Teilen besteht als
+#: davor (:func:`body_split`).
+MESSAGE_BODY_SPLIT: Final = _(
+    "Der Körper zerfällt nach diesem Schritt in lose Teile. Strg+Z nimmt ihn zurück."
+)
+
+
+def body_split(were: int, are: int, *, op: str, object_id: str | None = None) -> Finding | None:
+    """Ein Körper, der nach einem Schritt in mehr Teile zerfällt als vorher, sagt es.
+
+    Das Urteil hinter ``feature.body_split``, an **einer** Stelle: Die
+    Auswertung fällt es für jede Operation, die Merkmale einführt
+    (``scene.evaluate._split_findings``), und ein Baustein, der gewollt ein
+    loses Teil neben seinen Träger legt, fällt es über den Träger allein
+    (``knowledge.parts.ops``) — nur er weiß, welche Teile Träger sind und
+    welches die Schraube ist (``OperationSpec.leaves_separate_parts``).
+    Gezählt wird beim Aufrufer; ``were`` und ``are`` sind die Teile davor und
+    danach.
+
+    Warnung ohne Knopf: Der Weg zurück steht im Satz (Strg+Z), und ein
+    zerfallener Körper kann gewollt sein — geteilt wird auch mit Absicht.
+    """
+    if are <= were:
+        return None
+    return Finding(
+        code="feature.body_split",
+        severity="warning",
+        message=MESSAGE_BODY_SPLIT,
+        object_id=object_id,
+        values={"before": were, "after": are, "op": op},
+        source="internal",
+    )
 
 
 def without_effect(

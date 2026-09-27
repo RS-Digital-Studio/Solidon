@@ -2350,6 +2350,49 @@ def _check_embedded_gltf(payload: bytes) -> None:
             )
 
 
+def lifted_caps(raw: trimesh.Trimesh, caps: Sequence[tuple[Any, Any, float]]) -> trimesh.Trimesh:
+    """Hebt ebene Deckel eines geschlossenen Netzes an und ergänzt die Wand darunter.
+
+    Je Deckel ``(Dreiecke, Richtung, Strecke)``: Seine Punkte werden um die
+    Strecke entlang der Richtung kopiert, der Deckel wandert auf die Kopie, und
+    zwischen altem und neuem Rand entsteht die Wand. Die alten Randpunkte
+    bleiben bei den Flächen darunter; das Netz bleibt geschlossen, und was
+    davor war, behält seine Punkte und Dreiecke in derselben Reihenfolge.
+
+    Der Netz-Zwilling von ``brep.edit.collared`` (ein Prisma über einer ebenen
+    Fläche) und die eine Stelle, an der das am Netz geschieht: für die
+    Mündungen eines Hohlraums (``prepare_ops._past_the_mouths``) und für die
+    Öffnung eines abtragenden Bausteins, der schräg zu seiner Fläche steht
+    (``knowledge.parts.ops._opened_to_the_face``). Die Dreiecke eines Deckels
+    werden vor dem ersten Anheben gelesen — zwei Deckel mit gemeinsamem Rand
+    sehen einander so, wie sie waren.
+    """
+    points = np.asarray(raw.vertices, dtype=np.float64)
+    faces = np.asarray(raw.faces, dtype=np.int64).copy()
+    chosen = [(np.asarray(indices, dtype=np.int64), faces[indices]) for indices, _n, _d in caps]
+    added: list[Any] = [points]
+    collars: list[Any] = []
+    next_index = len(points)
+    for (indices, cap), (_indices, normal, reach) in zip(chosen, caps, strict=True):
+        members = np.unique(cap)
+        directed = np.vstack([cap[:, [0, 1]], cap[:, [1, 2]], cap[:, [2, 0]]])
+        _, inverse, counts = np.unique(
+            np.sort(directed, axis=1), axis=0, return_inverse=True, return_counts=True
+        )
+        rim = directed[counts[inverse.ravel()] == 1]
+        lifted = np.full(int(members.max()) + 1, -1, dtype=np.int64)
+        lifted[members] = np.arange(next_index, next_index + len(members))
+        added.append(points[members] + np.asarray(normal, dtype=np.float64) * reach)
+        next_index += len(members)
+        faces[indices] = lifted[cap]
+        first, second = rim[:, 0], rim[:, 1]
+        collars.append(np.column_stack([first, second, lifted[second]]))
+        collars.append(np.column_stack([first, lifted[second], lifted[first]]))
+    return trimesh.Trimesh(
+        vertices=np.vstack(added), faces=np.vstack([faces, *collars]), process=False
+    )
+
+
 def concatenated(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
     """Verschweißt mehrere Netze zu einem.
 

@@ -1115,7 +1115,9 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   `touches_features` und meldet mehr Teile als Warnung
   (`feature.body_split`, `evaluate._split_findings`) — der Rückweg steht im
   Satz. Gemessen: *Merkmal entfernen* an einem Zapfen, der der Körper selbst
-  war, ließ 50 Teile zurück, und der Bericht schwieg.
+  war, ließ 50 Teile zurück, und der Bericht schwieg. Ein gewollt loses Teil
+  zählt nicht (`leaves_separate_parts`, `bausteine.md`); das Urteil steht
+  einmal in `geom.boolean.body_split`.
 * **Ein konvexes Werkzeug aus den Flächen wurzelt in seiner Grundfläche und
   spart die Hohlräume aus, die durch es laufen** (`prepare_ops._rooted`,
   `_without_cavities`, gebündelt in `_placing_tool`). Kegel und Kuppel

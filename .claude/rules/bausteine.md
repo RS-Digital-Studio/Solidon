@@ -60,6 +60,26 @@ Und die Prüfung dazu misst die **Richtung**, nicht nur die Berührung: Zwei
 Volumen, die sich treffen, treffen sich am falschen Ende genauso. Was der Test
 sagen muss, ist, an welchem Ende die Sperrfläche sitzt.
 
+**Schräg zur Fläche gesetzt, öffnet er trotzdem bis über sie.** Das
+Hundertstel über der Mündung reicht nur, solange die Achse senkrecht steht;
+unter 10° blieb über gut der Hälfte jeder Öffnung ein Keil stehen —
+Magnettasche, Schraubenloch, Lagersitz, an beiden Kernen (Durchsicht 0.5.1).
+Die Richtung ist eine Eingabe und bleibt; angehoben wird der Deckel der
+Öffnung (`ops._opened_to_the_face`), und zwar bis über die **Ebene der Fläche
+am Ansatzpunkt**, nicht bis durch den Körper: Strahlen durch alles hätten
+eine Tasche neben einer Wand durch die Wand gezogen. Ein Ansatzpunkt tief im
+Körper bleibt ein eingeschlossener Hohlraum.
+
+## Ein lösbares Teil ist kein Zerfall
+
+Schraube, Mutter und separate Dichtung (`separate_from_host`) liegen gewollt
+als eigene Teile neben ihrem Träger. Die Auskunft kommt aus dem Baustein und
+reist über den Registereintrag (`OperationSpec.leaves_separate_parts`) zu
+Auswertung und Assistentenprüfung — keine Namensliste dort. Zerfällt der
+**Träger** selbst (eine Senkung, die einen schmalen Streifen durchschneidet),
+sagt es die Operation mit `feature.body_split`: Nur sie hat Träger und Teil
+noch getrennt in der Hand.
+
 ## Ein aufgesetzter Baustein beginnt bei null
 
 Der Ursprung ist die Fläche, und `ops._place` senkt den Baustein um

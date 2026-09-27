@@ -246,9 +246,12 @@ class PartSpec:
     separate_from_host: bool = False
     """Wahr, wenn der Baustein neben seinem Träger ein eigenes Teil bleibt.
 
-    Eine Schraube in einer gesenkten Bohrung berührt den Träger absichtlich
-    nicht. Die zusammengesetzte Szene enthält dann zwei Körper, aber keinen
-    Fehler: Der Baustein bildet eine demontierbare Verbindung ab.
+    Eine Schraube in einer gesenkten Bohrung wird nicht mit dem Träger
+    vereinigt — ihr Senkkopf liegt bündig in der Senkung an, ein Sechskantkopf
+    auf der Fläche. Die zusammengesetzte Szene enthält dann mehr Teile, aber
+    keinen Fehler: Der Baustein bildet eine demontierbare Verbindung ab. Die
+    Operation sagt das ihrem Registereintrag (``leaves_separate_parts``), und
+    Auswertung und Assistentenprüfung melden deshalb keinen Zerfall.
     """
     joined_by_host: bool = False
     """Wahr, wenn der **Träger** die Teile dieses Bausteins zusammenhält.

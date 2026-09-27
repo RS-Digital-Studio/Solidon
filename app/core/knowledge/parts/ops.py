@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Container, Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast, overload
 
 from app.core.errors import (
     CANCEL,
@@ -37,9 +37,11 @@ from app.core.expressions import resolve as resolve_parameters
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
+    body_split,
     boolean,
     deepest,
     fell_apart,
+    pieces,
     without_effect,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
@@ -65,7 +67,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG, dot3
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -464,13 +466,18 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         title=title,
         category="parts",
         # targets:4 — ein abtragender Baustein, der keine Schicht wegnimmt,
-        # sagt es (``parts.cuts_no_layer``, Durchsicht 0.5.1).
-        cache_version=f"{_result_version(spec)}:targets:4",
+        # sagt es (``parts.cuts_no_layer``, Durchsicht 0.5.1); targets:5 — ein
+        # lösbares Teil urteilt selbst, ob sein Träger zerfallen ist
+        # (``_host_split``), und ein schräg gesetzter abtragender Baustein
+        # öffnet bis über seine Fläche (``_opened_to_the_face``): Ein Ergebnis
+        # von davor trüge weder den Satz noch die freie Öffnung.
+        cache_version=f"{_result_version(spec)}:targets:5",
         params=params,
         consumes=1,
         produces=1,
         applies_to=_applies_to(spec),
         touches_features=True,
+        leaves_separate_parts=spec.separate_from_host,
         doc=spec.doc or title,
         caveat=spec.caveat,
         registry=registry,
@@ -563,6 +570,23 @@ def _hanging_loose(before: Mesh, after: Mesh, spec: PartSpec, subtractive: bool)
         message=lambda _loose: _loose_advice(spec),
         values={"part": spec.name},
     )
+
+
+def _host_split(before: Mesh, host: Mesh, spec: PartSpec, source: SceneObject) -> Finding | None:
+    """Ist der **Träger** eines lösbaren Teils zerfallen?
+
+    Eine gedruckte Schraube liegt als eigenes Teil neben ihrem Träger
+    (``separate_from_host``), und die Teilezahl des Szenenobjekts steigt
+    gewollt; die Auswertung fragt sie deshalb nicht
+    (``OperationSpec.leaves_separate_parts``). Was bleibt, ist der Träger:
+    Die Senkung einer M5 in einem Streifen, der schmaler ist als ihr Kopf,
+    schneidet ihn ganz durch — das ist der Zerfall, den ``feature.body_split``
+    meint, und nur hier sind Träger und Schraube noch getrennte Körper.
+
+    Gezählt wie :func:`_hanging_loose`, am exakten Träger die Körper der Form
+    (``geom.boolean.pieces``) — keine Vernetzung eines Zwischenstands.
+    """
+    return body_split(pieces(before), pieces(host), op=op_name(spec.name), object_id=source.id)
 
 
 #: Die Felder, mit denen sich ein Lochwand-Einhänger einfangen lässt. Wer sie
@@ -939,6 +963,8 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
     original_body = body
+    if subtractive:
+        placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
     addition = spec.host_add(part_params) if spec.host_add is not None else None
     added_features: dict[str, Feature] = {}
     added_findings: list[Finding] = []
@@ -1029,9 +1055,12 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     )
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
-    # nicht **am** Teil.
+    # nicht **am** Teil. Ein lösbares Teil fragt stattdessen, ob sein Träger
+    # zerfallen ist (:func:`_host_split`).
     loose = (
-        None if spec.separate_from_host else _hanging_loose(original_body, mesh, spec, subtractive)
+        _host_split(original_body, prepared, spec, source)
+        if spec.separate_from_host
+        else _hanging_loose(original_body, mesh, spec, subtractive)
     )
 
     spring = _spring_finding(spec.name, part_params, profile)
@@ -1323,6 +1352,8 @@ def _insert_at_exact(
     if body is None:
         raise InternalError(detail="the exact part path needs an exact host")
     original_body = body
+    if subtractive:
+        placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
     added_features: dict[str, Feature] = {}
     added_findings: list[Finding] = []
     with building("brep") as notes:
@@ -1395,7 +1426,9 @@ def _insert_at_exact(
         added_features,
     )
     loose = (
-        None if spec.separate_from_host else _hanging_loose(original_body, mesh, spec, subtractive)
+        _host_split(original_body, prepared, spec, source)
+        if spec.separate_from_host
+        else _hanging_loose(original_body, mesh, spec, subtractive)
     )
     spring = _spring_finding(spec.name, part_params, profile)
     return OpResult(
@@ -1411,6 +1444,133 @@ def _insert_at_exact(
             *([spring] if spring else []),
         ],
     )
+
+
+@overload
+def _opened_to_the_face(
+    tool: MeshData,
+    host: Mesh,
+    params: Any,
+    anchor: Vec3,
+    direction: Vec3 | None,
+    keeps_up: bool,
+) -> MeshData: ...
+
+
+@overload
+def _opened_to_the_face(
+    tool: Solid,
+    host: Mesh,
+    params: Any,
+    anchor: Vec3,
+    direction: Vec3 | None,
+    keeps_up: bool,
+) -> Solid: ...
+
+
+def _opened_to_the_face(
+    tool: MeshData | Solid,
+    host: Mesh,
+    params: Any,
+    anchor: Vec3,
+    direction: Vec3 | None,
+    keeps_up: bool,
+) -> MeshData | Solid:
+    """Ein abtragendes Werkzeug, dessen Öffnung bis über die Fläche an seiner Mündung reicht.
+
+    Jeder abtragende Baustein endet ein Hundertstel über seiner Mündung
+    (``BOOLEAN_OVERLAP``, §39) — genug, solange seine Achse senkrecht auf der
+    Fläche steht. **Mit einer Richtung, die schräg zur Fläche steht** (von
+    Hand eingetragen, vom Assistenten, von der Kommandozeile), liegt die
+    Fläche auf der tiefen Seite der Öffnung um bis zu ``R · tan(Neigung)`` über der
+    Mündung, und dort blieb ein Keil Material stehen: Durchsicht 0.5.1 (Prüfer
+    rest-lippe, rest-schraube) — 17 von 36 Strahlen entlang der Achse trafen
+    an der Magnettasche unter 10° Material, am Schraubenloch und am Lagersitz
+    608 ebenso, an beiden Kernen und ohne Befund. Der Magnet, die Schraube,
+    das Lager kamen nicht hinein.
+
+    Der Deckel der Öffnung wird deshalb entlang der Achse angehoben, bis er
+    die Fläche überall um das Hundertstel verlässt: am exakten Kern ein Prisma
+    über der Deckfläche (``edit.collared``), am Netz dieselbe Rechnung an den
+    Dreiecken (``geom.mesh.lifted_caps``). Was die Richtung sagt, bleibt: Die
+    Achse steht, wie eingetragen; nur die Öffnung wird nicht mehr zugedeckt.
+
+    **Gefragt wird die Fläche an der Mündung, nicht der Körper darüber.** Ihre
+    Ebene kommt vom Dreieck unter dem Ansatzpunkt; Strahlen durch den ganzen
+    Körper hätten eine Tasche neben einer Wand durch die Wand gezogen. Liegt
+    der Ansatzpunkt nicht auf der Oberfläche (weiter als die Facettengrenze
+    ``MAX_FACET_SAG`` davon, etwa tief im Körper eingetippt), bleibt das
+    Werkzeug, wie es ist — ebenso eines, das nicht an der Mündung öffnet (eine
+    Magnettasche mit Deckschicht), und eines, dessen Achse von der Fläche
+    wegzeigt (das sagt ``parts.cuts_no_layer``).
+
+    Nur bei eingetragener Stelle: An einem benannten Merkmal kommt die
+    Richtung von dessen Fläche oder Achse (:func:`_anchor`) und steht nie
+    schräg dazu — dort kostete die Frage nach der Oberfläche nur Zeit
+    (``on_surface`` an großen Netzen rund 70 ms).
+    """
+    import numpy as np
+
+    if _placement_value(params, "at_feature", ""):
+        return tool
+
+    from app.core.geom.mesh import lifted_caps, on_surface, stable_normals
+    from app.core.geom.section import SectionPlane
+
+    def along_axis(rows: Any, axis: Any) -> Any:
+        # Die Höhe entlang einer Richtung, komponentenweise: Sie setzt die
+        # Geometrie des Werkzeugs und rechnet deshalb ohne BLAS (RM-187).
+        return rows[:, 0] * axis[0] + rows[:, 1] * axis[1] + rows[:, 2] * axis[2]
+
+    # Der Rahmen der Mündung: derselbe wie beim Setzen, ohne Einsenken und
+    # Spiegelung — beide geschehen im eigenen System unter der Mündung.
+    frame = np.asarray(_matrix(params, anchor, 0.0, direction, keeps_up, False), dtype=np.float64)
+    mouth = frame[:3, 3]
+    outward = frame[:3, 2] / math.hypot(*(float(value) for value in frame[:3, 2]))
+    shape = as_mesh_data(tool)
+    points = np.asarray(shape.raw.vertices, dtype=np.float64)
+    heights = along_axis(points, outward) - dot3(mouth, outward)
+    top = float(heights.max())
+    if not EPS_GEOM < top <= BOOLEAN_OVERLAP + EPS_GEOM:
+        return tool
+    ground = as_mesh_data(host)
+    closest, distance, triangle = on_surface(ground.raw, mouth[None, :])
+    if float(distance[0]) > MAX_FACET_SAG:
+        return tool
+    facing = np.asarray(stable_normals(ground.raw)[0][int(triangle[0])], dtype=np.float64)
+    along = dot3(outward, facing)
+    if along <= EPS_GEOM:
+        return tool
+    # Je Randpunkt des Deckels, auf die Mündungsebene gelegt: wie weit die
+    # Ebene der Fläche dort entlang der Achse darüber liegt.
+    on_level = np.abs(heights - top) <= EPS_GEOM
+    rim = points[on_level] - top * outward
+    rise = float(along_axis(closest[0] - rim, facing).max()) / along
+    if rise <= EPS_GEOM:
+        return tool
+    # So weit, dass der Deckel die Fläche um dasselbe Hundertstel verlässt wie
+    # an einer senkrechten Mündung — höchstens durch den ganzen Körper.
+    reach = min(rise, float(ground.bounds.diagonal)) + BOOLEAN_OVERLAP - top
+    if isinstance(tool, MeshData):
+        normals = np.asarray(stable_normals(shape.raw)[0], dtype=np.float64)
+        corners = np.asarray(shape.raw.faces, dtype=np.int64)
+        facing_up = along_axis(normals, outward) >= 1.0 - EPS_GEOM
+        cap = np.nonzero(facing_up & on_level[corners].all(axis=1))[0]
+        if not len(cap):
+            return tool
+        widened = lifted_caps(shape.raw, [(cap, outward, reach)])
+        if not widened.is_watertight or widened.volume <= shape.volume - EPS_GEOM:
+            return tool
+        if not shape.slots:
+            return MeshData.of(widened)
+        # Die neue Wand trägt das Filament ihres Deckels.
+        walls = len(widened.faces) - shape.triangle_count
+        return MeshData.of(widened, slots=(*shape.slots, *[shape.slots[int(cap[0])]] * walls))
+    from app.core.brep import edit
+
+    level = dot3(mouth, outward) + top
+    normal = (float(outward[0]), float(outward[1]), float(outward[2]))
+    return edit.collared(tool, [(SectionPlane(normal=normal, position=level), reach)])
 
 
 def _exact_form(spec: PartSpec, produced: PartResult) -> Solid:
