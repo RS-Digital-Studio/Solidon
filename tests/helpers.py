@@ -343,3 +343,26 @@ def feature_operation(
             cancelled=NeverCancelled(),
         )
     )
+
+
+def contains(mesh: MeshData, points: Any) -> np.ndarray:
+    """Innen/Außen unabhängig aus der Summe der orientierten Raumwinkel.
+
+    Für ein geschlossenes Netz ist die Summe an einem Punkt innen ±4π, außen 0 —
+    ohne Strahlen und ohne ``rtree``, das die Umgebung nicht mitbringt.
+    """
+    inside = []
+    for point in np.asarray(points, dtype=float).reshape(-1, 3):
+        directions = np.asarray(mesh.raw.triangles) - point
+        directions /= np.linalg.norm(directions, axis=2)[:, :, None]
+        first, second, third = directions.transpose(1, 0, 2)
+        numerator = np.einsum("ij,ij->i", first, np.cross(second, third))
+        denominator = (
+            1.0
+            + np.einsum("ij,ij->i", first, second)
+            + np.einsum("ij,ij->i", second, third)
+            + np.einsum("ij,ij->i", third, first)
+        )
+        angle = 2.0 * np.arctan2(numerator, denominator).sum()
+        inside.append(abs(angle) > 2.0 * np.pi)
+    return np.asarray(inside)

@@ -33,6 +33,7 @@ from app.core.ingest.plan import import_plan
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, checksum, new_project
 from app.core.types import Feature, Finding, Profile, Quality, SceneObject, Source
+from tests.helpers import contains
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1984,3 +1985,224 @@ def test_a_magnet_pocket_from_a_part_is_copied_moved_and_removed_with_its_lip(
     # Die Lippe selbst misst rund 0,8 mm³ (Kegelring Ø 8,25 → 7,95 über 0,4 mm):
     # Eine Kopie als glatter Zylinder läge darüber.
     assert changed == pytest.approx(expected, abs=0.25), (op, changed, expected)
+
+
+#: Die Magnettasche 8x3 aus dem Baustein im Deckel von ``_lid_with_a_magnet_pocket``:
+#: Tasche Ø 8,25 von z 2 bis 4,6, Lippe bis zur Mündung z 5 mit der Öffnung Ø 7,95.
+_POCKET_FLOOR, _LIP_FOOT, _POCKET_MOUTH = 2.0, 4.6, 5.0
+_POCKET_RADIUS, _OPENING_RADIUS = 4.125, 3.975
+
+
+def _pocket_cavity(radius: float, *, keep: bool) -> float:
+    """Der Hohlraum der Magnettasche nach *Bohrung ändern* auf ``radius``.
+
+    Mitgenommen behält die Lippe Breite, Winkel und Höhe; mit *Nur
+    Bohrungsdurchmesser* bleibt ihre Öffnung — an einer weiteren Tasche setzt
+    sie am alten Fuß an, an einer engeren mit ihrem Winkel dort, wo sie so eng
+    ist wie die Tasche (``prepare_ops._narrowing_radii``).
+    """
+    height = _POCKET_MOUTH - _LIP_FOOT
+    opening = _OPENING_RADIUS if keep else radius - (_POCKET_RADIUS - _OPENING_RADIUS)
+    foot = _LIP_FOOT
+    if keep and radius < _POCKET_RADIUS:
+        foot += (_POCKET_RADIUS - radius) * height / (_POCKET_RADIUS - _OPENING_RADIUS)
+    lip = _POCKET_MOUTH - foot
+    frustum = math.pi * lip / 3.0 * (radius**2 + radius * opening + opening**2)
+    return math.pi * radius**2 * (foot - _POCKET_FLOOR) + frustum
+
+
+@pytest.mark.parametrize("box", ["create_brep_box", "create_box"], ids=["exakt", "Netz"])
+@pytest.mark.parametrize(
+    ("diameter", "mode", "opening"),
+    [(8.5, "follow", 8.2), (8.0, "follow", 7.7), (8.5, "keep", 7.95), (8.1, "keep", 7.95)],
+)
+def test_a_magnet_pocket_changes_its_diameter_and_keeps_its_lip(
+    profile: Profile, box: str, diameter: float, mode: str, opening: float
+) -> None:
+    """*Bohrung ändern* an der Magnettasche aus dem Baustein behält ihre Lippe,
+    an beiden Kernen mit denselben Sollmaßen (Durchsicht 0.5.1, rest-lippe).
+
+    Mit Einlauf sagte die Operation an der Lippe ab, und das Merkmalfenster
+    belegte deshalb *Nur Bohrungsdurchmesser* vor. Damit rechneten die Kerne
+    verschieden: Ø 8,1 schnitt am Netz die Lippe auf 8,09 auf (der Magnet
+    fiel heraus), der exakte Kern behielt sie; Ø 7,8 ließ am Netz eine
+    Hinterschneidung unter der Lippe, der exakte Kern schnitt gerade durch;
+    Ø 8,5 nahm an beiden die Lippe weg. Jetzt: mitgenommen wird die Lippe
+    mit der Tasche weiter oder enger (Öffnung Ø 8,2 an Ø 8,5), mit *Nur
+    Bohrungsdurchmesser* bleibt ihre Öffnung Ø 7,95 — die hält den Magneten.
+    Sollwerte: Volumen aus den Maßen (am Netz das 48-Eck der Tasche) und die
+    Öffnung der frisch erkannten Verengung.
+    """
+    from app.core.geom.mesh import as_mesh_data as twin_of
+    from app.core.perceive.features import detect, forget_cache
+    from app.core.scene.project import ProjectSources
+
+    project, history, lid = _lid_with_a_magnet_pocket(box)
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources)
+    assert before.complete
+    history.apply(
+        "Ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={
+                    "at_feature": "magnet_pocket_pocket_1",
+                    "diameter": diameter,
+                    "entrance_mode": mode,
+                },
+            )
+        ],
+    )
+    after = evaluate(project.document, profile, sources=sources)
+    assert after.complete, [str(finding.message) for finding in after.scene.report.findings]
+    assert _warnings(after.scene.report.findings) == []
+    body = after.scene.objects["obj_1"]
+    twin = twin_of(body.mesh)
+    assert twin.is_watertight
+    cavity = _pocket_cavity(diameter / 2.0, keep=mode == "keep")
+    if box == "create_brep_box":
+        assert body.mesh.volume == pytest.approx(lid - cavity, abs=1e-3)
+    else:
+        polygon = 48.0 / (2.0 * math.pi) * math.sin(2.0 * math.pi / 48.0)
+        assert twin.volume == pytest.approx(lid - polygon * cavity, abs=1e-3)
+    forget_cache()
+    found = detect(twin)
+    forget_cache()
+    at_the_pocket = [
+        feature
+        for feature in found.values()
+        if feature.kind in ("hole", "cone")
+        and math.dist(feature.params["centre"][:2], (-30.0, -20.0)) < 0.1
+    ]
+    lips = [feature for feature in at_the_pocket if feature.kind == "cone"]
+    bores = [feature for feature in at_the_pocket if feature.kind == "hole"]
+    assert len(lips) == 1 and lips[0].params.get("narrowing") is True, at_the_pocket
+    assert float(lips[0].params["opening"]) == pytest.approx(opening, abs=0.05)
+    assert len(bores) == 1 and float(bores[0].params["diameter"]) == pytest.approx(
+        diameter, abs=0.05
+    )
+
+
+def test_a_magnet_pocket_tilts_only_without_its_lip(
+    profile: Profile,
+) -> None:
+    """*Merkmal drehen* an der Magnettasche aus dem Baustein: An Tasche und Lippe
+    sagen Merkmalfenster und Operation denselben Satz, an beiden Kernen — und
+    der Weg darin führt: Ohne Lippe kippt die Tasche, samt Boden
+    (Durchsicht 0.5.1, rest-lippe).
+
+    Vorher bot das Fenster die Zeile an, und die Operation sagte ab — am Netz
+    mit dem Satz über eine Senkung, die in ihre Bohrung übergeht, am exakten
+    Körper, der Hohlraum lasse sich nicht als Bohrung lesen. Probeweise
+    gekippt las danach keine Erkennung die Lippe wieder als Verengung, und die
+    nächste Handlung rechnete ohne sie (``NARROWING_STAYS_STRAIGHT``). *Zum
+    Langloch ziehen* riet an der Tasche, „zuerst die Senkung“ zu entfernen.
+    """
+    from app.core.geom.mesh import as_mesh_data as twin_of
+    from app.core.perceive.actions import (
+        NARROWING_STAYS_ROUND,
+        NARROWING_STAYS_STRAIGHT,
+        actions_for,
+    )
+    from app.core.registry import REGISTRY
+    from app.core.scene.project import ProjectSources
+
+    pivot = np.asarray((-30.0, -20.0, 3.5))
+    turn = np.asarray(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, math.cos(math.radians(10.0)), -math.sin(math.radians(10.0))],
+            [0.0, math.sin(math.radians(10.0)), math.cos(math.radians(10.0))],
+        ]
+    )
+
+    def turned(points: list[tuple[float, float, float]]) -> Any:
+        return (np.asarray(points, dtype=float) - pivot) @ turn.T + pivot
+
+    def tilt(history: History) -> None:
+        history.apply(
+            "Drehen",
+            [
+                OperationDraft(
+                    op="rotate_feature",
+                    inputs=("obj_1",),
+                    params={"at_feature": "magnet_pocket_pocket_1", "axis": "x", "angle": 10.0},
+                )
+            ],
+        )
+
+    title = str(REGISTRY.get("rotate_feature").title)
+    slot_title = str(REGISTRY.get("slot_hole").title)
+    for box in ("create_brep_box", "create_box"):
+        project, history, _lid = _lid_with_a_magnet_pocket(box)
+        sources = ProjectSources(project)
+        before = evaluate(project.document, profile, sources=sources)
+        assert before.complete
+        body = before.scene.objects["obj_1"]
+        lips = [
+            feature
+            for feature in body.features.values()
+            if feature.kind == "cone" and feature.params.get("narrowing")
+        ]
+        assert len(lips) == 1, (box, sorted(body.features))
+        for chosen in ("magnet_pocket_pocket_1", lips[0].id):
+            rows = {
+                str(action.title): action
+                for action in actions_for(
+                    body.features[chosen], body.features, mesh=twin_of(body.mesh)
+                )
+            }
+            assert rows[title].op is None, (box, chosen)
+            assert rows[title].reason is NARROWING_STAYS_STRAIGHT, (box, chosen)
+            # Und *Zum Langloch ziehen* sagt an der Tasche, was an der Lippe gilt —
+            # dort stand „Entfernen Sie zuerst die Senkung“.
+            assert rows[slot_title].reason is NARROWING_STAYS_ROUND, (box, chosen)
+        tilt(history)
+        refused = evaluate(project.document, profile, sources=sources)
+        assert not refused.complete, box
+        told = [str(finding.message) for finding in refused.scene.report.findings]
+        assert str(NARROWING_STAYS_STRAIGHT) in told, (box, told)
+
+        project, history, _lid = _lid_with_a_magnet_pocket(box)
+        sources = ProjectSources(project)
+        history.apply(
+            "Langloch",
+            [
+                OperationDraft(
+                    op="slot_hole",
+                    inputs=("obj_1",),
+                    params={"at_feature": "magnet_pocket_pocket_1", "slot_length": 12.0},
+                )
+            ],
+        )
+        refused = evaluate(project.document, profile, sources=sources)
+        assert not refused.complete, box
+        told = [str(finding.message) for finding in refused.scene.report.findings]
+        assert str(NARROWING_STAYS_ROUND) in told, (box, told)
+
+        project, history, _lid = _lid_with_a_magnet_pocket(box)
+        sources = ProjectSources(project)
+        history.apply(
+            "Lippe weg",
+            [
+                OperationDraft(
+                    op="remove_feature",
+                    inputs=("obj_1",),
+                    params={"at_feature": lips[0].id, "sections": "single"},
+                )
+            ],
+        )
+        tilt(history)
+        after = evaluate(project.document, profile, sources=sources)
+        assert after.complete, [str(finding.message) for finding in after.scene.report.findings]
+        assert _warnings(after.scene.report.findings) == [], box
+        twin = twin_of(after.scene.objects["obj_1"].mesh)
+        assert twin.is_watertight
+        # Die gekippte Tasche ist leer, seitlich der Kippachse steht ihre Wand,
+        # und ihr Boden steht quer zur gekippten Achse.
+        pocket = turned([(-26.0, -20.0, 3.5), (-34.0, -20.0, 3.5), (-30.0, -20.0, 2.05)])
+        wall = turned([(-25.7, -20.0, 3.5), (-34.3, -20.0, 3.5), (-30.0, -20.0, 1.95)])
+        assert not contains(twin, pocket).any(), box
+        assert contains(twin, wall).all(), box

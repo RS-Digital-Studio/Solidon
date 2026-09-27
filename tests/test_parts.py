@@ -3160,16 +3160,18 @@ def test_a_chain_action_never_turns_the_lip_into_a_countersink(profile: Profile,
     weitet (``prepare_ops._entrance_side``): *Bohrung ändern* mit Einlauf
     machte an beiden Kernen aus der Lippe eine Senkung (Mündung Ø 8,75 über
     der Tasche Ø 8,49), am exakten Körper ebenso *Merkmal verschieben* und
-    *verdoppeln* — ohne einen Satz, und der Magnet hielt nicht mehr. Jetzt
-    sagt der Einlauf an einer Verengung ab. *Bohrung ändern* nur an der
-    Bohrung sagt, dass die Verengung verschwindet — ohne *Senkung mitziehen*,
-    das an ihr absagte. Versetzen geht an **beiden** Kernen über die eigenen
-    Flächen der Tasche und baut kein Einlaufprofil (am exakten Körper
-    ``prepare_ops._exact_chain_own_cavity``, Durchsicht 0.5.1, BOHRUNG-13):
-    Danach steht an der neuen Stelle genau eine Verengung.
+    *verdoppeln* — ohne einen Satz, und der Magnet hielt nicht mehr. Danach
+    sagte der Einlauf an einer Verengung ab; seit der Durchsicht 0.5.1
+    (rest-lippe) liest er sie mit ihrem eigenen Profil, die Verengung als
+    letzten Abschnitt. *Bohrung ändern* nur an der Bohrung lässt ihre Öffnung,
+    wo sie war, und sagt es — ohne *Senkung mitziehen*, das an ihr absagte;
+    erst eine Tasche, die nicht weiter ist als die Öffnung, lässt sie
+    verschwinden. Versetzen geht an **beiden** Kernen über die eigenen Flächen
+    der Tasche (am exakten Körper ``prepare_ops._exact_chain_own_cavity``,
+    BOHRUNG-13): Danach steht an der neuen Stelle genau eine Verengung.
     """
     from app.core.bootstrap import load_operations
-    from app.core.errors import RESIZE_THE_WIDENING, ValidationError
+    from app.core.errors import CORRECT_INPUT, RESIZE_THE_WIDENING, SHOW_FEATURE
     from app.core.geom.mesh import as_mesh_data
     from app.core.geom.prepare_ops import bore_entrance
     from app.core.perceive.features import detect, forget_cache
@@ -3197,23 +3199,46 @@ def test_a_chain_action_never_turns_the_lip_into_a_countersink(profile: Profile,
     entry = evaluate(project.document, profile, sources=ProjectSources(project)).scene.objects[
         "obj_1"
     ]
-    with pytest.raises(ValidationError):
-        bore_entrance(entry.mesh, entry.features["magnet_pocket_pocket_1"], entry.features)
+    entrance = bore_entrance(entry.mesh, entry.features["magnet_pocket_pocket_1"], entry.features)
+    assert entrance is not None and entrance.sections[-1].narrowing
+    assert 2.0 * entrance.sections[-1].outer_radius == pytest.approx(7.95, abs=0.01)
 
-    history.apply(
-        "Größer",
-        [
-            OperationDraft(
-                op="resize_hole",
-                inputs=("obj_1",),
-                params={"at_feature": "magnet_pocket_pocket_1", "diameter": 8.5},
-            )
-        ],
-    )
-    result = evaluate(project.document, profile, sources=ProjectSources(project))
-    told = [f for f in result.scene.report.findings if f.code.startswith("resize.")]
-    assert [f.code for f in told] == ["resize.narrowing_swallowed"]
-    assert RESIZE_THE_WIDENING not in told[0].suggestions
+    def lips_at(mesh: object) -> list[Any]:
+        forget_cache()
+        found = detect(as_mesh_data(mesh))
+        forget_cache()
+        return [
+            feature
+            for feature in found.values()
+            if feature.kind == "cone" and abs(float(feature.params["centre"][0])) < 0.1
+        ]
+
+    for diameter, code in ((8.5, "resize.narrowing_kept"), (7.8, "resize.narrowing_swallowed")):
+        project, history = pocket()
+        history.apply(
+            "Ändern",
+            [
+                OperationDraft(
+                    op="resize_hole",
+                    inputs=("obj_1",),
+                    params={"at_feature": "magnet_pocket_pocket_1", "diameter": diameter},
+                )
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        told = [f for f in result.scene.report.findings if f.code.startswith("resize.")]
+        assert [f.code for f in told] == [code], diameter
+        assert RESIZE_THE_WIDENING not in told[0].suggestions
+        lips = lips_at(result.scene.objects["obj_1"].mesh)
+        if code == "resize.narrowing_kept":
+            # Die Öffnung bleibt, wo sie war, und die Lippe setzt an der weiteren Tasche an.
+            assert told[0].suggestions == (SHOW_FEATURE,)
+            assert len(lips) == 1 and lips[0].params.get("narrowing") is True, lips
+            assert float(lips[0].params["opening"]) == pytest.approx(7.95, abs=0.05)
+        else:
+            assert told[0].severity == "warning" and CORRECT_INPUT in told[0].suggestions
+            assert lips == []
 
     project, history = pocket()
     history.apply(

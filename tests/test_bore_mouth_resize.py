@@ -19,6 +19,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, OpContext, OpResult, Profile, Quality, Scene, SceneObject
 from app.core.units import EPS_GEOM
+from tests.helpers import contains as _contains
 from tests.helpers import feature_operation as _operation
 from tests.helpers import sloping_bore as _sloping_bore
 
@@ -196,25 +197,6 @@ def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
     zeilen.append(f"Graph: { {k: sorted(v) for k, v in graph.items()} }")
     zeilen.append(f"ungültig: {sorted(invalid)}, berührend: {sorted(touching)}")
     return "\n".join(zeilen)
-
-
-def _contains(mesh: MeshData, points: list[tuple[float, float, float]]) -> np.ndarray:
-    """Innen/Außen unabhängig aus der Summe der orientierten Raumwinkel."""
-    inside = []
-    for point in points:
-        directions = np.asarray(mesh.raw.triangles) - np.asarray(point)
-        directions /= np.linalg.norm(directions, axis=2)[:, :, None]
-        first, second, third = directions.transpose(1, 0, 2)
-        numerator = np.einsum("ij,ij->i", first, np.cross(second, third))
-        denominator = (
-            1.0
-            + np.einsum("ij,ij->i", first, second)
-            + np.einsum("ij,ij->i", second, third)
-            + np.einsum("ij,ij->i", third, first)
-        )
-        angle = 2.0 * np.arctan2(numerator, denominator).sum()
-        inside.append(abs(angle) > 2.0 * np.pi)
-    return np.asarray(inside)
 
 
 def test_sloping_bore_and_its_entire_countersink_share_one_chain() -> None:
@@ -1425,3 +1407,270 @@ def test_removing_a_sloping_countersink_keeps_the_requested_scope(
         assert not _contains(changed, [(4.4, 0.0, 3.176 + 0.01)]).any()
     else:
         assert _contains(changed, [(0.0, 0.0, 3.1), (0.0, 0.0, 17.9)]).all()
+
+
+# --- Eine Haltelippe an der Mündung (Durchsicht 0.5.1, rest-lippe) ------------------
+
+#: Sacktasche Ø 8 von z 4 bis 8,5, darüber eine Haltelippe bis zur Mündung
+#: z 10 mit der Öffnung Ø 6,8 — der Umriss in der Halbebene (Radius, Höhe).
+_LIP_OUTLINE = [(0.0, 4.0), (4.0, 4.0), (4.0, 8.5), (3.4, 10.0), (0.0, 10.0), (0.0, 4.0)]
+
+#: Wie viel der Radius der Lippe je Millimeter zur Mündung hin abnimmt.
+_LIP_SLOPE = 0.4
+
+#: Die Fläche eines regelmäßigen 48-Ecks auf seinem Umkreis, als Anteil des
+#: Kreises: Am Netz sind Scheibe, Tasche und Werkzeug solche Vielecke.
+_POLYGON_48 = 48.0 / (2.0 * math.pi) * math.sin(2.0 * math.pi / 48.0)
+
+
+def _lipped(kind: str) -> SceneObject:
+    """Eine Sacktasche mit Haltelippe als unabhängig gebauter Körper.
+
+    Exakt in einem Quader 40 × 40 × 10 (``edit.bore_profile``), am Netz als
+    gedrehte Scheibe Ø 40 × 10 mit 48 Teilungen — beide Erkennungen lesen
+    Bohrung Ø 8 und eine Verengung auf Ø 6,8.
+    """
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.sketch.planes import frame_of
+
+    if kind == "brep":
+        body = edit.bore_profile(
+            edit.box(40.0, 40.0, 10.0), _LIP_OUTLINE, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+        )
+        features = features_of(body)
+        return SceneObject(id="obj_1", name="Lippe", kind="brep", mesh=body, features=features)
+    profile = [
+        [0.0, 0.0],
+        [20.0, 0.0],
+        [20.0, 10.0],
+        [3.4, 10.0],
+        [4.0, 8.5],
+        [4.0, 4.0],
+        [0.0, 4.0],
+    ]
+    mesh = MeshData.of(trimesh.creation.revolve(profile, sections=48))
+    return SceneObject(id="obj_1", name="Lippe", mesh=mesh, features=detect(mesh))
+
+
+def _on_the_lip(source: SceneObject, name: str, profile: Profile, **params: object) -> OpResult:
+    """Eine Merkmalsoperation an ``_lipped`` über ihren registrierten Vertrag."""
+    spec = REGISTRY.get(name)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def _lip_volume(kind: str, cavity: float) -> float:
+    """Das Volumen des Prüfkörpers mit diesem Hohlraum — exakt oder als 48-Eck."""
+    if kind == "brep":
+        return 40.0 * 40.0 * 10.0 - cavity
+    return _POLYGON_48 * (math.pi * 20.0**2 * 10.0 - cavity)
+
+
+def _frustum(height: float, wide: float, narrow: float) -> float:
+    return math.pi * height / 3.0 * (wide**2 + wide * narrow + narrow**2)
+
+
+def _found(changed: SceneObject) -> dict[str, Feature]:
+    """Die Merkmale am Ergebnis, frisch erkannt — nicht, was die Operation behauptet."""
+    from app.core.brep.features import features_of
+    from app.core.geom.mesh import as_mesh_data
+
+    if changed.kind == "brep":
+        return dict(features_of(changed.mesh))
+    return dict(detect(as_mesh_data(changed.mesh)))
+
+
+def _lip_found(changed: SceneObject) -> tuple[Feature, Feature]:
+    """Bohrung und Kegel am Ergebnis, frisch erkannt (:func:`_found`)."""
+    found = _found(changed)
+    bores = [f for f in found.values() if f.kind == "hole"]
+    cones = [f for f in found.values() if f.kind == "cone"]
+    assert len(bores) == 1 and len(cones) == 1, sorted((f.id, f.kind) for f in found.values())
+    return bores[0], cones[0]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("diameter", [9.0, 7.0])
+def test_follow_carries_the_lip_of_a_narrowed_mouth(
+    profile: Profile, kind: str, diameter: float
+) -> None:
+    """*Bohrung ändern* mit Einlauf nimmt eine Haltelippe mit, an beiden Kernen.
+
+    Die Einlaufprofile kannten nur den Kegel, der sich zur Mündung weitet: Der
+    Schaft reichte bis zur Mündung, und das Kegelprofil begann an seiner
+    Spitze. An einer Lippe schnitt das den Kegel weg und machte eine Senkung
+    daraus (R3); seither sagte der Einlauf dort ab, und die Magnettasche ließ
+    sich nur ohne ihre Lippe weiter oder enger machen. Jetzt endet der Schaft am
+    weiten Ende der Lippe, ihr Kegel läuft auf die Öffnung, und sie behält ihre
+    Breite, ihren Winkel und ihre Höhe: Tasche Ø 9 → Öffnung Ø 7,8, Tasche Ø 7
+    → Öffnung Ø 5,8 (Durchsicht 0.5.1, rest-lippe).
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    source = _lipped(kind)
+    hole = next(f for f in source.features.values() if f.kind == "hole")
+    result = _on_the_lip(
+        source,
+        "resize_hole",
+        profile,
+        at_feature=hole.id,
+        diameter=diameter,
+        entrance_mode="follow",
+        compensate=False,
+    )
+    changed = result.outputs[0]
+    assert changed.kind == kind
+    mesh = as_mesh_data(changed.mesh)
+    assert mesh.is_watertight
+    radius = diameter / 2.0
+    opening = radius - 0.6
+    # Die Lippe steht an der Mündung (z 9,9: Radius Öffnung + 0,04), darunter die Tasche.
+    assert _contains(mesh, [(radius + 0.1, 0.0, 6.0), (opening + 0.12, 0.0, 9.9)]).all()
+    assert not _contains(
+        mesh, [(radius - 0.1, 0.0, 6.0), (radius - 0.1, 0.0, 8.4), (opening - 0.1, 0.0, 9.9)]
+    ).any()
+    bore, lip = _lip_found(changed)
+    assert lip.params.get("narrowing") is True
+    assert float(lip.params["opening"]) == pytest.approx(2.0 * opening, abs=0.05)
+    assert float(bore.params["diameter"]) == pytest.approx(diameter, abs=0.05)
+    assert hole.id in changed.features
+    cavity = math.pi * radius**2 * 4.5 + _frustum(1.5, radius, opening)
+    volume = changed.mesh.volume if kind == "brep" else mesh.volume
+    assert volume == pytest.approx(_lip_volume(kind, cavity), abs=1e-3)
+    assert not [f.code for f in result.findings if f.severity != "info"]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("diameter", [9.0, 7.8, 6.4])
+def test_keep_leaves_the_opening_of_the_lip_where_it_was(
+    profile: Profile, kind: str, diameter: float
+) -> None:
+    """*Nur Bohrungsdurchmesser* an einer Tasche mit Lippe — an beiden Kernen gleich.
+
+    Die Kerne rechneten an der Magnettasche verschieden (Durchsicht 0.5.1,
+    rest-lippe): Ø 7,8 — das Netz ließ die Lippe über einer engeren Tasche
+    stehen, mit einer Hinterschneidung an ihrem Fuß, der exakte Kern schnitt
+    bis zur Mündung durch; Ø 8,1 — das Netz schnitt die Lippe auf, der exakte
+    Kern behielt ihren oberen Teil; weiter als die Tasche schnitten beide sie
+    ganz weg. Die Lippe hält den Magneten, und *Nur Bohrungsdurchmesser*
+    ändert nur die Tasche: Die Öffnung Ø 6,8 bleibt, und die Lippe setzt an der
+    neuen Tasche an — an einer weiteren (Ø 9) an ihrem alten Fuß, steiler und
+    ohne Ringstufe darunter, an einer engeren (Ø 7,8) mit ihrem Winkel dort, wo
+    sie so eng ist wie die Tasche, ohne Hinterschneidung. Erst eine Tasche, die
+    nicht weiter ist als die Öffnung (Ø 6,4), verengt nichts mehr: Dann läuft
+    sie gerade bis zur Mündung, und der Befund sagt es.
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    source = _lipped(kind)
+    hole = next(f for f in source.features.values() if f.kind == "hole")
+    result = _on_the_lip(
+        source,
+        "resize_hole",
+        profile,
+        at_feature=hole.id,
+        diameter=diameter,
+        entrance_mode="keep",
+        compensate=False,
+    )
+    changed = result.outputs[0]
+    mesh = as_mesh_data(changed.mesh)
+    assert mesh.is_watertight
+    radius = diameter / 2.0
+    assert _contains(mesh, [(radius + 0.1, 0.0, 6.0)]).all()
+    assert not _contains(mesh, [(radius - 0.1, 0.0, 6.0)]).any()
+    told = [f for f in result.findings if f.code.startswith("resize.")]
+    if radius <= 3.4:
+        assert _contains(mesh, [(radius + 0.1, 0.0, 9.95)]).all()
+        assert not _contains(mesh, [(radius - 0.1, 0.0, 9.95)]).any()
+        assert [f.code for f in told] == ["resize.narrowing_swallowed"]
+        assert told[0].severity == "warning" and told[0].suggestions
+        bores = [f for f in _found(changed).values() if f.kind in ("hole", "cone")]
+        assert [f.kind for f in bores] == ["hole"]
+        cavity = math.pi * radius**2 * 6.0
+    else:
+        # Die Öffnung an der Mündung bleibt Ø 6,8 (z 9,95: Radius knapp 3,44).
+        assert _contains(mesh, [(3.55, 0.0, 9.95)]).all()
+        assert not _contains(mesh, [(3.3, 0.0, 9.95)]).any()
+        assert [f.code for f in told] == ["resize.narrowing_kept"]
+        assert told[0].severity == "info"
+        bore, lip = _lip_found(changed)
+        assert lip.params.get("narrowing") is True
+        assert float(lip.params["opening"]) == pytest.approx(6.8, abs=0.05)
+        assert float(bore.params["diameter"]) == pytest.approx(diameter, abs=0.05)
+        if radius > 4.0:
+            # Weiter: am alten Fuß, steiler — keine Ringstufe unter der Lippe.
+            assert _contains(mesh, [(4.25, 0.0, 9.0)]).all()
+            assert not _contains(mesh, [(4.0, 0.0, 9.0), (radius - 0.1, 0.0, 8.4)]).any()
+            cavity = math.pi * radius**2 * 4.5 + _frustum(1.5, radius, 3.4)
+        else:
+            # Enger: derselbe Winkel, der Fuß höher — keine Hinterschneidung.
+            rise = (4.0 - radius) / _LIP_SLOPE
+            assert _contains(mesh, [(radius + 0.1, 0.0, 8.5 + rise / 2.0), (3.7, 0.0, 9.5)]).all()
+            assert not _contains(
+                mesh, [(radius - 0.1, 0.0, 8.5 + rise / 2.0), (3.5, 0.0, 9.5)]
+            ).any()
+            cavity = math.pi * radius**2 * (4.5 + rise) + _frustum(1.5 - rise, radius, 3.4)
+    volume = changed.mesh.volume if kind == "brep" else mesh.volume
+    assert volume == pytest.approx(_lip_volume(kind, cavity), abs=1e-3)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("chosen", ["hole", "cone"])
+def test_a_pocket_with_a_lip_says_why_it_stays_straight(
+    profile: Profile, kind: str, chosen: str
+) -> None:
+    """*Merkmal drehen* und *Zum Langloch ziehen* an einer Tasche mit Lippe:
+    Merkmalfenster und Operation sagen denselben Satz, an beiden Kernen (Regel 17).
+
+    Das Fenster bot *Merkmal drehen* an Tasche und Lippe an, und die Operation
+    sagte ab — am Netz mit dem Satz über eine Senkung, die in ihre Bohrung
+    übergeht, am exakten Körper, der Hohlraum lasse sich nicht als Bohrung
+    lesen. Gekippt läse keine der beiden Erkennungen die Lippe wieder als
+    Verengung, und jede weitere Handlung rechnete ohne sie
+    (``NARROWING_STAYS_STRAIGHT``). *Zum Langloch ziehen* riet an der Tasche,
+    „zuerst die Senkung“ zu entfernen (Durchsicht 0.5.1, rest-lippe).
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.actions import (
+        NARROWING_STAYS_ROUND,
+        NARROWING_STAYS_STRAIGHT,
+        actions_for,
+    )
+
+    source = _lipped(kind)
+    feature = next(f for f in source.features.values() if f.kind == chosen)
+    rows = {
+        str(action.title): action
+        for action in actions_for(feature, source.features, mesh=as_mesh_data(source.mesh))
+    }
+    turn = rows[str(REGISTRY.get("rotate_feature").title)]
+    assert turn.op is None and turn.reason is NARROWING_STAYS_STRAIGHT, turn
+    slot = rows[str(REGISTRY.get("slot_hole").title)]
+    assert slot.op is None and slot.reason is NARROWING_STAYS_ROUND, slot
+    with pytest.raises(ValidationError) as refused:
+        _on_the_lip(source, "rotate_feature", profile, at_feature=feature.id, axis="x", angle=15.0)
+    assert refused.value.detail == NARROWING_STAYS_STRAIGHT
+    if kind == "brep" and chosen == "hole":
+        # An der Bohrung eines exakten Körpers fragt *Zum Langloch ziehen* die
+        # Netz-Erkennung seiner Tessellierung, und die findet an diesem
+        # Prüfkörper keine Kette (Bericht rest-lippe, „Für Nachbarn“). An der
+        # Magnettasche aus dem Baustein sagt die Operation es an beiden Kernen
+        # (``test_feature_moves_keep_shape``).
+        return
+    with pytest.raises(ValidationError) as refused:
+        _on_the_lip(source, "slot_hole", profile, at_feature=feature.id, slot_length=4.0)
+    assert refused.value.detail == NARROWING_STAYS_ROUND

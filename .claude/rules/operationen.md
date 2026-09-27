@@ -724,13 +724,32 @@ Kriterium ist der Rand, nicht „Merkmal ohne Dreiecke“: Die Erkennung ordnet
 einem Baustein-Merkmal Flächen zu (`declared_partners`) und führt die Lippe
 dann als Kegel einer Kette, markiert als Verengung (`narrowing`). Eine
 solche Kette (`_narrows_outward` liest dasselbe Flag über
-`perceive.actions.narrows_the_mouth`) reist am exakten Kern ganz aus ihren
-Flächen: gefüllt (`_exact_own_chain_filled`, auch beim Entfernen) und
-geschnitten (`_exact_own_cut`), ohne je ein Einlaufprofil zu bauen — die
-Profile einer Kette weiten sich nach außen, schnitten die Lippe weg, und
-`_entrance_side` sagt an einer Verengung ohnehin ab. Die Absage gilt nur für
-*Bohrung ändern* mit Einlauf. Die Kopie eines Merkmals, das die Erkennung
-nicht sieht, wird nicht nachgemessen (`_copies_found`).
+`perceive.actions.narrows_the_mouth`) reist beim Versetzen, Verdoppeln, im
+Muster und beim Entfernen am exakten Kern ganz aus ihren Flächen: gefüllt
+(`_exact_own_chain_filled`) und geschnitten (`_exact_own_cut`). **Ändern geht
+über ihr eigenes Einlaufprofil** (Durchsicht 0.5.1, rest-lippe;
+`_narrowing_outline`): Der Schaft endet an ihrem Fuß, der Kegel läuft auf die
+Öffnung — an beiden Kernen dieselben Zahlen, also dieselbe Tasche. Bis dahin
+kannten die Profile nur den Kegel, der sich zur Mündung weitet; der Einlauf
+sagte an der Lippe ab, und die Kerne schnitten *Nur Bohrungsdurchmesser*
+verschieden. **Gekippt wird sie nicht** (`perceive.actions.narrowing_reason`,
+Panel und Operation mit demselben Satz): Schräg zur Fläche schneidet die
+Fläche die Lippe auf der hohen Seite weg, auf der tiefen führt die Öffnung als
+Schacht bis zur Fläche — und das liest keine Erkennung wieder als Verengung.
+Probeweise zugelassen rechnete jede folgende Handlung ohne die Lippe (am Netz
+still weg, ein zweites Kippen Material in der Öffnung, am exakten Körper ein
+undichter Körper). Wer das Kippen zulässt, bringt zuerst der Erkennung die
+gekippte Lippe bei (Registersatz im Bericht rest-lippe). Die Kopie eines
+Merkmals, das die Erkennung nicht sieht, wird nicht nachgemessen
+(`_copies_found`).
+**Und zwei Werkzeuge stoßen nie nur in einer Ebene aneinander, wenn sie am Netz
+vereinigt werden** (rest-lippe): Manifold legt die beiden Deckel dann nicht
+zusammen, sondern lässt sie stehen — nach dem Schnitt eine Haut ohne Dicke quer
+durch den Hohlraum, die das Volumen nicht sieht (Magnettasche, *Nur
+Bohrungsdurchmesser* auf Ø 8,1: 472 Dreiecke in der Fußebene der Lippe, die
+Tasche eine gerundete Seite). Das hintere Werkzeug reicht in das vordere
+hinein, wie der Kegel einer Senkung in ihren Schaft. Geprüft wird es nicht am
+Volumen, sondern an Flächen in dieser Ebene und an der Erkennung danach.
 **Und eine Mündung, die an der neuen Stelle unter Material liegt, wird
 gemeldet** (`_mouth_covered`, `{op}.mouth_covered`): Eine Sackbohrung hat keinen
 Durchgang, den sie verlieren könnte, und schwieg — an einer schrägen

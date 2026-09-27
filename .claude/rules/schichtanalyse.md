@@ -898,14 +898,32 @@ an dem die schwächere Fassung falsch lag:
 Im Zweifel bleibt der Kegel, was er war. Wer eine Bedingung lockert, fährt
 den Korpus und sieht sich jeden neu markierten Kegel an; bis heute ist keiner
 darunter eine Lippe. Was eine Verengung nicht anbietet, steht bei ihren
-Handlungen (`perceive.actions.cone_reason`, `not_offered_at`); die
-Einlaufprofile der Bohrungswerkzeuge kennen sie nicht und sagen an ihr ab
-(`prepare_ops._entrance_side`) — das betrifft nur *Bohrung ändern* mit
-Einlauf. Versetzen, Verdoppeln, Vervielfachen und Entfernen der ganzen Kette
-bauen an einer Verengung kein Profil: Sie gehen an beiden Kernen über die
+Handlungen (`perceive.actions.cone_reason`, `not_offered_at`). Die
+Einlaufprofile der Bohrungswerkzeuge tragen sie mit ihrem eigenen Profil
+(`prepare_ops._narrowing_outline`, Durchsicht 0.5.1, rest-lippe): *Bohrung
+ändern* in beiden Umfängen. Versetzen, Verdoppeln,
+Vervielfachen und Entfernen der ganzen Kette gehen an beiden Kernen über die
 eigenen Flächen der Tasche, samt Lippe (am exakten Körper
 `prepare_ops._exact_chain_own_cavity`, dasselbe Flag über
 `_narrows_outward`).
+
+**Was die Handlungen hinterlassen, muss die Erkennung wieder als Verengung
+lesen** — und sie liest nur eine offene Mündung an einer Wand aus ganzen
+Facetten. Am Netz ließ der Neuschnitt den Ring der alten Mündung in der
+Deckfläche stehen (0,125 mm um die neue, engere) und eine Ecke in der Mitte
+jeder Wandkante am Boden; die Lippe hieß danach wieder „Senkung“, oder die
+Tasche war eine gerundete Seite. Deshalb liegt das Ergebnis dort ohne Narben.
+**Gekippt liest sie die Lippe nicht mehr als Verengung**: Auf der hohen Seite
+schneidet die Fläche die Lippe weg (der Kegel ist dann ein Teilstück), auf der
+tiefen führt die Öffnung als Schacht ihrer Weite bis zur Fläche, und ein
+Zylinder, der mit der engen Weite weiterläuft, ist nach der dritten Bedingung
+oben eine Stufe, keine Mündung. Am exakten Körper stand sie dann als Kegel
+(„Senkung“) im Baum, am Netz mit Tasche und Schacht als gerundete Seite.
+Deshalb kippt *Merkmal drehen* eine Kette mit Verengung nicht
+(`perceive.actions.narrowing_reason`). Dieselbe gekippte Lippe entsteht aber,
+wenn die Magnettasche mit einer Richtung eingesetzt wird, die nicht senkrecht
+auf der Fläche steht — ein offener Registerpunkt (Bericht rest-lippe), keine
+Regel zum Lockern ohne Korpuslauf.
 
 ## Ein Hohlraum ohne Weg nach außen ist keine Bohrung (10.09.2026)
 

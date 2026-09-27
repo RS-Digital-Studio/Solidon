@@ -25,7 +25,7 @@ selbst.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Final
 
@@ -774,6 +774,10 @@ def actions_for(
                     ),
                 )
             )
+        elif fitting is not None and (lipped := narrowing_reason(fitting.name, cavity)):
+            # Die Bohrung einer Kette mit Verengung — deren Satz, nicht der
+            # über eine Senkung (:func:`narrowing_reason`).
+            actions.append(FeatureAction(title=fitting.title, op=None, reason=lipped))
         elif fitting is not None and (
             shared := _shares_its_cavity(
                 fitting.name,
@@ -932,10 +936,28 @@ NARROWING_HAS_NO_SIZE: Final = _(
 )
 
 #: *Zum Langloch ziehen* an einer Verengung — der Satz des Kegels sprach von
-#: einer Senkung, die es dort nicht gibt.
+#: einer Senkung, die es dort nicht gibt. An der Bohrung darunter ebenso: Dort
+#: hieß es „Entfernen Sie zuerst die Senkung“ (:func:`narrowing_reason`).
 NARROWING_STAYS_ROUND: Final = _(
     "Ein Langloch nimmt eine Verengung nicht mit. Nehmen Sie sie zuerst mit „Merkmal "
     "entfernen“ weg, oder lassen Sie die Bohrung rund."
+)
+
+#: *Merkmal drehen* an einer Verengung und an der Bohrung darunter.
+#:
+#: Gekippt steht die Lippe schräg zur Fläche: Auf der hohen Seite schneidet
+#: die Fläche sie weg, auf der tiefen führt die Öffnung als Schacht bis zur
+#: Fläche. Das liest keine der beiden Erkennungen wieder als Verengung.
+#: Probeweise zugelassen (Durchsicht 0.5.1, rest-lippe), stand danach am
+#: exakten Körper eine „Senkung“ im Baum, am Netz eine gerundete Seite neben
+#: einer Tasche ohne Flächen — und jede weitere Handlung rechnete ohne die
+#: Lippe: *Bohrung ändern* nahm sie am Netz still weg, ein zweites Drehen ließ
+#: Material in der Öffnung stehen, *Nur Bohrungsdurchmesser* ergab am exakten
+#: Körper einen undichten Körper. Vorher sagten Panel und Operation mit dem
+#: Satz über eine Senkung ab. Ohne Lippe kippt die Tasche.
+NARROWING_STAYS_STRAIGHT: Final = _(
+    "Eine Verengung lässt sich nicht drehen. Nehmen Sie sie zuerst mit „Merkmal "
+    "entfernen“ weg, oder lassen Sie die Bohrung gerade."
 )
 
 #: Und an einer **Verjüngung**, einem aufgesetzten Kegel: Gezogen wird ein
@@ -979,9 +1001,10 @@ def cone_reason(feature: Feature, op: str) -> TranslatableText | None:
 
     Die Tabellen oben fragen nach der Art, und ein Kegel war dort eine
     Senkung. An einer **Verengung** (:func:`narrows_the_mouth`) gilt *Merkmal
-    ändern* nicht, und *Zum Langloch ziehen* sagt, warum es sie nicht mitnimmt;
-    an einer **Verjüngung** sagt *Zum Langloch ziehen*, dass sie Material ist.
-    Panel und Operation lesen denselben Satz (``prepare_ops._movable_feature``).
+    ändern* nicht, und *Zum Langloch ziehen* und *Merkmal drehen* sagen, warum
+    sie sie nicht mitnehmen; an einer **Verjüngung** sagt *Zum Langloch
+    ziehen*, dass sie Material ist. Panel und Operation lesen denselben Satz
+    (``prepare_ops._movable_feature``).
     """
     if feature.kind != "cone" or feature.params.get("partial"):
         return None
@@ -990,11 +1013,29 @@ def cone_reason(feature: Feature, op: str) -> TranslatableText | None:
         # sonst verwiese deren Absage auf die gesperrte Schwester.
         if op in ("resize_feature", "resize_hole"):
             return NARROWING_HAS_NO_SIZE
-        if op == "slot_hole":
-            return NARROWING_STAYS_ROUND
-        return None
+        return narrowing_reason(op, (feature,))
     if op == "slot_hole" and not feature.params.get("recess"):
         return TAPER_IS_MATERIAL
+    return None
+
+
+def narrowing_reason(op: str, chain: Sequence[Feature] | None) -> TranslatableText | None:
+    """Was eine Kette mit Verengung nicht mitnimmt — an der Verengung selbst
+    (:func:`cone_reason`) wie an der Bohrung darunter —, oder ``None``.
+
+    *Zum Langloch ziehen* und *Merkmal drehen*. An der Bohrung einer
+    Magnettasche sagten beide bis zur Durchsicht 0.5.1 etwas über eine
+    Senkung: das Langloch „Entfernen Sie zuerst die Senkung“, das Drehen, das
+    Merkmal gehe in einen anderen Hohlraum über, „etwa eine Senkung in ihre
+    Bohrung“. Panel und Operation lesen denselben Satz
+    (``prepare_ops.rotate_feature``, ``prepare_ops.slot_hole``).
+    """
+    if not chain or not any(narrows_the_mouth(member) for member in chain):
+        return None
+    if op == "slot_hole":
+        return NARROWING_STAYS_ROUND
+    if op == "rotate_feature":
+        return NARROWING_STAYS_STRAIGHT
     return None
 
 
