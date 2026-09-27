@@ -5789,6 +5789,16 @@ class Viewport(QWidget):
         Skalierwürfel 4,31 ms und 80 Pickaufrufe für 40 Bewegungen. Das ist
         dieselbe Regel, die der Zeiger seit je befolgt (``_note_pointer``: „Ein
         Zug an der Kamera stoppt die Suche ganz"), nur für die Griffe.
+
+        **Der Zug beginnt mit dem Weg, nicht mit dem Druck** (27.09.2026).
+        ``placementDragStarted`` bindet den Maßentwurf und mit ihm die Auswahl
+        (``griffe.md``: „Die erste Eingabe bindet die Auswahl"). Gemeldet beim
+        Drücken, band schon ein Klick ohne Weg auf Griff oder Loch den Entwurf:
+        Am Wabenhalter ließ sich nach einem Klick auf die Mitte der gewählten
+        Bohrung keine andere mehr wählen, und die Statuszeile verlangte, eine
+        Änderung zu übernehmen, die es nicht gab. Gemeldet wird deshalb bei der
+        ersten Bewegung, die die Klickschwelle verlässt (``dragging``) — ein
+        Klick bleibt ein Klick, wie im Navigator.
         """
         held = event.kind == "move" and bool(event.buttons)
         for handle in (
@@ -5800,18 +5810,22 @@ class Viewport(QWidget):
         ):
             if handle is None or (held and not handle.pressing):
                 continue
-            if handle.handle(event):
-                if (
-                    event.kind == "press"
-                    and handle.pressing
-                    and (
-                        handle is self._placement_grip
-                        or (
-                            self._placement_pointer is not None
-                            and handle in (self._gizmo, self._slot_handle)
-                        )
+            # Der Griff, dessen Zug den Entwurf der Platzierung beginnt.
+            grip = (
+                handle
+                if isinstance(handle, Gizmo | SlotHandle)
+                and (
+                    handle is self._placement_grip
+                    or (
+                        self._placement_pointer is not None
+                        and handle in (self._gizmo, self._slot_handle)
                     )
-                ):
+                )
+                else None
+            )
+            was_dragging = grip is not None and grip.dragging
+            if handle.handle(event):
+                if grip is not None and not was_dragging and grip.dragging:
                     self.placementDragStarted.emit()
                 if (
                     event.kind == "release"
@@ -5844,8 +5858,10 @@ class Viewport(QWidget):
             # sitzt in der gewählten Bohrung — will den Druck aufs Loch selbst:
             # Er setzt den Baustein um. Bis zum 21.09.2026 lieh sich der Druck
             # dort einen Langlochgriff und zog, statt zu setzen.
-            if self._placement_pointer is not None and self._slot_handle is not None:
-                self.placementDragStarted.emit()
+            #
+            # Den Beginn des Zugs meldet erst die Bewegung, die der
+            # Langlochgriff oben annimmt — ein Klick ins gewählte Loch bindet
+            # keinen Entwurf (siehe oben, „Der Zug beginnt mit dem Weg").
             return
         if self._placement_pointer is not None and self._placement_pointer(event):
             return

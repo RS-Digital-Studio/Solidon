@@ -295,3 +295,148 @@ def test_the_scale_cube_scales_the_body_about_its_centre(scene: tuple) -> None:
     assert handle.item.colour() == "#00c0ff"
     assert not handle.handle(press(5, 5)), "neben dem Würfel gehört die Geste niemandem"
     handle.remove()
+
+
+def test_a_click_on_the_grip_moves_nothing_and_reports_nothing(scene: tuple) -> None:
+    """Ein Klick ohne Weg ist kein Zug — auch mit dem Zittern, das Klicken hat.
+
+    Dieselbe Schwelle wie im Navigator und an den Langlochknöpfen
+    (``CLICK_SLACK``, ``kamera.md``: „Ein Klick ist ein Klick, auch mit
+    Zittern“). Bis zum 27.09.2026 verschob der Griff sein Ziel schon beim
+    ersten Bildpunkt und meldete beim Loslassen die Matrix als Zug; am
+    Wabenhalter band der Klick auf die Mitte der gewählten Bohrung damit den
+    Maßentwurf, und die Nachbarbohrung ließ sich nicht mehr wählen
+    (Durchsicht 0.5.1, rest-auswahl).
+    """
+    renderer, body, gizmo, releases = scene
+    x, y = arrow_tip_pixel(renderer, gizmo, 2)
+    gizmo.handle(hover(x, y))
+    assert gizmo.handle(press(x, y)), "der Druck gehört dem Griff"
+    assert gizmo.handle(move(x + 3, y - 3)), "und das Zittern auch"
+    assert np.allclose(body.matrix(), np.eye(4)), "ein Klick verschiebt nichts"
+    assert not gizmo.dragging, "drei Bildpunkte sind noch ein Klick"
+    assert gizmo.handle(release(x + 3, y - 3))
+    assert releases == [], "und meldet keinen Zug"
+    assert not gizmo.pressing and not gizmo.dragging
+
+    # Gegenprobe: über die Schwelle hinaus ist es ein Zug — gerechnet von der
+    # Stelle des Drückens aus, nicht von der Schwelle.
+    far = np.asarray(gizmo.origin) + gizmo.axes[2] * gizmo._arrow_length * 1.5
+    fx, fy, _depth = renderer.world_to_display((float(far[0]), float(far[1]), float(far[2])))
+    gizmo.handle(hover(x, y))
+    assert gizmo.handle(press(x, y))
+    assert gizmo.handle(move(fx, fy))
+    assert gizmo.dragging
+    shift = body.matrix()[:3, 3]
+    assert shift[2] > 5.0 and abs(shift[0]) < 1e-6 and abs(shift[1]) < 1e-6, shift
+    assert gizmo.handle(move(x, y)), "zurück an den Anfang"
+    assert np.allclose(body.matrix(), np.eye(4), atol=1e-6), "steht wieder, wo er stand"
+    assert gizmo.handle(move(fx, fy))
+    assert gizmo.handle(release(fx, fy))
+    assert len(releases) == 1 and np.allclose(releases[0], body.matrix())
+
+
+def _dispatching_view(started: list[bool], navigated: list[object], **handles: object) -> object:
+    """Die Vorfahrt der Ansicht ohne Fenster: nur, was ``_dispatch_pointer`` liest."""
+    from types import SimpleNamespace
+
+    state = SimpleNamespace(
+        _placement_grip=None,
+        _preview_gizmo=None,
+        _gizmo=None,
+        _scale_handle=None,
+        _slot_handle=None,
+        _slot_borrowed=False,
+        _placement_pointer=lambda _event: False,
+        _placement_resume=None,
+        placementDragStarted=SimpleNamespace(emit=lambda: started.append(True)),
+        _queue_feature_label_layout=lambda: None,
+        _pull_at_the_hole=lambda _event: False,
+        _note_pointer=lambda _x, _y: None,
+        _forget_pointer=lambda: None,
+        _navigator=SimpleNamespace(handle=navigated.append),
+    )
+    for name, value in handles.items():
+        setattr(state, name, value)
+    return state
+
+
+def test_a_click_on_the_placement_grip_does_not_bind_the_draft(scene: tuple) -> None:
+    """Erst der Zug beginnt den Entwurf (``placementDragStarted``), nicht der Druck.
+
+    Die Ansicht meldete den Beginn beim Drücken; der Fluss band daraus den
+    Maßentwurf (``QuietHost.begin_edit``), und ``_quiet_selection_allowed``
+    hielt danach jede andere Auswahl fest — gemessen am Wabenhalter: nach
+    einem Klick auf die Mitte von ``hole_4`` blieb ``hole_4`` gewählt, gleich
+    wohin geklickt wurde, und die Statuszeile verlangte, eine Änderung zu
+    übernehmen, die es nicht gab (Sonde ``sonden/rest-auswahl``).
+    """
+    from app.ui.viewport import Viewport
+
+    renderer, body, gizmo, releases = scene
+    started: list[bool] = []
+    navigated: list[object] = []
+    view = _dispatching_view(started, navigated, _placement_grip=gizmo)
+    x, y = arrow_tip_pixel(renderer, gizmo, 2)
+    for event in (hover(x, y), press(x, y), move(x + 3, y - 3), release(x + 3, y - 3)):
+        Viewport._dispatch_pointer(view, event)  # type: ignore[arg-type]
+    assert started == [], "ein Klick ohne Weg beginnt nichts"
+    assert releases == [] and np.allclose(body.matrix(), np.eye(4)), "und bewegt nichts"
+    assert not gizmo.pressing
+
+    far = np.asarray(gizmo.origin) + gizmo.axes[2] * gizmo._arrow_length * 1.5
+    fx, fy, _depth = renderer.world_to_display((float(far[0]), float(far[1]), float(far[2])))
+    Viewport._dispatch_pointer(view, hover(x, y))  # type: ignore[arg-type]
+    Viewport._dispatch_pointer(view, press(x, y))  # type: ignore[arg-type]
+    assert started == [], "auch der Druck vor dem Zug nicht"
+    Viewport._dispatch_pointer(view, move(fx, fy))  # type: ignore[arg-type]
+    assert started == [True], "der Zug beginnt ihn, einmal"
+    Viewport._dispatch_pointer(view, move(fx, fy - 5))  # type: ignore[arg-type]
+    Viewport._dispatch_pointer(view, release(fx, fy - 5))  # type: ignore[arg-type]
+    assert started == [True] and len(releases) == 1
+    assert all(event.kind == "move" and not event.buttons for event in navigated), (
+        "an die Kamera ging nur die freie Bewegung"
+    )
+
+
+def test_a_click_into_the_chosen_hole_does_not_bind_the_draft(scene: tuple) -> None:
+    """Derselbe Grundsatz am Loch selbst: Der Druck ins gewählte Loch leiht
+    sich die Langlochknöpfe (``_pull_at_the_hole``) — und meldete den Beginn,
+    solange die Maße im Bild standen, schon beim Drücken."""
+    from app.ui.slot_handle import SlotHandle
+    from app.ui.viewport import Viewport
+
+    renderer, _body, gizmo, _releases = scene
+    gizmo.remove()
+    proposals: list[tuple[float, float]] = []
+    handle = SlotHandle(
+        renderer,
+        centre=(10.0, 10.0, 20.0),
+        axis=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        length=6.0,
+        angle=0.0,
+        knob_size=5.0,
+        colour="#ff9f1c",
+        release_callback=lambda length, angle: proposals.append((length, angle)),
+    )
+    started: list[bool] = []
+    view = _dispatching_view(
+        started,
+        [],
+        _slot_handle=handle,
+        _pull_at_the_hole=lambda event: handle.take_press(event, 0),
+    )
+    x, y, _depth = renderer.world_to_display((10.0, 10.0, 20.0))
+    for event in (press(x, y), move(x + 2, y + 2), release(x + 2, y + 2)):
+        Viewport._dispatch_pointer(view, event)  # type: ignore[arg-type]
+    assert started == [] and proposals == [], "ein Klick ins Loch beginnt nichts"
+    assert not handle.pressing
+
+    Viewport._dispatch_pointer(view, press(x, y))  # type: ignore[arg-type]
+    assert started == []
+    Viewport._dispatch_pointer(view, move(x + 60, y))  # type: ignore[arg-type]
+    assert started == [True], "der Zug zum Langloch beginnt den Entwurf"
+    Viewport._dispatch_pointer(view, release(x + 60, y))  # type: ignore[arg-type]
+    assert started == [True] and len(proposals) == 1
+    handle.remove()

@@ -2570,6 +2570,59 @@ def test_the_bound_placement_grip_changes_the_same_measure_order(qt_app: QApplic
         window.release()
 
 
+def test_a_click_on_the_grip_leaves_the_next_hole_free(qt_app: QApplication) -> None:
+    """Ein Klick ohne Weg auf den Bewegungsgriff bindet nichts und bewegt nichts.
+
+    Der Griff sitzt in der Mitte der gewählten Bohrung. Ein Klick dorthin —
+    mit dem Zittern, das Klicken hat — meldete bis zum 27.09.2026 schon beim
+    Drücken den Beginn eines Zugs, band den Maßentwurf, und danach ließ sich
+    keine andere Bohrung mehr wählen (Wabenhalter, Durchsicht 0.5.1).
+    """
+    from app.ui.render.api import PointerEvent
+
+    window = _window_with_a_renderer()
+    try:
+        object_id, hole = _a_selected_hole(window)
+        flow = _measures_in_the_view(window)
+        assert flow is not None and flow.active and not flow.dialog.begun
+        values = dict(flow.dialog.values())
+        grip = window.viewport._placement_grip
+        assert grip is not None
+        window.viewport.renderer.item_picks[(400, 300)] = grip.items[0]
+        dragged: list[object] = []
+        window.viewport.placementDragged.connect(dragged.append)
+        for event in (
+            PointerEvent("move", 400, 300),
+            PointerEvent("press", 400, 300, button="left"),
+            PointerEvent("move", 403, 302, buttons=frozenset({"left"})),
+            PointerEvent("release", 403, 302, button="left"),
+        ):
+            window.viewport._on_pointer(event)
+        assert window.session.wait_for_idle(30_000)
+        assert not flow.dialog.begun and flow.active, "der Klick beginnt keinen Entwurf"
+        assert dragged == [] and flow.dialog.values() == values, "und bewegt nichts"
+        assert window.viewport.user_selection_allowed()
+        assert window.object_tree.tree.selection_allowed()
+
+        other = next(
+            identifier
+            for identifier, feature in window.session.last_result.scene.objects[
+                object_id
+            ].features.items()
+            if feature.kind == "hole" and identifier != hole
+        )
+        window.object_tree.select_feature(object_id, other)
+        window.session.wait_for_idle()
+        for _ in range(40):
+            QApplication.processEvents()
+        assert window.object_tree.selected_feature() == other
+        assert window._quiet_target == (object_id, other), "die Maße gehen mit"
+    finally:
+        window.end_quiet_placement()
+        QApplication.processEvents()
+        window.release()
+
+
 def test_the_button_shows_the_answer_it_no_longer_holds(flow: Any) -> None:
     """Ob platziert werden darf, weiß der Fluss — nicht ein Knopf im Dialog.
 
@@ -4515,7 +4568,15 @@ def test_historical_bore_fields_preview_all_following_steps_and_preserve_origina
             renderer.item_picks[(x, y)] = grip.items[0]
             window.viewport._on_pointer(PointerEvent("move", x, y))
             window.viewport._on_pointer(PointerEvent("press", x, y, button="left"))
-            assert flow.dialog.begun and window.viewport._placement_grip is grip and grip.pressing
+            assert window.viewport._placement_grip is grip and grip.pressing
+            # Der Druck allein bindet nichts — erst der Weg über die
+            # Klickschwelle (``CLICK_SLACK``) ist ein Zug; gerechnet wird er
+            # vom Druckpunkt aus, zurück auf acht Punkte endet er dort.
+            assert not flow.dialog.begun, "ein Druck ohne Weg beginnt keinen Entwurf"
+            window.viewport._on_pointer(
+                PointerEvent("move", x + 16, y, buttons=frozenset({"left"}))
+            )
+            assert flow.dialog.begun and grip.dragging
             window.viewport._on_pointer(PointerEvent("move", x + 8, y, buttons=frozenset({"left"})))
             window.viewport._on_pointer(PointerEvent("release", x + 8, y, button="left"))
             assert session.wait_for_idle(30_000)

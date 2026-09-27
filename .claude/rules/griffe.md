@@ -55,6 +55,18 @@ Für die Griffe gilt:
   oder den Lagefeldern und reist im selben Auftrag mit.
 * **Der Maßeditor einer Bohrung erscheint mit der Auswahl.** Die erste
   Feld- oder Griffbetätigung beginnt den gebundenen Entwurf (§18.11).
+  **Betätigt ist ein Griff mit dem Weg, nicht mit dem Druck.**
+  `Viewport._dispatch_pointer` meldet `placementDragStarted` bei der ersten
+  Bewegung jenseits von `CLICK_SLACK` (`Gizmo.dragging`,
+  `SlotHandle.dragging`), auch für den Druck ins gewählte Loch
+  (`_pull_at_the_hole`). Ein Klick ohne Weg auf Griff oder Loch bewegt
+  nichts, meldet nichts und bindet nichts — die nächste Bohrung bleibt
+  wählbar. Bis zum 27.09.2026 kam die Meldung beim Drücken: Am Wabenhalter
+  hielt ein Klick auf die Mitte der gewählten Bohrung (dort beginnen die
+  Pfeile) die Auswahl fest, und die Statuszeile verlangte, eine Änderung zu
+  übernehmen, die es nicht gab (`test_render_gizmo.py`,
+  `test_a_click_on_the_placement_grip_does_not_bind_the_draft`). Der Satz
+  dazu geht mit dem Entwurf (`MainWindow.end_quiet_placement`).
   `PlacementFlow` besitzt die Fachfelder und seine Platzierungsgriffe; der
   allgemeine Merkmalsgriff bleibt dabei über `set_feature_gizmo_blocked`
   gesperrt. Ein reiner Verschiebungsauftrag zeigt keine Drehringe.

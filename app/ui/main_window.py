@@ -460,6 +460,16 @@ def _flash_colour(widget: QWidget) -> str:
     return text_colour("select", widget.palette().window().color().name())
 
 
+def _the_change_comes_first() -> str:
+    """Der eine Satz, wo eine begonnene Änderung Auswahl oder Befehl hält.
+
+    Gesagt in :meth:`MainWindow._say_the_change_comes_first`, abgeräumt mit
+    dem Entwurf in :meth:`MainWindow.end_quiet_placement` — beide fragen hier,
+    damit sie denselben Satz in derselben Sprache vergleichen.
+    """
+    return tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen.")
+
+
 def _tick(group: QActionGroup, value: str) -> None:
     """Setzt das Häkchen auf den Eintrag, der jetzt gilt.
 
@@ -16179,7 +16189,7 @@ class MainWindow(QMainWindow):
         und im Bild (``Viewport.selection_refused``) — vorher schwiegen Baum und
         Bild und verschluckten den Klick (Review Fenster #6, 21.09.2026).
         """
-        self.announce(tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen."))
+        self.announce(_the_change_comes_first())
 
     def _apply_placed_feature_later(self, op: str, params: Mapping[str, Any]) -> None:
         """Der wartende Klick, sobald das Bild steht (``_apply_when_previewed``)."""
@@ -16776,6 +16786,13 @@ class MainWindow(QMainWindow):
             self.feature_panel.set_measuring(False)
         self.viewport.set_feature_gizmo_blocked(False)
         self._drop_feature_preview()
+        # **Der Satz zur gehaltenen Auswahl geht mit dem Entwurf**
+        # (:meth:`_say_the_change_comes_first`). Nach Escape stand „… zuerst
+        # übernehmen oder abbrechen" sonst weiter in der Statuszeile, zu einer
+        # Änderung, die es nicht mehr gab (Durchsicht 0.5.1). Eine andere
+        # Ansage bleibt.
+        if self._announcement == _the_change_comes_first():
+            self._clear_the_status_line()
 
     def _on_measure_mode(self, mode: str) -> None:
         """Messen heißt orthografisch (§18.1, RM-142).

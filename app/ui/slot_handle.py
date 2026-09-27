@@ -426,6 +426,11 @@ class SlotHandle:
         centre: Vec3 = (float(self._centre[0]), float(self._centre[1]), float(self._centre[2]))
         return centre, self.length / 2.0 + self._knob_size * KNOB_RADIUS_SHARE
 
+    @property
+    def dragging(self) -> bool:
+        """Ob der gehaltene Druck ein Zug geworden ist — wie ``Gizmo.dragging``."""
+        return self.pressing and self._dragged
+
     def remove(self) -> None:
         for item in self._knobs:
             self._renderer.remove(item)

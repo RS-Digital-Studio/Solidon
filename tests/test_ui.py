@@ -83,6 +83,36 @@ def test_gesture_editor_entry_keeps_an_unaccepted_measure_draft(command: str) ->
     assert notices == [tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen.")]
 
 
+@pytest.mark.parametrize("before", ["held", "other"])
+def test_the_held_sentence_goes_with_the_draft(before: str) -> None:
+    """„… zuerst übernehmen oder abbrechen" gilt, solange ein Entwurf hält.
+
+    Am Wabenhalter stand der Satz nach Escape weiter in der Statuszeile — zu
+    einer Änderung, die es nicht mehr gab (Durchsicht 0.5.1, rest-auswahl).
+    Eine andere Ansage bleibt stehen: Das Ende des Entwurfs räumt nur seinen
+    eigenen Satz ab.
+    """
+    from types import SimpleNamespace
+
+    held = tr("Die aktuelle Änderung zuerst übernehmen oder abbrechen.")
+    cleared: list[bool] = []
+    view = SimpleNamespace(
+        _ending_quiet_placement=False,
+        _preview_approval=None,
+        _quiet_placement=None,
+        _quiet_host=None,
+        _quiet_target=None,
+        _quiet_order=None,
+        _announcement=held if before == "held" else "Gespeichert.",
+        feature_panel=SimpleNamespace(measuring=False),
+        viewport=SimpleNamespace(set_feature_gizmo_blocked=lambda _blocked: None),
+        _drop_feature_preview=lambda: None,
+        _clear_the_status_line=lambda: cleared.append(True),
+    )
+    MainWindow.end_quiet_placement(view)  # type: ignore[arg-type]
+    assert cleared == ([True] if before == "held" else [])
+
+
 def test_the_repair_buttons_ask_for_exactly_what_they_say() -> None:
     """Die Knöpfe der Reparaturbefunde, ohne Fenster: je Knopf genau sein Schalter.
 

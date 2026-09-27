@@ -33,6 +33,7 @@ import numpy as np
 from app.core.units import EPS_GEOM
 from app.ui.render import shapes
 from app.ui.render.api import Colour, Item, PointerEvent, Renderer, SurfaceStyle, Vec3
+from app.ui.render.navigator import is_click
 
 #: Die Achsenfarben, wie PyVista sie führte (Rot, Grün, Blau).
 AXIS_COLOURS: tuple[Colour, Colour, Colour] = ("#e0483e", "#5cb85c", "#3e8ee0")
@@ -149,6 +150,8 @@ class Gizmo:
         self._rings: list[Item] = []
         self._selected: tuple[str, int] | None = None
         self.pressing = False
+        self._pressed_at: tuple[int, int] | None = None
+        self._dragged = False
         self._init_parameter: float | None = None
         self._init_vector: np.ndarray | None = None
         self._build()
@@ -201,6 +204,17 @@ class Gizmo:
         self._rings.clear()
         self._selected = None
         self.pressing = False
+        self._dragged = False
+
+    @property
+    def dragging(self) -> bool:
+        """Ob der gehaltene Druck ein Zug geworden ist — über die Klickschwelle hinaus.
+
+        Die Ansicht meldet erst damit den Beginn eines Zugs
+        (``Viewport.placementDragStarted``): Ein Druck ohne Weg ist ein Klick,
+        und ein Klick beginnt keinen Entwurf.
+        """
+        return self.pressing and self._dragged
 
     def fits(self, target: Item, *, rotation: bool, scale: float) -> bool:
         """Ob dieser Griff für ``target`` so gebaut ist, wie er jetzt gebraucht würde.
@@ -258,6 +272,19 @@ class Gizmo:
         """Eine Zeigergeste — wahr, wenn sie dem Griff gehört."""
         if event.kind == "move":
             if self.pressing:
+                # **Ein Klick ist ein Klick, auch mit Zittern** — dieselbe
+                # Schwelle wie im Navigator und an den Langlochknöpfen
+                # (``kamera.md``). Bis zum 27.09.2026 zog der Griff ab dem
+                # ersten Bildpunkt: Drei Bildpunkte Zittern verschoben das Ziel
+                # um einen Millimeter, und das Loslassen meldete es als Zug.
+                # Jenseits der Schwelle rechnet der Zug weiter von der Stelle
+                # des Drückens aus (:meth:`_begin`), nicht von der Schwelle.
+                if not self._dragged:
+                    if is_click(
+                        self._pressed_at, (event.x, event.y), self._renderer.device_ratio()
+                    ):
+                        return True
+                    self._dragged = True
                 self._drag(event)
                 return True
             self._hover(event)
@@ -266,10 +293,23 @@ class Gizmo:
             if self._selected is None:
                 return False
             self.pressing = True
+            self._dragged = False
+            self._pressed_at = (event.x, event.y)
             self._begin(event)
             return True
         if event.kind == "release" and event.button == "left" and self.pressing:
             self.pressing = False
+            dragged, self._dragged = self._dragged, False
+            self._pressed_at = None
+            if not dragged:
+                # **Ein Klick ohne Weg meldet nichts.** Er gehört dem Griff —
+                # der Zeiger liegt auf ihm, und darunter ist nichts zu sehen,
+                # was der Klick sonst meinen könnte —, aber er bewegt nichts:
+                # kein Rückruf, keine Stelle, kein Schritt. Am Wabenhalter band
+                # der Klick auf die Mitte der gewählten Bohrung sonst den
+                # Maßentwurf, und keine andere Bohrung ließ sich mehr wählen
+                # (Durchsicht 0.5.1).
+                return True
             self._cached = self.target.matrix()
             if self._release is not None:
                 self._release(self._cached.copy())
