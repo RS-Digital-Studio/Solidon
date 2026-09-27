@@ -209,6 +209,47 @@ def test_every_operation_has_a_test(spec: OperationSpec) -> None:
     raise AssertionError(f"no test mentions {spec.name}")
 
 
+def test_steps_that_count_ahead_or_only_retriangulate_are_mesh_steps_on_one_body() -> None:
+    """Vorabzählung und zugesagte Form sprechen über **einen** Körper hinein und heraus.
+
+    Die Vorschau fragt die Zählung am Original und zeigt bei ``retriangulates``
+    das neue Netz statt einer Volumendifferenz (RESTVERLAUF-04). Beides setzt
+    voraus, dass derselbe Körper hinein- und herauskommt und danach ein Netz
+    ist; das Register prüft es beim Eintragen, dieser Test hält die Liste fest.
+    """
+    counting = {spec.name for spec in registered() if spec.expected_triangles is not None}
+    reshaping = {spec.name for spec in registered() if spec.retriangulates}
+
+    assert counting == {"remesh_mesh", "remesh_uniform", "subdivide_surface", "decimate_mesh"}
+    assert reshaping == {"remesh_mesh", "remesh_uniform", "decimate_mesh"}
+    for name in counting | reshaping:
+        spec = REGISTRY.get(name)
+        assert spec.consumes == 1 and spec.produces == 1, name
+        assert spec.result_kind == "mesh", name
+
+
+def test_the_register_refuses_a_count_ahead_on_more_than_one_body() -> None:
+    """Eine Vorabzählung an einer Operation mit zwei Eingängen hätte kein Original."""
+    from app.core.errors import InternalError
+    from app.core.registry import Registry, op_params, register_op
+    from app.core.types import BaseParams
+
+    @op_params
+    class Nothing(BaseParams):
+        pass
+
+    with pytest.raises(InternalError):
+        register_op(
+            name="two_bodies_counted",
+            title="x",
+            category="mesh",
+            params=Nothing,
+            consumes=2,
+            expected_triangles=lambda mesh, params: 0,
+            registry=Registry(),
+        )(lambda ctx: None)  # type: ignore[arg-type,return-value]
+
+
 def test_shortcuts_are_unique() -> None:
     shortcuts = [spec.shortcut.casefold() for spec in registered() if spec.shortcut]
     assert len(shortcuts) == len(set(shortcuts))

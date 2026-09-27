@@ -5377,6 +5377,70 @@ def test_the_decimate_and_retry_button_thins_before_the_step_and_runs_through(
     )
 
 
+def test_the_remesh_and_retry_button_refines_before_the_smoothing_and_runs_through(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """*Glätten* stülpt eine dünne Schale um — ein Klick im Prüfbericht verfeinert davor.
+
+    „Vorher neu vernetzen — feiner glättet sanfter." war bis zur Durchsicht
+    0.5.1 ein Rat ohne Länge und ohne Knopf. Jetzt nennt der Kern die Länge,
+    an der Verfeinern und Glätten durchlaufen, und der Knopf setzt *Kanten
+    verfeinern* vor den Schritt — ein Zug, Strg+Z nimmt ihn zurück.
+    """
+    import trimesh
+
+    from app.core.errors import REMESH_AND_RETRY
+    from app.core.geom.hollow import hollow
+    from app.core.geom.mesh import MeshData
+    from app.ui.panels import actions_for_document, as_error
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 30.0))
+    box.apply_translation((0.0, 0.0, 15.0))
+    path = tmp_path / "schale.stl"
+    path.write_bytes(hollow(MeshData.of(box), 2.0, vents=1).mesh.raw.export(file_type="stl"))
+    window.open_path(path)
+    window.session.wait_for_idle()
+    window.session.evaluate_now()
+    spec = REGISTRY.get("smooth_mesh")
+    window.session.apply(
+        spec.title, [OperationDraft(op=spec.name, inputs=("obj_1",), params={"iterations": 5})]
+    )
+    window.session.wait_for_idle()
+    halted = window.session.evaluate_now()
+    window._on_scene(halted)
+    assert halted.stopped_at is not None, "das Glätten ging — dann prüft der Test nichts"
+
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    handlers = window.error_handlers()
+    offered = [
+        action.id
+        for action in actions_for_document(
+            refusal,
+            window.session.project.document,
+            stopped_at=halted.stopped_at,
+            live_objects=halted.scene.objects,
+        )
+        if action.id in handlers
+    ]
+    assert offered == [REMESH_AND_RETRY.id], offered
+    ops_before = list(window.session.project.document.ops)
+
+    handlers[REMESH_AND_RETRY.id](as_error(refusal, window.session.project.document))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert after is not None and after.stopped_at is None
+    assert [entry.op for entry in window.session.project.document.ops] == [
+        "load",
+        "remesh_mesh",
+        "smooth_mesh",
+    ]
+    assert after.scene.objects["obj_1"].mesh.volume > 0.0
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert list(window.session.project.document.ops) == ops_before
+
+
 def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count() -> None:
     """*Dreiecke verringern und erneut versuchen* nimmt Schritt und Zahl aus dem Befund.
 
@@ -5412,6 +5476,163 @@ def test_the_decimate_button_retries_only_the_halted_step_with_the_named_count()
 
     assert retried == [(7, 25_000)]
     assert opened == [("decimate_mesh", {"triangles": 12_000, "method": "fast"}, ("obj_2",))]
+
+
+def test_the_remesh_button_retries_only_the_halted_step_with_the_named_length() -> None:
+    """*Kanten verfeinern und erneut versuchen* nimmt Schritt und Länge aus dem Befund.
+
+    Das Gegenstück zum Verringern, für ein *Glätten*, das umschlug oder zu
+    viel kostete: vor dem Schritt das Verfeinern, ohne Länge nichts
+    (Regel 21), und steht der Schritt nicht mehr im Verlauf, geht *Kanten
+    verfeinern* vorbelegt auf.
+    """
+    from types import SimpleNamespace
+
+    retried: list[tuple[int, float]] = []
+    opened: list[tuple[str, dict[str, object], tuple[str, ...]]] = []
+    view = SimpleNamespace(
+        session=SimpleNamespace(
+            project=SimpleNamespace(
+                document=SimpleNamespace(ops=[SimpleNamespace(id=6), SimpleNamespace(id=7)])
+            ),
+            remesh_and_retry=lambda step, edge: retried.append((step, edge)),
+        ),
+        run_operation=lambda spec, given, on_bodies: opened.append(
+            (spec.name, dict(given), tuple(on_bodies))
+        ),
+    )
+
+    MainWindow._remesh_after_error(
+        view, errors.AppError(title="umgestülpt", op_id=7, values={"remesh_to_mm": 2.0})
+    )
+    MainWindow._remesh_after_error(view, errors.AppError(title="umgestülpt", op_id=7))
+    MainWindow._remesh_after_error(
+        view,
+        errors.AppError(
+            title="umgestülpt", op_id=3, object_id="obj_2", values={"remesh_to_mm": "5"}
+        ),
+    )
+
+    MainWindow._remesh_after_error(
+        view, errors.AppError(title="geschrumpft", op_id=6, values={"remesh_to_mm": 10.0})
+    )
+
+    assert retried == [(7, 2.0), (6, 10.0)]
+    assert opened == [("remesh_mesh", {"edge": 5.0}, ("obj_2",))]
+
+
+def test_a_refused_preview_offers_in_the_dialog_what_the_dialog_carries_out() -> None:
+    """Die Absage der Vorschau trägt ihre Knöpfe in den Dialog — nur mit Zahl (RESTVERLAUF-04).
+
+    *Die kleinste Kantenlänge nehmen, die noch geht.* schreibt die Zahl ins
+    Feld; *Dreiecke verringern und erneut versuchen* setzt das Verringern vor
+    den Schritt des Dialogs. Beides nur mit dem Wert aus der Absage, und das
+    Verringern nur, wo es einen Schritt gibt, vor den es gehört.
+    """
+    from types import SimpleNamespace
+
+    from app.core.errors import Action, ValidationError
+
+    taken: list[tuple[str, float]] = []
+    prepared: list[tuple[str, dict[str, object]]] = []
+    view = SimpleNamespace(
+        _prepared_from_dialog=lambda approval, op, params, title: prepared.append(
+            (op, dict(params))
+        )
+    )
+    owner = SimpleNamespace(take_value=lambda name, value: taken.append((name, value)))
+    draft = OperationDraft(op="remesh_mesh", inputs=("obj_1",), params={"edge": 0.3})
+    approval = SimpleNamespace(
+        owner=owner, order=SimpleNamespace(change_op=None, drafts=(draft,), changes=None)
+    )
+    refusal = ValidationError(
+        field="edge",
+        detail="zu fein",
+        values={"reachable": 0.8, "decimate_to": 12_000},
+        suggestions=(
+            Action("use_reachable", "Die kleinste Kantenlänge nehmen, die noch geht."),
+            errors.DECIMATE_AND_RETRY,
+        ),
+    )
+
+    handlers = MainWindow._refusal_handlers(view, approval, refusal)
+    assert set(handlers) == {"use_reachable", "decimate_and_retry"}
+    handlers["use_reachable"](refusal)
+    handlers["decimate_and_retry"](refusal)
+    assert taken == [("edge", 0.8)]
+    assert prepared == [("decimate_mesh", {"triangles": 12_000, "method": "fast"})]
+
+    bare = ValidationError(field="edge", detail="zu fein", suggestions=refusal.suggestions)
+    assert MainWindow._refusal_handlers(view, approval, bare) == {}, "ohne Zahl kein Knopf"
+    nothing_to_prepare = SimpleNamespace(
+        owner=owner, order=SimpleNamespace(change_op=None, drafts=(), changes=None)
+    )
+    assert set(MainWindow._refusal_handlers(view, nothing_to_prepare, refusal)) == {"use_reachable"}
+
+
+def test_a_step_prepared_from_the_dialog_is_one_move() -> None:
+    """Vorbereitung und Schritt aus dem Dialog: eine Transaktion, der Dialog geht zu.
+
+    Beim Anlegen stehen das Verringern je Eingang und der Schritt in einem
+    ``Session.apply``; beim Ändern ersetzt der Verlauf den Schritt mit den
+    getippten Werten (``History.decimate_and_retry``). Nie zwei Strg+Z für
+    einen Klick (Regel 16).
+    """
+    from types import SimpleNamespace
+
+    applied: list[tuple[object, list[OperationDraft], object]] = []
+    retried: list[tuple[int, int, dict[str, object]]] = []
+    closed: list[bool] = []
+    view = SimpleNamespace(
+        _preview_is_current=lambda approval: True,
+        session=SimpleNamespace(
+            apply=lambda title, drafts, changes=None: applied.append((title, drafts, changes)),
+            decimate_and_retry=lambda step, count, values: retried.append(
+                (step, count, dict(values))
+            ),
+        ),
+    )
+    owner = SimpleNamespace(reject=lambda: closed.append(True))
+    draft = OperationDraft(op="remesh_mesh", inputs=("obj_1",), params={"edge": 0.3})
+    fresh = SimpleNamespace(
+        owner=owner, order=SimpleNamespace(change_op=None, drafts=(draft,), changes=None)
+    )
+    changed = SimpleNamespace(
+        owner=owner,
+        order=SimpleNamespace(change_op=5, drafts=(), changes=None, change_values={"edge": 0.3}),
+    )
+
+    MainWindow._prepared_from_dialog(
+        view, fresh, "decimate_mesh", {"triangles": 12_000, "method": "fast"}, "Titel"
+    )
+    MainWindow._prepared_from_dialog(
+        view, changed, "decimate_mesh", {"triangles": 12_000, "method": "fast"}, "Titel"
+    )
+
+    assert closed == [True, True]
+    assert len(applied) == 1
+    title, drafts, _changes = applied[0]
+    assert title == "Titel"
+    assert [(entry.op, entry.inputs) for entry in drafts] == [
+        ("decimate_mesh", ("obj_1",)),
+        ("remesh_mesh", ("obj_1",)),
+    ]
+    assert retried == [(5, 12_000, {"edge": 0.3})]
+
+
+def test_the_band_says_how_many_triangles_a_retriangulating_step_leaves() -> None:
+    """Gezählt heißt die genaue Zahl, vorab „geschätzt", am offenen Netz „höchstens"."""
+    from app.ui.labels import count_text
+    from app.ui.main_window import _count_note
+    from app.ui.session import TriangleCounts
+
+    assert count_text(6_081_000) == "6\u00a0081\u00a0000"
+    assert count_text(6_081_000, rough=True) == "6\u00a0100\u00a0000"
+    assert count_text(488) == "488"
+    assert "geschätzt" in _count_note(TriangleCounts(250_488, 6_081_000, False, True))
+    assert "höchstens" in _count_note(TriangleCounts(250_488, 6_081_000, True, True))
+    counted = _count_note(TriangleCounts(1_280, 9_120))
+    assert "geschätzt" not in counted and "9\u00a0120" in counted
 
 
 def test_a_halted_step_whose_advice_nobody_carries_out_still_opens_the_step() -> None:

@@ -180,6 +180,49 @@ def test_the_report_offers_no_step_action_without_a_step() -> None:
     ]
 
 
+def test_a_smoothing_that_cost_too_much_offers_the_refinement_before_it() -> None:
+    """„Erst neu vernetzen, dann glätten." ist seit der Durchsicht 0.5.1 ein Knopf.
+
+    ``mesh.smooth_shrank`` steht an einem Schritt, der durchlief; das Verfeinern
+    gehört **davor**, wie die Reparatur vor einen gerundeten Schritt. Angeboten
+    nur mit der durchgespielten Länge und nur an einem Schritt, der im Verlauf
+    steht und vorhandene Netze liest.
+    """
+    from app.core.errors import REMESH_AND_RETRY
+    from app.ui.panels import actions_for_document
+
+    document = Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="create_box", outputs=["obj_1"], params={}),
+            Operation(
+                id=2,
+                op="smooth_mesh",
+                inputs=["obj_1"],
+                outputs=["obj_1"],
+                params={"iterations": 5},
+            ),
+        ],
+    )
+    shrank = Finding(
+        code="mesh.smooth_shrank",
+        severity="warning",
+        message="—",
+        op_id=2,
+        object_id="obj_1",
+        values={"remesh_to_mm": 10.0},
+        suggestions=(REMESH_AND_RETRY,),
+    )
+
+    def offered(finding: Finding) -> list[str]:
+        return [action.id for action in actions_for_document(finding, document)]
+
+    assert REMESH_AND_RETRY.id in offered(shrank)
+    assert REMESH_AND_RETRY.id not in offered(dataclasses.replace(shrank, values={}))
+    assert REMESH_AND_RETRY.id not in offered(dataclasses.replace(shrank, op_id=9))
+
+
 def test_every_finding_with_correct_input_comes_from_an_operation() -> None:
     """*Eingabe korrigieren* nur an Befunden, die eine Operation zurückgibt.
 

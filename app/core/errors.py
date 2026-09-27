@@ -197,6 +197,14 @@ RECOUNT_AND_RETRY = Action(
 #: ``decimate_first`` ohne Zahl und ohne Draht da: im Fehlerdialog ein Satz,
 #: im Prüfbericht nichts.
 DECIMATE_AND_RETRY = Action("decimate_and_retry", _("Dreiecke verringern und erneut versuchen"))
+#: Für ein Netz, das beim *Glätten* umschlägt, weil seine Dreiecke für die Wand
+#: zu grob sind: *Kanten verfeinern* vor den angehaltenen Schritt, dann derselbe
+#: Schritt noch einmal (``History.remesh_and_retry``). Die Kantenlänge reist in
+#: ``values["remesh_to_mm"]`` mit und ist nachgerechnet — Verfeinern und Glätten
+#: an genau dieser Länge durchgespielt (``mesh_ops._remeshing_for_smoothing``).
+#: Bis zur Durchsicht 0.5.1 stand es als ``remesh_first`` ohne Länge und ohne
+#: Draht da.
+REMESH_AND_RETRY = Action("remesh_and_retry", _("Kanten verfeinern und erneut versuchen"))
 SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
 #: Wenn *Automatisch teilen* neben den gesperrten Sichtflächen keine Naht
 #: mehr findet (§22.3, RM-080): Die Sperren dieses Körpers aufheben — der

@@ -4781,6 +4781,85 @@ def test_a_partial_preview_says_so_instead_of_showing_nothing(window: MainWindow
         type(window.viewport).mark_preview = echt
 
 
+def test_a_too_fine_refinement_offers_the_length_that_goes_inside_the_dialog(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RESTVERLAUF-04: Die Absage steht in der Vorschau, der Knopf im Dialog.
+
+    Bis zur Durchsicht 0.5.1 sagte das Band „Keine Vorschau: Diese
+    Kantenlänge ergäbe mehr Dreiecke …", und der Weg — die Zahl, die geht —
+    kam erst nach dem Übernehmen als Knopf an einem angehaltenen Schritt. Jetzt
+    zählt die Vorschau am Original, und unter den Feldern steht *Die kleinste
+    Kantenlänge nehmen, die noch geht.*; ein Klick schreibt sie ins Feld.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.geom import mesh_ops
+
+    object_id = select(window)
+    body = window.session.last_result.scene.objects[object_id].mesh
+    wanted = mesh_ops.estimated_triangles(body, 0.5, until_short=True)
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", wanted - 1)
+
+    window.run_operation(REGISTRY.get("remesh_mesh"), {"edge": 0.5})
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.session.wait_for_idle()
+    QTest.qWait(50)
+
+    assert "Keine Vorschau" in window.viewport.banner.note.text()
+    assert dialog._refusal.isVisibleTo(dialog)
+    buttons = {
+        button.text(): button
+        for button in dialog._refusal.findChildren(QPushButton)
+        if button.isVisibleTo(dialog)
+    }
+    take = buttons.get(str(tr("Die kleinste Kantenlänge nehmen, die noch geht.")))
+    assert take is not None, list(buttons)
+    take.click()
+    QTest.qWait(350)
+    assert window.session.wait_for_idle()
+    QTest.qWait(50)
+
+    assert float(dialog.values()["edge"]) > 0.5
+    assert not dialog._refusal.isVisibleTo(dialog), "die neue Zahl geht — die Absage ist fort"
+    assert len(window.session.project.document.ops) == 1, "nichts übernommen"
+    dialog.reject()
+
+
+def test_refining_a_dense_body_says_the_count_instead_of_computing(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Über der Vorschaugröße ist die Zahl die Vorschau — und *Übernehmen* wartet auf nichts.
+
+    Am Spielwürfel stand die grobe Vorschau von *Kanten verfeinern* über zehn
+    Minuten im Booleschen Vergleich, und „Wird übernommen, sobald die
+    Vorschau steht." hieß: so lange. Jetzt sagt das Band nach der
+    Vorabzählung „aus … werden geschätzt … Dreiecke", und ein Klick übernimmt sofort.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui import session as session_module
+
+    select(window)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", 1)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", 600)
+
+    window.run_operation(REGISTRY.get("remesh_mesh"), {"edge": 0.5})
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert window.session.wait_for_idle()
+    QTest.qWait(50)
+
+    note = window.viewport.banner.note.text()
+    assert "geschätzt" in note and "Dreiecke" in note, note
+    assert dialog.can_accept()
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    assert [entry.op for entry in window.session.project.document.ops] == ["load", "remesh_mesh"]
+
+
 def test_changing_a_step_previews_on_the_coarse_twin(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:

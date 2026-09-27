@@ -14,6 +14,7 @@ sich nicht rechnen ließ, sagt das, statt eine leere Ansicht zu zeigen, die wie
 from __future__ import annotations
 
 import math
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -551,13 +552,27 @@ def _noise(profile: Profile | None) -> float:
     return profile.smallest_printable_volume if profile is not None else NOISE_VOLUME
 
 
-def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -> SceneDifference:
+def compare_scenes(
+    before: Scene,
+    after: Scene,
+    *,
+    quality: Quality = "draft",
+    retriangulated: Collection[ObjectId] = (),
+) -> SceneDifference:
     """Die Differenz einer ganzen Transaktion — die Einheit, in der §18.7
     misst.
 
     Den Drucker bringt die Szene mit; gefragt wird die **nachher**, denn um
     deren Zustand geht es. Eine Szene ohne Profil gibt es (Tests, ein frisch
     geöffnetes Dokument), und dann misst die Differenz am Rauschen.
+
+    ``retriangulated`` nennt Körper, deren Form die Operation zusagt
+    (``OperationSpec.retriangulates``): Sie bekommen das neue Netz als
+    ``retriangulated`` und keinen Booleschen Vergleich. Zwei fast
+    deckungsgleiche Häute sind der schlimmste Fall jedes Kerns — am
+    Spielwürfel aus ``F:\\3D Dateien`` stand die Vorschau von *Kanten
+    verfeinern* über zehn Minuten in diesem Schnitt (RESTVERLAUF-04), für eine
+    Antwort, die vorher feststand.
     """
     profile = after.profile if after.profile is not None else before.profile
     result = SceneDifference()
@@ -591,6 +606,14 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
             # Ein Körper, der keiner der beiden Kerne ist, hat keine Dreiecke
             # zum Vergleichen. Die Differenz ist eine Auskunft und keine
             # Zusage — sie fehlt dann, statt den Zug abzubrechen.
+            continue
+        if object_id in retriangulated and not _same_geometry(first, second):
+            result.entries[object_id] = Difference(
+                object_id=object_id,
+                retriangulated=second,
+                result=entry,
+                noise_volume=_noise(profile),
+            )
             continue
         if _same_geometry(first, second):
             # **Dieselben Dreiecke, andere Farben — auch das ist eine Vorschau.**

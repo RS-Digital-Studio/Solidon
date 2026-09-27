@@ -1632,6 +1632,36 @@ eine Karte sagt, was wo liegt, eine Regel, was zu halten ist.
   Körper auf. Wo die Fläche allein schon zu viele Dreiecke braucht, wird nicht
   gesucht und nichts angeboten; ein offenes Netz bekommt zuerst *Erst
   reparieren, dann neu rechnen*.
+- **Verfeinern und erneut versuchen nennt eine durchgespielte Länge.** Ein
+  *Glätten*, das den Körper umstülpt (`inverted`), ihn durch sich selbst
+  schiebt (`folded`: über ein Viertel **mehr** Volumen, am Kumiko-Organizer
+  das Vierfache) oder mehr als ein Viertel kostet (`mesh.smooth_shrank`),
+  bekommt `REMESH_AND_RETRY` nur mit der Kantenlänge, bei der *Kanten
+  verfeinern* und dasselbe *Glätten* danach durchlaufen und das Volumen um
+  höchstens `SMOOTH_LOSS_WARN` ändern (`mesh_ops._smoothing_holds`,
+  `_remeshing_for_smoothing`: runde Längen aus `SMOOTHING_EDGES`, die längste
+  zuerst, bis `SMOOTHING_REMESH_BUDGET` Dreiecke). Die Länge steht in
+  `values["remesh_to_mm"]`, `History.remesh_and_retry` setzt den Schritt davor
+  — auch vor einen, der durchlief (die Warnung), wie die Reparatur vor einen
+  gerundeten. *Weniger Durchgänge* steht nur da, wo ein Durchgang trägt; trägt
+  nichts, bleibt *Eingabe korrigieren* (Regel 17). Gemessen am STL-Korpus bei
+  fünf Durchgängen: fünf Umstülpungen, zwei Faltungen, zwölf Schrumpfungen —
+  jede bekam eine Länge, und jede lief damit durch.
+- **Wer die Dreieckszahl vorab zählt, deklariert es** (`expected_triangles`,
+  RESTVERLAUF-04): *Kanten verfeinern*, *Dreiecke angleichen*, *Fläche
+  unterteilen* und *Dreiecke verringern*. Dieselbe Funktion prüft in der
+  Operation vor dem ersten Schnitt und in der Vorschau am Original — eine
+  Absage ist an beiden Orten dieselbe Ausnahme mit denselben Werten. Wer eine
+  neue teilende Operation baut, trägt ihre Vorabzählung dort ein, statt sie
+  im Rumpf zu wiederholen.
+- **Wer nur das Netz ändert, deklariert es** (`retriangulates`): *Kanten
+  verfeinern*, *Dreiecke angleichen*, *Dreiecke verringern* — Operationen,
+  deren Abweichung sie selbst zusagen oder messen. Ihre Vorschau zeigt das
+  neue Netz und die Dreieckszahl, keinen Booleschen Vergleich
+  (`compare_scenes(retriangulated=…)`). *Glätten* und *Fläche unterteilen*
+  ändern die Form mit Absicht und tragen die Angabe nicht. Das Register lehnt
+  beide Angaben an einer Operation ab, die nicht einen Körper nimmt und
+  zurückgibt.
 - **Einfügen und Verschieben planen den Suffix genauso neu** (RM-188 P7):
   ab der ersten geänderten Stelle neue Kennungen, dieselben Werte, Körper
   und Startwerte, eine Transaktion (`_clone` teilt sich das mit

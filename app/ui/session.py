@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
 from pathlib import Path
-from typing import Any, BinaryIO, Final, cast
+from typing import Any, BinaryIO, Final, NamedTuple, cast
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
@@ -77,7 +77,7 @@ from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
 from app.core.perceive.local import CONFIRMED_FEATURE_LIMIT_TRIANGLES, forget_out_of_memory
-from app.core.registry import REGISTRY
+from app.core.registry import REGISTRY, validate
 from app.core.scene import (
     CancelSignal,
     EdgeTarget,
@@ -778,6 +778,15 @@ class _PreviewWorker(Worker):
     #: bedeutet, entscheidet die Oberfläche; hier reist nur weiter, was die
     #: Ausnahme ohnehin trägt (§2.7).
     advised = Signal(int, str)
+    #: Die Absage selbst, mit Werten und Handlungen — ein ``AppError`` aus der
+    #: Vorabzählung oder der ``Finding`` des Halts. Das Band trägt den Satz, der
+    #: Dialog die Knöpfe, die dort etwas bewirken (*Die kleinste Kantenlänge
+    #: nehmen, die noch geht.*, RESTVERLAUF-04). Kommt vor :attr:`explained`.
+    refused = Signal(int, object)
+    #: Wie viele Dreiecke der vorgeschaute Schritt dem Körper gibt — ``(davor,
+    #: danach, Obergrenze, gezählt)``, wo die Operation die Form zusagt
+    #: (``OperationSpec.retriangulates``). Das ist die Auskunft ihrer Vorschau.
+    counted = Signal(int, object)
 
     def __init__(
         self, session: Session, generation: int, compute: Any, cancel: CancelSignal
@@ -811,6 +820,7 @@ class _PreviewWorker(Worker):
             # **Und die Handlung reist mit** (14.09.2026): „Erst reparieren,
             # dann aushöhlen" nennt einen Schritt, der *vor* das Übernehmen
             # gehört — der Knopf daneben blieb trotzdem anklickbar.
+            self.refused.emit(self._generation, error)
             advice = _advice_of(error)
             if advice:
                 self.advised.emit(self._generation, advice)
@@ -1142,6 +1152,84 @@ def _stop_advice(result: EvaluationResult) -> str:
         if action.primary:
             return str(action.id)
     return ""
+
+
+def _stop_finding(result: EvaluationResult) -> Finding | None:
+    """Der Befund, der den Halt trägt — mit Werten und Handlungen, für die Knöpfe im Dialog."""
+    if result.stopped_at is None:
+        return None
+    blamed = [
+        finding for finding in result.scene.report.findings if finding.op_id == result.stopped_at
+    ]
+    return blamed[-1] if blamed else None
+
+
+class TriangleCounts(NamedTuple):
+    """Was die Vorschau eines Schritts sagt, der nur das Netz ändert (RESTVERLAUF-04).
+
+    ``before`` und ``after`` zählen die Dreiecke der Körper, die er anfasst.
+    ``estimated`` heißt: vorab gezählt und nicht gerechnet — dann ist
+    ``after`` eine Schätzung, oder mit ``at_most`` eine Obergrenze.
+    """
+
+    before: int
+    after: int
+    at_most: bool = False
+    estimated: bool = False
+
+
+@dataclass
+class _Counting:
+    """Was die Vorabzählung am Original über eine Vorschau entschieden hat.
+
+    ``bodies`` sind die Körper, an denen gezählt wurde — sie bekommen keine
+    verkleinerte Kopie. ``refusal`` ist die Absage der Operation, ``enough``
+    heißt: Die Zahl ist die ganze Vorschau, gerechnet wird nichts.
+    """
+
+    bodies: frozenset[str] = frozenset()
+    refusal: AppError | None = None
+    before: int = 0
+    after: int = 0
+    at_most: bool = False
+    enough: bool = False
+
+    def numbers(self) -> TriangleCounts:
+        return TriangleCounts(self.before, self.after, self.at_most, estimated=True)
+
+
+def _reshaped_only(working: Any, previewed: Sequence[OpId]) -> frozenset[str]:
+    """Die Körper, an denen jeder vorgeschaute Schritt nur das Netz ändert.
+
+    Eine Neuvernetzung, nach der noch ein Schritt die Form ändert, ist nicht
+    mehr die ganze Änderung — solche Körper bekommen ihren Vergleich wie
+    bisher. Leer, wenn kein vorgeschauter Schritt ``retriangulates`` trägt.
+    """
+    wanted = set(previewed)
+    reshaped: set[str] = set()
+    reshaping: set[str] = set()
+    for entry in working.ops:
+        if entry.id not in wanted:
+            continue
+        touched = {*entry.inputs, *entry.outputs}
+        if REGISTRY.has(entry.op) and REGISTRY.get(entry.op).retriangulates:
+            reshaped |= set(entry.outputs)
+        else:
+            reshaping |= touched
+    return frozenset(reshaped - reshaping)
+
+
+def _counts_of(before: Any, after: Any, bodies: frozenset[str]) -> TriangleCounts:
+    """Die Dreiecke der genannten Körper davor und danach — gerechnet, nicht geschätzt."""
+
+    def total(scene: Any) -> int:
+        return sum(
+            int(getattr(scene.objects[name].mesh, "triangle_count", 0))
+            for name in bodies
+            if name in scene.objects
+        )
+
+    return TriangleCounts(total(before), total(after))
 
 
 class _SplitWorker(Worker):
@@ -2240,15 +2328,35 @@ class Session(QObject):
         self._changed()
         return True
 
-    def decimate_and_retry(self, stopped_at: int, triangles: int) -> bool:
+    def decimate_and_retry(
+        self, stopped_at: int, triangles: int, values: Mapping[str, Any] | None = None
+    ) -> bool:
         """Setzt *Dreiecke verringern* und den erneuten Versuch als einen Zug vor den Fehler.
 
         Das vierte Geschwister von :meth:`repair_and_retry`, für ein Netz, das
         zum Teilen schon zu dicht ist; die Zahl nennt der Befund, Reihenfolge
-        und Undo gehören dem Verlauf.
+        und Undo gehören dem Verlauf. ``values`` gibt dem Schritt dabei die
+        Werte aus dem offenen Dialog (``History.decimate_and_retry``).
         """
         try:
-            self.history.decimate_and_retry(stopped_at, triangles)
+            self.history.decimate_and_retry(stopped_at, triangles, values)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._changed()
+        return True
+
+    def remesh_and_retry(
+        self, stopped_at: int, edge: float, values: Mapping[str, Any] | None = None
+    ) -> bool:
+        """Setzt *Kanten verfeinern* und den erneuten Versuch als einen Zug vor den Fehler.
+
+        Für ein *Glätten*, das umschlug, weil die Dreiecke für die Wand zu grob
+        sind; die Länge nennt der Befund (``values["remesh_to_mm"]``),
+        Reihenfolge und Undo gehören dem Verlauf (``History.remesh_and_retry``).
+        """
+        try:
+            self.history.remesh_and_retry(stopped_at, edge, values)
         except AppError as error:
             self.failed.emit(error)
             return False
@@ -3566,6 +3674,8 @@ class Session(QObject):
         advised: Any = None,
         failed: Any = None,
         progressed: Any = None,
+        refused: Any = None,
+        counted: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -3584,6 +3694,9 @@ class Session(QObject):
         ``progressed`` bekommt ``(Anteil, laufender Schritt)`` der Auswertung —
         das Fenster zeigt daraus ab zwei Sekunden Balken und *Abbrechen*
         (§2.8), und :meth:`cancel_preview` hält die Rechnung an.
+        ``refused`` bekommt die Absage samt Werten und Handlungen (ein
+        ``AppError`` oder den ``Finding`` des Halts), ``counted`` die
+        Dreieckszahlen eines Schritts, der nur das Netz ändert.
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -3625,6 +3738,14 @@ class Session(QObject):
                     if progressed is None
                     else (lambda fraction, text: worker.progressed.emit(generation, fraction, text))
                 ),
+                refused=(
+                    None if refused is None else (lambda why: worker.refused.emit(generation, why))
+                ),
+                counted=(
+                    None
+                    if counted is None
+                    else (lambda numbers: worker.counted.emit(generation, numbers))
+                ),
                 # Der Dialog zeigt Geometrie und Differenz, keine Merkmale:
                 # Eine Erkennung je getippter Zahl wäre eine Sekunde für nichts.
                 detect_features=False,
@@ -3646,6 +3767,12 @@ class Session(QObject):
             )
         if advised is not None:
             worker.advised.connect(lambda stamp, action: self._preview_done(stamp, action, advised))
+        if refused is not None:
+            worker.refused.connect(lambda stamp, why: self._preview_done(stamp, why, refused))
+        if counted is not None:
+            worker.counted.connect(
+                lambda stamp, numbers: self._preview_done(stamp, numbers, counted)
+            )
         if progressed is not None:
             worker.progressed.connect(
                 lambda stamp, fraction, text: self._preview_done(
@@ -4581,6 +4708,8 @@ class Session(QObject):
         detect_features: bool = True,
         snapshot: _Snapshot | None = None,
         progress: Any = None,
+        refused: Any = None,
+        counted: Any = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
 
@@ -4605,12 +4734,51 @@ class Session(QObject):
 
         ``progress`` bekommt Anteil und Schritt der Auswertung, wie
         ``evaluate`` sie meldet — für Balken und *Abbrechen* im Fenster.
+
+        **Was an der Dreieckszahl hängt, wird am Original gezählt**
+        (RESTVERLAUF-04, nur mit ``coarsened``, also im Dialog). Ein Schritt
+        mit Vorabzählung (``OperationSpec.expected_triangles``) bekommt keine
+        verkleinerte Kopie: Deren Zahl ist nicht die des Kunden. Sagt die
+        Zählung am Original ab, ist das die Antwort — ``refused`` bekommt die
+        Absage mit ihren Handlungen, gerechnet wird nichts. Ändert der Schritt
+        nur das Netz (``retriangulates``) und wüchse es über
+        :data:`COARSE_PREVIEW_ABOVE`, ist die Zahl selbst die Vorschau:
+        ``counted`` bekommt sie, und gerechnet wird ebenfalls nichts — die Form
+        bleibt, und ein Bild von Millionen Dreiecken zeigte nichts anderes als
+        das Modell davor. Sonst rechnet der Schritt am Original, und seine
+        Differenz ist das neue Netz statt eines Booleschen Vergleichs.
         """
         import copy
 
         snapshot = snapshot if snapshot is not None else _Snapshot.of(self)
         before = snapshot.before
+        counting = (
+            self._counted_ahead(
+                drafts,
+                snapshot,
+                change_op=change_op,
+                change_values=change_values,
+                change_name=change_name,
+                ask=ask,
+                cancelled=cancelled,
+            )
+            if coarsened is not None
+            else None
+        )
+        if counting is not None and counting.refusal is not None:
+            if refused is not None:
+                refused(counting.refusal)
+            advice = _advice_of(counting.refusal)
+            if counselled is not None and advice:
+                counselled(advice)
+            return before, None, _reason_of(counting.refusal)
+        if counting is not None and counting.enough:
+            if counted is not None:
+                counted(counting.numbers())
+            return before, SceneDifference(), ""
+        counted_bodies = counting.bodies if counting is not None else frozenset()
         coarse = _coarse_drafts(before) if coarsened is not None and change_op is None else []
+        coarse = [draft for draft in coarse if not counted_bodies.intersection(draft.inputs)]
         # Der Flächenbezug meint die Originalkontur einschließlich Bohrungen.
         # Eine vorgeschaltete Reduktion änderte ihre Dreiecke und Kennung.
         exact_faces = {
@@ -4648,6 +4816,7 @@ class Session(QObject):
                 coarsened is not None
                 and before is not None
                 and not _names_a_feature(working.ops[changed_index].params)
+                and not counted_bodies
             ):
                 # **Die grobe Stufe auch beim Ändern eines Schritts** (22.09.2026).
                 # Bis dahin blieb dieser Weg genau — die Verkleinerung musste
@@ -4706,6 +4875,8 @@ class Session(QObject):
                     detect_features=detect_features,
                     snapshot=snapshot,
                     progress=progress,
+                    refused=refused,
+                    counted=counted,
                 )
         preview_profile = snapshot.profile
         if changes is not None:
@@ -4752,6 +4923,8 @@ class Session(QObject):
                 detect_features=detect_features,
                 snapshot=snapshot,
                 progress=progress,
+                refused=refused,
+                counted=counted,
             )
         if result.stopped_at is not None:
             # Eine angehaltene Kette ist keine Vorschau: die leere Differenz
@@ -4766,6 +4939,14 @@ class Session(QObject):
                 advice = _stop_advice(result)
                 if advice:
                     counselled(advice)
+            # Die Knöpfe gehören dem Schritt des Dialogs: Hält ein späterer an,
+            # schriebe *Die kleinste Kantenlänge nehmen* dessen Zahl ins Feld
+            # eines anderen.
+            own = previewed if change_op is None else (changed_id,)
+            if refused is not None and result.stopped_at in own:
+                blamed = _stop_finding(result)
+                if blamed is not None:
+                    refused(blamed)
             return result.scene, None, _stop_reason(result)
         if coarse:
             coarsened(_triangles_of(before))
@@ -4774,7 +4955,14 @@ class Session(QObject):
         # Sekunden; wer vorher abgebrochen hat, bekommt ihn nicht mehr.
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        difference = compare_scenes(before, result.scene) if before is not None else None
+        reshaped = _reshaped_only(working, previewed)
+        difference = (
+            compare_scenes(before, result.scene, retriangulated=reshaped)
+            if before is not None
+            else None
+        )
+        if difference is not None and counted is not None and reshaped:
+            counted(_counts_of(before, result.scene, reshaped))
         if difference is not None:
             difference.findings = tuple(
                 finding for finding in result.scene.report.findings if finding.op_id in previewed
@@ -4903,6 +5091,116 @@ class Session(QObject):
             return result.scene
         finally:
             self._coarse_lock.release()
+
+    def _counted_ahead(
+        self,
+        drafts: Sequence[OperationDraft],
+        snapshot: _Snapshot,
+        *,
+        change_op: OpId | None,
+        change_values: Mapping[str, Any] | None,
+        change_name: str | None,
+        ask: Any,
+        cancelled: Any,
+    ) -> _Counting | None:
+        """Die Vorabzählung der vorgeschauten Schritte am Original — oder ``None``.
+
+        ``None`` heißt: Kein Schritt zählt vorab, oder sein Eingang ist nicht zu
+        haben, und die Vorschau geht ihren gewohnten Weg. Gezählt wird nur an
+        Netzen; ein exakter Körper wird beim Vorschauen ohnehin genau gerechnet
+        (``_coarse_drafts``), und seine Umwandlung muss das Band nennen.
+
+        Beim Ändern eines Schritts ist der Eingang die Szene **vor** ihm, nicht
+        die angezeigte (die ist nach ihm). Sie kommt aus einer Auswertung des
+        Stapels bis dorthin — dieselbe wie beim Platzieren
+        (:meth:`placement_before`), die Schritte liegen im Cache.
+        """
+        if change_op is None:
+            steps = [(draft.op, dict(draft.params), tuple(draft.inputs)) for draft in drafts]
+        else:
+            entry = next((op for op in snapshot.document.ops if op.id == change_op), None)
+            if entry is None:
+                return None
+            steps = [
+                (
+                    change_name or entry.op,
+                    {**entry.params, **dict(change_values or {})},
+                    tuple(entry.inputs),
+                )
+            ]
+        specs = [REGISTRY.get(name) if REGISTRY.has(name) else None for name, _p, _i in steps]
+        if not any(spec is not None and spec.expected_triangles is not None for spec in specs):
+            return None
+        scene = (
+            snapshot.before
+            if change_op is None
+            else self._scene_before_step(snapshot, change_op, ask, cancelled)
+        )
+        if scene is None:
+            return None
+        try:
+            known = expressions.resolve(snapshot.document.parameters)
+        except AppError:
+            return None
+        counting = _Counting()
+        bodies: set[str] = set()
+        enough = True
+        for spec, (_name, params, inputs) in zip(specs, steps, strict=True):
+            count = spec.expected_triangles if spec is not None else None
+            if spec is None or count is None:
+                enough = False
+                continue
+            try:
+                values = validate(spec.params, expressions.resolve_params(params, known))
+            except AppError:
+                # Ein Zwischenstand beim Tippen: Die Auswertung sagt es gleich.
+                return None
+            for name in inputs:
+                body = scene.objects.get(name)
+                if body is None or kind_of(body.mesh) != "mesh":
+                    enough = False
+                    continue
+                mesh = body.mesh
+                try:
+                    estimate = count(mesh, values)
+                except ValidationError as refusal:
+                    counting.refusal = refusal
+                    return counting
+                bodies.add(name)
+                counting.before += int(mesh.triangle_count)
+                counting.after += int(estimate.triangles)
+                counting.at_most = counting.at_most or bool(estimate.at_most)
+                enough = enough and (
+                    spec.retriangulates
+                    and estimate.triangles > COARSE_PREVIEW_ABOVE
+                    and estimate.triangles > mesh.triangle_count
+                )
+        counting.bodies = frozenset(bodies)
+        counting.enough = enough and bool(bodies)
+        return counting
+
+    def _scene_before_step(self, snapshot: _Snapshot, op_id: OpId, ask: Any, cancelled: Any) -> Any:
+        """Die Szene vor dem Schritt ``op_id`` — im Arbeiter, aus dem Cache; ``None`` bei Halt."""
+        import copy
+
+        document = copy.deepcopy(snapshot.document)
+        index = next(
+            (number for number, entry in enumerate(document.ops) if entry.id == op_id), None
+        )
+        if index is None:
+            return None
+        document.ops[:] = document.ops[:index]
+        result = evaluate(
+            document,
+            snapshot.profile,
+            quality="draft",
+            sources=ProjectSources(self.project, base_dir=self.base_dir),
+            ask=ask or _no_questions,
+            cache=self.cache,
+            cancelled=cancelled or NeverCancelled(),
+            detect_features=False,
+        )
+        return result.scene if result.stopped_at is None else None
 
     def accept_proposal(self, preview: ProposalPreview) -> Transaction | None:
         """Legt den Vorschlag als eine Transaktion ins Dokument (§26.5).

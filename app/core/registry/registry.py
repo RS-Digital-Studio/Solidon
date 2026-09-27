@@ -748,6 +748,34 @@ class OperationSpec:
     ``load`` oder *Dreiecke verringern* gilt das ausdrücklich nicht — dort ist
     „neu erkannt" kein Beleg dafür, dass etwas entstanden ist.
     """
+    retriangulates: bool = False
+    """Die Operation verteilt die Dreiecke neu und lässt die Form stehen — bis auf
+    eine Abweichung, die sie selbst misst und meldet oder zusagt.
+
+    *Kanten verfeinern* verschiebt keinen Punkt, *Dreiecke angleichen* bleibt
+    in seiner zugesagten Schranke, *Dreiecke verringern* misst, wie weit die
+    Fläche gewandert ist. Die Vorschau zeigt an ihnen das neue Netz und keine
+    Volumendifferenz (``geom.difference.compare_scenes``, ``retriangulated``):
+    Davor und danach sind zwei fast deckungsgleiche Häute, der schlimmste Fall
+    jedes Booleschen Kerns, und die Antwort ist bekannt, bevor er rechnet.
+    Gemessen in der Durchsicht 0.5.1 (RESTVERLAUF-04) am Spielwürfel aus
+    ``F:\\3D Dateien``: *Kanten verfeinern* auf 0,05 mm stand über zehn
+    Minuten in dieser Differenz, *Dreiecke verringern* auf 60 000 genau
+    gerechnet 69 s — für eine Differenz von 0,4 mm³."""
+    expected_triangles: Callable[[Any, Any], Any] | None = None
+    """Die Vorabzählung der Operation: ``(Netz, Parameter)`` → wie viele
+    Dreiecke herauskommen (``mesh_ops.TriangleEstimate``) — oder die Absage,
+    die die Operation selbst gäbe, als ``ValidationError``.
+
+    Gesetzt, wo das Ergebnis an der Dreieckszahl des Eingangs hängt: die drei
+    teilenden Netzoperationen und *Dreiecke verringern*. Die grobe Vorschau
+    rechnet auf einer verkleinerten Kopie, und deren Zahl ist nicht die des
+    Kunden — am Spielbrett aus ``F:\\3D Dateien`` zählte das Original bei 1 mm
+    11,97 Mio. Dreiecke (zu fein), die Kopie 7,8 Mio.: Die Vorschau rechnete,
+    *Übernehmen* hielt danach an. Die Vorschau fragt deshalb diese Zählung am
+    Original, bevor sie irgendetwas verkleinert. Dieselbe Funktion prüft in
+    der Operation vor dem ersten Schnitt; eine Absage klingt an beiden Orten
+    gleich und trägt dieselben Handlungen."""
     deterministic: bool = True
     cache_version: str = ""
     """Identität der geladenen Umsetzung, insbesondere des verwendeten Bausteinrezepts."""
@@ -876,6 +904,15 @@ class Registry:
                 detail=f"{spec.name!r} declares a minimum for a fixed input count",
                 values={"op": spec.name},
             )
+        # Beide Angaben sprechen über **den** Körper, den die Operation nimmt und
+        # als denselben zurückgibt — ein Netz vorher, eines nachher.
+        if (spec.retriangulates or spec.expected_triangles is not None) and (
+            spec.consumes != 1 or spec.produces != 1
+        ):
+            raise InternalError(
+                detail=f"{spec.name!r} counts or retriangulates without one body in and out",
+                values={"op": spec.name},
+            )
         if spec.shortcut:
             taken = self.by_shortcut(spec.shortcut)
             if taken is not None:
@@ -978,6 +1015,8 @@ def register_op(
     produces_from: str | None = None,
     keeps_inputs: int = 0,
     touches_features: bool = False,
+    retriangulates: bool = False,
+    expected_triangles: Callable[[Any, Any], Any] | None = None,
     deterministic: bool = True,
     cache_version: str = "",
     material_params: Iterable[str] = (),
@@ -1014,6 +1053,8 @@ def register_op(
                 produces_from=produces_from,
                 keeps_inputs=keeps_inputs,
                 touches_features=touches_features,
+                retriangulates=retriangulates,
+                expected_triangles=expected_triangles,
                 deterministic=deterministic,
                 cache_version=cache_version,
                 material_params=tuple(material_params),

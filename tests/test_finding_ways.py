@@ -57,7 +57,6 @@ OHNE_KNOPF: dict[str, str] = {
     "split.face_too_small": "Auskunft beim Teilen: Getrennt ist, der Satz sagt „geklebt hält sie“.",
     # Der Weg ist ein Schritt vor diesem — den gibt es nicht als Knopf, der Satz nennt ihn.
     "displace.too_coarse": "Der Weg ist Vernetzen vor dem Relief; der Satz nennt es.",
-    "mesh.smooth_shrank": "Der Weg ist Vernetzen vor dem Glätten; der Satz nennt es.",
     "sculpt.too_coarse": "Der Weg ist Vernetzen vor dem Formen; der Satz nennt es.",
     "pose.pinched": "Der Weg ist ein feineres Netz vor der Stellung; der Satz nennt es.",
     # Das Formen: *Eingabe korrigieren* öffnet nur den Rohtext der Striche,

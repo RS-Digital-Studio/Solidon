@@ -104,6 +104,8 @@ from app.core.backends import llm
 from app.core.errors import (
     CANCEL,
     CHOOSE,
+    DECIMATE_AND_RETRY,
+    REMESH_AND_RETRY,
     REPAIR_AND_RETRY,
     AppError,
     ExternalToolError,
@@ -271,6 +273,7 @@ from app.ui.labels import (
     body_facts,
     body_requirement,
     circle_measure,
+    count_text,
     demo_line,
     display_unit,
     edge_label,
@@ -305,6 +308,7 @@ from app.ui.panels import (
     ObjectTree,
     ParameterPanel,
     ReportPanel,
+    as_error,
     collapsible,
     describe_selection,
     open_section,
@@ -326,7 +330,7 @@ from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
-from app.ui.session import AskRequest, Session
+from app.ui.session import AskRequest, Session, TriangleCounts
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog
 from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
@@ -1820,6 +1824,39 @@ def _measure(value: object) -> float:
     return float(value) if isinstance(value, int | float) else 0.0
 
 
+def _positive(value: object) -> float | None:
+    """Eine Zahl aus den Werten einer Absage — nur, wenn sie endlich und positiv ist."""
+    try:
+        number = float(str(value))
+    except ValueError:
+        return None
+    return number if math.isfinite(number) and number > 0.0 else None
+
+
+def _count_note(numbers: TriangleCounts) -> str:
+    """Der Satz über einem Schritt, der nur das Netz ändert: wie viele Dreiecke danach.
+
+    Gezählt heißt: gerechnet, die Zahl steht genau da. Vorab geschätzt heißt
+    „geschätzt" und zwei geltende Ziffern — „rund" versprach zu viel: Am
+    Spielbrett aus ``F:\\3D Dateien`` nannte die Schätzung bei 1,53 mm 6,4 Mio.,
+    geteilt wurden es 4,1 Mio. Am offenen Netz ist die Vorabzählung eine
+    Obergrenze und heißt „höchstens" (``mesh_ops.TriangleEstimate``).
+    """
+    before = count_text(numbers.before)
+    if not numbers.estimated:
+        return tr("Vorschau — aus {before} werden {after} Dreiecke").format(
+            before=before, after=count_text(numbers.after)
+        )
+    after = count_text(numbers.after, rough=True)
+    if numbers.at_most:
+        return tr("Vorschau — aus {before} werden höchstens {after} Dreiecke").format(
+            before=before, after=after
+        )
+    return tr("Vorschau — aus {before} werden geschätzt {after} Dreiecke").format(
+        before=before, after=after
+    )
+
+
 def _needs_objects(count: int) -> str:
     """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
     fehlen.
@@ -2447,6 +2484,10 @@ class MainWindow(QMainWindow):
         self._preview_coarse_at = 0
         """Wie viele Dreiecke der Körper trug, als die Vorschau ihn für die
         Rechnung vergröbert hat — null, wenn genau gerechnet wurde (§2.8)."""
+        self._preview_count: TriangleCounts | None = None
+        """Die Dreieckszahlen eines Schritts, der nur das Netz ändert — davor und
+        danach, gezählt oder vorab geschätzt (RESTVERLAUF-04). Das Band sagt
+        sie statt „am Volumen ändert sich nichts"."""
         self._preview_effect = ""
         """Was die vorgeschaute Operation ändert, wenn sie die Geometrie nicht
         anfasst — die Lage aus dem Register (``OperationSpec.unchanged_effect``),
@@ -18193,12 +18234,21 @@ class MainWindow(QMainWindow):
             approval.difference = difference
             self._present_order_preview(approval)
 
+        def refused(problem: object) -> None:
+            """Die Absage mit ihren Werten — der Dialog zeigt, was er davon einlöst."""
+            self._preview_refused(approval, problem)
+
+        clear_refusal = getattr(approval.owner, "show_refusal", None)
+        if clear_refusal is not None:
+            clear_refusal(None)
         kwargs: dict[str, Any] = {
             "explained": still(explained),
             "coarse": still(self._preview_coarse),
             "advised": still(self._preview_advised),
             "failed": still(failed),
             "progressed": still(self._preview_progressed),
+            "refused": still(refused),
+            "counted": still(self._preview_counted),
         }
         if order.changes is not None:
             kwargs["changes"] = order.changes
@@ -18501,6 +18551,15 @@ class MainWindow(QMainWindow):
             # liegen. Der Satz sagt, worauf gerechnet wurde, und er sagt es
             # als Text — nicht als zweite Farbe (Regel 18).
             note = tr("Grobe Vorschau — beim Übernehmen wird genau gerechnet")
+        elif self._preview_count is not None and (reshaped or empty):
+            # **Ein Schritt, der nur das Netz ändert, sagt die Zahl**
+            # (RESTVERLAUF-04). Seine Vorschau ist kein Volumen — die Form
+            # sagt er zu —, sondern wie viele Dreiecke danach dastehen, und
+            # an der Zahl hängt, wie lange alles Weitere rechnet. Über
+            # :data:`~app.ui.session.COARSE_PREVIEW_ABOVE` ist sie vorab
+            # gezählt und nichts gerechnet: „geschätzt", am offenen Netz eine
+            # Obergrenze.
+            note = _count_note(self._preview_count)
         elif reshaped:
             note = tr("Vorschau — das Netz ändert sich, das Volumen nicht")
         elif recoloured:
@@ -18519,6 +18578,7 @@ class MainWindow(QMainWindow):
         else:
             note = tr("Vorschau — noch nicht übernommen")
         self._preview_coarse_at = 0
+        self._preview_count = None
         self._preview_effect = ""
         warnings = dict.fromkeys(
             str(finding.message)
@@ -18546,6 +18606,106 @@ class MainWindow(QMainWindow):
         gar nicht erst an (``Session._preview_done``).
         """
         self._preview_coarse_at = int(triangles)
+
+    def _preview_counted(self, numbers: TriangleCounts) -> None:
+        """Merkt die Dreieckszahlen eines Schritts, der nur das Netz ändert.
+
+        Kommt aus dem Arbeiter vor dem Ergebnis, wie der Merker der groben
+        Stufe; gelesen und geleert wird er in :meth:`_show_preview`.
+        """
+        self._preview_count = numbers
+
+    def _preview_refused(self, approval: _PreviewApproval, problem: object) -> None:
+        """Die Absage einer Vorschau mit den Knöpfen, die der offene Dialog einlöst.
+
+        Der Satz steht im Band (:meth:`_preview_explained`); hier geht es um die
+        Handlung, und die gehört dorthin, wo die Hand ist. Bis zur Durchsicht
+        0.5.1 stand „Diese Kantenlänge ergäbe mehr Dreiecke …" im Band ohne
+        Weg — die Zahl, die geht, kam erst nach dem Übernehmen, als Knopf an
+        einem angehaltenen Schritt im Prüfbericht (RESTVERLAUF-04).
+        """
+        show = getattr(approval.owner, "show_refusal", None)
+        if show is None:
+            return
+        error: AppError | None = None
+        if isinstance(problem, AppError):
+            error = problem
+        elif isinstance(problem, Finding):
+            error = as_error(problem, self.session.project.document)
+        show(error, self._refusal_handlers(approval, error) if error is not None else None)
+
+    def _refusal_handlers(
+        self, approval: _PreviewApproval, error: AppError
+    ) -> dict[str, Callable[[AppError], None]]:
+        """Welche Handlungen einer Absage dieser Dialog selbst einlöst — mit ihren Werten.
+
+        *Die kleinste Kantenlänge nehmen, die noch geht.* schreibt die Zahl ins
+        Feld, und die Vorschau rechnet neu. Die beiden Züge vor den Schritt —
+        *Dreiecke verringern* und *Kanten verfeinern und erneut versuchen* —
+        schreiben ihn samt Vorbereitung als **eine** Transaktion und schließen
+        den Dialog; Strg+Z nimmt beides zurück (Regel 16). Ohne die Zahl aus
+        der Absage gibt es keinen Knopf: raten wäre keiner (Regel 21).
+        """
+        owner = approval.owner
+        order = approval.order
+        handlers: dict[str, Callable[[AppError], None]] = {}
+        wanted = {action.id for action in error.suggestions}
+        field = str(getattr(error, "field", "") or error.values.get("field", "") or "")
+        reachable = _positive(error.values.get("reachable"))
+        take = getattr(owner, "take_value", None)
+        if "use_reachable" in wanted and field and reachable is not None and take is not None:
+            handlers["use_reachable"] = lambda _error: take(field, reachable)
+        prepared = order.change_op is not None or bool(order.drafts)
+        decimate_to = _positive(error.values.get("decimate_to"))
+        if DECIMATE_AND_RETRY.id in wanted and decimate_to is not None and prepared:
+            handlers[DECIMATE_AND_RETRY.id] = lambda _error: self._prepared_from_dialog(
+                approval,
+                "decimate_mesh",
+                {"triangles": int(decimate_to), "method": "fast"},
+                DECIMATE_AND_RETRY.label,
+            )
+        remesh_to = _positive(error.values.get("remesh_to_mm"))
+        if REMESH_AND_RETRY.id in wanted and remesh_to is not None and prepared:
+            handlers[REMESH_AND_RETRY.id] = lambda _error: self._prepared_from_dialog(
+                approval, "remesh_mesh", {"edge": remesh_to}, REMESH_AND_RETRY.label
+            )
+        return handlers
+
+    def _prepared_from_dialog(
+        self,
+        approval: _PreviewApproval,
+        op: str,
+        params: Mapping[str, Any],
+        title: Any,
+    ) -> None:
+        """Ein Netzschritt vor den Schritt des offenen Dialogs — beides als ein Zug.
+
+        Der Dialog geht zu, ohne selbst zu übernehmen. Beim Anlegen stehen die
+        Vorbereitung je Eingang und der Schritt in einer Transaktion
+        (``Session.apply``); beim Ändern ersetzt der Verlauf den Schritt mit
+        den getippten Werten und setzt die Vorbereitung davor
+        (``History.decimate_and_retry``, ``History.remesh_and_retry``).
+        """
+        if not self._preview_is_current(approval):
+            return
+        order = approval.order
+        reject = getattr(approval.owner, "reject", None)
+        if reject is not None:
+            reject()
+        if order.change_op is not None:
+            values = dict(order.change_values or {})
+            if op == "decimate_mesh":
+                self.session.decimate_and_retry(order.change_op, int(params["triangles"]), values)
+            else:
+                self.session.remesh_and_retry(order.change_op, float(params["edge"]), values)
+            return
+        bodies = list(dict.fromkeys(body for draft in order.drafts for body in draft.inputs))
+        self.session.apply(
+            title,
+            [OperationDraft(op=op, inputs=(body,), params=dict(params)) for body in bodies]
+            + list(order.drafts),
+            changes=order.changes,
+        )
 
     def _preview_advised(self, action: str) -> None:
         """Merkt die Handlung, die der Kern dem ausgebliebenen Bild mitgab.
@@ -18604,6 +18764,7 @@ class MainWindow(QMainWindow):
         self._preview_action = ""
         self._preview_reason = reason
         self._preview_coarse_at = 0
+        self._preview_count = None
         self._preview_effect = ""
         self._block_apply(reason if advice in self._APPLY_BLOCKING_ADVICE else None)
         self._show_difference(None)
@@ -18674,6 +18835,7 @@ class MainWindow(QMainWindow):
         self._preview_shown = True
         self._preview_reason = ""
         self._preview_coarse_at = 0
+        self._preview_count = None
         self._preview_effect = ""
         self._preview_action = ""
         if approval is not None:
@@ -18710,6 +18872,7 @@ class MainWindow(QMainWindow):
         self._preview_busy.stop()
         self._preview_reason = ""
         self._preview_coarse_at = 0
+        self._preview_count = None
         # Die zwei Merkposten gehören der Vorschau, die gerade geht: Der
         # nächste Weg zur Vorschau ist womöglich das Merkmalfenster, und das
         # hat weder eine Operation im Register gefragt noch eine Handlung
@@ -20293,6 +20456,9 @@ class MainWindow(QMainWindow):
             # Und wo das Netz selbst zu dicht ist: *Dreiecke verringern* vor den
             # angehaltenen Schritt, mit der Zahl, an der der Kern nachgezählt hat.
             "decimate_and_retry": self._decimate_after_error,
+            # Und in der Gegenrichtung: *Kanten verfeinern* vor ein *Glätten*, das
+            # umschlug — mit der Länge, an der der Kern beides durchgespielt hat.
+            "remesh_and_retry": self._remesh_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "export_as_mesh": self._export_as_mesh_after_error,
@@ -20891,6 +21057,35 @@ class MainWindow(QMainWindow):
             {"triangles": triangles, "method": "fast"},
             on_bodies=(object_id,),
         )
+
+    def _remesh_after_error(self, error: AppError) -> None:
+        """*Kanten verfeinern* vor den angehaltenen Schritt, dann derselbe Schritt noch einmal.
+
+        **Der Rat stand seit 0.5.0 da und hatte keinen Draht** (Durchsicht
+        0.5.1): „Vorher neu vernetzen — feiner glättet sanfter." stand im
+        Fehlerdialog als Satz, im Prüfbericht gar nicht, und ohne Länge hätte
+        ein Knopf nur raten können. Jetzt nennt der Kern sie
+        (``values["remesh_to_mm"]``, Verfeinern und Glätten daran
+        durchgespielt), und der Verlauf setzt den Schritt davor
+        (``History.remesh_and_retry``) — ein Zug, Strg+Z nimmt ihn zurück.
+
+        Auch vor einen Schritt, der durchlief und dabei zu viel Volumen kostete
+        (``mesh.smooth_shrank``): Das Verfeinern gehört **davor**, nicht
+        dahinter — derselbe Zug wie die Reparatur vor einem gerundeten Schritt.
+        Steht der Schritt nicht mehr im Verlauf, geht *Kanten verfeinern* für
+        den Körper des Befunds mit dieser Länge auf, als nächster Schritt.
+        """
+        edge = _positive(error.values.get("remesh_to_mm"))
+        if edge is None:
+            return
+        steps = self.session.project.document.ops
+        if error.op_id is not None and any(entry.id == error.op_id for entry in steps):
+            self.session.remesh_and_retry(error.op_id, edge)
+            return
+        object_id = error.object_id
+        if object_id is None:
+            return
+        self.run_operation(REGISTRY.get("remesh_mesh"), {"edge": edge}, on_bodies=(object_id,))
 
     def _change_selection_after_error(self, error: AppError) -> None:
         """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.

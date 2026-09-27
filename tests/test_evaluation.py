@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import math
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -1833,6 +1834,204 @@ def test_a_coarse_preview_the_kernel_refuses_is_computed_exactly(monkeypatch) ->
     assert reason == "", "keine Absage, die nur am groben Netz gilt"
     assert difference is not None and difference.removed_volume > 0.0
     assert seen == [], 'genau gerechnet — das Band sagt nicht „grob"'
+
+
+def _ellipsoid_session() -> tuple[Any, str, Any]:
+    """Eine Sitzung mit dem Ellipsoid aus dem Korpus: 1 280 Dreiecke, geschlossen."""
+    from app.ui.session import Session
+
+    session = Session()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    assert session.import_model(meshes / "near_sphere_ellipsoid.stl", unit="mm")
+    result = session.evaluate_now()
+    body, entry = next(iter(result.scene.objects.items()))
+    return session, body, entry.mesh
+
+
+def test_a_refinement_the_original_refuses_is_refused_before_anything_is_reduced(
+    monkeypatch,
+) -> None:
+    """Die grobe Kopie verdeckte die Absage (RESTVERLAUF-04) — jetzt zählt die Vorschau am Original.
+
+    Am Spielbrett aus ``F:\\3D Dateien`` zählte das Original bei 1 mm
+    11,97 Mio. Dreiecke (zu fein), die verkleinerte Kopie 7,8 Mio.: Die
+    Vorschau rechnete die Kopie, *Übernehmen* hielt danach an. Hier dasselbe
+    im Kleinen — eine Decke zwischen der Zählung der Kopie und der des
+    Originals. Die Absage kommt mit ihren Werten und Handlungen, bevor
+    irgendetwas verkleinert oder gerechnet wird.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom import mesh_ops
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+
+    session, body, mesh = _ellipsoid_session()
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    original = mesh_ops.estimated_triangles(mesh, 0.3, until_short=True)
+    coarse = mesh_ops.decimate_for_display(mesh, DECIMATE_FLOOR)
+    copied = mesh_ops.estimated_triangles(coarse, 0.3, until_short=True)
+    ceiling = (original + copied) // 2
+    assert copied < ceiling < original, "sonst prüft der Fall nicht, was die Kopie verdeckte"
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", ceiling)
+
+    def not_now(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("die Vorschau rechnet nicht, was schon abgesagt ist")
+
+    monkeypatch.setattr(mesh_ops, "_split_conforming", not_now)
+    seen: list[int] = []
+    refused: list[object] = []
+    draft = OperationDraft(op="remesh_mesh", params={"edge": 0.3}, inputs=(body,))
+
+    _scene, difference, reason = session._preview_outcome(
+        [draft], coarsened=seen.append, refused=refused.append, detect_features=False
+    )
+
+    assert difference is None
+    assert seen == [], "keine grobe Kopie"
+    assert len(refused) == 1 and isinstance(refused[0], ValidationError)
+    error = refused[0]
+    assert error.values["triangles"] == original
+    assert error.values["reachable"] > 0.3
+    assert "use_reachable" in {action.id for action in error.suggestions}
+    assert reason == str(error.detail)
+
+
+def test_a_refinement_past_the_preview_size_is_counted_and_not_computed(monkeypatch) -> None:
+    """Die Vorschau von *Kanten verfeinern* an einem dichten Netz ist die Zahl (RESTVERLAUF-04).
+
+    Am Spielwürfel (250 488 Dreiecke) teilte die grobe Vorschau auf 0,05 mm
+    eine Kopie in 16 s auf 4,5 Mio. Dreiecke und stand danach über zehn
+    Minuten im Booleschen Vergleich — für ein Bild derselben Form. Jetzt zählt
+    sie am Original und rechnet nichts; die Zahl steht im Band.
+    """
+    from app.core.geom import mesh_ops
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+    from app.ui.session import TriangleCounts
+
+    session, body, mesh = _ellipsoid_session()
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+
+    def not_now(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("gezählt wird, nicht gerechnet")
+
+    monkeypatch.setattr(mesh_ops, "remesh", not_now)
+    seen: list[int] = []
+    counts: list[object] = []
+    draft = OperationDraft(op="remesh_mesh", params={"edge": 0.5}, inputs=(body,))
+    started = time.perf_counter()
+
+    _scene, difference, reason = session._preview_outcome(
+        [draft], coarsened=seen.append, counted=counts.append, detect_features=False
+    )
+
+    assert time.perf_counter() - started < 5.0
+    expected = mesh_ops.estimated_triangles(mesh, 0.5, until_short=True)
+    assert counts == [TriangleCounts(mesh.triangle_count, expected, False, True)]
+    assert expected > DECIMATE_FLOOR
+    assert reason == ""
+    assert difference is not None and not difference.entries
+    assert seen == []
+
+
+def test_a_small_refinement_shows_its_new_mesh_without_a_boolean_cut(monkeypatch) -> None:
+    """Unter der Vorschaugröße rechnet der Schritt — und die Differenz ist das neue Netz."""
+    from app.core.geom import difference as difference_module
+    from app.ui.session import TriangleCounts
+
+    session, body, mesh = _ellipsoid_session()
+
+    def no_cut(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("kein Boolescher Vergleich an einer zugesagten Form")
+
+    monkeypatch.setattr(difference_module, "compare", no_cut)
+    counts: list[object] = []
+    draft = OperationDraft(op="remesh_mesh", params={"edge": 1.0}, inputs=(body,))
+
+    _scene, difference, reason = session._preview_outcome(
+        [draft], coarsened=[].append, counted=counts.append, detect_features=False
+    )
+
+    assert reason == ""
+    assert difference is not None
+    after = difference.entries[body].retriangulated
+    assert after is not None and after.triangle_count > mesh.triangle_count
+    assert counts == [TriangleCounts(mesh.triangle_count, after.triangle_count)]
+
+
+def test_reducing_a_large_body_is_previewed_on_the_body_itself(monkeypatch) -> None:
+    """Keine Verkleinerung vor dem Verkleinern (RESTVERLAUF-04).
+
+    Die grobe Kopie des Spielwürfels hatte 3 858 Dreiecke; *Dreiecke
+    verringern* auf 60 000 oder 200 000 sagte an ihr „Die Fläche hat sich
+    dabei kaum verschoben.", ohne etwas verringert zu haben — das Original hat
+    250 488. Jetzt rechnet die Vorschau am Körper selbst und zeigt das neue
+    Netz; der Vergleich zweier fast deckungsgleicher Häute entfällt (genau
+    gerechnet 69 s, jetzt 0,8 s).
+    """
+    from app.core.geom import difference as difference_module
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.ui import session as session_module
+
+    session, body, mesh = _ellipsoid_session()
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+
+    def no_cut(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("kein Boolescher Vergleich an einer Neuvernetzung")
+
+    monkeypatch.setattr(difference_module, "compare", no_cut)
+    seen: list[int] = []
+    target = 700
+    assert DECIMATE_FLOOR <= target < mesh.triangle_count
+    draft = OperationDraft(op="decimate_mesh", params={"triangles": target}, inputs=(body,))
+
+    _scene, difference, _reason = session._preview_outcome(
+        [draft], coarsened=seen.append, detect_features=False
+    )
+
+    assert seen == [], "am Körper selbst, nicht an einer Kopie"
+    assert difference is not None
+    after = difference.entries[body].retriangulated
+    assert after is not None and after.triangle_count < mesh.triangle_count
+    codes = {finding.code for finding in difference.findings}
+    assert "mesh.already_below_target" not in codes
+
+
+def test_changing_a_refinement_counts_at_the_input_of_its_step(monkeypatch) -> None:
+    """Beim Ändern eines Schritts ist das Original die Szene **vor** ihm.
+
+    Die angezeigte Szene ist die danach — am schon verfeinerten Netz gezählt,
+    hätte die Vorschau eine andere Zahl genannt als der Schritt beim Übernehmen.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom import mesh_ops
+
+    session, body, mesh = _ellipsoid_session()
+    session.history.apply(
+        "Kanten verfeinern",
+        [OperationDraft(op="remesh_mesh", inputs=(body,), params={"edge": 1.0})],
+    )
+    session.evaluate_now()
+    step = session.project.document.ops[-1].id
+    original = mesh_ops.estimated_triangles(mesh, 0.3, until_short=True)
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", original - 1)
+    refused: list[object] = []
+
+    _scene, difference, _reason = session._preview_outcome(
+        [],
+        change_op=step,
+        change_values={"edge": 0.3},
+        coarsened=[].append,
+        refused=refused.append,
+        detect_features=False,
+    )
+
+    assert difference is None
+    assert len(refused) == 1 and isinstance(refused[0], ValidationError)
+    assert refused[0].values["triangles"] == original, "am Eingang des Schritts gezählt"
 
 
 def test_a_recorded_answer_does_not_cost_the_import_a_second_time() -> None:

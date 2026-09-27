@@ -19,7 +19,7 @@ import threading
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable
-from typing import Any, Final, Literal, cast
+from typing import Any, Final, Literal, NamedTuple, cast
 
 import manifold3d
 import numpy as np
@@ -29,6 +29,7 @@ from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
     DECIMATE_AND_RETRY,
+    REMESH_AND_RETRY,
     REPAIR_AND_RETRY,
     REPAIR_BEFORE_AND_RETRY,
     SHOW_LOCATIONS,
@@ -1103,6 +1104,99 @@ def _thinning(mesh: MeshData, edge: float | None, limit: float, *, until_short: 
     return found
 
 
+class TriangleEstimate(NamedTuple):
+    """Was die Vorabzählung einer Netzoperation über ihr Ergebnis sagt.
+
+    ``triangles`` ist die Zahl, ``at_most`` sagt, wie sie gemeint ist: eine
+    Schätzung (die konforme Zählung traf an zwölf Modellen das 0,73- bis
+    1,10-Fache, :func:`estimated_triangles`) oder eine Obergrenze (das Teilen
+    nach Bedarf an einem offenen Netz, :func:`_on_demand_count`, dort lag das
+    Ergebnis beim 0,18- bis 0,58-Fachen). Die Vorschau sagt „rund" oder
+    „höchstens" — eine Obergrenze als Schätzung gelesen wäre um ein Vielfaches
+    zu hoch.
+    """
+
+    triangles: int
+    at_most: bool = False
+
+
+def _conforming_ahead(mesh: MeshData, edge: float) -> int:
+    """Die Vorabzählung des konformen Wegs von :func:`remesh` — oder seine Absage."""
+    wanted = estimated_triangles(mesh, edge, until_short=True)
+    if wanted > MAX_REMESH_TRIANGLES:
+        raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=True))
+    return wanted
+
+
+def _on_demand_ahead(mesh: MeshData, edge: float) -> int:
+    """Die Obergrenze des Teilens nach Bedarf (:func:`_on_demand_count`) — oder seine Absage."""
+    count = _on_demand_count(mesh)
+    wanted = count(edge)
+    if wanted > MAX_REMESH_TRIANGLES:
+        raise _too_fine(mesh, edge, wanted, count, reserve=1.0)
+    return wanted
+
+
+def _evenly_ahead(mesh: MeshData, edge: float) -> int:
+    """Die Vorabzählung von *Dreiecke angleichen* und *Fläche unterteilen* — oder ihre Absage.
+
+    Beide teilen einmal (``until_short=False``), die Absage nennt deshalb eine
+    Länge und eine Verringerung, die für einen Durchgang zählen.
+    """
+    wanted = estimated_triangles(mesh, edge)
+    if wanted > MAX_REMESH_TRIANGLES:
+        raise _too_fine(
+            mesh, edge, wanted, _conforming_count(mesh, until_short=False), until_short=False
+        )
+    return wanted
+
+
+def expected_remesh(mesh: MeshData, params: Any) -> TriangleEstimate:
+    """Die Vorabzählung von *Kanten verfeinern*, am Netz, das der Schritt bekommt.
+
+    Dieselben Zählungen, mit denen :func:`remesh` vor dem ersten Schnitt absagt,
+    und in derselben Reihenfolge: ein geschlossenes Netz konform, ein offenes
+    nach Bedarf. Eine Absage ist damit dieselbe Ausnahme mit denselben Werten
+    (``reachable``, ``decimate_to``) wie beim Übernehmen. Was sie nicht kennt,
+    ist der seltene Fall, in dem der exakte Kern ein geschlossenes Netz
+    trotzdem ablehnt und :func:`remesh` nach Bedarf weiterteilt — dort sagt
+    erst die Operation, ob es geht.
+
+    Liegt keine Kante über ``edge``, teilt die Operation nichts; die Zahl ist
+    dann die des Netzes und nicht die Schätzung, deren Flächenanteil auch ein
+    unberührtes Netz größer rechnete.
+    """
+    edge = float(params.edge)
+    if not mesh.is_watertight:
+        return TriangleEstimate(_on_demand_ahead(mesh, edge), at_most=True)
+    wanted = _conforming_ahead(mesh, edge)
+    if float(edge_lengths(mesh).max(initial=0.0)) <= edge:
+        return TriangleEstimate(mesh.triangle_count)
+    return TriangleEstimate(wanted)
+
+
+def expected_evened(mesh: MeshData, params: Any) -> TriangleEstimate:
+    """Die Vorabzählung von *Dreiecke angleichen* und *Fläche unterteilen*.
+
+    Dieselbe wie in der Operation (:func:`_evenly_ahead`), samt Absage.
+    """
+    return TriangleEstimate(_evenly_ahead(mesh, float(params.edge)))
+
+
+def expected_decimated(mesh: MeshData, params: Any) -> TriangleEstimate:
+    """Die Zählung von *Dreiecke verringern*: das Ziel, höchstens das, was schon da ist.
+
+    Keine Absage — ein Ziel über der Dreieckszahl lässt den Körper, wie er ist,
+    und sagt es (``mesh.already_below_target``). Gebraucht wird die Angabe für
+    die Vorschau: Eine vorab verkleinerte Kopie hätte schon weniger Dreiecke
+    als fast jedes Ziel, und die Vorschau sagte an ihr „schon weniger als das
+    Ziel", wo die Operation am Original verringert (gemessen am Spielwürfel,
+    250 488 Dreiecke, Ziel 60 000: „Die Fläche hat sich dabei kaum
+    verschoben.").
+    """
+    return TriangleEstimate(min(int(params.triangles), mesh.triangle_count), at_most=True)
+
+
 def _two_figures(count: float) -> int:
     """Auf zwei geltende Ziffern abgerundet — 125 244 wird 120 000.
 
@@ -1156,20 +1250,16 @@ def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None)
         if mesh.is_watertight:
             # Jeder Weg fragt seine eigene Zählung: Ein offenes Netz geht nie
             # konform, und ein Vorschlag aus der konformen Zählung wäre dort
-            # wieder abgelehnt worden.
-            wanted = estimated_triangles(mesh, edge, until_short=True)
-            if wanted > MAX_REMESH_TRIANGLES:
-                raise _too_fine(mesh, edge, wanted, _conforming_count(mesh, until_short=True))
+            # wieder abgelehnt worden. Dieselben Zählungen fragt die Vorschau
+            # (:func:`expected_remesh`).
+            _conforming_ahead(mesh, edge)
             conforming = _split_conforming(mesh, edge, cancelled)
             if conforming is not None:
                 _log.info(
                     "remeshed %d to %d triangles", mesh.triangle_count, conforming.triangle_count
                 )
                 return conforming
-        on_demand_count = _on_demand_count(mesh)
-        wanted = on_demand_count(edge)
-        if wanted > MAX_REMESH_TRIANGLES:
-            raise _too_fine(mesh, edge, wanted, on_demand_count, reserve=1.0)
+        _on_demand_ahead(mesh, edge)
         on_demand = _subdivided_on_demand(mesh, edge)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
@@ -1414,11 +1504,7 @@ def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
     ``deviation``. Erst danach wird geteilt. Mit ``deviation = 0`` fällt der
     erste Schritt aus und die Form bleibt exakt.
     """
-    wanted = estimated_triangles(mesh, edge)
-    if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(
-            mesh, edge, wanted, _conforming_count(mesh, until_short=False), until_short=False
-        )
+    _evenly_ahead(mesh, edge)
     solid = _as_solid(mesh)
     try:
         evened = _as_mesh(mesh, solid.simplify(deviation).refine_to_length(edge))
@@ -1448,11 +1534,7 @@ def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
     Eckpunktnormalen und kennt keine Vierecke. Die Kugel wird darüber genauso
     rund (33 436 mm³ von 33 510 möglichen).
     """
-    wanted = estimated_triangles(mesh, edge)
-    if wanted > MAX_REMESH_TRIANGLES:
-        raise _too_fine(
-            mesh, edge, wanted, _conforming_count(mesh, until_short=False), until_short=False
-        )
+    _evenly_ahead(mesh, edge)
     solid = _as_solid(mesh)
     smoothed = solid.calculate_normals(0, angle).smooth_by_normals(0)
     try:
@@ -1522,6 +1604,11 @@ class DecimateParams(BaseParams):
     # „2" mit dem Parameter ``method``: Der gemessene Weg rechnet wie zuvor,
     # der Schlüssel alter Einträge passt aber nicht mehr zum neuen Schema.
     cache_version="2",
+    # Die Vorschau zeigt das neue Netz, keine Volumendifferenz, und verkleinert
+    # den Körper nicht vorab — eine Verkleinerung vor dem Verkleinern hätte
+    # schon weniger Dreiecke als fast jedes Ziel (RESTVERLAUF-04).
+    retriangulates=True,
+    expected_triangles=expected_decimated,
 )
 def decimate_mesh(ctx: OpContext) -> OpResult:
     params = cast(DecimateParams, ctx.params)
@@ -1630,12 +1717,107 @@ def smooth_mesh(ctx: OpContext) -> OpResult:
     # hat, wartet nicht auf sie (23.09.2026).
     ctx.cancelled.raise_if_cancelled()
     findings = _deviation_findings(before, after, source.id, cancelled=ctx.cancelled)
-    findings.extend(_smoothing_cost(before, after, source.id, params.iterations))
+    findings.extend(
+        _smoothing_cost(before, after, source.id, params.iterations, cancelled=ctx.cancelled)
+    )
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
 
+#: Die Kantenlängen, die :func:`_remeshing_for_smoothing` vor dem Glätten
+#: nachrechnet — runde Zahlen in Millimetern, die längste zuerst. Eine runde
+#: Zahl steht danach als Wert im Verlauf; eine krumme sähe aus wie gemessen.
+SMOOTHING_EDGES: Final = (50.0, 20.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.2, 0.1)
+
+#: Wie groß das verfeinerte Netz für diese Suche höchstens werden darf. Jeder
+#: Versuch teilt und glättet einmal; an der dünnen Schale aus dem Befund
+#: (28 278 Dreiecke, längste Kante 56,6 mm) kostete ein Versuch 0,1 bis 0,3 s,
+#: an 285 000 Dreiecken 0,9 s. Über einer Million wird die Suche zur Wartezeit,
+#: und ein Netz, das erst so fein nicht mehr umschlägt, glättet der Kunde besser
+#: mit weniger Durchgängen. Eine Rechengrenze, keine Toleranz.
+SMOOTHING_REMESH_BUDGET: Final = 1_000_000
+
+#: Die zuletzt gesuchten Längen je Netz und Durchgangszahl — ein angehaltener
+#: Schritt rechnet bei jeder Auswertung neu, wie bei :data:`_THINNED`.
+_SMOOTHING_EDGES: OrderedDict[tuple[int, int], tuple[weakref.ref[Any], float | None]] = (
+    OrderedDict()
+)
+_SMOOTHING_LOCK = threading.Lock()
+
+
+def _remeshing_for_smoothing(
+    mesh: MeshData, iterations: int, cancelled: CancelToken | None = None
+) -> float | None:
+    """Die längste Kante, auf die *Kanten verfeinern* teilen muss, damit das Glätten geht.
+
+    **Nachgerechnet, nicht geschätzt.** Taubin bewegt jeden Punkt um einen
+    Anteil des Abstands zu seinen Nachbarn; an einem Netz mit langen Kanten
+    wandert eine Wandseite damit um Zentimeter und an der anderen vorbei. Die
+    dünne Schale aus dem Befund (40 x 40 x 30 mm, 2 mm Wand, längste Kante
+    56,6 mm) stülpte schon ein Durchgang um; auf 8 mm geteilt verlor sie bei
+    fünf Durchgängen 10,5 % Volumen, auf 2 mm 0,5 % (Durchsicht 0.5.1).
+
+    Probiert wird der Weg, den der eingefügte Schritt geht — :func:`remesh`
+    auf eine Länge aus :data:`SMOOTHING_EDGES`, dann :func:`smooth` mit
+    derselben Durchgangszahl —, die längste zuerst: Sie kostet die wenigsten
+    Dreiecke, und auf ihr glättet dieselbe Durchgangszahl am deutlichsten.
+    Sie trägt, wenn der Körper danach weder umgestülpt noch in sich
+    gefaltet ist und sein Volumen um nicht mehr als :data:`SMOOTH_LOSS_WARN`
+    ändert (:func:`_smoothing_holds`) — dann läuft der Schritt ohne Warnung
+    durch. ``None``, wenn keine Länge unter :data:`SMOOTHING_REMESH_BUDGET`
+    trägt; dann wird nichts angeboten.
+    """
+    if mesh.triangle_count == 0 or float(mesh.volume) <= 0.0:
+        return None
+    raw = mesh.raw
+    key = (id(raw), int(iterations))
+    with _SMOOTHING_LOCK:
+        known = _SMOOTHING_EDGES.get(key)
+        if known is not None and known[0]() is raw:
+            return known[1]
+    longest = float(edge_lengths(mesh).max(initial=0.0))
+    old = float(mesh.volume)
+    found: float | None = None
+    for edge in SMOOTHING_EDGES:
+        if edge >= longest:
+            continue
+        if estimated_triangles(mesh, edge, until_short=True) > SMOOTHING_REMESH_BUDGET:
+            break
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        try:
+            refined = remesh(mesh, edge, cancelled=cancelled)
+        except ValidationError:
+            break
+        if _smoothing_holds(old, float(smooth(refined, iterations).volume)):
+            found = edge
+            break
+    with _SMOOTHING_LOCK:
+        _SMOOTHING_EDGES[key] = (weakref.ref(raw), found)
+        while len(_SMOOTHING_EDGES) > _THINNED_LIMIT:
+            _SMOOTHING_EDGES.popitem(last=False)
+    return found
+
+
+def _smoothing_holds(old: float, new: float) -> bool:
+    """Ob ein geglätteter Körper noch der ist, der er war — gemessen am Volumen.
+
+    Taubin hält das Volumen; ein Viertel weniger heißt zusammengezogene Ecken,
+    ein Viertel **mehr** heißt, dass die Fläche durch sich selbst geschoben
+    wurde und sich die Lagen doppelt zählen. Gemessen am Kumiko-Organizer aus
+    ``F:\\3D Dateien`` (2 336 Dreiecke, längste Kante 137 mm): fünf Durchgänge
+    machten aus 133 944 mm³ 553 866 — ein Netz, das sich geschlossen nennt
+    und nichts mehr mit dem Teil zu tun hat. Auf 10 mm verfeinert: +8,9 %.
+    """
+    return new > 0.0 and abs(new / old - 1.0) <= SMOOTH_LOSS_WARN
+
+
 def _smoothing_cost(
-    before: MeshData, after: MeshData, object_id: str, iterations: int
+    before: MeshData,
+    after: MeshData,
+    object_id: str,
+    iterations: int,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> list[Finding]:
     """Was das Glätten am Körper selbst gekostet hat.
 
@@ -1647,11 +1829,46 @@ def _smoothing_cost(
     if old <= 0.0:
         return []
 
-    if new <= 0.0:
+    folded = new > 0.0 and new / old - 1.0 > SMOOTH_LOSS_WARN
+    if new <= 0.0 or folded:
         # Umgestülpt: die Innenwand ist an der Außenwand vorbeigewandert. Das
         # Netz nennt sich weiter wasserdicht und misst minus neunzehntausend
         # Kubikmillimeter; jede Kennzahl danach ist falsch, und exportieren
         # ließ es sich auch. Kein Befund, ein Abbruch.
+        #
+        # **Jeder Rat ist nachgerechnet** (Durchsicht 0.5.1). Bis dahin standen
+        # hier zwei Sätze ohne Zahl und ohne Knopf, und beide konnten falsch
+        # sein: An der dünnen Schale aus dem Befund stülpt schon ein einziger
+        # Durchgang um — „Weniger Durchgänge nehmen." half nie. Weniger steht
+        # nur da, wo ein Durchgang trägt; das Verfeinern nur mit der Länge, bei
+        # der die Kette danach durchläuft, als Knopf (``values["remesh_to_mm"]``,
+        # ``History.remesh_and_retry``). Trägt nichts, öffnet *Eingabe
+        # korrigieren* den Schritt (Regel 17).
+        #
+        # **Und ein Körper, der um mehr als ein Viertel wächst, ist genauso
+        # kaputt** (:func:`_smoothing_holds`): Die Fläche ist durch sich selbst
+        # geschoben. Bis zur Durchsicht 0.5.1 lief das ohne ein Wort durch — am
+        # Kumiko-Organizer mit dem Vierfachen des Volumens.
+        suggestions: list[Action] = []
+        values: dict[str, Any] = {}
+        if iterations > 1 and _smoothing_holds(old, float(smooth(before, 1).volume)):
+            suggestions.append(Action(id="fewer_iterations", label=_("Weniger Durchgänge nehmen.")))
+        edge = _remeshing_for_smoothing(before, iterations, cancelled)
+        if edge is not None:
+            values["remesh_to_mm"] = edge
+            suggestions.append(REMESH_AND_RETRY)
+        if folded:
+            raise ValidationError(
+                field="iterations",
+                detail=_(
+                    "Beim Glätten hat sich die Oberfläche durch sich selbst geschoben — für "
+                    "so viele Durchgänge sind die Dreiecke zu grob."
+                ),
+                value=iterations,
+                constraint="folded",
+                values=values,
+                suggestions=tuple(suggestions) or (CORRECT_INPUT,),
+            )
         raise ValidationError(
             field="iterations",
             detail=_(
@@ -1660,17 +1877,25 @@ def _smoothing_cost(
             ),
             value=iterations,
             constraint="inverted",
-            suggestions=(
-                Action(id="fewer_iterations", label=_("Weniger Durchgänge nehmen.")),
-                Action(
-                    id="remesh_first", label=_("Vorher neu vernetzen — feiner glättet sanfter.")
-                ),
-            ),
+            values=values,
+            suggestions=tuple(suggestions) or (CORRECT_INPUT,),
         )
 
     lost = 1.0 - new / old
     if lost <= SMOOTH_LOSS_WARN:
         return []
+    # **Der Satz nennt den Weg, und jetzt ist er ein Knopf** (Durchsicht 0.5.1):
+    # dieselbe durchgespielte Länge wie beim Umstülpen, der Schritt davor.
+    # Im STL-Korpus verloren 12 von 39 Modellen bei fünf Durchgängen mehr als
+    # ein Viertel ihres Volumens, fünf stülpten um, zwei falteten sich.
+    edge = _remeshing_for_smoothing(before, iterations, cancelled)
+    values = {
+        "lost": round(lost, 3),
+        "before": round(old, 1),
+        "after": round(new, 1),
+    }
+    if edge is not None:
+        values["remesh_to_mm"] = edge
     return [
         Finding(
             code="mesh.smooth_shrank",
@@ -1680,7 +1905,8 @@ def _smoothing_cost(
                 "zieht es die Ecken zusammen. Erst neu vernetzen, dann glätten."
             ),
             object_id=object_id,
-            values={"lost": round(lost, 3), "before": round(old, 1), "after": round(new, 1)},
+            values=values,
+            suggestions=(REMESH_AND_RETRY,) if edge is not None else (),
         )
     ]
 
@@ -1709,6 +1935,8 @@ class RemeshParams(BaseParams):
     # 2: konform durch den exakten Kern, Slots und Farben je Herkunftsdreieck
     # (25.09.2026) — dasselbe Projekt ergibt ein anderes, kleineres Netz.
     cache_version="2",
+    retriangulates=True,
+    expected_triangles=expected_remesh,
 )
 def remesh_mesh(ctx: OpContext) -> OpResult:
     params = cast(RemeshParams, ctx.params)
@@ -1837,6 +2065,8 @@ class UniformParams(BaseParams):
         "Nicht zum Verfeinern allein: Wer nur mehr Dreiecke will, ohne dass irgendwo "
         "welche verschwinden, nimmt „Kanten verfeinern“ — das teilt und fasst nie zusammen."
     ),
+    retriangulates=True,
+    expected_triangles=expected_evened,
 )
 def remesh_uniform(ctx: OpContext) -> OpResult:
     """Gleichmäßige Dreiecke, damit ein Pinsel überall gleich wirkt.
@@ -1923,6 +2153,9 @@ class SubdivideParams(BaseParams):
         "vorhandenen Dreiecken gerechnet, keine wiedergewonnene Konstruktion. "
         "Wo es auf ein Maß ankommt, gehört die Rundung in die Skizze."
     ),
+    # Zählt vorab wie das Angleichen, verändert aber die Form mit Absicht: Die
+    # Vorschau zeigt die Rundung als Differenz, nicht bloß das neue Netz.
+    expected_triangles=expected_evened,
 )
 def subdivide_surface(ctx: OpContext) -> OpResult:
     """Unterteilen als Glättungsverfahren, nicht als Vernetzungswerkzeug.

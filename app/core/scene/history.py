@@ -31,6 +31,7 @@ from app.core.errors import (
     CHANGE_SELECTION,
     DECIMATE_AND_RETRY,
     RECOUNT_AND_RETRY,
+    REMESH_AND_RETRY,
     REPAIR_AND_RETRY,
     SHOW_STEP_VALUES,
     SPLIT_AND_RETRY,
@@ -887,7 +888,9 @@ class History:
 
         return self._retried_after([], suffix, living, RECOUNT_AND_RETRY.label, redraft=redraft)
 
-    def decimate_and_retry(self, stopped_at: OpId, triangles: int) -> Transaction:
+    def decimate_and_retry(
+        self, stopped_at: OpId, triangles: int, values: Mapping[str, Any] | None = None
+    ) -> Transaction:
         """Verringert die Eingänge vor einem angehaltenen Schritt und plant neu.
 
         Das vierte Geschwister von :meth:`repair_and_retry`, für ein Netz, das
@@ -903,19 +906,14 @@ class History:
         (:func:`repair_targets`): lebende Eingänge, kein Schritt des exakten
         Kerns, dessen einzeln bearbeitbare Flächen das Verringern in Dreiecke
         verwandeln würde.
+
+        ``values`` gibt dem Schritt dabei neue Werte — der Weg aus dem offenen
+        Dialog, in dem der Kunde die Zahl gerade geändert hat und die Vorschau
+        dieselbe Absage zeigt (RESTVERLAUF-04): Ändern und Verringern sind dort
+        eine Handlung und ein Strg+Z.
         """
         activation.require(activation.CHANGE)
-        operations = self.operations
-        failed = self.operation(stopped_at)
-        failed_index = next(
-            index for index, entry in enumerate(operations) if entry.id == failed.id
-        )
-        prefix = operations[:failed_index]
-        suffix = operations[failed_index:]
-
-        living = _living_objects(prefix)
-        targets = repair_targets(self.document, stopped_at, self._registry)
-        if not targets:
+        if not repair_targets(self.document, stopped_at, self._registry):
             raise ValidationError(
                 field="in",
                 detail=_(
@@ -927,6 +925,87 @@ class History:
                 suggestions=(SHOW_STEP_VALUES, CANCEL),
                 op_id=stopped_at,
             )
+        return self._prepared_and_retried(
+            stopped_at,
+            "decimate_mesh",
+            {"triangles": int(triangles), "method": "fast"},
+            DECIMATE_AND_RETRY.label,
+            values,
+        )
+
+    def remesh_and_retry(
+        self, stopped_at: OpId, edge: float, values: Mapping[str, Any] | None = None
+    ) -> Transaction:
+        """Verfeinert die Eingänge vor einem angehaltenen Schritt und plant neu.
+
+        Das Geschwister von :meth:`decimate_and_retry` in der Gegenrichtung, für
+        ein Netz, das beim *Glätten* umschlägt, weil seine Dreiecke für die Wand
+        zu grob sind: Vor den Suffix ab ``stopped_at`` kommt je lebendem Eingang
+        *Kanten verfeinern* auf ``edge`` — die Länge, an der der Kern Verfeinern
+        und Glätten durchgespielt hat (``values["remesh_to_mm"]``,
+        ``mesh_ops._remeshing_for_smoothing``). Eine Transaktion, dieselbe
+        Zielschranke wie die Reparatur.
+        """
+        activation.require(activation.CHANGE)
+        if not repair_targets(self.document, stopped_at, self._registry):
+            raise ValidationError(
+                field="in",
+                detail=_(
+                    "Dieser Schritt verwendet kein vorhandenes Modell, dessen Kanten "
+                    "Solidon verfeinern kann."
+                ),
+                constraint="no_remesh_target",
+                values={"op": stopped_at},
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+                op_id=stopped_at,
+            )
+        return self._prepared_and_retried(
+            stopped_at, "remesh_mesh", {"edge": float(edge)}, REMESH_AND_RETRY.label, values
+        )
+
+    def _prepared_and_retried(
+        self,
+        stopped_at: OpId,
+        op: str,
+        params: Mapping[str, Any],
+        title: TranslatableText | str,
+        values: Mapping[str, Any] | None,
+    ) -> Transaction:
+        """Ein Netzschritt je lebendem Eingang vor den Schritt ``stopped_at``, dann der Suffix neu.
+
+        Der gemeinsame Weg von :meth:`decimate_and_retry` und
+        :meth:`remesh_and_retry`; Lizenz und Ziele haben beide vorher geprüft,
+        jede mit ihrem eigenen Satz. ``values`` ersetzt Werte des Schritts
+        selbst in seiner neuen Fassung; geprüft wird wie beim Ändern
+        (``_check_params``), bevor etwas geschrieben ist.
+        """
+        operations = self.operations
+        failed = self.operation(stopped_at)
+        failed_index = next(
+            index for index, entry in enumerate(operations) if entry.id == failed.id
+        )
+        prefix = operations[:failed_index]
+        suffix = operations[failed_index:]
+
+        living = _living_objects(prefix)
+        targets = repair_targets(self.document, stopped_at, self._registry)
+        changed: dict[str, Any] | None = None
+        if values:
+            spec = self._spec_of(failed)
+            self._check_params(spec.name, spec.params.spec(), values)
+            changed = {**failed.params, **values}
+
+        def redraft(entry: Operation) -> OperationDraft | None:
+            """Der Schritt selbst mit den geänderten Werten, jeder andere unverändert."""
+            if changed is None or entry.id != failed.id:
+                return None
+            return OperationDraft(
+                op=entry.op,
+                inputs=entry.inputs,
+                params=changed,
+                outputs=entry.outputs,
+                seed=entry.seed,
+            )
 
         # Erst vollständig planen, dann schreiben — ein ungültiger Wert hält
         # hier an (``_plan`` prüft die Grenzen der Operation), und geschrieben
@@ -934,18 +1013,14 @@ class History:
         self._reseed()
         planned: list[Operation] = []
         for target in targets:
-            thinned = self._plan(
-                OperationDraft(
-                    op="decimate_mesh",
-                    inputs=(target,),
-                    params={"triangles": int(triangles), "method": "fast"},
-                ),
+            prepared = self._plan(
+                OperationDraft(op=op, inputs=(target,), params=dict(params)),
                 living,
             )
-            planned.append(thinned)
-            living.difference_update(set(thinned.inputs) - set(thinned.outputs))
-            living.update(thinned.outputs)
-        return self._retried_after(planned, suffix, living, DECIMATE_AND_RETRY.label)
+            planned.append(prepared)
+            living.difference_update(set(prepared.inputs) - set(prepared.outputs))
+            living.update(prepared.outputs)
+        return self._retried_after(planned, suffix, living, title, redraft)
 
     def _with_replaced(
         self, step: Operation, gone: set[ObjectId], pieces: tuple[ObjectId, ...]

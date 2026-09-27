@@ -570,6 +570,13 @@ def test_smoothing_says_how_much_body_it_cost(profile: Profile) -> None:
     warning = next(f for f in result.findings if f.code == "mesh.smooth_shrank")
     assert warning.severity == "warning"
     assert float(warning.values["lost"]) > 0.5
+    # „Erst neu vernetzen, dann glätten." ist seit der Durchsicht 0.5.1 ein
+    # Knopf mit durchgespielter Länge — und die Länge trägt.
+    assert [action.id for action in warning.suggestions] == ["remesh_and_retry"]
+    edge = float(warning.values["remesh_to_mm"])
+    refined = SceneObject(id="obj_1", name="Quader", mesh=mesh_ops.remesh(entry.mesh, edge))
+    again = run("smooth_mesh", refined, profile, iterations=5)
+    assert "mesh.smooth_shrank" not in {finding.code for finding in again.findings}
 
 
 def test_smoothing_a_fine_mesh_stays_quiet(profile: Profile) -> None:
@@ -939,6 +946,260 @@ def test_thinning_is_not_offered_where_it_would_open_the_body(
 
     assert [action.id for action in raised.value.suggestions] == ["use_reachable"]
     assert "decimate_to" not in raised.value.values
+
+
+def _hole_plate(opened: bool = False) -> MeshData:
+    """Die Lochplatte aus dem Korpus — auf Wunsch mit zwei fehlenden Dreiecken."""
+    plate = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    if opened:
+        raw = plate.raw.copy()
+        raw.update_faces(np.arange(len(raw.faces)) > 1)
+        plate = MeshData.of(raw)
+    return plate
+
+
+@pytest.mark.parametrize("opened", [False, True])
+def test_the_count_ahead_refuses_exactly_as_the_step_does(
+    monkeypatch: pytest.MonkeyPatch, opened: bool
+) -> None:
+    """Die Vorschau fragt die Vorabzählung am Original — und die sagt dasselbe wie der Schritt.
+
+    Bis zur Durchsicht 0.5.1 rechnete die grobe Vorschau *Kanten verfeinern*
+    an einer verkleinerten Kopie, deren Zahl nicht die des Kunden ist: Am
+    Spielbrett aus ``F:\\3D Dateien`` zählte das Original bei 1 mm 11,97 Mio.
+    Dreiecke, die Kopie 7,8 Mio.; die Vorschau rechnete, *Übernehmen* hielt an
+    (RESTVERLAUF-04). ``expected_triangles`` ist dieselbe Zählung, die der
+    Schritt vor dem ersten Schnitt fragt: dieselbe Absage, dieselben Werte,
+    dieselben Handlungen. Am offenen Netz ist sie eine Obergrenze.
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 20_000)
+    plate = _hole_plate(opened)
+    spec = REGISTRY.get("remesh_mesh")
+    assert spec.expected_triangles is not None
+    assert spec.retriangulates
+
+    with pytest.raises(ValidationError) as counted:
+        spec.expected_triangles(plate, spec.params(edge=0.5))
+    with pytest.raises(ValidationError) as computed:
+        mesh_ops.remesh(plate, 0.5)
+
+    assert dict(counted.value.values) == dict(computed.value.values)
+    assert counted.value.suggestions == computed.value.suggestions
+    reachable = counted.value.values["reachable"]
+    estimate = spec.expected_triangles(plate, spec.params(edge=reachable))
+    assert estimate.at_most == opened
+    assert estimate.triangles <= 20_000
+    refined = mesh_ops.remesh(plate, reachable)
+    if opened:
+        assert refined.triangle_count <= estimate.triangles, "eine Obergrenze hält"
+    else:
+        assert 0.7 < refined.triangle_count / estimate.triangles < 1.3
+
+
+def test_a_length_that_splits_nothing_counts_the_mesh_as_it_is() -> None:
+    """Liegt keine Kante über der Länge, teilt der Schritt nichts — und die Zählung sagt das.
+
+    Die Schätzung trägt einen Flächenanteil, der auch ein unberührtes Netz
+    größer rechnet; die Vorschau sagte sonst „aus 3 000 werden rund 3 100".
+    """
+    plate = _hole_plate()
+    spec = REGISTRY.get("remesh_mesh")
+    assert spec.expected_triangles is not None
+    longest = float(mesh_ops.edge_lengths(plate).max())
+
+    estimate = spec.expected_triangles(plate, spec.params(edge=math.ceil(longest) + 1.0))
+
+    assert estimate.triangles == plate.triangle_count
+    assert mesh_ops.remesh(plate, math.ceil(longest) + 1.0).triangle_count == plate.triangle_count
+
+
+@pytest.mark.parametrize("op", ["remesh_uniform", "subdivide_surface"])
+def test_the_evening_steps_count_ahead_as_they_refuse(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, op: str
+) -> None:
+    """*Dreiecke angleichen* und *Fläche unterteilen* zählen einmal teilend, wie ihr Schritt."""
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 20_000)
+    plate = _hole_plate()
+    spec = REGISTRY.get(op)
+    assert spec.expected_triangles is not None
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate)
+
+    with pytest.raises(ValidationError) as counted:
+        spec.expected_triangles(plate, spec.params(edge=0.5))
+    with pytest.raises(ValidationError) as computed:
+        run(op, entry, profile, edge=0.5)
+
+    assert dict(counted.value.values) == dict(computed.value.values)
+    assert counted.value.suggestions == computed.value.suggestions
+
+
+def test_reducing_counts_the_target_and_never_refuses() -> None:
+    """*Dreiecke verringern* zählt vorab das Ziel, höchstens was schon da ist."""
+    plate = _hole_plate()
+    spec = REGISTRY.get("decimate_mesh")
+    assert spec.expected_triangles is not None
+    assert spec.retriangulates
+
+    low = spec.expected_triangles(plate, spec.params(triangles=mesh_ops.DECIMATE_FLOOR))
+    high = spec.expected_triangles(plate, spec.params(triangles=plate.triangle_count * 10))
+
+    assert low.triangles == mesh_ops.DECIMATE_FLOOR
+    assert high.triangles == plate.triangle_count
+
+
+def _shell() -> MeshData:
+    """Die dünne Schale aus dem Befund: 40 x 40 x 30 mm, 2 mm Wand, lange Kanten."""
+    box = trimesh.creation.box(extents=(40.0, 40.0, 30.0))
+    box.apply_translation((0.0, 0.0, 15.0))
+    return hollow(MeshData.of(box), 2.0, vents=1).mesh
+
+
+def test_an_inverted_smoothing_offers_the_refinement_that_goes(profile: Profile) -> None:
+    """„Vorher neu vernetzen" war ein Rat ohne Länge und ohne Knopf — jetzt ist er nachgerechnet.
+
+    An der Schale stülpt schon **ein** Durchgang um (−21 200 mm³); „Weniger
+    Durchgänge nehmen." half dort nie und steht deshalb nicht mehr da. Der Kern
+    spielt *Kanten verfeinern* und *Glätten* an runden Längen durch, die
+    längste zuerst, und nennt die erste, bei der der Körper nicht umschlägt und
+    ohne Warnung bleibt (Durchsicht 0.5.1).
+    """
+    shell = _shell()
+    entry = SceneObject(id="obj_1", name="Schale", mesh=shell)
+
+    with pytest.raises(ValidationError) as raised:
+        run("smooth_mesh", entry, profile, iterations=5)
+
+    offered = [action.id for action in raised.value.suggestions]
+    assert offered == ["remesh_and_retry"], offered
+    edge = raised.value.values["remesh_to_mm"]
+    assert edge in mesh_ops.SMOOTHING_EDGES
+
+    refined = SceneObject(id="obj_1", name="Schale", mesh=mesh_ops.remesh(shell, edge))
+    smoothed = run("smooth_mesh", refined, profile, iterations=5)
+    assert smoothed.outputs[0].mesh.volume > 0.0
+    assert not [f for f in smoothed.findings if f.code == "mesh.smooth_shrank"]
+    longer = [value for value in mesh_ops.SMOOTHING_EDGES if edge < value < 56.0]
+    if longer:
+        coarser = mesh_ops.smooth(mesh_ops.remesh(shell, min(longer)), 5)
+        assert coarser.volume <= 0.0 or 1.0 - coarser.volume / shell.volume > (
+            mesh_ops.SMOOTH_LOSS_WARN
+        ), "die längste Länge, die trägt — nicht irgendeine"
+
+
+def test_a_smoothing_that_blows_the_body_up_halts_like_one_that_turns_it_inside_out() -> None:
+    """Ein Viertel mehr Volumen nach Taubin heißt: Die Fläche ist durch sich selbst geschoben.
+
+    Am Kumiko-Organizer aus ``F:\\3D Dateien`` machten fünf Durchgänge aus
+    133 944 mm³ 553 866 — geschlossen genannt, und bis zur Durchsicht 0.5.1
+    ohne ein Wort übernommen. Nachgestellt mit einem Ergebnis, das viermal so
+    groß ist wie der Eingang.
+    """
+    body = block(40.0, 40.0, 30.0)
+    grown = MeshData.of(body.raw.copy().apply_scale(1.6))
+    assert grown.volume > 4.0 * body.volume
+
+    with pytest.raises(ValidationError) as raised:
+        mesh_ops._smoothing_cost(body, grown, "obj_1", 5)
+
+    assert raised.value.constraint == "folded"
+    assert "durch sich selbst" in str(raised.value.detail)
+    assert raised.value.suggestions
+    assert mesh_ops._smoothing_holds(100.0, 110.0)
+    assert not mesh_ops._smoothing_holds(100.0, 130.0), "gewachsen zählt wie geschrumpft"
+    assert not mesh_ops._smoothing_holds(100.0, 70.0)
+    assert not mesh_ops._smoothing_holds(100.0, -5.0)
+
+
+def test_a_smoothing_no_refinement_rescues_offers_the_step_itself(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile
+) -> None:
+    """Trägt keine Länge im Rahmen, wird nichts versprochen — der Schritt geht auf (Regel 17)."""
+    monkeypatch.setattr(mesh_ops, "SMOOTHING_REMESH_BUDGET", 1)
+    entry = SceneObject(id="obj_1", name="Schale", mesh=_shell())
+
+    with pytest.raises(ValidationError) as raised:
+        run("smooth_mesh", entry, profile, iterations=5)
+
+    assert [action.id for action in raised.value.suggestions] == ["correct_input"]
+    assert "remesh_to_mm" not in raised.value.values
+
+
+def test_remesh_and_retry_puts_the_refinement_before_the_halted_smoothing(
+    profile: Profile, document: Document
+) -> None:
+    """Der Kundenweg im Kern: Halt, Knopf, Kette läuft durch, Strg+Z (Regel 16)."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/schale.stl", sha256=""
+    )
+    project.sources["src_1"] = _shell().raw.export(file_type="stl")
+    history = History(document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Glätten",
+        [OperationDraft(op="smooth_mesh", inputs=("obj_1",), params={"iterations": 5})],
+    )
+    sources = ProjectSources(project)
+
+    halted = evaluate(document, profile, sources=sources, detect_features=False)
+
+    stopped = halted.stopped_at
+    assert stopped == history.operations[-1].id
+    refusal = next(f for f in halted.scene.report.findings if f.severity == "error")
+    assert [action.id for action in refusal.suggestions] == ["remesh_and_retry"]
+    edge = float(refusal.values["remesh_to_mm"])
+    before_ops = list(document.ops)
+    transactions = len(document.transactions)
+
+    history.remesh_and_retry(stopped, edge)
+    result = evaluate(document, profile, sources=sources, detect_features=False)
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert [entry.op for entry in history.operations] == ["load", "remesh_mesh", "smooth_mesh"]
+    assert history.operations[1].params == {"edge": edge}
+    assert len(document.transactions) == transactions + 1, "ein Zug, eine Transaktion"
+    assert result.scene.objects["obj_1"].mesh.volume > 0.0
+
+    history.undo()
+    assert list(document.ops) == before_ops, "Strg+Z holt den angehaltenen Stand zurück"
+
+
+def test_thinning_from_the_open_dialog_takes_the_typed_values_along(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, document: Document
+) -> None:
+    """Aus dem offenen Dialog: Verringern davor **und** die getippte Länge — ein Zug.
+
+    Wer einen angehaltenen Schritt ändert, sieht die Absage schon in der
+    Vorschau, samt *Dreiecke verringern und erneut versuchen* (RESTVERLAUF-04).
+    Der Knopf dort nimmt die Werte im Dialog mit; zwei Transaktionen wären zwei
+    Strg+Z für eine Handlung.
+    """
+    monkeypatch.setattr(mesh_ops, "MAX_REMESH_TRIANGLES", 200_000)
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/platte.stl", sha256=""
+    )
+    project.sources["src_1"] = _dense_plate().raw.export(file_type="stl")
+    history = History(document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        "Kanten verfeinern",
+        [OperationDraft(op="remesh_mesh", inputs=("obj_1",), params={"edge": 5.0})],
+    )
+    step = history.operations[-1].id
+    transactions = len(document.transactions)
+
+    history.decimate_and_retry(step, 2_000, {"edge": 1.5})
+
+    assert [entry.op for entry in history.operations] == ["load", "decimate_mesh", "remesh_mesh"]
+    assert history.operations[-1].params == {"edge": 1.5}
+    assert len(document.transactions) == transactions + 1
+    with pytest.raises(ValidationError) as raised:
+        history.decimate_and_retry(history.operations[-1].id, 2_000, {"kante": 1.0})
+    assert raised.value.constraint == "unknown"
+    assert len(document.transactions) == transactions + 1, "ein fremder Wert schreibt nichts"
 
 
 @pytest.mark.parametrize(

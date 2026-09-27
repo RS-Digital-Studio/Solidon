@@ -297,6 +297,40 @@ def test_new_triangles_at_the_same_volume_are_a_preview() -> None:
     assert not difference.recoloured
 
 
+def test_a_body_whose_shape_is_promised_gets_its_new_mesh_without_a_cut(monkeypatch) -> None:
+    """RESTVERLAUF-04: *Kanten verfeinern* sagt die Form zu — die Vorschau schneidet nicht.
+
+    Zwei fast deckungsgleiche Häute sind der schlimmste Fall jedes Booleschen
+    Kerns: Am Spielwürfel aus ``F:\\3D Dateien`` stand die Vorschau bei
+    0,05 mm über zehn Minuten in diesem Schnitt, für eine Antwort, die vorher
+    feststand. ``retriangulated`` nennt die Körper, deren Form die Operation
+    zusagt; sie bekommen das neue Netz und keinen Vergleich.
+    """
+    from app.core.geom import difference as difference_module
+
+    plain = cube(20.0)
+    finer = MeshData.of(plain.raw.subdivide())
+
+    def no_cut(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("kein Boolescher Vergleich an einer zugesagten Form")
+
+    monkeypatch.setattr(difference_module, "compare", no_cut)
+
+    difference = compare_scenes(
+        scene_with(obj_1=plain), scene_with(obj_1=finer), retriangulated={"obj_1"}
+    )
+
+    entry = difference.entries["obj_1"]
+    assert entry.retriangulated is finer
+    assert entry.result is not None and entry.result.mesh is finer
+    assert not difference.changed
+    assert difference.reshaped
+    unchanged = compare_scenes(
+        scene_with(obj_1=plain), scene_with(obj_1=plain), retriangulated={"obj_1"}
+    )
+    assert not unchanged.entries, "was gleich bleibt, bleibt gleich"
+
+
 def test_a_widened_bore_takes_material_and_adds_none_even_where_the_cut_cannot(
     profile: Profile,
 ) -> None:

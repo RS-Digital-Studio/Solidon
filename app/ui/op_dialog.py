@@ -1764,6 +1764,16 @@ class OperationDialog(QDialog):
         self._filament_notice.hide()
         layout.addWidget(self._filament_notice)
         layout.addLayout(front)
+        # **Die Absage der Vorschau mit ihren Knöpfen, direkt unter den Feldern**
+        # (RESTVERLAUF-04). Das Band über dem Bild trägt den Satz, aber es nimmt
+        # keinen Klick an; die Handlung, die hilft — die kleinste Kantenlänge,
+        # die noch geht, oder erst verringern —, stand bis zur Durchsicht 0.5.1
+        # erst drei Klicks später im Prüfbericht, nach einem angehaltenen
+        # Schritt. Sichtbar nur mit einer Handlung, die dieser Dialog einlöst
+        # (:meth:`show_refusal`).
+        self._refusal = ErrorNotice(self)
+        self._refusal.hide()
+        layout.addWidget(self._refusal)
         # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
         # nicht mehr verteilt über alles.
         layout.addStretch(1)
@@ -2100,6 +2110,38 @@ class OperationDialog(QDialog):
         """
         self._placement_hint.setVisible(bool(on))
         self.aim_again.setVisible(paused)
+
+    def show_refusal(
+        self,
+        problem: object | None,
+        handlers: Mapping[str, Callable[[AppError], None]] | None = None,
+    ) -> None:
+        """Die Absage der Vorschau mit den Knöpfen, die hier etwas bewirken — oder nichts.
+
+        ``handlers`` nennt die Handlungen, die das Fenster in diesem offenen
+        Dialog einlöst; ohne eine davon bleibt die Zeile weg — der Satz steht
+        ohnehin im Band, und ein Knopf ohne Wirkung wäre schlechter als keiner
+        (§2.7). ``None`` nimmt sie wieder weg, mit jeder neuen Vorschau.
+        """
+        if problem is None or not handlers:
+            self._refusal.clear()
+            self._refusal.hide()
+            return
+        self._refusal.set_error(problem, handlers)
+        self._refusal.setVisible(bool(self._refusal.text()))
+
+    def take_value(self, name: str, value: Any) -> bool:
+        """Einen Wert in ein Zahlenfeld schreiben, als hätte der Kunde ihn getippt.
+
+        Für *Die kleinste Kantenlänge nehmen, die noch geht.*: Die Zahl kommt
+        aus der Absage, das Feld meldet die Änderung wie jede Eingabe, und die
+        Vorschau rechnet neu. Falsch, wenn das Feld keines für Zahlen ist.
+        """
+        editor = self._editors.get(name)
+        if not isinstance(editor, ValueField):
+            return False
+        editor.set_value(value)
+        return True
 
     def block_apply(self, reason: str | None) -> None:
         """Den Übernehmen-Knopf von außen sperren — mit Grund — oder freigeben.

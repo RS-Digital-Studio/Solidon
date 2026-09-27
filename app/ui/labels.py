@@ -1424,6 +1424,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # ``mesh_ops._too_fine``: die Dreieckszahl, auf die *Dreiecke verringern*
     # vor dem erneuten Versuch geht — am verringerten Netz nachgezählt.
     "decimate_to": _("Verringern auf"),
+    # ``mesh_ops._smoothing_cost``: die Kantenlänge, auf die *Kanten
+    # verfeinern* vor dem erneuten *Glätten* teilt — daran durchgespielt.
+    "remesh_to": _("Verfeinern auf"),
     "dependencies": _("Begleitdateien"),
     "dependency": _("Begleitdatei"),
     "depth": _("Tiefe"),
@@ -1715,6 +1718,24 @@ def plain_number(value: float) -> str:
     „15,00". Bei einem Anteil und einem Winkel ist das die ganze Auskunft.
     """
     return localised(f"{value:g}")
+
+
+def count_text(count: int, *, rough: bool = False) -> str:
+    """Eine Anzahl in Dreiergruppen, getrennt durch ein geschütztes Leerzeichen.
+
+    „6081000 Dreiecke" liest niemand auf einen Blick, „6 081 000" schon. Das
+    Leerzeichen gilt in jeder Sprache — ein Punkt oder Komma als
+    Tausendertrennung hieße in der Hälfte der Sprachen etwas anderes (§19.3).
+    ``rough`` rundet vorher auf zwei geltende Ziffern: Eine vorab geschätzte
+    Zahl, die bis auf die Einerstelle dasteht, sähe aus wie gezählt.
+    """
+    whole = max(int(count), 0)
+    if rough and whole >= 100:
+        step = 10 ** (len(str(whole)) - 2)
+        whole = (whole + step // 2) // step * step
+    digits = str(whole)
+    groups = [digits[max(end - 3, 0) : end] for end in range(len(digits), 0, -3)]
+    return " ".join(reversed(groups))
 
 
 #: Welches Suffix welche Einheit meint, und wie ein Wert damit dasteht.

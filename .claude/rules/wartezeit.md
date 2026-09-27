@@ -463,6 +463,47 @@ vom genauen ab. Am Eiffelturm, am Spiderman und am Piratenschiff liegt die
 Abweichung bei 0,4, 3 und 0,04 %. Die Platte bekommt dasselbe grobe Netz wie
 vorher (292 Dreiecke); ihre Zeilen sind die Streuung des Laufs.
 
+**Was an der Dreieckszahl hängt, wird am Original gezählt, nicht an der
+Kopie** (Durchsicht 0.5.1, RESTVERLAUF-04). Die verkleinerte Kopie hat eine
+andere Zahl als der Körper des Kunden, und für drei Operationen ist die Zahl
+die Antwort: Am Spielbrett aus `F:\3D Dateien` zählte das Original bei 1 mm
+11,97 Mio. Dreiecke — zu fein —, die Kopie 7,8 Mio.; die Vorschau rechnete, und
+*Übernehmen* hielt danach an. *Dreiecke verringern* sagte an der Kopie des
+Spielwürfels (3 858 von 250 488 Dreiecken) „Die Fläche hat sich dabei kaum
+verschoben.", ohne etwas verringert zu haben. `_preview_outcome` fragt deshalb
+im Dialog zuerst `OperationSpec.expected_triangles` am Eingang des Schritts
+(`_counted_ahead`; beim Ändern die Szene **vor** dem Schritt,
+`_scene_before_step`), und diese Körper bekommen keine Kopie. Drei Ausgänge:
+
+* **Die Zählung sagt ab** — dann ist das die Antwort. Das Band trägt den Satz,
+  und `preview_async(refused=…)` reicht die Ausnahme ins Fenster; der Dialog
+  zeigt unter den Feldern die Handlungen, die er selbst einlöst
+  (`OperationDialog.show_refusal`, `MainWindow._refusal_handlers`): *Die
+  kleinste Kantenlänge nehmen, die noch geht.* schreibt die Zahl ins Feld,
+  *Dreiecke verringern und erneut versuchen* schreibt Verringern und Schritt
+  als eine Transaktion. Derselbe Weg trägt die Absage eines Halts
+  (`_stop_finding`) — etwa das umgestülpte *Glätten* mit *Kanten verfeinern
+  und erneut versuchen*.
+* **Die Operation ändert nur das Netz** (`retriangulates`) **und es wüchse über
+  `COARSE_PREVIEW_ABOVE`** — dann ist die Zahl die Vorschau: „Vorschau — aus
+  250 488 werden geschätzt 6 100 000 Dreiecke" (geteilt wurden es 5 778 968;
+  am Spielbrett bei 1,53 mm 6,4 statt 4,1 Mio. — deshalb „geschätzt" und nicht
+  „rund"), gerechnet wird nichts
+  (`preview_async(counted=…)`, `TriangleCounts`). Am Spielwürfel bei 0,05 mm
+  stand die Vorschau vorher über zehn Minuten im Booleschen Vergleich einer
+  auf 4,5 Mio. geteilten Kopie, und *Übernehmen* hieß „Wird übernommen, sobald
+  die Vorschau steht."; jetzt 0,07 s.
+* **Sonst rechnet der Schritt am Original** — ohne Kopie, und bei
+  `retriangulates` ohne Booleschen Vergleich: Die Differenz ist das neue Netz
+  (`compare_scenes(retriangulated=…)`), das Band nennt die gezählte Zahl.
+  *Dreiecke verringern* auf 60 000 am Spielwürfel: genau gerechnet 69 s, jetzt
+  0,75 s.
+
+Ein exakter Eingang wird nicht vorab gezählt: Seine Umwandlung muss das Band
+nennen, und dafür muss der Schritt rechnen — ohne Booleschen Vergleich, wo er
+nur das Netz ändert. Der Agentenweg zählt nicht vorab; er rechnet ohnehin
+genau.
+
 **Ein Weg bleibt genau, mit Absicht.** Der Agentenvorschlag geht über
 `preview_scene` ohne den Rückruf — er antwortet ohnehin nicht in
 Millisekunden, und sein Bild steht, bis jemand es annimmt.

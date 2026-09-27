@@ -825,6 +825,20 @@ def test_decimate_and_retry_never_guesses_a_target(history: History) -> None:
     assert document_to_data(history.document) == before
 
 
+def test_remesh_and_retry_never_guesses_a_target(history: History) -> None:
+    """Das Verfeinern vor dem Schritt nimmt dieselben Ziele wie die Reparatur — oder keine."""
+    create(history)
+    failed_id = history.operations[-1].id
+    before = document_to_data(history.document)
+
+    with pytest.raises(ValidationError) as caught:
+        history.remesh_and_retry(failed_id, 1.0)
+
+    assert caught.value.constraint == "no_remesh_target"
+    assert caught.value.suggestions
+    assert document_to_data(history.document) == before
+
+
 def test_decimate_and_retry_never_turns_an_exact_body_into_triangles() -> None:
     """Vor einen Schritt des exakten Kerns kommt kein Verringern — es machte Dreiecke daraus."""
     from app.core.bootstrap import load_operations

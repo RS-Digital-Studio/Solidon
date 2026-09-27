@@ -2735,6 +2735,8 @@ NEEDS_OP: Final = frozenset(
         "use_reachable",
         "repair_before_and_retry",
         "decimate_and_retry",
+        # Und vor ein umgeschlagenes *Glätten* das Verfeinern (Durchsicht 0.5.1).
+        "remesh_and_retry",
     }
 )
 

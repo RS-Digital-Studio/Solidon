@@ -97,6 +97,7 @@ from app.core.errors import (
     RECOGNIZE_FULLY,
     RECOGNIZE_LOCAL,
     RELEASE_PROTECTION,
+    REMESH_AND_RETRY,
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
     REPAIR_BEFORE_AND_RETRY,
@@ -789,6 +790,22 @@ def actions_for_document(
         # Schritt des exakten Kerns), und nur mit der Zahl, an der der Kern
         # nachgezählt hat.
         offered = [action for action in offered if action.id != DECIMATE_AND_RETRY.id]
+    if (
+        "remesh_to_mm" not in finding.values
+        or finding.op_id is None
+        or not repair_is_available(
+            document,
+            stopped_at=finding.op_id,
+            op_id=finding.op_id,
+            object_id=None,
+        )
+    ):
+        # *Kanten verfeinern und erneut versuchen* dasselbe, in der Gegenrichtung:
+        # nur mit der Länge, an der der Kern Verfeinern und Glätten durchgespielt
+        # hat, und nur vor einem Schritt, der vorhandene Netze liest — auch vor
+        # einem, der durchlief und nur zu viel Volumen kostete
+        # (``mesh.smooth_shrank``), wie die Reparatur vor einem gerundeten.
+        offered = [action for action in offered if action.id != REMESH_AND_RETRY.id]
     target = _object_for_finding(finding, document)
     if target is None or (live_objects is not None and target not in live_objects):
         offered = [
