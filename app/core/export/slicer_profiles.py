@@ -2200,9 +2200,19 @@ def match(
         return None, None
 
     exact = [entry for entry in candidates if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
+    # Bei gleicher Düse die Grundausführung, wie bei :func:`match_filament`:
+    # OrcaSlicer führt den Sovol SV06 als „0.4 nozzle“ und als „0.4 High-Speed
+    # nozzle“, und ohne diese Regel entschied die Reihenfolge im Ordner — ein
+    # gewöhnlicher SV06 bekam den High-Speed-Prozess mit 100 statt 25 mm/s
+    # Außenwand und 20 statt 40 Grad Stützgrenze vorgewählt (27.09.2026).
     chosen = min(
         exact or candidates,
-        key=lambda entry: (not entry.from_user, abs(entry.nozzle - printer.nozzle_diameter)),
+        key=lambda entry: (
+            not entry.from_user,
+            abs(entry.nozzle - printer.nozzle_diameter),
+            len(entry.name),
+            entry.name,
+        ),
     )
 
     fitting = processes(profiles, chosen)

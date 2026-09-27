@@ -316,6 +316,36 @@ def test_the_nozzle_decides_between_variants(slicer: Path) -> None:
     assert machine is not None and machine.nozzle == pytest.approx(0.6)
 
 
+def test_the_plain_machine_wins_over_a_variant_with_the_same_nozzle(
+    slicer: Path, bestand: Path
+) -> None:
+    """OrcaSlicer führt den Sovol SV06 als „0.4 nozzle“ und als „0.4 High-Speed
+    nozzle“ — dasselbe Gerät, dieselbe Düse. Bis zum 27.09.2026 entschied die
+    Reihenfolge im Ordner, und ein gewöhnlicher SV06 bekam den High-Speed-Prozess
+    vorgewählt. Die Variante liegt hier absichtlich zuerst im Ordner."""
+    _write(
+        bestand / "Elegoo" / "machine" / "ECC2" / "0-HighSpeed.json",
+        {
+            "type": "machine",
+            "name": "Elegoo Centauri Carbon 2 0.4 High-Speed nozzle",
+            "instantiation": "true",
+            "printer_model": "Elegoo Centauri Carbon 2",
+            "nozzle_diameter": ["0.4"],
+        },
+    )
+    found = sp.find_profiles(slicer, "orca")
+    variants = [
+        entry.name
+        for entry in sp.machines(found)
+        if abs(entry.nozzle - 0.4) < 1e-9 and "Centauri" in entry.name
+    ]
+    assert variants[0].endswith("High-Speed nozzle"), "sonst prüft der Fall nichts"
+
+    machine, _process = sp.match(found, _printer())
+
+    assert machine is not None and machine.name == "Elegoo Centauri Carbon 2 0.4 nozzle"
+
+
 def test_an_unknown_printer_gets_no_guess(slicer: Path) -> None:
     """Eine falsche Vorauswahl wäre schlimmer als keine — sie sähe aus wie
     eine Entscheidung."""
