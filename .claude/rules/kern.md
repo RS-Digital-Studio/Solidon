@@ -223,6 +223,38 @@ bitgleich, die Zuordnung dieselbe Zerlegung. **Wer eine der beiden ändert,
 `tests/test_local_detection.py::test_the_spot_reads_the_same_radii_jumps_and_surfaces_as_the_whole_body`
 vergleicht beide an Korpusnetzen, ungeteilt und nach *Kanten verfeinern*.
 
+## Über die Körpergrenze merkt sich nur, wer außer seiner Lesung nichts liest
+
+Die Vollerkennung nach jedem Schritt (§21.1) bleibt; schneller wird sie, weil
+ein Fleck, der Bit für Bit dasselbe liest, dieselbe Antwort bekommt — auch an
+einem neuen Körper (`features._by_geometry`, RM-261). Der Schlüssel ist der
+Abdruck der Stützpunktlesung (`_SurfaceSupport.digest`: jedes Feld und die
+Dreiecke des Flecks), dazu genau die Zahlen, die die Frage sonst vom Körper
+liest — die Toleranz aus seiner Diagonale, den geprüften Fit —, und die
+Löserbudgets. **Kein Toleranzvergleich**: Eine Normale, die in der letzten
+Stelle abweicht, ist eine andere Frage. Drei Regeln halten das dicht:
+
+- **Eine Frage in `GEOMETRY_KEYED_ANSWERS` liest den Körper nur über ihre
+  Lesung und über Zahlen, die ihr Aufrufer mitgibt** (die Toleranz geht als
+  Argument in die Rechnung und in den Schlüssel, damit beide dieselbe Zahl
+  sehen). Was der Rumpf darüber hinaus vom Körper liest, muss die Lesung
+  schon tragen — Normalen und Flächen des Flecks sind ihre Felder, Mitten
+  folgen aus den Dreiecken, und die Ecken in der Folge ihrer Nummern dürfen
+  nur in ein Minimum oder Maximum eingehen. Die Antwort ist unveränderlich
+  (ein Fit, ein Wahrheitswert), nie eine Dreiecksnummer.
+  `tests/test_features.py::test_every_question_across_bodies_is_named_and_shared`
+  verlangt den Eintrag.
+- **Die Grenze ist die jeder kleinen Frage** (`CACHE_LIMIT_PER_QUESTION`),
+  **und die Lebensdauer die des Merkers je Körper**: Eine Antwort gehört den
+  Abstammungen, die sie gerechnet oder gelesen haben, und geht mit der
+  letzten; `forget_cache` leert auch sie.
+- **Treffen kann sie nur, wenn der neue Körper dieselbe Darstellung trägt** —
+  dieselbe Eckenfolge, dieselbe Reihenfolge der Ecken. Eine Boolesche legt
+  deshalb zurück, was sie nicht geschnitten hat (`operationen.md`,
+  `attributes.in_source_layout`). Ohne das trafen am Gartenschlauchhalter
+  null von 2 743 Kegelfragen; mit ihm 2 605, und die Erkennung nach dem
+  Versetzen einer Bohrung sank von 27 auf 6 bis 8 s unter Last.
+
 ## Fehler
 
 Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —

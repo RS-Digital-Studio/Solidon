@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import struct
 import threading
 import weakref
 from collections import Counter, OrderedDict
@@ -1175,10 +1176,13 @@ def forget_cache() -> None:
     with _MEMORY_LOCK:
         _SUPPORT_CACHE.clear()
         _DIGESTS.clear()
+        _BY_GEOMETRY.clear()
+        _GEOMETRY_HOLDERS.clear()
         for memory in _MEMORIES.values():
             memory.answers.clear()
             memory.digests.clear()
             memory.lineage.answers.clear()
+            memory.lineage.geometric.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -3797,7 +3801,27 @@ def _sphere_is_recognisable_read(
 ) -> bool:
     """Der Rumpf von :func:`_sphere_is_recognisable` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
-    if support is None or not np.any(support.round_corners):
+    if support is None:
+        return False
+    result: bool = _by_geometry(
+        "_sphere_is_recognisable",
+        body,
+        support,
+        lambda: _sphere_is_recognisable_measured(body, fit, patch, support, check_cancelled),
+        fit,
+    )
+    return result
+
+
+def _sphere_is_recognisable_measured(
+    body: trimesh.Trimesh,
+    fit: SphereFit,
+    patch: list[int],
+    support: _SurfaceSupport,
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Der Kugelnachweis selbst; was er vom Körper liest, trägt die Lesung."""
+    if not np.any(support.round_corners):
         return False
     weights = support.areas / support.areas.sum()
     normals = support.normals
@@ -6281,6 +6305,29 @@ def _fit_cylinder_read(
     support = _surface_support(body, patch, check_cancelled)
     if support is None:
         return None
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    result: CylinderFit | None = _by_geometry(
+        "fit_cylinder",
+        body,
+        support,
+        lambda: _fit_cylinder_measured(body, patch, support, tolerance, check_cancelled),
+        tolerance,
+    )
+    return result
+
+
+def _fit_cylinder_measured(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    support: _SurfaceSupport,
+    tolerance: float,
+    check_cancelled: Callable[[], None] | None,
+) -> CylinderFit | None:
+    """Die Zylindereinpassung an einer Lesung.
+
+    Vom Körper liest sie in :func:`_chord_sag` Normalen, Flächen und Ecken des
+    Flecks — die Lesung trägt dieselben Zahlen (:data:`GEOMETRY_KEYED_ANSWERS`).
+    """
     normals, areas = support.normals, support.areas
     _values, vectors = np.linalg.eigh(normals.T @ (normals * areas[:, None]))
     axis = vectors[:, 0]
@@ -6303,7 +6350,6 @@ def _fit_cylinder_read(
     origin = (points.min(axis=0) + points.max(axis=0)) / 2.0
     relative = points - origin
     flat = np.column_stack((relative @ first, relative @ second))
-    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
     outline = _cylinder_contour(flat, tolerance, check_cancelled)
     if outline is None:
         return None
@@ -6592,7 +6638,12 @@ def fit_stadium(
 
 
 class _SurfaceSupport(NamedTuple):
-    """Private Lesezuordnung zwischen Netzpunkten und ihren Mantelfacetten."""
+    """Private Lesezuordnung zwischen Netzpunkten und ihren Mantelfacetten.
+
+    ``digest`` ist der Abdruck der ganzen Lesung samt der Dreiecke des Flecks,
+    Bit für Bit — der Schlüssel des Merkers über die Körpergrenze
+    (:func:`_by_geometry`).
+    """
 
     points: np.ndarray
     corners: np.ndarray
@@ -6602,6 +6653,7 @@ class _SurfaceSupport(NamedTuple):
     round_corners: np.ndarray
     ridges: np.ndarray
     directions: np.ndarray
+    digest: bytes = b""
 
 
 def _one_vertex_fan(
@@ -6859,15 +6911,19 @@ class _Lineage:
     dieser Abstammung; stirbt der letzte, gehen die Antworten mit ihm.
     ``origin`` ist der Schlüssel in :data:`_DERIVED_LINEAGES`, wenn die
     Körper aus einer gebundenen Antwort stammen (:data:`DERIVED_BODY_ANSWERS`).
+    ``geometric`` nennt die Antworten über die Körpergrenze, die diese
+    Abstammung gerechnet oder gelesen hat (:func:`_by_geometry`) — sie halten
+    sie mit.
     """
 
-    __slots__ = ("answers", "members", "origin", "token")
+    __slots__ = ("answers", "geometric", "members", "origin", "token")
 
     def __init__(self, origin: tuple[Any, ...] | None = None) -> None:
         self.token = next(_TOKENS)
         self.origin = origin
         self.members = 0
         self.answers: set[tuple[str, tuple[int, bytes, Any, int]]] = set()
+        self.geometric: set[tuple[str, bytes]] = set()
 
 
 #: Je abgeleiteter Abstammung — Elternabstammung, Frage, Schlüssel — die
@@ -6952,6 +7008,7 @@ def _forget_body(key: int, memory: _BodyMemory) -> None:
         lineage.members -= 1
         if lineage.members <= 0:
             _drop_answers(lineage.answers)
+            _release_geometric(lineage.geometric)
             if lineage.origin is not None and _DERIVED_LINEAGES.get(lineage.origin) is lineage:
                 del _DERIVED_LINEAGES[lineage.origin]
 
@@ -7118,6 +7175,148 @@ def _known_answer(name: str, body: trimesh.Trimesh) -> Any:
             return None
         answers.move_to_end(key)
         return answers[key]
+
+
+#: Die Fragen, deren Antwort auch ein anderer Körper geben darf — derselbe
+#: Fleck, Bit für Bit gelesen (RM-261, :func:`_by_geometry`).
+#:
+#: **Warum es sie braucht.** :func:`remembered` merkt je Körper, und nach
+#: jedem Schritt ist der Körper neu: Die Vollerkennung, die §21.1 nach jedem
+#: Schritt verlangt, passte am Gartenschlauchhalter (392 532 Dreiecke) je
+#: übernommenem Schritt rund 2 700 Kegel, 1 900 Kugeln, 1 700 Ringe und
+#: 2 600 Zylinder neu ein — 22 der 30 Sekunden —, obwohl eine Boolesche jedes
+#: Dreieck, das sie nicht schneidet, bitgleich übernimmt
+#: (``geom.attributes.in_source_layout``). Ein Fleck, dessen Lesung Bit für
+#: Bit dieselbe ist, bekommt dieselbe Antwort; gerechnet wird, was neu ist.
+#:
+#: **Wer hierher gehört**, liest den Körper nur über die Stützpunktlesung
+#: (:class:`_SurfaceSupport`, ihr Abdruck deckt jedes Feld und die Dreiecke
+#: des Flecks), die Toleranz aus der Körperdiagonale und den Fit, den ein
+#: Nachweis prüft — und nichts sonst; die Toleranz bekommt die Rechnung vom
+#: Aufrufer, der sie auch in den Schlüssel legt. Was die Rümpfe darüber
+#: hinaus vom Körper lesen, enthält die Lesung schon: Normalen und Flächen
+#: des Flecks sind ihre Felder, Mitten und Ecken der Dreiecke folgen aus den
+#: Dreiecken, und die Ecken des Flecks in der Folge ihrer Nummern gehen allein
+#: in ein Minimum oder Maximum ein, das von der Folge nicht abhängt. Wer eine
+#: Frage hinzunimmt, prüft ihren Rumpf auf genau das. Eine Antwort ist dabei
+#: immer ein unveränderlicher Fit oder ein Wahrheitswert — keine
+#: Dreiecksnummer, kein Feld.
+GEOMETRY_KEYED_ANSWERS: Final[frozenset[str]] = frozenset(
+    {
+        "fit_cone",
+        "fit_cylinder",
+        "fit_sphere",
+        "fit_torus",
+        "_cone_is_recognisable",
+        "_sphere_is_recognisable",
+        "_torus_is_recognisable",
+    }
+)
+
+#: Die Antworten über die Körpergrenze, je Frage unter ihrem Inhaltsschlüssel.
+#: Dieselbe Grenze wie jede kleine Frage (:data:`CACHE_LIMIT_PER_QUESTION`),
+#: und dieselbe Lebensdauer wie :func:`remembered`: Eine Antwort gehört den
+#: Abstammungen, die sie gerechnet oder gelesen haben
+#: (:attr:`_Lineage.geometric`), und geht mit der letzten.
+_BY_GEOMETRY: dict[str, OrderedDict[bytes, Any]] = {}
+
+#: Je Antwort über die Körpergrenze, wie viele lebende Abstammungen sie halten.
+_GEOMETRY_HOLDERS: dict[tuple[str, bytes], int] = {}
+
+
+def _by_geometry(
+    name: str,
+    body: trimesh.Trimesh,
+    support: _SurfaceSupport,
+    compute: Callable[[], Any],
+    *read: Any,
+) -> Any:
+    """Dieselbe Frage an denselben Fleck — auch an einem anderen Körper (RM-261).
+
+    Der Schlüssel ist der Abdruck der Stützpunktlesung (``support.digest``),
+    was die Frage darüber hinaus liest (``read``: der Fit, den ein Nachweis
+    prüft, und die Toleranz aus der Körperdiagonale — der Aufrufer rechnet sie
+    einmal und gibt sie der Rechnung mit, damit Schlüssel und Rechnung
+    dieselbe Zahl sehen) und die Löserbudgets — **Bit für Bit, ohne
+    Toleranz**: Zwei Flecken, deren Lesung sich in der letzten Stelle einer
+    Normale unterscheidet, sind zwei Fragen. Was :data:`GEOMETRY_KEYED_ANSWERS`
+    für eine Frage verlangt, steht dort. Gerechnet wird außerhalb des
+    Schlosses, wie in :func:`remembered`. ``body`` bestimmt nur, wer die
+    Antwort mithält (:attr:`_Lineage.geometric`).
+    """
+    key = hashlib.blake2b(
+        support.digest + _exact_bytes((read, ROUND_FIT_EVALUATIONS, FIT_SOLVER_POINTS)),
+        digest_size=16,
+    ).digest()
+    with _MEMORY_LOCK:
+        lineage = _memory_of(body).lineage
+        answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
+        if key in answers:
+            answers.move_to_end(key)
+            _held_geometric(lineage, name, key)
+            return answers[key]
+    value = compute()
+    with _MEMORY_LOCK:
+        answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
+        answers[key] = value
+        answers.move_to_end(key)
+        _held_geometric(lineage, name, key)
+        while len(answers) > CACHE_LIMIT_PER_QUESTION:
+            answers.popitem(last=False)
+    return value
+
+
+def _held_geometric(lineage: _Lineage, name: str, key: bytes) -> None:
+    """Die Abstammung hält diese Antwort mit — nur unter dem Schloss."""
+    entry = (name, key)
+    if entry not in lineage.geometric:
+        lineage.geometric.add(entry)
+        _GEOMETRY_HOLDERS[entry] = _GEOMETRY_HOLDERS.get(entry, 0) + 1
+
+
+def _release_geometric(held: set[tuple[str, bytes]]) -> None:
+    """Eine gestorbene Abstammung lässt ihre Antworten los; ohne Halter gehen sie.
+
+    Nur unter dem Schloss. Eine Antwort, die die Grenze schon verdrängt hat,
+    fehlt hier einfach.
+    """
+    for entry in held:
+        count = _GEOMETRY_HOLDERS.get(entry, 0) - 1
+        if count > 0:
+            _GEOMETRY_HOLDERS[entry] = count
+            continue
+        _GEOMETRY_HOLDERS.pop(entry, None)
+        answers = _BY_GEOMETRY.get(entry[0])
+        if answers is not None:
+            answers.pop(entry[1], None)
+    held.clear()
+
+
+def _exact_bytes(value: Any) -> bytes:
+    """Ein Wert als Bytes, Bit für Bit — auch ``-0.0`` und ``0.0`` sind zwei.
+
+    Für die Schlüssel von :func:`_by_geometry`: Zahlen, Wahrheitswerte,
+    ``None``, Texte, Tupel und die unveränderlichen Fits (ihre Felder in ihrer
+    Reihenfolge). Ein Vergleich über ``==`` hielte ``-0.0`` und ``0.0`` für
+    gleich, und die Rechnung dahinter muss es nicht.
+    """
+    if value is None:
+        return b"N"
+    if isinstance(value, bool):
+        return b"T" if value else b"F"
+    if isinstance(value, int):
+        return b"I" + str(value).encode("ascii") + b";"
+    if isinstance(value, float):
+        return b"D" + struct.pack("<d", value)
+    if isinstance(value, str):
+        return b"S" + value.encode("utf-8") + b";"
+    if isinstance(value, tuple):
+        return b"(" + b"".join(_exact_bytes(item) for item in value) + b")"
+    fields = getattr(value, "__dataclass_fields__", None)
+    if fields is None:
+        raise TypeError(f"no exact key for {type(value).__name__}")
+    parts = b"".join(_exact_bytes(getattr(value, field_name)) for field_name in fields)
+    return type(value).__name__.encode("ascii") + b"{" + parts + b"}"
 
 
 def _surface_support(
@@ -7374,8 +7573,29 @@ def _read_surface_support(
     if check_cancelled is not None:
         check_cancelled()
     return _SurfaceSupport(
-        points, corners, normals, triangles.mean(axis=1), areas, round_corners, ridges, directions
+        points,
+        corners,
+        normals,
+        triangles.mean(axis=1),
+        areas,
+        round_corners,
+        ridges,
+        directions,
+        _arrays_digest(
+            triangles, points, corners, normals, areas, round_corners, ridges, directions
+        ),
     )
+
+
+def _arrays_digest(*arrays: np.ndarray) -> bytes:
+    """Der Abdruck von Feldern, Bit für Bit: Art, Form und Inhalt jedes einzelnen."""
+    digest = hashlib.blake2b(digest_size=16)
+    for array in arrays:
+        plain = np.ascontiguousarray(array)
+        digest.update(plain.dtype.str.encode("ascii"))
+        digest.update(repr(plain.shape).encode("ascii"))
+        digest.update(plain.tobytes())
+    return digest.digest()
 
 
 def _ridge_endpoints(
@@ -7531,6 +7751,26 @@ def _fit_cone_read(
     support = _surface_support(body, patch, check_cancelled)
     if support is None:
         return None
+    # Eine gerade Naht zweier Mantelfacetten ist nur dann eine zusätzliche
+    # Stütze, wenn sie durch dieselbe Spitze läuft. Schnittpunkte auf einer
+    # solchen Mantellinie liegen ebenfalls auf dem analytischen Kegel.
+    line_tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    result: ConeFit | None = _by_geometry(
+        "fit_cone",
+        body,
+        support,
+        lambda: _fit_cone_measured(support, line_tolerance, check_cancelled),
+        line_tolerance,
+    )
+    return result
+
+
+def _fit_cone_measured(
+    support: _SurfaceSupport,
+    line_tolerance: float,
+    check_cancelled: Callable[[], None] | None,
+) -> ConeFit | None:
+    """Die Kegeleinpassung an einer Lesung — sie liest nichts sonst."""
     weights = support.areas / support.areas.sum()
     origin = weights @ support.centres
     centres = support.centres - origin
@@ -7560,10 +7800,6 @@ def _fit_cone_read(
     if math.degrees(half_angle) < CONE_START_ANGLE:
         return None
     points = support.points - origin
-    # Eine gerade Naht zweier Mantelfacetten ist nur dann eine zusätzliche
-    # Stütze, wenn sie durch dieselbe Spitze läuft. Schnittpunkte auf einer
-    # solchen Mantellinie liegen ebenfalls auf dem analytischen Kegel.
-    line_tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
     selected = _cone_support_points(support, origin + apex, line_tolerance, check_cancelled)
     if int(selected.sum()) < 6:
         return None
@@ -7696,7 +7932,19 @@ def _fit_sphere_read(
 ) -> SphereFit | None:
     """Der Rumpf von :func:`fit_sphere` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
-    if support is None or int(support.round_corners.sum()) < 4:
+    if support is None:
+        return None
+    result: SphereFit | None = _by_geometry(
+        "fit_sphere", body, support, lambda: _fit_sphere_measured(support, check_cancelled)
+    )
+    return result
+
+
+def _fit_sphere_measured(
+    support: _SurfaceSupport, check_cancelled: Callable[[], None] | None
+) -> SphereFit | None:
+    """Die Kugeleinpassung an einer Lesung — sie liest nichts sonst."""
+    if int(support.round_corners.sum()) < 4:
         return None
     points = support.points[support.round_corners]
     origin = points.mean(axis=0)
@@ -7775,7 +8023,19 @@ def _fit_torus_read(
 ) -> TorusFit | None:
     """Der Rumpf von :func:`fit_torus` — die Antwort merkt sich die Hülle."""
     support = _surface_support(body, patch, check_cancelled)
-    if support is None or int(support.round_corners.sum()) < 7:
+    if support is None:
+        return None
+    result: TorusFit | None = _by_geometry(
+        "fit_torus", body, support, lambda: _fit_torus_measured(support, check_cancelled)
+    )
+    return result
+
+
+def _fit_torus_measured(
+    support: _SurfaceSupport, check_cancelled: Callable[[], None] | None
+) -> TorusFit | None:
+    """Die Ringeinpassung an einer Lesung — sie liest nichts sonst."""
+    if int(support.round_corners.sum()) < 7:
         return None
     initial = fit_torus_samples(support.centres, support.normals, weights=support.areas)
     if initial is None:
@@ -7969,13 +8229,34 @@ def _torus_is_recognisable_read(
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
     """Der Rumpf von :func:`_torus_is_recognisable` — die Antwort merkt sich die Hülle."""
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None:
+        return False
+    weld = weld_tolerance(float(np.linalg.norm(body.extents)))
+    result: bool = _by_geometry(
+        "_torus_is_recognisable",
+        body,
+        support,
+        lambda: _torus_is_recognisable_measured(body, fit, patch, support, weld, check_cancelled),
+        fit,
+        weld,
+    )
+    return result
+
+
+def _torus_is_recognisable_measured(
+    body: trimesh.Trimesh,
+    fit: TorusFit,
+    patch: list[int],
+    support: _SurfaceSupport,
+    weld: float,
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Der Ringnachweis selbst; was er vom Körper liest, trägt die Lesung."""
     centres = np.asarray(body.triangles_center[patch], dtype=float)
     corners = np.asarray(body.triangles[patch], dtype=float)
     centre = np.asarray(fit.centre, dtype=float)
     axis = np.asarray(fit.axis, dtype=float)
-    support = _surface_support(body, patch, check_cancelled)
-    if support is None:
-        return False
     relative = support.points - centre
     along = relative @ axis
     across = np.linalg.norm(relative - np.outer(along, axis), axis=1)
@@ -7986,9 +8267,7 @@ def _torus_is_recognisable_read(
     # axialen Tangentialebenen und innerhalb seines äußeren Zylinders.
     # Das gilt auch für ungestützte Randpunkte. Eine lange Zylinderwand
     # neben der Rundung darf daher nicht im Stützpunktfit verschwinden.
-    allowance = max(
-        weld_tolerance(float(np.linalg.norm(body.extents))), fit.tube_radius * ROUND_TOLERANCE
-    )
+    allowance = max(weld, fit.tube_radius * ROUND_TOLERANCE)
     if np.any(np.abs(along) > fit.tube_radius + allowance) or np.any(
         across > fit.ring_radius + fit.tube_radius + allowance
     ):
@@ -8024,6 +8303,7 @@ def _cone_vertices_are_consistent(
     body: trimesh.Trimesh,
     fit: ConeFit,
     patch: list[int],
+    tolerance: float,
     *,
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
@@ -8059,7 +8339,6 @@ def _cone_vertices_are_consistent(
     radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
     angle = math.radians(fit.half_angle)
     errors = radial * math.cos(angle) - along * math.sin(angle)
-    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
     return _round_points_are_consistent(
         support, errors, _cone_support_points(support, apex, tolerance, check_cancelled)
     )
@@ -8091,8 +8370,37 @@ def _cone_is_recognisable_read(
     *,
     check_cancelled: Callable[[], None] | None = None,
 ) -> bool:
-    """Der Rumpf von :func:`_cone_is_recognisable` — die Antwort merkt sich die Hülle."""
-    if not _cone_vertices_are_consistent(body, fit, patch, check_cancelled=check_cancelled):
+    """Der Rumpf von :func:`_cone_is_recognisable` — die Antwort merkt sich die Hülle.
+
+    Ohne Lesung ist kein Kegel belegt (:func:`_cone_vertices_are_consistent`
+    fragt sie zuletzt und sagt dann nein).
+    """
+    support = _surface_support(body, patch, check_cancelled)
+    if support is None:
+        return False
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    result: bool = _by_geometry(
+        "_cone_is_recognisable",
+        body,
+        support,
+        lambda: _cone_is_recognisable_measured(body, fit, patch, tolerance, check_cancelled),
+        fit,
+        tolerance,
+    )
+    return result
+
+
+def _cone_is_recognisable_measured(
+    body: trimesh.Trimesh,
+    fit: ConeFit,
+    patch: list[int],
+    tolerance: float,
+    check_cancelled: Callable[[], None] | None,
+) -> bool:
+    """Der Kegelnachweis selbst; was er vom Körper liest, trägt die Lesung."""
+    if not _cone_vertices_are_consistent(
+        body, fit, patch, tolerance, check_cancelled=check_cancelled
+    ):
         return False
     centres = np.asarray(body.triangles_center[patch], dtype=float)
     corners = np.asarray(body.triangles[patch], dtype=float)
@@ -9801,31 +10109,56 @@ def _wandering_outline(
     for one, other in zip(near[touching].tolist(), far[touching].tolist(), strict=True):
         adjacent.setdefault(one, set()).add(other)
 
-    # Je Kreis bis zum nächsten Kreis auf jeder Seite, je Paar einmal gefragt.
+    # Je Kreis bis zum nächsten Kreis auf jeder Seite, je Paar einmal gefragt:
+    # über Splitter und formlose Stücke hinweg — die gehören zu Gruppen, und
+    # welche Kreise eine Gruppe berührt, steht einmal fest (RM-261). Bis dahin
+    # suchte jeder Kreis die Gruppen neu ab; am Gartenschlauchhalter waren das
+    # 936 000 Schritte und ein Viertel der Erkennung nach dem Merker. Dieselben
+    # Paare, dieselbe Frage — gefragt wird nur nicht mehr je Kreis von vorn.
+    passable = [
+        number for number in range(len(pieces)) if number not in fits and number not in confirmed
+    ]
+    group: dict[int, int] = {}
+    for start in passable:
+        if start in group:
+            continue
+        group[start] = start
+        frontier = [start]
+        while frontier:
+            current = frontier.pop()
+            for other in adjacent.get(current, ()):
+                if other not in group and other not in fits and other not in confirmed:
+                    group[other] = start
+                    frontier.append(other)
+    circles_beside: dict[int, set[int]] = {}
+    for member, label in group.items():
+        for other in adjacent.get(member, ()):
+            if other in fits and other not in confirmed:
+                circles_beside.setdefault(label, set()).add(other)
     smaller: set[int] = set()
     larger: set[int] = set()
     for number in circles:
         if check_cancelled is not None:
             check_cancelled()
-        seen = {number}
-        frontier = [number]
-        while frontier:
-            current = frontier.pop()
-            for other in sorted(adjacent.get(current, ())):
-                if other in seen or other in confirmed:
-                    continue
-                seen.add(other)
-                if other not in fits:
-                    frontier.append(other)
-                    continue
-                place = placed(number, other) if other > number else None
-                if place is None:
-                    continue
-                step, across, scale = place
-                if step <= scale * CURVATURE_JUMP and abs(across - step) <= scale * SINK_FIT_LIMIT:
-                    low, high = sorted((number, other), key=lambda key: fits[key].radius)
-                    larger.add(low)
-                    smaller.add(high)
+        reached: set[int] = set()
+        for other in adjacent.get(number, ()):
+            if other in confirmed:
+                continue
+            if other in fits:
+                reached.add(other)
+            else:
+                reached |= circles_beside.get(group[other], set())
+        for other in sorted(reached):
+            if other <= number:
+                continue
+            place = placed(number, other)
+            if place is None:
+                continue
+            step, across, scale = place
+            if step <= scale * CURVATURE_JUMP and abs(across - step) <= scale * SINK_FIT_LIMIT:
+                low, high = sorted((number, other), key=lambda key: fits[key].radius)
+                larger.add(low)
+                smaller.add(high)
     # Ein Kreis mit einem engeren Nachbarn und einem weiteren: zwei Wechsel in
     # dieselbe Richtung.
     return confirmed if smaller & larger else None

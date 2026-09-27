@@ -835,6 +835,71 @@ def test_untouched_round_forms_read_the_same_numbers_after_a_bore_elsewhere(name
     assert untouched, f"{name}: the bore must leave a round form untouched"
 
 
+def test_the_next_body_takes_the_answers_of_its_untouched_patches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach einer Bohrung braucht kein unberührter Fleck den Löser — und die Antwort bleibt.
+
+    Die Verrundung am Pfosten kostet frisch zehn Läufe des Lösers; nach der
+    Erkennung des Eingangs keinen, denn die neue Bohrung ist ein gerader
+    Zylinder. Dieselbe Erkennung ganz neu gerechnet sagt Bit für Bit dasselbe.
+    """
+    runs = [0]
+    raw = features_module._refined_fit
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        runs[0] += 1
+        return raw(*args, **kwargs)
+
+    monkeypatch.setattr(features_module, "_refined_fit", counted)
+    mesh = plate("post_with_fillet.stl")
+    forget_cache()
+    bored = _bored_far_away(mesh, detect(mesh))
+    runs[0] = 0
+    taken_over = detect(bored)
+    over = runs[0]
+    forget_cache()
+    runs[0] = 0
+    fresh = detect(bored)
+
+    assert over == 0 < runs[0], (over, runs[0])
+    assert sorted(map(_every_bit, taken_over.values())) == sorted(map(_every_bit, fresh.values()))
+    assert {name: sorted(f.face_indices) for name, f in taken_over.items()} == {
+        name: sorted(f.face_indices) for name, f in fresh.items()
+    }
+
+
+def test_answers_across_bodies_go_with_the_last_body_that_asked() -> None:
+    """Der Merker über die Körpergrenze hält eine Antwort, solange ein Körper sie gefragt hat.
+
+    Dieselbe Grenze wie jede kleine Frage (``CACHE_LIMIT_PER_QUESTION``) und
+    dieselbe Lebensdauer wie der Merker je Körper: Ein zweiter Körper mit
+    derselben Lesung liest die Antwort mit, und erst mit dem letzten geht sie.
+    """
+    import gc
+
+    forget_cache()
+    first = trimesh.creation.icosphere(subdivisions=2, radius=6.0)
+    second = trimesh.Trimesh(
+        np.asarray(first.vertices).copy(), np.asarray(first.faces).copy(), process=False
+    )
+    patch = list(range(len(first.faces)))
+    held = features_module._BY_GEOMETRY
+
+    ball = features_module.fit_sphere(first, patch)
+    assert ball is not None
+    assert len(held["fit_sphere"]) == 1
+    assert features_module.fit_sphere(second, patch) is ball, "dieselbe Lesung, dieselbe Antwort"
+    assert len(held["fit_sphere"]) == 1
+
+    del first
+    gc.collect()
+    assert len(held["fit_sphere"]) == 1, "der zweite Körper hält sie noch"
+    del second
+    gc.collect()
+    assert not held["fit_sphere"], "mit dem letzten Körper geht die Antwort"
+
+
 def test_moving_a_bore_keeps_the_layout_of_the_rest_of_the_body(profile: Any) -> None:
     """*Merkmal verschieben* füllt, glättet die Narben und schneidet — der Rest bleibt, wie er war.
 

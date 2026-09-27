@@ -2803,6 +2803,25 @@ def test_every_remembered_question_is_either_shared_or_bound() -> None:
     assert asked >= module.SHARED_ANSWERS | module.BODY_BOUND_ANSWERS, "keine Leichen"
 
 
+def test_every_question_across_bodies_is_named_and_shared() -> None:
+    """Wer über die Körpergrenze antwortet, steht in ``GEOMETRY_KEYED_ANSWERS`` (RM-261).
+
+    Die Menge ist die Stelle, an der steht, was eine solche Frage vom Körper
+    lesen darf; eine Frage, die ``_by_geometry`` fragt, ohne dort zu stehen,
+    hat niemand daran gemessen. Und jede ist auch je Körper eine geteilte
+    Frage: Ihre Antwort ist ein unveränderlicher Fit oder ein Wahrheitswert.
+    """
+    from app.core.perceive import features as module
+
+    source = (
+        Path(__file__).resolve().parents[1] / "app" / "core" / "perceive" / "features.py"
+    ).read_text(encoding="utf-8")
+    asked = set(re.findall(r"\b_by_geometry\(\s*\"(\w+)\"", source))
+    assert len(asked) >= 7, "die Suche findet die Fragen über die Körpergrenze"
+    assert asked == module.GEOMETRY_KEYED_ANSWERS, sorted(asked ^ module.GEOMETRY_KEYED_ANSWERS)
+    assert module.GEOMETRY_KEYED_ANSWERS <= module.SHARED_ANSWERS
+
+
 def test_recognition_selects_triangles_and_corners_through_plain_arrays() -> None:
     """Die Erkennung wählt nie direkt aus ``body.faces`` oder ``body.vertices``.
 
