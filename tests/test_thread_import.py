@@ -805,6 +805,8 @@ def test_the_thread_volume_and_area_come_from_the_native_compound(
 
     monkeypatch.setattr(properties, "_uv_volume", never)
     monkeypatch.setattr(properties, "_uv_surface", never)
+    # Auch der Mischweg integriert einzelne Flächen in Python (Durchsicht 0.5.1).
+    monkeypatch.setattr(properties, "_uv_moments", never)
     body = Solid(m6.shape)
     ridge = list(profiles.thread_ridge(6.0, 1.0))
     corners = [*ridge, ridge[0]]

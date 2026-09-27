@@ -491,7 +491,58 @@ def _cone_volume(face: Any, *, cancelled: CancelToken | None = None) -> tuple[An
     return inert, error * abs(mass)
 
 
-def _spanned_volume(shape: Any, *, cancelled: CancelToken | None = None) -> MassProperties:
+@dataclass(frozen=True, slots=True)
+class _FaceMoments:
+    """Das Kegelvolumen einer Fläche zum lokalen Ursprung auf einer Stufe der
+    Leiter: Masse, erste Momente (Masse mal Schwerpunkt) und gemeldeter Fehler,
+    alle absolut und mit Vorzeichen."""
+
+    mass: float
+    first: Vec3
+    error: float
+
+
+@dataclass(frozen=True, slots=True)
+class _Ladder:
+    """Was die native Leiter gemessen hat — als Ganzes und je Fläche.
+
+    ``levels[stufe][fläche]`` ist ``None``, wo sich eine Fläche auf dieser
+    Stufe nicht teilen oder integrieren ließ. ``result`` steht, sobald sich
+    zwei Stufen des ganzen Körpers einigen; sonst liest :func:`_mixed_volume`
+    die Stufen Fläche für Fläche.
+    """
+
+    faces: list[Any]
+    spanned: list[bool]
+    origin: Vec3
+    size: float
+    levels: list[list[_FaceMoments | None]]
+    result: MassProperties | None
+
+
+def _face_moments(entries: list[tuple[Any, float]]) -> _FaceMoments:
+    """Die Summe der Teilflächen einer Fläche, in Grundrechenarten (RM-187).
+
+    Eine Teilfläche ohne Kegelvolumen hat keinen Schwerpunkt; sie trägt auch
+    kein erstes Moment bei — dieselbe Konvention wie ``GProp_GProps.Add``.
+    """
+    masses: list[float] = []
+    firsts: tuple[list[float], list[float], list[float]] = ([], [], [])
+    errors: list[float] = []
+    for inert, absolute in entries:
+        mass = float(inert.Mass())
+        masses.append(mass)
+        errors.append(absolute)
+        if mass == 0.0:
+            continue
+        centre = inert.CentreOfMass()
+        for axis, value in enumerate((centre.X(), centre.Y(), centre.Z())):
+            firsts[axis].append(mass * float(value))
+    first = cast(Vec3, tuple(math.fsum(values) for values in firsts))
+    return _FaceMoments(math.fsum(masses), first, math.fsum(errors))
+
+
+def _volume_ladder(shape: Any, *, cancelled: CancelToken | None = None) -> _Ladder:
     """Volumen und Schwerpunkt nativ auf dem knotenzerlegten Verbund, mit Leiter.
 
     Jede Spline-Fläche geht an ihren Knotenspannen geteilt hinein, jede
@@ -502,42 +553,182 @@ def _spanned_volume(shape: Any, *, cancelled: CancelToken | None = None) -> Mass
     STEP-Gewinde ``m6_rechts`` 130 ms statt 13,8 s, verrundete
     NurbsConvert-Lochplatte Millisekunden statt 9,8 s — der Zackenkörper mit
     seiner 10⁻⁵ breiten Spanne bleibt exakt.
+
+    **Die Stufen werden je Fläche mitgeschrieben** (Durchsicht 0.5.1): Einigen
+    sie sich am ganzen Körper nicht, sagen sie, **welche** Fläche wandert, und
+    nur die geht den langsamen Weg (:func:`_mixed_volume`). Wo sie sich
+    einigen, ist das Ergebnis dasselbe wie vorher, Bit für Bit — gesammelt
+    wird es weiter über ``GProp_GProps``.
     """
     from OCP.GProp import GProp_GProps
 
-    if not _oriented_faces(shape, cancelled=cancelled):
-        # Eine leere Form hat kein Volumen und keinen Ort — der Aufrufer
-        # entscheidet, ob das ein Befund ist (``boolean.NOTHING_LEFT``).
-        return MassProperties(0.0, (0.0, 0.0, 0.0), None)
     origin, size = _local_frame(shape, cancelled=cancelled)
     local = _local_copy(shape, origin, cancelled=cancelled)
     faces = _oriented_faces(local, cancelled=cancelled)
     spanned = [_needs_spans(face, cancelled=cancelled) for face in faces]
     levels = _SUBDIVISIONS if any(spanned) else _SUBDIVISIONS[:1]
+    measured_levels: list[list[_FaceMoments | None]] = []
     before = None
+    # Eine Stufe mit zu großem Fehler oder einer unteilbaren Fläche trägt
+    # keine Einigung mehr — auch nicht mit der nächsten; ihre Flächen bleiben
+    # für den Mischweg stehen.
+    trusted = True
     for subdivisions in levels:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         total = GProp_GProps()
         error = 0.0
+        rows: list[_FaceMoments | None] = []
         for face, split in zip(faces, spanned, strict=True):
-            for part in _patches(face, subdivisions, cancelled=cancelled) if split else (face,):
-                inert, absolute = _cone_volume(part, cancelled=cancelled)
+            try:
+                entries = [
+                    _cone_volume(part, cancelled=cancelled)
+                    for part in (
+                        _patches(face, subdivisions, cancelled=cancelled) if split else (face,)
+                    )
+                ]
+            except OperationCancelled:
+                raise
+            except PROGRAMMING_ERRORS:
+                raise
+            except Exception:
+                rows.append(None)
+                trusted = False
+                continue
+            for inert, absolute in entries:
                 total.Add(inert)
                 error += absolute
+            rows.append(_face_moments(entries))
+        measured_levels.append(rows)
+        if not trusted:
+            continue
         mass = float(total.Mass())
         if not math.isfinite(mass) or mass < 0.0 or error > INTEGRAL_RELATIVE_ERROR * mass:
-            raise _unresolved_integral()
+            trusted = False
+            continue
         centre = total.CentreOfMass()
         measured = MassProperties(
             mass, _shifted((centre.X(), centre.Y(), centre.Z()), origin), None
         )
-        if before is None and len(levels) == 1:
-            return measured
-        if before is not None and _converged(before, measured, size):
-            return measured
+        if (before is None and len(levels) == 1) or (
+            before is not None and _converged(before, measured, size)
+        ):
+            return _Ladder(faces, spanned, origin, size, measured_levels, measured)
         before = measured
-    raise _unresolved_integral()
+    return _Ladder(faces, spanned, origin, size, measured_levels, None)
+
+
+def _spanned_volume(shape: Any, *, cancelled: CancelToken | None = None) -> MassProperties:
+    """Das Volumen der nativen Leiter — oder die Absage, wenn sie sich am ganzen
+    Körper nicht einigt (:func:`_volume_ladder`)."""
+    if not _oriented_faces(shape, cancelled=cancelled):
+        # Eine leere Form hat kein Volumen und keinen Ort — der Aufrufer
+        # entscheidet, ob das ein Befund ist (``boolean.NOTHING_LEFT``).
+        return MassProperties(0.0, (0.0, 0.0, 0.0), None)
+    ladder = _volume_ladder(shape, cancelled=cancelled)
+    if ladder.result is None:
+        raise _unresolved_integral()
+    return ladder.result
+
+
+def _settled(entries: list[_FaceMoments | None]) -> tuple[_FaceMoments, float, float] | None:
+    """Der feinste Wert einer Fläche, dessen Vorstufe es auch gibt, mit der
+    Uneinigkeit der beiden in Masse und erstem Moment — oder ``None``.
+
+    Eine Fläche ohne Spannen hat nur eine Stufe (sie wird nie geteilt, jede
+    Stufe rechnet dieselbe Fläche): Ihr Wert steht für sich, ohne Uneinigkeit.
+    """
+    if len(entries) == 1:
+        return (entries[0], 0.0, 0.0) if entries[0] is not None else None
+    for fine_index in range(len(entries) - 1, 0, -1):
+        fine, coarse = entries[fine_index], entries[fine_index - 1]
+        if fine is None or coarse is None:
+            continue
+        apart = math.hypot(*(a - b for a, b in zip(fine.first, coarse.first, strict=True)))
+        return fine, abs(fine.mass - coarse.mass), apart
+    return None
+
+
+def _mixed_volume(ladder: _Ladder, *, cancelled: CancelToken | None = None) -> MassProperties:
+    """Das Volumen, wenn sich die Leiter am ganzen Körper nicht einigt: je Fläche
+    der native Wert, und allein die Flächen, die wandern, entlang ihrer
+    Randkurven (:func:`_uv_moments`).
+
+    **Der Fall, der das verlangt, ist eine einzige Fläche** (Durchsicht 0.5.1).
+    An der Lochplatte ``pegboard-gs-100-v2.step`` schließt der Parameterrand
+    einer BSpline-Rundung nicht (Lücke 5,7·10⁻⁴ im Parameter, 9,7·10⁻⁴ mm im
+    Raum); jede Teilung schließt ihn anders, und ihr Kegelvolumen wanderte
+    zwischen den Stufen um 3·10⁻⁴ mm³. Die übrigen 48 Flächen einigten sich
+    auf 10⁻¹¹ — und trotzdem integrierte der Rückfall alle 49 in Python: 33 s
+    nach dem Laden und nach jedem Schritt, für ein Volumen, das auf dieselbe
+    Zahl kam. Die Randintegration der einen Fläche kostet 0,7 s.
+
+    **Die Zusage bleibt die der Leiter:** Die Flächen, die nativ bleiben,
+    tragen ihren gemeldeten Fehler **und** die Uneinigkeit ihrer letzten zwei
+    Stufen, ohne Vorzeichen summiert — strenger als am ganzen Körper, wo sich
+    Abweichungen aufheben dürfen. Wer am meisten wandert, geht zuerst den
+    langsamen Weg, bis der Rest unter ``INTEGRAL_RELATIVE_ERROR`` liegt; hält
+    auch das nicht, sagt die Funktion ab, und der Aufrufer rechnet alles
+    entlang der Randkurven wie bisher.
+    """
+    size = ladder.size
+    native: dict[int, tuple[_FaceMoments, float, float]] = {}
+    slow: list[int] = []
+    for index in range(len(ladder.faces)):
+        entry = _settled([level[index] for level in ladder.levels])
+        if entry is None:
+            slow.append(index)
+        else:
+            native[index] = entry
+
+    def weight(index: int, volume: float) -> tuple[float, int]:
+        """Wie viel der Grenze diese Fläche nativ verbraucht — in Masse und Lage;
+        bei Gleichstand die frühere Fläche zuerst, damit die Wahl feststeht."""
+        moments, apart_mass, apart_first = native[index]
+        mass_share = (moments.error + apart_mass) / (INTEGRAL_RELATIVE_ERROR * volume)
+        first_share = apart_first / (INTEGRAL_RELATIVE_ERROR * size * volume)
+        return max(mass_share, first_share), -index
+
+    integrated: dict[int, tuple[Any, float]] = {}
+    while True:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        for index in slow:
+            if index not in integrated:
+                integrated[index] = _uv_moments(
+                    ladder.faces[index], (0.0, 0.0, 0.0), size, "volume", cancelled=cancelled
+                )
+        volume = math.fsum(
+            [entry[0].mass for entry in native.values()]
+            + [float(integrated[index][0][0]) * size**3 for index in slow]
+        )
+        if not math.isfinite(volume) or volume <= 0.0:
+            raise _unresolved_integral()
+        # Der Fehler der Randintegration ist normiert wie ihre Momente: Masse in
+        # Hüllgröße hoch drei, erstes Moment hoch vier (:func:`_uv_volume`).
+        slow_error = math.fsum(integrated[index][1] for index in slow)
+        mass_used = math.fsum(entry[0].error + entry[1] for entry in native.values())
+        first_used = math.fsum(entry[2] for entry in native.values())
+        if (
+            mass_used + slow_error * size**3 <= INTEGRAL_RELATIVE_ERROR * volume
+            and first_used + slow_error * size**4 <= INTEGRAL_RELATIVE_ERROR * size * volume
+        ):
+            break
+        if not native:
+            raise _unresolved_integral()
+        worst = max(native, key=lambda index: weight(index, volume))
+        del native[worst]
+        slow.append(worst)
+
+    first = [
+        math.fsum(
+            [entry[0].first[axis] for entry in native.values()]
+            + [float(integrated[index][0][1 + axis]) * size**4 for index in slow]
+        )
+        for axis in range(3)
+    ]
+    centre = _shifted(cast(Vec3, tuple(value / volume for value in first)), ladder.origin)
+    return MassProperties(volume, centre, None)
 
 
 def _integrate(shape: Any, kind: str, *, cancelled: CancelToken | None = None) -> MassProperties:
@@ -942,17 +1133,26 @@ def properties(
 ) -> MassProperties:
     """Geprüfte Maße; schwierige Trimmungen rechnen auf den ursprünglichen Randkurven.
 
-    Volumen: der knotenzerlegte Verbund mit Leiter (:func:`_spanned_volume`),
-    danach der Python-Rückfall. Fläche: analytische Flächen im nativen
-    Standardweg, Spline-Flächen je Fläche über die Leiter, der Rückfall je
-    Fläche — und ein Körper ohne Spline-Fläche in einem einzigen nativen Aufruf.
+    Volumen: der knotenzerlegte Verbund mit Leiter (:func:`_volume_ladder`);
+    einigt sie sich nicht, gehen nur die Flächen, die wandern, entlang ihrer
+    Randkurven (:func:`_mixed_volume`), und erst danach alle
+    (:func:`_uv_volume`). Fläche: analytische Flächen im nativen Standardweg,
+    Spline-Flächen je Fläche über die Leiter, der Rückfall je Fläche — und ein
+    Körper ohne Spline-Fläche in einem einzigen nativen Aufruf.
     """
     try:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if kind == "volume":
+            if not _oriented_faces(shape, cancelled=cancelled):
+                # Eine leere Form hat kein Volumen und keinen Ort — der Aufrufer
+                # entscheidet, ob das ein Befund ist (``boolean.NOTHING_LEFT``).
+                return MassProperties(0.0, (0.0, 0.0, 0.0), None)
             try:
-                return _spanned_volume(shape, cancelled=cancelled)
+                ladder = _volume_ladder(shape, cancelled=cancelled)
+                if ladder.result is not None:
+                    return ladder.result
+                return _mixed_volume(ladder, cancelled=cancelled)
             except OperationCancelled:
                 raise
             except PROGRAMMING_ERRORS:

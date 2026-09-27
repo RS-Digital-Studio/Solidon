@@ -868,7 +868,7 @@ def test_an_unresolved_volume_quadrature_is_not_cached(
         """Der native Verbundweg fällt aus — wie an einer Fläche, die sich nicht teilen lässt."""
         raise ValueError("unavailable native compound")
 
-    monkeypatch.setattr(properties, "_spanned_volume", unavailable)
+    monkeypatch.setattr(properties, "_volume_ladder", unavailable)
     monkeypatch.setattr(integrate, "quad_vec", uncertain)
     with pytest.raises(GeometryError) as failure:
         _ = solid.volume
@@ -3788,3 +3788,67 @@ def test_the_integration_ladder_splits_swept_faces_completely(sweep: str) -> Non
         prism = BRepPrimAPI_MakePrism(base, gp_Vec(0.0, 0.0, 3.0)).Shape()
         measured = properties._spanned_volume(prism)
         assert measured.mass == pytest.approx(3.0 * expected, rel=1e-9)
+
+
+def _box_with_an_open_trim(gap: float) -> Any:
+    """Ein Quader 30 × 20 × 10 aus Spline-Flächen, an dem eine Fläche ihren
+    Parameterrand nicht schließt: Die Randkurve einer Kante liegt um ``gap``
+    neben ihren Nachbarn, die Kante trägt die Toleranz dafür — wie Fläche 0
+    der Lochplatte ``pegboard-gs-100-v2.step`` (Lücke 5,7·10⁻⁴ im Parameter,
+    9,7·10⁻⁴ mm im Raum).
+    """
+    from OCP.BRep import BRep_Builder, BRep_Tool
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt, gp_Vec2d
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    box = BRepPrimAPI_MakeBox(gp_Pnt(3.0, 4.0, 5.0), 30.0, 20.0, 10.0).Shape()
+    shape = BRepBuilderAPI_NurbsConvert(box, True).Shape()
+    face = TopoDS.Face(TopExp_Explorer(shape, TopAbs_FACE).Current())
+    edge = TopoDS.Edge(TopExp_Explorer(face, TopAbs_EDGE).Current())
+    trim = BRep_Tool.CurveOnSurface_s(edge, face, 0.0, 0.0)
+    BRep_Builder().UpdateEdge(
+        edge, trim.Translated(gp_Vec2d(0.0, gap)), face, max(BRep_Tool.Tolerance_s(edge), gap)
+    )
+    return shape
+
+
+def test_only_the_face_that_breaks_the_ladder_takes_the_slow_integral(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Fläche, deren Parameterrand nicht schließt, bringt die native Leiter
+    nicht zusammen: Jede Teilung schließt die Lücke anders, und das Gebiet
+    wandert mit der Stufe. Bis zur Durchsicht 0.5.1 fiel dann das Volumen des
+    **ganzen** Körpers in den Python-Rückfall — an der Lochplatte
+    ``pegboard-gs-100-v2.step`` 33 s nach dem Laden und nach jedem Schritt,
+    für eine einzige von 49 Flächen (die übrigen 48 einigten sich auf 10⁻¹¹).
+
+    Jetzt integriert nur diese eine Fläche entlang ihrer Randkurven; die
+    übrigen behalten ihre native Leiter, und die Zusage des Volumens bleibt
+    dieselbe: Rechenfehler und Uneinigkeit der Stufen zusammen unter
+    ``INTEGRAL_RELATIVE_ERROR``. Gegenprobe ist der Rückfall über alle Flächen.
+    """
+    from app.core.brep import properties
+
+    shape = _box_with_an_open_trim(1e-3)
+    with pytest.raises(GeometryError):
+        # Der Fall muss bestehen: Kommt die Leiter zusammen, wäre der Test keiner.
+        properties._spanned_volume(shape)
+    slow = properties._uv_volume(shape)
+
+    integrated: list[Any] = []
+    original = properties._uv_moments
+
+    def counted(face: Any, *args: Any, **kwargs: Any) -> Any:
+        integrated.append(face)
+        return original(face, *args, **kwargs)
+
+    monkeypatch.setattr(properties, "_uv_moments", counted)
+    measured = properties.properties(shape, "volume")
+    assert len(integrated) == 1
+    assert measured.mass == pytest.approx(6000.0, rel=properties.INTEGRAL_RELATIVE_ERROR)
+    assert measured.mass == pytest.approx(slow.mass, rel=properties.INTEGRAL_RELATIVE_ERROR)
+    assert measured.centre == pytest.approx((18.0, 14.0, 10.0), abs=1e-6)

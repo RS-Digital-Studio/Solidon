@@ -298,7 +298,7 @@ def test_cancellation_during_native_quadrature_keeps_source_and_cache(
         if route == "surface":
             probe.setattr("app.core.brep.properties._spanned_surface", unavailable_patches)
         else:
-            probe.setattr("app.core.brep.properties._spanned_volume", unavailable_patches)
+            probe.setattr("app.core.brep.properties._volume_ladder", unavailable_patches)
         with pytest.raises(OperationCancelled):
             if route == "transform":
                 edit.transformed_with_faces(source, matrix, cancelled=cancelled)

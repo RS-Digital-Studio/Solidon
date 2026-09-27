@@ -313,7 +313,15 @@ von zwei Stufen Einigkeit in Masse und Schwerpunkt auf
 sie (die Forderung nach 10⁻⁹ an ihr schickte die erste Fläche des M10 für
 5 s in den Python-Weg). Ohne Spannen genügt die erste Stufe. Erst wenn die
 Leiter nicht zusammenkommt, integriert der Python-Rückfall entlang der
-ursprünglichen Randkurven — derselbe Weg, tausendmal langsamer.
+ursprünglichen Randkurven — derselbe Weg, tausendmal langsamer. **Und beim
+Volumen nur für die Flächen, die wandern** (`_mixed_volume`, Durchsicht
+0.5.1): Die Leiter schreibt ihre Stufen je Fläche mit (`_volume_ladder`);
+wer am meisten wandert, geht zuerst den langsamen Weg, bis Fehler und
+Uneinigkeit der übrigen — ohne Vorzeichen summiert — unter der Grenze liegen.
+An der Lochplatte `pegboard-gs-100-v2.step` schließt der Parameterrand einer
+von 49 Flächen nicht (Lücke 5,7·10⁻⁴); dafür rechnete der Rückfall alle 49,
+24 s nach dem Laden und nach jedem Schritt, jetzt 1,5 s bei derselben Zahl
+(5·10⁻¹⁴). Erst wenn auch das nicht hält, integriert der Rückfall alle.
 Zwei Dinge daran sind gemessen, nicht angenommen: Die Teilflächen tragen die
 ursprünglichen Trimmkurven, an den Knotenlinien geschnitten, **ohne**
 `BuildCurves3d` und `SameParameter` — beides verschob die Ränder um bis zu
@@ -959,7 +967,7 @@ Anwendung gegen die installierte Bindung.
 | `features.py` | Merkmale aus der Topologie (§30, §21); „durchgehend?" fragt eine Bohrung erst nach dem Gewinde (`_ThroughQuestion`), damit dessen Fußstreifen nicht mitgefragt werden |
 | `thread.py` | Gewinde an importierter Geometrie: Kantenzüge nach Bogenlänge, Achse eingepasst (Zylinder oder Kegel, analytische Jacobi-Matrix), Vorschub und Händigkeit aus der Wendelregression, Gangzahl aus der Periodizität (§21.1, P2.5) |
 | `canonical.py` | Geprüfte Ebenen-, Zylinder-, Kegel-, Kugel- und Ringträger mit wirklichen Flächengrenzen (§30, §21). Ein Kandidat des Erkenners ist nie der Beweis: Belegt wird über alle rationalen Bézier-Koeffizienten; der Kegel (`ConeSurface`, `_cone_matches`) auch bis in die Spitze (`_apart_from_the_apex` halbiert dorthin); versagt der Erkenner an einer großen gespiegelten Ebene, ist die Ebene durch die Pole der Kandidat (`_pole_plane`). `_axial_limits` misst die Achsspanne für Zylinder und Kegel gleich. `horizontal_area` summiert die ebenen Flächen einer Höhe in einer Richtung — die exakte Seite der gezählten Organizer-Flächen (P2.7) |
-| `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall (§30, §11). Extrusionen und Drehflächen teilt `_trimmed_grid` über getrimmte Sichten — `ShapeUpgrade_SplitSurface` schneidet sie in der Richtung ihrer Kurve nicht. `estimated_volume` ist ein grobes Volumen für Plausibilitätsfragen und wird nie veröffentlicht |
+| `properties.py` | Volumen und Fläche nativ auf dem knotenzerlegten Verbund mit Leiter, Python-Randintegral als Rückfall je Fläche (§30, §11). Extrusionen und Drehflächen teilt `_trimmed_grid` über getrimmte Sichten — `ShapeUpgrade_SplitSurface` schneidet sie in der Richtung ihrer Kurve nicht. `estimated_volume` ist ein grobes Volumen für Plausibilitätsfragen und wird nie veröffentlicht |
 | `section.py` | Der exakte Ebenenschnitt für die Skizzenprojektion (P3.5): Kreise und Bögen als solche, alles andere als Kurve durch Punkte der echten Schnittlinie. `horizontal_regions` gibt den waagerechten Querschnitt als Flächen — Materialstück, gefüllter Umriss, Löcher —, aus denen `geom.lid` den exakten Deckel baut |
 | `lettering.py` | Schrift als exakte Flächen (P2.8): die Glyphenpfade als Strecken und Bézier-Kurven, gefüllt nach der Füllregel der Schrift (nonzero), zu Prismen aufgezogen — `label_text` nimmt sie für einen exakten Körper |
 | `step.py` | STEP hinein und hinaus: `read_assembly` löst eine Baugruppe über XCAF in Körper mit Weltlage, Namen und Flächenfarben auf, `write_bodies` schreibt Körper mit Namen und Farben; `read`/`write` für einen Körper; eine dichte Schale ohne Körper (Flächenmodell) wird beim Einlesen zum Körper, eine offene meldet `load_step` |
