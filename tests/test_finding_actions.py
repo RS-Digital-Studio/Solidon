@@ -261,3 +261,133 @@ def test_the_stages_tried_read_as_words() -> None:
     shown = value_text("attempted", ["direct", "welded"])
     assert "[" not in shown and "direct" not in shown, shown
     assert shown == "direkt gerechnet, mit zusammengeführten Punkten gerechnet"
+
+
+def _split_document() -> Document:
+    """Laden, dann *Teilen*: ``obj_1`` ist verbraucht, ``obj_2`` und ``obj_3`` stehen."""
+    return Document(
+        format_version=1,
+        app_version="0.0.1",
+        ops=[
+            Operation(id=1, op="load", outputs=["obj_1"], params={"source": "src_1"}),
+            Operation(id=2, op="repair", inputs=["obj_1"], outputs=["obj_1"], params={}),
+            Operation(
+                id=3,
+                op="split_pinned",
+                inputs=["obj_1"],
+                outputs=["obj_2", "obj_3"],
+                params={"axis": "z", "position": 10.0},
+            ),
+        ],
+    )
+
+
+def test_a_consumed_body_offers_nothing_that_needs_it() -> None:
+    """RM-268: Nach *Modell teilen* stand am Laptopständer „Das Modell besteht aus
+    21 Teilen …“ am verbrauchten ``obj_1`` — mit *Überschneidungen auflösen* und
+    *In Einzelteile zerlegen*; ein Klick legte eine Reparatur an einem Körper an,
+    den es nicht mehr gibt (``sonden/rest-kunde/s268_laptop.txt``).
+
+    Weggelassen wird jede Handlung, die den Körper des Befunds braucht
+    (``panels.NEEDS_LIVE_BODY``); was ohne ihn gilt — den Schritt ändern, die
+    ganze Szene anordnen —, bleibt. Am lebenden Körper steht alles da.
+    """
+    from types import SimpleNamespace
+
+    from app.core import errors
+    from app.ui.panels import NEEDS_LIVE_BODY, actions_for_document
+
+    document = _split_document()
+    needing = tuple(
+        action
+        for action in vars(errors).values()
+        if isinstance(action, errors.Action) and action.id in NEEDS_LIVE_BODY
+    )
+    assert {action.id for action in needing} == NEEDS_LIVE_BODY, "jede Kennung ist eine Handlung"
+    keeping = (errors.ARRANGE_ON_BED, errors.CORRECT_INPUT, errors.LEAVE_OPEN)
+    finding = Finding(
+        code="ingest.multiple_components",
+        severity="info",
+        message="—",
+        op_id=1,
+        object_id="obj_1",
+        values={"components": 21, "feature_ids": ("f1",)},
+        location=(0.0, 0.0, 0.0),
+        suggestions=(*needing, *keeping),
+    )
+    mesh = SimpleNamespace(kind="mesh")
+    gone = {"obj_2": mesh, "obj_3": mesh}
+    alive = {"obj_1": mesh}
+
+    def offered(entry: Finding, live: dict[str, object]) -> set[str]:
+        return {
+            action.id
+            for action in actions_for_document(entry, document, live_objects=live)  # type: ignore[arg-type]
+        }
+
+    assert offered(finding, gone) == {action.id for action in keeping}
+    for action in (errors.RESOLVE_INTERSECTIONS, errors.SPLIT_BODIES, errors.GIVE_THICKNESS):
+        assert action.id in offered(finding, alive), action.id
+
+    # *Überschneidungen auflösen* an einem Reparaturschritt ändert diesen Schritt
+    # (``MainWindow._resolve_intersections_after_error``) — das gilt ohne Körper.
+    at_repair = dataclasses.replace(
+        finding, op_id=2, suggestions=(errors.RESOLVE_INTERSECTIONS, errors.SPLIT_BODIES)
+    )
+    assert offered(at_repair, gone) == {errors.RESOLVE_INTERSECTIONS.id}
+
+
+def test_every_handler_that_reads_the_body_of_a_finding_is_listed() -> None:
+    """Die eine Quelle bleibt vollständig: Liest ein Handler am Fenster den
+    Körper des Befunds (``_object_of``, ``_entry_of``, ``error.object_id``), steht
+    seine Kennung in ``NEEDS_LIVE_BODY`` — oder hier mit Grund daneben."""
+    import app.ui.main_window as main_window
+    from app.ui.panels import NEEDS_LIVE_BODY
+
+    # Eigene Schranke oder bewusst ohne lebenden Körper:
+    reasoned = {
+        # ``repair_is_available`` fragt Körper und Schritt selbst (``live_objects``).
+        "repair_and_retry",
+        # Die Wahl steht am Ladeschritt; ein verbrauchter Körper behält sie
+        # (``panels._recognition_reopenable``, Review 24.09.2026).
+        "recognize_fully",
+        # Setzt das Verfeinern vor den Schritt, solange er im Verlauf steht —
+        # das gilt ohne den Körper; ohne Schritt nimmt es ``actions_for_document``
+        # schon heraus (``repair_is_available`` mit dem Schritt des Befunds).
+        "remesh_and_retry",
+    }
+    tree = ast.parse(Path(main_window.__file__).read_text(encoding="utf-8"))
+    window = next(
+        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "MainWindow"
+    )
+    methods = {node.name: node for node in window.body if isinstance(node, ast.FunctionDef)}
+    table = next(
+        node
+        for node in ast.walk(methods["error_handlers"])
+        if isinstance(node, ast.Dict) and len(node.keys) > 20
+    )
+
+    def reads_the_body(node: ast.AST) -> bool:
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Attribute) and inner.attr in {"_object_of", "_entry_of"}:
+                return True
+            if (
+                isinstance(inner, ast.Attribute)
+                and inner.attr == "object_id"
+                and isinstance(inner.value, ast.Name)
+                and inner.value.id == "error"
+            ):
+                return True
+        return False
+
+    missing = []
+    for key, value in zip(table.keys, table.values, strict=True):
+        if key is None:
+            continue  # ``**{...}`` der Schreibfehler: Wiederholen, anderer Ort
+        assert isinstance(key, ast.Constant)
+        body: ast.AST = value
+        if isinstance(value, ast.Attribute) and value.attr in methods:
+            body = methods[value.attr]
+        if reads_the_body(body) and key.value not in NEEDS_LIVE_BODY | reasoned:
+            missing.append(key.value)
+    assert not missing, missing

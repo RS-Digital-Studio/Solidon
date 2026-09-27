@@ -93,6 +93,8 @@ from app.core.errors import (
     DECIMATE_AND_RETRY,
     DECIMATE_MESH,
     EXPORT_AS_MESH,
+    GIVE_THICKNESS,
+    ORIENT_FOR_PRINT,
     PLACE_ON_BED,
     RECOGNIZE_FULLY,
     RECOGNIZE_LOCAL,
@@ -101,15 +103,19 @@ from app.core.errors import (
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
     REPAIR_BEFORE_AND_RETRY,
+    RESIZE_THE_WIDENING,
+    RESOLVE_INTERSECTIONS,
     SCALE_TO_FIT,
     SHOW_DETAILS,
     SHOW_FEATURE,
     SHOW_HISTORY,
+    SHOW_LAYERS,
     SHOW_LOCATION,
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
     SHOW_SUPPORT_NEED,
     SPLIT_ALONG_LINE,
+    SPLIT_AND_RETRY,
     SPLIT_BODIES,
     SPLIT_MODEL,
     Action,
@@ -267,6 +273,56 @@ _MEMBERS_ROLE = int(Qt.ItemDataRole.UserRole) + 6
 _PER_BODY_ACTIONS: Final[frozenset[str]] = frozenset(
     {"place_on_bed", "scale_to_fit", "split_model", "remove_small_parts"}
 )
+
+#: Handlungen, die den **Körper** des Befunds brauchen — lebend, im Ergebnis
+#: (RM-268). Ihre Handler am Fenster lesen ihn (``_object_of``, ``_entry_of``,
+#: ``error.object_id``) oder wirken auf die Auswahl, die an einem verbrauchten
+#: Körper eine andere wäre. Nach *Modell teilen* stand am Laptopständer
+#: „Das Modell besteht aus 21 Teilen …“ am verbrauchten Körper mit
+#: *Überschneidungen auflösen* und *In Einzelteile zerlegen*, und ein Klick
+#: legte eine Reparatur an einem Körper an, den es nicht mehr gibt. Was einen
+#: Schritt ändert (``NEEDS_OP``) oder die ganze Szene meint, gilt ohne ihn.
+#: Vollständig hält die Menge ``test_finding_actions`` am Handlerverzeichnis.
+NEEDS_LIVE_BODY: Final[frozenset[str]] = frozenset(
+    {
+        SHOW_LOCATIONS.id,
+        SHOW_LOCATION.id,
+        SHOW_FEATURE.id,
+        SHOW_SUPPORT_NEED.id,
+        SHOW_LAYERS.id,
+        DECIMATE_MESH.id,
+        # Hält die Kette nicht an seinem Schritt, verringert es den Körper selbst.
+        DECIMATE_AND_RETRY.id,
+        GIVE_THICKNESS.id,
+        RESOLVE_INTERSECTIONS.id,
+        SPLIT_BODIES.id,
+        REMOVE_SMALL_PARTS.id,
+        SPLIT_MODEL.id,
+        SPLIT_AND_RETRY.id,
+        RELEASE_PROTECTION.id,
+        SCALE_TO_FIT.id,
+        PLACE_ON_BED.id,
+        CONVERT_TO_EXACT.id,
+        ORIENT_FOR_PRINT.id,
+        RESIZE_THE_WIDENING.id,
+    }
+)
+
+
+def _needs_live_body(action: Action, finding: Finding, document: Document | None) -> bool:
+    """Ob ``action`` am Befund den lebenden Körper braucht (:data:`NEEDS_LIVE_BODY`).
+
+    Eine Ausnahme, so schmal wie ihr Handler: *Überschneidungen auflösen* an
+    einem Reparaturschritt ändert diesen Schritt und legt keinen neuen an
+    (``MainWindow._resolve_intersections_after_error``).
+    """
+    if action.id not in NEEDS_LIVE_BODY:
+        return False
+    if action.id == RESOLVE_INTERSECTIONS.id and document is not None:
+        step = next((entry for entry in document.ops if entry.id == finding.op_id), None)
+        return step is None or step.op != "repair"
+    return True
+
 
 #: Trägt an einer Sammelzeile, wie viele Befunde sie bündelt. Eine eigene
 #: Rolle und nicht ``values["count"]``: Den Schlüssel führen auch Befunde des
@@ -807,7 +863,11 @@ def actions_for_document(
         # (``mesh.smooth_shrank``), wie die Reparatur vor einem gerundeten.
         offered = [action for action in offered if action.id != REMESH_AND_RETRY.id]
     target = _object_for_finding(finding, document)
-    if target is None or (live_objects is not None and target not in live_objects):
+    if target is not None and live_objects is not None and target not in live_objects:
+        # Der Körper des Befunds ist verbraucht (RM-268): Jede Handlung, die
+        # ihn braucht, träfe nichts oder einen anderen (Review R7).
+        offered = [action for action in offered if not _needs_live_body(action, finding, document)]
+    if target is None:
         offered = [
             action for action in offered if action.id not in {SHOW_LOCATIONS.id, SHOW_LOCATION.id}
         ]
@@ -823,11 +883,6 @@ def actions_for_document(
         # Eine Sammelzeile über verschiedene Orte trägt keinen (siehe unten),
         # und ohne Ort hätte der Knopf kein Ziel.
         offered = [action for action in offered if action.id != SHOW_LOCATION.id]
-    if target is not None and live_objects is not None and target not in live_objects:
-        # *Dreiecke verringern* öffnet die Operation für die aktuelle Auswahl;
-        # ist der Körper des Befunds verbraucht, träfe sie einen anderen
-        # (Review R7).
-        offered = [action for action in offered if action.id != DECIMATE_MESH.id]
     if any(action.id == RECOGNIZE_LOCAL.id for action in offered) and not _local_targets(
         finding, document, live_objects, bodies
     ):

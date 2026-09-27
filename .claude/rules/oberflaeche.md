@@ -758,7 +758,11 @@ Absatz sagt, worauf.
   `edit_operation(op_id, field)` öffnet den Schritt mit dem Cursor in dem Feld,
   das der Kern genannt hat, und ersetzt ihn beim Übernehmen (§15.4). Eine
   Handlung, die eine Schrittkennung braucht, steht in `dialogs.NEEDS_OP` und
-  wird ohne sie nicht angeboten.
+  wird ohne sie nicht angeboten. Eine, die den **Körper** des Befunds braucht,
+  steht in `panels.NEEDS_LIVE_BODY` und fällt an einem verbrauchten Körper weg
+  (RM-268); `test_finding_actions` hält die Menge am Handlerverzeichnis
+  vollständig — wer einen Handler baut, der `_object_of`, `_entry_of` oder
+  `error.object_id` liest, trägt seine Kennung dort ein.
 - **Und eine Befundzeile aus einer Operation steht nie ohne Knopf da.** Viele
   Absagen tragen Räte, die nur der Kunde ausführen kann („Weniger Durchgänge
   nehmen.“); der Fehlerdialog zeigt sie als Sätze (`dialogs.unhandled_advice`),
