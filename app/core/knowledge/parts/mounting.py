@@ -32,6 +32,7 @@ from app.core.knowledge.parts.registry import (
     MOUTH_AT_ORIGIN,
     FeatureRequirement,
     PartChange,
+    RetainingLip,
     WallRequirement,
     register_part,
 )
@@ -265,6 +266,7 @@ class MagnetPocketParams(BaseParams):
         LIP_GRIP_FROM_PROFILE,
         MATERIAL_OF_TARGET,
     ],
+    retaining_lip=lambda raw: magnet_lip(raw),
 )
 def magnet_pocket(raw: BaseParams) -> PartResult:
     params = cast(MagnetPocketParams, raw)
@@ -292,7 +294,7 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
     # (Regel 7): Null im Parameter heißt „aus dem Profil", genau wie beim Spiel
     # eine Zeile darüber. Wo kein Profil bis hierher kommt, bleibt
     # ``MAGNET_LIP_GRIP`` der Rückfall — null hieße dort keine Lippe.
-    grip = (params.grip or MAGNET_LIP_GRIP) if (params.press_lip and params.cover <= 0.0) else 0.0
+    grip, lip_height = _lip_of(params)
     if grip and not is_greater(magnet_diameter, grip):
         raise ValidationError(
             field="diameter",
@@ -306,10 +308,6 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
             values={"minimum": grip},
         )
     narrow = magnet_diameter - grip
-    # Bei sehr flachen Sondergrößen darf die feste Lippenhöhe nicht den
-    # Taschenboden umkehren. Mindestens die halbe Tiefe bleibt zylindrisch;
-    # Standardmagnete behalten unverändert die volle Lippenhöhe.
-    lip_height = min(MAGNET_LIP_HEIGHT, magnet_height / 2.0) if grip else 0.0
 
     pocket = shapes.cylinder(diameter, magnet_height - lip_height)
     parts = [shapes.moved(pocket, (0.0, 0.0, mouth - magnet_height))]
@@ -340,6 +338,48 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
             depth=magnet_height,
         ),
     )
+
+
+def _lip_of(params: MagnetPocketParams) -> tuple[float, float]:
+    """Übermaß und Höhe der Haltelippe, beide null ohne Lippe."""
+    grip = (params.grip or MAGNET_LIP_GRIP) if (params.press_lip and params.cover <= 0.0) else 0.0
+    # Bei sehr flachen Sondergrößen darf die feste Lippenhöhe nicht den
+    # Taschenboden umkehren. Mindestens die halbe Tiefe bleibt zylindrisch;
+    # Standardmagnete behalten unverändert die volle Lippenhöhe.
+    magnet_height = params.height or standards.magnet(params.size).height
+    return grip, (min(MAGNET_LIP_HEIGHT, magnet_height / 2.0) if grip else 0.0)
+
+
+#: Wie viele Punkte den Taschenrand für die Frage nach der schrägen Lippe
+#: beschreiben — alle 5°; die Frage ist eine Neigung, keine Facettenkontur.
+_LIP_RIM_POINTS = 72
+
+
+def _circle(
+    radius: float, centre: tuple[float, float] = (0.0, 0.0)
+) -> tuple[tuple[float, float], ...]:
+    """Ein Kreis als Umriss einer Haltelippe, ``_LIP_RIM_POINTS`` Punkte."""
+    turns = [2.0 * math.pi * index / _LIP_RIM_POINTS for index in range(_LIP_RIM_POINTS)]
+    return tuple(
+        (centre[0] + radius * math.cos(turn), centre[1] + radius * math.sin(turn)) for turn in turns
+    )
+
+
+def magnet_lip(raw: BaseParams) -> RetainingLip | None:
+    """Die Haltelippe der Magnettasche am Taschenrand (RM-277).
+
+    Die Lippe reicht von der Mündung ``lip_height`` tief und ist am
+    Taschenrand (Halbmesser ``R``, Magnet plus Spiel) am niedrigsten. Steht die
+    Richtung schräg zur Fläche, liegt die Fläche dort um bis zu
+    ``R · tan(Neigung)`` unter der Mündung; ab ``tan(Neigung) > lip_height / R``
+    fehlt die Lippe auf einem Teil des Umfangs — bei 8x3 in PETG ab 5,54°.
+    """
+    params = cast(MagnetPocketParams, raw)
+    _grip, lip_height = _lip_of(params)
+    if not lip_height:
+        return None
+    radius = ((params.diameter or standards.magnet(params.size).diameter) + params.play) / 2.0
+    return RetainingLip(name=_("Die Haltelippe"), height=lip_height, rim=_circle(radius))
 
 
 @op_params
@@ -566,6 +606,7 @@ def _keyhole_without_ledge(params: KeyholeParams) -> TranslatableText | None:
         KEYHOLE_RETAINS_HEAD,
     ],
     feasible=lambda raw: _keyhole_without_ledge(cast(KeyholeParams, raw)),
+    retaining_lip=lambda raw: keyhole_ledge(raw),
 )
 def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)
@@ -661,6 +702,25 @@ def keyhole(raw: BaseParams) -> PartResult:
             depth=params.depth,
             through=True,
         ),
+    )
+
+
+def keyhole_ledge(raw: BaseParams) -> RetainingLip:
+    """Die Rückhaltekante über dem eingehängten Kopf (RM-277).
+
+    Sie ist so dick wie Tiefe minus Kopftiefe und muss rund um den Kopf
+    stehen, wo er nach dem Absinken sitzt: am Ende des Schlitzes, um den
+    Einhängeweg von der Einstiegsöffnung. Schräg zur Fläche gesetzt dreht
+    ``keeps_up`` den Schlitz dorthin, wo die Fläche unter der Mündung liegt —
+    bei den Vorgaben (M4, 8 mm Einhängeweg, 1,5 mm Kante) fehlt die Kante am
+    Kopfrand ab ``atan(1,5 / 11,5)`` = 7,4°.
+    """
+    params = cast(KeyholeParams, raw)
+    head = standards.screw(params.size).head
+    return RetainingLip(
+        name=_("Die Rückhaltekante"),
+        height=params.depth - params.head_room,
+        rim=_circle(head / 2.0, (0.0, -params.drop)),
     )
 
 

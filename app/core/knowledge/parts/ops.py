@@ -963,8 +963,10 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
     original_body = body
+    lip = None
     if subtractive:
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
+        lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     addition = spec.host_add(part_params) if spec.host_add is not None else None
     added_features: dict[str, Feature] = {}
     added_findings: list[Finding] = []
@@ -1073,6 +1075,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             *added_findings,
             *produced.findings,
             *([nothing] if nothing else []),
+            *([lip] if lip else []),
             *([loose] if loose else []),
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),
@@ -1352,8 +1355,10 @@ def _insert_at_exact(
     if body is None:
         raise InternalError(detail="the exact part path needs an exact host")
     original_body = body
+    lip = None
     if subtractive:
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
+        lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     added_features: dict[str, Feature] = {}
     added_findings: list[Finding] = []
     with building("brep") as notes:
@@ -1438,6 +1443,7 @@ def _insert_at_exact(
             *added_findings,
             *produced.findings,
             *([nothing] if nothing else []),
+            *([lip] if lip else []),
             *([loose] if loose else []),
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),
@@ -1514,7 +1520,7 @@ def _opened_to_the_face(
     if _placement_value(params, "at_feature", ""):
         return tool
 
-    from app.core.geom.mesh import lifted_caps, on_surface, stable_normals
+    from app.core.geom.mesh import lifted_caps, stable_normals
     from app.core.geom.section import SectionPlane
 
     def along_axis(rows: Any, axis: Any) -> Any:
@@ -1534,18 +1540,15 @@ def _opened_to_the_face(
     if not EPS_GEOM < top <= BOOLEAN_OVERLAP + EPS_GEOM:
         return tool
     ground = as_mesh_data(host)
-    closest, distance, triangle = on_surface(ground.raw, mouth[None, :])
-    if float(distance[0]) > MAX_FACET_SAG:
+    face = _face_under_mouth(ground, mouth, outward)
+    if face is None:
         return tool
-    facing = np.asarray(stable_normals(ground.raw)[0][int(triangle[0])], dtype=np.float64)
-    along = dot3(outward, facing)
-    if along <= EPS_GEOM:
-        return tool
+    closest, facing, along = face
     # Je Randpunkt des Deckels, auf die Mündungsebene gelegt: wie weit die
     # Ebene der Fläche dort entlang der Achse darüber liegt.
     on_level = np.abs(heights - top) <= EPS_GEOM
     rim = points[on_level] - top * outward
-    rise = float(along_axis(closest[0] - rim, facing).max()) / along
+    rise = float(along_axis(closest - rim, facing).max()) / along
     if rise <= EPS_GEOM:
         return tool
     # So weit, dass der Deckel die Fläche um dasselbe Hundertstel verlässt wie
@@ -1571,6 +1574,94 @@ def _opened_to_the_face(
     level = dot3(mouth, outward) + top
     normal = (float(outward[0]), float(outward[1]), float(outward[2]))
     return edit.collared(tool, [(SectionPlane(normal=normal, position=level), reach)])
+
+
+def _face_under_mouth(ground: MeshData, mouth: Any, outward: Any) -> tuple[Any, Any, float] | None:
+    """Die Fläche an der Mündung: nächster Punkt, Richtung, Anteil der Achse entlang ihrer Richtung.
+
+    ``None``, wenn die Mündung nicht auf der Oberfläche liegt (weiter als die
+    Facettengrenze ``MAX_FACET_SAG`` davon) oder die Achse von der Fläche
+    wegzeigt. Gefragt wird das Dreieck unter dem Ansatzpunkt, nicht der Körper
+    darüber (:func:`_opened_to_the_face`).
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import on_surface, stable_normals
+
+    closest, distance, triangle = on_surface(ground.raw, np.asarray(mouth)[None, :])
+    if float(distance[0]) > MAX_FACET_SAG:
+        return None
+    facing = np.asarray(stable_normals(ground.raw)[0][int(triangle[0])], dtype=np.float64)
+    along = dot3(outward, facing)
+    if along <= EPS_GEOM:
+        return None
+    return closest[0], facing, along
+
+
+def _lip_on_a_slant(
+    spec: PartSpec,
+    part_params: BaseParams,
+    host: Mesh,
+    params: Any,
+    anchor: Vec3,
+    direction: Vec3 | None,
+    keeps_up: bool,
+) -> Finding | None:
+    """Hält die Haltelippe noch ringsum, wenn der Baustein schräg zur Fläche steht? (RM-277)
+
+    Die Richtung bleibt Eingabe, und die Öffnung reicht seit
+    :func:`_opened_to_the_face` bis über die Fläche. Die Lippe aber liegt knapp
+    unter der Mündung (an der Magnettasche 0,4 mm), und auf der Seite, auf der die
+    Fläche abfällt, liegt diese am Rand der Lippe um bis zu ``R · tan(Neigung)``
+    tiefer. Durchsicht 0.5.1 (rest-schraube): Unter 10° fehlte die Lippe einer
+    Magnettasche 8x3 auf 31 % des Umfangs, unter 20° auf 41 %, ohne Befund.
+
+    **Die Grenze kommt aus der Geometrie**, nicht aus einer Gradzahl: Je Punkt
+    des Umrisses, an dem die Lippe halten muss (:class:`RetainingLip`), wie tief
+    die Ebene der Fläche entlang der Achse unter der Mündung liegt; tiefer als
+    die Lippe reicht, fehlt sie dort. Gesagt wird es als Warnung mit *Eingabe
+    korrigieren*, gedreht wird nichts (Regel 21) — die Richtung steht im Schritt,
+    und senkrecht zur Fläche gesetzt hält die Lippe ringsum.
+
+    Wie beim Öffnen nur bei eingetragener Stelle: An einem Merkmal kommt die
+    Richtung aus dessen Fläche und steht nie schräg dazu.
+    """
+    import numpy as np
+
+    if spec.retaining_lip is None or _placement_value(params, "at_feature", ""):
+        return None
+    lip = spec.retaining_lip(part_params)
+    if lip is None or not lip.rim:
+        return None
+    frame = np.asarray(_matrix(params, anchor, 0.0, direction, keeps_up, False), dtype=np.float64)
+    mouth = frame[:3, 3]
+    outward = frame[:3, 2] / math.hypot(*(float(value) for value in frame[:3, 2]))
+    face = _face_under_mouth(as_mesh_data(host), mouth, outward)
+    if face is None:
+        return None
+    closest, facing, along = face
+    rim = np.asarray(lip.rim, dtype=np.float64)
+    points = rim[:, :1] * frame[:3, 0] + rim[:, 1:2] * frame[:3, 1] + mouth
+    # Wie weit die Ebene der Fläche je Randpunkt entlang der Achse unter der Mündung liegt.
+    below = ((points - closest) @ facing) / along
+    if float(below.max()) <= lip.height + EPS_GEOM:
+        return None
+    return Finding(
+        code="parts.lip_on_a_slant",
+        severity="warning",
+        message=_(
+            "{lip} hält nur auf einer Seite, weil der Baustein schräg zur Fläche steht. "
+            "Setzen Sie ihn senkrecht zur Fläche: Klicken Sie die Fläche an oder prüfen "
+            "Sie im Schritt die Richtung.",
+            lip=lip.name,
+        ),
+        values={
+            "part": spec.name,
+            "angle_deg": round(math.degrees(math.acos(min(1.0, along))), 1),
+        },
+        # Regel 17: Die Richtung steht im Schritt.
+        suggestions=(CORRECT_INPUT,),
+    )
 
 
 def _exact_form(spec: PartSpec, produced: PartResult) -> Solid:

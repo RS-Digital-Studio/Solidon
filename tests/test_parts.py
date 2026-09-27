@@ -3446,6 +3446,14 @@ def _slanted(
     """Quader 40 × 40 × 10, der Baustein bei (0, 0, ``z``), Richtung Z um ``angle`` um X gekippt."""
     from app.core.geom.mesh import as_mesh_data
 
+    result, axis = _slanted_result(profile, box, name, values, angle, z)
+    return as_mesh_data(result.scene.objects["obj_1"].mesh), axis
+
+
+def _slanted_result(
+    profile: Profile, box: str, name: str, values: dict[str, Any], angle: float, z: float = 10.0
+) -> tuple[Any, np.ndarray]:
+    """Wie :func:`_slanted`, mit der ganzen Auswertung samt Befunden."""
     axis = np.array([0.0, -np.sin(np.radians(angle)), np.cos(np.radians(angle))])
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
@@ -3464,7 +3472,7 @@ def _slanted(
     )
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete, [str(f.message) for f in result.scene.report.findings]
-    return as_mesh_data(result.scene.objects["obj_1"].mesh), axis
+    return result, axis
 
 
 @pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
@@ -3516,6 +3524,68 @@ def test_a_slanted_pocket_below_the_face_stays_below_it(profile: Profile, box: s
     slanted, _axis = _slanted(profile, box, "magnet_pocket", {"size": "8x3"}, 10.0, z=5.0)
 
     assert slanted.volume == pytest.approx(upright.volume, abs=0.5)
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("angle", [0.0, 5.0, 6.0, 10.0])
+def test_a_magnet_pocket_set_at_a_slant_says_its_lip_holds_on_one_side(
+    profile: Profile, box: str, angle: float
+) -> None:
+    """RM-277: Schräg zur Fläche gesetzt, verliert die Haltelippe auf der tiefen Seite ihren Halt.
+
+    Durchsicht 0.5.1 (rest-schraube): Die Lippe liegt 0 bis 0,4 mm unter der
+    Mündung, und auf der Seite, auf der die Fläche abfällt, liegt diese am
+    Taschenrand um ``R · tan(Neigung)`` darunter. Unter 10° fehlte die Lippe auf
+    31 % des Umfangs, unter 20° auf 41 %, und kein Befund sagte es. Die Grenze
+    kommt aus der Geometrie, nicht aus einer Gradzahl: Die Lippe fehlt auf einem
+    Teil des Umfangs, sobald ``R · tan(Neigung)`` die Lippenhöhe übersteigt —
+    bei 8×3 in PETG ``atan(0,4 / 4,125)`` = 5,54°. Darunter ist sie ringsum da,
+    nur auf einer Seite niedriger.
+    """
+    from app.core.errors import CORRECT_INPUT
+
+    result, _axis = _slanted_result(profile, box, "magnet_pocket", {"size": "8x3"}, angle)
+    said = [f for f in result.scene.report.findings if f.code == "parts.lip_on_a_slant"]
+
+    radius = (standards.magnet("8x3").diameter + profile.material.clearance) / 2.0
+    limit = np.degrees(np.arctan(0.4 / radius))
+    assert limit == pytest.approx(5.54, abs=0.01)
+    if angle <= limit:
+        assert not said, [str(f.message) for f in said]
+        return
+    assert len(said) == 1, [f.code for f in result.scene.report.findings]
+    assert said[0].severity == "warning"
+    assert said[0].suggestions == (CORRECT_INPUT,)
+    assert said[0].values["angle_deg"] == pytest.approx(angle, abs=0.1)
+    assert "Haltelippe" in str(said[0].message)
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("angle", [0.0, 5.0, 10.0])
+def test_a_keyhole_set_at_a_slant_says_its_ledge_holds_on_one_side(
+    profile: Profile, box: str, angle: float
+) -> None:
+    """RM-277, der Zwilling: Die Rückhaltekante des Schlüssellochs fehlt schräg gesetzt ebenso.
+
+    ``keeps_up`` dreht den Schlitz zur Seite, auf der die Fläche unter der
+    Mündung liegt; bei den Vorgaben (M4, Einhängeweg 8, Tiefe 4, Kopftiefe 2,5)
+    ist die Kante 1,5 mm dick, und der Kopfrand reicht 8 + 3,5 mm von der
+    Einstiegsöffnung — ab ``atan(1,5 / 11,5)`` = 7,4° fehlt sie dort
+    (Sonde ``schraube/s2_lippe``: unter 10° an 52 statt 17 von 72 Richtungen
+    am Kopfrand, die 17 sind der Schlitz des Schafts).
+    """
+    from app.core.errors import CORRECT_INPUT
+
+    result, _axis = _slanted_result(profile, box, "keyhole", {"size": "M4"}, angle)
+    said = [f for f in result.scene.report.findings if f.code == "parts.lip_on_a_slant"]
+
+    limit = np.degrees(np.arctan((4.0 - 2.5) / (8.0 + standards.screw("M4").head / 2.0)))
+    if angle <= limit:
+        assert not said, [str(f.message) for f in said]
+        return
+    assert len(said) == 1
+    assert said[0].suggestions == (CORRECT_INPUT,)
+    assert "Rückhaltekante" in str(said[0].message)
 
 
 # --- versioning (§24.4) -------------------------------------------------------------

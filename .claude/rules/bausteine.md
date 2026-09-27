@@ -55,6 +55,12 @@ Bauteil und nimmt nichts weg.
   Ansatzpunkt**, nicht durch den Körper — Strahlen durch alles zögen eine
   Tasche neben einer Wand durch die Wand. Ein Ansatzpunkt tief im Körper
   bleibt ein eingeschlossener Hohlraum.
+- **Eine Haltelippe unter der Mündung erklärt sich** (`retaining_lip`,
+  `RetainingLip`: Wort, Höhe, Umriss). Schräg gesetzt liegt die Fläche auf der
+  tiefen Seite unter der Mündung; wo sie am Umriss tiefer liegt als die Lippe
+  reicht, meldet die Operation `parts.lip_on_a_slant` mit *Eingabe
+  korrigieren* — die Grenze kommt aus Höhe und Umriss, nicht aus einer
+  Gradzahl.
 
 ## Ein lösbares Teil ist kein Zerfall
 

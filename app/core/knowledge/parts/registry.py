@@ -52,6 +52,27 @@ Parameterstellung keine Vorbereitung braucht.
 """
 
 
+@dataclass(frozen=True, slots=True)
+class RetainingLip:
+    """Die Haltelippe unter der Mündung eines abtragenden Bausteins (RM-277).
+
+    ``name`` ist das Wort, unter dem der Kunde sie kennt, mit Artikel („Die
+    Haltelippe“); ``height``, wie tief unter der Mündung sie reicht; ``rim`` der
+    Umriss in der Mündungsebene (eigenes System des Bausteins, Millimeter), an
+    dem sie halten muss. Steht die Richtung schräg zur Fläche, liegt die Fläche
+    auf ihrer tiefen Seite unter der Mündung, und wo sie am Umriss tiefer liegt
+    als ``height``, fehlt die Lippe — die Operation sagt es.
+    """
+
+    name: TranslatableText
+    height: float
+    rim: tuple[tuple[float, float], ...]
+
+
+RetainingLipOf = Callable[[BaseParams], RetainingLip | None]
+"""Die Haltelippe eines Bausteins für diesen Parametersatz, ``None`` ohne Lippe."""
+
+
 #: Wie ein Bausteinname aussehen darf.
 #:
 #: Öffentlich, weil zwei Module ihn brauchen: Diese Prüfung hier beim
@@ -419,6 +440,10 @@ class PartSpec:
     Gedächtnis „Bausteinbereich ist ein Produktionsvertrag“: bedingte
     Eigenschaften stehen als Metadaten am Baustein, nicht als Sonderfall im
     Prüfkern und nicht als stille Kappung im Baustein."""
+    retaining_lip: RetainingLipOf | None = None
+    """Die Haltelippe unter der Mündung, an der der Baustein seinen Inhalt hält
+    (:class:`RetainingLip`). Schräg zur Fläche gesetzt, fehlt sie auf der tiefen
+    Seite, und die Operation meldet ``parts.lip_on_a_slant`` (RM-277)."""
     source: str = "shipped"
     """``shipped``, ``user`` oder ``recipe`` — der Katalog weist die Herkunft
     aus (§24.5). ``user`` heißt weiter: eine ``.py`` aus dem Nutzerordner; ein
@@ -618,6 +643,7 @@ def register_part(
     changes: Sequence[PartChange] = (),
     grip_from_profile: bool = True,
     feasible: Feasibility | None = None,
+    retaining_lip: RetainingLipOf | None = None,
     source: str = "shipped",
     registry: PartRegistry | None = None,
 ) -> Callable[[PartFn], PartFn]:
@@ -667,6 +693,7 @@ def register_part(
                 changes=tuple(changes),
                 grip_from_profile=grip_from_profile,
                 feasible=feasible,
+                retaining_lip=retaining_lip,
                 source=source,
             )
         )

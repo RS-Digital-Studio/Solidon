@@ -77,7 +77,7 @@ date = "2026-09-27"
 [[parts]]
 name = "foot"
 version = "15"
-fingerprint = "b03ef4b91873fc9fabd80b030af50abe7f288419cc5f1bfcb9d4fc96b12069ac"
+fingerprint = "199916308b0189764beb15efd57d3affdc159291a5632acf9b357668e48c821f"
 corners = 32
 checked = 32
 excluded = 0
@@ -121,7 +121,7 @@ date = "2026-09-27"
 [[parts]]
 name = "keyhole"
 version = "15"
-fingerprint = "52ae6811f347778c28ad18825c640af08e5c3d86955273628325968d58ae11c0"
+fingerprint = "fa2d6ca3a1fe55c6fa7306d2563f63c06b3f8698329ad37b07c004e5c923a009"
 corners = 112
 checked = 112
 excluded = 55
@@ -154,7 +154,7 @@ date = "2026-09-27"
 [[parts]]
 name = "magnet_pocket"
 version = "15"
-fingerprint = "49b98128b32517ea18df23850fd86dc9d5eb18f13ce3cc25cc41bf4e2bc44fd9"
+fingerprint = "7d74adbce0a70f38a73f4bb0211bea8d549a1f08dea95eff85ea37bef7418c1e"
 corners = 320
 checked = 320
 excluded = 0
@@ -231,7 +231,7 @@ date = "2026-09-27"
 [[parts]]
 name = "pegboard_hook"
 version = "15"
-fingerprint = "ab6d5897159939ef58d56918739efb21499a0e619d49c33997e8d8949e3785f5"
+fingerprint = "a10b648476df74a6f70a52ed6cb8476ffcf37bd72e70daabb0751f4c565efcf7"
 corners = 128
 checked = 128
 excluded = 0
@@ -385,7 +385,7 @@ date = "2026-09-27"
 [[parts]]
 name = "wall_mount"
 version = "20"
-fingerprint = "7c71b7f43236d27f0f768a82a6bf4f28f16ec44f2e2d6fc596f9d2edef07fb4a"
+fingerprint = "23f4cdcbe6fe9403dae836a3ef2222935a1a5e491a030bf61a38dc5a8e917d65"
 corners = 224
 checked = 224
 excluded = 0
