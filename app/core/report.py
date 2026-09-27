@@ -26,7 +26,14 @@ from types import TracebackType
 from typing import Final
 
 from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
-from app.core.log import crash_paths, exception_text, get_logger, log_path, redact
+from app.core.log import (
+    crash_paths,
+    exception_text,
+    get_logger,
+    log_path,
+    redact,
+    redact_user_paths,
+)
 from app.core.paths import ensure_dir, user_data_dir
 from app.i18n import _, get_language, tr
 
@@ -84,15 +91,27 @@ def exception_report(
 ) -> ErrorReport:
     """Gemeinsame redigierte Diagnose für CLI und unbehandelte Prozessfehler."""
     try:
-        detail = redact(error)
+        detail = redact_user_paths(redact(error))
     except Exception:
         detail = "<Ausnahmetext nicht lesbar>"
     name = redact(type(error).__name__)
     return ErrorReport(
-        summary=f"{redact(context)}: {name}" if context else name,
+        summary=f"{redact_user_paths(redact(context))}: {name}" if context else name,
         detail=detail,
         traceback=exception_text(error, traceback),
     )
+
+
+def crash_detail(error: BaseException, summary: str = "") -> str:
+    """Der Text eines Fehlerberichts aus dem Fenster (§33.1, RM-231).
+
+    Derselbe redigierte Weg wie der Absturzschutz: Anlass, Ausnahmetext und
+    Stapel ohne Quellzeilen, lokale Werte und Nutzerordner. Der Kunde sieht
+    den Text vor dem Senden (§37.2) — was er dort liest, geht hinaus.
+    """
+    report = exception_report(error)
+    heading = redact_user_paths(redact(summary)) if summary else ""
+    return "\n".join(filter(None, (heading, report.detail, report.traceback)))
 
 
 #: Die Bibliotheken, deren Fassung ein Bericht nennt. Reihenfolge wie im Text.
@@ -362,11 +381,16 @@ def crash_tail(directory: Path | None = None) -> bytes:
 def diagnostic_attachments(
     *, normal: bytes | None = None, directory: Path | None = None
 ) -> tuple[tuple[str, bytes], ...]:
-    """Ein unveränderlicher Schnappschuss für Vorschau, Ablage und bewussten Versand."""
+    """Ein unveränderlicher Schnappschuss für Vorschau, Ablage und bewussten Versand.
+
+    Ohne Nutzerordner (RM-231): Die Zeilen nennen die Dateien des Kunden, und
+    das Protokoll hängt in der Vorgabe an. Das lokale Protokoll bleibt, wie
+    es ist — geschwärzt wird, was hinausgeht.
+    """
     ordinary = normal if normal is not None else log_tail()
     crashes = crash_tail(directory)
     return tuple(
-        (name, data)
+        (name, redact_user_paths(data.decode("utf-8", errors="replace")).encode("utf-8"))
         for name, data in (("protokoll.txt", ordinary), ("absturzprotokoll.txt", crashes))
         if data
     )

@@ -90,7 +90,10 @@ nicht beim Modulimport. `faulthandler` hält einen eigenen rohen Deskriptor bis
 zum Prozessende; Logger-Rotation, Qt-Ende und Python-Abbau schließen ihn nicht.
 Unbehandelte Haupt- und Nebenfadenfehler benutzen mit der CLI denselben
 redigierten Bericht aus `report.exception_report()`, ohne Quellzeilen oder
-lokale Variablen. Versionsauskunft liest geladene Module und Paketmetadaten,
+lokale Variablen; der Fehlerbericht aus dem Fenster nimmt `report.crash_detail()`.
+`log.redact_user_paths` setzt dabei für den Nutzerordner `~` (Stapel,
+Ausnahmetext, Protokollanhang in `diagnostic_attachments`) — eine Installation
+für den eigenen Nutzer liegt darunter (RM-231). Versionsauskunft liest geladene Module und Paketmetadaten,
 ohne im Fehlerpfad native Bibliotheken nachzuladen.
 
 Absturzdateien liegen unter den lokalen Protokollen. `paths.lock_file()` ist

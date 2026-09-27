@@ -656,6 +656,56 @@ def test_an_exception_report_keeps_the_cause_without_source_or_local_values() ->
     assert not report.include_project and not report.digest
 
 
+def test_a_crash_report_names_the_place_without_the_user_folder() -> None:
+    """RM-231: Der Fehlerbericht aus dem Fenster trägt keinen Benutzerpfad.
+
+    ``MainWindow.report_error`` nahm ``traceback.format_exception`` — Quellzeilen
+    und jeder Pfad ungeschwärzt. Eine Installation für den eigenen Nutzer liegt
+    unter ``%LOCALAPPDATA%\\Programs`` (``{autopf}`` mit ``PrivilegesRequired=lowest``),
+    also stand der Benutzername in **jeder** Zeile des Stapels, dazu im Text
+    einer Ausnahme, die eine Datei des Kunden nennt. Die Fehlerstelle — Datei,
+    Zeile, Funktion — bleibt lesbar.
+    """
+    from app.core import log
+
+    home = Path.home()
+    module = home / "AppData" / "Local" / "Programs" / "Solidon" / "_internal" / "app" / "probe.py"
+    namespace: dict[str, Any] = {}
+    # Eigener Probetext: ein Stapelrahmen unter dem Nutzerordner.
+    exec(
+        compile(
+            "def boom(path):\n    raise FileNotFoundError(f'Datei fehlt: {path}')\n",
+            str(module),
+            "exec",
+        ),
+        namespace,
+    )
+    foreign = "C:\\Users\\Erika Mustermann\\Desktop\\teil.stl und /home/erika/teil.stl"
+    try:
+        try:
+            namespace["boom"](home / "Downloads" / "Teil.stl")
+        except FileNotFoundError as cause:
+            raise RuntimeError(foreign) from cause
+    except RuntimeError as error:
+        problem = error
+
+    for text in (
+        report_module.crash_detail(problem, summary=f"Beim Öffnen von {home / 'x.3mf'}"),
+        log.exception_text(problem),
+        report_module.exception_report(problem).detail,
+    ):
+        folded = text.casefold()
+        assert str(home).casefold() not in folded, text
+        assert home.as_posix().casefold() not in folded, text
+        for name in ("Erika", "erika"):
+            assert name not in text, text
+    detail = report_module.crash_detail(problem)
+    assert 'probe.py", line 2, in boom' in detail, "die Fehlerstelle bleibt lesbar"
+    assert "FileNotFoundError" in detail and "RuntimeError" in detail
+    assert "Traceback" in detail
+    assert "raise FileNotFoundError" not in detail, "keine Quellzeilen"
+
+
 def _crash_child(
     tmp_path: Path, body: str, *, installed: bool = True
 ) -> subprocess.CompletedProcess[str]:
@@ -875,6 +925,26 @@ def test_crash_attachments_are_redacted_bounded_and_frozen(tmp_path: Path) -> No
     recent.write_text("geänderter Stand", encoding="utf-8")
     assert dict(frozen)["absturzprotokoll.txt"] == raw
     assert attached["protokoll.txt"] == b"normal"
+
+
+def test_attached_logs_carry_no_user_folder(tmp_path: Path) -> None:
+    """RM-231, der zweite Weg hinaus: Das Protokoll hängt in der Vorgabe an
+    (``include_log``), und seine Zeilen nennen die Dateien des Kunden — samt
+    Nutzerordner. Der Schnappschuss für Vorschau und Versand trägt ``~``."""
+    home = Path.home()
+    opened = f"Datei geöffnet: {home / 'Downloads' / 'teil.stl'}"
+    recent = tmp_path / "crash-20260920T120000-0.4.4-123-0000000000000001.log"
+    recent.write_text(f'  File "{home / "x" / "viewport.py"}", line 7 in paint\n', "utf-8")
+
+    attached = dict(
+        report_module.diagnostic_attachments(normal=opened.encode("utf-8"), directory=tmp_path)
+    )
+
+    for name in ("protokoll.txt", "absturzprotokoll.txt"):
+        text = attached[name].decode("utf-8")
+        assert str(home).casefold() not in text.casefold(), text
+    assert attached["protokoll.txt"].decode("utf-8").endswith("teil.stl")
+    assert "viewport.py" in attached["absturzprotokoll.txt"].decode("utf-8")
 
 
 def test_a_partial_crash_line_cannot_lose_the_secret_prefix(tmp_path: Path) -> None:

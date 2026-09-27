@@ -140,6 +140,42 @@ def redact(value: object, *, limit: int = _MAX_MESSAGE_CHARACTERS) -> str:
     return text[: max(1, limit - 1)].rstrip() + "…"
 
 
+#: Ein Nutzerordner, wie ihn die drei Plattformen anlegen — samt Namen, der
+#: auch Leerzeichen tragen kann („C:\\Users\\Max Muster"). Doppelte Trenner
+#: kommen aus ``repr`` eines Pfads. Das Muster fängt auch fremde Profile und
+#: 8.3-Kurznamen („ROBERT~1"), die der genaue Vergleich mit dem eigenen
+#: Ordner nicht sieht.
+_USER_FOLDER = re.compile(
+    r"""(?ix)
+    (?:\b[a-z]:)?[\\/]+(?:users|home|documents\ and\ settings)[\\/]+
+    [^\\/"'<>|:\r\n\t)\]}]+
+    """
+)
+
+
+def redact_user_paths(text: str) -> str:
+    """Ersetzt den Nutzerordner in einer Diagnose durch ``~``.
+
+    **Der Weg zur Fehlerstelle bleibt, der Name geht** (RM-231): Aus
+    ``C:\\Users\\max\\AppData\\Local\\Programs\\Solidon\\…\\viewport.py``
+    wird ``~\\AppData\\Local\\Programs\\Solidon\\…\\viewport.py`` — eine
+    Installation für den eigenen Nutzer liegt dort, und der Benutzername
+    stand sonst in jeder Zeile eines Stapels. Zuerst der eigene Ordner
+    wörtlich (er muss nicht unter ``Users`` liegen), dann das Muster.
+    """
+    try:
+        home = str(Path.home())
+    except RuntimeError, KeyError:
+        home = ""
+    if len(home) > 3:
+        separators = r"[\\/]+"
+        parts = [re.escape(part) for part in re.split(r"[\\/]+", home) if part]
+        exact = (separators if home[0] in "\\/" else "") + separators.join(parts)
+        flags = re.IGNORECASE if os.name == "nt" else 0
+        text = re.sub(exact + r"(?![^\\/\"'<>|:\s)\]}])", "~", text, flags=flags)
+    return _USER_FOLDER.sub("~", text)
+
+
 def redact_external(value: object, *, limit: int = 500) -> str:
     """Ein begrenzter, redigierter Ausschnitt aus einer fremden Antwort."""
     return redact(value, limit=limit)
@@ -177,7 +213,7 @@ def exception_text(error: BaseException, traceback: TracebackType | None = None)
         while stack is not None and count < 100 and remaining > 0:
             code = stack.tb_frame.f_code
             add(
-                f'  File "{redact(code.co_filename, limit=500)}", '
+                f'  File "{redact_user_paths(redact(code.co_filename, limit=500))}", '
                 f"line {stack.tb_lineno}, in {redact(code.co_name, limit=500)}"
             )
             stack = stack.tb_next
@@ -185,7 +221,7 @@ def exception_text(error: BaseException, traceback: TracebackType | None = None)
         if stack is not None:
             add("…")
         try:
-            message = redact(problem)
+            message = redact_user_paths(redact(problem))
         except Exception:
             message = "<Ausnahmetext nicht lesbar>"
         add(f"{redact(type(problem).__name__)}: {message}")

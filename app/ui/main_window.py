@@ -173,6 +173,7 @@ from app.core.registry import (
     variant_members,
 )
 from app.core.registry.params import body_keys
+from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
     EvaluationResult,
@@ -21879,9 +21880,10 @@ class MainWindow(QMainWindow):
         Das Bildschirmfoto entsteht **vor** dem Dialog: eine Sekunde später
         zeigte es den Fehlerdialog statt dessen, was darunter schiefging.
         """
-        text = "\n".join(
-            filter(None, (summary, str(error), "".join(traceback.format_exception(error))))
-        )
+        # Derselbe redigierte Weg wie der Absturzschutz (RM-231): ohne
+        # Quellzeilen und ohne den Nutzerordner, der bei einer Installation
+        # für den eigenen Nutzer in jeder Stapelzeile stand.
+        text = crash_detail(error, summary)
         # **Zwei Fehler, ein Bericht.** Zwei modale Fenster übereinander heißen
         # zweimal wegklicken, und der zweite Fehler ist oft der eigentliche —
         # der erste ist die Folge, die zuerst auffällt. Der offene Bericht nimmt
