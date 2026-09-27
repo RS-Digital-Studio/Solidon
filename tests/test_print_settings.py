@@ -6352,3 +6352,123 @@ def test_cura_fan_in_the_off_layers_is_measured_in_the_print_file() -> None:
     longer = print_settings.with_path(settings, "cooling.disable_first_layers", 2)
     found = handover.fan_in_off_layers(held, longer, "cura")
     assert found is not None and "Schicht 2 mit 50 %" in found.message.translate("de")
+
+
+def _standing_box(name: str, extents: tuple[float, float, float]) -> Any:
+    """Ein Quader, der auf dem Bett steht, als Körper der Szene."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    mesh = trimesh.creation.box(extents=extents)
+    mesh.apply_translation((0.0, 0.0, extents[2] / 2.0))
+    return SceneObject(id=f"obj_{name}", name=name, mesh=MeshData.of(mesh))
+
+
+def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: Any = "orca") -> list:
+    """Der Rat des Druckdialogs für diese Körper, ohne Fenster gerechnet."""
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(bodies, settings, profile, None, {}, (), (), {}, flavour=flavour)
+    got: list[list] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    assert got, "der Arbeiter kam ohne Rat zurück"
+    return got[0]
+
+
+def test_the_advice_names_the_part_the_export_gives_it_to(tmp_path: Path) -> None:
+    """Die Zeile im Druckdialog nennt das Teil, an das der Export den
+    übernommenen Vorschlag schreibt (Konzept Herstellerprofil, Stufe E).
+
+    Seit Entscheidung G gilt ein Vorschlag aus der Geometrie dem Körper, der
+    ihn verlangt. Die Zeile sagte davon nichts: „Haftung: Skirt → Brim" las
+    sich wie ein Rand um jedes Teil. Jetzt steht der Turm daran — und genau
+    der Turm bekommt den Brim in der Datei, Platte und Klotz nicht.
+    """
+    from app.core.export.writer import write_assembly
+    from app.ui.print_settings_dialog import _TargetedAdvice
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.adhesion.kind == "skirt", "die Vorbedingung des Tests"
+    bodies = (
+        _standing_box("Turm", (4.0, 4.0, 80.0)),
+        _standing_box("Platte", (60.0, 60.0, 10.0)),
+        _standing_box("Klotz", (30.0, 30.0, 10.0)),
+    )
+
+    entries = _advice_of(bodies, settings, profile)
+
+    brim = [entry for entry in entries if entry.path == "adhesion.kind"]
+    assert len(brim) == 1 and brim[0].value == "brim", entries
+    assert isinstance(brim[0], _TargetedAdvice)
+    assert brim[0].parts == ("Turm",)
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Satz",
+        profile=profile,
+        settings=advise.apply(settings, brim),
+    )
+    config = ET.fromstring(zipfile.ZipFile(written).read("Metadata/model_settings.config"))
+    branded = {
+        own.get("name", ""): own.get("brim_type")
+        for node in config.iter("object")
+        if (own := {meta.get("key"): meta.get("value") for meta in node.findall("metadata")})
+    }
+    assert branded == {"Turm": "outer_only", "Platte": None, "Klotz": None}
+
+
+@pytest.mark.parametrize("case", ["one_body", "every_body", "plate_wide_slicer"])
+def test_a_proposal_for_the_whole_plate_names_no_part(case: str) -> None:
+    """Die Gegenproben: Ein Körper allein, ein Vorschlag, den jedes Teil
+    verlangt, und ein Slicer, der keine Werte je Teil annimmt — dann gilt die
+    Zeile der Platte, und sie nennt kein Teil."""
+    from app.ui.print_settings_dialog import _TargetedAdvice
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    tower = _standing_box("Turm", (4.0, 4.0, 80.0))
+    bodies: tuple[Any, ...] = (tower,)
+    flavour = "orca"
+    if case == "every_body":
+        bodies = (tower, _standing_box("Mast", (5.0, 5.0, 90.0)))
+    elif case == "plate_wide_slicer":
+        bodies = (tower, _standing_box("Platte", (60.0, 60.0, 10.0)))
+        flavour = "other"
+
+    entries = _advice_of(bodies, settings, profile, flavour)
+
+    brim = [entry for entry in entries if entry.path == "adhesion.kind"]
+    assert len(brim) == 1 and brim[0].value == "brim", entries
+    assert not isinstance(brim[0], _TargetedAdvice) or not brim[0].parts
+
+
+def test_a_long_list_of_parts_is_counted_in_the_line_and_named_in_full_beside_it() -> None:
+    """Drei Teile stehen in der Zeile, ab vier die ersten zwei und die Zahl der
+    übrigen; der Tooltip und der Bildschirmleser bekommen alle."""
+    from types import SimpleNamespace
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _TargetedAdvice
+
+    host = SimpleNamespace(_fields={"adhesion.kind": SimpleNamespace(title="Haftung")})
+
+    def entry(*parts: str) -> _TargetedAdvice:
+        return _TargetedAdvice(
+            path="adhesion.kind", value="brim", was="skirt", reason="", parts=parts
+        )
+
+    few = entry("Turm", "Mast", "Fahne")
+    many = entry("Scheibe 1", "Scheibe 2", "Scheibe 3", "Scheibe 4", "Scheibe 5")
+
+    assert PrintSettingsDialog._advice_title(host, few) == "Haftung · Turm, Mast, Fahne"
+    assert (
+        PrintSettingsDialog._advice_title(host, many)
+        == "Haftung · Scheibe 1, Scheibe 2 und 3 weitere"
+    )
+    assert PrintSettingsDialog._advice_parts(many) == (
+        "Gilt für: Scheibe 1, Scheibe 2, Scheibe 3, Scheibe 4, Scheibe 5"
+    )
+    assert PrintSettingsDialog._advice_parts(entry()) == ""

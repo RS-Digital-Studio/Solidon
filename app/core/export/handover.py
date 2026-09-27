@@ -67,6 +67,8 @@ from app.core.export.slicer_keys import (
     takes_a_machine_profile,
     wants_bed_coordinates,
 )
+from app.core.geom.attributes import used_slots
+from app.core.geom.mesh import as_mesh_data
 from app.core.ingest.threemf import SETTINGS_PATH
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
@@ -86,6 +88,7 @@ from app.core.types import (
     PrinterProfile,
     PrintSettings,
     Profile,
+    SceneObject,
     SettingAdvice,
     SlotOverride,
     SlotProfileBinding,
@@ -1549,6 +1552,61 @@ def settings_for_slot(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SlotProcess:
+    """Womit eine Spule eines Körpers druckt (§20, §29)."""
+
+    slot: MaterialSlot
+    """Die Spule, mit dem gewählten Filamentprofil, wo eines gewählt ist."""
+    profile: Profile
+    """Drucker und Material dieser Spule, bezogen auf das Druckraster."""
+    settings: PrintSettings
+    """Die Einstellungen, mit denen diese Spule fährt (:func:`settings_for_slot`)."""
+
+
+def slot_processes(
+    body: SceneObject,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+) -> tuple[SlotProcess, ...]:
+    """Jede Spule, die dieser Körper wirklich benutzt, mit Profil und Einstellungen.
+
+    Der Rat fragt je Spule und nicht nur nach Slot 0: Ein Griff aus TPU auf
+    einem Gehäuse aus PLA verlangt die langsame Außenwand, obwohl das Gehäuse
+    PLA ist. ``slot_profiles`` ordnet der Identität der ungewählten Spule
+    (:func:`threemf.slot_identity`) das gewählte Filamentprofil zu.
+
+    Druckdialog und Export fragen dieselbe Funktion (Konzept Herstellerprofil,
+    Entscheidung G): Solange der Export je Teil nur das Material von Slot 0
+    kannte, bekam ein Teil mit einer zweiten Spule einen übernommenen
+    Vorschlag nicht, den der Dialog für genau dieses Teil gezeigt hatte.
+    """
+    mesh = as_mesh_data(body.mesh)
+    own_profile = profiles.for_object(profile, body)
+    present = set(used_slots(mesh))
+    processes: list[SlotProcess] = []
+    for original in threemf.assembly_slots(
+        threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
+    ):
+        if original.index not in present:
+            continue
+        chosen = slot_profiles.get(threemf.slot_identity(original), "")
+        slot = replace(original, material=chosen) if chosen else original
+        material = profiles.material_id_for_type(slot.material_type or "")
+        material_profile = (
+            replace(own_profile, material=profiles.material(material)) if material else own_profile
+        )
+        effective = settings_for_slot(settings, profile, slot, setup)
+        processes.append(
+            SlotProcess(
+                slot, profiles.for_process(material_profile, effective, effective=True), effective
+            )
+        )
+    return tuple(processes)
+
+
 def unreachable_overrides(
     settings: PrintSettings,
     setup: SlicerSetup,
@@ -1770,6 +1828,29 @@ def configured_slots(
         else slot
         for slot in slots
     )
+
+
+def chosen_slot_profiles(
+    objects: Sequence[SceneObject], settings: PrintSettings
+) -> dict[threemf.SlotKey, str]:
+    """Welches Filamentprofil jede Spule des Auftrags bekommt, nach der Identität
+    der ungewählten Spule — die Zuordnung, die :func:`slot_processes` liest.
+
+    Über alle Körper des Auftrags zusammengelegt wie die Extruderliste der
+    Datei, denn gespeicherte Profile ohne Bindung zählen nach der Stelle in
+    dieser Liste (:func:`configured_slots`).
+    """
+    merged = threemf.merge_slots(
+        [
+            threemf.AssemblyPart(as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry))
+            for entry in objects
+        ]
+    )
+    return {
+        threemf.slot_identity(original): configured.material
+        for original, configured in zip(merged, configured_slots(merged, settings), strict=True)
+        if configured.material
+    }
 
 
 def with_slot_profiles(

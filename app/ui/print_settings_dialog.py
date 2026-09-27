@@ -75,7 +75,7 @@ from app.core.errors import (
 )
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
-from app.core.export.writer import arrangement_holds, write_assembly
+from app.core.export.writer import arrangement_holds, part_advice, write_assembly
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
@@ -1790,6 +1790,14 @@ class _TargetedAdvice(SettingAdvice):
     slot: MaterialSlot | None = None
     effective: PrintSettings | None = None
     unavailable: TranslatableText | str = ""
+    parts: tuple[str, ...] = ()
+    """Die Teile, an die der Export diesen Vorschlag schreibt, wenn er nur
+    einigen gilt (Konzept Herstellerprofil, Entscheidung G). Leer heißt: die
+    ganze Platte."""
+
+
+#: So viele Teilenamen stehen in einer Zeile des Rats; die übrigen zählt sie.
+SHOWN_PART_NAMES: Final = 3
 
 
 def _advice_identity(entry: SettingAdvice) -> object:
@@ -1816,6 +1824,9 @@ class _AdviceWorker(Worker):
         fit_kinds: tuple[str, ...],
         connectors: tuple[float, ...],
         previous: Mapping[str, tuple[float, float, SliceResult]],
+        *,
+        part_fits: Mapping[str, tuple[str, ...]] | None = None,
+        flavour: SlicerFlavour = "orca",
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1826,6 +1837,12 @@ class _AdviceWorker(Worker):
         self.fit_kinds = fit_kinds
         self.connectors = connectors
         self.previous = previous
+        self.part_fits = part_fits or {}
+        """Die Passungen je Körper, im Hauptthread aus dem Dokument gelesen —
+        der Export fragt sie je Teil (:func:`writer.part_advice`)."""
+        self.flavour = flavour
+        """Die Familie, für die die Teile benannt werden; ohne Slicer die der
+        gespeicherten 3MF."""
         self.cancelled = CancelSignal()
         self.analysis_context: tuple[Any, ...] | None = None
         """Für welchen Geometriestand dieser Arbeiter misst (``_analysis_context``)."""
@@ -1871,34 +1888,12 @@ class _AdviceWorker(Worker):
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
             mesh = as_mesh_data(body.mesh)
             own_profile = profiles.for_object(self.profile, body)
-            slots = threemf.assembly_slots(
-                threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
+            # Dieselben Spulen, die der Export je Teil fragt (Entscheidung G).
+            processes = handover.slot_processes(
+                body, self.settings, self.profile, self.setup, self.slot_profiles
             )
-            present = set(used_slots(mesh))
-            processes: list[tuple[MaterialSlot, Profile, PrintSettings]] = []
-            for original in slots:
-                if original.index not in present:
-                    continue
-                chosen = self.slot_profiles.get(threemf.slot_identity(original), "")
-                slot = replace(original, material=chosen) if chosen else original
-                material = profiles.material_id_for_type(slot.material_type or "")
-                material_profile = (
-                    replace(own_profile, material=profiles.material(material))
-                    if material
-                    else own_profile
-                )
-                effective = handover.settings_for_slot(
-                    self.settings, self.profile, slot, self.setup
-                )
-                processes.append(
-                    (
-                        slot,
-                        profiles.for_process(material_profile, effective, effective=True),
-                        effective,
-                    )
-                )
             angle = min(
-                (process.overhang_limit_degrees for _slot, process, _effective in processes),
+                (process.profile.overhang_limit_degrees for process in processes),
                 default=profiles.for_process(
                     own_profile, self.settings, effective=True
                 ).overhang_limit_degrees,
@@ -1911,7 +1906,7 @@ class _AdviceWorker(Worker):
             # nicht, und ein Ergebnis, das einen Materialwechsel überlebt,
             # spräche über einen Drucker, den niemand mehr gemeint hat.
             wall = max(
-                (process.minimum_wall_thickness for _slot, process, _effective in processes),
+                (process.profile.minimum_wall_thickness for process in processes),
                 default=profiles.for_process(
                     own_profile, self.settings, effective=True
                 ).minimum_wall_thickness,
@@ -1943,10 +1938,10 @@ class _AdviceWorker(Worker):
             results[body.id] = (angle, wall, result)
             if not self.rules_wanted:
                 continue
-            for slot, material_profile, effective in processes:
+            for process in processes:
                 entries = advise.advise(
-                    effective,
-                    material_profile,
+                    process.settings,
+                    process.profile,
                     result,
                     bounds=mesh.bounds,
                     fit_kinds=self.fit_kinds,
@@ -1954,7 +1949,7 @@ class _AdviceWorker(Worker):
                 )
                 common.append(
                     (
-                        effective,
+                        process.settings,
                         [
                             entry
                             for entry in entries
@@ -1962,12 +1957,12 @@ class _AdviceWorker(Worker):
                         ],
                     )
                 )
-                key = threemf.slot_identity(slot)
+                key = threemf.slot_identity(process.slot)
                 if key not in materials:
-                    materials[key] = (slot, [])
+                    materials[key] = (process.slot, [])
                 materials[key][1].append(
                     (
-                        effective,
+                        process.settings,
                         [
                             entry
                             for entry in entries
@@ -1975,7 +1970,7 @@ class _AdviceWorker(Worker):
                         ],
                     )
                 )
-        entries = advise.combine(self.settings, common)
+        entries = self._with_parts(advise.combine(self.settings, common), results)
         for slot, groups in materials.values():
             for entry in advise.combine(groups[0][0], groups):
                 entries.append(
@@ -2026,6 +2021,65 @@ class _AdviceWorker(Worker):
             ]
         self.cancelled.raise_if_cancelled()
         self.done.emit(entries, results)
+
+    def _with_parts(
+        self,
+        entries: list[SettingAdvice],
+        results: Mapping[str, tuple[float, float, SliceResult]],
+    ) -> list[SettingAdvice]:
+        """Nennt an jedem Vorschlag, der je Teil geschrieben wird, die Teile.
+
+        Übernommen gilt ein Vorschlag aus der Geometrie dem Körper, der ihn
+        verlangt (Konzept Herstellerprofil, Entscheidung G); die Zeile sagt,
+        welchem („Brim · Turm“). Gefragt wird, was der Export fragt: dieselbe
+        Trennung (:func:`handover.split_for_parts`, mit allen Vorschlägen
+        übernommen, wie die Liste sie vorbelegt) und derselbe Rat je Teil
+        (:func:`writer.part_advice`), mit den Schichten, die hier schon
+        gemessen sind. Gilt er allen Teilen oder der Platte, bleibt die Zeile,
+        wie sie war.
+        """
+        if len(self.objects) < 2:
+            return entries
+        candidates = {entry.path for entry in entries if entry.path in advise.PART_PATHS}
+        if not candidates:
+            return entries
+        split = handover.split_for_parts(
+            advise.apply(self.settings, entries), self.profile, self.setup, self.flavour
+        )
+        candidates &= split.per_part
+        if not candidates:
+            return entries
+        wanted: dict[str, list[str]] = {}
+        for body in self.objects:
+            self.cancelled.raise_if_cancelled()
+            if not self.rules_wanted:
+                return entries
+            for entry in part_advice(
+                body,
+                as_mesh_data(body.mesh),
+                split.base,
+                self.profile,
+                self.setup,
+                self.slot_profiles,
+                result=results[body.id][2],
+                fit_kinds=self.part_fits.get(body.id, ()),
+            ):
+                if entry.path in candidates:
+                    wanted.setdefault(entry.path, []).append(str(body.name))
+        named: list[SettingAdvice] = []
+        for entry in entries:
+            parts = tuple(wanted.get(entry.path, ()))
+            if entry.path in candidates and 0 < len(parts) < len(self.objects):
+                entry = _TargetedAdvice(
+                    path=entry.path,
+                    value=entry.value,
+                    was=entry.was,
+                    reason=entry.reason,
+                    severity=entry.severity,
+                    parts=parts,
+                )
+            named.append(entry)
+        return named
 
 
 class _StockWorker(Worker):
@@ -5975,6 +6029,13 @@ class PrintSettingsDialog(QDialog):
             self.session.project.document, {body.id for body in self._plate_bodies()}
         )
 
+    def _part_fits(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Dieselbe Frage je Körper — so fragt der Export je Teil
+        (:func:`app.core.export.writer.part_advice`). Im Hauptthread, denn das
+        Dokument gehört ihm."""
+        document = self.session.project.document
+        return tuple((body.id, fit_kinds_for(document, {body.id})) for body in self._plate_bodies())
+
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der
         Hinweis auf hohe, schmale Teile."""
@@ -6113,7 +6174,7 @@ class PrintSettingsDialog(QDialog):
             self._analysis_context(),
             self.settings,
             self.session.profile,
-            self._fits_in_play(),
+            self._part_fits(),
             self._connector_diameters(),
             self.session.busy,
             self._slicer_path,
@@ -6200,6 +6261,9 @@ class PrintSettingsDialog(QDialog):
             self._fits_in_play(),
             self._connector_diameters(),
             previous,
+            part_fits=dict(self._part_fits()),
+            # Ohne Slicer schreibt der Export die 3MF wie für die Orca-Familie.
+            flavour=flavour or "orca",
         )
         worker.analysis_context = analysis_context
         context = self._advice_request
@@ -6418,6 +6482,8 @@ class PrintSettingsDialog(QDialog):
             becomes = self._shown(entry.path, entry.value)
             title = self._advice_title(entry)
             reason = "\n".join(part for part in (str(entry.reason), str(unavailable)) if part)
+            # Alle Teile am ganzen Eintrag, auch die, die der Titel zählt.
+            said = "\n".join(part for part in (reason, self._advice_parts(entry)) if part)
             item = QTreeWidgetItem(
                 [
                     f"{marker}{title}",
@@ -6447,7 +6513,7 @@ class PrintSettingsDialog(QDialog):
             # eigenen Teil passt, war genau der abgeschnittene. Er steht jetzt
             # zusätzlich am ganzen Eintrag.
             for column in range(3):
-                item.setToolTip(column, reason)
+                item.setToolTip(column, said)
             self.advice_view.addTopLevelItem(item)
         del blocker
         waiting = self._advice_pending or bool(self._advice_problem)
@@ -6496,12 +6562,34 @@ class PrintSettingsDialog(QDialog):
             self.advice_view.resizeColumnToContents(column)
 
     def _advice_title(self, entry: SettingAdvice) -> str:
-        """Wie ein Vorschlag heißt — in der Liste und in der Meldung danach."""
+        """Wie ein Vorschlag heißt — in der Liste und in der Meldung danach.
+
+        Gilt er nur einigen Teilen, stehen sie dahinter („Brim · Turm“), bei
+        vielen die ersten und die Zahl der übrigen; alle nennt
+        :meth:`_advice_parts`.
+        """
         field = self._fields.get(entry.path)
         title = str(field.title) if field else entry.path
         if isinstance(entry, _TargetedAdvice) and entry.slot is not None and entry.slot.name:
             title = f"{title} · {entry.slot.name}"
+        if isinstance(entry, _TargetedAdvice) and entry.parts:
+            names = entry.parts
+            if len(names) > SHOWN_PART_NAMES:
+                rest = str(tr("und {count} weitere")).replace(
+                    "{count}", str(len(names) - SHOWN_PART_NAMES + 1)
+                )
+                title = f"{title} · {', '.join(names[: SHOWN_PART_NAMES - 1])} {rest}"
+            else:
+                title = f"{title} · {', '.join(names)}"
         return title
+
+    @staticmethod
+    def _advice_parts(entry: SettingAdvice) -> str:
+        """Die Zeile, die alle Teile eines Vorschlags je Teil nennt — für den
+        Tooltip und den Bildschirmleser, denn der Titel kürzt ab vier Teilen."""
+        if not isinstance(entry, _TargetedAdvice) or not entry.parts:
+            return ""
+        return f"{tr('Gilt für')}: {', '.join(entry.parts)}"
 
     def _chosen_advice(self) -> list[SettingAdvice]:
         """Die angehakten Vorschläge, in der Reihenfolge der Liste."""

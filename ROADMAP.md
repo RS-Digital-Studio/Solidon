@@ -67,10 +67,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Die Auskunft steht (`boolean.parts_not_united` mit *Stelle zeigen*, `ae178de8c`); offen die Geometrie: Teil 10 kreuzt sich 1 121-mal selbst, die 21 Teile lassen sich deshalb nicht vereinigen — gekippt 15° liegen 32,6 mm³ jenseits der alten Kappe, Verdoppeln bleibt ohne Wirkung, Versetzen „geht nicht mehr durch“; Weg über das Auflösen der Eigenkreuzung |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); offen die Zeile je Teil im Druckdialog und das Schreiben je Teil — Stufe E von [RM-281](#rm-281) |
+| [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); Schreiben je Teil (`2cf02ad2d`) und die Zeile „Brim · Teil“ im Druckdialog stehen; offen die Abnahme im Slicer mit Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
 | [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); offen Curas Fenster, das die Sperre nicht bekommt (Stufe E von [RM-281](#rm-281)) |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); von E stehen Rat und Werte je Teil, offen die Zeile im Druckdialog, Curas Fenster und die Abnahme im Slicer; dann der Rest von K, Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); von E stehen Rat, Werte und die Zeile je Teil, offen Curas Fenster und die Abnahme im Slicer; dann der Rest von K, Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -2059,9 +2059,11 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `writer._part_settings` nur noch Pfade aus `PrintSettings.accepted`; ohne Klick geht
   Elegoos Auto-Brim hinaus. Gemessen im ElegooSlicer: Minigolf-Platte 11,67 m und
   Waschschüssel 0,93 m Rand, jeweils gleich dem Lauf mit Elegoos Profil allein (vorher
-  8,51 und 0,40 m). **Offen:** die Zeile „Brim · <Teil>“ im Druckdialog und das Schreiben
-  je Teil statt für die Platte — Stufe E von [RM-281](#rm-281). Bis dahin gilt ein
-  übernommener Brim der ganzen Platte.
+  8,51 und 0,40 m). **Gebaut mit Stufe E** von [RM-281](#rm-281): Ein übernommener Brim
+  steht nur an den Teilen, die ihn brauchen (`2cf02ad2d`), und die Zeile im Druckdialog
+  nennt sie („Haftung · Turm“, ab vier Teilen gezählt, alle im Tooltip). Zeile und
+  Export fragen denselben Rat je Teil (`writer.part_advice`), je Spule des Teils.
+  **Offen:** die Abnahme im Slicer mit Stufe E.
 
 <a id="rm-252"></a>
 
@@ -2201,9 +2203,12 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     Pfade (`advise.PART_PATHS`), `handover.split_for_parts` setzt die Platte dort auf die
     Grundlage, Orca und Prusa bekommen Objektwerte, Cura je Netz die Rücknahme
     (`CURA_PER_MESH`); Haftungsprüfung und Stützsperre fragen den Wert je Teil, der
-    Konsolenlauf dieselbe Platte. Offen: die Zeile je Teil im Druckdialog (RM-250), die
-    Sperre für Curas Fenster (RM-257) und die Abnahme im Slicer: Minigolf-Satz mit einem
-    gestützten Körper — Stütze nur an ihm, Brim der übrigen geschlossen.
+    Konsolenlauf dieselbe Platte. Die Zeile im Druckdialog nennt die Teile (RM-250); sie
+    und der Export fragen denselben Rat je Teil und Spule (`writer.part_advice`) — vorher
+    las der Export nur das Material von Slot 0, und ein Griff aus TPU auf einem Teil aus
+    PETG verlor seine langsame Außenwand. Offen: die Sperre für Curas Fenster (RM-257)
+    und die Abnahme im Slicer: Minigolf-Satz mit einem gestützten Körper — Stütze nur an
+    ihm, Brim der übrigen geschlossen.
   - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
   - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
     Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder

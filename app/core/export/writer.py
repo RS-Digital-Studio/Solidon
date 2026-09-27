@@ -1130,23 +1130,77 @@ class _PartValues:
     """Womit dieses Teil gedruckt wird — für seine Stützsperre."""
 
 
+def part_advice(
+    entry: SceneObject,
+    mesh: MeshData,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+    *,
+    result: SliceResult | None,
+    fit_kinds: Sequence[str],
+) -> list[SettingAdvice]:
+    """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
+
+    Der Rat je Körper (:func:`advise.for_part`), gefragt für jede Spule, die
+    der Körper benutzt, mit deren Einstellungen und Material
+    (:func:`handover.slot_processes`), und zusammengeführt wie der Rat im
+    Druckdialog (:func:`advise.combine`). Der Export schreibt daraus die
+    Objektwerte, der Druckdialog nennt damit die Teile einer Zeile — beide
+    fragen diese Funktion, damit die Zeile kein Teil nennt, das die Datei nicht
+    bekommt.
+
+    Die Grundfläche kommt aus einem Schnitt knapp über dem Boden, nicht aus dem
+    Hüllquader: Ein Teil auf drei schmalen Armen hat eine große Grundfläche und
+    kaum Halt. Passungen (``fit_kinds``) und Zapfen zählen nur, wenn dieses
+    Teil sie trägt.
+    """
+    # Erst hier: ``handover`` zieht die G-Code-Auswertung mit, und ein Export
+    # soll nicht davon abhängen, dass ein Slicer im Spiel ist.
+    from app.core.export import handover
+    from app.core.slice import advise
+    from app.core.slice.analysis import cross_section
+
+    lowest = float(mesh.bounds.minimum[2])
+    section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
+    footprint = 0.0 if section is None or section.is_empty else float(section.area)
+    connectors = advise.connector_diameters([entry])
+    groups = [
+        (
+            process.settings,
+            advise.for_part(
+                process.settings,
+                mesh.bounds,
+                footprint,
+                profile=process.profile,
+                result=result,
+                fit_kinds=fit_kinds,
+                connectors=connectors,
+            ),
+        )
+        for process in handover.slot_processes(entry, settings, profile, setup, slot_profiles)
+    ]
+    return advise.combine(settings, groups)
+
+
 def _part_values(
     entry: SceneObject,
     mesh: MeshData,
     split: PartSplit | None,
     profile: Profile,
     flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
     document: Document | None,
     cancelled: CancelToken | None,
 ) -> _PartValues:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G) — und warum.
 
-    Gefragt wird der Rat je Körper (:func:`advise.for_part`) für die Pfade, die
+    Gefragt wird der Rat je Körper (:func:`part_advice`) für die Pfade, die
     der Split je Teil führt: Stützen nur am Körper, der sie braucht, ein Brim
     nur unter dem, der schlank ist oder auf wenig Fläche steht, die Werte einer
-    Passung nur am Teil, das sie trägt. Die Grundfläche kommt aus einem Schnitt
-    knapp über dem Boden, nicht aus dem Hüllquader: Ein Teil auf drei schmalen
-    Armen hat eine große Grundfläche und kaum Halt.
+    Passung nur am Teil, das sie trägt.
 
     **Der Rat reist mit heraus**: ein Wert ohne Begründung ist im Zweifel
     schlechter als die Vorgabe, weil niemand ihn nachprüfen kann.
@@ -1156,33 +1210,33 @@ def _part_values(
     wanted = split.per_part | split.unavailable
     if not wanted:
         return _PartValues({}, [], [], split.plate)
-    # Erst hier: ``handover`` zieht die G-Code-Auswertung mit, und ein Export
-    # soll nicht davon abhängen, dass ein Slicer im Spiel ist.
     from app.core.export import handover
     from app.core.knowledge import profiles as profile_table
     from app.core.scene.fits import fit_kinds_for
     from app.core.slice import advise
-    from app.core.slice.analysis import cross_section
 
-    lowest = float(mesh.bounds.minimum[2])
-    section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
-    footprint = 0.0 if section is None or section.is_empty else float(section.area)
-    part_profile = profile_table.for_process(
-        profile_table.for_object(profile, entry), split.base, effective=True
-    )
     result = (
-        _body_analysis(entry, mesh, split.base, part_profile, cancelled)
+        _body_analysis(
+            entry,
+            mesh,
+            split.base,
+            profile_table.for_process(
+                profile_table.for_object(profile, entry), split.base, effective=True
+            ),
+            cancelled,
+        )
         if wanted & _SLICED_PART_PATHS
         else None
     )
-    advice = advise.for_part(
+    advice = part_advice(
+        entry,
+        mesh,
         split.base,
-        mesh.bounds,
-        footprint,
-        profile=part_profile,
+        profile,
+        setup,
+        slot_profiles,
         result=result,
         fit_kinds=fit_kinds_for(document, {entry.id}) if document is not None else (),
-        connectors=advise.connector_diameters([entry]),
     )
     applied = [item for item in advice if item.path in split.per_part]
     unavailable = [item for item in advice if item.path in split.unavailable]
@@ -1488,6 +1542,7 @@ def write_assembly(
     exported = {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen}
     findings += _tessellation_finding(chosen, profile)
     split: PartSplit | None = None
+    slot_profiles: dict[threemf.SlotKey, str] = {}
     if settings is not None:
         from app.core.export import handover
 
@@ -1496,12 +1551,21 @@ def write_assembly(
         # Grundlage, bei Cura die Übernahme mit Rücknahme je Netz.
         split = handover.split_for_parts(settings, profile, setup, flavour)
         settings = split.plate
+        slot_profiles = handover.chosen_slot_profiles(objects, settings)
     # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
     # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch was der
     # Slicer je Teil nicht annimmt, wird benannt.
     part_values = {
         entry.id: _part_values(
-            entry, exported[entry.id], split, profile, flavour, document, cancelled
+            entry,
+            exported[entry.id],
+            split,
+            profile,
+            flavour,
+            setup,
+            slot_profiles,
+            document,
+            cancelled,
         )
         for entry in chosen
     }

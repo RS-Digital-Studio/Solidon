@@ -2339,6 +2339,54 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     assert meshes["Rohre-part-2.stl"]["scarf_joint_seam_length"] == "0"
 
 
+def test_a_part_gets_what_its_second_spool_asks_for(tmp_path: Path, profile: Profile) -> None:
+    """Der Rat je Teil fragt jede Spule des Teils, nicht nur Slot 0.
+
+    Ein Deckel in PETG mit einem Griff aus TPU: Der Druckdialog fragt je Spule
+    und schlägt für das weiche Filament die langsame Außenwand vor. Übernommen
+    geht sie je Teil (Entscheidung G) — und der Export fragte bis dahin nur das
+    Material von Slot 0. Der Griff bekam den Vorschlag nicht, den der Dialog
+    für ihn gezeigt hatte, und das TPU lief mit dem Tempo des PETG.
+    """
+    from app.core.geom.attributes import used_slots
+
+    griff_netz = MeshData.of(trimesh.creation.box(extents=(30.0, 30.0, 10.0)))
+    griff_netz = replace(griff_netz, slots=(0, 1) * (griff_netz.triangle_count // 2))
+    assert used_slots(griff_netz) == (0, 1), "die Vorbedingung des Tests"
+    objects = [
+        replace(
+            scene_object("obj_1", "Griff"),
+            mesh=griff_netz,
+            material_slots=[
+                MaterialSlot(0, "Grau", material_type="PETG"),
+                MaterialSlot(1, "Weich", material_type="TPU"),
+            ],
+        ),
+        replace(
+            scene_object("obj_2", "Deckel"),
+            mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 30.0, 10.0))),
+        ),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.speed.outer_wall > advise.FLEXIBLE_MAX_SPEED, "die Vorbedingung des Tests"
+    assert "speed.outer_wall" not in advise.plate_paths(settings, profile), (
+        "für PETG ist das Tempo kein Grund der ganzen Platte"
+    )
+    settings = print_settings.with_accepted(settings, "speed.outer_wall", advise.FLEXIBLE_MAX_SPEED)
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Deckel", profile=profile, settings=settings
+    )
+
+    values = _object_values(written, "Metadata/model_settings.config")
+    assert float(values["Griff"]["outer_wall_speed"]) == pytest.approx(advise.FLEXIBLE_MAX_SPEED)
+    assert "outer_wall_speed" not in values["Deckel"]
+    treffer = [finding for finding in findings if finding.code == "export.part_setting"]
+    assert [(finding.values["objects"], finding.values["setting"]) for finding in treffer] == [
+        (1, "speed.outer_wall")
+    ]
+
+
 def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
