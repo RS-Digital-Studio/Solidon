@@ -87,10 +87,17 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Jeder hervorgehobene Name im Satz (Knopf, Feld, Baustein, Titel) ist in
   jeder Sprache gegen den Katalog geprüft
   (`test_a_name_in_a_step_is_the_one_the_interface_shows`).
-- **Als Nächstes, für 0.5.1:** per Merge nach `main`, vor dem Tag v0.5.1 —
-  Robert Bescheid geben, damit die Release-Sitzung nicht vorher taggt. Danach
-  HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"), wenn Robert es noch
-  in 0.5.1 will.
+- **Fertig für `main` und der Release-Sitzung gemeldet**, samt den Punkten
+  im Changelog 0.5.1 (Gruppe *Handbuch und Website*, dazu unter *Bedienung
+  und System* das Auswahlfenster ohne Auswahl). Den Merge setzt die
+  Release-Sitzung vor dem Tag, wie jedes Paket
+  (`F:\3D Druck.review-051\UEBERGABE.md`, „Übernahme“); die Meldung liegt im
+  Hauptbaum unter `.claude/.state/handbuch-umbau-2026-09-27/MELDUNG.md`.
+  Beim Release läuft `make_guides.py` in allen Sprachen vor `make_manual.py`.
+- **Als Nächstes:** HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
+  wenn Robert es noch in 0.5.1 will; sonst weiter nach §9. Gearbeitet wird
+  weiter auf diesem Zweig. Was nach der Meldung dazukommt, geht mit einer
+  neuen Meldung nach `main`, und vorher wird `main` hereingeholt.
 
 ## §1 Befund
 

@@ -145,11 +145,19 @@ it into `website/version.json`.
 - If a file in *Recently opened* has been moved, Solidon says so and offers *Choose another file*.
 - A file that could not be read no longer ends up in *Recently opened*, and the next file no longer reports its name while loading.
 - Recently opened projects on the start page open with one click.
+- With nothing selected, the selection panel offers what applies to all bodies: *Orient for printing*, *Arrange on the bed* and *Check overlaps*.
 - After *Split the model*, all parts stand fully in view.
 - Every halted step in the report has a button: *Correct the input* opens it with the cursor in the affected field.
 - After splitting, the report no longer shows buttons that do nothing on lines about the old body.
 - A freely drawn sketch without dimensions no longer generates a notice in the report.
 - An error report names folders under your user directory without your username, even when Solidon itself is installed there.
+
+### Manual and website
+
+- The manual shows step by step, in pictures from the application, how to check and print a model, drill a hole and build your own part or an enclosure with a lid.
+- An overview picture explains the window: each number in the picture marks one area.
+- The search in the manual finds the right page even with everyday words, lists it first and opens it where the word appears.
+- The reference names, for every operation, where to find it in the menu or in the selection panel.
 
 ## 0.5.0
 

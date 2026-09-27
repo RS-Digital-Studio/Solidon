@@ -145,11 +145,19 @@ scrive in `website/version.json`.
 - Se un file in «Aperti di recente» è stato spostato, Solidon lo dice e propone «Scegli un altro file».
 - Un file che non si è potuto leggere non finisce più in «Aperti di recente», e il file successivo non ne annuncia più il nome durante il caricamento.
 - I progetti aperti di recente nella pagina iniziale si aprono con un clic.
+- Senza selezione, il pannello di selezione offre ciò che vale per tutti i corpi: «Orienta per la stampa», «Disponi sul piano» e «Controlla sovrapposizioni».
 - Dopo «Dividi il modello», tutti i pezzi stanno interamente nella vista.
 - Ogni passaggio interrotto nel rapporto ha un pulsante: «Correggi l'inserimento» lo apre con il cursore nel campo interessato.
 - Dopo la divisione, il rapporto non mostra più, sulle righe relative al corpo vecchio, pulsanti che non fanno nulla.
 - Un disegno tracciato liberamente senza quota non genera più un avviso nel rapporto.
 - Un rapporto di errore indica le cartelle nella vostra directory utente senza il vostro nome utente, anche se Solidon stesso è installato lì.
+
+### Manuale e sito web
+
+- Il manuale mostra passo per passo, con immagini dell'applicazione, come verificare e stampare un modello, praticare un foro e costruire un proprio pezzo o una scatola con coperchio.
+- Un'immagine d'insieme spiega la finestra: ogni numero nell'immagine indica un'area.
+- La ricerca nel manuale trova la pagina giusta anche con parole di tutti i giorni, la mostra per prima e la apre dove compare la parola.
+- Il riferimento indica per ogni operazione dove trovarla nel menu o nel pannello di selezione.
 
 ## 0.5.0
 

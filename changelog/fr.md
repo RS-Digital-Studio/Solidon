@@ -146,11 +146,19 @@ dans `website/version.json`.
 - Si un fichier de « Ouverts récemment » a été déplacé, Solidon le dit et propose « Choisir un autre fichier ».
 - Un fichier illisible n'atterrit plus dans « Ouverts récemment », et le fichier suivant n'annonce plus son nom au chargement.
 - Les projets ouverts récemment sur la page d'accueil s'ouvrent en un clic.
+- Quand rien n'est sélectionné, le panneau de sélection propose ce qui s'applique à tous les corps : « Orienter pour l'impression », « Disposer sur le plateau » et « Vérifier les chevauchements ».
 - Après « Scinder le modèle », toutes les pièces tiennent entièrement dans la vue.
 - Chaque étape arrêtée dans le rapport a un bouton : « Corriger la saisie » l'ouvre avec le curseur dans le champ concerné.
 - Après la division, le rapport ne montre plus, sur les lignes concernant l'ancien corps, de boutons sans effet.
 - Un dessin tracé librement sans cote ne génère plus d'avertissement dans le rapport.
 - Un rapport d'erreur nomme les dossiers sous votre répertoire utilisateur sans votre nom d'utilisateur, même si Solidon lui-même y est installé.
+
+### Manuel et site web
+
+- Le manuel montre pas à pas, avec des images de l'application, comment vérifier et imprimer un modèle, percer un trou et construire sa propre pièce ou un boîtier avec couvercle.
+- Une image d'ensemble explique la fenêtre : chaque numéro de l'image désigne une zone.
+- La recherche du manuel trouve la bonne page même avec des mots courants, l'affiche en premier et l'ouvre à l'endroit où figure le mot.
+- La référence indique pour chaque opération où la trouver dans le menu ou dans le panneau de sélection.
 
 ## 0.5.0
 

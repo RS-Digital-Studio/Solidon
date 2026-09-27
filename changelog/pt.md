@@ -145,11 +145,19 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um ficheiro de «Abertos recentemente» tiver sido movido, o Solidon di-lo e oferece «Escolher outro ficheiro».
 - Um ficheiro que não foi possível ler já não vai parar a «Abertos recentemente», e o ficheiro seguinte já não anuncia o nome dele ao carregar.
 - Os projetos abertos recentemente na página inicial abrem com um clique.
+- Sem nada selecionado, o painel de seleção oferece o que se aplica a todos os corpos: «Orientar para impressão», «Dispor na mesa» e «Verificar sobreposições».
 - Depois de «Dividir o modelo», todas as peças ficam completamente à vista.
 - Cada passo interrompido no relatório tem um botão: «Corrigir a entrada» abre-o com o cursor no campo afetado.
 - Depois da divisão, o relatório já não mostra, nas linhas sobre o corpo antigo, botões que não fazem nada.
 - Um desenho traçado livremente sem cota já não gera um aviso no relatório.
 - Um relatório de erro indica as pastas na sua pasta de utilizador sem o seu nome de utilizador, mesmo quando o próprio Solidon está aí instalado.
+
+### Manual e site
+
+- O manual mostra passo a passo, com imagens da aplicação, como verificar e imprimir um modelo, abrir um furo e construir uma peça própria ou uma caixa com tampa.
+- Uma imagem de conjunto explica a janela: cada número na imagem indica uma área.
+- A pesquisa do manual encontra a página certa também com palavras do dia a dia, mostra-a primeiro e abre-a onde a palavra aparece.
+- A referência indica, para cada operação, onde encontrá-la no menu ou no painel de seleção.
 
 ## 0.5.0
 
