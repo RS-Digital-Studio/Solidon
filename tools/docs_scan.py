@@ -21,10 +21,12 @@ Vier Fragen, alle ohne Ausführung von Projektcode:
    zu Recht und ist trotzdem ein Fund.
 4. **Leere Geltungsbereiche** — ein `paths:`-Muster, auf das nichts passt.
 
-**Was es nicht ist: ein Test.** Es steht nicht im Tor. Eine große Regeldatei
-ist kein Fehler, sondern eine Abwägung, und ein doppelter Absatz kann ein
-bewusstes Zitat sein. Was hier herauskommt, ist die Grundlage einer
-Durchsicht — die Entscheidung trifft, wer die Gebiete kennt.
+**Was es nicht ist: das Tor.** Die Obergrenzen — Größe je Regel und Karte,
+Ladelast je Quelldatei, keine Datumsangaben in Überschriften — hält
+`tests/test_directory_docs.py` mit derselben Zählung. Dieses Werkzeug zeigt,
+woher eine Last kommt, und findet Doppelungen, tote Verweise und leere
+Geltungsbereiche; ein doppelter Absatz kann ein bewusstes Zitat sein, und die
+Entscheidung trifft, wer die Gebiete kennt.
 
 Der Selbsttest liegt in `tests/test_docs_scan.py`: Ein Suchwerkzeug, das zu
 wenig findet, schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
