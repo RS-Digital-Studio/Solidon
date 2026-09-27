@@ -601,10 +601,38 @@ def _worked_corner(rounded: bool) -> str:
     return _mesh_print(edit(body, 3.0, "named", [edge_key(entry) for entry in touching]).mesh)
 
 
+_GROOVED: list[Any] = []
+
+
+def _curved_mouth() -> str:
+    """Stopfen und Werkzeug einer Kette, deren Mündung in einer Rinne liegt (RM-248).
+
+    Die Höhe jeder Ecke des Deckels kommt aus einem Polynom, das an die Fläche
+    um den Rand angepasst wurde (``geom.mouth_cap``). Der Körper und seine
+    Kette entstehen einmal und außerhalb des Rauschens; unter ihm laufen nur
+    Anpassung, Deckel und Werkzeug.
+    """
+    from app.core.geom import prepare_ops
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.relations import cavity_chains
+    from tests.test_feature_moves_keep_shape import BOTH_ENDS, _widened
+
+    if not _GROOVED:
+        source = _widened("mesh", BOTH_ENDS["Zylindersenkung und Fase"], bottom="Rinne R 40")
+        mesh = as_mesh_data(source.mesh)
+        _GROOVED.extend((mesh, cavity_chains(source.features, mesh)[0]))
+    mesh, chain = _GROOVED
+    plug = prepare_ops._cavity_plug(mesh, chain, quality="fine", seed=1, cancelled=None)
+    tool = prepare_ops._past_curved_mouths(mesh, chain)
+    assert plug is not None and tool is not None, "der Weg muss den fortgesetzten Deckel nehmen"
+    return f"{_mesh_print(plug)}|{_mesh_print(tool)}"
+
+
 _WAYS: dict[str, Callable[[], str]] = {
     "align_to_feature": _aligned_plate,
     "corner_chamfer": lambda: _worked_corner(False),
     "corner_fillet": lambda: _worked_corner(True),
+    "curved_mouth": _curved_mouth,
     "fill_band": _bore_wall_band,
     "fill_bridged": _top_with_holes,
     "import_repair": _mended_import,

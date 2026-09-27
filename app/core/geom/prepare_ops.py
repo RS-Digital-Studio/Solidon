@@ -921,6 +921,7 @@ def _body_from_faces(
     *,
     allowed_rings: tuple[int, ...],
     curved_rims: bool = False,
+    past_curved: tuple[NDArray[np.float64], float] | None = None,
 ) -> MeshData | None:
     """Einen Flächenausschnitt an seinen ebenen Randringen schließen.
 
@@ -932,9 +933,19 @@ def _body_from_faces(
 
     ``curved_rims`` nimmt auch einen Ring, der nur fast eben ist — bis
     :data:`CURVED_RIM` seines Durchmessers neben seiner Ausgleichsebene, im
-    Mittel. Der Deckel ist dann ein Fächer vom Mittelpunkt an den Ring und
-    folgt ihm; das braucht nur der Stopfen (:func:`_cavity_plug`), nie ein
-    Werkzeug, das bündig schneiden muss.
+    Mittel. Der Deckel ist dann die Fläche um den Ring, über das Loch
+    fortgesetzt (``mouth_cap``, RM-248), und wo sie sich nicht als glatte
+    Fläche fassen lässt, ein Fächer vom Mittelpunkt. Das braucht nur der
+    Stopfen (:func:`_cavity_plug`), nie ein Werkzeug, das bündig schneiden muss.
+
+    ``past_curved`` (Achse, Zugabe) nimmt denselben Ring für ein **Werkzeug**:
+    Er wird entlang der Achse — nach außen, weg vom Hohlraum — bis um die Zugabe
+    hinter seinen äußersten Punkt verlängert und dort eben geschlossen, wie das
+    Werkzeug aus Kennzahlen an einer gekrümmten Mündung (:func:`_chain_copy_tool`).
+    Die Wand bleibt dabei das Vieleck der Datei: Ein Zylinder aus Kennzahlen
+    trägt eine andere Teilung als der Stopfen aus den Flächen, und an der Platte
+    mit Zylinder R 40 schnitt er beim Versetzen 1,1 mm³ mehr, als der Stopfen
+    zurückgab.
     """
     if not face_indices:
         return None
@@ -990,16 +1001,28 @@ def _body_from_faces(
             # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
             # einer Seitenwand hat ihren Ring in der YZ-Ebene.
             spread = ring - hub
-            limit = FLAT_RIM
-            if curved_rims:
-                reach = float(np.max(np.linalg.norm(spread, axis=1)))
-                limit = max(limit, CURVED_RIM * 2.0 * reach)
-            if float(np.linalg.svd(spread, compute_uv=False)[-1]) > limit * len(ring) ** 0.5:
-                return None
+            flatness = float(np.linalg.svd(spread, compute_uv=False)[-1])
+            flat = flatness <= FLAT_RIM * len(ring) ** 0.5
             # Der Deckel läuft gegen die Randkanten des Ausschnitts: Jede
             # Kante wird von der anderen Seite geschlossen, und der Körper ist
             # von Anfang an gleichsinnig gewickelt (siehe unten).
             directed = rim_directed[belongs]
+            if not flat:
+                reach = float(np.max(np.linalg.norm(spread, axis=1)))
+                limit = max(FLAT_RIM, CURVED_RIM * 2.0 * reach)
+                if not (curved_rims or past_curved) or flatness > limit * len(ring) ** 0.5:
+                    return None
+                built = _curved_rim_cap(
+                    mesh, chosen, points, directed, next_index, past_curved=past_curved
+                )
+                if built is not None:
+                    added, capped = built
+                    vertices.append(added)
+                    faces.append(capped)
+                    next_index += len(added)
+                    continue
+                if past_curved is not None:
+                    return None
             cap = np.column_stack(
                 [
                     directed[:, 1],
@@ -1031,6 +1054,110 @@ def _body_from_faces(
     if not closed.is_watertight or closed.volume <= EPS_GEOM:
         return None
     return MeshData.of(closed)
+
+
+def _rim_loop(directed: NDArray[np.int64]) -> list[int] | None:
+    """Die Punkte eines Randrings in der Richtung seiner Kanten — ``None``, wo er
+    sich verzweigt oder nicht schließt."""
+    successor = {int(first): int(second) for first, second in directed}
+    if len(successor) != len(directed):
+        return None
+    start = min(successor)
+    loop = [start]
+    current = successor[start]
+    while current != start:
+        if current not in successor or len(loop) >= len(successor):
+            return None
+        loop.append(current)
+        current = successor[current]
+    return loop if len(loop) == len(successor) else None
+
+
+def _curved_rim_cap(
+    mesh: MeshData,
+    cavity: NDArray[np.int64],
+    points: NDArray[np.float64],
+    directed: NDArray[np.int64],
+    next_index: int,
+    *,
+    past_curved: tuple[NDArray[np.float64], float] | None,
+) -> tuple[NDArray[np.float64], NDArray[np.int64]] | None:
+    """Der Deckel eines gekrümmten Rands: neue Punkte (Nummern ab ``next_index``)
+    und Dreiecke gegen den Umlauf der Randkanten ``directed`` — oder ``None``.
+
+    Für den Stopfen die fortgesetzte Fläche (``mouth_cap``); ``None`` heißt
+    dort „keine glatte Fläche", und der Aufrufer nimmt den Fächer. Für ein
+    Werkzeug (``past_curved``) die Wand entlang der Achse bis hinter den
+    äußersten Randpunkt und ein ebener Deckel dort.
+    """
+    from app.core.geom import mouth_cap
+
+    loop = _rim_loop(directed)
+    if loop is None:
+        return None
+    ordered = points[np.asarray(loop, dtype=np.int64)]
+    count = len(loop)
+    surface = mouth_cap.mouth_surface(mesh, cavity, ordered)
+    if surface is None:
+        # Keine glatte Fläche um den Rand — die Mündung mit eigener Rundung an
+        # der Lochplatte gs-100: Der Stopfen bleibt beim Fächer, das Werkzeug
+        # bei den Kennzahlen, beides wie bisher.
+        return None
+    if past_curved is not None:
+        axis, overlap = past_curved
+        outward = np.asarray(axis, dtype=np.float64)
+        middle = np.asarray(units.exact_centre(points.tolist()), dtype=np.float64)
+        hub = np.asarray(units.exact_centre(ordered.tolist()), dtype=np.float64)
+        if units.dot3(hub - middle, outward) < 0.0:
+            outward = -outward
+        heights = transform.along(ordered - hub, outward)
+        # **Bis hinter die Fläche, nicht nur hinter den Rand**: Eine Kuppe
+        # reicht in ihrer Mitte weiter hinaus als an ihrem Rand, und ein
+        # Werkzeug, das an der Ebene durch den äußersten Randpunkt endete, ließe
+        # dort eine Haut stehen. Der äußerste Punkt der Fläche über dem Loch
+        # zählt mit — und damit liegt auch der Deckel, der an der alten Stelle
+        # auf ihr sitzt, im Werkzeug.
+        inside = transform.along(mouth_cap.support_points(surface) - hub, outward)
+        top = max(float(heights.max()), float(inside.max())) + overlap
+        lifted = ordered + (top - heights)[:, None] * outward[None, :]
+        crown = np.asarray(units.exact_centre(lifted.tolist()), dtype=np.float64)
+        rim_index = np.asarray(loop, dtype=np.int64)
+        lifted_index = next_index + np.arange(count, dtype=np.int64)
+        following = np.roll(np.arange(count), -1)
+        first, second = rim_index, rim_index[following]
+        lifted_first, lifted_second = lifted_index, lifted_index[following]
+        crown_index = np.full(count, next_index + count, dtype=np.int64)
+        triangles = np.vstack(
+            [
+                np.column_stack([second, first, lifted_first]),
+                np.column_stack([second, lifted_first, lifted_second]),
+                np.column_stack([lifted_second, lifted_first, crown_index]),
+            ]
+        )
+        return np.vstack([lifted, crown.reshape(1, 3)]), triangles
+    added, triangles = mouth_cap.cap_grid(surface)
+    mapping = np.concatenate(
+        [np.asarray(loop, dtype=np.int64), next_index + np.arange(len(added), dtype=np.int64)]
+    )
+    # Das Gitter läuft mit dem Rand, der Deckel muss gegen ihn laufen.
+    return added, mapping[triangles][:, ::-1]
+
+
+def _past_curved_mouths(mesh: MeshData, chain: Sequence[Feature]) -> MeshData | None:
+    """Der Hohlraum einer Kette aus ihren Flächen, an einer gekrümmten Mündung
+    entlang der Achse über ihren äußersten Randpunkt hinaus verlängert — das
+    Werkzeug, wo :func:`_paired_cavity_body` an der Mündung keine Ebene findet
+    (``_body_from_faces``, ``past_curved``). Ebene Mündungen verlängert danach
+    :func:`_past_the_mouths` wie immer."""
+    from app.core.perceive.relations import cavity_surface_indices
+
+    axis = np.asarray(_feature_direction(chain[0]), dtype=np.float64)
+    return _body_from_faces(
+        mesh,
+        cavity_surface_indices(mesh, chain),
+        allowed_rings=(2,),
+        past_curved=(axis, FEATURE_OVERLAP),
+    )
 
 
 def _paired_cavity_body(mesh: MeshData, *features: Feature) -> MeshData | None:
@@ -2631,6 +2758,15 @@ class FeaturePlacementGeometry:
     selected_offset: Vec3
     related: tuple[Feature, ...]
     cavity: bool
+    flush: bool = True
+    """Ob ``mesh`` genau der Hohlraum ist und damit auch die alte Stelle füllt.
+
+    Eine Kette mit gekrümmter Mündung hat keinen solchen Körper: Ihr Werkzeug
+    reicht über die Mündung hinaus (:func:`_past_curved_mouths`) oder kommt
+    aus den Kennzahlen (:func:`_chain_tool`). Die alte Stelle füllt dann der
+    Stopfen (:func:`_cavity_plug`) wie beim Versetzen mit Zahlen — mit dem
+    Werkzeug gefüllt stünde ein Stumpf vor der Fläche.
+    """
 
 
 def _feature_mount(
@@ -2787,6 +2923,17 @@ def feature_placement_geometry(
         if chain
         else _tool_for(body, feature, centre, alone=True, rooted=True)
     )
+    flush = built is not None
+    if chain and built is None:
+        # **Eine Kette mit gekrümmter Mündung bekommt das Werkzeug ihrer
+        # Operation** (Durchsicht 0.5.1): ``_paired_cavity_body`` findet dort
+        # keine Ebene, und wer die Senkbohrung an eine neue Stelle klicken
+        # wollte, las „geht in einen anderen Hohlraum über", obwohl *Merkmal
+        # versetzen* mit Zahlen dieselbe Kette versetzt. Dieselbe Reihenfolge
+        # wie :func:`_chain_copy_tool`; gefüllt wird mit dem Stopfen (``flush``).
+        built = _past_curved_mouths(body, chain) or _chain_tool(
+            body, chain, pivot=np.asarray(centre, dtype=np.float64), tilt=0.0
+        )
     if built is None:
         raise ValidationError(field="at_feature", detail=NO_OWN_BODY, constraint="not_movable")
     frame = _feature_mount(body, feature, related, built)
@@ -2803,6 +2950,7 @@ def feature_placement_geometry(
         cast(Vec3, tuple(float(value) for value in offset)),
         related,
         is_a_cavity(feature),
+        flush,
     )
 
 
@@ -2847,17 +2995,36 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
     closed_solver = None
     if not duplicate:
         if len(geometry.related) > 1:
-            old_matrix = np.eye(4)
-            old_matrix[:3, :3] = old_rotation
-            old_matrix[:3, 3] = geometry.frame.origin
-            old_tool = geometry.mesh.raw.copy()
-            transform.moved(old_tool, old_matrix)
-            closed = boolean(
-                "union",
-                [body, MeshData.of(old_tool)],
-                quality=ctx.quality,
-                seed=ctx.seed,
-                cancelled=ctx.cancelled,
+            if geometry.flush:
+                old_matrix = np.eye(4)
+                old_matrix[:3, :3] = old_rotation
+                old_matrix[:3, 3] = geometry.frame.origin
+                old_tool = geometry.mesh.raw.copy()
+                transform.moved(old_tool, old_matrix)
+                filler: MeshData | None = MeshData.of(old_tool)
+            else:
+                filler = _cavity_plug(
+                    body,
+                    geometry.related,
+                    quality=ctx.quality,
+                    seed=ctx.seed,
+                    cancelled=ctx.cancelled,
+                )
+            if filler is None:
+                raise ValidationError(
+                    field="at_feature", detail=NO_OWN_BODY, constraint="not_movable"
+                )
+            # Ohne Narben wie beim Versetzen mit Zahlen (:func:`_without_scars`):
+            # Die Kappen des Stopfens blieben sonst in der Fläche stehen, an
+            # der Senkbohrung aus 768 Dreiecken 260 mehr je Zug (Durchsicht 0.5.1).
+            closed = _without_scars(
+                boolean(
+                    "union",
+                    [body, filler],
+                    quality=ctx.quality,
+                    seed=ctx.seed,
+                    cancelled=ctx.cancelled,
+                )
             )
         else:
             closed = _closed_at(
@@ -3371,7 +3538,10 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 4: ein Langloch reist aus seinen Flächen, samt Fasen und schräger
     # Mündung, und der Kragen am Netz nimmt das Messrauschen der Mitte wie
     # der exakte Kern (Durchsicht 0.5.1).
-    cache_version="4",
+    # 5: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche, das
+    # Werkzeug kommt aus den Flächen der Kette, und der Klick ins Bild nimmt
+    # sie an und lässt keine Narben stehen (RM-248, Durchsicht 0.5.1).
+    cache_version="5",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -3726,7 +3896,9 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # Zugabe unter seinen Boden (23.09.2026).
     # 3: ein Langloch wird aus seinen Flächen kopiert, samt Fasen (Durchsicht
     # 0.5.1).
-    cache_version="3",
+    # 4: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
+    # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
+    cache_version="4",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4152,7 +4324,9 @@ class _PatternPlace:
     name="pattern_feature",
     # 2: ein Langloch wird aus seinen Flächen gesetzt, samt Fasen (Durchsicht
     # 0.5.1).
-    cache_version="2",
+    # 3: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
+    # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
+    cache_version="3",
     title=_("Merkmal vervielfachen"),
     category="holes",
     params=PatternFeatureParams,
@@ -4752,7 +4926,11 @@ def _chain_copy_tool(
     Merkmalsmuster: Beide bewegen dasselbe Werkzeug nur verschieden.
     """
     measured = np.asarray(feature.params["centre"], dtype=float)
-    exact = _paired_cavity_body(body, *chain)
+    # **Eine gekrümmte Mündung verlängert die Flächen, nicht die Kennzahlen**
+    # (RM-248): Der Stopfen kommt aus den Flächen, und ein Zylinder aus
+    # Kennzahlen mit anderer Teilung schnitt an der neuen Stelle mehr ab, als
+    # er zurückgab — an der Platte mit Zylinder R 40 1,1 mm³ je Versetzen.
+    exact = _paired_cavity_body(body, *chain) or _past_curved_mouths(body, chain)
     tool = (
         _past_the_mouths(body, exact)
         if exact is not None
@@ -4856,7 +5034,9 @@ class RemoveFeatureParams(BaseParams):
     # endet an den Stirnflächen des Stifts (23.09.2026).
     # 9: ein Langloch schließt mit dem Körper aus seinen Flächen, samt Fasen
     # (Durchsicht 0.5.1).
-    cache_version="9",
+    # 10: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche statt
+    # mit einem Fächer vom Mittelpunkt ihres Rands (RM-248, Durchsicht 0.5.1).
+    cache_version="10",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -5067,7 +5247,9 @@ class RotateFeatureParams(BaseParams):
     # gekippte Sackbohrung bleibt über ihrem Boden (23.09.2026).
     # 4: ein Langloch schließt samt Fasen, und ein gekipptes durchgehendes
     # endet an seinen alten Randebenen (Durchsicht 0.5.1).
-    cache_version="4",
+    # 5: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche (RM-248,
+    # Durchsicht 0.5.1).
+    cache_version="5",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -6775,7 +6957,9 @@ OPEN_BODY_DETAIL: Final = _(
     # trägt die Befunde des neuen Orts (22.09.2026).
     # 8: eine schräge Bohrung schließt beim Versetzen an ihren Randebenen.
     # 9: die Tiefe ist ein Wert (``depth``, ``open_side``, 23.09.2026).
-    cache_version="9",
+    # 10: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche (RM-248,
+    # Durchsicht 0.5.1).
+    cache_version="10",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,

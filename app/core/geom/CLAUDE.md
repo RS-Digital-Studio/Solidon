@@ -995,7 +995,14 @@ Merkmale zurück; die Hohlraumdecke liegt innen und wird abgewiesen)
 
 `prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Abschneiden — das halbe
 Teilen mit einer bleibenden Seite, `cut_away` über `section.cut` —, Anordnen,
-Kollisionen, §18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; überzeugt keine
+Kollisionen, §18.6) · `mouth_cap.py` (der Deckel einer gekrümmten Mündung,
+RM-248: `mouth_surface` tastet die Fläche um einen Rand als Höhenfeld über
+seiner Ausgleichsebene ab — an den Facetten, auf einem Raster, bis
+`MOUTH_REACH` des Radius —, passt ein Polynom dritten Grades in
+Grundrechenarten ein, wirft Proben einer anderen Fläche hinaus und sagt
+`None`, wo keine glatte Fläche steht; `cap_grid` baut daraus den Deckel des
+Netzstopfens, `support_points` die Stützpunkte der exakten Füllung) ·
+`autosplit.py` (schneiden, bis es auf die Platte passt; überzeugt keine
 achsparallele Ebene, fragt ein Fächer aus zwölf gekippten Richtungen — nur Nähte mit weniger
 Konturen, als achsparallel möglich, eine schiefe Naht geht als `split_line` in den Verlauf; je
 Naht werden beide Stiftseiten fertig gebaut und am Stützvolumen verglichen, `pins_on_b`; nach einer
@@ -1824,7 +1831,9 @@ gemessen wäre der Riegel halb: „DejaVu" steht auch in `DejaVuSans.ttf`, wenn
   erhalten; Materialtoleranz und globale Schweißtoleranz ändern sich nicht.
 - **Merkmalswerkzeuge umfassen die belegte vollständige Form.**
   `feature_placement_geometry()` bestimmt den wirklichen Materialanschluss
-  und schließt zusammenhängende Bohrketten gemeinsam. `x/y/z` bleiben die
+  und schließt zusammenhängende Bohrketten gemeinsam; eine Kette mit
+  gekrümmter Mündung trägt das Werkzeug ihrer Operation (`flush=False`), und
+  die alte Stelle füllt `_cavity_plug`. `x/y/z` bleiben die
   Zielmitte des gewählten Merkmals; ein lokaler Versatz verbindet sie mit der
   angeklickten Mündung oder Basis. Weitere Kettenglieder behalten beim
   Versetzen ihre Kennungen und bekommen beim Kopieren jeweils neue.

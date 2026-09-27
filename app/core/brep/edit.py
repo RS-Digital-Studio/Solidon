@@ -2078,29 +2078,25 @@ def solid_from_faces(
     Kopien (``BRepBuilderAPI_Copy``), wie es der Eigentumsvertrag verlangt.
 
     ``fan_caps`` schließt einen Ring, der **nicht** in einer Ebene liegt, mit
-    einem Fächer: der Regelfläche von seinem Mittelpunkt an jede seiner Kanten
-    (:func:`_fan_cap`). Dasselbe tut der Netzkern an einer Mündung in einer
-    gekrümmten Fläche (``prepare_ops._body_from_faces``, ``curved_rims``) —
-    dort mit Dreiecken, hier mit den echten Randkurven. Das braucht nur ein
-    Stopfen, der einen Hohlraum füllt; ob der Ring dafür eben genug ist,
-    entscheidet der Aufrufer.
+    der Fläche um ihn, über das Loch fortgesetzt (:func:`_continued_cap`,
+    RM-248): auf dem Träger der Nachbarfläche, wo der Ring in einer liegt, sonst
+    als Füllung mit Stützpunkten auf der gemessenen Fläche. Wo keine glatte
+    Fläche um den Ring steht oder das Nähen damit nicht hält, bleibt es beim
+    Fächer — der Regelfläche vom Mittelpunkt an jede Kante (:func:`_fan_cap`).
+    Dasselbe tut der Netzkern an einer Mündung in einer gekrümmten Fläche
+    (``prepare_ops._body_from_faces``, ``curved_rims``) — dort mit Dreiecken,
+    hier mit den echten Randkurven. Das braucht nur ein Stopfen, der einen
+    Hohlraum füllt; ob der Ring dafür eben genug ist, entscheidet der Aufrufer.
     """
     require()
-    from OCP.BRepBuilderAPI import (
-        BRepBuilderAPI_Copy,
-        BRepBuilderAPI_MakeFace,
-        BRepBuilderAPI_MakeSolid,
-        BRepBuilderAPI_Sewing,
-    )
-    from OCP.BRepCheck import BRepCheck_Analyzer
-    from OCP.BRepLib import BRepLib
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy, BRepBuilderAPI_MakeFace
     from OCP.collections import HSequence_TopoDS_Shape
     from OCP.collections import (
         IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
     )
     from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
     from OCP.ShapeAnalysis import ShapeAnalysis_FreeBounds
-    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_SHELL
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
     from OCP.TopExp import TopExp, TopExp_Explorer
     from OCP.TopoDS import TopoDS
 
@@ -2136,22 +2132,56 @@ def solid_from_faces(
     wires = ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(rim, EPS_GEOM, False)
     if wires.Length() not in allowed_rings:
         return None
-    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
-    for index in chosen:
-        sewing.Add(BRepBuilderAPI_Copy(faces[index], True, False).Shape())
+    planar: list[Any] = []
+    curved: list[Any] = []
     for position in range(1, wires.Length() + 1):
         wire = TopoDS.Wire(wires.Value(position))
         if not wire.Closed():
             return None
         cap = BRepBuilderAPI_MakeFace(wire, True)
         if cap.IsDone():
-            sewing.Add(cap.Face())
-            continue
-        fan = _fan_cap(wire) if fan_caps else None
-        if fan is None:
+            planar.append(cap.Face())
+        elif fan_caps:
+            curved.append(wire)
+        else:
             return None
-        for piece in fan:
-            sewing.Add(piece)
+    # **Erst die Fläche um den Rand, fortgesetzt; sonst der Fächer** (RM-248).
+    # Hält die fortgesetzte Fläche beim Nähen nicht — eine Füllung trifft ihre
+    # Randkanten nur auf ihre Genauigkeit —, gilt der Fächer wie bisher.
+    continued = [
+        _continued_cap(solid, wire, wanted, faces, numbered, neighbours) for wire in curved
+    ]
+    attempts = [continued] if any(entry is not None for entry in continued) else []
+    attempts.append([None] * len(curved))
+    for caps in attempts:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        pieces = list(planar)
+        for wire, cap_faces in zip(curved, caps, strict=True):
+            fan = cap_faces if cap_faces is not None else _fan_cap(wire)
+            if fan is None:
+                return None
+            pieces.extend(fan)
+        built = _sewn_body(
+            [BRepBuilderAPI_Copy(faces[index], True, False).Shape() for index in chosen], pieces
+        )
+        if built is not None:
+            return built
+    return None
+
+
+def _sewn_body(copies: list[Any], caps: list[Any]) -> Solid | None:
+    """Flächen und Deckel zu einem geschlossenen, gültigen Körper genäht — oder ``None``."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid, BRepBuilderAPI_Sewing
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepLib import BRepLib
+    from OCP.TopAbs import TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    for shape in (*copies, *caps):
+        sewing.Add(shape)
     sewing.Perform()
     if sewing.NbFreeEdges() != 0:
         return None
@@ -2176,6 +2206,248 @@ def solid_from_faces(
     if built.volume <= EPS_GEOM:
         return None
     return built
+
+
+def _continued_cap(
+    solid: Solid, wire: Any, chosen: set[int], faces: list[Any], numbered: Any, neighbours: Any
+) -> list[Any] | None:
+    """Der Deckel eines gekrümmten Rands als Fortsetzung der Fläche um ihn — oder ``None``.
+
+    **Liegt der Rand ganz in einer Fläche, ist ihr Träger der Deckel**: eine
+    Fläche auf demselben Träger, begrenzt vom Randdraht (:func:`_cap_on_carrier`).
+    Ein Zylinder, eine Kugel, eine Ebene laufen unter dem Loch weiter, und eine
+    Spline-Fläche, deren Loch ein innerer Draht ist, ebenso. An der Platte mit
+    einer Unterseite im Zylinder R 40 blieb unter der Zylindersenkung mit dem
+    Fächer eine Mulde von 4,0 mm³ — mit dem Träger 0,0000.
+
+    **Sonst eine Füllung**: der Randdraht als Grenze, Stützpunkte auf der
+    Fläche, die um den Rand gemessen und eingepasst wurde (``mouth_cap``, an
+    einer feinen Vernetzung der Flächen um den Rand — :func:`_faces_near` —,
+    damit die Stützpunkte auf der exakten Fläche liegen und nicht auf ihren
+    Sehnen). Wo die Nachbarschaft keine glatte Fläche ist — die
+    Mündungsrundung der Lochplatte gs-100 —, ``None``, und es bleibt beim
+    Fächer.
+    """
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+
+    edges: list[Any] = []
+    owners: set[int] = set()
+    walk = TopExp_Explorer(wire, TopAbs_EDGE)
+    while walk.More():
+        edge = walk.Current()
+        walk.Next()
+        edges.append(edge)
+        owners |= {
+            numbered.FindIndex(other) - 1 for other in listed(neighbours.FindFromKey(edge))
+        } - chosen
+    if not owners:
+        return None
+    if len(owners) == 1:
+        carried = _cap_on_carrier(faces[next(iter(owners))], edges, wire)
+        if carried is not None:
+            return [carried]
+    return _filled_cap(wire, _faces_near(wire, faces, chosen))
+
+
+def _faces_near(wire: Any, faces: list[Any], chosen: set[int]) -> list[Any]:
+    """Die Flächen um den Randdraht, so weit die Anpassung tastet — ohne die des Hohlraums.
+
+    **Dieselbe Nachbarschaft, die der Netzkern sieht** (``mouth_cap.MOUTH_REACH``
+    des Radius um den Rand), nicht nur die Flächen, an denen der Rand liegt: An
+    der Lochplatte ``pegboard-gs-100-v2.step`` sind das vier Spline-Flächen
+    einer Mündungsrundung, ein Band von 1,7 mm um die Zylindersenkung, und ein
+    Polynom über dieses Band allein, über das ganze Loch fortgesetzt, lief als
+    Trichter hinein: Versetzen um 1 mm fehlten 7,8 statt 4,1 mm³ (Durchsicht 0.5.1).
+    Mit dem Zylinder dahinter findet die Anpassung dort keine glatte Fläche,
+    genau wie am Netz, und es bleibt beim Fächer.
+
+    Genommen wird jede Fläche, deren Hüllquader den Würfel um den Rand trifft;
+    was davon zu steil ist oder weiter weg liegt, sortiert die Anpassung selbst
+    aus (``mouth_cap._facet_heights``).
+    """
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+
+    from app.core.geom.mouth_cap import MOUTH_REACH
+
+    points = _wire_points(wire)
+    if len(points) < 3:
+        return []
+    centre = exact_centre(points)
+    radius = max(math.dist(point, centre) for point in points)
+    reach = radius * (1.0 + MOUTH_REACH)
+    around = Bnd_Box()
+    around.Update(
+        centre[0] - reach,
+        centre[1] - reach,
+        centre[2] - reach,
+        centre[0] + reach,
+        centre[1] + reach,
+        centre[2] + reach,
+    )
+    near: list[Any] = []
+    for index, face in enumerate(faces):
+        if index in chosen:
+            continue
+        bounds = Bnd_Box()
+        BRepBndLib.Add_s(face, bounds, False)
+        if not bounds.IsOut(around):
+            near.append(face)
+    return near
+
+
+def _cap_on_carrier(neighbour: Any, edges: list[Any], wire: Any) -> Any | None:
+    """Eine Fläche auf dem Träger von ``neighbour``, begrenzt vom Loch, das diese
+    Fläche um ``edges`` trägt — oder ``None``, wenn das Ergebnis nicht trägt.
+
+    Der Loch-Draht der Nachbarfläche umgekehrt ist der Rand des Deckels: Seine
+    Kanten tragen ihre Parameterkurven auf genau diesem Träger schon, und das
+    Nähen trifft sie ohne Toleranz. Welche Richtung die beschränkte Seite ist,
+    sagt die Fläche selbst — die umschlossene ist endlich und etwa so groß wie
+    die Öffnung, die andere unendlich oder der ganze Rest einer Kugel.
+    """
+    from OCP.BRep import BRep_Builder, BRep_Tool
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_EDGE, TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopLoc import TopLoc_Location
+    from OCP.TopoDS import TopoDS, TopoDS_Face
+
+    hole = None
+    walk = TopExp_Explorer(neighbour, TopAbs_WIRE)
+    while walk.More() and hole is None:
+        candidate = TopoDS.Wire(walk.Current())
+        walk.Next()
+        members: list[Any] = []
+        inner = TopExp_Explorer(candidate, TopAbs_EDGE)
+        while inner.More():
+            members.append(inner.Current())
+            inner.Next()
+        if len(members) == len(edges) and all(
+            any(member.IsSame(edge) for edge in edges) for member in members
+        ):
+            hole = candidate
+    if hole is None:
+        return None
+    opening = _opening_area(wire)
+    location = TopLoc_Location()
+    carrier = BRep_Tool.Surface_s(neighbour, location)
+    builder = BRep_Builder()
+    for bound in (hole.Reversed(), hole):
+        cap = TopoDS_Face()
+        builder.MakeFace(cap, carrier, location, BRep_Tool.Tolerance_s(neighbour))
+        builder.Add(cap, bound)
+        cap.Orientation(neighbour.Orientation())
+        if not BRepCheck_Analyzer(cap).IsValid():
+            continue
+        props = GProp_GProps()
+        BRepGProp.SurfaceProperties_s(cap, props)
+        area = float(props.Mass())
+        if math.isfinite(area) and 0.0 < area <= _CAP_AREA_LIMIT * opening:
+            return cap
+    return None
+
+
+#: Wie viel größer als die Öffnung ein Deckel auf dem Träger höchstens sein
+#: darf. Eine gekrümmte Fläche über einem Loch ist etwas größer als seine
+#: Projektion; die andere Seite des Randdrahts ist unendlich oder der ganze Rest
+#: einer geschlossenen Fläche — beides um ein Vielfaches mehr.
+_CAP_AREA_LIMIT: Final = 4.0
+
+
+def _opening_area(wire: Any) -> float:
+    """Die Fläche, die der Randdraht in seiner Ausgleichsebene umschließt."""
+    from app.core.units import plane_axes, plane_fit, ring_area
+
+    points = _wire_points(wire)
+    if len(points) < 3:
+        return 0.0
+    centre, normal, _spread = plane_fit(points)
+    axes = plane_axes(normal)
+    if axes is None:
+        return 0.0
+    first, second = axes
+    flat = [
+        (
+            sum((point[k] - centre[k]) * first[k] for k in range(3)),
+            sum((point[k] - centre[k]) * second[k] for k in range(3)),
+        )
+        for point in points
+    ]
+    return ring_area(flat)
+
+
+def _wire_points(wire: Any) -> list[Vec3]:
+    """Punkte entlang des Drahts in seiner Laufrichtung — je Kante :data:`_FAN_SAMPLES`."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.BRepTools import BRepTools_WireExplorer
+    from OCP.TopAbs import TopAbs_REVERSED
+
+    points: list[Vec3] = []
+    walk = BRepTools_WireExplorer(wire)
+    while walk.More():
+        edge = walk.Current()
+        walk.Next()
+        curve = BRepAdaptor_Curve(edge)
+        first, last = curve.FirstParameter(), curve.LastParameter()
+        if edge.Orientation() == TopAbs_REVERSED:
+            first, last = last, first
+        for step in range(_FAN_SAMPLES):
+            point = curve.Value(first + (last - first) * step / _FAN_SAMPLES)
+            points.append((point.X(), point.Y(), point.Z()))
+    return points
+
+
+def _filled_cap(wire: Any, neighbours: list[Any]) -> list[Any] | None:
+    """Eine Füllung über dem Randdraht, gestützt auf die Fläche um ihn — oder ``None``.
+
+    ``neighbours`` sind die Flächen um den Rand (:func:`_faces_near`).
+    """
+    import numpy as np
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepCheck import BRepCheck_Analyzer
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeFilling
+    from OCP.GeomAbs import GeomAbs_C0
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS, TopoDS_Compound
+
+    from app.core.brep.kernel import tessellate
+    from app.core.geom import mouth_cap
+    from app.core.units import MAX_FACET_SAG
+
+    rim = _wire_points(wire)
+    if len(rim) < 3:
+        return None
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    for face in neighbours:
+        builder.Add(compound, face)
+    # Fein genug, dass die Facetten auf der exakten Fläche liegen: ein Zehntel
+    # der Facettengrenze, mit der der Zwilling vernetzt ist.
+    fine = tessellate(compound, deflection=MAX_FACET_SAG / 10.0)
+    surface = mouth_cap.mouth_surface(fine, np.zeros(0, dtype=np.int64), np.asarray(rim))
+    if surface is None:
+        return None
+    filling = BRepOffsetAPI_MakeFilling()
+    walk = TopExp_Explorer(wire, TopAbs_EDGE)
+    while walk.More():
+        filling.Add(TopoDS.Edge(walk.Current()), GeomAbs_C0)
+        walk.Next()
+    for x, y, z in mouth_cap.support_points(surface).tolist():
+        filling.Add(gp_Pnt(x, y, z))
+    filling.Build()
+    if not filling.IsDone():
+        return None
+    face = TopoDS.Face(filling.Shape())
+    if not BRepCheck_Analyzer(face).IsValid():
+        return None
+    return [face]
 
 
 def _fan_cap(wire: Any) -> list[Any] | None:

@@ -1093,26 +1093,64 @@ BOTH_ENDS: dict[str, list[tuple[float, float]]] = {
 }
 
 
-def _widened(kernel: str, outline: Sequence[tuple[float, float]], *, curved: bool = False) -> Any:
+#: Die gekrümmten Unterseiten der Platte, in denen die untere Mündung liegt
+#: (RM-248): gewölbt wie ein Zylinder R 40 entlang X, als Rinne R 40 von 0,5 mm
+#: Tiefe in die ebene Unterseite geschnitten (nach innen gewölbt, wie die
+#: Hohlkehle des Gartenschlauchhalters), und eben für y < 0, tangential in den
+#: Zylinder für y > 0 — die Mündung liegt über der Naht zweier Flächen.
+CURVED_BOTTOMS: tuple[str, ...] = ("Zylinder R 40", "Rinne R 40", "Naht Ebene-Zylinder")
+
+
+def _widened(kernel: str, outline: Sequence[tuple[float, float]], *, bottom: str = "eben") -> Any:
     """Die Platte 44 × 24 × 12 mit einer Bohrung aus ``outline`` bei x = −8.
 
-    ``curved`` legt die Unterseite in einen Zylinder R 40 entlang X: Die
-    untere Mündung liegt dann in einer gekrümmten Fläche und streut 0,31 mm
-    entlang der Achse — der Fall der unteren Schraubbohrung an
-    ``pegboard-gs-100-v2.step``, dort in einer BSpline-Rundung.
+    ``bottom`` legt die Unterseite in eine der :data:`CURVED_BOTTOMS`: Die
+    untere Mündung liegt dann in einer gekrümmten Fläche und streut entlang
+    der Achse — am Zylinder R 40 um 0,31 mm, wie die untere Schraubbohrung an
+    ``pegboard-gs-100-v2.step``.
     """
     from app.core.brep import edit
     from app.core.sketch.planes import frame_of
 
     plate = edit.box(44.0, 24.0, 12.0)
-    if curved:
+    if bottom != "eben":
+        axis_height = -39.5 if bottom == "Rinne R 40" else 40.0
         roll = edit.revolved_bore_tool(
             [(0.0, -30.0), (40.0, -30.0), (40.0, 30.0), (0.0, 30.0), (0.0, -30.0)],
-            frame_of((1.0, 0.0, 0.0), (0.0, 0.0, 40.0)),
+            frame_of((1.0, 0.0, 0.0), (0.0, 0.0, axis_height)),
         )
-        plate = edit.unified(edit.boolean("intersection", [plate, roll]))
+        if bottom == "Rinne R 40":
+            plate = edit.unified(edit.boolean("difference", [plate, roll]))
+        elif bottom == "Zylinder R 40":
+            plate = edit.unified(edit.boolean("intersection", [plate, roll]))
+        else:
+            flat = edit.moved(edit.box(60.0, 12.0, 20.0), (0.0, -6.0, 0.0))
+            support = edit.unified(edit.boolean("union", [roll, flat]))
+            plate = edit.unified(edit.boolean("intersection", [plate, support]))
     solid = edit.bore_profile(plate, list(outline), frame_of((0, 0, 1), (-8.0, 0, 0)))
     return _body(kernel, solid)
+
+
+def _bottom_height(bottom: str, y: np.ndarray) -> np.ndarray:
+    """Die Höhe der Unterseite über z = 0 an der Stelle ``y`` (sie hängt nicht von x ab)."""
+    arc = np.sqrt(1600.0 - y * y)
+    if bottom == "Zylinder R 40":
+        return 40.0 - arc
+    if bottom == "Rinne R 40":
+        return np.maximum(arc - 39.5, 0.0)
+    if bottom == "Naht Ebene-Zylinder":
+        return np.where(y > 0.0, 40.0 - arc, 0.0)
+    return np.zeros_like(y)
+
+
+def _cavity_under(bottom: str, outline: Sequence[tuple[float, float]]) -> float:
+    """Der Hohlraum aus ``outline`` bis an die Unterseite ``bottom``: das Profil
+    abzüglich dessen, was die Unterseite unter der Zylindersenkung Ø 10 höher
+    liegt als z = 0 — über die Scheibe integriert (y = 5 sin t)."""
+    turn = np.linspace(-np.pi / 2.0, np.pi / 2.0, 20001)
+    width = 50.0 * np.cos(turn) ** 2
+    raised = np.trapezoid(width * _bottom_height(bottom, 5.0 * np.sin(turn)), turn)
+    return _profile_volume(outline) - float(raised)
 
 
 def _profile_volume(outline: Sequence[tuple[float, float]]) -> float:
@@ -1261,23 +1299,31 @@ def test_each_section_of_a_bore_widened_at_both_ends_is_removed_alone(
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("bottom", CURVED_BOTTOMS)
 def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kernels(
-    profile: Profile, kernel: str
+    profile: Profile, kernel: str, bottom: str
 ) -> None:
     """Die untere Zylindersenkung mündet in eine gekrümmte Fläche.
 
     Am exakten Kern sagte jede Kettenhandlung dort ab — mit dem Satz des
     Einlaufs, der zu „Nur Bohrungsdurchmesser" riet, einem Feld, das
-    Versetzen nicht hat (RM-245). Jetzt reicht das Werkzeug bis zur Ebene
-    durch den weitesten Punkt des Rands, wie am Netz, und gefüllt wird aus den
-    Flächen mit einem Fächer am Rand. Beide Kerne lassen dabei denselben
-    kleinen Rest des Fächers stehen, und die Kette steht an der neuen Stelle
-    wieder da.
+    Versetzen nicht hat (RM-245). Danach füllten beide Kerne die alte Stelle
+    mit einem Fächer vom Mittelpunkt des Rands, und der lag auf der mittleren
+    Höhe des Rands statt auf der Fläche (RM-248): am Zylinder R 40 eine Mulde
+    von 4,9 mm³ am Netz und 4,0 mm³ am exakten Körper, an der Naht 3,5 und 2,0,
+    in der Rinne eine Beule.
+
+    Jetzt ist der Deckel die Fläche um den Rand, fortgesetzt — exakt auf dem
+    Träger der Nachbarfläche oder als Füllung über der gemessenen Fläche, am
+    Netz als Gitter auf ihr —, und das Werkzeug an der neuen Stelle reicht aus
+    den Flächen bis hinter die Fläche. Versetzt wird entlang X, wo die Fläche
+    sich nicht ändert: Das Volumen bleibt, gemessen am eigenen Kern (am
+    exakten das Integral), auf einen halben Kubikmillimeter von 651.
     """
     from tests.test_bore_depth import _evaluated
 
-    source = _widened(kernel, BOTH_ENDS["Zylindersenkung und Fase"], curved=True)
-    before = abs(float(as_mesh_data(source.mesh).volume))
+    source = _widened(kernel, BOTH_ENDS["Zylindersenkung und Fase"], bottom=bottom)
+    before = abs(float(source.mesh.volume))
     bore = _narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
@@ -1285,11 +1331,98 @@ def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kerne
         source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
     )
     assert _warnings(findings) == [], findings
-    change = abs(float(as_mesh_data(moved.mesh).volume)) - before
-    # Der Fächer vom Mittelpunkt des Rands liegt über der Mitte der Fläche: Am
-    # Zylinder R 40 bleiben rund 4 bis 5 mm³ von 651, an beiden Kernen.
-    assert abs(change) <= 0.01 * _profile_volume(BOTH_ENDS["Zylindersenkung und Fase"]), change
+    change = abs(float(moved.mesh.volume)) - before
+    assert abs(change) < 0.5, change
     assert _chain_ids(moved) == members
+
+
+@pytest.mark.parametrize("bottom", CURVED_BOTTOMS)
+def test_a_bore_under_a_curved_face_is_closed_up_to_that_face(
+    profile: Profile, bottom: str
+) -> None:
+    """Entfernt, gibt die Kette genau ihren Hohlraum bis an die Fläche zurück.
+
+    Der Sollwert kommt nicht aus dem Programm: Profil der Kette minus das, was
+    die Unterseite unter der Senkung höher liegt als z = 0, über die Scheibe
+    integriert (:func:`_cavity_under`). Mit dem Fächer fehlten am Zylinder
+    R 40 6,5 mm³, in der Rinne stand eine Beule über der Fläche (RM-248); am
+    exakten Kern liegt der Deckel jetzt auf dem Träger oder folgt ihm als
+    Füllung.
+    """
+    from tests.test_bore_depth import _evaluated
+
+    outline = BOTH_ENDS["Zylindersenkung und Fase"]
+    source = _widened("brep", outline, bottom=bottom)
+    bore = _narrowest_hole(source)
+    closed, findings = _evaluated(
+        source, profile, "remove_feature", at_feature=bore.id, sections="chain"
+    )
+    assert _warnings(findings) == [], findings
+    given = float(closed.mesh.volume) - float(source.mesh.volume)
+    assert given == pytest.approx(_cavity_under(bottom, outline), abs=0.05)
+
+
+def test_the_exact_filling_asks_the_faces_around_the_rim_and_not_only_its_own() -> None:
+    """Die Füllung am exakten Kern stützt sich auf dieselbe Nachbarschaft wie das Netz.
+
+    ``edit._filled_cap`` vernetzte zuerst nur die Flächen, an denen der Rand
+    liegt. An der Lochplatte ``pegboard-gs-100-v2.step`` sind das vier
+    Spline-Flächen einer Mündungsrundung, ein Band von 1,7 mm, und das Polynom
+    über dieses Band allein lief über das Loch fortgesetzt als Trichter hinein:
+    Beim Versetzen um 1 mm fehlten 7,8 statt 4,1 mm³ (Durchsicht 0.5.1) — am
+    Netz derselben Platte fand die Anpassung keine Fläche, und es blieb beim
+    Fächer. ``_faces_near`` nimmt jede Fläche in dem Ring, den die Anpassung
+    abtastet: in der Rinne R 40 auch die ebene Unterseite hinter der Kante der
+    Rinne, die den Rand nicht berührt, und keine Fläche des Hohlraums.
+    """
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.BRepTools import BRepTools
+    from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane
+    from OCP.TopAbs import TopAbs_WIRE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import edit
+    from app.core.perceive.relations import cavity_chain_state_at, cavity_surface_indices
+
+    source = _widened("brep", BOTH_ENDS["Zylindersenkung und Fase"], bottom="Rinne R 40")
+    solid = source.mesh
+    mesh = as_mesh_data(solid)
+    bore = _narrowest_hole(source)
+    chain = cavity_chain_state_at(bore, source.features, mesh).chain
+    assert chain is not None
+    chosen = set(solid.faces_of_triangles(cavity_surface_indices(mesh, chain)))
+    faces = solid.faces()
+
+    def surface(face: Any) -> Any:
+        return BRepAdaptor_Surface(face)
+
+    groove = next(
+        index
+        for index, face in enumerate(faces)
+        if surface(face).GetType() == GeomAbs_Cylinder
+        and surface(face).Cylinder().Radius() == pytest.approx(40.0)
+    )
+    outer = BRepTools.OuterWire_s(faces[groove])
+    walk = TopExp_Explorer(faces[groove], TopAbs_WIRE)
+    rims = []
+    while walk.More():
+        if not walk.Current().IsSame(outer):
+            rims.append(TopoDS.Wire(walk.Current()))
+        walk.Next()
+    assert len(rims) == 1
+    near = edit._faces_near(rims[0], faces, chosen)
+    picked = {index for index, face in enumerate(faces) if any(face.IsSame(n) for n in near)}
+    assert groove in picked
+    assert not picked & chosen
+    flat_bottom = {
+        index
+        for index in picked
+        if surface(faces[index]).GetType() == GeomAbs_Plane
+        and abs(surface(faces[index]).Plane().Axis().Direction().Z()) > 0.999
+        and surface(faces[index]).Plane().Location().Z() == pytest.approx(0.0, abs=1e-6)
+    }
+    assert flat_bottom, "die ebene Unterseite hinter der Rinne gehört zur Nachbarschaft"
 
 
 # --- Eine Seite, die schmaler ist als die Hülle (RM-249) ------------------------------

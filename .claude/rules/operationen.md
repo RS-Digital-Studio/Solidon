@@ -618,17 +618,42 @@ Ebene hinausreicht, trug bei jedem Versetzen ein Scheibchen ab — 1,33 mm³ an
 Werkzeug der Kopie** (`_cavity_plug`, `_chain_copy_tool`) — wie beim Kippen
 und Verdoppeln derselben Kette; bis zum 25.09.2026 sagte allein das Versetzen
 ab. **Und ein Rand in einer schrägen, leicht gekrümmten Fläche wird aus den
-Flächen gefüllt, mit einem Fächerdeckel am Ring** (`_body_from_faces`,
+Flächen gefüllt, mit der Fläche um ihn als Deckel** (`_body_from_faces`,
 `curved_rims`, bis `CURVED_RIM` des Durchmessers neben der Ebene): Der
 Zylinderstopfen reichte bis an den äußersten Punkt des Rands, an der konvexen
 Hülle gekappt, und füllte die Luft vor dem Rest der Mündung — am
 Gartenschlauchhalter 58 und 148 mm³ beim Kippen um 5° und 15°, in einer Rinne
-11 und 43 mm³. Was bleibt, ist der Durchhang des Deckels über der gekrümmten
-Fläche (in der Rinne 1 bis 4 mm³). Der Fächer geht vom Mittelpunkt aus
-(`units.exact_centre`), nicht von einer geschätzten Flächenhöhe: Die wäre eine
-Ausgleichsrechnung über LAPACK und schriebe je Maschine andere Ecken (RM-187).
-Nur der Stopfen nimmt diese Deckel; ein Werkzeug, das bündig schneiden muss,
-nie.
+11 und 43 mm³. Der Fächer vom Mittelpunkt des Rands, der danach kam, lag auf
+dessen mittlerer Höhe und nicht auf der Fläche (RM-248): eine Mulde von
+4,9 mm³ unter einer Senkung Ø 10 in einem Zylinder R 40, eine Beule von
+26 mm³ in der Hohlkehle des Gartenschlauchhalters. **Jetzt wird die Fläche
+gemessen und fortgesetzt** (`geom.mouth_cap`): als Höhenfeld über der
+Ausgleichsebene des Rands, an den Facetten selbst abgetastet, bis zu einem
+halben Radius um ihn, ein Polynom dritten Grades eingepasst — in
+Grundrechenarten, denn seine Höhe setzt jede Ecke (RM-187, der Weg steht in
+`test_platform_identity._WAYS`) —, und der Deckel ist ein Gitter auf ihm.
+Proben, die um mehr als `MAX_FACET_SAG` danebenliegen, gehören zu einer
+anderen Fläche (eine Kante im Ring) und fallen heraus; trägt die Fläche dann
+nicht die Hälfte des Rings oder weicht sie am Rand weiter ab, gibt es keinen
+fortgesetzten Deckel, und es bleibt beim Fächer. Das ist die Mündung mit
+eigener Rundung an der Lochplatte gs-100: Die Rundung gehört nicht zur Kette
+und bleibt beim Versetzen stehen. **Das Werkzeug an der neuen Stelle kommt
+dann auch aus den Flächen** (`_past_curved_mouths`, `past_curved`): die Wand
+des Rands entlang der Achse bis hinter den äußersten Punkt von Rand **und**
+Fläche verlängert — ein Zylinder aus Kennzahlen trug eine andere Teilung als
+der Stopfen und schnitt 1,1 mm³ mehr ab, und eine Ebene nur durch den
+äußersten Randpunkt ließe über einer Kuppe eine Haut. Nur der Stopfen nimmt
+den fortgesetzten Deckel; ein Werkzeug, das bündig schneiden muss, nie.
+**Der Klick ins Bild nimmt dasselbe Paar** (`feature_placement_geometry`,
+`flush`): Geist und Schnitt an der neuen Stelle sind das Werkzeug, gefüllt
+wird mit dem Stopfen — der Geist reicht über die Mündung hinaus und stünde als
+Stumpf vor der Fläche, 8,3 mm³ an der Platte mit Zylinder R 40. Wo die Flächen
+keinen Körper hergeben, gilt auch dort das Werkzeug aus Kennzahlen.
+Abnahme: `test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kernels`
+(Zylinder, Rinne, Naht Ebene-Zylinder, beide Kerne, unter 0,5 mm³),
+`test_a_bore_under_a_curved_face_is_closed_up_to_that_face` (exakt, gegen das
+integrierte Profil) und
+`test_a_chain_whose_mouth_lies_in_a_curved_face_can_be_placed_by_hand`.
 
 **Eine Bohrung, die sich an beiden Enden weitet, ist eine Kette mit zwei
 Seiten** (RM-245). Die Kette beginnt mit der engsten Bohrung, dahinter stehen
@@ -639,9 +664,19 @@ exakte Einlauf (`_BoreEntrance.back`) fragen je Seite, und die Bohrung
 dazwischen hat keine eigene Mündung. **Die äußere Zylindersenkung darf am
 exakten Kern in eine gekrümmte Fläche münden** (`_curved_mouth_planes`,
 offen und bis `CURVED_RIM` neben der Ebene): Das Werkzeug reicht bis zur
-Ebene durch den weitesten Randpunkt, gefüllt wird aus den nativen Flächen mit
-einem Fächer (`edit.solid_from_faces`, `fan_caps`) — derselbe Deckel wie am
-Netz. **Und der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
+Ebene durch den weitesten Randpunkt, gefüllt wird aus den nativen Flächen
+(`edit.solid_from_faces`, `fan_caps`). Der Deckel ist dort die Fläche um den
+Rand (`edit._continued_cap`, RM-248): Liegt der Rand in **einer**
+Nachbarfläche, eine Fläche auf deren Träger, begrenzt vom Lochdraht —
+exakt, der Zylinder läuft unter dem Loch weiter; liegt er in mehreren, eine
+Füllung mit dem Randdraht als Grenze und Stützpunkten auf der gemessenen
+Fläche; sonst der Fächer. Hält das Nähen mit der fortgesetzten Fläche nicht,
+gilt ebenfalls der Fächer. **Gemessen wird die Füllung an derselben
+Nachbarschaft wie am Netz** (`edit._faces_near`: jede Fläche im Ring von
+`MOUTH_REACH` um den Rand, fein vernetzt, ohne die des Hohlraums) — nicht nur
+an den Flächen, an denen der Rand liegt: An `pegboard-gs-100-v2.step` sind das
+die Flächen einer Mündungsrundung, und ihr Polynom lief als Trichter ins Loch
+(Versetzen um 1 mm −7,8 statt −4,1 mm³). **Und der äußere Zylinder einer Kette ist beim Wiederfinden entlang der
 Achse frei** (`_chain_mouths`): Wie weit er reicht, sagt die Fläche, in die er
 mündet. Die exakten Kopien werden erst nach Lage und Maß zugeordnet und dann
 benannt (`_exact_copy_result`); ein Fund, der zufällig den Namen einer Kopie
@@ -741,6 +776,10 @@ Versetzen rund 270, 796 → 1042 → 1308 → 1576 → 1852 an der Lochplatte na
 vier Zügen, und jeder spätere Schritt rechnete mit. `Manifold.simplify` legt
 sie zusammen, übernommen nur unter der Zusicherung von `boolean._tidied`:
 dicht, gleiches Volumen, weniger Dreiecke; sonst bleibt die rohe Vereinigung.
+**Beide Wege zur neuen Stelle tun es**, der mit Zahlen und der Klick ins Bild
+(`_place_oriented_feature`): Dem Klickweg fehlte es bis zur Durchsicht 0.5.1,
+und eine Senkbohrung aus 768 Dreiecken wuchs dort um 260 je Zug
+(`test_a_chain_moved_by_hand_leaves_no_scars_in_the_face`).
 Das Netz wird dabei neu nummeriert — **und eine Operation gibt nur Merkmale
 ihres Ausgangsnetzes zurück** (`_without_old_triangles`): Was sie nur
 weiterreicht, verliert Flächennummern und Teilträger, Ort und Maß bleiben; die

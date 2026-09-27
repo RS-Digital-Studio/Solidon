@@ -911,6 +911,49 @@ def test_surface_placement_carries_the_complete_bore_chain(operation, chosen, pr
         )
 
 
+def test_a_chain_moved_by_hand_leaves_no_scars_in_the_face(profile):
+    """Versetzen per Klick räumt die Kappen des Stopfens ab wie der Zahlenweg.
+
+    Der Zahlenweg tut es seit dem 23.09.2026 (``_without_scars``); am Klickweg
+    fehlte es (Durchsicht 0.5.1): An dieser Senkbohrung wuchs der Körper je Zug
+    um 260 Dreiecke, 768 → 1028 → 1288 nach zwei Zügen, 130 davon in der
+    Oberseite — und mit ihnen jeder spätere Schritt.
+    """
+    from app.core.perceive.features import detect
+    from app.core.perceive.relations import cavity_chains
+    from app.core.types import SceneObject
+    from tests.test_missing_ops import run
+
+    load_operations()
+    outline = [
+        [30.0, 0.0],
+        [30.0, 10.0],
+        [5.5, 10.0],
+        [5.5, 8.5],
+        [3.0, 6.0],
+        [3.0, 0.0],
+        [30.0, 0.0],
+    ]
+    mesh = MeshData.of(trimesh.creation.revolve(outline, sections=64))
+    current = SceneObject(id="obj_1", name="Senkbohrung", mesh=mesh, features=detect(mesh))
+    spec = REGISTRY.get("move_feature")
+    for x in (15.0, -15.0):
+        body = current.mesh
+        bore = next(
+            item
+            for item in next(iter(cavity_chains(current.features, body)))
+            if item.kind == "hole"
+        )
+        prepared = placement.prepare_surface(body, _top(body), current.features)
+        hit = placement.at_point(prepared, (x, 0.0, 10.0))
+        values = placement.surface_values(spec, hit, feature=bore, source=current)
+        moved = run("move_feature", current, profile, **values).outputs[0].mesh
+        current = SceneObject(id="obj_1", name="Senkbohrung", mesh=moved, features=detect(moved))
+    assert current.mesh.raw.is_watertight
+    assert current.mesh.volume == pytest.approx(mesh.volume, abs=0.02)
+    assert len(current.mesh.raw.faces) == len(mesh.raw.faces)
+
+
 def test_a_free_direction_drills_the_rotated_plate_to_the_given_depth():
     from app.core.geom.prepare import drill
     from tests.test_prepare import profiles
@@ -1536,6 +1579,72 @@ def test_internal_shoulders_never_replace_the_outer_cavity_mouth():
     assert geometry.frame.normal == pytest.approx((0.0, 0.0, 1.0))
     assert geometry.mesh.is_watertight
     assert geometry.mesh.bounds.maximum[2] == pytest.approx(0.0, abs=1e-10)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_chain_whose_mouth_lies_in_a_curved_face_can_be_placed_by_hand(
+    kernel: str, profile
+) -> None:
+    """Eine Kette mit gekrümmter Mündung lässt sich ins Bild klicken — und die
+    alte Stelle füllt der Stopfen, nicht das Werkzeug.
+
+    ``feature_placement_geometry`` fragte nur ``_paired_cavity_body``, und das
+    findet an einer gekrümmten Mündung keine Ebene: Wer die Senkbohrung einer
+    Platte mit gewölbter Unterseite — oder die Senkungen in der Hohlkehle des
+    Gartenschlauchhalters — an eine neue Stelle klicken wollte, las „Dieses
+    Merkmal geht in einen anderen Hohlraum über …“, obwohl *Merkmal
+    versetzen* mit eingetippten Zahlen dieselbe Kette versetzt (Durchsicht
+    0.5.1). Jetzt nimmt der Geist dasselbe Werkzeug wie die Operation.
+
+    **Dieses Werkzeug reicht über die gekrümmte Mündung hinaus**, und
+    ``_place_oriented_feature`` füllte die alte Stelle mit dem Geist: Mit ihm
+    stand dort ein Stumpf unter der Fläche, 8,3 mm³ (gemessen an dieser
+    Platte, 16 mm entlang X). Gefüllt wird jetzt mit dem Stopfen der Kette
+    (``flush``), wie beim Versetzen mit Zahlen.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.prepare_ops import feature_placement_geometry
+    from app.core.units import MAX_FACET_SAG
+    from tests.test_feature_moves_keep_shape import (
+        BOTH_ENDS,
+        _cavity_under,
+        _narrowest_hole,
+        _widened,
+    )
+    from tests.test_missing_ops import run
+
+    load_operations()
+    outline = BOTH_ENDS["Zylindersenkung und Fase"]
+    source = _widened(kernel, outline, bottom="Zylinder R 40")
+    bore = _narrowest_hole(source)
+    geometry = feature_placement_geometry(source, bore, "move_feature")
+    assert geometry.mesh.is_watertight
+    assert len(geometry.related) == 3
+    assert not geometry.flush
+    # Der ganze Hohlraum reist mit: Senkung, Bohrung und Fase, 651 mm³ nach
+    # dem Profil, dazu der Überstand hinter der gekrümmten Mündung.
+    assert abs(float(geometry.mesh.volume)) > 640.0
+
+    mesh = as_mesh_data(source.mesh)
+    before = abs(float(mesh.volume))
+    normals = np.asarray(mesh.raw.face_normals)
+    centres = np.asarray(mesh.raw.triangles_center)
+    # Geklickt wird auf die Oberseite, an der der Rahmen sitzt, 16 mm weiter
+    # entlang X — dort ist die Unterseite dieselbe.
+    top = np.flatnonzero((normals[:, 2] > 0.999) & (np.abs(centres[:, 2] - 12.0) < 0.01))
+    placed = {}
+    for operation in ("move_feature", "duplicate_feature"):
+        spec = REGISTRY.get(operation)
+        prepared = placement.prepare_surface(mesh, int(top[0]), source.features)
+        hit = placement.at_point(prepared, (8.0, 0.0, 12.0))
+        values = placement.surface_values(spec, hit, feature=bore, source=source)
+        placed[operation] = as_mesh_data(run(operation, source, profile, **values).outputs[0].mesh)
+    moved = placed["move_feature"]
+    assert moved.is_watertight
+    assert abs(float(moved.volume)) - before == pytest.approx(0.0, abs=0.5)
+    assert float(moved.bounds.minimum[2]) > -MAX_FACET_SAG
+    removed = before - abs(float(placed["duplicate_feature"].volume))
+    assert removed == pytest.approx(_cavity_under("Zylinder R 40", outline), rel=0.01)
 
 
 def test_the_welded_adjacency_is_built_once_per_mesh_and_not_once_per_click():

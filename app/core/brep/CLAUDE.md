@@ -691,7 +691,14 @@ Kegel geht als B-Spline-Fläche durch STEP und hält dabei die siebte Stelle.
 Körper geschlossen — aus privaten Kopien der Flächen. Geschlossen ist, was
 keine freie Kante hat; das `Closed()`-Flag setzt Sewing nicht, und an einer
 Kuppe stand es auf falsch bei gültigem Körper (20.09.2026). Ein Ring, der in
-keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten. Als
+keiner Ebene liegt, gibt keinen Körper: dann wird nichts geraten — außer der
+Aufrufer füllt einen Hohlraum (`fan_caps`): Dann ist der Deckel die Fläche um
+den Ring, fortgesetzt (`_continued_cap`, RM-248) — eine Fläche auf dem
+Träger der einen Nachbarfläche, begrenzt vom Lochdraht (`_cap_on_carrier`),
+oder eine Füllung mit dem Randdraht und Stützpunkten aus
+`geom.mouth_cap` an den Flächen um den Rand (`_filled_cap`, `_faces_near`) —,
+und erst wo beides nicht trägt oder das
+Nähen damit scheitert, der Fächer vom Mittelpunkt (`_fan_cap`). Als
 Werkzeug bekommt ein solcher Hohlraumkörper an seinen offenen Mündungen einen
 Kragen (`collared`, das Prisma seines Deckels) — so schneidet
 `geom.prepare_ops._exact_own_cut` ein versetztes Langloch samt Fasen und eine
