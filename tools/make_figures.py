@@ -147,6 +147,10 @@ def work_area() -> tuple[int, int]:
     return int(area.width()), int(area.height())
 
 
+#: Wie viele Punkte je Richtung ``foreign_window_over`` abfragt.
+COVER_GRID = 12
+
+
 def foreign_window_over(widget: QWidget, rect: QRect | None = None) -> str:
     """Welches fremde Fenster über ``rect`` des Widgets liegt — leer, wenn keines.
 
@@ -156,10 +160,16 @@ def foreign_window_over(widget: QWidget, rect: QRect | None = None) -> str:
     Sitzung — mit fremdem Projekt, fremdem Drucker und der Restlaufzeit der
     Demo in der Statuszeile. Eine Bildschirmaufnahme greift, was obenauf liegt.
 
-    Gefragt wird Windows an 25 Punkten des Rechtecks, welchem Prozess das
-    Fenster dort gehört (``WindowFromPoint``). Eigene Dialoge und Menüs zählen
-    nicht als fremd. Auf anderen Systemen gibt es die Abfrage nicht, und die
-    Antwort ist leer — dort nimmt auch niemand parallel auf.
+    Gefragt wird Windows an einem Raster von Punkten des Rechtecks, welchem
+    Prozess das Fenster dort gehört (``WindowFromPoint``). Eigene Dialoge und
+    Menüs zählen nicht als fremd. Auf anderen Systemen gibt es die Abfrage
+    nicht, und die Antwort ist leer — dort nimmt auch niemand parallel auf.
+
+    **Zwölf mal zwölf Punkte, nicht fünf mal fünf.** Die Vorschau der
+    Taskleiste, die aufgeht, wenn jemand am Rechner mit der Maus darüberfährt,
+    ist gut ein Achtel so breit wie das Fenster; am 27.09.2026 lag sie unten
+    mitten im Bild, zwischen den Punkten bei einem Viertel und der Hälfte der
+    Breite, und die Prüfung sah sie nicht. Ein Punkt kostet Mikrosekunden.
     """
     if sys.platform != "win32":
         return ""
@@ -172,8 +182,9 @@ def foreign_window_over(widget: QWidget, rect: QRect | None = None) -> str:
     user32.GetAncestor.restype = wintypes.HWND
     area = rect if rect is not None else widget.rect()
     own = os.getpid()
-    for share_x in (0.02, 0.25, 0.5, 0.75, 0.98):
-        for share_y in (0.02, 0.25, 0.5, 0.75, 0.98):
+    shares = tuple(0.02 + 0.96 * index / (COVER_GRID - 1) for index in range(COVER_GRID))
+    for share_x in shares:
+        for share_y in shares:
             spot = widget.mapToGlobal(
                 QPoint(
                     area.left() + round((area.width() - 1) * share_x),

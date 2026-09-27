@@ -913,6 +913,41 @@ def _write_stamp(folder: Path, taken: list[guides.Guide]) -> None:
     )
 
 
+def _stay_on_top(window: Any) -> None:
+    """Das Aufnahmefenster für die Dauer des Laufs über jedes fremde Fenster legen.
+
+    Auf dem Aufnahmeschirm liegt oft ein Fenster des Nutzers, am 27.09.2026 das
+    maximierte Claude-Fenster. Windows holt ein Programm aus dem Hintergrund
+    nicht nach vorn: ``raise_`` und ``activateWindow`` blieben wirkungslos, und
+    ``wait_until_uncovered`` brach nach 300 s ab. Die oberste Ebene
+    (``HWND_TOPMOST``) gilt ohne Fokuswechsel; Dialoge und Menüs gehören dem
+    Fenster und stehen deshalb darüber. Über Win32 und nicht über
+    ``WindowStaysOnTopHint``: Der Schalter baut das native Fenster neu und mit
+    ihm die Fläche, in die der Renderer zeichnet. Ein fremdes Fenster, das
+    selbst oben liegt, meldet ``foreign_window_over`` weiterhin.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32  # type: ignore[attr-defined]
+    user32.SetWindowPos.argtypes = [
+        wintypes.HWND,
+        wintypes.HWND,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        wintypes.UINT,
+    ]
+    user32.SetWindowPos.restype = wintypes.BOOL
+    topmost = wintypes.HWND(-1)
+    keep = 0x0001 | 0x0002 | 0x0010  # SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE
+    if not user32.SetWindowPos(int(window.winId()), topmost, 0, 0, 0, 0, keep):
+        print("  … das Aufnahmefenster ließ sich nicht nach oben legen", flush=True)
+
+
 def _child(language: str, keys: list[str], target: Path) -> int:
     """Die Kindseite: ein Fenster, alle gewählten Anleitungen einer Sprache."""
     from app.core.paths import user_config_dir
@@ -962,6 +997,7 @@ def _child(language: str, keys: list[str], target: Path) -> int:
     window.trial_line.hide()
     window.raise_()
     window.activateWindow()
+    _stay_on_top(window)
     shots.settle(app, 40)
     print(f"{language}:")
     try:
