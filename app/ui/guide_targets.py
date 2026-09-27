@@ -103,6 +103,30 @@ def _report_action(window: MainWindow) -> QWidget:
     return buttons[0]
 
 
+def _report_slicer(window: MainWindow) -> QWidget:
+    """„An den Slicer übergeben …" — er steht nur da, wenn nichts mehr zu beanstanden ist."""
+    button: QWidget = window.report.to_slicer
+    return button
+
+
+def _print_dialog(window: MainWindow) -> QWidget:
+    """Der Druckdialog. Er läuft modal über ``exec()`` und hängt an keinem Attribut."""
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = QApplication.activeModalWidget()
+    if not isinstance(dialog, PrintSettingsDialog):
+        raise MissingTargetError("print: der Druckdialog ist nicht offen")
+    return dialog
+
+
+#: Die Teile des Druckdialogs: Name → Attribut des Dialogs.
+_PRINT: Final[dict[str, str]] = {
+    "print.printer": "printer_choice",
+    "print.slice": "slice_button",
+    "print.save": "save_button",
+}
+
+
 #: Die Bereiche des Hauptfensters: Name → Attribut des Fensters.
 #:
 #: Als Attributname und nicht als Lambda: Fenster und diese Datei kennen
@@ -132,6 +156,7 @@ _START: Final[dict[str, str]] = {
 _FINDERS: Final[dict[str, Callable[[MainWindow], QWidget]]] = {
     "statusbar": lambda window: window.statusBar(),
     "report.action": _report_action,
+    "report.slicer": _report_slicer,
     "start.drop": _drop_area,
     "dialog": _open_dialog,
     "dialog.accept": _accept_button,
@@ -144,7 +169,7 @@ _PLACES: Final = frozenset({"history.last"})
 #: Wortschatz im Kern — ein Name dort, den hier niemand kennt, wäre eine
 #: Anleitung, die erst beim Release scheitert.
 RESOLVED: Final[frozenset[str]] = (
-    frozenset(_AREAS) | frozenset(_START) | frozenset(_FINDERS) | _PLACES
+    frozenset(_AREAS) | frozenset(_START) | frozenset(_PRINT) | frozenset(_FINDERS) | _PLACES
 )
 
 
@@ -156,6 +181,8 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
         return getattr(window, _AREAS[name])  # type: ignore[no-any-return]
     if name in _START:
         return _start(window, _START[name])
+    if name in _PRINT:
+        return getattr(_print_dialog(window), _PRINT[name])  # type: ignore[no-any-return]
     finder = _FINDERS.get(name)
     if finder is not None:
         return finder(window)

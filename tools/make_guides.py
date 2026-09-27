@@ -90,6 +90,16 @@ ROOM_VARIABLE: Final = "SOLIDON_GUIDES_ROOM"
 #: Bereiche, in denen nichts steht.
 EXAMPLE: Final = shots.EXAMPLE
 
+#: Die Netze, an denen die Anleitungen mit heruntergeladenen Modellen
+#: entstehen — aus dem Korpus der Suite, nicht aus einem Beispielprojekt:
+#: Ein Beispiel wird für seine eigene Tour gepflegt, und eine Änderung dort
+#: soll nicht still das Handbuch verschieben.
+MESHES: Final = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
+
+#: Ein Netz mit offener Stelle, wie es aus dem Netz kommt: Der Prüfbericht hat
+#: etwas zu sagen, und seine Handlung behebt es.
+BROKEN_MODEL: Final = MESHES / "broken_open.stl"
+
 #: Wie breit ein Schrittbild höchstens gespeichert wird. Die Bilder reisen mit
 #: der Anwendung, sechs Sprachen lang; das Handbuchfenster zeigt sie ohnehin
 #: in der Breite seiner Textspalte.
@@ -425,6 +435,26 @@ class GuideRun:
 # hier wäre ein Zwilling, der beim nächsten Umbau auseinanderläuft.
 
 
+def _fresh(run: GuideRun) -> None:
+    """Zurück auf den Startbildschirm, ohne gespeicherte Änderung."""
+    run.session.forget_changes()
+    run.session.start_new()
+    run.window._show_start_screen(True)
+    run.settle(20)
+
+
+def _import(run: GuideRun, model: Path) -> None:
+    """Ein Modell einlesen wie hereingezogen und alles abwarten, den Prüfbericht eingeschlossen."""
+    if not model.is_file():
+        raise SystemExit(f"Anleitungsmodell fehlt: {model}")
+    run.session.start_new()
+    run.session.import_model(model, raise_on_error=True)
+    run.window._show_start_screen(False)
+    web.until_quiet(run.app, run.session, model.name)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(20)
+
+
 def story_window_overview(run: GuideRun) -> None:
     """Das ganze Fenster mit einem gewählten Körper: alle Bereiche gefüllt."""
     web.open_example(run.window, run.app, EXAMPLE)
@@ -435,10 +465,56 @@ def story_window_overview(run: GuideRun) -> None:
     run.capture(1)
 
 
+def story_print_a_model(run: GuideRun) -> None:
+    """Vom Startbildschirm über den Prüfbericht in den Druckdialog."""
+    from app.ui import guide_targets
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    _fresh(run)
+    run.capture(1)
+
+    _import(run, BROKEN_MODEL)
+    report = run.window.report
+    run.window.right.setCurrentWidget(report)
+    run.settle(10)
+    run.capture(2)
+
+    if report.list.count() == 0:
+        raise SystemExit(f"{BROKEN_MODEL.name}: der Prüfbericht meldet nichts")
+    report.list.setCurrentRow(0)
+    run.settle(10)
+    run.capture(3)
+
+    guide_targets.widget_for(run.window, "report.action").click()
+    web.until_quiet(run.app, run.session, "Reparatur")
+    run.window.right.setCurrentWidget(report)
+    run.settle(10)
+    run.capture(4)
+
+    def in_dialog(dialog: Any) -> None:
+        # Erst wenn Slicer und Profile gefunden sind, steht der Dialog so da,
+        # wie der Kunde ihn sieht (Muster ``make_web_images``, Motiv
+        # „schritt-druck"); vorher stünde „Die Slicer werden gesucht …".
+        if not dialog.wait_for_slicers():
+            raise SystemExit("Die Slicersuche des Druckdialogs kam nicht zurück")
+        for _ in range(200):
+            if not dialog._profiles_pending:
+                break
+            run.settle(2)
+        run.settle(20)
+        run.capture(5)
+        run.capture(6)
+
+    button = guide_targets.widget_for(run.window, "report.slicer")
+    web.while_open(PrintSettingsDialog, button.click, in_dialog)
+    run.settle(20)
+
+
 #: Je Anleitung ihre Geschichte. ``tests/test_guides.py`` verlangt für jede
 #: Anleitung im Kern genau eine.
 STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
     "window-overview": story_window_overview,
+    "print-a-model": story_print_a_model,
 }
 
 
@@ -490,8 +566,23 @@ def _child(language: str, keys: list[str], target: Path) -> int:
     folder = target / language
     folder.mkdir(parents=True, exist_ok=True)
     chosen = [guide for guide in guides.GUIDES if guide.key in keys]
+    # Der Stand eines Kunden, der den Druckdialog schon einmal geöffnet hat:
+    # ein gewählter Slicer und der gelesene Hinweis zu den Druckeinstellungen,
+    # sonst stünde vor dem Dialog der Hinweis und im Dialog die Slicersuche.
+    # Dieselben Aufrufe wie der Dialog selbst, im isolierten Profil
+    # (Muster ``make_web_images._screens_child``).
+    from app.core import discover
+    from app.core import tools as external_tools
+    from app.ui.print_disclosure import remember_disclosure
+
+    found = discover.find_programs("slicer", external_tools.SLICERS)
+    prusa = next((one for one in found if "prusa" in one.name.lower()), None)
+    if prusa is not None:
+        discover.remember_path("slicer", str(prusa))
+    settings = UiSettings()
+    remember_disclosure(settings)
     session = Session()
-    window = shots.prepared(MainWindow(session, UiSettings()), None, hidden=False)
+    window = shots.prepared(MainWindow(session, settings), None, hidden=False)
     # Die Restlaufzeit der Demo steht in der Statuszeile und wäre im Handbuch
     # eine Zahl, die nach einer Woche nicht mehr stimmt.
     window.trial_line.hide()

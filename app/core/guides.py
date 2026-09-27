@@ -57,6 +57,13 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Wer ein Loch verschieben will, soll die Zeile sehen, nicht die Liste.
         "history.last",
         "report.action",
+        # „An den Slicer übergeben …" im Prüfbericht — der letzte Meter, wenn
+        # nichts mehr zu beanstanden ist
+        "report.slicer",
+        # Der Druckdialog: Drucker oben, „Slicen" und „Druckdatei speichern …"
+        "print.printer",
+        "print.slice",
+        "print.save",
         # Startbildschirm: die Ablagefläche und die Knöpfe „Neues Projekt",
         # „Modell öffnen …", „Projekt öffnen …" und „Handbuch"
         "start.drop",
@@ -184,6 +191,39 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 ("report", _("Prüfbericht: was nicht stimmt, meist mit Knopf zum Beheben.")),
                 ("selection", _("Auswahl: Maße und passende Handlungen zum gewählten Teil.")),
                 ("statusbar", _("Statusleiste: Maße, Fortschritt und offene Warnungen.")),
+            ),
+        ),
+    ),
+    Guide(
+        key="print-a-model",
+        title=_("Ein Modell prüfen und drucken"),
+        summary=_("Von der heruntergeladenen Datei bis zur Druckdatei."),
+        part="start",
+        steps=(
+            step(
+                _("Ziehen Sie die Datei auf das Fenster oder klicken Sie auf *Modell öffnen …*."),
+                "start.drop",
+                "start.model",
+            ),
+            # Offene Stellen und verkehrte Flächen repariert Solidon beim
+            # Einlesen selbst; der Bericht sagt, was es war, und die Knöpfe unter
+            # einem Befund zeigen die Stelle oder nehmen die Reparatur zurück.
+            # Ein „Knopf, der ihn behebt" stand im ersten Entwurf und war am
+            # Fenster falsch (Probelauf 27.09.2026 an broken_open.stl).
+            step(_("Rechts im *Prüfbericht* steht, was Solidon am Modell gefunden hat."), "report"),
+            step(
+                _("Ein Klick auf einen Befund zeigt darunter, was Sie tun können."),
+                "report.action",
+            ),
+            step(
+                _("Passt alles, klicken Sie auf *An den Slicer übergeben …*."),
+                "report.slicer",
+            ),
+            step(_("Prüfen Sie oben Drucker und Filament."), "print.printer"),
+            step(
+                _("*Slicen* rechnet die Druckdatei, *Druckdatei speichern …* legt sie ab."),
+                "print.slice",
+                "print.save",
             ),
         ),
     ),
