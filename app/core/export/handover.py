@@ -1496,6 +1496,9 @@ class CuraMachine:
     search_path: tuple[Path, ...] = ()
     codes: Mapping[str, str] = field(default_factory=dict)
     switches: Mapping[str, str] = field(default_factory=dict)
+    name: str = ""
+    """``machine_name`` der Definition — CuraEngine schreibt ihn als
+    ``;TARGET_MACHINE.NAME`` in den Kopf (:func:`cura_machine_differences`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -3439,7 +3442,41 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         search_path=search,
         codes=codes,
         switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
+        name=str(chain.get("machine_name") or ""),
     )
+
+
+def cura_machine_differences(
+    analysis: gcode.GcodeAnalysis, machine: CuraMachine | None
+) -> list[str]:
+    """Hat CuraEngine mit der Maschine gerechnet, die Solidon übergab?
+
+    Die Gegenprobe der Werte (:func:`verify_settings`) sieht es nicht:
+    CuraEngine schreibt keine Einstellungen in die Druckdatei. Ohne die
+    Maschine druckte der Drucker ohne die Bettvermessung oder das Startmakro
+    seines Herstellers (``M420 S1``, ``START_PRINT``). Geprüft werden der Name im
+    Kopf (``;TARGET_MACHINE.NAME``) und, der Reihe nach, jeder Befehl des
+    übergebenen Startcodes vor der ersten Schicht (Konzept Herstellerprofil,
+    Entscheidung K). Ohne Druckerdefinition gibt es nichts zu vergleichen, dort
+    spricht :func:`machine_missing`.
+    """
+    if machine is None or not machine.from_printer:
+        return []
+    differences: list[str] = []
+    found = analysis.settings.get("machine_name")
+    if machine.name and found is not None and found != machine.name:
+        differences.append(f"machine_name: {machine.name} → {found}")
+    position = 0
+    for line in machine.codes.get("machine_start_gcode", "").splitlines():
+        command = line.split(";", 1)[0].strip()
+        if not command:
+            continue
+        try:
+            position = analysis.start.index(command, position) + 1
+        except ValueError:
+            differences.append(f"machine_start_gcode: {command} → —")
+            break
+    return differences
 
 
 def _placeholder_values(chain: Mapping[str, object], written: Mapping[str, str]) -> dict[str, str]:
@@ -4522,7 +4559,9 @@ def slice_model(
         # Nur die zusätzlich abgeleitete Position setzt mehrere tatsächlich
         # benutzte Werkzeuge voraus; ausdrückliche Sollwerte bleiben vollständig.
         written = config.written if len(metrics.used_tools) > 1 else requested_values
-        ignored = verify_settings(analysis.settings, written)
+        ignored = verify_settings(
+            analysis.settings, written, cura_machine_differences(analysis, config.cura_machine)
+        )
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
@@ -4877,10 +4916,17 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
     return verify_settings(gcode.analyze(text).settings, written)
 
 
-def verify_settings(found: Mapping[str, str], written: Mapping[str, str]) -> list[Finding]:
-    """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen."""
+def verify_settings(
+    found: Mapping[str, str], written: Mapping[str, str], differences: Sequence[str] = ()
+) -> list[Finding]:
+    """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen.
 
-    ignored: list[str] = []
+    ``differences`` sind Abweichungen, die sich nicht als Wert vergleichen
+    lassen — bei CuraEngine Maschine und Startcode
+    (:func:`cura_machine_differences`). Sie stehen im selben Befund.
+    """
+
+    ignored: list[str] = list(differences)
     for key, wanted in written.items():
         if key in _RECOMPUTED:
             continue
