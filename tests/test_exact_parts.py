@@ -390,7 +390,8 @@ def test_printed_nut_exact_carries_the_internal_thread_through() -> None:
     prism = math.sqrt(3.0) / 2.0 * nut.width**2 * nut.height
     removed = _thread_volume(bore, screw.pitch, nut.height, internal=True)
     assert body.volume == pytest.approx(prism - removed, rel=1e-6)
-    assert body.bounds.maximum[2] == pytest.approx(nut.height, abs=1e-6)
+    # Die Mutter steht um das Spiel über ihrer Fläche (RM-276).
+    assert body.bounds.maximum[2] == pytest.approx(play + nut.height, abs=1e-6)
     assert body.bounds.maximum[0] == pytest.approx(nut.width / 2.0, abs=1e-6)
     assert produced.features["thread_1"].params["internal"] is True
     mesh = _built("printed_nut", False, size="M5", play=play)
@@ -467,8 +468,10 @@ def test_a_printed_screw_stays_a_loose_part_next_to_its_exact_host(profile: Prof
     body = _sound(result.mesh, bodies=3)
     assert result.kind == "brep"
     screw = standards.screw("M5")
-    sink = (screw.countersink - screw.clearance) / 2.0
-    prepared = HOST[0] * HOST[1] * HOST[2] - _frustum(screw.clearance, screw.countersink, sink)
+    # Die Senkung steht um das Spiel senkrecht zur 90°-Flanke vom Kopf ab (RM-276).
+    mouth = screw.countersink + 2.0 * math.sqrt(2.0) * for_object(profile, host).material.clearance
+    sink = (mouth - screw.clearance) / 2.0
+    prepared = HOST[0] * HOST[1] * HOST[2] - _frustum(screw.clearance, mouth, sink)
     spec = PARTS.get("printed_screw")
     _params, produced = _built_part(
         spec, spec.params(**values), for_object(profile, host), "fine", kernel="brep"

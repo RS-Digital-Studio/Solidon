@@ -66,6 +66,12 @@ Assistentenprüfung — keine Namensliste dort. Zerfällt der **Träger** selbst
 mit `feature.body_split`: Nur sie hat Träger und Teil noch getrennt in der
 Hand.
 
+**Lösbar heißt auch an Ort und Stelle gedruckt lösbar**: Ein lösbares Teil
+hält zu seinem Sitz das ganze Spiel aus dem Materialprofil — Sechskantkopf
+und Mutter stehen um das Spiel über der Fläche, die Senkung steht um das Spiel
+senkrecht zur Flanke vom Senkkopf ab. Eine Berührungsfläche verschweißt im
+Druck, und das Gewinde allein macht kein Teil lösbar.
+
 ## Ein aufgesetzter Baustein beginnt bei null
 
 `ops._place` senkt ihn um `BOOLEAN_OVERLAP` in die Fläche, mehr nicht; was

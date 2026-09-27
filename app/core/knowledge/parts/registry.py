@@ -247,8 +247,10 @@ class PartSpec:
     """Wahr, wenn der Baustein neben seinem Träger ein eigenes Teil bleibt.
 
     Eine Schraube in einer gesenkten Bohrung wird nicht mit dem Träger
-    vereinigt — ihr Senkkopf liegt bündig in der Senkung an, ein Sechskantkopf
-    auf der Fläche. Die zusammengesetzte Szene enthält dann mehr Teile, aber
+    vereinigt — ihr Senkkopf sitzt bündig in der Senkung, ein Sechskantkopf
+    über der Fläche, beide mit dem Spiel aus dem Materialprofil zum Sitz
+    (RM-276: ohne Abstand verschweißten sie an Ort und Stelle gedruckt mit
+    dem Träger). Die zusammengesetzte Szene enthält dann mehr Teile, aber
     keinen Fehler: Der Baustein bildet eine demontierbare Verbindung ab. Die
     Operation sagt das ihrem Registereintrag (``leaves_separate_parts``), und
     Auswertung und Assistentenprüfung melden deshalb keinen Zerfall.
@@ -717,7 +719,10 @@ def register_part(
 #: Bundhöhe der Einlage; den Bundfreiraum setzt das Klemmenpaar.
 #: Version 20: Netzgewinde laufen an beiden Stirnflächen aus, sodass gedruckte
 #: Schraube und Mutter zusammengehen (``fasteners.py``, 22.09.2026).
-LIBRARY_VERSION: Final = "20"
+#: Version 21: Gedruckte Schraube und Mutter halten das Profilspiel auch zu
+#: ihrem Sitz — Sechskantkopf und Mutter um das Spiel angehoben, die Senkung
+#: um das Spiel weiter (``fasteners.py``, RM-276, 27.09.2026).
+LIBRARY_VERSION: Final = "21"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
