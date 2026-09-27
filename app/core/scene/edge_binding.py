@@ -42,6 +42,7 @@ from app.core.geom.edges import (
     described_by_key,
     edge_fingerprint,
     edge_key,
+    edge_lie_of,
     edges_in_kernel,
     indices_in_kernel,
     points_in_kernel,
@@ -222,6 +223,25 @@ def _choice_of(entry: ParamSpec, resolved: Mapping[str, Any]) -> Any:
     return resolved.get(entry.depends_on[0], "named")
 
 
+def _edge_target(token: str, source: SceneObject, kernel: EdgeKernel, candidate: Any) -> EdgeTarget:
+    """Ein Kandidat, wie Dialog und Ansicht ihn zeigen — mit der Lage seiner Beschriftung.
+
+    ``upright`` und ``flat`` kommen aus :func:`~app.core.geom.edges.edge_lie_of`
+    und nicht aus der Kante selbst: An einem Ring gilt dort ``flat`` immer,
+    auch wo er senkrecht steht (RM-269).
+    """
+    lie = edge_lie_of(candidate)
+    return EdgeTarget(
+        token=token,
+        object_id=source.id,
+        points=points_in_kernel(kernel, source.mesh, candidate),
+        middle=tuple(float(value) for value in candidate.middle),  # type: ignore[arg-type]
+        length=float(candidate.length),
+        upright=lie == "upright",
+        flat=lie == "flat",
+    )
+
+
 def _ask_for_each(
     source: SceneObject,
     kernel: EdgeKernel,
@@ -236,15 +256,7 @@ def _ask_for_each(
     for key, matches in colliding.items():
         check_cancelled()
         targets = tuple(
-            EdgeTarget(
-                token=f"{key}#{number}",
-                object_id=source.id,
-                points=points_in_kernel(kernel, source.mesh, candidate),
-                middle=tuple(float(value) for value in candidate.middle),  # type: ignore[arg-type]
-                length=float(candidate.length),
-                upright=bool(candidate.upright),
-                flat=bool(candidate.flat),
-            )
+            _edge_target(f"{key}#{number}", source, kernel, candidate)
             for number, candidate in enumerate(matches, start=1)
         )
         tokens = [target.token for target in targets]

@@ -612,6 +612,66 @@ def choose[AnyEdge: SelectableEdge](edges: Sequence[AnyEdge], choice: EdgeChoice
     ]
 
 
+#: Wie eine Kante im Raum liegt, in den Worten ihrer Beschriftung.
+EdgeLie = Literal["upright", "flat", "slanted"]
+
+
+def _lie_along(rise: float) -> EdgeLie:
+    """Die Lage einer Richtung aus ihrem Anteil in Z, wie ``upright`` und ``flat``."""
+    height = abs(rise)
+    if height > 0.9:
+        return "upright"
+    return "flat" if height < 0.1 else "slanted"
+
+
+def edge_lie_of(entry: Any) -> EdgeLie:
+    """Wie eine Kante liegt — für ihre **Beschriftung** (RM-269).
+
+    Eine Strecke oder ein Bogen nach der Richtung von Anfang zu Ende, wie
+    ``upright`` und ``flat``. Ein **geschlossener Ring** hat keine: Anfang
+    und Ende fallen zusammen, die Richtung ist null, und ``flat`` galt an
+    jedem Ring. Die Mündung einer quer liegenden Bohrung hieß deshalb
+    „Waagerecht“, obwohl sie senkrecht steht. Ein Ring liegt, wie seine Ebene
+    liegt: waagerecht, wenn ihre Normale senkrecht steht, und umgekehrt.
+
+    **Die Auswahl nach Lage** (:func:`choose`) fragt bewusst weiter ``flat``
+    und ``upright``: Sie bestimmt, welche Kanten *Verrunden* trifft, und eine
+    andere Antwort dort änderte gespeicherte Projekte. Deshalb darf die
+    Rechnung hier schnell sein (``np.cross``, ``np.linalg.norm``, RM-187): Sie
+    benennt nur und entscheidet nichts an der Geometrie.
+
+    ``entry`` ist ein :class:`MeshEdge` (trägt ``points``), ein
+    ``brep.edit.EdgeInfo`` (abgetastet über ``edge_points``) oder ein
+    ``scene.edge_binding.EdgeTarget`` (trägt die Antwort schon).
+    """
+    direction = getattr(entry, "direction", None)
+    if direction is None:
+        return "upright" if entry.upright else "flat" if entry.flat else "slanted"
+    if math.dist(direction, (0.0, 0.0, 0.0)) > EPS_GEOM:
+        return _lie_along(float(direction[2]))
+    points = getattr(entry, "points", None)
+    if points is None:
+        from app.core.brep import edit
+
+        points = edit.edge_points(entry)
+    ring = np.asarray(points, dtype=float)
+    if len(ring) < 3:
+        return "flat"
+    # Die Normale nach Newell: je Stück das Kreuzprodukt, über den ganzen
+    # Ring summiert — stabil auch an einem Zug, der nicht ganz eben ist.
+    following = np.roll(ring, -1, axis=0)
+    normal = np.cross(ring - ring.mean(axis=0), following - ring.mean(axis=0)).sum(axis=0)
+    size = float(np.linalg.norm(normal))
+    if size <= EPS_GEOM:
+        return "flat"
+    # Die Normale steht quer zum Ring: eine senkrechte Normale heißt ein
+    # waagerecht liegender Ring.
+    lie = _lie_along(float(normal[2]) / size)
+    if lie == "upright":
+        return "flat"
+    return "upright" if lie == "flat" else "slanted"
+
+
 def named_edges[AnyEdge: SelectableEdge](
     edges: Sequence[AnyEdge], keys: Sequence[str]
 ) -> list[AnyEdge]:

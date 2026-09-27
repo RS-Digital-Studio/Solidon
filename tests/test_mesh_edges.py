@@ -2641,3 +2641,53 @@ def test_the_chamfer_marks_name_the_face_the_operation_takes(kernel: str) -> Non
 
     assert chamfer_marks(sides, {"mode": "equal_distances", "distance": 2.0}) is None
     assert chamfer_marks(sides, {**values, "distance": "=@fehlt"}) is None
+
+
+def _lying_cylinder(backend: str) -> list[Any]:
+    """Ein liegender Zylinder (Achse X): seine zwei Ränder stehen senkrecht."""
+    if backend == "mesh":
+        raw = trimesh.creation.cylinder(radius=RADIUS, height=HEIGHT, sections=64)
+        raw.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (0, 1, 0)))
+        return edges_of(MeshData(raw))
+    brep = pytest.importorskip("app.core.brep.edit")
+    if not pytest.importorskip("app.core.brep.kernel").available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+    turn = (
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (-1.0, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    return brep.edges_of(brep.transformed(brep.cylinder(2.0 * RADIUS, HEIGHT), turn))
+
+
+@pytest.mark.parametrize("backend", ["mesh", "brep"])
+def test_a_rim_is_named_after_the_plane_it_lies_in(backend: str) -> None:
+    """RM-269 (3): Die Rundkante einer liegenden Bohrung hieß „Waagerecht“.
+
+    Ein geschlossener Ring hat keine Richtung von Anfang zu Ende — sie ist null,
+    und ``flat`` (``|z| < 0,1``) galt damit an **jedem** Ring. Am Kundenweg stand
+    „Waagerecht · 13,82 mm“ an der Mündung einer Bohrung Ø 4,4, die quer im Teil
+    liegt: Der Ring steht senkrecht. Ein Ring liegt, wie seine Ebene liegt.
+    Strecken bleiben, wie sie waren.
+    """
+    from app.core.geom.edges import edge_lie_of
+
+    rims = _lying_cylinder(backend)
+    assert len(rims) == 2 and all(
+        math.dist(entry.direction, (0.0, 0.0, 0.0)) < 1e-6 for entry in rims
+    ), "zwei Ringe ohne Richtung — sonst prüft der Test keinen Ring"
+    assert [edge_lie_of(entry) for entry in rims] == ["upright", "upright"]
+    from app.ui.labels import edge_label
+
+    assert edge_label(rims[0]).startswith(str(message("Senkrecht"))), edge_label(rims[0])
+
+    standing = edges_of(MeshData(trimesh.creation.cylinder(radius=RADIUS, height=HEIGHT)))
+    assert [edge_lie_of(entry) for entry in standing] == ["flat", "flat"]
+
+    slanted = trimesh.creation.cylinder(radius=RADIUS, height=HEIGHT, sections=64)
+    slanted.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 4.0, (0, 1, 0)))
+    assert {edge_lie_of(entry) for entry in edges_of(MeshData(slanted))} == {"slanted"}
+
+    box = {edge_lie_of(entry) for entry in edges_of(block())}
+    assert box == {"upright", "flat"}, "Strecken liegen nach ihrer Richtung"

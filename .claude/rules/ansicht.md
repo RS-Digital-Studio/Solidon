@@ -415,7 +415,9 @@ irgendwo stehen muss.
 
 Bis dahin pickte der Renderer Flächen und Merkmale, keine Kanten; die
 Kantenwahl der Verrundung lag als Liste im Dialog („Senkrecht · 20 mm ·
-x -20,0, y -15,0", zum Ankreuzen). Wer **diese eine Ecke** brechen wollte,
+x -20,0, y -15,0", zum Ankreuzen). Die Lage in dieser Zeile fragt
+`edges.edge_lie_of`: Ein Ring hat keine Richtung und liegt, wie seine Ebene
+liegt — die Mündung einer Querbohrung heißt „Senkrecht“ (RM-269). Wer **diese eine Ecke** brechen wollte,
 musste sie in einer Aufzählung wiedererkennen.
 
 Sie ist jetzt eine dritte Sache, die ein Klick treffen kann — und sie geht

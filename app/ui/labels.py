@@ -2635,9 +2635,16 @@ def edge_label(entry: Any) -> str:
     ``entry`` ist ein ``brep.edit.EdgeInfo`` — als ``Any`` angenommen, weil
     ``labels`` ohne den optionalen B-Rep-Kern importierbar bleiben muss (§30).
     """
-    if entry.upright:
+    # Die Lage fragt der Kern (``edges.edge_lie_of``): An einem Ring ist die
+    # Richtung null, und ``flat`` galt an jedem — die Mündung einer quer
+    # liegenden Bohrung hieß „Waagerecht“ (RM-269). Erst hier geladen: Die
+    # Kantenrechnung zieht die Boolesche Kette nach, und ``labels`` lädt früh.
+    from app.core.geom.edges import edge_lie_of
+
+    shown = edge_lie_of(entry)
+    if shown == "upright":
         lie = tr("Senkrecht")
-    elif entry.flat:
+    elif shown == "flat":
         lie = tr("Waagerecht")
     else:
         lie = tr("Schräg")
