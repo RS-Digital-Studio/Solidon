@@ -82,11 +82,22 @@ def replacements() -> dict[str, str]:
     return table
 
 
+#: Namen sind kein Deutsch: was in Backticks steht (Datei, Zweig, Bezeichner),
+#: ein Pfad und ein Dateiname mit Endung. `uebersetzung.md` und der Zweig
+#: `uebergabe-gesamtpruefung` schlugen sonst an, obwohl sie so heißen müssen.
+NAMES = re.compile(
+    r"`[^`\n]*`"
+    r"|[\w.-]+(?:[/\\][\w.-]+)+"
+    r"|\b[\w-]+\.(?:md|py|toml|json|txt|sh|ya?ml|tsv|ini|cfg|html|php|p3d)\b"
+)
+
+
 def findings(text: str) -> dict[str, str]:
     """Welche Ersatzschreibungen in diesem Text stehen, und wie es richtig wäre."""
     table = {word: correct for word, correct in replacements().items() if correct}
     if not table:
         return {}
+    text = NAMES.sub(" ", text)
     # **Als Stamm, nicht als ganzes Wort.** Die Liste kennt
     # „unvollstaendig", geschrieben wird „unvollstaendiger"; sie kennt
     # „gross", geschrieben wird „grosses". Eine Prüfung auf ganze Wörter
