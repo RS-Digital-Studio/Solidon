@@ -8067,23 +8067,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
     from app.core.perceive.relations import cavity_chain_state_at, cavity_is_shared
 
     body = as_mesh_data(source.mesh)
-    neighbours = source.features
-    selected = feature
-    if source.kind == "brep":
-        # Der exakte Merkmalsbaum beschreibt Kegelflächen noch nicht als Senkung.
-        # Die Netz-Erkennung ergänzt sie; dieselben Dreiecke benennen die Bohrung.
-        from app.core.perceive.features import detect
-
-        neighbours = detect(body)
-        faces = set(feature.face_indices)
-        matching = [
-            entry
-            for entry in neighbours.values()
-            if entry.kind == feature.kind and faces.intersection(entry.face_indices)
-        ]
-        if len(matching) == 1:
-            selected = matching[0]
-    state = cavity_chain_state_at(selected, neighbours, body)
+    # **An beiden Kernen die Merkmale der Szene** — dieselben, die das
+    # Merkmalfenster fragt und *Merkmal drehen* (RM-264). Am exakten Körper
+    # stand hier seit dem 12.09.2026 die Netz-Erkennung seiner Tessellierung,
+    # weil der exakte Merkmalsbaum damals keine Kegel kannte. Er kennt sie;
+    # die Netz-Erkennung fand dagegen an einer gedrehten Tasche mit Haltelippe
+    # gar nichts — das Fenster stellte die Zeile grau, und die Operation zog
+    # das Langloch durch die Lippe.
+    state = cavity_chain_state_at(feature, source.features, body)
     if cavity_is_shared(state):
         from app.core.perceive.actions import narrowing_reason
 

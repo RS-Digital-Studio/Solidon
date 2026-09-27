@@ -1667,16 +1667,16 @@ def test_a_pocket_with_a_lip_says_why_it_stays_straight(
     with pytest.raises(ValidationError) as refused:
         _on_the_lip(source, "rotate_feature", profile, at_feature=feature.id, axis="x", angle=15.0)
     assert refused.value.detail == NARROWING_STAYS_STRAIGHT
-    if kind == "brep" and chosen == "hole":
-        # An der Bohrung eines exakten Körpers fragt *Zum Langloch ziehen* die
-        # Netz-Erkennung seiner Tessellierung, und die findet an diesem
-        # Prüfkörper keine Kette (Bericht rest-lippe, „Für Nachbarn“). An der
-        # Magnettasche aus dem Baustein sagt die Operation es an beiden Kernen
-        # (``test_feature_moves_keep_shape``).
-        return
+    # **Auch an der Bohrung des exakten Körpers** (RM-264). *Zum Langloch
+    # ziehen* fragte dort die Netz-Erkennung seiner Tessellierung, und die fand
+    # an diesem Prüfkörper keine Kette: Das Fenster stellte die Zeile grau, und
+    # die Operation zog das Langloch durch die Lippe. Jetzt fragt sie die
+    # Merkmale der Szene, wie das Fenster und wie *Merkmal drehen*.
+    volume = as_mesh_data(source.mesh).volume
     with pytest.raises(ValidationError) as refused:
-        _on_the_lip(source, "slot_hole", profile, at_feature=feature.id, slot_length=4.0)
+        _on_the_lip(source, "slot_hole", profile, at_feature=feature.id, slot_length=12.0)
     assert refused.value.detail == NARROWING_STAYS_ROUND
+    assert as_mesh_data(source.mesh).volume == pytest.approx(volume, abs=1e-9)
 
 
 # --- Eine Senkung auf ihrer Bohrung ändern (Durchsicht 0.5.1, rest-lippe) ----------
