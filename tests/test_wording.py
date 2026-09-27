@@ -503,7 +503,6 @@ DARF_DESIGNER_WORD: dict[str, str] = {
     "Einen Parameterwert setzen": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
     "Für Wahrheitswerte verwenden Sie": "Kommandozeile: „Boolean“ ist dort der Datentyp.",
     "Wie breit eine Bahn gelegt wird.": "„is normal“ heißt dort „ist üblich“.",
-    "Die Fälle, die am Anfang am häufigsten sind": "„that is normal“ heißt dort „ist üblich“.",
     "Normale": (
         "Nur im Steckbrief für das Sprachmodell (perceive/digest.py) — der Kunde liest ihn nicht."
     ),
