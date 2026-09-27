@@ -15485,7 +15485,9 @@ def _cut_and_pin(
     if glue_hint and plan is not None and plan.count and plan.shape == "round":
         pair.findings.append(connector_glue_finding())
 
-    first_features, second_features = _features_after_split(source.features, plane, source.mesh)
+    # Am Netz des Eingangs gemessen — am exakten Körper an seiner Tessellierung,
+    # auf die die Dreiecksnummern seiner Merkmale zeigen (beide Kerne gleich).
+    first_features, second_features = _features_after_split(source.features, plane, mesh)
     first_name, second_name = half_names(
         source.name, pinned=bool(pair.pin_features), pins_on_b=pins_on_b
     )
@@ -15541,6 +15543,18 @@ def _features_after_split(
     second: dict[str, Feature] = {}
     for feature_id, feature in features.items():
         connector = feature_id.startswith(("pin_", "bore_"))
+        if not connector and feature.kind == "face" and _crosses(feature, plane, mesh):
+            # **Eine Fläche, durch die die Ebene geht, reist mit beiden Hälften**
+            # (R4): Jede Hälfte trägt ein Stück von ihr, und die Auswertung gibt
+            # den Namen dort dem größten Stück in ihrer Ebene
+            # (``evaluate._divided_partners``). Über den Mittelpunkt kam sie in
+            # eine Hälfte, fand dort kein gleich großes Stück und stand als
+            # unerkannter Eintrag mit ihrem alten Maß da; eine Passung an der
+            # Deckfläche war nicht mehr messbar, und schob man die Ebene über die
+            # Mitte, wechselte der Name die Hälfte (Durchsicht 0.5.1).
+            first[feature_id] = feature
+            second[feature_id] = feature
+            continue
         side = None if connector else _surface_side(feature, plane, mesh)
         if side is None:
             side = feature_side(feature, plane, connector=connector)
@@ -15549,6 +15563,28 @@ def _features_after_split(
         elif side == 1:
             second[feature_id] = feature
     return first, second
+
+
+def _crosses(feature: Feature, plane: SectionPlane, mesh: Mesh | None) -> bool:
+    """Ob Dreiecke eines Merkmals auf beiden Seiten der Ebene liegen — ob sie es teilt.
+
+    Dieselbe Rechnung wie :func:`_surface_side`: Grundrechenarten (RM-187),
+    verglichen mit ``EPS_GEOM``. Ohne Netz oder gültige Dreiecke: nein.
+    """
+    if not isinstance(mesh, MeshData) or not feature.face_indices:
+        return False
+    faces = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(faces.min()) < 0 or int(faces.max()) >= mesh.triangle_count:
+        return False
+    normal = np.asarray(plane.normal, dtype=float)
+    length = math.sqrt(float((normal * normal).sum()))
+    if length <= EPS_GEOM:
+        return False
+    corners = np.asarray(mesh.raw.vertices, dtype=float)[
+        np.asarray(mesh.raw.faces, dtype=np.int64)[faces].ravel()
+    ]
+    distances = (corners * (normal / length)).sum(axis=1) - plane.position
+    return bool((distances < -EPS_GEOM).any()) and bool((distances > EPS_GEOM).any())
 
 
 def _surface_side(feature: Feature, plane: SectionPlane, mesh: Mesh | None) -> FeatureSide | None:
@@ -15650,7 +15686,7 @@ def cut_away(ctx: OpContext) -> OpResult:
             value=params.position,
             constraint="no_split",
         )
-    features, _dropped = _features_after_split(source.features, plane, source.mesh)
+    features, _dropped = _features_after_split(source.features, plane, mesh)
     # **Eine offene Schnittfläche wird gesagt, nicht verschwiegen.** *Teilen*
     # meldet sie seit je (``split.uncapped``); *Abschneiden* ging denselben
     # Schnitt bis zum 22.09.2026 ohne ein Wort, und der Körper kam mit offener

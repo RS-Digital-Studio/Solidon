@@ -149,7 +149,14 @@ from app.core.types import (
     Transform,
     kind_of,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, MAX_FACET_SAG, is_close, match_tolerance
+from app.core.units import (
+    EPS_DISPLAY,
+    EPS_GEOM,
+    MAX_FACET_SAG,
+    exact_mean,
+    is_close,
+    match_tolerance,
+)
 from app.i18n import TranslatableText, _, format_decimal, source_text, tr
 
 _log = get_logger(__name__)
@@ -1891,54 +1898,306 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
     )
 
 
-def _divided_in_place(
-    feature: Feature | None, detected: Mapping[FeatureId, Feature], source: Mesh | None
-) -> bool:
+def _divided_in_place(feature: Feature | None, faces_now: _FacesNow, source: Mesh | None) -> bool:
     """Ob eine alte ebene Fläche nach dem Schritt geteilt oder beschnitten weiterbesteht.
 
     Weiterbestehend heißt: Eine erkannte Fläche liegt in ihrer Ebene, gleich
     gerichtet, und ihre Mitte im Hüllquader der alten Fläche — gemessen an
-    deren Dreiecken im Eingangsnetz. Eine Fläche, die eine formende Operation
-    wirklich nimmt (ein Pinselzug, der ihr die Ebene nimmt), hat keine solche
-    Nachfolgerin und bleibt ein Verlust.
+    deren Dreiecken im Eingangsnetz (:func:`_pieces_in_place`). Eine Fläche,
+    die eine formende Operation wirklich nimmt (ein Pinselzug, der ihr die
+    Ebene nimmt), hat keine solche Nachfolgerin und bleibt ein Verlust.
     """
+    return bool(_pieces_in_place(feature, faces_now, source))
+
+
+@dataclass(frozen=True, slots=True)
+class _FacesNow:
+    """Die ebenen Flächen nach dem Schritt als Felder — einmal gebaut, je alte Fläche gefragt.
+
+    Die Frage nach den Stücken einer alten Fläche läuft über jede erkannte
+    Fläche; als Schleife je alter Fläche wäre das Waisen mal Flächen in
+    Python, an der Kumiko-Schale mit 7 295 Flächen Sekunden.
+    """
+
+    names: tuple[FeatureId, ...]
+    normals: Any
+    centres: Any
+    areas: Any
+
+
+def _faces_now(detected: Mapping[FeatureId, Feature]) -> _FacesNow:
+    """Die ebenen Flächen aus ``detected`` mit Normale, Mitte und Fläche."""
     import numpy as np
 
-    if feature is None or feature.kind != "face" or not feature.face_indices:
-        return False
-    if not isinstance(source, MeshData):
-        return False
-    normal = feature.params.get("normal")
-    centre = feature.params.get("centre")
-    if not isinstance(normal, tuple | list) or not isinstance(centre, tuple | list):
-        return False
-    faces = np.asarray(feature.face_indices, dtype=np.int64)
-    if int(faces.max()) >= source.triangle_count:
-        return False
-    corners = np.asarray(source.raw.vertices, dtype=float)[
-        np.asarray(source.raw.faces, dtype=np.int64)[faces].ravel()
-    ]
-    tolerance = match_tolerance(source.bounds.diagonal)
-    low = corners.min(axis=0) - tolerance
-    high = corners.max(axis=0) + tolerance
-    for candidate in detected.values():
+    names: list[FeatureId] = []
+    normals: list[tuple[float, float, float]] = []
+    centres: list[tuple[float, float, float]] = []
+    areas: list[float] = []
+    for name, candidate in detected.items():
         if candidate.kind != "face":
             continue
         there = candidate.params.get("centre")
         direction = candidate.params.get("normal")
         if not isinstance(there, tuple | list) or not isinstance(direction, tuple | list):
             continue
-        facing = sum(float(a) * float(b) for a, b in zip(normal, direction, strict=True))
-        if facing < PARALLEL_FACE_COSINE:
+        if len(there) != 3 or len(direction) != 3:
             continue
-        apart = sum(
-            (float(b) - float(a)) * float(n) for a, b, n in zip(centre, there, normal, strict=True)
-        )
-        if abs(apart) > tolerance:
+        names.append(name)
+        normals.append((float(direction[0]), float(direction[1]), float(direction[2])))
+        centres.append((float(there[0]), float(there[1]), float(there[2])))
+        areas.append(float(candidate.params.get("area", 0.0) or 0.0))
+    return _FacesNow(
+        tuple(names),
+        np.asarray(normals, dtype=float).reshape(-1, 3),
+        np.asarray(centres, dtype=float).reshape(-1, 3),
+        np.asarray(areas, dtype=float),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _OldFace:
+    """Eine alte ebene Fläche, gemessen an ihren Dreiecken im Eingangsnetz.
+
+    ``direction`` ist ihre Normale als Einheitsvektor, ``middle`` ihre Mitte,
+    ``tolerance`` die Zuordnungstoleranz des Eingangsnetzes.
+    """
+
+    corners: Any
+    direction: Any
+    middle: Any
+    tolerance: float
+
+
+def _old_face(feature: Feature | None, source: Mesh | None) -> _OldFace | None:
+    """Die Dreiecke einer alten ebenen Fläche im Eingangsnetz — wenn sie diese Fläche sind.
+
+    ``None`` heißt: kein Netz, keine gültigen Nummern, oder die Dreiecke unter
+    diesen Nummern sind eine andere Fläche — ihre flächengewichtete Normale
+    weicht ab, oder ihre Mitte liegt nicht in der Ebene des Merkmals. So
+    sehen Nummern aus, die eine Operation an ihrem eigenen Ergebnis vergeben
+    hat: Am Eingang bezeichnen sie fremde Dreiecke, und aus deren Hüllquader
+    bekäme ein falsches Stück den Namen. Summiert wird exakt (``math.fsum``,
+    RM-187), denn an der Antwort hängt, welches Stück welchen Namen trägt.
+    """
+    import numpy as np
+
+    if feature is None or feature.kind != "face" or not feature.face_indices:
+        return None
+    if source is not None and not isinstance(source, MeshData):
+        # Ein exakter Körper: Die Dreiecksnummern seiner Merkmale zeigen auf
+        # seine Tessellierung (beide Kerne gleich, R4).
+        converted = getattr(source, "to_mesh", None)
+        source = converted() if callable(converted) else None
+    if not isinstance(source, MeshData):
+        return None
+    normal = feature.params.get("normal")
+    centre = feature.params.get("centre")
+    if not isinstance(normal, tuple | list) or not isinstance(centre, tuple | list):
+        return None
+    if len(normal) != 3 or len(centre) != 3:
+        return None
+    faces = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(faces.max()) >= source.triangle_count or int(faces.min()) < 0:
+        return None
+    direction = np.asarray([float(value) for value in normal], dtype=float)
+    middle = np.asarray([float(value) for value in centre], dtype=float)
+    weights = np.asarray(source.raw.area_faces, dtype=float)[faces]
+    normals = np.asarray(source.raw.face_normals, dtype=float)[faces] * weights[:, None]
+    summed = [math.fsum(normals[:, axis].tolist()) for axis in range(3)]
+    length = math.sqrt(math.fsum(value * value for value in summed))
+    own = math.sqrt(math.fsum(float(value) * float(value) for value in direction))
+    if length <= 0.0 or own <= 0.0:
+        return None
+    facing = math.fsum(float(a) * float(b) for a, b in zip(summed, direction, strict=True))
+    if facing < PARALLEL_FACE_COSINE * length * own:
+        return None
+    corners = np.asarray(source.raw.vertices, dtype=float)[
+        np.asarray(source.raw.faces, dtype=np.int64)[faces].ravel()
+    ]
+    tolerance = match_tolerance(source.bounds.diagonal)
+    unit = direction / own
+    offsets = ((corners - middle) * unit).sum(axis=1)
+    if abs(exact_mean(offsets.tolist())) > tolerance:
+        return None
+    return _OldFace(corners, unit, middle, tolerance)
+
+
+def _pieces_in_place(
+    feature: Feature | None, faces_now: _FacesNow, source: Mesh | None
+) -> tuple[FeatureId, ...]:
+    """Die erkannten Flächen, die Stücke einer alten ebenen Fläche sind.
+
+    Ein Stück liegt in der Ebene der alten Fläche, gleich gerichtet, und seine
+    Mitte im Hüllquader ihrer Dreiecke im Eingangsnetz (:func:`_old_face`).
+    Dieselbe Messung für zwei Fragen: ob die alte Fläche fort ist
+    (:func:`_divided_in_place`) und welches Stück ihren Namen trägt
+    (:func:`_divided_partners`). Gerechnet mit Grundrechenarten (RM-187): An
+    der Antwort hängt, welches Stück welchen Namen trägt.
+    """
+    import numpy as np
+
+    if not faces_now.names:
+        return ()
+    old = _old_face(feature, source)
+    if old is None:
+        return ()
+    low = old.corners.min(axis=0) - old.tolerance
+    high = old.corners.max(axis=0) + old.tolerance
+    facing = (faces_now.normals * old.direction).sum(axis=1) >= PARALLEL_FACE_COSINE
+    apart = np.abs(((faces_now.centres - old.middle) * old.direction).sum(axis=1))
+    inside = ((faces_now.centres >= low) & (faces_now.centres <= high)).all(axis=1)
+    chosen = facing & (apart <= old.tolerance) & inside
+    return tuple(faces_now.names[index] for index in np.flatnonzero(chosen))
+
+
+def _cut_by_the_step(feature: Feature, source: Mesh | None, bounds: BoundingBox) -> bool:
+    """Ob eine alte Fläche über den Körper hinausreicht, den der Schritt ausgab.
+
+    Nach *Teilen* reicht die Deckfläche in die andere Hälfte; nach *Abschneiden*
+    über die Schnittebene. Gemessen an ihren Dreiecken im Eingangsnetz
+    (:func:`_old_face`) gegen den Hüllquader der Ausgabe, mit der
+    Zuordnungstoleranz des Eingangs.
+    """
+    import numpy as np
+
+    old = _old_face(feature, source)
+    if old is None:
+        return False
+    low = np.asarray(bounds.minimum, dtype=float) - old.tolerance
+    high = np.asarray(bounds.maximum, dtype=float) + old.tolerance
+    return bool(((old.corners < low) | (old.corners > high)).any())
+
+
+def _with_triangles_before(
+    name: FeatureId, feature: Feature, before: Mapping[FeatureId, Feature]
+) -> Feature:
+    """Die alte Fläche mit ihren Dreiecken im Eingangsnetz, auch wenn der Schritt sie leer ließ.
+
+    Wer ein Netz neu baut, reicht die alten Merkmale ohne Dreiecksnummern
+    weiter (``prepare_ops._without_old_triangles``): Ort und Maß bleiben, die
+    Oberfläche gibt ihnen die Auswertung. Welche Stücke einer Fläche danach in
+    ihrer Ebene liegen, misst sich aber an ihren alten Dreiecken — ohne sie
+    stand nach *Abschneiden* die Deckfläche ohne Dreiecke und mit ihrem alten
+    Maß im Baum, und das Stück daneben hieß jedes Mal anders (R4). Die Nummern
+    kommen dann vom Eingang desselben Körpers (``before``); ob sie diese
+    Fläche bezeichnen, prüft :func:`_old_face`.
+    """
+    if feature.face_indices or feature.kind != "face":
+        return feature
+    earlier = before.get(name)
+    if earlier is None or earlier.kind != "face" or not earlier.face_indices:
+        return feature
+    return dataclasses.replace(feature, face_indices=earlier.face_indices)
+
+
+def _lost_reference_finding(
+    old_id: FeatureId,
+    generated: bool,
+    needed: Mapping[FeatureId, tuple[str, ...]] | None,
+    entry: SceneObject,
+    operation: Operation,
+) -> Finding:
+    """Der Befund für ein Merkmal, auf das noch jemand zeigt und das dieser Schritt verlor.
+
+    Eine Stelle für zwei Wege: das zugeordnete Merkmal ohne Partner und die
+    abgeschnittene erzeugte Fläche (:func:`_divided_partners`, R4).
+    """
+    later = needed.get(old_id, ()) if needed is not None else ()
+    values: dict[str, Any] = {"feature": old_id}
+    if later:
+        values["where"] = "; ".join(later)
+    return Finding(
+        code="perceive.generated_lost" if generated else "perceive.referenced_lost",
+        severity="warning",
+        message=_("Ein benanntes Merkmal ist nach dieser Operation nicht mehr auffindbar.")
+        if generated
+        else _(
+            "Ein Merkmal, auf das sich eine Passung oder ein späterer Schritt "
+            "bezieht, ist nach diesem Schritt nicht mehr erkennbar."
+        ),
+        object_id=entry.id,
+        op_id=operation.id,
+        values=values,
+        suggestions=(CORRECT_INPUT, SHOW_HISTORY),
+    )
+
+
+def _divided_partners(
+    old: Mapping[FeatureId, Feature],
+    detected: Mapping[FeatureId, Feature],
+    seen: MatchResult,
+    source: Mesh | None,
+    before: Mapping[FeatureId, Feature],
+) -> tuple[MatchResult, tuple[FeatureId, ...]]:
+    """Eine geteilte Fläche trägt ihren Namen am größten Stück in ihrer Ebene (R4).
+
+    Die Zuordnung misst Lage und Größe, und ein Stück ist keines von beiden:
+    Nach *Teilen* eines Quaders 20 x 20 x 10, Ebene 3 mm vor der Mitte, lag die
+    Deckfläche mit 260 statt 400 mm² um 3,5 mm neben ihrer alten Mitte, und die
+    Zuordnung fand sie nicht. ``face_top`` stand danach als unerkannter
+    Eintrag mit seinem alten Maß neben dem erkannten Stück ``face_3``, und eine
+    Passung an der Deckfläche war nicht mehr messbar (Durchsicht 0.5.1, R4).
+
+    Gefragt wird nur für alte Flächen ohne Partner (``seen.orphaned``): Liegen
+    Stücke von ihr in dieser Ausgabe (:func:`_pieces_in_place`) und ist eines
+    davon das größte, trägt es den Namen — samt Dreiecken und neu gemessener
+    Fläche, wie jeder zugeordnete Partner. Sind die größten gleich groß,
+    entscheidet die Lage nicht (Regel 21): Das Paar geht als offene Frage an
+    die Zuordnung (``seen.ambiguous``), die fragt, wenn ein Verweis daran hängt.
+    Zurück kommen die ergänzte Zuordnung und die alten Flächen, von denen hier
+    kein Stück liegt. ``before`` sind die Merkmale desselben Körpers vor dem
+    Schritt: Reichte die Operation eine Fläche ohne Dreiecke weiter, gelten
+    deren alte (:func:`_with_triangles_before`).
+    """
+    if not seen.orphaned:
+        return seen, ()
+    faces_now = _faces_now(detected)
+    area_of = dict(zip(faces_now.names, faces_now.areas.tolist(), strict=True))
+    # Ein Stück, das schon ein Name trägt oder um das eine offene Frage geht,
+    # ist nicht frei.
+    taken = set(seen.mapping.values())
+    contested = {piece for candidates in seen.ambiguous.values() for piece in candidates}
+    mapping = dict(seen.mapping)
+    ambiguous = dict(seen.ambiguous)
+    still: list[FeatureId] = []
+    missing: list[FeatureId] = []
+    diagonal = float(source.bounds.diagonal) if source is not None else 0.0
+    same = match_tolerance(diagonal) * match_tolerance(diagonal)
+    for name in seen.orphaned:
+        feature = old.get(name)
+        if feature is None or feature.kind != "face":
+            still.append(name)
             continue
-        if all(low[axis] <= float(there[axis]) <= high[axis] for axis in range(3)):
-            return True
-    return False
+        measured = _with_triangles_before(name, feature, before)
+        pieces = [
+            piece
+            for piece in _pieces_in_place(measured, faces_now, source)
+            if piece not in taken and piece not in contested
+        ]
+        if not pieces:
+            still.append(name)
+            missing.append(name)
+            continue
+        # Stabil sortiert: Bei gleicher Fläche bleibt die Folge der Erkennung.
+        ranked = sorted(pieces, key=lambda piece: -area_of[piece])
+        largest = area_of[ranked[0]]
+        tied = tuple(piece for piece in ranked if is_close(area_of[piece], largest, same))
+        if len(tied) > 1:
+            ambiguous[name] = tied
+            contested.update(tied)
+            continue
+        mapping[name] = ranked[0]
+        taken.add(ranked[0])
+    return (
+        dataclasses.replace(
+            seen,
+            mapping=mapping,
+            orphaned=tuple(still),
+            ambiguous=ambiguous,
+            fresh=tuple(name for name in seen.fresh if name not in taken),
+        ),
+        tuple(missing),
+    )
 
 
 def _shift_between(before: BoundingBox, now: BoundingBox) -> Transform | None:
@@ -3317,6 +3576,13 @@ def _with_features(
     feature_movement = transform
     if feature_movement is None and previous_bounds is not None:
         feature_movement = _shift_between(previous_bounds, mesh.bounds)
+    # **Die Stücke einer alten Fläche sucht nur ein Schritt ohne Bewegung an
+    # ihren alten Dreiecken** (:func:`_divided_partners`, R4): Nach einer
+    # Verschiebung liegt das Eingangsnetz woanders als das Ergebnis.
+    # ``before_step`` sind die Merkmale dieses Körpers vor dem Schritt, mit
+    # ihren Dreiecken im Eingangsnetz.
+    divided_source = (source_mesh or origin_mesh) if feature_movement is None else None
+    before_step: Mapping[FeatureId, Feature] = previous if feature_movement is None else {}
     inherited = _inherited_features(entry.features, previous)
     transformed = (
         transformed_features(
@@ -3669,6 +3935,32 @@ def _with_features(
             mesh.bounds.diagonal,
             check_cancelled=watch.raise_if_cancelled,
         )
+        # **Eine geteilte Fläche trägt ihren Namen am größten Stück** (R4):
+        # Nach *Teilen* fand ``face_top`` sein Stück nicht, weil es kleiner war
+        # und woanders lag, und stand als unerkannter Eintrag daneben. Liegt
+        # hier gar kein Stück von ihr, hat der Schritt sie abgeschnitten — ein
+        # Eintrag ohne Dreiecke wäre eine Behauptung, und er fällt weg.
+        watch.raise_if_cancelled()
+        seen, not_here = _divided_partners(declared, detected, seen, divided_source, before_step)
+        cut_off = {
+            name
+            for name in not_here
+            if _cut_by_the_step(
+                _with_triangles_before(name, declared[name], before_step),
+                divided_source,
+                mesh.bounds,
+            )
+        }
+        if cut_off:
+            findings.extend(
+                _lost_reference_finding(name, True, needed, entry, operation)
+                for name in sorted(cut_off)
+                if name in referenced
+            )
+            declared = {name: feature for name, feature in declared.items() if name not in cut_off}
+            seen = dataclasses.replace(
+                seen, orphaned=tuple(name for name in seen.orphaned if name not in cut_off)
+            )
         blind = set(seen.orphaned)
         # Randöffnungen sind geometrisch erkennbare Langlöcher. Fehlt ihre
         # Wand, darf ein mitgetragener Eintrag nicht zur ungeprüften Zusage
@@ -3859,6 +4151,12 @@ def _with_features(
         mesh.bounds.diagonal,
         check_cancelled=watch.raise_if_cancelled,
     )
+    # **Auch eine erkannte Fläche, die der Schritt geteilt hat, behält ihren
+    # Namen am größten Stück** (R4) — nach *Teilen* in jeder Hälfte, in der ein
+    # Stück von ihr liegt; gleich große Stücke fragt die Zuordnung darunter,
+    # wenn ein Verweis daran hängt.
+    watch.raise_if_cancelled()
+    matched, _not_here = _divided_partners(previous, detected, matched, divided_source, before_step)
 
     _answer_matches(
         dataclasses.replace(entry, features=detected),
@@ -3882,6 +4180,9 @@ def _with_features(
     # ``True`` die geschlossenen Fehlstellen. Gemeldet werden sie nach der
     # Schleife einmal je Körper und Schritt (siehe dort).
     quiet: dict[bool, list[str]] = {False: [], True: []}
+    # Die Flächen nach dem Schritt einmal als Felder, nicht je Waise eine
+    # Schleife über alle (:func:`_divided_in_place`).
+    faces_now = _faces_now(detected)
     for old_id in matched.orphaned:
         old_feature = previous.get(old_id)
         if (
@@ -3948,27 +4249,7 @@ def _with_features(
         if old_id in announced_gone and needed is not None and not later:
             continue
         if (old_id in referenced) if generated or needed is None else (old_id in needed):
-            values: dict[str, Any] = {"feature": old_id}
-            if later:
-                values["where"] = "; ".join(later)
-            findings.append(
-                Finding(
-                    code="perceive.generated_lost" if generated else "perceive.referenced_lost",
-                    severity="warning",
-                    message=_(
-                        "Ein benanntes Merkmal ist nach dieser Operation nicht mehr auffindbar."
-                    )
-                    if generated
-                    else _(
-                        "Ein Merkmal, auf das sich eine Passung oder ein späterer Schritt "
-                        "bezieht, ist nach diesem Schritt nicht mehr erkennbar."
-                    ),
-                    object_id=entry.id,
-                    op_id=operation.id,
-                    values=values,
-                    suggestions=(CORRECT_INPUT, SHOW_HISTORY),
-                )
-            )
+            findings.append(_lost_reference_finding(old_id, generated, needed, entry, operation))
             continue
 
         # **Was die Operation selbst als entfernt meldet, steht nicht noch
@@ -3985,7 +4266,13 @@ def _with_features(
         # stehen in derselben Ebene im Baum, und „Ein Formdetail ist nach
         # diesem Schritt nicht mehr automatisch wiederzuerkennen“ klang nach
         # einem Schaden an einem Schritt, der genau das tun sollte.
-        if _divided_in_place(old_feature, detected, source_mesh or origin_mesh):
+        if _divided_in_place(
+            _with_triangles_before(old_id, old_feature, before_step)
+            if old_feature is not None
+            else None,
+            faces_now,
+            source_mesh or origin_mesh,
+        ):
             continue
         quiet[defect].append(old_id)
 

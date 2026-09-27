@@ -341,6 +341,21 @@ zeigen: `source_mesh`, und wo es fehlt, weil ein Eingang mehrere Ausgaben hat
 (*Teilen*), `origin_mesh` — sonst verlor die zweite Hälfte jede geteilte
 Fläche.
 
+**Und sie heißt am größten Stück weiter** (`_divided_partners`, R4 der
+Durchsicht 0.5.1): Findet eine alte Fläche — erkannt oder erzeugt — keinen
+Partner, trägt das größte freie Stück in ihrer Ebene ihren Namen, samt
+Dreiecken und neu gemessener Fläche; nach *Teilen* in jeder Hälfte, in der
+ein Stück liegt (die Operation gibt eine querende Fläche beiden mit,
+`prepare_ops._features_after_split`). Gleich große Stücke sind eine offene
+Frage (`MatchResult.ambiguous`, Regel 21), die `_answer_matches` stellt,
+sobald ein Verweis daran hängt. Die alten Dreiecke kommen vom Eingang desselben
+Körpers, wo die Operation eine Fläche ohne sie weitergab
+(`_with_triangles_before`, *Abschneiden*), und gelten nur, wenn sie diese
+Fläche sind (`_old_face`: Normale und Ebene). Nach einer Bewegung wird nicht
+gesucht. Eine erzeugte Fläche ohne Stück, die der Schritt beschnitten hat
+(`_cut_by_the_step`), fällt aus dem Körper, statt ohne Dreiecke mit altem Maß
+stehenzubleiben; zeigt eine Passung darauf, sagt es `perceive.generated_lost`.
+
 **Die Zuordnungsfrage fragt, was etwas trägt, zuerst — und nur, was eine
 Antwort hat** (`_answer_matches`). Verwiesene alte Merkmale kommen vor
 unverwiesenen (stabile Sortierung); bleibt einem unverwiesenen nichts zur

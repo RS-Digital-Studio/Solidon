@@ -3027,17 +3027,208 @@ def test_a_face_that_a_split_divides_is_not_reported_lost_in_either_half(
     ]
     assert not lost, lost
     halves = [result.scene.objects[name] for name in document.ops[-1].outputs]
-    # Jede Hälfte ist ein Quader mit sechs erkannten Flächen; die Stücke der
-    # geteilten Flächen stehen darunter, in beiden Hälften.
+    # Jede Hälfte ist ein Quader mit sechs Flächen, jede erkannt und mit
+    # Dreiecken. Die Deckfläche trägt in beiden Hälften den Namen, den der
+    # Quader ihr gab — die Stücke einer geteilten Fläche behalten ihn seit R4
+    # (``evaluate._divided_partners``), statt neben einem unerkannten Eintrag
+    # frisch benannt zu werden.
     faces = [
         sorted(
             name
             for name, feature in half.features.items()
-            if feature.kind == "face" and feature.provenance == "detected"
+            if feature.kind == "face" and feature.recognised and feature.face_indices
         )
         for half in halves
     ]
     assert all(len(names) == 6 for names in faces), faces
+    assert all("face_top" in names for names in faces), faces
+
+
+@pytest.mark.parametrize("cut", ["split", "below", "above"])
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_a_cut_face_keeps_its_name_on_its_piece(profile: Profile, box: str, cut: str) -> None:
+    """*Teilen* und *Abschneiden*: Eine Fläche, die die Ebene quert, heißt am Stück weiter (R4).
+
+    Quader 20 x 20 x 10, Ebene 3 mm neben der Mitte, eine bündige Passung an
+    der Deckfläche. Vorher reiste die Deckfläche mit der Hälfte ihrer Mitte,
+    fand dort kein gleich großes Stück und stand als unerkannter Eintrag mit
+    400 mm² da, ohne Dreiecke; das Stück daneben hieß neu. Schob man die Ebene
+    über die Mitte, meldete *Teilen* „nicht mehr erkennbar“ und die Passung
+    „Merkmal fehlt“. *Abschneiden* reichte die Flächen ohne Dreiecke weiter:
+    Die Seiten standen als verloren im Bericht, und nach dem Verschieben zeigte
+    die Passung auf die Schnittfläche oder den Boden — „10 mm statt 0 mm“ an
+    einer Deckfläche, die stimmte (Durchsicht 0.5.1). Beide Kerne gleich: Der
+    exakte Quader wird an seiner Tessellierung geschnitten.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.features import forget_cache
+    from app.core.scene.project import new_project
+
+    load_operations()
+    forget_cache()
+    document = new_project("centauri-carbon-2", "petg").document
+    history = History(document)
+    size = {"width": 20.0, "depth": 20.0, "height": 10.0}
+    history.apply("Quader", [OperationDraft(op=box, params=dict(size))])
+    history.apply("Nachbar", [OperationDraft(op=box, params={**size, "y": 40.0})])
+    scene = evaluate(document, profile, cache=ResultCache()).scene
+
+    def top_of(features: dict[str, Any]) -> str:
+        return next(
+            name
+            for name, feature in sorted(features.items())
+            if feature.kind == "face" and feature.params["normal"][2] > 0.99
+        )
+
+    top = top_of(dict(scene.objects["obj_1"].features))
+    middle = float(scene.objects["obj_1"].mesh.bounds.centre[0])
+    params: dict[str, Any] = {"axis": "x", "position": middle - 3.0}
+    params.update({"pins": 0} if cut == "split" else {"keep": cut})
+    history.apply(
+        "Schnitt",
+        [
+            OperationDraft(
+                op="split_pinned" if cut == "split" else "cut_away",
+                inputs=("obj_1",),
+                params=params,
+            )
+        ],
+    )
+    outputs = tuple(document.ops[-1].outputs)
+    partner = (
+        FeatureRef(outputs[1], top)
+        if cut == "split"
+        else FeatureRef("obj_2", top_of(dict(scene.objects["obj_2"].features)))
+    )
+    document.fits.append(
+        Fit(
+            name="deckel",
+            a=FeatureRef(outputs[0], top),
+            b=partner,
+            kind="flush",
+            tolerance="auto:petg",
+        )
+    )
+
+    for position in (middle - 3.0, middle + 3.0):
+        step = document.ops[-1]
+        if step.params["position"] != position:
+            history.change_params(step.id, {**step.params, "position": position})
+        result = evaluate(document, profile, cache=ResultCache())
+
+        assert result.complete
+        codes = {finding.code for finding in result.scene.report.findings}
+        lost = {
+            "perceive.orphaned",
+            "perceive.referenced_lost",
+            "perceive.generated_lost",
+            "fit.missing_feature",
+            "fit.not_measurable",
+            "fit.violated",
+        }
+        assert not codes & lost, (position, sorted(codes))
+        for name in outputs:
+            body = result.scene.objects[name]
+            faces = {n: f for n, f in body.features.items() if f.kind == "face"}
+            assert all(f.recognised and f.face_indices for f in faces.values()), faces
+            face = faces[top]
+            width = float(body.mesh.bounds.maximum[0] - body.mesh.bounds.minimum[0])
+            assert face.params["normal"][2] > 0.99
+            assert face.params["centre"][2] == pytest.approx(10.0, abs=1e-6)
+            assert face.params["area"] == pytest.approx(width * 20.0, rel=1e-6)
+
+
+def _box_top(indices: str) -> tuple[Any, Any]:
+    """Ein Quader 20 x 20 x 10 als Netz und seine alte Deckfläche.
+
+    ``indices``: ``"top"`` gibt ihr die Dreiecke der Deckfläche, ``"bottom"``
+    die des Bodens — Nummern, die nicht diese Fläche sind.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Feature
+
+    body = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    body.apply_translation((0.0, 0.0, 5.0))
+    wanted = 1.0 if indices == "top" else -1.0
+    faces = tuple(
+        int(index) for index in np.flatnonzero(np.isclose(body.face_normals[:, 2], wanted))
+    )
+    old = Feature(
+        id="face_top",
+        kind="face",
+        provenance="generated",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 10.0), "area": 400.0},
+        face_indices=faces,
+    )
+    return MeshData.of(body), old
+
+
+def _piece(name: str, x: float, area: float) -> Any:
+    """Ein erkanntes Stück der Deckfläche bei ``x``."""
+    from app.core.types import Feature
+
+    return Feature(
+        id=name,
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.0, 1.0), "centre": (x, 0.0, 10.0), "area": area},
+    )
+
+
+def test_two_equal_pieces_of_a_divided_face_are_a_question() -> None:
+    """Zwei gleich große Stücke: Die Lage entscheidet nicht, die Zuordnung fragt (R4, Regel 21).
+
+    Das größte Stück trägt den Namen einer geteilten Fläche. Sind die größten
+    gleich groß, wäre jede Wahl geraten; das Paar geht als offene Frage an die
+    Zuordnung, die fragt, sobald ein Verweis daran hängt.
+    """
+    from app.core.perceive.matching import MatchResult
+    from app.core.scene.evaluate import _divided_partners
+
+    source, old = _box_top("top")
+    seen = MatchResult(orphaned=("face_top",), fresh=("face_1", "face_2"))
+
+    equal = {"face_1": _piece("face_1", -5.0, 200.0), "face_2": _piece("face_2", 5.0, 200.0)}
+    result, missing = _divided_partners({"face_top": old}, equal, seen, source, {})
+    assert result.ambiguous == {"face_top": ("face_1", "face_2")}
+    assert not result.mapping and not result.orphaned and not missing
+
+    larger = {"face_1": _piece("face_1", -6.5, 140.0), "face_2": _piece("face_2", 3.5, 260.0)}
+    result, missing = _divided_partners({"face_top": old}, larger, seen, source, {})
+    assert result.mapping == {"face_top": "face_2"}
+    assert result.fresh == ("face_1",) and not result.ambiguous and not missing
+
+
+def test_old_triangles_that_are_another_face_find_no_piece() -> None:
+    """Dreiecksnummern, die nicht die alte Fläche bezeichnen, geben keinem Stück ihren Namen (R4).
+
+    So sehen Nummern aus, die eine Operation an ihrem eigenen Ergebnis vergab:
+    Am Eingang zeigen sie auf fremde Dreiecke. Hier der Boden unter dem Namen
+    der Deckfläche — der Name bleibt ohne Stück, statt aus dem Hüllquader des
+    Bodens eines zu wählen. Reicht die Operation die Fläche ohne Dreiecke
+    weiter, gelten die des Eingangs.
+    """
+    import dataclasses
+
+    from app.core.perceive.matching import MatchResult
+    from app.core.scene.evaluate import _divided_partners
+
+    source, wrong = _box_top("bottom")
+    seen = MatchResult(orphaned=("face_top",), fresh=("face_1",))
+    pieces = {"face_1": _piece("face_1", 3.5, 260.0)}
+
+    result, missing = _divided_partners({"face_top": wrong}, pieces, seen, source, {})
+    assert missing == ("face_top",) and not result.mapping
+
+    _source, right = _box_top("top")
+    passed_on = dataclasses.replace(right, face_indices=())
+    result, missing = _divided_partners(
+        {"face_top": passed_on}, pieces, seen, source, {"face_top": right}
+    )
+    assert result.mapping == {"face_top": "face_1"} and not missing
 
 
 @pytest.mark.parametrize(

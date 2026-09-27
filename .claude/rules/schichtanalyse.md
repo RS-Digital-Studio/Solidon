@@ -571,6 +571,17 @@ Eine ID muss eine Neuberechnung überleben — sonst zeigt der Op-Stack nach der
 nächsten Änderung ins Leere. Mehrdeutige Zuordnung hält an und fragt, statt
 die nächstbeste zu nehmen.
 
+**Eine geteilte Fläche heißt am größten Stück weiter** (27.09.2026,
+Durchsicht 0.5.1, R4; `evaluate._divided_partners`). Ein Stück hat weder Lage
+noch Größe der alten Fläche, also findet die Zuordnung es nicht; gesucht wird
+es in ihrer Ebene, innerhalb ihrer alten Dreiecke. Drei Grenzen:
+Gleich große Stücke sind eine Frage und keine Wahl (Regel 21) — gestellt,
+sobald ein Verweis daran hängt. Die alten Dreiecke gelten nur, wenn sie diese
+Fläche sind (Normale und Ebene); Nummern, die eine Operation an ihrem eigenen
+Ergebnis vergeben hat, geben keinem Stück einen Namen. Und nach einer
+Bewegung wird nicht gesucht. Eine Operation, die eine querende Fläche teilt,
+gibt sie beiden Hälften mit (`prepare_ops._features_after_split`).
+
 Ein Verlust ohne Verweis wird **einmal je Körper und Schritt** gemeldet, nie je
 Merkmal (`perceive.orphaned`/`perceive.mended`, Zahl und Kennungen in den
 Werten). Ein Formschritt kann viele erkannte Flächen verlieren; ihre Kennungen
