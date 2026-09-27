@@ -15,6 +15,15 @@ import app.ui  # noqa: F401
 from app.core.log import install_crash_logging
 
 if __name__ == "__main__":
+    # **Der Hilfsprozess des Kerns startet genau diese Datei noch einmal**
+    # (``core.geom.kernel_process``, RM-212). Im eingefrorenen Paket ist
+    # ``sys.executable`` die Anwendung selbst; ``freeze_support`` erkennt den
+    # Aufruf und rechnet dann als Hilfsprozess, statt ein zweites Fenster,
+    # ein Absturzprotokoll und Qt aufzubauen. Deshalb vor allem anderen —
+    # außerhalb des Pakets tut es nichts.
+    from multiprocessing import freeze_support
+
+    freeze_support()
     install_crash_logging()
 
 # isort: split
@@ -42,6 +51,7 @@ from app.branding import APP_ID, APP_NAME, APP_VERSION
 from app.core import activation, network
 from app.core.backends.resources import release_warm_before_exit
 from app.core.bootstrap import load_operations, load_user_parts
+from app.core.geom import kernel_process
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
@@ -232,6 +242,10 @@ class _ImportWarmup(Worker):
     Importmechanismus ist threadsicher, und ``sys.modules`` gehört danach
     allen. ``test_loading_the_registry_defers_geometry_libraries`` bleibt
     davon unberührt: Das Register lädt weiterhin nichts davon.
+
+    Danach startet hier der Hilfsprozess des Kerns (``kernel_process.warm_up``,
+    RM-212): Die erste große Rechnung fände ihn sonst erst im Start, und die
+    erste grobe Vorschau stünde um diese Zeit später.
     """
 
     def work(self) -> None:
@@ -240,6 +254,7 @@ class _ImportWarmup(Worker):
                 importlib.import_module(name)
             except Exception as error:  # eine fehlende Bibliothek meldet sich beim ersten Gebrauch
                 _log.info("warmup skipped %s: %s", name, error)
+        kernel_process.warm_up()
 
 
 def _kernel_probe_failed(detail: str) -> None:
@@ -627,6 +642,10 @@ def main(argv: list[str] | None = None) -> int:
     # die Grafikkarte (``resources.release_warm_before_exit``): Nach dem
     # Beenden betritt niemand mehr die Spur, die es sonst freigäbe.
     application.aboutToQuit.connect(release_warm_before_exit)
+    # Und kein Hilfsprozess des Kerns überlebt das Fenster (RM-212). Unter
+    # Windows beendet ihn zusätzlich das Jobobjekt, falls dieser Prozess ohne
+    # ``aboutToQuit`` endet.
+    application.aboutToQuit.connect(kernel_process.shutdown)
 
     _log.info("%s %s started", APP_NAME, APP_VERSION)
     return int(application.exec())

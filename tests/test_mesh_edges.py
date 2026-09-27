@@ -1244,7 +1244,7 @@ def test_shaping_uses_only_the_fallback_stages_of_its_quality(
     engine = importlib.import_module("app.core.geom.boolean")
     seen: list[str] = []
 
-    def unavailable(kind: Any, meshes: Any, stage: str, seed: Any) -> None:
+    def unavailable(kind: Any, meshes: Any, stage: str, seed: Any, cancelled: Any = None) -> None:
         seen.append(stage)
         raise RuntimeError("forced unavailable geometry kernel")
 

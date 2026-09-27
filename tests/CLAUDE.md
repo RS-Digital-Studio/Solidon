@@ -61,6 +61,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
+| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen, bei einem harten Ende des Elternprozesses und im eingefrorenen Paket richtig? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme und sterbende; Schwelle null, Aufruf aus einem Nebenfaden |
 
 ## Helfer
 

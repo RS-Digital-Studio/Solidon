@@ -195,8 +195,9 @@ wird genau gerechnet.
   Körpers. Ein Ziel unter dem, was der Sehnenfehler allein erreicht, reißt
   beides. Braucht eine Form (Figur, Scan) bei 0,05 mm mehr Dreiecke als die
   Schranke, wird sie gröber — „grob" steht auch dann.
-* **Beim Rückweg ins Netz** fallen Splitter (`mesh_ops._without_slivers`), und
-  `_as_mesh` verschweißt nur, wo das Netz dicht bleibt (wie `boolean._tidied`).
+* **Beim Rückweg ins Netz** fallen Splitter (`kernel_jobs.without_slivers`), und
+  `mesh_ops._as_mesh` verschweißt nur, wo das Netz dicht bleibt (wie
+  `boolean._tidied`).
 * **Auch `change_op` nimmt die Stufe** (`_coarse_steps_before`).
 * **Die Dialogvorschau erkennt keine Merkmale** (`detect_features=False`),
   außer ein späterer Schritt oder eine Passung braucht eines. Der
@@ -206,8 +207,11 @@ wird genau gerechnet.
   oder scheitert die Verkleinerung, rechnet die Vorschau genau; ein ungültiger
   Wert (`ValidationError`, `UserError`) rechnet nicht zweimal. Nachweis:
   `test_evaluation.py::test_a_coarse_preview_the_kernel_refuses_is_computed_exactly`.
-* **Falle:** `manifold3d` gibt den GIL nie her; die erste grobe Vorschau je
-  Körper und Dialog steht auch im Hauptthread.
+* **Die Verkleinerung rechnet im Hilfsprozess** (`geom.kernel_process`, RM-212):
+  `manifold3d` gibt den GIL nie her, und aus dem Vorschau-Arbeiter hielt die
+  erste grobe Vorschau je Körper sonst den Hauptthread an. Das gilt nur für
+  Arbeiter — aus dem Hauptthread gerufen rechnet der Kern hier, denn gewartet
+  wäre dort genauso.
 * **Was an der Dreieckszahl hängt, zählt das Original, nicht die Kopie**
   (`OperationSpec.expected_triangles`, `_counted_ahead`): Eine Absage ist die
   Antwort, mit den Handlungen, die der Dialog selbst einlöst
@@ -443,13 +447,16 @@ für echte Sichtbarkeit `isVisibleTo(eltern)`.
 
 ### Ein Arbeiter ist nur nebenläufig, wenn er den GIL hergibt
 
-`manifold3d` hält den GIL während `simplify`; ein solcher Arbeiter steht für
-die Ereignisschleife im Hauptthread. **Gemessen wird der Hauptthread** — die
-größte Lücke eines Zeitgebers, solange der Arbeiter rechnet. Für zwanzig
-Pixel genügt das Raster; wo der exakte Kern bleibt (Anzeige ab §31), ist das
-ein offener Punkt, kein Freibrief. `shapely` und `numpy` geben ihn meist her
-(`_SculptWallWorker`); eine Prüfung, die nach jeder Geste neu anläuft, bekommt
-einen Abbruchschalter (`maps.wall_thickness_map`).
+`manifold3d` hält den GIL in jedem Aufruf; ein solcher Arbeiter steht für die
+Ereignisschleife im Hauptthread — deshalb rechnet der Kern an großen Körpern
+im Hilfsprozess (`kern.md`). **Gemessen wird der Hauptthread** — die größte
+Lücke eines Zeitgebers, solange der Arbeiter rechnet, zugeordnet über
+`faulthandler`-Abzüge (die laufen ohne GIL), nicht über einen Python-Faden, der
+in derselben Lücke steht. Für zwanzig Pixel genügt das Raster. `shapely` und
+`numpy` geben ihn meist her (`_SculptWallWorker`), `pickle`, `repr` und
+`tuple`/`sorted` über Millionen Python-Zahlen nicht; eine Prüfung, die nach
+jeder Geste neu anläuft, bekommt einen Abbruchschalter
+(`maps.wall_thickness_map`).
 
 ### Ein Blick auf eine Datei ist eine Netzfrage
 

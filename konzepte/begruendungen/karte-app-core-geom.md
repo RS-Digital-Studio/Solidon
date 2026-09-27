@@ -109,7 +109,7 @@ Kern ein zweites Mal rechnen lässt, legt ebenso zurück. Warum, steht in
 
 Ein geschlossenes Ergebnis mit positivem Volumen bleibt auch als kleiner
 Messkörper gültig. `EPS_GEOM` ist eine Längentoleranz und kein Mindestvolumen;
-Kontaktreste entscheidet `_native_contact` an der Float64-Rechengrenze.
+Kontaktreste entscheidet `kernel_jobs.native_contact` an der Float64-Rechengrenze.
 Fertigungsspiel und Restwand bewertet anschließend der fachliche Aufrufer.
 
 *HEAD-Fassung.*
@@ -2032,7 +2032,7 @@ Schritt vervierfacht), dann das Zusammenlegen im Raster für Netze, die der
 Kern nicht nimmt (`_clustered_for_display`). Die angeforderte Dreieckszahl ist
 ein Richtwert; der Rasterweg darf bis zum Doppelten behalten. Was der Kern beim
 Vereinfachen an Schalen stehen lässt, die im Mittel dünner sind als seine
-Toleranz, geht nicht mit (`_without_slivers`), und `_as_mesh` verschweißt nur,
+Toleranz, geht nicht mit (`kernel_jobs.without_slivers`), und `_as_mesh` verschweißt nur,
 wo das Netz dabei dicht bleibt — beides riss an Kundenmodellen das grobe Netz
 der Vorschau auf, und die Bohrung darauf scheiterte (RM-212). Für die große
 Anzeige sind damit höchstens 400.000 Dreiecke bei einem Richtwert von 200.000

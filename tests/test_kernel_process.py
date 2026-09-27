@@ -1,0 +1,758 @@
+"""Der Hilfsprozess des Netzkerns (RM-212): dieselben Bytes, echtes Abbrechen, keine Waisen.
+
+``manifold3d`` hält den GIL in jedem Aufruf; große Kernaufrufe rechnet deshalb
+``app.core.geom.kernel_process`` in einem eigenen Prozess. Geprüft wird hier:
+
+* **Bitgleich** — jede Rechnung aus ``kernel_jobs.JOBS`` und jeder öffentliche
+  Weg dorthin gibt im Hilfsprozess dieselben Felder und Zahlen wie im Prozess.
+* **Abbrechen beendet den Hilfsprozess**, auch mitten in einem Kernaufruf.
+* **Ein toter Hilfsprozess** ist eine Meldung mit Handlungsvorschlag, ein
+  stummer ein Rückfall in den Prozess — nie stilles Warten.
+* **Keine Waisen**: ``shutdown`` räumt auf, und ein hart beendeter
+  Elternprozess nimmt seinen Hilfsprozess mit.
+* **Der Anschluss**: Die grobe Vorschau und das Übernehmen einer großen
+  Verfeinerung rechnen, wie ihre Arbeiterfäden sie rufen, im Hilfsprozess.
+
+Was im Prozess bleibt: der Hauptfaden und alles unter ``OFFLOAD_ABOVE``. Die
+Suite rechnet deshalb sonst nirgends im Hilfsprozess; wer ihn hier braucht,
+setzt die Schwelle auf null und ruft aus einem Nebenfaden.
+"""
+
+from __future__ import annotations
+
+import ast
+import os
+import subprocess
+import sys
+import textwrap
+import threading
+import time
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pytest
+import trimesh
+
+from app.core.errors import OperationCancelled
+from app.core.geom import kernel_jobs, kernel_process
+from app.core.geom.mesh import MeshData
+from app.core.scene.cancel import CancelSignal
+
+ROOT = Path(__file__).resolve().parent.parent
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+@pytest.fixture(autouse=True)
+def _no_helper_outlives_a_test() -> Iterator[None]:
+    """Jeder Test beginnt und endet ohne Hilfsprozess, und er zählt für sich."""
+    kernel_process.shutdown()
+    kernel_process._POOL.counts.clear()
+    yield
+    kernel_process.shutdown()
+
+
+@pytest.fixture
+def offloaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Schwelle null: jede Rechnung aus einem Nebenfaden geht in den Hilfsprozess."""
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+
+
+def in_a_worker(work: Callable[[], Any], timeout: float = 120.0) -> Any:
+    """``work`` in einem Nebenfaden — wie die Arbeiter von Vorschau, Auswertung und Ansicht."""
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["value"] = work()
+        except BaseException as problem:
+            box["error"] = problem
+
+    worker = threading.Thread(target=run, name="kernel-test")
+    worker.start()
+    worker.join(timeout)
+    assert not worker.is_alive(), f"der Nebenfaden kam in {timeout} s nicht zurück"
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
+def welded(name: str) -> MeshData:
+    """Ein Korpusnetz, verschweißt wie beim Import — der Kern nimmt nur geschlossene."""
+    return MeshData.of(trimesh.load(str(MESHES / name), force="mesh"))
+
+
+def mesh_input(mesh: MeshData, suffix: str = "") -> dict[str, np.ndarray]:
+    return {
+        f"vertices{suffix}": np.asarray(mesh.raw.vertices),
+        f"faces{suffix}": np.asarray(mesh.raw.faces),
+    }
+
+
+def same_bytes(first: dict[str, np.ndarray], second: dict[str, np.ndarray]) -> None:
+    assert first.keys() == second.keys()
+    for name in first:
+        assert first[name].dtype == second[name].dtype, name
+        assert first[name].shape == second[name].shape, name
+        assert first[name].tobytes() == second[name].tobytes(), name
+
+
+def _cylinder_through(mesh: MeshData) -> MeshData:
+    low, high = mesh.bounds.minimum, mesh.bounds.maximum
+    tool = trimesh.creation.cylinder(radius=3.0, height=float(high[2] - low[2]) + 4.0, sections=48)
+    tool.apply_translation([(low[index] + high[index]) / 2.0 for index in range(3)])
+    return MeshData.of(tool)
+
+
+def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], dict[str, Any]]]]]:
+    """Je Rechnung ein Eingang, an dem sie etwas tut (nicht nur ``found=False``)."""
+
+    def plate() -> MeshData:
+        return welded("plate_holes.stl")
+
+    def display() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        body = welded("near_sphere_ellipsoid.stl")
+        return mesh_input(body), {
+            "target": 600,
+            "tolerance": 0.05,
+            "growth": 4.0,
+            "steps": 6,
+            "triangles": body.triangle_count,
+        }
+
+    def at_most() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        # Einmal geteilt: Die neuen Ecken liegen in den ebenen Flächen, und
+        # ``simplify(0)`` nimmt sie ohne Abweichung wieder heraus.
+        source = plate().raw
+        vertices, faces = trimesh.remesh.subdivide(
+            np.asarray(source.vertices), np.asarray(source.faces)
+        )
+        body = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+        return mesh_input(body), {"tolerance": 0.0, "most": body.triangle_count * 0.95}
+
+    def search() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        body = welded("near_sphere_ellipsoid.stl")
+        return mesh_input(body), {"target": 700, "limit": 1.0, "steps": 32, "resolution": 1e-3}
+
+    def conforming() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        return mesh_input(plate()), {
+            "edge": 2.0,
+            "most": 8_000_000,
+            "passes": 12,
+            "slack": 1e-6,
+        }
+
+    def once() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        return mesh_input(welded("torus_ring.stl")), {"edge": 0.5}
+
+    def simplify_refine() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        return mesh_input(plate()), {"deviation": 0.01, "edge": 1.0}
+
+    def smooth_refine() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        return mesh_input(welded("sphere_socket.stl")), {"angle": 52.5, "edge": 1.0}
+
+    def boolean() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        body = plate()
+        return {**mesh_input(body, "0"), **mesh_input(_cylinder_through(body), "1")}, {
+            "bodies": 2,
+            "kind": "difference",
+        }
+
+    def closed() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        return mesh_input(plate()), {"tolerance": 1e-6}
+
+    def gap() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        body = plate()
+        other = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        other.apply_translation((0.0, 0.0, 40.0))
+        return {**mesh_input(body, "0"), **mesh_input(MeshData.of(other), "1")}, {"search": 50.0}
+
+    return [
+        ("display_simplify", display),
+        ("simplify_at_most", at_most),
+        ("simplify_search", search),
+        ("refine_conforming", conforming),
+        ("refine_once", once),
+        ("simplify_and_refine", simplify_refine),
+        ("smooth_and_refine", smooth_refine),
+        ("boolean", boolean),
+        ("simplify_closed", closed),
+        ("min_gap", gap),
+    ]
+
+
+def test_every_job_has_a_case() -> None:
+    """Eine neue Rechnung in ``JOBS`` bekommt ihren Fall für die Bitgleichheit unten."""
+    assert {name for name, _case in _job_cases()} == set(kernel_jobs.JOBS)
+
+
+@pytest.mark.parametrize(("job", "case"), _job_cases(), ids=[name for name, _ in _job_cases()])
+def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
+    job: str,
+    case: Callable[[], tuple[dict[str, np.ndarray], dict[str, Any]]],
+    offloaded: None,
+) -> None:
+    """Dieselbe Rechnung, dieselben Eingänge, dieselbe ``manifold3d``-Fassung: dieselben Bytes.
+
+    Das ist die Zusage, unter der der Hilfsprozess überhaupt rechnen darf —
+    Cache, Determinismus (Regel 6) und jede Zahl im Prüfbericht hängen daran.
+    Verglichen wird Byte für Byte, nicht auf eine Toleranz.
+    """
+    arrays, values = case()
+    here = kernel_jobs.JOBS[job](arrays, dict(values), lambda: None)
+
+    there = in_a_worker(lambda: kernel_process.run(job, arrays, values, weight=1))
+
+    same_bytes(here[0], there[0])
+    assert here[1] == there[1]
+    assert kernel_process.statistics().get(f"helper:{job}") == 1, "im Hilfsprozess gerechnet"
+    assert here[1] != {} and (here[0] or here[1].get("gap") is not None), "der Fall tut etwas"
+
+
+def test_the_public_ways_give_the_same_mesh_through_the_helper(offloaded: None) -> None:
+    """Anzeige-Dezimierung, Verfeinern und Boolesches: dasselbe Netz, ob hier oder dort gerechnet.
+
+    Im Hauptfaden bleibt jede Rechnung im Prozess; derselbe Aufruf aus einem
+    Nebenfaden geht über den Hilfsprozess. Verglichen werden Eckpunkte,
+    Dreiecke und Slots des fertigen Netzes — also auch alles, was der
+    Elternprozess danach daraus macht (Verschweißen, Slots, Herkunft).
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.geom.measure import surface_gap
+    from app.core.geom.mesh_ops import decimate_for_display, remesh, uniform
+
+    plate = welded("plate_holes.stl")
+    ellipsoid = welded("near_sphere_ellipsoid.stl")
+    tool = _cylinder_through(plate)
+    ways: list[Callable[[], Any]] = [
+        lambda: decimate_for_display(ellipsoid, 600),
+        lambda: remesh(plate, 2.0),
+        lambda: uniform(plate, 1.0, 0.01),
+        lambda: boolean("difference", [plate, tool]).mesh,
+        lambda: surface_gap(plate, tool, 50.0),
+    ]
+    for way in ways:
+        here = way()
+        there = in_a_worker(way)
+        if isinstance(here, MeshData):
+            assert isinstance(there, MeshData)
+            same_bytes(
+                {"vertices": np.asarray(here.raw.vertices), "faces": np.asarray(here.raw.faces)},
+                {"vertices": np.asarray(there.raw.vertices), "faces": np.asarray(there.raw.faces)},
+            )
+            assert tuple(here.slots) == tuple(there.slots)
+        else:
+            assert here == there
+    counts = kernel_process.statistics()
+    assert counts["helper"] >= len(ways), counts
+    assert counts["started"] == 1, "ein Hilfsprozess für alle — er wartet zwischen den Rechnungen"
+
+
+def test_the_main_thread_and_small_jobs_stay_in_this_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Hauptfaden wartete auf den Hilfsprozess wie auf den Kern selbst; Kleines lohnt nicht.
+
+    Die Schwelle kommt aus der Messung (``OFFLOAD_ABOVE``); darunter und im
+    Hauptfaden startet kein Prozess.
+    """
+    plate = welded("plate_holes.stl")
+    arrays, values = mesh_input(plate), {"tolerance": 1e-6}
+
+    kernel_process.run("simplify_closed", arrays, values, weight=10**9)
+    in_a_worker(
+        lambda: kernel_process.run(
+            "simplify_closed", arrays, values, weight=kernel_process.OFFLOAD_ABOVE
+        )
+    )
+
+    assert kernel_process.statistics()["started"] == 0
+    assert kernel_process.processes() == []
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    assert not kernel_process.offloaded(1), "im Hauptfaden nie"
+    assert in_a_worker(lambda: kernel_process.offloaded(1)), "im Nebenfaden über der Schwelle"
+
+
+def test_a_kernel_error_in_the_helper_comes_back_as_it_would_here(offloaded: None) -> None:
+    """Was der Kern selbst wirft, kommt unverändert an — die Rückfallkette fängt genau das.
+
+    Ein offenes Netz nimmt der Kern nicht (``status`` ist kein ``NoError``); das
+    ist ein ``ValueError`` mit demselben Text wie im Prozess, und der
+    Hilfsprozess bleibt für die nächste Rechnung.
+    """
+    open_mesh = welded("broken_open.stl")
+    plate = welded("plate_holes.stl")
+    arrays = {**mesh_input(open_mesh, "0"), **mesh_input(plate, "1")}
+    values = {"bodies": 2, "kind": "union"}
+    with pytest.raises(ValueError) as here:
+        kernel_jobs.boolean(arrays, dict(values), lambda: None)
+
+    with pytest.raises(ValueError) as there:
+        in_a_worker(lambda: kernel_process.run("boolean", arrays, values, weight=1))
+
+    assert str(there.value) == str(here.value)
+    assert any("Hilfsprozess" in note for note in getattr(there.value, "__notes__", ()))
+    assert len(kernel_process.processes()) == 1, "der Hilfsprozess lebt weiter"
+
+
+# --- Abbrechen, Tod, Stille --------------------------------------------------------------
+
+
+def _answers_nothing(connection: Any) -> None:
+    """Ein Hilfsprozess, der nach dem Start nie antwortet."""
+    time.sleep(600.0)
+
+
+def _never_accepts(connection: Any) -> None:
+    """Ein Hilfsprozess, der bereit meldet und dann keine Rechnung annimmt."""
+    connection.send(("ready", os.getpid()))
+    time.sleep(600.0)
+
+
+def _dies_mid_job(connection: Any) -> None:
+    """Ein Hilfsprozess, der eine Rechnung annimmt und dabei stirbt."""
+    connection.send(("ready", os.getpid()))
+    connection.recv()
+    connection.send(("accepted",))
+    os._exit(3)
+
+
+def _computes_forever(connection: Any) -> None:
+    """Ein Hilfsprozess, der annimmt und nie fertig wird — ein Kernaufruf ohne Ende.
+
+    Die Datei aus ``KERNEL_TEST_MARK`` sagt dem Test, dass die Rechnung läuft.
+    """
+    connection.send(("ready", os.getpid()))
+    connection.recv()
+    connection.send(("accepted",))
+    Path(os.environ["KERNEL_TEST_MARK"]).write_text("rechnet", encoding="utf-8")
+    time.sleep(600.0)
+
+
+def _small_job() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    return mesh_input(welded("plate_holes.stl")), {"tolerance": 1e-6}
+
+
+def test_a_helper_that_never_starts_falls_back_to_this_process(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach der Startfrist wird der stumme Hilfsprozess beendet, und die Rechnung läuft hier.
+
+    Das ist der Fall eines eingefrorenen Pakets ohne ``freeze_support``: Der
+    Kindprozess startet die Anwendung, statt zu antworten. Nach zwei
+    gescheiterten Starts rechnet die Sitzung ohne Hilfsprozess weiter.
+    """
+    monkeypatch.setattr(kernel_process, "_SERVE", _answers_nothing)
+    monkeypatch.setattr(kernel_process, "STARTUP_SECONDS", 1.0)
+    arrays, values = _small_job()
+    expected = kernel_jobs.simplify_closed(arrays, dict(values), lambda: None)
+
+    started = time.monotonic()
+    got = in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+
+    assert time.monotonic() - started < 20.0
+    same_bytes(expected[0], got[0])
+    counts = kernel_process.statistics()
+    assert counts["fallback"] == 1 and counts["helper"] == 0
+    assert kernel_process.processes() == [], "der stumme Hilfsprozess ist beendet"
+    in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+    assert kernel_process._POOL.disabled, "nach zwei Fehlstarts ohne Hilfsprozess"
+
+
+def test_a_helper_that_does_not_accept_a_job_falls_back_to_this_process(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nimmt ein Hilfsprozess eine Rechnung nicht an, hängt er — beendet, und hier gerechnet."""
+    monkeypatch.setattr(kernel_process, "_SERVE", _never_accepts)
+    monkeypatch.setattr(kernel_process, "ACCEPT_SECONDS", 1.0)
+    arrays, values = _small_job()
+    expected = kernel_jobs.simplify_closed(arrays, dict(values), lambda: None)
+
+    got = in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+
+    same_bytes(expected[0], got[0])
+    assert kernel_process.statistics()["fallback"] == 1
+    assert kernel_process.processes() == []
+
+
+def test_a_helper_that_dies_mid_job_is_a_message_with_a_way_forward(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stirbt der Hilfsprozess in einer Rechnung, kommt sofort eine Meldung — kein stilles Warten.
+
+    Im Prozess der Anwendung hätte derselbe Absturz sie mitgerissen. Die
+    Meldung trägt Handlungsvorschläge (Regel 17), und die nächste Rechnung
+    startet einen frischen Hilfsprozess.
+    """
+    monkeypatch.setattr(kernel_process, "_SERVE", _dies_mid_job)
+    arrays, values = _small_job()
+
+    started = time.monotonic()
+    with pytest.raises(kernel_process.KernelHelperLostError) as lost:
+        in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+
+    assert time.monotonic() - started < 20.0, "der Tod meldet sich sofort, nicht nach einer Frist"
+    assert lost.value.suggestions, "Regel 17"
+    assert lost.value.detail
+    assert lost.value.values["triangles"] == 1
+    assert kernel_process.processes() == []
+    monkeypatch.setattr(kernel_process, "_SERVE", kernel_jobs.serve)
+    in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+    assert kernel_process.statistics()["helper"] == 1, "der nächste Hilfsprozess rechnet"
+
+
+def test_cancelling_ends_the_helper_even_inside_a_kernel_call(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``ctx.cancelled`` beendet den Hilfsprozess wirklich.
+
+    Ein Kernaufruf ist anders nicht anzuhalten; der wartende Faden kehrt binnen
+    Sekunden mit ``OperationCancelled`` zurück.
+    """
+    mark = tmp_path / "rechnet"
+    monkeypatch.setenv("KERNEL_TEST_MARK", str(mark))
+    monkeypatch.setattr(kernel_process, "_SERVE", _computes_forever)
+    arrays, values = _small_job()
+    signal = CancelSignal()
+    outcome: dict[str, Any] = {}
+
+    def compute() -> None:
+        try:
+            kernel_process.run("simplify_closed", arrays, values, weight=1, cancelled=signal)
+        except OperationCancelled:
+            outcome["cancelled"] = time.monotonic()
+
+    worker = threading.Thread(target=compute)
+    worker.start()
+    deadline = time.monotonic() + 60.0
+    while not mark.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert mark.exists(), "die Rechnung hat nie begonnen"
+    helper = kernel_process.processes()[0]
+    asked = time.monotonic()
+    signal.cancel()
+    worker.join(30.0)
+
+    assert "cancelled" in outcome
+    assert outcome["cancelled"] - asked < 2.0, "abgebrochen wird binnen Sekunden"
+    helper.join(10.0)
+    assert not helper.is_alive(), "der rechnende Hilfsprozess ist beendet, nicht zurückgelassen"
+    assert kernel_process.processes() == []
+
+
+def test_cancelling_a_real_kernel_call_in_the_helper(offloaded: None) -> None:
+    """Dasselbe am echten Hilfsprozess, mitten in ``simplify``.
+
+    Die Bisektion über eine Kugel mit 327 680 Dreiecken rechnet 32
+    ``simplify``-Läufe (gemessen 0,15 bis 0,3 s je Lauf an 327 680 Dreiecken,
+    ``schwelle.py``) — abgebrochen wird eine Sekunde nach dem Start der
+    Rechnung im schon bereiten Hilfsprozess, also mitten darin. Der Prozess
+    endet, der Faden kehrt zurück.
+    """
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=7, radius=20.0))
+    arrays = mesh_input(sphere)
+    values = {"target": 5000, "limit": 5.0, "steps": 32, "resolution": 1e-12}
+    signal = CancelSignal()
+    outcome: dict[str, Any] = {}
+    # Bereit, bevor die Uhr läuft: Abgebrochen wird in der Rechnung, nicht im Start.
+    assert kernel_process.warm_up()
+
+    def compute() -> None:
+        try:
+            outcome["result"] = kernel_process.run(
+                "simplify_search", arrays, values, weight=1, cancelled=signal
+            )
+        except OperationCancelled:
+            outcome["cancelled"] = True
+
+    helper = kernel_process.processes()[0]
+    worker = threading.Thread(target=compute)
+    worker.start()
+    time.sleep(1.0)
+    signal.cancel()
+    worker.join(30.0)
+
+    assert outcome == {"cancelled": True}, "die Bisektion lief noch, als abgebrochen wurde"
+    helper.join(10.0)
+    assert not helper.is_alive()
+
+
+# --- Keine Waisen ------------------------------------------------------------------------
+
+
+def test_shutdown_leaves_no_helper_behind(offloaded: None) -> None:
+    """``shutdown`` (am Ende der Anwendung an ``aboutToQuit``) beendet untätige und rechnende."""
+    arrays, values = _small_job()
+    in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+    assert kernel_process.warm_up(), "ein bereiter Hilfsprozess wartet"
+    helpers = kernel_process.processes()
+    assert helpers
+
+    assert kernel_process.shutdown() == len(helpers)
+
+    for helper in helpers:
+        helper.join(10.0)
+        assert not helper.is_alive()
+    assert kernel_process.processes() == []
+
+
+def _alive(pid: int) -> bool:
+    """Ob ein Prozess noch lebt — ohne ihm etwas zu tun (unter Windows beendete ``os.kill`` ihn)."""
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        handle = kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            kernel32.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))
+            return code.value == 259
+        finally:
+            kernel32.CloseHandle(ctypes.c_void_p(handle))
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+_PARENT = textwrap.dedent(
+    """
+    import sys, threading
+    sys.path.insert(0, {root!r})
+    from app.core.geom import kernel_process
+
+    def main():
+        assert kernel_process.warm_up()
+        print(kernel_process.processes()[0].pid, flush=True)
+        threading.Event().wait()
+
+    if __name__ == "__main__":
+        main()
+    """
+)
+
+
+def test_a_helper_ends_with_a_parent_that_is_killed(tmp_path: Path) -> None:
+    """Stirbt Solidon hart (Absturz, Task-Manager), endet sein Hilfsprozess mit.
+
+    Unter Windows überlebt ein Kind seinen Elternprozess; das Jobobjekt
+    (``process.bind_helper``) beendet es mit dem letzten Griff. Unter POSIX
+    endet ein untätiger Hilfsprozess an der geschlossenen Leitung.
+    """
+    script = tmp_path / "eltern.py"
+    script.write_text(_PARENT.format(root=str(ROOT)), encoding="utf-8")
+    parent = subprocess.Popen(
+        [sys.executable, str(script)], stdout=subprocess.PIPE, text=True, cwd=str(tmp_path)
+    )
+    try:
+        assert parent.stdout is not None
+        line = parent.stdout.readline()
+        helper = int(line.strip())
+        assert _alive(helper)
+    finally:
+        parent.kill()
+        parent.wait(30.0)
+        if parent.stdout is not None:
+            parent.stdout.close()
+    deadline = time.monotonic() + 20.0
+    while _alive(helper) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not _alive(helper), "der Hilfsprozess ist mit seinem Elternprozess gegangen"
+
+
+# --- Eingefrorenes Paket -----------------------------------------------------------------
+
+
+def test_the_entry_point_hands_a_helper_start_to_freeze_support_first() -> None:
+    """Im Paket startet ``sys.executable`` die Anwendung selbst — als Hilfsprozess.
+
+    ``multiprocessing.freeze_support()`` muss das erkennen, bevor
+    Absturzprotokoll, Qt oder ein Fenster entstehen: der erste Aufruf im
+    ``__main__``-Block von ``app/ui/app.py``, dem Einstieg der PyInstaller-Spec.
+    """
+    source = (ROOT / "app" / "ui" / "app.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    guards = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Compare)
+        and isinstance(node.test.left, ast.Name)
+        and node.test.left.id == "__name__"
+    ]
+    first_guard = guards[0]
+    calls = [
+        statement.value.func
+        for statement in first_guard.body
+        if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)
+    ]
+    assert isinstance(calls[0], ast.Name) and calls[0].id == "freeze_support"
+    before = tree.body[: tree.body.index(first_guard)]
+    imported = {
+        alias.name if isinstance(node, ast.Import) else (node.module or "")
+        for node in before
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+    }
+    assert not any("PySide6" in name for name in imported), "kein Qt vor freeze_support"
+    spec = (ROOT / "packaging" / "solidon3d.spec").read_text(encoding="utf-8")
+    assert '"app" / "ui" / "app.py"' in spec, "die Spec startet genau diese Datei"
+    start = spec.index("excludes=[")
+    excluded = spec[start : spec.index("]", start)]
+    assert '"multiprocessing"' not in excluded, "der Hilfsprozess braucht multiprocessing im Paket"
+
+
+def test_the_helper_side_loads_nothing_but_numpy_and_the_kernel() -> None:
+    """Der Hilfsprozess lädt ``kernel_jobs`` und sonst kein Modul des Kerns — ein kurzer Start.
+
+    Im Paket läuft vor ``freeze_support`` nur der Kopf von ``app/ui/app.py``;
+    was ``kernel_jobs`` nachzieht, verlängert jeden Start des Hilfsprozesses.
+    """
+    probe = (
+        "import sys; import app.core.geom.kernel_jobs; "
+        "print(sorted(n for n in sys.modules if n.startswith('app.')))"
+    )
+    loaded = subprocess.run(
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=str(ROOT),
+    ).stdout
+    assert loaded.strip() == "['app.core', 'app.core.geom', 'app.core.geom.kernel_jobs']"
+
+
+# --- Der Anschluss: die Anwendung tut es -------------------------------------------------
+
+
+def _ellipsoid_session() -> tuple[Any, str, MeshData]:
+    """Eine Sitzung mit dem Ellipsoid aus dem Korpus: 1 280 Dreiecke, geschlossen."""
+    from app.ui.session import Session
+
+    session = Session()
+    assert session.import_model(MESHES / "near_sphere_ellipsoid.stl", unit="mm")
+    result = session.evaluate_now()
+    body, entry = next(iter(result.scene.objects.items()))
+    return session, body, entry.mesh
+
+
+def test_the_coarse_preview_reduces_and_drills_in_the_helper(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die grobe Vorschau, wie ihr Arbeiter sie rechnet, verkleinert und bohrt im Hilfsprozess.
+
+    ``Session._preview_outcome`` ist die Arbeit des ``_PreviewWorker`` — hier in
+    einem Nebenfaden gerufen wie dort. Die Schwellen sind so gesetzt, dass das
+    Ellipsoid aus dem Korpus die grobe Stufe nimmt (RM-212: die erste grobe
+    Vorschau stand sonst je Körper im Hauptfaden). Dieselbe Vorschau im
+    Hauptfaden rechnet im Prozess, und beide tragen dasselbe ab.
+    """
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.core.scene import OperationDraft
+    from app.ui import session as session_module
+
+    session, body, _mesh = _ellipsoid_session()
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    draft = OperationDraft(
+        op="drill_hole",
+        params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+        inputs=(body,),
+    )
+
+    def preview() -> tuple[Any, list[int]]:
+        seen: list[int] = []
+        _scene, difference, _reason = session._preview_outcome(
+            [draft], coarsened=seen.append, detect_features=False
+        )
+        return difference, seen
+
+    there, seen_there = in_a_worker(preview)
+    counts = kernel_process.statistics()
+    kernel_process.shutdown()
+    session.cancel_preview()
+    here, seen_here = preview()
+
+    assert seen_there and seen_here, "grob gerechnet"
+    assert counts["helper:display_simplify"] >= 1, counts
+    assert counts["helper:boolean"] >= 1, counts
+    assert there is not None and here is not None
+    assert there.removed_volume == here.removed_volume
+    assert kernel_process.statistics()["started"] == 1, "der Hauptfaden startet keinen"
+
+
+def test_applying_a_large_refinement_refines_in_the_helper(offloaded: None) -> None:
+    """Das Übernehmen von *Kanten verfeinern*, wie der Auswertungsarbeiter es rechnet.
+
+    ``Session.run_evaluation`` ist die Arbeit des ``_EvaluationWorker``. Am
+    Spielwürfel (0,05 mm, 5,8 Mio. Dreiecke) stand der Hauptfaden dabei 15,0
+    und 22,7 s in ``refine_to_length`` (RM-212); hier teilt der Hilfsprozess,
+    und das Netz ist dasselbe wie im Prozess geteilt.
+    """
+    from app.core.geom.mesh_ops import remesh
+    from app.core.scene import OperationDraft
+
+    session, body, mesh = _ellipsoid_session()
+    session.history.apply(
+        "Verfeinern", [OperationDraft(op="remesh_mesh", params={"edge": 0.8}, inputs=(body,))]
+    )
+
+    result = in_a_worker(session.run_evaluation)
+
+    assert result.stopped_at is None
+    counts = kernel_process.statistics()
+    assert counts["helper:refine_conforming"] == 1, counts
+    refined = next(iter(result.scene.objects.values())).mesh
+    expected = remesh(mesh, 0.8)
+    same_bytes(
+        {"vertices": np.asarray(expected.raw.vertices), "faces": np.asarray(expected.raw.faces)},
+        {"vertices": np.asarray(refined.raw.vertices), "faces": np.asarray(refined.raw.faces)},
+    )
+
+
+def test_the_workers_of_the_window_use_the_helper(
+    qt_app: object, offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dasselbe über die echten Arbeiter: ``preview_async`` und die Auswertung nach dem Übernehmen.
+
+    Ein Fenstertest (``qt_app``), gefahren beim Release. Belegt, dass die
+    ``QThread``-Arbeiter der Sitzung — nicht nur ein Nebenfaden der Suite —
+    den Kern im Hilfsprozess rechnen lassen.
+    """
+    from app.core.geom.mesh_ops import DECIMATE_FLOOR
+    from app.core.scene import OperationDraft
+    from app.ui import session as session_module
+
+    session, body, _mesh = _ellipsoid_session()
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
+    monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
+    collected: list[object] = []
+    try:
+        session.preview_async(
+            collected.append,
+            [
+                OperationDraft(
+                    op="drill_hole",
+                    params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 20.0, "depth": 0.0},
+                    inputs=(body,),
+                )
+            ],
+        )
+        assert session.wait_for_idle(60_000)
+        assert collected and collected[-1] is not None
+        assert kernel_process.statistics()["helper:display_simplify"] >= 1
+
+        session.history.apply(
+            "Verfeinern", [OperationDraft(op="remesh_mesh", params={"edge": 0.8}, inputs=(body,))]
+        )
+        assert session.wait_for_idle(60_000)
+        assert session.last_result is not None and session.last_result.stopped_at is None
+        assert kernel_process.statistics()["helper:refine_conforming"] == 1
+    finally:
+        session.cancel_preview()
+        session.wait_for_idle(30_000)

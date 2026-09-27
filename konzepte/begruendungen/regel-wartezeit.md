@@ -486,7 +486,7 @@ offen ist, und jede Zahl rechnete erst grob vergeblich und dann genau. Mit der
 Schranke als Ziel nimmt er das geschlossene Kernergebnis. Zwei Fallen lagen
 dahinter, beide im Rückweg ins Netz: `simplify` ließ am Piratenschiff zwölf
 Splitter neben dem Rumpf stehen, im Mittel dünner als seine Toleranz
-(`mesh_ops._without_slivers` lässt sie weg), und `_as_mesh` verschweißte
+(`kernel_jobs.without_slivers` lässt sie weg), und `_as_mesh` verschweißte
 Schalen, die sich an einer Kante berühren, bis vier Flächen an ihr hingen —
 am Eiffelturm zwei echte Teile (seither verschweißt es nur, wo das Netz dicht
 bleibt, wie `boolean._tidied`). Gemessen mit derselben Sonde, vorher und

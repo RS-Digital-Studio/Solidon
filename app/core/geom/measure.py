@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from app.core.deferred import trimesh
+from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshData, on_surface, ray_hits
 from app.core.types import BoundingBox, CancelToken, Mesh, Vec3
 from app.core.units import EPS_GEOM, round_display
@@ -143,22 +144,23 @@ def surface_gap(first: MeshData, second: MeshData, search_length: float) -> floa
     """Kleinster Flächenabstand bis zur Suchweite, einschließlich Kante gegen Kante.
 
     Der vorhandene Geometriekern prüft sämtliche Dreiecke über seinen Raumindex.
-    Eine fehlgeschlagene Körperübernahme ist keine Abstandsaussage.
+    Eine fehlgeschlagene Körperübernahme ist keine Abstandsaussage. Die
+    Rechnung ist ``kernel_jobs.min_gap``, an großen Körpern im Hilfsprozess
+    (``kernel_process``).
     """
-    import manifold3d
-
-    solids = [
-        manifold3d.Manifold(
-            manifold3d.Mesh64(
-                np.asarray(mesh.raw.vertices, dtype=np.float64),
-                np.asarray(mesh.raw.faces, dtype=np.uint64),
-            )
-        )
-        for mesh in (first, second)
-    ]
-    if any(solid.status() != manifold3d.Error.NoError or solid.is_empty() for solid in solids):
-        return None
-    return float(solids[0].min_gap(solids[1], search_length))
+    _arrays, reported = kernel_process.run(
+        "min_gap",
+        {
+            "vertices0": np.asarray(first.raw.vertices),
+            "faces0": np.asarray(first.raw.faces),
+            "vertices1": np.asarray(second.raw.vertices),
+            "faces1": np.asarray(second.raw.faces),
+        },
+        {"search": search_length},
+        weight=first.triangle_count + second.triangle_count,
+    )
+    gap = reported["gap"]
+    return None if gap is None else float(gap)
 
 
 #: Wie viele sichtbare Kanten an einem Punkt zusammenlaufen müssen, damit er

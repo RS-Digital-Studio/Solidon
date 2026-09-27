@@ -54,7 +54,7 @@ unter „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der
   Rückvernetzung; flächiger Kontakt ergibt ein leeres Netz, ob das gilt, sagt
-  `allow_empty`. Kontaktreste entscheidet `_native_contact` an der
+  `allow_empty`. Kontaktreste entscheidet `kernel_jobs.native_contact` an der
   Float64-Grenze `gamma(8) * max|Koordinate| * Oberfläche` je Komponente —
   keine Drucktoleranz; `EPS_GEOM` ist kein Mindestvolumen. Verbleibende Schalen
   werden angefügt, nie neu vereinigt (das füllte Hohlräume).
@@ -84,6 +84,13 @@ Originaldreiecke zu einem belegten `SurfacePatch`, Budget je Dreieck; keine
 neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
 der Aufrufer)
+
+**Der Netzkern im Hilfsprozess** (RM-212) — `kernel_jobs.py` (jeder lange
+`manifold3d`-Aufruf als reine Rechnung, Felder hinein, Felder heraus; `JOBS`
+ist der einzige Weg in den Hilfsprozess; dazu seine Seite `serve` und der
+gemeinsame Speicher `pack`/`copied`) · `kernel_process.py` (`run` wählt: hier
+oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
+`shutdown`). Die Regel steht in `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen
