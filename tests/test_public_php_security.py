@@ -8,7 +8,6 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import time
 from collections.abc import Iterator
@@ -21,7 +20,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 import pytest
 
-from tests.php_probe import php_command, php_executable
+from tests.php_probe import free_port, php_command, php_executable
 
 ROOT = Path(__file__).parent.parent
 API = ROOT / "website" / "api"
@@ -37,12 +36,6 @@ ENDPOINTS = (
     "count.php",
     "stats.php",
 )
-
-
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return int(probe.getsockname()[1])
 
 
 def _php_command(
@@ -111,7 +104,7 @@ def _php_server(
     extensions: tuple[str, ...] = (),
 ) -> Iterator[str]:
     php = php_command(*extensions)
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
     environment["SOLIDON_ACTIVATION_RATE_FILE"] = str(tmp_path / "activation-rate.json")

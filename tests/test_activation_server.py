@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import socket
 import sqlite3
 import subprocess
 import time
@@ -17,7 +16,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from app.core.activation import certificate, device, ed25519, key
-from tests.php_probe import php_command
+from tests.php_probe import free_port, php_command
 from tools.make_licence_keys import make_key
 from tools.setup_activation_server import main as setup_activation_server
 
@@ -100,12 +99,6 @@ def _php_command(port: int) -> list[str]:
     return [*command, "-S", f"127.0.0.1:{port}", "-t", "website"]
 
 
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return int(probe.getsockname()[1])
-
-
 def _post(url: str, text: str) -> tuple[int, str]:
     request = Request(
         url,
@@ -170,7 +163,7 @@ def test_php_issues_one_idempotent_device_certificate(
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
     seed_file.chmod(0o600)
     database = tmp_path / "activation.sqlite"
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {
@@ -385,7 +378,7 @@ def test_health_check_never_creates_a_missing_database(tmp_path: Path) -> None:
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
     seed_file.chmod(0o600)
     database = tmp_path / "missing.sqlite"
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {
@@ -448,7 +441,7 @@ def test_private_operator_path_manages_one_licence_and_records_every_change(
     token = "ab" * 32
     token_file.write_text(token + "\n", encoding="ascii")
     token_file.chmod(0o600)
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {
@@ -678,7 +671,7 @@ def test_php_reads_both_key_formats_to_the_same_digest(
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
     seed_file.chmod(0o600)
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {
@@ -749,7 +742,7 @@ def test_php_gives_the_commercial_licence_a_second_device_and_no_third(
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
     seed_file.chmod(0o600)
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {
@@ -856,7 +849,7 @@ def test_the_server_record_learns_the_licence_kind_and_an_old_database_migrates(
     token = "cd" * 32
     token_file.write_text(token + "\n", encoding="ascii")
     token_file.chmod(0o600)
-    port = _free_port()
+    port = free_port()
     environment = os.environ.copy()
     environment.update(
         {

@@ -62,6 +62,26 @@ def _layers(
 # --- die drei Ebenen (§29) ----------------------------------------------------------
 
 
+def test_the_stage_names_speak_the_language_of_the_window() -> None:
+    """Regel 20: Die Stufennamen kamen als Titel aus ``print_settings.toml``,
+    ohne ``_()``, und standen in der englischen Oberfläche als „Fein“ und
+    „Belastbar“ da (Fund der Release-Sitzung, 27.09.2026). Mit ihnen der Name,
+    unter dem der Slicer den Prozess zeigt."""
+    from app.i18n import catalog, set_language
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    catalog.install_language("en")
+    set_language("en")
+
+    assert list(print_settings.quality_presets().values()) == [
+        "Draft",
+        "Standard",
+        "Fine",
+        "Strong",
+    ]
+    assert print_settings.resolve(profile, "fine").title == "Fine · PLA"
+
+
 def test_the_quality_preset_decides_the_layer_height() -> None:
     profile = profiles.make_profile("prusa-mk4s", "pla")
     draft = print_settings.resolve(profile, "draft")

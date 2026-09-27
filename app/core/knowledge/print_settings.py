@@ -134,9 +134,25 @@ def reload() -> None:
     _tables = None
 
 
+#: Die Namen der Qualitätsstufen in der Oberfläche (Regel 20). Die Titel in
+#: ``print_settings.toml`` gingen am Einsammler vorbei und standen in jeder
+#: Sprache deutsch im Druckdialog. Mit Kontext, denn „Standard" und „Fein"
+#: sind als Wörter auch anderswo zu haben.
+QUALITY_TITLES: Final = {
+    "draft": _("Entwurf", context="Qualitätsstufe"),
+    "standard": _("Standard", context="Qualitätsstufe"),
+    "fine": _("Fein", context="Qualitätsstufe"),
+    "strong": _("Belastbar", context="Qualitätsstufe"),
+}
+
+
 def quality_presets() -> Mapping[str, str]:
-    """Kennung auf Titel, für die Auswahl in der Oberfläche."""
-    return {key: str(values.get("title", key)) for key, values in _all()["quality"].items()}
+    """Kennung auf Titel, für die Auswahl in der Oberfläche — übersetzt
+    (:data:`QUALITY_TITLES`); eine Stufe ohne Titel dort nennt den der Tabelle."""
+    return {
+        key: str(QUALITY_TITLES[key]) if key in QUALITY_TITLES else str(values.get("title", key))
+        for key, values in _all()["quality"].items()
+    }
 
 
 def _quality_table(quality: QualityPreset) -> dict[str, Any]:
@@ -250,7 +266,9 @@ def resolve(
 
     settings = PrintSettings(
         id=f"{quality}-{profile.material.id}",
-        title=f"{stage.get('title', quality)} · {profile.material.title}",
+        # Der Name, unter dem der Slicer den Prozess zeigt („Solidon Fein · PLA"),
+        # in der Sprache der Oberfläche.
+        title=f"{quality_presets().get(quality, quality)} · {profile.material.title}",
         quality=quality,
         layers=LayerSettings(
             layer_height=round(layer_height, 3),
