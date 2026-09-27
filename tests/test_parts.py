@@ -2216,7 +2216,7 @@ def test_the_nut_trap_takes_the_nut_it_is_named_after() -> None:
 
     Geprüft wird gegen die Norm und nicht gegen die Tabelle: Wer die Erwartung
     aus derselben Quelle nimmt wie den Prüfling, prüft nur, ob sich etwas
-    geändert hat (``.claude/memory/sollwert-aus-dem-pruefling.md``).
+    geändert hat.
     """
     #: Höhe m max nach ISO 4032, abgeschrieben aus der Norm und nicht aus
     #: ``standards.toml`` — sonst prüfte sich die Tabelle selbst.
@@ -2514,7 +2514,7 @@ def test_the_range_check_knows_which_parts_their_host_holds_together(
     „zerfällt in Teile" gelesen — über einem Baustein, der im Einsatz tadellos
     ist.
 
-    Das ist der Fall aus ``.claude/memory/eine-kette-endet-am-letzten-glied.md``
+    Das ist „eine Kette endet am letzten Glied“
     in Reinform: Ein Feld einzuführen ist nicht dasselbe, wie es zu lesen. Ich
     hatte beim Einbauen sogar den richtigen Satz geschrieben — „statt eine
     Ausnahme in den Test zu schreiben" — und dann genau das getan.
@@ -5123,8 +5123,7 @@ def test_the_hook_goes_through_the_slot_and_catches_behind_it(count: int) -> Non
     ``slot_width + 2 * slot_width`` nachrechnete, also die Randformel der
     Rückplatte rückwärts. Als der Rand ein eigenes Maß bekam, wurde der Test
     rot, obwohl der Baustein besser geworden war — er hatte die Aktualität der
-    Formel geprüft und nie ihre Richtigkeit
-    (``.claude/memory/sollwert-aus-dem-pruefling.md``).
+    Formel geprüft und nie ihre Richtigkeit.
     """
     from app.core.knowledge import standards
     from app.core.knowledge.parts import PARTS

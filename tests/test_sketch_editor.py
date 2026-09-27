@@ -6670,8 +6670,7 @@ def test_the_rectangle_is_a_plain_tool_and_the_fixed_shapes_are_gone(qt_app: QAp
     # **Die andere Hälfte, und sie wird am Quelltext geprüft.** Der Hinweis
     # der leeren Skizze im Hauptfenster versprach „eine fertige Form
     # einsetzen" — ein Weg, den es nicht mehr gibt. Gelesen wird die Stelle,
-    # die den Hinweis setzt („Sollwert aus dem Prüfling",
-    # `.claude/memory/sollwert-aus-dem-pruefling.md`).
+    # die den Hinweis setzt („Sollwert aus dem Prüfling").
     quelle = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text(
         encoding="utf-8"
     )

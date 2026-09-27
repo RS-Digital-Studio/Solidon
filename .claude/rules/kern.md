@@ -308,8 +308,7 @@ Cura-Definition aus `install_root` startet CuraEngine nicht), und
 Slicer unsichtbar. Deshalb: **Jeder neue Startpfad bekommt `discover.on_host`
 davor** (`flatpak-spawn --host`), **und mit XDG ist im Flatpak der Rechner
 gemeint** (`config_home`, `exchange_dir`). Ein Modul, das eine Falle richtig
-benennt, ist gegen sie nicht immun
-(`.claude/memory/benannte-falle-schuetzt-nicht.md`).
+benennt, ist gegen sie nicht immun.
 
 ### Was auf einer Plattform gilt, ist keine Zusage
 

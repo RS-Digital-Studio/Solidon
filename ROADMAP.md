@@ -323,7 +323,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   allein und beide zusammen sind sauber; das Zustellen der Ereignisse ist es. Vier
   Sitzungsabschlüsse dagegen — sammeln, Ereignisse zustellen, die QApplication löschen, alle
   Fenster schließen und löschen — fangen ihn **nicht** auf: Der Schaden entsteht beim Zustellen,
-  sichtbar wird er beim Herunterfahren ([[absturz-frame-ist-die-naechste-allokation]]).
+  sichtbar wird er beim Herunterfahren.
 
   **Die Anwendung ist nachweislich nicht betroffen.** Der Kundenweg — `build_application`, STL
   öffnen, `close()`, `quit()`, Prozessende — endet offscreen wie auf der echten Plattform mit
@@ -3476,8 +3476,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   danach 120 Läufe ohne Fehler bei gleichem Code; `PYTHONMALLOC=debug` zeigte keine
   Heap-Spur. Ursache nach Ausschluss: der Prozessor (Intel Core i9-13900K, Raptor Lake,
   Microcode 0x133, Intels „Vmin Shift Instability“). Dieselbe Familie wie die
-  Erinnerungen `native-bibliotheken-speicher.md` (07.08.2026) und
-  `ast-walk-reisst-im-torlauf.md`, dazu Windows-Absturzprotokolle vom 23. und 24.09.2026
+  nativen Abrisse vom 07.08.2026 und der AST-Lauf, der im Tor riss, dazu Windows-Absturzprotokolle vom 23. und 24.09.2026
   mit verfälschten Befehlszeigern. Zwei Beobachtungen derselben Durchsicht haben dasselbe
   Bild und ließen sich isoliert nicht nachstellen: ein `NameError: name 'type' is not
   defined` in `perceive/local._plain` (RESTVORSCHAU-08) und Zugriffsverletzungen beim

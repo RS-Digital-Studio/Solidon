@@ -4146,7 +4146,7 @@ class _ReticleArm(QWidget):
     in einem Quadrat von 32 mal 32 Punkten in der Fensterfarbe — genau über der
     Stelle, die gewählt werden soll (Bildschirmaufnahme: alle 1024 Bildpunkte
     des Quadrats verdeckt). Eine Fenstermaske ist keine Lösung
-    (``fenstermaske-ueber-vulkan-verliert-das-geraet``). Vier schmale Arme sind
+    (über Vulkan verliert sie das Gerät). Vier schmale Arme sind
     je ein volles Rechteck: dunkler Rand, heller Kern, auf jeder Oberfläche zu
     sehen, und die Mitte bleibt frei.
     """

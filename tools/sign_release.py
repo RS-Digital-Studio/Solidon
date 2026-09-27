@@ -83,7 +83,6 @@ INSTALLER_ORCHESTRATION_FILES = frozenset(
         "tools/CLAUDE.md",
         "packaging/CLAUDE.md",
         "Signierung/README.md",
-        ".claude/memory/signierung-ist-ein-eigener-vertrauensraum.md",
     }
 )
 ARCHIVE_NAME = "windows-signing-input.zip"

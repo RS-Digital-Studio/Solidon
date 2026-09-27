@@ -585,7 +585,7 @@ def test_the_voxel_stage_says_how_far_its_volume_is_off() -> None:
     assert grown > 0.0
     assert values["deviation_mm3"] == pytest.approx(grown, rel=1e-9)
     assert values["share_percent"] == pytest.approx(100.0 * grown / float(sphere.raw.volume))
-    # Die Zahl steht in den Werten, nicht im Satz (fehlertexte-ohne-platzhalter).
+    # Die Zahl steht in den Werten, nicht im Satz.
     assert "{" not in finding.message.msgid
 
 

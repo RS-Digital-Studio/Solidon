@@ -145,14 +145,12 @@ def memory_notes() -> list[Path]:
 
 
 def memory_index() -> set[str]:
-    """Die Dateinamen, auf die ``MEMORY.md`` zeigt — mittelbar über seine Sammelindizes.
+    """Die Dateinamen, auf die ``MEMORY.md`` zeigt — mittelbar über Sammelindizes.
 
-    Ein Sammelindex heißt ``index-*.md`` und steht selbst als Zeile in
-    ``MEMORY.md``. Er entstand am 23.09.2026, als der Hauptindex über die
-    Grenze von 17 KB wuchs, ab der die Sitzung ihn nicht mehr vollständig
-    lädt: 39 Messlehren stehen seither wortgleich dort, und der Hauptindex
-    nennt ihre Stichwörter. Eine Erinnerung, die nur dort steht, ist über
-    genau eine Verweisstufe zu finden — tiefer schachtelt kein Index.
+    Die Erinnerungen sind Themendateien, eine Zeile je Thema; ein Sammelindex
+    (``index-*.md``, selbst als Zeile in ``MEMORY.md``) ist deshalb nicht mehr
+    nötig, wird aber weiter gelesen: Eine Erinnerung, die nur dort steht, ist
+    über genau eine Verweisstufe zu finden — tiefer schachtelt kein Index.
     """
     text = (MEMORY / "MEMORY.md").read_text(encoding="utf-8")
     named = {hit.group(1) for hit in MEMORY_ENTRY.finditer(text)}
@@ -181,10 +179,10 @@ def test_the_plan_and_the_maps_are_both_there() -> None:
 def test_the_local_memory_is_read() -> None:
     """Dieselbe Zusicherung für die Erinnerungen, wo es sie gibt."""
     _local_memory()
-    assert len(memory_notes()) > 50, (
-        f"nur {len(memory_notes())} Erinnerungen gefunden — der Suchlauf greift nicht"
+    assert len(memory_notes()) >= 20, (
+        f"nur {len(memory_notes())} Themendateien gefunden — der Suchlauf greift nicht"
     )
-    assert len(memory_index()) > 50, "das Muster für die Einträge in MEMORY.md greift nicht"
+    assert len(memory_index()) >= 20, "das Muster für die Einträge in MEMORY.md greift nicht"
 
 
 def test_memories_stay_out_of_the_repository() -> None:
@@ -216,12 +214,6 @@ def test_every_memory_note_is_named_in_the_index() -> None:
     geladen wird; alles übrige wird über sie gefunden. Wer eine Notiz anlegt und
     den Zeiger vergisst, legt sie ab, wo niemand sucht — und das fällt nie auf,
     weil das Fehlen einer Erinnerung sich nicht meldet.
-
-    Am 30.08.2026 standen drei so da: ``baustein-begriff-je-sprache`` und
-    ``fremde-zwischenstaende-verfaelschen-messungen`` waren seit ``f934a422``
-    committet und in keinem Index, ``sicherung-ist-eine-zeitmaschine`` umgekehrt
-    im Index und in keinem Commit. Die erste von ihnen legt die Begriffe fest,
-    nach denen gerade in fünf Sprachen übersetzt wird.
     """
     _local_memory()
     named = memory_index()

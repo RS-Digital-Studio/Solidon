@@ -126,7 +126,7 @@ def test_the_hooks_keep_the_grid_of_the_board(profile: Profile) -> None:
     erste Fassung dieses Tests rechnete ``bounds.size[0] - 3 * slot_width`` —
     dieselbe Formel, die der Baustein benutzt, nur rückwärts. Ein Test, der die
     Formel des Prüflings nachrechnet, prüft, ob sie sich geändert hat, nicht ob
-    sie stimmt (``.claude/memory/sollwert-aus-dem-pruefling.md``). Der
+    sie stimmt. Der
     Rasterabstand kommt aus der Tabelle; die Zapfen stehen dort, wo die
     Merkmale es sagen.
     """

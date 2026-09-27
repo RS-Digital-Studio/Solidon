@@ -7,8 +7,8 @@ Duplikat-Sucher jenes Tages war brauchbar, weil er zuerst den Fall fand, den
 eine andere Sitzung eine Stunde vorher gemeldet hatte.
 
 `tools/twin_scan.py` sucht nicht nach Fehlern, sondern nach Kandidaten — und
-ein Suchwerkzeug hat die gefährlichste Fehlerart der drei aus
-`.claude/memory/messwerkzeug-misst-sich-selbst.md`: **es schweigt**. Zu wenig
+ein Suchwerkzeug hat die gefährlichste Fehlerart eines
+Messwerkzeugs: **es schweigt**. Zu wenig
 zu finden sieht aus wie nichts zu finden. Geprüft wird deshalb, dass es
 gepflanzte Fälle findet, und dass es einen leeren Baum als Fehler meldet statt
 als Ergebnis.
