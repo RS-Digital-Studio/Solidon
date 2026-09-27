@@ -1,0 +1,600 @@
+"""Die Bildanleitungen des Handbuchs aufnehmen — aus der echten Oberfläche.
+
+    .venv\\Scripts\\python.exe tools/make_guides.py [sprachen …] [--nur ANLEITUNG]
+        [--ziel ORDNER] [--schirm N]
+
+Jede Anleitung aus :mod:`app.core.guides` hat hier eine **Geschichte**: eine
+Funktion, die den Weg der Anleitung durch die Oberfläche geht, jeden Schritt
+abwartet und danach ein Bild nimmt. Auf das Bild kommen, was die Anleitung
+verlangt: ein Rahmen um jedes Ziel, eine Nummer, bei kleinen Zielen ein Pfeil,
+und der Rest leicht abgedunkelt. **Wo** ein Ziel steht, sagt
+:mod:`app.ui.guide_targets` zur Aufnahmezeit, aus der Geometrie des echten
+Widgets. Verschiebt sich ein Knopf, wandert der Rahmen mit.
+
+**Beim Release, und nur dann** (Konzept Handbuch §6, Robert, 27.09.2026:
+„immer aktuell … wenn wir eine neue version erstellen, zwischendrin brauchen
+wir es nicht"). Der Lauf gehört in ``/erzeugen``, vor ``make_manual.py``.
+Während der Entwicklung schreibt ``--ziel`` in einen Ordner außerhalb des
+Baums; eingecheckt werden Bilder nur aus dem Release-Lauf.
+
+**Laut scheitern ist die Aufgabe.** Fehlt ein Ziel, lässt sich ein Schritt
+nicht gehen oder wird eine Auswertung nicht fertig, endet das Werkzeug mit
+einem Fehler, der Anleitung und Schritt nennt — und der Release hält an. Die
+Filmwerkzeuge daneben überspringen ein fehlendes Menü still, und zwei ihrer
+drei Geschichten scheitern am 27.09.2026 an einem Knopf, den es nicht mehr
+gibt, ohne dass es jemand gemerkt hätte (``konzepte/nachweise-handbuch-2026-09/
+aufnahmetechnik.md``). Eine Anleitung, die nicht mehr stimmt, soll auffallen,
+bevor ein Kunde sie liest.
+
+Dieselben Bedingungen wie bei ``make_figures.py`` und ``make_web_images.py``,
+aus denselben Gründen: nicht offscreen (dort fehlen die Schriften, und der
+Viewport zeichnet nur auf einem echten Schirm), das Fenster maximiert auf dem
+Zielschirm, in nativen Bildpunkten, gegriffen über den Bildschirm, damit
+Menüs und Dialoge als eigene Fenster mit im Bild stehen. **Ein Prozess je
+Sprache mit eigenen Nutzerverzeichnissen**: Die Geschichten öffnen Dateien
+und merken sich Einstellungen, und nichts davon darf Roberts Profil
+streifen.
+
+Je Sprache schreibt der Lauf neben die Bilder ``guides.json``: je Anleitung
+die Version, in der sie aufgenommen wurde, und den Abdruck ihrer
+Beschreibung (:func:`app.core.guides.fingerprint`). Ein Test mit Marker
+``rendered`` vergleicht beides mit dem heutigen Stand.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Final
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QImage,
+    QImageWriter,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPolygonF,
+)
+from PySide6.QtWidgets import QApplication
+
+from app.branding import APP_VERSION
+from app.core import figures, guides
+from app.core.bootstrap import load_operations
+from app.i18n import install_catalog, set_language
+from app.i18n.catalog import read_catalog
+from tools import make_figures as shots
+from tools import make_web_images as web
+from tools.make_web_images import ISOLATED_VARIABLES, framed, grab
+
+#: Woran das Kind erkennt, dass es isoliert läuft (Muster ``make_web_images``).
+ROOM_VARIABLE: Final = "SOLIDON_GUIDES_ROOM"
+
+#: Das Beispiel, an dem die Anleitungen über das Fenster entstehen — dasselbe
+#: wie das Hauptfensterbild des Handbuchs (``make_figures.EXAMPLE``): benannte
+#: Maße, ein gefüllter Verlauf, erkannte Merkmale. Ein leeres Fenster zeigte
+#: Bereiche, in denen nichts steht.
+EXAMPLE: Final = shots.EXAMPLE
+
+#: Wie breit ein Schrittbild höchstens gespeichert wird. Die Bilder reisen mit
+#: der Anwendung, sechs Sprachen lang; das Handbuchfenster zeigt sie ohnehin
+#: in der Breite seiner Textspalte.
+MAX_WIDTH: Final = 1600
+
+#: Wie viel Umgebung ein Schritt um seine Ziele zeigt, in nativen Bildpunkten
+#: — genug, damit man erkennt, wo im Fenster man ist.
+MARGIN: Final = 220
+
+#: Das Seitenverhältnis eines Ausschnitts.
+RATIO: Final = 16 / 10
+
+#: Unter dieser Kantenlänge bekommt ein Ziel einen Pfeil: Ein Rahmen um einen
+#: Menüeintrag oder einen kleinen Knopf ist auf einer Handbuchseite schnell
+#: übersehen.
+SMALL: Final = 56
+
+#: Innenabstand zwischen Ziel und Rahmen.
+PADDING: Final = 6
+
+#: Radius der Nummernscheibe.
+BADGE: Final = 17
+
+#: Wie weit die Nummer eines kleinen Ziels abgesetzt steht, damit ein Pfeil
+#: zwischen beide passt.
+AWAY: Final = 64
+
+#: Der Rand um das Bildschirmfoto. Die Nummer sitzt auf der linken oberen
+#: Ecke ihres Rahmens, halb innen, halb außen; am Fensterrand stünde sie ohne
+#: diesen Rand über dem Menü oder dem ersten Knopf — so verdeckte die Nummer
+#: der Werkzeugleiste im ersten Probelauf das Wort „Datei".
+BORDER: Final = 30
+
+#: Wie stark der Rest des Bildes zurücktritt.
+DIM: Final = QColor(0, 0, 0, 105)
+
+
+#: Die Qualität der WebP-Bilder. 86 wie bei den Website-Bildern
+#: (``make_web_images``): Die Schrift der Oberfläche bleibt scharf, und das
+#: Übersichtsbild misst 85 statt 408 KB als PNG.
+QUALITY: Final = 86
+
+
+def _picture_path(folder: Path, key: str) -> Path:
+    """Wohin das Bild eines Schritts gehört — mit der Endung, die der Katalog nennt."""
+    figure = figures.find(key)
+    if figure is None:
+        raise SystemExit(f"{key}: keine Abbildung dieses Namens im Katalog")
+    return folder / figure.path().name
+
+
+@dataclass(frozen=True, slots=True)
+class Spot:
+    """Ein Ziel im Bild, in Bildkoordinaten."""
+
+    rect: QRect
+    point: bool = False
+    """Ein Punkt statt eines Bereichs — dort, wo die Geschichte geklickt hat."""
+
+
+# --- Zeichnen -------------------------------------------------------------------
+
+
+def _palette() -> dict[str, str]:
+    from app.ui.theme import THEMES
+
+    return THEMES["dark"]
+
+
+def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> QImage:
+    """Das Bildschirmfoto mit Rand, Rahmen, Nummern und Pfeilen.
+
+    Ein gewöhnlicher Schritt dunkelt alles außer seinen Zielen ab; das erste
+    Ziel trägt die Nummer des Schritts, weitere nur einen Rahmen. Eine Legende
+    dunkelt nicht ab — sie zeigt das ganze Fenster —, und jedes Ziel trägt
+    seine eigene Nummer. Die Nummer ist die zweite Kodierung neben der Farbe
+    (Regel 18). ``spots`` steht in den Koordinaten von ``piece``.
+    """
+    palette = _palette()
+    amber, ink = QColor(palette["highlight"]), QColor(palette["highlight_text"])
+    halo = QColor(ink.red(), ink.green(), ink.blue(), 190)
+    canvas = QImage(
+        piece.width() + 2 * BORDER,
+        piece.height() + 2 * BORDER,
+        QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    canvas.fill(QColor(palette["base"]))
+    painter = QPainter(canvas)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.drawImage(BORDER, BORDER, piece)
+    shot = QRectF(BORDER, BORDER, piece.width(), piece.height())
+    frames = [_frame(spot).translated(BORDER, BORDER) for spot in spots]
+
+    if not legend and frames:
+        shade = QPainterPath()
+        shade.setFillRule(Qt.FillRule.OddEvenFill)
+        shade.addRect(shot)
+        for frame in frames:
+            shade.addRoundedRect(frame, 8, 8)
+        painter.fillPath(shade, DIM)
+    painter.setPen(QPen(QColor(palette["line"]), 1))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawRect(shot.adjusted(-0.5, -0.5, 0.5, 0.5))
+
+    for frame in frames:
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(halo, 7))
+        painter.drawRoundedRect(frame, 8, 8)
+        painter.setPen(QPen(amber, 3.5))
+        painter.drawRoundedRect(frame, 8, 8)
+
+    taken: list[QPointF] = []
+    bounds = QRectF(canvas.rect())
+    for index, (spot, frame) in enumerate(zip(spots, frames, strict=True), start=1):
+        label = index if legend else (number if index == 1 else None)
+        if label is None:
+            continue
+        away = not legend and _small(spot)
+        others = [other for other in frames if other is not frame]
+        centre = _badge_centre(frame, others, bounds, taken, away=away)
+        taken.append(centre)
+        if away:
+            _arrow(painter, centre, frame, amber, halo)
+        _badge(painter, centre, str(label), amber, ink)
+    painter.end()
+
+    for spot in spots:
+        if spot.point:
+            _pointer(canvas, spot.rect.center() + QPoint(BORDER, BORDER))
+    return canvas
+
+
+def _small(spot: Spot) -> bool:
+    return spot.point or min(spot.rect.width(), spot.rect.height()) < SMALL
+
+
+def _frame(spot: Spot) -> QRectF:
+    if spot.point:
+        centre = QPointF(spot.rect.center())
+        return QRectF(centre.x() - 22, centre.y() - 22, 44, 44)
+    return QRectF(spot.rect).adjusted(-PADDING, -PADDING, PADDING, PADDING)
+
+
+def _reach(spot: Spot) -> QRect:
+    """Was ein Ausschnitt um ein Ziel mindestens zeigen muss: Rahmen, Nummer, Pfeil."""
+    frame = _frame(spot)
+    extra = AWAY + BADGE if _small(spot) else BADGE
+    return frame.adjusted(-extra, -extra, extra, extra).toAlignedRect()
+
+
+def _badge_centre(
+    frame: QRectF,
+    others: list[QRectF],
+    bounds: QRectF,
+    taken: list[QPointF],
+    *,
+    away: bool,
+) -> QPointF:
+    """Wo die Nummer steht — und nie auf einem anderen Bereich.
+
+    Zuerst auf der linken oberen Ecke des Rahmens, halb innen, halb außen: So
+    liest man sie als Etikett dieses Rahmens. Grenzt dort ein anderer Rahmen
+    an (die Ansicht beginnt genau unter der Werkzeugleiste), wird die nächste
+    Stelle versucht: in die Ecke hinein, links oder rechts neben den Rahmen,
+    auf die Mitte der Oberkante. Eine Nummer, die auf einem fremden Bereich
+    steht, zeigte auf den falschen. Ein kleines Ziel bekommt seine Nummer
+    abgesetzt, damit der Pfeil dazwischen passt.
+    """
+    reach = BADGE + 3
+    if away:
+        candidates = [
+            QPointF(frame.left() - AWAY, frame.top() - AWAY),
+            QPointF(frame.right() + AWAY, frame.top() - AWAY),
+            QPointF(frame.left() - AWAY, frame.bottom() + AWAY),
+            QPointF(frame.right() + AWAY, frame.bottom() + AWAY),
+        ]
+    else:
+        # In die Ecke hinein erst zuletzt: Dort verdeckt die Nummer den Inhalt
+        # ihres eigenen Bereichs — im Probelauf das erste Wort der Werkzeugzeile.
+        middle = frame.center()
+        candidates = [
+            frame.topLeft(),
+            QPointF(frame.left() - BADGE - 8, middle.y()),
+            QPointF(frame.right() + BADGE + 8, middle.y()),
+            QPointF(middle.x(), frame.top()),
+            QPointF(frame.left() + BADGE + 10, frame.top() + BADGE + 10),
+        ]
+
+    def free(centre: QPointF) -> bool:
+        disc = QRectF(centre.x() - reach, centre.y() - reach, 2 * reach, 2 * reach)
+        return (
+            bounds.contains(disc)
+            and not any(other.intersects(disc) for other in others)
+            and all(
+                abs(centre.x() - spot.x()) > 2 * BADGE + 4
+                or abs(centre.y() - spot.y()) > 2 * BADGE + 4
+                for spot in taken
+            )
+        )
+
+    chosen = next((centre for centre in candidates if free(centre)), candidates[0])
+    x = min(max(chosen.x(), bounds.left() + reach), bounds.right() - reach)
+    y = min(max(chosen.y(), bounds.top() + reach), bounds.bottom() - reach)
+    return QPointF(x, y)
+
+
+def _badge(painter: QPainter, centre: QPointF, text: str, amber: QColor, ink: QColor) -> None:
+    painter.setPen(QPen(ink, 3))
+    painter.setBrush(amber)
+    painter.drawEllipse(centre, BADGE, BADGE)
+    font = QFont(painter.font())
+    font.setBold(True)
+    font.setPixelSize(20)
+    painter.setFont(font)
+    painter.setPen(ink)
+    painter.drawText(
+        QRectF(centre.x() - BADGE, centre.y() - BADGE, 2 * BADGE, 2 * BADGE),
+        int(Qt.AlignmentFlag.AlignCenter),
+        text,
+    )
+
+
+def _arrow(painter: QPainter, start: QPointF, frame: QRectF, amber: QColor, halo: QColor) -> None:
+    """Ein Pfeil von der Nummer zum nächsten Punkt des Rahmens."""
+    tip = QPointF(
+        min(max(start.x(), frame.left()), frame.right()),
+        min(max(start.y(), frame.top()), frame.bottom()),
+    )
+    dx, dy = tip.x() - start.x(), tip.y() - start.y()
+    length = (dx * dx + dy * dy) ** 0.5
+    if length < BADGE + 12:
+        return
+    ux, uy = dx / length, dy / length
+    begin = QPointF(start.x() + ux * (BADGE + 2), start.y() + uy * (BADGE + 2))
+    head = 14.0
+    base = QPointF(tip.x() - ux * head, tip.y() - uy * head)
+    left = QPointF(base.x() - uy * head * 0.6, base.y() + ux * head * 0.6)
+    right = QPointF(base.x() + uy * head * 0.6, base.y() - ux * head * 0.6)
+    for colour, width in ((halo, 8.0), (amber, 4.0)):
+        painter.setPen(QPen(colour, width, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.drawLine(begin, base)
+    painter.setPen(QPen(halo, 2))
+    painter.setBrush(amber)
+    painter.drawPolygon(QPolygonF([tip, left, right]))
+
+
+def _pointer(image: QImage, spot: QPoint) -> None:
+    """Der Mauszeiger mit Klickring — derselbe wie in den Filmen."""
+    from tools.make_video import _paint_pointer
+
+    _paint_pointer(image, (float(spot.x()), float(spot.y()), True))
+
+
+# --- Ein Lauf durch eine Anleitung --------------------------------------------------
+
+
+class GuideRun:
+    """Was eine Geschichte braucht: das Fenster, und wie man einen Schritt aufnimmt."""
+
+    def __init__(self, app: QApplication, window: Any, guide: guides.Guide, folder: Path) -> None:
+        self.app = app
+        self.window = window
+        self.session = window.session
+        self.guide = guide
+        self.folder = folder
+        self.taken = 0
+
+    def settle(self, rounds: int = 12) -> None:
+        shots.settle(self.app, rounds)
+
+    def capture(self, number: int, *, points: dict[str, QPoint] | None = None) -> None:
+        """Den Zustand für Schritt ``number`` aufnehmen, markiert und zugeschnitten.
+
+        ``points`` setzt für ein Ziel einen Punkt statt seines Rahmens: dort,
+        wo die Geschichte in die Ansicht geklickt hat. Global, wie
+        ``mapToGlobal`` ihn liefert.
+        """
+        from app.ui import guide_targets
+
+        if number != self.taken + 1:
+            raise SystemExit(
+                f"{self.guide.key}: Schritt {number} aufgenommen, erwartet war {self.taken + 1}"
+            )
+        step = self.guide.steps[number - 1]
+        self.settle()
+        origin = self.window.mapToGlobal(QPoint(0, 0))
+        spots: list[Spot] = []
+        for mark in step.marks:
+            if points and mark.target in points:
+                where = points[mark.target] - origin
+                spots.append(Spot(QRect(where, QSize(1, 1)), point=True))
+                continue
+            try:
+                area = guide_targets.area_for(self.window, mark.target)
+            except guide_targets.MissingTargetError as missing:
+                raise SystemExit(f"{self.guide.key}, Schritt {number}: {missing}") from missing
+            spots.append(Spot(area.translated(-origin)))
+        image = grab(self.window)
+        if step.whole_window:
+            crop = image.rect()
+        else:
+            focus = QRect()
+            for spot in spots:
+                focus = focus.united(_reach(spot))
+            crop = framed(focus.intersected(image.rect()), RATIO, image.rect(), MARGIN)
+        corner = crop.topLeft()
+        inside = [Spot(spot.rect.translated(-corner), spot.point) for spot in spots]
+        picture = annotate(image.copy(crop), inside, legend=step.is_legend, number=number)
+        if picture.width() > MAX_WIDTH:
+            picture = picture.scaledToWidth(MAX_WIDTH, Qt.TransformationMode.SmoothTransformation)
+        target = _picture_path(self.folder, self.guide.figure_key(number))
+        writer = QImageWriter(str(target), target.suffix.lstrip(".").encode("ascii"))
+        writer.setQuality(QUALITY)
+        if not writer.write(picture):
+            raise SystemExit(f"{target} ließ sich nicht schreiben: {writer.errorString()}")
+        size = target.stat().st_size // 1024
+        print(f"  {target.name:<36} {picture.width()}x{picture.height()}  {size} KB")
+        self.taken = number
+
+    def finish(self) -> None:
+        if self.taken != len(self.guide.steps):
+            raise SystemExit(
+                f"{self.guide.key}: {self.taken} von {len(self.guide.steps)} Schritten aufgenommen"
+            )
+
+
+# --- Die Geschichten ------------------------------------------------------------------
+#
+# Die Wege durch die Oberfläche, die es schon gibt, kommen aus
+# ``make_web_images`` — dort öffnet ``open_example`` ein Beispiel ohne die
+# Zuletzt-Liste, ``select_body`` wählt wie ein Klick im Objektbaum und
+# ``until_quiet`` wartet auch den Prüfbericht ab. Eine zweite Fassung davon
+# hier wäre ein Zwilling, der beim nächsten Umbau auseinanderläuft.
+
+
+def story_window_overview(run: GuideRun) -> None:
+    """Das ganze Fenster mit einem gewählten Körper: alle Bereiche gefüllt."""
+    web.open_example(run.window, run.app, EXAMPLE)
+    web.select_body(run.window, 0)
+    run.window.right.setCurrentWidget(run.window.report)
+    run.window.viewport.reset_camera(follow_selection=False)
+    run.settle(30)
+    run.capture(1)
+
+
+#: Je Anleitung ihre Geschichte. ``tests/test_guides.py`` verlangt für jede
+#: Anleitung im Kern genau eine.
+STORIES: Final[dict[str, Callable[[GuideRun], None]]] = {
+    "window-overview": story_window_overview,
+}
+
+
+# --- Prozesse -------------------------------------------------------------------------
+
+
+def _write_stamp(folder: Path, taken: list[guides.Guide]) -> None:
+    """Je Anleitung Version und Abdruck neben die Bilder schreiben."""
+    path = folder / "guides.json"
+    stamp: dict[str, Any] = {"guides": {}}
+    if path.is_file():
+        stamp = json.loads(path.read_text(encoding="utf-8"))
+    for guide in taken:
+        stamp["guides"][guide.key] = {
+            "version": APP_VERSION,
+            "fingerprint": guides.fingerprint(guide),
+        }
+    path.write_text(
+        json.dumps(stamp, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def _child(language: str, keys: list[str], target: Path) -> int:
+    """Die Kindseite: ein Fenster, alle gewählten Anleitungen einer Sprache."""
+    from app.core.paths import user_config_dir
+
+    room = os.environ.get(ROOM_VARIABLE)
+    if not room or not str(user_config_dir()).startswith(room):
+        raise SystemExit(
+            "Die Anleitungen entstehen nur isoliert, über den Elternprozess: "
+            f"{user_config_dir()} ist ein echtes Profil."
+        )
+    from app.ui.app import install_qt_translations
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.theme import apply_theme
+
+    load_operations()
+    app = QApplication.instance() or QApplication([])
+    assert isinstance(app, QApplication)
+    apply_theme(app, "dark")
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    install_qt_translations(app, language)
+
+    folder = target / language
+    folder.mkdir(parents=True, exist_ok=True)
+    chosen = [guide for guide in guides.GUIDES if guide.key in keys]
+    session = Session()
+    window = shots.prepared(MainWindow(session, UiSettings()), None, hidden=False)
+    # Die Restlaufzeit der Demo steht in der Statuszeile und wäre im Handbuch
+    # eine Zahl, die nach einer Woche nicht mehr stimmt.
+    window.trial_line.hide()
+    window.raise_()
+    window.activateWindow()
+    shots.settle(app, 40)
+    print(f"{language}:")
+    try:
+        for guide in chosen:
+            run = GuideRun(app, window, guide, folder)
+            STORIES[guide.key](run)
+            run.finish()
+    finally:
+        session.forget_changes()
+        window.close()
+        shots.release_viewport(window)
+    _write_stamp(folder, chosen)
+    return 0
+
+
+def _take(language: str, keys: list[str], target: Path) -> None:
+    """Eine Sprache in einem eigenen Prozess mit eigenen Nutzerverzeichnissen."""
+    with tempfile.TemporaryDirectory(prefix="solidon-anleitungen-") as room:
+        environment = dict(os.environ)
+        for name in ISOLATED_VARIABLES:
+            environment[name] = room
+        environment[ROOM_VARIABLE] = room
+        environment.pop("QT_QPA_PLATFORM", None)
+        environment.pop("QT_SCALE_FACTOR", None)
+        arguments = [sys.executable, str(Path(__file__).resolve()), "--kind", language]
+        arguments += ["--ziel", str(target), "--schirm", str(shots.SCREEN_INDEX)]
+        for key in keys:
+            arguments += ["--nur", key]
+        run = subprocess.run(arguments, env=environment, check=False)
+    expected = [
+        _picture_path(target / language, key)
+        for guide in guides.GUIDES
+        if guide.key in keys
+        for key in guide.figure_keys()
+    ]
+    missing = [path.name for path in expected if not path.is_file()]
+    if run.returncode != 0 or missing:
+        raise SystemExit(
+            f"Die Anleitungen für {language!r} sind nicht vollständig entstanden "
+            f"(Kindprozess endete mit {run.returncode}; es fehlen: {', '.join(missing) or '—'})"
+        )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Bildanleitungen des Handbuchs aus der echten Oberfläche aufnehmen."
+    )
+    # Die Schalter sind deutsch wie bei den übrigen Erzeugern, ihre Ziele
+    # englisch wie jeder Bezeichner in ``tools/`` (test_language_rules).
+    parser.add_argument(
+        "languages", nargs="*", metavar="SPRACHE", help="Sprachen, ohne Angabe alle"
+    )
+    parser.add_argument(
+        "--nur",
+        dest="only",
+        action="append",
+        default=[],
+        metavar="ANLEITUNG",
+        help="nur diese Anleitung (mehrfach möglich)",
+    )
+    parser.add_argument(
+        "--ziel",
+        dest="target",
+        type=Path,
+        default=figures.IMAGE_ROOT,
+        metavar="ORDNER",
+        help="Ordner für die Bilder, je Sprache ein Unterordner (Vorgabe: app/images/manual)",
+    )
+    parser.add_argument(
+        "--schirm",
+        dest="screen",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Bildschirm für die Aufnahme",
+    )
+    parser.add_argument("--kind", dest="child", default=None, help=argparse.SUPPRESS)
+    arguments = parser.parse_args(argv)
+
+    if arguments.screen is not None:
+        shots.SCREEN_INDEX = arguments.screen
+    known = {guide.key for guide in guides.GUIDES}
+    unknown = sorted(set(arguments.only) - known)
+    if unknown:
+        raise SystemExit(
+            f"Unbekannte Anleitung: {', '.join(unknown)}. Bekannt: {', '.join(sorted(known))}"
+        )
+    keys = arguments.only or sorted(known)
+    missing = sorted(set(keys) - set(STORIES))
+    if missing:
+        raise SystemExit(f"Ohne Geschichte: {', '.join(missing)}")
+
+    if arguments.child is not None:
+        return _child(arguments.child, keys, arguments.target)
+    for language in shots.chosen_languages(tuple(arguments.languages)):
+        _take(language, keys, arguments.target)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

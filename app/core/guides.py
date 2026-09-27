@@ -25,6 +25,7 @@ gerade steckt und wie seine Klasse heißt.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -32,7 +33,7 @@ from typing import Final, Literal
 from app.i18n import TranslatableText, _
 
 #: In welchem Teil des Handbuchs eine Anleitung steht. Die übrigen Teile
-#: (Verstehen, Hilfe, Nachschlagen) tragen keine Anleitungen.
+#: (Funktionen, Hilfe bei Problemen, Nachschlagen) tragen keine Anleitungen.
 GuidePart = Literal["start", "tasks"]
 
 #: Die festen Ziele, die eine Anleitung nennen darf.
@@ -56,10 +57,12 @@ TARGETS: Final[frozenset[str]] = frozenset(
         # Wer ein Loch verschieben will, soll die Zeile sehen, nicht die Liste.
         "history.last",
         "report.action",
-        # Startbildschirm
+        # Startbildschirm: die Ablagefläche und die Knöpfe „Neues Projekt",
+        # „Modell öffnen …", „Projekt öffnen …" und „Handbuch"
         "start.drop",
         "start.new",
-        "start.open",
+        "start.model",
+        "start.project",
         "start.manual",
         # Der offene Dialog als Ganzes und sein Hauptknopf. Der heißt nicht
         # „Übernehmen", sondern wie die Operation („Bohrung setzen"), bei
@@ -193,3 +196,26 @@ def find(key: str) -> Guide | None:
         if guide.key == key:
             return guide
     return None
+
+
+def fingerprint(guide: Guide) -> str:
+    """Ein Abdruck dessen, was die Bilder einer Anleitung zeigen sollen.
+
+    Die Aufnahme schreibt ihn neben die Bilder (``guides.json``); ein Test
+    vergleicht ihn beim Release mit dem heutigen Stand. Ein neuer Schritt, ein
+    anderes Ziel oder ein anderer Satz verlangt neue Bilder: Die Zahl der
+    Bilder hängt an den Schritten, die Markierung an den Zielen, und der Satz
+    steht als Alt-Text am Bild. Gezählt wird die deutsche Quelle, nicht eine
+    Übersetzung — eine bessere Übersetzung ändert kein Bild.
+    """
+    parts = [guide.key, str(len(guide.steps))]
+    for one in guide.steps:
+        parts.append(_source(one.text))
+        parts.append("1" if one.whole_window else "0")
+        for mark in one.marks:
+            parts.extend((mark.target, _source(mark.label)))
+    return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def _source(text: TranslatableText | str) -> str:
+    return text.msgid if isinstance(text, TranslatableText) else text

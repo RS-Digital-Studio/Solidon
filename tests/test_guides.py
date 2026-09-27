@@ -9,12 +9,15 @@ passen, prüft ein Test mit Marker ``rendered``.
 
 from __future__ import annotations
 
+import json
 from typing import get_args
 
 import pytest
 
+from app.branding import APP_VERSION
 from app.core import figures, guides, manual, tour
 from app.core.bootstrap import load_operations
+from app.i18n.catalog import available_languages
 
 load_operations()
 
@@ -158,3 +161,80 @@ def test_the_text_output_keeps_the_steps_and_drops_their_pictures() -> None:
         assert "figure:" not in text
         for one in guide.steps:
             assert text.count(str(one.text)) == 1, one.text
+
+
+def test_every_name_of_the_vocabulary_has_its_resolution_in_the_interface() -> None:
+    """Ein Name im Kern, den die Oberfläche nicht kennt, scheiterte erst beim Release."""
+    from app.ui import guide_targets
+
+    assert guides.TARGETS == guide_targets.RESOLVED
+
+
+def test_every_guide_has_its_story_and_no_story_is_left_over() -> None:
+    """Die Geschichte geht den Weg der Anleitung; ohne sie entsteht kein Bild."""
+    from tools import make_guides
+
+    assert set(make_guides.STORIES) == {guide.key for guide in guides.GUIDES}
+
+
+def test_the_fingerprint_follows_what_the_pictures_show() -> None:
+    """Ein neuer Schritt oder ein anderes Ziel verlangt neue Bilder; ein Tippfehler im
+    Satz eines anderen Schritts ändert den Abdruck auch — der Satz steht im Alt-Text."""
+    base = guides.Guide("probe", "Probe", "Kurz.", "tasks", (guides.step("Eins.", "report"),))
+    other_target = guides.Guide("probe", "Probe", "Kurz.", "tasks", (guides.step("Eins.", "tree"),))
+    more = guides.Guide(
+        "probe",
+        "Probe",
+        "Kurz.",
+        "tasks",
+        (guides.step("Eins.", "report"), guides.step("Zwei.", "tree")),
+    )
+    assert guides.fingerprint(base) == guides.fingerprint(base)
+    assert guides.fingerprint(base) != guides.fingerprint(other_target)
+    assert guides.fingerprint(base) != guides.fingerprint(more)
+
+
+@pytest.mark.rendered
+@pytest.mark.parametrize("language", available_languages())
+def test_the_guide_pictures_belong_to_this_version(language: str) -> None:
+    """Die Bilder entstehen beim Release (Konzept Handbuch §6); zwischen zwei
+    Releases ist dieser Test rot, und das ist ein Zustand, kein Fund."""
+    stamp_path = figures.IMAGE_ROOT / language / "guides.json"
+    assert stamp_path.is_file(), f"{stamp_path} fehlt — tools/make_guides.py lief nicht"
+    stamp = json.loads(stamp_path.read_text(encoding="utf-8"))["guides"]
+    for guide in guides.GUIDES:
+        entry = stamp.get(guide.key)
+        assert entry is not None, f"{language}: {guide.key} nie aufgenommen"
+        assert entry["version"] == APP_VERSION, f"{language}: {guide.key} von {entry['version']}"
+        assert entry["fingerprint"] == guides.fingerprint(guide), (
+            f"{language}: {guide.key} wurde seit der Aufnahme geändert"
+        )
+        for key in guide.figure_keys():
+            figure = figures.find(key)
+            assert figure is not None and figure.available(language), f"{language}: {key}"
+
+
+def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
+    """Jeder feste Name findet sein Widget am Fenster, wie die Anwendung es baut.
+
+    Die Namen, die einen Zustand brauchen — ein offener Dialog, ein gewählter
+    Befund, ein Schritt im Verlauf —, prüft erst die Aufnahme beim Release;
+    hier geht es um die, die immer da sind.
+    """
+    from app.ui import guide_targets
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    stateful = {"dialog", "dialog.accept", "report.action", "history.last"}
+    window = MainWindow(Session(), UiSettings())
+    try:
+        for name in sorted(guide_targets.RESOLVED - stateful):
+            assert guide_targets.widget_for(window, name) is not None, name
+        with pytest.raises(guide_targets.MissingTargetError):
+            guide_targets.widget_for(window, "dialog")
+        with pytest.raises(guide_targets.MissingTargetError):
+            guide_targets.area_for(window, "history.last")
+    finally:
+        window.close()
+        window.deleteLater()

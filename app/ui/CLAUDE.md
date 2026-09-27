@@ -2093,7 +2093,11 @@ benötigt keine globalen Warnfilter und fängt keine Warnung eines anderen Threa
 **Hilfe und Bedienung**
 
 `manual_window.py` · `tour.py` · `shortcuts_window.py` ·
-`shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py`
+`shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py` ·
+`guide_targets.py` (welches Bedienelement ein Name aus dem Wortschatz der
+Bildanleitungen meint — `widget_for` für das Widget, `area_for` für den Ort
+auf dem Schirm; die Tour und die Aufnahme `tools/make_guides.py` fragen
+dieselbe Auflösung, und ein Name ohne Ziel ist `MissingTargetError`)
 
 Die Befehlspalette trennt Titel und Kürzel nur in der ersten Zeile. Ein
 Sperrgrund oder erklärender Satz bleibt darunter in der Titelspalte; das

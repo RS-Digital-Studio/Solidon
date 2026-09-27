@@ -72,10 +72,14 @@ class Figure:
     Ein Schrittbild einer Bildanleitung wiederholt den Satz, unter dem es
     steht; in der Textausgabe stünde derselbe Satz dann zweimal hintereinander.
     Dort entfällt es, und die Aussage bleibt trotzdem vollständig."""
+    suffix: str = "png"
+    """Die Dateiendung eines Bildschirmfotos. Die Schrittbilder der
+    Bildanleitungen sind WebP: Gemessen am Übersichtsbild 85 statt 408 KB bei
+    gleicher Schrift, und sie reisen zu Dutzenden je Sprache mit der Anwendung."""
 
     def path(self, language: str = SOURCE_LANGUAGE) -> Path:
         """Der Dateiort eines Bildschirmfotos."""
-        return IMAGE_ROOT / language / f"{self.key}.png"
+        return IMAGE_ROOT / language / f"{self.key}.{self.suffix}"
 
     def available(self, language: str = SOURCE_LANGUAGE) -> bool:
         """Ob diese Abbildung hier und jetzt entstehen kann.
@@ -1516,6 +1520,7 @@ def _guide_figures() -> tuple[Figure, ...]:
             ),
             kind="shot",
             in_text=False,
+            suffix="webp",
         )
         for guide in guides.GUIDES
         for number, (key, one) in enumerate(

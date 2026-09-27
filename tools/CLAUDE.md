@@ -174,7 +174,12 @@ Der Importgraph von `affected_tests.py` behält auch nicht mehr vorhandene
 Importziele als Knoten, damit gelöschte Module ihre direkten und indirekten
 Testabhängigkeiten behalten.
 
-`make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
+`make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_guides.py`
+(die Bildanleitungen des Handbuchs: je Anleitung eine Geschichte durch die
+echte Oberfläche, Rahmen, Nummern und Pfeile an den Zielen aus
+`app/ui/guide_targets.py`, WebP je Schritt, ein Kindprozess je Sprache;
+läuft vor `make_manual.py`, und ein fehlendes Ziel hält den Lauf an) ·
+`make_web_images.py`
 · `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
 `make_video.py` · `make_longform_video.py` (deutsche und englische 3-Minuten+-Tutorials:
 sichtbares leeres Projekt, echte Dialoge, höchstens einer zugleich,

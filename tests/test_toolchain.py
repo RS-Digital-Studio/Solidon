@@ -2370,6 +2370,9 @@ RENDERED_TESTS: Final[frozenset[str]] = frozenset(
         # Eine geänderte Zeichnung (Fensterschema, 22.09.2026) stimmt erst nach
         # dem Handbuchlauf beim Release wieder.
         "test_the_drawn_figures_are_the_ones_the_code_draws",
+        # Die Bildanleitungen des Handbuchs: Version und Abdruck je Anleitung
+        # stimmen erst nach dem Aufnahmelauf beim Release (Konzept Handbuch §6).
+        "test_the_guide_pictures_belong_to_this_version",
     }
 )
 
