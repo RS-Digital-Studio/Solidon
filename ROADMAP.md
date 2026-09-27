@@ -67,10 +67,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Die Auskunft steht (`boolean.parts_not_united` mit *Stelle zeigen*, `ae178de8c`); offen die Geometrie: Teil 10 kreuzt sich 1 121-mal selbst, die 21 Teile lassen sich deshalb nicht vereinigen — gekippt 15° liegen 32,6 mm³ jenseits der alten Kappe, Verdoppeln bleibt ohne Wirkung, Versetzen „geht nicht mehr durch“; Weg über das Auflösen der Eigenkreuzung |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); Schreiben je Teil (`2cf02ad2d`) und die Zeile „Brim · Teil“ im Druckdialog stehen; offen die Abnahme im Slicer mit Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
 | [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); Curas Fenster bekommt mit Stufe E eine 3MF mit Sperre und Werten je Teil; offen die Sichtprüfung im Cura-Fenster |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); von E stehen Rat, Werte und die Zeile je Teil und Curas Fenster, offen die Abnahme im Slicer; dann der Rest von K, Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -2026,44 +2025,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     eine Aussparung wird abgezogen — wie die Teilarten der Orca-Familie.
 
   **Offen:** der Probedruck der Schüssel am Centauri Carbon 2 mit
-  übernommenen Vorschlägen. Die Frage zum Brim je Teil beim Export steht als
-  RM-250.
-
-<a id="rm-250"></a>
-
-- [~] **RM-250 — Der Brim je Teil beim Export ist eine Automatik.**
-  Gefunden am 26.09.2026 bei RM-247. `advise.for_part` setzt beim Export
-  einem einzelnen Teil einen Brim, wenn es auf weniger als `SMALL_FOOTPRINT`
-  steht oder schlank ist, auch wenn die Platte auf Schürze steht und niemand
-  „Vorschläge übernehmen" geklickt hat (seit 03.09.2026, mit Befund
-  `export.part_setting`). Roberts Vorgabe vom 26.09.2026 lautet: nur mit
-  „Vorschläge übernehmen" werden Einstellungen auf das Modell zugeschnitten,
-  sonst gehen die Standardeinstellungen zum Slicer. Zu entscheiden: Bleibt
-  die Automatik je Teil (sie verhindert, dass kleine Teile abreißen, und ist
-  im Prüfbericht benannt), oder wird sie ein Vorschlag je Teil im Druckdialog?
-  Die neue Regel für viele kleine Füße ist bewusst nur ein Vorschlag.
-
-  **Durchsicht v0.5.1 (26.09.2026, druck):** An der Schüssel stand deshalb schon bei
-  *Standard* `export.part_setting`. Drei Wege: **A** — Automatik behalten (heute): kein
-  abgerissenes Kleinteil, aber *Standard* ist nicht Standard, und der Kunde sieht den
-  Brim erst im Exportbericht. **B** — Vorschlag je Teil im Druckdialog: eine Zeile
-  „Brim · <Teil>“ mit Grund, vorbelegt angehakt wie alle; *Vorschläge übernehmen* nimmt
-  sie mit, ohne Klick geht Standard hinaus — folgerichtig zur Regel vom 26.09.2026 und
-  zum Vorschlag „kleine Füße“, der schon so gebaut ist; `_TargetedAdvice` trägt schon
-  Ziele (Spulen), ein Ziel „Teil“ wäre dieselbe Bauart. **C** — Automatik, aber vorher
-  sichtbar als gesetzte, abwählbare Zeile im Dialog. Empfehlung der Durchsicht: B.
-
-  **Entschieden am 27.09.2026 mit dem Konzept Herstellerprofil** (Entscheidung G, im
-  Wesentlichen Weg B): Ein Brim je Teil kommt nur noch mit der Übernahme des
-  Vorschlags, und dann nur an den Teilen, die ihn brauchen. Seit `aed31c787` schreibt
-  `writer._part_settings` nur noch Pfade aus `PrintSettings.accepted`; ohne Klick geht
-  Elegoos Auto-Brim hinaus. Gemessen im ElegooSlicer: Minigolf-Platte 11,67 m und
-  Waschschüssel 0,93 m Rand, jeweils gleich dem Lauf mit Elegoos Profil allein (vorher
-  8,51 und 0,40 m). **Gebaut mit Stufe E** von [RM-281](#rm-281): Ein übernommener Brim
-  steht nur an den Teilen, die ihn brauchen (`2cf02ad2d`), und die Zeile im Druckdialog
-  nennt sie („Haftung · Turm“, ab vier Teilen gezählt, alle im Tooltip). Zeile und
-  Export fragen denselben Rat je Teil (`writer.part_advice`), je Spule des Teils.
-  **Offen:** die Abnahme im Slicer mit Stufe E.
+  übernommenen Vorschlägen. Die Frage zum Brim je Teil beim Export ist mit
+  [RM-250](ROADMAP-ARCHIV.md#rm-250) erledigt.
 
 <a id="rm-252"></a>
 
@@ -2186,7 +2149,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     Schwellenvorschlag am SV06 aus der Gesamtprüfung fällt damit weg.
   - Nebenbei aus der Gesamtprüfung behoben: Rand über den Bettrand und zu hohe Teile
     (`5063fc9f5`), Bambu Studio, das nach der fertigen Druckdatei nicht endet
-    (`64a0e4677`, drei von rund hundert Läufen).
+    (`64a0e4677`, drei von rund hundert Läufen), abstürzende PHP-Prüfserver unter
+    Last (OPcache, `f333bd008`), der Hinweis zur Kalibrierung ohne Passung
+    (`a97ee3d2e`).
   - **Schrägnaht steht**, aus Roberts Druck des Minigolf-Satzes mit 50 mm/s in der
     ersten Schicht: Die Naht an den vier Schäften (Ø 25,7, 200 mm) kam aus Elegoos Profil
     („aligned“, keine Schrägnaht, Rampenlänge 0), am Ende jeder Außenschleife liefen 0,73
@@ -2203,18 +2168,38 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     zum Vergleich `output/druckbereit/minigolf-2026-09-27/…-schraegnaht.gcode` (9:49 statt
     9:18 h).
 
+  - **E steht** (`2cf02ad2d`, `074364017`, `6daf7ee39`): `for_part` fragt mit Profil jede
+    Regel für die geometrischen Pfade (`advise.PART_PATHS`), `handover.split_for_parts`
+    setzt die Platte dort auf die Grundlage, Orca und Prusa bekommen Objektwerte, Cura je
+    Netz die Rücknahme (`CURA_PER_MESH`); Haftungsprüfung und Stützsperre fragen den Wert
+    je Teil, der Konsolenlauf dieselbe Platte. Die Zeile im Druckdialog nennt die Teile
+    ([RM-250](ROADMAP-ARCHIV.md#rm-250)); sie und der Export fragen denselben Rat je Teil und Spule
+    (`writer.part_advice`) — vorher las der Export nur das Material von Slot 0, und ein
+    Griff aus TPU auf einem Teil aus PETG verlor seine langsame Außenwand. Curas Fenster
+    bekommt Sperre und Werte je Teil als 3MF (RM-257). Abgenommen am Minigolf-Satz mit
+    einem Pilz, der ohne Stütze in die Luft druckt (`je_teil_abnahme`,
+    `output/review/gesamt-2026-09-27/stufe-e*`): ElegooSlicer, PrusaSlicer 2.9.6 und
+    CuraEngine stützen nur den Pilz, die Ränder der übrigen Teile bleiben geschlossen.
+    PrusaSlicer stützte den Pilz zuerst gar nicht: Der Objektwert setzte
+    `support_material` ohne `support_material_auto`, und Prusas Grundlage stützt nur an
+    Verstärkern (Entscheidung J, `36ca07053`). Über Orcas Auto-Brim schlägt Solidon
+    keinen Brim mehr vor (`83a8e3de1`): Er rechnet aus Höhe und Grundfläche und hielt
+    mehr als die feste Breite des Profils (Schäfte 0,9 statt 1,9 m Randbahn).
+  - **K steht:** Die Gegenprobe prüft die Grundlage an einer Stichprobe, bei PrusaSlicer
+    Modell, Drucker und Startcode (C, `44ab90965`), bei CuraEngine den Namen der Maschine
+    und den Startcode vor der ersten Schicht (`f1a1fba65`); an den Druckdateien der
+    Abnahme (SV06) still.
+  - Aus Roberts Befunden am Abend des 27.09.2026 behoben: Die Erstinbetriebnahme schlägt
+    den Drucker des gemerkten Slicers gleich beim Öffnen vor, *Fertig* wartet auf diese
+    Suche. Im Druckdialog steht die Slicerwahl über dem zugeklappten Abschnitt, eine
+    Druckerwahl dort wird die Vorgabe neuer Projekte, eine gemerkte Maschine gilt nur für
+    ihren Drucker und Slicer, und steht der Slicer auf einem anderen Drucker, bietet der
+    Dialog ihn an („… übernehmen“; `75bdc1914`, `67f42c99a`). Ein gemessener
+    Überhangwinkel gilt nur auf dem Raster seiner Probe (`manufacturer.measured_on`,
+    `b50d94d1d`); mit anderer Bahnbreite oder der Stufe „Fein“ stützten Analyse und
+    Slicer sonst nach der Probe weiter.
+
   **Offen, in dieser Reihenfolge:**
-  - **E** Je Teil. Stehen: `for_part` fragt mit Profil jede Regel für die geometrischen
-    Pfade (`advise.PART_PATHS`), `handover.split_for_parts` setzt die Platte dort auf die
-    Grundlage, Orca und Prusa bekommen Objektwerte, Cura je Netz die Rücknahme
-    (`CURA_PER_MESH`); Haftungsprüfung und Stützsperre fragen den Wert je Teil, der
-    Konsolenlauf dieselbe Platte. Die Zeile im Druckdialog nennt die Teile (RM-250); sie
-    und der Export fragen denselben Rat je Teil und Spule (`writer.part_advice`) — vorher
-    las der Export nur das Material von Slot 0, und ein Griff aus TPU auf einem Teil aus
-    PETG verlor seine langsame Außenwand. Curas Fenster bekommt Sperre und Werte je Teil
-    als 3MF (RM-257). Offen: die Abnahme im Slicer: Minigolf-Satz mit einem gestützten
-    Körper — Stütze nur an ihm, Brim der übrigen geschlossen.
-  - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
   - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
     Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder
     Slicer“ als Gesamtabnahme.
@@ -2225,8 +2210,11 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Schicht 2). Der zweite Druck mit der ganzen ersten Schicht auf 50 mm/s lief sauber, die
   Stege geschlossen (Fotos bis Schicht 4; Roberts Urteil: die Einstellungen passen).
   Geändert waren dabei zwei Dinge, das Tempo und die frisch gereinigte Platte.
-  `efd4686c2` sorgt dafür, dass das Feld „Erste Schicht“ auch die Füllung trifft. Ob
-  Solidon an schmalen Stegen von sich aus langsamer vorschlägt, gehört in Paket 3.
+  `efd4686c2` sorgt dafür, dass das Feld „Erste Schicht“ auch die Füllung trifft. An
+  schmalen Stegen schlägt Solidon von sich aus 50 mm/s vor (`advise.NARROW_WEB_*`), nach
+  Anteil der ersten Schicht oder nach Fläche: Der Rumpf der Platte trägt 195 mm² Stege,
+  aber nur 8,6 % — gegen den Anteil allein blieb die Regel dort stumm. Die Fläche ist an
+  186 Körpern des Korpus geeicht (`NARROW_WEB_AREA`).
 
 <a id="rm-282"></a>
 
