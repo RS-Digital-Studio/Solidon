@@ -191,6 +191,13 @@ gescheitert ist:
   Akzentfarbe und halbfett — Regel 18) und steht an Körper und Fläche: Dort
   ist ein Baustein möglich, und der Knopf soll auffallen (Robert,
   11.09.2026). An einer Bohrung oder Verrundung steht er nicht.
+* **Handlungen für alle Körper stehen, wenn nichts gewählt ist — und nur
+  dann** (Robert, 27.09.2026). Welche das sind, sagt das Register
+  (`takes_whole_scene`: *Druckoptimal ausrichten*, *Auf dem Bett anordnen*,
+  *Überschneidungen prüfen*). An einem gewählten Körper sagte der Knopf, er
+  gelte diesem Körper, und nahm doch alle. Ohne Auswahl steht über ihnen
+  „Gilt für alle Körper.", ohne Suchfeld; eine leere Szene lässt nur
+  *Bausteine* und den Satz, wie man zu Handlungen kommt.
 * **Aus dem Register herleiten lässt sich das nicht.** Gemessen am 07.09.2026:
   Nach Kategorie-Rang aus `MENU_GROUPS` sortiert stünden bei zwei gewählten
   Körpern *Auf dem Bett anordnen*, *Objekt duplizieren* und *Objekt entfernen*

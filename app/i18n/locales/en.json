@@ -3592,6 +3592,7 @@
   "Gilt bei nicht angehaktem {field}.": "Applies when {field} is not ticked.",
   "Gilt bei {field} = {value}.": "Applies when {field} = {value}.",
   "Gilt für": "Applies to",
+  "Gilt für alle Körper.": "Applies to all bodies.",
   "Gilt für einen einzelnen Körper. Leer übernimmt den Namen aus der Datei.": "Applies to a single body. Empty takes the name from the file.",
   "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit der Slicer rechnet. Sobald Sie im Filamentwähler eine Farbe setzen oder über „Filament auf eine Fläche“ arbeiten, gilt die Spule.": "Applies only while the part has no coloured spool — then this is what the slicer works with. As soon as you set a colour in the filament picker or work via “Filament on a face”, the spool wins.",
   "Gilt nur, wenn der Bezugspunkt „Genannter Punkt“ ist.": "Applies only when the reference point is “Named point”.",

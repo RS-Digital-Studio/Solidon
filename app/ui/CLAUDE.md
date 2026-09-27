@@ -1435,8 +1435,9 @@ den gewählten Ausschnitt im Körpermodus nicht.
 `selection_operations.py` (Körperoperationen in einer eigenen Karte unter der
 von Bericht und Chat — beide Karten stapelt `overlay.CardColumn` als eine
 Zone; einmal aus dem Register aufgebaut, bei Auswahlwechseln nur
-nachgeführt — eine Gruppe über `OPEN_UP_TO` beginnt zugeklappt, und
-`PICKER_HANDLES` lässt dem Filament-Schnellwähler darüber seine Handlung) ·
+nachgeführt — eine Gruppe über `OPEN_UP_TO` beginnt zugeklappt,
+`PICKER_HANDLES` lässt dem Filament-Schnellwähler darüber seine Handlung, und
+ohne Auswahl stehen die Handlungen für alle Körper) ·
 `tool_strip.py` · `analysis_bar.py` · `section_bar.py` · `split_bar.py` ·
 `transform_bar.py` · `explode_bar.py` · `sculpt_bar.py` · `pose_bar.py` ·
 `scale_widget.py` (der Würfel am Körper) · `slot_handle.py` (die zwei Knöpfe am

@@ -3592,6 +3592,7 @@
   "Gilt bei nicht angehaktem {field}.": "Aplica-se quando {field} não está marcado.",
   "Gilt bei {field} = {value}.": "Aplica-se quando {field} = {value}.",
   "Gilt für": "Aplica-se a",
+  "Gilt für alle Körper.": "Aplica-se a todos os corpos.",
   "Gilt für einen einzelnen Körper. Leer übernimmt den Namen aus der Datei.": "Aplica-se a um só corpo. Vazio adota o nome do ficheiro.",
   "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit der Slicer rechnet. Sobald Sie im Filamentwähler eine Farbe setzen oder über „Filament auf eine Fläche“ arbeiten, gilt die Spule.": "Só vale enquanto a peça não tiver uma bobina com cor; então é com isto que o slicer conta. Assim que definir uma cor no seletor de filamento ou usar «Filamento numa face», vale a bobina.",
   "Gilt nur, wenn der Bezugspunkt „Genannter Punkt“ ist.": "Aplica-se apenas quando o ponto de referência é «Ponto indicado».",
