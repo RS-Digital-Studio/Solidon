@@ -3607,8 +3607,9 @@ def test_cura_gets_every_part_and_the_blocker_as_meshes_of_their_own(
     Bis zum 27.09.2026 bekam Cura alle Teile als ein STL, und die Sperre fiel
     weg — am Minigolf-Körper im Prüfbericht gemessen: mit der Sperre als
     eigenem Netz und ``anti_overhang_mesh`` 18 476 Stützbewegungen weniger,
-    die Modellbahn gleich. Das zusammengelegte STL bleibt für Curas Fenster,
-    und dort setzt der Kunde die Sperre selbst — der Befund sagt es.
+    die Modellbahn gleich. Curas Fenster bekommt dieselben Netze als 3MF
+    (:func:`test_curas_window_gets_the_blocker_and_the_values_of_each_part`),
+    der Befund ist deshalb derselbe wie bei jedem Slicer.
     """
     entry = scene_object(mesh=tunnel_block())
     second = scene_object("obj_2", "Zweites")
@@ -3636,7 +3637,93 @@ def test_cura_gets_every_part_and_the_blocker_as_meshes_of_their_own(
     blocker = read_mesh(meshes[1].path.read_bytes(), ".stl")
     assert blocker.volume > 0.0
     [said] = [finding for finding in findings if finding.code == "export.support_blocker"]
-    assert "Cura-Fenster" in str(said.message), "der Befund nennt den Handgriff im Fenster"
+    assert "Cura-Fenster" not in str(said.message), "das Fenster bekommt die Sperre selbst"
+
+
+def _ledge_tunnel() -> MeshData:
+    """Der Tunnelblock mit einem Kragarm oben, 30 mm frei: Er braucht Stützen,
+    und die Tunneldecke trägt sich selbst — Stützen an und Kanal gesperrt."""
+    ledge = trimesh.creation.box(extents=(30.0, 40.0, 3.0))
+    ledge.apply_translation((44.0, 0.0, 38.5))
+    return MeshData.of(trimesh.boolean.union([tunnel_block().raw, ledge]))
+
+
+def test_curas_window_gets_the_blocker_and_the_values_of_each_part(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Curas Fenster bekommt, was die Kommandozeile bekommt (RM-257): je Teil
+    ein Objekt mit seinen Werten, die Sperre als Netz mit ``anti_overhang_mesh``
+    — als 3MF in Curas Schreibweise statt des zusammengelegten STL, das weder
+    Sperre noch Werte je Teil trug.
+
+    Die Sperre steht als Komponente neben ihrem Körper in einem Objekt: Cura
+    setzt ein freistehendes Objekt aufs Bett, ein Kind einer Gruppe wandert
+    mit ihr. Verschoben um den halben Bauraum, denn Cura misst eine 3MF von
+    der Bettecke und ordnet sie beim Laden nicht an.
+    """
+    taken = print_settings.with_accepted(
+        print_settings.with_accepted(print_settings.resolve(profile), "support.style", "grid"),
+        "support.block_channels",
+        True,
+    )
+    objects = [
+        scene_object("obj_1", "Tunnel", mesh=_ledge_tunnel()),
+        replace(
+            scene_object("obj_2", "Klotz"),
+            mesh=apply(scene_object().mesh, translation((70.0, 0.0, 0.0))),
+        ),
+    ]
+
+    console, _console_findings = write_assembly(
+        objects,
+        tmp_path / "konsole",
+        project_name="t",
+        profile=profile,
+        settings=taken,
+        flavour="cura",
+    )
+    window, findings = write_assembly(
+        objects,
+        tmp_path / "fenster",
+        project_name="t",
+        profile=profile,
+        settings=taken,
+        flavour="cura",
+        for_window=True,
+    )
+
+    assert window.suffix == ".3mf"
+    archive = zipfile.ZipFile(window)
+    assert sorted(archive.namelist()) == ["3D/3dmodel.model", "[Content_Types].xml", "_rels/.rels"]
+    model = ET.fromstring(archive.read("3D/3dmodel.model"))
+    core = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    objects_by_id = {node.get("id"): node for node in model.iter(f"{core}object")}
+
+    def values(node: ET.Element) -> dict[str, str]:
+        return {
+            meta.get("name", ""): meta.text or ""
+            for meta in node.iter(f"{core}metadata")
+            if meta.get("name", "").startswith("cura:")
+        }
+
+    items = list(model.iter(f"{core}item"))
+    width, depth, _height = profile.printer.build_volume
+    assert {item.get("transform") for item in items} == {
+        f"1 0 0 0 1 0 0 0 1 {width / 2:g} {depth / 2:g} 0"
+    }
+    tunnel, block = (objects_by_id[item.get("objectid")] for item in items)
+    body, shield = (
+        objects_by_id[component.get("objectid")] for component in tunnel.iter(f"{core}component")
+    )
+    assert values(body) == {"cura:support_enable": "True"}
+    assert values(shield) == {"cura:anti_overhang_mesh": "True"}
+    assert values(block) == {"cura:support_enable": "False"}
+    assert [dict(mesh.settings) for mesh in handover.cura_meshes(console)] == [
+        {"support_enable": "true"},
+        {"anti_overhang_mesh": "true"},
+        {"support_enable": "false"},
+    ], "dieselben Werte wie in der Kommandozeile, dort in ihrer Schreibweise"
+    assert "export.support_blocker" in {finding.code for finding in findings}
 
 
 def test_cura_gets_parts_without_a_blocker_when_none_is_taken(

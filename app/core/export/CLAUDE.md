@@ -86,11 +86,14 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   `detail="support"` und extrudiert die Kanalscheiben mit `manifold3d`
   (`BLOCKER_SIMPLIFY`, `BLOCKER_MARGIN`); abbrechbar bis in den Schnitt
   (`write_assembly(cancelled=)`, `_PlateJob.cancelled`).
-- **Cura bekommt je Teil ein Netz**: neben dem zusammengelegten STL fürs
-  Fenster je Teil und je Sperre ein STL und die Netzliste `<name>.meshes.json`
+- **Cura bekommt je Teil ein Netz**: neben dem zusammengelegten STL je Teil
+  und je Sperre ein STL und die Netzliste `<name>.meshes.json`
   (`write_cura_meshes`); `_command` liest sie (`cura_meshes`) und setzt je Netz
   `-l` mit seinen Werten, die Sperre mit `anti_overhang_mesh=true`;
   die Werte je Netz kommen aus `writer._part_values` (Rücknahme je Netz, `handover.PartSplit`).
+  Curas Fenster bekommt dasselbe als 3MF (`writer._cura_window`,
+  `threemf.write_assembly(cura=True)`), angefordert vom Fenster-Arbeiter
+  des Druckdialogs (`_PlateJob.for_window`).
 - **CuraEngine bekommt seine Maschine aus der Druckerdefinition**
   (`_cura_machine`): mit `PrinterProfile.cura_definition` und installierter
   Datei `-j`, sonst `fdmprinter`; Start- und Endcode aus der Kette, gefüllt von

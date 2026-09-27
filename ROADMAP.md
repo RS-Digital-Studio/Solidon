@@ -69,8 +69,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-250 — Der Brim je Teil beim Export ist eine Automatik](#rm-250) | Geometrie, Erkennung und Druckvorbereitung | Entschieden mit dem Konzept Herstellerprofil (Entscheidung G): ohne Klick kein Brim je Teil mehr (`aed31c787`, im ElegooSlicer an Platte und Schüssel derselbe Rand wie mit Elegoos Profil allein); Schreiben je Teil (`2cf02ad2d`) und die Zeile „Brim · Teil“ im Druckdialog stehen; offen die Abnahme im Slicer mit Stufe E von [RM-281](#rm-281) |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
-| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); offen Curas Fenster, das die Sperre nicht bekommt (Stufe E von [RM-281](#rm-281)) |
-| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); von E stehen Rat, Werte und die Zeile je Teil, offen Curas Fenster und die Abnahme im Slicer; dann der Rest von K, Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
+| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); Curas Fenster bekommt mit Stufe E eine 3MF mit Sperre und Werten je Teil; offen die Sichtprüfung im Cura-Fenster |
+| [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis D, F und L stehen und sind im Slicer abgenommen (C `44ab90965`, F `d4dd5332b`, L `e0e3cf982`); von E stehen Rat, Werte und die Zeile je Teil und Curas Fenster, offen die Abnahme im Slicer; dann der Rest von K, Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
@@ -2120,9 +2120,14 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Teil geht als eigenes Netz in CuraEngine, jede Sperre als Netz mit
   `anti_overhang_mesh`. Gemessen an der Waschschüssel statt der Okarina, in CuraEngine
   5.13 am K1 Max, Neptune 4 und Centauri Carbon 2: Stütze 38 % kürzer, Wände auf 0,1 m
-  gleich. **Offen:** Curas Fenster öffnet das zusammengelegte STL und bekommt die Sperre
-  nicht, der Exportbefund sagt es dem Kunden. Der Weg dorthin, eine 3MF mit der Sperre
-  als Objekt, gehört zu Stufe E von [RM-281](#rm-281).
+  gleich. **Das Fenster mit Stufe E** von [RM-281](#rm-281): *Im Slicer öffnen* gibt Cura
+  statt des zusammengelegten STL eine 3MF in seiner Schreibweise (`writer._cura_window`):
+  dieselben Netze und Werte wie die Konsole, je Objekt als `cura:<schlüssel>`, die Sperre
+  als Komponente neben ihrem Körper mit `cura:anti_overhang_mesh`, um den halben Bauraum
+  verschoben. Belegt an Curas Quelltext: libSavitar liest die Metadaten am Objekt und
+  streift `cura:` ab, eine Komponente wird Kind einer Gruppe (die nicht einzeln aufs Bett
+  fällt), und Uraniums `MeshFileHandler` zentriert das Netz nach dem Lesen, sodass der
+  Versatz einmal wirkt. **Offen:** die Sichtprüfung im Cura-Fenster selbst.
 
 <a id="rm-281"></a>
 
@@ -2206,9 +2211,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     Konsolenlauf dieselbe Platte. Die Zeile im Druckdialog nennt die Teile (RM-250); sie
     und der Export fragen denselben Rat je Teil und Spule (`writer.part_advice`) — vorher
     las der Export nur das Material von Slot 0, und ein Griff aus TPU auf einem Teil aus
-    PETG verlor seine langsame Außenwand. Offen: die Sperre für Curas Fenster (RM-257)
-    und die Abnahme im Slicer: Minigolf-Satz mit einem gestützten Körper — Stütze nur an
-    ihm, Brim der übrigen geschlossen.
+    PETG verlor seine langsame Außenwand. Curas Fenster bekommt Sperre und Werte je Teil
+    als 3MF (RM-257). Offen: die Abnahme im Slicer: Minigolf-Satz mit einem gestützten
+    Körper — Stütze nur an ihm, Brim der übrigen geschlossen.
   - **K** Rest der Gegenprobe: Identität und Startcode bei PrusaSlicer und Cura.
   - Danach Paket 3 (Mindestschichtzeit, Keilspitzen, Stützbedarf gegen das Urteil des
     Herstellers, Brückenregel, Inseln an Schrauben) und der Lauf „jedes Modell × jeder

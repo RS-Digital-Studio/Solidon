@@ -4672,6 +4672,15 @@ _CURA_CONTAINER_VERSION: Final = 4
 _CURA_PROFILE_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
 
 
+def for_the_cura_window(values: Mapping[str, str]) -> dict[str, str]:
+    """Werte in der Schreibweise von Curas Fenster: Wahrheitswerte als
+    ``True``/``False``, wie sein eigener Schreiber sie ablegt; die Konsole
+    liest ``true``/``false`` (:func:`values_for`)."""
+    return {
+        key: {"true": "True", "false": "False"}.get(value, value) for key, value in values.items()
+    }
+
+
 def cura_profile_beside(
     model: Path,
     settings: PrintSettings,
@@ -4762,9 +4771,8 @@ def cura_profile_beside(
         if position is not None:
             lines.append(f"position = {position}")
         lines += ["", "[values]"]
-        for key, value in sorted(values.items()):
-            written = {"true": "True", "false": "False"}.get(value, value)
-            lines.append(f"{key} = {written}")
+        for key, value in sorted(for_the_cura_window(values).items()):
+            lines.append(f"{key} = {value}")
         return "\n".join(lines) + "\n"
 
     shared = as_mapping(settings_for_handover(settings, profile, "cura", slots, setup), "cura")

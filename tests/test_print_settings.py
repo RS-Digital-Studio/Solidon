@@ -6472,3 +6472,28 @@ def test_a_long_list_of_parts_is_counted_in_the_line_and_named_in_full_beside_it
         "Gilt für: Scheibe 1, Scheibe 2, Scheibe 3, Scheibe 4, Scheibe 5"
     )
     assert PrintSettingsDialog._advice_parts(entry()) == ""
+
+
+def test_opening_curas_window_writes_the_3mf_the_console_writes_an_stl(tmp_path: Path) -> None:
+    """*Im Slicer öffnen* verlangt die Datei fürs Fenster (RM-257): bei Cura die
+    3MF mit Sperre und Werten je Teil. *Slicen* bleibt beim STL mit Netzliste,
+    denn CuraEngine liest keine 3MF."""
+    from app.ui.print_settings_dialog import _OpenInSlicerWorker, _PlateJob, _prepare_plate
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    job = _PlateJob(
+        objects=(_standing_box("Klotz", (20.0, 20.0, 10.0)),),
+        plates=(0,),
+        folder=tmp_path,
+        name="t",
+        setup=handover.SlicerSetup(tmp_path / "CuraEngine.exe", "cura"),
+        settings=print_settings.resolve(profile, "standard"),
+        profile=profile,
+        slot_profiles={},
+    )
+
+    window = _OpenInSlicerWorker(job)._job
+
+    assert window.for_window and not job.for_window
+    assert _prepare_plate(window, 0).model.suffix == ".3mf"
+    assert _prepare_plate(job, 0).model.suffix == ".stl"

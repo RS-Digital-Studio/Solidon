@@ -1599,6 +1599,11 @@ class _PlateJob:
     #: (``writer._support_blocker``); ohne ihn griff *Abbrechen* erst danach.
     #: Der Arbeiter setzt ihn selbst (``replace``), der Dialog kennt ihn nicht.
     cancelled: CancelToken | None = None
+    #: Ob die Dateien ein Fenster öffnet statt der Kommandozeile. Curas Fenster
+    #: bekommt dann eine 3MF mit Stützsperre und Werten je Teil statt des STL
+    #: der Konsole (``writer.write_assembly``, RM-257). Auch das setzt der
+    #: Arbeiter selbst.
+    for_window: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1730,6 +1735,7 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         scene=job.scene,
         document=job.document,
         cancelled=job.cancelled,
+        for_window=job.for_window,
     )
     by_plate: dict[int, tuple[MaterialSlot, ...]] = {}
     for plate in job.plates:
@@ -1762,6 +1768,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         scene=job.scene,
         document=job.document,
         cancelled=job.cancelled,
+        for_window=job.for_window,
     )
     return PlateRun(
         plate=plate,
@@ -2293,7 +2300,7 @@ class _OpenInSlicerWorker(Worker):
     def __init__(self, job: _PlateJob) -> None:
         super().__init__()
         self.cancelled = CancelSignal()
-        self._job = replace(job, cancelled=self.cancelled)
+        self._job = replace(job, cancelled=self.cancelled, for_window=True)
 
     def cancel(self) -> None:
         """Weitere Platten und das Öffnen nach dem aktuellen Schreiben verwerfen."""

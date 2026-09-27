@@ -1478,6 +1478,7 @@ def write_assembly(
     document: Document | None = None,
     checked: Sequence[Finding] | None = None,
     cancelled: CancelToken | None = None,
+    for_window: bool = False,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
@@ -1486,7 +1487,9 @@ def write_assembly(
     eine Datei entsteht.
 
     Ein ausdrücklicher Dateiexport (`for_slicer=False`) bleibt 3MF.
-    Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format.
+    Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format,
+    Curas Fenster (``for_window``) eine 3MF in seiner Schreibweise
+    (:func:`_cura_window`).
 
     Der Unterschied zu :func:`write_plan` ist nicht das Format, sondern die
     Zahl der Dateien: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
@@ -1619,6 +1622,17 @@ def write_assembly(
             configured = handover.configured_slots(slots, settings)
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
+        if for_window and takes_mesh_settings(flavour):
+            target, noted = _cura_window(
+                chosen,
+                exported,
+                directory / (given_name(project_name, "projekt") + ".3mf"),
+                project_name,
+                part_values,
+                profile,
+                cancelled,
+            )
+            return target, findings + noted
         target = _written(
             directory / (given_name(project_name, "projekt") + ".stl"),
             _cura_assembly([exported[entry.id] for entry in chosen], bed),
@@ -1801,12 +1815,9 @@ def _cura_meshes(
     Bis zum 27.09.2026 bekam Cura alle Teile als ein STL, und die Sperre fiel
     dabei weg (``NOT_TAKEN_BY``). Als eigenes Netz mit ``anti_overhang_mesh``
     wirkt sie — gemessen im Prüfbericht Cura (Abschnitt 1.5): 18 476 Stützbewegungen
-    wurden 0, die Modellbahn blieb gleich. Das zusammengelegte STL bleibt die
-    Datei, die Curas Fenster öffnet; die Netze und ihre Liste
-    (``handover.write_cura_meshes``) liest nur die Kommandozeile.
-
-    Die Sperre gilt nur dem Slicen: Im Fenster setzt der Kunde sie selbst,
-    und der Befund sagt es ihm.
+    wurden 0, die Modellbahn blieb gleich. Die Netze und ihre Liste
+    (``handover.write_cura_meshes``) liest die Kommandozeile; Curas Fenster
+    bekommt dieselben Netze mit denselben Werten als 3MF (:func:`_cura_window`).
 
     **Je Netz, was nur diesem Teil gilt** (Entscheidung G): Die Platte trägt
     die Übernahme, ein Teil, das sie nicht braucht, bekommt die Grundlage
@@ -1815,27 +1826,7 @@ def _cura_meshes(
     """
     from app.core.export import handover
 
-    findings: list[Finding] = []
-    blockers: dict[str, MeshData | None] = {}
-    for entry in chosen:
-        own = part_values[entry.id].effective
-        if own is None or own.support.style == "none" or not own.support.block_channels:
-            continue
-        blockers[entry.id], noted = _support_blocker(
-            entry, exported[entry.id], own, profile, cancelled
-        )
-        findings += [
-            replace(
-                finding,
-                message=_(
-                    "In „{name}“ liegen Decken in schmalen Kanälen. Beim Slicen sperrt "
-                    "Solidon dort die Stützen; im Cura-Fenster setzen Sie dafür selbst "
-                    "einen Stützblocker.",
-                    name=source_text(entry.name),
-                ),
-            )
-            for finding in noted
-        ]
+    blockers, findings = _cura_blockers(chosen, exported, part_values, profile, cancelled)
     meshes: list[handover.CuraMesh] = []
     for number, entry in enumerate(chosen, start=1):
         part = _written(
@@ -1852,6 +1843,74 @@ def _cura_meshes(
             meshes.append(handover.CuraMesh(barrier, {"anti_overhang_mesh": "true"}))
     handover.write_cura_meshes(target, meshes)
     return findings
+
+
+def _cura_blockers(
+    chosen: Sequence[SceneObject],
+    exported: Mapping[str, MeshData],
+    part_values: Mapping[str, _PartValues],
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> tuple[dict[str, MeshData | None], list[Finding]]:
+    """Die Stützsperre je Teil, das gestützt wird und die Sperre übernommen
+    hat — mit dessen eigenen Einstellungen (Entscheidung G), für die
+    Kommandozeile und das Fenster dieselbe."""
+    findings: list[Finding] = []
+    blockers: dict[str, MeshData | None] = {}
+    for entry in chosen:
+        own = part_values[entry.id].effective
+        if own is None or own.support.style == "none" or not own.support.block_channels:
+            continue
+        blockers[entry.id], noted = _support_blocker(
+            entry, exported[entry.id], own, profile, cancelled
+        )
+        findings += noted
+    return blockers, findings
+
+
+def _cura_window(
+    chosen: Sequence[SceneObject],
+    exported: Mapping[str, MeshData],
+    target: Path,
+    project_name: str,
+    part_values: Mapping[str, _PartValues],
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> tuple[Path, list[Finding]]:
+    """Was Curas Fenster öffnet: dieselben Netze mit denselben Werten wie die
+    Kommandozeile (:func:`_cura_meshes`), als 3MF in Curas Schreibweise (RM-257).
+
+    Das Fenster bekam bis dahin das zusammengelegte STL: ohne Stützsperre, und
+    ohne die Werte je Teil — die Übernahme der Platte stützte dort jedes Teil.
+    Eine 3MF liest es mit Werten je Objekt (``cura:``-Metadaten,
+    :func:`threemf.write_assembly`), die Sperre als Komponente neben ihrem
+    Körper, damit sie beim Anordnen mitwandert.
+
+    **An derselben Stelle wie in der Kommandozeile**: Cura ordnet eine 3MF
+    beim Laden nicht an und misst von der Bettecke; Solidon rechnet um die
+    Bettmitte. Verschoben wird deshalb um den halben Bauraum des Druckers —
+    Curas aktive Maschine ist derselbe Drucker, auf den auch das Profil
+    daneben passt (:func:`handover.cura_profile_beside`).
+    """
+    from app.core.export import handover
+
+    blockers, findings = _cura_blockers(chosen, exported, part_values, profile, cancelled)
+    width, depth, _height = profile.printer.build_volume
+    parts = [
+        threemf.AssemblyPart(
+            mesh=exported[entry.id],
+            name=source_text(entry.name),
+            slots=threemf.slots_for_object(entry),
+            settings=handover.for_the_cura_window(part_values[entry.id].keys),
+            support_blocker=blockers.get(entry.id),
+        )
+        for entry in chosen
+    ]
+    written = _written(
+        target, threemf.write_assembly(parts, project_name, bed=(width, depth), cura=True)
+    )
+    _log.info("exported %d object(s) as a 3MF for Cura's window to %s", len(chosen), target.name)
+    return written, findings
 
 
 def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) -> bytes:

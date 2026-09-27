@@ -207,17 +207,21 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   PrusaSlicer als Bereich (Dreiecke hinter denen des Körpers, `SupportBlocker`
   in der Beilage, Modell mit `slic3rpe:Version3mf`, sonst übergeht PrusaSlicer
   die Beilage), CuraEngine als eigenes Netz mit `anti_overhang_mesh=true`
-  (`slicer_keys.takes_mesh_settings`; im Cura-Fenster gilt sie nicht, der
-  Befund nennt den Handgriff). Jede Familie druckt die fremde Schreibweise als
+  (`slicer_keys.takes_mesh_settings`), Curas Fenster als Komponente neben
+  ihrem Körper mit `cura:anti_overhang_mesh` (ein freistehendes Objekt setzt
+  Cura aufs Bett). Jede Familie druckt die fremde Schreibweise als
   Kunststoff — geprüft wird an der **Modellbahn** mit und ohne Sperre, nicht
   an der Stütze. Geschrieben nur in die direkte Übergabe, nie in eine
   gespeicherte 3MF.
-- **Cura bekommt kein 3MF** (`cura`; CuraEngine liest keines):
-  `write_assembly` gibt ein STL aller Teile der Platte fürs Fenster, daneben
-  je Teil ein Netz und eine Netzliste für die Kommandozeile (`-s` nach `-l`
-  gilt nur diesem Netz). Eine Netzliste, die nicht hält (fremder Pfad,
-  fehlende Datei, Wert mit Umbruch), hält die Übergabe an, statt still ohne
-  Sperre zu rechnen.
+- **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die
+  Kommandozeile gibt `write_assembly` ein STL aller Teile der Platte, daneben
+  je Teil ein Netz und eine Netzliste (`-s` nach `-l` gilt nur diesem Netz).
+  Eine Netzliste, die nicht hält (fremder Pfad, fehlende Datei, Wert mit
+  Umbruch), hält die Übergabe an, statt still ohne Sperre zu rechnen. Das
+  Fenster (`for_window`) bekommt dieselben Netze mit denselben Werten als 3MF
+  in Curas Schreibweise (`cura:<schlüssel>` am Objekt, Wahrheitswerte `True`,
+  `handover.for_the_cura_window`), um den halben Bauraum verschoben wie die
+  Konsole — Cura ordnet eine 3MF beim Laden nicht an.
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein
