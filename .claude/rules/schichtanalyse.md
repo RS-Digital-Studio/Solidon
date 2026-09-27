@@ -252,6 +252,19 @@ den schlanken Körper je Teil. Und wo die Stütze auf dem Bett bis an die Füße
 reicht, legt der Slicer den Rand nur, wo Platz ist — an der Schüssel mit
 Gitter vom Bett 236 mm.
 
+**Schmale Stege bekommen eine langsame erste Schicht** (27.09.2026). Auf
+Roberts Minigolf-Platte am Centauri Carbon 2 rissen zwischen den Löchern die
+kurzen Bodenbahnen der ersten Schicht; Elegoos Standard legt deren Füllung
+mit 105 mm/s. Mit 50 mm/s für die ganze erste Schicht lief derselbe Druck
+sauber. Liegt ein Anteil der ersten Schicht von mindestens
+`advise.NARROW_WEB_SHARE` in Stegen schmaler als `NARROW_WEB_LINES` Bahnen
+(`analysis.narrow_share`) und ist die erste Schicht schneller als
+`NARROW_WEB_SPEED`, schlägt `advise` dieses Tempo vor. Die Grenzen sind an
+drei Modellen gemessen (Platte 22 %, Wedge-Lock 4 %, Schüssel 2 %); die
+Gesamtprüfung über den Korpus prüft sie nach. Über dem Herstellerprofil
+bremst der Vorschlag nur: Wände, die der Hersteller langsamer legt, bleiben
+(Regel zur Übergabe in `dateiformat.md`).
+
 **Mehrere Körper werden gemeinsam beurteilt.** `advise.combine` berücksichtigt
 auch Körper, deren Einstellungen bereits passen. Ein einzelner Würfel darf
 deshalb die Stützen eines anderen Körpers nicht abschalten. Filamentwerte

@@ -503,6 +503,32 @@ def test_a_field_that_serves_two_keys_never_speeds_up_the_second(
     assert process["internal_solid_infill_speed"] == "200", "langsamer darf er werden"
 
 
+def test_a_suggestion_slows_the_first_layer_and_never_speeds_its_walls(
+    bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Erste Schicht 50 mm/s" an schmalen Stegen (Roberts Minigolf-Platte,
+    27.09.2026) schreibt Wände und Füllung der ersten Schicht. Liegen die Wände
+    beim Hersteller bei 40, bleiben sie dort: Ein Vorschlag bremst, er
+    beschleunigt nicht. Eine eigene Wahl im Dialog darf beides."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    vendor = bestand.parent / "resources" / "profiles" / "Elegoo" / "process" / "ECC2"
+    document = json.loads((vendor / "standard.json").read_text(encoding="utf-8"))
+    document.update({"initial_layer_speed": "40", "initial_layer_infill_speed": "105"})
+    _write(vendor / "standard.json", document)
+    base = print_settings.resolve(_cc2())
+    suggested = print_settings.with_accepted(base, "speed.first_layer", 50.0)
+    chosen = print_settings.with_choice(base, "speed.first_layer", 60.0)
+    (tmp_path / "vorschlag").mkdir()
+    (tmp_path / "wahl").mkdir()
+
+    process, _filament = _written(tmp_path / "vorschlag", suggested, _setup(bestand))
+    own, _filament = _written(tmp_path / "wahl", chosen, _setup(bestand))
+
+    assert process["initial_layer_speed"] == "40", "der Vorschlag bremst, er beschleunigt nicht"
+    assert process["initial_layer_infill_speed"] == "50"
+    assert (own["initial_layer_speed"], own["initial_layer_infill_speed"]) == ("60", "60")
+
+
 def test_the_check_holds_what_the_slicer_prints(
     bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

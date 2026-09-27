@@ -450,6 +450,11 @@ Grad. Roberts Minigolf-Druck bekam davon einen Stützfuß in Schicht 1
   sie mit ihrem Feld langsamer werden, schneller nicht: Der Vorschlag
   „Innenwand 142" hob an der Kobra 2 die Lückenfüllung von 100 auf 142 mm/s.
   Wer einem Feld einen weiteren Schlüssel gibt, prüft, ob er dazugehört.
+- **Ein übernommener Vorschlag bremst, er beschleunigt nicht.** Tempi, die nur
+  ein Vorschlag setzt (`handover._suggested_speed_keys`), werden über dem
+  Herstellerprozess nie schneller als dort: „Erste Schicht 50 mm/s" an
+  schmalen Stegen legt die Füllung langsamer und lässt Wände, die der
+  Hersteller mit 40 legt, bei 40. Eine eigene Wahl im Dialog darf beides.
 - **Ein Vorschlag, der beim Slicer nichts ändert, wird nicht angeboten.**
   Tempodeckel nach dem Volumenstrom (`advise.limits_flow`) fallen weg, wo der
   Slicer selbst danach deckelt (`slicer_keys.caps_volumetric_speed`: Orca-Familie

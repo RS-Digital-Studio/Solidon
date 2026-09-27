@@ -1828,6 +1828,7 @@ def write_config(
             setup,
             deviating=deviating.get("process", {}),
             plate=plate,
+            suggested=_suggested_speed_keys(settings, setup.flavour),
         )
         target.write_text(
             json.dumps(process_document, indent=2, ensure_ascii=False),
@@ -2073,6 +2074,7 @@ def project_settings(
             setup,
             deviating=deviating.get("process", {}),
             plate=plate,
+            suggested=_suggested_speed_keys(settings, setup.flavour),
         )
     )
     document.update(_machine_keys(profile, setup.flavour))
@@ -2262,7 +2264,9 @@ _ORCA_FOLLOWERS: Final = frozenset({"gap_infill_speed", "internal_solid_infill_s
 
 
 def _followers_not_faster(
-    base: Mapping[str, object], deviating: Mapping[str, str]
+    base: Mapping[str, object],
+    deviating: Mapping[str, str],
+    suggested: frozenset[str] = frozenset(),
 ) -> dict[str, str]:
     """Eine Abweichung macht einen mitbedienten Schlüssel nie schneller als beim Hersteller.
 
@@ -2272,14 +2276,32 @@ def _followers_not_faster(
     darf sie werden, denn wer die Innenwand bremst, meint die Lückenfüllung
     mit. Schneller nicht: Das wäre eine Abweichung, die niemand gewählt hat.
     Ein Herstellerwert, der keine Zahl ist, bleibt, wie er ist.
+
+    Dasselbe gilt für jedes Tempo, das nur ein übernommener Vorschlag setzt
+    (``suggested``, :func:`_suggested_speed_keys`): Ein Vorschlag bremst, er
+    beschleunigt nicht. „Erste Schicht 50 mm/s" an schmalen Stegen legt die
+    Füllung langsamer und lässt Wände, die der Hersteller mit 40 legt, bei 40.
+    Eine eigene Wahl im Dialog darf beides.
     """
     kept = dict(deviating)
-    for key in _ORCA_FOLLOWERS & kept.keys():
+    for key in (_ORCA_FOLLOWERS | suggested) & kept.keys():
         vendor = _as_float(_printed(base.get(key, "")))
         own = _as_float(kept[key])
         if vendor is None or own is None or own > vendor:
             del kept[key]
     return kept
+
+
+def _suggested_speed_keys(settings: PrintSettings, flavour: SlicerFlavour) -> frozenset[str]:
+    """Die Tempo-Schlüssel, die nur ein übernommener Vorschlag setzt, keine eigene Wahl."""
+    suggested = settings.accepted - settings.chosen
+    return frozenset(
+        entry.key
+        for entry in slicer_keys.TABLES[flavour]
+        if entry.path in suggested
+        and entry.path.startswith("speed.")
+        and entry.key.endswith("_speed")
+    )
 
 
 def _orca_process(
@@ -2289,6 +2311,7 @@ def _orca_process(
     *,
     deviating: Mapping[str, str] | None = None,
     plate: str = "",
+    suggested: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     """Das Prozessprofil für die Orca-Familie.
 
@@ -2329,7 +2352,9 @@ def _orca_process(
         document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     # Auf dem Herstellerprozess nur die Abweichung, ohne ihn alles (Entscheidung D).
     document.update(
-        values if base is None or deviating is None else _followers_not_faster(document, deviating)
+        values
+        if base is None or deviating is None
+        else _followers_not_faster(document, deviating, suggested)
     )
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,

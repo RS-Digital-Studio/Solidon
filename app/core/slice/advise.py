@@ -40,6 +40,7 @@ from app.core.slice.analysis import (
     island_layers,
     largest_overhang_patch,
     model_support,
+    narrow_share,
     narrowest_measured,
     piece_area,
     tapered_layers,
@@ -68,6 +69,23 @@ SMALL_FOOTPRINT = 400.0
 #: Ab diesem Verhältnis von Höhe zu kleinster Grundkante ist ein Teil schlank
 #: genug, dass die Düse es beim Anfahren kippen kann.
 SLENDER_RATIO = 4.0
+
+#: Wie breit ein Steg der ersten Schicht höchstens ist, um als schmal zu gelten,
+#: in Bahnbreiten der ersten Schicht. Auf Roberts Minigolf-Platte (27.09.2026)
+#: rissen zwischen Loch 3, Loch 4 und dem inneren Bogen die kurzen Bodenbahnen
+#: der ersten Schicht bei 105 mm/s; die Stege dort sind schmaler als sechs
+#: Bahnen zu 0,5 mm.
+NARROW_WEB_LINES: Final = 6.0
+
+#: Ab welchem Anteil der ersten Schicht in schmalen Stegen deren Tempo zählt.
+#: Die Minigolf-Platte trägt 22 % darin, der Wedge-Lock 4 %, die Waschschüssel
+#: auf ihren Füßen 2 % (``analysis.narrow_share``, 27.09.2026).
+NARROW_WEB_SHARE: Final = 0.10
+
+#: Das Tempo der ersten Schicht über schmalen Stegen, in mm/s. Mit 50 mm/s für
+#: die ganze erste Schicht lief Roberts zweiter Druck der Platte sauber; es ist
+#: das Wandtempo der ersten Schicht in Elegoos und Bambus Standardprozessen.
+NARROW_WEB_SPEED: Final = 50.0
 
 #: Ab diesem Anteil der Schichten mit einem Keil in der Wand lohnt es, die
 #: Außenwand zuerst zu legen. Der Becher im Organizer vom 20.09.2026 steht auf
@@ -884,6 +902,35 @@ def _from_geometry(
                 path="adhesion.kind",
                 value="brim",
                 reason=_("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen."),
+                severity="warning",
+            )
+        )
+
+    # **Schmale Stege brauchen eine langsame erste Schicht.** Roberts
+    # Minigolf-Platte am Centauri Carbon 2 (27.09.2026): Elegoos Standard legt
+    # die Füllung der ersten Schicht mit 105 mm/s, und an den Stegen zwischen
+    # den Löchern rissen die kurzen Bodenbahnen. Mit der ganzen ersten Schicht
+    # auf 50 mm/s lief derselbe Druck sauber. Vorgeschlagen wird deshalb dieses
+    # Tempo, wo ein nennenswerter Teil der ersten Schicht in schmalen Stegen
+    # liegt; über dem Herstellerprofil macht der Vorschlag die Wände der ersten
+    # Schicht dabei nie schneller (``handover._followers_not_faster``).
+    if (
+        result.layers
+        and settings.speed.first_layer > NARROW_WEB_SPEED + EPS_GEOM
+        and narrow_share(
+            result.layers[0], NARROW_WEB_LINES * settings.layers.first_layer_line_width
+        )
+        >= NARROW_WEB_SHARE
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="speed.first_layer",
+                value=NARROW_WEB_SPEED,
+                reason=_(
+                    "Die erste Schicht hat schmale Stege. Langsamer gelegt, haften ihre "
+                    "kurzen Bahnen besser."
+                ),
                 severity="warning",
             )
         )
