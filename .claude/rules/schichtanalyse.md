@@ -142,10 +142,11 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `SCARF_MIN_HEIGHT`. Eine Ecke versteckt die Naht selbst.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
-  `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) und ist sie schneller als
-  `NARROW_WEB_SPEED`, wird dieses Tempo vorgeschlagen — kurze Bodenbahnen
-  zwischen Löchern reißen im Herstellertempo. Die Grenzen sind an drei
-  Modellen gemessen, die Gesamtprüfung über den Korpus prüft sie nach. Über
+  `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als
+  `NARROW_WEB_AREA` mm² davon, und ist sie schneller als `NARROW_WEB_SPEED`,
+  wird dieses Tempo vorgeschlagen — kurze Bodenbahnen zwischen Löchern reißen
+  im Herstellertempo, auch an einem großen Teil mit wenigen langen Stegen.
+  Beide Grenzen sind am Korpus geeicht. Über
   dem Herstellerprofil bremst der Vorschlag nur (`dateiformat.md`, „Auf dem
   Herstellerprofil wird nur die Abweichung geschrieben“).
 - **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`), auch

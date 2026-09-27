@@ -775,6 +775,70 @@ def test_narrow_webs_get_a_slow_first_layer() -> None:
     assert not first_layer_advice(_plate_with_webs(2.0), slow), "schon langsam genug"
 
 
+def _slotted_plate(slots: int, length: float) -> MeshData:
+    """Eine Platte 150 × 80 × 2 mm mit ``slots`` Schlitzen zu 22 × ``length``
+    mm nebeneinander, dazwischen Stege von 2 mm — viel Steg auf einer großen
+    ersten Schicht, wie beim Bahnteil ``Gövde59`` aus Roberts Minigolf-Satz
+    (8,6 % der ersten Schicht, 195 mm², 27.09.2026)."""
+    plate = trimesh.creation.box(extents=(150.0, 80.0, 2.0))
+    step = 22.0 + 2.0
+    start = -(slots * step - 2.0) / 2.0 + 11.0
+    cuts = []
+    for index in range(slots):
+        cut = trimesh.creation.box(extents=(22.0, length, 4.0))
+        cut.apply_translation((start + index * step, 0.0, 0.0))
+        cuts.append(cut)
+    body = trimesh.boolean.difference([plate, *cuts], engine="manifold")
+    body.apply_translation((0.0, 0.0, 1.0))
+    return MeshData.of(body)
+
+
+def test_a_large_part_with_long_narrow_webs_gets_a_slow_first_layer() -> None:
+    """Gefragt wird auch die Fläche der Stege, nicht nur ihr Anteil.
+
+    Robert, 27.09.2026: Der Rumpf ``Gövde59`` trägt 8,6 % seiner ersten
+    Schicht in Stegen unter drei Millimetern, zusammen 195 mm², und genau dort
+    rissen bei 105 mm/s die Bodenbahnen. Gegen den Anteil allein blieb die
+    Regel stumm: Geeicht war sie an der ganzen Platte (22 % mit den Schäften),
+    gefragt wird sie je Teil. Im Korpus (186 Körper) liegen nur sieben
+    zwischen 3 und 10 %; mit 100 mm² kommen der Rumpf und ein Besenhalter
+    dazu, der Wedge-Lock mit 78 mm² nicht.
+    """
+    from app.core.slice.analysis import narrow_share
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    fast = print_settings.with_path(print_settings.resolve(profile), "speed.first_layer", 105.0)
+    width = advise.NARROW_WEB_LINES * fast.layers.first_layer_line_width
+
+    def measured(body: MeshData) -> tuple[float, float, list[SettingAdvice]]:
+        result = slice_body(
+            body,
+            fast.layers.layer_height,
+            first_layer_height=fast.layers.first_layer_height,
+            overhang_angle=profile.overhang_limit_degrees,
+            bridge_from=profile.minimum_wall_thickness,
+            support_volume=False,
+        )
+        share = narrow_share(result.layers[0], width)
+        entries = advise.advise(fast, profile, result, bounds=body.bounds)
+        return (
+            share,
+            share * result.layers[0].area,
+            [entry for entry in entries if entry.path == "speed.first_layer"],
+        )
+
+    share, area, advice = measured(_slotted_plate(5, 60.0))
+    assert share < advise.NARROW_WEB_SHARE, "die Vorbedingung: unter dem Anteil"
+    assert area >= advise.NARROW_WEB_AREA, "die Vorbedingung: über der Fläche"
+    assert [number(entry) for entry in advice] == [pytest.approx(advise.NARROW_WEB_SPEED)]
+
+    share, area, advice = measured(_slotted_plate(2, 20.0))
+    assert share < advise.NARROW_WEB_SHARE and area < advise.NARROW_WEB_AREA, (
+        "die Gegenprobe: ein kurzer Steg auf einer großen Platte"
+    )
+    assert not advice
+
+
 def _plate_on_a_sloped_foot(angle: float) -> MeshData:
     """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
     gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils

@@ -84,6 +84,13 @@ NARROW_WEB_LINES: Final = 6.0
 #: auf ihren Füßen 2 % (``analysis.narrow_share``, 27.09.2026).
 NARROW_WEB_SHARE: Final = 0.10
 
+#: Ab welcher Fläche schmaler Stege in der ersten Schicht deren Tempo zählt,
+#: in mm² — auch unter :data:`NARROW_WEB_SHARE`. Der Rumpf ``Gövde59`` der
+#: Minigolf-Platte, an dem die Bodenbahnen rissen, trägt 195 mm² bei 8,6 %;
+#: im Korpus von 186 Körpern liegt der nächste darunter bei 106 mm²
+#: (Besenhalter), der Wedge-Lock bei 78 (Eichung 27.09.2026).
+NARROW_WEB_AREA: Final = 100.0
+
 #: Das Tempo der ersten Schicht über schmalen Stegen, in mm/s. Mit 50 mm/s für
 #: die ganze erste Schicht lief Roberts zweiter Druck der Platte sauber; es ist
 #: das Wandtempo der ersten Schicht in Elegoos und Bambus Standardprozessen.
@@ -926,13 +933,18 @@ def _from_geometry(
     # Tempo, wo ein nennenswerter Teil der ersten Schicht in schmalen Stegen
     # liegt; über dem Herstellerprofil macht der Vorschlag die Wände der ersten
     # Schicht dabei nie schneller (``handover._followers_not_faster``).
-    if (
-        result.layers
-        and settings.speed.first_layer > NARROW_WEB_SPEED + EPS_GEOM
-        and narrow_share(
-            result.layers[0], NARROW_WEB_LINES * settings.layers.first_layer_line_width
-        )
-        >= NARROW_WEB_SHARE
+    #
+    # **Nennenswert als Anteil oder als Fläche.** Gerissen ist es am Rumpf
+    # ``Gövde59``, 8,6 % seiner ersten Schicht in Stegen — ein großes Teil mit
+    # wenigen, aber langen Stegen. Gegen den Anteil allein blieb die Regel dort
+    # stumm (:data:`NARROW_WEB_AREA`).
+    web_share = (
+        narrow_share(result.layers[0], NARROW_WEB_LINES * settings.layers.first_layer_line_width)
+        if result.layers and settings.speed.first_layer > NARROW_WEB_SPEED + EPS_GEOM
+        else 0.0
+    )
+    if result.layers and (
+        web_share >= NARROW_WEB_SHARE or web_share * result.layers[0].area >= NARROW_WEB_AREA
     ):
         advice.append(
             _advice(
