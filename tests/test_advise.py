@@ -630,14 +630,15 @@ def test_a_travel_speed_that_does_not_move_is_refused() -> None:
 def test_the_overhang_limit_comes_from_the_manufacturer() -> None:
     """Die Stützgrenze des Standardprozesses im Slicer des Herstellers
     (27.09.2026): ElegooSlicer ``support_threshold_angle`` 30 gegen die
-    Waagerechte, PrusaSlicer für den MINI ``support_material_threshold`` 50.
-    Ohne Herstellerwert bleibt die Startregel."""
+    Waagerechte, PrusaSlicer für den MINI ``support_material_threshold`` 40 —
+    im Prozess mit Input Shaper, den Prusa heute vorwählt; der ältere ohne ihn
+    führt 50 und stand hier zuerst. Ohne Herstellerwert bleibt die Startregel."""
     centauri = profiles.make_profile("centauri-carbon-2", "pla")
     mini = profiles.make_profile("prusa-mini", "pla")
     plain = profiles.make_profile("generic-220", "pla")
 
     assert centauri.overhang_limit_degrees == pytest.approx(60.0)
-    assert mini.overhang_limit_degrees == pytest.approx(40.0), "strenger als die Startregel"
+    assert mini.overhang_limit_degrees == pytest.approx(50.0)
     assert plain.printer.overhang_limit is None
     assert plain.overhang_limit_degrees == pytest.approx(rules.OVERHANG_LIMIT_DEGREES)
 
@@ -683,9 +684,15 @@ def test_an_older_project_is_offered_the_printers_overhang_limit() -> None:
     assert [number(entry) for entry in offered] == [60.0]
     assert "support.threshold_angle" not in paths(advise.advise(current, centauri))
 
-    mini = profiles.make_profile("prusa-mini", "pla")
-    looser = print_settings.with_path(print_settings.resolve(mini), "support.threshold_angle", 45.0)
-    stricter = [e for e in advise.advise(looser, mini) if e.path == "support.threshold_angle"]
+    # Die andere Richtung an einem Drucker, der strenger ist als die
+    # Startregel. Der Bestand führt keinen mehr, seit MINI und XL die Grenze
+    # ihres Input-Shaper-Prozesses tragen — die Regel gilt trotzdem.
+    plain = profiles.make_profile("generic-220", "pla")
+    strict = Profile(replace(plain.printer, overhang_limit=40.0), plain.material)
+    looser = print_settings.with_path(
+        print_settings.resolve(strict), "support.threshold_angle", 45.0
+    )
+    stricter = [e for e in advise.advise(looser, strict) if e.path == "support.threshold_angle"]
     assert [number(entry) for entry in stricter] == [40.0]
     assert stricter[0].reason != offered[0].reason, "die andere Richtung hat ihren eigenen Grund"
 
