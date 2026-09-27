@@ -163,6 +163,9 @@ geänderter Verlauf bleibt unangetastet und bekommt einen erklärenden Befund.
 dem Register, gegliedert in fünf Teile über `OUTLINE`;
 `spacemouse_access_help` liefert außerdem die kopierbare Betriebssystemhilfe,
 mit gerätebezogener USB-Regel nur bei bekannter Hersteller-/Produktkennung) ·
+`manual_search.py` (die Suche im Handbuch: Rangfolge nach Titel,
+Kurzfassung, Stichwort und Text, Fundstelle je Seite; Faltung, Trefferstärke
+und Kundenwörter kommen aus `registry/search.py`, wie in der Befehlspalette) ·
 `guides.py` (Bildanleitungen: Schritte, Sätze und die Namen der Ziele, auf die
 ein Bild zeigt; aufgenommen werden sie beim Release in der echten Oberfläche,
 Konzept `konzepte/konzept-handbuch-2026-09.md`) ·

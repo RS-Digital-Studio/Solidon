@@ -2092,7 +2092,9 @@ benötigt keine globalen Warnfilter und fängt keine Warnung eines anderen Threa
 
 **Hilfe und Bedienung**
 
-`manual_window.py` · `tour.py` · `shortcuts_window.py` ·
+`manual_window.py` (zeigt, was `core/manual_search.py` findet, in dessen
+Rangfolge, und schlägt jede Seite an ihrer Fundstelle auf) · `tour.py` ·
+`shortcuts_window.py` ·
 `shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py` ·
 `guide_targets.py` (welches Bedienelement ein Name aus dem Wortschatz der
 Bildanleitungen meint — `widget_for` für das Widget, `area_for` für den Ort

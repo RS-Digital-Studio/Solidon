@@ -254,7 +254,11 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "mirror_object": _("spiegelverkehrt; seitenverkehrt; Spiegelbild", context="Suchwörter"),
     "duplicate_object": _("Kopie; Duplikat", context="Suchwörter"),
     "delete_object": _("Teil löschen; wegwerfen", context="Suchwörter"),
-    "hollow_object": _("hohl; hohl machen; innen leer; Material sparen", context="Suchwörter"),
+    # „Gehäuse" ist das Wort dessen, der eine Elektronik unterbringen will; im
+    # Handbuch heißt dasselbe ein Kasten aus einem Quader (Konzept Handbuch §7).
+    "hollow_object": _(
+        "hohl; hohl machen; innen leer; Material sparen; Gehäuse", context="Suchwörter"
+    ),
     "repair": _(
         "kaputt; defekt; Fehler beheben; Löcher im Modell; reparieren", context="Suchwörter"
     ),
@@ -296,7 +300,9 @@ CUSTOMER_WORDS: Final[dict[str, TranslatableText]] = {
     "subtract_objects": _("herausschneiden; Form ausschneiden", context="Suchwörter"),
     "pattern": _("Reihe; mehrere Kopien; vervielfältigen", context="Suchwörter"),
     "paint_slot": _("bemalen; Fläche anmalen", context="Suchwörter"),
-    "load": _("Modell laden; STL öffnen; importieren", context="Suchwörter"),
+    # Ein Modell in Zoll kommt über das Einlesen herein, dort steht die
+    # Einheit; Handbuch und Palette nannten das Wort bis dahin nirgends.
+    "load": _("Modell laden; STL öffnen; importieren; Zoll", context="Suchwörter"),
 }
 
 
@@ -436,12 +442,14 @@ def starts_a_word(part: str, text: str) -> bool:
     return False
 
 
-def _strength(term: str, text: str) -> float:
+def strength(term: str, text: str) -> float:
     """Wie gut ein Wort der Anfrage einen Suchtext trifft, zwischen 0 und 1.
 
     Am Wortanfang zählt das ganze Wort voll und sein Stamm zu
     :data:`_STEM_SHARE`; mitten im Wort nur ein langes Wort, und nur zu
-    :data:`_INNER_SHARE`.
+    :data:`_INNER_SHARE`. Dieselbe Rechnung wägt die Wörter einer
+    Handbuchseite (``app/core/manual_search.py``): Was die Palette als
+    Treffer zählt, zählt auch dort.
     """
     if len(term) < STEM_LENGTH:
         # Drei Buchstaben sind ein Wort oder nichts: „pla" meint das Material,
@@ -471,7 +479,7 @@ def _same_word(term: str, word: str) -> bool:
     return word.startswith(stem_of(term)) and term.startswith(stem_of(word))
 
 
-def _says(phrase: str, terms: list[str]) -> bool:
+def says(phrase: str, terms: list[str]) -> bool:
     """Ob die Anfrage jedes Wort dieser Wendung enthält (:func:`_same_word`).
 
     Ein kurzes Wort aus Buchstaben („an", „zu", „la") zählt nicht mit: Die
@@ -547,11 +555,11 @@ def rank_entries(
         hits: dict[str, float] = {}
         for name, texts_of_op in fields.items():
             best = max(
-                weight * _strength(term, texts_of_op[field]) for field, weight in _FIELD_WEIGHTS
+                weight * strength(term, texts_of_op[field]) for field, weight in _FIELD_WEIGHTS
             )
             if best:
                 hits[name] = best
-        spread = sum(1 for texts_of_op in fields.values() if _strength(term, texts_of_op["all"]))
+        spread = sum(1 for texts_of_op in fields.values() if strength(term, texts_of_op["all"]))
         # **Ein Wort, das in jeder sechsten Operation steht, entscheidet
         # nichts** — „das", „die", „mit", „auf". Gezählt statt aufgelistet:
         # eine Liste von Füllwörtern bräuchte es je Sprache, die Zählung nicht.
@@ -565,7 +573,7 @@ def rank_entries(
     if terms:
         for name in scores:
             phrases = customer_phrases(name) if customer_words else SYNONYMS.get(name, ())
-            if any(_says(phrase, terms) for phrase in phrases):
+            if any(says(phrase, terms) for phrase in phrases):
                 scores[name] += _SYNONYM_SCORE
     for name in wanted:
         if name in scores:

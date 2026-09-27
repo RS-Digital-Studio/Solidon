@@ -61,18 +61,21 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
 - **HB-4, drei Anleitungen gebaut** und am Fenster auf Deutsch
   aufgenommen und angesehen: *Das Fenster auf einen Blick*, *Ein Modell prüfen
   und drucken* (`d36503d57`, sechs Schritte an
-  `tests/data/meshes/broken_open.stl`) und *Ein Loch bohren* (sieben Schritte
-  an `plate_holes.stl`; der sechste zeigt das fertige Loch nah, mit einem Ring
-  aus dem echten Lochdurchmesser). Alle Sätze in sechs Sprachen.
-- **Als Nächstes:** HB-6, die Suche mit Rangfolge — `manual.search` mit
-  Gewichten für Titel, Zusammenfassung und Text, Kundenwörtern und einem Test
-  über die 38 Kundensuchen aus `nachweise-handbuch-2026-09/findbarkeit.md`
-  (Ausgang: 50 % unter den ersten drei, Ziel mindestens 80 %). Danach *Das
-  erste eigene Teil* (Weg 2: Grundform, Maß, Baustein, Drucken) und *Ein
-  Gehäuse mit Deckel* — Vorlage für den Weg ist `story_housing` in
-  `tools/make_longform_video.py`, deren Aufrufe aber teils programmatisch
-  sind: Die Geschichte muss den Weg über die Knöpfe gehen, die die Sätze
-  nennen. Dann HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?").
+  `tests/data/meshes/broken_open.stl`) und *Ein Loch bohren* (`3d2af85fd`,
+  sieben Schritte an `plate_holes.stl`; der sechste zeigt das fertige Loch
+  nah, mit einem Ring aus dem echten Lochdurchmesser). Alle Sätze in sechs
+  Sprachen.
+- **HB-6, Suche mit Rangfolge, gebaut** (§7): `app/core/manual_search.py` auf
+  Faltung, Trefferstärke und Kundenwörtern der Befehlspalette; das Fenster
+  zeigt die Treffer in Rangfolge und schlägt jede Seite an ihrer Fundstelle
+  auf. Die Palette hat dafür „Gehäuse" und „Zoll" als Kundenwörter bekommen.
+- **Als Nächstes:** *Das erste eigene Teil* (Weg 2: Grundform, Maß, Baustein,
+  Drucken) und *Ein Gehäuse mit Deckel* — Vorlage für den Weg ist
+  `story_housing` in `tools/make_longform_video.py`, deren Aufrufe aber teils
+  programmatisch sind: Die Geschichte muss den Weg über die Knöpfe gehen, die
+  die Sätze nennen. *Ein Gehäuse mit Deckel* ist das Wort des Interessenten
+  aus dem Anlass; heute führt „Gehäuse" auf *Aushöhlen* in der Referenz. Dann
+  HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?").
 
 ## §1 Befund
 
@@ -371,13 +374,18 @@ Ok-Knopf zurück, `_flash_area` kehrt bei einem unbekannten Namen zurück.
 ## §7 Finden
 
 - **Gruppen** im Handbuchfenster (§4).
-- **Suche mit Rangfolge:** Titel vor Kurzfassung vor Text, Anleitungen vor
-  Referenz, mit Fundstelle. Dazu ein kleines Wörterbuch der Kundenwörter
-  („abrunden" findet *Verrunden*, „größer machen" findet *Skalieren*,
-  „zweifarbig" findet *Zweifarbendruck*). Gemessen wird mit den 38 Suchen aus
-  `nachweise-handbuch-2026-09/findbarkeit.md`, vorher und nachher. Ausgang:
-  50 Prozent unter den ersten drei, 29 Prozent auf Platz eins, 11 Prozent
-  ohne Treffer.
+- **Suche mit Rangfolge** (`app/core/manual_search.py`, gebaut): Titel vor
+  Kurzfassung vor Stichwort (Überschriften, Fettdruck) vor Fließtext, das
+  ganze Wort vor dem Wortanfang, Anleitungen vor Referenz, und jede Seite
+  schlägt an ihrer Fundstelle auf, markiert. **Kein eigenes Wörterbuch:**
+  Faltung, Trefferstärke und Kundenwörter kommen aus der Befehlspalette
+  (`registry/search.py`). „abrunden" führt so auf *Verrunden*, „größer
+  machen" auf *Skalieren*, in jeder Sprache, und eine Ergänzung dort wirkt an
+  beiden Stellen. Gemessen an den 50 Kundensuchen aus
+  `nachweise-handbuch-2026-09/findbarkeit.md`: von den 38 aus dem Auftrag
+  stehen jetzt alle unter den ersten drei (vorher 25) und 35 ganz oben
+  (vorher 7). Keine Suche bleibt ohne Treffer (vorher 4). Messung, Tabelle und
+  jede Gewichtung mit ihrem Grund: `nachweise-handbuch-2026-09/suche.md`.
 - **F1 im Zusammenhang:** im Operationsdialog die Anleitung zu dieser
   Operation oder, wo es keine gibt, ihr Referenzeintrag; sonst „Wo fange ich
   an?".
@@ -404,7 +412,7 @@ Nachweis.
 | HB-3 | `tools/make_guides.py`: Geschichten, Markierung, Ausschnitt, Format, Kindprozess je Sprache, `--ziel`, `--nur`, Stempel; Schritt in `/erzeugen` | Ein Lauf in einer Sprache in einen fremden Ordner; Bildbudget gemessen; Fehler bei fehlendem Ziel belegt | [~] Werkzeug gebaut: Rahmen, Nummern, Pfeile, Abdunkeln, Rand, Ausschnitt, WebP (Übersichtsbild 82 KB statt 408 KB als PNG), Kindprozess je Sprache, Stempel. Deutsch in einen fremden Ordner gelaufen; ein fehlendes Ziel beendet den Lauf mit Exit 1 und nennt Anleitung und Schritt. **Offen:** der Schritt in `/erzeugen` — der Skill wird auf `main` gerade umgebaut, der Schritt kommt mit dem Merge; das Bildbudget, gemessen, sobald HB-4 steht |
 | HB-4 | Erste Anleitungen: *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken*, *Ein Loch in ein heruntergeladenes Modell*, *Das erste eigene Teil* | Bilder in einer Sprache gesichtet; Texte in sechs Sprachen | [~] *Das Fenster auf einen Blick*, *Ein Modell prüfen und drucken* und *Ein Loch bohren* gebaut und auf Deutsch gesichtet; *Das erste eigene Teil* offen |
 | HB-5 | Gliederung im Handbuchfenster, „Wo fange ich an?", Verweise `manual:`, Hilfe-Menü, Startbildschirmknopf | Fenstertests (Release), Kerntests für Reihenfolge und Verweise | [ ] |
-| HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [ ] |
+| HB-6 | Suche mit Rangfolge, Fundstelle, Kundenwörtern | Anteil der Suchen mit richtiger Seite unter den ersten drei, vorher und nachher gemessen | [x] 38 von 38 unter den ersten drei (vorher 25), 35 ganz oben (vorher 7), keine ohne Treffer (vorher 4); `tests/test_manual_search.py`, Nachweis `suche.md`. Der Fenstertest über Rangfolge und Fundstelle läuft beim Release |
 | HB-7 | F1 im Zusammenhang | Fenstertest (Release) | [ ] |
 | HB-8 | Weitere Anleitungen (Liste in §4) | je Anleitung wie HB-4 | [ ] |
 | HB-9 | Erklärseiten kürzen und neu übersetzen | Wortzahl der Erklärseiten um mindestens ein Drittel kleiner, kein Wissen verloren (verschoben in Anleitungen oder Referenz) | [ ] |
@@ -432,8 +440,9 @@ Nachweis.
   dem Kundenhandbuch in eine eigene Seite für Entwickler wandert. Heute ist
   sie bei 30 von 38 Kundensuchen ein Treffer, wiederholt 142
   Operationsbeschreibungen und widerspricht der Seite *Fernsteuerung*.
-  Mindestens die Suche soll sie nachrangig behandeln (HB-6); der Widerspruch
-  zur Seite *Fernsteuerung* wird in jedem Fall aufgelöst.
+  Die Suche behandelt sie seit HB-6 nachrangig (ihre Wertung wird geviertelt);
+  in keiner der 50 Kundensuchen steht sie mehr vor der richtigen Seite. Der
+  Widerspruch zur Seite *Fernsteuerung* wird in jedem Fall aufgelöst.
 
 ## §11 Abnahme des Ganzen
 

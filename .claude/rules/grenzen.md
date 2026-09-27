@@ -449,3 +449,13 @@ Füllwort ist (eine Wendung „zu einem Teil" traf jede Anfrage mit „eine" und
 „Teils"), und dass es nicht über einen kurzen Stamm ein anderes Wort meint —
 `test_every_customer_word_belongs_to_a_row_of_the_palette` hält die Schlüssel
 am Register und an den Fensterbefehlen fest.
+
+**Dieselben Kundenwörter führen durch das Handbuch** (`core/manual_search.py`,
+Konzept Handbuch §7). Die Handbuchsuche faltet mit `fold`, wägt mit
+`strength` und liest die Kundenwörter über `customer_phrases` und `says`.
+Nennt eine Suche genau die Wendung einer Operation, sucht sie zusätzlich
+deren Titel als Wortfolge. Wer ein Kundenwort einträgt, ändert also auch, wo
+das Handbuch aufschlägt. `tests/test_manual_search.py` hält 50 Kundensuchen
+fest; mindestens 80 Prozent müssen die richtige Seite unter den ersten drei
+zeigen. Eine eigene Wortliste des Handbuchs wäre ein Zwilling dieser Tabelle
+(`.claude/rules/zwillinge.md`).

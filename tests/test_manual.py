@@ -750,6 +750,27 @@ def test_searching_looks_inside_the_pages(qt_app: QApplication) -> None:
     assert window.contents.count() < len(manual.pages())
 
 
+def test_the_search_lists_the_best_page_first_and_opens_it_where_the_word_stands(
+    qt_app: QApplication,
+) -> None:
+    """Die Liste folgt der Rangfolge des Kerns, und die Seite schlägt an der
+    Fundstelle auf, markiert (Konzept Handbuch §7). „abrunden" steht nirgends
+    im Handbuch und führt über die Kundenwörter zu *Verrunden*, weit unten in
+    der Referenz."""
+    from app.core import manual_search
+
+    window = ManualWindow()
+    try:
+        window.search.setText("abrunden")
+        found = manual_search.search("abrunden")
+        assert found and found[0].spot
+        assert window.contents.item(0).text() == str(found[0].page.title)
+        assert window.text.textCursor().selectedText() == found[0].spot
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_a_search_without_a_hit_says_so_instead_of_showing_nothing(
     qt_app: QApplication,
 ) -> None:
