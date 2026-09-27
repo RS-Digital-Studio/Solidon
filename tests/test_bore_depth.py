@@ -520,7 +520,7 @@ def test_a_blind_slot_changes_its_depth_like_a_hole(
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_a_wider_entrance_and_a_new_depth_in_one_step(profile: Profile, kernel: str) -> None:
-    """„Senkung und Stufen mitnehmen" mit Ø 8 und 6 mm Tiefe: erst der Einlauf, dann der Boden."""
+    """„Senkung, Stufen und Verengung mitnehmen" mit Ø 8 und 6 mm Tiefe: erst der Einlauf, dann der Boden."""
     source = _plate(
         kernel,
         [(0, 2), (3, 2), (3, 10), (5, 12), (0, 12), (0, 2)],

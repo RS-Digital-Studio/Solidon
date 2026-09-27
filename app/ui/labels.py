@@ -890,7 +890,9 @@ def colour_name(value: str) -> str:
 _CHOICE_NAMES: dict[str, TranslatableText] = {
     "whole_face": _("Gesamte Fläche"),
     "keep": _("Nur Bohrungsdurchmesser"),
-    "follow": _("Senkung und Stufen mitnehmen"),
+    # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
+    # die geht mit (RM-271) — der Name nennt, was mitgehen kann.
+    "follow": _("Senkung, Stufen und Verengung mitnehmen"),
     "legacy_raw": _("Unveränderte Quellachsen"),
     "gltf": _("glTF: Y nach oben"),
     "clearance": _("Spielpassung"),
@@ -1108,10 +1110,10 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
     "whole_face": _("Füllt die gewählte ebene Fläche bis zum Rand; Bohrungen bleiben frei."),
-    "keep": _("Außenmaße und Lage der vorhandenen Senkung und Stufen bleiben erhalten."),
+    "keep": _("Außenmaße und Lage von Senkung, Stufen und Verengung bleiben erhalten."),
     "follow": _(
-        "Einführbreite, Senkungswinkel und Stufentiefen bleiben erhalten; "
-        "die Durchmesser ändern sich gemeinsam."
+        "Alle Durchmesser ändern sich gemeinsam, auch die Öffnung einer Verengung; "
+        "Breiten, Winkel und Tiefen bleiben."
     ),
     "legacy_raw": _("Behält die Achsen der Quelldatei bei, wie in älteren Projekten."),
     "gltf": _("Richtet GLB und GLTF von Y-oben auf Solidons Z-oben aus."),

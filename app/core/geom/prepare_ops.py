@@ -8783,9 +8783,9 @@ def _narrowing_after_resize(feature: Feature, narrowing: Feature, diameter: floa
             code="resize.narrowing_swallowed",
             severity="warning",
             message=_(
-                "An der Mündung dieser Bohrung sitzt eine Verengung mit {opening:.2f} mm "
-                "Öffnung. Bei diesem Durchmesser verschwindet sie — soll sie bleiben, wählen "
-                "Sie einen größeren Durchmesser oder „Senkung und Stufen mitnehmen“.",
+                "Die Verengung an der Mündung ({opening:.2f} mm Öffnung) verschwindet bei "
+                "diesem Durchmesser. Soll sie bleiben, wählen Sie einen größeren Durchmesser "
+                "oder „Senkung, Stufen und Verengung mitnehmen“.",
                 opening=opening,
             ),
             feature_ids=(narrowing.id, feature.id),
