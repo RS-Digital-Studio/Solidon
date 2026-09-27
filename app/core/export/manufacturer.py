@@ -80,6 +80,9 @@ class Foundation:
     """Die Druckplatte, für die die Betttemperatur gelesen wurde — der Name,
     wie die Orca-Familie ihn schreibt (``Textured PEI Plate``)."""
     plate_refuses_filament: bool = False
+    """Der Hersteller nennt für diese Platte und dieses Filament 0 °C: Die
+    Platte ist dafür nicht freigegeben (Orca ``Print.cpp``: „does not support
+    filament")."""
     plates: Mapping[str, int] = field(default_factory=dict)
     """Die Platten, für die das Filament eine Betttemperatur nennt — Name wie
     die Orca-Familie ihn schreibt, Temperatur in °C, 0 heißt gesperrt. Die
@@ -88,9 +91,6 @@ class Foundation:
     """Ein gewähltes Prozessprofil, das sich nicht lesen ließ — dann ist die
     Grundlage Solidons Tabelle, und der Kunde erfährt es
     (:func:`findings`; Review Stufe A+B, H13)."""
-    """Der Hersteller nennt für diese Platte und dieses Filament 0 °C: Die
-    Platte ist dafür nicht freigegeben (Orca ``Print.cpp``: „does not support
-    filament")."""
 
     @property
     def has_profile(self) -> bool:
