@@ -23,9 +23,11 @@ Das Modul zerfällt in zwei Teile, wie das Konzept es verlangt:
   tut und wie Assist es auf demselben Rechner tut. Der Herstellertreiber
   3DxWare darf daneben laufen: Er liest dieselben Berichte, ohne sie
   wegzunehmen (gemessen am 02.09.2026, 4572 Berichte in fünfzig Sekunden
-  bei laufendem 3DxWare). Nicht blockierend, im Hauptthread, kein eigener
-  Faden — ein ``QTimer`` fragt mit ~60 Hz, was seit dem letzten Mal ankam;
-  eine leere Lesung kostet unter einer Mikrosekunde (gemessen).
+  bei laufendem 3DxWare). Gelesen wird nicht blockierend im Hauptthread —
+  ein ``QTimer`` fragt mit ~60 Hz, was seit dem letzten Mal ankam; eine leere
+  Lesung kostet unter einer Mikrosekunde (gemessen). **Gesucht wird in einem
+  Nebenfaden** (:meth:`SpaceMouseController._search`): ``hid.enumerate()``
+  fragt jedes HID-Gerät nach seinen Namen.
 
   **Auf dem Mac gilt der Satz vom Nebeneinander nicht.** Dort hält 3DxWare
   das Gerät exklusiv, und ``hidapi`` öffnet seinerseits exklusiv — wer den
@@ -64,6 +66,7 @@ import logging
 import math
 import struct
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -138,6 +141,16 @@ TICK_MS: Final = 16
 SCAN_MS: Final = 2000
 SCAN_FIRST_MS: Final = 1500
 SCAN_MAX_MS: Final = 30_000
+#: Wie oft der Hauptthread nachsieht, ob die Suche im Nebenfaden fertig ist.
+#:
+#: **Die Suche lief im Hauptthread und hielt ihn an** (RM-258): Zwischen den
+#: Gerätefragen gibt ``hidapi`` den GIL ab und holt ihn für jeden Namen wieder;
+#: rechnet daneben ein Arbeiter, wartet jeder dieser Griffe. Beim Einlesen des
+#: Mausoleum-Drachen stand der Qt-Takt darin 170 bis 350 ms, zu den Zeiten der
+#: Suche (7,5 s, 15,5 s, 31,5 s nach dem Start; ``sonden/3mf/p05_waechter.py``,
+#: Hauptthread in ``HidD_GetProductString``). Allein dauert sie hier 25 bis
+#: 33 ms (29 Geräte, ``sonden/3mf/p06_hid.py``).
+SEARCH_POLL_MS: Final = 20
 #: Mehr Berichte je Takt werden nicht gelesen — ein Gerät, das schneller
 #: sendet, als wir zeichnen, darf den Takt nicht auffressen.
 REPORTS_PER_TICK: Final = 32
@@ -561,6 +574,8 @@ class HidReader:
         self._unavailable = False
         self.blocked_device: tuple[int, int] | None = None
         """Hersteller und Produkt eines gefundenen, aber nicht zugänglichen Geräts."""
+        self._found: list[dict[str, Any]] | None = None
+        """Was :meth:`search` in einem Nebenfaden gefunden hat (:meth:`offer`)."""
 
     @property
     def is_open(self) -> bool:
@@ -576,15 +591,15 @@ class HidReader:
                 self._module = hid
         return self._module
 
-    def open(self) -> bool:
-        """Die Bewegungsschnittstelle des ersten bekannten Geräts öffnen."""
-        if self._device is not None:
-            return True
-        previous = self.blocked_device
-        self.blocked_device = None
+    def search(self) -> list[dict[str, Any]]:
+        """Die Bewegungsschnittstellen bekannter Geräte — leer, wo keine sind.
+
+        Ändert nichts am Leser und darf in einem Nebenfaden laufen
+        (:meth:`SpaceMouseController._search`); geöffnet wird im Hauptthread.
+        """
         hid = self._hid()
         if hid is None:
-            return False
+            return []
         try:
             devices = list(hid.enumerate())
             candidates = [info for info in devices if _is_motion_interface(info)]
@@ -596,7 +611,24 @@ class HidReader:
                 candidates = [info for info in devices if info.get("vendor_id") == 0x256F]
         except (OSError, ValueError, KeyError) as problem:
             _log.debug("3D mouse enumeration failed: %s", problem)
+            return []
+        return candidates
+
+    def offer(self, found: list[dict[str, Any]]) -> None:
+        """Das Ergebnis einer :meth:`search` für das nächste :meth:`open`."""
+        self._found = found
+
+    def open(self) -> bool:
+        """Die Bewegungsschnittstelle des ersten bekannten Geräts öffnen."""
+        found, self._found = self._found, None
+        if self._device is not None:
+            return True
+        previous = self.blocked_device
+        self.blocked_device = None
+        hid = self._hid()
+        if hid is None:
             return False
+        candidates = self.search() if found is None else found
         for candidate in candidates:
             device = None
             try:
@@ -942,7 +974,12 @@ class SpaceMouseController(QObject):
         self._poll.timeout.connect(self._tick)
         self._scan = QTimer(self)
         self._scan.setSingleShot(True)
-        self._scan.timeout.connect(self._look_for_device)
+        self._scan.timeout.connect(self._search)
+        self._searched: list[list[dict[str, Any]]] | None = None
+        """Der Kasten, in den die laufende Suche ihr Ergebnis legt."""
+        self._collect = QTimer(self)
+        self._collect.setInterval(SEARCH_POLL_MS)
+        self._collect.timeout.connect(self._collect_search)
         self._scan_wait = SCAN_MS
         self._was_active = False
         self._blocked_notified = False
@@ -958,6 +995,8 @@ class SpaceMouseController(QObject):
         """Gerät schließen, Takt anhalten."""
         self._poll.stop()
         self._scan.stop()
+        self._collect.stop()
+        self._searched = None
         self._reader.close()
 
     @property
@@ -969,6 +1008,40 @@ class SpaceMouseController(QObject):
     def blocked_device(self) -> tuple[int, int] | None:
         """Die Kennungen für eine auf das gefundene Gerät begrenzte Freigabe."""
         return self._reader.blocked_device
+
+    def _search(self) -> None:
+        """Nach einem Gerät suchen, ohne den Hauptthread daran warten zu lassen.
+
+        Ein **Daemon-Faden**, kein Arbeiter an der Leine — wie bei „Zuletzt
+        geöffnet“ (``MainWindow._show_recent``): Eine Gerätefrage lässt sich
+        nicht abbrechen, und eine späte Antwort landet in einem Kasten, den
+        niemand mehr abholt. Der Treiberweg auf dem Mac meldet sich über
+        Rückrufe an und bleibt im Hauptthread.
+        """
+        reader = self._reader
+        if not isinstance(reader, HidReader) or reader.is_open:
+            self._look_for_device()
+            return
+        box: list[list[dict[str, Any]]] = []
+        self._searched = box
+        threading.Thread(
+            target=lambda: box.append(reader.search()), name="spacemouse-search", daemon=True
+        ).start()
+        self._collect.start()
+
+    def _collect_search(self) -> None:
+        """Holt das Ergebnis aus :meth:`_search` ab und öffnet im Hauptthread."""
+        box = self._searched
+        if box is None:
+            self._collect.stop()
+            return
+        if not box:
+            return
+        self._collect.stop()
+        self._searched = None
+        if isinstance(self._reader, HidReader):
+            self._reader.offer(box[0])
+        self._look_for_device()
 
     def _look_for_device(self) -> None:
         if self._reader.open():
