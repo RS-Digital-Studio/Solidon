@@ -170,7 +170,7 @@ def _version_of(name: str) -> str:
 #: Was die Fenstersitzung eines Linux-Rechners beschreibt. Auf Windows und
 #: macOS ist nichts davon gesetzt, und dann steht die Zeile auch nicht da.
 #:
-#: **Warum sie überhaupt dasteht.** Simon Wenger meldete am 27.08.2026: „Es
+#: **Warum sie überhaupt dasteht.** Ein Kunde meldete am 27.08.2026: „Es
 #: war schwierig Solidon3D zum Laufen zu bringen. Es waren viele tweaks nötig,
 #: wie auf x11 umschalten und weitere. Bis jetzt geht einiges nicht. So muss
 #: ich z.B. diesen Text in einer anderen Anwendung schreiben und nach Solidon3D

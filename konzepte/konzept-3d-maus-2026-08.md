@@ -9,7 +9,7 @@ Bauart: Dort hält 3DxWare das Gerät exklusiv, rohes HID bleibt leer, und der
 Weg führt durch das Framework des Treibers (`DriverReader`, Abschnitt 7,
 Falle 2 und Abschnitt 10). Was offen ist, steht im Register von `ROADMAP.md`.
 
-Anlass: Die Kundenanfrage aus dem Dentalbereich (R. W. D., 30.08.2026). Ein
+Anlass: Die Kundenanfrage aus dem Dentalbereich (30.08.2026). Ein
 Zahntechniker, der acht Stunden am Tag in exocad die linke Hand auf einer
 SpaceMouse liegen hat, steckt sie in Solidon ein und drückt — und das Bild
 steht still. Er will keine neue Funktion; er will, dass die Handbewegung, die

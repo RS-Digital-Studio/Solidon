@@ -17,7 +17,7 @@ Stufe 1 sind damit kein neuer Auftrag. Die Ausschlüsse aus §6 bleiben gültig.
 Der übrige Text dokumentiert den damaligen Ausgangspunkt; laufende
 Umsetzung und Nachweise werden in RM-188 geführt.
 
-Anlass: Eine Kundenanfrage aus dem Dentalbereich (R. W. D., 30.08.2026 —
+Anlass: Eine Kundenanfrage aus dem Dentalbereich (30.08.2026 —
 exocad/3shape beruflich, FDM- und Resindrucker privat) fragte nach einer
 „Integration von Resin-Druckern". Seine Präzisierung vom selben Vormittag
 verschiebt die Frage: Sein Kernproblem ist nicht fehlende Resin-Analyse,

@@ -760,7 +760,7 @@ def test_a_report_describes_the_window_session_where_there_is_one(
 ) -> None:
     """Auf Linux gehört in den Bericht, wie die Fenstersitzung eingerichtet ist.
 
-    Simon Wenger meldete am 27.08.2026: „Es waren viele tweaks nötig, wie auf
+    Ein Kunde meldete am 27.08.2026: „Es waren viele tweaks nötig, wie auf
     x11 umschalten … So muss ich diesen Text in einer anderen Anwendung
     schreiben und nach Solidon3D copypasten." Sein Bericht enthielt jede
     Bibliotheksfassung und **nichts** über die Sitzung, in der das geschah —
