@@ -492,7 +492,7 @@ vergibt der Plan (`first_pin`), ein gleichnamiges Merkmal weicht aus
   unter beiden Schlüsseln ab (`_key_after_answers`); den Schlüssel baut nur
   `resolve_params`.
 - **Bewegte und fein geteilte Kopien werden nicht neu untersucht:** Wer nur
-  bewegt, meldet `transform` (`moved_object`/`apply`), wer nur teilt, die
+  bewegt, nimmt `apply` (Vermerk `note_movement`), wer nur teilt, meldet die
   Herkunft (`note_refinement`); übertragen wird unter Beleg, nie auf Zusage.
 - **Die Live-Vorschau erkennt nur, was jemand braucht**
   (`detect_features=False`); ihre Szene ist nie Dokumentstand, Merkmale liest

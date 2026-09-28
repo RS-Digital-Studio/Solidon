@@ -290,6 +290,8 @@ Schlüssel nennt Raster, Winkel, Brückenbreite und Drucker.
 Provenienz-IDs überleben jede Neuberechnung — sonst zeigt der Op-Stack ins
 Leere; mehrdeutige Zuordnung hält an und fragt.
 
+- **Starr bewegt erbt die Erkennung** (`features.moved_from`), gespiegelt
+  oder skaliert wird neu erkannt: Ein Gewinde wechselt dort die Hand.
 - **Zwillinge entscheidet die Lage ihrer Oberfläche**
   (`matching.settled_by_surface`, vor `_divided_partners`): nur, wenn sie für
   beide Seiten mit Vorsprung die nächste ist; sonst bleibt es eine Frage.

@@ -881,6 +881,318 @@ def test_the_evaluation_carries_features_across_a_translation(profile) -> None:
             assert np.allclose(after[name].params["centre"], expected, atol=1e-6)
 
 
+def _plate_project(steps: list[tuple[str, str, dict]]):
+    """Die Lochplatte geladen, danach ``steps`` als (Titel, Operation, Parameter).
+
+    Eine Operation mit ``consumes=1`` bekommt den ersten zuletzt ausgegebenen
+    Körper als Eingang; eine über der ganzen Szene (``takes_whole_scene``) alle
+    zuletzt ausgegebenen — in dieser Kette ist das die Szene, wie sie die
+    Kommandozeile ohne ``--on`` einsetzt.
+    """
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    for title, name, params in steps:
+        last = project.document.ops[-1].outputs
+        inputs = tuple(last) if REGISTRY.get(name).takes_whole_scene else (last[0],)
+        history.apply(title, [OperationDraft(op=name, inputs=inputs, params=params)])
+    return project, ProjectSources(project)
+
+
+def _counted_recognitions(monkeypatch) -> list[int]:
+    """Zählt die Aufrufe von ``detect`` aus der Auswertung, die wirklich rechnen.
+
+    ``detect`` beantwortet ein Netz, dessen Erkennung im Merker steht — auch
+    eine übertragene —, ohne zu rechnen. Gezählt wird deshalb jeder Aufruf, für
+    den der Merker vorher nichts wusste. Rechnet er an einem bewegten Netz, ist
+    die Übertragung ausgefallen.
+    """
+    import importlib
+
+    from app.core.perceive.features import known_detection
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    runs: list[int] = []
+    original = evaluation.detect
+
+    def counted(mesh, **kwargs):
+        if known_detection(mesh) is None:
+            runs.append(1)
+        return original(mesh, **kwargs)
+
+    monkeypatch.setattr(evaluation, "detect", counted)
+    return runs
+
+
+def _rigid_between(before: MeshData, after: MeshData) -> tuple[np.ndarray, np.ndarray]:
+    """Drehung und Versatz, die ``before`` Ecke für Ecke auf ``after`` legen (Kabsch).
+
+    Von außen gerechnet, nicht über den Vermerk der Anwendung — der Sollwert
+    für die Lage der Merkmale soll nicht aus dem Weg stammen, den er prüft.
+    """
+    source = np.asarray(before.raw.vertices, dtype=float)
+    target = np.asarray(after.raw.vertices, dtype=float)
+    assert source.shape == target.shape, "dieselben Ecken, nur bewegt"
+    source_centre, target_centre = source.mean(axis=0), target.mean(axis=0)
+    left, _values, right = np.linalg.svd((source - source_centre).T @ (target - target_centre))
+    sign = np.sign(np.linalg.det(right.T @ left.T))
+    turn = right.T @ np.diag([1.0, 1.0, sign]) @ left.T
+    shift = target_centre - turn @ source_centre
+    assert np.allclose(source @ turn.T + shift, target, atol=1e-6), "starr bewegt"
+    return turn, shift
+
+
+def test_copies_turned_for_print_keep_their_features_without_a_search(profile, monkeypatch) -> None:
+    """Kopieren und *Druckoptimal ausrichten* erkennen nicht neu (§21.2, §31).
+
+    *Druckoptimal ausrichten* dreht und verschiebt jeden Körper der Szene mit
+    eigener Matrix und meldet deshalb keine. Bis zum 28.09.2026 lief die
+    Erkennung darum an jedem ausgerichteten Netz vollständig neu — am
+    Minigolf-Satz 323 von 441 Sekunden einer Auswertung. Jetzt vermerkt die
+    Bewegung Eingang und Matrix am Netz, und die Auswertung überträgt die
+    Erkennung des Eingangs, sobald dieselben Dreiecke an den bewegten Ecken
+    liegen.
+
+    Die Platte steht erst hochkant, damit das Ausrichten sie wirklich dreht.
+    Gerechnet wird genau eine Erkennung: die beim Laden.
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import evaluate
+
+    forget_cache()
+    project, sources = _plate_project(
+        [
+            ("Drehen", "rotate_object", {"axis": "x", "angle": 90.0}),
+            ("Duplizieren", "duplicate_object", {"count": 2}),
+            ("Ausrichten", "orient_for_print", {"thorough": False}),
+        ]
+    )
+    runs = _counted_recognitions(monkeypatch)
+    only_loaded, only_loaded_sources = _plate_project([])
+    loaded = evaluate(only_loaded.document, profile, sources=only_loaded_sources)
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at is None
+    assert runs == [1], "erkannt wird beim Laden, danach nur noch übertragen"
+    origin = loaded.scene.objects[only_loaded.document.ops[0].outputs[0]]
+    before = origin.features
+    assert len(before) == 10
+    kinds = sorted(feature.kind for feature in before.values())
+    outputs = project.document.ops[-1].outputs
+    assert len(outputs) == 2, "Original und Kopie"
+    for object_id in outputs:
+        body = result.scene.objects[object_id]
+        after = body.features
+        assert sorted(feature.kind for feature in after.values()) == kinds
+        assert set(after) == set(before), "dieselben Namen am Original wie an der Kopie"
+        turn, shift = _rigid_between(origin.mesh, body.mesh)
+        assert not np.allclose(turn, np.eye(3), atol=1e-6), "das Ausrichten hat gedreht"
+        for name, feature in before.items():
+            moved = after[name]
+            assert moved.provenance == feature.provenance
+            assert moved.face_indices == feature.face_indices, "dieselben Dreiecke"
+            if "centre" in feature.params:
+                expected = turn @ np.asarray(feature.params["centre"]) + shift
+                assert np.allclose(moved.params["centre"], expected, atol=1e-6)
+            if "axis" in feature.params:
+                axis = turn @ np.asarray(feature.params["axis"])
+                assert abs(float(np.dot(moved.params["axis"], axis))) == pytest.approx(1.0)
+            if "diameter" in feature.params:
+                assert moved.params["diameter"] == pytest.approx(feature.params["diameter"])
+
+
+def test_arranging_copies_does_not_search_again(profile, monkeypatch) -> None:
+    """*Auf dem Bett anordnen* verschiebt jeden Körper für sich — und erkennt nicht neu."""
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import evaluate
+
+    forget_cache()
+    project, sources = _plate_project(
+        [
+            ("Duplizieren", "duplicate_object", {"count": 3}),
+            ("Anordnen", "arrange_bed", {}),
+        ]
+    )
+    runs = _counted_recognitions(monkeypatch)
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at is None
+    assert runs == [1]
+    loaded = result.scene.objects[project.document.ops[0].outputs[0]]
+    placed = [result.scene.objects[name] for name in project.document.ops[-1].outputs]
+    assert len({tuple(np.round(body.mesh.bounds.minimum, 3)) for body in placed}) == 3
+    for body in placed:
+        assert set(body.features) == set(loaded.features)
+
+
+def test_a_reopened_project_carries_the_turn_from_the_disk_cache(
+    profile, monkeypatch, tmp_path
+) -> None:
+    """Der Bewegungsvermerk reist durch den Plattencache.
+
+    Ein ausgerichteter Körper kommt beim Wiederöffnen von der Platte, und dort
+    fehlte der Vermerk, der nur im Speicher des Netzes lebt: Die Erkennung lief
+    an jedem Körper neu, bei jedem Öffnen des Projekts.
+    """
+    from app.core.geom.mesh import MeshCodec
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+
+    forget_cache()
+    project, sources = _plate_project(
+        [
+            ("Drehen", "rotate_object", {"axis": "x", "angle": 90.0}),
+            ("Duplizieren", "duplicate_object", {"count": 2}),
+            ("Ausrichten", "orient_for_print", {"thorough": False}),
+        ]
+    )
+    first = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        cache=ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache")),
+    )
+    assert first.stopped_at is None
+
+    forget_cache()
+    runs = _counted_recognitions(monkeypatch)
+    reopened = evaluate(
+        project.document,
+        profile,
+        sources=sources,
+        cache=ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache")),
+    )
+
+    assert reopened.stopped_at is None
+    assert runs == [1], "nur das geladene Netz wird erkannt, die bewegten kommen mit"
+    for object_id in project.document.ops[-1].outputs:
+        assert set(reopened.scene.objects[object_id].features) == set(
+            first.scene.objects[object_id].features
+        )
+
+
+def test_a_step_that_passes_a_moved_copy_through_does_not_move_it_again(profile) -> None:
+    """Ein durchgereichtes Netz ist nicht bewegt, auch wenn sein Vermerk einen Vorfahren nennt.
+
+    Die Kopie wird verschoben und trägt danach den Vermerk „aus dem Original,
+    um diesen Versatz“. *Überschneidungen prüfen* reicht beide Körper durch —
+    und das Original steht als Eingang daneben. Ohne Gegenprüfung belegte der
+    Vermerk eine Bewegung dieses Schritts, und die Merkmale der Kopie wären ein
+    zweites Mal verschoben worden.
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+
+    forget_cache()
+    project, sources = _plate_project([("Duplizieren", "duplicate_object", {"count": 2})])
+    history = History(project.document)
+    original, copy = project.document.ops[-1].outputs
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(copy,), params={"dx": 80.0})],
+    )
+    moved = evaluate(project.document, profile, sources=sources)
+    history.apply(
+        "Prüfen",
+        [OperationDraft(op="check_collisions", inputs=(original, copy), params={})],
+    )
+    checked = evaluate(project.document, profile, sources=sources)
+
+    assert checked.stopped_at is None
+    for object_id in (original, copy):
+        before = moved.scene.objects[object_id].features
+        after = checked.scene.objects[object_id].features
+        assert set(after) == set(before)
+        for name, feature in before.items():
+            if "centre" in feature.params:
+                assert np.allclose(after[name].params["centre"], feature.params["centre"])
+
+
+@pytest.mark.parametrize(
+    ("name", "params"),
+    [
+        ("scale_object", {"factor": 2.0}),
+        ("mirror_object", {"axis": "x"}),
+    ],
+)
+def test_scaling_and_mirroring_search_again(profile, monkeypatch, name, params) -> None:
+    """Was nicht starr ist oder die Hand wechselt, wird neu erkannt.
+
+    Eine Skalierung ändert die Form der Merkmale, eine Spiegelung dreht den
+    Umlaufsinn und macht aus einem Rechts- ein Linksgewinde — beides bekommt
+    keinen Bewegungsvermerk, und die Erkennung liest den neuen Körper selbst.
+    """
+    from app.core.perceive.features import forget_cache, movement_note
+    from app.core.scene import evaluate
+
+    forget_cache()
+    project, sources = _plate_project([("Ändern", name, params)])
+    runs = _counted_recognitions(monkeypatch)
+    only_loaded, only_loaded_sources = _plate_project([])
+    loaded = evaluate(only_loaded.document, profile, sources=only_loaded_sources)
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at is None
+    assert runs == [1, 1], "geladen und danach neu erkannt"
+    body = result.scene.objects[project.document.ops[-1].outputs[0]]
+    assert movement_note(body.mesh) == ()
+    before = loaded.scene.objects[only_loaded.document.ops[0].outputs[0]].features
+    assert set(body.features) == set(before), "die Namen folgen ihrem Merkmal"
+    for feature_id, feature in body.features.items():
+        assert feature.kind == before[feature_id].kind
+        assert feature.provenance == before[feature_id].provenance
+
+
+def test_a_movement_note_is_a_promise_not_a_proof() -> None:
+    """Der Vermerk wird geglaubt, wenn Eingang und Geometrie ihn belegen — sonst nicht."""
+    from app.core.geom.transform import composed, rotation
+    from app.core.perceive.features import (
+        MOVEMENT_NOTE_DEPTH,
+        moved_from,
+        movement_note,
+        restore_movement_note,
+    )
+
+    mesh = body("plate_holes.stl")
+    turn = rotation("z", 30.0)
+    shift = translation((4.0, -2.0, 1.0))
+    turned = apply(mesh, turn)
+    placed = apply(turned, shift)
+
+    # Zwei Bewegungen hintereinander nennen beide Vorfahren, der nächste zuerst.
+    note = movement_note(placed)
+    assert len(note) == 2
+    found = moved_from(placed, [mesh])
+    assert found is not None
+    source, matrix = found
+    assert source is mesh
+    assert np.array_equal(np.asarray(matrix), composed(shift, turn))
+    assert moved_from(placed, [turned])[0] is turned
+
+    # Ohne passenden Eingang, mit falscher Matrix oder an anderen Ecken: nichts.
+    assert moved_from(placed, [body("cube_clean.stl")]) is None
+    wrong = tuple((key, translation((1.0, 0.0, 0.0))) for key, _cells in note)
+    restore_movement_note(placed, wrong)
+    assert moved_from(placed, [mesh, turned]) is None
+    assert moved_from(mesh, [mesh]) is None, "ohne Vermerk keine Bewegung"
+
+    # Eine lange Kette bleibt kurz.
+    chained = mesh
+    for step in range(MOVEMENT_NOTE_DEPTH + 2):
+        chained = apply(chained, translation((1.0 + step, 0.0, 0.0)))
+    assert len(movement_note(chained)) == MOVEMENT_NOTE_DEPTH
+    assert moved_from(chained, [mesh]) is None, "zu weit zurück, also neu erkennen"
+
+
 def _same_surface(before: MeshData, after: MeshData, old: Feature, new: Feature) -> None:
     """Das übertragene Merkmal deckt dieselbe Fläche wie das alte — nur feiner geteilt."""
     assert new.kind == old.kind

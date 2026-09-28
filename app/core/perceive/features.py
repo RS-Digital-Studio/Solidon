@@ -1732,6 +1732,113 @@ def carry_detection(
     return True
 
 
+#: Unter diesem Schlüssel legt eine starre Bewegung am bewegten Netz ab, aus
+#: welchem Netz es mit welcher Matrix entstand (:func:`note_movement`).
+MOVED_FROM_KEY: Final = "solidon_moved_from"
+
+#: Wie viele Vorfahren ein Bewegungsvermerk höchstens nennt. Eine Operation
+#: bewegt einen Körper selten mehr als zweimal hintereinander (*Druckoptimal
+#: ausrichten*: drehen, dann anordnen), und jeder Vorfahr kostet nur einen
+#: Abdruck und eine Matrix — die Grenze hält eine lange Kette klein, nicht
+#: einen gewöhnlichen Fall.
+MOVEMENT_NOTE_DEPTH: Final = 4
+
+#: Ein Bewegungsvermerk: Abdruck eines Vorfahren und die Matrix, die ihn auf
+#: dieses Netz bewegt — der nächste Vorfahr zuerst.
+MovementNote = tuple[tuple[bytes, np.ndarray], ...]
+
+
+def note_movement(source: MeshData, moved: MeshData, matrix: Any) -> None:
+    """Vermerkt am bewegten Netz, aus welchem Netz es mit welcher Matrix entstand.
+
+    Das Gegenstück zu :func:`note_refinement` für eine Bewegung, gesetzt von
+    ``geom.transform.apply`` bei jeder starren Matrix. Die gemeldete Bewegung
+    einer Operation (``OpResult.transform``) kennt nur einen Körper; wer
+    mehrere Körper je mit eigener Matrix bewegt — *Druckoptimal ausrichten*,
+    *Auf dem Bett anordnen*, die Kopien eines Musters —, meldet keine, und die
+    Erkennung lief an jedem bewegten Netz vollständig neu (der Anlass steht bei
+    ``scene.evaluate._motion_of``).
+
+    Trägt ``source`` selbst einen Vermerk, reist er zusammengesetzt mit: Das
+    Ausrichten dreht erst und verschiebt dann, und der Eingang der Operation
+    ist der Vorfahr des gedrehten Zwischennetzes. Ein Vermerk ist eine Zusage;
+    geglaubt wird er erst von :func:`moved_from`, am Eingang und an der
+    Geometrie.
+    """
+    from app.core.geom.transform import composed
+
+    cells = np.asarray(matrix, dtype=np.float64)
+    entries = [(_mesh_key(source), cells.copy())]
+    entries.extend((key, composed(cells, earlier)) for key, earlier in movement_note(source))
+    restore_movement_note(moved, tuple(entries[:MOVEMENT_NOTE_DEPTH]))
+
+
+def movement_note(mesh: MeshData) -> MovementNote:
+    """Der Vermerk aus :func:`note_movement` — leer, wenn das Netz keinen trägt.
+
+    Für den Plattencache wie :func:`refinement_note`: Ein von der Platte
+    gelesenes Netz hätte ihn sonst nicht mehr, und nach dem Wiederöffnen lief
+    die Erkennung an jedem ausgerichteten Körper neu.
+    """
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is None:
+        return ()
+    cache.verify()
+    noted = cache.cache.get(MOVED_FROM_KEY)
+    if not noted:
+        return ()
+    return tuple((bytes(key), np.asarray(cells, dtype=np.float64)) for key, cells in noted)
+
+
+def restore_movement_note(mesh: MeshData, note: MovementNote) -> None:
+    """Legt einen Bewegungsvermerk an ``mesh`` — aus der Bewegung oder von der Platte.
+
+    Auch von der Platte bleibt er eine Zusage; geglaubt wird er erst von
+    :func:`moved_from`.
+    """
+    cache = getattr(mesh.raw, "_cache", None)
+    if cache is None or not note:
+        return
+    cache.verify()
+    cache[MOVED_FROM_KEY] = tuple(
+        (bytes(key), np.asarray(cells, dtype=np.float64).copy()) for key, cells in note
+    )
+
+
+def moved_from(
+    moved: MeshData, sources: Sequence[MeshData]
+) -> tuple[MeshData, tuple[tuple[float, ...], ...]] | None:
+    """Welcher der ``sources`` ``moved`` belegbar starr bewegt ist — und mit welcher Matrix.
+
+    Gefragt wird der Vermerk aus :func:`note_movement`: Ein Vorfahr, dessen
+    Abdruck einer der Quellen gleicht, und eine Matrix, unter der
+    :func:`moved_twin` das bewegte Netz als dieselben Dreiecke an den bewegten
+    Ecken bestätigt. Ohne Vermerk, ohne passende Quelle oder ohne Beleg:
+    ``None``, und die Erkennung rechnet wie zuvor. Eine Spiegelung dreht den
+    Umlaufsinn und besteht den Beleg deshalb nie — ihr Gewinde wechselt die
+    Hand und wird neu gelesen.
+
+    **Und ein Netz, das selbst eine der Quellen ist, wurde nicht bewegt.** Eine
+    Operation, die ihre Eingänge durchreicht (*Überschneidungen prüfen*, das
+    Original beim Duplizieren), gibt ein Netz zurück, dessen Vermerk von einer
+    früheren Bewegung stammt — und steht dessen Vorfahr ebenfalls in der
+    Szene, etwa das Original einer verschobenen Kopie, belegte der Vermerk
+    eine Bewegung, die dieser Schritt nie gemacht hat. Die Merkmale wären ein
+    zweites Mal verschoben worden.
+    """
+    note = movement_note(moved)
+    if not note:
+        return None
+    by_key = {_mesh_key(source): source for source in sources}
+    if _mesh_key(moved) in by_key:
+        return None
+    for key, cells in note:
+        source = by_key.get(key)
+        if source is not None and moved_twin(source, moved, cells):
+            return source, tuple(tuple(float(value) for value in row) for row in cells)
+    return None
+
+
 #: Unter diesem Schlüssel legt *Kanten verfeinern* am feineren Netz ab, aus
 #: welchem Dreieck welches Netzes jedes neue stammt (:func:`note_refinement`).
 REFINED_FROM_KEY: Final = "solidon_refined_from"

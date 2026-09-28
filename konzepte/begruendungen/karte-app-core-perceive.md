@@ -297,6 +297,31 @@ zusammen. Drei Leser kommen ohne Rechnung aus:
   Verschieben oder Drehen an 204 000 Dreiecken kostete davor 1,3 s
   Neuerkennung für eine Antwort, die bis auf die Lage schon dastand.
 
+  **Und dort, wo niemand eine Matrix meldet.** `OpResult.transform` kennt
+  einen Körper; *Druckoptimal ausrichten* und *Auf dem Bett anordnen* über
+  der ganzen Szene, die Kopien eines Musters bewegen jeden mit eigener Matrix
+  und meldeten keine — die Erkennung lief an jedem neu. Am Minigolf-Satz
+  (Roberts Projekt, 12 Schritte, 16 Körper) rechnete sie 18-mal statt dreimal,
+  14 davon am zweiten Ausrichten; die CPU-Zeit der ganzen Auswertung fiel von
+  185–190 s auf 70–87 s (je zwei Läufe im Wechsel, Sonde
+  `output/review/merkmale-kopien-2026-09-28/`). Nebenbei wurde der Bericht
+  lageunabhängig: Neu erkannt ließ derselbe Körper nach jeder Drehung eine
+  andere Zahl Rundformen weg (37, 36, 35 — RM-210) und stand dreimal im
+  Bericht, übertragen bleibt es bei einer Zahl. Seit dem 28.09.2026 vermerkt
+  `geom.transform.apply` jede starre Bewegung ohne Spiegelung am Netz
+  (`note_movement`: Abdruck des Eingangs und Matrix, über zwei Bewegungen
+  einer Operation zusammengesetzt), und `scene.evaluate._motion_of` fragt
+  `moved_from`, wenn die Operation schweigt. Geglaubt wird wie zuvor erst
+  nach `moved_twin`; ein Netz, das selbst ein Eingang ist, gilt als
+  unbewegt, sonst belegte der Vermerk einer früheren Verschiebung eine
+  zweite, wo ein Schritt nur durchreicht. Spiegeln bekommt keinen Vermerk —
+  das Gewinde wechselt die Hand und wird neu gelesen —, Skalieren ist nicht
+  starr. Über den Korpus `tests/data/meshes` (Laden, hochkant drehen, auf
+  drei Ausfertigungen duplizieren, ausrichten, anordnen) fielen die Erkennungsläufe von 145 auf
+  36, mit null Unterschieden in Namen, Arten, Provenienz, Erzeuger, Lage,
+  Achse und Durchmesser über 1056 Merkmale beider Abläufe; Spiegeln und
+  Skalieren blieben bei 108 Läufen.
+
 - **`carry_refined_detection`** tut dasselbe für eine feiner geteilte Kopie
   (*Kanten verfeinern*). Die Operation vermerkt die Herkunft jedes Dreiecks
   am Ergebnis (`note_refinement`, im Cache des Netzes), `refined_twin`
