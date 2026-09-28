@@ -550,6 +550,10 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
 
 @register_op(
     name="drill_hole",
+    # 1: mit freier Richtung liegt das Werkzeug in der Welt, der Körper bleibt,
+    # wo er ist; ein Ende in einer Fläche mit Luft dahinter reicht um die
+    # Zugabe hinaus (RM-274).
+    cache_version="1",
     title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
@@ -7367,7 +7371,8 @@ OPEN_BODY_DETAIL: Final = _(
     # Durchsicht 0.5.1).
     # 11: an einer Haltelippe schneiden beide Umfänge über ihr eigenes Profil
     # (Durchsicht 0.5.1).
-    cache_version="11",
+    # 12: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
+    cache_version="12",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -8037,7 +8042,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 6: der erste Zug schließt die runde Bohrung und schneidet ohne Zugabe.
     # 7: ein verkürztes Langloch schließt zuerst seinen alten Umriss.
     # 8: genau die Breite als Länge schneidet wieder eine runde Bohrung.
-    cache_version="8",
+    # 9: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
+    cache_version="9",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort

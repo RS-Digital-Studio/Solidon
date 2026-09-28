@@ -5790,20 +5790,72 @@ def test_the_vertex_face_index_reads_a_degenerate_mesh_like_trimesh_does() -> No
     assert rim is not None and rim.frayed
     found = _candidates_at(body, patch, rim.frayed)
     assert found and 5 in found
-    # Die Kandidaten sind dieselben wie über ``trimesh.vertex_faces``:
+    # Die Kandidaten sind dieselben wie über ``trimesh.vertex_faces`` — glatt
+    # angrenzend, über eine Naht unter ``CURVATURE_LIMIT``:
     inside = np.zeros(len(body.faces), dtype=bool)
     inside[patch] = True
-    neighbours = features_module._neighbour_index(body)[0]
+    neighbours, rows = features_module._neighbour_index(body)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     expected = set()
     for node in rim.frayed:
         for face in theirs[node]:
             if face < 0 or inside[face]:
                 continue
-            beside = neighbours[face]
-            beside = beside[beside >= 0]
-            if len(beside) and inside[beside].any():
+            present = neighbours[face] >= 0
+            beside, seams = neighbours[face][present], rows[face][present]
+            touching = inside[beside]
+            if touching.any() and (angles[seams[touching]] < features_module.CURVATURE_LIMIT).any():
                 expected.add(int(face))
     assert found == expected
+
+
+def test_a_triangle_beyond_an_edge_never_closes_a_notch() -> None:
+    """Eine Kerbe schließt nur, was die Fläche des Flecks glatt fortsetzt.
+
+    Ein Kegelmantel mit 45° sitzt auf einem ebenen Ringabsatz, wie die Senkung
+    über einer verkleinerten Bohrung. Fehlt dem Mantel ein Dreieck mit nur einer
+    Ecke am Absatz, franst sein Rand an dieser Ecke aus. Das fehlende
+    Kegeldreieck grenzt über eine Naht von 7,5° an und kommt zurück; die
+    Dreiecke des Absatzes an derselben Ecke liegen über eine Kante von 45° an
+    und gehören zu einer anderen Fläche. Nahm die Kerbenschließung sie mit, las
+    sich der Kegel an der gedrehten Senkbohrung als Torus — je nach Vernetzung
+    des Absatzes (RM-274, ``sonden/bohren/p12_kippe.py``).
+    """
+    from app.core.perceive.features import CURVATURE_LIMIT, _candidates_at, _rim_of
+
+    band = trimesh.creation.revolve([(3.0, 0.0), (6.0, 3.0)], sections=48)
+    step = trimesh.creation.revolve([(1.5, 0.0), (3.0, 0.0)], sections=48)
+    body = trimesh.util.concatenate([band, step])
+    body.merge_vertices()
+    count = len(band.faces)
+    corners = np.asarray(body.vertices)[np.asarray(body.faces)]
+    on_the_step = np.isclose(corners[:, :, 2], 0.0) & np.isclose(
+        np.hypot(corners[:, :, 0], corners[:, :, 1]), 3.0
+    )
+    missing = next(index for index in range(count) if int(on_the_step[index].sum()) == 1)
+    patch = [index for index in range(count) if index != missing]
+    rim = _rim_of(body, patch)
+    assert rim is not None and rim.frayed, "ohne das Dreieck franst der Rand am Absatz aus"
+
+    found = _candidates_at(body, patch, rim.frayed)
+
+    assert found == {missing}
+    # Die Gegenprobe zur Voraussetzung: Am fransigen Knoten liegen Dreiecke des
+    # Absatzes, die an den Fleck grenzen — nur eben über eine Kante.
+    inside = np.zeros(len(body.faces), dtype=bool)
+    inside[patch] = True
+    beside_the_patch = {
+        int(face)
+        for node in rim.frayed
+        for face in np.flatnonzero((np.asarray(body.faces) == node).any(axis=1))
+        if face >= count
+        and inside[body.face_adjacency[(body.face_adjacency == face).any(axis=1)]].any()
+    }
+    assert beside_the_patch, "am Knoten liegt ein Dreieck des Absatzes an"
+    creases = np.degrees(body.face_adjacency_angles)[
+        ((body.face_adjacency[:, 0] >= count) != (body.face_adjacency[:, 1] >= count))
+    ]
+    assert float(creases.min()) > CURVATURE_LIMIT
 
 
 def test_a_notch_too_large_to_be_one_stays_open() -> None:

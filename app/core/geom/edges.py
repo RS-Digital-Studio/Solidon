@@ -3396,7 +3396,55 @@ def _placed_edge_work(
     )
     world = result.mesh.raw.copy()
     transform.moved(world, frame)
+    # **Was der Kern nicht berührt hat, steht wieder an seinem Ort** (RM-274).
+    # Der Körper liegt für die Ecke im Rahmen ihres Knotens, weil Bereich und
+    # Zielkörper genau in dessen drei Ebenen liegen — in der Welt träfe eine
+    # gedrehte Ecke sie nicht genau. Hin- und Rückweg runden aber jede Ecke:
+    # Am L-Profil mit einer Kugel an der fernen Ecke standen danach 481 von
+    # 511 Ecken abseits der Kanten woanders, gedreht alle. Jede Ecke, die
+    # Bit für Bit eine Ecke des Eingangs im Rahmen ist, bekommt deshalb deren
+    # Weltkoordinate zurück; nur was die Ecke neu gebaut hat, kommt aus dem
+    # Rahmen.
+    world.vertices = _back_in_place(
+        np.asarray(result.mesh.raw.vertices, dtype=np.float64),
+        local,
+        np.asarray(mesh.raw.vertices, dtype=np.float64),
+        np.asarray(world.vertices, dtype=np.float64),
+    )
     result.mesh = result.mesh.replacing(world)
+    return result
+
+
+def _back_in_place(
+    placed: np.ndarray, source_placed: np.ndarray, source: np.ndarray, moved: np.ndarray
+) -> np.ndarray:
+    """``moved`` mit dem Weltort aus ``source`` für jede Ecke, die der Kern durchreichte.
+
+    ``source_placed`` ist ``source`` im Rahmen, in dem gerechnet wurde, Ecke für
+    Ecke in derselben Folge; ``placed`` das Ergebnis dort und ``moved`` dasselbe
+    Ergebnis zurück in der Welt. Durchgereicht heißt: Die Ecke steht in
+    ``placed`` Bit für Bit wie eine in ``source_placed``, wie bei
+    :func:`attributes.in_source_layout` — gesucht wird sortiert, nicht je Ecke.
+    """
+    if not len(placed) or not len(source_placed):
+        return moved
+    points = np.concatenate((source_placed, placed))
+    order = np.lexsort((points[:, 2], points[:, 1], points[:, 0]))
+    ordered = points[order]
+    fresh = np.ones(len(points), dtype=bool)
+    fresh[1:] = (ordered[1:] != ordered[:-1]).any(axis=1)
+    place = np.empty(len(points), dtype=np.int64)
+    place[order] = np.cumsum(fresh) - 1
+    first_source = np.full(int(place.max()) + 1, -1, dtype=np.int64)
+    source_places = place[: len(source_placed)]
+    # Bei gleichen Orten im Eingang zählt die erste Ecke: Zwei Ecken, die im
+    # Rahmen zusammenfallen, lagen auch in der Welt bis auf das Rauschen
+    # beieinander, und der Kern hat sie ohnehin zu einer gemacht.
+    first_source[source_places[::-1]] = np.arange(len(source_placed))[::-1]
+    found = first_source[place[len(source_placed) :]]
+    result = np.array(moved, dtype=np.float64, copy=True)
+    known = found >= 0
+    result[known] = source[found[known]]
     return result
 
 

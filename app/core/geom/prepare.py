@@ -826,10 +826,6 @@ def resize_bore(
         dtype=float,
     )
     to_world[:3, 3] = np.asarray(position, dtype=float)
-    to_local = lathe.rigid_inverse(to_world)
-    local_body = mesh.raw.copy()
-    transform.moved(local_body, to_local)
-    local_mesh = mesh.replacing(local_body)
 
     kind: BooleanKind
     if grows:
@@ -851,6 +847,7 @@ def resize_bore(
             sections=BORE_SECTIONS,
         )
         kind = "union"
+    capped: list[tuple[np.ndarray, SectionPlane]] = []
     if end_planes:
         # Die beiden Randebenen begrenzen jeden Umfangspunkt einzeln. Eine
         # senkrechte Werkzeugkappe auf Höhe des höchsten alten Randpunkts
@@ -875,17 +872,20 @@ def resize_bore(
                 position_in_bore
                 - (vertices[selected, 0] * normal[0] + vertices[selected, 1] * normal[1])
             ) / normal[2]
+            capped.append((selected, plane))
         tool.vertices = vertices
-    # Im Koordinatensystem der Bohrung rechnen. Ein schräger Zylinder ist
-    # geometrisch nicht schwieriger als ein senkrechter, numerisch aber schon:
-    # an der gedrehten Korpusplatte zerlegte der direkte Mesh-Kern 97 Grad der
-    # neuen Wand in Keile und die Erkennung nannte sie danach „Verrundung".
-    # Lokal steht die Achse exakt auf Z; zurückgedreht wird erst das fertige
-    # Ergebnis. Das ändert keine Maße und bewahrt die freie Richtung.
-    outcome = boolean(kind, [local_mesh, MeshData.of(tool)], quality=quality, seed=seed)
-    world_body = outcome.mesh.raw.copy()
-    transform.moved(world_body, to_world)
-    resized = outcome.mesh.replacing(world_body)
+    # **Das Werkzeug wandert in die Welt, nicht der Körper in den Rahmen**
+    # (RM-274, der Weg aus RM-187). Bis zur Durchsicht 0.5.1 lag hier der ganze
+    # Körper im Rahmen der Bohrung und danach wieder in der Welt, und die
+    # Rundung beider Wege versetzte jede Ecke, die der Schnitt nicht berührt.
+    # Die Kappen auf den gemessenen Randebenen legt :func:`_onto_planes` in der
+    # Welt so genau auf ihre Ebene, wie ``float`` es erlaubt — eine
+    # achsparallele Mündung trifft sie damit Bit für Bit.
+    transform.moved(tool, to_world)
+    if capped:
+        tool.vertices = _onto_planes(np.asarray(tool.vertices, dtype=np.float64), capped)
+    outcome = boolean(kind, [mesh, MeshData.of(tool)], quality=quality, seed=seed)
+    resized = outcome.mesh
     findings = list(outcome.findings)
     nothing = without_effect(mesh, resized, kind, profile)
     if nothing is not None:
@@ -896,15 +896,38 @@ def resize_bore(
     )
     findings.extend(split_findings(mesh, resized))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
-    world_tool = tool.copy()
-    transform.moved(world_tool, to_world)
     return BoreResult(
         mesh=resized,
         solver=outcome.solver,
         diameter=cut_diameter,
         findings=findings,
-        cutting_tool=MeshData.of(world_tool) if grows else None,
+        cutting_tool=MeshData.of(tool) if grows else None,
     )
+
+
+def _onto_planes(
+    vertices: np.ndarray, capped: Sequence[tuple[np.ndarray, SectionPlane]]
+) -> np.ndarray:
+    """Die gewählten Ecken genau auf ihre Ebene legen, entlang der steilsten Weltachse.
+
+    Ein Werkzeug, dessen Kappe im Rahmen der Bohrung auf einer Randebene lag,
+    liegt nach dem Weg in die Welt nur bis auf die Rundung darauf. Aufgelöst
+    wird nach der Koordinate, in der die Ebene am steilsten steht: Bei einer
+    achsparallelen Ebene ist das genau ihre Lage, die Kappe fällt Bit für Bit
+    in die Fläche des Körpers; bei einer schrägen rückt die Ecke um weniger als
+    eine Rundung. Grundrechenarten in fester Folge (RM-187).
+    """
+    placed = np.array(vertices, dtype=np.float64, copy=True)
+    for selected, plane in capped:
+        normal = [float(value) for value in plane.normal]
+        steepest = max(range(3), key=lambda index: abs(normal[index]))
+        others = [index for index in range(3) if index != steepest]
+        rest = (
+            placed[selected, others[0]] * normal[others[0]]
+            + placed[selected, others[1]] * normal[others[1]]
+        )
+        placed[selected, steepest] = (float(plane.position) - rest) / normal[steepest]
+    return placed
 
 
 #: Wieviel größer der Körper gebaut wird, der ein gemessenes Merkmal ausfüllt,
@@ -993,7 +1016,9 @@ def slot_bore(
             values={"shortest": format_length(shortest_slot(diameter))},
         )
     vector = np.asarray(direction, dtype=float)
-    span = float(np.linalg.norm(vector))
+    # ``math.hypot`` statt ``np.linalg.norm`` (BLAS, RM-187): Aus der Länge
+    # wird die Achse, und aus der Achse der Rahmen des Werkzeugs.
+    span = math.hypot(float(vector[0]), float(vector[1]), float(vector[2]))
     if not math.isfinite(span) or span <= EPS_GEOM:
         raise bore_geometry_error()
     if not math.isfinite(depth) or depth <= EPS_GEOM:
@@ -1011,45 +1036,48 @@ def slot_bore(
     # Achse und ist damit seitenunabhängig — was richtig ist, denn eine
     # erkannte Bohrung hat zwei Mündungen, und welche gemeint ist, hat niemand
     # gesagt (Regel 21).
-    to_world = np.eye(4)
-    to_world[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
-    to_world[:3, 3] = np.asarray(position, dtype=float)
-    to_local = lathe.rigid_inverse(to_world)
-    local_body = mesh.raw.copy()
-    transform.moved(local_body, to_local)
 
     # Nur ein durchgehendes Loch darf über beide Mündungen hinausragen. Bei
     # einer Blindbohrung bliebe der Boden sonst nicht, wo er gemessen wurde —
-    # dieselbe Abwägung wie in :func:`resize_bore`.
+    # dieselbe Abwägung wie in :func:`resize_bore`. Ein Ende, das in einer
+    # Fläche mit Luft dahinter liegt — die Mündung —, reicht dagegen um die
+    # Zugabe hinaus (:func:`_open_ends`): Das Werkzeug liegt in der Welt, und
+    # dort trifft es eine schräge Fläche nicht genau.
     height = depth + (BOOLEAN_OVERLAP * 2.0 if through else 0.0)
-    if round_bore:
-        tool = lathe.cylinder(
-            radius=(diameter + overlap) / 2.0, height=height, sections=BORE_SECTIONS
+    radius = (diameter + overlap) / 2.0
+    below = above = False
+    if not through:
+        reach = radius + travel / 2.0
+        below, above = _open_ends(
+            mesh,
+            _heights(mesh, frame),
+            frame,
+            ((-height / 2.0, -1.0, reach), (height / 2.0, 1.0, reach)),
         )
+    low = -height / 2.0 - (BOOLEAN_OVERLAP if below else 0.0)
+    high = height / 2.0 + (BOOLEAN_OVERLAP if above else 0.0)
+    if round_bore:
+        tool = lathe.cylinder(radius=radius, height=high - low, sections=BORE_SECTIONS)
+        if below or above:
+            tool.apply_translation((0.0, 0.0, (high + low) / 2.0))
     else:
         tool = extrude_profile(
-            slot_profile(
-                radius=(diameter + overlap) / 2.0,
-                travel=travel,
-                angle_deg=angle_deg,
-            ),
-            height,
+            slot_profile(radius=radius, travel=travel, angle_deg=angle_deg),
+            high - low,
             PlaneFrame(
-                origin=(0.0, 0.0, -height / 2.0),
+                origin=(0.0, 0.0, low),
                 x_axis=(1.0, 0.0, 0.0),
                 y_axis=(0.0, 1.0, 0.0),
                 normal=(0.0, 0.0, 1.0),
             ),
         )
-    outcome = boolean(
-        "difference",
-        [mesh.replacing(local_body), MeshData.of(tool)],
-        quality=quality,
-        seed=seed,
-    )
-    world_body = outcome.mesh.raw.copy()
-    transform.moved(world_body, to_world)
-    slotted = outcome.mesh.replacing(world_body)
+    # **Das Werkzeug wandert in die Welt, nicht der Körper in den Rahmen**
+    # (RM-274): derselbe Umbau wie beim Bohren, und aus demselben Grund — der
+    # Hin- und Rückweg des ganzen Körpers versetzte jede Ecke, die das
+    # Langloch nicht berührt.
+    transform.moved(tool, _in_world(frame))
+    outcome = boolean("difference", [mesh, MeshData.of(tool)], quality=quality, seed=seed)
+    slotted = outcome.mesh
     findings = list(outcome.findings)
     nothing = without_effect(mesh, slotted, "difference", profile)
     if nothing is not None:
@@ -1132,7 +1160,14 @@ def drill_outline(
                 ),
             )
         wide_radius = bore_diameter(widening_diameter, profile, compensate) / 2.0
-        transition = (wide_radius - radius) / math.tan(math.radians(transition_angle / 2.0))
+        # Die Länge des Übergangs über den Kotangens aus den exakten
+        # Winkelfunktionen (RM-187), nicht über ``math.tan``: Aus ihr wird ein
+        # Ring des Werkzeugs, und ``math.tan`` rundet je Mathematikbibliothek
+        # anders. Bei 180 Grad ist der Kosinus genau null, die Schulter flach.
+        half = transition_angle / 2.0
+        transition = (
+            (wide_radius - radius) * units.exact_cos_degrees(half) / units.exact_sin_degrees(half)
+        )
         if widening_depth + transition >= depth - EPS_GEOM:
             raise ValidationError(
                 field="depth",
@@ -1471,33 +1506,114 @@ def drill_tool(
     return MeshData.of(cylinder)
 
 
-def _restore_drill_end_planes(
-    body: trimesh.Trimesh,
-    original_vertices: np.ndarray,
-    world_to_local: np.ndarray,
-    planes: tuple[float, float],
-) -> None:
-    """Nur Float64-Transformationsrauschen an den bekannten Werkzeugenden bereinigen.
+def _in_world(frame: PlaneFrame) -> np.ndarray:
+    """Die Matrix, die ein Werkzeug aus dem Rahmen einer Bohrung in die Welt legt."""
+    matrix = np.eye(4)
+    matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    matrix[:3, 3] = np.asarray(frame.origin, dtype=np.float64)
+    return matrix
 
-    Vier Produkte, ihre Summation und der Ebenenvergleich werden konservativ
-    durch gamma_8 begrenzt. Die Schranke folgt je Eckpunkt aus den Beträgen
-    der wirklichen Matrixterme; sie ist weder Materialzugabe noch geometrische
-    Schweißtoleranz. Ein darüber hinausgehender Abstand bleibt unangetastet.
+
+def _heights(mesh: MeshData, frame: PlaneFrame) -> np.ndarray:
+    """Die Lage jeder Ecke entlang der Achse eines Rahmens, gemessen von seinem Ursprung.
+
+    Elementweise (:func:`transform.along`), nicht über ``@``: Aus ihr werden
+    Werkzeuglänge und Endebenen, und die sollen auf jeder Maschine dieselben
+    sein (RM-187).
     """
-    unit_roundoff = np.finfo(np.float64).eps / 2.0
-    gamma = 8.0 * unit_roundoff / (1.0 - 8.0 * unit_roundoff)
-    magnitude = np.abs(original_vertices) @ np.abs(world_to_local[2, :3]) + abs(
-        float(world_to_local[2, 3])
+    offset = np.asarray(mesh.raw.vertices, dtype=np.float64) - np.asarray(
+        frame.origin, dtype=np.float64
     )
-    vertices = np.asarray(body.vertices, dtype=np.float64).copy()
-    changed = False
-    for plane in planes:
-        close = np.abs(vertices[:, 2] - plane) <= gamma * (magnitude + abs(plane))
-        if bool(np.any(close)):
-            vertices[close, 2] = plane
-            changed = True
-    if changed:
-        body.vertices = vertices
+    return transform.along(offset, frame.normal)
+
+
+def _open_ends(
+    mesh: MeshData,
+    heights: np.ndarray,
+    frame: PlaneFrame,
+    ends: Sequence[tuple[float, float, float]],
+) -> tuple[bool, ...]:
+    """Je Ende eines abziehenden Werkzeugs: liegt es in einer Körperfläche mit Luft dahinter?
+
+    ``heights`` ist :func:`_heights` desselben Rahmens; ``ends`` nennt je Ende
+    seine Lage entlang ``frame.normal``, wohin es blickt (+1 in Richtung der
+    Normalen, -1 dagegen) und wie weit das Werkzeug dort von der Achse reicht.
+
+    **Das ist die Endebene des Bohrungsgebiets in Weltlage** (RM-274). Solange
+    der Körper im Rahmen der Bohrung lag, legte die Bereinigung Ecken im
+    Float64-Rauschen einer Endebene genau auf sie, und der Kern schnitt eine
+    Fläche dort bündig weg. Ein Werkzeug in Weltlage trifft eine schräge Fläche
+    nicht genau, und bündig davor lässt die Differenz eine Haut stehen
+    (gemessen: eine Platte um 17,5° gedreht, Boden in der Unterseite bei 33°,
+    jede float32-Fläche). Wer hier ``True`` bekommt, reicht dieses Ende um
+    :data:`BOOLEAN_OVERLAP` in die Luft dahinter — das Ergebnis ist dasselbe
+    wie bündig und genau.
+
+    In der Fläche heißt: Alle drei Ecken eines Dreiecks liegen näher an der
+    Endebene als ``units.weld_tolerance`` — zwei Orte, die das Verschweißen für
+    einen hält, und weit über der float32-Rundung einer STL. Gefragt werden nur
+    Dreiecke, die in die Ebene gelegt näher als die Reichweite an der Achse
+    liegen. **Luft dahinter nur, wenn alle von ihnen vom Werkzeug weg zeigen**;
+    zeigt eines zum Werkzeug hin, endet dort Material (ein Boden, auf den das
+    Werkzeug trifft), und das Ende bleibt, wo es ist — jede Zugabe wäre dort
+    ein Maßfehler.
+    """
+    raw = mesh.raw
+    vertices = np.asarray(raw.vertices, dtype=np.float64)
+    faces = np.asarray(raw.faces, dtype=np.int64)
+    band = units.weld_tolerance(mesh.bounds.diagonal)
+    offset = vertices - np.asarray(frame.origin, dtype=np.float64)
+    across = transform.along(offset, frame.x_axis)
+    up = transform.along(offset, frame.y_axis)
+    answers: list[bool] = []
+    for height, facing, reach in ends:
+        near = np.abs(heights - height) <= band
+        flat = faces[near[faces].all(axis=1)]
+        if len(flat):
+            flat = flat[_near_the_axis(across, up, flat, reach)]
+        if not len(flat):
+            answers.append(False)
+            continue
+        corners = vertices[flat]
+        normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        away = transform.along(normals, frame.normal) * facing
+        away = away[away != 0.0]
+        answers.append(bool(len(away)) and bool(np.all(away > 0.0)))
+    return tuple(answers)
+
+
+def _near_the_axis(
+    across: np.ndarray, up: np.ndarray, faces: np.ndarray, reach: float
+) -> np.ndarray:
+    """Welche Dreiecke, in die Ebene quer zur Achse gelegt, die Scheibe um sie berühren.
+
+    ``across`` und ``up`` sind die Lagen der Ecken entlang der beiden anderen
+    Achsen des Rahmens. Berührt heißt: Die Achse liegt im Dreieck, oder eine
+    seiner Kanten kommt ihr näher als ``reach``. Grundrechenarten, elementweise.
+    """
+    first = np.stack((across[faces[:, 0]], up[faces[:, 0]]), axis=1)
+    second = np.stack((across[faces[:, 1]], up[faces[:, 1]]), axis=1)
+    third = np.stack((across[faces[:, 2]], up[faces[:, 2]]), axis=1)
+
+    def side(start: np.ndarray, end: np.ndarray) -> np.ndarray:
+        turn = (end[:, 0] - start[:, 0]) * -start[:, 1] - (end[:, 1] - start[:, 1]) * -start[:, 0]
+        return np.asarray(turn)
+
+    def gap(start: np.ndarray, end: np.ndarray) -> np.ndarray:
+        step = end - start
+        length = step[:, 0] * step[:, 0] + step[:, 1] * step[:, 1]
+        along = -(start[:, 0] * step[:, 0] + start[:, 1] * step[:, 1])
+        share = np.clip(along / np.where(length > 0.0, length, 1.0), 0.0, 1.0)
+        x = start[:, 0] + share * step[:, 0]
+        y = start[:, 1] + share * step[:, 1]
+        return np.asarray(x * x + y * y)
+
+    turns = (side(first, second), side(second, third), side(third, first))
+    inside = ((turns[0] >= 0.0) & (turns[1] >= 0.0) & (turns[2] >= 0.0)) | (
+        (turns[0] <= 0.0) & (turns[1] <= 0.0) & (turns[2] <= 0.0)
+    )
+    nearest = np.minimum(np.minimum(gap(first, second), gap(second, third)), gap(third, first))
+    return np.asarray(inside | (nearest <= reach * reach))
 
 
 def drill(
@@ -1554,7 +1670,9 @@ def drill(
         raise ValidationError(
             field="nx", detail=_("Wählen Sie eine endliche Richtung für die Bohrung.")
         )
-    length = float(np.linalg.norm(direction))
+    # ``math.hypot`` statt ``np.linalg.norm`` (BLAS, RM-187): Aus der Länge
+    # wird die Richtung, und aus der Richtung der Rahmen des Werkzeugs.
+    length = math.hypot(float(direction[0]), float(direction[1]), float(direction[2]))
     if length <= EPS_GEOM and (widening_diameter > EPS_GEOM or travel > EPS_GEOM):
         direction[AXIS_INDEX[axis]] = -_into_the_material(mesh, axis, position)
         length = 1.0
@@ -1563,14 +1681,17 @@ def drill(
 
         outward = direction / length
         frame = frame_of((float(outward[0]), float(outward[1]), float(outward[2])), position)
-        to_world = np.eye(4)
-        to_world[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
-        to_world[:3, 3] = position
-        world_to_local = np.linalg.inv(to_world)
-        local_body = mesh.raw.copy()
-        transform.moved(local_body, world_to_local)
+        # **Das Werkzeug wandert in die Welt, nicht der Körper in den Rahmen**
+        # (RM-274). Bis zur Durchsicht 0.5.1 lag hier der ganze Körper für den
+        # Schnitt im Rahmen der Bohrung und danach wieder in der Welt; die
+        # Rundung von Hin- und Rückweg versetzte Ecken, die der Schnitt nie
+        # berührt — am Gartenschlauchhalter 17 490 außerhalb eines Lochs von
+        # Ø 3 mm und 2 mm Tiefe, und der Merker über die Körpergrenze rechnete
+        # danach 1 078 statt 79 Fragen neu. Gemessen wird im Rahmen nur entlang
+        # der Achse, und das elementweise.
+        heights = _heights(mesh, frame)
         if through:
-            low, high = float(local_body.bounds[0, 2]), float(local_body.bounds[1, 2])
+            low, high = float(heights.min()), float(heights.max())
             if widening_diameter > EPS_GEOM and anchor == "mouth":
                 height, mouth = -low + BOOLEAN_OVERLAP, 0.0
             else:
@@ -1578,34 +1699,44 @@ def drill(
                 mouth = high + BOOLEAN_OVERLAP
         else:
             height, mouth = depth, depth / 2.0 if anchor == "centre" else 0.0
-        _restore_drill_end_planes(
-            local_body,
-            np.asarray(mesh.raw.vertices, dtype=np.float64),
-            world_to_local,
-            (mouth, mouth - height),
+        # **Die Enden des Werkzeugs** (die Endebenen des Bohrungsgebiets). Ein
+        # Ende, das in einer Körperfläche mit Luft dahinter liegt — die Mündung
+        # in der angeklickten Fläche, ein Boden in der Unterseite —, reicht um
+        # die Zugabe darüber (:func:`_open_ends`); bündig ließ der Weg über den
+        # Rahmen an einer schrägen float32-Fläche eine Haut in der Mündung
+        # stehen. Ein Blindboden im Material und eine im Material eingegebene
+        # Mündung bleiben genau, wo sie sind; ein durchgehendes Werkzeug reicht
+        # ohnehin über den Körper hinaus.
+        radius = cut_diameter / 2.0 + travel / 2.0
+        top_radius = (
+            bore_diameter(widening_diameter, profile, compensate) / 2.0
+            if widening_diameter > EPS_GEOM
+            else radius
         )
+        below = above = False
+        if not through:
+            below, above = _open_ends(
+                mesh, heights, frame, ((mouth - height, -1.0, radius), (mouth, 1.0, top_radius))
+            )
+        elif widening_diameter > EPS_GEOM and anchor == "mouth":
+            (above,) = _open_ends(mesh, heights, frame, ((mouth, 1.0, top_radius),))
         tool = drill_tool(
             diameter=diameter,
-            depth=height,
+            depth=height + (BOOLEAN_OVERLAP if below else 0.0),
             profile=profile,
             compensate=compensate,
             widening_diameter=widening_diameter,
             widening_depth=widening_depth,
             transition_angle=transition_angle,
+            mouth_overlap=BOOLEAN_OVERLAP if above else 0.0,
             slot_length=slot_length,
             slot_angle=slot_angle,
         )
         cylinder = tool.raw.copy()
         cylinder.apply_translation((0.0, 0.0, mouth))
-        outcome = boolean(
-            "difference",
-            [mesh.replacing(local_body), MeshData.of(cylinder)],
-            quality=quality,
-            seed=seed,
-        )
-        world_body = outcome.mesh.raw.copy()
-        transform.moved(world_body, to_world)
-        result = outcome.mesh.replacing(world_body)
+        transform.moved(cylinder, _in_world(frame))
+        outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
+        result = outcome.mesh
         findings = list(outcome.findings)
         nothing = without_effect(mesh, result, "difference", profile)
         if nothing is not None:
@@ -1629,10 +1760,8 @@ def drill(
         # Das Werkzeug im Weltraum, für die Nachbarprüfung des Aufrufers —
         # ``resize_hole`` versetzt eine Bohrung über diesen Weg, und bis zum
         # 22.09.2026 blieb ohne Werkzeug die aufgerissene Nachbarwand ungesagt.
-        world_tool = cylinder.copy()
-        transform.moved(world_tool, to_world)
         return BoreResult(
-            result, outcome.solver, cut_diameter, findings, cutting_tool=MeshData.of(world_tool)
+            result, outcome.solver, cut_diameter, findings, cutting_tool=MeshData.of(cylinder)
         )
     height = _through_length(mesh, axis) * 2.0 if through else depth
     cylinder = drill_tool(

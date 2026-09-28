@@ -222,7 +222,9 @@ class FilletParams(BaseParams):
     # 9: Radius mit Verlauf (P6.1, 23.09.2026).
     # 10: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
     # 11: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
-    cache_version="11",
+    # 12: an einer gemischten Ecke bleibt jede durchgereichte Ecke an ihrem
+    # Weltort (RM-274).
+    cache_version="12",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -394,7 +396,8 @@ class ChamferParams(BaseParams):
     # am Linienschwerpunkt — an Bögen und Kreisen (P6.2, 23.09.2026).
     # 11: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
     # 12: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
-    cache_version="12",
+    # 13: wie beim Verrunden (RM-274).
+    cache_version="13",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,

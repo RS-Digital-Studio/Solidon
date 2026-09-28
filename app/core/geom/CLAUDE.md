@@ -163,8 +163,11 @@ ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
   Werkzeugs, nie mit größerer Toleranz. Nachbarbefunde messen am Werkzeug und
   melden eine dünne Wand nur, wenn sie dünner wird.
 - **Platzieren**: `frame_of()`, der Nullvektor bewahrt die alte Semantik; das
-  Bohrwerkzeug reicht exakt bis zur Tiefe, `drill()` bereinigt nur
-  Float64-Rauschen. `feature_placement_geometry()` schließt Ketten gemeinsam,
+  Bohrwerkzeug reicht exakt bis zur Tiefe und wandert in die Welt (`drill`,
+  `resize_bore`, `slot_bore`: `_in_world`, Lage entlang der Achse über
+  `_heights`), ein Ende in einer Fläche mit Luft dahinter reicht um die Zugabe
+  hinaus (`_open_ends`), Kappen auf gemessenen Randebenen legt `_onto_planes`
+  genau darauf. `feature_placement_geometry()` schließt Ketten gemeinsam,
   `local_text_body()` trägt jeden Formparameter. Ein Ring ohne gemessene Achse
   hat keine Lage (`FEATURE_WITHOUT_AXIS`); beim Platzieren fallen alte
   Dreiecks- und Trägerbezüge gemeinsam.

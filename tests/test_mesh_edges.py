@@ -687,6 +687,69 @@ def test_mixed_corners_join_on_a_plane_or_torus(
     assert float(distance.max()) <= MAX_FACET_SAG + 1e-6
 
 
+@pytest.mark.parametrize("rounded", [False, True], ids=["chamfer", "fillet"])
+@pytest.mark.parametrize("transformed", [False, True], ids=["original", "rotated"])
+def test_a_mixed_corner_leaves_every_corner_away_from_its_edges_in_place(
+    rounded: bool, transformed: bool
+) -> None:
+    """Abseits der drei bearbeiteten Kanten steht jede Ecke danach Bit für Bit, wo sie war.
+
+    Die gemischte Ecke rechnet im Rahmen ihres Knotens (Bereich und Zielkörper
+    liegen genau in dessen drei Ebenen). Bis zur Durchsicht 0.5.1 kam der ganze
+    Körper von dort gerundet zurück: An diesem L-Profil mit einer Kugel an der
+    fernen Ecke standen danach 481 von 511 Ecken abseits der Kanten woanders,
+    gedreht alle (RM-274, ``sonden/bohren/p16_eckrahmen.py``). Jetzt bekommt
+    jede Ecke, die der Kern unverändert durchreicht, ihren Weltort zurück.
+    """
+    raw = _notched_block()
+    knob = trimesh.creation.icosphere(subdivisions=3, radius=3.0)
+    knob.vertices = np.asarray(knob.vertices) + np.array([2.0, 2.0, 0.0])
+    body = boolean("union", [MeshData(raw), MeshData(knob)]).mesh.raw.copy()
+    frame = np.eye(4)
+    if transformed:
+        frame = trimesh.transformations.rotation_matrix(math.radians(31.0), (2.0, 1.0, -3.0))
+        frame[:3, 3] = (-15.0, 10.0, 7.0)
+        body.apply_transform(frame)
+    point = trimesh.transform_points([[10.0, 10.0, 20.0]], frame)[0]
+    mesh = MeshData(body)
+    touching = [
+        entry
+        for entry in edges_of(mesh)
+        if min(math.dist(point, entry.points[0]), math.dist(point, entry.points[-1])) < 1e-6
+    ]
+    assert len(touching) == 3
+    edit = round_edges if rounded else bevel_edges
+    changed = edit(mesh, 3.0, "named", [edge_key(entry) for entry in touching]).mesh
+
+    def to_the_edges(points: np.ndarray) -> np.ndarray:
+        """Der Abstand jeder Ecke zur nächsten bearbeiteten Kante."""
+        nearest = np.full(len(points), np.inf)
+        for entry in touching:
+            line = np.asarray(entry.points, dtype=float)
+            for start, end in pairwise(line):
+                step = end - start
+                share = np.clip(((points - start) @ step) / float(step @ step), 0.0, 1.0)
+                nearest = np.minimum(
+                    nearest, np.linalg.norm(points - (start + share[:, None] * step), axis=1)
+                )
+        return nearest
+
+    def rows(points: np.ndarray) -> np.ndarray:
+        return np.ascontiguousarray(points, dtype=np.float64).view([("", np.float64)] * 3).ravel()
+
+    before = np.asarray(mesh.raw.vertices)
+    after = np.asarray(changed.raw.vertices)
+    # Abseits heißt: weiter als das Maß und einen Millimeter von jeder Kante.
+    away = before[to_the_edges(before) > 4.0]
+    assert len(away) > 400, "die Kugel trägt die Ecken abseits der Kanten"
+    assert np.isin(rows(away), rows(after)).all()
+    # Die Gegenrichtung: Abseits der Kanten ist keine Ecke neu — bis auf die
+    # äußerste der Fase, die √2 mal das Maß von ihrer Kante liegt.
+    distance = to_the_edges(after)
+    fresh = ~np.isin(rows(after), rows(before)) & (distance > 4.0)
+    assert np.all(distance[fresh] <= 3.0 * math.sqrt(2.0) + 1e-9)
+
+
 def test_a_mixed_corner_preserves_an_unrelated_hole() -> None:
     """Der lokale Ersatz darf keine fremde Bohrung zuschütten."""
     raw = _notched_block()
