@@ -70,6 +70,7 @@ from PySide6.QtGui import (
     QPainterPath,
     QPen,
     QPolygonF,
+    qGray,
 )
 from PySide6.QtWidgets import QApplication, QMenu
 
@@ -164,6 +165,16 @@ BORDER: Final = 30
 #: Wie stark der Rest des Bildes zurücktritt.
 DIM: Final = QColor(0, 0, 0, 105)
 
+#: Wie viel Unruhe (:func:`_busyness`, mittlere Helligkeitsabweichung) eine
+#: Stelle für die Nummer ruhiger sein muss als die vor ihr in der Reihenfolge.
+#: Leere Flächen der Oberfläche liegen unter drei, Schrift über zwanzig; bei
+#: sechzehn Stellen bleibt die Vorliebe damit unter dem Abstand zur Schrift.
+CALM_ORDER: Final = 0.5
+
+#: Wo entlang des Pfeils gemessen wird, als Anteil des Wegs von der Nummer zur
+#: Spitze.
+PATH_SHARES: Final = (0.25, 0.4, 0.55, 0.7, 0.82)
+
 
 #: Die Qualität der WebP-Bilder. 86 wie bei den Website-Bildern
 #: (``make_web_images``): Die Schrift der Oberfläche bleibt scharf, und das
@@ -223,7 +234,7 @@ def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> 
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.drawImage(BORDER, BORDER, piece)
     shot = QRectF(BORDER, BORDER, piece.width(), piece.height())
-    frames = [_frame(spot).translated(BORDER, BORDER) for spot in spots]
+    frames = [frame.translated(BORDER, BORDER) for frame in _frames(spots)]
 
     if not legend and frames:
         shade = QPainterPath()
@@ -256,7 +267,7 @@ def annotate(piece: QImage, spots: list[Spot], *, legend: bool, number: int) -> 
             continue
         away = not legend and _small(spot)
         others = [other for other in frames if other is not frame]
-        centre = _badge_centre(frame, others, bounds, taken, away=away)
+        centre = _badge_centre(frame, others, bounds, taken, away=away, picture=piece)
         taken.append(centre)
         if away:
             _arrow(painter, centre, frame, amber, halo)
@@ -313,6 +324,38 @@ def _frame(spot: Spot) -> QRectF:
     return QRectF(spot.rect).adjusted(-PADDING, -PADDING, PADDING, PADDING)
 
 
+def _frames(spots: list[Spot]) -> list[QRectF]:
+    """Die Rahmen um die Ziele — enger, wo zwei sonst ineinandergriffen.
+
+    Einträge eines Menüs stehen Zeile an Zeile. Mit dem gewöhnlichen Abstand
+    griff jeder Rahmen in die Nachbarzeile, und zwei Rahmen deckten die Zeile
+    dazwischen zu (*Nach unten* im Kontextmenü des Verlaufs, Durchsicht
+    28.09.2026). Wo zwei Ziele näher beieinander stehen als zwei Abstände,
+    teilen sie sich den Platz dazwischen.
+    """
+    padding = [float(PADDING)] * len(spots)
+    for first, one in enumerate(spots):
+        for second in range(first + 1, len(spots)):
+            other = spots[second]
+            if one.point or other.point or one.rect.intersects(other.rect):
+                continue
+            gap = max(
+                other.rect.left() - one.rect.right(),
+                one.rect.left() - other.rect.right(),
+                other.rect.top() - one.rect.bottom(),
+                one.rect.top() - other.rect.bottom(),
+            )
+            if gap > 2 * PADDING:
+                continue
+            room = max(0.0, (gap - 1) / 2)
+            padding[first] = min(padding[first], room)
+            padding[second] = min(padding[second], room)
+    return [
+        _frame(spot) if spot.point else QRectF(spot.rect).adjusted(-pad, -pad, pad, pad)
+        for spot, pad in zip(spots, padding, strict=True)
+    ]
+
+
 def _reach(spot: Spot) -> QRect:
     """Was ein Ausschnitt um ein Ziel mindestens zeigen muss: Rahmen, Nummer, Pfeil."""
     frame = _frame(spot)
@@ -327,6 +370,7 @@ def _badge_centre(
     taken: list[QPointF],
     *,
     away: bool,
+    picture: QImage | None = None,
 ) -> QPointF:
     """Wo die Nummer steht — und nie auf einem anderen Bereich.
 
@@ -337,19 +381,35 @@ def _badge_centre(
     auf die Mitte der Oberkante. Eine Nummer, die auf einem fremden Bereich
     steht, zeigte auf den falschen. Ein kleines Ziel bekommt seine Nummer
     abgesetzt, damit der Pfeil dazwischen passt.
+
+    **Unter den freien Stellen die ruhigste** (Durchsicht 28.09.2026): Die
+    erste freie verdeckte die Beschriftung eines Nachbarfelds, und ein
+    Pfeil kreuzte einen Hinweissatz. Gemessen wird am Bildschirmfoto
+    (:func:`_busyness`), unter der Nummer und entlang des Pfeils; bei
+    gleicher Ruhe gilt die Reihenfolge unten. Eine abgesetzte Nummer hat dafür
+    acht Richtungen in zwei Abständen: Mit den vier Ecken allein lag in einem
+    dichten Dialog jede Stelle auf Text.
     """
     reach = BADGE + 3
+    middle = frame.center()
     if away:
         candidates = [
-            QPointF(frame.left() - AWAY, frame.top() - AWAY),
-            QPointF(frame.right() + AWAY, frame.top() - AWAY),
-            QPointF(frame.left() - AWAY, frame.bottom() + AWAY),
-            QPointF(frame.right() + AWAY, frame.bottom() + AWAY),
+            spot
+            for distance in (AWAY, AWAY * 1.6)
+            for spot in (
+                QPointF(frame.left() - distance, frame.top() - distance),
+                QPointF(frame.right() + distance, frame.top() - distance),
+                QPointF(frame.left() - distance, frame.bottom() + distance),
+                QPointF(frame.right() + distance, frame.bottom() + distance),
+                QPointF(frame.left() - distance - BADGE, middle.y()),
+                QPointF(frame.right() + distance + BADGE, middle.y()),
+                QPointF(middle.x(), frame.top() - distance),
+                QPointF(middle.x(), frame.bottom() + distance),
+            )
         ]
     else:
         # In die Ecke hinein erst zuletzt: Dort verdeckt die Nummer den Inhalt
         # ihres eigenen Bereichs — im Probelauf das erste Wort der Werkzeugzeile.
-        middle = frame.center()
         candidates = [
             frame.topLeft(),
             QPointF(frame.left() - BADGE - 8, middle.y()),
@@ -370,10 +430,50 @@ def _badge_centre(
             )
         )
 
-    chosen = next((centre for centre in candidates if free(centre)), candidates[0])
+    def unrest(centre: QPointF) -> float:
+        score = _busyness(picture, centre, reach)
+        if away:
+            tip = QPointF(
+                min(max(centre.x(), frame.left()), frame.right()),
+                min(max(centre.y(), frame.top()), frame.bottom()),
+            )
+            # Die unruhigste Stelle des Wegs zählt: Eine einzige Textzeile,
+            # die der Pfeil kreuzt, stört, auch wenn der Rest leer ist. Kurz
+            # vor der Spitze wird nicht gemessen, dort beginnt das Ziel selbst.
+            path = [centre + (tip - centre) * share for share in PATH_SHARES]
+            score += max(_busyness(picture, point, 5.0) for point in path)
+        return score
+
+    usable = [rank for rank, centre in enumerate(candidates) if free(centre)]
+    chosen = candidates[
+        min(usable, key=lambda rank: unrest(candidates[rank]) + CALM_ORDER * rank) if usable else 0
+    ]
     x = min(max(chosen.x(), bounds.left() + reach), bounds.right() - reach)
     y = min(max(chosen.y(), bounds.top() + reach), bounds.bottom() - reach)
     return QPointF(x, y)
+
+
+def _busyness(picture: QImage | None, centre: QPointF, radius: float) -> float:
+    """Wie unruhig das Bildschirmfoto um einen Punkt der Leinwand ist.
+
+    Die mittlere Abweichung der Helligkeit, jeder dritte Bildpunkt: Schrift
+    und Kanten liegen weit darüber, eine leere Fläche nahe null. Der Rand
+    um das Foto zählt als ruhig.
+    """
+    if picture is None:
+        return 0.0
+    left = int(centre.x() - radius) - BORDER
+    top = int(centre.y() - radius) - BORDER
+    size = max(1, int(2 * radius))
+    values = [
+        qGray(picture.pixel(x, y))
+        for y in range(max(0, top), min(picture.height(), top + size), 3)
+        for x in range(max(0, left), min(picture.width(), left + size), 3)
+    ]
+    if not values:
+        return 0.0
+    mean = sum(values) / len(values)
+    return sum(abs(value - mean) for value in values) / len(values)
 
 
 def _badge(painter: QPainter, centre: QPointF, text: str, amber: QColor, ink: QColor) -> None:

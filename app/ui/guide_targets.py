@@ -25,12 +25,13 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, Final
 
-from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
     QDialogButtonBox,
+    QFormLayout,
     QListWidget,
     QMenu,
     QPushButton,
@@ -39,6 +40,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import guides
+from app.ui.labels import RowCheckBox
 
 if TYPE_CHECKING:
     from app.ui.main_window import MainWindow
@@ -336,7 +338,25 @@ def area_for(window: MainWindow, name: str) -> QRect:
     widget = widget_for(window, name)
     if not widget.isVisible():
         raise MissingTargetError(f"{name}: {type(widget).__name__} ist gerade nicht zu sehen")
+    if isinstance(widget, RowCheckBox):
+        return _checkbox_area(_in_view(widget))
     return _global(_in_view(widget))
+
+
+def _checkbox_area(box: QWidget) -> QRect:
+    """Beschriftung und Kästchen eines Hakens in einer Formularzeile.
+
+    Der Haken füllt die ganze Feldspalte (``labels.RowCheckBox``), gezeichnet
+    wird nur sein Quadrat am linken Rand. Ein Rahmen um das Widget umschloss
+    ein leeres Feld, und die Beschriftung stand außerhalb (*Maße als Parameter
+    anlegen*, *Oben öffnen*; Durchsicht 28.09.2026).
+    """
+    square = QRect(box.mapToGlobal(QPoint(0, 0)), QSize(box.height(), box.height()))
+    for form in box.window().findChildren(QFormLayout):
+        caption = form.labelForField(box)
+        if caption is not None and caption.isVisible():
+            return square.united(_global(caption))
+    return square
 
 
 def _in_view(widget: QWidget) -> QWidget:

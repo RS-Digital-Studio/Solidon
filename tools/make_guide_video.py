@@ -159,13 +159,17 @@ def check_pictures(folder: Path, chosen: tuple[guides.Guide, ...]) -> None:
 
 
 def caption_html(text: str, accent: str) -> str:
-    """Ein Schrittsatz als HTML: Namen in der Farbe der Markierung, Verweise als Text.
+    """Ein Schrittsatz als HTML: Namen in der Farbe der Markierung, Verweise kursiv.
 
-    Ein Verweis auf eine Seite ist im Film nicht anklickbar; sein Text bleibt.
+    Ein Verweis auf eine Seite ist im Film nicht anklickbar. Als bloßer Text
+    verschwamm der Titel im Satz („wie in Das erste eigene Teil einen
+    Quader“), kursiv liest er sich als Titel (Durchsicht 28.09.2026).
     """
-    escaped = html.escape(markup.unlinked(text), quote=False)
+    marked = markup.MANUAL_LINK.sub(lambda match: f"\x02{match.group(1)}\x03", text)
+    escaped = html.escape(marked, quote=False)
     escaped = _STRONG.sub(r"<b>\1</b>", escaped)
-    return _EMPHASIS.sub(rf'<span style="color:{accent}; font-weight:600">\1</span>', escaped)
+    escaped = _EMPHASIS.sub(rf'<span style="color:{accent}; font-weight:600">\1</span>', escaped)
+    return escaped.replace("\x02", "<i>").replace("\x03", "</i>")
 
 
 def reading_seconds(words: int, bounds: tuple[float, float]) -> float:
@@ -208,7 +212,6 @@ class _Painter:
         palette = THEMES["dark"]
         self.base = QColor(palette["base"])
         self.card = QColor(palette["alternate"])
-        self.line = QColor(palette["line"])
         self.text = QColor(palette["text"])
         self.muted = QColor(palette["muted"])
         self.accent = QColor(palette["highlight"])

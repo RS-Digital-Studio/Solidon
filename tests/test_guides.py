@@ -441,13 +441,14 @@ def test_a_film_stops_at_pictures_that_no_longer_fit_their_guide(tmp_path: Path)
 
 def test_a_caption_colours_the_names_and_keeps_a_link_as_its_text() -> None:
     """Im Film ist nichts anklickbar; der Name, den der Kunde sucht, steht in der
-    Farbe der Markierung, und nichts aus dem Satz wird zu HTML."""
+    Farbe der Markierung, der Titel eines Verweises kursiv, und nichts aus dem
+    Satz wird zu HTML."""
     from tools import make_guide_video
 
     text = "Klicken Sie auf *Verrunden* wie in [Das erste eigene Teil](manual:first-part) <b>"
     shown = make_guide_video.caption_html(text, "#f0a54a")
     assert '<span style="color:#f0a54a; font-weight:600">Verrunden</span>' in shown
-    assert "Das erste eigene Teil" in shown
+    assert "<i>Das erste eigene Teil</i>" in shown
     assert "manual:" not in shown
     assert "*" not in shown
     assert "&lt;b&gt;" in shown
