@@ -37,8 +37,15 @@ from app.ui.loading import (
 
 
 def _running(veil: LoadingVeil, seconds: float) -> None:
-    """Tut so, als liefe der Lauf schon so lange."""
-    veil.timing.started = time.monotonic() - seconds
+    """Tut so, als liefe der Lauf schon so lange.
+
+    Die Restschätzung zählt seit ``49d898d48`` ab dem Beginn der laufenden
+    Teilrechnung (``ProgressTiming._counted_from``), nicht ab dem Anfang des
+    Vorgangs — ein Lauf, der schon so lange rechnet, hat beide so weit hinten.
+    """
+    since = time.monotonic() - seconds
+    veil.timing.started = since
+    veil.timing._counted_from = since
 
 
 @pytest.mark.parametrize(
@@ -154,7 +161,13 @@ def test_clock_runs_without_animation_or_new_progress(
 def test_hiding_the_veil_does_not_stop_the_shared_clock(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Die Statuszeile braucht die Uhr weiterhin, wenn ein Modell sichtbar ist."""
+    """Die Statuszeile braucht die Uhr weiterhin, wenn ein Modell sichtbar ist.
+
+    Nach dem Schleier misst die Rechnung weiter (``timing.step`` bei 130 s):
+    Ein Anteil, der länger als ``ESTIMATE_AFTER_S`` stillsteht, bekommt seit
+    ``a5e6bf614`` keine Restschätzung mehr, und ohne den zweiten Schritt prüfte
+    die Zeile nur diese Regel statt der weiterlaufenden Uhr.
+    """
     import app.ui.loading as loading_module
 
     now = [100.0]
@@ -164,8 +177,10 @@ def test_hiding_the_veil_does_not_stop_the_shared_clock(
     try:
         timing.begin()
         veil.begin("Modell wird gelesen", at_once=True)
-        veil.step(0.5, "Merkmale werden erkannt")
+        veil.step(0.25, "Merkmale werden erkannt")
         veil.end()
+        now[0] = 130.0
+        timing.step(0.5, "Merkmale werden erkannt")
         now[0] = 135.0
         timing._tick.timeout.emit()
         assert not veil.showing
