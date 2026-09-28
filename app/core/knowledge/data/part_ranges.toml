@@ -66,7 +66,7 @@ date = "2026-09-27"
 [[parts]]
 name = "fit_ladder"
 version = "18"
-fingerprint = "aeb068bcdc162a7304ac3abd6aa6bb2c01ee96a210a6b3349e3d169e10f996e0"
+fingerprint = "444bf4e528c126e55de665560de941012bbd749e0cc7a29cc83d15dcfce6d801"
 corners = 32
 checked = 32
 excluded = 0
@@ -99,7 +99,7 @@ date = "2026-09-27"
 [[parts]]
 name = "heatset_m4"
 version = "17"
-fingerprint = "e469f76724adf13ba16ea0c3208463a9abd06956b812c525832b0c4d7f91fefc"
+fingerprint = "c69b20bfe7add3c90bd2da30d85a385b0ca6cfe067a1b62ecf2ea7b245649c3e"
 corners = 36
 checked = 36
 excluded = 0
@@ -165,7 +165,7 @@ date = "2026-09-27"
 [[parts]]
 name = "nut_trap"
 version = "15"
-fingerprint = "956c8b966e73aaa3a13eb5727354768ee7975aebb816d505b5e0d047f41e6442"
+fingerprint = "8fab0a2651d5fdabbb98bc8460e7f00792051a37783851fadb904fd9891b3caf"
 corners = 112
 checked = 112
 excluded = 0
@@ -220,7 +220,7 @@ date = "2026-09-27"
 [[parts]]
 name = "overhang_fan"
 version = "20"
-fingerprint = "f30e2d088bf9b1328244a2017b284a4539b1646e983e92ed50b7962ff31fd3a0"
+fingerprint = "18400ef356742930dd9a71c08bf910208d744e2a91335563283474a825dd3131"
 corners = 32
 checked = 32
 excluded = 16
@@ -242,7 +242,7 @@ date = "2026-09-27"
 [[parts]]
 name = "printed_nut"
 version = "20"
-fingerprint = "db3b3a6d3a991432658562e96174906fdb8de4ea17bbfc18946073b22808efb4"
+fingerprint = "134ef03ce8ff33f6077072567b36efcd84a576df403dc63d4d6faf9497b14a59"
 corners = 14
 checked = 14
 excluded = 0
@@ -253,7 +253,7 @@ date = "2026-09-27"
 [[parts]]
 name = "printed_screw"
 version = "20"
-fingerprint = "94d237193ff623d3918bdd536670712bdc2c65160a67f325089a673849ecc54b"
+fingerprint = "fe14e6c0f6b1bf31be2658478be4e735ad418de8b3875a1af7a762a8a0d163ab"
 corners = 56
 checked = 56
 excluded = 0
@@ -264,7 +264,7 @@ date = "2026-09-27"
 [[parts]]
 name = "printed_thread"
 version = "20"
-fingerprint = "4344ea23946c7b23c54bb39af787934c0a5d23e1f980073f6f063dcf85722f41"
+fingerprint = "ec40641faf8e86a8059da0c615661fba2de47aad40d0f14db205a090f5604692"
 corners = 56
 checked = 56
 excluded = 0
@@ -319,7 +319,7 @@ date = "2026-09-27"
 [[parts]]
 name = "screw_hole"
 version = "15"
-fingerprint = "9353d6e88adbd5854cb88fc7fe2b1c4c32800e84e183459590ed8a58416fe249"
+fingerprint = "d53dbc358b72687555402f54804b3fe0924aa6d03a2376d0d3e0addd76271075"
 corners = 224
 checked = 224
 excluded = 0
@@ -374,7 +374,7 @@ date = "2026-09-27"
 [[parts]]
 name = "wall_ladder"
 version = "20"
-fingerprint = "c6347b051c2801ceaee6404b66507c7dec2c83ca05a3ca98b31ab34ad452869c"
+fingerprint = "03956322990a508b8a1fce56b04c0f5fb9bee6237597a7d2af634120e65ab393"
 corners = 16
 checked = 16
 excluded = 0

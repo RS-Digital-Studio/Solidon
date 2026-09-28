@@ -374,6 +374,7 @@ def bore_advice(
     mesh: MeshData | None = None,
     cavity: tuple[Feature, ...] | None = None,
     status: MeasureStatus | None = None,
+    spec: OperationSpec | None = None,
 ) -> tuple[str, list[str]]:
     """Was zu dieser Bohrung zu sagen ist — und, wo nichts passt, zu fragen.
 
@@ -392,6 +393,13 @@ def bore_advice(
     ``question_for`` in ``perceive/matching.py``: Der Kern formuliert, der
     Aufrufer zeigt. Das Dezimaltrennzeichen bleibt dabei ein Punkt —
     lokalisiert wird in der Oberfläche.
+
+    **Mit ``spec`` spricht der Satz vom Baustein des Dialogs**
+    (``PartSpec.at_hole_advice``): über *Druckbares Gewinde* vom
+    Innengewinde, das in die Bohrung passt, über der Einpressbuchse von der
+    Buchse — jeweils die Größe, die der Dialog vorwählt. Ohne eigenen Satz
+    bleibt der allgemeine über die Schraube, deren Durchgangsloch die Bohrung
+    ist (die Senkung).
     """
     from app.core.perceive.actions import measure_explanation, measure_qualifier
 
@@ -420,6 +428,9 @@ def bore_advice(
                 "Diese Aufweitung misst {measure}. Die Schraubengröße richtet sich "
                 "nach der engeren Bohrung."
             ).replace("{measure}", named_measure), []
+    advice = _part_advice(spec, diameter)
+    if advice is not None:
+        return f"{tr('Bohrungsmaß: {measure}.').replace('{measure}', named_measure)} {advice}", []
     if status.source != "native":
         # **Eine Messung nennt eine Größe als Einschätzung** (Durchsicht
         # 0.5.0). Bis dahin sagte sie gar keine: An einer Netzbohrung von
@@ -477,6 +488,19 @@ def bore_advice(
         asked.replace("{measure}", measured),
         [*_sizes_around(diameter, ()), tr("Selbst eintragen")],
     )
+
+
+def _part_advice(spec: OperationSpec | None, diameter: float) -> str | None:
+    """Der eigene Satz des Bausteins zu dieser Bohrung — oder ``None``."""
+    if spec is None:
+        return None
+    from app.core.knowledge.parts.ops import part_of
+
+    part = part_of(spec.name)
+    if part is None or part.at_hole_advice is None:
+        return None
+    said = part.at_hole_advice(float(diameter))
+    return None if said is None else str(said)
 
 
 def advises_on_bores(spec: OperationSpec) -> bool:

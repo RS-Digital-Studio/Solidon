@@ -131,12 +131,23 @@ from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, sho
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
-from app.core.types import Document, Feature, Finding, MaterialSlot, ObjectId, OpId, SceneObject
+from app.core.types import (
+    Document,
+    Feature,
+    Finding,
+    MaterialSlot,
+    ObjectId,
+    OpId,
+    Parameter,
+    SceneObject,
+    Transaction,
+)
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import OVERSAMPLING, icon, icon_name_for
 from app.ui.labels import (
+    BoundedSpin,
     LengthSpin,
     NumberSpin,
     RowCheckBox,
@@ -999,6 +1010,9 @@ def as_error(
     if finding.location is not None:
         # *Stelle zeigen* fliegt dorthin; der Fehler kennt sonst keinen Ort.
         values.setdefault("location", tuple(float(value) for value in finding.location))
+    if finding.outline:
+        # Und den Rand, wo die Stelle eine Fläche ist (``Finding.outline``).
+        values.setdefault("outline", finding.outline)
     return AppError(
         title=finding.message,
         detail=str(detail) if detail is not None else None,
@@ -1083,6 +1097,41 @@ def _op_title(name: str) -> str:
         return str(REGISTRY.get(name).title)
     except AppError:
         return name
+
+
+def _parameter_value(parameter: Parameter) -> str:
+    """Der Wert eines Projektmaßes, wie die Leiste ihn schreibt — Länge in der Anzeigeeinheit."""
+    if (parameter.unit or "mm") == "mm":
+        return length(parameter.value)
+    return localised(f"{parameter.value:g}") + (f" {parameter.unit}" if parameter.unit else "")
+
+
+def _changed_parameters(transaction: Transaction) -> str:
+    """Was eine Parameteränderung im Verlauf geändert hat: „Breite: 40,00 mm → 90,00 mm“.
+
+    Die Zeile heißt nach der Beschriftung der Leiste (``Session._parameter_title``);
+    die Kurzhilfe nennt dazu den Wert davor und danach. Leer, wenn die
+    Transaktion keine Projektmaße trägt.
+    """
+    changes = transaction.changes
+    after = changes.after.parameters if changes is not None else None
+    if not after:
+        return ""
+    before = (changes.before.parameters if changes is not None else None) or {}
+    lines: list[str] = []
+    for name, now in after.items():
+        was = before.get(name)
+        shown = now or was
+        if shown is None:
+            continue
+        label = str(shown.title or name)
+        if now is None:
+            lines.append(f"{label}: {_parameter_value(shown)} → –")
+        elif was is None:
+            lines.append(f"{label}: {_parameter_value(now)}")
+        else:
+            lines.append(f"{label}: {_parameter_value(was)} → {_parameter_value(now)}")
+    return "\n".join(lines)
 
 
 def _op_icon_name(name: str) -> str:
@@ -3051,6 +3100,11 @@ class ParameterPanel(QWidget):
         self._unit_editors: dict[str, QComboBox] = {}
         self._detail_buttons: dict[str, QToolButton] = {}
         """Der sichtbare Weg zu Grenzen, Einheit und Ausdruck jeder Zeile."""
+        self._refusal: QWidget | None = None
+        """Die Zeile unter einem Feld, das eine getippte Zahl abgelehnt hat — oder nichts.
+
+        Sie nennt die Grenze und trägt den Weg, sie zu ändern (*Parameter
+        ändern …*). Eine je Leiste: Getippt wird in einem Feld."""
         self._rows: dict[QWidget, str] = {}
         """Welches Widget zu welchem Parameter gehört — für das Kontextmenü.
 
@@ -3264,6 +3318,66 @@ class ParameterPanel(QWidget):
         self._unit_editors[name] = editor
         return editor
 
+    def refusal_text(self) -> str:
+        """Der Satz der Ablehnung, der gerade unter einem Feld steht — leer ohne."""
+        if self._refusal is None:
+            return ""
+        label = self._refusal.findChild(QLabel)
+        return label.text() if label is not None else ""
+
+    def _show_refusal(self, name: str) -> None:
+        """Nennt unter dem Feld die Grenze, an der die getippte Zahl scheitert.
+
+        Nie still (Regel des Zeichnens, ``zeichenflaeche.md``): Die abgelehnte
+        Zahl bleibt markiert im Feld, darunter steht die Grenze, und der Knopf
+        daneben öffnet *Parameter ändern*, wo sie steht. Eine Obergrenze, die
+        zu eng gesetzt war, ist damit einen Klick entfernt.
+        """
+        editor = self._editors.get(name)
+        unit = self._unit_editors.get(name)
+        said = (
+            editor.refusal(str(unit.currentData() or "") if unit is not None else "")
+            if isinstance(editor, BoundedSpin)
+            else ""
+        )
+        if self._refusal is not None:
+            self._form.removeRow(self._refusal)
+            self._refusal = None
+        if editor is None:
+            return
+        editor.setAccessibleDescription(said)
+        if not said:
+            self._fit()
+            return
+        row = editor.parentWidget()
+        if row is None:
+            return
+        # PySide liefert (Zeile, Rolle); der Stub kennt nur ``object``.
+        position: Any = self._form.getWidgetPosition(row)
+        row_index = int(position[0])
+        refusal = QWidget(self._sheet)
+        layout = QHBoxLayout(refusal)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        sentence = QLabel(said, refusal)
+        sentence.setWordWrap(True)
+        fit_wrapped(sentence)
+        set_level(sentence, "caption")
+        layout.addWidget(sentence, 1)
+        change = QPushButton(tr("Parameter ändern …"), refusal)
+        change.setAccessibleDescription(said)
+        # Über die Ereignisschleife: Der Dialog baut die Leiste neu, und dabei
+        # ginge dieser Knopf mitten in seinem eigenen Signal unter.
+        change.clicked.connect(
+            lambda _checked=False, key=name: QTimer.singleShot(
+                0, self, lambda: self.limitsRequested.emit(key)
+            )
+        )
+        layout.addWidget(change)
+        self._form.insertRow(row_index + 1, refusal)
+        self._refusal = refusal
+        self._fit()
+
     def _details_clicked(self) -> None:
         """Öffnet die erweiterten Angaben der angeklickten Parameterzeile."""
         button = self.sender()
@@ -3348,6 +3462,9 @@ class ParameterPanel(QWidget):
         self._editors.clear()
         self._unit_editors.clear()
         self._detail_buttons.clear()
+        # Die Zeile der Ablehnung geht mit den Zeilen (``removeRow``); der neue
+        # Stand kennt keine abgelehnte Zahl mehr.
+        self._refusal = None
         # **Vor dem Neuaufbau leeren, nicht danach.** ``removeRow`` löscht die
         # Widgets der alten Zeilen; ein Eintrag, der auf ein totes C++-Objekt
         # zeigt, beantwortet den nächsten Rechtsklick mit einem Absturz.
@@ -3391,7 +3508,10 @@ class ParameterPanel(QWidget):
                 # man an ihr ändern will, und bearbeiten lässt sie sich sonst
                 # nirgends.
                 continue
-            editor = NumberSpin(self)
+            # **Abgelehnt, nicht gekürzt** (:class:`BoundedSpin`): Mit
+            # Obergrenze 100 wurde aus getipptem „150“ still 15 — die Null
+            # verfiel, die Eingabetaste übernahm den Rest (Durchsicht 0.5.1).
+            editor = BoundedSpin(self)
             wheel_needs_focus(editor)
             editor.setDecimals(2)
             editor.setMinimum(parameter.minimum if parameter.minimum is not None else -100_000.0)
@@ -3414,6 +3534,8 @@ class ParameterPanel(QWidget):
             editor.valueChanged.connect(
                 lambda value, key=name: self._queue_parameter_edit(key, value)
             )
+            editor.valueRefused.connect(lambda _number, key=name: self._show_refusal(key))
+            editor.lineEdit().textEdited.connect(lambda _text, key=name: self._show_refusal(key))
             self._editors[name] = editor
             self._add_parameter_row(name, f"{parameter.title or name}", editor, unit)
         self._fit()
@@ -3857,8 +3979,13 @@ class HistoryPanel(QWidget):
                 else tr("Schritte {numbers}").format(
                     numbers=", ".join(str(entry) for entry in transaction.ops)
                 )
+                if transaction.ops
+                # **Eine Änderung am Projekt vertritt keinen Schritt** — dort
+                # stand „t2 · Schritte “ mit leerer Liste. Sie sagt, was sich
+                # änderte (:func:`_changed_parameters`), sonst nur die Kennung.
+                else _changed_parameters(transaction)
             )
-            tip = f"{transaction.id} · {steps}"
+            tip = f"{transaction.id} · {steps}" if steps else str(transaction.id)
             if halted:
                 tip += "\n" + tr("Hier hält die Kette an — der Grund steht im Prüfbericht.")
             item.setToolTip(tip)

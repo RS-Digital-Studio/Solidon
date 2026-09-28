@@ -879,6 +879,17 @@ class _Snapshot:
         )
 
 
+def _parameter_title(parameter: Parameter) -> TranslatableText:
+    """Der Verlaufseintrag einer Parameteränderung — mit der Beschriftung der Leiste.
+
+    Im Verlauf stand „Parameter breite“: der Schlüssel, den der Kunde nirgends
+    sieht, während die Parameterleiste „Breite“ zeigt (``parameter.title or
+    name``, ``ParameterPanel.show_document``). Übersetzbar gespeichert, wie die
+    Titel des Löschens: Der Eintrag folgt der Sprache, auch nach dem Laden.
+    """
+    return _("Parameter {name}", name=parameter.title or parameter.name)
+
+
 def _reason_of(error: AppError) -> str:
     """Der Satz, der den Fehler erklärt — das Detail, wo es eines gibt.
 
@@ -2451,7 +2462,7 @@ class Session(QObject):
             return False
         try:
             self.history.apply(
-                f"{tr('Parameter')} {name}",
+                _parameter_title(changed),
                 changes=change_for(self.project.document, parameters={name: changed}),
                 origin=origin or Origin(by="user"),
             )
@@ -2526,7 +2537,7 @@ class Session(QObject):
             if parameter.expression:
                 expressions.resolution_order({**parameters, parameter.name: parameter})
             self.history.apply(
-                f"{tr('Parameter')} {parameter.name}",
+                _parameter_title(parameter),
                 changes=change_for(self.project.document, parameters={parameter.name: parameter}),
                 origin=origin or Origin(by="user"),
             )
@@ -2571,7 +2582,7 @@ class Session(QObject):
                 # kann er sich jetzt selbst nennen.
                 expressions.resolution_order({**parameters, name: parameter})
             self.history.apply(
-                f"{tr('Parameter')} {name}",
+                _parameter_title(parameter),
                 changes=change_for(self.project.document, parameters={name: parameter}),
                 origin=origin or Origin(by="user"),
             )

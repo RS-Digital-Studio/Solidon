@@ -154,6 +154,16 @@ def size_for_fit_ladder(diameter: float) -> dict[str, Any]:
     return {"diameter": round(float(diameter), 2)}
 
 
+def fit_ladder_advice(_diameter: float) -> TranslatableText:
+    """Der Satz über der Bohrung für die Passungsleiter: Sie misst, was da ist.
+
+    Der allgemeine Satz nannte eine Schraube — für einen Prüfkörper, der den
+    gemessenen Durchmesser als Nennmaß übernimmt (:func:`size_for_fit_ladder`),
+    eine Auskunft ohne Bezug.
+    """
+    return _("Der Testkörper prüft Passungen um genau diesen Durchmesser.")
+
+
 @op_params
 class FitLadderParams(BaseParams):
     diameter: float = param(
@@ -209,6 +219,7 @@ class FitLadderParams(BaseParams):
     at_face=False,
     params=FitLadderParams,
     at_hole_values=size_for_fit_ladder,
+    at_hole_advice=fit_ladder_advice,
     bodies=2,
     features=["pin", "bore", "face"],
     wall=WallRequirement.not_applicable(

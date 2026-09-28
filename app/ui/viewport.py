@@ -1433,6 +1433,24 @@ HEADLIGHT = {"light": 0.45, "dark": 0.25}
 #: eine zweite Wahrheit.
 FINDING_MARK_MS = 2600
 
+#: Wie lange eine Marke mit Rand steht — eine Fläche will länger angesehen werden.
+#:
+#: Ein Ring sagt „hier“ und ist in einem Blick erfasst; ein Rand sagt „diese
+#: Fläche“, und die liest man ab: wo sie beginnt, wie groß sie ist, ob sie an
+#: der richtigen Stelle sitzt. In 2,6 s war die neue Fläche einer geschlossenen
+#: Öffnung wieder verschwunden, bevor die Kamera ganz stand.
+FINDING_OUTLINE_MS = 6000
+
+#: Die Farbe der Befundmarke — **nicht die Auswahlfarbe**.
+#:
+#: *Stelle zeigen* wählt den Körper, und der steht dann in der Auswahlfarbe da.
+#: Ring und Satz in derselben Farbe verschwanden darin: An
+#: ``partially_open.stl`` lag ein bernsteinfarbener Ring auf einer
+#: bernsteinfarbenen Deckfläche (Handbuchbild *Ein Modell reparieren*, 3). Das
+#: Hinweisblau steht gegen Bernstein und gegen das Grau des Körpers; die zweite
+#: Kodierung (Regel 18) sind Rand, Ring und der Satz auf eigenem Grund.
+FINDING_COLOUR = ROLES["info"]
+
 #: Wie groß der Ring im Bild ist, als Anteil der sichtbaren Höhe.
 #:
 #: Am Bild bemessen und nicht am Modell: Eine Marke soll auf jedem Teil gleich
@@ -4842,6 +4860,8 @@ class Viewport(QWidget):
         """Deckkraft des Kontaktschattens, von ``set_theme`` gesetzt."""
         self._finding_actors: list[Any] = []
         """Ring und Beschriftung der zuletzt angeklickten Warnung."""
+        self._finding_outline: tuple[tuple[Vec3, Vec3], ...] = ()
+        """Der Rand der Stelle, wenn sie eine Fläche ist (``Finding.outline``) — sonst leer."""
         self._finding_mark: tuple[Vec3, str, str] | None = None
         """Szenenort, Text und Körper der kurzlebigen Warnungsmarke.
 
@@ -6194,7 +6214,13 @@ class Viewport(QWidget):
         moved = np.asarray(point, dtype=float) + shift
         return (float(moved[0]), float(moved[1]), float(moved[2]))
 
-    def mark_finding(self, point: Vec3, title: str, object_id: str = "") -> None:
+    def mark_finding(
+        self,
+        point: Vec3,
+        title: str,
+        object_id: str = "",
+        outline: tuple[tuple[Vec3, Vec3], ...] = (),
+    ) -> None:
         """Eine vergängliche Marke an der Stelle, die ein Befund nennt (§18.4).
 
         **Der Flug allein beantwortet die Frage nicht.** Ein angeklickter
@@ -6217,15 +6243,21 @@ class Viewport(QWidget):
         Textarray als *Dataset-Feld*, nicht für eine Punktliste an
         ``add_point_labels`` — gemessen am 30.08.2026 ging „Face supérieure"
         hier durch und fiel dort.)
+
+        **Ist die Stelle eine Fläche, wird sie umrandet** (``outline``, die
+        Randkanten aus ``Finding.outline``): Eine eben geschlossene Öffnung
+        ist kein Netzfehler mehr, keine Karte färbt sie, und die neue Fläche
+        sieht aus wie jede andere. Der Rand zeigt, welche es ist.
         """
         if self.renderer is None:
             return
 
         self._finding_timer.stop()
         self._finding_mark = (point, title, object_id)
+        self._finding_outline = tuple(outline)
         self._draw_finding_mark()
         self.renderer.render()
-        self._finding_timer.start(FINDING_MARK_MS)
+        self._finding_timer.start(FINDING_OUTLINE_MS if outline else FINDING_MARK_MS)
 
     def _draw_finding_mark(self) -> None:
         """Ring und Beschriftung der gemerkten Warnungsmarke zeichnen.
@@ -6293,12 +6325,26 @@ class Viewport(QWidget):
             self.renderer.add_lines(
                 shapes.closed_ring(ring),
                 name="finding_ring",
-                colour=SELECTED_COLOUR,
+                colour=FINDING_COLOUR,
                 width=3.0,
                 connected=True,
                 keep_in_front=True,
             )
         )
+        if self._finding_outline:
+            # Der Rand liegt, wo der Körper gezeichnet ist — derselbe Versatz
+            # wie die Mitte (Platte, Explosion, §25).
+            shift = centre - np.asarray(point, dtype=float)
+            segments = np.asarray(self._finding_outline, dtype=float).reshape(-1, 3) + shift
+            self._finding_actors.append(
+                self.renderer.add_lines(
+                    segments,
+                    name="finding_outline",
+                    colour=FINDING_COLOUR,
+                    width=4.0,
+                    keep_in_front=True,
+                )
+            )
         if title:
             # **Über dem Ring im Bild, nicht über ihm in der Welt.** Der Satz
             # stand um einen Radius in +z versetzt; von oben gesehen ist +z
@@ -6315,8 +6361,17 @@ class Viewport(QWidget):
                     np.asarray([centre + up * radius * FINDING_LABEL_REACH], dtype=float),
                     [title],
                     name="finding_label",
+                    # **Auf eigenem Grund**, wie die Skizzenmaße: Der Satz
+                    # steht über einem Körper in der Auswahlfarbe, und farbige
+                    # Schrift darauf war nicht zu lesen.
                     style=LabelStyle(
-                        text_colour=SELECTED_COLOUR, font_size=12, bold=True, always_visible=True
+                        text_colour=self._sketch_label_colour,
+                        font_size=12,
+                        bold=True,
+                        always_visible=True,
+                        background=self._sketch_label_background,
+                        background_opacity=1.0,
+                        margin=4,
                     ),
                 )
             )
@@ -6338,6 +6393,7 @@ class Viewport(QWidget):
         """Die Marke wieder wegnehmen — nach der Zeit oder vor der nächsten."""
         self._finding_timer.stop()
         self._finding_mark = None
+        self._finding_outline = ()
         removed = self._remove_finding_actors()
         if render and removed and self.renderer is not None:
             self.renderer.render()

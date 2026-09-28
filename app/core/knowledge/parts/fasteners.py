@@ -38,7 +38,7 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.registry import op_params, param, play_param
 from app.core.types import BaseParams, Feature, PartResult
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _SCREWS = standards.screw_sizes()
 _NUTS = standards.nut_sizes()
@@ -421,6 +421,76 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     return {"size": fitting[-1], "internal": True}
 
 
+def insert_advice(diameter: float) -> TranslatableText:
+    """Der Satz über der Bohrung für die Einpressbuchse — dieselbe Größe wie
+    :func:`size_for_insert`.
+
+    Der allgemeine Satz nannte die Schraube, deren Durchgangsloch die Bohrung
+    ist: An 5,20 mm stand „Passt vermutlich zu M5“, vorgewählt war die Buchse
+    M4, deren Einpressloch die Bohrung aufweitet.
+    """
+    size = size_for_insert(diameter).get("size")
+    if size is None:
+        return _("Keine Einpressbuchse der Normteiltabelle hat ein so weites Loch.")
+    return _(
+        "Passend ist die Einpressbuchse {size}: Ihr Einpressloch weitet diese Bohrung auf.",
+        size=size,
+    )
+
+
+def nut_trap_advice(diameter: float) -> TranslatableText:
+    """Der Satz über der Bohrung für die Mutternfalle — dieselbe Größe wie
+    :func:`size_for_nut_trap`."""
+    size = size_for_nut_trap(diameter).get("size")
+    if size is None:
+        return _("Keine Mutter der Normteiltabelle hat ein so weites Schraubenloch.")
+    return _("Passend ist die Mutter {size}: Ihr Schraubenloch nimmt diese Bohrung auf.", size=size)
+
+
+def thread_advice(diameter: float) -> TranslatableText:
+    """Der Satz über der Bohrung für das Innengewinde — dieselbe Größe wie
+    :func:`size_for_thread`.
+
+    Über *Druckbares Gewinde* stand „Passt vermutlich zu M5 (Durchgangsloch
+    fein)“ und darunter die Vorauswahl M6 (Handbuchbild *Ein Gewinde in eine
+    Bohrung*, 4). Beides stimmte, aber der Satz sprach von einem Durchgangsloch,
+    und in eine 5,2-mm-Bohrung passt ein **Innengewinde** M6: Kernloch 5,0 mm
+    darunter, Nennmaß 6 mm darüber. Wo keines passt, nennt der Satz die zwei
+    Nachbarn und warum — dieselben zwei Schranken aus der Normteiltabelle.
+    """
+    size = size_for_thread(diameter).get("size")
+    if size is not None:
+        return _("In diese Bohrung passt ein Innengewinde {size}.", size=size)
+    sizes = standards.screw_sizes()
+    too_wide = [entry for entry in sizes if standards.screw(entry).nominal < diameter]
+    too_narrow = [entry for entry in sizes if standards.screw(entry).tap > diameter]
+    if too_wide and too_narrow:
+        return _(
+            "Kein Normgewinde passt in diese Bohrung: Für {smaller} ist sie zu weit, "
+            "für {larger} zu eng.",
+            smaller=too_wide[-1],
+            larger=too_narrow[0],
+        )
+    if too_wide:
+        return _(
+            "Kein Normgewinde passt in diese Bohrung: Sie ist weiter als {size}.",
+            size=too_wide[-1],
+        )
+    return _(
+        "Kein Normgewinde passt in diese Bohrung: Sie ist enger als das Kernloch von {size}.",
+        size=too_narrow[0],
+    )
+
+
+def printed_screw_advice(diameter: float) -> TranslatableText | None:
+    """Der Satz über der Bohrung für die gedruckte Schraube — dieselbe Größe
+    wie :func:`size_for_printed_screw`; ohne Größe der allgemeine Satz."""
+    size = size_for_printed_screw(diameter).get("size")
+    if size is None:
+        return None
+    return _("Diese Bohrung ist das Durchgangsloch einer Schraube {size}.", size=size)
+
+
 def size_for_printed_screw(diameter: float) -> dict[str, Any]:
     """Die Normschraube für ein vorhandenes Durchgangsloch.
 
@@ -442,6 +512,7 @@ def size_for_printed_screw(diameter: float) -> dict[str, Any]:
     subtractive=True,
     at_hole=True,
     at_hole_values=size_for_insert,
+    at_hole_advice=insert_advice,
     features=["bore", "chamfer"],
     wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     feature_requirements=(
@@ -556,6 +627,7 @@ class NutTrapParams(BaseParams):
     subtractive=True,
     at_hole=True,
     at_hole_values=size_for_nut_trap,
+    at_hole_advice=nut_trap_advice,
     features=["pocket", "bore"],
     wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     feature_requirements=(
@@ -767,6 +839,7 @@ class ThreadParams(BaseParams):
     subtractive=False,
     at_hole=True,
     at_hole_values=size_for_thread,
+    at_hole_advice=thread_advice,
     features=["thread"],
     wall=WallRequirement.not_applicable(
         "Das Innengewinde ist ein abtragendes Werkzeug; beim Außengewinde "
@@ -904,6 +977,7 @@ class PrintedScrewParams(BaseParams):
     at_face=False,
     at_hole_mouth=True,
     at_hole_values=size_for_printed_screw,
+    at_hole_advice=printed_screw_advice,
     separate_from_host=True,
     host_cut=lambda raw: _printed_screw_countersink(raw),
     features=["thread", "countersink"],

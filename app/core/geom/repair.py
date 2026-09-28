@@ -52,7 +52,7 @@ from app.core.geom.mesh import (
 )
 from app.core.geom.transform import along
 from app.core.log import get_logger
-from app.core.types import CancelToken, Finding, ProgressFn, SolverInfo
+from app.core.types import CancelToken, Finding, ProgressFn, SolverInfo, Vec3
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 from app.i18n import _
 
@@ -3024,6 +3024,9 @@ class _Filled:
     #: Mitte und Fläche der größten geschlossenen Öffnung.
     widest: tuple[float, float, float] | None = None
     widest_span: float = 0.0
+    #: Ihre Randkanten über die Ecklagen — *Stelle zeigen* umrandet damit die
+    #: neue Fläche (``Finding.outline``).
+    widest_rim: tuple[tuple[tuple[float, ...], tuple[float, ...]], ...] = ()
     #: Die großen Öffnungen, die auf Wunsch offen blieben (*Offen lassen*,
     #: ``keep_wide``) — je Auftrag Randkanten, Fläche und Mitte, damit der
     #: Bericht am Endstand zählen kann, was davon noch offen ist.
@@ -3402,6 +3405,7 @@ def _fill_loops(
         if widest is None
         else (float(widest.centre[0]), float(widest.centre[1]), float(widest.centre[2])),
         widest_span=0.0 if widest is None else widest.spanned,
+        widest_rim=() if widest is None else tuple(sorted(widest.rim_keys)),
         kept=tuple(kept),
     )
 
@@ -3521,6 +3525,7 @@ def _filled_rounds(
     wide = 0
     widest: tuple[float, float, float] | None = None
     widest_span = 0.0
+    widest_rim: tuple[tuple[tuple[float, ...], tuple[float, ...]], ...] = ()
     last = _Filled(mesh)
     for _round in range(FILL_ROUNDS):
         last = _fill_loops(working, cancelled, keep_wide=keep_wide)
@@ -3528,7 +3533,7 @@ def _filled_rounds(
         closed += last.closed
         wide += last.wide
         if last.widest is not None and last.widest_span > widest_span:
-            widest, widest_span = last.widest, last.widest_span
+            widest, widest_span, widest_rim = last.widest, last.widest_span, last.widest_rim
         if not last.closed:
             break
     return _Filled(
@@ -3540,7 +3545,21 @@ def _filled_rounds(
         flat=last.flat,
         widest=widest,
         widest_span=widest_span,
+        widest_rim=widest_rim,
         kept=last.kept,
+    )
+
+
+def _outline(
+    rim: tuple[tuple[tuple[float, ...], tuple[float, ...]], ...],
+) -> tuple[tuple[Vec3, Vec3], ...]:
+    """Die Randkanten einer geschlossenen Öffnung als Strecken für ``Finding.outline``."""
+    return tuple(
+        (
+            (float(first[0]), float(first[1]), float(first[2])),
+            (float(second[0]), float(second[1]), float(second[2])),
+        )
+        for first, second in rim
     )
 
 
@@ -4362,6 +4381,7 @@ def repair(
                     else _("Eine große Öffnung wurde mit einer neuen Fläche geschlossen."),
                     values={"walls": filled.wide},
                     location=filled.widest,
+                    outline=_outline(filled.widest_rim),
                     suggestions=(SHOW_LOCATION, LEAVE_OPEN),
                 )
             )

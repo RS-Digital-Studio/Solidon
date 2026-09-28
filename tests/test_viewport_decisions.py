@@ -8876,6 +8876,61 @@ def test_the_finding_ring_stands_in_front_of_the_material_at_its_place(
         viewport.deleteLater()
 
 
+def test_the_finding_mark_never_wears_the_colour_of_the_selection() -> None:
+    """*Stelle zeigen* wählt den Körper — die Marke darauf darf nicht dessen Farbe tragen.
+
+    Ring und Satz standen in der Auswahlfarbe auf einem Körper in der
+    Auswahlfarbe (Handbuchbild *Ein Modell reparieren*, 3). Ohne Fenster.
+    """
+    from app.ui.viewport import FINDING_COLOUR, FINDING_MARK_MS, FINDING_OUTLINE_MS, SELECTED_COLOUR
+
+    assert FINDING_COLOUR.lower() != SELECTED_COLOUR.lower()
+    assert FINDING_OUTLINE_MS > FINDING_MARK_MS, "eine Fläche will länger angesehen werden"
+
+
+def test_a_finding_with_a_rim_outlines_the_new_face(qt_app: QApplication) -> None:
+    """Die neue Fläche einer geschlossenen Öffnung wird umrandet, nicht nur beringt.
+
+    Vorher stand ein bernsteinfarbener Ring auf einem bernsteinfarbenen
+    Würfel, und die neue Fläche war nicht zu erkennen. Jetzt: Rand aus den
+    Randkanten, vor dem Material, in der Befundfarbe; der Satz auf eigenem
+    Grund; die Marke steht länger.
+    """
+    from app.ui.viewport import FINDING_COLOUR, FINDING_OUTLINE_MS, Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    renderer.set_camera_pose(CameraPose((0.0, -80.0, 80.0), (0.0, 0.0, 20.0), (0.0, 0.0, 1.0)))
+    rim = (
+        ((-10.0, -10.0, 20.0), (10.0, -10.0, 20.0)),
+        ((10.0, -10.0, 20.0), (10.0, 10.0, 20.0)),
+        ((10.0, 10.0, 20.0), (-10.0, 10.0, 20.0)),
+        ((-10.0, 10.0, 20.0), (-10.0, -10.0, 20.0)),
+    )
+    viewport.mark_finding((0.0, 0.0, 20.0), "Eine große Öffnung wurde geschlossen.", "", rim)
+    try:
+        outline = renderer.entries("finding_outline")[-1]
+        assert outline.get("keep_in_front"), "der Rand liegt sonst im Material"
+        points = np.asarray(outline["item"].points, dtype=float)
+        assert points.shape == (8, 3)
+        assert np.allclose(points, np.asarray(rim, dtype=float).reshape(-1, 3))
+        assert outline["item"].colour() == FINDING_COLOUR
+        assert renderer.entries("finding_ring")[-1]["item"].colour() == FINDING_COLOUR
+        label = renderer.entries("finding_label")[-1]
+        assert label["style"].background is not None, "der Satz steht auf eigenem Grund"
+        assert viewport._finding_timer.interval() == FINDING_OUTLINE_MS
+
+        # Ohne Rand bleibt es beim Ring und der kurzen Frist.
+        viewport.mark_finding((0.0, 0.0, 20.0), "Stelle", "")
+        assert all(
+            getattr(actor, "name", "") != "finding_outline" for actor in viewport._finding_actors
+        )
+    finally:
+        viewport._finding_timer.stop()
+        viewport.deleteLater()
+
+
 def test_the_chamfer_marks_say_one_and_two_and_the_angle_stands_at_the_reference() -> None:
     """Die Beschriftung der Fasenmarken: Ziffer, Maß, und der Winkel an der Bezugsfläche (P6.2).
 

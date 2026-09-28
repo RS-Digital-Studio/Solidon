@@ -384,6 +384,56 @@ def test_a_bore_that_fits_nothing_keeps_the_default() -> None:
         assert values["at_feature"] == "hole_1", "die Zuordnung bleibt davon unberührt"
 
 
+def test_the_sentence_over_a_bore_names_the_size_the_dialog_chose() -> None:
+    """Satz und Vorauswahl sprechen von derselben Größe.
+
+    Über *Druckbares Gewinde* stand an einer 5,20-mm-Bohrung „Passt vermutlich
+    zu M5 (Durchgangsloch fein).“, gewählt war M6 (Handbuchbild *Ein Gewinde in
+    eine Bohrung*, 4): Der allgemeine Satz sprach von einem Durchgangsloch. Die
+    Einpressbuchse zeigte denselben Satz über der Vorauswahl M4. Geprüft über
+    jeden Baustein mit eigenem Satz und eine Reihe von Durchmessern: Nennt der
+    Satz eine Normgröße, ist es die vorgewählte.
+    """
+    import re
+
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import advises_on_bores, bore_advice
+
+    sizes = set(standards.screw_sizes()) | set(standards.insert_sizes())
+    specs = [
+        spec
+        for spec in REGISTRY.all()
+        if advises_on_bores(spec)
+        and (part := part_of(spec.name)) is not None
+        and part.at_hole_advice is not None
+    ]
+    names = {spec.name for spec in specs}
+    assert {"insert_printed_thread", "insert_heatset_m4", "insert_nut_trap"} <= names, names
+    for diameter in (2.6, 3.4, 4.3, 5.19, 5.5, 6.5, 8.4, 10.0):
+        bore = hole(diameter=diameter)
+        for spec in specs:
+            chosen = values_for(spec, bore).get("size")
+            said, choices = bore_advice(diameter, ask=False, feature=bore, spec=spec)
+            assert said.startswith("Bohrungsmaß: "), said
+            assert not choices, "ein Satz über dem Dialog fragt nicht"
+            named = [word for word in re.findall(r"M\d+(?:[.,]\d+)?", said) if word in sizes]
+            if chosen is not None:
+                assert named and named[0] == chosen, (spec.name, diameter, chosen, said)
+
+    gewinde = REGISTRY.get("insert_printed_thread")
+    said, _choices = bore_advice(5.19, ask=False, feature=hole(diameter=5.19), spec=gewinde)
+    assert "Innengewinde M6" in said and "Durchgangsloch" not in said, said
+    said, _choices = bore_advice(6.5, ask=False, feature=hole(diameter=6.5), spec=gewinde)
+    assert "M6" in said and "M8" in said and "Kein Normgewinde" in said, said
+
+    # Gegenprobe: Die Senkung behält den Satz über die Schraube, die hindurchgeht.
+    said, _choices = bore_advice(
+        5.19, ask=False, feature=hole(diameter=5.19), spec=REGISTRY.get("countersink_hole")
+    )
+    assert "Durchgangsloch" in said and "M5" in said, said
+
+
 def test_a_part_that_brings_its_own_bore_takes_no_size_from_one() -> None:
     """Die Gegenprobe — sonst hätte der neue Weg den alten überschrieben.
 

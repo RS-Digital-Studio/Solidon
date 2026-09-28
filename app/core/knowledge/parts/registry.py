@@ -41,6 +41,10 @@ class BuildWithProfile(Protocol):
     ) -> PartResult: ...
 
 
+HoleAdvice = Callable[[float], "TranslatableText | str | None"]
+"""Aus dem gemessenen Durchmesser einer Bohrung der Satz, den der Dialog dieses
+Bausteins darüber zeigt — ``None`` lässt den allgemeinen Satz stehen."""
+
 HostCut = Callable[[BaseParams], PartResult | None]
 """Optionales Werkzeug, das ein lösbares Teil am Träger vorbereitet.
 
@@ -220,6 +224,17 @@ class PartSpec:
     Gibt ein leeres Ergebnis zurück, wo keine Größe passt. **Kein Rateschluss
     auf die nächstbeste** (Regel 21): Eine 40-mm-Bohrung bekommt keinen
     M8-Vorschlag, sondern gar keinen, und die Vorgabe bleibt stehen.
+    """
+    at_hole_advice: HoleAdvice | None = None
+    """Was der Dialog über der angeklickten Bohrung zu **diesem** Baustein sagt.
+
+    Der allgemeine Satz nennt die Schraube, deren Durchgangsloch die Bohrung
+    ist (``placement.bore_advice``). Über *Druckbares Gewinde* stand damit
+    „Passt vermutlich zu M5 (Durchgangsloch fein)“, während M6 vorgewählt war
+    — richtig für ein Innengewinde in 5,2 mm, aber der Satz sprach von etwas
+    anderem. Dieselbe Frage wie :attr:`at_hole_values`, als Satz: Er nennt die
+    Größe, die :attr:`at_hole_values` vorwählt, mit den Maßen der
+    Normteiltabelle. ``None`` als Antwort lässt den allgemeinen Satz stehen.
     """
     at_hole: bool = False
     """Wahr für einen Baustein, der in eine **vorhandene** Bohrung gesetzt wird.
@@ -603,6 +618,7 @@ def register_part(
     host_add: HostCut | None = None,
     standalone: bool = False,
     at_hole_values: HoleValues | None = None,
+    at_hole_advice: HoleAdvice | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
     lies_flat: bool = False,
@@ -652,6 +668,7 @@ def register_part(
                 host_add=host_add,
                 standalone=standalone,
                 at_hole_values=at_hole_values,
+                at_hole_advice=at_hole_advice,
                 bodies=bodies,
                 at_face=at_face,
                 keeps_up=keeps_up,

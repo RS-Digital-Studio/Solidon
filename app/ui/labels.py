@@ -500,6 +500,117 @@ class NumberSpin(QDoubleSpinBox):
             return super().valueFromText(shown)
 
 
+def limit_sentence(value: str, limit: str, *, above: bool) -> str:
+    """Warum eine getippte Zahl nicht angenommen wird — mit der Grenze beim Namen."""
+    if above:
+        return tr("{value} liegt über der Obergrenze {limit}.").format(value=value, limit=limit)
+    return tr("{value} liegt unter der Untergrenze {limit}.").format(value=value, limit=limit)
+
+
+class BoundedSpin(NumberSpin):
+    """Ein Zahlenfeld, das eine Zahl jenseits seiner Grenzen **ablehnt**, statt sie zu kürzen.
+
+    Ein ``QDoubleSpinBox`` mit Obergrenze 100 nimmt beim Tippen von „150“ die
+    Null nicht an: Qts Prüfung nennt „150“ ungültig, die Taste verfällt, und die
+    Eingabetaste übernimmt „15“. Gemessen an der Parameterleiste (Durchsicht
+    0.5.1): Obergrenze 100, getippt 150, im Modell stand danach 15 — ohne ein
+    Wort. Hier gilt die Regel des Zeichnens (``zeichenflaeche.md``): **Beim
+    Tippen wird abgelehnt, beim Drehen geklemmt**, und die abgelehnte Zahl
+    bleibt markiert im Feld stehen.
+
+    * ``validate`` lässt eine Zahl außerhalb der Grenzen als Zwischenstand zu —
+      keine Ziffer verfällt.
+    * Eingabetaste und Fokuswechsel übernehmen sie nicht: ``valueRefused``
+      meldet die getippte Zahl, das Feld behält sie, markiert. Wer anzeigt,
+      nennt die Grenze (:func:`limit_sentence`) und den Weg, sie zu ändern.
+    * Pfeile und Rad klemmen an der Grenze, wie Qt es ohnehin tut.
+
+    Die Qt-Grenzen bleiben die echten Grenzen — die Breite des Feldes misst
+    sich an ihnen, und ``value()`` liegt nie außerhalb.
+    """
+
+    valueRefused = Signal(float)
+    """Eine getippte Zahl liegt außerhalb der Grenzen und wurde nicht übernommen."""
+
+    def validate(self, text: str, pos: int) -> Any:
+        """Wie :class:`NumberSpin` — nur ist eine Zahl jenseits der Grenzen ein
+        Zwischenstand und kein Tippfehler."""
+        checked: Any = super().validate(text, pos)
+        if checked[0] != QValidator.State.Invalid:
+            return checked
+        if self._typed_number(text) is not None:
+            return QValidator.State.Intermediate, text, pos
+        return checked
+
+    def _typed_number(self, text: str) -> float | None:
+        """Die getippte Zahl, gleich ob innerhalb der Grenzen — ``None`` ohne Zahl."""
+        body = self._digits_only(self._as_shown(text))
+        if not re.fullmatch(r"[+-]?\d+(?:[.,]\d*)?", body):
+            return None
+        return float(body.replace(",", "."))
+
+    def refused_value(self) -> float | None:
+        """Die getippte Zahl, wenn sie außerhalb der Grenzen liegt — sonst ``None``."""
+        number = self._typed_number(self.lineEdit().text())
+        if number is None:
+            return None
+        slack = 0.5 * 10.0 ** -self.decimals()
+        if number > self.maximum() + slack or number < self.minimum() - slack:
+            return number
+        return None
+
+    def refusal(self, unit: str = "") -> str:
+        """Der Satz zur abgelehnten Zahl, in der Schreibweise des Feldes — leer ohne Ablehnung.
+
+        ``unit`` für ein Feld, dessen Einheit daneben steht statt im Feld (die
+        Parameterleiste führt sie in einer eigenen Auswahl).
+        """
+        number = self.refused_value()
+        if number is None:
+            return ""
+        above = number > self.maximum()
+        limit = self.maximum() if above else self.minimum()
+        suffix = self.suffix() or (f" {unit}" if unit else "")
+        return limit_sentence(
+            self.textFromValue(number) + suffix, self.textFromValue(limit) + suffix, above=above
+        )
+
+    def interpretText(self) -> None:  # noqa: N802 - Qt-Name
+        """Eine abgelehnte Zahl bleibt stehen, auch wenn jemand von außen auswertet.
+
+        Der Operationsdialog wertet vor dem Übernehmen jedes Zahlenfeld aus
+        (``can_accept``); Qt setzte dabei den vorigen Wert zurück, und die
+        Ablehnung wäre still verschwunden.
+        """
+        if self.refused_value() is None:
+            super().interpretText()
+
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Die Eingabetaste übernimmt keine Zahl jenseits der Grenzen — und
+        schickt sie auch nicht an den Hauptknopf des Dialogs weiter."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            refused = self.refused_value()
+            if refused is not None:
+                self.selectAll()
+                self.valueRefused.emit(refused)
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Der Fokuswechsel verwirft die abgelehnte Zahl nicht still.
+
+        Qt setzte sonst den alten Wert zurück; der Text bleibt stehen, und der
+        Anzeigende sagt warum.
+        """
+        refused = self.refused_value()
+        typed = self.lineEdit().text()
+        super().focusOutEvent(event)
+        if refused is not None:
+            self.lineEdit().setText(typed)
+            self.valueRefused.emit(refused)
+
+
 class LengthSpin(NumberSpin):
     """Ein Zahlenfeld für eine Länge — außen die Anzeigeeinheit, innen Millimeter.
 

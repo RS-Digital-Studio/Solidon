@@ -174,6 +174,14 @@ danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
 `valueFromText`. Als Typprüfung bleibt `QDoubleSpinBox` richtig.
 
+**Eine Grenze lehnt ab, sie kürzt nicht:** Qt verwirft an einem Feld mit
+Obergrenze 100 die Null von „150“, und die Eingabetaste übernimmt 15. Wo der
+Kunde Grenzen tippt, steht ein `labels.BoundedSpin` (Parameterleiste,
+`op_dialog.ValueField`): Die Zahl bleibt markiert stehen, `valueRefused`
+meldet sie, der Anzeigende nennt die Grenze (`limit_sentence`) und, wo sie
+änderbar ist, den Weg dorthin; der Operationsdialog sperrt *Übernehmen* mit
+demselben Satz. Pfeile und Rad klemmen.
+
 ## Gestufte Tiefe
 
 Jeder Dialog hat eine kurze Vorderseite und dahinter „Weitere Einstellungen“

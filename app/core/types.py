@@ -1582,6 +1582,13 @@ class Finding:
     values: Mapping[str, float | str | TranslatableText] = field(default_factory=dict)
     location: Vec3 | None = None
     """Wohin die Kamera fliegt, wenn die Warnung angeklickt wird (§18.4)."""
+    outline: tuple[tuple[Vec3, Vec3], ...] = ()
+    """Die Randkanten einer Stelle, die eine Fläche ist — *Stelle zeigen* umrandet sie.
+
+    Eine eben geschlossene große Öffnung ist kein Netzfehler mehr, keine
+    Karte färbt sie; die Mitte allein zeigte einen Ring auf einem Teil, das
+    überall gleich aussieht. Nicht in der Projektdatei: Die Auswertung
+    erzeugt den Befund bei jedem Lauf neu."""
     source: MetricSource = "internal"
     suggestions: tuple[Action, ...] = ()
     """Konkrete Auswege, wenn der Befund aus einer Ausnahme entstand (§2.7)."""

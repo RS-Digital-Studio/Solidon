@@ -1080,6 +1080,41 @@ def test_the_disk_cache_keeps_findings_solver_and_transform(tmp_path: Path) -> N
     assert again.transform == moved
 
 
+def test_the_disk_cache_keeps_the_rim_of_a_closed_opening(tmp_path: Path) -> None:
+    """``Finding.outline`` übersteht den Plattencache — sonst stufte ein warmer Cache
+    *Stelle zeigen* still auf den Ring allein zurück.
+
+    Die Projektdatei trägt den Rand nicht (``finding_to_data``), der Cache
+    schon; ein Eintrag ohne Rand bleibt ohne.
+    """
+    from app.core.scene.serialise import finding_to_data
+    from app.core.types import Finding
+
+    rim = (((0.0, 0.0, 20.0), (20.0, 0.0, 20.0)), ((20.0, 0.0, 20.0), (0.0, 0.0, 20.0)))
+    wide = Finding(
+        code="repair.wide_hole_filled",
+        severity="warning",
+        message="Eine große Öffnung wurde mit einer neuen Fläche geschlossen.",
+        location=(10.0, 0.0, 20.0),
+        outline=rim,
+    )
+    assert "outline" not in finding_to_data(wide), "die Projektdatei behält ihr Format"
+    cache = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    cache.put(
+        "key",
+        CachedResult(
+            objects=(make_object("obj_1"),),
+            findings=(wide, dataclasses.replace(wide, code="ohne", outline=())),
+        ),
+    )
+
+    again = cache.get("key")
+
+    assert again is not None
+    assert again.findings[0].outline == rim
+    assert again.findings[1].outline == ()
+
+
 def test_the_cache_survives_several_threads_writing_at_once() -> None:
     """Drei Fäden legen hier ab: Auswertung, Agent und Vorschau.
 
