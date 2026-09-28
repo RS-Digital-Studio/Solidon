@@ -70,10 +70,10 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
   `plan._placement`): das erste Modell `place_on_bed` und `centre`, jedes
   weitere `place_on_bed` und `free_spot`, ohne Angabe nichts.
   `ops._to_a_free_spot` legt alle Körper der Datei als Block an die erste
-  freie Stelle (`geom.prepare.first_free_spot`, gelesen aus `ctx.scene`,
-  Schlüssel über `ParamSpec.reads_scene`); eine Datei mit mehreren Platten
-  rückt hinter die letzte belegte (`plates_behind`). `load_step` fragt
-  dieselben Helfer.
+  freie Stelle (`geom.prepare.placed_at_free_spot`, gelesen aus `ctx.scene`)
+  und gibt Mitte und Platte als Antwort zurück (`spot_*`, §15.7); danach liest
+  der Schritt die Szene nicht mehr. Eine Datei mit mehreren Platten rückt
+  hinter die letzte belegte. `load_step` fragt denselben Helfer.
 - **Native 3MF-Farben** — Werkzeugpaletten (Orca/Bambu-Metadaten,
   Prusa-Konfiguration), Objekt- und Part-Werkzeuge, bemalte Dreiecke — werden
   Materialslots; Prusa-Volumen behalten ihre Dreiecksbereiche.

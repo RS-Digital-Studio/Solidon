@@ -1052,13 +1052,19 @@ def test_the_command_line_keeps_an_answer_for_its_next_evaluation(
     History(project.document).apply("Quader", [OperationDraft("create_box")])
     key = recognition_answer_key("obj_1")
     record = {"object_id": "obj_1", "scope": "a" * 32, "allowed": True}
+    # Die Antworten der Operationen gelten ebenso — wie im Fenster; eine freie
+    # Stelle wird so einmal gesucht und steht danach im Schritt (§17.1).
+    answered = {1: {"width": 42.0}}
     monkeypatch.setattr(
-        main, "evaluate", lambda *_args, **_kwargs: SimpleNamespace(matches={1: {key: record}})
+        main,
+        "evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(matches={1: {key: record}}, answers=answered),
     )
 
     main.run_evaluation(project, tmp_path / "teil.p3d", quiet=True)
 
     assert project.document.ops[0].matches[key] == record
+    assert project.document.ops[0].params["width"] == 42.0
 
 
 def test_the_command_line_takes_back_a_skipped_recognition(

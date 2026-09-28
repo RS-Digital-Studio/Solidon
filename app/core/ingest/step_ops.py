@@ -18,7 +18,14 @@ from app.core.brep import step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import CANCEL, CORRECT_INPUT, InternalError, ValidationError
+from app.core.geom.prepare import (
+    free_spot_param,
+    placed_at_free_spot,
+    spot_param,
+    spot_plate_param,
+)
 from app.core.ingest.loader import bed_offset
+from app.core.ingest.ops import FREE_SPOT_DOC
 from app.core.log import get_logger
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.registry.params import WHOLE_FILE, body_keys
@@ -69,31 +76,27 @@ class LoadStepParams(BaseParams):
         default="",
         doc=_("Gilt für einen einzelnen Körper. Leer übernimmt den Namen aus der Datei."),
     )
+    #: Derselbe Schalter wie an ``load``; Vorgabe aus, damit ein älterer
+    #: Ladeschritt liegen bleibt, wo er gespeichert wurde.
+    free_spot: bool = free_spot_param(FREE_SPOT_DOC)
     place_on_bed: bool = param(
         title=_("Auf das Bett setzen"),
         default=False,
+        depends_on=("free_spot", (False,)),
         doc=_("Setzt das Modell mit seiner Unterseite auf das Druckbett."),
     )
     centre: bool = param(
         title=_("Mittig auf das Bett legen"),
         default=False,
+        depends_on=("free_spot", (False,)),
         doc=_(
             "Schiebt das Modell in die Mitte der Druckplatte. Ein Modell aus einem "
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
         ),
     )
-    #: Derselbe Schalter wie an ``load`` (Robert, 28.09.2026); Vorgabe aus, damit
-    #: ein älterer Ladeschritt liegen bleibt, wo er gespeichert wurde.
-    free_spot: bool = param(
-        title=_("An eine freie Stelle legen"),
-        default=False,
-        reads_scene=True,
-        doc=_(
-            "Setzt das Modell auf und legt es neben die Teile, die schon im Projekt liegen: "
-            "an die erste freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. "
-            "Geht vor „Mittig auf das Bett legen“."
-        ),
-    )
+    spot_x: float | None = spot_param("x")
+    spot_y: float | None = spot_param("y")
+    spot_plate: int = spot_plate_param()
     copy: int = param(
         title=_("Kopie"),
         default=0,
@@ -220,13 +223,15 @@ def _whole_file(ctx: OpContext, params: LoadStepParams, payload: bytes, stem: st
 
     solid = step.read(payload)
     findings = [_loaded(solid.face_count, solid.edge_count), _metadata_lost(), *_not_closed(solid)]
-    offset, placing, plate = _bed_offset(ctx, step.shape_bounds(solid.shape), params, several=False)
+    offset, placing, plate, answered = _bed_offset(
+        ctx, step.shape_bounds(solid.shape), params, several=False
+    )
     if offset is not None:
         solid = Solid(solid.shape.Moved(TopLoc_Location(offset)))
     findings.extend(placing)
     name = _named_copy(stem, params, single=True)
     entry = dataclasses.replace(_object(name, solid, cancelled=ctx.cancelled), plate=plate)
-    return OpResult(outputs=[entry], findings=findings)
+    return OpResult(outputs=[entry], findings=findings, answered=answered)
 
 
 def _metadata_lost() -> Finding:
@@ -267,7 +272,7 @@ def _assembly(
         )
     chosen = [by_key[key] for key in keys]
     findings: list[Finding] = []
-    offset, placing, plate = _bed_offset(
+    offset, placing, plate, answered = _bed_offset(
         ctx, _group_bounds(chosen), params, several=len(chosen) > 1
     )
     findings.extend(placing)
@@ -322,7 +327,7 @@ def _assembly(
         ),
     )
     findings.extend(_assembly_findings(assembly, chosen, stem))
-    return OpResult(outputs=outputs, findings=findings)
+    return OpResult(outputs=outputs, findings=findings, answered=answered)
 
 
 def _assembly_findings(
@@ -448,9 +453,10 @@ def _bed_offset(
     params: LoadStepParams,
     *,
     several: bool,
-) -> tuple[Any, list[Finding], int]:
+) -> tuple[Any, list[Finding], int, dict[str, Any]]:
     """Der gemeinsame Versatz aufs Bett, in seine Mitte oder an die erste
-    freie Stelle — mit seinen Befunden und der Platte.
+    freie Stelle — mit seinen Befunden, der Platte und der festzuhaltenden
+    Stelle (``OpResult.answered``).
 
     Dieselbe Regel wie beim Netz (``ingest.ops._group_on_bed`` und
     ``_to_a_free_spot``, §17.1 Schritt 6): Eine Baugruppe geht als Ganzes, die
@@ -458,34 +464,38 @@ def _bed_offset(
     Form, nicht über Dreiecke — der Körper bleibt exakt. Ohne Versatz ist die
     Lage ``None``.
     """
-    from app.core.geom.prepare import first_free_spot, free_spot_finding, standing_in
     from app.core.ingest.ops import group_on_bed_finding
 
-    findings: list[Finding] = []
     group = BoundingBox(bounds[:3], bounds[3:])
-    offset = bed_offset(group, place_on_bed=params.place_on_bed, centre=params.centre)
-    if not all(abs(value) <= EPS_GEOM for value in offset):
-        findings.append(
-            group_on_bed_finding(
-                offset, place_on_bed=params.place_on_bed, centre=params.centre, several=several
-            )
-        )
-    plate = 0
     if params.free_spot:
-        seated = BoundingBox(
-            (bounds[0] + offset[0], bounds[1] + offset[1], bounds[2] + offset[2]),
-            (bounds[3] + offset[0], bounds[4] + offset[1], bounds[5] + offset[2]),
+        placed = placed_at_free_spot(
+            group,
+            ctx.profile,
+            ctx.scene,
+            spot=(params.spot_x, params.spot_y, params.spot_plate),
         )
-        (dx, dy, dz), plate = first_free_spot(seated, ctx.profile, standing_in(ctx.scene))
-        offset = (offset[0] + dx, offset[1] + dy, offset[2] + dz)
-        findings.append(free_spot_finding(plate))
+        offset, findings, plate, answered = (
+            placed.offset,
+            list(placed.findings),
+            placed.plate,
+            dict(placed.answered),
+        )
+    else:
+        findings, plate, answered = [], 0, {}
+        offset = bed_offset(group, place_on_bed=params.place_on_bed, centre=params.centre)
+        if not all(abs(value) <= EPS_GEOM for value in offset):
+            findings.append(
+                group_on_bed_finding(
+                    offset, place_on_bed=params.place_on_bed, centre=params.centre, several=several
+                )
+            )
     if all(abs(value) <= EPS_GEOM for value in offset):
-        return None, findings, plate
+        return None, findings, plate, answered
     from OCP.gp import gp_Trsf, gp_Vec
 
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(*offset))
-    return trsf, findings, plate
+    return trsf, findings, plate, answered
 
 
 def _composed(offset: Any, placement: Any) -> Any:

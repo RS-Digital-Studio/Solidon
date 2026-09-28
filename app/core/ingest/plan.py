@@ -36,7 +36,7 @@ from app.core.ingest.loader import (
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.log import get_logger
 from app.core.registry import REGISTRY
-from app.core.registry.params import WHOLE_FILE
+from app.core.registry.params import WHOLE_FILE, reads_scene
 from app.core.scene.history import OperationDraft
 from app.core.types import Document, ObjectId, ProgressFn, SceneObject
 from app.core.units import EPS_DISPLAY
@@ -238,9 +238,10 @@ def import_plan(
 
     Die Entscheidung fällt hier und wird in die Parameter der Operation
     geschrieben (``place_on_bed``, ``centre``, ``free_spot``), nicht als Regel
-    beim Auswerten nachgeschlagen. Die freie Stelle rechnet die Operation aus
-    der Szene vor ihr — das folgt aus Parametern und Stapel, und dieselbe Datei
-    kommt beim nächsten Öffnen gleich herein (§15.1).
+    beim Auswerten nachgeschlagen: Sonst hinge das Ergebnis daran, was sonst
+    noch in der Szene steht. Die freie Stelle sucht die Operation einmal und
+    hält sie als Antwort im Schritt fest (§15.7, ``spot_*``) — danach bleibt
+    das Modell liegen, auch wenn sich davor etwas ändert.
 
     ``taken`` sind die Namen, die in diesem Stapel schon vergeben sind
     (:func:`names_in_use`). Trägt einer davon den Dateinamen, bekommt dieser
@@ -488,10 +489,13 @@ def imported_group(
                 # Eine spätere Gegenflächenwahl kann ihren Träger auch über
                 # einen Ausdruck bestimmen. Ohne Auswertung keinen fremden
                 # Bezug als unbenutzt erklären: Das Angebot endet konservativ.
-                if spec.reads_other_bodies or any(
-                    (field.targets_feature or field.reads_scene)
-                    and later.params.get(field.name, field.default)
-                    for field in spec.params.spec()
+                if (
+                    spec.reads_other_bodies
+                    or reads_scene(spec.params, later.params)
+                    or any(
+                        field.targets_feature and later.params.get(field.name, field.default)
+                        for field in spec.params.spec()
+                    )
                 ):
                     return ()
         return targets

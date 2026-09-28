@@ -211,8 +211,12 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
         sources=ProjectSources(project, base_dir=path.parent),
         cache=evaluation_cache(),
     )
+    history = History(project.document)
+    # Auch die Antworten der Operationen, wie im Fenster (``Session``): Eine
+    # freie Stelle wird einmal gesucht und steht danach im Schritt (§17.1).
+    history.record_answers(result.answers)
     if result.matches:
-        History(project.document).record_matches(result.matches)
+        history.record_matches(result.matches)
     return result
 
 

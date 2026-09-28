@@ -1147,11 +1147,18 @@ baut daraus das normalisierte Szenenobjekt über dieselbe Eingangskette:
    Körpern wird als Ganzes gelegt, die Teile behalten ihre Lage zueinander;
    eine 3MF mit mehreren Platten behält ihre Aufteilung und kommt hinter die
    letzte belegte Platte. Beides steht als Parameter in der Op (`centre`,
-   `free_spot`), nicht als Regel bei der Auswertung; die freie Stelle rechnet
-   die Op aus der Szene vor ihr, also aus Parametern und Stapel (§15.1). Ein
-   Ladeschritt ohne `free_spot` behält die Lage seiner Datei. Ein erzeugtes
-   Modell (Weg 3) ist ebenso ein weiteres Modell und folgt derselben Regel,
-   gelegt erst am fertigen Maß: `fit_to_size` trägt dafür denselben Schalter.
+   `free_spot`), nicht als Regel bei der Auswertung. **Die freie Stelle wird
+   beim ersten Laden gerechnet und im Ladeschritt festgehalten**, auf demselben
+   Weg wie die beantwortete Einheitenfrage (§15.7; Entscheidung Robert zum
+   Review): Die Op gibt Mitte und Platte als Antwort zurück (`spot_x`,
+   `spot_y`, `spot_plate`), und danach liest der Schritt die Szene nicht mehr.
+   Das Modell bleibt liegen, wie in jedem Slicer — wird davor etwas gelöscht
+   oder geändert oder der Drucker gewechselt, wandert es nicht, und eine
+   Bohrung daran trifft weiter. Ein Ladeschritt ohne Lageentscheidung behält
+   die Lage seiner Datei. Ein erzeugtes Modell (Weg 3) ist ebenso ein weiteres
+   Modell und folgt derselben Regel, gelegt erst am fertigen Maß
+   (`fit_to_size` trägt denselben Schalter) und nach der Reparaturkette
+   aufgesetzt.
 
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar und
 änderbar bleiben. Verschweißen und Entfernen entarteter Dreiecke dürfen einen
@@ -1913,8 +1920,9 @@ skalieren, auf Bett ausrichten, gemeinsam auf das Bett setzen, druckoptimal orie
 `place_on_bed` setzt weiterhin einen einzelnen Körper auf. `place_group_on_bed`
 verschiebt seine gespeicherte Auswahl mit einem gemeinsamen Z-Versatz: Der
 tiefste Punkt liegt danach auf dem Bett, die relative Lage aller Teile bleibt
-erhalten. Weitere Importe kommen aufgesetzt an eine freie Stelle (§17.1); ihre
-Dateikoordinaten behält nur ein Ladeschritt ohne Lageentscheidung. Das Angebot
+erhalten. Weitere Importe kommen aufgesetzt an eine freie Stelle, die einmal
+gerechnet und im Ladeschritt festgehalten wird (§17.1); ihre Dateikoordinaten
+behält nur ein Ladeschritt ohne Lageentscheidung. Das Angebot
 am Befund nimmt die unveränderten, noch vorhandenen Teile desselben Imports
 gemeinsam auf; es ist ein eigener rücknehmbarer Schritt.
 

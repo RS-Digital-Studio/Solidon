@@ -28,6 +28,7 @@ from shapely.geometry import box
 
 from app.core import units
 from app.core.build_area import (
+    fits_on_bed,
     fits_xy,
     footprint,
     placement_offset,
@@ -36,6 +37,7 @@ from app.core.build_area import (
 )
 from app.core.deferred import trimesh
 from app.core.errors import (
+    ARRANGE_ON_BED,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     SHOW_HISTORY,
@@ -54,11 +56,13 @@ from app.core.geom.mesh import MeshData, as_mesh_data, concatenated, ray_hit_dis
 from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
+from app.core.registry import param
 from app.core.types import (
     BoundingBox,
     Finding,
     Mesh,
     ObjectId,
+    ParamPlacement,
     PlaneFrame,
     Profile,
     Quality,
@@ -2576,7 +2580,7 @@ def _into_the_middle(
 def arrange_on_bed(
     meshes: list[MeshData],
     profile: Profile,
-    spacing: float = 5.0,
+    spacing: float = ARRANGE_SPACING,
     plates: int = 1,
     object_ids: Sequence[ObjectId] | None = None,
     *,
@@ -2767,7 +2771,7 @@ def first_free_spot(
     *,
     spacing: float = ARRANGE_SPACING,
     plates: int = MAX_PLATES,
-) -> tuple[Vec3, int]:
+) -> tuple[Vec3, int, bool]:
     """Wohin ein weiteres Modell kommt, ohne dass etwas anderes sich bewegt (§17.1, §29).
 
     **Der Anlass** (Robert, 28.09.2026: „wenn wir ein weiteres modell
@@ -2779,18 +2783,18 @@ def first_free_spot(
     Reihenfolge: die hinterste, dann linkeste freie Stelle, mit ``spacing`` zu
     jedem Nachbarn und zum Rand. Was schon liegt (``occupied``, Grenzen und
     Platte), bleibt liegen und belegt seinen Platz auf seiner Platte. Eine
-    leere Platte nimmt das Modell immer, und dort liegt es mittig wie jedes
-    Modell auf einem leeren Bett. Passt es auf keine belegte Platte, kommt es
-    auf die nächste; ist keine mehr erlaubt, liegt es neben der letzten, ohne
-    Überschneidung, und :func:`check_build_volume` sagt es.
+    leere Platte nimmt das Modell immer; mittig liegt es dort in jeder Achse,
+    in der es auf die Fläche passt (:func:`_into_the_middle`). Passt es auf
+    keine belegte Platte, kommt es auf die nächste; ist keine mehr erlaubt,
+    liegt es neben der letzten, ohne Überschneidung.
 
     ``body`` sind die Grenzen des ganzen Modells: Eine Baugruppe wird als
     Ganzes gelegt, die Teile behalten ihre Lage zueinander. Gelegt wird ein
     Quader aus diesen Grenzen, nie die Form — der Platz eines Quaders ist nie
     zu knapp bemessen, und für einen exakten Körper muss nichts vernetzt werden.
     Zurück kommen der Versatz, der das Modell dorthin legt und **aufsetzt**,
-    und die Platte. Eingefügt (``load.free_spot``) wie erzeugt
-    (``fit_to_size.free_spot``, Weg 3) fragen dieselbe Funktion.
+    die Platte und ob es dort ganz auf der Druckfläche steht. Gerechnet wird
+    einmal: :func:`placed_at_free_spot` hält die Stelle im Schritt fest.
     """
 
     def block(bounds: BoundingBox) -> MeshData:
@@ -2804,19 +2808,19 @@ def first_free_spot(
     area = printable_area(profile.printer, margin=spacing)
     last = max((plate for _bounds, plate in occupied), default=-1)
     final = min(last + 1, max(plates, 1) - 1)
-    for plate in range(final + 1):
+    plate = 0
+    while True:
         standing = [(block(bounds), 0) for bounds, at in occupied if at == plate]
-        trial = arrange_on_bed([moving], profile, spacing, plates=1, occupied=standing)
-        placed = trial.meshes[0]
-        if standing and plate < final and not fits_xy(placed, area):
-            continue
-        shift = (
-            float(placed.bounds.minimum[0] - moving.bounds.minimum[0]),
-            float(placed.bounds.minimum[1] - moving.bounds.minimum[1]),
-            -float(body.minimum[2]),
-        )
-        return shift, plate
-    return (0.0, 0.0, -float(body.minimum[2])), final
+        placed = arrange_on_bed([moving], profile, spacing, plates=1, occupied=standing).meshes[0]
+        if not standing or plate == final or fits_xy(placed, area):
+            break
+        plate += 1
+    shift = (
+        float(placed.bounds.minimum[0] - moving.bounds.minimum[0]),
+        float(placed.bounds.minimum[1] - moving.bounds.minimum[1]),
+        -float(body.minimum[2]),
+    )
+    return shift, plate, fits_on_bed(placed, profile.printer)
 
 
 def standing_in(scene: Scene, ignore: Collection[ObjectId] = ()) -> list[tuple[BoundingBox, int]]:
@@ -2832,15 +2836,147 @@ def standing_in(scene: Scene, ignore: Collection[ObjectId] = ()) -> list[tuple[B
     ]
 
 
-def free_spot_finding(plate: int) -> Finding:
-    """Wohin ein weiteres Modell gekommen ist — die Platte, wie der Kunde sie zählt."""
-    return Finding(
-        code="arrange.free_spot",
-        severity="info",
-        message=_(
-            "Das Modell kam an die erste freie Stelle auf Platte {number}.", number=plate + 1
+#: Die Felder, in denen ein Schritt seine freie Stelle festhält (§17.1,
+#: Schritt 6). Solange sie leer sind, liest ``free_spot`` die Szene
+#: (``ParamSpec.answered_by``); danach nie wieder.
+SPOT_FIELDS: Final = ("spot_x", "spot_y")
+
+
+def free_spot_param(doc: TranslatableText, placement: ParamPlacement = "front") -> Any:
+    """Der Schalter *An eine freie Stelle legen* — an Ladeschritt und *Auf Maß bringen*."""
+    return param(
+        title=_("An eine freie Stelle legen"),
+        default=False,
+        reads_scene=True,
+        answered_by=SPOT_FIELDS,
+        placement=placement,
+        doc=doc,
+    )
+
+
+def spot_param(axis: Literal["x", "y"]) -> Any:
+    """Eine Achse der festgehaltenen Stelle: die Mitte des Modells in der Aufsicht."""
+    return param(
+        title=_("Mitte X") if axis == "x" else _("Mitte Y"),
+        default=None,
+        optional=True,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="advanced",
+        depends_on=("free_spot", (True,)),
+        doc=_(
+            "Wo die Mitte des Modells liegt. Die freie Stelle wird einmal gesucht und "
+            "hier festgehalten; leer sucht sie neu."
         ),
-        values={"plate": plate + 1},
+    )
+
+
+def spot_plate_param() -> Any:
+    """Die Platte der festgehaltenen Stelle, gezählt wie im Plattenwähler."""
+    return param(
+        title=_("Platte"),
+        default=1,
+        minimum=1,
+        placement="advanced",
+        depends_on=("free_spot", (True,)),
+        doc=_("Auf welcher Druckplatte das Modell liegt."),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class FreeSpot:
+    """Wohin ein Schritt sein Modell legt — und was er darüber sagt."""
+
+    offset: Vec3
+    """Der Versatz der ganzen Gruppe: zur Stelle und aufgesetzt."""
+    plate: int
+    """Um so viele Platten rückt jedes Teil; ohne Plattenaufteilung die Platte."""
+    answered: dict[str, float | int]
+    """Die frisch gerechnete Stelle für ``OpResult.answered``; leer, wenn sie
+    schon im Schritt stand."""
+    findings: list[Finding]
+
+
+def placed_at_free_spot(
+    group: BoundingBox,
+    profile: Profile,
+    scene: Scene,
+    *,
+    spot: tuple[float | None, float | None, int],
+    ignore: Collection[ObjectId] = (),
+    keep_layout: bool = False,
+) -> FreeSpot:
+    """Die freie Stelle, **einmal gerechnet und dann festgehalten** (§17.1, §15.7).
+
+    Entscheidung Robert: Die Stelle wird beim ersten Laden gerechnet und im
+    Schritt festgehalten, auf demselben Weg wie die beantwortete Einheitenfrage
+    (``OpResult.answered``). Danach bleibt das Modell liegen, wie in jedem
+    Slicer — wird davor etwas gelöscht oder geändert oder der Drucker
+    gewechselt, wandert es nicht, und eine Bohrung daran trifft weiter.
+
+    ``spot`` ist die festgehaltene Mitte in X und Y und die Platte (ab 1); mit
+    beiden Achsen gesetzt wird nur dorthin gelegt und aufgesetzt, ohne die Szene
+    zu lesen. ``keep_layout`` gilt einer Datei mit mehreren Platten: Sie behält
+    ihre Aufteilung und rückt hinter die letzte belegte Platte.
+    """
+    centre = (float(group.centre[0]), float(group.centre[1]))
+    seat = -float(group.minimum[2])
+    spot_x, spot_y, spot_plate = spot
+    if spot_x is not None and spot_y is not None:
+        target, plate = (spot_x, spot_y), max(spot_plate, 1) - 1
+        return FreeSpot((target[0] - centre[0], target[1] - centre[1], seat), plate, {}, [])
+    findings: list[Finding] = []
+    if keep_layout:
+        plate = max((at for _bounds, at in standing_in(scene, ignore)), default=-1) + 1
+        target = centre
+        if plate:
+            findings.append(
+                Finding(
+                    code="arrange.plates_behind",
+                    severity="info",
+                    message=_(
+                        "Die Platten der Datei kommen hinter die vorhandenen, ab Platte {number}.",
+                        number=plate + 1,
+                    ),
+                    values={"plate": plate + 1},
+                )
+            )
+    else:
+        shift, plate, fits = first_free_spot(group, profile, standing_in(scene, ignore))
+        target = (centre[0] + shift[0], centre[1] + shift[1])
+        moved = plate > 0 or not (is_close(shift[0], 0.0) and is_close(shift[1], 0.0))
+        if not fits:
+            findings.append(
+                Finding(
+                    code="arrange.no_free_spot",
+                    severity="warning",
+                    message=_(
+                        "Auf keiner Druckplatte war Platz für das Modell; es liegt auf "
+                        "Platte {number} und steht über die Druckfläche hinaus.",
+                        number=plate + 1,
+                    ),
+                    values={"plate": plate + 1},
+                    suggestions=(ARRANGE_ON_BED,),
+                )
+            )
+        elif moved:
+            findings.append(
+                Finding(
+                    code="arrange.free_spot",
+                    severity="info",
+                    message=_(
+                        "Das Modell kam an die erste freie Stelle auf Platte {number}.",
+                        number=plate + 1,
+                    ),
+                    values={"plate": plate + 1},
+                )
+            )
+    return FreeSpot(
+        (target[0] - centre[0], target[1] - centre[1], seat),
+        plate,
+        {"spot_x": target[0], "spot_y": target[1], "spot_plate": plate + 1},
+        findings,
     )
 
 
@@ -2888,7 +3024,7 @@ def back_onto_bed(
     others: Sequence[MeshData],
     profile: Profile,
     *,
-    spacing: float = 5.0,
+    spacing: float = ARRANGE_SPACING,
 ) -> tuple[Vec3, list[Finding]]:
     """Der XY-Versatz zu einem freien Platz auf der Druckfläche (§29).
 

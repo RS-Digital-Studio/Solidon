@@ -583,14 +583,17 @@ def test_the_session_puts_a_generated_body_on_the_stack(
     object_id = session.add_generated(result)
     session.wait_for_idle()
 
-    # Drei Schritte, und die Reihenfolge ist keine Geschmacksfrage: was ein
+    # Vier Schritte, und die Reihenfolge ist keine Geschmacksfrage: was ein
     # Bildmodell liefert, ist auf einen Einheitswürfel normiert und misst als
     # Millimeter gelesen ein bis zwei. Erst auf Maß bringen, dann bereinigen —
-    # andersherum verschweißt die Reparatur bei dieser Größe die halbe Lehne.
+    # andersherum verschweißt die Reparatur bei dieser Größe die halbe Lehne —,
+    # und zuletzt aufsetzen, denn die Reparatur kann unter dem Körper etwas
+    # wegnehmen.
     assert [entry.op for entry in session.project.document.ops] == [
         "load",
         "fit_to_size",
         "repair",
+        "place_on_bed",
     ]
     assert object_id == "obj_1"
     assert session.project.document.sources["src_1"].kind == "generated"

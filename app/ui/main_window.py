@@ -5850,6 +5850,9 @@ class MainWindow(QMainWindow):
         self._trial_message = message
 
     def _connect_session(self) -> None:
+        #: Der Körper eines eben eingefügten Modells, dessen Platte das Fenster
+        #: zeigt, sobald ein Ergebnis ihn trägt (``_show_the_plate_of_the_import``).
+        self._plate_of_import: ObjectId | None = None
         self.session.sceneChanged.connect(self._on_scene)
         self.session.pictureChanged.connect(self._on_picture)
         self.session.projectChanged.connect(self._on_project)
@@ -19500,6 +19503,23 @@ class MainWindow(QMainWindow):
         finally:
             self._showing_scene = False
             self._pending_scene = None
+        self._show_the_plate_of_the_import()
+
+    def _show_the_plate_of_the_import(self) -> None:
+        """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
+        eingefügten Modells (Review F14).
+
+        Ein weiteres Modell kommt an die erste freie Stelle, oft auf eine
+        andere Platte (§17.1, Schritt 6); ohne den Wechsel stünde es nicht im
+        Bild, und nur ein Befund nennte die Platte. Gewechselt wird einmal,
+        sobald ein Ergebnis den Körper trägt — dieselbe Wahl wie im Plattenfeld.
+        """
+        wanted = self._plate_of_import
+        result = self.session.last_result
+        if wanted is None or result is None or wanted not in result.scene.objects:
+            return
+        self._plate_of_import = None
+        self._show_the_plate_of(wanted)
 
     def _on_picture(self, picture: EvaluationResult) -> None:
         """Das Modell vor seiner Erkennung ins Bild bringen (KUNDE-14).
@@ -19704,6 +19724,10 @@ class MainWindow(QMainWindow):
         eingelesen, self._recent_candidate = self._recent_candidate, None
         if eingelesen is None:
             return
+        operations = self.session.project.document.ops
+        if operations and operations[-1].outputs:
+            self._plate_of_import = operations[-1].outputs[0]
+            self._show_the_plate_of_the_import()
         self.settings.remember(eingelesen)
         self._store_settings()
         self._show_recent()

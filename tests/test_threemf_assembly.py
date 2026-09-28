@@ -398,7 +398,7 @@ def test_a_further_file_with_plates_comes_behind_the_last_plate(profile) -> None
     centres = [tuple(round(float(v), 6) for v in entry.mesh.bounds.centre[:2]) for entry in objects]
     assert centres[2:] == centres[:2] == [(0.0, 0.0), (-68.0, 72.0)], "an seiner Stelle"
     codes = {finding.code for finding in result.scene.report.findings}
-    assert "load.plates_behind" in codes, "der Bericht sagt, ab welcher Platte"
+    assert "arrange.plates_behind" in codes, "der Bericht sagt, ab welcher Platte"
 
 
 def test_one_plate_changes_nothing() -> None:

@@ -1118,26 +1118,42 @@ def test_an_older_further_load_keeps_the_place_of_its_file(profile: Profile) -> 
     assert "arrange.free_spot" not in {entry.code for entry in result.scene.report.findings}
 
 
-def test_the_free_place_follows_the_model_before_it(profile: Profile) -> None:
-    """Die freie Stelle hängt an dem, was davor liegt — also auch der Schlüssel.
+def test_the_free_place_is_found_once_and_then_kept(profile: Profile) -> None:
+    """Die freie Stelle wird einmal gerechnet und im Schritt festgehalten
+    (Entscheidung Robert, §15.7): wie die beantwortete Einheitenfrage.
 
-    Wird der erste Würfel in Zentimetern gelesen, wird er 200 mm groß, und auf
-    der ersten Platte bleibt kein Platz für den zweiten. Mit Cache darf dann
-    nicht das alte Ergebnis zurückkommen (§15, ``ParamSpec.reads_scene``).
+    Solange sie nicht im Schritt steht, hängt sie an dem, was davor liegt —
+    wird der erste Würfel in Zentimetern gelesen (200 mm), ist auf der ersten
+    Platte kein Platz, und mit Cache darf nicht das alte Ergebnis kommen. Steht
+    sie im Schritt, bleibt der zweite liegen, wie in jedem Slicer.
     """
     from app.core.scene.cache import ResultCache
 
     cube = (MESHES / "cube_clean.stl").read_bytes()
     project, history = _imported_in_turn(profile, ("erster.stl", cube), ("zweiter.stl", cube))
     cache = ResultCache()
-    before = _scene(project, profile, cache=cache).scene.objects["obj_2"]
-    assert before.plate == 0
+    first = _scene(project, profile, cache=cache)
+    second_step = project.document.ops[1]
+    placed = first.scene.objects["obj_2"].mesh.bounds
+    assert first.answers[second_step.id] == {
+        "spot_x": pytest.approx(placed.centre[0]),
+        "spot_y": pytest.approx(placed.centre[1]),
+        "spot_plate": 1,
+    }, "die Stelle kommt als Antwort zurück"
 
+    # Noch nicht festgehalten: Die Stelle folgt dem, was davor liegt.
     history.change_params(project.document.ops[0].id, {"unit": "cm"})
-    after = _scene(project, profile, cache=cache).scene.objects["obj_2"]
+    moved = _scene(project, profile, cache=cache).scene.objects["obj_2"]
+    assert moved.plate == 1, "kein Platz mehr neben 200 mm — die nächste Platte"
+    history.change_params(project.document.ops[0].id, {"unit": "mm"})
 
-    assert after.plate == 1, "kein Platz mehr neben 200 mm — die nächste Platte"
-    assert after.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0))
+    # Festgehalten — wie die Sitzung es nach dem ersten Ergebnis tut: Der
+    # zweite bleibt, wo er zuerst hinkam.
+    assert history.record_answers(first.answers)
+    history.change_params(project.document.ops[0].id, {"unit": "cm"})
+    kept = _scene(project, profile, cache=cache).scene.objects["obj_2"]
+    assert kept.plate == 0
+    assert tuple(kept.mesh.bounds.minimum) == pytest.approx(tuple(placed.minimum))
 
 
 # --- die Lade-Operation ---------------------------------------------------------

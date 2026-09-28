@@ -111,9 +111,15 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
     assert source.origin.seed == 7
     assert source.origin.author == "scripted"
     assert project.sources[result.source_id] == result.result.payload
-    # Drei Schritte: laden, reparieren, auf Arbeitsgröße bringen. Der dritte
-    # kam dazu, weil ein Bildmodell auf einen Einheitswürfel normiert liefert.
-    assert [entry.op for entry in project.document.ops] == ["load", "fit_to_size", "repair"]
+    # Vier Schritte: laden, auf Arbeitsgröße bringen (ein Bildmodell liefert
+    # auf einem Einheitswürfel), reparieren und zuletzt aufsetzen — nach der
+    # Kette, denn die Reparatur kann unter dem Körper etwas wegnehmen.
+    assert [entry.op for entry in project.document.ops] == [
+        "load",
+        "fit_to_size",
+        "repair",
+        "place_on_bed",
+    ]
 
 
 def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
@@ -305,7 +311,7 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Figur", seed=7)
 
-    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren"
+    assert len(generation.transactions) == 5, "Laden, Größe, Reparieren, Dezimieren, Aufsetzen"
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
@@ -336,7 +342,9 @@ def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Vase", seed=7)
 
-    assert len(generation.transactions) == 3, "Laden, Größe, Reparieren — keine Dezimierung"
+    assert len(generation.transactions) == 4, (
+        "Laden, Größe, Reparieren, Aufsetzen — keine Dezimierung"
+    )
 
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
@@ -447,6 +455,31 @@ def test_a_generated_model_goes_to_a_free_spot_beside_what_is_there(
     assert _apart(cube, body, ARRANGE_SPACING), "nicht im Würfel"
     codes = {entry.code for entry in scene.scene.report.findings}
     assert "arrange.free_spot" in codes
+
+
+def test_a_generated_model_stays_seated_when_the_repair_takes_a_crumb_below_it(
+    project: Project, profile: Profile
+) -> None:
+    """Review F8 (Sonde p1): Ein loser Krümel unter der Kugel stand nach
+    *Auf Maß bringen* auf dem Bett, die Reparaturkette nahm ihn weg, und der
+    Körper schwebte 5,21 mm darüber. Aufgesetzt wird deshalb nach der Kette."""
+    kugel = trimesh.creation.icosphere(subdivisions=4, radius=1.0)
+    splitter = trimesh.creation.icosphere(subdivisions=1, radius=0.01)
+    splitter.apply_translation([0.0, 0.0, -1.1])
+    body = trimesh.util.concatenate([kugel, splitter])
+    backend = ScriptedMeshBackend(
+        fallback=bytes(trimesh.exchange.export.export_mesh(body, None, file_type="ply")),
+        suffix=".ply",
+    )
+
+    result = from_text(project, backend, "eine Kugel", seed=7)
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    entry = scene.scene.objects[result.object_id]
+    assert entry.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "auf dem Bett"
+    assert "arrange.above_bed" not in {finding.code for finding in scene.scene.report.findings}
+    assert [operation.op for operation in project.document.ops][-1] == "place_on_bed"
 
 
 def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(

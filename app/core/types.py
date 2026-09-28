@@ -1863,14 +1863,18 @@ class ParamSpec:
     der Szene (Regel 3: lesen, nie ändern).
 
     Die Schwester von ``OperationSpec.reads_other_bodies``, nur an einem Wert
-    statt an der ganzen Operation: *Modell einfügen* legt ein weiteres Modell
-    an die erste freie Stelle (``free_spot``, §17.1 Schritt 6) und muss dafür
-    wissen, was schon liegt. Ein Ladeschritt ohne den Schalter — jeder, der vor
-    dem 28.09.2026 gespeichert wurde — liest nichts davon und soll auch nicht
-    neu rechnen, wenn davor etwas anderes geändert wird. Der Cache-Schlüssel
-    bekommt die Hashes aller Objekte deshalb nur, solange der Wert wahr ist
-    (``evaluate._with_nested_context``), und nur dann gilt der Schritt als
-    Zugriff auf eine frühere Importgruppe (``ingest.plan.imported_group``)."""
+    statt an der ganzen Operation: *An eine freie Stelle legen* (``free_spot``,
+    §17.1 Schritt 6) muss wissen, was schon liegt. Ein Schritt ohne den
+    Schalter liest nichts davon und rechnet nicht neu, wenn davor etwas anderes
+    geändert wird. Ob gelesen wird, sagt :func:`registry.params.reads_scene` —
+    für den Cache-Schlüssel (``evaluate._with_nested_context``) und für die
+    Frage, ob ein späterer Schritt eine Importgruppe benutzt
+    (``ingest.plan.imported_group``)."""
+    answered_by: tuple[str, ...] = ()
+    """Die Felder, in denen der Schritt festhält, was er beim Lesen der Szene
+    gefunden hat. Sind sie gesetzt, liest ``reads_scene`` nicht mehr: Die
+    freie Stelle wird einmal gerechnet und kommt als Antwort in den Schritt
+    (§15.7, Entscheidung Robert)."""
     feature_kinds: tuple[str, ...] = ()
     """Welche Merkmalsarten dieser Merkmalsparameter annimmt — leer heißt jede.
 
