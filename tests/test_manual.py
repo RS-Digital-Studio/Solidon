@@ -2112,7 +2112,9 @@ def test_the_exchange_manual_describes_only_local_files(
     try:
         exchange = next(page for page in manual.pages() if page.key == "exchange")
         body = str(exchange.body)
-        html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+        # Entschlüsselt: Die Seite schreibt einen geraden Apostroph als
+        # ``&#x27;``, und der Satz, den der Kunde liest, ist der entschlüsselte.
+        html = unescape(WEBSITE_PAGES[language].read_text(encoding="utf-8"))
     finally:
         set_language("de")
 
