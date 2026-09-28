@@ -17,7 +17,7 @@ from app.core.scene import History
 from app.core.scene.project import new_project
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.session import Session
-from tests.conftest import FakeMesh
+from tests.helpers import FakeMesh
 from tests.scripted_backend import ScriptedMeshBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"

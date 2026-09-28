@@ -165,7 +165,7 @@ def _body(**kwargs: object) -> SceneObject:
     entscheidet sich an den Spulen und am Feld daneben, nie an der Geometrie —
     ein echtes Netz kostete hier nur Ladezeit.
     """
-    from tests.conftest import FakeMesh
+    from tests.helpers import FakeMesh
 
     return SceneObject(id="obj_1", name="Teil", mesh=FakeMesh(), **kwargs)  # type: ignore[arg-type]
 
