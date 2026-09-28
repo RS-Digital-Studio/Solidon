@@ -28,6 +28,7 @@ from app.ui.header import HeaderBar, bounds_text, filament_names, project_name
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.helpers import make_object
 
 
 def test_the_title_drops_the_suffix_but_keeps_the_star() -> None:
@@ -68,7 +69,6 @@ def test_the_header_names_the_printer_and_no_filament(qt_app: QApplication) -> N
     denn „2 Filamente" beantwortet keine Frage (Robert, 07.09.2026).
     Welcher Körper welche Spule trägt, sagt der Filamentbereich links.
     """
-    from conftest import make_object
 
     header = HeaderBar()
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
@@ -90,8 +90,6 @@ def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
     printer_title = "Druckermodell" * 16
     profile = replace(profile, printer=replace(profile.printer, title=printer_title))
-
-    from conftest import make_object
 
     result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
     window.header.show_profile(profile, result)
@@ -214,7 +212,6 @@ def test_the_header_lists_multiple_project_filaments_instead_of_one_global_mater
     qt_app: QApplication,
 ) -> None:
     """Slotname, Materialart und Farbe bleiben projektbezogen unterscheidbar."""
-    from conftest import make_object
 
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
     body = make_object(slots=(0, 1) * 6)
@@ -238,7 +235,6 @@ def test_the_header_ignores_unused_filament_metadata_after_a_complete_repaint(
     qt_app: QApplication,
 ) -> None:
     """Vollständig übermalte Flächen nennen weder Basis noch frühere Farben."""
-    from conftest import make_object
 
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
     body = make_object(slots=(1,) * 12)
@@ -266,7 +262,6 @@ def test_slot_metadata_without_a_material_uses_only_the_known_project_fallback(
     qt_app: QApplication,
 ) -> None:
     """Leere Importfelder bleiben sichtbar, eine fremde Art bleibt fremd."""
-    from conftest import make_object
 
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
     body = make_object(slots=(0,) * 12)
@@ -285,7 +280,6 @@ def test_showing_the_header_reads_large_face_slot_assignments_once(
     qt_app: QApplication,
 ) -> None:
     """Kurztext und Tooltip teilen eine Erhebung über die Dreieckszuordnung."""
-    from conftest import make_object
 
     class CountingSlots(list[int]):
         def __init__(self, values: list[int]) -> None:
@@ -325,7 +319,6 @@ def test_an_open_project_gives_the_header_readable_room_before_toolbar_words(
     window: MainWindow, qt_app: QApplication
 ) -> None:
     """Auf Laptopbreite bleiben Projekt, Drucker und Filamentanzahl lesbar."""
-    from conftest import make_object
 
     body = make_object(slots=(0, 1) * 6)
     body.material_slots = [
@@ -368,7 +361,6 @@ def test_the_plate_filter_never_lies_over_the_printer(qt_app: QApplication) -> N
     gekommen ist. Gegenprobe ohne ``_stretch_the_plate_column`` beim Zeigen:
     der Wähler beginnt bei derselben x-Stelle wie der Drucker, rot.
     """
-    from conftest import make_object
 
     window = MainWindow(Session(), UiSettings())
     try:
@@ -485,7 +477,6 @@ def _with_object(session: Session, name: str) -> None:
     """
     from app.core.scene.evaluate import EvaluationResult
     from app.core.types import Scene
-    from conftest import make_object
 
     scene = Scene(objects={"obj_1": make_object(name=name)})
     session.last_result = EvaluationResult(scene=scene)

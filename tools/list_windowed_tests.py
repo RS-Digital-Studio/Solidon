@@ -156,8 +156,23 @@ def _collect(
     arguments.extend(str(path) for path in paths)
     captured_out = io.StringIO()
     captured_err = io.StringIO()
-    with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
-        outcome = pytest.main(arguments, plugins=[collector])
+    # **Die Sammlung hinterlässt dem Aufrufer sein Modulverzeichnis.** Eine
+    # ``conftest.py`` ohne Paket lädt pytest als Modul ``conftest`` und wirft
+    # dafür das vorhandene gleichen Namens aus ``sys.modules`` — im eigenen
+    # Prozess einer laufenden Suite ist das deren ``tests/conftest.py``.
+    # Danach fand ``from conftest import make_object`` die ``conftest.py``
+    # eines Testordners im Temp-Verzeichnis (CI 0.5.1, macOS). Ersetztes kommt
+    # zurück, und der Suchpfad steht wieder, wie er stand.
+    modules = dict(sys.modules)
+    search_path = list(sys.path)
+    try:
+        with contextlib.redirect_stdout(captured_out), contextlib.redirect_stderr(captured_err):
+            outcome = pytest.main(arguments, plugins=[collector])
+    finally:
+        sys.path[:] = search_path
+        for name, module in modules.items():
+            if sys.modules.get(name) is not module:
+                sys.modules[name] = module
     only_filtered = outcome == pytest.ExitCode.NO_TESTS_COLLECTED and collector.collected_count > 0
     if outcome != pytest.ExitCode.OK and not only_filtered:
         details = (captured_out.getvalue() + captured_err.getvalue()).strip()

@@ -2324,9 +2324,13 @@ def test_windowed_suite_selection_follows_the_fixture_graph(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
+    suite_conftest = sys.modules.get("conftest")
     found = collect_windowed((tmp_path,), confcutdir=tmp_path)
 
     assert found == (windowed.resolve(),)
+    # Die fremde ``conftest.py`` bleibt in ihrer Sammlung: Stand sie danach in
+    # ``sys.modules``, scheiterte ``from conftest import …`` im selben Arbeiter.
+    assert sys.modules.get("conftest") is suite_conftest
 
 
 #: Die Tests, deren Grün an einem **Erzeugerlauf** hängt.

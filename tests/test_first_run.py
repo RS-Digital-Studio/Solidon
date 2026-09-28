@@ -2154,13 +2154,10 @@ def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> Non
     deshalb nur auf ausdrücklichen Wunsch mit (§37.2). Der Mittelweg gibt uns
     die Diagnose und dem Kunden sein Modell.
     """
-    import sys
-
-    sys.path.insert(0, "tests")
     from app.core.scene.evaluate import EvaluationResult
     from app.core.types import Scene
     from app.ui.support_dialog import KIND_BUG, SupportDialog
-    from conftest import make_object
+    from tests.helpers import make_object
 
     session = Session()
     session.last_result = EvaluationResult(scene=Scene(objects={"o1": make_object(name="Halter")}))

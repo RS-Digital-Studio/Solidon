@@ -55,6 +55,10 @@ Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 - **Ein PHP-Prüfserver startet über `php_command`** (`tests/php_probe.py`), der
   OPcache abschaltet: Unter Windows teilen sich alle PHP-Prozesse den
   Opcode-Speicher, und parallele Server mit anderen Erweiterungen stürzten ab.
+- **Ein `pytest.main` im Prozess der Suite gibt `sys.modules` und `sys.path`
+  zurück, wie es sie fand** (`tools/list_windowed_tests._collect`): Eine
+  `conftest.py` ohne Paket verdrängt dort das Modul `conftest` der Suite, und
+  spätere Tests im selben Arbeiter finden das fremde.
 - **Die Umgebung wird gegen `constraints.txt` aufgebaut**, sonst wird die Suite
   ohne geänderte Zeile rot.
 - **`filterwarnings = ["error"]`**: Eine Warnung wird behoben, nicht
