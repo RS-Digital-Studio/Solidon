@@ -1970,6 +1970,8 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
     qt_app: QApplication,
 ) -> None:
     """Importierte Langlöcher zeigen Länge und Breite direkt an den Kantenmaßen."""
+    from PySide6.QtTest import QTest
+
     window = _window_with_a_renderer()
     try:
         window.open_path(MESHES / "plate_coarse_slots.stl")
@@ -1987,13 +1989,24 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
             for field in flow._measure_group.findChildren(LengthSpin)
         }
         assert {"Länge des Langlochs", "Breite"} <= fields.keys()
-        fields["Länge des Langlochs"].set_value_mm(12.0)
+        # Getippt, wie der Kunde tippt: Erst eine Taste im Feld beginnt den
+        # Entwurf (``QuietHost.begin_edit``), und erst ein begonnener Entwurf
+        # führt den Umriss nach. ``set_value_mm`` ging daran vorbei, und der
+        # Test war seit seiner Entstehung rot, ohne dass es ein Lauf zeigte.
+        editor = fields["Länge des Langlochs"].lineEdit()
+        editor.selectAll()
+        QTest.keyClicks(editor, QLocale().toString(12.0, "f", 2))
         for _ in range(40):
             QApplication.processEvents()
         handle = window.viewport._slot_handle
         assert handle is not None and handle.length == pytest.approx(12.0)
+        # Die Zahl steht im Entwurf, den *Übernehmen* liest. Das Merkmalfenster
+        # rechts bekommt sie beim Tippen bewusst nicht zurück („Wer gerade
+        # liest, schreibt nicht zurück“, ``MainWindow._place_measures``); sein
+        # Zwilling zeigt die Länge ohnehin nicht, solange die Maßgruppe steht.
         armed = window.feature_panel._runs[window.feature_panel._armed]
-        assert armed.op == "slot_hole" and armed.values()["slot_length"] == pytest.approx(12.0)
+        assert armed.op == "slot_hole"
+        assert flow.dialog.values()["slot_length"] == pytest.approx(12.0)
         _display_measure_preview(window, flow)
         before = len(window.session.project.document.ops)
         flow.accept()
@@ -2001,6 +2014,8 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
             QApplication.processEvents()
             window.session.wait_for_idle()
         assert len(window.session.project.document.ops) == before + 1
+        added = window.session.project.document.ops[-1]
+        assert added.op == "slot_hole" and added.params["slot_length"] == pytest.approx(12.0)
         assert window.session.last_result.stopped_at is None
         window.session.undo()
         window.session.wait_for_idle()

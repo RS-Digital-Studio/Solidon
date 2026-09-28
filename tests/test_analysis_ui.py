@@ -118,8 +118,20 @@ def test_report_navigation_keeps_the_selected_feature_and_its_measure_group(
     window: MainWindow,
     route: str,
 ) -> None:
-    """Ein Berichtsklick beendet auch am echten Fenster keinen begonnenen Bohrungsentwurf."""
+    """Ein Berichtsklick beendet auch am echten Fenster keinen begonnenen Bohrungsentwurf.
+
+    Die Maße im Bild brauchen einen Renderer (``MainWindow._measure_in_the_view``
+    steigt ohne aus), und offscreen gibt es keinen — ohne die Attrappe stand
+    nach dem Klick keine Maßgruppe, und der Test war seit seiner Entstehung rot.
+    """
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.object_tree.select_object("obj_1")
     window.object_tree.select_feature("obj_1", "hole_1")
+    if window._quiet_placement is None:
+        window.feature_panel._in_view.click()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
     host, flow = window._quiet_host, window._quiet_placement
     assert host is not None and flow is not None
     host.begin_edit()
