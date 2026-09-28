@@ -1393,7 +1393,8 @@ def test_an_additional_language_needs_no_manual_generator_code(
     assert 'href="/nl/#pricing">NL·Preis</a>' in html
     assert '<a class="skip" href="#content">NL·Zum Inhalt springen</a>' in html
     assert '<h2 class="toc-title">NL·Inhalt</h2>' in html
-    assert "NL·Referenz — jede Operation mit ihren Werten" in html
+    assert '<h3 class="toc-part">NL·Erste Schritte</h3>' in html
+    assert '<h2 class="part">NL·Nachschlagen</h2>' in html
     assert "NL·Handbuch: 3D-Modelle für den Druck vorbereiten" in html
     assert "NL·Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck" in html
 
@@ -1405,6 +1406,8 @@ def test_an_additional_language_needs_no_manual_generator_code(
         ">Preis</a>",
         ">Zum Inhalt springen</a>",
         '<h2 class="toc-title">Inhalt</h2>',
+        '<h3 class="toc-part">Erste Schritte</h3>',
+        '<h2 class="part">Nachschlagen</h2>',
     )
     assert not [text for text in german_fallbacks if text in html]
 
@@ -1462,6 +1465,89 @@ def test_the_contents_lead_to_the_chapter_they_name(language: str) -> None:
     assert got == wanted, (
         f"{language}: das Verzeichnis nennt {len(wanted)} Kapitel, die Anker im Text sind {got}"
     )
+
+
+@pytest.mark.parametrize("language", ["de", "en", "fr"])
+def test_the_parts_stand_in_the_contents_and_in_the_text_alike(language: str) -> None:
+    """Verzeichnis und Text gliedern sich nach denselben Teilen (Konzept Handbuch §4).
+
+    Je Teil mit Seiten steht im Verzeichnis sein Titel über seinen Kapiteln
+    und im Text eine Teilüberschrift vor seinem ersten Kapitel — in der
+    Reihenfolge von ``manual.pages()`` und aus ``Page.part``, derselben
+    Auskunft, nach der das Handbuchfenster gruppiert. Verglichen wird die
+    ganze Folge aus Teilen und Kapiteln: Stünde ein Teil an der falschen
+    Stelle, fehlte er im Text oder stünde ein Kapitel unter dem falschen, wiche
+    sie ab.
+    """
+    import re
+    from html import escape as html_escape
+    from itertools import groupby
+
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+    from tools.make_manual import _anchor, _classify, anchored, contents
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        expected: list[str] = []
+        for part, members in groupby(manual.pages(), key=lambda page: page.part):
+            expected.append(f"teil:{html_escape(str(manual.PART_TITLES[part]), quote=False)}")
+            expected.extend(f"kapitel:{_anchor(page)}" for page in members)
+        toc = [
+            f"teil:{title}" if title else f"kapitel:{target}"
+            for title, target in re.findall(
+                r'<h3 class="toc-part">([^<]+)</h3>|<a href="#([^"]+)">', contents(language)
+            )
+        ]
+        text = [
+            f"teil:{title}" if title else f"kapitel:{target}"
+            for title, target in re.findall(
+                r'<h\d class="part">([^<]+)</h\d>|<h\d id="([^"]+)"',
+                anchored(_classify(manual.as_html())),
+            )
+        ]
+    finally:
+        set_language("de")
+
+    parts = [entry for entry in expected if entry.startswith("teil:")]
+    assert len(parts) >= 3, f"{language}: nur diese Teile haben Seiten: {parts}"
+    assert toc == expected, f"{language}: das Verzeichnis folgt den Teilen nicht"
+    assert text == expected, f"{language}: der Text folgt den Teilen nicht"
+
+
+def test_a_part_without_pages_has_no_heading_and_the_numbers_run_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Teil ohne Seiten verspräche Kapitel, die es nicht gibt.
+
+    Sein Titel steht weder im Verzeichnis noch im Text. Die Nummern laufen über
+    die Teile hinweg durch, wie über den Kapiteln im Text. Die Teilüberschrift
+    steht unmittelbar vor dem ersten Kapitel, auch vor einem erzeugten: Daran
+    hängt im Druck, dass ein Referenzkapitel am Anfang eines Teils kein
+    zweites Blatt beginnt und die Überschrift allein zurücklässt.
+    """
+    from tools.make_manual import _classify, anchored, contents
+
+    pages = (
+        manual.Page("one", "Eins", "Der erste Text über etwas.", part="start"),
+        manual.Page("two", "Zwei", "Der zweite Text über etwas.", part="start"),
+        manual.Page("three", "Drei", "Der dritte Text über etwas.", part="topics"),
+        manual.Page("scene", "Szene", "## Szene\n\nErzeugt aus dem Register.", generated=True),
+    )
+    monkeypatch.setattr(manual, "pages", lambda registry=None: pages)
+    toc = contents("de")
+    text = anchored(_classify(manual.as_html()))
+
+    for absent in ("tasks", "help"):
+        assert str(manual.PART_TITLES[absent]) not in toc + text, absent
+    assert '<h3 class="toc-part">Erste Schritte</h3><ol>' in toc
+    assert '<h3 class="toc-part">Funktionen</h3><ol start="3">' in toc
+    assert '<h3 class="toc-part">Nachschlagen</h3><ol start="4">' in toc
+    assert '<h2 class="part">Erste Schritte</h2><h3 id="one">' in text
+    assert '<h2 class="part">Funktionen</h2><h3 id="three">' in text
+    assert '<h2 class="part">Nachschlagen</h2><h3 id="ref-scene" class="chapter">' in text
+    assert text.count('class="part"') == 3
 
 
 def test_the_knowledge_pages_stand_before_the_reference() -> None:
@@ -2372,3 +2458,205 @@ def test_stamping_preserves_pdf_link_targets(
     target = reader.named_destinations[link["/Dest"]]
     assert reader.get_destination_page_number(target) == 2
     assert make_manual._chapter_of_each_page(pdf) == ["", "", *("Die vier Wege",) * 4]
+
+
+def test_the_pdf_bookmarks_hold_the_parts_and_under_them_their_chapters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Lesezeichen des PDF: oben die Teile, darunter ihre Kapitel.
+
+    Jedes springt auf seine erste Seite, gebaut aus denselben benannten Zielen
+    wie Kopfzeile und Inhaltsverzeichnis: Ein Kapitel springt an die Stelle,
+    die auch sein Eintrag im Verzeichnis anspringt, ein Teil an den Kopf der
+    Seite, auf der sein erstes Kapitel beginnt. Das PDF öffnet mit sichtbaren
+    Lesezeichen — vorher war die Seitenleiste des Betrachters leer.
+    """
+    from pypdf import PdfReader
+
+    from tools import make_manual
+
+    pages = (
+        manual.Page("what", "Was Solidon ist", "", part="start"),
+        manual.Page("ways", "Die vier Wege", "", part="start"),
+        manual.Page("window", "Das Fenster", "", part="topics"),
+        manual.Page("glossary", "Wörterbuch", "", part="reference"),
+        manual.Page("mesh", "Netz", "", generated=True),
+    )
+    monkeypatch.setattr(manual, "pages", lambda: pages)
+    pdf = tmp_path / "manual.pdf"
+    _pdf_with_chapter_targets(
+        pdf, {"what": 2, "ways": 2, "window": 3, "glossary": 4, "ref-mesh": 5}, dictionary=True
+    )
+
+    def overlay(path: Path, chapters: list[str], total: int, language: str) -> Path:
+        """Die Seitendarstellung bleibt hier unabhängig vom Qt-Zeichner."""
+        _pdf_with_chapter_targets(path, {}, dictionary=True)
+        return path
+
+    monkeypatch.setattr(make_manual, "_overlay", overlay)
+    make_manual._stamp(pdf, "de")
+    reader = PdfReader(pdf)
+
+    parts: list[tuple[str, int]] = []
+    chapters: list[list[tuple[str, int]]] = []
+    for item in reader.outline:
+        if isinstance(item, list):
+            chapters.append(
+                [(str(one.title), reader.get_destination_page_number(one)) for one in item]
+            )
+        else:
+            parts.append((str(item.title), reader.get_destination_page_number(item)))
+    assert parts == [("Erste Schritte", 2), ("Funktionen", 3), ("Nachschlagen", 4)]
+    assert chapters == [
+        [("Was Solidon ist", 2), ("Die vier Wege", 2)],
+        [("Das Fenster", 3)],
+        [("Wörterbuch", 4), ("Netz", 5)],
+    ]
+    first_part, first_chapters = reader.outline[0], reader.outline[1]
+    assert (first_part.typ, float(first_part.top)) == ("/XYZ", 842.0), "Teil: Kopf der Seite"
+    assert [one.typ for one in first_chapters] == ["/Fit", "/Fit"], "Kapitel: sein Ziel"
+    assert reader.page_mode == "/UseOutlines"
+
+
+def test_the_raster_count_sees_every_picture_once_also_inside_a_form(tmp_path: Path) -> None:
+    """Die Zählung hinter der Bedingung, dass das PDF jedes Bildschirmfoto trägt.
+
+    Ein Bild, das zwei Seiten zeigen, zählt einmal; eines in einem
+    Formularobjekt zählt mit; ein Formular ohne Bild zählt nicht.
+    """
+    from pypdf import PdfWriter
+    from pypdf.generic import (
+        ArrayObject,
+        DecodedStreamObject,
+        DictionaryObject,
+        NameObject,
+        NumberObject,
+    )
+
+    from tools.make_manual import _raster_images
+
+    writer = PdfWriter()
+
+    def xobject(subtype: str, data: bytes, **entries: object) -> object:
+        item = DecodedStreamObject()
+        item.set_data(data)
+        item[NameObject("/Type")] = NameObject("/XObject")
+        item[NameObject("/Subtype")] = NameObject(subtype)
+        for key, value in entries.items():
+            item[NameObject(f"/{key}")] = value
+        return writer._add_object(item)
+
+    def image() -> object:
+        return xobject(
+            "/Image",
+            b"\x00\x00\x00",
+            Width=NumberObject(1),
+            Height=NumberObject(1),
+            ColorSpace=NameObject("/DeviceRGB"),
+            BitsPerComponent=NumberObject(8),
+        )
+
+    def form(inner: dict[str, object]) -> object:
+        return xobject(
+            "/Form",
+            b"",
+            BBox=ArrayObject([NumberObject(0), NumberObject(0), NumberObject(9), NumberObject(9)]),
+            Resources=DictionaryObject(
+                {
+                    NameObject("/XObject"): DictionaryObject(
+                        {NameObject(name): value for name, value in inner.items()}
+                    )
+                }
+            ),
+        )
+
+    shared = image()
+    for used in (
+        {"/Im0": shared},
+        {"/Im0": shared, "/Fm0": form({"/Im1": image()})},
+        {"/Fm1": form({})},
+    ):
+        page = writer.add_blank_page(width=100, height=100)
+        page[NameObject("/Resources")] = DictionaryObject(
+            {
+                NameObject("/XObject"): DictionaryObject(
+                    {NameObject(name): value for name, value in used.items()}
+                )
+            }
+        )
+    pdf = tmp_path / "bilder.pdf"
+    with pdf.open("wb") as stream:
+        writer.write(stream)
+
+    assert _raster_images(pdf) == 2
+
+
+def test_the_print_takes_a_screenshot_as_jpeg_only_where_that_is_lighter(tmp_path: Path) -> None:
+    """Der Druck liest eine Kopie der Seite; die Website behält ihre Dateien.
+
+    Chromium reicht ein JPEG unverändert ins PDF durch und legt jedes andere
+    Rasterbild verlustfrei gepackt ab. Ein Bild mit Verlauf und Rauschen — wie
+    ein Schrittbild über dem abgedunkelten Modell — packt sich verlustfrei
+    schlecht und geht als JPEG in den Druck. Eine ruhige Fläche packt sich
+    verlustfrei kleiner und bleibt, ebenso ein Bild mit Durchsicht, denn JPEG
+    kennt keine. Die Verweise um die Bildschirmfotos fallen weg, relative
+    Adressen werden absolut; Sprünge im Dokument und Adressen im Netz bleiben.
+    """
+    import random
+    import re
+
+    from PySide6.QtGui import QColor, QImage
+
+    from tools.make_manual import _print_copy
+
+    site = tmp_path / "website"
+    images = site / "handbuch" / "de"
+    images.mkdir(parents=True)
+    flat = QImage(320, 200, QImage.Format.Format_RGB32)
+    flat.fill(QColor(30, 32, 36))
+    busy = QImage(320, 200, QImage.Format.Format_RGB32)
+    clear = QImage(320, 200, QImage.Format.Format_ARGB32)
+    noise = random.Random(5)
+    for y in range(200):
+        for x in range(320):
+            shade = 40 + x // 4 + y // 4 + noise.randrange(-6, 7)
+            busy.setPixelColor(x, y, QColor(shade, shade + 10, shade + 25))
+            clear.setPixelColor(x, y, QColor(shade, shade + 10, shade + 25, 120 if x < 40 else 255))
+    for name, picture in (("flat", flat), ("busy", busy), ("clear", clear)):
+        assert picture.save(str(images / f"{name}.png"))
+    page = site / "handbuch.html"
+    page.write_text(
+        '<link rel="stylesheet" href="style.css">'
+        '<p><a href="#what">Sprung</a> <a href="https://solidon3d.de/">Netz</a></p>'
+        + "".join(
+            f'<figure class="screenshot"><div class="stage"><a href="handbuch/de/{name}.png">'
+            f'<img src="handbuch/de/{name}.png" alt="{name}" loading="lazy"></a></div></figure>'
+            for name in ("flat", "busy", "clear")
+        )
+        + '<figure><picture><source srcset="handbuch/de/drawing-dark.svg" '
+        'media="(prefers-color-scheme: dark)"><img src="handbuch/de/drawing.svg" '
+        'alt="drawing"></picture></figure>',
+        encoding="utf-8",
+    )
+    before = page.read_bytes()
+    folder = tmp_path / "druck"
+    folder.mkdir()
+
+    copy, shown = _print_copy(page, folder)
+    html = copy.read_text(encoding="utf-8")
+    sources = {alt: source for source, alt in re.findall(r'<img src="([^"]+)" alt="(\w+)"', html)}
+
+    assert copy.parent == folder
+    assert page.read_bytes() == before, "die Seite der Website bleibt, wie sie ist"
+    assert sorted(path.name for path in images.iterdir()) == ["busy.png", "clear.png", "flat.png"]
+    assert shown == 3
+    assert sources["busy"] == (folder / "busy.jpg").as_uri()
+    assert (folder / "busy.jpg").read_bytes()[:2] == b"\xff\xd8"
+    assert QImage(str(folder / "busy.jpg")).size() == busy.size()
+    assert sources["flat"] == (images / "flat.png").resolve().as_uri()
+    assert sources["clear"] == (images / "clear.png").resolve().as_uri()
+    assert sources["drawing"] == (images / "drawing.svg").resolve().as_uri()
+    assert f'srcset="{(images / "drawing-dark.svg").resolve().as_uri()}"' in html
+    assert f'href="{(site / "style.css").resolve().as_uri()}"' in html
+    assert 'href="#what"' in html and 'href="https://solidon3d.de/"' in html
+    assert html.count('<div class="stage"><img src=') == 3, "kein Verweis um ein Bildschirmfoto"

@@ -8,14 +8,17 @@ das an drei Stellen gepflegt wird, sagt nach dem zweiten Monat dreierlei.
 
 Was entsteht:
 
-* ``website/handbuch.html`` und ``website/en/manual.html`` — je eine Seite,
-  passend zum vorhandenen ``style.css``, ohne JavaScript und ohne fremde
-  Ressourcen, wie der Rest der Seite auch.
+* ``website/handbuch.html`` und ``website/<sprache>/manual.html`` — je eine
+  Seite, passend zum vorhandenen ``style.css``, ohne JavaScript und ohne fremde
+  Ressourcen, wie der Rest der Seite auch. Verzeichnis und Text gliedern sich
+  nach den Teilen des Handbuchs (``Page.part``), wie das Handbuchfenster.
 * ``website/handbuch/`` mit den Abbildungen. Gezeichnetes und Gerendertes als
   SVG, weil es dann in jeder Größe scharf bleibt; die Bildschirmfotos als PNG,
-  weil sie nun einmal Pixel sind.
-* ``Releases/Solidon-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
+  die Schrittbilder der Anleitungen als WebP, weil sie nun einmal Pixel sind.
+* ``Releases/Solidon3D-Handbuch-<sprache>.pdf`` — über Qt gesetzt, damit dafür
   keine Abhängigkeit dazukommt, deren Lizenz erst geprüft werden müsste (§36).
+  Mit Lesezeichen nach Teilen und Kapiteln; die Bildschirmfotos gehen als
+  JPEG in den Druck, wo das leichter ist.
 
 Das PDF braucht Qt und damit die echte Plattform; zu den Schriften unter
 ``offscreen`` steht alles in ``tools/make_figures.py``.
@@ -27,7 +30,19 @@ import os
 import re
 import struct
 import sys
+import tempfile
+import zlib
+from collections.abc import Iterable
+from html import escape
+from itertools import groupby
 from pathlib import Path
+from typing import TYPE_CHECKING
+from urllib.parse import unquote
+
+if TYPE_CHECKING:
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import Fit
+    from PySide6.QtGui import QImage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -108,6 +123,16 @@ STYLE = """
       font-size: .68em; font-weight: 600; color: var(--muted);
       margin-right: .8rem; font-variant-numeric: tabular-nums;
     }
+    /* Ein Teil beginnt: dieselbe Kennzeile wie im Verzeichnis, mit einer
+       Linie darüber, eine Ebene über den Kapiteln. Sie trägt weder Anker
+       noch Nummer — gezählt und angesprungen werden die Kapitel, der Teil
+       ordnet sie nur. Die Breite ist die der Kapitelüberschrift, damit
+       beide an derselben Kante stehen. */
+    main > h2.part { max-width: 38rem; margin-top: 5rem; padding-top: 1.1rem;
+                     border-top: 2px solid var(--line); color: var(--muted);
+                     font-size: var(--t-sm); font-weight: 750; letter-spacing: .06em;
+                     text-transform: uppercase; }
+    main > h2.part + h3[id] { margin-top: 1.2rem; }
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
@@ -173,11 +198,12 @@ STYLE = """
                 padding: .28rem 0; border-bottom: 1px solid var(--line);
                 text-decoration: none; color: var(--fg); font-size: var(--t-md); }
     nav.toc li:last-child a { border-bottom: none; }
-    /* Die Fuge zwischen den geschriebenen Kapiteln und der Referenz —
-       gedämpft, weil sie ordnet und nicht ruft. */
-    nav.toc .toc-divider { margin: 1.6rem 0 .8rem; border: none; padding: 0;
-                           font-size: var(--t-md); color: var(--muted);
-                           font-weight: 600; letter-spacing: .02em; }
+    /* Die Teile des Handbuchs, jeder über seinen Kapiteln — gedämpft, weil
+       sie ordnen und nicht rufen. */
+    nav.toc .toc-part { margin: 1.6rem 0 .5rem; border: none; padding: 0;
+                        font-size: var(--t-xs); color: var(--muted); font-weight: 750;
+                        letter-spacing: .06em; text-transform: uppercase; }
+    nav.toc .toc-title + .toc-part { margin-top: 0; }
     nav.toc a:hover { color: var(--accent); }
     nav.toc .num { color: var(--accent); font-size: var(--t-xs); font-weight: 600;
                    min-width: 1.6rem; font-variant-numeric: tabular-nums; }
@@ -237,8 +263,12 @@ STYLE = """
       nav.toc { break-after: page; background: none; border: none;
                 border-radius: 0; padding: 0; margin: 0; }
       nav.toc .toc-title { font-size: 18pt; margin-bottom: 1.2rem; }
+      nav.toc .toc-part { break-after: avoid; }
       nav.toc ol { columns: 2; column-gap: 2rem; }
-      nav.toc a { color: var(--fg); font-size: 9.5pt; padding: .22rem 0; }
+      /* Auf Papier braucht kein Eintrag den Mindestraum für den Finger
+         (``style.css``, Zielräume): Mit ihm stand jede Zeile über einen
+         Zentimeter hoch, und das Verzeichnis lief über zwei Blätter. */
+      nav.toc a { color: var(--fg); font-size: 9.5pt; padding: .22rem 0; min-block-size: 0; }
 
       /* Eine Überschrift steht nie allein am Fuß, und ein Bild wird nie
          zwischen zwei Blättern zerschnitten — das war der auffälligste
@@ -253,6 +283,16 @@ STYLE = """
          stehen als ``<h3>`` da, und ein ``h2.chapter`` allein griffe nie. */
       h2.chapter, h3.chapter { break-before: page; margin-top: 0; }
       h3 { break-after: avoid; }
+      /* Ein Teil beginnt auf einem neuen Blatt — ein Umbruch je Teil, und
+         sein Lesezeichen landet oben auf dieser Seite. Das erste Kapitel
+         steht gleich darunter, auch ein Referenzkapitel, das sonst selbst
+         ein Blatt beginnen und die Kennzeile allein zurücklassen würde. So
+         spezifisch wie die Wahl für den Bildschirm, sonst gewännen deren
+         Linie, Abstand und Breite auch auf dem Papier. */
+      main > h2.part { break-before: page; max-width: none; margin: 0 0 .4rem;
+                       padding-top: 0; border-top: none; font-size: 9pt; }
+      main > h2.part + h3[id] { margin-top: 0; }
+      main > h2.part + .chapter { break-before: auto; }
       figure { break-inside: avoid; margin: 1.2rem auto; }
       /* Höher als das hier passt ein Bildschirmfoto kaum je noch neben Text
          auf ein Blatt — es rutscht dann allein auf die nächste Seite und
@@ -452,15 +492,46 @@ def _anchor(page: manual.Page) -> str:
     return f"ref-{page.key}" if page.generated else page.key
 
 
+def _parts(
+    pages: Iterable[manual.Page],
+) -> list[tuple[manual.Part, list[tuple[int, manual.Page]]]]:
+    """Die Kapitel nach den Teilen des Handbuchs, jedes mit seiner Nummer.
+
+    Der Teil steht an der Seite (``Page.part``) und kommt aus derselben
+    Gliederung, nach der das Handbuchfenster gruppiert — hier entsteht keine
+    zweite Zuordnung. Ein Teil ohne Seiten kommt nicht vor; eine leere
+    Überschrift verspräche Kapitel, die es nicht gibt. Die Nummern laufen über
+    die Teile hinweg durch, wie über den Kapiteln im Text.
+    """
+    return [
+        (part, list(members))
+        for part, members in groupby(enumerate(pages, start=1), key=lambda item: item[1].part)
+    ]
+
+
+def _part_title(part: manual.Part) -> str:
+    """Der Titel eines Teils in der eingestellten Sprache, für HTML maskiert."""
+    return escape(str(manual.PART_TITLES[part]), quote=False)
+
+
 def contents(language: str) -> str:
-    """Ein Inhaltsverzeichnis — bei dreiunddreißig Kapiteln kein Luxus.
+    """Ein Inhaltsverzeichnis — bei so vielen Kapiteln kein Luxus.
 
-    Mit gezählten Kapiteln und zweispaltig: eine Punktliste über
-    dreiunddreißig Zeilen ist eine Aufzählung, kein Verzeichnis — man findet
-    darin nichts wieder, weil nichts eine Stelle hat. Die Nummer gibt jedem
-    Kapitel eine.
+    Gegliedert nach den Teilen des Handbuchs (:func:`_parts`), darunter je
+    Teil seine Kapitel: Wer anfängt, findet die ersten Schritte, wer
+    nachschlagen will, das Nachschlagewerk, ohne durch das andere hindurch zu
+    lesen. Die erzeugten Kapitel stehen am Ende des letzten Teils,
+    *Nachschlagen*, zusammen mit dem Wörterbuch und den Wissensseiten — so
+    gruppiert sie auch das Handbuchfenster. Ein eigener Zwischentitel für die
+    Referenz („jede Operation mit ihren Werten") stand früher auch über den
+    Wissensseiten und beschrieb sie falsch.
 
-    Die Anker dazu setzt `anchored`; hier steht nur die Liste.
+    Mit gezählten Kapiteln und zweispaltig: eine lange Punktliste ist eine
+    Aufzählung, kein Verzeichnis — man findet darin nichts wieder, weil nichts
+    eine Stelle hat. Die Nummer gibt jedem Kapitel eine.
+
+    Die Anker und die Teilüberschriften im Text setzt `anchored`; hier steht
+    nur die Liste.
     """
 
     def entry(number: int, page: manual.Page) -> str:
@@ -469,21 +540,14 @@ def contents(language: str) -> str:
             f'<span class="num">{number:02d}</span>{page.title}</a></li>'
         )
 
-    pages = list(manual.pages())
-    written = [(number, page) for number, page in enumerate(pages, start=1) if not page.generated]
-    generated = [(number, page) for number, page in enumerate(pages, start=1) if page.generated]
-
     heading = site_text("Inhalt", language)
     blocks = [f'<h2 class="toc-title">{heading}</h2>']
-    blocks.append("<ol>" + "".join(entry(number, page) for number, page in written) + "</ol>")
-    if generated:
-        # Die Fuge, an der aus Lesen Nachschlagen wird. Die Nummern laufen
-        # durch: sie stehen so auch über den Kapiteln selbst.
-        divider = site_text("Referenz — jede Operation mit ihren Werten", language)
-        blocks.append(f'<h3 class="toc-divider">{divider}</h3>')
+    for part, numbered in _parts(manual.pages()):
+        first = numbered[0][0]
+        blocks.append(f'<h3 class="toc-part">{_part_title(part)}</h3>')
         blocks.append(
-            f'<ol start="{generated[0][0]}">'
-            + "".join(entry(number, page) for number, page in generated)
+            (f'<ol start="{first}">' if first != 1 else "<ol>")
+            + "".join(entry(number, page) for number, page in numbered)
             + "</ol>"
         )
     return f'<nav class="toc" id="toc">{"".join(blocks)}</nav>'
@@ -514,12 +578,18 @@ def anchored(html: str) -> str:
     mitten in Kapitel 24. Gesucht wird deshalb nur vorwärts — die Kapitel stehen
     im Text in derselben Reihenfolge wie in ``manual.pages()`` — und nur auf der
     Ebene der Kapitel.
+
+    **Vor dem ersten Kapitel eines Teils steht der Teil**, eine Ebene über den
+    Kapiteln und ohne Anker — dieselbe Gliederung wie im Verzeichnis
+    (`contents`). Findet sich ein Kapitel nicht, rückt die Teilüberschrift vor
+    das nächste gefundene desselben Teils.
     """
     from app.core.markup import inline
 
     pieces: list[str] = []
     cursor = 0
     level = ""
+    part: manual.Part | None = None
     for page in manual.pages():
         title = inline(str(page.title))
         pattern = re.compile(rf"<h([1-6])>{re.escape(title)}</h\1>")
@@ -539,6 +609,10 @@ def anchored(html: str) -> str:
             # Einführung liest man am Stück (siehe ``@media print``).
             css = ' class="chapter"' if page.generated else ""
             pieces.append(html[cursor : found.start()])
+            if page.part != part:
+                part = page.part
+                above = max(int(level) - 1, 1)
+                pieces.append(f'<h{above} class="part">{_part_title(part)}</h{above}>')
             pieces.append(f'<h{level} id="{_anchor(page)}"{css}>{title}</h{level}>')
             cursor = found.end()
             break
@@ -802,6 +876,179 @@ def _suffix(key: str) -> str:
     return figure.suffix if figure is not None and figure.kind == "shot" else "svg"
 
 
+#: Die JPEG-Qualität, mit der ein Bildschirmfoto in den Druck geht.
+#:
+#: **92, weil Qt erst über 90 die Farbe in voller Auflösung speichert**
+#: (4:4:4 statt 4:2:0). Bis 90 verschwimmen die orangen Rahmen, Pfeile und
+#: Nummern der Anleitungen an ihren Kanten, bei 85 kommt Rauschen um die
+#: Schrift dazu. Ab 91 ist auch siebenfach vergrößert kein Unterschied zum
+#: verlustfreien Bild mehr zu sehen; 92 lässt Abstand zu dieser Schwelle, und
+#: 95 wiegt ein Fünftel mehr ohne sichtbaren Gewinn.
+PDF_JPEG_QUALITY = 92
+
+#: Eine Adresse in einem Attribut der Seite.
+_REFERENCE = re.compile(r'\b(src|srcset|href)="([^"]*)"')
+
+#: Der Anfang einer Adresse mit Schema (``https:``, ``mailto:``, ``file:``).
+_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+
+#: Der Verweis, den `_staged` um ein Bildschirmfoto legt.
+_STAGED_LINK = re.compile(r'(<div class="stage">)<a href="[^"]*">(<img [^>]*>)</a>')
+
+
+def _print_copy(page_file: Path, folder: Path) -> tuple[Path, int]:
+    """Die Seite, wie sie in den Druck geht, und wie viele Bildschirmfotos sie zeigt.
+
+    Dieselbe Datei wie auf der Website, mit drei Unterschieden:
+
+    * **Die Verweise um die Bildschirmfotos fallen weg.** Auf der Website
+      öffnet ein Tippen das Bild in voller Größe (`_staged`); im Druck wurde
+      daraus ein Verweis auf den Pfad des Bau-Rechners,
+      ``file:///F:/3D%20Druck/website/handbuch/…``. Beim Kunden führt er ins
+      Leere und zeigt einen fremden Pfad. Das Bild bleibt, nur der Verweis geht.
+    * **Ein Bildschirmfoto kommt als JPEG, wo das leichter ist** (`_printable`).
+      Die Website behält ihre Dateien.
+    * **Jede relative Adresse wird absolut**, weil die Kopie in ``folder``
+      liegt und nicht neben ihren Bildern. Sprungmarken bleiben, wie sie sind:
+      Sie führen innerhalb des Dokuments, und genau daraus werden die Sprünge
+      im PDF.
+
+    Die Zahl zählt die Bildschirmfotos, deren Datei es gibt. So viele
+    Rasterbilder muss das PDF danach tragen (`_raster_images`).
+    """
+    base = page_file.parent
+    shown: set[Path] = set()
+
+    def absolute(address: str, *, picture: bool = False) -> str:
+        if not address or address.startswith(("#", "/")) or _SCHEME.match(address):
+            return address
+        source = (base / unquote(address.split("?", 1)[0])).resolve()
+        if picture and source.suffix in (".png", ".webp"):
+            if source.is_file():
+                shown.add(source)
+            return _printable(source, folder)
+        return source.as_uri()
+
+    def rewrite(match: re.Match[str]) -> str:
+        name, value = match.group(1), match.group(2)
+        if name == "srcset":
+            candidates = (candidate.strip().partition(" ") for candidate in value.split(","))
+            value = ", ".join(
+                f"{absolute(address)}{space}{descriptor}"
+                for address, space, descriptor in candidates
+            )
+        else:
+            value = absolute(value, picture=name == "src")
+        return f'{name}="{value}"'
+
+    html = _STAGED_LINK.sub(r"\1\2", page_file.read_text(encoding="utf-8"))
+    copy = folder / page_file.name
+    copy.write_text(_REFERENCE.sub(rewrite, html), encoding="utf-8")
+    return copy, len(shown)
+
+
+def _printable(source: Path, folder: Path) -> str:
+    """Die Adresse, unter der der Druck ein Bildschirmfoto liest.
+
+    **Chromium reicht ein JPEG unverändert ins PDF durch**: Der Bildstrom im
+    PDF ist Byte für Byte die Datei. Jedes andere Rasterbild entpackt es und
+    legt die Pixel verlustfrei gepackt ab. Für die Schrittbilder der
+    Anleitungen ist das teuer — sie sind WebP, also schon verlustbehaftet, und
+    ihre Pixel packen sich schlecht. Ein Bildschirmfoto als PNG mit ruhigen
+    Flächen packt sich dagegen verlustfrei kleiner als jedes JPEG.
+
+    Deshalb entscheidet die Größe: JPEG, wo es leichter ist als das, was
+    Chromium verlustfrei ablegte (`_flate_size`), sonst die Datei selbst. Ein
+    Bild mit Durchsicht bleibt, wie es ist; JPEG kennt keine. Das JPEG kommt
+    nach ``folder``, nicht neben die Bilder der Website.
+    """
+    from PySide6.QtGui import QImage
+
+    image = QImage(str(source))
+    if image.isNull() or not _opaque(image):
+        return source.as_uri()
+    jpeg = folder / f"{source.stem}.jpg"
+    saved = image.convertToFormat(QImage.Format.Format_RGB32).save(
+        str(jpeg), "JPG", PDF_JPEG_QUALITY
+    )
+    if not saved or jpeg.stat().st_size >= _flate_size(image):
+        jpeg.unlink(missing_ok=True)
+        return source.as_uri()
+    return jpeg.as_uri()
+
+
+def _flate_size(image: QImage) -> int:
+    """So viele Bytes legte Chromium für ein Bild ab, das kein JPEG ist.
+
+    Skia, das PDF-Werk von Chromium, packt die RGB-Zeilen eines Rasterbilds
+    mit zlib auf der üblichen Stufe 6. Das wird hier nachgerechnet, und es
+    trifft den Bildstrom im gedruckten PDF auf wenige Prozent, eher knapp
+    darunter: Ein Grenzfall bleibt dadurch verlustfrei, nicht umgekehrt.
+    """
+    from PySide6.QtGui import QImage
+
+    rgb = image.convertToFormat(QImage.Format.Format_RGB888)
+    row, stride = rgb.width() * 3, rgb.bytesPerLine()
+    data = bytes(rgb.constBits())
+    pixels = b"".join(data[line * stride : line * stride + row] for line in range(rgb.height()))
+    return len(zlib.compress(pixels, 6))
+
+
+def _opaque(image: QImage) -> bool:
+    """Ob ein Bild überall deckt — nur dann wird aus ihm ohne Verlust ein JPEG."""
+    from PySide6.QtGui import QImage
+
+    if not image.hasAlphaChannel():
+        return True
+    alpha = image.convertToFormat(QImage.Format.Format_Alpha8)
+    width, stride = alpha.width(), alpha.bytesPerLine()
+    data = bytes(alpha.constBits())
+    full = b"\xff" * width
+    return all(
+        data[line * stride : line * stride + width] == full for line in range(alpha.height())
+    )
+
+
+def _raster_images(pdf: Path) -> int:
+    """Wie viele Rasterbilder ein PDF trägt, jedes einmal gezählt.
+
+    Gezählt an den Bildobjekten, die die Seiten benutzen, auch in
+    Formularobjekten. Ein Suchen nach ``/Subtype /Image`` im Dateitext taugt
+    dafür nicht: Chromium legt seine Objekte gepackt ab, und die Suche fände
+    auch in einem guten PDF nichts.
+    """
+    from io import BytesIO
+
+    from pypdf import PdfReader
+    from pypdf.generic import DictionaryObject, IndirectObject
+
+    reader = PdfReader(BytesIO(pdf.read_bytes()))
+    images: set[int] = set()
+    forms: set[int] = set()
+
+    def visit(resources: object) -> None:
+        if isinstance(resources, IndirectObject):
+            resources = resources.get_object()
+        if not isinstance(resources, DictionaryObject) or "/XObject" not in resources:
+            return
+        xobjects = resources["/XObject"]
+        if not isinstance(xobjects, DictionaryObject):
+            return
+        for name in xobjects:
+            reference = xobjects.raw_get(name)
+            item = reference.get_object()
+            number = reference.idnum if isinstance(reference, IndirectObject) else id(item)
+            if item.get("/Subtype") == "/Image":
+                images.add(number)
+            elif item.get("/Subtype") == "/Form" and number not in forms:
+                forms.add(number)
+                visit(item.get("/Resources"))
+
+    for page in reader.pages:
+        visit(page.get_inherited("/Resources"))
+    return len(images)
+
+
 def write_pdf(language: str, page_file: Path) -> Path:
     """Das Handbuch als PDF — gedruckt aus derselben Seite, die im Web steht.
 
@@ -822,6 +1069,10 @@ def write_pdf(language: str, page_file: Path) -> Path:
     Media, und das setzt Chromium nicht um. Dafür trägt jede Seite ihre
     Ordnung im Inhaltsverzeichnis und in den Kapitelüberschriften — und der
     Leser sieht die Zahl in seinem Betrachter.
+
+    Gedruckt wird eine Kopie der Seite (`_print_copy`): ohne die Verweise um
+    die Bildschirmfotos und mit den Bildschirmfotos als JPEG, wo das leichter
+    ist. Danach legt `_stamp` Kopf- und Fußzeilen und die Lesezeichen an.
     """
     from PySide6.QtCore import QEventLoop, QMarginsF, QTimer, QUrl
     from PySide6.QtGui import QPageLayout, QPageSize
@@ -842,12 +1093,11 @@ def write_pdf(language: str, page_file: Path) -> Path:
         QPageLayout.Unit.Millimeter,
     )
 
-    def attempt(settle: int) -> bool:
-        """Ein Druckversuch. ``settle`` ist die Ruhezeit nach dem Dekodieren."""
+    def attempt(printable: Path, settle: int) -> bool:
+        """Ein Druckversuch. ``settle`` ist die Ruhezeit nach dem Laden."""
         page = QWebEnginePage()
         loop = QEventLoop()
         done: list[bool] = []
-        seen_images: list[int] = []
 
         def printed(data: bytes) -> None:
             if data:
@@ -855,66 +1105,50 @@ def write_pdf(language: str, page_file: Path) -> Path:
             done.append(bool(data))
             loop.quit()
 
-        def count_then_print(found: object) -> None:
-            """Die Bildzahl der Seite festhalten, dann drucken."""
-            seen_images.append(int(found) if isinstance(found, int | float) else -1)
-            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
-
         def loaded(ok: bool) -> None:
             if not ok:
                 done.append(False)
                 loop.quit()
                 return
-            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen.
-            #
-            # **Er reicht nicht, und das ist ein offener Punkt** (ROADMAP,
-            # 26.08.2026): Die erzeugten PDFs tragen null eingebettete Bilder,
-            # an jeder Abbildung steht eine Lücke in exakt ihrer Größe. Zwei
-            # Wege sind gemessen und untauglich — ``decode()`` abzuwarten löst
-            # sein Promise nie auf (und ``runJavaScript`` wartet ohnehin nicht
-            # auf Promises, es gibt den synchronen Wert zurück), und eine
-            # ``QWebEngineView`` mit echtem Viewport druckt genauso ohne Bilder.
-            # Die Zahl daneben ist deshalb keine Zierde: Sie sagt, wie viele
-            # Bilder die Seite kennt, und trennt „Seite ohne Abbildungen" von
-            # „Abbildungen, die nicht mitgedruckt werden".
-            #
-            # **Vorher fallen die Verweise um die Bildschirmfotos weg.** Auf der
-            # Website öffnet ein Tippen das Bild in voller Größe (``_staged``);
-            # im Druck wurde daraus ein Verweis auf den Pfad des Bau-Rechners,
-            # ``file:///F:/3D%20Druck/website/handbuch/…`` — neun je Sprache,
-            # gemessen an den PDFs von 0.5.0. Beim Kunden führt er ins Leere
-            # und zeigt einen fremden Pfad. Das Bild bleibt, nur der Verweis geht.
-            page.runJavaScript(
-                "document.querySelectorAll('figure.screenshot .stage > a')"
-                ".forEach(link => link.replaceWith(...link.childNodes));"
-                "document.images.length",
-                count_then_print,
-            )
+            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen. Ob
+            # alle Bildschirmfotos im PDF angekommen sind, zählt danach
+            # ``_raster_images`` im fertigen PDF.
+            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
 
         page.loadFinished.connect(loaded)
-        page.load(QUrl.fromLocalFile(str(page_file.resolve())))
+        page.load(QUrl.fromLocalFile(str(printable)))
         QTimer.singleShot(PDF_PRINT_LIMIT_MS, loop.quit)
         loop.exec()
         page.deleteLater()
-        if seen_images and seen_images[0] == 0:
-            # Ein Handbuch ohne ein einziges Bild ist kein Erfolg, sondern eine
-            # Seite, die ihre Abbildungen nicht gefunden hat.
-            print(f"  {language}: die Seite trug kein einziges Bild", file=sys.stderr)
         return bool(done) and done[0]
 
     # Zwei Anläufe, der zweite mit mehr Ruhe. Chromium bringt seinen eigenen
     # Prozess mit, und der ist unter Last gelegentlich noch nicht bereit, wenn
     # ``loadFinished`` schon kam — ein Handbuch deswegen gar nicht zu drucken
-    # wäre die schlechtere Antwort.
-    #
-    # **Der zweite Anlauf läuft nie**, und das gehört zum offenen Punkt oben:
-    # ``attempt`` gilt als gelungen, sobald ``printToPdf`` Bytes liefert, und
-    # ein PDF ohne Bilder ist auch Bytes. Eine Erfolgsbedingung, die die Bilder
-    # prüft, braucht eine verlässliche Zählung im fertigen PDF — ein Grep auf
-    # ``/Subtype /Image`` taugt dafür nicht, weil Chromium Objektströme
-    # komprimiert und der Grep dann auch über einem guten PDF null liefert.
-    if not attempt(400) and not attempt(2500):
-        raise RuntimeError(f"das Handbuch {language} ließ sich nicht drucken")
+    # wäre die schlechtere Antwort. Gelungen ist ein Anlauf erst, wenn das PDF
+    # jedes Bildschirmfoto der Seite trägt: Auch ein PDF ohne Bilder ist Bytes.
+    # Die Kopie und ihre JPEG-Dateien liegen in einem Ordner auf Zeit; hält
+    # Chromium eine davon noch offen, bleibt er liegen, statt den Lauf zu beenden.
+    with tempfile.TemporaryDirectory(prefix="solidon-druck-", ignore_cleanup_errors=True) as folder:
+        printable, pictures = _print_copy(page_file.resolve(), Path(folder))
+        found = -1
+        for settle in (400, 2500):
+            if not attempt(printable, settle):
+                continue
+            found = _raster_images(target)
+            if found >= pictures:
+                break
+        else:
+            problem = (
+                "nicht drucken"
+                if found < 0
+                else "nicht vollständig drucken, das PDF trägt "
+                f"{found} von {pictures} Bildschirmfotos"
+            )
+            raise RuntimeError(
+                f"Das Handbuch {language} ließ sich {problem}. Prüfen Sie die Bilder unter "
+                f"website/handbuch/{language} und erzeugen Sie das Handbuch erneut."
+            )
 
     _stamp(target, language)
     return target
@@ -930,48 +1164,92 @@ FOOTER_BASELINE = 32.0
 STAMP_INSET = PDF_MARGIN_SIDE * 72.0 / 25.4
 
 
-def _chapter_of_each_page(pdf: Path) -> list[str]:
-    """Welches Kapitel auf welcher Seite läuft.
+def _chapter_starts(reader: PdfReader) -> list[tuple[manual.Page, int, Fit]]:
+    """Jedes Kapitel mit der Seite, auf der es beginnt, und seiner Stelle darauf.
 
     Die HTML-Anker werden beim Drucken zu benannten PDF-Zielen. Sie halten
     die tatsächliche Seite auch bei umbrochenen Überschriften und fehlenden
-    Leerzeichen der Textextraktion fest. Kopfzeile und Inhaltsverzeichnis
-    lesen dadurch dieselbe Seitenauskunft. Beginnen mehrere Kapitel auf
-    einem Blatt, führt dessen Kopf das letzte davon.
+    Leerzeichen der Textextraktion fest. Kopfzeile, Inhaltsverzeichnis und
+    Lesezeichen lesen dadurch dieselbe Seitenauskunft.
     """
+    from pypdf.generic import Fit
+
+    destinations = {
+        str(key).removeprefix("/"): value for key, value in reader.named_destinations.items()
+    }
+    starts: list[tuple[manual.Page, int, Fit]] = []
+    for chapter in manual.pages():
+        target = destinations.get(_anchor(chapter))
+        number = reader.get_destination_page_number(target) if target is not None else None
+        if target is None or number is None or number < 0:
+            raise RuntimeError(
+                f"Das PDF-Ziel für „{chapter.title}“ fehlt. "
+                "Erzeugen Sie das Handbuch erneut aus der vollständigen HTML-Seite."
+            )
+        kind, *arguments = target.dest_array[1:]
+        starts.append((chapter, number, Fit(str(kind), arguments)))
+    return starts
+
+
+def _running_chapters(starts: list[tuple[manual.Page, int, Fit]], total: int) -> list[str]:
+    """Welches Kapitel auf welcher Seite läuft.
+
+    Beginnen mehrere Kapitel auf einem Blatt, führt dessen Kopf das letzte
+    davon.
+    """
+    titles = {number: str(chapter.title) for chapter, number, _where in starts}
+    running = ""
+    found: list[str] = []
+    for number in range(total):
+        running = titles.get(number, running)
+        found.append(running)
+    return found
+
+
+def _chapter_of_each_page(pdf: Path) -> list[str]:
+    """Welches Kapitel auf welcher Seite des PDF läuft."""
     from io import BytesIO
 
     from pypdf import PdfReader
 
     reader = PdfReader(BytesIO(pdf.read_bytes()))
-    destinations = {
-        str(key).removeprefix("/"): value for key, value in reader.named_destinations.items()
-    }
-    starts: dict[int, str] = {}
-    for chapter in manual.pages():
-        target = destinations.get(_anchor(chapter))
-        number = reader.get_destination_page_number(target) if target is not None else None
-        if number is None or number < 0:
-            raise RuntimeError(
-                f"Das PDF-Ziel für „{chapter.title}“ fehlt. "
-                "Erzeugen Sie das Handbuch erneut aus der vollständigen HTML-Seite."
+    return _running_chapters(_chapter_starts(reader), len(reader.pages))
+
+
+def _bookmark(writer: PdfWriter, starts: list[tuple[manual.Page, int, Fit]]) -> None:
+    """Die Lesezeichen: die Teile oben, ihre Kapitel darunter.
+
+    Ein Kapitel springt an die Stelle seiner Überschrift, dieselbe, die das
+    Inhaltsverzeichnis anspringt. Ein Teil springt an den Kopf der Seite, auf
+    der sein erstes Kapitel beginnt: Dort steht im Druck seine Überschrift,
+    denn ein Teil beginnt auf einem neuen Blatt. Die Teile kommen aus
+    ``Page.part`` wie im Verzeichnis. Das PDF öffnet mit sichtbaren
+    Lesezeichen: Ohne sie blieb die Seitenleiste des Betrachters leer, und
+    ein Kapitel fand man nur über das Verzeichnis.
+    """
+    from pypdf.generic import Fit
+
+    part: manual.Part | None = None
+    parent = None
+    for chapter, number, where in starts:
+        if chapter.part != part:
+            part = chapter.part
+            top = float(writer.pages[number].mediabox.top)
+            parent = writer.add_outline_item(
+                str(manual.PART_TITLES[part]), number, fit=Fit.xyz(0, top, None)
             )
-        starts[number] = str(chapter.title)
-    running = ""
-    found: list[str] = []
-    for number in range(len(reader.pages)):
-        running = starts.get(number, running)
-        found.append(running)
-    return found
+        writer.add_outline_item(str(chapter.title), number, parent=parent, fit=where)
+    writer.page_mode = "/UseOutlines"
 
 
 def _stamp(pdf: Path, language: str) -> None:
-    """Kopf- und Fußzeile auf jede Seite legen.
+    """Kopf- und Fußzeile auf jede Seite legen, dazu die Lesezeichen.
 
     Chromium druckt keine — CSS Paged Media kennt Randboxen mit Seitenzähler,
     Chromium setzt sie nicht um. Also wird eine zweite, durchsichtige Lage
     gezeichnet und darübergelegt: oben das laufende Kapitel und der Name,
-    unten Version und Seitenzahl.
+    unten Version und Seitenzahl. Die Lesezeichen (`_bookmark`) entstehen im
+    selben Schritt aus denselben Zielen.
 
     Deckblatt und Inhaltsverzeichnis bleiben frei — ein Titelblatt mit
     Kolumnentitel sieht aus wie eine Seite, die verrutscht ist.
@@ -980,12 +1258,14 @@ def _stamp(pdf: Path, language: str) -> None:
 
     from pypdf import PdfReader, PdfWriter
 
-    chapters = _chapter_of_each_page(pdf)
     # Aus dem Speicher: Der verzögert lesende Reader darf die Datei beim
     # anschließenden Ersetzen nicht mehr offen halten.
     reader = PdfReader(BytesIO(pdf.read_bytes()))
+    starts = _chapter_starts(reader)
     total = len(reader.pages)
-    overlay = _overlay(pdf.with_suffix(".stamp.pdf"), chapters, total, language)
+    overlay = _overlay(
+        pdf.with_suffix(".stamp.pdf"), _running_chapters(starts, total), total, language
+    )
 
     # Einzelne Seiten zu kopieren verliert den Dokumentkatalog und damit
     # die Ziele, auf die die Links im Inhaltsverzeichnis zeigen.
@@ -995,6 +1275,7 @@ def _stamp(pdf: Path, language: str) -> None:
     for number, page in enumerate(writer.pages):
         if number >= SKIP_STAMP:
             page.merge_page(marks.pages[number])
+    _bookmark(writer, starts)
     writer.add_metadata(
         {
             "/Title": f"{site_text('Handbuch', language)} — {APP_NAME}",

@@ -209,6 +209,17 @@ Die PDF-Kapitelköpfe lesen die tatsächlichen Seiten aus den benannten Zielen
 der HTML-Kapitelanker. Beim Stempeln bleibt der ganze PDF-Dokumentkatalog
 erhalten, damit auch das Inhaltsverzeichnis diese Ziele weiter erreicht.
 PDF-Leser arbeiten dabei aus dem Speicher und halten die Zieldatei nicht offen.
+Die Lesezeichen entstehen im selben Schritt aus denselben Zielen: die Teile
+des Handbuchs oben, ihre Kapitel darunter.
+
+Gedruckt wird eine Kopie der Seite, in der ein Bildschirmfoto als JPEG steht,
+wo das leichter ist; die Website behält ihre Dateien. Chromium reicht ein
+JPEG unverändert ins PDF durch und packt jedes andere Rasterbild verlustfrei —
+teuer für die Schrittbilder der Anleitungen, billig für die ruhigen
+PNG-Bildschirmfotos. Die Begründung steht an `_printable`, die Wahl der
+Qualität an `PDF_JPEG_QUALITY`. Trägt das PDF danach nicht jedes
+Bildschirmfoto der Seite, hält der Lauf an: Auch ein PDF ohne Bilder ist
+Bytes.
 
 ## Bauen, signieren, ausliefern
 
