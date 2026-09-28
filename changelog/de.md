@@ -126,7 +126,7 @@ Nutzen da und sonst nichts.
 
 - Die Kantenwahl *Waagerecht*, *Oben* oder *Unten* nimmt den Rand einer seitlichen Bohrung nicht mehr mit. Wer ihn meint, wählt ihn einzeln; ältere Projekte rechnen wie gespeichert.
 - Am eingelesenen Modell wird der Rand einer Bohrung so tief verrundet oder angefast wie am konstruierten Teil. Vorher fiel die Rundung bei großen Radien bis zu einem Fünftel zu flach aus.
-- Passen Radius oder Fase nicht an jede Kante einer Kantenwahl wie *Alle* oder *Senkrecht*, bearbeitet Solidon die übrigen und zeigt mit *Stelle zeigen*, wo das Maß nicht passt, statt ganz abzusagen.
+- Passt das Maß nicht an jede Kante einer Kantenwahl wie *Alle* oder *Senkrecht*, bearbeitet Solidon die passenden und zeigt die anderen mit *Stelle zeigen*, statt ganz abzusagen.
 
 ### Maße im Bild
 
