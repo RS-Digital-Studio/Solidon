@@ -7,7 +7,7 @@ import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, OperationCancelled
-from app.core.export import handover
+from app.core.export import handover, manufacturer
 from app.core.filament_usage import with_spool
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import place_on_bed
@@ -228,6 +228,15 @@ def test_unknown_stock_demand_always_names_the_filament(qt_app, monkeypatch, nam
     assert notes == [f"{title}: Einzelbedarf erst nach dem Slicen bekannt."]
 
 
+def _table_foundation(session, quality):
+    """Die Grundlage ohne gemerkten Slicer: Solidons Tabelle.
+
+    ``MainWindow._print_foundation`` fragte sonst im Arbeiter nach dem Profil
+    des Herstellers; die Attrappe hier hat keinen und braucht keinen.
+    """
+    return manufacturer.base_settings(session.profile, quality, None)
+
+
 def test_first_inventory_binding_keeps_the_selected_print_quality(qt_app):
     """Eine erstmals angelegte Lagerkennung bewahrt die bisher wirksame Feinheit."""
     from app.ui.session import Session
@@ -237,6 +246,7 @@ def test_first_inventory_binding_keeps_the_selected_print_quality(qt_app):
     harness.effective_print_settings = lambda: main_window.MainWindow.effective_print_settings(
         harness
     )
+    harness._print_foundation = lambda quality: _table_foundation(session, quality)
     configured = main_window.MainWindow._inventory_settings(harness)
     assert configured.inventory_project_id
     assert configured.quality == "fine"
@@ -275,6 +285,7 @@ def test_quick_assignment_is_one_transaction_and_keeps_the_spool(qt_app, invento
         ),
     )
     harness._inventory_settings = lambda: main_window.MainWindow._inventory_settings(harness)
+    harness._print_foundation = lambda quality: _table_foundation(session, quality)
     harness.effective_print_settings = lambda: main_window.MainWindow.effective_print_settings(
         harness
     )

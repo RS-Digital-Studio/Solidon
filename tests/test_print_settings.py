@@ -28,6 +28,7 @@ from app.core.types import (
     LayerInfo,
     MaterialSlot,
     Polygon,
+    SettingAdvice,
     SliceResult,
 )
 
@@ -481,17 +482,21 @@ def test_a_tall_slim_part_asks_for_a_brim() -> None:
     assert "adhesion.kind" in _paths(entries)
 
 
-@pytest.mark.parametrize(("flavour", "asks"), [("orca", False), ("prusa", True), ("cura", True)])
-def test_the_orca_auto_brim_already_holds_a_part(flavour: str, asks: bool) -> None:
+@pytest.mark.parametrize(
+    ("flavour", "kind", "asks"),
+    [("orca", "auto", False), ("prusa", "none", True), ("cura", "auto", True)],
+)
+def test_the_orca_auto_brim_already_holds_a_part(flavour: str, kind: str, asks: bool) -> None:
     """Orcas Auto-Brim rechnet aus Höhe, Grundfläche und Tempo selbst und hielt
     mehr als Solidons Brim fester Breite: 1,9 statt 0,9 m Randbahn an den
     200 mm hohen Schäften der Minigolf-Platte, 0,93 statt 0,40 m an der
     Waschschüssel (ElegooSlicer, 27.09.2026). Über ihm schweigen die drei
-    Brim-Regeln — kleine Standfläche, kleine Füße, hoch und schmal. PrusaSlicer
-    und Cura haben keinen; dort heißt „automatisch“ die Art aus der Tabelle,
-    und die Regeln bleiben."""
+    Brim-Regeln — kleine Standfläche, kleine Füße, hoch und schmal. Cura hat
+    keinen; dort heißt „automatisch“ die Art aus der Tabelle, und die Regeln
+    bleiben. PrusaSlicer auch nicht, und seine Grundlage liest an Prusas
+    eigenen Druckern „keine“ (``_prusa_adhesion``), die ebenso wenig hält."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
-    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", kind)
     slim = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 200.0))
     cases = (
         advise.advise(settings, profile, _layers(80.0, 80.0, 80.0), flavour=flavour),
@@ -3920,6 +3925,32 @@ def test_an_object_override_carries_the_measures_of_its_group() -> None:
     assert "wall_loops" not in keys
 
 
+def test_an_object_override_carries_only_the_advised_paths() -> None:
+    """Ein Rat je Teil schreibt seine Pfade, nicht deren ganze Gruppe (Durchsicht 0.5.1, B1).
+
+    Über die Gruppe bekam ein Teil mit Passungsrat am Bambu P1S 21 Objektwerte
+    statt vier, darunter die innere Vollfüllung mit 270 statt Bambus 250 mm/s,
+    und der Slicer druckte sie so. Was der Rat nicht nennt, gehört der Platte.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    advice = [
+        SettingAdvice("speed.outer_wall", 30.0, settings.speed.outer_wall, "Passung"),
+        SettingAdvice("shell.wall_count", 4, settings.shell.wall_count, "Passung"),
+        SettingAdvice("infill.density", 0.4, settings.infill.density, "Passung"),
+    ]
+
+    assert set(handover.object_keys(settings, advice, "orca")) == {
+        "outer_wall_speed",
+        "wall_loops",
+        "sparse_infill_density",
+    }
+    assert set(handover.object_keys(settings, advice, "prusa")) == {
+        "external_perimeter_speed",
+        "perimeters",
+        "fill_density",
+    }
+
+
 def test_without_advice_a_part_gets_no_override() -> None:
     settings = print_settings.resolve(profiles.make_profile())
 
@@ -6557,3 +6588,85 @@ def test_opening_curas_window_writes_the_3mf_the_console_writes_an_stl(tmp_path:
     assert window.for_window and not job.for_window
     assert _prepare_plate(window, 0).model.suffix == ".3mf"
     assert _prepare_plate(job, 0).model.suffix == ".stl"
+
+
+def _supported_parts(written: Path, flavour: str) -> set[str]:
+    """Welche Teile der Datei als Objekt- oder Netzwert Stützen tragen."""
+    if flavour == "cura":
+        return {
+            mesh.path.name
+            for mesh in handover.cura_meshes(written)
+            if dict(mesh.settings).get("support_enable") == "true"
+        }
+    member, key = {
+        "orca": ("Metadata/model_settings.config", "enable_support"),
+        "prusa": ("Metadata/Slic3r_PE_model.config", "support_material"),
+    }[flavour]
+    config = ET.fromstring(zipfile.ZipFile(written).read(member))
+    supported: set[str] = set()
+    for node in config.iter("object"):
+        own = {meta.get("key", ""): meta.get("value", "") for meta in node.findall("metadata")}
+        if own.get(key) == "1":
+            supported.add(own.get("name", node.get("id", "")))
+    return supported
+
+
+@pytest.mark.parametrize(
+    ("flavour", "program"),
+    [
+        ("orca", "elegoo-slicer.exe"),
+        ("prusa", "prusa-slicer-console.exe"),
+        ("cura", "CuraEngine.exe"),
+    ],
+)
+def test_an_accepted_suggestion_is_asked_of_the_whole_job_not_one_plate(
+    tmp_path: Path, flavour: str, program: str
+) -> None:
+    """Durchsicht 0.5.1, N1: *Slicen* schreibt je Platte eine Datei. Verlangt
+    der Pilz auf Platte 1 die übernommenen Stützen, bekommt der Klotz auf
+    Platte 2 keine. Bis dahin bekam er sie, weil auf seiner Platte kein Teil
+    sie verlangte — der Ausgangsfehler von Entscheidung G, auf den übrigen
+    Platten zurück.
+
+    Die Gegenprobe steht am Ende: Ist der Klotz allein der ganze Auftrag,
+    gilt der übernommene Vorschlag weiter jedem Teil (B2)."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+    from app.ui.print_settings_dialog import _PlateJob, _prepare_plate
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    stem.apply_translation((0.0, 0.0, 10.0))
+    cap = trimesh.creation.box(extents=(40.0, 40.0, 3.0))
+    cap.apply_translation((0.0, 0.0, 21.5))
+    mushroom = SceneObject(
+        id="obj_1", name="Pilz", mesh=MeshData.of(trimesh.boolean.union([stem, cap])), plate=0
+    )
+    block = replace(_standing_box("Klotz", (30.0, 30.0, 10.0)), plate=1)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "support.style", "auto"
+    )
+    job = _PlateJob(
+        objects=(mushroom, block),
+        plates=(0, 1),
+        folder=tmp_path,
+        name="t",
+        setup=handover.SlicerSetup(tmp_path / program, flavour),
+        settings=settings,
+        profile=profile,
+        slot_profiles={},
+    )
+
+    first, second = _prepare_plate(job, 0), _prepare_plate(job, 1)
+
+    assert len(_supported_parts(first.model, flavour)) == 1, "der Pilz"
+    assert _supported_parts(second.model, flavour) == set()
+    assert "export.part_setting_all" not in {entry.code for entry in second.findings}
+
+    alone = replace(job, objects=(block,), plates=(1,), folder=tmp_path / "allein")
+    alone.folder.mkdir()
+    run = _prepare_plate(alone, 1)
+    assert len(_supported_parts(run.model, flavour)) == 1, "B2: kein Teil verlangt, alle tragen"
+    assert "export.part_setting_all" in {entry.code for entry in run.findings}

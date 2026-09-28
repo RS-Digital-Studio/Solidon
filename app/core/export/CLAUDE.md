@@ -93,7 +93,8 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   die Werte je Netz kommen aus `writer._part_values` (Rücknahme je Netz, `handover.PartSplit`).
   Curas Fenster bekommt dasselbe als 3MF (`writer._cura_window`,
   `threemf.write_assembly(cura=True)`), angefordert vom Fenster-Arbeiter
-  des Druckdialogs (`_PlateJob.for_window`).
+  des Druckdialogs (`_PlateJob.for_window`), mittig auf dem Bett der
+  Maschine, die in Cura aktiv ist (`CuraActiveMachine.bed`).
 - **CuraEngine bekommt seine Maschine aus der Druckerdefinition**
   (`_cura_machine`): mit `PrinterProfile.cura_definition` und installierter
   Datei `-j`, sonst `fdmprinter`; Start- und Endcode aus der Kette, gefüllt von

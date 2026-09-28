@@ -226,8 +226,9 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   Umbruch), hält die Übergabe an, statt still ohne Sperre zu rechnen. Das
   Fenster (`for_window`) bekommt dieselben Netze mit denselben Werten als 3MF
   in Curas Schreibweise (`cura:<schlüssel>` am Objekt, Wahrheitswerte `True`,
-  `handover.for_the_cura_window`), um den halben Bauraum verschoben wie die
-  Konsole — Cura ordnet eine 3MF beim Laden nicht an.
+  `handover.for_the_cura_window`), mittig auf dem Bett der Maschine, die in Cura
+  aktiv ist (`CuraActiveMachine.bed`, ohne sie das des Druckers): Curas Leser
+  zieht deren halbe Bettgröße ab und ordnet eine 3MF beim Laden nicht an.
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein
@@ -291,7 +292,13 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   ein Slicer nicht je Teil annimmt, bleibt plattenweit
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
-  den das Teil bekommt. Eine eigene Wahl gilt der Platte.
+  den das Teil bekommt. Eine eigene Wahl gilt der Platte. Ein Objektwert
+  trägt die Pfade seines Rats und deren Partner (`COUPLED_PATHS`), nie die
+  ganze Gruppe — sonst schriebe er Solidons Tabellenwerte über die des
+  Herstellers (`handover.object_keys`). **Ein übernommener Vorschlag
+  verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
+  jedes (`writer._unserved`, `export.part_setting_all`); die Platte bleibt,
+  damit `slice_model` dieselbe rechnet.
 - **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
   nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
   (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres

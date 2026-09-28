@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
@@ -56,6 +56,7 @@ from app.core.types import (
     Finding,
     MaterialSlot,
     Mesh,
+    ObjectId,
     PrintSettings,
     Profile,
     Scene,
@@ -1214,10 +1215,8 @@ def _part_values(
     wanted = split.per_part | split.unavailable
     if not wanted:
         return _PartValues({}, [], [], split.plate)
-    from app.core.export import handover
     from app.core.knowledge import profiles as profile_table
     from app.core.scene.fits import fit_kinds_for
-    from app.core.slice import advise
 
     result = (
         _body_analysis(
@@ -1245,25 +1244,47 @@ def _part_values(
     )
     applied = [item for item in advice if item.path in split.per_part]
     unavailable = [item for item in advice if item.path in split.unavailable]
+    return _values_for(split, applied, unavailable, flavour)
+
+
+def _values_for(
+    split: PartSplit,
+    applied: Sequence[SettingAdvice],
+    unavailable: Sequence[SettingAdvice],
+    flavour: SlicerFlavour,
+    everywhere: Sequence[SettingAdvice] = (),
+) -> _PartValues:
+    """Objektwerte und wirksame Einstellungen eines Teils aus seinem Rat.
+
+    ``everywhere`` sind übernommene Vorschläge, die beim Export kein Teil für
+    sich verlangt hat (:func:`_unserved`). Sie stehen an diesem Teil wie sein
+    eigener Rat, tragen aber keinen Befund *dieses* Teils.
+    """
+    from app.core.export import handover
+    from app.core.slice import advise
+
     if not split.revert:
+        carried = [*applied, *everywhere]
         return _PartValues(
-            handover.object_keys(split.plate, applied, flavour),
-            applied,
-            unavailable,
-            advise.apply(split.plate, applied),
+            handover.object_keys(split.plate, carried, flavour),
+            list(applied),
+            list(unavailable),
+            advise.apply(split.plate, carried),
         )
     # **Cura umgekehrt**: Die Platte trägt die Übernahme. Was dieses Teil nicht
     # braucht, bekommt es je Netz als Grundlage zurück; was es braucht, mit dem
     # eigenen Wert, wo Cura den ganzen Pfad je Netz annimmt, sonst mit dem der
     # Platte. Die Rücknahme ist kein Rat an den Kunden und trägt keinen Grund.
-    applied = [
-        item
-        if handover.cura_takes_whole(item.path)
-        else replace(item, value=read_path(split.plate, item.path))
-        for item in applied
-    ]
-    needed = {item.path for item in applied}
-    changes = applied + [
+
+    def as_cura_takes_it(item: SettingAdvice) -> SettingAdvice:
+        if handover.cura_takes_whole(item.path):
+            return item
+        return replace(item, value=read_path(split.plate, item.path))
+
+    own = [as_cura_takes_it(item) for item in applied]
+    carried = own + [as_cura_takes_it(item) for item in everywhere]
+    needed = {item.path for item in carried}
+    changes = carried + [
         SettingAdvice(
             path=path,
             value=read_path(split.base, path),
@@ -1277,7 +1298,100 @@ def _part_values(
         for key, value in handover.object_keys(split.plate, changes, flavour).items()
         if key in handover.CURA_PER_MESH
     }
-    return _PartValues(keys, applied, unavailable, advise.apply(split.plate, changes))
+    return _PartValues(keys, own, list(unavailable), advise.apply(split.plate, changes))
+
+
+def _unserved(
+    split: PartSplit | None, accepted: PrintSettings | None, values: Iterable[_PartValues]
+) -> list[SettingAdvice]:
+    """Übernommene Vorschläge je Teil, die beim Export kein Teil bekommt.
+
+    **Ein übernommener Vorschlag verschwindet nie still** (Durchsicht 0.5.1,
+    B2). Der Split setzt einen übernommenen Pfad auf der Platte auf die
+    Grundlage zurück, und der Rat je Teil wird dort gefragt. Schweigt er dort
+    für jedes Teil, landete der Wert nirgends: Am Centauri Carbon 2 wählte der
+    Kunde „Skirt", der Dialog bot dem schlanken Turm „Brim" an, und nach dem
+    Übernehmen hielt Elegoos Auto-Brim der Grundlage den Rat je Teil still —
+    in der Datei stand weder ein Brim am Turm noch einer auf der Platte, und
+    kein Befund sagte es. Dasselbe, wenn Dialog und Export den Rat je Teil
+    verschieden beantworten (Anzeige- gegen Exportnetz).
+
+    Solche Werte gehen deshalb an **jedes** Teil, als Objektwert. Die Platte
+    bleibt, wie der Split sie schreibt: So rechnet der Konsolenlauf
+    (``handover.slice_model``), der den Split ohne die Teile fragt, mit
+    derselben Platte wie die Datei. Was schon die Grundlage trägt, fehlt nicht.
+    """
+    if split is None or accepted is None:
+        return []
+    served = {item.path for entry in values for item in entry.applied}
+    return [
+        SettingAdvice(
+            path=path,
+            value=read_path(accepted, path),
+            was=read_path(split.base, path),
+            reason="",
+        )
+        for path in sorted(split.per_part - served)
+        if not _same_value(read_path(accepted, path), read_path(split.base, path))
+    ]
+
+
+def _served_elsewhere(
+    others: Sequence[SceneObject],
+    paths: frozenset[str],
+    split: PartSplit,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+    document: Document | None,
+    cancelled: CancelToken | None,
+) -> frozenset[str]:
+    """Welche dieser Pfade ein Teil des Auftrags auf einer anderen Platte verlangt.
+
+    Durchsicht 0.5.1, N1: *Slicen* schreibt je Platte eine Datei, und
+    :func:`_unserved` sah nur die eigene. Lag der Pilz, der Stützen verlangt,
+    auf Platte 1, bekam auf Platte 2 jeder Klotz Stützen — der Ausgangsfehler
+    von Entscheidung G, auf den übrigen Platten zurück. Gefragt wird derselbe
+    Rat je Teil wie beim Schreiben (:func:`_part_values`), und nur, solange
+    ein Pfad noch offen ist.
+    """
+    open_paths = set(paths)
+    served: set[str] = set()
+    for entry in others:
+        if not open_paths:
+            break
+        values = _part_values(
+            entry,
+            mesh_for_export(entry.mesh, profile),
+            split,
+            profile,
+            flavour,
+            setup,
+            slot_profiles,
+            document,
+            cancelled,
+        )
+        hit = {item.path for item in values.applied} & open_paths
+        served |= hit
+        open_paths -= hit
+    return frozenset(served)
+
+
+def _finding_value(value: object) -> float | str:
+    """Ein Einstellungswert, wie ihn ein Befund trägt: Zahl, Wahrheitswert oder Wort."""
+    return value if isinstance(value, int | float | str) else str(value)
+
+
+def _same_value(first: object, second: object) -> bool:
+    """Gleich bis auf die Anzeigegenauigkeit bei Zahlen, sonst genau gleich."""
+    if isinstance(first, float) or isinstance(second, float):
+        return (
+            isinstance(first, int | float)
+            and isinstance(second, int | float)
+            and abs(float(first) - float(second)) <= EPS_DISPLAY
+        )
+    return first == second
 
 
 def _body_analysis(
@@ -1324,32 +1438,37 @@ def _body_analysis(
     )
 
 
-def _part_setting_findings(
-    advice: Sequence[SettingAdvice], *, applied: bool = True
-) -> list[Finding]:
-    """Was der Export je Teil selbst entschieden hat, in einem Satz je Grund.
+#: Die Befunde, mit denen der Export sagt, was ein Teil anders bekommt als die
+#: Platte. ``setting`` trägt den Punktpfad; Feldname und Wert in Worten setzt
+#: die Oberfläche dazu (``panels``), denn beide kennt nur der Druckdialog.
+PART_SETTING_CODES: Final = frozenset(
+    {"export.part_setting", "export.part_setting_unavailable", "export.part_setting_all"}
+)
 
-    Einmal je Grund und nicht je Teil: Zwölf Behälter auf zu kleiner Fläche
-    ergäben zwölf gleiche Zeilen, und elf davon verdrängen andere (§26.1).
-    Dieselbe Zurückhaltung wie beim ungedeckelten Schnitt in ``autosplit``.
+
+def _part_setting_findings(
+    advice: Sequence[tuple[ObjectId, SettingAdvice]], *, applied: bool = True
+) -> list[Finding]:
+    """Was der Export je Teil selbst entschieden hat — ein Befund je Teil und Einstellung.
+
+    **Je Teil, mit dessen Kennung**, damit ein Klick im Prüfbericht die Teile
+    wählt, für die es gilt, und der Tooltip sie beim Namen nennt. Gleiche Sätze
+    bündelt der Bericht zu einer Zeile mit ihrer Zahl davor (``panels._bundled``)
+    — zwölf Behälter auf zu kleiner Fläche verdrängen dort nichts (§26.1). Der
+    Satz ist der Grund des Rats; bis zur Durchsicht 0.5.1 (B4) stand für alle
+    vierzehn Pfade derselbe, ohne Teil, und im Tooltip Punktpfad und ``True``.
 
     Bei übernommenen Werten kommt die Schwere vom Rat selbst. ``for_part`` gibt
     ``info``, und das ist richtig: Hier hat die Anwendung etwas getan, das
     der Kunde wissen soll — ein Brim kostet Material und muss abgeschnitten
     werden. Kann die Ausgabe die Werte nicht tragen, wird daraus eine Warnung.
     """
-    counted: dict[tuple[str, str], list[SettingAdvice]] = {}
-    for entry in advice:
-        counted.setdefault((entry.path, str(entry.reason)), []).append(entry)
     return [
         Finding(
             code="export.part_setting" if applied else "export.part_setting_unavailable",
-            severity=group[0].severity if applied else "warning",
+            severity=entry.severity if applied else "warning",
             message=(
-                _(
-                    "Für einzelne Teile gilt eine andere Einstellung als für die Platte — "
-                    "die Geometrie verlangt es."
-                )
+                _("Nur für dieses Teil: {reason}", reason=entry.reason)
                 if applied
                 else _(
                     "Dieser Slicer übernimmt die empfohlenen Einstellungen für einzelne Teile "
@@ -1357,14 +1476,16 @@ def _part_setting_findings(
                     "wählen Sie einen Slicer, der 3MF-Baugruppen liest."
                 )
             ),
+            # Beim übernommenen Wert steht der Grund im Satz; wo der Slicer ihn
+            # nicht trägt, bleibt er im Tooltip, damit der Rat nachprüfbar bleibt.
             values={
-                "objects": len(group),
-                "setting": path,
-                "value": str(group[0].value),
-                "reason": group[0].reason,
+                "setting": entry.path,
+                "value": _finding_value(entry.value),
+                **({} if applied else {"reason": entry.reason}),
             },
+            object_id=part,
         )
-        for (path, _reason), group in sorted(counted.items())
+        for part, entry in advice
     ]
 
 
@@ -1484,6 +1605,7 @@ def write_assembly(
     checked: Sequence[Finding] | None = None,
     cancelled: CancelToken | None = None,
     for_window: bool = False,
+    job: Sequence[SceneObject] | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
@@ -1504,6 +1626,12 @@ def write_assembly(
 
     ``plate`` schränkt auf eine Druckplatte ein; ohne Angabe geht alles hinein,
     was übergeben wurde.
+
+    ``job`` nennt den ganzen Auftrag, wenn diese Datei nur einen Teil davon
+    trägt — *Slicen* schreibt je Platte eine. Ob ein übernommener Vorschlag je
+    Teil von keinem Teil verlangt wird (:func:`_unserved`), entscheidet dann
+    der ganze Auftrag, nicht diese Platte. Ohne Angabe ist die Datei der
+    Auftrag.
 
     ``place_on_bed`` legt die Teile in Bettkoordinaten — für die Übergabe an
     den Slicer, die sie mit ``--arrange 0`` auch durchsetzt. Beim Export einer
@@ -1550,6 +1678,9 @@ def write_assembly(
     exported = {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen}
     findings += _tessellation_finding(chosen, profile)
     split: PartSplit | None = None
+    # Was der Kunde übernommen hat, bevor der Split die Platte zurücksetzt —
+    # daran misst :func:`_unserved`, was sonst verloren ginge.
+    accepted = settings
     slot_profiles: dict[threemf.SlotKey, str] = {}
     if settings is not None:
         from app.core.export import handover
@@ -1577,18 +1708,56 @@ def write_assembly(
         )
         for entry in chosen
     }
+    # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
+    # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
+    # keines des ganzen Auftrags: Verlangt es ein Teil auf einer anderen
+    # Platte, bleibt es auf dieser still (:func:`_served_elsewhere`).
+    everywhere = _unserved(split, accepted, part_values.values())
+    if split is not None and everywhere and job is not None:
+        from app.core.export import handover
+
+        here = {entry.id for entry in chosen}
+        served = _served_elsewhere(
+            [entry for entry in job if entry.id not in here],
+            frozenset(item.path for item in everywhere),
+            split,
+            profile,
+            flavour,
+            setup,
+            handover.chosen_slot_profiles(job, split.plate),
+            document,
+            cancelled,
+        )
+        everywhere = [item for item in everywhere if item.path not in served]
+    if split is not None and everywhere:
+        part_values = {
+            key: _values_for(split, values.applied, values.unavailable, flavour, everywhere)
+            for key, values in part_values.items()
+        }
+        findings += [
+            Finding(
+                code="export.part_setting_all",
+                severity="info",
+                message=_(
+                    "Gilt für alle Teile: Beim Export brauchte kein Teil diesen übernommenen "
+                    "Vorschlag für sich allein."
+                ),
+                values={"setting": item.path, "value": _finding_value(item.value)},
+            )
+            for item in everywhere
+        ]
     # Die Sperre nennt sich selbst, mit dem Namen des Teils
     # (``export.support_blocker``); ein zweiter Satz dazu wäre derselbe.
     findings += _part_setting_findings(
         [
-            advice
-            for values in part_values.values()
-            for advice in values.applied
+            (entry.id, advice)
+            for entry in chosen
+            for advice in part_values[entry.id].applied
             if advice.path != "support.block_channels"
         ]
     )
     findings += _part_setting_findings(
-        [advice for values in part_values.values() for advice in values.unavailable],
+        [(entry.id, advice) for entry in chosen for advice in part_values[entry.id].unavailable],
         applied=False,
     )
     if settings is not None:
@@ -1635,6 +1804,7 @@ def write_assembly(
                 project_name,
                 part_values,
                 profile,
+                setup,
                 cancelled,
             )
             return target, findings + noted
@@ -1880,6 +2050,7 @@ def _cura_window(
     project_name: str,
     part_values: Mapping[str, _PartValues],
     profile: Profile,
+    setup: SlicerSetup | None,
     cancelled: CancelToken | None,
 ) -> tuple[Path, list[Finding]]:
     """Was Curas Fenster öffnet: dieselben Netze mit denselben Werten wie die
@@ -1891,16 +2062,20 @@ def _cura_window(
     :func:`threemf.write_assembly`), die Sperre als Komponente neben ihrem
     Körper, damit sie beim Anordnen mitwandert.
 
-    **An derselben Stelle wie in der Kommandozeile**: Cura ordnet eine 3MF
-    beim Laden nicht an und misst von der Bettecke; Solidon rechnet um die
-    Bettmitte. Verschoben wird deshalb um den halben Bauraum des Druckers —
-    Curas aktive Maschine ist derselbe Drucker, auf den auch das Profil
-    daneben passt (:func:`handover.cura_profile_beside`).
+    **Mittig auf dem Bett der Maschine, die in Cura aktiv ist**: Cura ordnet
+    eine 3MF beim Laden nicht an und zieht die halbe Bettgröße *dieser*
+    Maschine ab; Solidon rechnet um die Bettmitte. Mit dem Bett des Druckers
+    in Solidon lag ein Auftrag an einer anderen Maschine um die halbe
+    Differenz daneben (B5, Durchsicht 0.5.1). Dieselbe Maschine bekommt auch
+    das Profil daneben (:func:`handover.cura_profile_beside`); ist keine
+    bekannt, gilt das Bett des Druckers.
     """
-    from app.core.export import handover
+    from app.core.export import handover, slicer_profiles
 
     blockers, findings = _cura_blockers(chosen, exported, part_values, profile, cancelled)
     width, depth, _height = profile.printer.build_volume
+    active = slicer_profiles.cura_active_machine(setup.executable) if setup is not None else None
+    bed = active.bed if active is not None and active.bed is not None else (width, depth)
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
@@ -1911,9 +2086,7 @@ def _cura_window(
         )
         for entry in chosen
     ]
-    written = _written(
-        target, threemf.write_assembly(parts, project_name, bed=(width, depth), cura=True)
-    )
+    written = _written(target, threemf.write_assembly(parts, project_name, bed=bed, cura=True))
     _log.info("exported %d object(s) as a 3MF for Cura's window to %s", len(chosen), target.name)
     return written, findings
 

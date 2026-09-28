@@ -2094,11 +2094,82 @@ def test_an_accepted_brim_goes_only_to_the_part_that_needs_it(
     )
 
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
-    assert [finding.values["objects"] for finding in treffer] == [1], "nur der Turm"
+    assert [finding.object_id for finding in treffer] == ["obj_1"], "nur der Turm"
     assert _plate_value(written, "orca", "brim_type") == "no_brim", "die Platte bleibt"
     values = _object_values(written, "Metadata/model_settings.config")
     assert values["Turm"]["brim_type"] == "outer_only"
     assert "brim_type" not in values["Platte"]
+
+
+def _two_blocks() -> list[SceneObject]:
+    """Zwei Klötze, die keines Rats je Teil bedürfen: kein Überhang, breiter Fuß."""
+    return [
+        replace(
+            scene_object("obj_1", "Klotz"),
+            mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 10.0))),
+        ),
+        replace(
+            scene_object("obj_2", "Platte"),
+            mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 30.0, 10.0))),
+        ),
+    ]
+
+
+def test_an_accepted_suggestion_no_part_asks_for_goes_to_every_part(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Ein übernommener Vorschlag verschwindet nie still (Durchsicht 0.5.1, B2).
+
+    Fragt der Export den Rat je Teil und keines verlangt ihn — weil die
+    Grundlage des Herstellers schon hält oder weil Dialog und Export an
+    verschiedenen Netzen rechnen —, bekommt jedes Teil den übernommenen Wert
+    als Objektwert, und der Bericht sagt es. Die Platte bleibt die Grundlage,
+    damit Datei und Konsolenlauf dieselbe Platte tragen. Bis dahin stand der
+    Wert nirgends in der Datei.
+    """
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.support.style == "none", "die Vorbedingung des Tests"
+    settings = print_settings.with_accepted(settings, "support.style", "auto")
+
+    written, findings = write_assembly(
+        _two_blocks(), tmp_path, project_name="Klötze", profile=profile, settings=settings
+    )
+
+    assert _plate_value(written, "orca", "enable_support") in ("0", ["0"]), "die Platte bleibt"
+    values = _object_values(written, "Metadata/model_settings.config")
+    assert values["Klotz"]["enable_support"] == "1"
+    assert values["Platte"]["enable_support"] == "1"
+    said = [
+        (entry.values["setting"], entry.values["value"])
+        for entry in findings
+        if entry.code == "export.part_setting_all"
+    ]
+    assert said == [("support.style", "auto")]
+    assert not [entry for entry in findings if entry.code == "export.part_setting"]
+
+
+def test_cura_keeps_an_accepted_suggestion_no_part_asks_for(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Bei Cura trägt die Platte die Übernahme, und ein Netz, das sie nicht
+    braucht, bekommt die Grundlage zurück. Braucht sie keines, nahm jedes sie
+    zurück — der Vorschlag war weg (B2). Jetzt bleibt sie an allen."""
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "support.style", "auto"
+    )
+
+    written, findings = write_assembly(
+        _two_blocks(),
+        tmp_path,
+        project_name="Klötze",
+        profile=profile,
+        settings=settings,
+        flavour="cura",
+    )
+
+    meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(written)}
+    assert [entry.get("support_enable") for entry in meshes.values()] == ["true", "true"], meshes
+    assert "export.part_setting_all" in {entry.code for entry in findings}
 
 
 def test_the_export_adds_no_brim_by_itself(tmp_path: Path, profile: Profile) -> None:
@@ -2168,9 +2239,8 @@ def test_an_accepted_brim_for_a_part_is_said_out_loud(tmp_path: Path, profile: P
 
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
     assert treffer, [finding.code for finding in findings]
-    assert len(treffer) == 1, "einmal je Grund, nicht je Teil"
-    assert treffer[0].values["objects"] == 1, "nur der Turm, nicht die Platte"
-    assert "Brim" in str(treffer[0].values["reason"]), treffer[0].values["reason"]
+    assert [finding.object_id for finding in treffer] == ["obj_1"], "nur der Turm"
+    assert "Brim" in str(treffer[0].message), treffer[0].message
     assert treffer[0].values["setting"] == "adhesion.kind"
     assert treffer[0].values["value"] == "brim"
 
@@ -2198,7 +2268,7 @@ def test_cura_says_when_part_settings_cannot_be_carried(
         assert unavailable[0].severity == "warning"
         assert unavailable[0].values["setting"] == "adhesion.kind"
         assert unavailable[0].values["value"] == "brim"
-        assert unavailable[0].values["objects"] == 1
+        assert unavailable[0].object_id == "obj_1"
         assert str(unavailable[0].values["reason"])
 
 
@@ -2257,8 +2327,8 @@ def test_supports_go_only_to_the_part_whose_geometry_needs_them(
         # gemessen in der Abnahme von Stufe E, PrusaSlicer 2.9.6.
         assert values["Pilz"]["support_material_auto"] == "1"
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
-    assert [(finding.values["objects"], finding.values["setting"]) for finding in treffer] == [
-        (1, "support.style")
+    assert [(finding.object_id, finding.values["setting"]) for finding in treffer] == [
+        ("obj_1", "support.style")
     ]
 
 
@@ -2289,8 +2359,8 @@ def test_cura_takes_supports_back_where_a_part_does_not_need_them(
         "Pilze-part-2.stl": {"support_enable": "false"},
     }
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
-    assert [(finding.values["objects"], finding.values["value"]) for finding in treffer] == [
-        (1, "tree")
+    assert [(finding.object_id, finding.values["value"]) for finding in treffer] == [
+        ("obj_1", "tree")
     ]
 
 
@@ -2328,10 +2398,8 @@ def test_the_scarf_seam_goes_to_the_round_part_only(tmp_path: Path, profile: Pro
     assert values["Rohr"]["seam_slope_type"] == "external"
     assert values["Rohr"]["seam_slope_min_length"] == "20"
     assert "seam_slope_type" not in values["Klotz"]
-    said = [
-        finding.values["objects"] for finding in findings if finding.code == "export.part_setting"
-    ]
-    assert said == [1], "einmal, für das Rohr"
+    said = [finding.object_id for finding in findings if finding.code == "export.part_setting"]
+    assert said == ["obj_1"], "einmal, für das Rohr"
 
     prusa, _findings = written("prusa")
     parts = _object_values(prusa, "Metadata/Slic3r_PE_model.config")
@@ -2387,8 +2455,8 @@ def test_a_part_gets_what_its_second_spool_asks_for(tmp_path: Path, profile: Pro
     assert float(values["Griff"]["outer_wall_speed"]) == pytest.approx(advise.FLEXIBLE_MAX_SPEED)
     assert "outer_wall_speed" not in values["Deckel"]
     treffer = [finding for finding in findings if finding.code == "export.part_setting"]
-    assert [(finding.values["objects"], finding.values["setting"]) for finding in treffer] == [
-        (1, "speed.outer_wall")
+    assert [(finding.object_id, finding.values["setting"]) for finding in treffer] == [
+        ("obj_1", "speed.outer_wall")
     ]
 
 
@@ -3729,6 +3797,49 @@ def test_curas_window_gets_the_blocker_and_the_values_of_each_part(
         {"support_enable": "false"},
     ], "dieselben Werte wie in der Kommandozeile, dort in ihrer Schreibweise"
     assert "export.support_blocker" in {finding.code for finding in findings}
+
+
+def test_curas_window_centres_the_job_on_the_bed_cura_has_active(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curas Leser zieht beim Öffnen die halbe Bettgröße *seiner* aktiven
+    Maschine ab (``ThreeMFReader._read``, Cura 5.13) und ordnet nicht an.
+
+    Auf das Bett des Druckers in Solidon gerechnet, lag ein Auftrag an einer
+    anderen Maschine um die halbe Differenz aus der Mitte: am Ender-3 V3 SE
+    (220 mm) mit dem Centauri Carbon 2 (256 mm) um 18 mm nach hinten rechts
+    (B5, Durchsicht 0.5.1) — ein Auftrag, der auf Curas Bett passte, konnte so
+    über dessen Rand ragen.
+    """
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _executable: slicer_profiles.CuraActiveMachine(
+            name="Ender-3 V3 SE",
+            definition=Path("creality_ender3v3se.def.json"),
+            bed=(220.0, 200.0),
+        ),
+    )
+    assert profile.printer.build_volume[:2] != (220.0, 200.0), "sonst prüft der Test nichts"
+
+    window, _findings = write_assembly(
+        [scene_object("obj_1", "Klotz")],
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=print_settings.resolve(profile),
+        flavour="cura",
+        setup=handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura"),
+        for_window=True,
+    )
+
+    model = ET.fromstring(zipfile.ZipFile(window).read("3D/3dmodel.model"))
+    core = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    assert [item.get("transform") for item in model.iter(f"{core}item")] == [
+        "1 0 0 0 1 0 0 0 1 110 100 0"
+    ]
 
 
 def test_cura_gets_parts_without_a_blocker_when_none_is_taken(

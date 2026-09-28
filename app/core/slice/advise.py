@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
 from app.core.errors import (
@@ -646,11 +646,14 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
 
 
 #: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: Der Skirt
-#: berührt es nicht, und „automatisch“ heißt bei PrusaSlicer und Cura die Art
-#: aus Solidons Tabelle, die das Teil nicht kennt. Wo der Slicer seinen Brim
-#: selbst aus dem Teil rechnet, gilt „automatisch“ als gehalten
-#: (:func:`_unanchored`).
-UNANCHORED: Final = frozenset({"skirt", "auto"})
+#: berührt es nicht, „keine“ auch nicht, und „automatisch“ heißt bei
+#: PrusaSlicer und Cura die Art aus Solidons Tabelle, die das Teil nicht kennt.
+#: Wo der Slicer seinen Brim selbst aus dem Teil rechnet, gilt „automatisch“
+#: als gehalten (:func:`_unanchored`). „Keine“ ist die Grundlage an Prusas
+#: eigenen Druckern (``skirts = 0``, ``brim_width = 0``, der Startcode zieht
+#: eine Spüllinie); ohne sie bekam dort kein Turm einen Brim, auch nicht je
+#: Teil (Durchsicht 0.5.1, B3).
+UNANCHORED: Final = frozenset({"skirt", "auto", "none"})
 
 #: Die Slicerfamilien, deren „automatisch“ den Brim aus dem Teil rechnet: Orcas
 #: ``auto_brim`` aus Höhe, Flächenmomenten der Grundfläche und Tempo, bis 18 mm
@@ -751,16 +754,26 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
     return advice
 
 
-def _from_geometry(
-    settings: PrintSettings,
-    profile: Profile,
-    result: SliceResult,
-    bounds: BoundingBox | None,
-    flavour: SlicerFlavour | None = None,
-) -> list[SettingAdvice]:
-    """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
-    advice: list[SettingAdvice] = []
+@dataclass(frozen=True, slots=True)
+class SupportNeed:
+    """Ob ein Schnitt Stützen braucht, und woran es hängt (:func:`support_need`)."""
 
+    needed: bool
+    islands: tuple[float, ...]
+    """Höhen, auf denen eine Kontur in der Luft beginnt."""
+    model: ModelSupport
+    overhang: float
+    """Überhang in mm² ohne Kanaldecken."""
+    patch: float
+    """Das größte zusammenhängende Überhangstück in mm², ohne Kanaldecken."""
+
+
+def support_need(result: SliceResult) -> SupportNeed:
+    """Braucht dieser Schnitt Stützen? Die eine Antwort für den Vorschlag
+    „Stützen nötig“ (:func:`_from_geometry`) und für *Druckoptimal ausrichten*
+    (``orientation.search``) — zwei Regeln für dieselbe Frage liefen sonst
+    auseinander.
+    """
     islands = island_layers(result)
     # Kanaldecken zählen nicht: Sie tragen sich selbst, und eine Stütze darin
     # käme nicht mehr heraus (:func:`model_support`, die Waschschüssel vom
@@ -805,7 +818,28 @@ def _from_geometry(
     # darin dieselbe Decke wie beim Deckel. Gefragt wird deshalb das größte
     # zusammenhängende Stück (:func:`largest_overhang_patch`); lange freie
     # Stege fängt die Brückenregel darunter weiter ab.
-    needs_support = _may_need_support(result, islands, overhang, patch, model.channel_layers)
+    return SupportNeed(
+        needed=_may_need_support(result, islands, overhang, patch, model.channel_layers),
+        islands=islands,
+        model=model,
+        overhang=overhang,
+        patch=patch,
+    )
+
+
+def _from_geometry(
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult,
+    bounds: BoundingBox | None,
+    flavour: SlicerFlavour | None = None,
+) -> list[SettingAdvice]:
+    """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
+    advice: list[SettingAdvice] = []
+
+    need = support_need(result)
+    islands, model, overhang = need.islands, need.model, need.overhang
+    needs_support = need.needed
 
     if needs_support and settings.support.style == "none":
         # **Stützen an, die Art des Slicers** — außer das Modell verlangt eine

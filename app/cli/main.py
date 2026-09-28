@@ -217,10 +217,17 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
 
 
 def print_findings(findings: Any) -> None:
+    # Gleiche Sätze einmal, mit ihrer Zahl davor — wie im Prüfbericht
+    # (``panels._bundled``). Der Export meldet eine Einstellung je Teil, und
+    # zwölf Behälter auf zu kleiner Fläche ergäben sonst zwölf gleiche Zeilen.
+    counted: dict[tuple[str, str], int] = {}
     for finding in findings:
+        key = (finding.severity, str(finding.message))
+        counted[key] = counted.get(key, 0) + 1
+    for (severity, message), count in counted.items():
         # Nie Farbe allein (§19.1) — im Terminal trägt das Zeichen die Bedeutung.
-        marker = {"info": "-", "warning": "!", "error": "X"}[finding.severity]
-        print(f"  {marker} {finding.message}")
+        marker = {"info": "-", "warning": "!", "error": "X"}[severity]
+        print(f"  {marker} {f'({count}) ' if count > 1 else ''}{message}")
 
 
 def print_report(result: Any) -> None:

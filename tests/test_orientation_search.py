@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import trimesh
@@ -717,6 +718,198 @@ def test_the_umbrella_is_not_left_upside_down() -> None:
         f"{found.best.direction}: {found.best.support_volume:.0f} mm³ "
         f"gegen {upside_down.support_volume:.0f} mm³ kopfüber"
     )
+
+
+def _standing_shaft() -> MeshData:
+    """Ein Schaft wie im Minigolf-Satz, 19,2 x 19,2 x 200 mm, stehend. So braucht
+    er nach der Regel der Druckvorschläge keine Stütze."""
+    return place_on_bed(MeshData.of(trimesh.creation.box(extents=(19.2, 19.2, 200.0))))
+
+
+def _judged_like_the_minigolf_shafts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der grobe Schnitt urteilt wie an Roberts Schäften (28.09.2026): stehend
+    0,51 cm³ Stützraum auf 368 mm², liegend 0,26 cm³ auf 3 840 mm² — liegend
+    gewinnt nach Stützraum und Standfläche. Wie der Körper im Druckraster
+    urteilt, bleibt dem echten Netz (:func:`orientation.stays`)."""
+    from app.core.slice import orientation
+
+    def judged(
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
+        **_kwargs: Any,
+    ) -> orientation.Candidate:
+        standing = direction == (0.0, 0.0, -1.0)
+        area = 368.0 if standing else 3840.0
+        return orientation.Candidate(
+            direction,
+            510.0 if standing else 260.0,
+            area,
+            200.0 if standing else 19.2,
+            footing=area,
+        )
+
+    monkeypatch.setattr(orientation, "judge", judged)
+
+
+def test_a_shaft_that_stands_without_support_keeps_standing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Roberts Minigolf-Satz (28.09.2026): Die Schäfte kamen stehend und wurden
+    stehend gedruckt. Die Suche legte sie hin, weil liegend weniger Stützraum
+    blieb — der liegende Gewinner brauchte aber selbst Stütze, und die
+    stehende Lage nach der Regel der Druckvorschläge keine."""
+    from app.core.knowledge import profiles
+
+    _judged_like_the_minigolf_shafts(monkeypatch)
+
+    found = search(_standing_shaft(), profile=profiles.make_profile("centauri-carbon-2", "pla"))
+
+    assert found.best.direction == (0.0, 0.0, -1.0)
+    # Und der Prüfbericht sagt, warum sich nichts gedreht hat — „gesucht“
+    # allein ließ den Kunden vor einem unveränderten Teil stehen (N5). Die
+    # groben Stützzahlen der Suche stehen nicht daneben: Sie widersprächen
+    # dem Satz, denn geurteilt hat der Schnitt im Druckraster.
+    (said,) = found.findings
+    assert said.code == "orient.kept"
+    assert str(said.message) == "Die Lage bleibt: Das Teil steht und braucht keine Stütze."
+    assert "support" not in said.values and "saved" not in said.values
+
+
+def test_a_part_that_needs_support_standing_is_still_turned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenprobe zum Schaft: Dasselbe grobe Urteil, aber stehend braucht
+    der Körper Stütze — ein T auf seinem Stiel, der Kragarm 35 mm frei. Dann
+    gewinnt die Suche wie bisher."""
+    from app.core.knowledge import profiles
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 40.0))
+    stem.apply_translation((0.0, 0.0, 20.0))
+    arm = trimesh.creation.box(extents=(80.0, 10.0, 5.0))
+    arm.apply_translation((0.0, 0.0, 42.5))
+    tee = place_on_bed(MeshData.of(trimesh.boolean.union([stem, arm])))
+    _judged_like_the_minigolf_shafts(monkeypatch)
+
+    found = search(tee, profile=profiles.make_profile("centauri-carbon-2", "pla"))
+
+    assert found.best.direction != (0.0, 0.0, -1.0)
+
+
+def test_a_plate_on_its_edge_is_laid_flat_although_it_stands() -> None:
+    """Die Gegenseite der Schäfte (Durchsicht 0.5.1): Eine Platte auf ihrer
+    Kante steht und braucht keine Stütze — flach liegend aber genauso wenig,
+    und dort steht sie zehnmal breiter und ist in einem Zehntel der Schichten
+    gedruckt. Die gelieferte Lage bleibt nur gegen einen Gewinner, der selbst
+    Stütze braucht."""
+    from app.core.knowledge import profiles
+
+    on_edge = place_on_bed(apply(corpus("plate_holes.stl"), rotation("y", 90.0)))
+    assert on_edge.bounds.size[2] > 70.0, "die Vorbedingung: sie steht auf der Kante"
+
+    found = search(on_edge, profile=profiles.make_profile("centauri-carbon-2", "pla"))
+
+    assert found.mesh.bounds.size[2] < 10.0, "flach"
+
+
+def _spy_on_stays(monkeypatch: pytest.MonkeyPatch) -> list[MeshData]:
+    """Die Netze, an denen :func:`orientation.stays` urteilt."""
+    from app.core.slice import orientation
+
+    seen: list[MeshData] = []
+    real = orientation.stays
+
+    def spy(mesh: MeshData, *args: Any, **kwargs: Any) -> bool:
+        seen.append(mesh)
+        return real(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(orientation, "stays", spy)
+    return seen
+
+
+def test_the_kept_pose_is_judged_on_the_original_mesh(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Durchsicht 0.5.1, N2: ``stays`` urteilte am Ersatznetz der Suche. Die
+    Ausdünnung erfindet Inseln und Überhänge und verschluckt andere — an vier
+    von dreißig Körpern des Minigolf-Satzes urteilte es anders als das
+    Original und der Prüfbericht. Der Schaft hier ist fein genug, dass die
+    Suche ihn ausdünnt; sonst wäre Ersatznetz gleich Original und der Test
+    prüfte nichts."""
+    from app.core.knowledge import profiles
+    from app.core.slice.orientation import search_proxy
+
+    fine = _standing_shaft().raw
+    while len(fine.faces) <= 40_000:
+        fine = fine.subdivide()
+    body = MeshData.of(fine)
+    assert search_proxy(body) is not body, "die Suche dünnt aus"
+    _judged_like_the_minigolf_shafts(monkeypatch)
+    seen = _spy_on_stays(monkeypatch)
+
+    found = search(body, profile=profiles.make_profile("centauri-carbon-2", "pla"))
+
+    assert seen and all(mesh is body for mesh in seen)
+    assert found.best.direction == (0.0, 0.0, -1.0)
+
+
+def test_a_pose_the_coarse_slice_settles_costs_no_fine_slice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N2, die Zeit: Die Frage nach dem Stützbedarf im Druckraster kostet einen
+    vollen Schnitt. Sie kam vor der Suche an jeden stehenden Körper, auch an
+    den, den der grobe Schnitt schon behielt — den Rundschaft v17 18,3 statt
+    1,3 s. Ein Klotz auf seiner größten Fläche braucht sie nicht."""
+    from app.core.knowledge import profiles
+
+    block = place_on_bed(MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 10.0))))
+    seen = _spy_on_stays(monkeypatch)
+
+    found = search(block, profile=profiles.make_profile("centauri-carbon-2", "pla"))
+
+    assert found.best.direction == (0.0, 0.0, -1.0)
+    assert seen == []
+
+
+def test_a_winner_a_hair_beside_the_delivered_pose_costs_no_fine_slice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N2, ``obj_30`` des Minigolf-Satzes: Seine Bodenfläche zeigt 0,0114 Grad
+    neben der Ausgangslage und gewann über den Gleichstand im Stützraum mit
+    4,5 mm² mehr Standfläche. Eine andere Lage ist das nicht — die Kippung
+    hebt keine Stelle um eine Schicht —, der Vergleich der Richtungen nannte
+    sie aber eine und fragte :func:`orientation.stays`: 2,2 s für ein Nein.
+    Wie ``obj_30`` braucht das T hier stehend Stütze."""
+    from app.core.knowledge import profiles
+    from app.core.slice import orientation
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 40.0))
+    stem.apply_translation((0.0, 0.0, 20.0))
+    arm = trimesh.creation.box(extents=(80.0, 10.0, 5.0))
+    arm.apply_translation((0.0, 0.0, 42.5))
+    tee = MeshData.of(trimesh.boolean.union([stem, arm]))
+    body = place_on_bed(apply(tee, rotation("x", 0.01)))
+    delivered = (0.0, 0.0, -1.0)
+
+    def judged(
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
+        **_kwargs: Any,
+    ) -> orientation.Candidate:
+        upright = direction[2] < -0.999
+        support = (510.0 if direction == delivered else 500.0) if upright else 5000.0
+        area = (368.0 if direction == delivered else 370.0) if upright else 3840.0
+        return orientation.Candidate(direction, support, area, 200.0, footing=area)
+
+    monkeypatch.setattr(orientation, "judge", judged)
+    seen = _spy_on_stays(monkeypatch)
+
+    found = search(body, profile=profiles.make_profile("centauri-carbon-2", "pla"))
+
+    assert found.best.direction != delivered, "die Vorbedingung: die gekippte Bodenfläche gewinnt"
+    assert found.mesh.bounds.size[2] > 40.0, "und das T steht"
+    assert seen == []
 
 
 def _pool_holder() -> MeshData:

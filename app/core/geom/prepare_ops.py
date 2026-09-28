@@ -102,7 +102,7 @@ from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, 
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.scene.placement import SIDE_KEYS, side_of
-from app.core.slice.orientation import DEFAULT_CANDIDATES, search
+from app.core.slice.orientation import DEFAULT_CANDIDATES, search, shape_key, turned_like
 from app.core.types import (
     BaseParams,
     CancelToken,
@@ -17240,7 +17240,7 @@ class OrientParams(BaseParams):
     doc=_(
         "Sucht für jeden Körper der Szene die Lage mit dem geringsten "
         "Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine "
-        "eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils."
+        "eigene Lage, und was schon ohne Stützen steht, bleibt stehen."
     ),
 )
 def orient_for_print_op(ctx: OpContext) -> OpResult:
@@ -17256,22 +17256,33 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
     # eine, und nur wenn es eine gibt; mitnehmen muss die Operation die
     # Merkmale aber für jeden einzelnen.
     matrices: list[Any] = []
+    # **Gleiche Körper teilen ihre Suche** (``orientation.turned_like``): Kopien
+    # tragen dasselbe Netz an anderem Ort, und gesucht wurde für jede neu — am
+    # Minigolf-Satz sechzehnmal für drei Formen. Der Schlüssel ist die Form in
+    # ihrer Lage samt Überhanggrenze; eine gekippte Kopie sucht selbst.
+    searched: dict[tuple[bytes, float], Any] = {}
     for number, entry in enumerate(ctx.inputs):
         mesh = as_mesh_data(entry.mesh)
         try:
             if params.thorough:
-                found = search(
-                    mesh,
-                    count=params.candidates,
-                    seed=ctx.seed,
-                    profile=ctx.profile,
-                    overhang_angle=analysis_limits(ctx.profile, entry)[1],
-                    # Der Fortschritt gehört dem ganzen Auftrag, nicht dem
-                    # einzelnen Körper: Bei vier Teilen liefe der Balken sonst
-                    # viermal von vorn.
-                    progress=_share_of(ctx.progress, number, len(ctx.inputs)),
-                    cancelled=ctx.cancelled,
-                )
+                angle = analysis_limits(ctx.profile, entry)[1]
+                key = (shape_key(mesh), angle)
+                earlier = searched.get(key)
+                found = turned_like(mesh, earlier, ctx.profile) if earlier is not None else None
+                if found is None:
+                    found = search(
+                        mesh,
+                        count=params.candidates,
+                        seed=ctx.seed,
+                        profile=ctx.profile,
+                        overhang_angle=angle,
+                        # Der Fortschritt gehört dem ganzen Auftrag, nicht dem
+                        # einzelnen Körper: Bei vier Teilen liefe der Balken
+                        # sonst viermal von vorn.
+                        progress=_share_of(ctx.progress, number, len(ctx.inputs)),
+                        cancelled=ctx.cancelled,
+                    )
+                    searched[key] = found
                 # **Gedreht wird der echte Körper, nicht das Urteil.**
                 # ``search`` arbeitet auf Dreiecken; ein exakter Körper käme
                 # als Netz zurück, und danach ist kein Verrunden mehr möglich.

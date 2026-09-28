@@ -216,6 +216,18 @@ def _least_support(scored: Sequence[Orientation], skip: Vec3) -> list[Vec3]:
     return chosen
 
 
+def same_pose(first: Vec3, second: Vec3, extent: float, layer_height: float) -> bool:
+    """Ob zwei Richtungen für den Druck dieselbe Lage sind: Keine Stelle des
+    Körpers liegt dadurch um eine Schicht anders zu einer anderen.
+
+    Wie hoch ein Punkt über einem anderen liegt, ist ihr Abstand mal der
+    Richtung; zwischen zwei Richtungen ändert sich das höchstens um den
+    Abstand der Punkte mal den Abstand der Richtungen. ``extent`` ist die
+    Diagonale des Hüllquaders, der größte Abstand zweier Punkte.
+    """
+    return math.dist(first, second) * extent < layer_height
+
+
 def _unique_directions(directions: list[Vec3]) -> list[Vec3]:
     """Entfernt Lagen, die dieselbe Schichtanalyse erneut auslösen würden.
 
@@ -385,6 +397,66 @@ def settled(baseline: Candidate, floor: float, footprint: float, best_footprint:
     if floor > 0.0 and not stands(baseline, floor):
         return False
     return footprint >= best_footprint * (1.0 - SUPPORT_TIE)
+
+
+def stays(
+    mesh: MeshData,
+    baseline: Candidate,
+    profile: Profile,
+    floor: float,
+    overhang_angle: float | None,
+    cancelled: CancelToken | None = None,
+) -> bool:
+    """Bleibt die gelieferte Lage, weil sie steht und keine Stütze braucht?
+
+    **Die Lage, in der ein Teil kommt, hat jemand gewählt.** Roberts
+    Minigolf-Satz (28.09.2026): Die Schäfte, 19,2 x 19,2 x 200 mm, stehen in der
+    STL und wurden stehend gedruckt. Die Suche legte sie hin, weil liegend
+    0,26 statt 0,51 cm³ Stützraum blieben und die Standfläche größer war —
+    nach der Regel der Druckvorschläge braucht aber auch die stehende Lage
+    keine Stütze (keine Insel, 97 mm² Überhang). Liegend verlor der Schaft
+    seine runde Außenwand, jeder brauchte schräg 117 x 181 mm der Platte, und
+    der Satz lag auf drei Platten.
+
+    Gefragt wird deshalb dieselbe Regel wie beim Vorschlag „Stützen nötig“
+    (``advise.support_need``), im Druckraster des Profils statt im groben der
+    Suche — von :func:`search` nur, wenn ihr Gewinner selbst Stütze braucht.
+
+    **Am Original, nicht am Ersatznetz der Suche** — wie der Prüfbericht. Die
+    Ausdünnung erfindet Inseln und Überhänge und verschluckt andere: An vier
+    von dreißig Körpern des Minigolf-Satzes urteilte das Ersatznetz anders als
+    das Original (Durchsicht 0.5.1, N2), am Rundschaft v17 mit einer Insel und
+    289 statt 12 mm² Überhang. Das Urteil merkt sich das Netz
+    (:data:`_STAYS_CACHE`), denn eine zweite Auswertung fragt dasselbe.
+    """
+    if not stands(baseline, floor):
+        return False
+    wall = profile.minimum_wall_thickness
+    name = f"{_STAYS_CACHE}|{profile.printer.layer_height:.6f}|{overhang_angle}|{wall:.6f}"
+    cache = getattr(mesh.raw, "_cache", None)
+    remembered = cache[name] if cache is not None else None
+    if isinstance(remembered, bool):
+        return remembered
+    from app.core.slice import advise
+
+    result = slice_body(
+        mesh,
+        profile.printer.layer_height,
+        first_layer_height=profile.printer.layer_height,
+        overhang_angle=overhang_angle,
+        bridge_from=wall,
+        cancelled=cancelled,
+        support_volume=False,
+    )
+    kept = not advise.support_need(result).needed
+    if cache is not None:
+        cache[name] = kept
+    return kept
+
+
+#: Unter diesem Namen merkt sich ein Netz in ``trimesh``s Cache, ob seine Lage
+#: bleibt (:func:`stays`). Der Cache verfällt, sobald sich die Ecken ändern.
+_STAYS_CACHE = "solidon.orientation.stays"
 
 
 def best_face_candidate(
@@ -582,6 +654,33 @@ def search(
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
     best = best_of(field, floor)
+    # **Was stützenfrei steht, bleibt — gegen einen Gewinner, der selbst
+    # Stütze braucht** (:func:`stays`). Die Minigolf-Schäfte legte die Suche
+    # hin, weil liegend 0,26 statt 0,51 cm³ Stützraum blieben; nach der Regel
+    # der Druckvorschläge braucht aber nur die liegende Lage Stütze. Braucht der
+    # Gewinner keine, bleibt er: Eine Platte auf ihrer Kante steht auch ohne
+    # Stütze, liegt aber flach genauso stützenfrei und zehnmal breiter.
+    # Gefragt wird nur hier, weil die Frage einen vollen Schnitt im Druckraster
+    # kostet; vor der Suche kostete sie den Rundschaft v17 18,3 statt 1,3 s
+    # (Durchsicht 0.5.1, N2).
+    # Eine andere Lage ist nur, was eine Stelle um eine Schicht verschiebt
+    # (:func:`same_pose`): An ``obj_30`` des Minigolf-Satzes gewann die
+    # Bodenfläche 0,0114 Grad neben der Ausgangslage über den Gleichstand im
+    # Stützraum, und die Frage kostete 2,2 s für ein Nein.
+    kept = (
+        profile is not None
+        and baseline is not None
+        and not same_pose(
+            best.direction,
+            baseline.direction,
+            float(np.linalg.norm(mesh.bounds.size)),
+            profile.printer.layer_height,
+        )
+        and best.support_volume > EPS_GEOM
+        and stays(mesh, baseline, profile, floor, overhang_angle, cancelled)
+    )
+    if kept and baseline is not None:
+        best = baseline
     matrix = matrices[best.direction]
     turned = apply(mesh, matrix)
     # Nie negativ, wie :attr:`SearchResult.improvement`: Kippt die
@@ -591,15 +690,26 @@ def search(
     saved = (
         max(0.0, baseline.support_volume - best.support_volume) if baseline is not None else None
     )
+    values = {"candidates": len(directions), "valid": len(scored), "sliced": len(field)}
     findings = [
+        # **Bleibt die Lage, sagt der Befund warum** (Durchsicht 0.5.1, N5):
+        # „gesucht“ ließ den Kunden vor einem unveränderten Teil ohne Grund
+        # stehen. Die Stützzahlen der groben Suche fehlen dort mit Absicht — sie
+        # widersprächen dem Satz, denn geurteilt hat der Schnitt im Druckraster.
         Finding(
+            code="orient.kept",
+            severity="info",
+            message=_("Die Lage bleibt: Das Teil steht und braucht keine Stütze."),
+            values=values,
+            source="internal",
+        )
+        if kept
+        else Finding(
             code="orient.searched",
             severity="info",
             message=_("Ausrichtung über die Schichtanalyse gesucht."),
             values={
-                "candidates": len(directions),
-                "valid": len(scored),
-                "sliced": len(field),
+                **values,
                 "support": round(best.support_volume / 1000.0, 2),
                 **({"saved": round(saved / 1000.0, 2)} if saved is not None else {}),
             },
@@ -649,5 +759,52 @@ def search(
         tried=len(field),
         baseline=baseline,
         findings=findings,
+        transform=matrix,
+    )
+
+
+def shape_key(mesh: MeshData) -> bytes:
+    """Woran zwei Netze dieselbe Form in derselben Lage sind — gleich, wo sie stehen.
+
+    Die Ecken relativ zur kleinsten Ecke, auf einen Mikrometer gerundet, und
+    die Dreiecke. Eine verschobene Kopie trifft denselben Schlüssel, eine
+    gekippte nicht: Für sie gilt eine andere Lage. Trifft die Rundung eine
+    Kante zwischen zwei Werten, fehlt nur der Treffer, und es wird gesucht.
+    """
+    import hashlib
+
+    vertices = np.asarray(mesh.raw.vertices, dtype=np.float64)
+    digest = hashlib.blake2b(digest_size=16)
+    if len(vertices):
+        digest.update(np.round(vertices - vertices.min(axis=0), 6).tobytes())
+    digest.update(np.asarray(mesh.raw.faces, dtype=np.int64).tobytes())
+    return digest.digest()
+
+
+def turned_like(
+    mesh: MeshData, earlier: SearchResult, profile: Profile | None, margin: float = 0.0
+) -> SearchResult | None:
+    """Die Lage einer früheren Suche für ein Netz derselben Form (:func:`shape_key`).
+
+    Kopien tragen dasselbe Netz an anderem Ort, und *Druckoptimal ausrichten*
+    suchte für jede neu — an Roberts Minigolf-Satz sechzehnmal für drei
+    Formen. Übernommen wird die Richtung; wohin der Körper damit aufs Bett
+    kommt, rechnet :func:`search` für ihn selbst (``fitting_transform``).
+    ``None``, wenn die Lage hier nicht passt — dann sucht der Aufrufer.
+    """
+    direction = earlier.best.direction
+    matrix = (
+        print_transform(mesh, direction)
+        if profile is None
+        else fitting_transform(mesh, direction, profile.printer, margin=margin)
+    )
+    if matrix is None:
+        return None
+    return SearchResult(
+        mesh=apply(mesh, matrix),
+        best=earlier.best,
+        tried=earlier.tried,
+        baseline=earlier.baseline,
+        findings=earlier.findings,
         transform=matrix,
     )

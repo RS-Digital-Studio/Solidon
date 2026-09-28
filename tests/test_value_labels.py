@@ -420,6 +420,41 @@ def test_the_estimate_reaches_the_status_bar_too() -> None:
     assert remaining_time(None, 0.25) == ""
 
 
+def test_a_part_setting_names_the_part_the_field_and_the_value(qt_app: object) -> None:
+    """Nach dem Export sagt der Bericht, welches Teil was anders bekommt —
+    mit Feldname und Wert wie im Druckdialog (Durchsicht 0.5.1, B4).
+
+    Bis dahin stand für alle vierzehn Pfade je Teil derselbe Satz, ohne Teil,
+    und im Tooltip „Einstellung: support.style" und „Wert: True".
+    """
+    from app.core.export.writer import _part_setting_findings
+    from app.core.types import SettingAdvice
+    from app.ui.panels import _line_for, _value_lines
+
+    support, seam = _part_setting_findings(
+        [
+            (
+                "obj_1",
+                SettingAdvice(
+                    "support.style",
+                    "auto",
+                    "none",
+                    "Die Überhänge sind zu groß, um sich selbst zu tragen.",
+                ),
+            ),
+            ("obj_2", SettingAdvice("shell.scarf_seam", True, False, "Rund, ohne Ecke.")),
+        ]
+    )
+    names = {"obj_1": "Pilz", "obj_2": "Rohr"}
+
+    line = _line_for(support, names)
+    assert "Pilz" in line and "Stützen: Automatisch" in line, line
+    assert support.object_id == "obj_1", "der Klick wählt das Teil"
+    assert _value_lines(seam) == ["Schrägnaht: an"]
+    for text in (line, _line_for(seam, names), *_value_lines(support), *_value_lines(seam)):
+        assert "support." not in text and "shell." not in text and "True" not in text, text
+
+
 def test_a_path_keeps_its_dots_and_a_number_gets_its_comma(qt_app: object) -> None:
     """Das Dezimaltrennzeichen gehört an Zahlen, nicht an Pfade.
 

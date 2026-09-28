@@ -13506,14 +13506,15 @@ def test_the_arrangement_spacing_knows_the_plate_adhesion(window: MainWindow) ->
     Deckelplatte. Der Dialog öffnet deshalb mit dem Abstand, den die Haftung
     verlangt; ändern lässt er sich weiterhin.
     """
-    from dataclasses import replace as _replace
 
     from app.core.knowledge import print_settings as settings_table
 
     _with_two_objects(window)
     settings = settings_table.resolve(window.session.profile)
-    adhesion = _replace(settings.adhesion, kind="brim", brim_width=5.0)
-    window.session.set_print_settings(_replace(settings, adhesion=adhesion))
+    # Als eigene Wahl: Was nicht gewählt ist, kommt aus der Grundlage (Skirt).
+    settings = settings_table.with_choice(settings, "adhesion.kind", "brim")
+    settings = settings_table.with_choice(settings, "adhesion.brim_width", 5.0)
+    window.session.set_print_settings(settings)
 
     window.run_operation(REGISTRY.get("arrange_bed"))
 
@@ -13526,14 +13527,13 @@ def test_the_arrangement_spacing_knows_the_plate_adhesion(window: MainWindow) ->
 
 def test_without_plate_adhesion_the_spacing_stays_the_default(window: MainWindow) -> None:
     """Ohne Rand kein Aufschlag — die Vorgabe der Operation bleibt stehen."""
-    from dataclasses import replace as _replace
 
     from app.core.knowledge import print_settings as settings_table
 
     _with_two_objects(window)
     settings = settings_table.resolve(window.session.profile)
-    adhesion = _replace(settings.adhesion, kind="none")
-    window.session.set_print_settings(_replace(settings, adhesion=adhesion))
+    settings = settings_table.with_choice(settings, "adhesion.kind", "none")
+    window.session.set_print_settings(settings)
 
     window.run_operation(REGISTRY.get("arrange_bed"))
 

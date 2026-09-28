@@ -1034,6 +1034,41 @@ FILAMENT_FIELDS: tuple[Field, ...] = tuple(
 )
 
 
+#: Die Felder nach Punktpfad — für Beschriftung und Wertanzeige außerhalb des
+#: Dialogs (:func:`setting_title`, :func:`shown_value`).
+_FIELD_OF: Final[dict[str, Field]] = {field.path: field for field in FIELDS}
+
+
+def setting_title(path: str) -> str:
+    """Wie der Dialog eine Einstellung nennt — der Prüfbericht nennt sie genauso.
+
+    Ein Pfad, den kein Feld trägt, bleibt stehen: mehr als nichts, und ein
+    Test sieht ihn.
+    """
+    field = _FIELD_OF.get(path)
+    return str(field.title) if field is not None else path
+
+
+def shown_value(path: str, value: object) -> str:
+    """Ein Wert so, wie er im Feld daneben steht — sonst schlägt der Vorschlag
+    etwas vor, das der Nutzer nicht wiedererkennt, und der Prüfbericht nennt
+    nach dem Export einen anderen Wert als der Dialog davor."""
+    field = _FIELD_OF.get(path)
+    if isinstance(value, str):
+        return choice_label(value)
+    # Vor der Zahl, denn ``True`` ist auch ein ``int``: Ein Haken stand
+    # hier als „0 → 1".
+    if isinstance(value, bool):
+        return str(tr("an") if value else tr("aus"))
+    if field is not None and isinstance(value, int | float):
+        # Mit den Nachkommastellen und dem Komma des Felds daneben — ``:g``
+        # schrieb „0.16 mm" neben „0,160 mm" und „59.5238 mm/s".
+        decimals = 0 if field.kind == "int" else field.decimals
+        number = localised(f"{float(value) * field.factor:.{decimals}f}")
+        return f"{number} {field.unit}".strip()
+    return str(value)
+
+
 def _toggle_of(section: QWidget) -> QToolButton | None:
     """Der Umschalter eines Abschnitts aus :func:`panels.collapsible`.
 
@@ -1773,6 +1808,9 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
+        # Ob ein übernommener Vorschlag je Teil verlangt ist, entscheidet der
+        # ganze Auftrag, nicht diese eine Platte (Durchsicht 0.5.1, N1).
+        job=[entry for entry in objects if entry.plate in job.plates],
     )
     return PlateRun(
         plate=plate,
@@ -6230,22 +6268,8 @@ class PrintSettingsDialog(QDialog):
         )
 
     def _shown(self, path: str, value: object) -> str:
-        """Ein Wert so, wie er im Feld daneben steht — sonst schlägt der
-        Vorschlag etwas vor, das der Nutzer nicht wiedererkennt."""
-        field = self._fields.get(path)
-        if isinstance(value, str):
-            return choice_label(value)
-        # Vor der Zahl, denn ``True`` ist auch ein ``int``: Ein Haken stand
-        # hier als „0 → 1".
-        if isinstance(value, bool):
-            return str(tr("an") if value else tr("aus"))
-        if field is not None and isinstance(value, int | float):
-            # Mit den Nachkommastellen und dem Komma des Felds daneben — ``:g``
-            # schrieb „0.16 mm" neben „0,160 mm" und „59.5238 mm/s".
-            decimals = 0 if field.kind == "int" else field.decimals
-            number = localised(f"{float(value) * field.factor:.{decimals}f}")
-            return f"{number} {field.unit}".strip()
-        return str(value)
+        """Ein Wert so, wie er im Feld daneben steht (:func:`shown_value`)."""
+        return shown_value(path, value)
 
     def _refresh_stock(self) -> None:
         """Die letzte Eingabe gewinnt; gleichzeitig rechnet höchstens ein Arbeiter."""
