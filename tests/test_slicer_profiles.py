@@ -1288,6 +1288,61 @@ def test_cura_names_its_active_machine_with_nozzle_and_spool(
     )
 
 
+def test_cura_names_the_bed_of_its_active_machine(
+    cura: Path, cura_bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curas 3MF-Leser zieht beim Öffnen die halbe Bettgröße der aktiven Maschine ab.
+
+    Das Maß steht in der Erbkette der Definition; was der Nutzer in den
+    Maschineneinstellungen ändert, steht im Container an Stelle sechs
+    (``_ContainerIndexes.DefinitionChanges``) und geht vor.
+    """
+    root = _cura_konfiguration(tmp_path, monkeypatch)
+    _cura_maschine(root, "Meine Werkstatt", "abax_pri3")
+    _write(
+        cura_bestand / "definitions" / "fdmprinter.def.json",
+        {
+            "version": 2,
+            "name": "FDM Drucker",
+            "metadata": {"visible": False},
+            "settings": {
+                "machine_settings": {
+                    "children": {
+                        "machine_width": {"default_value": 100},
+                        "machine_depth": {"default_value": 100},
+                    }
+                }
+            },
+        },
+    )
+    _write(
+        cura_bestand / "definitions" / "abax_pri3.def.json",
+        {
+            "version": 2,
+            "name": "Abax PRi3",
+            "inherits": "fdmprinter",
+            "metadata": {"visible": True, "manufacturer": "Abax 3D Technologies"},
+            "overrides": {"machine_width": {"default_value": 220}},
+        },
+    )
+
+    found = sp.cura_active_machine(cura)
+    assert found is not None
+    assert found.bed == (220.0, 100.0), "die Breite vom Drucker, die Tiefe aus der Wurzel"
+
+    changes = root / "definition_changes"
+    changes.mkdir()
+    (changes / "Meine+Werkstatt_settings.inst.cfg").write_text(
+        "[general]\nversion = 4\nname = Meine Werkstatt_settings\ndefinition = abax_pri3\n\n"
+        "[metadata]\ntype = definition_changes\nsetting_version = 27\n\n"
+        "[values]\nmachine_depth = 250\n",
+        encoding="utf-8",
+    )
+    found = sp.cura_active_machine(cura)
+    assert found is not None
+    assert found.bed == (220.0, 250.0), "die Maschineneinstellungen des Nutzers gehen vor"
+
+
 def test_cura_without_a_set_up_printer_names_no_machine(
     cura: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

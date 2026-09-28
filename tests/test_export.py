@@ -3799,6 +3799,49 @@ def test_curas_window_gets_the_blocker_and_the_values_of_each_part(
     assert "export.support_blocker" in {finding.code for finding in findings}
 
 
+def test_curas_window_centres_the_job_on_the_bed_cura_has_active(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Curas Leser zieht beim Öffnen die halbe Bettgröße *seiner* aktiven
+    Maschine ab (``ThreeMFReader._read``, Cura 5.13) und ordnet nicht an.
+
+    Auf das Bett des Druckers in Solidon gerechnet, lag ein Auftrag an einer
+    anderen Maschine um die halbe Differenz aus der Mitte: am Ender-3 V3 SE
+    (220 mm) mit dem Centauri Carbon 2 (256 mm) um 18 mm nach hinten rechts
+    (B5, Durchsicht 0.5.1) — ein Auftrag, der auf Curas Bett passte, konnte so
+    über dessen Rand ragen.
+    """
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _executable: slicer_profiles.CuraActiveMachine(
+            name="Ender-3 V3 SE",
+            definition=Path("creality_ender3v3se.def.json"),
+            bed=(220.0, 200.0),
+        ),
+    )
+    assert profile.printer.build_volume[:2] != (220.0, 200.0), "sonst prüft der Test nichts"
+
+    window, _findings = write_assembly(
+        [scene_object("obj_1", "Klotz")],
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=print_settings.resolve(profile),
+        flavour="cura",
+        setup=handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura"),
+        for_window=True,
+    )
+
+    model = ET.fromstring(zipfile.ZipFile(window).read("3D/3dmodel.model"))
+    core = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    assert [item.get("transform") for item in model.iter(f"{core}item")] == [
+        "1 0 0 0 1 0 0 0 1 110 100 0"
+    ]
+
+
 def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
     tmp_path: Path, profile: Profile
 ) -> None:

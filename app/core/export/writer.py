@@ -1804,6 +1804,7 @@ def write_assembly(
                 project_name,
                 part_values,
                 profile,
+                setup,
                 cancelled,
             )
             return target, findings + noted
@@ -2049,6 +2050,7 @@ def _cura_window(
     project_name: str,
     part_values: Mapping[str, _PartValues],
     profile: Profile,
+    setup: SlicerSetup | None,
     cancelled: CancelToken | None,
 ) -> tuple[Path, list[Finding]]:
     """Was Curas Fenster öffnet: dieselben Netze mit denselben Werten wie die
@@ -2060,16 +2062,20 @@ def _cura_window(
     :func:`threemf.write_assembly`), die Sperre als Komponente neben ihrem
     Körper, damit sie beim Anordnen mitwandert.
 
-    **An derselben Stelle wie in der Kommandozeile**: Cura ordnet eine 3MF
-    beim Laden nicht an und misst von der Bettecke; Solidon rechnet um die
-    Bettmitte. Verschoben wird deshalb um den halben Bauraum des Druckers —
-    Curas aktive Maschine ist derselbe Drucker, auf den auch das Profil
-    daneben passt (:func:`handover.cura_profile_beside`).
+    **Mittig auf dem Bett der Maschine, die in Cura aktiv ist**: Cura ordnet
+    eine 3MF beim Laden nicht an und zieht die halbe Bettgröße *dieser*
+    Maschine ab; Solidon rechnet um die Bettmitte. Mit dem Bett des Druckers
+    in Solidon lag ein Auftrag an einer anderen Maschine um die halbe
+    Differenz daneben (B5, Durchsicht 0.5.1). Dieselbe Maschine bekommt auch
+    das Profil daneben (:func:`handover.cura_profile_beside`); ist keine
+    bekannt, gilt das Bett des Druckers.
     """
-    from app.core.export import handover
+    from app.core.export import handover, slicer_profiles
 
     blockers, findings = _cura_blockers(chosen, exported, part_values, profile, cancelled)
     width, depth, _height = profile.printer.build_volume
+    active = slicer_profiles.cura_active_machine(setup.executable) if setup is not None else None
+    bed = active.bed if active is not None and active.bed is not None else (width, depth)
     parts = [
         threemf.AssemblyPart(
             mesh=exported[entry.id],
@@ -2080,9 +2086,7 @@ def _cura_window(
         )
         for entry in chosen
     ]
-    written = _written(
-        target, threemf.write_assembly(parts, project_name, bed=(width, depth), cura=True)
-    )
+    written = _written(target, threemf.write_assembly(parts, project_name, bed=bed, cura=True))
     _log.info("exported %d object(s) as a 3MF for Cura's window to %s", len(chosen), target.name)
     return written, findings
 

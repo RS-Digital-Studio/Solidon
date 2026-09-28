@@ -520,6 +520,10 @@ _CURA_MATERIAL_INDEX: Final = "4"
 #: (``_ContainerIndexes.Variant``).
 _CURA_VARIANT_INDEX: Final = "5"
 
+#: An welcher Stelle der Maschinenstapel hält, was der Nutzer in den
+#: Maschineneinstellungen ändert (``_ContainerIndexes.DefinitionChanges``).
+_CURA_DEFINITION_CHANGES_INDEX: Final = "6"
+
 #: So heißen leere Stellen eines Stapels — ein Fach ohne Spule, eine Maschine
 #: ohne Düsenvarianten.
 _CURA_EMPTY: Final = frozenset({"", "empty_material", "empty_variant"})
@@ -578,13 +582,15 @@ class CuraActiveMachine:
     ``definition`` ist seine Druckerdefinition, ``variant`` der Name der Düse
     im ersten Fach („0.4mm Nozzle"), ``material_type`` die Art der Spule darin
     („PLA"). Leer heißt: Die Maschine hat keine Düsenvarianten, oder das Fach
-    ist leer.
+    ist leer. ``bed`` ist Breite und Tiefe ihres Betts — ``None``, wenn die
+    Erbkette sie nicht als Zahl führt.
     """
 
     name: str
     definition: Path
     variant: str = ""
     material_type: str = ""
+    bed: tuple[float, float] | None = None
 
 
 def cura_active_machine(executable: Path) -> CuraActiveMachine | None:
@@ -633,8 +639,39 @@ def cura_active_machine(executable: Path) -> CuraActiveMachine | None:
             material_type=_cura_material_type(
                 first.get(_CURA_MATERIAL_INDEX, ""), resources, folder
             ),
+            bed=_cura_bed(
+                folder, stack.get(_CURA_DEFINITION_CHANGES_INDEX, ""), definition, installed
+            ),
         )
     return None
+
+
+def _cura_bed(
+    folder: Path, changes: str, definition: Path, installed: Path
+) -> tuple[float, float] | None:
+    """Breite und Tiefe des Betts: die Maschineneinstellungen vor der Erbkette.
+
+    Curas 3MF-Leser zieht beim Öffnen die halbe Bettgröße der aktiven Maschine
+    ab (``ThreeMFReader._read``, Cura 5.13) — genau diese Werte, auch die, die
+    der Nutzer selbst eingetragen hat.
+    """
+    values: dict[str, Any] = {}
+    try:
+        values.update(_cura_definition_values(definition, (installed,)))
+    except ExternalToolError:
+        _log.debug("the definition chain of %s does not resolve", definition.name)
+    place = folder / "definition_changes"
+    for path in sorted(place.glob("*.inst.cfg")) if place.is_dir() else ():
+        if unquote_plus(path.name.removesuffix(".inst.cfg")) != changes:
+            continue
+        parsed = _read_ini(path)
+        if parsed is not None and parsed.has_section("values"):
+            values.update(parsed["values"])
+    try:
+        width, depth = float(values["machine_width"]), float(values["machine_depth"])
+    except KeyError, TypeError, ValueError:
+        return None
+    return (width, depth) if width > 0.0 and depth > 0.0 else None
 
 
 def _cura_machine_stack(folder: Path, machine: str) -> dict[str, str]:

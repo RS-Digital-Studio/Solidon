@@ -220,8 +220,9 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   Umbruch), hält die Übergabe an, statt still ohne Sperre zu rechnen. Das
   Fenster (`for_window`) bekommt dieselben Netze mit denselben Werten als 3MF
   in Curas Schreibweise (`cura:<schlüssel>` am Objekt, Wahrheitswerte `True`,
-  `handover.for_the_cura_window`), um den halben Bauraum verschoben wie die
-  Konsole — Cura ordnet eine 3MF beim Laden nicht an.
+  `handover.for_the_cura_window`), mittig auf dem Bett der Maschine, die in Cura
+  aktiv ist (`CuraActiveMachine.bed`, ohne sie das des Druckers): Curas Leser
+  zieht deren halbe Bettgröße ab und ordnet eine 3MF beim Laden nicht an.
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein
