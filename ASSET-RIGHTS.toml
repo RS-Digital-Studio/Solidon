@@ -52,6 +52,31 @@ platforms = ["windows", "macos", "linux"]
 status = "cleared"
 
 [[asset]]
+pattern = "app/images/manual/*/guide-*.webp"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahmen der eigenen Anwendung mit den Nummern und Rahmen der Bildanleitungen, an eigenen Prüfkörpern und Beispielprojekten"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_guides.py"
+inputs = [
+  "app/core/guides.py",
+  "app/ui",
+  "app/i18n/locales",
+  "app/examples",
+  "tests/data/meshes/broken_open.stl",
+  "tests/data/meshes/plate_holes.stl",
+  "tests/data/meshes/oversized.stl",
+  "tests/data/meshes/partially_open.stl",
+  "tests/data/meshes/broken_selfint.stl",
+]
+derivative_status = "generated_from_own_sources"
+evidence = ["app/images/CLAUDE.md", "tools/make_guides.py", "tests/data/README.md"]
+redistribution_right = "confirmed_in_product"
+platforms = ["windows", "macos", "linux"]
+status = "cleared"
+
+[[asset]]
 paths = [
   "app/examples/aushoehlen-und-teilen.p3d",
   "app/examples/dose-mit-deckel.p3d",
