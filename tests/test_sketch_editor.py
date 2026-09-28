@@ -2537,15 +2537,28 @@ def test_the_line_says_whether_the_outline_is_closed(qt_app: QApplication) -> No
     assert canvas.status_text().startswith("Geschlossen"), canvas.status_text()
 
 
+def _rectangle_without_measures() -> Sketch:
+    """Ein Rechteck aus dem Formenmenü, dem Länge und Breite fehlen.
+
+    Die Grundform bringt beide Maße und einen Festpunkt mit und ist damit
+    bestimmt. Die zwei Tests darunter prüften bis ``e8f9f574d`` gegen dieses
+    bestimmte Rechteck auf „Freiheitsgrade“ — das stand damals auch im Satz
+    „alle Freiheitsgrade vergeben“ und traf zufällig. Ohne die zwei Maße sind
+    genau zwei offen.
+    """
+    made = shapes.rectangle(40.0, 20.0)
+    return replace(made, constraints=tuple(c for c in made.constraints if c.kind != "distance"))
+
+
 def test_a_closed_outline_still_counts_its_degrees_of_freedom(qt_app: QApplication) -> None:
     """Die Freiheitsgrade bleiben in der Zeile — sie sind die zweite Frage,
     nicht die abgeschaffte."""
     canvas = SketchCanvas()
-    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    canvas.insert_shape(_rectangle_without_measures())
 
     line = canvas.status_text()
     assert line.startswith("Geschlossen"), line
-    assert "Maße fehlen" in line or "Maß fehlt" in line, line
+    assert "Noch 2 Maße fehlen" in line, line
 
 
 def test_a_selection_can_be_moved_in_one_go(qt_app: QApplication) -> None:
@@ -4291,10 +4304,10 @@ def test_the_line_translates_its_number_into_a_consequence(qt_app: QApplication)
     CAD-Kenntnisse".
     """
     canvas = SketchCanvas()
-    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    canvas.insert_shape(_rectangle_without_measures())
 
     line = canvas.status_text()
-    assert "Maße fehlen" in line or "Maß fehlt" in line, "die Zahl bleibt: " + line
+    assert "Noch 2 Maße fehlen" in line, "die Zahl bleibt: " + line
     assert "Freiheitsgrad" not in line, "Slicer-Kunden kennen das Wort nicht (KUNDE-08): " + line
     assert canvas.outline_advice() in line, "und der Satz steht dahinter: " + line
     assert "Körper" in canvas.outline_advice(), canvas.outline_advice()

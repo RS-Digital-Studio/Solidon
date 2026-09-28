@@ -439,7 +439,10 @@ für echte Sichtbarkeit `isVisibleTo(eltern)`.
   das Baum-Vorschaubild nur das Raster (`mesh_ops.raster_for_display`).
 * **Freigegeben heißt: nichts mehr anfangen** — `ObjectTree.release` leert den
   Vorrat, bevor es wartet; sonst überlebt ein nachgestarteter Zeichner den
-  Prozess.
+  Prozess. Das gilt auch für den Slot eines späten Ergebnisses: Wer daraus
+  etwas startet (`_foundation_found` → zweite Auswertung), fragt
+  `_close_requested` wie der Start selbst — sonst läuft beim Beenden ein
+  Faden, dessen Frage niemand beantwortet.
 
 ### Ein Arbeiter ist nur nebenläufig, wenn er den GIL hergibt
 

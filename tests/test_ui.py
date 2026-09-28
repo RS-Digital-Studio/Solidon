@@ -1383,6 +1383,8 @@ def test_outline_import_waits_for_the_shown_contours(
     path = tmp_path / "contours.svg"
     path.write_bytes(SOURCE)
     window.open_path(path)
+    # Gelesen und geplant wird im Arbeiter (RM-224); die Konturwahl öffnet danach.
+    assert window.session.wait_for_idle()
     dialog = window.findChild(OutlineDialog)
     assert dialog is not None
     assert not window.session.history.operations
@@ -9177,9 +9179,20 @@ def test_partial_repair_runs_from_the_report_and_undoes(
 
     repaired = window.session.last_result.scene.objects[object_id].mesh
     assert open_edge_count(repaired) == 16
-    lines = [window.report.list.item(row).text() for row in range(window.report.list.count())]
-    assert any("3 von 19 offenen Kanten geschlossen; 16 bleiben offen" in line for line in lines)
-    assert any("Offene Kanten: 16" in line for line in lines)
+    # Die Bilanz steht seit ``2b83f72a5`` in zwei Befunden statt in dem einen
+    # Satz „3 von 19 offenen Kanten geschlossen; 16 bleiben offen“: Was
+    # geschlossen wurde (mit Kanten davor und danach), und was offen bleibt.
+    shown = [
+        window.report.list.item(row).data(Qt.ItemDataRole.UserRole)
+        for row in range(window.report.list.count())
+    ]
+    codes = [finding.code for finding in shown]
+    filled = next((finding for finding in shown if finding.code == "repair.holes_filled"), None)
+    assert filled is not None, codes
+    assert (filled.values["before"], filled.values["after"]) == (19, 16)
+    still = next((finding for finding in shown if finding.code == "repair.still_open"), None)
+    assert still is not None, codes
+    assert still.values["open_edges"] == 16
 
     choose("repair.still_open")
     location_button = button(errors.SHOW_LOCATIONS.label)
@@ -14027,7 +14040,11 @@ def test_a_resize_before_the_toolbar_exists_does_not_end_the_start(qt_app: QAppl
     try:
         early.resizeEvent(QResizeEvent(QSize(800, 600), QSize(640, 480)))
     finally:
+        # Gleich löschen, nicht erst im Abbau der Suite: Der fragt jedes
+        # Hauptfenster nach ``release``, und ein halb gebautes hat nichts zum
+        # Loslassen — es endete dort mit ``AttributeError`` (``_ask_dialog``).
         early.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_the_window_title_names_the_model_once_it_is_read(window: MainWindow) -> None:
@@ -18979,9 +18996,12 @@ def test_an_edge_question_shows_the_edge_line_in_the_dialog_and_emphasises_by_to
     )
 
     class Answer(module.AskDialog):
-        def __init__(self, question, choices, parent=None, *, labels=None):
+        # ``**rest`` nimmt ``as_buttons`` mit (seit ``c2ebc0fe0``) und jedes
+        # weitere Schlüsselwort: Ohne es endete ``_on_ask`` am Ersatzdialog mit
+        # einem ``TypeError`` statt mit der Frage.
+        def __init__(self, question, choices, parent=None, *, labels=None, **rest):
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels)
+            super().__init__(question, choices, parent, labels=labels, **rest)
 
         def exec(self):
             shown.append(("dialog", None))
@@ -19037,9 +19057,12 @@ def test_a_feature_question_names_its_candidates_like_the_tree(
     monkeypatch.setattr(window.viewport, "show_candidates", lambda *args: None)
 
     class Answer(module.AskDialog):
-        def __init__(self, question, choices, parent=None, *, labels=None):
+        # ``**rest`` nimmt ``as_buttons`` mit (seit ``c2ebc0fe0``) und jedes
+        # weitere Schlüsselwort: Ohne es endete ``_on_ask`` am Ersatzdialog mit
+        # einem ``TypeError`` statt mit der Frage.
+        def __init__(self, question, choices, parent=None, *, labels=None, **rest):
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels)
+            super().__init__(question, choices, parent, labels=labels, **rest)
 
         def exec(self):
             self.list.setCurrentRow(0)
@@ -19476,3 +19499,37 @@ def test_a_closing_window_takes_no_late_feature_answer(
 
     assert window._answers_worker is None
     assert reported == [], "das schließende Fenster meldete einen Fehler, den niemand liest"
+
+
+@pytest.mark.parametrize("closing", [False, True])
+def test_a_late_manufacturer_foundation_starts_no_run_in_a_closing_window(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, closing: bool
+) -> None:
+    """Kommt die Herstellergrundlage nach ``release``, wird nicht mehr ausgewertet.
+
+    Seit ``e0e3cf982`` (Entscheidung L) wertet das Fenster ein zweites Mal
+    aus, wenn die Grundlage eine andere Stützschwelle bringt als die Tabelle,
+    mit der der erste Lauf rechnete. ``_start_foundation`` fragte nach dem
+    Schließen, ``_foundation_found`` nicht: Im Abbau der Suite startete eine
+    späte Grundlage einen Auswertungsarbeiter, dessen Frage niemand mehr
+    beantwortete, und der Prozess endete danach mit 0xC0000409 — jeder Lauf von
+    ``test_active_matching_questions_end_when_their_evaluation_is_invalidated``
+    in den Varianten mit neuem Lauf. Die Gegenprobe ohne Schließen wertet aus.
+    """
+    from app.core.export import manufacturer
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+
+    runs: list[bool] = []
+    key = ("grundlage",)
+    window.session.last_result = EvaluationResult(scene=Scene(objects={}))
+    monkeypatch.setattr(window, "_foundation_key", lambda _quality: key)
+    monkeypatch.setattr(window.session, "evaluation_follows", lambda _settings: False)
+    monkeypatch.setattr(window.session, "evaluate_async", lambda: runs.append(True))
+    foundation = manufacturer.Foundation(settings=window.effective_print_settings())
+    if closing:
+        window.release()
+
+    window._foundation_found(key, foundation)
+
+    assert runs == ([] if closing else [True])

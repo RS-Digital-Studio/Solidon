@@ -195,18 +195,23 @@ def keep_imports_open(monkeypatch: pytest.MonkeyPatch, session: Any) -> None:
     der Suite keinen offenen Körper mehr, an dem sich das prüfen ließe.
 
     Abgeschaltet wird nur das Schließen der Leseoperation (``mend=False``),
-    nicht die Reparatur als Operation. **Und die Sitzung bekommt einen eigenen
+    nicht die Reparatur als Operation — und zwar **gegen** das, was die
+    Leseoperation übergibt: Seit ``2b83f72a5`` reicht sie ``mend`` aus ihrem
+    Parameter selbst weiter (RM-241), und ein ``partial(..., mend=False)``
+    wurde davon still überschrieben; vier Fenstertests bekamen danach einen
+    geschlossenen Körper. **Und die Sitzung bekommt einen eigenen
     Cache nur im Speicher:** Der Plattencache der Suite ist prozessweit, und
     ein früherer Test hat dieselbe Datei vielleicht schon geschlossen
     eingelesen — sein Ergebnis käme sonst aus dem Cache statt aus der
     Leseoperation.
     """
-    from functools import partial
-
     from app.core.ingest import loader, ops
     from app.core.scene.cache import ResultCache
 
-    monkeypatch.setattr(ops, "normalise", partial(loader.normalise, mend=False))
+    def left_open(*args: Any, **kwargs: Any) -> Any:
+        return loader.normalise(*args, **{**kwargs, "mend": False})
+
+    monkeypatch.setattr(ops, "normalise", left_open)
     session.cache = ResultCache()
 
 
@@ -220,21 +225,28 @@ def fill_only_small_holes(monkeypatch: pytest.MonkeyPatch) -> None:
     Die Testnetze haben solche Ränder nicht; dieser Schalter stellt den
     Teilerfolg nach, damit sein Weg durch die Oberfläche (Restbefund, *Stellen
     zeigen*, kein Reparaturring) geprüft bleibt.
+
+    Ersetzt wird ``_filled_rounds``, die Runden des Ringfüllers: Seit
+    ``2b83f72a5`` ruft die Reparatur sie direkt und nicht mehr über
+    ``_filled_with_count``; der alte Schalter griff danach ins Leere, und die
+    Reparatur schloss alles. ``fill_holes`` geht weiter über denselben Weg.
     """
     import trimesh
 
     from app.core.geom import repair
 
-    def filled(mesh: Any) -> tuple[Any, bool, int]:
-        before = repair.open_edge_count(mesh)
-        if not before:
-            return mesh, False, 0
+    def rings(mesh: Any) -> int:
+        return len(mesh.raw.outline().entities) if repair.open_edge_count(mesh) else 0
+
+    def filled(mesh: Any, cancelled: Any = None, *, keep_wide: bool = False) -> Any:
+        if not repair.open_edge_count(mesh):
+            return repair._Filled(mesh)
         raw = mesh.raw.copy()
         trimesh.repair.fill_holes(raw)
         result = mesh.replacing(raw)
-        return result, repair.open_edge_count(result) < before, 0
+        return repair._Filled(result, closed=max(0, rings(mesh) - rings(result)))
 
-    monkeypatch.setattr(repair, "_filled_with_count", filled)
+    monkeypatch.setattr(repair, "_filled_rounds", filled)
 
 
 # --- Die schräge Senkbohrung (RM-187) ----------------------------------------------

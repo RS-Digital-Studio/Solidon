@@ -667,3 +667,76 @@ def test_changed_group_choice_invalidates_following_geometry_but_reuses_the_raw_
     assert final.complete and cold.statistics.disk_hits > 0
     marker = next(body for body in final.scene.objects.values() if body.name == "Markierung")
     assert marker.mesh.bounds.centre[0] == pytest.approx(3.0)
+
+
+def _textured_plate(profile, faces_after: int):
+    """Die Lochplatte aus dem Korpus, ihre Oberseite und ein Stapel mit Texturschritten.
+
+    Der erste Texturschritt überzieht die ganze Oberseite mit Rippen und ersetzt
+    sie dabei durch viele neue Flächen; ``faces_after`` weitere Schritte nennen
+    danach dieselbe alte Oberseite.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.scene.placement import top_face
+    from app.core.scene.project import ProjectSources
+    from app.core.types import Source
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project.sources["src_1"] = (meshes / "plate_holes.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    loaded = evaluate(project.document, profile, sources=sources, cache=cache)
+    body = next(iter(loaded.scene.objects))
+    face = top_face(loaded.scene.objects[body].features)
+    assert face is not None
+    texture = {"coverage": "whole_face", "face": face.id, "pattern": "rib", "pitch": 5.0}
+    for _step in range(1 + faces_after):
+        history.apply(
+            "Muster", [OperationDraft(op="apply_texture", inputs=(body,), params=texture)]
+        )
+    return project, cache, sources, face.id
+
+
+def test_a_step_is_not_asked_where_its_own_face_went(profile):
+    """Wer eine Fläche texturiert, wird nicht gefragt, welche neue Fläche sie fortführt.
+
+    Der Verweis des Texturschritts auf die Oberseite wird an seinem Eingang
+    aufgelöst; nach dem Schritt braucht sie niemand mehr (``_needed_after``).
+    Gezählt wurde für die Frage trotzdem jeder Verweis im Stapel, und die Textur
+    über die ganze Oberseite fragte „Welches Merkmal entspricht face_2?“ mit
+    dreizehn Rippenflächen zur Wahl — im Fenster ein modaler Dialog nach jedem
+    Übernehmen, in ``test_operation_ui`` ein Test, der auf ihn wartete.
+    """
+    project, cache, sources, _face = _textured_plate(profile, faces_after=0)
+
+    def refuse(question, choices):
+        pytest.fail(f"nach dem eigenen Verweis gefragt: {question}")
+
+    result = evaluate(project.document, profile, sources=sources, cache=cache, ask=refuse)
+
+    assert result.stopped_at is None
+
+
+def test_a_later_step_on_the_same_face_still_gets_its_question(profile):
+    """Die Gegenprobe: Nennt ein **späterer** Schritt die ersetzte Oberseite, bleibt die
+    Frage (§21.3) — die Lebensdauer entscheidet, nicht ein Verbot."""
+    project, cache, sources, face = _textured_plate(profile, faces_after=1)
+    asked: list[str] = []
+
+    def ask(question, choices):
+        asked.append(question)
+        return choices[0]
+
+    evaluate(project.document, profile, sources=sources, cache=cache, ask=ask)
+
+    assert asked, "der zweite Schritt braucht die Oberseite nach dem ersten"
+    assert f"{face}?" in asked[0]

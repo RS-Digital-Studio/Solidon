@@ -19985,6 +19985,13 @@ class MainWindow(QMainWindow):
         self._foundation_cache = (key, foundation)
         if self._foundation_pending == key:
             self._foundation_pending = None
+        # **Ein Fenster, das losgelassen wird, fängt nichts mehr an** — wie
+        # ``_start_foundation``. Die Grundlage kam sonst nach ``release`` an,
+        # und die zweite Auswertung (Entscheidung L) startete einen Arbeiter an
+        # der Sitzung eines geschlossenen Fensters: eine Frage, die niemand
+        # beantwortet, und ein laufender Faden beim Beenden (0xC0000409).
+        if self._close_requested:
+            return
         result = self.session.last_result
         if result is None or key != self._foundation_key(foundation.settings.quality):
             return
