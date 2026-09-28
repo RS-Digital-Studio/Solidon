@@ -9035,9 +9035,20 @@ def test_partial_repair_runs_from_the_report_and_undoes(
 
     repaired = window.session.last_result.scene.objects[object_id].mesh
     assert open_edge_count(repaired) == 16
-    lines = [window.report.list.item(row).text() for row in range(window.report.list.count())]
-    assert any("3 von 19 offenen Kanten geschlossen; 16 bleiben offen" in line for line in lines)
-    assert any("Offene Kanten: 16" in line for line in lines)
+    # Die Bilanz steht seit ``2b83f72a5`` in zwei Befunden statt in dem einen
+    # Satz „3 von 19 offenen Kanten geschlossen; 16 bleiben offen“: Was
+    # geschlossen wurde (mit Kanten davor und danach), und was offen bleibt.
+    shown = [
+        window.report.list.item(row).data(Qt.ItemDataRole.UserRole)
+        for row in range(window.report.list.count())
+    ]
+    codes = [finding.code for finding in shown]
+    filled = next((finding for finding in shown if finding.code == "repair.holes_filled"), None)
+    assert filled is not None, codes
+    assert (filled.values["before"], filled.values["after"]) == (19, 16)
+    still = next((finding for finding in shown if finding.code == "repair.still_open"), None)
+    assert still is not None, codes
+    assert still.values["open_edges"] == 16
 
     choose("repair.still_open")
     location_button = button(errors.SHOW_LOCATIONS.label)
