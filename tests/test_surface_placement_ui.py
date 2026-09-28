@@ -63,6 +63,17 @@ class _Renderer:
         self.lines: list[dict[str, Any]] = []
         self.surfaces: list[dict[str, Any]] = []
         self.removed: list[Any] = []
+        #: Angehaltene Bilder und Freigaben — wie ``render_fakes.RecordingRenderer``.
+        #: Der Fluss hält das Bild an, solange die Fläche am Merkmal entsteht
+        #: (``PlacementFlow._hold_frames``, seit ``a255b14f8``).
+        self.holds: list[int] = []
+        self.releases = 0
+
+    def hold_frames(self, milliseconds: int) -> None:
+        self.holds.append(int(milliseconds))
+
+    def release_frames(self) -> None:
+        self.releases += 1
 
     def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
         item = _Item(_args[0] if _args else None, _kwargs.get("capacity"))
