@@ -72,7 +72,7 @@ from PySide6.QtGui import (
     QPolygonF,
     qGray,
 )
-from PySide6.QtWidgets import QApplication, QMenu
+from PySide6.QtWidgets import QApplication, QMenu, QToolTip
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core import figures, guides
@@ -631,6 +631,10 @@ class GuideRun:
         """
         for _attempt in range(10):
             _stay_on_top(self.window)
+            # Ein Tooltip ist ein eigenes Fenster über dem Aufnahmefenster und
+            # käme mit ins Bild: Im Portugiesischen stand „Dividido: 2 · 2
+            # Ajustes“ über dem Verlauf der Teilen-Anleitung (Release 0.5.1).
+            QToolTip.hideText()
             self.settle(2)
             image = grab(self.window)
             other = shots.foreign_window_over(self.window)
