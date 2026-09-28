@@ -108,7 +108,7 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.scene.revision import Revision, revise, step_needs
+from app.core.scene.revision import Revision, revise, searched_at_the_end, step_needs
 from app.core.scene.revision import commit as commit_revision
 from app.core.scene.revision import dependencies as revision_dependencies
 from app.core.split import (
@@ -348,10 +348,8 @@ class _EvaluationWorker(Worker):
             result = session.run_evaluation()
         finally:
             session._pending.replay = None
-        if picture.answers:
-            # Eine Antwort des ersten Laufs (die Einheit beim Laden) steht nur
-            # in seinem Ergebnis: Der zweite fand den Schritt im Cache.
-            result = dataclasses.replace(result, answers={**picture.answers, **result.answers})
+        # Die Antworten des ersten Laufs trägt auch der zweite: Den Ladeschritt
+        # findet er im Cache, und der Eintrag reist mit ihnen (§15.7).
         return result
 
     def work(self) -> None:
@@ -1306,6 +1304,12 @@ class _SplitWorker(Worker):
         super().release_finished_references()
 
 
+#: Plant einen Umbau erst im Arbeiter: mit dem Verlauf, seinen Abhängigkeiten
+#: am Grundstand und einer Auswertung wie der des Arbeiters — Einfügen sucht
+#: damit die freie Stelle am Endstand (:func:`searched_at_the_end`).
+_Planner = Callable[[History, Dependencies, Callable[[Any], EvaluationResult]], RevisionPlan]
+
+
 class _RevisionWorker(Worker):
     """Ein Umbau des Verlaufs, isoliert gerechnet (P7) — besitzt nichts, meldet alles.
 
@@ -1327,7 +1331,7 @@ class _RevisionWorker(Worker):
         self,
         session: Session,
         document: Any,
-        planned: RevisionPlan | Callable[[History, Dependencies], RevisionPlan],
+        planned: RevisionPlan | _Planner,
         baseline: EvaluationResult | None,
         cancel: CancelSignal,
     ) -> None:
@@ -1366,7 +1370,7 @@ class _RevisionWorker(Worker):
             plan = (
                 self._planned
                 if isinstance(self._planned, RevisionPlan)
-                else self._planned(history, context)
+                else self._planned(history, context, run)
             )
             revision = revise(
                 history,
@@ -4269,7 +4273,11 @@ class Session(QObject):
         baseline = self.last_result if self.result_current else None
         wanted = tuple(int(op_id) for op_id in op_ids)
 
-        def planned(history: History, context: Dependencies) -> RevisionPlan:
+        def planned(
+            history: History,
+            context: Dependencies,
+            _run: Callable[[Any], EvaluationResult] | None = None,
+        ) -> RevisionPlan:
             if kind == "suppress":
                 return history.plan_suppress(wanted, context)
             if kind == "reactivate":
@@ -4302,6 +4310,14 @@ class Session(QObject):
         davor, den die Oberfläche gerade zeigt; der Arbeiter rechnet ihn zuerst
         (der Cache trägt das meiste). Nach dem Übernehmen rückt die Marke
         hinter den neuen Schritt — wer mehrere einfügt, fügt sie der Reihe nach ein.
+
+        **Ein weiteres Modell sucht seine freie Stelle am Endstand**, nicht am
+        Stand vor der Marke, den ``last_result`` zeigt: Dort steht ein
+        späteres, schon festgehaltenes Modell noch nicht, und beide lägen
+        deckungsgleich (Review N4). Der Arbeiter plant deshalb ein zweites Mal,
+        mit der Stelle im Entwurf (:func:`searched_at_the_end`); geplant wird
+        hier trotzdem sofort, damit eine unmögliche Stelle ohne Wartezeit
+        ihren Satz sagt.
         """
         marker = self._insert_before
         assert marker is not None
@@ -4315,20 +4331,26 @@ class Session(QObject):
                 raise error
             self.failed.emit(error)
             return False
+        by = origin or Origin(by="user")
         try:
-            plan = self.history.plan_insert(
-                marker, title, drafts, origin or Origin(by="user"), changes
-            )
+            self.history.plan_insert(marker, title, drafts, by, changes)
         except AppError as error:
             if raise_on_error:
                 raise
             self.failed.emit(error)
             return False
-        return self._start_revision(plan, None)
+
+        def planned(
+            history: History, _context: Dependencies, run: Callable[[Any], EvaluationResult]
+        ) -> RevisionPlan:
+            settled = searched_at_the_end(history.document, title, drafts, evaluate=run)
+            return history.plan_insert(marker, title, settled, by, changes)
+
+        return self._start_revision(planned, None)
 
     def _start_revision(
         self,
-        planned: RevisionPlan | Callable[[History, Dependencies], RevisionPlan],
+        planned: RevisionPlan | _Planner,
         baseline: EvaluationResult | None,
     ) -> bool:
         """Den Arbeiter für einen Umbau starten — mit einer Kopie des Dokuments von jetzt."""

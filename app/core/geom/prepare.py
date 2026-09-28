@@ -2793,7 +2793,10 @@ def first_free_spot(
     Quader aus diesen Grenzen, nie die Form — der Platz eines Quaders ist nie
     zu knapp bemessen, und für einen exakten Körper muss nichts vernetzt werden.
     Zurück kommen der Versatz, der das Modell dorthin legt und **aufsetzt**,
-    die Platte und ob es dort ganz auf der Druckfläche steht. Gerechnet wird
+    die Platte und ob **nur die Grenze der Plattenzahl** es über die
+    Druckfläche hinaus stehen lässt: Es passte auf ein leeres Bett, aber keine
+    erlaubte Platte hatte Platz. Ein Modell, das auf kein Bett passt, ist
+    kein Platzmangel — das sagt die Bauraumprüfung (Review N6). Gerechnet wird
     einmal: :func:`placed_at_free_spot` hält die Stelle im Schritt fest.
     """
 
@@ -2820,7 +2823,14 @@ def first_free_spot(
         float(placed.bounds.minimum[1] - moving.bounds.minimum[1]),
         -float(body.minimum[2]),
     )
-    return shift, plate, fits_on_bed(placed, profile.printer)
+    crowded = (
+        bool(standing)
+        and not fits_on_bed(placed, profile.printer)
+        and fits_on_bed(
+            arrange_on_bed([moving], profile, spacing, plates=1).meshes[0], profile.printer
+        )
+    )
+    return shift, plate, crowded
 
 
 def standing_in(scene: Scene, ignore: Collection[ObjectId] = ()) -> list[tuple[BoundingBox, int]]:
@@ -2840,6 +2850,13 @@ def standing_in(scene: Scene, ignore: Collection[ObjectId] = ()) -> list[tuple[B
 #: Schritt 6). Solange sie leer sind, liest ``free_spot`` die Szene
 #: (``ParamSpec.answered_by``); danach nie wieder.
 SPOT_FIELDS: Final = ("spot_x", "spot_y")
+
+#: Die Grenze der Felder ``spot_x``/``spot_y`` in beide Richtungen, in mm.
+#: Weit gefasst, denn gefüllt werden sie von der Suche, nicht vom Kunden: Die
+#: Plattenreihe und ein Modell, das auf kein Bett passt, liegen weit draußen,
+#: und eine Stelle, die ihr eigenes Feld abwiese, hielte die Kette am
+#: Ladeschritt an (Review N3: 2,5 m lang, Mitte bei 1127 mm).
+SPOT_LIMIT: Final = 100_000.0
 
 
 def free_spot_param(doc: TranslatableText, placement: ParamPlacement = "front") -> Any:
@@ -2861,8 +2878,8 @@ def spot_param(axis: Literal["x", "y"]) -> Any:
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-SPOT_LIMIT,
+        maximum=SPOT_LIMIT,
         placement="advanced",
         depends_on=("free_spot", (True,)),
         doc=_(
@@ -2943,10 +2960,10 @@ def placed_at_free_spot(
                 )
             )
     else:
-        shift, plate, fits = first_free_spot(group, profile, standing_in(scene, ignore))
+        shift, plate, crowded = first_free_spot(group, profile, standing_in(scene, ignore))
         target = (centre[0] + shift[0], centre[1] + shift[1])
         moved = plate > 0 or not (is_close(shift[0], 0.0) and is_close(shift[1], 0.0))
-        if not fits:
+        if crowded:
             findings.append(
                 Finding(
                     code="arrange.no_free_spot",

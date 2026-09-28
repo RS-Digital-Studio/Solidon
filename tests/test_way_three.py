@@ -311,7 +311,7 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Figur", seed=7)
 
-    assert len(generation.transactions) == 5, "Laden, Größe, Reparieren, Dezimieren, Aufsetzen"
+    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren samt Aufsetzen"
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
@@ -342,8 +342,8 @@ def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Vase", seed=7)
 
-    assert len(generation.transactions) == 4, (
-        "Laden, Größe, Reparieren, Aufsetzen — keine Dezimierung"
+    assert len(generation.transactions) == 3, (
+        "Laden, Größe, Reparieren samt Aufsetzen — keine Dezimierung"
     )
 
     result = evaluated(project, profile)
@@ -480,6 +480,23 @@ def test_a_generated_model_stays_seated_when_the_repair_takes_a_crumb_below_it(
     assert entry.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "auf dem Bett"
     assert "arrange.above_bed" not in {finding.code for finding in scene.scene.report.findings}
     assert [operation.op for operation in project.document.ops][-1] == "place_on_bed"
+
+
+def test_one_undo_takes_the_last_chain_step_and_the_seating_together(project: Project) -> None:
+    """Review N5 (Sonde p16): Das Aufsetzen stand als eigene Transaktion am
+    Ende. Ein Strg+Z nahm nur sie, und im Normalfall änderte sich nichts
+    Sichtbares. Es gehört in die Transaktion des letzten Kettenschritts: ein
+    Strg+Z nimmt Reparatur und Aufsetzen zusammen, wie vor dem Aufsetzen."""
+    generation = from_text(project, _sphere_backend(), "eine Kugel", seed=7)
+    last = next(
+        entry for entry in project.document.transactions if entry.id == generation.transactions[-1]
+    )
+    by_id = {operation.id: operation.op for operation in project.document.ops}
+    assert [by_id[op_id] for op_id in last.ops] == ["repair", "place_on_bed"]
+
+    History(project.document).undo()
+
+    assert [operation.op for operation in project.document.ops] == ["load", "fit_to_size"]
 
 
 def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(

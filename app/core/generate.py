@@ -274,9 +274,21 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
         origin,
     )
 
+    # **Und zuletzt wieder aufs Bett.** Die Stelle steht seit ``fit_to_size``
+    # fest, die Höhe nicht: Die Reparaturkette nimmt lose Krümel weg, und lag
+    # einer unter dem Körper, schwebte er danach — gemessen 5,21 mm über dem
+    # Bett (Review F8). Aufgesetzt wird deshalb nach der ganzen Kette, in der
+    # Transaktion ihres letzten Schritts: Als eigene nahm ein Strg+Z nur das
+    # Aufsetzen zurück, und im Normalfall änderte sich nichts Sichtbares
+    # (Review N5).
+    seating = OperationDraft(op="place_on_bed", inputs=(object_id,), outputs=(object_id,))
+    too_fine = result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT
     repairing = history.apply(
         _("Reparaturkette"),
-        [OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR))],
+        [
+            OperationDraft(op="repair", inputs=(object_id,), params=dict(GENERATED_REPAIR)),
+            *(() if too_fine else (seating,)),
+        ],
         origin,
     )
     # Und ein vierter Schritt, wenn das Netz zu fein ist, um damit zu arbeiten.
@@ -297,7 +309,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # stehen, auf 100 mm gebracht, ohne die Quelle, aus der er kam. Was in
     # einem Zug entstanden ist, gehört vollständig in die Liste.
     steps = [loading.id, sizing.id, repairing.id]
-    if result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT:
+    if too_fine:
         decimating = history.apply(
             _("Auf Arbeitsauflösung bringen"),
             [
@@ -306,22 +318,12 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
                     inputs=(object_id,),
                     outputs=(object_id,),
                     params={"triangles": GENERATED_TRIANGLE_TARGET},
-                )
+                ),
+                seating,
             ],
             origin,
         )
         steps.append(decimating.id)
-
-    # **Und zuletzt wieder aufs Bett.** Die Stelle steht seit ``fit_to_size``
-    # fest, die Höhe nicht: Die Reparaturkette nimmt lose Krümel weg, und lag
-    # einer unter dem Körper, schwebte er danach — gemessen 5,21 mm über dem
-    # Bett (Review F8). Aufgesetzt wird deshalb nach der ganzen Kette.
-    seating = history.apply(
-        _("Auf das Bett setzen"),
-        [OperationDraft(op="place_on_bed", inputs=(object_id,), outputs=(object_id,))],
-        origin,
-    )
-    steps.append(seating.id)
 
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)
     return Generation(

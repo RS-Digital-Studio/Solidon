@@ -37,6 +37,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
@@ -51,9 +52,16 @@ from app.core.perceive.matching import (
     resolve,
 )
 from app.core.registry import REGISTRY, Registry
+from app.core.registry.params import reads_scene
 from app.core.scene.evaluate import EvaluationResult, sight_of
 from app.core.scene.fits import active_fits
-from app.core.scene.history import Dependencies, History, RevisionPlan, StepNeed
+from app.core.scene.history import (
+    Dependencies,
+    History,
+    OperationDraft,
+    RevisionPlan,
+    StepNeed,
+)
 from app.core.scene.orphans import Reference, references, with_reference
 from app.core.types import (
     Document,
@@ -683,6 +691,36 @@ def _walk(
                     )
                 )
     return found, state
+
+
+def searched_at_the_end(
+    document: Document,
+    title: TranslatableText | str,
+    drafts: Sequence[OperationDraft],
+    *,
+    evaluate: Callable[[Document], EvaluationResult],
+    registry: Registry | None = None,
+) -> list[OperationDraft]:
+    """Neue Schritte, die ihre Stelle an der Szene suchen, suchen sie am Endstand (P7.1, §17.1).
+
+    An der Einfügemarke sähe ein weiteres Modell nur die Szene vor der Marke.
+    Ein späteres Modell, dessen Stelle schon feststeht, steht dort noch nicht,
+    und beide lägen deckungsgleich (Review N4). Gesucht wird deshalb an einer
+    Kopie mit den Schritten **am Ende** — dem Stand, den der Kunde vor sich
+    hat —, und die Antworten stehen danach im Entwurf (§15.7): Am
+    Einfügeort sucht der Schritt nicht mehr. Hält die Kette vorher an, gibt
+    es keine Antwort, und der Entwurf bleibt, wie er war.
+    """
+    source = registry or REGISTRY
+    if not any(reads_scene(source.get(draft.op).params, draft.params) for draft in drafts):
+        return list(drafts)
+    trial = History(deepcopy(document))
+    added = trial.apply(title, drafts)
+    answers = evaluate(trial.document).answers
+    return [
+        dataclasses.replace(draft, params={**draft.params, **answers.get(op_id, {})})
+        for draft, op_id in zip(drafts, added.ops, strict=True)
+    ]
 
 
 def revise(

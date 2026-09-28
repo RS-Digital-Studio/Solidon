@@ -100,6 +100,85 @@ def test_a_drop_lands_before_the_next_step_below() -> None:
     assert drop_before(rows, -1) == 1
 
 
+def _stopped(session: Any) -> None:
+    """Den Arbeiter, den eine Änderung anstößt, anhalten und abwarten — ohne
+    Ereignisschleife meldet er nichts zurück, gerechnet wird hier im Test."""
+    running = session._worker
+    session.cancel_evaluation()
+    if running is not None:
+        assert running.wait(60_000)
+    session.cancel_signal.reset()
+
+
+def test_an_import_at_the_marker_does_not_land_on_a_kept_model(monkeypatch: Any) -> None:
+    """Review N4 (Sonde p18): ein weiteres Modell an der Einfügemarke.
+
+    Vor dem Ladeschritt eines Blocks eingefügt, dessen Stelle schon
+    feststand, suchte der zweite Block an der Szene vor der Marke. Dort stand
+    der erste noch nicht, und beide lagen deckungsgleich. Die Sitzung plant
+    jetzt im Arbeiter mit der Stelle am Endstand. Geprüft ohne Fenster: Der
+    Plan, den die Sitzung dem Arbeiter übergibt, läuft hier so, wie der
+    Arbeiter ihn fährt.
+    """
+    import copy
+    from pathlib import Path
+
+    from app.core.scene import evaluate
+    from app.core.scene.history import RevisionPlan
+    from app.core.scene.project import ProjectSources
+    from app.core.scene.revision import commit, dependencies, revise
+    from app.ui.session import Session
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+    session = Session()
+    for name in ("cube_clean.stl", "block_with_rounded_edge.stl"):
+        assert session.import_model(meshes / name, unit="mm")
+        _stopped(session)
+
+    def run(document: Any) -> Any:
+        return evaluate(
+            document,
+            session.evaluation_profile,
+            cache=session.cache,
+            sources=ProjectSources(session.project, base_dir=session.base_dir),
+        )
+
+    session.history.record_answers(run(session.project.document).answers)
+    kept = session.project.document.ops[1]
+    assert kept.params.get("spot_x") is not None, "die Stelle des ersten Blocks steht fest"
+    assert session.start_inserting(kept.id)
+    _stopped(session)
+
+    handed: list[Any] = []
+    monkeypatch.setattr(
+        session, "_start_revision", lambda planned, _baseline: handed.append(planned) or True
+    )
+    assert session.import_model(meshes / "block_with_rounded_edge.stl", unit="mm")
+    [planned] = handed
+
+    history = History(copy.deepcopy(session.project.document))
+    baseline = run(history.document)
+    context = dependencies(history.document, baseline)
+    plan = planned if isinstance(planned, RevisionPlan) else planned(history, context, run)
+    commit(session.history, revise(history, plan, evaluate=run, baseline=baseline))
+    result = run(session.project.document)
+
+    assert result.complete
+    boxes = [
+        (entry.plate, entry.mesh.bounds.minimum, entry.mesh.bounds.maximum)
+        for entry in result.scene.objects.values()
+    ]
+    assert len(boxes) == 3
+    overlapping = [
+        (a, b)
+        for index, a in enumerate(boxes)
+        for b in boxes[index + 1 :]
+        if a[0] == b[0]
+        and all(a[1][axis] < b[2][axis] and b[1][axis] < a[2][axis] for axis in (0, 1))
+    ]
+    assert not overlapping, "der eingefügte Block liegt nicht auf dem festgehaltenen"
+
+
 # --- Feld und Sitzung (Release) ---------------------------------------------------
 
 

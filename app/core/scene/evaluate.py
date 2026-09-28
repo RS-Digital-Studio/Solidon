@@ -731,6 +731,13 @@ def _evaluate(
             # Solver weg, und nach einem Cache-Treffer fehlte die Stufe in
             # der Solver-Übersicht des Berichts.
             result = cached
+            # §15.7: Die Antwort reist mit dem Ergebnis. Die Sitzung schreibt
+            # sie nur zu einem angenommenen Lauf; kam der Schritt danach aus
+            # dem Cache — nach Strg+Z vor dem ersten Ergebnis, im nächsten
+            # Projekt, nach einem Neustart von der Platte —, bliebe er sonst
+            # für immer unbeantwortet.
+            if cached.answered:
+                answers[operation.id] = dict(cached.answered)
         else:
             context = OpContext(
                 # Regel 3 hat jetzt einen Boden unter sich: ``scene`` ist eine
@@ -813,10 +820,8 @@ def _evaluate(
                 break
             # §15.7: Die Antwort **hier** abholen und nicht weiter unten. Was
             # die Operation zurückgegeben hat, wird gleich in ein
-            # ``CachedResult`` umgewandelt — und das kennt das Feld nicht, weil
-            # ein Ergebnis von der Platte niemanden gefragt hat. Wer es unten
-            # liest, liest an einem Objekt, das nur so heißt wie das, das er
-            # meint.
+            # ``CachedResult`` umgewandelt; weiter unten ist beides dasselbe
+            # Objekt, ob frisch oder aus dem Cache.
             answered_key: str | None = None
             if produced.answered:
                 answers[operation.id] = dict(produced.answered)
@@ -856,6 +861,7 @@ def _evaluate(
                 solver=produced.solver,
                 transform=produced.transform,
                 continuations=tuple(tuple(entries) for entries in produced.feature_continuations),
+                answered=dict(produced.answered),
             )
 
         if len(result.objects) != len(operation.outputs):

@@ -131,7 +131,12 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   (``OperationSpec.reads_process``), trägt Schichthöhe, Bahnbreite und
 #:   Überhanggrenze nicht mehr im Schlüssel — Laden, Kopieren und Verschieben
 #:   bleiben, wenn der Druckdialog sie ändert.
-CACHE_FORMAT_VERSION: Final = 32
+#: - 33 (28.09.2026, freie Stelle): Ein Eintrag trägt die Antworten seines
+#:   Schritts (``answered``) — die erkannte Einheit, die freie Stelle. Ein
+#:   älterer Eintrag hat sie nicht, und ein Treffer ließe den Schritt
+#:   unbeantwortet: Das weitere Modell suchte seine Stelle bei jeder Änderung
+#:   davor neu.
+CACHE_FORMAT_VERSION: Final = 33
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +155,12 @@ class CachedResult:
     je Ausgabe (``OpResult.feature_continuations``). Ein Cachetreffer, der
     sie verlöre, ließe eine bewusst geänderte Bohrung beim zweiten Lauf als
     unbelegt anhalten."""
+    answered: dict[str, Any] = field(default_factory=dict)
+    """Was die Operation für ihre Parameter festgestellt hat (``OpResult.answered``,
+    §15.7). Ein Treffer gibt es weiter wie ein frischer Lauf: Die Sitzung
+    schreibt die Antwort nur, wenn sie das Ergebnis annimmt — kam der Schritt
+    danach aus dem Cache, ohne sie, blieb er unbeantwortet und rechnete bei
+    jeder Änderung davor anders."""
 
     @property
     def cost(self) -> int:
@@ -896,6 +907,9 @@ class DiskCache:
                 else None
             )
             continuations = _continuations_from_data(data.get("continuations", []), len(objects))
+            answered = data.get("answered", {})
+            if not isinstance(answered, dict) or not all(isinstance(k, str) for k in answered):
+                raise ValueError("invalid cached answers")
         except _DAMAGED_ENTRY as problem:
             # Ein beschädigter Cache-Eintrag ist nie fatal: verwerfen und
             # neu rechnen.
@@ -917,6 +931,7 @@ class DiskCache:
             solver=solver,
             transform=transform,
             continuations=continuations,
+            answered=answered,
         )
 
     def put(self, key: str, result: CachedResult) -> None:
@@ -979,6 +994,8 @@ class DiskCache:
                     [{"source": str(entry.source), "target": entry.target} for entry in per_output]
                     for per_output in result.continuations
                 ]
+            if result.answered:
+                payload["answered"] = dict(result.answered)
             (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
         except (OSError, TypeError) as problem:
             # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat
