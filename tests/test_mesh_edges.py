@@ -2146,18 +2146,27 @@ def test_a_group_of_edges_leaves_out_what_cannot_be_worked_and_says_so(
     ids=["verrunden", "fasen"],
 )
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
-def test_both_kernels_refuse_what_does_not_fit_on_a_thin_wall(
+def test_both_kernels_leave_out_what_does_not_fit_on_a_thin_wall(
     op: str, field: str, fits: float, too_large: float, kernel: str
 ) -> None:
     """Die oberen Kanten einer 3-mm-Wand, verrundet oder gefast: dieselbe Antwort
     an beiden Kernen (Übertrag der Durchsicht v0.4.1, Punkt 3).
 
     Auf der 3 mm breiten Stirnfläche treffen sich die Berührlinien beider
-    Kanten, sobald das Maß die halbe Breite erreicht. Der exakte Kern lehnte
-    ab 1,5 mm ab („Der Radius ist für diese Kanten zu groß."), das Netz rechnete
-    weiter und machte die Wand still niedriger — gemessen am 22.09.2026: Fase
-    2,9 mm ergab 18,6 statt 20 mm Höhe, Verrundung 2,0 mm 19,93 mm. Jetzt
-    sagen beide dasselbe, mit dem größten Maß, das passt.
+    langen Kanten, sobald das Maß die halbe Breite erreicht. Der exakte Kern
+    lehnte ab 1,5 mm ab, das Netz rechnete weiter und machte die Wand still
+    niedriger — gemessen am 22.09.2026: Fase 2,9 mm ergab 18,6 statt 20 mm
+    Höhe, Verrundung 2,0 mm 19,93 mm. Vom 23.09. an sagten beide für die
+    ganze Gruppe ab, mit dem größten Maß, das passt.
+
+    **Seit dem 28.09.2026 lässt die Gruppe die zwei langen Kanten aus und
+    bearbeitet die zwei kurzen**, an beiden Kernen gleich (RM-279 (ii),
+    Entscheidung der Release-Sitzung 0.5.1 nach Kundensicht, Robert gemeldet):
+    An Kundenteilen mit einer einzigen schmalen Fläche war „senkrecht“ sonst
+    bei jedem Radius unbenutzbar (pegboard-goot ab 0,37 mm). Die Wand bleibt
+    20 mm hoch, und der Befund ``edges.too_narrow`` nennt die ausgelassenen
+    mit dem größten Maß, das dort passt, und *Stelle zeigen*. Wer die lange
+    Kante **einzeln** wählt, bekommt weiter die Absage.
     """
     if kernel == "brep":
         pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
@@ -2169,13 +2178,37 @@ def test_both_kernels_refuse_what_does_not_fit_on_a_thin_wall(
     entry = SceneObject(id="obj_1", name="Wand", mesh=body, kind=kernel)
     height = body.bounds.size[2]
 
-    fitted = run(op, entry, **{field: fits, "edges": "top"}).outputs[0]
-    assert fitted.mesh.bounds.size[2] == pytest.approx(height, abs=1e-6)
+    fitted = run(op, entry, **{field: fits, "edges": "top"})
+    assert fitted.outputs[0].mesh.bounds.size[2] == pytest.approx(height, abs=1e-6)
+    assert "edges.too_narrow" not in {finding.code for finding in fitted.findings}
 
+    partly = run(op, entry, **{field: too_large, "edges": "top"})
+    result = partly.outputs[0].mesh
+    assert result.bounds.size[2] == pytest.approx(height, abs=1e-6), "keine still niedrigere Wand"
+    assert result.volume < body.volume - 0.5, "die kurzen Kanten sind bearbeitet"
+    narrow = next(finding for finding in partly.findings if finding.code == "edges.too_narrow")
+    assert (narrow.values["skipped"], narrow.values["worked"]) == (2, 2)
+    assert narrow.values["largest_mm"] == pytest.approx(1.5, abs=1e-3)
+    assert "1.50 mm" in str(narrow.message) or "1,50 mm" in str(narrow.message)
+    assert narrow.location is not None and abs(narrow.location[1]) == pytest.approx(1.5, abs=1e-3)
+    assert [action.id for action in narrow.suggestions][:1] == ["show_location"]
+
+    # Die zwei langen Kanten **einzeln** gewählt: Zusammen tragen sie das Maß
+    # nicht, und eine ausdrückliche Auswahl hält an, statt still eine zu nehmen.
+    if kernel == "brep":
+        from app.core.brep import edit as exact
+
+        keys = [
+            exact.edge_key(e)
+            for e in exact.edges_of(body)
+            if e.length > 30.0 and e.middle[2] > 19.0
+        ]
+    else:
+        keys = [edge_key(e) for e in edges_of(body) if e.length > 30.0 and e.middle[2] > 9.0]
+    assert len(keys) == 2
     with pytest.raises(GeometryError) as refused:
-        run(op, entry, **{field: too_large, "edges": "top"})
+        run(op, entry, **{field: too_large, "edges": "named", "edge_keys": " ".join(keys)})
     assert refused.value.values["largest_mm"] == pytest.approx(1.5, abs=1e-6)
-    assert "1.50 mm" in str(refused.value.detail) or "1,50 mm" in str(refused.value.detail)
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])

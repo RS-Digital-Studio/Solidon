@@ -121,7 +121,8 @@ glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `choose` für die Gruppen
 nach Lage beider Kerne, `edges_in_kernel`, `EDGE_SELECTION_REJECTED`,
 `RadiusLaw`, `ChamferShape`, `sharp_corner`; Werkzeug je Stück als Prisma, am
-gebogenen Zug durch die Knoten, `_swept_tool`) ·
+gebogenen Zug durch die Knoten, `_swept_tool`; `contact_band_limits` je Kante
+für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 `faces.py` (Prisma aus dem eigenen Umriss, Versatz je Knoten;
 `pushed_features`)
 

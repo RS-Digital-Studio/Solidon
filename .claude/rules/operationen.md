@@ -106,7 +106,9 @@ Radien an einer Ecke) eine Absage mit Weg (Regel 21).
 
 Nur `edges.choose` fragt die Lage: Strecken nach Richtung, Ränder nur waagerecht
 (`edge_lie_of`), ein „Senkrecht“ beschrifteter zu keiner. Ein gebogener
-Zug wird durch seine Knoten gezogen (`_swept_tool`, RM-279).
+Zug wird durch seine Knoten gezogen (`_swept_tool`, RM-279). Eine Gruppe lässt
+aus, was das Maß nicht trägt (`contact_band_limits`, `edges.too_narrow` mit Zahl
+und Stelle); trägt keine, sagt sie ab.
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
@@ -157,9 +159,7 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
   oder Wicklung gehören in `CLOSED_STATE_CODES`, `ONE_PIECE_CODES` oder
   `WOUND_STATE_CODES`.
 - **Die Reparatur löst Überschneidungen von sich aus auf** (Entscheidung Robert,
-  `RepairParams.self_intersections`); alte Schritte behalten ihren Wert
-  (Migration 34→35), ein Befund bietet das Auflösen an; eine sich selbst
-  kreuzende Schale wird benannt, nicht vereinigt (`repair.self_crossing`).
+  `RepairParams.self_intersections`, alte Schritte nicht; `repair.self_crossing`).
 - **Was aus einem Verhältnis entsteht, fragt die Auswertung am Endstand**, nicht
   die Op je Schritt (`check_placement`, `check_bodies_in_one_place`,
   `check_thin_walls`; Restwand `relations.thinnest_sleeve` wie `sleeve_at`,
