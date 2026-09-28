@@ -291,6 +291,10 @@ Schlüssel nennt Raster, Winkel, Brückenbreite und Drucker.
 Provenienz-IDs überleben jede Neuberechnung — sonst zeigt der Op-Stack ins
 Leere; mehrdeutige Zuordnung hält an und fragt.
 
+- **Zwillinge entscheidet die Lage ihrer Oberfläche**
+  (`matching.settled_by_surface`, vor `_divided_partners`): nur, wenn sie für
+  beide Seiten mit Vorsprung die nächste ist; sonst bleibt es eine Frage.
+
 - **Eine geteilte Fläche heißt am größten Stück weiter**
   (`evaluate._divided_partners`), gesucht in ihrer Ebene innerhalb ihrer alten
   Dreiecke — nur, wenn diese Dreiecke die Fläche sind (Normale, Ebene), nie

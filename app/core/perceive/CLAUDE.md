@@ -20,7 +20,7 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | `slots.py` | Langlöcher, topologisch: zwei Halbzylinder, zwei ebene Flanken (Gegenprobe `tests/test_slot_features.py`); `slots_from_stadiums`, `open_slots_instead_of_fillets`, `native_open_slot_measures`, Paarsuche `_PairPlan` |
 | `patterns.py` | Muster (§25): `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung |
 | `relations.py` | Nachbarschaften: Hohlraumketten (unten), Rohrwand (`sleeve_at`, `thinnest_sleeve`), Dreieckseigentum (`cell_owner_table`, `CONTESTED`), Gleichartigkeit (`alike_for_actions`, `_same_surface_patch`), Gruppensätze (`group_evidence_texts`, `group_reason_texts` — das Panel liest sie von hier) |
-| `matching.py` | Stabile Bezeichner (§21.3): `match`, `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features` |
+| `matching.py` | Stabile Bezeichner (§21.3): `match`, `settled_by_surface` (Zwillinge nach der Lage ihrer Oberfläche), `resolve`, `apply_mapping`, `inherit_originators`, `transformed_features`, `moved_features` |
 | `match_records.py` | JSON-Struktur und körperqualifizierte Antwortschlüssel; Domänen `group:`, `native-group:`, `edge-answer:`, `recognition-answer:` als Konstanten |
 | `match_decisions.py` | Ganze Zuordnungsentscheidungen wiedererkennen und atomar prüfen; `resolve_group(scope=...)` gibt eine native Wahl nur für denselben Scope frei, eine Netzantwort nie für die native Frage; keine zweite Zuordnung |
 | `local.py` | Begrenzte Suche am großen Netz (unten) |

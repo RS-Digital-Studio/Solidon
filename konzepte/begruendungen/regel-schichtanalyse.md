@@ -562,6 +562,22 @@ Ergebnis vergeben hat, geben keinem Stück einen Namen. Und nach einer
 Bewegung wird nicht gesucht. Eine Operation, die eine querende Fläche teilt,
 gibt sie beiden Hälften mit (`prepare_ops._features_after_split`).
 
+**Zwillinge entscheidet die Lage ihrer Oberfläche** (28.09.2026, Paket muster
+der Release-Sitzung 0.5.1; `matching.settled_by_surface`). Drei Bögen eines
+Grats haben für den Merkmalsvektor dieselbe Mitte, Achse und Größe; `match`
+meldete sie nach jedem Schritt mehrdeutig, ohne Verweis kamen sie unter neuen
+Namen zurück, mit Verweis als Frage. Am Korpus waren es nach *Kanten
+verfeinern*, *Bohrung setzen* und *Verschieben* je 355, 167 und 165 Merkmale an
+über 40 Körpern (Siebhalter-Ring, Rankenclip, Filterball, Besteckkörbe,
+Bildschirmabdeckungen), danach keines. Gemessen wird der flächengewichtete
+Schwerpunkt der Dreiecke — unabhängig von der Teilung, daher trägt er auch das
+Verfeinern —, der alte im Eingangsnetz samt Bewegung. Der Vorsprung gilt in
+Millimetern (Faktor `AMBIGUITY_MARGIN` plus `units.MAX_FACET_SAG`), nicht mit
+der Untergrenze der Zuordnung: Die Stufen einer geprägten Schrift liegen 0,08 mm
+übereinander, und die alte Oberfläche liegt bis auf Rundung genau auf einer.
+Gleich große Stücke einer geteilten Fläche bleiben eine Frage; deshalb läuft
+die Entscheidung vor `_divided_partners`.
+
 Ein Verlust ohne Verweis wird **einmal je Körper und Schritt** gemeldet, nie je
 Merkmal (`perceive.orphaned`/`perceive.mended`, Zahl und Kennungen in den
 Werten). Ein Formschritt kann viele erkannte Flächen verlieren; ihre Kennungen
