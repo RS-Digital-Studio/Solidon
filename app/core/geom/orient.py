@@ -410,13 +410,14 @@ def ranked_orientations(
     Liste als auch unter den größten Flächennormalen; sie ein zweites Mal zu
     prüfen ändert kein Urteil und kostet auf einem dichten Netz spürbar Zeit.
 
-    ``standing`` sagt, ob eine Lage steht. Mit ihm hält eine begrenzte
-    Vorauswahl ihren letzten Platz für die beste Lage frei, die steht, falls
-    keine der vorderen es tut. Die Heuristik wiegt Auflage gegen Überhang, das
-    Endurteil fragt zuerst, ob eine Lage steht (``slice.orientation.best_of``).
-    Mit 60 Grad reihte sie an einer Auto-Split-Hälfte mit Stift 62 Lagen auf
-    einer Kante vor die Lage auf dem Stift, und keine der drei geschnittenen
-    stand.
+    ``standing`` sagt, ob eine Lage steht. Mit ihm geht der letzte Platz
+    einer begrenzten Vorauswahl, wenn keine der vorderen steht, an die Lage
+    mit dem kleinsten geschätzten Stützraum (:attr:`Orientation.support`), die
+    steht. Die Heuristik wiegt Auflage gegen Überhang, das Endurteil fragt
+    zuerst, ob eine Lage steht (``slice.orientation.best_of``). Mit 60 Grad
+    reihte sie an einer Auto-Split-Hälfte mit Stift 62 Lagen vor die Lage auf
+    dem Stift — Kippungen auf eine Kante und liegende Lagen, die rollen —, und
+    keine der drei geschnittenen stand.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -440,29 +441,37 @@ def ranked_orientations(
     )
     selected: list[Orientation] = []
     wanted = None if limit is None else max(1, limit)
-    seeking = standing is not None
-    for entry in ranked:
+    rest: list[Orientation] = []
+    for index, entry in enumerate(ranked):
         # Erst die günstige Reihenfolge bestimmen: Für eine begrenzte
-        # Vorauswahl müssen schlechtere Lagen nicht mehr platziert werden —
-        # außer der ersten, die steht, solange die Vorauswahl keine hat.
-        full = wanted is not None and len(selected) >= wanted
-        if full and not seeking:
+        # Vorauswahl müssen schlechtere Lagen nicht mehr platziert werden.
+        if wanted is not None and len(selected) >= wanted:
+            rest = ranked[index:]
             break
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        if full and standing is not None and not standing(entry):
-            continue
         if (
             printer is not None
             and fitting_transform(mesh, entry.direction, printer, margin=margin) is None
         ):
             continue
-        if full:
+        selected.append(entry)
+    if standing is None or not rest or any(standing(entry) for entry in selected):
+        return selected
+    # Der freie Platz: die Lage mit dem kleinsten geschätzten Stützraum, die
+    # steht. Nach der Heuristik stünde oft eine davor, deren Überhänge sie
+    # nicht sieht, weil sie nicht weiß, wie hoch sie hängen (RM-190).
+    for entry in sorted(rest, key=lambda entry: (entry.support, entry.direction)):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if (
+            printer is not None
+            and fitting_transform(mesh, entry.direction, printer, margin=margin) is None
+        ):
+            continue
+        if standing(entry):
             selected[-1] = entry
-            seeking = False
-        else:
-            selected.append(entry)
-            seeking = seeking and standing is not None and not standing(entry)
+            break
     return selected
 
 

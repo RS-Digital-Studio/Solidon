@@ -1750,8 +1750,9 @@ def _best_by_support(
     **Und welche Hälfte die Stifte trägt, gehört zur selben Frage** (RM-005):
     Die Stifte stehen über die Naht, und die Hälfte mit ihnen kann nicht mehr
     auf der Naht liegen. Gemessen am Balken mit zwei gekreuzten Überhängen:
-    Bei x = -2 kosten die Stifte an A 242 402 mm³ Stützen, an B 23 883; an der
-    gewählten Naht x = 3,25 sind es 3 754 gegen 3 298. Beide Zuordnungen
+    Bei x = -2 kosten die Stifte an A 5 112 mm³ Stützen, an B 238 325, weil B
+    dann auf ihrem fernen Ende steht; an der gewählten Naht x = 3,25 sind es
+    3 620 gegen 4 255 (Centauri Carbon 2, PETG). Beide Zuordnungen
     werden deshalb fertig gebaut und gestellt; B gewinnt nur mit derselben
     Fünf-Prozent-Grenze, mit der eine Naht die andere schlägt — sonst bleibt
     es bei A, wie bisher.

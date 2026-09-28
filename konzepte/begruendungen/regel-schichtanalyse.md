@@ -494,34 +494,38 @@ Schichtanalyse sah die richtige nie. Geschnitten werden damit höchstens
 zwölf in 22 Sekunden, und wo die Zeit hingeht, steht in der Karte des
 Moduls.
 
-**Auto Splits Vorauswahl hält einen Platz für eine Lage, die steht.** Auto
-Split schneidet je Teilstück nur drei Lagen (`best_face_candidate`,
-`SUPPORT_ORIENTATION_CANDIDATES`), und eine Naht, an der kein Teil steht,
-kostet „unbekannt“. Seit die Überhanggrenze aus dem Druckerprofil kommt (60
-Grad an Elegoo, Bambu, Creality), wird eine Schnittfläche, leicht gekippt,
-druckbar, und die Heuristik (Auflage gegen Überhang gegen Höhe) reiht jede
-Kippung auf eine Kante vor die Lage auf dem Stift: Am gestreckten Prüfkörper
-des Leistungstests lagen dort drei Richtungen unter einem Grad auseinander
-vorn, die stehende Lage auf Rang 62, und alle sechs Nähte kosteten
-„unbekannt“. An 127 Modellen aus dem Korpus, je in der Mitte der längsten
-Achse geteilt, stand an vier Hälften (zwei Modelle) bei 45 Grad eine der
-drei, bei 60 keine. Eine Winkelsperre zwischen den gewählten Richtungen half
-nicht: Die Kippungen liegen auf einem Kreis um die Schnittnormale, auch mit
-20 oder 30 Grad Abstand kam die stehende Lage nicht unter die drei. Die
-geschätzte Auflage allein (`Orientation.footprint`) reicht als Prüfung auch
-nicht: Am selben Prüfkörper stehen liegende Lagen mit 23 bis 47 mm² davor,
-die rollen. Darum geht der letzte Platz an die beste Lage, die nach
-demselben Urteil wie danach steht — Auflage in halber Schichthöhe des
+**Auto Splits Vorauswahl hält der billigsten stehenden Lage einen Platz.**
+Auto Split schneidet je Teilstück nur drei Lagen (`best_face_candidate`,
+`SUPPORT_ORIENTATION_CANDIDATES`), und schon eine Hälfte ohne stehende Lage
+macht den Preis der Naht „unbekannt“. Seit die Überhanggrenze aus dem
+Druckerprofil kommt (60 Grad an Elegoo, Bambu, Creality), wird eine
+Schnittfläche, leicht gekippt, druckbar, und die Heuristik (Auflage gegen
+Überhang gegen Höhe) reiht Kippungen auf eine Kante und liegende Lagen, die
+rollen, vor die Lage auf dem Stift: Am gestreckten Prüfkörper des
+Leistungstests lagen vorn drei Richtungen unter einem Grad auseinander, die
+stehende Lage auf Rang 62, und alle sechs Nähte kosteten „unbekannt“. An 127
+Modellen aus dem Korpus, je in der Mitte der längsten Achse geteilt, stand
+an vier Hälften (zwei Modelle) bei 45 Grad eine der drei, bei 60 keine. Eine
+Winkelsperre zwischen den gewählten Richtungen half nicht: Die Kippungen
+liegen auf einem Kreis um die Schnittnormale.
+
+Steht keine der drei vorderen, geht der letzte Platz deshalb an die Lage mit
+dem kleinsten geschätzten Stützraum (`Orientation.support`), die nach
+demselben Urteil wie danach steht: Auflage in halber Schichthöhe des
 Druckers, Schwerpunkt über ihrer Hülle, was eine Linie davon trägt
-(`orientation._stands_on`, ohne Schnitt durch den ganzen Körper) —, wenn
-keine der vorderen es tut. Gefragt wird nur, wo die geschätzte Auflage die
-kleinste haltbare erste Schicht erreicht; ein liegender Zylinder, der auf
-seiner Rundung steht, zählt dabei nicht, und seine Vorauswahl bleibt, wie
-sie war. Geschnitten werden weiter genau drei Lagen, der Leistungstest
-braucht 14,4 statt 13,9 Sekunden beim Stand mit 45 Grad. An den 254 Hälften
-ändert sich die Vorauswahl je Grenze an acht; an sieben davon steht danach
-eine Lage, wo vorher keine stand, keine verliert ihren Stand, keine braucht
-mehr Stütze.
+(`orientation._stands_on`, ohne Schnitt durch den ganzen Körper; ein Test
+hält beide Antworten gleich). **Nach der Schätzung, nicht nach der
+Heuristik**: Die Heuristik weiß nicht, wie hoch ein Überhang hängt, und
+reihte am Balken mit gekreuzten Überhängen das ferne Ende (geschätzt
+254 883 mm³) knapp vor die Schnittfläche (6 419 mm³); die Nahtpreise lagen
+dadurch an echten Nähten 1,4- bis 39-fach zu hoch. **Ohne Vorprüfung an der
+geschätzten Auflage**: Die zählt nur Dreiecke, die fast genau nach unten
+zeigen, und ein gestreckter Ring, dessen Hälften flach auf gut 600 mm²
+stehen, behielt mit ihr jede Naht „unbekannt“. Geschnitten werden weiter
+genau drei Lagen. Was die Prüfung kostet, fängt `_contact` auf: Es sucht die
+Dreiecke an der Aufstandsebene über die Ecken darunter statt über alle Ecken
+aller Dreiecke, 2 statt 5 ms an einer Hälfte mit 100 000 Dreiecken, und
+dieselben Dreiecke — das Urteil rechnet damit bitgleich.
 
 **Und die dritte Breite ist keine Zahl, sondern eine Strecke.** `taper_length`
 misst je Schicht, wie viel Außenkontur auf einem **Keil** liegt: einer Wand,

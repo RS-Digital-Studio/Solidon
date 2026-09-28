@@ -28,7 +28,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import CancelSignal, NeverCancelled
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
-from app.core.slice.orientation import best_face_candidate
+from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate
 from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import Finding, OpContext, Profile, Scene, SceneObject, Source
 from app.i18n import source_text
@@ -181,7 +181,11 @@ def test_real_support_moves_the_seam_between_crossed_overhangs(profile: Profile)
     chosen_support = autosplit._support_after_cut(
         mesh, candidate, profile, orientation_candidates=3, cancelled=None
     )
-    assert chosen_support < cheap_support * 0.5, (
+    # Deutlich heißt: jenseits der Toleranz, unter der zwei Nähte als gleich
+    # teuer gelten und die Nahtgüte entscheidet (``SUPPORT_TIE``). Hier stand
+    # die Hälfte; solange die Mittenlage nur eine Lage auf einer Kante oder
+    # am fernen Ende fand, lag ihr Preis um Größenordnungen darüber.
+    assert chosen_support < cheap_support * (1.0 - SUPPORT_TIE), (
         f"die gewählte Naht braucht {chosen_support:.0f} statt {cheap_support:.0f} mm³ — "
         "der analytische Körper soll den Unterschied deutlich, nicht im Rauschen zeigen"
     )
@@ -2494,6 +2498,77 @@ def test_the_pins_go_to_the_half_that_needs_less_support(profile: Profile) -> No
     )
 
 
+def stretched_ring() -> MeshData:
+    """``torus_ring.stl``, gestreckt wie der Körper des Leistungstests: die
+    lange Achse 1,6 Bauräume des Centauri Carbon 2, die übrigen 0,75 — zu groß
+    fürs Bett, mittig um den Ursprung."""
+    ring = read_mesh((MESHES / "torus_ring.stl").read_bytes(), ".stl").raw.copy()
+    ring.merge_vertices()
+    extents = ring.extents
+    room = 256.0
+    ring.apply_scale((1.6 * room / extents[0], 0.75 * room / extents[1], 0.75 * room / extents[1]))
+    ring.apply_translation(-ring.bounds.mean(axis=0))
+    return MeshData.of(ring)
+
+
+def _half_of_a_stretched_ring() -> MeshData:
+    first, _second, _findings = split_at_plane(stretched_ring(), SectionPlane.along("x", 0.0))
+    return first
+
+
+@pytest.mark.parametrize("pins_on_b", [False, True])
+def test_a_flat_ring_gets_a_price_at_every_seam(profile: Profile, pins_on_b: bool) -> None:
+    """Die Hälften stehen flach auf gut 600 mm², aber kaum ein Dreieck ihrer
+    Rundung zeigt genau nach unten. Eine Vorprüfung an der geschätzten
+    Auflage verwarf die Lage, und jede Naht des Rings kostete „unbekannt“."""
+    price = autosplit._support_after_cut(
+        stretched_ring(),
+        autosplit.Candidate("x", 0.0, 1.0, 2, 0.0),
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=2,
+        pins_on_b=pins_on_b,
+    )
+
+    assert math.isfinite(price)
+
+
+def test_the_free_place_asks_the_same_question_as_the_judgement(profile: Profile) -> None:
+    """Der freie Platz fragt, ob eine Lage steht, ohne den Körper zu schneiden
+    (``_stands_on``). Beide Antworten müssen für jede Lage gleich ausfallen,
+    sonst verdrängt der Platz eine Lage, die steht, oder bleibt leer."""
+    from app.core.geom.orient import ranked_orientations
+    from app.core.slice.orientation import _stands_on, judge, stands
+
+    half = _half_of_a_stretched_ring()
+    footing = profile.printer.layer_height / 2.0
+    ask = _stands_on(half, profile, footing)
+    ranked = ranked_orientations(
+        half, printer=profile.printer, overhang_limit=profile.overhang_limit_degrees
+    )
+    answers = {
+        entry.direction: (
+            ask(entry),
+            stands(
+                judge(
+                    half,
+                    entry.direction,
+                    1.0,
+                    footing,
+                    overhang_angle=profile.overhang_limit_degrees,
+                    line_width=profile.printer.extrusion_width,
+                ),
+                profile.smallest_first_layer,
+            ),
+        )
+        for entry in ranked
+    }
+
+    assert any(judged for _asked, judged in answers.values()), "Voraussetzung: eine Lage steht"
+    assert {direction for direction, (asked, judged) in answers.items() if asked != judged} == set()
+
+
 def test_a_half_that_cannot_stand_has_no_cheap_support(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2507,8 +2582,9 @@ def test_a_half_that_cannot_stand_has_no_cheap_support(
     22.09.2026). Unbekannt heißt: niemals billig.
 
     Seit die Vorauswahl einen Platz für eine Lage hält, die steht, steht B
-    dort aufrecht auf ihrem Ende, 202 mm hoch unter beiden Überhängen — ein
-    ehrlicher Preis, und viel teurer als die Naht, die die Überhänge trennt.
+    dort aufrecht auf ihrem Ende, mit den Stiften 210 mm hoch, beide Decken
+    (je 45 x 6 mm, nichts darunter) über 190 mm hoch — ein ehrlicher Preis,
+    und teurer als die Naht, die die Überhänge trennt.
     Die Sperre selbst gilt weiter für jede Hälfte, deren Vorauswahl nicht steht.
     """
     mesh = crossed_overhangs()
@@ -2526,7 +2602,8 @@ def test_a_half_that_cannot_stand_has_no_cheap_support(
 
     upright = price(-2.0, pins_on_b=True)
     assert math.isfinite(upright)
-    assert upright > 10.0 * price(3.25, pins_on_b=False), "die Naht zwischen den Überhängen"
+    assert upright > 2 * (45.0 * 6.0) * 190.0, "zwei freie Decken, als Säulen gerechnet"
+    assert upright > price(3.25, pins_on_b=False), "die Naht zwischen den Überhängen"
 
     from app.core.slice.orientation import Candidate as Pose
 
@@ -2536,6 +2613,27 @@ def test_a_half_that_cannot_stand_has_no_cheap_support(
         lambda *_args, **_kwargs: Pose((0.0, 0.0, -1.0), 2988.0, 1.4, 12.0),
     )
     assert price(-2.0, pins_on_b=True) == float("inf")
+
+
+def test_the_free_place_goes_to_the_cheapest_pose_that_stands(profile: Profile) -> None:
+    """Am Balken bei x = −2 mit den Stiften an A hat B nur Löcher und steht auf
+    der Schnittfläche. Die Heuristik reihte das ferne Ende knapp davor (Löcher
+    kosten Auflage), und der freie Platz ging dorthin: 238 325 mm³ statt rund
+    5 000. Auf der Schnittfläche hängen Pfosten und Decke aufrecht (616 mm²)
+    2,5 mm über dem Bett, seitlich (688 mm²) 7 mm — als Säulen gerechnet die
+    Obergrenze unten, die Lochdecken nicht mitgezählt.
+    """
+    price = autosplit._support_after_cut(
+        crossed_overhangs(),
+        autosplit.Candidate("x", -2.0, 144.0, 1, 0.0),
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=2,
+        pins_on_b=False,
+    )
+
+    assert price < 616.0 * 2.5 + 688.0 * 7.0
 
 
 def test_a_seam_with_pins_on_b_keeps_its_pairs_the_right_way_round(profile: Profile) -> None:
