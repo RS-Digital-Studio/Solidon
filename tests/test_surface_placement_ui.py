@@ -1512,7 +1512,9 @@ def test_late_tool_from_a_closed_run_is_discarded(flow: Any, monkeypatch: Any) -
     monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     requests = []
     monkeypatch.setattr(
-        session, "placement_async", lambda compute, then, failed: requests.append((compute, then))
+        session,
+        "placement_async",
+        lambda compute, then, failed, refused=None: requests.append((compute, then)),
     )
     controller.start()
     compute, then = requests.pop()

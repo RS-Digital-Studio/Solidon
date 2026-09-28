@@ -3969,6 +3969,10 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
     blind.renderer = renderer
     blind._finding_actors = []
     blind._finding_mark = None
+    # Der Satz steht auf eigenem Grund in den Farben der Skizzenmaße; ohne
+    # ``__init__`` setzt der Test sie so, wie der Konstruktor es tut.
+    blind._sketch_label_colour = THEMES["dark"]["text"]
+    blind._sketch_label_background = THEMES["dark"]["window"]
     current = SimpleNamespace(name="dieselbe Auswertung")
     blind._result = current
     blind._finding_timer = SimpleNamespace(
