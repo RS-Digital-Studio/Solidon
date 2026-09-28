@@ -112,8 +112,11 @@ Release-Bilder und gehören nicht in den Uploadpfad.
 6. **Erzeugen**, was sich geändert hat, in der Reihenfolge oben.
 7. **Kein zweites Tor vor dem Tag.** Nach Versionssprung und Erzeugern nur die
    betroffenen Wächter (`test_changelog`, `test_toolchain`, `test_website`,
-   `test_wording`, `test_manual`, `test_guides`), committen, taggen — die CI fährt die Suiten
-   am Tag auf allen Plattformen.
+   `test_wording`, `test_manual`, `test_guides`, `test_asset_packaging` — jeweils
+   samt `rendered`), committen, taggen — die CI fährt die Suiten am Tag auf allen
+   Plattformen. `test_asset_packaging` fährt die Rechteprüfung, mit der jeder
+   Paketbau beginnt: Eine neue Erzeugerdatei im Anwendungsbaum, die sie nicht
+   kennt, hält sonst erst den Tag-Lauf an.
 8. **CI-Bau:** `.github/workflows/build.yml` bestimmt Trigger, Plattformen und
    die getrennten Signier- und Prüfjobs. Vor Tag oder Handstart Commit und
    Versionsstand feststellen; kein fest eingetragenes Beispiel-Tag. Laufkennung
