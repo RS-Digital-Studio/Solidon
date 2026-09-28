@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -303,14 +303,31 @@ def judge(
     # neben einer großen Auflage liegen. Getrennte Füße tragen gemeinsam über
     # ihre konvexe Hülle; das Loch zwischen ihnen ist kein Grund zum Ablehnen.
     contact, centre = _contact(standing, turn, footing_height or layer_height / 2.0)
+    stable, footing = _carried(contact, centre, line_width)
+    first_layer_area = result.first_layer_area
+    if footing_mesh is not None:
+        first_layer_area = 0.0 if contact is None or contact.is_empty else float(contact.area)
+    return Candidate(
+        direction=direction,
+        support_volume=result.support_volume,
+        first_layer_area=first_layer_area,
+        height=turned.bounds.size[2],
+        stable=stable,
+        footing=footing,
+    )
+
+
+def _carried(
+    contact: ShapelyPolygon | None, centre: np.ndarray, line_width: float | None
+) -> tuple[bool, float | None]:
+    """Ob der Schwerpunkt über der Auflage liegt, und wie viel davon eine Linie
+    trägt (``None`` ohne Linienbreite) — das Urteil von :func:`judge` über die
+    Auflage, ohne den Körper zu schneiden."""
     stable = (
         contact is not None
         and bool(np.isfinite(centre).all())
         and bool(contact.convex_hull.buffer(EPS_GEOM).covers(Point(centre)))
     )
-    first_layer_area = result.first_layer_area
-    if footing_mesh is not None:
-        first_layer_area = 0.0 if contact is None or contact.is_empty else float(contact.area)
     footing = None
     if line_width is not None:
         # Gehrung statt Rundung: Ein Rückversatz braucht dann keinen Kreisbogen
@@ -320,14 +337,7 @@ def judge(
             if contact is None or contact.is_empty
             else float(contact.buffer(-line_width / 2.0, join_style="mitre").area)
         )
-    return Candidate(
-        direction=direction,
-        support_volume=result.support_volume,
-        first_layer_area=first_layer_area,
-        height=turned.bounds.size[2],
-        stable=stable,
-        footing=footing,
-    )
+    return stable, footing
 
 
 def _contact(
@@ -474,6 +484,10 @@ def best_face_candidate(
     anschließend dieselbe Entscheidung wie in der großen Orientierungssuche:
     Eine Lage muss stehen können, dann gewinnt das echte interne
     Stützvolumen, bei höchstens fünf Prozent Abstand die Grundfläche.
+
+    Darum hält die Vorauswahl einen Platz für eine Lage frei, die steht
+    (``ranked_orientations(standing=…)``): Sonst kostete an Druckern mit 60 Grad
+    Überhanggrenze jede Naht von Auto Split „unbekannt“.
     """
     coarse = ranked_orientations(
         mesh,
@@ -481,6 +495,7 @@ def best_face_candidate(
         cancelled=cancelled,
         printer=profile.printer,
         overhang_limit=profile.overhang_limit_degrees,
+        standing=_stands_on(mesh, profile),
     )[: max(1, count)]
     if not coarse:
         raise NoFittingOrientationError()
@@ -502,6 +517,28 @@ def best_face_candidate(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
     return best_of(field, profile.smallest_first_layer)
+
+
+def _stands_on(mesh: MeshData, profile: Profile) -> Callable[[Orientation], bool]:
+    """Ob eine Lage der Vorauswahl steht, wie :func:`stands` nach :func:`judge`
+    urteilen wird — nur die Auflage, ohne Schnitt durch den ganzen Körper.
+
+    Gefragt wird nur, wo die geschätzte Auflage die kleinste haltbare erste
+    Schicht erreicht. Darunter steht eine Lage höchstens auf einer Rundung,
+    etwa ein liegender Zylinder; den freien Platz bekommt eine ebene Auflage,
+    und die Suche nach ihr bleibt billig, auch wenn keine steht.
+    """
+    floor = profile.smallest_first_layer
+    footing_height = profile.printer.layer_height / 2.0
+
+    def check(entry: Orientation) -> bool:
+        if entry.footprint < floor:
+            return False
+        contact, centre = _contact(mesh, rotation_to_down(entry.direction), footing_height)
+        stable, footing = _carried(contact, centre, profile.printer.extrusion_width)
+        return stable and footing is not None and footing >= floor
+
+    return check
 
 
 def search(

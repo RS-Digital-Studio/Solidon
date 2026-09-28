@@ -2494,7 +2494,9 @@ def test_the_pins_go_to_the_half_that_needs_less_support(profile: Profile) -> No
     )
 
 
-def test_a_half_that_cannot_stand_has_no_cheap_support(profile: Profile) -> None:
+def test_a_half_that_cannot_stand_has_no_cheap_support(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Eine Lage, die nicht steht, ist kein Preis für eine Naht.
 
     ``best_face_candidate`` gibt eine Lage, die nicht steht, nur zurück, wenn
@@ -2503,19 +2505,37 @@ def test_a_half_that_cannot_stand_has_no_cheap_support(profile: Profile) -> None
     auf 1,4 mm² erster Schicht und „kostete" 2 988 mm³, weniger als jede
     Naht, die die Überhänge trennt; Auto Split hätte sie gewählt (gemessen am
     22.09.2026). Unbekannt heißt: niemals billig.
+
+    Seit die Vorauswahl einen Platz für eine Lage hält, die steht, steht B
+    dort aufrecht auf ihrem Ende, 202 mm hoch unter beiden Überhängen — ein
+    ehrlicher Preis, und viel teurer als die Naht, die die Überhänge trennt.
+    Die Sperre selbst gilt weiter für jede Hälfte, deren Vorauswahl nicht steht.
     """
     mesh = crossed_overhangs()
-    seam = autosplit.Candidate("x", -2.0, 144.0, 1, 0.0)
-    on_b = autosplit._support_after_cut(
-        mesh,
-        seam,
-        profile,
-        orientation_candidates=3,
-        cancelled=None,
-        connector_count=2,
-        pins_on_b=True,
+
+    def price(position: float, *, pins_on_b: bool) -> float:
+        return autosplit._support_after_cut(
+            mesh,
+            autosplit.Candidate("x", position, 144.0, 1, 0.0),
+            profile,
+            orientation_candidates=3,
+            cancelled=None,
+            connector_count=2,
+            pins_on_b=pins_on_b,
+        )
+
+    upright = price(-2.0, pins_on_b=True)
+    assert math.isfinite(upright)
+    assert upright > 10.0 * price(3.25, pins_on_b=False), "die Naht zwischen den Überhängen"
+
+    from app.core.slice.orientation import Candidate as Pose
+
+    monkeypatch.setattr(
+        autosplit,
+        "best_face_candidate",
+        lambda *_args, **_kwargs: Pose((0.0, 0.0, -1.0), 2988.0, 1.4, 12.0),
     )
-    assert on_b == float("inf")
+    assert price(-2.0, pins_on_b=True) == float("inf")
 
 
 def test_a_seam_with_pins_on_b_keeps_its_pairs_the_right_way_round(profile: Profile) -> None:

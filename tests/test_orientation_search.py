@@ -373,6 +373,99 @@ def test_the_face_shortlist_is_decided_by_real_support(
     assert chosen.direction == directions[1], "danach entscheidet das echte Stützvolumen"
 
 
+def test_a_bounded_shortlist_keeps_its_last_place_for_a_pose_that_stands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Drei fast gleiche Kantenlagen vorn, die stehende weit hinten.
+
+    So sah die Vorauswahl an einer Auto-Split-Hälfte mit Stift bei 60 Grad
+    Überhanggrenze aus: Richtungen unter einem Grad auseinander, keine mit
+    Auflage, liegende Lagen, die rollen, und die Lage auf dem Stift auf Rang 62.
+    """
+    from app.core.geom import orient
+
+    edge = [(0.850, -0.526, 0.003), (0.850, -0.526, -0.011), (0.851, -0.526, 0.019)]
+    ranked = [
+        *(Orientation(direction, 0.0, 5.8, 158.7 + index) for index, direction in enumerate(edge)),
+        Orientation((0.0, 0.0, 1.0), 0.0, 500.0, 160.0),
+        Orientation((0.0, 1.0, 0.0), 47.2, 4965.2, 160.0),
+        Orientation((1.0, 0.0, 0.0), 72.4, 4929.0, 172.0),
+        Orientation((0.0, 0.0, -1.0), 80.0, 6000.0, 172.0),
+    ]
+    asked: list[tuple[float, float, float]] = []
+
+    def wide(entry: Orientation) -> bool:
+        """Steht auf dem Stift und auf der Schnittfläche; liegend rollt sie."""
+        asked.append(entry.direction)
+        return entry.direction in {(1.0, 0.0, 0.0), (0.0, 0.0, -1.0)}
+
+    monkeypatch.setattr(orient, "candidates", lambda _mesh: [entry.direction for entry in ranked])
+    monkeypatch.setattr(orient, "evaluate_directions", lambda *_args, **_kwargs: ranked)
+    body = MeshData.of(trimesh.creation.box())
+
+    assert [entry.direction for entry in ranked_orientations(body, limit=3)] == edge
+    kept = ranked_orientations(body, limit=3, standing=wide)
+    assert [entry.direction for entry in kept] == [*edge[:2], (1.0, 0.0, 0.0)], (
+        "der letzte Platz geht an die beste Lage, die steht"
+    )
+    assert asked[-1] == (1.0, 0.0, 0.0), "nach der ersten stehenden wird nicht weiter gefragt"
+    assert ranked_orientations(body, standing=wide) == ranked_orientations(body), (
+        "ohne Grenze der Zahl bleibt die Rangliste, wie sie ist"
+    )
+    assert ranked_orientations(body, limit=2, standing=lambda _entry: True) == ranked[:2]
+
+
+def _half_with_pin() -> MeshData:
+    """Eine Auto-Split-Hälfte im Kleinen: halbes gestrecktes Ellipsoid, ein
+    Zapfen mitten auf der Schnittfläche.
+
+    Die einzige Lage, die steht, ist die auf dem Zapfen; die Schnittfläche
+    hängt dann über. Mit 60 Grad Überhanggrenze wird sie, leicht gekippt,
+    druckbar, und die Heuristik zieht jede Kippung auf eine Kante vor.
+    """
+    import math
+
+    ellipsoid = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    ellipsoid.apply_scale((3.0, 1.0, 1.0))
+    half = ellipsoid.slice_plane((5.0, 0.0, 0.0), (-1.0, 0.0, 0.0), cap=True)
+    pin = trimesh.creation.cylinder(radius=3.0, height=8.0, sections=32)
+    pin.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, (0, 1, 0)))
+    pin.apply_translation((7.0, 0.0, 0.0))
+    return MeshData.of(trimesh.boolean.union([half, pin], engine="manifold"))
+
+
+@pytest.mark.parametrize("overhang_limit", [45.0, 60.0])
+def test_auto_splits_shortlist_finds_the_pose_on_the_pin(
+    profile: Profile, overhang_limit: float
+) -> None:
+    """Bei 45 Grad stand die Lage auf dem Zapfen in der Vorauswahl, bei 60
+    fiel sie heraus, und Auto Split bewertete die Naht mit „unbekannt“."""
+    import dataclasses
+
+    from app.core.geom.autosplit import SUPPORT_ORIENTATION_CANDIDATES
+    from app.core.slice.orientation import stands
+
+    limited = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, overhang_limit=overhang_limit)
+    )
+    body = _half_with_pin()
+    heuristic = ranked_orientations(
+        body,
+        limit=SUPPORT_ORIENTATION_CANDIDATES,
+        printer=limited.printer,
+        overhang_limit=overhang_limit,
+    )
+    if overhang_limit == 60.0:
+        assert all(entry.footprint < limited.smallest_first_layer for entry in heuristic), (
+            "Voraussetzung: vorn steht bei 60 Grad keine Lage"
+        )
+
+    chosen = best_face_candidate(body, count=SUPPORT_ORIENTATION_CANDIDATES, profile=limited)
+
+    assert stands(chosen, limited.smallest_first_layer)
+    assert chosen.direction == (1.0, 0.0, 0.0)
+
+
 def test_the_face_shortlist_can_be_cancelled(profile: Profile) -> None:
     signal = CancelSignal()
     signal.cancel()
@@ -522,7 +615,7 @@ def test_a_ball_never_stands_no_matter_how_coarse_the_search_is(profile: Profile
     Dieselbe Kugel bekam damit einmal ``orient.no_footing`` und einmal nicht,
     je nachdem, wie grob gesucht wurde.
     """
-    ball = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0)))
+    ball = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=20.0)))
 
     found = search(ball, count=24, seed=5, profile=profile)
 
