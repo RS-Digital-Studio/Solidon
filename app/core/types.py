@@ -1869,6 +1869,23 @@ class ParamSpec:
     "up_to"``: Eine zweite Operation mit Zielfläche hätte ihren Parameter exakt
     so nennen müssen, sonst hätte der Cache still ein veraltetes Ergebnis
     geliefert."""
+    reads_scene: bool = False
+    """Solange dieser Schalter an ist, liest die Operation die übrigen Körper
+    der Szene (Regel 3: lesen, nie ändern).
+
+    Die Schwester von ``OperationSpec.reads_other_bodies``, nur an einem Wert
+    statt an der ganzen Operation: *An eine freie Stelle legen* (``free_spot``,
+    §17.1 Schritt 6) muss wissen, was schon liegt. Ein Schritt ohne den
+    Schalter liest nichts davon und rechnet nicht neu, wenn davor etwas anderes
+    geändert wird. Ob gelesen wird, sagt :func:`registry.params.reads_scene` —
+    für den Cache-Schlüssel (``evaluate._with_nested_context``) und für die
+    Frage, ob ein späterer Schritt eine Importgruppe benutzt
+    (``ingest.plan.imported_group``)."""
+    answered_by: tuple[str, ...] = ()
+    """Die Felder, in denen der Schritt festhält, was er beim Lesen der Szene
+    gefunden hat. Sind sie gesetzt, liest ``reads_scene`` nicht mehr: Die
+    freie Stelle wird einmal gerechnet und kommt als Antwort in den Schritt
+    (§15.7, Entscheidung Robert)."""
     feature_kinds: tuple[str, ...] = ()
     """Welche Merkmalsarten dieser Merkmalsparameter annimmt — leer heißt jede.
 

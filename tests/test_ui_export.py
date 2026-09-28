@@ -520,8 +520,9 @@ def test_export_as_3mf_writes_one_assembly(
         "getSaveFileName",
         staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
     )
-    # Zweimal dasselbe Modell heißt zwei Körper am selben Ort — ein Befund, und
-    # seit RM-140 fragt der Export danach, bevor er schreibt.
+    # Das zweite Modell liegt seit dem 28.09.2026 an einer freien Stelle; wo
+    # doch zwei Körper am selben Ort stehen, fragt der Export seit RM-140 vor
+    # dem Schreiben, und die Antwort steht bereit.
     export_anyway(monkeypatch)
     window.object_tree.tree.clearSelection()
     window.action_export()
@@ -1394,7 +1395,8 @@ def test_export_as_3mf_carries_the_print_settings(
         "getSaveFileName",
         staticmethod(lambda *args, **kwargs: (str(target), "3MF (*.3mf)")),
     )
-    # Zwei Körper am selben Ort — der Export fragt danach (§29, RM-140).
+    # Stünden zwei Körper am selben Ort, fragte der Export danach (§29,
+    # RM-140); die Antwort steht bereit.
     export_anyway(monkeypatch)
     window.object_tree.tree.clearSelection()
     window.action_export()

@@ -12,7 +12,7 @@ import dataclasses
 import math
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from app.core.errors import (
     CANCEL,
@@ -21,6 +21,13 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.prepare import (
+    FreeSpot,
+    free_spot_param,
+    placed_at_free_spot,
+    spot_param,
+    spot_plate_param,
+)
 from app.core.geom.transform import apply, rotation, scaling, translation
 from app.core.ingest import outline, threemf
 from app.core.ingest.loader import (
@@ -50,6 +57,14 @@ from app.core.units import UNIT_NAMES, LengthUnit, format_length, is_zero, to_mm
 from app.i18n import _
 
 _UNIT_CHOICES = ("auto", "mm", "cm", "in", "m")
+
+#: Was *An eine freie Stelle legen* an einem Ladeschritt tut — für ``load`` und
+#: ``load_step`` derselbe Satz.
+FREE_SPOT_DOC = _(
+    "Setzt das Modell auf und legt es neben die Teile, die schon im Projekt liegen: "
+    "an die erste freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. "
+    "Geht vor „Mittig auf das Bett legen“."
+)
 
 #: Was eine 3MF über sich sagt, ausgedrückt in dem, was der Kern kennt (§11.1):
 #: eine seiner vier Einheiten und ein Faktor davor, wo das Format feiner
@@ -88,19 +103,29 @@ class LoadParams(BaseParams):
         default="",
         doc=_("Leer übernimmt den Dateinamen."),
     )
+    #: Der Einlesplan setzt den Schalter für jedes Modell nach dem ersten
+    #: (§17.1, Schritt 6); Vorgabe aus, damit ein älterer Ladeschritt liegen
+    #: bleibt, wo er gespeichert wurde. Die Stelle wird einmal gesucht und in
+    #: ``spot_*`` festgehalten.
+    free_spot: bool = free_spot_param(FREE_SPOT_DOC)
     place_on_bed: bool = param(
         title=_("Auf das Bett setzen"),
         default=False,
+        depends_on=("free_spot", (False,)),
         doc=_("Setzt das Modell mit seiner Unterseite auf das Druckbett."),
     )
     centre: bool = param(
         title=_("Mittig auf das Bett legen"),
         default=False,
+        depends_on=("free_spot", (False,)),
         doc=_(
             "Schiebt das Modell in die Mitte der Druckplatte. Ein Modell aus einem "
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
         ),
     )
+    spot_x: float | None = spot_param("x")
+    spot_y: float | None = spot_param("y")
+    spot_plate: int = spot_plate_param()
     coordinates: str = param(
         title=_("Quellachsen"),
         default="legacy_raw",
@@ -324,7 +349,7 @@ def load(ctx: OpContext) -> OpResult:
         # Nicht aufgeschrieben: Die Datei sagt es beim nächsten Mal wieder, und
         # ein Faktor (Mikrometer, Fuß) ließe sich im Parameter gar nicht
         # ausdrücken — er ginge bei der nächsten Auswertung verloren.
-        answered: dict[str, str] = {}
+        answered: dict[str, Any] = {}
         if factor is not None:
             parts = [
                 dataclasses.replace(part, mesh=apply(part.mesh, scaling((factor, factor, factor))))
@@ -363,12 +388,12 @@ def load(ctx: OpContext) -> OpResult:
             # Jeden Körper für sich auf Z = 0 abzusetzen nähme einem Gehäuse den
             # Deckel ab und stapelte die Teile aufeinander. Eine Baugruppe geht
             # deshalb **gemeinsam** aufs Bett, unten nach der Schleife — nicht
-            # gar nicht.
-            place_on_bed=params.place_on_bed and len(parts) == 1,
+            # gar nicht. An einer freien Stelle setzt ``_to_a_free_spot`` auf.
+            place_on_bed=params.place_on_bed and len(parts) == 1 and not params.free_spot,
             # Aus demselben Grund wie eine Zeile darüber: Jeden Körper für sich
             # zu zentrieren schöbe die Teile einer Baugruppe ineinander. Sie
             # rückt gemeinsam in die Mitte, unten nach der Schleife.
-            centre=params.centre and len(parts) == 1,
+            centre=params.centre and len(parts) == 1 and not params.free_spot,
             progress=ctx.progress,
             cancelled=ctx.cancelled,
         )
@@ -385,12 +410,18 @@ def load(ctx: OpContext) -> OpResult:
             _named(result.findings, part.name) if len(parts) > 1 else list(result.findings)
         )
 
-    if (params.place_on_bed or params.centre) and len(outputs) > 1:
-        # **Mehrere Platten stehen schon an ihrer Stelle** (RM-252): Der Leser
-        # hat jedes Teil auf seine Platte gelegt, gemessen von der Bettmitte
-        # (``threemf._plate_layout``). Die Mitte des gemeinsamen Hüllquaders
-        # aller Platten wäre keine Mitte irgendeiner Platte.
-        several_plates = len({part.plate for part in parts}) > 1
+    # **Mehrere Platten stehen schon an ihrer Stelle** (RM-252): Der Leser
+    # hat jedes Teil auf seine Platte gelegt, gemessen von der Bettmitte
+    # (``threemf._plate_layout``). Die Mitte des gemeinsamen Hüllquaders
+    # aller Platten wäre keine Mitte irgendeiner Platte.
+    several_plates = len({part.plate for part in parts}) > 1
+    if params.free_spot:
+        # Die freie Stelle setzt selbst auf; die zwei Haken daneben ruhen
+        # (``depends_on``), und kein zweiter Befund sagt dasselbe anders.
+        outputs = _to_a_free_spot(
+            ctx, params, outputs, findings, answered, several_plates=several_plates
+        )
+    elif (params.place_on_bed or params.centre) and len(outputs) > 1:
         outputs = _group_on_bed(
             outputs,
             findings,
@@ -552,24 +583,73 @@ def _group_on_bed(
     Liegt die Gruppe schon richtig, geschieht nichts und wird nichts gemeldet:
     ein Befund über eine Verschiebung um null wäre Lärm.
     """
-    boxes = [as_mesh_data(entry.mesh).bounds for entry in outputs]
-    low = [min(float(box.minimum[axis]) for box in boxes) for axis in range(3)]
-    high = [max(float(box.maximum[axis]) for box in boxes) for axis in range(3)]
-    group = BoundingBox((low[0], low[1], low[2]), (high[0], high[1], high[2]))
-    offset = bed_offset(group, place_on_bed=place_on_bed, centre=centre)
+    offset = bed_offset(_bounds_of(outputs), place_on_bed=place_on_bed, centre=centre)
     if all(is_zero(value) for value in offset):
         return outputs
-
-    lift = translation(offset)
-    moved = [
-        dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
-    ]
-    # Ein Befund mit Ort zeigt auf den Körper, und der steht jetzt woanders.
-    findings[:] = moved_findings(findings, offset)
+    moved = _moved(outputs, findings, offset)
     findings.append(
         group_on_bed_finding(offset, place_on_bed=place_on_bed, centre=centre, several=True)
     )
     return moved
+
+
+def _bounds_of(outputs: Sequence[SceneObject]) -> BoundingBox:
+    """Der gemeinsame Hüllquader aller Körper einer Datei."""
+    boxes = [as_mesh_data(entry.mesh).bounds for entry in outputs]
+    low = [min(float(box.minimum[axis]) for box in boxes) for axis in range(3)]
+    high = [max(float(box.maximum[axis]) for box in boxes) for axis in range(3)]
+    return BoundingBox((low[0], low[1], low[2]), (high[0], high[1], high[2]))
+
+
+def _moved(outputs: list[SceneObject], findings: list[Finding], offset: Vec3) -> list[SceneObject]:
+    """Alle Körper um denselben Versatz — und die Befunde mit Ort mit ihnen."""
+    lift = translation(offset)
+    # Ein Befund mit Ort zeigt auf den Körper, und der steht jetzt woanders.
+    findings[:] = moved_findings(findings, offset)
+    return [
+        dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
+    ]
+
+
+def _to_a_free_spot(
+    ctx: OpContext,
+    params: LoadParams,
+    outputs: list[SceneObject],
+    findings: list[Finding],
+    answered: dict[str, Any],
+    *,
+    several_plates: bool,
+) -> list[SceneObject]:
+    """Ein weiteres Modell aufgesetzt an die erste freie Stelle (§17.1, Schritt 6).
+
+    Alle Körper der Datei gehen **auf einmal**, als ein Block: Die Teile
+    behalten ihre Lage zueinander, wie beim ersten Modell. Eine Datei mit
+    mehreren Platten behält ihre Aufteilung und kommt hinter die letzte
+    belegte Platte. Die Stelle wird einmal gerechnet und kommt als Antwort in
+    den Schritt (``answered``); danach liest er die Szene nicht mehr.
+    """
+    placed = placed_at_free_spot(
+        _bounds_of(outputs),
+        ctx.profile,
+        ctx.scene,
+        spot=(params.spot_x, params.spot_y, params.spot_plate),
+        keep_layout=several_plates,
+    )
+    return _placed(outputs, findings, answered, placed)
+
+
+def _placed(
+    outputs: list[SceneObject],
+    findings: list[Finding],
+    answered: dict[str, Any],
+    placed: FreeSpot,
+) -> list[SceneObject]:
+    """Die Körper an ihre Stelle, die Befunde dazu, die Stelle in die Antwort."""
+    if not all(is_zero(value) for value in placed.offset):
+        outputs = _moved(outputs, findings, placed.offset)
+    findings.extend(placed.findings)
+    answered.update(placed.answered)
+    return [dataclasses.replace(entry, plate=entry.plate + placed.plate) for entry in outputs]
 
 
 def group_on_bed_finding(

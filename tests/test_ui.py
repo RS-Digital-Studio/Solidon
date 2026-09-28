@@ -5339,6 +5339,20 @@ def test_later_report_findings_keep_the_selected_action(
     assert all(not button.isHidden() for button in current)
 
 
+def keep_the_files_place(window: MainWindow) -> None:
+    """Der letzte Ladeschritt ohne Lageentscheidung: Die Datei behält ihre Koordinaten.
+
+    Ein weiteres Modell kommt seit dem 28.09.2026 aufgesetzt an die erste freie
+    Stelle (§17.1, Schritt 6). Unter der Platte liegt es nur noch, wenn die
+    Haken am Ladeschritt aus sind — wie in jedem Schritt, der davor gespeichert
+    wurde. Die Tests der Befunde „unter dem Bett" stellen genau das her.
+    """
+    step = window.session.history.operations[-1]
+    assert step.op in ("load", "load_step"), step.op
+    assert window.session.change_params(step.id, {"place_on_bed": False, "free_spot": False})
+    assert window.session.wait_for_idle()
+
+
 def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWindow) -> None:
     """Die Knopfzeile des Prüfberichts steht ohne einen Klick da (§2.7).
 
@@ -5347,13 +5361,14 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     Klick auf eine Listenzeile Knöpfe freischaltet, muss man wissen. §2.7
     verspricht anklickbare Handlungen, nicht auffindbare.
 
-    Gemessen an einem **zweiten** Modell, und das hat seit dem 03.09.2026 einen
-    Grund: Das erste Modell eines Projekts kommt aufgesetzt und mittig herein
-    (§17.1, Schritt 6), hat also nichts unter der Platte und nichts zu melden.
-    Jedes weitere behält seine Dateilage — ``block_with_rounded_edge.stl``
-    liegt von Z -10 bis +10 —, der Bericht meldet ``arrange.below_bed``, und
-    *Auf das Bett setzen* löst es mit einem Klick. Vorher standen dort **null**
-    Knöpfe und ``currentRow()`` auf −1.
+    Gemessen an einem **zweiten** Modell mit ausgeschalteten Haken am
+    Ladeschritt: Das erste Modell eines Projekts kommt aufgesetzt und mittig
+    herein, jedes weitere aufgesetzt an eine freie Stelle (§17.1, Schritt 6).
+    Die Dateilage hat nur, wer *Auf das Bett setzen* und *An eine freie Stelle
+    legen* ausschaltet — ``block_with_rounded_edge.stl`` liegt dann von Z -10
+    bis +10 —, der Bericht meldet ``arrange.below_bed``, und *Auf das Bett
+    setzen* löst es mit einem Klick. Vorher standen dort **null** Knöpfe und
+    ``currentRow()`` auf −1.
 
     Zwei Entscheidungen im Testaufbau, beide notwendig:
 
@@ -5370,10 +5385,11 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
 
     window.open_path(MESHES / "block_with_rounded_edge.stl")
     window.session.wait_for_idle()
-    # Das zweite Modell ist das, das unter der Platte landet — das erste liegt
-    # seit dem 03.09.2026 aufgesetzt und mittig da.
+    # Das zweite Modell ist das, das unter der Platte landet — mit den Haken
+    # seines Ladeschritts aus, sonst läge es aufgesetzt an einer freien Stelle.
     window.open_path(MESHES / "block_with_rounded_edge.stl")
     window.session.wait_for_idle()
+    keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
 
     codes = [
@@ -6110,12 +6126,14 @@ def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
     Das Modell kommt zweimal: Das erste liegt seit dem 03.09.2026 aufgesetzt
     und mittig, und seit dem 14.09.2026 begrüßt eine STL ohne den Befund über
     das Verschweißen — der Bericht wäre leer, und eine Wahl gäbe es nicht.
-    Das zweite landet unter der Platte und bringt den Befund.
+    Das zweite landet mit ausgeschalteten Haken unter der Platte und bringt
+    den Befund (sonst läge es seit dem 28.09.2026 an einer freien Stelle).
     """
     window.open_path(MESHES / "block_with_rounded_edge.stl")
     window.session.wait_for_idle()
     window.open_path(MESHES / "block_with_rounded_edge.stl")
     window.session.wait_for_idle()
+    keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
     assert window.report.list.count(), "ohne Befund prüft dieser Test nichts"
 
@@ -8780,9 +8798,11 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     # Zwei Modelle, weil das erste seit dem 03.09.2026 mittig auf dem Bett
-    # landet und der Fall „unter der Platte" erst mit dem zweiten entsteht.
+    # landet und der Fall „unter der Platte" erst mit dem zweiten entsteht —
+    # mit ausgeschalteten Haken, sonst läge es an einer freien Stelle.
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
+    keep_the_files_place(window)
     report = window.report
     report.show_result(window.session.last_result, window.session.project.document)
 
@@ -9467,6 +9487,7 @@ def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
         parts.append(threemf.AssemblyPart(mesh=MeshData.of(mesh), name=f"Teil {index + 1}"))
     assert window.session.import_payload("gruppe.3mf", threemf.write_assembly(parts))
     window.session.wait_for_idle()
+    keep_the_files_place(window)
     targets = window.session.project.document.ops[-1].outputs
     before = window.session.last_result
     assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
@@ -9527,6 +9548,10 @@ def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
     assert [restored[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
         [-100.0 + 2.0 * index for index in range(count)]
     )
+    # Zweimal zurück: erst das Ausschalten der Haken (``keep_the_files_place``
+    # ist ein eigener Schritt), dann der Import selbst.
+    window.action_undo()
+    window.session.wait_for_idle()
     window.action_undo()
     window.session.wait_for_idle()
     assert set(window.session.last_result.scene.objects) == {"obj_1"}
@@ -9550,6 +9575,7 @@ def test_grounded_import_keeps_the_single_bed_action_for_its_floating_body(windo
         parts.append(threemf.AssemblyPart(mesh=MeshData(mesh), name=f"Teil {index + 1}"))
     assert window.session.import_payload("aufgesetzt.3mf", threemf.write_assembly(parts))
     window.session.wait_for_idle()
+    keep_the_files_place(window)
     targets = window.session.project.document.ops[-1].outputs
     before = window.session.last_result
     assert [before.scene.objects[key].mesh.bounds.minimum[2] for key in targets] == [0.0, 10.0]
@@ -9616,11 +9642,12 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     angeboten war es nirgends: Der Bericht nannte den Fall und bot *Modell
     teilen* und *Auf den Bauraum verkleinern* an.
 
-    **Seit dem 03.09.2026 ist es das zweite Modell, an dem das gemessen wird.**
-    Das erste eines Projekts kommt aufgesetzt und mittig herein; jedes weitere
-    behält seine Lage, weil es sonst im ersten läge. Der Befund und sein Knopf
-    haben damit denselben Anlass wie vorher, nur nicht mehr beim allerersten
-    Öffnen.
+    **Gemessen wird am zweiten Modell mit ausgeschalteten Haken.** Das erste
+    eines Projekts kommt aufgesetzt und mittig herein, jedes weitere aufgesetzt
+    an eine freie Stelle (§17.1, Schritt 6). Die Dateilage behält ein
+    Ladeschritt, an dem *Auf das Bett setzen* und *An eine freie Stelle legen*
+    aus sind — so wie jeder, der vor dem 28.09.2026 gespeichert wurde. Der
+    Befund und sein Knopf haben damit denselben Anlass wie vorher.
 
     Geprüft wird die ganze Kette — Kennung, Handlung, Handler, Geometrie — und
     dass ein Undo sie zurücknimmt (Regel 19, §2.1).
@@ -9631,10 +9658,11 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     window.session.wait_for_idle()
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
+    keep_the_files_place(window)
 
     result = window.session.last_result
     sunk = [f for f in result.scene.report.findings if f.code == "arrange.below_bed"]
-    assert sunk, "ein weiteres Modell behält seine Lage und steckt unter der Platte"
+    assert sunk, "ohne die Haken behält es seine Lage und steckt unter der Platte"
     # Das zweite Objekt ist das gesunkene; das erste liegt auf dem Bett.
     gesunken = list(result.scene.objects.values())[1]
     before = gesunken.mesh.bounds.minimum[2]

@@ -87,6 +87,10 @@ entfernen; Normalen vereinheitlichen; Komponenten zählen, Kleinstteile
 erzwingen. Die Kette ist die Op `load` — ihre Parameter bleiben im Stapel
 sichtbar und änderbar.
 
+- **Die Lage steht im Ladeschritt** (§17.1): Die freie Stelle eines weiteren
+  Modells wird einmal gerechnet und als Antwort festgehalten (`free_spot`,
+  `spot_*`, Format 38, Entscheidung Robert).
+
 - **Was zum Lesen eines Formats gehört, ist kein Befund**: STL verschweißt
   schweigend (`normalise(weld_is_reading=True)`, von `import_model` an der
   Endung gesetzt); OBJ, PLY und 3MF behalten den Befund. „Das Modell besteht

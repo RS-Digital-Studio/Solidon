@@ -369,6 +369,38 @@ def test_a_new_import_loads_the_plates_into_the_scene(profile) -> None:
     assert "arrange.off_the_plate" not in codes, codes
 
 
+def test_a_further_file_with_plates_comes_behind_the_last_plate(profile) -> None:
+    """Eine zweite Datei mit mehreren Platten (Robert, 28.09.2026): Sie behält
+    ihre Aufteilung und kommt hinter die letzte belegte Platte — so überlappt
+    nichts, und jedes Teil steht auf seiner Platte an seiner Stelle."""
+    from app.core.ingest.plan import import_plan
+    from app.core.scene import History, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+    payload = plated_container({"1": (1, 128.0, 128.0), "2": (2, stride + 60.0, 200.0)})
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    for key in ("src_1", "src_2"):
+        project.document.sources[key] = Source(
+            id=key, kind="import", path=f"sources/{key}.3mf", sha256=""
+        )
+        project.sources[key] = payload
+        chosen = import_plan(key, f"{key}.3mf", payload, "auto", first_model=key == "src_1")
+        history.apply(chosen.title, [chosen.draft])
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    objects = [result.scene.objects[key] for key in ("obj_1", "obj_2", "obj_3", "obj_4")]
+    assert [entry.plate for entry in objects] == [0, 1, 2, 3]
+    centres = [tuple(round(float(v), 6) for v in entry.mesh.bounds.centre[:2]) for entry in objects]
+    assert centres[2:] == centres[:2] == [(0.0, 0.0), (-68.0, 72.0)], "an seiner Stelle"
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "arrange.plates_behind" in codes, "der Bericht sagt, ab welcher Platte"
+
+
 def test_one_plate_changes_nothing() -> None:
     payload = plated_container({"1": (1, 100.0, 50.0), "2": (1, 30.0, 40.0)})
 

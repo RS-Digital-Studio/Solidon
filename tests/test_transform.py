@@ -322,6 +322,10 @@ def test_fit_to_size_reaches_the_given_edge(profile: Profile) -> None:
     said = [f for f in result.scene.report.findings if f.code == "transform.fitted"]
     assert said, "die Operation sagt, worauf sie gebracht hat"
     assert said[0].values["from_mm"] == pytest.approx(20.0, abs=1e-3)
+    # Ohne ``free_spot`` — wie jeder vor dem 28.09.2026 gespeicherte Schritt —
+    # bleibt die Mitte, wo sie war, auch unter der Platte.
+    assert tuple(bodies[0].mesh.bounds.centre) == pytest.approx((0.0, 0.0, 0.0), abs=1e-6)
+    assert bodies[0].plate == 0
 
 
 def test_fit_to_size_refuses_a_body_without_extent() -> None:

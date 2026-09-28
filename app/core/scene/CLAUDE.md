@@ -141,7 +141,10 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   Drucker- und Materialfeld (`profile_key`), `material_params`,
   `OperationSpec.cache_version` (der geladene Stand), `CACHE_FORMAT_VERSION`
   (Stand der Erkennung, kein Projektformat). Beschädigtes wird neu gerechnet
-  (`_DAMAGED_ENTRY`).
+  (`_DAMAGED_ENTRY`). Die übrigen Körper unter `#scene` mischt
+  `_with_nested_context` für `OperationSpec.reads_other_bodies` immer ein, für
+  einen Schalter mit `ParamSpec.reads_scene` nur, solange er an ist und seine
+  Antwortfelder (`answered_by`) leer sind (`registry.params.reads_scene`).
 - **Prozesswerte nur im Schlüssel eines Schritts, der sie liest**: Schichthöhe,
   Bahnbreite, Stützschwelle und was aus ihnen folgt (`hashing._profile_parts`)
   setzt der Druckdialog. **Die Vorgabe liest** (`OperationSpec.reads_process`),

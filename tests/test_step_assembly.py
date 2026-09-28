@@ -333,7 +333,7 @@ def imported(
     name: str,
     *,
     keys: list[str] | None = None,
-    first_model: bool = False,
+    first_model: bool | None = None,
     stem: str | None = None,
 ) -> tuple[Any, History]:
     """Ein Projekt, in das eine Korpusdatei über den Einleseplan gekommen ist."""
@@ -561,6 +561,49 @@ def test_the_first_model_goes_onto_the_bed_as_one_group(profile: Profile) -> Non
     front, back = boxes[0], boxes[2]
     assert back[1] - front[1] == pytest.approx(corpus.AXLE_OFFSET), "die Lage zueinander bleibt"
     assert "load.assembly_on_bed" in codes_of(project, profile)
+
+
+def test_a_further_step_file_comes_to_a_free_place_as_one_group(profile: Profile) -> None:
+    """Eine STEP-Baugruppe als weiteres Modell (Robert, 28.09.2026): alle
+    Körper auf einmal an die erste freie Stelle der ersten Platte, aufgesetzt,
+    ohne Überschneidung mit dem ersten Modell — und die Lage zueinander bleibt.
+    Der Körper bleibt exakt."""
+    from app.core.build_area import fits_on_bed
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    project, history = imported("nested", first_model=True)
+    first = scene_of(project, profile)
+    data = payload("instances")
+    project.sources["src_2"] = data
+    project.document.sources["src_2"] = Source(
+        id="src_2", kind="import", path="sources/instances.step", sha256=""
+    )
+    chosen = ingest_plan.import_plan("src_2", "instances.step", data, first_model=False)
+    assert chosen.draft.params["free_spot"] is True
+    history.apply(chosen.title, [chosen.draft])
+
+    objects = scene_of(project, profile)
+    added = [entry for key, entry in objects.items() if key not in first]
+    assert len(added) == 4
+    assert all(entry.kind == "brep" and entry.plate == 0 for entry in added)
+    for key, entry in first.items():
+        assert_bounds(bounds_of(objects[key].mesh.shape), bounds_of(entry.mesh.shape))
+    boxes = [bounds_of(entry.mesh.shape) for entry in added]
+    assert min(box[2] for box in boxes) == pytest.approx(0.0, abs=BOUNDS), "aufgesetzt"
+    for entry in added:
+        assert fits_on_bed(entry.mesh, profile.printer), entry.name
+        for other in first.values():
+            a, b = bounds_of(entry.mesh.shape), bounds_of(other.mesh.shape)
+            assert (
+                a[3] + ARRANGE_SPACING <= b[0] + BOUNDS
+                or b[3] + ARRANGE_SPACING <= a[0] + BOUNDS
+                or a[4] + ARRANGE_SPACING <= b[1] + BOUNDS
+                or b[4] + ARRANGE_SPACING <= a[1] + BOUNDS
+            ), (entry.name, other.name)
+    plate, left = boxes[0], boxes[1]
+    expected = bolt_bounds(corpus.BOLT_INSTANCES[0][1], False)
+    assert left[0] - plate[0] == pytest.approx(expected[0], abs=BOUNDS), "die Lage zueinander"
+    assert left[1] - plate[1] == pytest.approx(expected[1], abs=BOUNDS)
 
 
 def test_the_findings_say_what_came_and_what_did_not(profile: Profile) -> None:

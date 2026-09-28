@@ -36,7 +36,7 @@ from app.core.ingest.loader import (
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.log import get_logger
 from app.core.registry import REGISTRY
-from app.core.registry.params import WHOLE_FILE
+from app.core.registry.params import WHOLE_FILE, reads_scene
 from app.core.scene.history import OperationDraft
 from app.core.types import Document, ObjectId, ProgressFn, SceneObject
 from app.core.units import EPS_DISPLAY
@@ -216,29 +216,32 @@ def import_plan(
     payload: bytes,
     unit: str = "auto",
     *,
-    first_model: bool = False,
+    first_model: bool | None = None,
     taken: Sequence[str] = (),
     progress: ProgressFn = _silent_plan,
 ) -> ImportPlan:
     """Der Einleseweg für eine Datei, entschieden an ihrer Endung.
 
-    ``first_model`` sagt, dass die Szene noch leer ist — das erste Modell
-    eines Projekts. Dann kommt es **auf** die Platte und **in ihre Mitte**
+    ``first_model`` sagt, ob die Szene noch leer ist. **Das erste Modell**
+    eines Projekts (``True``) kommt **auf** die Platte und **in ihre Mitte**
     (§17.1, Schritt 6), statt dort zu liegen, wo seine Datei es hinlegt: Ein
     heruntergeladenes Modell sitzt meist um den Ursprung und steckt zur Hälfte
     unter dem Bett, eines aus einem CAD-Programm hat seinen Nullpunkt in einer
     Ecke und liegt weit daneben. Beides ist für den ersten Blick auf ein
     frisches Projekt die falsche Lage (Entscheidung Robert, 03.09.2026).
 
-    **Nur beim ersten**, und zwar aus einem geometrischen Grund: Ein zweites
-    Modell in die Mitte zu schieben legte es in das erste hinein. Wer weitere
-    Teile ordnet, nimmt *Auf dem Bett anordnen* (§29) — die Operation, die den
-    Platz kennt.
+    **Jedes weitere** (``False``) kommt aufgesetzt an die erste freie Stelle,
+    Platte für Platte wie *Auf dem Bett anordnen* (§29): In die Mitte
+    geschoben läge es im ersten, an seinen Dateikoordinaten meist außerhalb,
+    obwohl auf den Platten Platz war (Robert, 28.09.2026). ``None`` heißt, der
+    Aufrufer entscheidet nichts — die Datei behält ihre Lage.
 
     Die Entscheidung fällt hier und wird in die Parameter der Operation
-    geschrieben, nicht beim Auswerten nachgeschlagen: Sonst hinge das Ergebnis
-    daran, was sonst noch in der Szene steht, und dieselbe Datei käme beim
-    nächsten Öffnen anders herein (§15.1).
+    geschrieben (``place_on_bed``, ``centre``, ``free_spot``), nicht als Regel
+    beim Auswerten nachgeschlagen: Sonst hinge das Ergebnis daran, was sonst
+    noch in der Szene steht. Die freie Stelle sucht die Operation einmal und
+    hält sie als Antwort im Schritt fest (§15.7, ``spot_*``) — danach bleibt
+    das Modell liegen, auch wenn sich davor etwas ändert.
 
     ``taken`` sind die Namen, die in diesem Stapel schon vergeben sind
     (:func:`names_in_use`). Trägt einer davon den Dateinamen, bekommt dieser
@@ -315,7 +318,7 @@ def import_plan(
                 # Eine Nummer statt eines Namens (``_own_name``): Sie gilt
                 # jedem Körper, den die Datei bringt, auch einer Baugruppe.
                 **_own_name(name, taken, loads=True),
-                **({"place_on_bed": True, "centre": True} if first_model else {}),
+                **_placement(first_model),
             },
             produces=max(parts, 1),
         ),
@@ -323,12 +326,25 @@ def import_plan(
     )
 
 
+def _placement(first_model: bool | None) -> dict[str, bool]:
+    """Die Lage eines Ladeschritts als seine Parameter (§17.1, Schritt 6).
+
+    Das erste Modell aufgesetzt und mittig, jedes weitere aufgesetzt an die
+    erste freie Stelle; ohne Angabe nichts — dann gilt die Lage der Datei.
+    """
+    if first_model is None:
+        return {}
+    if first_model:
+        return {"place_on_bed": True, "centre": True}
+    return {"place_on_bed": True, "free_spot": True}
+
+
 def _step_plan(
     source_id: str,
     name: str,
     payload: bytes,
     *,
-    first_model: bool,
+    first_model: bool | None,
     taken: Sequence[str],
     progress: ProgressFn,
 ) -> ImportPlan:
@@ -372,7 +388,7 @@ def _step_plan(
                 # Eine Nummer statt eines Namens, wie beim Netz: Sie gilt
                 # jedem Körper, den die Datei bringt (``_own_name``).
                 **_own_name(name, taken, loads=True),
-                **({"place_on_bed": True, "centre": True} if first_model else {}),
+                **_placement(first_model),
             },
             produces=len(keys),
         ),
@@ -473,9 +489,13 @@ def imported_group(
                 # Eine spätere Gegenflächenwahl kann ihren Träger auch über
                 # einen Ausdruck bestimmen. Ohne Auswertung keinen fremden
                 # Bezug als unbenutzt erklären: Das Angebot endet konservativ.
-                if spec.reads_other_bodies or any(
-                    field.targets_feature and later.params.get(field.name, field.default)
-                    for field in spec.params.spec()
+                if (
+                    spec.reads_other_bodies
+                    or reads_scene(spec.params, later.params)
+                    or any(
+                        field.targets_feature and later.params.get(field.name, field.default)
+                        for field in spec.params.spec()
+                    )
                 ):
                     return ()
         return targets

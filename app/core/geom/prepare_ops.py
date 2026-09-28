@@ -64,6 +64,7 @@ from app.core.geom.pins import (
     plan_pins,
 )
 from app.core.geom.prepare import (
+    ARRANGE_SPACING,
     BORE_SECTIONS,
     FEATURE_OVERLAP,
     MAX_PLATES,
@@ -17463,7 +17464,7 @@ def _laid_out_after_turning(
 class ArrangeParams(BaseParams):
     spacing: float = param(
         title=_("Abstand"),
-        default=5.0,
+        default=ARRANGE_SPACING,
         unit="mm",
         minimum=0.0,
         maximum=100.0,

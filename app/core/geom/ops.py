@@ -21,6 +21,12 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.prepare import (
+    free_spot_param,
+    placed_at_free_spot,
+    spot_param,
+    spot_plate_param,
+)
 from app.core.geom.repair import repair
 from app.core.geom.transform import (
     AXIS_VECTORS,
@@ -533,6 +539,20 @@ class FitToSizeParams(BaseParams):
         placement="advanced",
         doc=_("Welcher Punkt beim Skalieren stehen bleibt."),
     )
+    #: Weg 3 setzt ihn: Ein erzeugtes Modell ist ein weiteres Modell und wird
+    #: erst am fertigen Maß gelegt — dieselbe Regel wie ``load.free_spot``.
+    #: Vorgabe aus, damit ein älterer Schritt liegen bleibt, wo er stand.
+    free_spot: bool = free_spot_param(
+        _(
+            "Setzt das Modell nach dem Skalieren auf und legt es neben die Teile, die schon "
+            "im Projekt liegen: an die erste freie Stelle, Platte für Platte, wie "
+            "„Auf dem Bett anordnen“."
+        ),
+        placement="advanced",
+    )
+    spot_x: float | None = spot_param("x")
+    spot_y: float | None = spot_param("y")
+    spot_plate: int = spot_plate_param()
 
 
 @register_op(
@@ -570,6 +590,25 @@ def fit_to_size(ctx: OpContext) -> OpResult:
     pivot = anchor_point(body, cast(Anchor, params.about))
     matrix = scaling((factor, factor, factor), pivot)
     fitted = moved_object(source, matrix, cancelled=ctx.cancelled)
+    placed: list[Finding] = []
+    answered: dict[str, Any] = {}
+    if params.free_spot:
+        # Gelegt wird am fertigen Maß, nicht am Einheitswürfel des Generators;
+        # der eigene Eingang belegt keinen Platz neben sich selbst. Die Stelle
+        # wird einmal gerechnet und festgehalten (``answered``, §15.7).
+        spot = placed_at_free_spot(
+            fitted.mesh.bounds,
+            ctx.profile,
+            ctx.scene,
+            spot=(params.spot_x, params.spot_y, params.spot_plate),
+            ignore={source.id},
+        )
+        matrix = composed(translation(spot.offset), matrix)
+        fitted = dataclasses.replace(
+            moved_object(source, matrix, cancelled=ctx.cancelled), plate=spot.plate
+        )
+        placed.extend(spot.findings)
+        answered.update(spot.answered)
     return OpResult(
         outputs=[fitted],
         transform=as_transform(matrix),
@@ -581,8 +620,10 @@ def fit_to_size(ctx: OpContext) -> OpResult:
                 values={"from_mm": round(current, 3), "to_mm": params.largest},
                 source="internal",
             ),
+            *placed,
             *_too_small_to_print(fitted.mesh, ctx.profile),
         ],
+        answered=answered,
     )
 
 

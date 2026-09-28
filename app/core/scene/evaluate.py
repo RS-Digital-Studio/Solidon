@@ -112,6 +112,7 @@ from app.core.perceive.matching import (
 )
 from app.core.perceive.relations import thinnest_sleeve
 from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, validate
+from app.core.registry.params import reads_scene
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.edge_binding import NO_BINDING, EdgeBinding, EdgeTarget, bind_edges
@@ -4746,9 +4747,15 @@ def _with_nested_context(
     (``reads_other_bodies``), und der Schlüssel bekommt die Hashes **aller**
     Objekte: Die Eingänge stehen ohnehin darin, doppelt schadet nicht, und
     „alle außer den Eingängen" wüsste hier niemand — die Eingangsliste steht
-    an der Operation, nicht am Parametersatz."""
+    an der Operation, nicht am Parametersatz.
+
+    **Die fünfte hängt an einem Schalter** (``ParamSpec.reads_scene``): *An
+    eine freie Stelle legen* liest die Szene wie die vierte, aber nur, solange
+    der Schalter an ist und die Stelle noch nicht im Schritt steht
+    (``registry.params.reads_scene``). Danach, und in jedem Schritt ohne den
+    Schalter, hängt der Schlüssel an nichts davon."""
     context: dict[str, Any] = {}
-    if reads_other_bodies and hashes is not None:
+    if (reads_other_bodies or reads_scene(params_class, resolved)) and hashes is not None:
         # Sortiert, weil ein Schlüssel aus einer Wörterbuchreihenfolge kein
         # Schlüssel ist: Zwei gleiche Szenen müssen denselben ergeben.
         context["#scene"] = tuple(sorted(hashes.items()))

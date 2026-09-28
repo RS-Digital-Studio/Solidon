@@ -3705,3 +3705,46 @@ def test_v36_rounding_at_horizontal_keeps_the_mouths_of_a_cross_bore(profile) ->
     for key in ("obj_1", "obj_2"):
         # Zwei Mündungen zu R 1 an Ø 6 tragen nach Pappus rund 8,7 mm³ ab.
         assert today.scene.objects[key].mesh.volume - volumes[key] > 5.0, key
+
+
+def test_v37_a_further_model_keeps_the_place_of_its_file(profile) -> None:
+    """37 → 38: Ein weiteres Modell von vor dem 28.09.2026 bleibt, wo es lag.
+
+    ``further_model_v37.p3d`` hat der Stand davor geschrieben: zweimal
+    ``cube_clean.stl`` über den Einlesplan, der erste aufgesetzt und mittig, der
+    zweite ohne Lageentscheidung an seinen Dateikoordinaten (-10 … 10 in allen
+    Achsen, im ersten). Seit Format 38 legt der Plan ein weiteres Modell an eine
+    freie Stelle (``free_spot``); der gespeicherte Schritt trägt den Schalter
+    nicht und rechnet wie gespeichert. Mit dem Schalter kommt der zweite neben
+    den ersten.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "further_model_v37.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 37
+    assert [entry["params"] for entry in original["ops"]] == [
+        {"source": "src_1", "unit": "mm", "place_on_bed": True, "centre": True},
+        {"source": "src_2", "unit": "mm"},
+    ]
+
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    stored = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert stored.complete
+    first, second = stored.scene.objects["obj_1"], stored.scene.objects["obj_2"]
+    assert tuple(first.mesh.bounds.minimum) == pytest.approx((-10.0, -10.0, 0.0))
+    assert tuple(second.mesh.bounds.minimum) == pytest.approx((-10.0, -10.0, -10.0))
+    assert second.plate == 0
+
+    History(project.document).change_params(
+        project.document.ops[1].id, {"place_on_bed": True, "free_spot": True}
+    )
+    today = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert today.complete
+    moved = today.scene.objects["obj_2"].mesh.bounds
+    assert moved.minimum[2] == pytest.approx(0.0)
+    assert moved.maximum[0] <= first.mesh.bounds.minimum[0] - 5.0 or moved.minimum[1] >= (
+        first.mesh.bounds.maximum[1] + 5.0
+    ), "neben dem ersten, nicht in ihm"

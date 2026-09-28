@@ -109,6 +109,8 @@ def param(
     required: bool | None = None,
     subtractive_on: tuple[str | bool, ...] | None = None,
     targets_feature: bool = False,
+    reads_scene: bool = False,
+    answered_by: tuple[str, ...] = (),
     feature_kinds: tuple[str, ...] = (),
     optional: bool = False,
     sketch_planes: tuple[str, ...] = (),
@@ -124,6 +126,10 @@ def param(
 
     ``targets_feature`` markiert einen Parameter, der ein Merkmal als **Ziel**
     nennt — siehe :attr:`app.core.types.ParamSpec.targets_feature`.
+
+    ``reads_scene`` markiert einen Schalter, unter dem die Operation die
+    übrigen Körper der Szene liest, ``answered_by`` die Felder, die das
+    Gelesene festhalten — siehe :attr:`app.core.types.ParamSpec.reads_scene`.
 
     ``feature_kinds`` nennt die Merkmalsarten, die ein Merkmalsparameter
     annimmt — siehe :attr:`app.core.types.ParamSpec.feature_kinds`.
@@ -148,6 +154,8 @@ def param(
             "required": required,
             "subtractive_on": subtractive_on,
             "targets_feature": targets_feature,
+            "reads_scene": reads_scene,
+            "answered_by": tuple(answered_by),
             "feature_kinds": tuple(feature_kinds),
             "optional": optional,
             "sketch_planes": tuple(sketch_planes),
@@ -176,6 +184,21 @@ def _kind_of(annotation: Any, declared: ParamKind | None, choices: tuple[str, ..
             values={"annotation": str(annotation)},
         )
     return kind
+
+
+def reads_scene(params_class: type[BaseParams], values: Mapping[str, Any]) -> bool:
+    """Liest ein Schritt mit diesen Werten die übrigen Körper der Szene?
+
+    Ja, solange ein Schalter mit ``reads_scene`` an ist und eines seiner
+    ``answered_by``-Felder noch leer — danach steht das Gelesene im Schritt
+    (§15.7). Eine Stelle für Cache-Schlüssel und Importgruppe.
+    """
+    return any(
+        spec.reads_scene
+        and values.get(spec.name, spec.default)
+        and (not spec.answered_by or any(values.get(name) is None for name in spec.answered_by))
+        for spec in params_class.spec()
+    )
 
 
 def op_params[P: BaseParams](cls: type[P]) -> type[P]:
@@ -225,6 +248,8 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 depends_on=metadata["depends_on"],
                 subtractive_on=metadata["subtractive_on"],
                 targets_feature=metadata["targets_feature"],
+                reads_scene=metadata["reads_scene"],
+                answered_by=metadata["answered_by"],
                 feature_kinds=metadata["feature_kinds"],
                 optional=metadata["optional"],
                 sketch_planes=metadata["sketch_planes"],

@@ -2458,6 +2458,55 @@ def test_the_key_reads_the_bodies_that_were_not_chosen() -> None:
     assert "#scene" not in quiet, "wer die Szene nicht liest, hängt nicht an ihr"
 
 
+def _scene_reading_switches() -> list[tuple[str, str]]:
+    """Jeder Schalter mit ``reads_scene`` im Register — samt Untergrenze."""
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+
+    found = [
+        (spec.name, field.name)
+        for spec in REGISTRY.all()
+        for field in spec.params.spec()
+        if field.reads_scene
+    ]
+    assert {
+        ("load", "free_spot"),
+        ("load_step", "free_spot"),
+        ("fit_to_size", "free_spot"),
+    } <= set(found), found
+    return found
+
+
+@pytest.mark.parametrize(("op", "switch"), _scene_reading_switches())
+def test_a_step_hangs_on_the_scene_only_until_it_has_found_its_spot(op: str, switch: str) -> None:
+    """Wer die Szene liest (``reads_scene``), hängt mit dem Schlüssel an ihr —
+    aber nur, solange er sucht (Review F4, Entscheidung Robert zu F1).
+
+    Mit dem Schalter und ohne festgehaltene Stelle gehört jeder Körper davor in
+    den Schlüssel; steht die Stelle im Schritt (``answered_by``) oder ist der
+    Schalter aus — jeder Schritt, der vor Format 38 gespeichert wurde —, bleibt
+    der Schlüssel, wie er war: Ein schwerer Import rechnet nicht neu, weil davor
+    etwas anderes geändert wurde. Gefahren über alle Schalter im Register.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+
+    spec = REGISTRY.get(op)
+    field = next(entry for entry in spec.params.spec() if entry.name == switch)
+    assert field.answered_by, "wer die Szene liest, hält fest, was er fand"
+    looking = {switch: True}
+    before = _with_nested_context(spec.params, looking, {}, None, None, {"obj_1": "a1"})
+    after = _with_nested_context(spec.params, looking, {}, None, None, {"obj_1": "a2"})
+    assert before["#scene"] != after["#scene"], "wandert der erste Körper, kippt der Schlüssel"
+
+    settled = {switch: True, **dict.fromkeys(field.answered_by, 12.5)}
+    for values in ({switch: False}, {}, settled):
+        quiet = _with_nested_context(spec.params, values, {}, None, None, {"obj_1": "a1"})
+        assert "#scene" not in quiet, values
+
+
 def test_an_exact_sketch_plane_hashes_only_its_named_body() -> None:
     """Eine gleichnamige Fläche eines anderen Körpers ist keine Abhängigkeit.
 

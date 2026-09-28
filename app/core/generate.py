@@ -263,7 +263,12 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
                 op="fit_to_size",
                 inputs=(object_id,),
                 outputs=(object_id,),
-                params={"largest": WORKING_SIZE_MM},
+                # **Und erst am fertigen Maß wird gelegt** (Robert,
+                # 28.09.2026): Ein erzeugtes Modell ist aus Kundensicht ein
+                # weiteres Modell — aufgesetzt an die erste freie Stelle,
+                # nach derselben Regel wie beim Einfügen (§17.1, Schritt 6).
+                # In einem leeren Projekt heißt das: mittig auf Platte 1.
+                params={"largest": WORKING_SIZE_MM, "free_spot": True},
             )
         ],
         origin,
@@ -306,6 +311,17 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
             origin,
         )
         steps.append(decimating.id)
+
+    # **Und zuletzt wieder aufs Bett.** Die Stelle steht seit ``fit_to_size``
+    # fest, die Höhe nicht: Die Reparaturkette nimmt lose Krümel weg, und lag
+    # einer unter dem Körper, schwebte er danach — gemessen 5,21 mm über dem
+    # Bett (Review F8). Aufgesetzt wird deshalb nach der ganzen Kette.
+    seating = history.apply(
+        _("Auf das Bett setzen"),
+        [OperationDraft(op="place_on_bed", inputs=(object_id,), outputs=(object_id,))],
+        origin,
+    )
+    steps.append(seating.id)
 
     _log.info("generated %s into %s via %s", object_id, source_id, result.backend)
     return Generation(

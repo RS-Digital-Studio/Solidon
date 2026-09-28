@@ -30,7 +30,7 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
   mit Meter zuerst. `load` dreht die schon angewandten Knoten von Y-oben nach
   Z-oben; `legacy_raw` erhält alte Quellen, eine erzeugte GLB
   (`generate.into_project`) speichert `gltf` mit `mm`, die Zielgröße bleibt
-  der eigene Schritt `fit_to_size`.
+  der eigene Schritt `fit_to_size` — der mit `free_spot` auch die Lage setzt.
 - **Offene Stellen werden geschlossen** (Regel: `dateiformat.md`): `normalise`
   ruft `geom.repair.repair` ohne die schon gefahrenen Schritte, sobald das
   verschweißte Netz nicht dicht ist. Der Ladeschritt trägt `mend` (*Offene
@@ -65,8 +65,15 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
 - **3MF und STEP sind Baugruppen.** STEP liest der Plan über
   `brep.step.read_assembly`, schreibt die Kennungen in `load_step.bodies` und
   legt sie als `ImportPlan.choices` daneben; die Zahl der Ausgänge steht vor
-  der Operation fest (§11). Beim ersten Modell kommen `place_on_bed` und
-  `centre` dazu; geht die Baugruppe nicht auf, wählt der Plan `*`.
+  der Operation fest (§11). Geht die Baugruppe nicht auf, wählt der Plan `*`.
+- **Die Lage schreibt der Plan in den Ladeschritt** (§17.1, Schritt 6;
+  `plan._placement`): das erste Modell `place_on_bed` und `centre`, jedes
+  weitere `place_on_bed` und `free_spot`, ohne Angabe nichts.
+  `ops._to_a_free_spot` legt alle Körper der Datei als Block an die erste
+  freie Stelle (`geom.prepare.placed_at_free_spot`, gelesen aus `ctx.scene`)
+  und gibt Mitte und Platte als Antwort zurück (`spot_*`, §15.7); danach liest
+  der Schritt die Szene nicht mehr. Eine Datei mit mehreren Platten rückt
+  hinter die letzte belegte. `load_step` fragt denselben Helfer.
 - **Native 3MF-Farben** — Werkzeugpaletten (Orca/Bambu-Metadaten,
   Prusa-Konfiguration), Objekt- und Part-Werkzeuge, bemalte Dreiecke — werden
   Materialslots; Prusa-Volumen behalten ihre Dreiecksbereiche.

@@ -111,9 +111,15 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
     assert source.origin.seed == 7
     assert source.origin.author == "scripted"
     assert project.sources[result.source_id] == result.result.payload
-    # Drei Schritte: laden, reparieren, auf Arbeitsgröße bringen. Der dritte
-    # kam dazu, weil ein Bildmodell auf einen Einheitswürfel normiert liefert.
-    assert [entry.op for entry in project.document.ops] == ["load", "fit_to_size", "repair"]
+    # Vier Schritte: laden, auf Arbeitsgröße bringen (ein Bildmodell liefert
+    # auf einem Einheitswürfel), reparieren und zuletzt aufsetzen — nach der
+    # Kette, denn die Reparatur kann unter dem Körper etwas wegnehmen.
+    assert [entry.op for entry in project.document.ops] == [
+        "load",
+        "fit_to_size",
+        "repair",
+        "place_on_bed",
+    ]
 
 
 def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
@@ -305,7 +311,7 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Figur", seed=7)
 
-    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren"
+    assert len(generation.transactions) == 5, "Laden, Größe, Reparieren, Dezimieren, Aufsetzen"
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
@@ -336,7 +342,9 @@ def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Vase", seed=7)
 
-    assert len(generation.transactions) == 3, "Laden, Größe, Reparieren — keine Dezimierung"
+    assert len(generation.transactions) == 4, (
+        "Laden, Größe, Reparieren, Aufsetzen — keine Dezimierung"
+    )
 
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
@@ -371,3 +379,123 @@ def test_the_list_of_steps_leaves_none_of_them_out(project: Project, profile: Pr
     )
     schritte = [operation.op for operation in project.document.ops]
     assert "fit_to_size" in schritte, "sonst prüft dieser Test nichts"
+
+
+# --- ein erzeugtes Modell ist ein weiteres Modell (Robert, 28.09.2026) ---------
+
+
+def _sphere_backend() -> ScriptedMeshBackend:
+    """Eine geschlossene Kugel auf dem Einheitswürfel, wie ein Bildmodell sie liefert."""
+    kugel = trimesh.creation.icosphere(subdivisions=3, radius=1.0)
+    return ScriptedMeshBackend(
+        fallback=bytes(trimesh.exchange.export.export_mesh(kugel, None, file_type="ply")),
+        suffix=".ply",
+    )
+
+
+def _with_a_model_first(project: Project, name: str, payload: bytes) -> None:
+    """Ein Modell über den Einlesplan, wie das Fenster es als erstes einfügt."""
+    from app.core.ingest.plan import import_plan
+    from app.core.types import Source
+
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=f"sources/{name}", sha256=""
+    )
+    project.sources["src_1"] = payload
+    chosen = import_plan("src_1", name, payload, "mm", first_model=True)
+    History(project.document).apply(chosen.title, [chosen.draft])
+
+
+def _apart(one, other, spacing: float) -> bool:
+    a, b = one.mesh.bounds, other.mesh.bounds
+    return bool(
+        a.maximum[0] + spacing <= b.minimum[0] + 1e-6
+        or b.maximum[0] + spacing <= a.minimum[0] + 1e-6
+        or a.maximum[1] + spacing <= b.minimum[1] + 1e-6
+        or b.maximum[1] + spacing <= a.minimum[1] + 1e-6
+    )
+
+
+def test_a_generated_model_in_an_empty_project_stands_in_the_middle(
+    project: Project, profile: Profile
+) -> None:
+    """Wie das erste eingefügte Modell (§17.1, Schritt 6): aufgesetzt und mittig —
+    gelegt nach der Größenanpassung, am fertigen Maß von 100 mm."""
+    result = from_text(project, _sphere_backend(), "eine Kugel", seed=7)
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    body = scene.scene.objects[result.object_id]
+    assert body.plate == 0
+    assert max(body.mesh.bounds.size) == pytest.approx(100.0, abs=1e-3)
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "aufgesetzt"
+    assert body.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0), abs=1e-6), "mittig"
+
+
+def test_a_generated_model_goes_to_a_free_spot_beside_what_is_there(
+    project: Project, profile: Profile
+) -> None:
+    """Ein erzeugtes Modell ist aus Kundensicht ein weiteres Modell: an die
+    erste freie Stelle der ersten Platte, ganz auf der Druckfläche, im Abstand
+    der Anordnung — und der Würfel davor bleibt, wo er war."""
+    from app.core.build_area import fits_on_bed
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    _with_a_model_first(project, "wuerfel.stl", (MESHES / "cube_clean.stl").read_bytes())
+    result = from_text(project, _sphere_backend(), "eine Kugel", seed=7)
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    cube, body = scene.scene.objects["obj_1"], scene.scene.objects[result.object_id]
+    assert cube.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0)), "der Würfel bleibt"
+    assert (cube.plate, body.plate) == (0, 0), "Platz war auf der ersten Platte"
+    assert max(body.mesh.bounds.size) == pytest.approx(100.0, abs=1e-3), "am fertigen Maß"
+    assert fits_on_bed(body.mesh, profile.printer), "ganz auf der Druckfläche"
+    assert body.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "aufgesetzt"
+    assert _apart(cube, body, ARRANGE_SPACING), "nicht im Würfel"
+    codes = {entry.code for entry in scene.scene.report.findings}
+    assert "arrange.free_spot" in codes
+
+
+def test_a_generated_model_stays_seated_when_the_repair_takes_a_crumb_below_it(
+    project: Project, profile: Profile
+) -> None:
+    """Review F8 (Sonde p1): Ein loser Krümel unter der Kugel stand nach
+    *Auf Maß bringen* auf dem Bett, die Reparaturkette nahm ihn weg, und der
+    Körper schwebte 5,21 mm darüber. Aufgesetzt wird deshalb nach der Kette."""
+    kugel = trimesh.creation.icosphere(subdivisions=4, radius=1.0)
+    splitter = trimesh.creation.icosphere(subdivisions=1, radius=0.01)
+    splitter.apply_translation([0.0, 0.0, -1.1])
+    body = trimesh.util.concatenate([kugel, splitter])
+    backend = ScriptedMeshBackend(
+        fallback=bytes(trimesh.exchange.export.export_mesh(body, None, file_type="ply")),
+        suffix=".ply",
+    )
+
+    result = from_text(project, backend, "eine Kugel", seed=7)
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    entry = scene.scene.objects[result.object_id]
+    assert entry.mesh.bounds.minimum[2] == pytest.approx(0.0, abs=1e-6), "auf dem Bett"
+    assert "arrange.above_bed" not in {finding.code for finding in scene.scene.report.findings}
+    assert [operation.op for operation in project.document.ops][-1] == "place_on_bed"
+
+
+def test_a_generated_model_goes_to_the_next_plate_when_the_first_is_full(
+    project: Project, profile: Profile
+) -> None:
+    """Eine Platte von 230 mm lässt auf dem 256er Bett keinen Platz für 100 mm:
+    Das erzeugte Modell kommt auf die nächste Platte, dort mittig."""
+    from app.core.build_area import fits_on_bed
+
+    plate = trimesh.creation.box(extents=(230.0, 230.0, 4.0))
+    _with_a_model_first(project, "platte.stl", bytes(plate.export(file_type="stl")))
+    result = from_text(project, _sphere_backend(), "eine Kugel", seed=7)
+    scene = evaluated(project, profile)
+
+    assert scene.complete
+    body = scene.scene.objects[result.object_id]
+    assert body.plate == 1
+    assert fits_on_bed(body.mesh, profile.printer)
+    assert body.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0), abs=1e-6)
