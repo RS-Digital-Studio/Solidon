@@ -2460,6 +2460,45 @@ def test_stamping_preserves_pdf_link_targets(
     assert make_manual._chapter_of_each_page(pdf) == ["", "", *("Die vier Wege",) * 4]
 
 
+def test_every_page_before_the_first_chapter_stays_without_header_and_footer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deckblatt und Verzeichnis bleiben frei, auch wenn das Verzeichnis wächst.
+
+    Die Grenze sagt das erste Kapitelziel, keine feste Seitenzahl: Mit mehr
+    Kapiteln oder in einer längeren Sprache reicht das Verzeichnis auf ein
+    weiteres Blatt, und das bekäme sonst Kopf- und Fußzeile ohne Kapitel.
+    """
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import ContentStream
+
+    from tools import make_manual
+
+    monkeypatch.setattr(manual, "pages", lambda: (manual.Page("what", "Die vier Wege", ""),))
+    pdf = tmp_path / "manual.pdf"
+    _pdf_with_chapter_targets(pdf, {"what": 3}, dictionary=True)
+    given: list[list[str]] = []
+
+    def overlay(path: Path, chapters: list[str], total: int, language: str) -> Path:
+        """Jede Seite der Lage trägt einen Strich, damit man sieht, wo sie liegt."""
+        given.append(chapters)
+        writer = PdfWriter()
+        for _ in range(total):
+            page = writer.add_blank_page(width=595, height=842)
+            stroke = ContentStream(None, writer)
+            stroke.set_data(b"0 0 m 10 10 l S")
+            page.replace_contents(stroke)
+        with path.open("wb") as stream:
+            writer.write(stream)
+        return path
+
+    monkeypatch.setattr(make_manual, "_overlay", overlay)
+    make_manual._stamp(pdf, "de")
+    stamped = [page.get_contents() is not None for page in PdfReader(pdf).pages]
+    assert stamped == [False, False, False, True, True, True]
+    assert given == [["", "", "", *("Die vier Wege",) * 3]], "die Lage lässt dieselben frei"
+
+
 def test_the_pdf_bookmarks_hold_the_parts_and_under_them_their_chapters(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

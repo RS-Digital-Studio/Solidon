@@ -1251,8 +1251,10 @@ def _stamp(pdf: Path, language: str) -> None:
     unten Version und Seitenzahl. Die Lesezeichen (`_bookmark`) entstehen im
     selben Schritt aus denselben Zielen.
 
-    Deckblatt und Inhaltsverzeichnis bleiben frei — ein Titelblatt mit
-    Kolumnentitel sieht aus wie eine Seite, die verrutscht ist.
+    Frei bleibt jede Seite vor dem ersten Kapitel, also Deckblatt und
+    Inhaltsverzeichnis — ein Titelblatt mit Kolumnentitel sieht aus wie eine
+    Seite, die verrutscht ist. Wie viele Seiten das sind, sagen die Ziele und
+    keine feste Zahl: Das Verzeichnis wächst mit den Kapiteln und je Sprache.
     """
     from io import BytesIO
 
@@ -1263,9 +1265,8 @@ def _stamp(pdf: Path, language: str) -> None:
     reader = PdfReader(BytesIO(pdf.read_bytes()))
     starts = _chapter_starts(reader)
     total = len(reader.pages)
-    overlay = _overlay(
-        pdf.with_suffix(".stamp.pdf"), _running_chapters(starts, total), total, language
-    )
+    running = _running_chapters(starts, total)
+    overlay = _overlay(pdf.with_suffix(".stamp.pdf"), running, total, language)
 
     # Einzelne Seiten zu kopieren verliert den Dokumentkatalog und damit
     # die Ziele, auf die die Links im Inhaltsverzeichnis zeigen.
@@ -1273,7 +1274,7 @@ def _stamp(pdf: Path, language: str) -> None:
     # Dieselbe Vorsicht: ``overlay`` wird am Ende gelöscht.
     marks = PdfReader(BytesIO(overlay.read_bytes()))
     for number, page in enumerate(writer.pages):
-        if number >= SKIP_STAMP:
+        if running[number]:
             page.merge_page(marks.pages[number])
     _bookmark(writer, starts)
     writer.add_metadata(
@@ -1340,13 +1341,11 @@ def _replace_with(pdf: Path, writer: object) -> None:
     raise RuntimeError(f"{pdf.name} ließ sich nicht ersetzen — {holder}")
 
 
-#: Wie viele Seiten am Anfang ohne Kolumnentitel bleiben: Deckblatt und
-#: Inhaltsverzeichnis.
-SKIP_STAMP = 2
-
-
 def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Path:
-    """Die Lage mit Kopf- und Fußzeilen, eine Seite je Seite des Handbuchs."""
+    """Die Lage mit Kopf- und Fußzeilen, eine Seite je Seite des Handbuchs.
+
+    Eine Seite, auf der noch kein Kapitel läuft, bleibt leer.
+    """
     from PySide6.QtCore import QMarginsF, QRectF, Qt
     from PySide6.QtGui import (
         QColor,
@@ -1377,7 +1376,7 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
         for number in range(total):
             if number:
                 writer.newPage()
-            if number < SKIP_STAMP:
+            if not chapters[number]:
                 continue
 
             box = QRectF(STAMP_INSET, 0, width - 2 * STAMP_INSET, HEADER_BASELINE)
