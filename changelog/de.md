@@ -47,24 +47,36 @@ Nutzen da und sonst nichts.
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer gilt das Profil des Herstellers. Solidon schreibt nur, was Sie ändern oder an Vorschlägen übernehmen.
 - Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.
 - Übernommene Vorschläge gelten nur dem Teil, das sie braucht: Stützen, Brim und die Werte einer Passung, in jedem unterstützten Slicer. Der Druckdialog nennt die Teile.
-- Die Stufen *Fein*, *Entwurf* und *Belastbar* wählen jetzt den passenden Prozess Ihres Slicers, etwa „0.12mm Fine“ bei *Fein*.
-- Die Qualitätsstufen im Druckdialog stehen jetzt in der Sprache der Oberfläche.
-- Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, wie in Elegoos eigenem Profil.
+- Druckt ein Teil stehend ohne Stützen, lässt *Druckoptimal ausrichten* es stehen, statt es auf Stützen zu legen. Ein Minigolf-Satz aus 16 Teilen passt so auf eine Platte statt auf vier.
+- Passt ein Teil in keiner Lage aufs Bett, sagt der Druckdialog schon vor dem Slicen, um wie viel es zu groß ist, und bietet *Modell teilen* und *Auf den Bauraum verkleinern* an.
+- Auch wo sich Teile eines Modells nur berühren, gelingt *Modell teilen*, und die Verbinder sitzen an jeder Naht richtig herum in ihren Löchern. Vorher meldete der Bericht dort Kollisionen.
 - Den Überhangwinkel nimmt Solidon aus dem Herstellerprofil Ihres Druckers, bei Elegoo, Bambu und Creality 60 statt 45 Grad. Fasen und flache Schrägen bekommen keine unnötigen Stützen mehr.
-- Haben Sie den Überhang Ihres Druckers gemessen, stützt auch der Slicer erst ab diesem Winkel, solange Schichthöhe und Bahnbreite der Messung gelten.
-- Auch der Prüfbericht rechnet Überhänge jetzt mit dem Winkel, ab dem Ihr Slicerprofil stützt.
+- An runden Außenwänden schlägt Solidon eine *Schrägnaht* vor, in jedem unterstützten Slicer. Der Druck dauert dadurch 2 bis 4 Prozent länger.
+- Rechnet Ihr Slicer den Brim selbst, wie ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer, schlägt Solidon keinen eigenen vor. Der des Slicers gibt hohen Teilen mehr Rand.
+- Die Stufen *Fein*, *Entwurf* und *Belastbar* wählen jetzt den passenden Prozess Ihres Slicers, etwa „0.12mm Fine“ bei *Fein*.
 - Der Druckdialog zeigt, was gedruckt wird: Grundlage ist das Herstellerprofil, Ihre eigenen Werte sind markiert und lassen sich einzeln zurücksetzen.
 - Die Druckplatte wählen Sie im Druckdialog, und die Betttemperatur folgt ihr. Gibt der Hersteller die Platte für Ihr Filament nicht frei, sagt Solidon es vor dem Druck.
 - Ohne *Vorschläge übernehmen* bekommt kein Teil mehr ungefragt einen Brim, weder beim Export noch bei der Übergabe an den Slicer.
-- An runden Außenwänden schlägt Solidon eine *Schrägnaht* vor, in jedem unterstützten Slicer. Der Druck dauert dadurch 2 bis 4 Prozent länger.
-- Rechnet Ihr Slicer den Brim selbst, wie ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer, schlägt Solidon keinen eigenen vor. Der des Slicers gibt hohen Teilen mehr Rand.
-- Reicht ein Brim, Skirt oder Raft über das Bett hinaus, sagt Solidon es bei der Übergabe an den Slicer und bietet *Auf dem Bett anordnen* an.
-- Lehnt der Slicer ein zu hohes Teil ab, nennt Solidon beide Höhen und bietet *Modell teilen*, *Auf den Bauraum verkleinern* und einen anderen Drucker an.
-- Bleibt Bambu Studio nach dem Slicen hängen, übernimmt Solidon die fertige Druckdatei, statt nach fünf Minuten abzusagen.
+- Neu ist der Vorschlag *Kanäle frei halten*: Übernommen sperrt die Übergabe die Stützen in den Kanälen, in jedem unterstützten Slicer. Das Cura-Fenster bekommt die Sperre und die Werte je Teil mit.
+- Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Braucht sonst keine Stelle Stützen auf dem Modell, schlägt Solidon sie nur vom Bett vor.
+- Der Druckdialog zeigt seine Vorschläge schneller, am Bohrmaschinenhalter nach 4,3 statt 7,6 Sekunden.
 - Projekte aus 0.5.0 drucken mit dem Tempo Ihres Druckers. Was Sie darin selbst eingestellt hatten, bleibt erhalten.
 - Das Tempo der ersten Schicht gilt jetzt auch für ihre Füllung. Vorher legte der Slicer den Boden mit dem Tempo des Herstellers, am Centauri Carbon 2 mit 105 mm/s.
 - Mit PrusaSlicer beginnt der Druck jetzt wie bei Prusa selbst, mit Bettvermessung, Spüllinie und Druckerprüfung.
 - PETG geht an PrusaSlicer jetzt als PETG hinaus, nicht mehr als PLA.
+- In OrcaSlicer bekommt jeder Drucker seine eigene Maschine und deren Standardprozess vorgewählt, der Sovol SV06 nicht mehr die High-Speed-Ausführung, der Ender-3 V3 nicht mehr „0.12mm Fine“.
+- Neu sind der Creality Ender-3 V3 SE und der V3 KE. Bisher bekam ein SE die Werte des viel schnelleren Ender-3 V3.
+- Gleiche Kopien rechnet *Druckoptimal ausrichten* nur einmal und ist am selben Minigolf-Satz in weniger als einem Drittel der Zeit fertig.
+- Die Qualitätsstufen im Druckdialog stehen jetzt in der Sprache der Oberfläche.
+- Auch das Tempo der Leerfahrten kommt vom Drucker: Der Centauri Carbon 2 fährt sie mit 500 statt 150 mm/s, wie in Elegoos eigenem Profil.
+- Haben Sie den Überhang Ihres Druckers gemessen, stützt auch der Slicer erst ab diesem Winkel, solange Schichthöhe und Bahnbreite der Messung gelten.
+- Auch der Prüfbericht rechnet Überhänge jetzt mit dem Winkel, ab dem Ihr Slicerprofil stützt.
+- Reicht ein Brim, Skirt oder Raft über das Bett hinaus, sagt Solidon es bei der Übergabe an den Slicer und bietet *Auf dem Bett anordnen* an.
+- Lehnt der Slicer ein zu hohes Teil ab, nennt Solidon beide Höhen und bietet *Modell teilen*, *Auf den Bauraum verkleinern* und einen anderen Drucker an.
+- Lehnt der Slicer ein Teil ab, das nicht auf seine Platte passt, nennt Solidon den Grund und bietet *Modell teilen*, *Auf den Bauraum verkleinern* und *Auf dem Bett anordnen* an.
+- Bleibt Bambu Studio nach dem Slicen hängen, übernimmt Solidon die fertige Druckdatei, statt nach fünf Minuten abzusagen.
+- Mit Cura lassen sich auch große Modelle slicen. Vorher endete der Lauf dort ohne Druckdatei, etwa am Eiffelturm mit 313 000 Dreiecken.
+- Kann Creality Print eine 3MF nur in seinem Fenster rechnen, sagt Solidon das und führt zu *Im Slicer öffnen …*.
 - Hat die erste Schicht schmale Stege, auch wenige lange an einem großen Teil, schlägt Solidon vor, sie mit 50 mm/s zu legen. Die kurzen Bahnen haften so besser.
 - Eine längere *Mindestzeit je Schicht* schlägt Solidon nur noch vor, wo Ihr Profil keine trägt. Vorher kam der Vorschlag an fast jedem Teil mit Fase oder Spitze.
 - Wo Ihr Slicer das Tempo selbst nach dem Volumenstrom begrenzt, schlägt Solidon dafür kein eigenes Tempolimit mehr vor.
@@ -77,14 +89,14 @@ Nutzen da und sonst nichts.
 - Mit Cura druckt die Füllung jetzt nach den Wänden, und Leerfahrten meiden Stützen und ziehen auf langen Wegen das Filament zurück.
 - Das Profil für das Cura-Fenster passt jetzt zu dem Drucker, der in Cura eingerichtet ist. Bisher lehnte Cura es bei manchen Druckern ab oder zeigte es nicht an.
 - Den Volumenstrom bietet der Druckdialog für Cura nicht mehr als Einstellung an, denn Cura liest ihn nicht.
-- Neu sind der Creality Ender-3 V3 SE und der V3 KE. Bisher bekam ein SE die Werte des viel schnelleren Ender-3 V3.
-- Eine Decke über einem Wasserkanal oder Tunnel holt keine Stützen mehr aufs Modell. Braucht sonst keine Stelle Stützen auf dem Modell, schlägt Solidon sie nur vom Bett vor.
-- Neu ist der Vorschlag *Kanäle frei halten*: Übernommen sperrt die Übergabe die Stützen in den Kanälen, in jedem unterstützten Slicer. Das Cura-Fenster bekommt die Sperre und die Werte je Teil mit.
 - Gitterstützen kommen als echtes Gitter beim Slicer an, mit wechselnder Richtung je Schicht, statt als lose Linien, die sich im Druck verschieben.
 - Steht ein Teil auf vielen kleinen Füßen, schlägt Solidon einen Brim vor, wo Ihr Slicer keinen eigenen rechnet, auch wenn die Füße zusammen genug Fläche hätten.
 - Ein schmaler schräger Streifen an der Außenwand gilt im Prüfbericht nicht mehr als weit gespannte Brücke.
+- Schrift, die als eigenes Teil dicht an einer Wand steht, beginnt im Prüfbericht nicht mehr in der Luft, und Solidon schlägt dafür keine Stützen mehr vor.
 - Den Hinweis, die Toleranzen Ihres Materials zu kalibrieren, zeigt der Prüfbericht nur noch an Modellen mit Passungen. Nur dort rechnet Solidon mit ihnen.
 - Die Übergabe an Cura überträgt die ersten Schichten ohne Lüfter als Hochlauf. Gewarnt wird nur noch, wenn die fertige Druckdatei wirklich abweicht.
+- Nach *Auf den Bauraum verkleinern* steht das Teil weiter auf dem Bett. Vorher hob es sich an, und der Bericht meldete es als schwebend.
+- Passt ein Teil nur mit schmalerem Rand aufs Bett, liegt es nach *Auf dem Bett anordnen* in der Mitte, statt über die Kante zu ragen, und der Bericht nennt den schmaleren Rand.
 - An großen Modellen findet *Modell teilen* die Naht bis zu doppelt so schnell, an mehrfarbigen in einem Bruchteil der Zeit. Geteilt wird wie vorher.
 - Teilt Solidon ein Modell automatisch in drei oder mehr Stücke, zählen die Namen durch und nennen die Verbinder, etwa „Wandleiste 2 von 3 · Stifte und Löcher“.
 - Eine gedruckte Schraube, Mutter oder Dichtung aus den Bausteinen gilt im Prüfbericht nicht mehr als zerfallener Körper. Sie ist ein eigenes Teil, und das ist gewollt.
@@ -100,6 +112,7 @@ Nutzen da und sonst nichts.
 - Sackloch, Langloch und Aufweitung in einer schrägen Fläche sowie gekippte Sackbohrungen wie eine Magnettasche ohne Lippe bleiben an der Mündung ganz offen. Vorher blieb dort eine dünne Haut.
 - Versetzen und Verdoppeln warnen, wenn die Wand zur Nachbarbohrung zu dünn wird oder aufreißt.
 - Läuft eine Bohrung nach dem Versetzen, Verdoppeln oder Kippen seitlich aus dem Teil, sagt Solidon es auch an abgesetzten Stellen. Eine Kopie, die nicht entstanden ist, fällt auf.
+- Eine versetzte oder verdoppelte Bohrung aus einer STL-Datei meldet in dünnen Platten nicht mehr fälschlich, sie gehe nicht mehr durch.
 - Auf Rippen und in Waben meldet eine gekippte Bohrung nicht mehr fälschlich, sie rage über die Kante.
 - Nach dem Versetzen, Kippen oder Verdoppeln zeigt das Merkmalfenster die Maße, die das Ergebnis wirklich hat.
 - Bohren, Versetzen, *Bohrung ändern* und der Zug zum Langloch lassen das Modell abseits der Bohrung, wie es war. Die Erkennung danach ist an großen Modellen deutlich schneller fertig.
@@ -118,7 +131,7 @@ Nutzen da und sonst nichts.
 - Setzen Sie ein Gewinde, eine Einpressbuchse oder eine Mutternfalle an eine Bohrung, nennt der Dialog oben die Größe, die passt, und wählt genau diese vor.
 - An einer Senkung schneidet *Merkmal ändern* das neue Maß, als wäre sie gleich so gesenkt. Vorher sagte Solidon ab oder ließ eine dünne Haut quer über der Bohrung stehen.
 - Stecken Teile eines Modells ineinander, vereinigt Solidon sie vor dem Rechnen, so wie sie gedruckt werden. Volumen und Bohrungen stimmen dann, und der Bericht sagt es.
-- Weiten Sie eine Bohrung auf, zeigt die genaue Vorschau das ganze abgetragene Material, auch an großen Modellen und an Körpern mit eingeschlossenen Kanälen.
+- Weiten Sie eine Bohrung auf, zeigt die genaue Vorschau das ganze abgetragene Material, auch an großen Modellen, bei einem Ansichtsschnitt und an Körpern mit eingeschlossenen Kanälen.
 - Beim Tippen eines Maßes an einer großen Figur steht die grobe Vorschau in unter einer Sekunde statt nach bis zu neunzehn, und die Vorschau einer Bohrung darauf gelingt.
 - Rechnet ein Schritt an einem offenen Modell nur angenähert und wächst dabei das Volumen, nennt der Bericht die Abweichung und bietet *Erst reparieren, dann neu rechnen* an.
 
@@ -138,13 +151,18 @@ Nutzen da und sonst nichts.
 - Ein begonnener Bohrungsentwurf geht nicht mehr nebenbei verloren: Ein Klick in den Prüfbericht, ein Werkzeugwechsel oder Strg+Z bittet erst, ihn zu übernehmen oder abzubrechen.
 - Beim Tippen einer Koordinate verschwinden die Maßfelder nicht mehr nach der zweiten Ziffer.
 - An großen Modellen antwortet *Wandstärke messen* etwa viermal so schnell.
+- Ein Klick mitten in eine gesenkte Bohrung wählt die Bohrung statt ihrer Senkung, und die Maße nennen ihre Kante nach der Seite, etwa „Außenkante links“ statt „Außenkante 4“.
+- Ist eine Kante oder ein Abstand gewählt, steht im Auswahlfenster nicht mehr „Kein Merkmal gewählt …“.
 
 ### Erkennen
 
 - Merkmale werden bis 1,5 Millionen Dreiecke von selbst erkannt. Bis fünf Millionen fragt Solidon vorher und nennt den Speicherbedarf und die Dauer auf Ihrem Rechner.
-- Wer die volle Erkennung ablehnt, holt sie später mit *Alle Merkmale erkennen* im Prüfbericht nach. Dauert sie zu lange, lädt *Ohne Merkmalserkennung laden* das Modell ohne.
+- Wer die volle Erkennung ablehnt, holt sie später mit *Alle Merkmale erkennen* im Prüfbericht oder auf der Kommandozeile nach. Dauert sie zu lange, lädt *Ohne Merkmalserkennung laden* das Modell ohne.
 - An großen Modellen findet *Merkmale an einer Stelle erkennen* Flächen, wo es vorher zu viele Dreiecke meldete. Die Stelle lässt sich auch per Tastatur wählen.
+- An großen Modellen beginnt *Merkmale an einer Stelle erkennen* gleich mit der Suche. Vorher rechnete es erst das ganze Modell neu, am Mausoleum-Drachen 40 Sekunden je Versuch.
 - Große Modelle und Gitter werden deutlich schneller erkannt: ein erzeugtes Puppenhausbett mit 1,2 Millionen Dreiecken in 27 statt 174 Sekunden. Abbrechen wirkt dabei nach wenigen Sekunden.
+- Kopien und gedrehte oder verschobene Teile übernehmen die Merkmale ihres Ursprungs, statt sie neu zu suchen. Ein Projekt mit vielen gleichen Teilen rechnet so in weniger als der halben Zeit.
+- Nach einer Bohrung nennt die Fläche eines konstruierten Körpers ihre heutige Größe, und eine neue Bohrung fehlt nicht mehr im Baum, wenn vorher eine andere geändert wurde.
 - Schriftzüge und Streben stehen im Baum als gerundete Seiten statt als Dutzende Verrundungen mit wechselnden Radien.
 - Umrisse aus Bögen und Geraden werden Bogen für Bogen mit ihrem Radius erkannt. *In Flächen und Kanten umwandeln* geht dadurch um ein Vielfaches schneller.
 - Ein abgesetzter Zapfen gilt nicht mehr als Gewinde. Zylinder und Bohrungen, die diese Verwechslung verschluckt hatte, sind wieder da.
@@ -154,9 +172,14 @@ Nutzen da und sonst nichts.
 - Nach *Teilen* und *Abschneiden* behält eine geteilte Fläche ihren Namen am größten Stück, und Passungen daran bleiben gültig.
 - Klicken Sie die Randkante einer liegenden Bohrung an, heißt sie „Senkrecht“, so wie sie steht.
 - Hat ein Modell mehr als 5 000 Merkmale, behält Solidon die größten, statt ohne jedes Merkmal dazustehen. Skalieren bringt ihre Namen nicht durcheinander.
+- Ein Baustein mit einem einzigen Merkmal heißt im Baum wie im Verlauf, etwa „Magnettasche“ statt „Sackbohrung 1“.
 
 ### Einlesen und Reparieren
 
+- Ein großes Modell steht nach dem Einlesen gleich im Bild, seine Merkmale folgen. Vorher erschien es erst, wenn die Erkennung fertig war.
+- Eine 3MF aus Bambu Studio, OrcaSlicer oder ElegooSlicer mit mehreren Platten legt jedes Teil auf seine Platte, an seine Stelle darauf. Vorher kamen alle auf eine, viele neben das Bett.
+- Eine 3MF mit mehreren Platten, die zu einem Projekt dazukommt, behält ihre Platten und reiht sie hinter die vorhandenen.
+- Ein Modell ohne eigene Farben bleibt nach dem Schließen seiner Löcher in der Farbe des Körpers. Vorher wurde es grau, und *Textur in Filamente umrechnen* machte ein graues Filament daraus.
 - Fehlt einem Modell ein Stück Bohrungswand oder ein Teil eines Senkungskegels, schließt Solidon die Lücke als Wand, nicht als Deckel quer durch die Bohrung.
 - Offene Nähte werden beim Einlesen und Reparieren geschlossen, ohne Teile zu verbinden, die sich nur berühren. Ein heiles Modell bleibt unverändert.
 - Überschneidungen löst *Reparieren* jetzt von selbst auf. Stecken die Teile eines eingelesenen Modells ineinander, bietet der Prüfbericht *Überschneidungen auflösen* an.
@@ -164,16 +187,18 @@ Nutzen da und sonst nichts.
 - Nach dem Schließen einer Öffnung beim Einlesen umrandet *Stelle zeigen* die ganze neue Fläche in eigener Farbe.
 - Ein umgestülptes Teil neben einem Hohlkörper wird gerichtet, ohne dass der Hohlraum verloren geht. Ein Teil im Material eines anderen wird gemeldet statt geraten.
 - Der Prüfbericht nach dem Einlesen ist kürzer: Befunde, die das Ergebnis widerlegt, fallen weg, und wo sich etwas tun lässt, steht ein Knopf statt eines Ratschlags.
-- Die Netzfehlerkarte zeigt heile Stellen in der Farbe des Körpers, damit einzelne Fehler auffallen, und trägt *Reparieren* direkt in der Legende.
+- Die Netzfehlerkarte zeigt heile Stellen in der Farbe des Körpers, damit einzelne Fehler auffallen, und trägt *Reparieren* direkt in der Legende. Einen einzigen Körper wählt sie selbst.
 - Die Suche nach Überschneidungen kommt auch an Modellen mit Fächern aus schmalen Dreiecken bis zum Ende. Netzfehlerkarte und Reparatur sehen dann das ganze Modell.
 - Eine 3MF aus PrusaSlicer lädt Modifikatoren, Stützsperren und Stützverstärker nicht mehr als festes Material. Eine Aussparung wird vom Teil abgezogen.
 - Mit *Kanten verfeinern* bleiben alle Merkmale erhalten, und es entstehen bis zu viermal weniger Dreiecke: ein Bohrmaschinenhalter bei 1 mm Kantenlänge in fünf Sekunden statt vierzehn Minuten.
 - Ein geschlossenes Modell bleibt dabei dicht und behält seine Filamentfarben. Bei zu vielen Dreiecken nennt Solidon eine Kantenlänge, die wirklich geht.
-- Die Vorschau von *Kanten verfeinern* steht in Sekunden, statt das Fenster anzuhalten, und eine zu feine Länge sagt sofort ab.
+- Die Vorschau von *Kanten verfeinern* und *Dreiecke verringern* steht in Sekunden, statt das Fenster anzuhalten, und eine zu feine Länge sagt sofort ab.
 - Ist ein Modell für *Kanten verfeinern* zu fein, bietet der Prüfbericht *Dreiecke verringern und erneut versuchen* mit einer Zahl an, die wirklich trägt.
 - Würde *Glätten* einen Körper umstülpen, sagt Solidon es und bietet *Kanten verfeinern und erneut versuchen* mit einer Kantenlänge an, die trägt.
 - Große Baugruppen lesen schneller ein: Die Reparatur beim Einlesen eines Piratenschiffs mit 1,2 Millionen Dreiecken braucht rund 30 Prozent weniger Zeit.
 - Beim Öffnen großer 3MF-Dateien bleibt das Fenster bedienbar, auch während das Modell gelesen wird.
+- Lesen Sie eine umbenannte Kopie einer schon geöffneten Datei ein, trägt der Körper den neuen Namen. Vorher hieß er wie die erste Datei.
+- An großen Netzen rechnet *Offene Fläche schließen* in Sekunden, bei 122 752 Dreiecken 1,8 statt 24 Sekunden.
 
 ### Handbuch und Website
 
@@ -188,18 +213,23 @@ Nutzen da und sonst nichts.
 ### Bedienung und System
 
 - Große Rechnungen wie Vorschau und *Kanten verfeinern* laufen in einem eigenen Prozess: Das Fenster bleibt bedienbar, und *Abbrechen* wirkt sofort. Dafür läuft ein zweiter Solidon-Prozess mit.
-- Beim Laden und bei langen Rechnungen zählt eine Uhr die verstrichene Zeit mit, auch wenn der Fortschritt eine Weile stillsteht.
+- Beim Laden und bei langen Rechnungen zählt eine Uhr die verstrichene Zeit mit, auch wenn der Fortschritt stillsteht, und die Restzeit springt nicht mehr, wenn ein neuer Teil der Rechnung beginnt.
+- Die automatische Sicherung läuft neben dem Fenster und hält es auch an großen Modellen nicht mehr an. Lässt sie sich nicht schreiben, sagt Solidon es.
 - Ein Modell auf einem langsamen oder nicht antwortenden Laufwerk friert das Fenster beim Öffnen nicht mehr ein.
 - Ist eine Datei aus *Zuletzt geöffnet* verschoben worden, sagt Solidon das und bietet *Andere Datei wählen* an.
 - Eine Datei, die sich nicht lesen ließ, landet nicht mehr in *Zuletzt geöffnet*, und die nächste Datei meldet beim Laden nicht deren Namen.
+- Eine Datei ohne lesbares Modell bleibt nicht mehr als erster Schritt stehen, an dem jede weitere Datei mit „Die Kette hält an“ scheiterte.
 - Zuletzt geöffnete Projekte auf der Startseite öffnen mit einem Klick.
 - Ist nichts gewählt, bietet das Auswahlfenster an, was für alle Körper gilt: *Druckoptimal ausrichten*, *Auf dem Bett anordnen* und *Überschneidungen prüfen*.
 - Nach *Modell teilen* stehen alle Teile ganz im Bild.
 - Jeder angehaltene Schritt im Prüfbericht hat einen Knopf: *Eingabe korrigieren* öffnet ihn mit dem Cursor im betroffenen Feld.
-- Nach dem Teilen zeigt der Prüfbericht an Zeilen zum alten Körper keine Knöpfe mehr, die nichts bewirken.
+- Nach *Modell teilen* sagt der Prüfbericht in einem Satz, dass die Stücke noch aneinanderliegen, statt in über zwanzig Zeilen, und Zeilen zum alten Körper tragen keine leeren Knöpfe mehr.
 - Eine frei gezogene Zeichnung ohne Maß erzeugt keinen Hinweis mehr im Prüfbericht.
+- Stehen im Prüfbericht nur Hinweise, sagt er oben „Druckbereit“, und ein Hinweis zur Einrichtung ist nicht mehr wie eine Warnung vorgewählt.
+- Warnungen im Prüfbericht tragen einen Knopf: *Merkmal zeigen* an einer Passung, die nicht passt, *Druckeinstellungen öffnen* an Befunden zu Bett, Stützen, Düse und Brim.
 - Ein Fehlerbericht nennt Ordner unter Ihrem Benutzerverzeichnis ohne Ihren Benutzernamen, auch wenn Solidon selbst dort installiert ist.
 - In *Erste Schritte* steht der Drucker Ihres Slicers gleich beim Öffnen. Vorher kam der Vorschlag erst nach Sekunden, und *Fertig* übernahm bis dahin den allgemeinen Drucker.
+- Nach dem Einlesen trägt die Titelleiste den Namen des Modells statt „Unbenannt“, und *Erste Schritte* nennt Slicer beim Namen statt beim Dateinamen.
 - Den Slicer wählen Sie im Druckdialog über den Profilen, auch wenn dieser Abschnitt zugeklappt ist.
 - Einen Drucker, den Sie im Druckdialog wählen, bekommt auch das nächste neue Projekt. Ist Ihr Slicer auf einen anderen Drucker eingestellt, bietet der Dialog diesen mit einem Klick an.
 - Wählen Sie einen anderen Drucker oder Slicer, gilt das gemerkte Maschinenprofil des vorigen nicht mehr.
@@ -208,7 +238,10 @@ Nutzen da und sonst nichts.
 - Der Verlauf nennt einen geänderten Parameter mit seiner Beschriftung und zeigt den Wert davor und danach.
 - Der Griff an einer gewählten Fläche zeigt nur noch den Pfeil, mit dem Sie sie verschieben.
 - Ohne Text sagt *Text aufbringen*, dass der Text fehlt, statt die Vorschau für nicht verfügbar zu erklären.
-- In den Übersetzungen heißen *Trennen* und *Teilen* jetzt überall verschieden, und die italienische Oberfläche duzt durchgehend.
+- Nach dem Zeichnen steht rechts wieder der Reiter von vorher, etwa der Prüfbericht. Bisher stand dort der Chat, und *An den Slicer übergeben …* lag verdeckt.
+- Die *Befehlspalette …* findet Operationen in jeder Sprache auch über Alltagswörter, etwa „copy“ oder „calamita“. Bisher kannte sie solche Wörter nur auf Deutsch.
+- Beim Speichern mit *Auswahl als Baustein speichern …* prüft Solidon die Wandstärken des Bausteins um ein Vielfaches schneller.
+- In den Übersetzungen heißen *Trennen* und *Teilen* jetzt überall verschieden, Tasten wie auf der Tastatur, und die italienische Oberfläche duzt durchgehend.
 
 ### Assistent mit lokalem Modell
 
