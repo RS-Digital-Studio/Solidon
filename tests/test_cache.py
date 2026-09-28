@@ -717,23 +717,7 @@ def _loaded_plate(profile: Profile) -> SceneObject:
     return SceneObject(id="obj_1", name="Platte", mesh=mesh)
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
-        "load",
-        "load_step",
-        "load_outline",
-        "duplicate_object",
-        "rename_object",
-        "delete_object",
-        "pattern",
-        "translate_object",
-        "rotate_object",
-        "mirror_object",
-        "place_on_bed",
-        "place_group_on_bed",
-    ],
-)
+@pytest.mark.parametrize("case", sorted(_STEPS_WITHOUT_PROCESS))
 def test_a_step_without_process_values_never_reads_one(profile: Profile, case: str) -> None:
     """Jeder freigestellte Schritt läuft an einem Profil, das beim Lesen eines
     Prozesswerts abbricht — auf den Wegen, die das Profil überhaupt fragen:
@@ -824,16 +808,18 @@ def test_a_step_without_process_values_never_reads_one(profile: Profile, case: s
         )
         moved = _guarded_run(profile, case, [edge], params, others=(near,))
         codes = {finding.code for finding in moved.findings}
-        assert codes & {"transform.rearranged_on_bed", "transform.nudged_onto_bed"}, codes
+        assert "transform.rearranged_on_bed" in codes, codes
         alone = _guarded_run(profile, case, [edge], params)
         assert {finding.code for finding in alone.findings} & {"transform.nudged_onto_bed"}
     elif case == "mirror_object":
         assert _guarded_run(profile, case, [plate], {"axis": "x"}).outputs
     elif case == "place_on_bed":
         assert _guarded_run(profile, case, [plate], {}).outputs
-    else:
+    elif case == "place_group_on_bed":
         second = dataclasses.replace(neighbour, id="obj_2")
         assert len(_guarded_run(profile, case, [plate, second], {}).outputs) == 2
+    else:
+        pytest.fail(f"{case} is exempt but has no guarded run here")
 
 
 def test_the_guard_catches_a_step_that_reads_the_process(profile: Profile) -> None:
