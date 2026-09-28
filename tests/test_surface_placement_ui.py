@@ -1450,7 +1450,12 @@ def test_feature_hover_reuses_the_body_prepared_outside_qt(
 ) -> None:
     """Mausbewegungen und Maße dürfen den Merkmalskörper nicht erneut im Qt-Thread berechnen."""
     import app.core.geom.prepare_ops as module
+    from app.ui import placement_flow
 
+    # Der Weg über den Arbeiter: Am kleinen Körper entsteht die Fläche beim
+    # Start seit ``f01f8b622`` einmal gleich im Hauptfaden (``AT_ONCE_BELOW``);
+    # hier geht es darum, dass danach nichts sie noch einmal rechnet.
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     original, session, viewport, _dialog = flow
     original.dispose()
     object_id = original.inputs_of()[0]
@@ -2159,7 +2164,7 @@ def _another_hole(window, object_id: str, hole: str) -> str:
 
 
 def test_a_click_at_a_hole_holds_the_picture_until_its_surface_is_there(
-    qt_app: QApplication,
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein Bild je Bohrungsklick statt zweier (RM-232).
 
@@ -2168,22 +2173,45 @@ def test_a_click_at_a_hole_holds_the_picture_until_its_surface_is_there(
     brachte die Maße. Der Fluss hält das Bild an, solange er die Fläche am
     Merkmal rechnet, und gibt es frei, sobald sie steht — ein Anhalten, eine
     Freigabe, mit der Frist aus ``FRAME_HOLD_MS``.
+
+    Das gilt für den Weg über den Arbeiter. An einem kleinen Körper entsteht
+    die Fläche seit ``f01f8b622`` gleich im Klick (``AT_ONCE_BELOW``); dort
+    sind Anhalten und Freigabe beide schon vorbei, wenn der Klick zurückkehrt.
+    Die Platte liegt unter der Grenze, der Arbeiterweg wird deshalb mit
+    ``AT_ONCE_BELOW = 0`` erzwungen und danach der Klickweg geprüft.
     """
+    from app.ui import placement_flow
     from app.ui.placement_flow import FRAME_HOLD_MS
 
+    at_once_below = placement_flow.AT_ONCE_BELOW
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     window = _window_with_a_renderer()
     try:
         object_id, first_hole = _a_selected_hole(window)
         renderer = window.viewport.renderer
         first = _measures_in_the_view(window)
         assert first is not None and first._surface is not None
+        entry = window.session.last_result.scene.objects[object_id]
+        assert entry.mesh.triangle_count < at_once_below, "die Platte ist ein kleiner Körper"
         assert renderer.holds and set(renderer.holds) == {FRAME_HOLD_MS}
         assert renderer.releases == len(renderer.holds), "freigegeben, sobald die Fläche steht"
-        window.object_tree.select_feature(object_id, _another_hole(window, object_id, first_hole))
+        second_hole = _another_hole(window, object_id, first_hole)
+        window.object_tree.select_feature(object_id, second_hole)
         assert renderer.releases == len(renderer.holds) - 1, "angehalten, solange sie rechnet"
         second = _measures_in_the_view(window)
         assert second is not None and second is not first and second._surface is not None
         assert renderer.releases == len(renderer.holds) and not second._frames_held
+
+        # Am kleinen Körper rechnet der Klick selbst: angehalten und
+        # freigegeben, bevor er zurückkehrt, und die Fläche steht schon.
+        monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", at_once_below)
+        holds_before = len(renderer.holds)
+        window.object_tree.select_feature(object_id, first_hole)
+        assert len(renderer.holds) > holds_before, "auch der Klickweg hält das Bild an"
+        assert renderer.releases == len(renderer.holds), "und gibt es im Klick wieder frei"
+        third = window._quiet_placement
+        assert third is not None and third is not second and third._surface is not None
+        assert not third._frames_held
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()
