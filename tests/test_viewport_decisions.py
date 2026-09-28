@@ -356,7 +356,13 @@ def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setenv("QT_QPA_PLATFORM", "wayland")
-    monkeypatch.delenv(QT_PLATFORM_BEFORE_VARIABLE, raising=False)
+    # Erst setzen, dann löschen: So merkt sich ``monkeypatch`` den Zustand vor
+    # dem Test. Ein ``delenv`` allein merkt sich bei fehlender Variable nichts,
+    # und die späteren ``delenv`` stellten beim Abbau den Vorwert ``wayland``
+    # wieder her — der nächste Fehlerberichtstest im selben Arbeiter las dann
+    # „von Solidon3D gesetzt“ (CI 0.5.1, Linux und macOS).
+    monkeypatch.setenv(QT_PLATFORM_BEFORE_VARIABLE, "")
+    monkeypatch.delenv(QT_PLATFORM_BEFORE_VARIABLE)
 
     assert qt_platform.prefer_x11_for_the_viewport() == "xcb;wayland"
     assert os.environ["QT_QPA_PLATFORM"] == "xcb;wayland"
