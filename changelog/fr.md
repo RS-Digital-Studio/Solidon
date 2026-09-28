@@ -128,7 +128,7 @@ dans `website/version.json`.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
 - Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
 - La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
-- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. Le découpage se fait comme avant.
+- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. La division se fait comme avant.
 - Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
 - Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
 

@@ -434,7 +434,7 @@ def insert_advice(diameter: float) -> TranslatableText:
     if size is None:
         return _("Keine Einpressbuchse der Normteiltabelle hat ein so weites Loch.")
     return _(
-        "Passend ist die Einpressbuchse {size}: Ihr Einpressloch weitet diese Bohrung auf.",
+        "Passend ist die Einpressbuchse {size}; ihr Einpressloch weitet diese Bohrung auf.",
         size=size,
     )
 
@@ -445,7 +445,7 @@ def nut_trap_advice(diameter: float) -> TranslatableText:
     size = size_for_nut_trap(diameter).get("size")
     if size is None:
         return _("Keine Mutter der Normteiltabelle hat ein so weites Schraubenloch.")
-    return _("Passend ist die Mutter {size}: Ihr Schraubenloch nimmt diese Bohrung auf.", size=size)
+    return _("Passend ist die Mutter {size}; ihr Schraubenloch nimmt diese Bohrung auf.", size=size)
 
 
 def thread_advice(diameter: float) -> TranslatableText:

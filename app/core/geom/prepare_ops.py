@@ -203,6 +203,42 @@ def _first_pin_param() -> Any:
     )
 
 
+def _piece_count_param() -> Any:
+    """Die Stückzahl eines Laufs von *Automatisch teilen* (RM-229), für beide Schnittarten."""
+    return param(
+        title=_("Stücke des Laufs"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_(
+            "Automatisch teilen trägt ein, in wie viele Stücke es teilt. Ab drei "
+            "heißen sie „1 von 3“, „2 von 3“ …; null heißt: A und B."
+        ),
+    )
+
+
+def _number_a_param() -> Any:
+    """Die Nummer von Stück A in der Zählung des Laufs (RM-229)."""
+    return param(
+        title=_("Nummer von Stück A"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_("Seine Nummer in dieser Zählung. Null heißt: Es wird gleich weiter geteilt."),
+    )
+
+
+def _number_b_param() -> Any:
+    """Die Nummer von Stück B in der Zählung des Laufs (RM-229)."""
+    return param(
+        title=_("Nummer von Stück B"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_("Dasselbe für Stück B."),
+    )
+
+
 #: Was eine Hälfte von der anderen unterscheidet, sobald verstiftet wurde,
 #: und das Zeichen davor.
 _HALF_MARK = " · "
@@ -16122,30 +16158,9 @@ class SplitPinnedParams(BaseParams):
         ),
     )
     first_pin: int = _first_pin_param()
-    piece_count: int = param(
-        title=_("Stücke des Laufs"),
-        default=0,
-        minimum=0,
-        placement="advanced",
-        doc=_(
-            "Automatisch teilen trägt ein, in wie viele Stücke es teilt. Ab drei "
-            "heißen sie „1 von 3“, „2 von 3“ …; null heißt: A und B."
-        ),
-    )
-    number_a: int = param(
-        title=_("Nummer von Stück A"),
-        default=0,
-        minimum=0,
-        placement="advanced",
-        doc=_("Seine Nummer in dieser Zählung. Null heißt: Es wird gleich weiter geteilt."),
-    )
-    number_b: int = param(
-        title=_("Nummer von Stück B"),
-        default=0,
-        minimum=0,
-        placement="advanced",
-        doc=_("Dasselbe für Stück B."),
-    )
+    piece_count: int = _piece_count_param()
+    number_a: int = _number_a_param()
+    number_b: int = _number_b_param()
 
 
 @op_params
@@ -16965,6 +16980,9 @@ class SplitLineParams(BaseParams):
         ),
     )
     first_pin: int = _first_pin_param()
+    piece_count: int = _piece_count_param()
+    number_a: int = _number_a_param()
+    number_b: int = _number_b_param()
 
 
 @register_op(
@@ -17016,6 +17034,8 @@ def split_line(ctx: OpContext) -> OpResult:
         play=params.play,
         pins_on_b=params.pins_on_b,
         first_pin=params.first_pin,
+        numbers=(params.number_a, params.number_b),
+        piece_count=params.piece_count,
     )
 
 

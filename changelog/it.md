@@ -52,7 +52,7 @@ scrive in `website/version.json`.
 - Un clic su un foro non mostra più immagini intermedie: pannello di selezione e scheda delle quote compaiono subito al loro posto, senza saltare.
 - Un clic sulle frecce di un foro selezionato non blocca più la selezione: il foro successivo si può cliccare come sempre.
 - Esc sulle quote nella vista scarta la bozza e toglie la selezione, come «Annulla».
-- Un clic su «Applica» non va più perso in silenzio, e le quote che non avete digitato restano esattamente come sono state misurate.
+- Un clic su «Applica» non va più perso in silenzio, e le quote che non hai digitato restano esattamente come sono state misurate.
 - Un foro iniziato non va più perso per strada: un clic nel rapporto, un cambio di strumento o Ctrl+Z chiedono prima di applicarlo o annullarlo.
 - Digitando una coordinata, i campi quota non spariscono più dopo la seconda cifra.
 - Sui modelli grandi, «Misura lo spessore di parete» risponde circa quattro volte più in fretta.
@@ -110,7 +110,7 @@ scrive in `website/version.json`.
 - Con PrusaSlicer la stampa inizia ora come con Prusa stessa: con livellamento del piano, linea di spurgo e controllo della stampante.
 - Il PETG arriva ora a PrusaSlicer come PETG, non più come PLA.
 - Se il primo strato ha passaggi stretti, Solidon propone di stenderlo a 50 mm/s. Così le linee corte aderiscono meglio.
-- Dove il vostro slicer limita già la velocità in base al flusso volumetrico, Solidon non propone più un proprio limite di velocità.
+- Dove il tuo slicer limita già la velocità in base al flusso volumetrico, Solidon non propone più un proprio limite di velocità.
 - Se adotti i valori di un profilo di filamento e poi cambi filamento, tornano a valere i valori del nuovo.
 - Il primo strato stampa ora linee larghe quanto il profilo della tua stampante, di solito 0,5 mm con ugello da 0,4. Con Cura la testina non va più a passo d'uomo tra una e l'altra.
 - Con Cura la stampa inizia ora con il codice di avvio della tua stampante, come dal produttore. Se Cura non conosce la stampante, Solidon te lo dice.
