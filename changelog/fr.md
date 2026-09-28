@@ -25,7 +25,7 @@ dans `website/version.json`.
 - Les suggestions appliquées ne valent que pour la pièce qui en a besoin : supports, brim et valeurs d'un ajustement, dans chaque slicer pris en charge. Les réglages d'impression nomment les pièces.
 - Si une pièce s'imprime debout sans supports, « Orienter pour l'impression » la laisse debout plutôt que sur des supports. Un jeu de minigolf de 16 pièces tient ainsi sur un plateau au lieu de quatre.
 - Pour une pièce trop grande dans tous les sens, les réglages d'impression disent avant la découpe de combien elle dépasse et proposent « Scinder le modèle » et « Réduire au volume d'impression ».
-- Même quand des pièces ne font que se toucher, « Scinder le modèle » réussit, et les connecteurs sont à l'endroit dans leurs trous à chaque jointure. Avant, le rapport y voyait des collisions.
+- Même si les pièces d'un modèle ne font que se toucher, « Scinder le modèle » réussit, et les connecteurs sont à l'endroit dans leurs trous à chaque jointure. Avant, le rapport y voyait des collisions.
 - Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
 - Sur les parois extérieures rondes, Solidon propose une « Couture en biseau », dans chaque slicer pris en charge. L'impression dure ainsi 2 à 4 % de plus.
 - Si votre slicer calcule lui-même le brim, comme ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, Solidon n'en propose pas. Celui du slicer donne plus de bord aux pièces hautes.
@@ -40,7 +40,7 @@ dans `website/version.json`.
 - La vitesse de la première couche vaut désormais aussi pour son remplissage. Avant, le slicer posait le fond à la vitesse du fabricant, 105 mm/s sur la Centauri Carbon 2.
 - Avec PrusaSlicer, l'impression commence désormais comme chez Prusa : avec mesure du plateau, ligne de purge et contrôle de l'imprimante.
 - Le PETG part désormais vers PrusaSlicer comme PETG, et non plus comme PLA.
-- Dans OrcaSlicer, chaque imprimante reçoit sa propre machine et son processus standard : la Sovol SV06 n'a plus la version High-Speed, la Ender-3 V3 plus « 0.12mm Fine ».
+- Dans OrcaSlicer, chaque imprimante reçoit sa propre machine et son processus standard : la Sovol SV06 n'a plus la version High-Speed, ni la Ender-3 V3 « 0.12mm Fine ».
 - Nouvelles : les Creality Ender-3 V3 SE et V3 KE. Jusqu'ici, une SE recevait les valeurs de l'Ender-3 V3, bien plus rapide.
 - Les copies identiques ne sont calculées qu'une fois par « Orienter pour l'impression », qui termine le même jeu de minigolf en moins d'un tiers du temps.
 - Les niveaux de qualité de la boîte de dialogue d'impression s'affichent désormais dans la langue de l'interface.
@@ -127,8 +127,8 @@ dans `website/version.json`.
 - Un perçage commencé ne se perd plus en chemin : un clic dans le rapport, un changement d'outil ou Ctrl+Z demande d'abord de l'appliquer ou de l'annuler.
 - Saisir une coordonnée ne fait plus disparaître les champs de cote après le deuxième chiffre.
 - Sur les grands modèles, « Mesurer l'épaisseur de paroi » répond environ quatre fois plus vite.
-- Un clic au milieu d'un perçage fraisé choisit le perçage et non sa fraisure, et les cotes nomment son arête par le côté, comme « Arête extérieure à gauche » au lieu de « Arête extérieure 4 ».
-- Quand une arête ou une distance est choisie, le panneau de sélection n'affiche plus « Aucun détail sélectionné … ».
+- Un clic au milieu d'un perçage fraisé sélectionne le perçage et non sa fraisure, et les cotes nomment son arête par le côté, comme « Arête extérieure à gauche » au lieu de « Arête extérieure 4 ».
+- Quand une arête ou une distance est sélectionnée, le panneau de sélection n'affiche plus « Aucun détail sélectionné … ».
 
 ### Reconnaissance
 
@@ -137,7 +137,7 @@ dans `website/version.json`.
 - Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces là où il signalait trop de triangles. L'endroit se choisit aussi au clavier.
 - Sur les grands modèles, « Détecter les éléments à un endroit » commence tout de suite à chercher. Avant, il recalculait d'abord tout le modèle, 40 secondes par essai sur le dragon du mausolée.
 - Grands modèles et treillis sont reconnus bien plus vite : un lit de maison de poupée généré, 1,2 million de triangles, en 27 secondes au lieu de 174. Annuler agit en quelques secondes.
-- Copies et pièces tournées ou déplacées reprennent les caractéristiques de leur original sans les rechercher. Un projet avec beaucoup de pièces identiques calcule en moins de la moitié du temps.
+- Copies et pièces tournées ou déplacées reprennent les caractéristiques de leur original sans les rechercher. Un projet avec beaucoup de pièces identiques se calcule en moins de la moitié du temps.
 - Après un perçage, la face d'un corps construit indique sa taille actuelle, et un nouveau perçage ne manque plus dans l'arbre quand un autre a été modifié avant.
 - Lettrages et entretoises apparaissent dans l'arbre comme des côtés arrondis au lieu de dizaines de congés aux rayons changeants.
 - Les contours faits d'arcs et de droites sont reconnus arc par arc avec leur rayon. « Convertir en faces et arêtes » est ainsi bien plus rapide.
@@ -163,7 +163,7 @@ dans `website/version.json`.
 - Après la fermeture d'une ouverture à l'import, « Montrer l'endroit » entoure toute la nouvelle face d'une couleur à part.
 - Une pièce retournée à côté d'un corps creux est remise à l'endroit sans perdre la cavité. Une pièce dans la matière d'une autre est signalée au lieu d'être devinée.
 - Le rapport après l'import est plus court : les constats que le résultat dément disparaissent, et là où l'on peut agir, un bouton remplace le conseil.
-- La carte des défauts de maillage montre les zones saines dans la couleur du corps, pour que chaque défaut ressorte, et porte « Réparer » dans la légende. Un corps unique, elle le choisit seule.
+- La carte des défauts de maillage montre les zones saines dans la couleur du corps, pour que chaque défaut ressorte, et porte « Réparer » dans la légende. Elle sélectionne d'office un corps unique.
 - La recherche de recouvrements va jusqu'au bout aussi sur les modèles aux éventails de triangles étroits. Carte des défauts et réparation voient alors tout le modèle.
 - Un 3MF de PrusaSlicer ne charge plus les modificateurs, bloqueurs et renforts de supports comme matière pleine. Un volume négatif est soustrait de la pièce.
 - Avec « Affiner les arêtes », toutes les caractéristiques restent, avec jusqu'à quatre fois moins de triangles : un support de perceuse à 1 mm en cinq secondes au lieu de quatorze minutes.
@@ -190,7 +190,7 @@ dans `website/version.json`.
 
 - Les gros calculs comme l'aperçu ou « Affiner les arêtes » tournent dans un processus à part : la fenêtre reste utilisable et « Annuler » agit aussitôt. Un second processus Solidon tourne pour cela.
 - Pendant le chargement et les longs calculs, une horloge compte le temps écoulé même si la progression s'arrête, et le temps restant ne saute plus quand une autre partie du calcul commence.
-- La sauvegarde automatique tourne à côté de la fenêtre et ne la bloque plus, même avec de grands modèles. Si elle ne peut pas s'écrire, Solidon le dit.
+- La sauvegarde automatique tourne en arrière-plan et ne bloque plus la fenêtre, même avec de grands modèles. Si elle ne peut pas s'écrire, Solidon le dit.
 - Un modèle sur un disque lent ou qui ne répond pas ne fige plus la fenêtre à l'ouverture.
 - Si un fichier de « Ouverts récemment » a été déplacé, Solidon le dit et propose « Choisir un autre fichier ».
 - Un fichier illisible n'atterrit plus dans « Ouverts récemment », et le fichier suivant n'annonce plus son nom au chargement.

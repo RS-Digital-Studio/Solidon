@@ -23,8 +23,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O nível «Padrão» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.
 - As sugestões aplicadas valem só para a peça que precisa delas: suportes, brim e os valores de um ajuste, em cada slicer suportado. As definições de impressão indicam as peças.
 - Se uma peça se imprime de pé sem suportes, «Orientar para impressão» deixa-a de pé em vez de a deitar sobre suportes. Um conjunto de minigolfe de 16 peças cabe assim numa placa em vez de quatro.
-- Se uma peça não cabe na mesa em nenhuma posição, as definições de impressão dizem antes de fatiar quanto é grande demais e oferecem «Dividir o modelo» e «Reduzir para o volume de impressão».
-- Mesmo onde as partes de um modelo apenas se tocam, «Dividir o modelo» funciona, e os conectores ficam do lado certo nos seus furos em cada junta. Antes o relatório indicava colisões.
+- Se uma peça não cabe na mesa em nenhuma posição, as definições de impressão dizem já antes de fatiar em quanto é demasiado grande e oferecem «Dividir o modelo» e «Reduzir para o volume de impressão».
+- Mesmo onde as partes de um modelo apenas se tocam, «Dividir o modelo» funciona, e os conectores ficam bem orientados nos seus furos em cada junta. Antes o relatório indicava colisões.
 - O Solidon usa o ângulo de saliência do perfil do fabricante da sua impressora: 60 em vez de 45 graus na Elegoo, Bambu e Creality. Chanfros e inclinações suaves já não recebem suportes desnecessários.
 - Em paredes exteriores redondas, o Solidon propõe uma «Costura em bisel», em cada slicer suportado. A impressão demora assim 2 a 4 % mais.
 - Se o seu slicer calcula o brim sozinho, como o ElegooSlicer, o Bambu Studio, o Creality Print e o OrcaSlicer, o Solidon não propõe um próprio. O do slicer dá mais borda às peças altas.
@@ -39,7 +39,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A velocidade da primeira camada vale agora também para o seu enchimento. Antes, o slicer fazia o fundo à velocidade do fabricante, 105 mm/s na Centauri Carbon 2.
 - Com o PrusaSlicer, a impressão começa agora como na própria Prusa: com nivelamento da mesa, linha de purga e verificação da impressora.
 - O PETG vai agora para o PrusaSlicer como PETG, já não como PLA.
-- No OrcaSlicer, cada impressora recebe pré-selecionada a sua própria máquina e o processo padrão: a Sovol SV06 já não a versão High-Speed, a Ender-3 V3 já não «0.12mm Fine».
+- No OrcaSlicer, cada impressora recebe pré-selecionada a sua própria máquina e o processo padrão: a Sovol SV06 já não recebe a versão High-Speed, nem a Ender-3 V3 «0.12mm Fine».
 - Novas: as Creality Ender-3 V3 SE e V3 KE. Até agora, uma SE recebia os valores da muito mais rápida Ender-3 V3.
 - As cópias iguais são calculadas uma só vez por «Orientar para impressão», que termina o mesmo conjunto de minigolfe em menos de um terço do tempo.
 - Os níveis de qualidade da janela de impressão aparecem agora no idioma da interface.
@@ -71,7 +71,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O relatório só mostra o aviso para calibrar as tolerâncias do seu material em modelos com ajustes. Só aí o Solidon as usa.
 - A entrega ao Cura transfere as primeiras camadas sem ventoinha como arranque gradual. Só avisa quando o ficheiro de impressão final difere de facto.
 - Depois de «Reduzir para o volume de impressão», a peça continua assente na mesa. Antes levantava-se, e o relatório dava-a como flutuante.
-- Se uma peça só cabe na mesa com uma margem mais estreita, «Dispor na mesa» coloca-a no centro em vez de sair da borda, e o relatório indica essa margem.
+- Se uma peça só cabe na mesa com uma margem mais estreita, «Dispor na mesa» coloca-a no centro em vez de ultrapassar a borda, e o relatório indica essa margem.
 - Em modelos grandes, «Dividir o modelo» encontra a costura até duas vezes mais depressa, e nos modelos multicor numa fração do tempo. A divisão funciona como antes.
 - Quando o Solidon divide automaticamente um modelo em três ou mais peças, os nomes são numerados e indicam os conectores, por exemplo «Calha de parede 2 de 3 · Pinos e furos».
 - Um parafuso, uma porca ou um vedante impressos do catálogo de blocos já não contam no relatório como um corpo fragmentado. É uma peça própria, e isso é intencional.
@@ -126,8 +126,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo começado já não se perde pelo caminho: um clique no relatório, uma troca de ferramenta ou Ctrl+Z pedem primeiro para o aplicar ou cancelar.
 - Ao escrever uma coordenada, os campos de cota já não desaparecem depois do segundo algarismo.
 - Em modelos grandes, «Medir a espessura de parede» responde cerca de quatro vezes mais depressa.
-- Um clique no centro de um furo escareado escolhe o furo e não o escareamento, e as cotas indicam a aresta pelo lado, como «Aresta exterior à esquerda» em vez de «Aresta exterior 4».
-- Com uma aresta ou uma distância escolhida, o painel de seleção já não diz «Nenhum detalhe selecionado …».
+- Um clique no centro de um furo escareado seleciona o furo e não o escareamento, e as cotas indicam a aresta pelo lado, como «Aresta exterior à esquerda» em vez de «Aresta exterior 4».
+- Com uma aresta ou uma distância selecionada, o painel de seleção já não diz «Nenhum detalhe selecionado …».
 
 ### Reconhecimento
 
@@ -136,7 +136,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Em modelos grandes, «Detetar elementos num local» encontra faces onde antes indicava triângulos a mais. O local também se escolhe com o teclado.
 - Em modelos grandes, «Detetar elementos num local» começa logo a procurar. Antes recalculava primeiro o modelo todo, 40 segundos por tentativa no dragão do mausoléu.
 - Modelos grandes e grelhas são reconhecidos muito mais depressa: uma cama de casa de bonecas gerada, com 1,2 milhões de triângulos, em 27 segundos em vez de 174. Cancelar atua em poucos segundos.
-- As cópias e as peças rodadas ou deslocadas herdam as características do original em vez de as procurarem de novo. Um projeto com muitas peças iguais calcula assim em menos de metade do tempo.
+- As cópias e as peças rodadas ou deslocadas herdam as características do original em vez de as procurarem de novo. Um projeto com muitas peças iguais é calculado assim em menos de metade do tempo.
 - Depois de um furo, a face de um corpo construído indica o seu tamanho atual, e um furo novo já não falta na árvore quando antes se alterou outro.
 - Letreiros e escoras aparecem na árvore como lados arredondados em vez de dezenas de arredondamentos com raios variáveis.
 - Os contornos feitos de arcos e retas são reconhecidos arco a arco com o seu raio. «Converter em faces e arestas» fica assim muito mais rápido.
@@ -162,7 +162,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois de fechar uma abertura ao importar, «Mostrar o ponto» contorna toda a face nova com uma cor própria.
 - Uma peça virada do avesso ao lado de um corpo oco é endireitada sem perder a cavidade. Uma peça dentro do material de outra é indicada em vez de adivinhada.
 - O relatório depois de importar é mais curto: as constatações que o resultado desmente desaparecem, e onde se pode agir há um botão em vez de um conselho.
-- O mapa de defeitos de malha mostra as zonas sãs na cor do corpo, para que cada defeito sobressaia, e traz «Reparar» na legenda. Se houver um só corpo, escolhe-o sozinho.
+- O mapa de defeitos de malha mostra as zonas sãs na cor do corpo, para que cada defeito sobressaia, e traz «Reparar» na legenda. Se houver um só corpo, seleciona-o sozinho.
 - A procura de sobreposições chega agora ao fim também em modelos com leques de triângulos estreitos. Mapa de defeitos e reparação veem então o modelo inteiro.
 - Um 3MF do PrusaSlicer já não carrega modificadores, bloqueadores e reforços de suportes como material maciço. Um volume negativo é subtraído da peça.
 - Com «Refinar as arestas» mantêm-se todas as características e surgem até quatro vezes menos triângulos: um suporte de berbequim com arestas de 1 mm em cinco segundos em vez de catorze minutos.
@@ -189,7 +189,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Os cálculos grandes, como a pré-visualização ou «Refinar as arestas», correm num processo à parte: a janela continua utilizável e «Cancelar» atua logo. Para isso corre um segundo processo do Solidon.
 - Ao carregar e em cálculos longos, um relógio conta o tempo decorrido mesmo com o progresso parado, e o tempo restante já não salta quando começa uma nova parte do cálculo.
-- A cópia de segurança automática corre ao lado da janela e já não a bloqueia, nem com modelos grandes. Se não puder ser escrita, o Solidon avisa.
+- A cópia de segurança automática corre em segundo plano e já não bloqueia a janela, nem com modelos grandes. Se não puder ser escrita, o Solidon avisa.
 - Um modelo numa unidade lenta ou que não responde já não congela a janela ao abrir.
 - Se um ficheiro de «Abertos recentemente» tiver sido movido, o Solidon di-lo e oferece «Escolher outro ficheiro».
 - Um ficheiro que não foi possível ler já não vai parar a «Abertos recentemente», e o ficheiro seguinte já não anuncia o nome dele ao carregar.

@@ -24,8 +24,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El nivel «Estándar» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
 - Las sugerencias aplicadas valen solo para la pieza que las necesita: soportes, brim y los valores de un ajuste, en cada slicer compatible. Los ajustes de impresión nombran las piezas.
 - Si una pieza se imprime de pie sin soportes, «Orientar para imprimir» la deja de pie en vez de tumbarla sobre soportes. Un juego de minigolf de 16 piezas cabe así en una placa en vez de cuatro.
-- Si una pieza no cabe en la cama en ninguna posición, los ajustes de impresión dicen antes de laminar cuánto sobra y ofrecen «Dividir el modelo» y «Reducir al volumen de impresión».
-- También donde las piezas de un modelo solo se tocan funciona «Dividir el modelo», y los conectores quedan del derecho en sus agujeros en cada costura. Antes el informe mostraba colisiones.
+- Si una pieza no cabe en la cama en ninguna posición, los ajustes de impresión dicen ya antes de laminar en cuánto es demasiado grande y ofrecen «Dividir el modelo» y «Reducir al volumen de impresión».
+- También donde las piezas de un modelo solo se tocan funciona «Dividir el modelo», y los conectores quedan bien orientados en sus agujeros en cada costura. Antes el informe mostraba ahí colisiones.
 - Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
 - En paredes exteriores redondas, Solidon propone una «Costura en bisel», en cada slicer compatible. La impresión tarda así entre un 2 y un 4 % más.
 - Si su slicer calcula el brim por sí mismo, como ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer, Solidon no propone uno propio. El del slicer da más borde a las piezas altas.
@@ -40,7 +40,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
 - Con PrusaSlicer, la impresión empieza ahora como con la propia Prusa: con nivelación de la cama, línea de purga y comprobación de la impresora.
 - El PETG llega ahora a PrusaSlicer como PETG, ya no como PLA.
-- En OrcaSlicer cada impresora recibe preseleccionada su propia máquina y su proceso estándar: la Sovol SV06 ya no la versión High-Speed, la Ender-3 V3 ya no «0.12mm Fine».
+- En OrcaSlicer cada impresora recibe preseleccionada su propia máquina y su proceso estándar: la Sovol SV06 ya no recibe la versión High-Speed ni la Ender-3 V3 «0.12mm Fine».
 - Nuevas: las Creality Ender-3 V3 SE y V3 KE. Hasta ahora una SE recibía los valores de la mucho más rápida Ender-3 V3.
 - Las copias iguales las calcula «Orientar para imprimir» una sola vez, y termina el mismo juego de minigolf en menos de un tercio del tiempo.
 - Los niveles de calidad del diálogo de impresión aparecen ahora en el idioma de la interfaz.
@@ -72,7 +72,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El informe solo muestra ya el aviso de calibrar las tolerancias de su material en modelos con ajustes. Solo ahí las usa Solidon.
 - La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
 - Tras «Reducir al volumen de impresión», la pieza sigue apoyada en la cama. Antes se levantaba, y el informe la daba por flotante.
-- Si una pieza solo cabe en la cama con un margen más estrecho, «Organizar sobre la cama» la deja en el centro en vez de sobresalir del borde, y el informe indica el margen.
+- Si una pieza solo cabe en la cama con un margen más estrecho, «Organizar sobre la cama» la deja en el centro en vez de sobresalir del borde, y el informe indica ese margen.
 - En modelos grandes, «Dividir el modelo» encuentra la costura hasta el doble de rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
 - Si Solidon divide un modelo automáticamente en tres o más piezas, los nombres se numeran y nombran los conectores, por ejemplo «Listón de pared 2 de 3 · Pasadores y agujeros».
 - Un tornillo, tuerca o junta impresos del catálogo de bloques ya no cuentan en el informe como un cuerpo fragmentado. Es una pieza propia, y así está previsto.
@@ -107,7 +107,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si coloca una rosca, un inserto termofijado o un alojamiento de tuerca en un taladro, el diálogo indica arriba el tamaño que encaja y preselecciona justo ese.
 - En un avellanado, «Cambiar elemento» corta la nueva medida como si se hubiera avellanado así desde el principio. Antes, Solidon se negaba o dejaba una fina piel atravesando el taladro.
 - Si piezas de un modelo están metidas unas en otras, Solidon las une antes de calcular, tal como se imprimirán. Volumen y taladros cuadran entonces, y el informe lo dice.
-- Si agranda un taladro, la vista previa precisa muestra todo el material retirado, también en modelos grandes, con un corte de vista y en cuerpos con canales cerrados.
+- Si agranda un taladro, la vista previa precisa muestra todo el material retirado, también en modelos grandes, con la vista en sección y en cuerpos con canales cerrados.
 - Al escribir una cota en una figura grande, la vista previa aproximada aparece en menos de un segundo en lugar de hasta diecinueve, y la de un taladro en ella funciona.
 - Si un paso en un modelo abierto solo calcula de forma aproximada y el volumen crece, el informe indica la desviación y ofrece «Reparar primero y volver a calcular».
 
@@ -127,8 +127,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un taladro empezado ya no se pierde por el camino: un clic en el informe, un cambio de herramienta o Ctrl+Z piden primero aplicarlo o cancelarlo.
 - Al escribir una coordenada, los campos de cota ya no desaparecen tras la segunda cifra.
 - En modelos grandes, «Medir el espesor de pared» responde unas cuatro veces más rápido.
-- Un clic en el centro de un taladro avellanado elige el taladro y no su avellanado, y las cotas nombran su arista por el lado, como «Arista exterior izquierda» en vez de «Arista exterior 4».
-- Con una arista o una distancia elegida, el panel de selección ya no dice «Ningún elemento seleccionado …».
+- Un clic en el centro de un taladro avellanado selecciona el taladro y no su avellanado, y las cotas nombran su arista por el lado, como «Arista exterior izquierda» en vez de «Arista exterior 4».
+- Con una arista o una distancia seleccionada, el panel de selección ya no dice «Ningún elemento seleccionado …».
 
 ### Reconocimiento
 
@@ -137,7 +137,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En modelos grandes, «Detectar detalles en un punto» encuentra caras donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.
 - En modelos grandes, «Detectar detalles en un punto» empieza a buscar enseguida. Antes recalculaba primero todo el modelo, 40 segundos por intento en el dragón del mausoleo.
 - Los modelos grandes y las retículas se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 s en vez de 174. Cancelar actúa en pocos segundos.
-- Las copias y las piezas giradas o desplazadas heredan las características de su original sin buscarlas de nuevo. Un proyecto con muchas piezas iguales calcula así en menos de la mitad del tiempo.
+- Las copias y las piezas giradas o desplazadas heredan las características de su original sin buscarlas de nuevo. Un proyecto con muchas piezas iguales se calcula así en menos de la mitad del tiempo.
 - Tras un taladro, la cara de un cuerpo construido indica su tamaño actual, y un taladro nuevo ya no falta en el árbol cuando antes se cambió otro.
 - Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes.
 - Los contornos de arcos y rectas se reconocen arco a arco con su radio. «Convertir en caras y aristas» es así mucho más rápido.
@@ -163,7 +163,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras cerrar una abertura al importar, «Mostrar el punto» rodea toda la cara nueva con un color propio.
 - Una pieza vuelta del revés junto a un cuerpo hueco se endereza sin perder la cavidad. Una pieza dentro del material de otra se indica en lugar de adivinarse.
 - El informe tras importar es más corto: los hallazgos que el resultado desmiente desaparecen, y donde se puede hacer algo hay un botón en lugar de un consejo.
-- El mapa de defectos de malla muestra las zonas sanas en el color del cuerpo, para que cada defecto destaque, y lleva «Reparar» en la leyenda. Si hay un solo cuerpo, lo elige él.
+- El mapa de defectos de malla muestra las zonas sanas en el color del cuerpo, para que cada defecto destaque, y lleva «Reparar» en la leyenda. Si hay un solo cuerpo, lo selecciona solo.
 - La búsqueda de solapamientos llega ahora al final también en modelos con abanicos de triángulos estrechos. Mapa de defectos y reparación ven entonces todo el modelo.
 - Un 3MF de PrusaSlicer ya no carga modificadores, bloqueadores ni reforzadores de soportes como material macizo. Un volumen negativo se resta de la pieza.
 - Con «Refinar las aristas» se conservan todas las características y salen hasta cuatro veces menos triángulos: un soporte de taladradora con aristas de 1 mm en cinco segundos en vez de catorce minutos.
@@ -190,7 +190,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Los cálculos grandes, como la vista previa o «Refinar las aristas», van en un proceso aparte: la ventana responde y «Cancelar» actúa al instante. Para ello corre un segundo proceso de Solidon.
 - Al cargar y en cálculos largos, un reloj cuenta el tiempo transcurrido aunque el progreso se detenga, y el tiempo restante ya no salta cuando empieza una nueva parte del cálculo.
-- La copia de seguridad automática corre junto a la ventana y ya no la detiene, ni con modelos grandes. Si no se puede escribir, Solidon lo dice.
+- La copia de seguridad automática funciona en segundo plano y ya no detiene la ventana, ni con modelos grandes. Si no se puede escribir, Solidon lo dice.
 - Un modelo en una unidad lenta o que no responde ya no congela la ventana al abrirlo.
 - Si un archivo de «Abiertos recientemente» se ha movido, Solidon lo dice y ofrece «Elegir otro archivo».
 - Un archivo que no se pudo leer ya no acaba en «Abiertos recientemente», y el siguiente archivo ya no anuncia su nombre al cargar.

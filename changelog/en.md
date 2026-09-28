@@ -87,7 +87,7 @@ it into `website/version.json`.
 - Blind holes, slots and widenings in a sloping face, and tilted blind bores such as a magnet pocket without a lip, stay fully open at the mouth. Before, a thin skin was left there.
 - Moving and duplicating warn when the wall to the neighbouring bore gets too thin or breaks open.
 - If a bore runs out of the side of the part after moving, duplicating or tilting, Solidon now says so at stepped places too. A copy that was not created is noticed.
-- A moved or duplicated bore from an STL file in a thin plate no longer wrongly reports that it no longer goes through.
+- In thin plates, a moved or duplicated bore from an STL file no longer wrongly reports that it has stopped going through.
 - On ribs and in honeycombs, a tilted bore no longer wrongly reports that it runs over the edge.
 - After moving, tilting or duplicating, the feature panel shows the dimensions the result really has.
 - Drilling, moving, *Change bore* and pulling into a slot leave the model away from the bore just as it was. Recognition afterwards finishes much faster on large models.
@@ -136,7 +136,7 @@ it into `website/version.json`.
 - On large models, *Detect features at a spot* finds faces where it used to report too many triangles. The spot can also be chosen with the keyboard.
 - On large models, *Detect features at a spot* starts searching straight away. Before, it first recomputed the whole model, 40 seconds per attempt on the mausoleum dragon.
 - Large models and lattices are recognised much faster: a generated doll's house bed with 1.2 million triangles in 27 seconds instead of 174. Cancel takes effect within a few seconds.
-- Copies and rotated or moved parts take over the features of their original instead of searching for them again. A project with many identical parts computes in less than half the time.
+- Copies and rotated or moved parts inherit the features of their original instead of searching for them again. A project with many identical parts is then computed in less than half the time.
 - After a bore, a face of a designed body names its current area, and a new bore is no longer missing from the tree when another one was changed before.
 - Lettering and struts appear in the tree as rounded sides instead of dozens of fillets with changing radii.
 - Outlines made of arcs and lines are recognised arc by arc with their radius. *Convert to faces and edges* is many times faster as a result.
@@ -152,7 +152,7 @@ it into `website/version.json`.
 ### Importing and repairing
 
 - A large model appears in the view right after import, and its features follow. Before, it only appeared once recognition was finished.
-- A 3MF with several plates from Bambu Studio, OrcaSlicer or ElegooSlicer puts every part on its own plate, at its place there. Before, all came onto one, many beside the bed.
+- A 3MF with several plates from Bambu Studio, OrcaSlicer or ElegooSlicer puts every part on its own plate, in its position there. Before, they all landed on one plate, many of them beside the bed.
 - A 3MF with several plates that is added to a project keeps its plates and places them after the existing ones.
 - A model without colours of its own keeps the body's colour after its holes are closed. Before, it turned grey, and *Convert texture to filaments* made a grey filament from it.
 - If a model is missing a piece of bore wall or part of a countersink cone, Solidon closes the gap as a wall, not as a lid across the bore.
@@ -162,7 +162,7 @@ it into `website/version.json`.
 - After an opening has been closed on import, *Show the place* outlines the whole new face in a colour of its own.
 - A part turned inside out next to a hollow body is set right without losing the cavity. A part inside another part's material is reported instead of guessed.
 - The report after importing is shorter: findings the result disproves drop out, and where something can be done there is a button instead of advice.
-- The mesh defects map shows intact areas in the body's colour so that single defects stand out, and carries *Repair* right in the legend. A single body is selected by the map itself.
+- The mesh defects map shows intact areas in the body's colour so that single defects stand out, and carries *Repair* right in the legend. If there is only one body, the map selects it on its own.
 - The search for overlaps now reaches the end on models with fans of narrow triangles too. The mesh defects map and repair then see the whole model.
 - A 3MF from PrusaSlicer no longer loads modifiers, support blockers and support enforcers as solid material. A negative volume is subtracted from the part.
 - With *Refine edges*, all features stay and up to four times fewer triangles are created: a drill holder at 1 mm edge length in five seconds instead of fourteen minutes.
@@ -189,7 +189,7 @@ it into `website/version.json`.
 
 - Large calculations such as previews and *Refine edges* run in a separate process: the window stays responsive, and *Cancel* works at once. A second Solidon process runs alongside for this.
 - While loading and during long calculations, a clock counts the elapsed time even when progress stands still, and the remaining time no longer jumps when a new part of the calculation begins.
-- The automatic backup runs alongside the window and no longer stalls it, even with large models. If it cannot be written, Solidon says so.
+- The automatic backup runs in the background and no longer stalls the window, even with large models. If it cannot be written, Solidon says so.
 - A model on a slow or unresponsive drive no longer freezes the window when you open it.
 - If a file in *Recently opened* has been moved, Solidon says so and offers *Choose another file*.
 - A file that could not be read no longer ends up in *Recently opened*, and the next file no longer reports its name while loading.
@@ -213,7 +213,7 @@ it into `website/version.json`.
 - The history names a changed parameter by its label and shows the value before and after.
 - The handle on a selected face now shows only the arrow you move it with.
 - Without text, *Put text on* says that the text is missing instead of declaring the preview unavailable.
-- After drawing, the tab from before is back on the right, such as the report. Until now the chat stood there, and *Hand over to the slicer …* was hidden.
+- After drawing, the previous tab, such as the report, is back on the right. Until now the chat was shown there, and *Hand over to the slicer …* was hidden.
 - The *Command palette …* finds operations in every language through everyday words too, such as “copy” or “calamita”. Until now it knew such words only in German.
 - When saving with *Save selection as a part …*, Solidon checks the wall thickness of the part many times faster.
 - In every translation, *Cut* and *Split* now have different names, keys are named as on the keyboard, and the Italian interface addresses you informally throughout.

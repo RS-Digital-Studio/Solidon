@@ -39,7 +39,7 @@ scrive in `website/version.json`.
 - La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
 - Con PrusaSlicer la stampa inizia ora come con Prusa stessa: con livellamento del piano, linea di spurgo e controllo della stampante.
 - Il PETG arriva ora a PrusaSlicer come PETG, non più come PLA.
-- In OrcaSlicer ogni stampante riceve preselezionata la propria macchina con il suo processo standard: la Sovol SV06 non più la versione High-Speed, la Ender-3 V3 non più «0.12mm Fine».
+- In OrcaSlicer ogni stampante riceve preselezionata la propria macchina con il suo processo standard: la Sovol SV06 non riceve più la versione High-Speed, né la Ender-3 V3 «0.12mm Fine».
 - Nuove: le Creality Ender-3 V3 SE e V3 KE. Finora una SE riceveva i valori della molto più veloce Ender-3 V3.
 - Le copie uguali vengono calcolate una sola volta da «Orienta per la stampa», che finisce lo stesso set da minigolf in meno di un terzo del tempo.
 - I livelli di qualità nella finestra di stampa appaiono ora nella lingua dell'interfaccia.
@@ -50,8 +50,8 @@ scrive in `website/version.json`.
 - Se lo slicer rifiuta un pezzo troppo alto, Solidon indica entrambe le altezze e propone «Dividi il modello», «Riduci al volume di stampa» o un'altra stampante.
 - Se lo slicer rifiuta un pezzo che non entra nel suo piatto, Solidon indica il motivo e propone «Dividi il modello», «Riduci al volume di stampa» e «Disponi sul piano».
 - Se Bambu Studio resta bloccato dopo lo slicing, Solidon prende il file di stampa finito invece di segnalare un errore dopo cinque minuti.
-- Con Cura si possono affettare anche modelli grandi. Prima lo slicing finiva senza file di stampa, per esempio con la torre Eiffel da 313 000 triangoli.
-- Se Creality Print può affettare un 3MF solo nella sua finestra, Solidon lo dice e porta ad «Apri nello slicer …».
+- Con Cura si può fare lo slicing anche di modelli grandi. Prima lo slicing finiva senza file di stampa, per esempio con la torre Eiffel da 313 000 triangoli.
+- Se Creality Print può calcolare un 3MF solo nella sua finestra, Solidon lo dice e porta ad «Apri nello slicer …».
 - Se il primo strato ha tratti stretti, anche pochi e lunghi su un pezzo grande, Solidon propone di stenderlo a 50 mm/s. Così le linee corte aderiscono meglio.
 - Solidon propone un «Tempo minimo per strato» più lungo solo dove il tuo profilo non ne ha uno. Prima il suggerimento arrivava su quasi ogni pezzo con uno smusso o una punta.
 - Dove il tuo slicer limita già la velocità in base al flusso volumetrico, Solidon non propone più un proprio limite di velocità.
@@ -71,7 +71,7 @@ scrive in `website/version.json`.
 - Il rapporto mostra l'avviso di calibrare le tolleranze del tuo materiale solo sui modelli con accoppiamenti. Solo lì Solidon le usa.
 - Il passaggio a Cura trasmette i primi strati senza ventola come avvio graduale. L'avviso arriva solo se il file di stampa finito si discosta davvero.
 - Dopo «Riduci al volume di stampa» il pezzo resta appoggiato sul piano. Prima si sollevava, e il rapporto lo segnalava come sospeso.
-- Se un pezzo entra sul piano solo con un margine più stretto, «Disponi sul piano» lo mette al centro invece di farlo sporgere dal bordo, e il rapporto indica il margine.
+- Se un pezzo entra sul piano solo con un margine più stretto, «Disponi sul piano» lo mette al centro invece di farlo sporgere dal bordo, e il rapporto indica quel margine.
 - Sui modelli grandi, «Dividi il modello» trova la giunzione fino a due volte più in fretta, e su quelli multicolore in una frazione del tempo. La divisione avviene come prima.
 - Se Solidon divide automaticamente un modello in tre o più pezzi, i nomi vengono numerati e indicano i connettori, per esempio «Listello da parete 2 di 3 · Spine e fori».
 - Una vite, un dado o una guarnizione stampati dal catalogo dei blocchi non contano più nel rapporto come un corpo frammentato. È un pezzo a sé, ed è voluto.
@@ -126,17 +126,17 @@ scrive in `website/version.json`.
 - Un foro iniziato non va più perso per strada: un clic nel rapporto, un cambio di strumento o Ctrl+Z chiedono prima di applicarlo o annullarlo.
 - Digitando una coordinata, i campi quota non spariscono più dopo la seconda cifra.
 - Sui modelli grandi, «Misura lo spessore di parete» risponde circa quattro volte più in fretta.
-- Un clic al centro di un foro svasato sceglie il foro e non la svasatura, e le quote indicano il bordo per lato, come «Bordo esterno a sinistra» invece di «Bordo esterno 4».
-- Con uno spigolo o una distanza scelti, il pannello di selezione non dice più «Nessun elemento selezionato …».
+- Un clic al centro di un foro svasato seleziona il foro e non la svasatura, e le quote indicano il bordo per lato, come «Bordo esterno a sinistra» invece di «Bordo esterno 4».
+- Con uno spigolo o una distanza selezionati, il pannello di selezione non dice più «Nessun elemento selezionato …».
 
 ### Riconoscimento
 
 - Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul tuo computer.
-- Rifiutato il riconoscimento completo, lo recuperi con «Riconosci tutte le caratteristiche» nel rapporto o da riga di comando. Se è lungo, «Carica senza riconoscimento delle caratteristiche» lo salta.
+- Rifiutato il riconoscimento completo, lo recuperi con «Riconosci tutte le caratteristiche» nel rapporto o da riga di comando. Se è lento, «Carica senza riconoscimento delle caratteristiche» lo salta.
 - Sui modelli grandi «Riconosci elementi in un punto» trova facce dove prima segnalava troppi triangoli. Il punto si sceglie anche da tastiera.
 - Sui modelli grandi «Riconosci elementi in un punto» inizia subito a cercare. Prima ricalcolava tutto il modello, 40 secondi a tentativo sul drago del mausoleo.
 - Modelli grandi e reticoli vengono riconosciuti molto più in fretta: un letto da casa delle bambole generato, 1,2 milioni di triangoli, in 27 secondi invece di 174. Annulla agisce in pochi secondi.
-- Le copie e i pezzi ruotati o spostati prendono le caratteristiche del loro originale invece di cercarle di nuovo. Un progetto con molti pezzi uguali calcola così in meno della metà del tempo.
+- Le copie e i pezzi ruotati o spostati prendono le caratteristiche del loro originale invece di cercarle di nuovo. Un progetto con molti pezzi uguali viene calcolato così in meno della metà del tempo.
 - Dopo un foro, la faccia di un corpo costruito indica la sua misura attuale, e un foro nuovo non manca più nell'albero se prima ne è stato modificato un altro.
 - Scritte e montanti compaiono nell'albero come lati arrotondati invece che come decine di raccordi dai raggi variabili.
 - I contorni fatti di archi e rette vengono riconosciuti arco per arco con il loro raggio. «Converti in facce e spigoli» diventa così molto più rapido.
@@ -162,7 +162,7 @@ scrive in `website/version.json`.
 - Dopo la chiusura di un'apertura all'importazione, «Mostra il punto» contorna tutta la nuova faccia con un colore proprio.
 - Una parte rovesciata accanto a un corpo cavo viene raddrizzata senza perdere la cavità. Una parte dentro il materiale di un'altra viene segnalata invece che indovinata.
 - Il rapporto dopo l'importazione è più corto: i rilievi smentiti dal risultato spariscono, e dove si può fare qualcosa c'è un pulsante invece di un consiglio.
-- La mappa dei difetti della mesh mostra le zone sane nel colore del corpo, così ogni difetto risalta, e porta «Ripara» nella legenda. Se il corpo è uno solo, lo sceglie da sé.
+- La mappa dei difetti della mesh mostra le zone sane nel colore del corpo, così ogni difetto risalta, e porta «Ripara» nella legenda. Se il corpo è uno solo, lo seleziona da sé.
 - La ricerca delle sovrapposizioni arriva ora fino in fondo anche sui modelli con ventagli di triangoli stretti. Mappa dei difetti e riparazione vedono tutto il modello.
 - Un 3MF di PrusaSlicer non carica più modificatori, blocchi e rinforzi dei supporti come materiale pieno. Un volume negativo viene sottratto dal pezzo.
 - Con «Affina gli spigoli» restano tutte le caratteristiche e i triangoli sono fino a quattro volte meno: un supporto per trapano con spigoli di 1 mm in cinque secondi invece di quattordici minuti.
@@ -189,7 +189,7 @@ scrive in `website/version.json`.
 
 - I calcoli grandi come l'anteprima o «Affina gli spigoli» girano in un processo a parte: la finestra resta utilizzabile e «Annulla» agisce subito. Per questo gira un secondo processo di Solidon.
 - Durante il caricamento e i calcoli lunghi un orologio conta il tempo trascorso anche se l'avanzamento si ferma, e il tempo restante non salta più quando inizia una nuova parte del calcolo.
-- Il salvataggio automatico gira accanto alla finestra e non la blocca più, anche con modelli grandi. Se non si può scrivere, Solidon lo dice.
+- Il salvataggio automatico gira in secondo piano e non blocca più la finestra, anche con modelli grandi. Se non si può scrivere, Solidon lo dice.
 - Un modello su un'unità lenta o che non risponde non blocca più la finestra all'apertura.
 - Se un file in «Aperti di recente» è stato spostato, Solidon lo dice e propone «Scegli un altro file».
 - Un file che non si è potuto leggere non finisce più in «Aperti di recente», e il file successivo non ne annuncia più il nome durante il caricamento.
