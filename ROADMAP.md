@@ -81,7 +81,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-279 — „Alle waagerechten Kanten“ nimmt die Ränder einer Querbohrung mit](#rm-279) | Geometrie, Erkennung und Druckvorbereitung | `edges.choose` fragt `flat`, und das gilt an jedem Ring (Quader mit Querbohrung Ø 6: 10 Kanten, darunter beide Bohrungsränder); `edge_lie_of` steht seit `6bcffec39`. Zu entscheiden: alte Projekte über eine Migration wie gespeichert, oder das neue Verhalten ab einer Version mit Meldung |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Alles in 0.5.1 (Robert), der Tag wartet auf „Handbuch fertig“. Auf `main`: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Auf `handbuch-umbau` fertig: HB-5 bis HB-12 (fünfzehn Anleitungen, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter, Film). Offen: nach texte-051 und dem Oberflächenpaket auf `main` die Namen nachziehen und die betroffenen Bilder neu aufnehmen |
+| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Alles in 0.5.1 (Robert), der Tag wartet auf „Handbuch fertig“. Auf `main`: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Für 0.5.1 fertig und gemeldet: HB-5 bis HB-13 (fünfzehn Anleitungen, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter, Film), `main` mit texte-051 und Oberflächenpaket nachgezogen. Offen nach 0.5.1: Feldabnahme (§11 des Konzepts), Nummernplatzierung auf Text in zwei Bildern |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster gefahren (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge, Bildschirmleser und Trennstriche im dunklen Thema (2,30:1) gemessen; offen allein die Rampe der 3D-Maus am echten Gerät — ob dieser Rest in RM-070 aufgeht (dasselbe Gerät) und der Punkt damit schließt, entscheidet Robert |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Welle 2 (`9145aedc`) und die Gebietsdurchsichten haben die in der Sollliste benannten Stellen, Preise, Generatoraussage, Sicherheit, Agentenquote und Sprachkonsistenz nachgezogen; die Durchsicht 0.5.1 hat jeden Text seit 0.5.0 gelesen und Wächter gegen Konstrukteurswörter und falsch zitierte Knöpfe eingecheckt (`e8f9f574d`); offen ist der erschöpfende Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website, dazu Presse A16/A23 und die C12-Namen |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
@@ -2492,11 +2492,19 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   „Handbuch fertig“: HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
   HB-7 (F1 im Zusammenhang), der Rest von HB-8, HB-9 bis HB-12. Die
   Aufteilung in drei Stränge mit ihren Aufträgen steht in §12 des Konzepts.
-  **Stand:** HB-5 bis HB-12 sind auf `handbuch-umbau` fertig, die Stränge B
-  und C zusammengeführt. Bis zur Meldung offen: `main` hereinholen, sobald
-  texte-051 und das Oberflächenpaket der Release-Sitzung dort sind, die
-  geänderten Namen im Handbuch nachziehen und die Bilder neu aufnehmen, die
-  das Paket ändert (§0 des Konzepts).
+  **Stand:** Für 0.5.1 fertig und an die Release-Sitzung gemeldet: HB-5 bis
+  HB-13 auf `handbuch-umbau`, B und C zusammengeführt, `main` mit texte-051
+  und dem Oberflächenpaket hereingeholt und die Namen nachgezogen; alle
+  fünfzehn Anleitungen in sechs Sprachen probeweise aufgenommen, das Handbuch
+  im Wegwerfbaum vollständig erzeugt (§0 des Konzepts). Beim Release laufen
+  `make_guides.py`, `make_manual.py` und `make_guide_video.py` (`/erzeugen`).
+  **Offen nach 0.5.1:** die Feldabnahme aus §11 (ein Kunde ohne CAD geht
+  *Das erste eigene Teil* ohne Hilfe durch) und die Nummernplatzierung der
+  Bildanleitungen, die in *Ein Gehäuse mit Deckel* 3 und *Ein Teil
+  beschriften* 3 auf Text im Auswahlfenster liegt; `tools/make_guides.py`
+  wählt den Platz nach der Unruhe im Bild und kennt die Textflächen der
+  Oberfläche nicht, und wo ringsum alles unruhig ist, landet die Nummer auf
+  Text.
   **Abnahme:** §11 des Konzepts.
 
 <a id="rm-197"></a>

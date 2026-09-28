@@ -1,6 +1,6 @@
 # Konzept — Ein Handbuch, das man ohne Ausprobieren versteht
 
-> **Stand:** 27.09.2026. Arbeitsbaum `F:\3D Druck.handbuch`, Zweig
+> **Stand:** 28.09.2026. Arbeitsbaum `F:\3D Druck.handbuch`, Zweig
 > `handbuch-umbau`, Registerpunkt [RM-283](../ROADMAP.md#rm-283).
 > **Anlass:** Ein Interessent (Elektronikbetrieb) schrieb am 27.09.2026, es sei
 > schwierig, alles aus dem Handbuch zu lernen, und Ausprobieren führe nicht
@@ -149,11 +149,24 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Anleitungen und je Sprache. Beschreibung und Vorspann der Handbuchseite,
   Start- und Funktionsseiten der Website und der Changelog 0.5.1 sprechen
   vom neuen Anfang und den fünfzehn Anleitungen.
-- **Als Nächstes:** Die Release-Sitzung bringt texte-051 und ihr
-  Oberflächenpaket nach `main` und sagt Bescheid. Dann `main` hereinholen,
-  die geänderten Namen im Handbuch nachziehen
-  (`F:\3D Druck.review-051\reports\texte-schluss.md`, „Für das Handbuch“),
-  die Bilder neu aufnehmen, die sie nennt, Tor, Meldung „Handbuch fertig“.
+- **`main` mit texte-051 und dem Oberflächenpaket hereingeholt** und das
+  Handbuch nachgezogen: Werkzeug *Trennen* und Operation *Teilen* heißen je
+  Sprache wie im Fenster, *Senkung, Stufen und Verengung mitnehmen*, der
+  Grenzsatz zum Parameterfeld, fr `Échap` und gerader Apostroph in fr und it,
+  it „passaggio“ für den Schritt im Verlauf, die Nummerierung ab drei
+  Stücken. Französisch setzt im Handbuch vor „:“ ein Leerzeichen, auch wo der
+  Code einen Satz zusammensetzt (Regel in `.claude/rules/uebersetzung.md`).
+- **Probe für 0.5.1:** alle fünfzehn Anleitungen in sechs Sprachen am
+  Fenster aufgenommen (nicht eingecheckt; die Bilder entstehen beim Release),
+  die deutschen angesehen; das Handbuch im Wegwerfbaum vollständig erzeugt,
+  Erzeugnistests grün. Das Verzeichnis des PDF hat jetzt zwei Seiten, das
+  erste Kapitel beginnt auf Seite 4.
+- **Für 0.5.1 fertig,** gemeldet an die Release-Sitzung
+  (`F:\3D Druck\.claude\.state\handbuch-umbau-2026-09-27\MELDUNG-fertig.md`).
+  Beim Release: `make_guides.py` in allen Sprachen nach dem Versionssprung,
+  dann `make_manual.py`, dann `make_guide_video.py` (`/erzeugen`).
+- **Offen nach 0.5.1** (Register RM-283): die Feldabnahme aus §11 und die
+  Nummernplatzierung, die in zwei Bildern auf Text liegt.
 
 ## §1 Befund
 
