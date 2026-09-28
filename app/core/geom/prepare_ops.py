@@ -208,6 +208,7 @@ def _first_pin_param() -> Any:
 _HALF_MARK = " · "
 _PIN_NOTE = _("Stifte")
 _BORE_NOTE = _("Löcher")
+_BOTH_NOTE = _("Stifte und Löcher")
 
 #: Dieselben zwei Zusätze als **ganzer** Name, mit dem Stamm als Wert. Der
 #: Stamm gehört dem Nutzer und bleibt eine Zeichenkette; der Zusatz gehört der
@@ -218,7 +219,7 @@ _BORE_NOTE = _("Löcher")
 #: Der Einsammler liest die Message-ID als **Literal** aus dem ``_()``-Aufruf,
 #: und ein zusammengesetzter Ausdruck ist für ihn keine. Zwei Sprachdateien mit
 #: einem Schlüssel, den niemand mehr füllt, wären der Preis dafür.
-_HALF_IDS = frozenset({"{name} · Stifte", "{name} · Löcher"})
+_HALF_IDS = frozenset({"{name} · Stifte", "{name} · Löcher", "{name} · Stifte und Löcher"})
 
 
 @lru_cache(maxsize=1)
@@ -241,18 +242,52 @@ def _own_notes() -> frozenset[str]:
     """
     from app.i18n.catalog import available_languages, read_catalog
 
-    notes = {str(_PIN_NOTE), str(_BORE_NOTE), _PIN_NOTE.msgid, _BORE_NOTE.msgid}
+    own = (_PIN_NOTE, _BORE_NOTE, _BOTH_NOTE)
+    notes = {text for note in own for text in (str(note), note.msgid)}
     for language in available_languages():
         catalog = read_catalog(language)
-        for note in (_PIN_NOTE, _BORE_NOTE):
+        for note in own:
             translated = catalog.get(note.msgid)
             if translated:
                 notes.add(translated)
     return frozenset(notes)
 
 
+def _connectors_of(features: Mapping[FeatureId, Feature]) -> tuple[bool, bool]:
+    """Trägt ein Stück erzeugte Stifte, erzeugte Löcher? (``pins.add_pins``)
+
+    Gezählt wird nur, was ein Schnitt gesetzt hat: Ein erkannter Zapfen an
+    einem geladenen Modell ist kein Stift zum Zusammenstecken.
+    """
+    pins = bores = False
+    for key, feature in features.items():
+        if feature.provenance != "generated":
+            continue
+        pins = pins or (key.startswith("pin_") and feature.kind == "pin")
+        bores = bores or key.startswith("bore_")
+    return pins, bores
+
+
+def _noted(name: TranslatableText | str, carries: tuple[bool, bool]) -> TranslatableText | str:
+    """Der Name mit dem Zusatz dessen, was das Stück trägt."""
+    match carries:
+        case (True, True):
+            return _("{name} · Stifte und Löcher", name=name)
+        case (True, False):
+            return _("{name} · Stifte", name=name)
+        case (False, True):
+            return _("{name} · Löcher", name=name)
+    return name
+
+
 def half_names(
-    base: TranslatableText | str, *, pinned: bool, pins_on_b: bool = False
+    base: TranslatableText | str,
+    *,
+    pinned: bool,
+    pins_on_b: bool = False,
+    carries: tuple[tuple[bool, bool], tuple[bool, bool]] | None = None,
+    numbers: tuple[int, int] = (0, 0),
+    piece_count: int = 0,
 ) -> tuple[TranslatableText | str, TranslatableText | str]:
     """Wie die beiden Stücke heißen.
 
@@ -273,6 +308,15 @@ def half_names(
 
     ``pins_on_b`` sagt, dass B die Stifte trägt (RM-005) — dann tauschen die
     Zusätze, die Buchstaben bleiben, wo die Hälften liegen.
+
+    **Ab drei Stücken zählt ein Lauf** (RM-229, Entscheidung der
+    Release-Sitzung nach Kundensicht): *Automatisch teilen* trägt
+    ``piece_count`` und die Nummern beider Hälften ein, und aus „Wandleiste B A
+    · Stifte“ wird „Wandleiste 2 von 3 · Stifte und Löcher“. Eine Hälfte mit
+    der Nummer null teilt derselbe Lauf gleich weiter; sie trägt nur den Stamm,
+    damit der nächste Schnitt ihn findet. Bei zwei Stücken bleiben A und B.
+    ``carries`` sagt je Hälfte, ob sie Stifte und ob sie Löcher trägt — auch
+    die einer früheren Naht; ohne Angabe folgt es aus ``pinned``.
     """
     # Ab hier wörtlich: Wie die Hälften heißen, entsteht beim Trennen, und was
     # dabei entsteht, gehört dem Nutzer — dieselbe Regel wie beim Namen einer
@@ -287,17 +331,22 @@ def half_names(
         head, mark, tail = stem.rpartition(_HALF_MARK)
         if mark and tail in _own_notes():
             stem = head
-    if not pinned:
-        return f"{stem} A", f"{stem} B"
-    if pins_on_b:
-        return (
-            _("{name} · Löcher", name=f"{stem} A"),
-            _("{name} · Stifte", name=f"{stem} B"),
+    if carries is None:
+        carries = (
+            (pinned and not pins_on_b, pinned and pins_on_b),
+            (pinned and pins_on_b, pinned and not pins_on_b),
         )
-    return (
-        _("{name} · Stifte", name=f"{stem} A"),
-        _("{name} · Löcher", name=f"{stem} B"),
-    )
+
+    def stem_of(letter: str, number: int) -> TranslatableText | str:
+        if piece_count < 3:
+            return f"{stem} {letter}"
+        if number <= 0:
+            return stem
+        return _("{name} {number} von {count}", name=stem, number=number, count=piece_count)
+
+    first = _noted(stem_of("A", numbers[0]), carries[0])
+    second = _noted(stem_of("B", numbers[1]), carries[1])
+    return first, second
 
 
 @op_params
@@ -16067,6 +16116,30 @@ class SplitPinnedParams(BaseParams):
         ),
     )
     first_pin: int = _first_pin_param()
+    piece_count: int = param(
+        title=_("Stücke des Laufs"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_(
+            "Automatisch teilen trägt ein, in wie viele Stücke es teilt. Ab drei "
+            "heißen sie „1 von 3“, „2 von 3“ …; null heißt: A und B."
+        ),
+    )
+    number_a: int = param(
+        title=_("Nummer von Stück A"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_("Seine Nummer in dieser Zählung. Null heißt: Es wird gleich weiter geteilt."),
+    )
+    number_b: int = param(
+        title=_("Nummer von Stück B"),
+        default=0,
+        minimum=0,
+        placement="advanced",
+        doc=_("Dasselbe für Stück B."),
+    )
 
 
 @op_params
@@ -16362,6 +16435,9 @@ def split_bodies(ctx: OpContext) -> OpResult:
     params=SplitPinnedParams,
     consumes=1,
     produces=2,
+    # Die Namen der Stücke sagen seit RM-229, was sie tragen, und zählen einen
+    # Lauf ab drei Stücken; ein Cache-Eintrag von vorher trüge die alten.
+    cache_version="1",
     doc=_(
         "Teilt ein Objekt an einer Ebene, auf Wunsch mit Passstiften in der "
         "Schnittfläche. Das Spiel kommt aus dem Materialprofil; null Stifte heißt: "
@@ -16393,6 +16469,8 @@ def split_pinned(ctx: OpContext) -> OpResult:
         play=params.play,
         pins_on_b=params.pins_on_b,
         first_pin=params.first_pin,
+        numbers=(params.number_a, params.number_b),
+        piece_count=params.piece_count,
     )
 
 
@@ -16407,6 +16485,8 @@ def _cut_and_pin(
     play: float,
     pins_on_b: bool = False,
     first_pin: int = 0,
+    numbers: tuple[int, int] = (0, 0),
+    piece_count: int = 0,
 ) -> OpResult:
     """Der gemeinsame Teil von *Teilen* und *An Linie trennen*.
 
@@ -16484,9 +16564,6 @@ def _cut_and_pin(
     # Am Netz des Eingangs gemessen — am exakten Körper an seiner Tessellierung,
     # auf die die Dreiecksnummern seiner Merkmale zeigen (beide Kerne gleich).
     first_features, second_features = _features_after_split(source.features, plane, mesh)
-    first_name, second_name = half_names(
-        source.name, pinned=bool(pair.pin_features), pins_on_b=pins_on_b
-    )
     first_mesh, second_mesh = (pair.second, pair.first) if pins_on_b else (pair.first, pair.second)
     first_added, second_added = (
         (pair.bore_features, pair.pin_features)
@@ -16502,6 +16579,20 @@ def _cut_and_pin(
     }
     first_features = _clear_of(first_features, first_added, taken)
     second_features = _clear_of(second_features, second_added, taken)
+    # **Der Name sagt, was das Stück trägt** (RM-229): gelesen an den Verbindern,
+    # die es nach diesem Schnitt hat — auch denen einer früheren Naht. Das
+    # Mittelstück eines Laufs hieß sonst „· Stifte“ und trug auch Löcher.
+    first_name, second_name = half_names(
+        source.name,
+        pinned=bool(pair.pin_features),
+        pins_on_b=pins_on_b,
+        carries=(
+            _connectors_of({**first_features, **first_added}),
+            _connectors_of({**second_features, **second_added}),
+        ),
+        numbers=numbers,
+        piece_count=piece_count,
+    )
     return OpResult(
         solver=pair.solver,
         outputs=[
@@ -16878,6 +16969,8 @@ class SplitLineParams(BaseParams):
     params=SplitLineParams,
     consumes=1,
     produces=2,
+    # Wie bei *Teilen*: Die Namen sagen seit RM-229, was die Stücke tragen.
+    cache_version="1",
     icon="split",
     doc=_(
         "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf "
