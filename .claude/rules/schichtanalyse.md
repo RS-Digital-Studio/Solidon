@@ -291,6 +291,10 @@ Schlüssel nennt Raster, Winkel, Brückenbreite und Drucker.
 Provenienz-IDs überleben jede Neuberechnung — sonst zeigt der Op-Stack ins
 Leere; mehrdeutige Zuordnung hält an und fragt.
 
+- **Zwillinge entscheidet die Lage ihrer Oberfläche**
+  (`matching.settled_by_surface`, vor `_divided_partners`): nur, wenn sie für
+  beide Seiten mit Vorsprung die nächste ist; sonst bleibt es eine Frage.
+
 - **Eine geteilte Fläche heißt am größten Stück weiter**
   (`evaluate._divided_partners`), gesucht in ihrer Ebene innerhalb ihrer alten
   Dreiecke — nur, wenn diese Dreiecke die Fläche sind (Normale, Ebene), nie
@@ -501,6 +505,9 @@ nur in seinem Gitter neu gezeichnet (`_GENERATOR_LATTICE`).
 - Gefaltet wird nach allen Einzelformen und **vor** dem Freiformfilter.
 - Was ein Muster ausmacht, steht am Netz, nie ein Trägername; ein
   Zylinderträger wird in seiner Abwicklung gemessen.
+- **Unter gleichen Zellen wählt `patterns.SEAM_DIRECTION`** — Naht unter
+  gleich großen Lücken (auch um Randstücke), Anker unter gleich nahen Zellen —,
+  nie der Rundungsrest oder die erste Ebenenachse.
 - Ein Stopfen liegt auf den Facetten, nicht auf dem Kreis; erst teilen, dann
   biegen; **geteilt wird konform** (`patterns._cut_at`), nicht mit
   `split_by_plane` und Vereinigung. Wer eine Auskunft genauer macht, sucht die

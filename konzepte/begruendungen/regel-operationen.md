@@ -302,6 +302,66 @@ Absage mit Weg, nicht eine stille Wahl (Regel 21).
 Kontur an Kante 1 hängt, verrundet eine Kette zur Hälfte mit dem Endradius.
 Und ein eigenes `Law_Function` nimmt OCCT 8.0.1 gar nicht an.
 
+### Kantengruppen und gebogene Züge
+
+Ein geschlossener Ring hat keine Richtung von Anfang zu Ende, und `flat`
+(`|z| < 0,1`) galt bis Format 36 an jedem: „alle waagerechten Kanten“ nahm am
+Quader 40 × 30 × 20 mit Querbohrung Ø 6 zehn Kanten statt acht, die zwei
+stehenden Mündungen eingeschlossen, und *Verrunden* rundete sie mit (RM-279).
+Die Beschriftung nannte den Ring da schon nach seiner Ebene „Senkrecht“
+(RM-269). Die naheliegende Einheit — die Mündung auch zu „alle senkrechten
+Kanten“ zu zählen — hat die Release-Sitzung 0.5.1 nach Messung verworfen: Die
+Vorgabe von Verrunden, Fase und Wulst ist „senkrecht“, und sie hätte an jedem
+Teil mit Querbohrung die Mündungen mitgerundet, bei R 5 an Ø 6 zum Trichter;
+am Netz kam die Rundung eines Rings damals zudem zu flach heraus, und an
+`pegboard-gs-100` sank der größte passende Radius von 0,85 auf 0,71 mm. Für den
+Kunden ist eine senkrechte Kante eine gerade Kante und kein Lochrand. Ein Rand
+in einer Seitenwand gehört deshalb zu keiner Gruppe, und die doc-Sätze von
+`edges` und `rings_by_plane` sagen es, weil die Beschriftung „Senkrecht“ zeigt.
+Gespeicherte Schritte behalten den alten Weg (Migration 36 → 37).
+
+**Ein gebogener Zug ist kein Satz Prismen.** Am Netz bekam jedes Stück eines
+Zugs sein eigenes Prisma, mit Stirnflächen quer zum eigenen Stück. Biegt der Zug
+und liegt der Zwickel außen um die Biegung — am Rand einer Bohrung in einer
+Wand —, klafft zwischen zwei Prismen ein Keil, und dort bleibt Material stehen:
+Quader mit Bohrung Ø 6, R 2 5,4 % und R 5 20,5 % zu wenig, Fase 2 14,4 %, die
+Rundung bis 1,95 mm neben dem Torus, als Sägezahn um die Mündung. Jetzt liegt
+je Knoten ein Querschnitt mit gemittelter Richtung und gemittelten Normalen,
+dazwischen verbindet das Werkzeug gerade, wie der exakte Kern einen Torus
+tesselliert; ein Ring wird ein Schlauch ohne Stirnflächen. Danach liegt die
+Rundung höchstens 0,043 mm (R 5) neben dem Torus, innerhalb
+`units.MAX_FACET_SAG`; der Sehnenzug des Bogens trägt rund 4 % mehr ab als der
+Kreis — dieselbe Grenze. Ein gerader Zug, ein Knick über `SWEEP_TURN_LIMIT`
+(45 Grad) und eine Fase mit zwei Maßen (`shape`) bleiben beim Prisma; ein
+Radiusverlauf geht denselben Weg (2 → 4 → 2 an der Mündung: 0,87 → 1,05 × exakt),
+und nur wo er nicht trägt, bleibt es beim Loft je Stück (`_varying_tool`).
+
+**Eine Gruppe lässt aus, was das Maß nicht trägt** (28.09.2026, Entscheidung der
+Release-Sitzung 0.5.1 nach Kundensicht; Robert gemeldet). Vom 23.09. an sagte
+die ganze Gruppe ab, sobald eine Kante auf einer schmalen Fläche lag — mit dem
+größten Maß, das überall passt (Durchsicht vor 0.5.0, Paket „merkmalsops“:
+vorher machte das Netz die Wand still niedriger). An Kundenteilen mit einer
+einzigen schmalen Fläche war „senkrecht“ damit bei jedem Radius unbenutzbar
+(pegboard-goot ab 0,37 mm, pb3041 ab 0,21 mm), und einzeln wählen kann ein
+Kunde ohne CAD nicht. Jetzt fragt `edges.contact_band_limits` je Kante; die
+Gruppe bearbeitet, was trägt, und `edges.too_narrow` nennt die übrigen mit dem
+kleinsten Maß, das dort passt, und *Stelle zeigen* — derselbe Grundsatz wie für
+Züge ohne Winkel (`edges.skipped`). Stoßen zwei gewählte Kanten auf derselben
+schmalen Fläche aneinander, fallen beide heraus: welche bleiben soll, wäre
+geraten. Trägt keine Kante das Maß, bleibt die Absage; eine einzeln gewählte
+Kante hält weiter an. Die Wand bleibt dabei so hoch, wie sie war.
+
+**Der exakte Kern fragt dasselbe, baut aber nicht immer den Rest.** Die Frage
+stellt er an seiner Tessellierung (`edge_ops._group_that_fits`) und nimmt die
+exakten Kanten, die auf einem tragenden Zug liegen (zwei innere Punkte, die
+Enden teilt eine Kante mit ihren Nachbarn); glatte Kanten ohne Zug fallen wie am
+Netz mit `edges.skipped` heraus. Wo OpenCASCADE die verkleinerte Gruppe nicht
+baut (Hohlkasten 3 mm, „alle“ R 2: 17 Kanten, jede einzeln baubar, zusammen
+nicht) oder offen tesselliert (zwei Rundungen an pegboard-goot, bei jedem Radius
+und auch einzeln), bleibt die Absage mit der größten Zahl. Ein Suchen nach dem
+baubaren Rest durch wiederholtes Bauen wurde gemessen und verworfen: 15 bis 37 s
+je Vorschau an den Pegboards, und der Rest war teils offen.
+
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
 Die Formschräge rechnet am Netz Werkzeuge zwischen alter und neuer Fläche;
@@ -351,6 +411,34 @@ Dreiecksfolge bleibt die des Kerns, keine Koordinate ändert sich. **Wer
 Szene landet** (`prepare_ops._without_scars` mit `simplify`), legt es ebenso
 zurück. Das ist die Voraussetzung dafür, dass der Merker über die
 Körpergrenze (`kern.md`) nach einem Schritt trifft.
+
+**Und an seinem Ort: Das Werkzeug wandert in die Welt** (RM-274). *Bohrung
+setzen* mit der Normalen einer angeklickten Fläche, *Bohrung ändern* und *Zum
+Langloch ziehen* legten bis zur Durchsicht 0.5.1 den ganzen Körper in den
+Rahmen der Bohrung und zurück. Am Gartenschlauchhalter (Ø 3 × 2 mm in die
+größte Fläche, Normale +y) standen danach 17 490 Ecken außerhalb des Schnitts
+woanders, 352 862 von 392 696 Dreiecken waren bitgleich, und der Merker über
+die Körpergrenze rechnete 1 078 statt 79 Fragen neu. Mit dem Werkzeug in der
+Welt ist das Ergebnis Bit für Bit das des achsparallelen Wegs (0 versetzt,
+Merker 79). Die gemischte Ecke von *Verrunden* und *Fase* rechnet weiter im
+Rahmen ihres Knotens, weil Bereich und Zielkörper genau in dessen drei Ebenen
+liegen und eine gedrehte Ecke sie in der Welt nicht träfe; dafür bekommt jede
+durchgereichte Ecke ihre Weltkoordinate zurück (am L-Profil mit Kugel vorher
+481 von 511 fernen Ecken versetzt, gedreht alle, danach keine).
+
+**Ein Werkzeugende in einer Fläche mit Luft dahinter reicht über sie hinaus**
+(`prepare._open_ends`). Ein Werkzeug in Weltlage, das bündig in einer schrägen
+Fläche endet, lässt eine Haut stehen — gemessen an einer um 17,5° gedrehten
+Platte an der Mündung, bei 33° am Boden in der Unterseite, an jeder auf
+float32 gerundeten Fläche. Der Weg über den Rahmen bereinigte nur
+Float64-Rauschen und ließ deshalb an einer schrägen STL-Fläche über jedem
+Sackloch, Langloch und jeder Aufweitung eine Scheibe in der Mündung stehen
+(zwei Teile, keine Bohrung erkannt). In der Fläche heißt näher als die
+Schweißtoleranz; Luft dahinter heißt, alle Dreiecke dort, die die Scheibe um
+die Achse berühren, zeigen vom Werkzeug weg. Eine Haut unter der
+Schweißtoleranz ist damit keine mehr — am Würfel 20 mm liegt die Grenze bei
+3,5·10⁻⁵ mm, ein Tausendstel Millimeter bleibt ein echter Abstand
+(`test_surface_placement.py::test_a_real_offset_from_the_drill_mouth_survives_roundoff_cleanup`).
 
 **An einem eingelesenen Netz ist „koplanar" nur fast koplanar** (RM-166,
 14.09.2026). Eine STL trägt float32, und ein Fasenkeil, dessen Flanke exakt in

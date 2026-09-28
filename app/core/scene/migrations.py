@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 36
+FORMAT_VERSION: Final = 37
 
 
 @dataclass(frozen=True, slots=True)
@@ -981,6 +981,41 @@ def _readable_print_settings(stored: dict[str, Any]) -> bool:
     return isinstance(stored.get("slot_profiles", []), list)
 
 
+#: Die Operationen, die Kanten nach ihrer Lage wählen (``edges`` als Gruppe).
+_EDGE_GROUP_OPERATIONS: Final = frozenset({"fillet_edges", "chamfer_edges", "bead_edges"})
+
+
+def _keep_edge_groups_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """36 → 37: Gespeicherte Kantengruppen zählen jeden Ring weiter als waagerecht.
+
+    Seit RM-279 nimmt eine Gruppe nach Lage einen geschlossenen Ring nur,
+    wenn er waagerecht liegt (``edges.choose`` über ``edge_lie_of``); die
+    Mündung einer Querbohrung gehört zu keiner. Bis Format 36 galt ``flat`` an
+    jedem Ring — „alle waagerechten Kanten“, „oben“ und „unten“ konnten die
+    Mündungen einer Querbohrung mitrunden. Ein alter Schritt bekommt deshalb
+    ``rings_by_plane = False`` und trifft beim Öffnen dieselben Kanten wie
+    beim Speichern. Wie 34 → 35 auch in den gespeicherten Fassungen ``before``
+    und ``after`` jeder Änderung; ein Schritt, der den Schlüssel schon trägt,
+    bleibt, wie er ist. Festgehalten an ``tests/data/projects/edge_groups_v36.p3d``,
+    geschrieben vom Stand vor der Änderung.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if isinstance(operation, dict) and operation.get("op") in _EDGE_GROUP_OPERATIONS:
+            params = operation.setdefault("params", {})
+            if isinstance(params, dict):
+                params.setdefault("rings_by_plane", False)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1018,6 +1053,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=33, to_version=34, apply=_allow_large_recognition_answers),
     Step(from_version=34, to_version=35, apply=_keep_repairs_as_they_were),
     Step(from_version=35, to_version=36, apply=_mark_own_print_settings),
+    Step(from_version=36, to_version=37, apply=_keep_edge_groups_as_they_were),
 )
 
 

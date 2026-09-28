@@ -5472,3 +5472,52 @@ def test_the_hint_to_aim_in_the_view_belongs_to_the_running_placement(
         assert not dialog._placement_hint.isVisibleTo(dialog), "und Escape nimmt ihn zurück"
     finally:
         dialog.deleteLater()
+
+
+@pytest.mark.parametrize("name", ["fillet_edges", "chamfer_edges", "bead_edges"])
+def test_the_rim_switch_sits_at_the_back_and_follows_the_group(
+    name: str, qt_app: QApplication
+) -> None:
+    """RM-279: „Runde Ränder nach ihrer Lage“ steht hinten und nur bei einer Gruppe.
+
+    Ein neuer Schritt trägt den Haken; ein alter aus Format 36 öffnet ohne ihn
+    und behält ihn beim Übernehmen, damit er dieselben Kanten trifft wie
+    gespeichert. Bei „senkrecht“, „alle“ und einzeln gewählten Kanten gibt es
+    nichts einzuordnen — dort ist die Zeile fort.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    dialog = OperationDialog(REGISTRY.get(name), {"obj_1": "Quader"}, None)
+    try:
+        box = dialog._editors["rings_by_plane"]
+        assert isinstance(box, QCheckBox)
+        assert dialog._rows["rings_by_plane"] is dialog._advanced_form, "Rückseite"
+        assert box.isChecked() and dialog.values()["rings_by_plane"] is True
+        choice = dialog._editors["edges"]
+        assert isinstance(choice, QComboBox)
+        for group, shown in (
+            ("horizontal", True),
+            ("top", True),
+            ("vertical", False),
+            ("all", False),
+            ("named", False),
+        ):
+            choice.setCurrentIndex(choice.findData(group))
+            assert box.isEnabled() is shown, group
+    finally:
+        dialog.deleteLater()
+
+    stored = OperationDialog(
+        REGISTRY.get(name),
+        {"obj_1": "Quader"},
+        None,
+        values={"edges": "horizontal", "rings_by_plane": False},
+    )
+    try:
+        assert not stored._editors["rings_by_plane"].isChecked()
+        assert stored.values()["rings_by_plane"] is False
+    finally:
+        stored.deleteLater()

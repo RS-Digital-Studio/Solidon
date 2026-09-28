@@ -562,6 +562,22 @@ Ergebnis vergeben hat, geben keinem Stück einen Namen. Und nach einer
 Bewegung wird nicht gesucht. Eine Operation, die eine querende Fläche teilt,
 gibt sie beiden Hälften mit (`prepare_ops._features_after_split`).
 
+**Zwillinge entscheidet die Lage ihrer Oberfläche** (28.09.2026, Paket muster
+der Release-Sitzung 0.5.1; `matching.settled_by_surface`). Drei Bögen eines
+Grats haben für den Merkmalsvektor dieselbe Mitte, Achse und Größe; `match`
+meldete sie nach jedem Schritt mehrdeutig, ohne Verweis kamen sie unter neuen
+Namen zurück, mit Verweis als Frage. Am Korpus waren es nach *Kanten
+verfeinern*, *Bohrung setzen* und *Verschieben* je 355, 167 und 165 Merkmale an
+über 40 Körpern (Siebhalter-Ring, Rankenclip, Filterball, Besteckkörbe,
+Bildschirmabdeckungen), danach keines. Gemessen wird der flächengewichtete
+Schwerpunkt der Dreiecke — unabhängig von der Teilung, daher trägt er auch das
+Verfeinern —, der alte im Eingangsnetz samt Bewegung. Der Vorsprung gilt in
+Millimetern (Faktor `AMBIGUITY_MARGIN` plus `units.MAX_FACET_SAG`), nicht mit
+der Untergrenze der Zuordnung: Die Stufen einer geprägten Schrift liegen 0,08 mm
+übereinander, und die alte Oberfläche liegt bis auf Rundung genau auf einer.
+Gleich große Stücke einer geteilten Fläche bleiben eine Frage; deshalb läuft
+die Entscheidung vor `_divided_partners`.
+
 Ein Verlust ohne Verweis wird **einmal je Körper und Schritt** gemeldet, nie je
 Merkmal (`perceive.orphaned`/`perceive.mended`, Zahl und Kennungen in den
 Werten). Ein Formschritt kann viele erkannte Flächen verlieren; ihre Kennungen
@@ -1157,3 +1173,19 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   bereits gefüllter Streifen gehört zum neuen Feld. Am Stirnrand reicht nur
   das Schneidwerkzeug über die gemessene Stirnfläche hinaus; seine Verlängerung
   bezieht sich auf diese Ebene, nicht auf den angenäherten Umrisspunkt.
+
+* **Unter gleichen Zellen wählt eine feste Weltrichtung** (28.09.2026, RM-275;
+  `patterns.SEAM_DIRECTION`). Um einen Zylinder sind alle Zellen gleich; am
+  Gewürzdeckel (24 Mulden, jede ein Randstück) lag die Naht der Abwicklung der
+  ersten Ebenenachse gegenüber und genau auf einer Mulde, und welcher Seite sie
+  zufiel, entschied das Vorzeichen einer Summe nahe null: Schon beim Laden
+  stand die Mitte bei einem Teil der Deckel eine halbe Teilung links, bei den
+  anderen rechts, und nach *Merkmal verschieben* weit weg sprang sie an vier
+  von zwölf. Aus ganzen Zellen war die Naht die größte von lauter gleich großen
+  Lücken — ebenfalls Rundung. Jede Wahl auf einem Kreis kippt irgendwo; die
+  Richtung (1, φ, φ²) legt die Kippe auf Winkel, die kein konstruiertes Muster
+  trifft (58,28° um Z und X, 69,09° um Y), statt auf die Weltachsen, an denen
+  Rändel konstruiert werden. Gleich groß heißt bis auf `SAME_MEASURE`; ein
+  Teilfeld behält seine eine große Lücke. Der Anker (nächste Zelle zur Mitte)
+  hat bei gerader Zellenzahl zwei gleich nahe; auch dort entscheidet die
+  Richtung.

@@ -1483,6 +1483,15 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   Geschlossen wird nur, was **eindeutig** ist: genau ein freies Dreieck bringt
   den Rand in Ordnung. Bringen es zwei, bleibt der Fleck, wie er ist — dort
   steht eine Gabelung, und die zu raten verbietet Regel 21.
+  **Und nur, was die Fläche glatt fortsetzt** (RM-274, Paket bohren der
+  Release-Sitzung 0.5.1): Ein Kandidat grenzt über eine Naht unter
+  `CURVATURE_LIMIT` an den Fleck, dieselbe Schwelle, an der ein Fleck endet.
+  Vorher schloss ein Paar ebener Dreiecke des Ringabsatzes einer verkleinerten
+  schrägen Senkbohrung die Kerbe des Senkkegels über einen Knick von 39°, der
+  Kegel war danach nicht mehr belegt und las sich als Torus — je nach
+  Vernetzung des Absatzes: über 17 Lagen je Achse verlor der Stand vor dem
+  Umbau den Kegel bei 1,1 rad, der Stand mit dem Werkzeug in der Welt bei 0,73
+  rad, mit der Regel keiner (`sonden/bohren/p12_kippe.py`).
   **Gesucht und geprüft wird am Knoten, nicht im Netz** (20.09.2026):
   `_rim_of` zählt Kanten und Randgrade eines Flecks einmal, `_candidates_at`
   liest die Kandidaten über den eigenen Index Ecke → Dreiecke

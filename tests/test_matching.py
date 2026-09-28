@@ -2112,3 +2112,151 @@ def test_a_declared_pin_takes_the_twin_at_its_own_place() -> None:
     assert not seen.ambiguous
     assert "pin_2" in seen.orphaned, "an seiner Stelle steht nichts"
     assert "pin_1" not in seen.fresh
+
+
+def ridged_ring() -> bytes:
+    """Ein Ring mit einem Grat innen, dreimal unterbrochen — drei Verrundungen um denselben Kreis.
+
+    Der Grat läuft als schmales Band (0,67 mm) zwischen zwei Kegeln um Ø 54,57;
+    drei breite Nasen trennen ihn in drei Bögen. Für die Zuordnung sind die
+    drei Bögen Zwillinge: dieselbe Art, dieselbe Mitte, Achse und dasselbe Maß
+    — nur ihre Oberfläche liegt an drei Stellen. So sieht der Ring des
+    Siebhalters aus dem Korpus aus (``Siebhalter+X1C.3mf``), an dem nach
+    *Kanten verfeinern*, *Bohrung setzen* und *Verschieben* drei von 48
+    Verrundungen mit bitgleichen Maßen unter neuen Namen zurückkamen.
+    """
+    from app.core.geom.boolean import boolean
+    from app.core.scene.cancel import NeverCancelled
+
+    tip = 0.67
+    reach = 8.4 - 6.65 - tip / 2.0
+    profile = [
+        (28.7, 0.0),
+        (35.0, 0.0),
+        (35.0, 13.0),
+        (28.7, 13.0),
+        (28.7, 8.4),
+        (28.7 - reach, 6.65 + tip / 2.0),
+        (28.7 - reach, 6.65 - tip / 2.0),
+        (28.7, 4.9),
+        (28.7, 0.0),
+    ]
+    ring = trimesh.creation.revolve(np.array(profile), sections=128)
+    if ring.volume < 0.0:
+        ring.invert()
+    lugs = []
+    for index in range(3):
+        lug = trimesh.creation.box(extents=(3.0, 20.0, 5.0))
+        lug.apply_translation((27.5, 0.0, 6.65))
+        lug.apply_transform(
+            trimesh.transformations.rotation_matrix(index * 2.0 * np.pi / 3.0 + 0.3, (0, 0, 1))
+        )
+        lugs.append(lug)
+    cut = boolean(
+        "difference",
+        [MeshData.of(ring), MeshData.of(trimesh.util.concatenate(lugs))],
+        quality="fine",
+        cancelled=NeverCancelled(),
+    ).mesh
+    return bytes(cut.raw.export(file_type="stl"))
+
+
+def _surface_place(mesh: MeshData, feature: Feature) -> np.ndarray:
+    faces = np.asarray(feature.face_indices, dtype=np.int64)
+    areas = np.asarray(mesh.raw.area_faces)[faces]
+    return (np.asarray(mesh.raw.triangles_center)[faces] * areas[:, None]).sum(axis=0) / areas.sum()
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        ("remesh_mesh", {"edge": 1.0}, (0.0, 0.0, 0.0)),
+        (
+            "drill_hole",
+            {"diameter": 2.0, "x": 31.0, "y": -5.0, "z": 13.0, "depth": 1.0},
+            (0.0,) * 3,
+        ),
+        ("translate_object", {"dx": 5.0}, (5.0, 0.0, 0.0)),
+    ],
+    ids=["verfeinern", "bohren", "verschieben"],
+)
+def test_twins_keep_their_names_where_their_surface_stays(profile, step) -> None:
+    """Zwillinge für die Zuordnung behalten ihren Namen an der Stelle ihrer Oberfläche.
+
+    Drei Bögen desselben Grats unterscheidet der Merkmalsvektor nicht, und die
+    Zuordnung meldete sie nach jedem Schritt mehrdeutig: Ohne Verweis kamen sie
+    unter neuen Namen zurück, mit Verweis stellte sie dem Kunden eine Frage,
+    die die Geometrie beantwortet. Wo die Oberfläche eines Bogens nach dem
+    Schritt liegt, liegt nur einer — der behält den Namen. Gefragt wird nicht
+    (``ask`` schlägt fehl).
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    forget_cache()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/ring.stl", sha256=""
+    )
+    project.sources["src_1"] = ridged_ring()
+    history = History(project.document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+
+    def no_question(question, choices):
+        pytest.fail(f"gefragt: {question}")
+
+    first = evaluate(project.document, profile, sources=sources, ask=no_question)
+    body_id = project.document.ops[-1].outputs[0]
+    before = first.scene.objects[body_id]
+    fillets = sorted(name for name, f in before.features.items() if f.kind == "fillet")
+    assert len(fillets) == 3, sorted(before.features)
+    centre, diagonal = before.mesh.bounds.centre, before.mesh.bounds.diagonal
+    twins = [before.features[name] for name in fillets]
+    assert cost(twins[0], twins[1], centre, centre, diagonal) < 0.05, "die drei sind Zwillinge"
+
+    op, params, shift = step
+    history.apply(op, [OperationDraft(op=op, inputs=(body_id,), params=params)])
+    output_id = project.document.ops[-1].outputs[0]
+    second = evaluate(project.document, profile, sources=sources, ask=no_question)
+    assert second.stopped_at is None
+    after = second.scene.objects[output_id]
+    assert sorted(name for name, f in after.features.items() if f.kind == "fillet") == fillets
+    for name in fillets:
+        np.testing.assert_allclose(
+            _surface_place(after.mesh, after.features[name]),
+            _surface_place(before.mesh, before.features[name]) + np.asarray(shift),
+            atol=0.05,
+        )
+    assert "perceive.orphaned" not in {finding.code for finding in second.scene.report.findings}
+
+
+def test_only_a_clearly_nearest_surface_settles_twins() -> None:
+    """Die Lage der Oberfläche entscheidet nur, was sie für beide Seiten mit Abstand trennt."""
+    from app.core.perceive.matching import MatchResult, settled_by_surface
+
+    open_twins = MatchResult(ambiguous={"a": ("x", "y"), "b": ("x", "y")}, fresh=("x", "y", "z"))
+    far = {"a": np.array([0.0, 0.0, 0.0]), "b": np.array([30.0, 0.0, 0.0])}
+    near = {"x": np.array([30.0, 0.1, 0.0]), "y": np.array([0.0, 0.1, 0.0])}
+    settled = settled_by_surface(open_twins, far, near, 100.0)
+    assert settled.mapping == {"a": "y", "b": "x"}
+    assert not settled.ambiguous
+    assert settled.fresh == ("z",)
+    # Gleich weit weg — zwei gleiche Stücke einer geteilten Fläche: bleibt offen.
+    halves = {"x": np.array([-5.0, 0.0, 0.0]), "y": np.array([5.0, 0.0, 0.0])}
+    one = MatchResult(ambiguous={"a": ("x", "y")}, fresh=("x", "y"))
+    assert settled_by_surface(one, {"a": np.zeros(3)}, halves, 100.0) == one
+    # Ohne Ort entscheidet nichts, und auch ein Rivale ohne Ort hält das Paar offen.
+    assert settled_by_surface(open_twins, {"a": far["a"]}, near, 100.0).mapping == {}
+    # Weiter weg als die Lagetoleranz der Zuordnung: kein Paar.
+    beyond = {"x": np.array([50.0, 0.0, 0.0]), "y": np.array([90.0, 0.0, 0.0])}
+    assert settled_by_surface(one, {"a": np.zeros(3)}, beyond, 100.0) == one
+    # Stufen einer geprägten Schrift, 0,08 mm übereinander: Genau an ihrer
+    # Stelle liegt nur eine — die Untergrenze der Zuordnung gilt hier nicht,
+    # wohl aber die Sehnenabweichung, unter der das Netz nichts unterscheidet.
+    step = {"x": np.array([0.0, 0.0, 0.392]), "y": np.array([0.0, 0.0, 0.473])}
+    assert settled_by_surface(one, {"a": step["x"]}, step, 40.0).mapping == {"a": "x"}
+    close = {"x": np.array([0.0, 0.0, 0.392]), "y": np.array([0.0, 0.0, 0.422])}
+    assert settled_by_surface(one, {"a": close["x"]}, close, 40.0) == one

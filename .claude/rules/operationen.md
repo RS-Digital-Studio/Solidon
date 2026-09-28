@@ -51,9 +51,7 @@ Zwillinge (`drill_brep_hole`, `shell_exact`; Netz-Zwilling der Grundkörper nur
 in der Befehlspalette) und die Erzeuger an einem Träger, samt neuem Teil.
 
 **Den Unterschied nennt der `caveat`** (Sehnenzug bis `units.MAX_FACET_SAG`) und
-sagt, wann man den anderen Weg braucht:
-Ein Unterschied, den man benennt, ist eine Eigenschaft; einer, den man
-verschweigt, ist ein Fehlerbericht.
+sagt, wann man den anderen Weg braucht.
 
 ## Ein Parameter sagt, was er bewirkt
 
@@ -102,9 +100,15 @@ Offene Kante: linkes Ende, dann vorn, dann unten (`edges.starts_at_first`);
 Ring: Punkt kleinster Lage (`LOOP_START`), Richtung `LOOP_WAY` — nie
 Knotennummer oder erster Punkt; beide Kerne und jeder Verbraucher fragen
 dieselben Funktionen. Ohne Form (Ring mit verschiedenen Endradien, verschiedene
-Radien an einer Ecke) eine Absage mit Weg (Regel 21). OCCT:
-`SetRadius(UandR, IC, IinC)` gilt der Kante `IinC`, nicht der Kontur; ein
-eigenes `Law_Function` nimmt 8.0.1 nicht an.
+Radien an einer Ecke) eine Absage mit Weg (Regel 21).
+
+### Kantengruppen und gebogene Züge
+
+Nur `edges.choose` fragt die Lage: Strecken nach Richtung, Ränder nur waagerecht
+(`edge_lie_of`), ein „Senkrecht“ beschrifteter zu keiner. Ein gebogener
+Zug wird durch seine Knoten gezogen (`_swept_tool`, RM-279). Eine Gruppe lässt
+aus, was das Maß nicht trägt (`contact_band_limits`, `edges.too_narrow` mit Zahl
+und Stelle); trägt keine, sagt sie ab.
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 
@@ -126,16 +130,16 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
   Befund** (`boolean.parts_united`); mehrschalige Körper gehen durch
   `boolean()`.
 - **Was der Kern nicht geschnitten hat, kommt in der Darstellung des Eingangs
-  zurück** (`attributes.in_source_layout`: Eckenfolge je Dreieck, Reihenfolge
-  der Ecken; Dreiecksfolge und Koordinaten bleiben die des Kerns), auch
-  außerhalb von `boolean()` (`prepare_ops._without_scars`) — die Erkennung liest
-  Normalen aus der Eckenfolge.
+  und an seinem Ort zurück** (`attributes.in_source_layout`,
+  `prepare_ops._without_scars`): Werkzeuge wandern in die Welt, nie Körper in
+  ihren Rahmen (`prepare.drill` u. a.); sonst holt `edges._back_in_place`
+  durchgereichte Ecken zurück.
 - **„Koplanar robust" gilt nur für exakt koplanare float64-Geometrie.** Am
   float32-Netz einer STL bekommen abziehende Keile `BOOLEAN_OVERLAP` als
-  Flankenüberstand (`edges.rounding_tool`), Stufe 2 entnadelt nur mit der
+  Überstand (`edges.rounding_tool`), ebenso Werkzeugenden in Flächen mit Luft
+  dahinter (`prepare._open_ends`); Stufe 2 entnadelt nur mit der
   Zusicherung des Imports (`boolean._welded_input`), die Ausgabe wird wie im
-  Slicer verschweißt und nur dicht bei gleichem Volumen übernommen
-  (`boolean._tidied`).
+  Slicer verschweißt (`boolean._tidied`).
 
 ## Befunde statt Protokoll
 
@@ -155,9 +159,7 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
   oder Wicklung gehören in `CLOSED_STATE_CODES`, `ONE_PIECE_CODES` oder
   `WOUND_STATE_CODES`.
 - **Die Reparatur löst Überschneidungen von sich aus auf** (Entscheidung Robert,
-  `RepairParams.self_intersections`); alte Schritte behalten ihren Wert
-  (Migration 34→35), ein Befund bietet das Auflösen an; eine sich selbst
-  kreuzende Schale wird benannt, nicht vereinigt (`repair.self_crossing`).
+  `RepairParams.self_intersections`, alte Schritte nicht; `repair.self_crossing`).
 - **Was aus einem Verhältnis entsteht, fragt die Auswertung am Endstand**, nicht
   die Op je Schritt (`check_placement`, `check_bodies_in_one_place`,
   `check_thin_walls`; Restwand `relations.thinnest_sleeve` wie `sleeve_at`,

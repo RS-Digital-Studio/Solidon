@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -61,7 +61,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
+from app.core.units import DEGREE_UNIT, EPS_GEOM, MAX_FACET_SAG, format_length
 from app.i18n import _
 
 #: Wie eine Fase bemaßt ist (P6.2): gleich breit, zwei Abstände, Abstand und Winkel.
@@ -80,7 +80,19 @@ _STATIONS_HOW = _(
 
 #: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
 _CHOICE_DOC = _(
-    "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte."
+    "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln "
+    "gewählte. Ein runder Rand gehört nur dazu, wenn er waagerecht liegt; eine Bohrung in "
+    "einer Seitenwand wählen Sie einzeln."
+)
+
+#: Wie runde Ränder zu den Gruppen stehen (RM-279) — ein Satz für alle drei.
+#: Er nennt den Namen, den die Beschriftung einer solchen Mündung zeigt: Sie
+#: heißt „Senkrecht“ und gehört trotzdem zu keiner Gruppe (``edges.choose``).
+_RINGS_DOC = _(
+    "Ein runder Rand wie die Mündung einer Bohrung zählt nur zu waagerecht, oben oder "
+    "unten, wenn er waagerecht liegt. In einer Seitenwand heißt er „Senkrecht“, gehört "
+    "aber zu keiner Gruppe — wählen Sie ihn dann einzeln. Ohne Haken zählt jeder runde "
+    "Rand als waagerecht, wie in Schritten aus älteren Versionen."
 )
 
 #: Und derselbe Satz zum Feld der einzeln gewählten Kanten.
@@ -89,6 +101,21 @@ _KEYS_DOC = _(
     "ihrer Nummer — ein Schritt davor darf etwas anderes ändern, ohne dass die "
     "Verrundung wandert."
 )
+
+
+def _rings_param() -> bool:
+    """Das Feld „Runde Ränder nach ihrer Lage“ — gleich an allen drei Operationen."""
+    return cast(
+        bool,
+        param(
+            title=_("Runde Ränder nach ihrer Lage"),
+            default=True,
+            placement="advanced",
+            doc=_RINGS_DOC,
+            # „senkrecht“ nimmt an beiden Wegen dieselben Kanten.
+            depends_on=("edges", ("horizontal", "top", "bottom")),
+        ),
+    )
 
 
 def _chosen_edges(choice: str, value: str) -> tuple[str, ...]:
@@ -173,6 +200,11 @@ class FilletParams(BaseParams):
         choices=EDGE_CHOICES,
         doc=_CHOICE_DOC,
     )
+    # **Aus nur für gespeicherte Schritte** (RM-279): Bis Format 36 zählte
+    # jeder Ring als waagerecht, auch die Mündung einer Querbohrung, und die
+    # Migration 36 → 37 schreibt ihnen den Haken aus, damit sie beim Öffnen
+    # dieselben Kanten treffen.
+    rings_by_plane: bool = _rings_param()
     edge_keys: str = param(
         title=_("Einzelne Kanten"),
         default="",
@@ -188,7 +220,11 @@ class FilletParams(BaseParams):
     # 8: die Berührlinien werden an beiden Kernen geprüft, und eine Gruppe
     # lässt gefaltete Züge aus (22.09.2026).
     # 9: Radius mit Verlauf (P6.1, 23.09.2026).
-    cache_version="9",
+    # 10: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
+    # 11: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
+    # 12: an einer gemischten Ecke bleibt jede durchgereichte Ecke an ihrem
+    # Weltort (RM-274).
+    cache_version="12",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -218,6 +254,7 @@ def fillet_edges(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         rounded=True,
+        rings_by_plane=params.rings_by_plane,
         law=law,
     )
 
@@ -336,6 +373,11 @@ class ChamferParams(BaseParams):
         choices=EDGE_CHOICES,
         doc=_CHOICE_DOC,
     )
+    # **Aus nur für gespeicherte Schritte** (RM-279): Bis Format 36 zählte
+    # jeder Ring als waagerecht, auch die Mündung einer Querbohrung, und die
+    # Migration 36 → 37 schreibt ihnen den Haken aus, damit sie beim Öffnen
+    # dieselben Kanten treffen.
+    rings_by_plane: bool = _rings_param()
     edge_keys: str = param(
         title=_("Einzelne Kanten"),
         default="",
@@ -352,7 +394,10 @@ class ChamferParams(BaseParams):
     # 9: zwei Abstände oder Abstand und Winkel (P6.2, 23.09.2026).
     # 10: der exakte Kern fragt die Flächen an einem Punkt auf der Kante statt
     # am Linienschwerpunkt — an Bögen und Kreisen (P6.2, 23.09.2026).
-    cache_version="10",
+    # 11: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
+    # 12: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
+    # 13: wie beim Verrunden (RM-274).
+    cache_version="13",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -379,6 +424,7 @@ def chamfer_edges(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         rounded=False,
+        rings_by_plane=params.rings_by_plane,
         shape=chamfer_shape(params),
     )
 
@@ -510,6 +556,11 @@ class BeadParams(BaseParams):
         choices=EDGE_CHOICES,
         doc=_CHOICE_DOC,
     )
+    # **Aus nur für gespeicherte Schritte** (RM-279): Bis Format 36 zählte
+    # jeder Ring als waagerecht, auch die Mündung einer Querbohrung, und die
+    # Migration 36 → 37 schreibt ihnen den Haken aus, damit sie beim Öffnen
+    # dieselben Kanten treffen.
+    rings_by_plane: bool = _rings_param()
     edge_keys: str = param(
         title=_("Einzelne Kanten"),
         default="",
@@ -523,7 +574,8 @@ class BeadParams(BaseParams):
 @register_op(
     name="bead_edges",
     result_kind="mesh",
-    cache_version="6",
+    # 7: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
+    cache_version="7",
     title=_("Wulst anlegen"),
     category="shaping",
     params=BeadParams,
@@ -558,6 +610,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         selected_edges=ctx.bound_edges.get("edge_keys"),
+        rings_by_plane=params.rings_by_plane,
         quality=ctx.quality,
         cancelled=ctx.cancelled,
     )
@@ -585,6 +638,7 @@ def _worked(
     keys: tuple[str, ...],
     *,
     rounded: bool,
+    rings_by_plane: bool = True,
     shape: ChamferShape | None = None,
     law: RadiusLaw | None = None,
 ) -> OpResult:
@@ -607,6 +661,7 @@ def _worked(
             choice,
             keys,
             selected_edges=bound,
+            rings_by_plane=rings_by_plane,
             profile=ctx.profile,
             rounded=rounded,
             cancelled=ctx.cancelled,
@@ -622,6 +677,7 @@ def _worked(
             choice,
             keys,
             selected_edges=bound,
+            rings_by_plane=rings_by_plane,
             quality=ctx.quality,
             cancelled=ctx.cancelled,
             narrowest=narrowest_face(ctx.profile),
@@ -639,6 +695,7 @@ def _worked(
         choice,
         keys,
         selected_edges=bound,
+        rings_by_plane=rings_by_plane,
         quality=ctx.quality,
         cancelled=ctx.cancelled,
         narrowest=narrowest_face(ctx.profile),
@@ -679,6 +736,7 @@ def _on_a_solid(
     keys: tuple[str, ...],
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     profile: Profile | None,
     rounded: bool,
     cancelled: CancelToken,
@@ -695,6 +753,21 @@ def _on_a_solid(
     from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid
 
+    narrow: list[Finding] = []
+    asked = selected_edges
+    if selected_edges is None and not keys and choice != "named":
+        fitted = _group_that_fits(
+            source,
+            size,
+            choice,
+            rounded=rounded,
+            narrowest=narrowest_face(profile),
+            shape=shape,
+            law=law,
+            rings_by_plane=rings_by_plane,
+        )
+        if fitted is not None:
+            selected_edges, narrow = fitted
     try:
         if rounded:
             solid = edit.fillet(
@@ -703,6 +776,7 @@ def _on_a_solid(
                 choice,
                 keys,
                 selected_edges=selected_edges,
+                rings_by_plane=rings_by_plane,
                 cancelled=cancelled,
                 law=law,
             )
@@ -713,6 +787,7 @@ def _on_a_solid(
                 choice,
                 keys,
                 selected_edges=selected_edges,
+                rings_by_plane=rings_by_plane,
                 shape=shape,
                 cancelled=cancelled,
             )
@@ -722,15 +797,35 @@ def _on_a_solid(
             size,
             choice,
             keys,
-            selected_edges,
+            asked,
             rounded,
             narrowest_face(profile),
             shape,
             law,
+            rings_by_plane=rings_by_plane,
         )
         if explained is None:
             raise
         raise explained from refused
+    if narrow and cast(Solid, source.mesh).is_watertight and not solid.is_watertight:
+        # **Eine verkleinerte Gruppe liefert keinen offenen Körper** (RM-279 (ii)).
+        # An pegboard-goot tesselliert OpenCASCADE zwei der übrigen Rundungen
+        # offen, bei jedem Radius und auch einzeln gewählt; vor dem Auslassen
+        # sagte die Gruppe dort ab, und dabei bleibt es mit der größten Zahl.
+        explained = _why_it_does_not_fit(
+            source,
+            size,
+            choice,
+            keys,
+            asked,
+            rounded,
+            narrowest_face(profile),
+            shape,
+            law,
+            rings_by_plane=rings_by_plane,
+        )
+        if explained is not None:
+            raise explained
     empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
     return OpResult(
         outputs=[
@@ -738,8 +833,121 @@ def _on_a_solid(
                 source, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
             )
         ],
-        findings=[dataclasses.replace(empty, object_id=source.id)] if empty is not None else [],
+        findings=[
+            dataclasses.replace(entry, object_id=source.id)
+            for entry in (*narrow, empty)
+            if entry is not None
+        ],
     )
+
+
+def _group_that_fits(
+    source: SceneObject,
+    size: float,
+    choice: EdgeChoice,
+    *,
+    rounded: bool,
+    narrowest: float,
+    shape: ChamferShape | None,
+    law: RadiusLaw | None,
+    rings_by_plane: bool,
+) -> tuple[tuple[int, ...], list[Finding]] | None:
+    """Die Kanten einer Gruppe am exakten Körper, die das Maß tragen — und die Befunde.
+
+    **Dieselbe Frage wie am Netz** (``edges.contact_band_limits``, RM-279 (ii)):
+    gefragt an der Tessellierung des Körpers, deren ebene Flächen exakt sind,
+    wie :func:`_why_it_does_not_fit`. Nur wenn dort einige, aber nicht alle
+    Kanten zu eng sind, wird die Gruppe verkleinert: auf die exakten Kanten,
+    die auf einem Zug der Tessellierung liegen, der das Maß trägt. Gefragt wird
+    an zwei inneren Punkten jeder Kante — ihre Enden teilt sie mit den
+    Nachbarn. Eine exakte Kante ohne Zug ist eine glatte, an der keine zwei
+    Flächen unter einem Winkel stoßen (am Netz ``edges.skipped``); sie fällt
+    mit demselben Befund heraus. ``None``, wenn jede Kante das Maß trägt oder
+    keine; dann bleibt der bisherige Weg mit seiner Absage.
+    """
+    import numpy as np
+
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+    from app.core.geom.edges import (
+        contact_band_limits,
+        edges_of,
+        skipped_finding,
+        too_narrow_finding,
+        wanted,
+    )
+    from app.core.units import weld_tolerance
+
+    solid = cast(Solid, source.mesh)
+    mesh = as_mesh_data(source.mesh)
+    entries = edges_of(mesh)
+    tolerance = weld_tolerance(mesh.bounds.diagonal)
+    try:
+        chosen = wanted(entries, choice, (), rings_by_plane=rings_by_plane)
+    except GeometryError:
+        return None
+    varying = law if law is not None and not law.constant else None
+    limits = contact_band_limits(
+        entries,
+        chosen,
+        size,
+        rounded=rounded,
+        tolerance=tolerance,
+        narrowest=narrowest,
+        shape=shape,
+        law=varying,
+    )
+    narrow = [entry for entry in chosen if id(entry) in limits]
+    if not narrow or len(narrow) == len(chosen):
+        return None
+    reach = 10.0 * tolerance + MAX_FACET_SAG
+
+    def lies_on(chains: Sequence[MeshEdge]) -> Callable[[np.ndarray], bool]:
+        starts = np.concatenate([np.asarray(entry.points[:-1], dtype=float) for entry in chains])
+        stops = np.concatenate([np.asarray(entry.points[1:], dtype=float) for entry in chains])
+        span = stops - starts
+        square = np.maximum(np.einsum("ij,ij->i", span, span), 1e-24)
+
+        def test(point: np.ndarray) -> bool:
+            offset = point - starts
+            share = np.clip(np.einsum("ij,ij->i", offset, span) / square, 0.0, 1.0)
+            return bool(np.linalg.norm(offset - share[:, None] * span, axis=1).min() <= reach)
+
+        return test
+
+    on_narrow = lies_on(narrow)
+    on_kept = lies_on([entry for entry in chosen if id(entry) not in limits])
+    group = edit.choose(solid, choice, rings_by_plane=rings_by_plane)
+    kept, too_narrow, smooth = [], 0, 0
+    for entry in group:
+        points = np.asarray(edit.edge_points(entry), dtype=float)
+        run = np.concatenate(([0.0], np.cumsum(np.linalg.norm(np.diff(points, axis=0), axis=1))))
+        probes = [
+            np.array([np.interp(share * run[-1], run, points[:, axis]) for axis in range(3)])
+            for share in (1.0 / 3.0, 2.0 / 3.0)
+        ]
+        if any(on_narrow(probe) for probe in probes):
+            too_narrow += 1
+        elif all(on_kept(probe) for probe in probes):
+            kept.append(entry)
+        else:
+            smooth += 1
+    if not kept or not too_narrow:
+        return None
+    findings = [
+        too_narrow_finding(
+            too_narrow,
+            min(limits.values()),
+            size,
+            worked=len(kept),
+            rounded=rounded,
+            varying=varying is not None,
+            place=narrow[0].points[0],
+        )
+    ]
+    if smooth:
+        findings.append(skipped_finding(smooth, len(kept)))
+    return edit.native_edge_indices(solid, kept), findings
 
 
 def _why_it_does_not_fit(
@@ -752,6 +960,8 @@ def _why_it_does_not_fit(
     narrowest: float,
     shape: ChamferShape | None = None,
     law: RadiusLaw | None = None,
+    *,
+    rings_by_plane: bool = True,
 ) -> GeometryError | None:
     """Warum der exakte Kern abgelehnt hat — mit demselben Satz wie am Netz, wo er passt.
 
@@ -771,7 +981,7 @@ def _why_it_does_not_fit(
     mesh = as_mesh_data(source.mesh)
     entries = edges_of(mesh)
     try:
-        chosen = wanted(entries, choice, keys)
+        chosen = wanted(entries, choice, keys, rings_by_plane=rings_by_plane)
     except GeometryError:
         return None
     try:
@@ -796,8 +1006,6 @@ def _why_it_does_not_fit(
 def narrowest_face(profile: Profile | None) -> float:
     """Die schmalste Fläche, die eine Berührlinie tragen muss — das kleinste Detail
     des Druckers, ohne Drucker die Sehnengrenze (``edges.contact_band_limit``)."""
-    from app.core.units import MAX_FACET_SAG
-
     if profile is None:
         return MAX_FACET_SAG
     return max(MAX_FACET_SAG, float(profile.printer.smallest_detail))

@@ -1578,10 +1578,12 @@ def _remember(
 ) -> None:
     """Eine vollständige Erkennung unter dem Abdruck ihres Netzes ablegen.
 
-    Die drei Nebentabellen werden zusammen mit dem Ergebnis geführt, damit
-    Verdrängung und Nachfrage dieselben Einträge sehen — ob die Antwort
-    gerechnet wurde (:func:`detect`) oder von einem bewegten Zwilling stammt
-    (:func:`carry_detection`), ist für die Ablage dasselbe.
+    Die vier Nebentabellen — Flächenindizes als Gewicht der Verdrängung,
+    weggelassene Rundformen, das Freiformurteil und unlesbare Schalen —
+    werden zusammen mit dem Ergebnis geführt, damit Verdrängung und Nachfrage
+    dieselben Einträge sehen. Ob die Antwort gerechnet wurde (:func:`detect`)
+    oder von einem bewegten Zwilling stammt (:func:`carry_detection`), ist für
+    die Ablage dasselbe.
     """
     weight = sum(
         len(feature.face_indices)
@@ -6520,8 +6522,10 @@ def fit_stadium(
     :mod:`app.core.perceive.slots` (``ACROSS_THE_AXIS``).
 
     **Die Mittellinie.** In der Projektion liegen die Ecken auf einem Stadion,
-    und das ist in genau einer Richtung länger als quer dazu: die Hauptachse
-    der Punktwolke. Ihre Ausdehnung quer ist der Durchmesser, längs die
+    und das ist in genau einer Richtung länger als quer dazu: die Richtung der
+    größten Ausdehnung, aus den zwei Scheiteln gelesen — nicht die Hauptachse
+    der Punktwolke, die bei wenig Weg quer zeigen kann (siehe den Kommentar
+    im Rumpf). Ihre Ausdehnung quer ist der Durchmesser, längs die
     Gesamtlänge; die Differenz ist der Weg zwischen den Bogenmitten.
 
     **Der Rückstand** vergleicht jede Ecke mit der Kontur: über der Strecke
@@ -10854,10 +10858,24 @@ def _vertex_faces_index(body: trimesh.Trimesh) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozenset[int]) -> set[int]:
-    """Die Dreiecke außerhalb des Flecks, die an ihn grenzen und einen fransigen Knoten tragen."""
+    """Die Dreiecke außerhalb des Flecks, glatt angrenzend, mit einem fransigen Knoten.
+
+    **Glatt heißt: über eine Naht unter** :data:`CURVATURE_LIMIT` — dieselbe
+    Schwelle, an der :func:`_connected_patches` einen Fleck enden lässt. Eine
+    Kerbe ist ein herausgefallenes Segment derselben Fläche (siehe
+    :data:`NOTCH_AT_MOST`), und das setzt sie ohne Kante fort. Was nur über
+    eine Kante anliegt, gehört zu einer anderen Fläche: Am Ringabsatz einer
+    Senkbohrung schloss sonst ein Paar ebener Dreiecke über einen Knick von
+    39° die Kerbe des Senkkegels, und der Kegel las sich danach als Torus — je
+    nach Vernetzung des Absatzes, an derselben Bohrung in einer Lage ja, in
+    der nächsten nicht (RM-274, ``sonden/bohren/p12_kippe.py``).
+    """
     inside = np.zeros(len(body.faces), dtype=bool)
     inside[np.asarray(patch, dtype=np.intp)] = True
-    neighbours, _rows = _neighbour_index(body)
+    neighbours, rows = _neighbour_index(body)
+    # Die Winkel im Bogenmaß aus dem Cache von trimesh; in Grad umgerechnet
+    # wird je Kandidat nur seine Naht, wie in :func:`_connected_patches`.
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
     ranges, vertex_faces = _vertex_faces_index(body)
     found: set[int] = set()
     for node in frayed:
@@ -10867,9 +10885,13 @@ def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozense
             # Nur die unmittelbaren Nachbarn des Flecks kommen in Frage: Ein
             # Dreieck, das den Knoten teilt, aber nirgends anliegt, schließt
             # keine Kerbe.
-            beside = neighbours[face]
-            beside = beside[beside >= 0]
-            if len(beside) and inside[beside].any():
+            present = neighbours[face] >= 0
+            beside = neighbours[face][present]
+            seams = rows[face][present]
+            touching = inside[beside]
+            if touching.any() and bool(
+                np.any(np.degrees(angles[seams[touching]]) < CURVATURE_LIMIT)
+            ):
                 found.add(int(face))
     return found
 

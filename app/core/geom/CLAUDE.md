@@ -118,8 +118,11 @@ glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 (`mirror_plane`) · `pins.py` (Passstifte, `first_pin`)
 
 **Kanten und Flächen** — `edge_ops.py`, `face_ops.py` (der Körper wählt den
-Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `edges_in_kernel`,
-`EDGE_SELECTION_REJECTED`, `RadiusLaw`, `ChamferShape`, `sharp_corner`) ·
+Kern) · `edges.py` (Züge mit `edge_key` wie in `brep.edit`; `choose` für die Gruppen
+nach Lage beider Kerne, `edges_in_kernel`, `EDGE_SELECTION_REJECTED`,
+`RadiusLaw`, `ChamferShape`, `sharp_corner`; Werkzeug je Stück als Prisma, am
+gebogenen Zug durch die Knoten, `_swept_tool`; `contact_band_limits` je Kante
+für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 `faces.py` (Prisma aus dem eigenen Umriss, Versatz je Knoten;
 `pushed_features`)
 
@@ -161,8 +164,11 @@ ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
   Werkzeugs, nie mit größerer Toleranz. Nachbarbefunde messen am Werkzeug und
   melden eine dünne Wand nur, wenn sie dünner wird.
 - **Platzieren**: `frame_of()`, der Nullvektor bewahrt die alte Semantik; das
-  Bohrwerkzeug reicht exakt bis zur Tiefe, `drill()` bereinigt nur
-  Float64-Rauschen. `feature_placement_geometry()` schließt Ketten gemeinsam,
+  Bohrwerkzeug reicht exakt bis zur Tiefe und wandert in die Welt (`drill`,
+  `resize_bore`, `slot_bore`: `_in_world`, Lage entlang der Achse über
+  `_heights`), ein Ende in einer Fläche mit Luft dahinter reicht um die Zugabe
+  hinaus (`_open_ends`), Kappen auf gemessenen Randebenen legt `_onto_planes`
+  genau darauf. `feature_placement_geometry()` schließt Ketten gemeinsam,
   `local_text_body()` trägt jeden Formparameter. Ein Ring ohne gemessene Achse
   hat keine Lage (`FEATURE_WITHOUT_AXIS`); beim Platzieren fallen alte
   Dreiecks- und Trägerbezüge gemeinsam.

@@ -71,9 +71,12 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   `head_room_1` als Kopfzone); Kopfzylinder und Kegel teilen ihren ganzen
   Stirnrand, ohne Überstand (ein Ringsims trennte die Hohlraumkette).
 - **Ein lösbares Teil** (`separate_from_host`) setzt `leaves_separate_parts`;
-  über den Träger urteilt die Operation (`ops._host_split`). Schräg zur Fläche
-  gesetzt öffnet ein abtragender Baustein bis über ihre Ebene
-  (`ops._opened_to_the_face`); die Regeln in `bausteine.md`.
+  über den Träger urteilt die Operation (`ops._host_split`), das Spiel zum
+  Sitz baut der Baustein selbst (`fasteners.printed_screw`, `printed_nut`,
+  `_printed_screw_countersink`). Schräg zur Fläche gesetzt öffnet ein
+  abtragender Baustein bis über ihre Ebene (`ops._opened_to_the_face`), und
+  eine erklärte Haltelippe prüft `ops._lip_on_a_slant`; die Regeln in
+  `bausteine.md`.
 - **Material**: `profiles.for_object` gibt beim Einsetzen das Material des
   Ziels, auch für `build_with_profile`; `grip_from_profile` kennzeichnet
   Übermaß, eine konstruktive Verengung misst gegen ihr Maß (Kabelclip).
