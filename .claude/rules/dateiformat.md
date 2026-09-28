@@ -110,10 +110,8 @@ sichtbar und änderbar.
   mit Zahl im Bericht (`repair.holes_filled`, `repair.branching_resolved`),
   eine Öffnung über `FILL_LOOP_SHARE` der Oberfläche zusätzlich als Warnung
   `repair.wide_hole_filled` (Test: `broken_open.stl`). Danach wird die
-  Antwort auf „ist es dicht" im Netzcache neu gesetzt: Ein `None` dort las der
-  Hauptthread als `False`, und ein geschlossener Körper meldete sich offen.
-  Die Reparatur bleibt eine Operation: dieselben Befunde, Strg+Z am
-  Ladeschritt.
+  Antwort auf „ist es dicht" im Netzcache neu gesetzt. Die Reparatur bleibt
+  eine Operation: dieselben Befunde, Strg+Z am Ladeschritt.
 
 Grenzen des Schließens (Entscheidung Robert):
 
@@ -134,7 +132,7 @@ Grenzen des Schließens (Entscheidung Robert):
 - **Was ausblieb, ist keine Zeile**: Ein Verschweißen oder Entfernen, das das
   Netz aufgerissen hätte, geht ins Protokoll, nicht in den Bericht.
 - **Eine Fläche ohne Dicke bleibt offen** (`repair.no_thickness`, *Dicke
-  geben*) — geschlossen läge eine zweite Fläche deckungsgleich darauf.
+  geben*).
 - **Unentscheidbares wird gemeldet, nicht gerichtet**: Eine Schale ganz in
   einer anderen, nach außen gerichtet, ist `repair.part_inside` mit Ort, bei
   Import und Reparatur gleich.
@@ -172,9 +170,8 @@ eingefroren (`gc.freeze`), am Ende in Scheiben freigegeben und aufgetaut;
 nichts bleibt eingefroren (`gc.get_freeze_count() == 0`, Test). Wer nur
 zählt, baut keine Geometrie (`_StructureOnly`). Ein Stück, ein Zahlenblock
 und ein Freigabeblock halten den GIL je höchstens wenige Millisekunden
-(`XML_CHUNK`, `NUMBER_BLOCK`) — so lange wartet jeder Griff des Hauptthreads.
-Objekte und Materialgruppen sucht `_outside_meshes`, nie `findall(".//…")`
-über das Modell: Das lief in C durch alle Ecken und Dreiecke (Test).
+(`XML_CHUNK`, `NUMBER_BLOCK`). Objekte und Materialgruppen sucht
+`_outside_meshes`, nie `findall(".//…")` über das Modell (Test).
 
 **STEP ist eine Baugruppe** (Format 33): je Komponenteninstanz ein exakter
 Körper mit Weltlage, Namen und Flächenfarben über XCAF
@@ -278,8 +275,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   (`manufacturer.measured_on`): Wirksame Einstellungen entstehen über
   `manufacturer.effective`, im Druckdialog über sein Attribut `settings`. Eine
   andere Schichthöhe oder Bahnbreite setzt den gemessenen Überhangwinkel auf
-  die Grundlage ohne Messung zurück (`Foundation.unmeasured`), sonst stützten
-  Analyse und Slicer nach einer Probe, die für diesen Druck nichts sagt.
+  die Grundlage ohne Messung zurück (`Foundation.unmeasured`).
 - **Was aus dem Körper folgt, steht am Teil** (`handover.split_for_parts`):
   Ein übernommener Pfad aus `advise.PART_PATHS` ohne plattenweiten Grund
   (`advise.plate_paths`) fällt auf der Platte auf die Grundlage zurück, und
@@ -294,8 +290,7 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
   den das Teil bekommt. Eine eigene Wahl gilt der Platte. Ein Objektwert
   trägt die Pfade seines Rats und deren Partner (`COUPLED_PATHS`), nie die
-  ganze Gruppe — sonst schriebe er Solidons Tabellenwerte über die des
-  Herstellers (`handover.object_keys`). **Ein übernommener Vorschlag
+  ganze Gruppe (`handover.object_keys`). **Ein übernommener Vorschlag
   verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
   jedes (`writer._unserved`, `export.part_setting_all`); die Platte bleibt,
   damit `slice_model` dieselbe rechnet.
@@ -331,12 +326,10 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Drucker, Prozess und Filament aus seinem Bestand (`manufacturer.prusa_chain`),
   aufgelöst und ohne die Profilverwaltungsschlüssel (`PRUSA_MANAGING_KEYS`),
   vollständig in `solidon.ini` und der 3MF-Beilage (`handover.prusa_values`),
-  darüber nur die Abweichung. Dazu technisch nötig: die drei `*_settings_id`
-  (das Fenster wählt die installierten Profile und zeigt nur Solidons
-  Abweichung als „geändert"); `support_material_auto = 1` bei eingeschalteten
-  Stützen (Prusas Vorgabe stützt nur an gemalten Verstärkern); der Rückzug auch
-  als `filament_retract_*` (sonst überstimmt das Filament); im Konsolenlauf
-  `binary_gcode = 0`, die 3MF bleibt binär. Ohne Drucker des Bündels bleibt
+  darüber nur die Abweichung. Dazu technisch nötig: die drei `*_settings_id`,
+  `support_material_auto = 1` bei eingeschalteten Stützen, der Rückzug auch
+  als `filament_retract_*`, im Konsolenlauf `binary_gcode = 0` (die 3MF
+  bleibt binär). Ohne Drucker des Bündels bleibt
   Solidons voller Satz samt Maschine und `filament_type`, und
   `slicer.printer_unknown` sagt, dass Bettvermessung und Spüllinie fehlen. Was
   keine der drei Ketten nennt, liest die Grundlage aus PrusaSlicers
@@ -389,8 +382,7 @@ In `fdmprinter.def.json` trägt jede abgeleitete Einstellung `value` und
 Vorgabewert — ein geschriebener Wert erreicht die Schlüssel nicht, die aus ihm
 gerechnet werden. Die Erbkette (auch einer Druckerdefinition) löst CuraEngine
 selbst auf und lädt Extruderzüge aus `machine_extruder_trains`, sofern `-d`
-den Ordner `extruders` nennt (mit `os.pathsep`; `CURA_ENGINE_SEARCH_PATH` fand
-sie unter Windows nicht).
+den Ordner `extruders` nennt (mit `os.pathsep`).
 
 Eine neue Cura-Zuordnung prüft, was am Schlüssel hängt: Kopien in
 `CURA_MIRRORED`, Faktoren in `CURA_SCALED`, Gerechnetes in `_cura_computed`
@@ -433,8 +425,7 @@ aus `slicer_profiles.cura_active_machine` (`cura.cfg` → Maschinenstapel →
 Definition; erstes Fach → Düse und Spule) und
 `cura_quality_types(…, variant=…, material_type=…)`, nie aus `fdmprinter` für
 eine Maschine mit eigenen Stufen. Passt kein eingerichteter Drucker, entsteht
-**keine Datei**, sondern `handover.cura_profile_unbound` — ein still
-verschwindendes Profil ist schlimmer als keines.
+**keine Datei**, sondern `handover.cura_profile_unbound`.
 
 ## Winkel zählen nicht überall gleich
 
@@ -454,9 +445,7 @@ Fehlalarm entwertet den echten Befund.
 ## Ein Absturz ist keine Absage
 
 `crashed()` trennt beide am Rückgabewert (POSIX: negative Signale; Windows:
-`NTSTATUS` ab `0xC0000000`) und steht **vor** den Ausgabeprüfungen — ein
-abgestürztes Programm schreibt keinen Satz, und der Rat, das Slicer-Profil zu
-prüfen, führte ins Leere.
+`NTSTATUS` ab `0xC0000000`) und steht **vor** den Ausgabeprüfungen.
 
 ## Über Erfolg entscheidet die Druckdatei, nicht das Prozessende
 

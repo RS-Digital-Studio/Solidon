@@ -157,6 +157,13 @@ Zu GLB und glTF:
 Zum Weg aus dem Netz: „Zwei Importwege wären zwei Stellen, an denen die
 Einheitenfrage vergessen werden kann."
 
+Warum die Antwort auf „ist es dicht“ nach dem Schließen neu gesetzt wird:
+Ein `None` im Netzcache las der Hauptthread als `False`, und ein
+geschlossener Körper meldete sich offen.
+
+Eine Fläche ohne Dicke bleibt offen, weil geschlossen eine zweite Fläche
+deckungsgleich darauf läge.
+
 ## Formate
 
 Zu 3MF: „Wer es als ein Mesh liest, verliert genau das."
@@ -175,6 +182,10 @@ Warum ein 3MF-Modell nie am Stück geparst wird:
 > Speicherbereiniger lief danach über 3,5 Millionen `Element`-Objekte — das
 > Fenster stand, obwohl der Import im Arbeiter lief (Durchsicht 0.5.1,
 > FENSTER-03).
+
+Warum die Blöcke beim Parsen so klein sind: So lange, wie ein Stück den GIL
+hält, wartet jeder Griff des Hauptthreads. `findall(".//…")` über das Modell
+lief in C durch alle Ecken und Dreiecke.
 
 ## Was welcher Slicer bekommt
 
@@ -265,6 +276,20 @@ Druckdialog je Profilwahl fünf Sekunden."
 
 Der Stand der Messungen zur Abnahme steht in `ROADMAP.md` unter RM-281.
 
+Warum ein Objektwert nie die ganze Einstellungsgruppe trägt: Sonst schriebe
+er Solidons Tabellenwerte über die des Herstellers (Review der
+Gesamtprüfung 0.5.1, B1).
+
+Warum der gemessene Überhangwinkel bei anderer Schichthöhe oder Bahnbreite
+zurückfällt: Sonst stützten Analyse und Slicer nach einer Probe, die für
+diesen Druck nichts sagt.
+
+Warum die Prusa-Kette ihre technischen Werte mitbringt: Mit den drei
+`*_settings_id` wählt das Fenster die installierten Profile und zeigt nur
+Solidons Abweichung als „geändert“; Prusas Vorgabe stützt nur an gemalten
+Verstärkern, daher `support_material_auto = 1`; ohne `filament_retract_*`
+überstimmt das Filament den Rückzug.
+
 ## CuraEngine rechnet keine Formeln
 
 Was ein geschriebener Wert nicht erreicht, und die Messung:
@@ -282,6 +307,9 @@ Zu den Werksprofilen (Stufe D, 27.09.2026): „Ihre Formeln erreichen die
 Konsole so wenig wie die von `fdmprinter`; ohne Solidons Zeile gälte also
 nicht das Profil des Herstellers, sondern das allgemeine."
 
+Warum `-d` den Ordner `extruders` nennt: Über `CURA_ENGINE_SEARCH_PATH` fand
+CuraEngine die Extruderzüge unter Windows nicht.
+
 ## Der Startcode kommt vom Hersteller, die Platzhalter füllt Solidon
 
 Die Entscheidung Roberts vom 26.08.2026 lautete: „Der Anfahrcode bleibt der
@@ -297,6 +325,9 @@ des Herstellers". Warum Solidon füllt: „gemessen:
 > Gemessen an der Installation 5.13: mit `draft` abgelehnt an Neptune 4 und
 > Centauri Carbon, unsichtbar an K1 Max, Ender-3 V3 SE und KE und SV06; mit
 > der Stufe der aktiven Maschine überall sichtbar.
+
+Passt kein eingerichteter Drucker, entsteht keine Datei: Ein still
+verschwindendes Profil ist schlimmer als keines.
 
 ## Winkel zählen nicht überall gleich
 
@@ -328,6 +359,9 @@ des Herstellers". Warum Solidon füllt: „gemessen:
 > Gemessen an Creality Print 7.2, das auf dieser Maschine nie eingerichtet
 > war: dreimal `0xC0000005` mitten im eigenen Start, lange bevor es das Modell
 > ansieht.
+
+`crashed()` steht vor den Ausgabeprüfungen, weil ein abgestürztes Programm
+keinen Satz schreibt; der Rat, das Slicer-Profil zu prüfen, führte ins Leere.
 
 ## Ein Wert gehört an einen Schlüssel, der dasselbe meint
 
