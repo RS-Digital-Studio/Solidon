@@ -134,6 +134,14 @@ bis 0,9 s.
   (179 ms), `csgraph` im Zusammenhang (224 ms). Seit `python_values`,
   `array("q")` und der Rechnung `component_labels` im Hilfsprozess stand das
   Fenster beim Übernehmen höchstens 94 ms (Spielbrett 128 ms).
+- **Ein BLAS-Faden, keine BLAS-Rechnung**: OpenBLAS legt beim Laden je
+  Rechenkern einen Puffer an — `import numpy` 758 MB privater Speicher an 32
+  Kernen, `scipy` noch einmal so viel, mit `OPENBLAS_NUM_THREADS=1` 19 MB
+  (`sonden/hilfsprozess/privat.py`, 28.09.2026). Ein untätiger Hilfsprozess
+  trug danach 761 MB frisch und 1 605 MB nach der ersten
+  Zusammenhangsrechnung, mit einem Faden 21 und 135 MB; Arbeitssatz und
+  Dauer der Verfeinerung blieben gleich (`speicher.py`). Das geht nur, weil
+  keine Rechnung BLAS ruft — sonst hinge ihr Ergebnis an der Fadenzahl.
 
 ## Über die Körpergrenze merkt sich nur, wer außer seiner Lesung nichts liest
 

@@ -599,6 +599,105 @@ def test_a_helper_ends_with_a_parent_that_is_killed(tmp_path: Path) -> None:
     assert not _alive(helper), "der Hilfsprozess ist mit seinem Elternprozess gegangen"
 
 
+# --- Was der Hilfsprozess mitträgt -------------------------------------------------------
+
+
+def _notes_its_environment(connection: Any) -> None:
+    """Ein Hilfsprozess, der vor der Arbeit notiert, wie viele BLAS-Fäden er bekam."""
+    Path(os.environ["KERNEL_TEST_MARK"]).write_text(
+        os.environ.get("OPENBLAS_NUM_THREADS", "-"), encoding="utf-8"
+    )
+    kernel_jobs.serve(connection)
+
+
+@pytest.mark.parametrize("ours", [None, "7"], ids=["ohne", "gesetzt"])
+def test_a_helper_starts_with_one_blas_thread_and_ours_stay(
+    ours: str | None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """OpenBLAS legt beim Laden je Rechenkern einen Puffer an — der Hilfsprozess bekommt einen.
+
+    Gemessen 758 MB privater Speicher je Bibliothek an 32 Kernen, mit einem
+    Faden 19 MB (``HELPER_ENVIRONMENT``). Die Anwendung behält ihren Wert,
+    auch einen gesetzten.
+    """
+    mark = tmp_path / "umgebung"
+    monkeypatch.setenv("KERNEL_TEST_MARK", str(mark))
+    if ours is None:
+        monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+    else:
+        monkeypatch.setenv("OPENBLAS_NUM_THREADS", ours)
+    monkeypatch.setattr(kernel_process, "_SERVE", _notes_its_environment)
+
+    assert kernel_process.warm_up()
+
+    assert mark.read_text(encoding="utf-8") == "1"
+    assert os.environ.get("OPENBLAS_NUM_THREADS") == ours
+
+
+#: Was ``numpy`` über BLAS oder LAPACK rechnet. Mit der Zahl der Fäden ändert sich
+#: dort die Reihenfolge einer Summe und damit das letzte Bit.
+_BLAS_CALLS = frozenset(
+    {
+        "cholesky",
+        "cond",
+        "det",
+        "dot",
+        "eig",
+        "eigh",
+        "eigvals",
+        "eigvalsh",
+        "einsum",
+        "inner",
+        "inv",
+        "lstsq",
+        "matmul",
+        "matrix_power",
+        "matrix_rank",
+        "multi_dot",
+        "pinv",
+        "qr",
+        "slogdet",
+        "solve",
+        "svd",
+        "tensordot",
+        "tensorinv",
+        "tensorsolve",
+        "vdot",
+    }
+)
+
+
+def test_the_jobs_call_no_blas() -> None:
+    """Eine Rechnung in ``kernel_jobs`` ruft kein BLAS.
+
+    Der Hilfsprozess rechnet mit einem BLAS-Faden, die Anwendung mit einem je
+    Kern (``HELPER_ENVIRONMENT``). Über BLAS hinge ein Ergebnis an der
+    Fadenzahl, und dieselbe Rechnung gäbe hier und dort verschiedene Bytes.
+    Eine Norm entlang einer Achse rechnet ``numpy`` als Summe ohne BLAS, ohne
+    ``axis`` über ``dot``.
+    """
+    source = (ROOT / "app" / "core" / "geom" / "kernel_jobs.py").read_text(encoding="utf-8")
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.BinOp, ast.AugAssign)) and isinstance(node.op, ast.MatMult):
+            found.append(f"@ in Zeile {node.lineno}")
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        name = (
+            function.attr
+            if isinstance(function, ast.Attribute)
+            else function.id
+            if isinstance(function, ast.Name)
+            else ""
+        )
+        if name in _BLAS_CALLS:
+            found.append(f"{name} in Zeile {node.lineno}")
+        if name == "norm" and not any(keyword.arg == "axis" for keyword in node.keywords):
+            found.append(f"norm ohne axis in Zeile {node.lineno}")
+    assert found == []
+
+
 # --- Eingefrorenes Paket -----------------------------------------------------------------
 
 

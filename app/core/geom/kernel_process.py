@@ -36,11 +36,12 @@ from __future__ import annotations
 
 import multiprocessing
 import multiprocessing.connection
+import os
 import pickle
 import threading
 import time
-from collections.abc import Callable, Mapping
-from contextlib import suppress
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager, suppress
 from typing import Any, Final
 
 import numpy as np
@@ -91,6 +92,18 @@ IDLE_KEPT: Final = 1
 #: und ein zweiter Versuch kostete den Kunden die Frist noch einmal.
 STARTS_BEFORE_GIVING_UP: Final = 1
 
+#: Was ein Hilfsprozess in seiner Umgebung anders sieht als die Anwendung.
+#: OpenBLAS, das ``numpy`` und ``scipy`` je einmal mitbringen, legt beim Laden
+#: für jeden Rechenkern einen Puffer an: gemessen 758 MB privater Speicher je
+#: Bibliothek an 32 Kernen, mit einem Faden 19 MB (``sonden/hilfsprozess/
+#: privat.py``, 28.09.2026) — ein untätiger Hilfsprozess trug nach der ersten
+#: Zusammenhangsrechnung 1,5 GB davon. Eine Rechnung in ``kernel_jobs`` ruft
+#: kein BLAS (``test_the_jobs_call_no_blas``), der eine Faden kostet sie also
+#: nichts und ändert kein Byte.
+HELPER_ENVIRONMENT: Final = {"OPENBLAS_NUM_THREADS": "1"}
+
+_ENVIRONMENT_LOCK: Final = threading.Lock()
+
 _CONTEXT: Final = multiprocessing.get_context("spawn")
 
 #: Was ein Hilfsprozess nach dem Start ausführt. Ein Name, damit die Suite einen
@@ -124,6 +137,28 @@ class _HelperCancelledError(Exception):
     """Der Aufrufer hat abgebrochen, während der Hilfsprozess rechnete."""
 
 
+@contextmanager
+def _helper_environment() -> Iterator[None]:
+    """:data:`HELPER_ENVIRONMENT` für die Dauer eines Starts, danach der alte Stand.
+
+    Ein Kindprozess erbt die Umgebung, wenn er entsteht, und liest sie, bevor
+    er ``numpy`` lädt; die Anwendung selbst hat ihr OpenBLAS da längst geladen.
+    Unter einem Schloss, damit zwei Starts einander den alten Wert nicht
+    überschreiben.
+    """
+    with _ENVIRONMENT_LOCK:
+        saved = {name: os.environ.get(name) for name in HELPER_ENVIRONMENT}
+        os.environ.update(HELPER_ENVIRONMENT)
+        try:
+            yield
+        finally:
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+
 class _Helper:
     """Ein Hilfsprozess und die Leitung zu ihm. Gehört immer genau einem Faden."""
 
@@ -132,7 +167,8 @@ class _Helper:
         self.process = _CONTEXT.Process(
             target=_SERVE, args=(theirs,), name="solidon-kernel", daemon=True
         )
-        self.process.start()
+        with _helper_environment():
+            self.process.start()
         theirs.close()
         self.connection = mine
         self.started = time.monotonic()

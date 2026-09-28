@@ -145,6 +145,11 @@ ihn ruft, hält das Fenster an (RM-212).
   Grenzen als Zahl vom Aufrufer (sonst gilt ein Umstellen im Test nicht im
   Hilfsprozess), eigene zusammenhängende Ausgabefelder, nie ein Körper des
   Kerns. Verschweißen, Slots und Befunde bleiben beim Aufrufer.
+- **Eine Rechnung ruft kein BLAS** (kein `@`, `dot`, `einsum`, `linalg` außer
+  einer Norm entlang einer Achse): Der Hilfsprozess startet mit einem
+  BLAS-Faden (`HELPER_ENVIRONMENT`, spart je Bibliothek einen Puffer je
+  Rechenkern), und über BLAS hinge das Ergebnis an der Fadenzahl.
+  `test_the_jobs_call_no_blas` hält es.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
   Verfeinerung die erwartete des Ergebnisses.
 - **Der Abbruch reicht als Token hinein** und beendet den Hilfsprozess; wer um
