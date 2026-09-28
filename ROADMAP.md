@@ -83,6 +83,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
+| [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
+| [RM-308 — Die schnelle Lage von orient_for_print prüft das Stehen nicht](#rm-308) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Standprüfung wie in der Auto-Split-Vorauswahl |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Alles in 0.5.1 (Robert), der Tag wartet auf „Handbuch fertig“. Auf `main`: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Für 0.5.1 fertig und gemeldet: HB-5 bis HB-13 (fünfzehn Anleitungen, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter, Film), `main` mit texte-051 und Oberflächenpaket nachgezogen. Offen nach 0.5.1: Feldabnahme (§11 des Konzepts), Nummernplatzierung auf Text in zwei Bildern |
@@ -2510,6 +2512,28 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   die letzte belegte, ohne Grenze (`plates_behind`); `first_free_spot` betrachtet nur Platten
   bis `MAX_PLATES`. Liegt etwas auf Platte 13, landet ein weiteres Modell neben Platte 12
   statt auf einer leeren späteren. Abnahme: eine Regel für beide.
+
+<a id="rm-307"></a>
+
+- [ ] **RM-307 — Auto Split: Reste aus dem Review der Vorauswahl.** Aus dem Release 0.5.1 (Fix `autosplit-lagen-051`,
+  `F:\3D Druck.review-051\reports\review-autosplit-lagen.md`). Seit 0.5.1 hält die
+  Vorauswahl für Auto Split ihren letzten Platz für die billigste stehende Lage frei, wenn
+  keine der drei vorderen steht. (a) Steht eine der vorderen, aber teuer, bleibt ihr Preis zu
+  hoch (ma-mi-ya mit Stiften an A 1 679 711 statt 63 010 mm³; an 3 von 114 Modellen fielen
+  Nahtentscheidungen auf solchen Zahlen, jedes Mal mit gleich viel oder weniger Stütze als
+  vorher). (b) Für das schnellere `_contact` fehlt ein bleibender Gegentest gegen eine
+  Auswahl nach Brute Force an den Toleranzrändern (belegt ist die Gleichheit nur in der
+  Review-Sonde). (c) Ohne übersetzten Schnittkern (`_chain`) braucht der Leistungstest
+  23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
+  Abnahme: je Punkt behoben oder begründet belassen.
+
+<a id="rm-308"></a>
+
+- [ ] **RM-308 — Die schnelle Lage von orient_for_print prüft das Stehen nicht.** Aus dem Release 0.5.1 (Review `autosplit-lagen-051`).
+  `orient_for_print` nimmt auf seinem schnellen Weg den ersten Platz der Heuristik ohne
+  Standprüfung; an 14 von 126 Korpusmodellen steht er bei 45°, an 13 bei 60° nicht. Kein
+  Rückschritt aus 0.5.1. Weg: dieselbe Prüfung wie `best_face_candidate(standing=…)`.
+  Abnahme: der erste Platz steht, oder die Lage wird mit Befund verworfen.
 
 ## Bedienung und Darstellung
 
