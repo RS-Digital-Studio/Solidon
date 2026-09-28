@@ -47,6 +47,11 @@ nachgeprüfte Vorauswahl — hier nachgeprüft durch die Abstände), und die
 Reihenfolge der Probleme im Stapel ändert keine Zahl eines Problems: Jedes
 wird auf eine Zeilenzahl aufgefüllt, die nur von ihm selbst abhängt.
 
+**Und der echte Lauf selbst steht auch hier** (:func:`solve`): SciPys
+``least_squares`` auf diesem Weg, Schritt für Schritt nachgebaut und Bit für
+Bit gleich, nur ohne die Hülle aus Argumentprüfung und ``VectorFunction``,
+die ein Fünftel der Löserzeit kostete.
+
 Die Rechnung folgt SciPy (BSD-3-Clause, Copyright © 2001 bis 2002 Enthought, Inc.,
 2003 SciPy Developers); die Residuen und Ableitungen von Kegel und Ring sind
 dieselben Formeln wie in :func:`app.core.perceive.features._fit_cone_measured`
@@ -58,7 +63,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 
@@ -114,6 +119,8 @@ MIN_PADDED_ROWS: Final = 16
 MIN_BATCH: Final = 64
 
 _EPS: Final = float(np.finfo(float).eps)
+#: Dieselbe Zahl als NumPy-Skalar, wie SciPy sie in ``solve_lsq_trust_region`` führt.
+_EPS_SCIPY: Final = np.finfo(float).eps
 _RUNNING: Final = -1
 
 
@@ -150,6 +157,162 @@ class TorusProblem:
 
 
 Problem = ConeProblem | TorusProblem
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class Solution:
+    """Was :func:`solve` zurückgibt: die gelesenen Felder von SciPys ``OptimizeResult``."""
+
+    x: np.ndarray
+    fun: np.ndarray
+    jac: np.ndarray
+    nfev: int
+    status: int
+
+    @property
+    def success(self) -> bool:
+        """Wie ``OptimizeResult.success``: ein Abbruch über eine Toleranz, nicht über das Budget."""
+        return self.status > 0
+
+
+def solve(
+    fun: Callable[[np.ndarray], np.ndarray],
+    jac: Callable[[np.ndarray], np.ndarray],
+    x0: np.ndarray,
+    *,
+    precision: float,
+    evaluations: int,
+) -> Solution:
+    """SciPys ``least_squares`` mit Ableitung, ohne Schranken, Schritt für Schritt nachgebaut.
+
+    **Dieselben Gleitkommaschritte in derselben Folge** wie SciPy 1.18 auf
+    diesem Weg — ``least_squares`` → ``trf`` → ``trf_no_bounds`` mit
+    ``tr_solver='exact'`` und ``x_scale=1`` —, nur ohne ``VectorFunction``,
+    Argumentprüfung und ``OptimizeResult``: Dieselben NumPy- und
+    SciPy-Aufrufe (``np.dot``, ``norm``, ``scipy.linalg.svd``) auf denselben
+    Feldern, die Multiplikation mit dem Einheitsmaßstab entfällt, weil sie
+    nichts ändert. Gemessen bitgleich in ``x``, Residuen, Ableitung,
+    Auswertungszahl und Status an 5 033 Läufen der Erkennung (Kumiko-Schale,
+    Drache, Bowlingkugel) und am Korpus; die Hülle um SciPy kostete ein
+    Fünftel der Löserzeit. ``tests/test_refine.py`` hält beide Wege aneinander.
+
+    Nachbau von Code aus SciPy (BSD-3-Clause).
+    """
+    from scipy.linalg import svd  # schwer; erst beim ersten Lauf laden (wie deferred.py)
+
+    x0 = np.atleast_1d(x0).astype(float)
+    f0 = np.atleast_1d(fun(x0.copy()))
+    jacobian = np.atleast_2d(jac(x0.copy()))
+    if not np.all(np.isfinite(f0)):
+        raise ValueError("Residuals are not finite in the initial point.")
+    x = x0.copy()
+    f = f0
+    f_true = f.copy()
+    nfev = 1
+    m, n = jacobian.shape
+    cost = 0.5 * np.dot(f, f)
+    gradient = jacobian.T.dot(f)
+    delta = np.linalg.norm(x0)
+    if delta == 0:
+        delta = 1.0
+    alpha: Any = 0.0
+    status: int | None = None
+    while True:
+        if np.linalg.norm(gradient, ord=np.inf) < precision:
+            status = 1
+        if status is not None or nfev == evaluations:
+            break
+        u, s, v = svd(jacobian, full_matrices=False)
+        v = v.T
+        uf = u.T.dot(f)
+        reduction: Any = -1
+        while reduction <= 0 and nfev < evaluations:
+            step, alpha = _trust_region_step(n, m, uf, s, v, delta, alpha)
+            moved = jacobian.dot(step)
+            predicted = -(0.5 * np.dot(moved, moved) + np.dot(step, gradient))
+            x_new = x + step
+            f_new = np.atleast_1d(fun(x_new.copy()))
+            nfev += 1
+            step_norm = np.linalg.norm(step)
+            if not np.all(np.isfinite(f_new)):
+                delta = 0.25 * step_norm
+                continue
+            cost_new = 0.5 * np.dot(f_new, f_new)
+            reduction = cost - cost_new
+            ratio: Any
+            if predicted > 0:
+                ratio = reduction / predicted
+            elif predicted == reduction == 0:
+                ratio = 1
+            else:
+                ratio = 0
+            delta_new = delta
+            if ratio < 0.25:
+                delta_new = 0.25 * step_norm
+            elif ratio > 0.75 and step_norm > 0.95 * delta:
+                delta_new *= 2.0
+            by_cost = reduction < precision * cost and ratio > 0.25
+            by_step = step_norm < precision * (precision + np.linalg.norm(x))
+            if by_cost and by_step:
+                status = 4
+            elif by_cost:
+                status = 2
+            elif by_step:
+                status = 3
+            if status is not None:
+                break
+            alpha *= delta / delta_new
+            delta = delta_new
+        if reduction > 0:
+            x = x_new
+            f = f_new
+            f_true = f.copy()
+            cost = cost_new
+            jacobian = np.atleast_2d(jac(x.copy()))
+            gradient = jacobian.T.dot(f)
+    return Solution(
+        x=x, fun=f_true, jac=jacobian, nfev=nfev, status=0 if status is None else status
+    )
+
+
+def _trust_region_step(
+    n: int, m: int, uf: np.ndarray, s: np.ndarray, v: np.ndarray, delta: Any, alpha: Any
+) -> tuple[np.ndarray, Any]:
+    """``scipy.optimize._lsq.common.solve_lsq_trust_region`` mit ``rtol=0.01``, ``max_iter=10``."""
+
+    def phi_and_derivative(value: Any) -> tuple[Any, Any]:
+        denominator = s**2 + value
+        p_norm = np.linalg.norm(suf / denominator)
+        return p_norm - delta, -np.sum(suf**2 / denominator**3) / p_norm
+
+    suf = s * uf
+    full_rank = s[-1] > _EPS_SCIPY * m * s[0] if m >= n else False
+    if full_rank:
+        step = -v.dot(uf / s)
+        if np.linalg.norm(step) <= delta:
+            return step, 0.0
+    upper = np.linalg.norm(suf) / delta
+    if full_rank:
+        phi, derivative = phi_and_derivative(0.0)
+        lower = -phi / derivative
+    else:
+        lower = 0.0
+    if not full_rank and alpha == 0:
+        alpha = max(0.001 * upper, (lower * upper) ** 0.5)
+    for _iteration in range(10):
+        if alpha < lower or alpha > upper:
+            alpha = max(0.001 * upper, (lower * upper) ** 0.5)
+        phi, derivative = phi_and_derivative(alpha)
+        if phi < 0:
+            upper = alpha
+        ratio = phi / derivative
+        lower = max(lower, alpha - ratio)
+        alpha -= (phi + delta) * ratio / delta
+        if np.abs(phi) < 0.01 * delta:
+            break
+    step = -v.dot(suf / (s**2 + alpha))
+    step *= delta / np.linalg.norm(step)
+    return step, alpha
 
 
 def exhausted(

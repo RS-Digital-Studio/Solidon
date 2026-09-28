@@ -269,17 +269,17 @@ def test_true_detection_stops_inside_the_first_solver_evaluation(
 ) -> None:
     """Der Operationsabbruch erreicht den echten Löser vor dessen nächstem Schritt."""
     from app.core.errors import OperationCancelled
-    from app.core.perceive import features
+    from app.core.perceive import features, refine
     from app.core.scene.cancel import CancelSignal
 
     mesh = MeshData.of(_round_surface(kind))
     before = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
     signal = CancelSignal()
     features.forget_cache()
-    original = features.least_squares
+    original = refine.solve
     evaluated: list[bool] = []
 
-    def cancel_inside(residual: Any, initial: Any, **options: Any) -> Any:
+    def cancel_inside(residual: Any, jacobian: Any, initial: Any, **options: Any) -> Any:
         """Eine echte Residualauswertung bricht denselben weitergereichten Auftrag ab."""
 
         def stopped(values: Any) -> Any:
@@ -287,10 +287,10 @@ def test_true_detection_stops_inside_the_first_solver_evaluation(
             signal.cancel()
             return residual(values)
 
-        return original(stopped, initial, **options)
+        return original(stopped, jacobian, initial, **options)
 
     with monkeypatch.context() as patch:
-        patch.setattr(features, "least_squares", cancel_inside)
+        patch.setattr(refine, "solve", cancel_inside)
         with pytest.raises(OperationCancelled):
             detect(mesh, check_cancelled=signal.raise_if_cancelled)
 

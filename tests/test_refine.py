@@ -8,6 +8,7 @@ Zahl und Maß, Bit für Bit. Hier stehen die Regeln, die sie tragen:
 
 * Der Stapel rechnet dieselben Residuen und Ableitungen wie die Einpassung.
 * Er sagt nie „vergeblich" zu einem Lauf, der eine Antwort bringt.
+* Der Nachbau des Lösers (:func:`refine.solve`) rechnet Bit für Bit wie SciPy.
 * Sein Urteil hängt nicht an der Reihenfolge der Probleme, ihrer Punkte oder
   daran, welche anderen Probleme im Stapel stehen.
 * Jeder seiner Abstände kann allein ein Nein verhindern (Gegenproben).
@@ -186,6 +187,51 @@ def test_the_batch_never_turns_away_a_run_that_answers(
     assert not wrong, f"the batch turned away runs that answer after {wrong} evaluations"
     vain = sum(run.nfev >= features.ROUND_FIT_EVALUATIONS for run in runs)
     assert sum(verdicts) >= vain // 2, f"only {sum(verdicts)} of {vain} vain runs recognised"
+
+
+def _same_bits(first: Any, second: Any) -> bool:
+    first, second = np.asarray(first), np.asarray(second)
+    return bool(
+        first.shape == second.shape
+        and first.dtype == second.dtype
+        and first.tobytes() == second.tobytes()
+    )
+
+
+def test_the_solver_computes_what_scipy_computes(runs: list[Run]) -> None:
+    """:func:`refine.solve` ist ``least_squares`` auf diesem Weg — Bit für Bit.
+
+    Parameter, Residuen, Ableitung, Auswertungszahl und Status an jedem
+    Kegel- und Ringlauf des Prüfkörpers, vergeblich oder nicht. Hebt jemand
+    SciPy und ändert sich dort ein Schritt, fällt es hier auf und nicht
+    erst in einem Merkmal.
+    """
+    for run in runs:
+        start = np.asarray(run.problem.initial)
+        expected = least_squares(
+            run.residual,
+            start,
+            jac=run.jacobian,
+            ftol=features.ROUND_FIT_PRECISION,
+            xtol=features.ROUND_FIT_PRECISION,
+            gtol=features.ROUND_FIT_PRECISION,
+            max_nfev=features.ROUND_FIT_EVALUATIONS,
+        )
+        mine = refine.solve(
+            run.residual,
+            run.jacobian,
+            start,
+            precision=features.ROUND_FIT_PRECISION,
+            evaluations=features.ROUND_FIT_EVALUATIONS,
+        )
+        assert (mine.nfev, mine.status, mine.success) == (
+            expected.nfev,
+            expected.status,
+            expected.success,
+        )
+        assert _same_bits(mine.x, expected.x)
+        assert _same_bits(mine.fun, expected.fun)
+        assert _same_bits(mine.jac, expected.jac)
 
 
 def _reversed_points(problem: refine.Problem) -> refine.Problem:

@@ -7762,15 +7762,30 @@ def _refined_fit(
         assert jacobian is not None
         return jacobian(values)
 
-    result = least_squares(
-        checked,
-        initial,
-        jac="2-point" if jacobian is None else checked_jacobian,
-        ftol=ROUND_FIT_PRECISION,
-        xtol=ROUND_FIT_PRECISION,
-        gtol=ROUND_FIT_PRECISION,
-        max_nfev=ROUND_FIT_EVALUATIONS,
-    )
+    # **Mit Ableitung rechnet der Nachbau, Schritt für Schritt wie SciPy**
+    # (:func:`refine.solve`, bitgleich): Die Hülle um ``least_squares`` —
+    # Argumentprüfung, ``VectorFunction``, ``OptimizeResult`` — kostete an der
+    # Kumiko-Schale ein Fünftel der Löserzeit. Ohne Ableitung schätzt SciPy sie
+    # aus Differenzen wie bisher.
+    result: Any
+    if jacobian is None:
+        result = least_squares(
+            checked,
+            initial,
+            jac="2-point",
+            ftol=ROUND_FIT_PRECISION,
+            xtol=ROUND_FIT_PRECISION,
+            gtol=ROUND_FIT_PRECISION,
+            max_nfev=ROUND_FIT_EVALUATIONS,
+        )
+    else:
+        result = refine.solve(
+            checked,
+            checked_jacobian,
+            initial,
+            precision=ROUND_FIT_PRECISION,
+            evaluations=ROUND_FIT_EVALUATIONS,
+        )
     if not result.success or not np.isfinite(result.x).all() or not np.isfinite(result.fun).all():
         return None
     # **Wer sein Budget ausschöpft, hat nicht gerechnet, sondern aufgehört**
