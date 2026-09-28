@@ -3851,16 +3851,21 @@ class Session(QObject):
         self._previews.append(worker)
         self._leash.start(worker)
 
-    def placement_async(self, compute: Any, then: Any, failed: Any) -> None:
+    def placement_async(self, compute: Any, then: Any, failed: Any, refused: Any = None) -> None:
         """Berechnet einen Platzierungsbezug oder Anzeigegeist abseits des Fensters.
 
         Der Aufrufer hält höchstens eine laufende Anfrage je Kanal und ersetzt
         ihren Nachfolger. Die Sitzung hält den Arbeiter auch nach Dialogende;
         das Ergebnis trägt niemals eine Änderung am Dokument.
+
+        Eine Absage des Kerns (``AppError``) kommt als ``refused(error)`` vor
+        ``then(None)`` — der Aufrufer nennt ihren Satz statt eines allgemeinen.
         """
         worker = _PreviewWorker(self, 0, lambda: (None, compute(), ""), CancelSignal())
         # Die PySide-Kontextüberladung ist in den Stubs nicht erfasst. Der
         # Empfänger bindet sämtliche Rückrufe an den Thread der Sitzung.
+        if refused is not None:
+            worker.refused.connect(lambda _stamp, error: refused(error), self)  # type: ignore[arg-type]
         worker.done.connect(lambda _stamp, value: then(value), self)  # type: ignore[arg-type]
         worker.crashed.connect(failed, self)  # type: ignore[arg-type]
         worker.finished.connect(
