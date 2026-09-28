@@ -216,6 +216,18 @@ def _least_support(scored: Sequence[Orientation], skip: Vec3) -> list[Vec3]:
     return chosen
 
 
+def same_pose(first: Vec3, second: Vec3, extent: float, layer_height: float) -> bool:
+    """Ob zwei Richtungen für den Druck dieselbe Lage sind: Keine Stelle des
+    Körpers liegt dadurch um eine Schicht anders zu einer anderen.
+
+    Wie hoch ein Punkt über einem anderen liegt, ist ihr Abstand mal der
+    Richtung; zwischen zwei Richtungen ändert sich das höchstens um den
+    Abstand der Punkte mal den Abstand der Richtungen. ``extent`` ist die
+    Diagonale des Hüllquaders, der größte Abstand zweier Punkte.
+    """
+    return math.dist(first, second) * extent < layer_height
+
+
 def _unique_directions(directions: list[Vec3]) -> list[Vec3]:
     """Entfernt Lagen, die dieselbe Schichtanalyse erneut auslösen würden.
 
@@ -408,10 +420,23 @@ def stays(
 
     Gefragt wird deshalb dieselbe Regel wie beim Vorschlag „Stützen nötig“
     (``advise.support_need``), im Druckraster des Profils statt im groben der
-    Suche. Nur was so Stützen braucht oder nicht steht, wird gedreht.
+    Suche — von :func:`search` nur, wenn ihr Gewinner selbst Stütze braucht.
+
+    **Am Original, nicht am Ersatznetz der Suche** — wie der Prüfbericht. Die
+    Ausdünnung erfindet Inseln und Überhänge und verschluckt andere: An vier
+    von dreißig Körpern des Minigolf-Satzes urteilte das Ersatznetz anders als
+    das Original (Durchsicht 0.5.1, N2), am Rundschaft v17 mit einer Insel und
+    289 statt 12 mm² Überhang. Das Urteil merkt sich das Netz
+    (:data:`_STAYS_CACHE`), denn eine zweite Auswertung fragt dasselbe.
     """
     if not stands(baseline, floor):
         return False
+    wall = profile.minimum_wall_thickness
+    name = f"{_STAYS_CACHE}|{profile.printer.layer_height:.6f}|{overhang_angle}|{wall:.6f}"
+    cache = getattr(mesh.raw, "_cache", None)
+    remembered = cache[name] if cache is not None else None
+    if isinstance(remembered, bool):
+        return remembered
     from app.core.slice import advise
 
     result = slice_body(
@@ -419,11 +444,19 @@ def stays(
         profile.printer.layer_height,
         first_layer_height=profile.printer.layer_height,
         overhang_angle=overhang_angle,
-        bridge_from=profile.minimum_wall_thickness,
+        bridge_from=wall,
         cancelled=cancelled,
         support_volume=False,
     )
-    return not advise.support_need(result).needed
+    kept = not advise.support_need(result).needed
+    if cache is not None:
+        cache[name] = kept
+    return kept
+
+
+#: Unter diesem Namen merkt sich ein Netz in ``trimesh``s Cache, ob seine Lage
+#: bleibt (:func:`stays`). Der Cache verfällt, sobald sich die Ecken ändern.
+_STAYS_CACHE = "solidon.orientation.stays"
 
 
 def best_face_candidate(
@@ -534,22 +567,7 @@ def search(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 
-    # **Was stützenfrei steht, bleibt — ohne die übrigen Lagen zu werten.**
-    # Gemessen an Roberts Minigolf-Projekt (28.09.2026): Je Schaft gingen rund
-    # 3 s in die 214 Lagen der Vorauswahl, vor allem in die Frage, wo jede aufs
-    # Bett passt (``fitting_transform``, 12 ms je Lage) — und danach blieb der
-    # Schaft ohnehin stehen (:func:`stays`). Die Prüfung kommt deshalb vor der
-    # Vorauswahl; wo sie nicht greift, kostet sie einen Schnitt.
-    kept = (
-        baseline is not None
-        and profile is not None
-        and stays(proxy, baseline, profile, floor, overhang_angle, cancelled)
-    )
-    directions = (
-        [baseline_direction]
-        if kept
-        else _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
-    )
+    directions = _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
     # **Die Vorauswahl sieht Achsen und tragende Flächen am Original.** Die
     # Kandidatenliste beginnt mit der Ausgangslage, den sechs Achsen und den
     # größten ebenen Flächen des Körpers — und die Ausdünnung, an der die
@@ -595,7 +613,7 @@ def search(
         ),
     )
     initial = next((entry for entry in scored if entry.direction == baseline_direction), None)
-    complete = kept or (
+    complete = (
         baseline is not None
         and initial is not None
         and settled(baseline, floor, initial.footprint, max(entry.footprint for entry in scored))
@@ -636,6 +654,33 @@ def search(
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
     best = best_of(field, floor)
+    # **Was stützenfrei steht, bleibt — gegen einen Gewinner, der selbst
+    # Stütze braucht** (:func:`stays`). Die Minigolf-Schäfte legte die Suche
+    # hin, weil liegend 0,26 statt 0,51 cm³ Stützraum blieben; nach der Regel
+    # der Druckvorschläge braucht aber nur die liegende Lage Stütze. Braucht der
+    # Gewinner keine, bleibt er: Eine Platte auf ihrer Kante steht auch ohne
+    # Stütze, liegt aber flach genauso stützenfrei und zehnmal breiter.
+    # Gefragt wird nur hier, weil die Frage einen vollen Schnitt im Druckraster
+    # kostet; vor der Suche kostete sie den Rundschaft v17 18,3 statt 1,3 s
+    # (Durchsicht 0.5.1, N2).
+    # Eine andere Lage ist nur, was eine Stelle um eine Schicht verschiebt
+    # (:func:`same_pose`): An ``obj_30`` des Minigolf-Satzes gewann die
+    # Bodenfläche 0,0114 Grad neben der Ausgangslage über den Gleichstand im
+    # Stützraum, und die Frage kostete 2,2 s für ein Nein.
+    kept = (
+        profile is not None
+        and baseline is not None
+        and not same_pose(
+            best.direction,
+            baseline.direction,
+            float(np.linalg.norm(mesh.bounds.size)),
+            profile.printer.layer_height,
+        )
+        and best.support_volume > EPS_GEOM
+        and stays(mesh, baseline, profile, floor, overhang_angle, cancelled)
+    )
+    if kept and baseline is not None:
+        best = baseline
     matrix = matrices[best.direction]
     turned = apply(mesh, matrix)
     # Nie negativ, wie :attr:`SearchResult.improvement`: Kippt die
@@ -645,15 +690,26 @@ def search(
     saved = (
         max(0.0, baseline.support_volume - best.support_volume) if baseline is not None else None
     )
+    values = {"candidates": len(directions), "valid": len(scored), "sliced": len(field)}
     findings = [
+        # **Bleibt die Lage, sagt der Befund warum** (Durchsicht 0.5.1, N5):
+        # „gesucht“ ließ den Kunden vor einem unveränderten Teil ohne Grund
+        # stehen. Die Stützzahlen der groben Suche fehlen dort mit Absicht — sie
+        # widersprächen dem Satz, denn geurteilt hat der Schnitt im Druckraster.
         Finding(
+            code="orient.kept",
+            severity="info",
+            message=_("Die Lage bleibt: Das Teil steht und braucht keine Stütze."),
+            values=values,
+            source="internal",
+        )
+        if kept
+        else Finding(
             code="orient.searched",
             severity="info",
             message=_("Ausrichtung über die Schichtanalyse gesucht."),
             values={
-                "candidates": len(directions),
-                "valid": len(scored),
-                "sliced": len(field),
+                **values,
                 "support": round(best.support_volume / 1000.0, 2),
                 **({"saved": round(saved / 1000.0, 2)} if saved is not None else {}),
             },

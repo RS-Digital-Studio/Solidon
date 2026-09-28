@@ -1760,6 +1760,7 @@
   "Die Körper ließen sich auf keinem Weg verknüpfen.": "The bodies could not be combined by any route.",
   "Die Körper überschneiden sich in der aktuellen Lage. Die gesamten Körper und ihre Platzierung prüfen.": "The bodies overlap in their current positions. Check the complete bodies and their placement.",
   "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, Boden, Schulter und die tatsächlichen Konturen prüfen.": "The bodies overlap in this assembly position. Check the insertion depth, bottom, shoulder and actual contours.",
+  "Die Lage bleibt: Das Teil steht und braucht keine Stütze.": "The position stays: the part stands and needs no support.",
   "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt.": "The positions of the associated sections are not reliably identified.",
   "Die Lage dieses Bausteins ist an einen Projektparameter gebunden ({fields}). Ändern Sie den Parameter, oder lösen Sie die Bindung im Schritt.": "The position of this part is bound to a project parameter ({fields}). Change the parameter, or release the binding in the step.",
   "Die Lettern daneben sind der zweite Weg: ein eigener Körper. Für Drucker mit einem Werkzeug — gedruckt und aufgeklebt, oder mit Filamentwechsel von Hand.": "The letters next to it are the second way: a body of its own. For printers with one tool — printed and glued on, or with a filament change by hand.",

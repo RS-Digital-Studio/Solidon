@@ -1760,6 +1760,7 @@
   "Die Körper ließen sich auf keinem Weg verknüpfen.": "No se han podido combinar los cuerpos por ninguna vía.",
   "Die Körper überschneiden sich in der aktuellen Lage. Die gesamten Körper und ihre Platzierung prüfen.": "Los cuerpos se solapan en su posición actual. Comprobar los cuerpos completos y su colocación.",
   "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, Boden, Schulter und die tatsächlichen Konturen prüfen.": "Los cuerpos se solapan en esta posición de montaje. Comprobar la profundidad de inserción, el fondo, el hombro y los contornos reales.",
+  "Die Lage bleibt: Das Teil steht und braucht keine Stütze.": "La posición se mantiene: la pieza se sostiene de pie y no necesita soportes.",
   "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt.": "Las posiciones de los tramos asociados no se han identificado con seguridad.",
   "Die Lage dieses Bausteins ist an einen Projektparameter gebunden ({fields}). Ändern Sie den Parameter, oder lösen Sie die Bindung im Schritt.": "La posición de este bloque está vinculada a un parámetro del proyecto ({fields}). Cambie el parámetro o suelte la vinculación en el paso.",
   "Die Lettern daneben sind der zweite Weg: ein eigener Körper. Für Drucker mit einem Werkzeug — gedruckt und aufgeklebt, oder mit Filamentwechsel von Hand.": "Las letras de al lado son el segundo camino: un cuerpo propio. Para impresoras con una sola herramienta — impreso y pegado, o con cambio de filamento a mano.",

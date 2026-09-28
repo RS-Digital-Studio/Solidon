@@ -1760,6 +1760,7 @@
   "Die Körper ließen sich auf keinem Weg verknüpfen.": "Não foi possível combinar os corpos por nenhuma via.",
   "Die Körper überschneiden sich in der aktuellen Lage. Die gesamten Körper und ihre Platzierung prüfen.": "Os corpos sobrepõem-se na posição atual. Verificar os corpos completos e o seu posicionamento.",
   "Die Körper überschneiden sich in dieser Einbaulage. Einstecktiefe, Boden, Schulter und die tatsächlichen Konturen prüfen.": "Os corpos sobrepõem-se nesta posição de montagem. Verificar a profundidade de inserção, o fundo, o ressalto e os contornos reais.",
+  "Die Lage bleibt: Das Teil steht und braucht keine Stütze.": "A posição mantém-se: a peça fica de pé e não precisa de suportes.",
   "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt.": "A posição das secções associadas não foi identificada com segurança.",
   "Die Lage dieses Bausteins ist an einen Projektparameter gebunden ({fields}). Ändern Sie den Parameter, oder lösen Sie die Bindung im Schritt.": "A posição deste bloco está ligada a um parâmetro do projeto ({fields}). Altere o parâmetro ou solte a ligação no passo.",
   "Die Lettern daneben sind der zweite Weg: ein eigener Körper. Für Drucker mit einem Werkzeug — gedruckt und aufgeklebt, oder mit Filamentwechsel von Hand.": "As letras ao lado são o segundo caminho: um corpo próprio. Para impressoras com uma ferramenta — impresso e colado, ou com troca de filamento à mão.",

@@ -141,8 +141,7 @@ def body_findings(
     found += overhang_findings(entry.id, result)
     found += [_placed(finding, entry.id) for finding in advise.located_warnings(result, profile)]
     # Eine Lage, die nach der Regel der Druckvorschläge keine Stütze braucht,
-    # behält auch *Druckoptimal ausrichten* (``orientation.stays``) — dann gibt
-    # es keine andere, die sich lohnte.
+    # spart durch eine andere keine — dieselbe Frage wie ``orientation.stays``.
     if (
         search
         and result.support_volume >= ORIENT_WORTH_SUPPORT
