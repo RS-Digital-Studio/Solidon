@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-28 | [Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)](#release-sitzung-051-zweite-runde-zwei-punkte-geschlossen-28092026) |
 | 2026-09-28 | [Release-Sitzung 0.5.1: sechs Punkte geschlossen (28.09.2026)](#release-sitzung-051-sechs-punkte-geschlossen-28092026) |
 | 2026-09-28 | [Übergabe auf dem Herstellerprofil, Stufe E: ein Punkt geschlossen (28.09.2026)](#übergabe-auf-dem-herstellerprofil-stufe-e-ein-punkt-geschlossen-28092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-c-f-und-l-ein-punkt-geschlossen-27092026) |
@@ -9057,10 +9058,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d`. **Seit dem 02.09.2026 auch außerhalb des Flatpaks abgesichert:** Qt 6 wählt ohne `QT_QPA_PLATFORM` in jeder Wayland-Sitzung `[wayland, xcb]` (belegt in `qguiapplication.cpp`, 6.8 bis 6.11), und VTKs Qt-Anbindung kennt nur X11 — AppImage und Archiv hätten Martins Fehler auf jedem KDE- und GNOME-Desktop gehabt. `app/ui/qt_platform.py` wählt vor dem Anwendungsaufbau xcb, sobald `DISPLAY` da ist (auch gegen ein global gesetztes `wayland`; der Fehlerbericht weist die Wahl mit dem Vorwert aus), `viewport._available()` lehnt Wayland mit einem Hinweis ab statt VTK nativ sterben zu lassen, das Manifest trägt zusätzlich `--env=QT_QPA_PLATFORM=xcb` nach FreeCADs Flathub-Muster. Geprüft ist die Weiche, nicht das Bild — ein echtes Wayland fehlt weiterhin. **Seit dem VTK-Ausbau (06.09.2026)** stirbt auf Wayland nichts mehr nativ; ob der wgpu-Fensterweg von rendercanvas dort zeichnet, hat noch niemand gefahren — die X11-Bevorzugung bleibt, bis das jemand tut |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
-| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Paket geprüft, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. **05.09.2026:** Das ausgelieferte Paket 0.3.4 (arm64) ist von Windows aus geöffnet worden — `Resources/certifi/cacert.pem`, `libssl.3.dylib`, `libcrypto.3.dylib` und `_ssl` reisen mit, und der Leser von 0.2.2 nimmt die heutige `version.json` an (gegen den Server gemessen). Was weiter fehlt, ist der Lauf auf einem Mac: Der Kunde R. W. D. hatte am 05.09. noch 0.2.2 — ob sein Mac den Hinweis auf 0.3.x je zeigte, steht in seiner `~/Library/Logs/Solidon3D/app.log` („update check did not answer: …" nennt den Grund). Dort *Hilfe → Nach Updates suchen* drücken |
+| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Paket geprüft, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. **05.09.2026:** Das ausgelieferte Paket 0.3.4 (arm64) ist von Windows aus geöffnet worden — `Resources/certifi/cacert.pem`, `libssl.3.dylib`, `libcrypto.3.dylib` und `_ssl` reisen mit, und der Leser von 0.2.2 nimmt die heutige `version.json` an (gegen den Server gemessen). Was weiter fehlt, ist der Lauf auf einem Mac: Ein Kunde hatte am 05.09. noch 0.2.2 — ob sein Mac den Hinweis auf 0.3.x je zeigte, steht in seiner `~/Library/Logs/Solidon3D/app.log` („update check did not answer: …" nennt den Grund). Dort *Hilfe → Nach Updates suchen* drücken |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
-| 3D-Maus — Windows am Gerät bestätigt; macOS über den Treiber gebaut, dort ungemessen; Linux und die Treiberemulation offen | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | **nichts mehr für Windows** — Roberts SpaceMouse Compact hing am 02.09.2026 am Rechner. `app/ui/spacemouse.py` liest direkt über HID (`hidapi`, BSD-3 aus der Dreifachlizenz gewählt, Freigabeliste und Spec nachgezogen) — neben laufendem 3DxWare, das dieselben Berichte mitliest; Raw Input war der erste Anlauf und blieb leer, weil 3DxWare Rohdaten nur an Programme aus seiner Liste durchreicht. Die sechs Achsen bildet eine reine Funktion auf die Kamera ab (Objektmodus mit allen sechs Achsen, eine Gerätetaste = *Alles einpassen*), die Vorzeichen stammen aus einer geführten Aufzeichnung (`tests/data/spacemouse/compact-2026-09-02.jsonl`, 4189 Berichte), Robert hat es im Fenster gefahren (18 046 Berichte, 8 000 Kamerafahrten). Einstellungen: An/Aus, ein Regler, Richtung umkehren, sichtbar ab dem ersten gesehenen Gerät. Offen: (1) **macOS — Treiberweg gebaut, am Gerät ungemessen** (05.09.2026, Anlass: der erste Mac-Bericht des Kunden aus dem Anlass, R. W. D.: „die Maus tut nichts"). 3DxWare hält das Gerät dort exklusiv, `hidapi` bekommt keinen Bericht; `DriverReader` lädt das `3DconnexionClient`-Framework des Kunden zur Laufzeit, meldet sich mit Platzhalter an wie FreeCAD und Blender und schreibt die Zustandsmeldungen in die rohen Berichte um (Struktur mit Zwei-Byte-Packung, elf Tests gegen einen nachgestellten Treiber; `default_reader` wählt je Rechner). Bestätigt wird das durch seine Rückmeldung — und der Changelog-Punkt dazu kommt mit dem nächsten Release, nicht vorher. **Linux** — Rechte (udev-Regel) und ein Gerät zum Messen fehlen weiter (Konzept Falle 2); (2) **3DxWare emuliert für unbekannte Programme Mausbewegungen** (Robert: ein bisschen hat sich bewegt, aber nicht sinnvoll) — Abhilfe wäre eine Programmdatei mit `<Transport>RawInput</Transport>` im 3DxWare-Nutzerordner (Muster in `%APPDATA%\\3Dconnexion\\3DxWare\\Cfg`), die Solidon beim ersten gesehenen Gerät schreiben könnte; bis dahin schaltet der Kunde sie in den 3Dconnexion-Einstellungen ab; (3) die Handmessung Bildrate bei 1 Mio. Dreiecken (Konzept §9) |
+| 3D-Maus — Windows am Gerät bestätigt; macOS über den Treiber gebaut, dort ungemessen; Linux und die Treiberemulation offen | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | **nichts mehr für Windows** — Roberts SpaceMouse Compact hing am 02.09.2026 am Rechner. `app/ui/spacemouse.py` liest direkt über HID (`hidapi`, BSD-3 aus der Dreifachlizenz gewählt, Freigabeliste und Spec nachgezogen) — neben laufendem 3DxWare, das dieselben Berichte mitliest; Raw Input war der erste Anlauf und blieb leer, weil 3DxWare Rohdaten nur an Programme aus seiner Liste durchreicht. Die sechs Achsen bildet eine reine Funktion auf die Kamera ab (Objektmodus mit allen sechs Achsen, eine Gerätetaste = *Alles einpassen*), die Vorzeichen stammen aus einer geführten Aufzeichnung (`tests/data/spacemouse/compact-2026-09-02.jsonl`, 4189 Berichte), Robert hat es im Fenster gefahren (18 046 Berichte, 8 000 Kamerafahrten). Einstellungen: An/Aus, ein Regler, Richtung umkehren, sichtbar ab dem ersten gesehenen Gerät. Offen: (1) **macOS — Treiberweg gebaut, am Gerät ungemessen** (05.09.2026, Anlass: der erste Mac-Bericht des Kunden aus dem Anlass: „die Maus tut nichts"). 3DxWare hält das Gerät dort exklusiv, `hidapi` bekommt keinen Bericht; `DriverReader` lädt das `3DconnexionClient`-Framework des Kunden zur Laufzeit, meldet sich mit Platzhalter an wie FreeCAD und Blender und schreibt die Zustandsmeldungen in die rohen Berichte um (Struktur mit Zwei-Byte-Packung, elf Tests gegen einen nachgestellten Treiber; `default_reader` wählt je Rechner). Bestätigt wird das durch seine Rückmeldung — und der Changelog-Punkt dazu kommt mit dem nächsten Release, nicht vorher. **Linux** — Rechte (udev-Regel) und ein Gerät zum Messen fehlen weiter (Konzept Falle 2); (2) **3DxWare emuliert für unbekannte Programme Mausbewegungen** (Robert: ein bisschen hat sich bewegt, aber nicht sinnvoll) — Abhilfe wäre eine Programmdatei mit `<Transport>RawInput</Transport>` im 3DxWare-Nutzerordner (Muster in `%APPDATA%\\3Dconnexion\\3DxWare\\Cfg`), die Solidon beim ersten gesehenen Gerät schreiben könnte; bis dahin schaltet der Kunde sie in den 3Dconnexion-Einstellungen ab; (3) die Handmessung Bildrate bei 1 Mio. Dreiecken (Konzept §9) |
 | Resin Stufe 1 — entschieden: bauen als nächste Serie | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Serienstart nach der Panels-Welle (D1–D12) — Weg B mit zwei beratschlagten Präzisierungen (zwei generische Geräte, B4 in Stufe 1); Paketschnitt bei Start |
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
@@ -20971,7 +20972,7 @@ steht, ist kein festgehaltener Fund.
 
 ## Der erste Kundenbericht aus dem Feld (27.08.2026)
 
-Simon Wenger, CachyOS mit GNOME auf Wayland, Solidon3D 0.1.5. Er konnte den
+Ein Kunde, CachyOS mit GNOME auf Wayland, Solidon3D 0.1.5. Er konnte den
 Bericht **nicht aus der Anwendung senden** und schickte ihn als Anhang an
 Robert weiter, mit dem Satz „Ich kann den Bericht aus der App nicht senden:
 urlopen error“.
@@ -21237,7 +21238,7 @@ hindert; die drei behobenen stehen oben und hier.
   liegen darin, `LSMinimumSystemVersion` und die `Distribution` sagen beide
   12.0, signiert ist es nicht. Und der Leser von 0.2.2 nimmt die heutige
   `version.json` an (Worktree auf `v0.2.2`, gegen den Server gefahren:
-  `0.3.4`, neuer, vier Pakete). Anlass war der Mac-Kunde R. W. D., der am
+  `0.3.4`, neuer, vier Pakete). Anlass war ein Mac-Kunde, der am
   05.09. noch 0.2.2 hatte; ob sein Mac den Hinweis je zeigte, sagt seine
   `~/Library/Logs/Solidon3D/app.log` — „update check did not answer: …"
   nennt den Grund, wenn es einen gab.
@@ -22473,7 +22474,7 @@ Fusion 360 und Solid Edge — hat vier Fragen geschickt: SpaceMouse,
 Resin-Drucker, Lizenzmodell, Kaufen. Zwei davon beantwortet der Bestand
 (ein Schlüssel für alle eigenen Rechner, genau einer aktiv; verkauft wird
 ab dem 01.11.2026), zwei sind Arbeit. Die Anfrage liegt in Roberts
-Postfach (R. W. D., Zeitz, 30.08.2026); der Antwortentwurf nennt beide
+Postfach (ein Kunde, 30.08.2026); der Antwortentwurf nennt beide
 Punkte als notiert — was hier steht, ist also auch zugesagt.
 
 - **Historischer Befund RM-070 (weiter offen; aktuelle Aufgabe [RM-070](ROADMAP.md#rm-070)):** **SpaceMouse-Anbindung: Konzept liegt vor**
@@ -33257,3 +33258,115 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   `test_operation_ui.py::test_the_rim_switch_sits_at_the_back_and_follows_the_group`.
   `6e8d0bedc`, `4e145c801`, `53ad8b785`, `81b797456`; Merges `9f19b44d6`, `cbef27715`.
   Rest am exakten Kern: [RM-284](ROADMAP.md#rm-284).
+
+## Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)
+
+Nach Handbuchumbau, Stapel und Hilfsprozess (auf main mit `016fdc423`, `c3636d210`,
+`813b6490a`, `c6c312951`). RM-212 ist gebaut bis auf die Dauer der genauen Vorschau
+(RM-296), RM-271 trägt seinen Namen jetzt auch im Handbuch. RM-209, RM-132 und
+RM-193 sind mit dem Stapelumbau fortgeschrieben und bleiben offen; die Reste der
+Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
+
+<a id="rm-212"></a>
+
+- [x] **RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich.**
+  Was nach der vierten Runde von RM-208 bleibt (Bericht vorschau, Ansicht
+  B18/B19, fenster). Drei Posten, jeder gemessen: `manifold3d.simplify` hält den
+  GIL, die erste grobe Vorschau steht deshalb einmal je Körper im Hauptthread
+  (Platte 0,57 s, Voronoi-Spiderman 2,0 s); derselbe Stillstand trifft
+  `decimate_for_display` im Arbeiter des Viewports. Der Anzeigeweg fährt an
+  Netzen, die der Kern nicht unter das Ziel bringt, sechs vergebliche
+  Kernschritte, bevor das Raster drankommt (Spiderman 4,1 s, Piratenschiff
+  4,8 s). Und die genaue Vorschau großer Teile bleibt langsam (Senkplatte mit
+  311 296 Dreiecken 8–15 s, davon Boolesche Stufe 4,8 s, `compare_scenes` 4 s,
+  Erkennung 1,8 s; Piratenschiff 20–37 s); sie hat seit `a4f2428c` Balken und
+  *Abbrechen*, schneller wird sie erst mit einem Tausch des Hohlraums am lokalen
+  Ausschnitt statt am ganzen Körper. Bewusst nicht gebaut: ein Merker „grobe
+  Stufe scheitert hier" (an den drei Rückweg-Modellen versucht jede Zahl erst
+  grob, 0,1–0,5 s). Weg: das Raster vorziehen, sobald die Kernkurve flach wird;
+  `simplify` in einen Unterprozess oder vor die erste Vorschau ziehen; den
+  lokalen Tausch als eigene Stufe der genauen Vorschau. Abnahme: keine grobe
+  Vorschau über 0,2 s im Hauptthread, Spiderman und Piratenschiff unter 1 s bis
+  zum Raster, Senkplatte genau unter 3 s — gemessen mit
+  `sonden/vorschau/probe_preview.py` auf ruhiger Maschine.
+
+  **Stand 26.09.2026.** Der zweite Posten ist erledigt, anders als gedacht:
+  Das Raster vorzuziehen hätte nichts gebracht, denn sein Netz ist offen, und
+  jede Bohrung darauf scheitert. Die grobe Vorschau verkleinert jetzt auf die
+  Schranke selbst (`COARSE_PREVIEW_TARGET` = 150 000) und nimmt das
+  geschlossene Kernergebnis; der Anzeigeweg lässt dabei Splitter dünner als
+  die Toleranz weg (`_without_slivers`), und `_as_mesh` verschweißt nur, wo
+  das Netz dicht bleibt. Vorher und nachher hintereinander gemessen: Spiderman
+  grob danach 17,8–18,9 → 0,6 s, Piratenschiff 11,1–13,4 → 0,7 s, Eiffelturm
+  2,8 → 1,7 s, alle drei vorher Absage und genau; die Schüssel zahlt
+  0,22 → 0,5 s für 0,1 statt 1,8 % Abweichung. Längster GIL-Stillstand:
+  Spiderman 799 → 324 ms, Piratenschiff 819 → 492, Eiffelturm 664 → 120,
+  Platte 250, Schüssel 89. Die genaue Vorschau der Senkplatte liegt bei
+  4,3–5,7 s (Review: 8–15), und sie war bei Ø 6 und 6,5 unvollständig: Der
+  Schnitt „danach minus davor" lief in Splitter; `difference.compare` nimmt
+  seither die Volumenbilanz statt des Schnitts, der leer sein muss
+  (`_empty_by_balance`). Übrig: `resize_hole` 2,9 s (vier Boolesche 1,9 s,
+  volle Nacherkennung unter 1,5 Mio. Dreiecken 1,1 s), Vergleich 1,8 s
+  (Beschnitt 0,6, Schnitt am dichten Ausschnitt mit 150 000 Dreiecken 1,0).
+  Für den ersten Posten gibt es nur zwei Wege — einen Hilfsprozess für die
+  Kernaufrufe oder einen Kern, der den GIL hergibt (eigenes Rad oder
+  Beitrag an `manifold3d`) —, und beide sind eine Entscheidung Roberts.
+  Sonden und Messungen: `.claude/.state/rm-212-2026-09-26/`.
+
+  **Durchsicht v0.5.1 (26./27.09.2026):** Die genaue Vorschau rechnet auch an Körpern mit
+  Hohlräumen die Bilanz (Gartenschlauchhalter, Bohrung Ø 6 → 7: vorher „unvollständig“,
+  jetzt 60,715 mm³, `61225727b`). *Bohrung ändern* und *Merkmal versetzen* am Netz messen
+  örtlich nach statt mit der ganzen Merkmalssuche (Gartenschlauchhalter 92,8 → 10,8 s
+  und 87,7 → 12,5 s, `51c17b7a6`); davon lebt auch die genaue Vorschau, die ohne
+  Erkennung rechnet. Die Vorschau von *Kanten verfeinern* rechnet keine Boolesche
+  Differenz mehr, wo die Operation die Form zusagt (`retriangulates`), und zeigt die
+  Dreieckszahl; eine zu feine Länge sagt sie am Original ab statt an der groben Kopie
+  (`expected_triangles`) — Spielwürfel 0,05 mm 17 min ohne Ergebnis → 0,58 s,
+  Spielbrett 1 mm 16 min → Absage mit Knopf in 6 s (`ce8b91c7c`). **Neu gemessen und
+  offen:** Beim Übernehmen großer Verfeinerungen steht der Hauptfaden 14,1 bis 14,6 s
+  (Spielwürfel 0,05 mm, 5,8 Mio. Dreiecke) bzw. 5,7 s (Spielbrett), weil `manifold3d`
+  den GIL auch in `refine_to_length` hält — derselbe Posten wie beim ersten
+  Verkleinern, derselbe Weg (Hilfsprozess, Entscheidung Robert). Bericht
+  `F:\3D Druck.review-051\reports\rest-vorschau.md`.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket hilfsprozess):** Entschieden von
+  Robert (27.09.2026): Große Aufrufe des Netzkerns laufen ab `OFFLOAD_ABOVE` Dreiecken in
+  einem Hilfsprozess (`geom.kernel_process`, `geom.kernel_jobs`), mit denselben Bytes wie
+  im Prozess der Anwendung; die Felder reisen über gemeinsamen Speicher. Grobe Vorschau an
+  fünf Modellen: längster Stillstand im Hauptfaden höchstens 99 ms statt bis 874 ms
+  (Lochplatte, Spiderman, Piratenschiff, Eiffelturm, Waschschüssel); Übernehmen von
+  *Kanten verfeinern* am Spielwürfel 0,05 mm 94 ms statt 21 s, am Spielbrett 128 ms statt
+  6,6 s; *Abbrechen* 0,2 bis 0,3 s statt 8 bis 15 s; bitgleich (26 Fälle, je Rechnung ein
+  Test). Nach dem Review: Kommt kein Hilfsprozess zustande oder fehlt gemeinsamer
+  Speicher, rechnet der Aufrufer hier weiter, Speichermangel wird als Hinweis gemeldet; ein
+  verlorener Hilfsprozess kommt in der Booleschen Kette als er selbst an; kein Temp-Ordner
+  bleibt liegen; der Rauchtest `tools/check_frozen_helper.py` startet den Hilfsprozess aus
+  dem gebauten Paket auf allen Runnern. Am gebauten Windows-Paket belegt. Der Stillstand
+  der genauen Vorschau an der Senkplatte ist gelöst (1,1 s → unter 0,1 s), ihre Dauer
+  nicht: [RM-296](ROADMAP.md#rm-296). Tests `tests/test_kernel_process.py`,
+  `tests/test_packaging.py`. `a55e844ad`, `575841694`, `06ba8cf88`, `48f5231c3`,
+  `35dff6278`, `2e832f605`; Merge `813b6490a`. Reste: [RM-298](ROADMAP.md#rm-298).
+
+<a id="rm-271"></a>
+
+- [x] **RM-271 — An einer Magnettasche heißt die Wahl „Senkung und Stufen mitnehmen“.**
+  Aus der Durchsicht v0.5.1 (rest-lippe). *Bohrung ändern* nimmt seit `8e1e3aca5` die
+  Haltelippe mit. Die Wahl im Dialog heißt an jeder Kette so, auch wo die Kette eine
+  Verengung ist, und der Satz `resize.narrowing_swallowed` zitiert den Knopf so (der
+  Wächter verlangt das wörtliche Zitat). Ein anderer Name berührt `core/manual.py`, die
+  von Hand gepflegte `website/funktionen.html` und ältere Changelog-Einträge. Warum
+  Robert: ein Knopfname, der in Handbuch, Website und Changelog steht. Optionen: Der Name
+  bleibt (die Lippe ist eine Stufe der Kette), oder die Wahl heißt an einer Kette mit
+  Verengung anders (texte schlägt den Namen vor). Abnahme: bei neuem Namen Katalog,
+  Satz, Handbuch und `funktionen.html` nachgezogen, `test_wording` grün.
+
+  **Stand 28.09.2026 (Release 0.5.1, Paket texte, `dff5ac944`):** Entschieden über die
+  Release-Sitzung nach Kundensicht: An einer Kette mit Verengung heißt die Wahl „Senkung,
+  Stufen und Verengung mitnehmen“. Katalog, Satz `resize.narrowing_swallowed`, Wahlsätze,
+  `website/funktionen.html` und die fünf `features.html` sind nachgezogen, `test_wording`
+  grün. Die Handbuchseite trägt den Namen mit dem Merge des Handbuchumbaus (bis dahin die
+  austragbare Ausnahme `NAME_WARTET_AUF_HANDBUCH`); danach schließen.
+
+  **Abschluss 28.09.2026 (Release 0.5.1):** Die Handbuchseite trägt den neuen Namen seit
+  dem Merge des Handbuchumbaus (`016fdc423`); die austragbare Ausnahme
+  `NAME_WARTET_AUF_HANDBUCH` ist ausgetragen, `test_wording` grün.
