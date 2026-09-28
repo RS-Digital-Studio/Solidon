@@ -26,7 +26,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os níveis de qualidade da janela de impressão aparecem agora no idioma da interface.
 - A velocidade dos percursos em vazio também vem da impressora: a Centauri Carbon 2 desloca-se a 500 em vez de 150 mm/s, como no próprio perfil da Elegoo.
 - O Solidon usa o ângulo de saliência do perfil do fabricante da sua impressora: 60 em vez de 45 graus na Elegoo, Bambu e Creality. Chanfros e inclinações suaves já não recebem suportes desnecessários.
-- Se mediu a saliência da sua impressora, também o slicer só coloca suportes a partir desse ângulo, enquanto valerem a altura de camada e a largura de linha da medição.
+- Se mediu a saliência da sua impressora, também o slicer só coloca suportes a partir desse ângulo, enquanto valerem a altura de camada e a largura do cordão da medição.
 - Também o relatório calcula agora as saliências com o ângulo a partir do qual o seu perfil do slicer coloca suportes.
 - As definições de impressão mostram o que é impresso: a base é o perfil do fabricante, e os seus próprios valores ficam marcados e podem ser repostos um a um.
 - A placa de impressão escolhe-se nas definições de impressão, e a temperatura da mesa acompanha-a. Se o fabricante não autoriza a placa para o seu filamento, o Solidon avisa antes.
@@ -61,9 +61,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O relatório só mostra o aviso para calibrar as tolerâncias do seu material em modelos com ajustes. Só aí o Solidon as usa.
 - A entrega ao Cura transfere as primeiras camadas sem ventoinha como arranque gradual. Só avisa quando o ficheiro de impressão final difere de facto.
 - Em modelos grandes, «Dividir o modelo» encontra a costura até duas vezes mais depressa, e nos modelos multicor numa fração do tempo. A divisão funciona como antes.
-- Quando o Solidon divide automaticamente um modelo em três ou mais peças, os nomes são numerados e indicam os conectores, por exemplo «Ripa 2 de 3 · Pinos e furos».
+- Quando o Solidon divide automaticamente um modelo em três ou mais peças, os nomes são numerados e indicam os conectores, por exemplo «Calha de parede 2 de 3 · Pinos e furos».
 - Um parafuso, uma porca ou um vedante impressos do catálogo de blocos já não contam no relatório como um corpo fragmentado. É uma peça própria, e isso é intencional.
-- Os parafusos e porcas impressos têm folga também na cabeça e no apoio, e soltam-se mesmo impressos junto com a peça. Os projetos antigos avisam da alteração ao abrir.
+- Os parafusos e porcas impressos têm folga também na cabeça e no apoio, e continuam desmontáveis mesmo impressos junto com a peça. Os projetos antigos avisam da alteração ao abrir.
 - Com um parafuso de cabeça escareada do catálogo de blocos, um corpo feito de faces e arestas mantém-se estanque ao exportar: a peça e o parafuso entram no ficheiro cada um fechado.
 
 ### Editar furos
@@ -101,7 +101,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - A escolha de arestas «Horizontal», «Em cima» ou «Em baixo» já não inclui o bordo de um furo lateral. Se o quiser, escolha-o à parte; os projetos antigos calculam como foram guardados.
 - Num modelo importado, o bordo de um furo é arredondado ou chanfrado tão fundo como numa peça construída. Antes, com raios grandes, o arredondamento ficava até um quinto mais raso.
-- Se um raio ou chanfro não cabe em todas as arestas de uma escolha como «Todos» ou «Vertical», o Solidon trabalha as restantes e mostra com «Mostrar o ponto» onde não cabe, em vez de recusar.
+- Se a cota não cabe em todas as arestas de uma escolha como «Todos» ou «Vertical», o Solidon trabalha as que cabem e mostra as outras com «Mostrar o ponto», em vez de recusar.
 
 ### Cotas na vista
 
@@ -119,13 +119,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As características são reconhecidas sozinhas até 1,5 milhões de triângulos. Até cinco milhões, o Solidon pergunta antes e indica a memória necessária e a duração no seu computador.
 - Recusado o reconhecimento completo, «Reconhecer todas as características» recupera-o no relatório. Se demorar, «Carregar sem reconhecimento de características» salta-o.
 - Em modelos grandes, «Detetar elementos num local» encontra faces onde antes indicava triângulos a mais. O local também se escolhe com o teclado.
-- Modelos grandes e treliças são reconhecidos muito mais depressa: uma cama de casa de bonecas gerada, com 1,2 milhões de triângulos, em 27 segundos em vez de 174. Cancelar atua em segundos.
+- Modelos grandes e grelhas são reconhecidos muito mais depressa: uma cama de casa de bonecas gerada, com 1,2 milhões de triângulos, em 27 segundos em vez de 174. Cancelar atua em poucos segundos.
 - Letreiros e escoras aparecem na árvore como lados arredondados em vez de dezenas de arredondamentos com raios variáveis.
 - Os contornos feitos de arcos e retas são reconhecidos arco a arco com o seu raio. «Converter em faces e arestas» fica assim muito mais rápido.
 - Um pino escalonado já não conta como rosca. Voltam os cilindros e furos que essa confusão tinha engolido.
 - O lábio de um alojamento de íman chama-se estreitamento na árvore e nomeia a sua abertura. Nenhuma ação o transforma mais num escareamento.
 - Depois de «Refinar as arestas», o Solidon reconhece arredondamentos, furos e letreiros como no original, mesmo após outro furo. Arredondamentos iguais mantêm o nome, também após «Deslocar».
-- Um padrão à volta de um punho redondo, como um recartilhado numa tampa, mantém o centro e a direção ao continuar a editar.
+- Um padrão à volta de uma pega redonda, como um recartilhado numa tampa, mantém o centro e a direção ao continuar a editar.
 - Depois de «Dividir» e «Cortar fora», uma face dividida mantém o nome na peça maior, e os ajustes nela continuam válidos.
 - Se clicar na aresta de bordo de um furo deitado, ela chama-se «Vertical», tal como está realmente.
 - Se um modelo tem mais de 5 000 características, o Solidon mantém as maiores em vez de ficar sem nenhuma. Escalar não baralha os seus nomes.
@@ -174,7 +174,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois da divisão, o relatório já não mostra, nas linhas sobre o corpo antigo, botões que não fazem nada.
 - Um desenho traçado livremente sem cota já não gera um aviso no relatório.
 - Um relatório de erro indica as pastas na sua pasta de utilizador sem o seu nome de utilizador, mesmo quando o próprio Solidon está aí instalado.
-- Em «Primeiros passos», a impressora do seu slicer aparece logo ao abrir. Antes a sugestão só chegava ao fim de segundos, e «Concluído» ficava até lá com a impressora genérica.
+- Em «Primeiros passos», a impressora do seu slicer aparece logo ao abrir. Antes a sugestão só chegava ao fim de alguns segundos, e «Concluído» ficava até lá com a impressora genérica.
 - O slicer escolhe-se nas definições de impressão por cima dos perfis, mesmo com essa secção recolhida.
 - A impressora escolhida nas definições de impressão passa também para o próximo projeto novo. Se o seu slicer estiver noutra impressora, as definições oferecem-na com um clique.
 - Se escolher outra impressora ou outro slicer, o perfil de máquina memorizado do anterior deixa de valer.
