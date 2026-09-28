@@ -18,18 +18,67 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.5.1
 
+### Imprimir y entregar al slicer
+
+- En PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.
+- El nivel «Estándar» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
+- Las sugerencias aplicadas valen solo para la pieza que las necesita: soportes, brim y los valores de un ajuste, en cada slicer compatible. Los ajustes de impresión nombran las piezas.
+- Los niveles «Fino», «Borrador» y «Resistente» eligen ahora el proceso correspondiente de su slicer, por ejemplo «0.12mm Fine» con «Fino».
+- Los niveles de calidad del diálogo de impresión aparecen ahora en el idioma de la interfaz.
+- La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, como en el propio perfil de Elegoo.
+- Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
+- Si ha medido el voladizo de su impresora, también el slicer pone soportes solo a partir de ese ángulo, mientras rijan la altura de capa y el ancho de línea de la medición.
+- También el informe calcula ahora los voladizos con el ángulo a partir del cual su perfil del slicer pone soportes.
+- Los ajustes de impresión muestran lo que se imprime: la base es el perfil del fabricante, y sus propios valores están marcados y se pueden restablecer uno a uno.
+- La placa de impresión se elige en los ajustes de impresión y la temperatura de la cama la sigue. Si el fabricante no autoriza la placa para su filamento, Solidon lo avisa antes.
+- Sin «Aplicar las sugerencias», ninguna pieza recibe ya un brim sin preguntar, ni al exportar ni al entregarla al slicer.
+- En paredes exteriores redondas, Solidon propone una «Costura en bisel», en cada slicer compatible. La impresión tarda así entre un 2 y un 4 % más.
+- Si su slicer calcula el brim por sí mismo, como ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer, Solidon no propone uno propio. El del slicer da más borde a las piezas altas.
+- Si un brim, skirt o raft sobresale de la cama, Solidon lo indica al entregar al slicer y ofrece «Organizar sobre la cama».
+- Si el slicer rechaza una pieza demasiado alta, Solidon indica ambas alturas y ofrece «Dividir el modelo», «Reducir al volumen de impresión» u otra impresora.
+- Si Bambu Studio se queda colgado tras laminar, Solidon toma el archivo de impresión terminado en lugar de dar un error a los cinco minutos.
+- Los proyectos de 0.5.0 imprimen con la velocidad de su impresora. Lo que usted había ajustado en ellos se conserva.
+- La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
+- Con PrusaSlicer, la impresión empieza ahora como con la propia Prusa: con nivelación de la cama, línea de purga y comprobación de la impresora.
+- El PETG llega ahora a PrusaSlicer como PETG, ya no como PLA.
+- Si la primera capa tiene pasos estrechos, aunque sean unos pocos largos en una pieza grande, Solidon propone hacerla a 50 mm/s. Así las líneas cortas se adhieren mejor.
+- Solidon solo propone un «Tiempo mínimo por capa» más largo donde su perfil no tiene ninguno. Antes, la sugerencia aparecía en casi cualquier pieza con chaflán o punta.
+- Donde su slicer ya limita la velocidad según el caudal volumétrico, Solidon ya no propone un límite de velocidad propio.
+- Si adopta los valores de un perfil de filamento y después cambia de filamento, vuelven a regir los valores del nuevo.
+- La primera capa imprime ahora líneas tan anchas como el perfil de su impresora, normalmente 0,5 mm con boquilla de 0,4. Con Cura, el cabezal ya no va a paso de tortuga entre ellas.
+- Con Cura, la impresión empieza ahora con el código de inicio de su impresora, como en el fabricante. Si Cura no conoce la impresora o el archivo no lo lleva, Solidon se lo indica.
+- Con Cura, la primera capa usa ahora la aceleración del perfil del fabricante en lugar de la aceleración de impresión completa.
+- Los soportes de Cura siguen ahora el patrón de los perfiles de fábrica: unidos, con un techo ligero y velocidad moderada.
+- Con Cura, las paredes en voladizo se imprimen ahora más despacio, como en el fabricante. Las impresiones con muchos voladizos tardan hasta un 20 % más.
+- Con Cura, el relleno se imprime ahora después de las paredes, y los desplazamientos evitan los soportes y retraen el filamento en trayectos largos.
+- El perfil para la ventana de Cura corresponde ahora a la impresora configurada en Cura. Antes Cura lo rechazaba con algunas impresoras o no lo mostraba.
+- Los ajustes de impresión ya no ofrecen el caudal volumétrico para Cura, porque Cura no lo lee.
+- Nuevas: las Creality Ender-3 V3 SE y V3 KE. Hasta ahora una SE recibía los valores de la mucho más rápida Ender-3 V3.
+- Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Si nada más los necesita sobre el modelo, Solidon los propone solo desde la cama.
+- Nueva sugerencia «Mantener libres los canales»: aplicada, la entrega bloquea los soportes en los canales en cada slicer compatible. La ventana de Cura recibe el bloqueo y los valores por pieza.
+- Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
+- Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim donde su slicer no calcula uno propio, aunque los pies juntos tengan superficie suficiente.
+- Una franja estrecha e inclinada junto a la pared exterior ya no cuenta en el informe como un puente largo.
+- El informe solo muestra ya el aviso de calibrar las tolerancias de su material en modelos con ajustes. Solo ahí las usa Solidon.
+- La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
+- En modelos grandes, «Dividir el modelo» encuentra la costura hasta el doble de rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
+- Si Solidon divide un modelo automáticamente en tres o más trozos, los nombres se numeran y nombran los conectores, por ejemplo «Listón 2 de 3 · Pasadores y agujeros».
+- Un tornillo, tuerca o junta impresos del catálogo de bloques ya no cuentan en el informe como un cuerpo fragmentado. Es una pieza propia, y así está previsto.
+- Los tornillos y tuercas impresos tienen holgura también en la cabeza y en el apoyo, y se sueltan aunque se impriman con la pieza. Los proyectos antiguos avisan del cambio al abrirlos.
+- Con un tornillo avellanado del catálogo de bloques, un cuerpo de caras y aristas se mantiene estanco al exportar: la pieza y el tornillo entran en el archivo cada uno cerrado.
+
 ### Editar taladros
 
 - Un taladro con avellanado en un lado y chaflán en el otro se puede inclinar, desplazar y duplicar. Antes, Solidon lo rechazaba.
 - Un taladro o avellanado inclinado ya no corta lo que está delante de su boca, como una nervadura o el panal de al lado.
 - Un taladro avellanado en una cara curva se puede desplazar, también con un clic en la vista. Tras desplazarlo, inclinarlo o quitarlo, el punto antiguo queda a ras con la cara.
 - Un taladro avellanado con el borde de entrada redondeado en una cara plana se puede desplazar, duplicar y quitar junto con el redondeo. Antes quedaba un hueco.
-- Un taladro ciego inclinado, como un bolsillo para imán sin labio, queda del todo abierto en su boca. Antes, una fina piel en el lado más profundo tapaba media abertura.
+- Taladros ciegos, ranuras y ensanches en una cara inclinada, y taladros ciegos inclinados como un bolsillo para imán sin labio, quedan abiertos del todo en la boca. Antes quedaba una fina piel.
 - Desplazar y duplicar avisan cuando la pared hacia el taladro vecino se vuelve demasiado fina o se rompe.
 - Si un taladro sale por el lateral de la pieza tras desplazarlo, duplicarlo o inclinarlo, Solidon lo indica también en zonas escalonadas. Una copia que no se creó se detecta.
 - En nervaduras y panales, un taladro inclinado ya no indica por error que sobresale del borde.
 - Tras desplazar, inclinar o duplicar, el panel de características muestra las cotas que el resultado tiene de verdad.
-- Tras desplazar un taladro, las características ajenas al cambio quedan tal como estaban, y aplicarlo en modelos grandes termina mucho más rápido.
+- Taladrar, desplazar, «Cambiar orificio» y estirar a ranura dejan el modelo fuera del taladro tal como estaba. El reconocimiento posterior termina mucho más rápido en modelos grandes.
 - Si en un cuerpo de caras y aristas, por ejemplo de un archivo STEP, un corte de taladro falla sin que se note, Solidon lo detecta y vuelve a calcular. Antes podía quedar un cuerpo roto.
 - En cuerpos de caras y aristas, los pasos de taladro están listos en segundos: en una placa perforada de un archivo STEP, «Cambiar orificio» tarda 2 en lugar de unos 120 segundos.
 - En cuerpos de caras y aristas, «Cortar una cavidad» ya no devuelve un cuerpo defectuoso.
@@ -37,15 +86,23 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El tirador del extremo de una ranura se agarra en cualquier punto de la abertura, y ya no salta hacia el puntero en el primer arrastre.
 - Las ranuras se llevan consigo sus chaflanes y su boca oblicua al desplazarlas o duplicarlas. Antes, los chaflanes se quedaban en el sitio antiguo.
 - Un bolsillo para imán del catálogo de bloques se puede desplazar, duplicar, multiplicar y eliminar, junto con el labio que sujeta el imán.
-- En un bolsillo para imán, «Cambiar orificio» cambia el diámetro junto con el labio. «Solo diámetro del orificio» mantiene la abertura para el imán y avisa si queda demasiado justa.
+- En un bolsillo para imán, «Cambiar orificio» con «Incluir avellanado, escalones y estrechamiento» cambia el diámetro junto con el labio. «Solo diámetro del orificio» mantiene la abertura.
 - Si se coloca en ángulo respecto a la cara, la abertura de un bolsillo para imán, un orificio para tornillo o un asiento de rodamiento queda libre. Antes había una cuña de material encima.
+- Si un bolsillo para imán o un colgador de ojo de cerradura queda inclinado respecto a la cara, Solidon avisa de que su labio solo sujeta por un lado y ofrece «Corregir la entrada».
 - Si un bloque como un bolsillo para imán no elimina nada en el punto elegido, Solidon lo indica y aconseja hacer clic en la cara.
 - En un bolsillo para imán con labio, «Estirar a ranura» también rechaza actuar en cuerpos de caras y aristas, en lugar de cortar el labio.
+- Si coloca una rosca, un inserto termofijado o un alojamiento de tuerca en un taladro, el diálogo indica arriba el tamaño que encaja y preselecciona justo ese.
 - En un avellanado, «Cambiar elemento» corta la nueva medida como si se hubiera avellanado así desde el principio. Antes, Solidon se negaba o dejaba una fina piel atravesando el taladro.
 - Si piezas de un modelo están metidas unas en otras, Solidon las une antes de calcular, tal como se imprimirán. Volumen y taladros cuadran entonces, y el informe lo dice.
 - Si agranda un taladro, la vista previa precisa muestra todo el material retirado, también en modelos grandes y en cuerpos con canales cerrados.
 - Al escribir una cota en una figura grande, la vista previa aproximada aparece en menos de un segundo en lugar de hasta diecinueve, y la de un taladro en ella funciona.
 - Si un paso en un modelo abierto solo calcula de forma aproximada y el volumen crece, el informe indica la desviación y ofrece «Reparar primero y volver a calcular».
+
+### Redondear y achaflanar
+
+- La elección de aristas «Horizontal», «Superior» o «Abajo» ya no incluye el borde de un taladro lateral. Si lo quiere, elíjalo aparte; los proyectos antiguos calculan como se guardaron.
+- En un modelo importado, el borde de un taladro se redondea o achaflana tan hondo como en una pieza construida. Antes, con radios grandes, el redondeo salía hasta un quinto más plano.
+- Si un radio o un chaflán no cabe en todas las aristas de la selección, Solidon trabaja las aristas donde cabe y muestra las demás con «Mostrar el punto». Antes se negaba todo el paso.
 
 ### Cotas en la vista
 
@@ -62,13 +119,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Las características se reconocen solas hasta 1,5 millones de triángulos. Hasta cinco millones, Solidon pregunta antes e indica la memoria necesaria y la duración en su ordenador.
 - Rechazado el reconocimiento completo, «Reconocer todas las características» lo recupera en el informe. Si tarda demasiado, «Cargar sin reconocimiento de características» lo omite.
-- En modelos grandes, «Detectar detalles en un punto» encuentra caras, alojamientos y aplanamientos donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.
-- Los modelos grandes se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 segundos en vez de 174. Cancelar actúa en pocos segundos.
+- En modelos grandes, «Detectar detalles en un punto» encuentra caras donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.
+- Los modelos grandes y las celosías se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 s en vez de 174. Cancelar actúa en pocos segundos.
 - Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes.
 - Los contornos de arcos y rectas se reconocen arco a arco con su radio. «Convertir en caras y aristas» es así mucho más rápido.
 - Un tetón escalonado ya no cuenta como rosca. Vuelven los cilindros y taladros que esa confusión se había tragado.
 - El labio de un bolsillo para imán se llama estrechamiento en el árbol y nombra su abertura. Ninguna acción lo convierte ya en avellanado.
-- Tras «Refinar las aristas», Solidon reconoce redondeos, taladros y rótulos igual que en el original, incluso después de un taladro adicional.
+- Tras «Refinar las aristas», Solidon reconoce redondeos, taladros y rótulos igual que en el original, incluso tras otro taladro. Los redondeos iguales conservan su nombre, también tras «Trasladar».
+- Un patrón alrededor de un mango redondo, como un moleteado en una tapa, conserva su centro y su dirección al seguir editando.
 - Tras «Dividir» y «Recortar», una cara dividida conserva su nombre en la parte más grande, y los ajustes en ella siguen siendo válidos.
 - Si hace clic en el borde de un taladro tumbado, se llama «Vertical», tal como está en realidad.
 - Si un modelo tiene más de 5 000 características, Solidon conserva las más grandes en lugar de quedarse sin ninguna. Escalar no revuelve sus nombres.
@@ -79,6 +137,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las costuras abiertas se cierran al importar y reparar sin unir piezas que solo se tocan. Un modelo intacto queda sin cambios.
 - Los solapamientos los resuelve ahora «Reparar» por sí solo. Si las piezas de un modelo importado están metidas unas en otras, el informe ofrece «Resolver solapamientos».
 - Una superficie sin grosor queda abierta y ofrece «Dar grosor». Una abertura grande indica su sitio con «Mostrar el punto», y «Dejar abierto» deja abierta solo esa.
+- Tras cerrar una abertura al importar, «Mostrar el punto» rodea toda la cara nueva con un color propio.
 - Una pieza vuelta del revés junto a un cuerpo hueco se endereza sin perder la cavidad. Una pieza dentro del material de otra se indica en lugar de adivinarse.
 - El informe tras importar es más corto: los hallazgos que el resultado desmiente desaparecen, y donde se puede hacer algo hay un botón en lugar de un consejo.
 - El mapa de defectos de malla muestra las zonas sanas en el color del cuerpo, para que cada defecto destaque, y lleva «Reparar» directamente en la leyenda.
@@ -90,57 +149,21 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un modelo es demasiado fino para «Refinar las aristas», el informe ofrece «Reducir triángulos y volver a intentarlo» con una cifra que realmente funciona.
 - Si «Suavizar» fuera a volver del revés un cuerpo, Solidon lo indica y ofrece «Refinar las aristas y volver a intentarlo» con una longitud de arista que funciona.
 - Los conjuntos grandes se importan más rápido: la reparación al importar un barco pirata de 1,2 millones de triángulos tarda alrededor de un 30 % menos.
+- Al abrir archivos 3MF grandes, la ventana sigue respondiendo, también mientras se lee el modelo.
 
-### Imprimir y entregar al slicer
+### Manual y sitio web
 
-- En PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.
-- El nivel «Estándar» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.
-- Los niveles «Fino», «Borrador» y «Resistente» eligen ahora el proceso correspondiente de su slicer, por ejemplo «0.12mm Fine» con «Fino».
-- Los niveles de calidad del diálogo de impresión aparecen ahora en el idioma de la interfaz.
-- La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, para que la boquilla gotee menos por el camino.
-- Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
-- También el informe calcula ahora los voladizos con el ángulo a partir del cual su perfil del slicer pone soportes.
-- Los ajustes de impresión muestran lo que se imprime: la base es el perfil del fabricante, y sus propios valores están marcados y se pueden restablecer uno a uno.
-- La placa de impresión se elige en los ajustes de impresión y la temperatura de la cama la sigue. Si el fabricante no autoriza la placa para su filamento, Solidon lo avisa antes.
-- Sin «Aplicar las sugerencias», ninguna pieza recibe ya un brim sin preguntar, ni al exportar ni al entregarla al slicer.
-- Si un brim, skirt o raft sobresale de la cama, Solidon lo indica al entregar al slicer y ofrece «Organizar sobre la cama».
-- Si el slicer rechaza una pieza demasiado alta, Solidon indica ambas alturas y ofrece «Dividir el modelo», «Reducir al volumen de impresión» u otra impresora.
-- Si Bambu Studio se queda colgado tras laminar, Solidon toma el archivo de impresión terminado en lugar de dar un error a los cinco minutos.
-- Los proyectos de 0.5.0 imprimen con la velocidad de su impresora. Lo que usted había ajustado en ellos se conserva.
-- La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
-- Con PrusaSlicer, la impresión empieza ahora como con la propia Prusa: con nivelación de la cama, línea de purga y comprobación de la impresora.
-- El PETG llega ahora a PrusaSlicer como PETG, ya no como PLA.
-- Si la primera capa tiene pasos estrechos, Solidon propone hacerla a 50 mm/s. Así las líneas cortas se adhieren mejor.
-- Donde su slicer ya limita la velocidad según el caudal volumétrico, Solidon ya no propone un límite de velocidad propio.
-- Si adopta los valores de un perfil de filamento y después cambia de filamento, vuelven a regir los valores del nuevo.
-- La primera capa imprime ahora líneas tan anchas como el perfil de su impresora, normalmente 0,5 mm con boquilla de 0,4. Con Cura, el cabezal ya no va a paso de tortuga entre ellas.
-- Con Cura, la impresión empieza ahora con el código de inicio de su impresora, como en el fabricante. Si Cura no conoce la impresora, Solidon se lo indica.
-- Con Cura, la primera capa usa ahora la aceleración del perfil del fabricante en lugar de la aceleración de impresión completa.
-- Los soportes de Cura siguen ahora el patrón de los perfiles de fábrica: unidos, con un techo ligero y velocidad moderada.
-- Con Cura, las paredes en voladizo se imprimen ahora más despacio, como en el fabricante. Las impresiones con muchos voladizos tardan hasta un 20 % más.
-- Con Cura, el relleno se imprime ahora después de las paredes, y los desplazamientos evitan los soportes y retraen el filamento en trayectos largos.
-- El perfil para la ventana de Cura corresponde ahora a la impresora configurada en Cura. Antes Cura lo rechazaba con algunas impresoras o no lo mostraba.
-- Los ajustes de impresión ya no ofrecen el caudal volumétrico para Cura, porque Cura no lo lee.
-- Nuevas: las Creality Ender-3 V3 SE y V3 KE. Hasta ahora una SE recibía los valores de la mucho más rápida Ender-3 V3.
-- Un techo sobre un canal de agua o un túnel ya no atrae soportes sobre el modelo. Si nada más los necesita sobre el modelo, Solidon los propone solo desde la cama.
-- Nueva sugerencia «Mantener libres los canales»: aplicada, la entrega bloquea los soportes en los canales en cada slicer compatible, en Cura al laminar desde Solidon.
-- Los soportes de rejilla llegan al slicer como rejilla de verdad, con la dirección cambiando en cada capa, en lugar de líneas sueltas que se desplazan al imprimir.
-- Si una pieza se apoya en muchos pies pequeños, Solidon propone un brim, aunque los pies juntos tengan superficie suficiente.
-- Una franja estrecha e inclinada junto a la pared exterior ya no cuenta en el informe como un puente largo.
-- La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
-- En modelos grandes, «Dividir el modelo» encuentra la costura hasta el doble de rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
-- Un tornillo, tuerca o junta impresos del catálogo de bloques ya no cuentan en el informe como un cuerpo fragmentado. Es una pieza propia, y así está previsto.
-- Con un tornillo avellanado del catálogo de bloques, un cuerpo de caras y aristas se mantiene estanco al exportar: la pieza y el tornillo entran en el archivo cada uno cerrado.
-
-### Asistente con modelo local
-
-- La elección de modelo recomienda también un modelo más pequeño para tarjetas desde 10 GB de memoria gráfica e indica para cada uno la memoria que ocupa y cómo resuelve encargos de varias partes.
-- El asistente recibe en detalle solo las acciones que encajan con la petición. Así queda sitio para el historial y la respuesta, y los encargos salen bien mucho más a menudo.
-- El modelo local se queda cargado tres minutos tras una respuesta, y la siguiente pregunta ya no espera a que arranque.
-- Una respuesta que no encuentra fin se corta tras una longitud fija y se indica como cortada, en lugar de ocupar la tarjeta gráfica hasta el límite de diez minutos.
+- Quince guías muestran paso a paso, con imágenes de la aplicación, cómo comprobar, imprimir y reparar un modelo, construir, dividir y rotular una pieza o imprimir a dos colores.
+- El manual empieza en «¿Por dónde empiezo?» y lleva desde ahí a cada guía. F1 en el diálogo de una operación abre su guía o su entrada.
+- Una imagen de conjunto explica la ventana: cada número de la imagen señala una zona.
+- La búsqueda del manual encuentra la página adecuada también con palabras cotidianas, la muestra primero y la abre donde aparece la palabra.
+- La referencia indica en cada operación dónde se encuentra en el menú o en el panel de selección.
+- Las páginas explicativas son un tercio más cortas. Si hay una guía con imágenes sobre su tema, el enlace aparece al final de la página.
+- En el sitio web y en el PDF, el manual está organizado como en la aplicación, de los primeros pasos a la consulta. En el PDF, los marcadores llevan a cada capítulo.
 
 ### Manejo y sistema
 
+- Los cálculos grandes, como la vista previa o «Refinar las aristas», van en un proceso aparte: la ventana responde y «Cancelar» actúa al instante. Para ello corre un segundo proceso de Solidon.
 - Al cargar y en cálculos largos, un reloj cuenta el tiempo transcurrido, aunque el progreso se quede quieto un rato.
 - Un modelo en una unidad lenta o que no responde ya no congela la ventana al abrirlo.
 - Si un archivo de «Abiertos recientemente» se ha movido, Solidon lo dice y ofrece «Elegir otro archivo».
@@ -152,16 +175,23 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras la división, el informe ya no muestra en las líneas del cuerpo antiguo botones que no hacen nada.
 - Un dibujo trazado libremente sin cota ya no genera un aviso en el informe.
 - Un informe de error nombra las carpetas de su directorio de usuario sin su nombre de usuario, incluso si Solidon está instalado allí.
+- En «Primeros pasos», la impresora de su slicer aparece nada más abrir. Antes la sugerencia llegaba al cabo de segundos, y «Terminado» tomaba hasta entonces la impresora genérica.
+- El slicer se elige en los ajustes de impresión encima de los perfiles, aunque esa sección esté plegada.
+- La impresora que elija en los ajustes de impresión pasa también al siguiente proyecto nuevo. Si su slicer está en otra impresora, el diálogo la ofrece con un clic.
+- Si elige otra impresora u otro slicer, el perfil de máquina recordado del anterior deja de valer.
+- Un número tecleado fuera de los límites de un campo se rechaza en vez de recortarse en silencio, y Solidon indica el límite.
+- La pregunta antes de borrar un paso nombra los pasos dependientes que se van con él.
+- El historial nombra un parámetro cambiado con su etiqueta y muestra el valor antes y después.
+- El tirador de una cara seleccionada muestra solo la flecha con la que se desplaza.
+- Sin texto, «Aplicar texto» dice que falta el texto en vez de dar la vista previa por no disponible.
+- La herramienta «Separar» y la operación «Dividir» se llaman ahora distinto en cada idioma, y la interfaz italiana tutea en todas partes.
 
-### Manual y sitio web
+### Asistente con modelo local
 
-- Quince guías muestran paso a paso, con imágenes de la aplicación, cómo comprobar, imprimir y reparar un modelo, construir, dividir y rotular una pieza o imprimir a dos colores.
-- El manual empieza en «¿Por dónde empiezo?» y lleva desde ahí a cada guía. F1 en el diálogo de una operación abre su guía o su entrada.
-- Una imagen de conjunto explica la ventana: cada número de la imagen señala una zona.
-- La búsqueda del manual encuentra la página adecuada también con palabras cotidianas, la muestra primero y la abre donde aparece la palabra.
-- La referencia indica en cada operación dónde se encuentra en el menú o en el panel de selección.
-- Las páginas explicativas son un tercio más cortas. Si hay una guía con imágenes sobre su tema, el enlace aparece al final de la página.
-- En el sitio web y en el PDF, el manual está organizado como en la aplicación, de los primeros pasos a la consulta. En el PDF, los marcadores llevan a cada capítulo.
+- La elección de modelo recomienda también un modelo más pequeño para tarjetas desde 10 GB de memoria gráfica e indica para cada uno la memoria que ocupa y cómo resuelve encargos de varias partes.
+- El asistente recibe en detalle solo las acciones que encajan con la petición. Así queda sitio para el historial y la respuesta, y los encargos salen bien mucho más a menudo.
+- El modelo local se queda cargado tres minutos tras una respuesta, y la siguiente pregunta ya no espera a que arranque.
+- Una respuesta que no encuentra fin se corta tras una longitud fija y se indica como cortada, en lugar de ocupar la tarjeta gráfica hasta el límite de diez minutos.
 
 ## 0.5.0
 

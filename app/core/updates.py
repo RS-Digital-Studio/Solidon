@@ -213,15 +213,18 @@ MAX_PACKAGE_BYTES: Final = 2 * 1024 * 1024 * 1024
 #: der Kunde nicht merkt — nicht, was über einer Grenze steht.
 #:
 #: Wer **diese** Grenze anfasst, prüft dagegen weiterhin, ob das Fenster den
-#: Zuwachs verträgt; sie gehört der Anzeige und nicht der Auswahl.
-MAX_CHANGES: Final = 120
+#: Zuwachs verträgt; sie gehört der Anzeige und nicht der Auswahl. Mit 0.5.1
+#: wuchs sie von 120 auf 200, weil der Abschnitt mehr als 120 Punkte trägt.
+#: Was eine ältere Installation liest, kürzt ``make_download`` ohnehin von
+#: hinten (``cap_for_legacy_clients``) — deshalb steht das Wichtigste vorn.
+MAX_CHANGES: Final = 200
 
 
 def _room_for_the_version_file() -> int:
     """Was die Versionsdatei im schlimmsten erlaubten Fall wiegen darf.
 
-    Hundertzwanzig Punkte à achthundert Zeichen — mehr lässt das eigene Format nicht
-    zu — in **jeder** eingecheckten Sprache, und das **zweimal**: ``changes``
+    :data:`MAX_CHANGES` Punkte à achthundert Zeichen — mehr lässt das eigene Format
+    nicht zu — in **jeder** eingecheckten Sprache, und das **zweimal**: ``changes``
     trägt die flache Liste, ``groups`` dieselben Punkte gegliedert. Beide
     stehen nebeneinander in der Datei, weil jede ausgelieferte Fassung sie
     liest und der Leser bis 0.2.2 nur die flache kennt. Dazu noch einmal so
