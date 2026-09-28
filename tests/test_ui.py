@@ -18082,10 +18082,12 @@ def test_no_second_window_appears_along_the_way(window: MainWindow) -> None:
 
     # Zweimal dasselbe Modell: Das zweite landet unter der Platte und gibt
     # einen Befund **mit Handlung** — nur dafür baut ``_show_offers`` Knöpfe,
-    # und genau die standen unter Verdacht.
+    # und genau die standen unter Verdacht. Unter der Platte liegt es seit der
+    # freien Stelle (0.5.1) nur mit ausgeschalteten Haken am Ladeschritt.
     for _ in range(2):
         window.open_path(MESHES / "block_with_rounded_edge.stl")
         window.session.wait_for_idle()
+    keep_the_files_place(window)
     window._on_scene(window.session.evaluate_now())
     QApplication.processEvents()
     assert window.report._offers.findChildren(QPushButton), (
