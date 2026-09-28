@@ -376,21 +376,27 @@ def test_the_face_shortlist_is_decided_by_real_support(
 def test_a_bounded_shortlist_keeps_its_last_place_for_a_pose_that_stands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Drei fast gleiche Kantenlagen vorn, die stehende weit hinten.
+    """Drei fast gleiche Kantenlagen vorn, die stehenden weit hinten.
 
     So sah die Vorauswahl an einer Auto-Split-Hälfte mit Stift bei 60 Grad
     Überhanggrenze aus: Richtungen unter einem Grad auseinander, keine mit
     Auflage, liegende Lagen, die rollen, und die Lage auf dem Stift auf Rang 62.
+    Stehen zwei, bekommt den Platz die mit dem kleineren geschätzten Stützraum,
+    nicht die der Heuristik: Am Balken reihte sie das ferne Ende (254 883 mm³
+    geschätzt) knapp vor die Schnittfläche (6 419 mm³).
     """
     from app.core.geom import orient
 
     edge = [(0.850, -0.526, 0.003), (0.850, -0.526, -0.011), (0.851, -0.526, 0.019)]
     ranked = [
-        *(Orientation(direction, 0.0, 5.8, 158.7 + index) for index, direction in enumerate(edge)),
-        Orientation((0.0, 0.0, 1.0), 0.0, 500.0, 160.0),
-        Orientation((0.0, 1.0, 0.0), 47.2, 4965.2, 160.0),
-        Orientation((1.0, 0.0, 0.0), 72.4, 4929.0, 172.0),
-        Orientation((0.0, 0.0, -1.0), 80.0, 6000.0, 172.0),
+        *(
+            Orientation(direction, 0.0, 5.8, 158.7 + index, 138.0)
+            for index, direction in enumerate(edge)
+        ),
+        Orientation((0.0, 0.0, 1.0), 0.0, 500.0, 160.0, 500.0),
+        Orientation((0.0, 1.0, 0.0), 47.2, 4965.2, 160.0, 40_000.0),
+        Orientation((1.0, 0.0, 0.0), 72.4, 4929.0, 172.0, 254_883.0),
+        Orientation((0.0, 0.0, -1.0), 80.0, 6000.0, 172.0, 6_419.0),
     ]
     asked: list[tuple[float, float, float]] = []
 
@@ -405,10 +411,12 @@ def test_a_bounded_shortlist_keeps_its_last_place_for_a_pose_that_stands(
 
     assert [entry.direction for entry in ranked_orientations(body, limit=3)] == edge
     kept = ranked_orientations(body, limit=3, standing=wide)
-    assert [entry.direction for entry in kept] == [*edge[:2], (1.0, 0.0, 0.0)], (
-        "der letzte Platz geht an die beste Lage, die steht"
+    assert [entry.direction for entry in kept] == [*edge[:2], (0.0, 0.0, -1.0)], (
+        "der letzte Platz geht an die stehende Lage mit dem kleinsten Stützraum"
     )
-    assert asked[-1] == (1.0, 0.0, 0.0), "nach der ersten stehenden wird nicht weiter gefragt"
+    assert asked == [*edge, (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)], (
+        "gefragt wird nach dem Stützraum, bis eine steht"
+    )
     assert ranked_orientations(body, standing=wide) == ranked_orientations(body), (
         "ohne Grenze der Zahl bleibt die Rangliste, wie sie ist"
     )
@@ -456,7 +464,19 @@ def test_auto_splits_shortlist_finds_the_pose_on_the_pin(
         overhang_limit=overhang_limit,
     )
     if overhang_limit == 60.0:
-        assert all(entry.footprint < limited.smallest_first_layer for entry in heuristic), (
+        footing = limited.printer.layer_height / 2.0
+        judged = [
+            judge(
+                body,
+                entry.direction,
+                1.0,
+                footing,
+                overhang_angle=overhang_limit,
+                line_width=limited.printer.extrusion_width,
+            )
+            for entry in heuristic
+        ]
+        assert not any(stands(pose, limited.smallest_first_layer) for pose in judged), (
             "Voraussetzung: vorn steht bei 60 Grad keine Lage"
         )
 
@@ -615,7 +635,7 @@ def test_a_ball_never_stands_no_matter_how_coarse_the_search_is(profile: Profile
     Dieselbe Kugel bekam damit einmal ``orient.no_footing`` und einmal nicht,
     je nachdem, wie grob gesucht wurde.
     """
-    ball = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=20.0)))
+    ball = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0)))
 
     found = search(ball, count=24, seed=5, profile=profile)
 

@@ -256,7 +256,7 @@ Nähte kennt sie nicht; sie trägt `source="internal"` (Regel 14).
   stehende reiht; höchstens `FINALISTS` + sechs Achsen + Ausgangslage.
   **Was steht und nach `advise.support_need` keine Stütze braucht, bleibt,**
   **wenn der Gewinner Stütze braucht** (`orientation.stays`, am Original).
-  **Auto Splits Vorauswahl hält einen Platz für eine Lage, die steht**
+  **Auto Splits Vorauswahl hält der billigsten stehenden Lage einen Platz**
   (`ranked_orientations(standing=…)`).
 - **Eine dünne Wand ist nicht allein deshalb undruckbar** (Arachne); unter der
   Mindestbahnbreite verlangt der Befund die Kontrolle im Slicer.

@@ -366,12 +366,15 @@ def _contact(
     # jedes Dreieck behält, das der Ebenenschnitt mit seiner eigenen Toleranz
     # noch ansieht; die Bewegung danach ist die exakte.
     lifted = vertices @ np.asarray(matrix[2, :3], dtype=float) + float(matrix[2, 3])
-    corners = lifted[faces]
-    crossing = (corners.min(axis=1) <= height + 2.0 * EPS_GEOM) & (
-        corners.max(axis=1) >= height - 2.0 * EPS_GEOM
-    )
+    # Ein Dreieck kreuzt die Ebene, wenn eine Ecke darunter und eine darüber
+    # liegt. Erst die wenigen mit einer Ecke darunter, dann nur deren Ecken:
+    # Alle Ecken aller Dreiecke als Zahlen zu sammeln kostete an einer
+    # Hälfte mit 100 000 Dreiecken den größten Teil der Prüfung.
+    below = lifted <= height + 2.0 * EPS_GEOM
+    near = np.flatnonzero(below[faces[:, 0]] | below[faces[:, 1]] | below[faces[:, 2]])
+    crossing = near[lifted[faces[near]].max(axis=1) >= height - 2.0 * EPS_GEOM]
     centre = moved_points(np.asarray(body.center_mass, dtype=float)[None, :], matrix)[0, :2]
-    if not crossing.any():
+    if not len(crossing):
         return None, centre
     used, local = np.unique(faces[crossing], return_inverse=True)
     band = trimesh.Trimesh(
@@ -487,19 +490,20 @@ def best_face_candidate(
 
     Darum hält die Vorauswahl einen Platz für eine Lage frei, die steht
     (``ranked_orientations(standing=…)``): Sonst kostete an Druckern mit 60 Grad
-    Überhanggrenze jede Naht von Auto Split „unbekannt“.
+    Überhanggrenze jede Naht „unbekannt“, an der eine Hälfte vorn keine
+    stehende Lage hatte.
     """
+    footing = profile.printer.layer_height / 2.0
     coarse = ranked_orientations(
         mesh,
         limit=count,
         cancelled=cancelled,
         printer=profile.printer,
         overhang_limit=profile.overhang_limit_degrees,
-        standing=_stands_on(mesh, profile),
+        standing=_stands_on(mesh, profile, footing),
     )[: max(1, count)]
     if not coarse:
         raise NoFittingOrientationError()
-    footing = profile.printer.layer_height / 2.0
     field: list[Candidate] = []
     for orientation in coarse:
         if cancelled is not None:
@@ -519,24 +523,24 @@ def best_face_candidate(
     return best_of(field, profile.smallest_first_layer)
 
 
-def _stands_on(mesh: MeshData, profile: Profile) -> Callable[[Orientation], bool]:
+def _stands_on(
+    mesh: MeshData, profile: Profile, footing_height: float
+) -> Callable[[Orientation], bool]:
     """Ob eine Lage der Vorauswahl steht, wie :func:`stands` nach :func:`judge`
-    urteilen wird — nur die Auflage, ohne Schnitt durch den ganzen Körper.
+    in ``footing_height`` urteilen wird — nur die Auflage, ohne Schnitt durch
+    den ganzen Körper.
 
-    Gefragt wird nur, wo die geschätzte Auflage die kleinste haltbare erste
-    Schicht erreicht. Darunter steht eine Lage höchstens auf einer Rundung,
-    etwa ein liegender Zylinder; den freien Platz bekommt eine ebene Auflage,
-    und die Suche nach ihr bleibt billig, auch wenn keine steht.
+    Ohne Vorprüfung an der geschätzten Auflage: Die zählt nur Dreiecke, die
+    fast genau nach unten zeigen, und ein halber Ring, der flach auf gut
+    600 mm² steht, hat davon zu wenige.
     """
-    floor = profile.smallest_first_layer
-    footing_height = profile.printer.layer_height / 2.0
 
     def check(entry: Orientation) -> bool:
-        if entry.footprint < floor:
-            return False
         contact, centre = _contact(mesh, rotation_to_down(entry.direction), footing_height)
         stable, footing = _carried(contact, centre, profile.printer.extrusion_width)
-        return stable and footing is not None and footing >= floor
+        area = 0.0 if contact is None or contact.is_empty else float(contact.area)
+        pose = Candidate(entry.direction, entry.support, area, entry.height, stable, footing)
+        return stands(pose, profile.smallest_first_layer)
 
     return check
 
