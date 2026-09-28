@@ -190,7 +190,10 @@ class Guide:
     eigenes Feld und keine Ableitung aus den Markierungen: Der Zwilling im
     anderen Rechenkern (``drill_brep_hole`` neben ``drill_hole``) öffnet
     denselben Dialog, ohne dass ein Bild ihn markiert. Jede markierte Operation
-    steht hier auch, das prüft ``tests/test_guides.py``."""
+    steht hier auch, das prüft ``tests/test_guides.py``. Umgekehrt nur, was die
+    Schritte zeigen: Eine Operation, die die Anleitung bloß streift, schickte
+    F1 in eine Anleitung, die die Frage nicht beantwortet — ihr Eintrag in der
+    Referenz tut es."""
     topics: tuple[str, ...] = ()
     """Die Erklärseiten, an deren Ende ein Verweis auf diese Anleitung steht.
 
@@ -474,7 +477,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "report.slicer",
             ),
         ),
-        teaches=("split_pinned", "arrange_bed"),
+        teaches=("split_pinned",),
         topics=("splitting",),
     ),
     Guide(
@@ -667,7 +670,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
             ),
             step(_("Der Text steht auf der Fläche."), "viewport"),
         ),
-        teaches=("label_text", "create_label"),
+        teaches=("label_text",),
         topics=("labels",),
     ),
     Guide(
@@ -738,7 +741,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
                 "report.slicer",
             ),
         ),
-        teaches=("paint_slot", "assign_slot", "clear_filament"),
+        teaches=("paint_slot",),
         topics=("moving",),
     ),
     Guide(
