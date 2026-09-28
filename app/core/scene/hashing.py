@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable, Mapping, Sequence
+from array import array
+from collections.abc import Buffer, Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
-
-import numpy as np
 
 from app.core.scene import cache
 from app.core.types import Feature, Operation, Profile, Quality
@@ -135,15 +134,21 @@ def operation_hash(
 FeatureMemo = dict[int, tuple[Feature, bytes]]
 
 
-def _index_bytes(indices: Sequence[int]) -> bytes:
+def _index_bytes(indices: Sequence[int]) -> Buffer:
     """Dreiecksindizes als rohe Bytes statt als JSON-Liste.
 
     Ein Lochblech 20 mal 20 trägt 406 Merkmale mit 156 824 Indizes; als
     JSON-Text gehasht kostete das 88,7 ms je Auswertung, warm 74 Prozent
     eines Kantenschritts (Review, 21.09.2026). Ein ``int64``-Feld ist über
     Prozesse und Plattformen dieselbe Bytefolge.
+
+    **Über ``array("q")``, nicht ``np.asarray``**: Beide ergeben dieselben
+    Bytes, aber ``np.asarray`` prüft jede Zahl einer Liste einzeln auf ihren
+    Typ, am Stück und unter dem GIL — an der größten Fläche des verfeinerten
+    Spielwürfels (3 979 168 Nummern) hielt das den Hauptfaden bis zu 190 ms an
+    (RM-212). Der Puffer geht ohne Kopie in den Hash.
     """
-    return np.asarray(indices, dtype=np.int64).tobytes()
+    return array("q", indices)
 
 
 def feature_digest(feature: Feature, name: str) -> bytes:

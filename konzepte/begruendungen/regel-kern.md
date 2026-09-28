@@ -96,6 +96,53 @@ Warum auch einmal je Körper `vertex_rank` gefragt wird:
 > von *Kanten verfeinern* auf 0,04 mm am Spielwürfel stand über zehn Minuten
 > in `perceive.features._area_and_reach` (Durchsicht 0.5.1, Stapelabzug).
 
+## Ein Kernaufruf an einem ganzen Körper rechnet im Hilfsprozess
+
+RM-212, Entscheidung Robert vom 27.09.2026: ein Hilfsprozess statt eines Kerns,
+der den GIL hergibt. Gemessen am 27.09.2026 mit einem 2-ms-Takt neben dem
+Aufruf (`sonden/hilfsprozess/gil_kern.py`): Jeder Aufruf von `manifold3d` hält
+den GIL für seine ganze Dauer — der Aufbau aus `Mesh64` 110 ms am Spielwürfel
+(250 488 Dreiecke) bis 1,1 s am Spielbrett (1,95 Mio.), `simplify` 0,13 bis
+1,4 s, `refine_to_length` 1,5 bis 8,2 s, `to_mesh64` des feinen Netzes 0,2 bis
+0,4 s. Beim Übernehmen von *Kanten verfeinern* am Spielwürfel (0,05 mm, 5,8 Mio.
+Dreiecke) stand das Fenster 22,7 und 15,0 s am Stück, im zweiten und dritten
+Durchgang von `refine_to_length`; die erste grobe Vorschau stand je Körper 0,4
+bis 0,9 s.
+
+- **Gemeinsamer Speicher statt `pickle`**: `pickle.dumps`/`loads` der 147 MB
+  des verfeinerten Würfels hielten den GIL 70 und 37 ms, `np.copyto` in den
+  gemeinsamen Speicher und die Kopie heraus je 1 ms.
+- **Die Schwelle** (`OFFLOAD_ABOVE`, `sonden/hilfsprozess/schwelle.py`): Unter
+  10 000 Dreiecken hielt eine Rechnung im Prozess den Hauptfaden höchstens
+  16 bis 18 ms an, ein Bild bei 60 Hz; darüber wächst es mit der Größe (27 ms
+  an 20 480, 178 ms an 327 680), während der Hilfsprozess 1 bis 3 ms
+  Stillstand kostet.
+- **Eine Stufe unter der Anwendung**: Mit gleicher Priorität wachte der
+  Hauptfaden neben dem rechnenden Hilfsprozess 912 ms zu spät aus einem
+  10-ms-Schlaf auf, ohne dass ein Python-Faden rechnete — der Kern belegt jeden
+  freigegebenen Kern.
+- **Bitgleich**: 26 Fälle vorher, nachher und im Hilfsprozess
+  (`sonden/hilfsprozess/referenz.py`), dazu je Rechnung ein Fall in
+  `tests/test_kernel_process.py`.
+- **Im Paket** startet `Solidon3D.exe` als Hilfsprozess und ist nach 0,4 bis
+  0,8 s bereit (`sonden/hilfsprozess/eingefroren/`); der Vorstart hinter dem
+  Fenster (`warm_up`) nimmt diese Zeit aus der ersten Vorschau.
+- **Und die Buchhaltung danach**: Nach dem Hilfsprozess blieben am
+  verfeinerten Würfel Stillstände von 0,2 bis 0,54 s, keiner davon im Kern —
+  ein `repr` über alle Merkmale (569 ms, die größte Fläche trägt 3 979 168
+  Dreiecksnummern), dreimal `sorted` je Merkmal (117 ms), `fsum(tolist())`
+  (179 ms), `csgraph` im Zusammenhang (224 ms). Seit `python_values`,
+  `array("q")` und der Rechnung `component_labels` im Hilfsprozess stand das
+  Fenster beim Übernehmen höchstens 94 ms (Spielbrett 128 ms).
+- **Ein BLAS-Faden, keine BLAS-Rechnung**: OpenBLAS legt beim Laden je
+  Rechenkern einen Puffer an — `import numpy` 758 MB privater Speicher an 32
+  Kernen, `scipy` noch einmal so viel, mit `OPENBLAS_NUM_THREADS=1` 19 MB
+  (`sonden/hilfsprozess/privat.py`, 28.09.2026). Ein untätiger Hilfsprozess
+  trug danach 761 MB frisch und 1 605 MB nach der ersten
+  Zusammenhangsrechnung, mit einem Faden 21 und 135 MB; Arbeitssatz und
+  Dauer der Verfeinerung blieben gleich (`speicher.py`). Das geht nur, weil
+  keine Rechnung BLAS ruft — sonst hinge ihr Ergebnis an der Fadenzahl.
+
 ## Über die Körpergrenze merkt sich nur, wer außer seiner Lesung nichts liest
 
 Der Merker über die Körpergrenze entstand mit RM-261. Warum die Boolesche

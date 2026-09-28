@@ -363,6 +363,40 @@ def _attach_process_boundary(process: subprocess.Popen[Any]) -> None:
         _attach_windows_job(process)
 
 
+def bind_helper(process: Any) -> None:
+    """Bindet einen eigenen Hilfsprozess (``multiprocessing``) so, dass er mit Solidon endet.
+
+    Unter Windows überlebt ein Kind seinen Elternprozess; ein Hilfsprozess des
+    Kerns (``geom.kernel_process``), der gerade eine Verfeinerung von Minuten
+    rechnet, liefe nach einem Absturz oder einem Beenden über den
+    Task-Manager weiter, bis sie fertig ist. Dasselbe Jobobjekt wie für
+    fremde Programme beendet ihn mit dem letzten Griff darauf — und den hält
+    nur dieser Prozess. Unter POSIX endet ein Hilfsprozess an der geschlossenen
+    Leitung oder zwischen zwei Kernaufrufen (``kernel_jobs.serve``).
+
+    ``process`` ist ein gestartetes ``multiprocessing.Process``; gebunden wird
+    sein Griff (``_popen._handle``).
+    """
+    if os.name != "nt":
+        return
+    popen = getattr(process, "_popen", None)
+    if popen is not None and getattr(popen, "_handle", None) is not None:
+        _attach_windows_job(cast("subprocess.Popen[Any]", popen))
+
+
+def release_helper(process: Any) -> None:
+    """Gibt das Jobobjekt eines beendeten Hilfsprozesses frei (:func:`bind_helper`).
+
+    Mit ``KILL_ON_JOB_CLOSE`` beendet das Schließen auch einen Hilfsprozess,
+    der noch liefe — gerufen wird es nur für einen, der beendet werden soll.
+    """
+    if os.name != "nt":
+        return
+    popen = getattr(process, "_popen", None)
+    if popen is not None:
+        _close_windows_job(cast("subprocess.Popen[Any]", popen))
+
+
 def _resume_windows_process(process_id: int) -> None:
     """Setzt den ersten Thread eines sicher gebunden gestarteten Prozesses fort."""
 

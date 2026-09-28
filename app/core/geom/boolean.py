@@ -34,7 +34,9 @@ from app.core.errors import (
     PROGRAMMING_ERRORS,
     SHOW_LOCATION,
     BooleanFailedError,
+    OperationCancelled,
 )
+from app.core.geom import kernel_process
 from app.core.geom.attributes import (
     DEFAULT_CUT_SLOT,
     carry_refined_units,
@@ -206,7 +208,11 @@ def boolean(
             cancelled.raise_if_cancelled()
         attempted.append(stage)
         try:
-            result = _run_stage(kind, meshes, stage, seed)
+            result = _run_stage(kind, meshes, stage, seed, cancelled)
+        except OperationCancelled:
+            # Der Hilfsprozess des Kerns wurde beendet (``kernel_process``) —
+            # ein Abbruch, kein Kern, der aufgegeben hat.
+            raise
         except PROGRAMMING_ERRORS:
             # Die Stufen rufen mit eigenen Argumenten — ``voxelized(pitch=...)``,
             # ``matrix_to_marching_cubes(matrix=..., pitch=...)``. Fiele ein
@@ -512,16 +518,20 @@ def _keep_slots(
 
 
 def _run_stage(
-    kind: BooleanKind, meshes: list[MeshData], stage: SolverStage, seed: int | None
+    kind: BooleanKind,
+    meshes: list[MeshData],
+    stage: SolverStage,
+    seed: int | None,
+    cancelled: CancelToken | None = None,
 ) -> MeshData | None:
     if stage == "direct":
-        return _kernel(kind, [mesh.raw for mesh in meshes], meshes[0])
+        return _kernel(kind, [mesh.raw for mesh in meshes], meshes[0], cancelled)
     if stage == "welded":
         cleaned = [_welded_input(mesh) for mesh in meshes]
-        return _kernel(kind, [mesh.raw for mesh in cleaned], meshes[0])
+        return _kernel(kind, [mesh.raw for mesh in cleaned], meshes[0], cancelled)
     if stage == "jittered":
         disturbed = [_jitter(mesh, seed, index) for index, mesh in enumerate(meshes)]
-        return _kernel(kind, [mesh.raw for mesh in disturbed], meshes[0])
+        return _kernel(kind, [mesh.raw for mesh in disturbed], meshes[0], cancelled)
     return _voxel(kind, meshes)
 
 
@@ -549,87 +559,48 @@ def _welded_input(mesh: MeshData) -> MeshData:
     return cleaned
 
 
-def _native_contact(body: Any, volume: float) -> bool:
-    """Erkennt ausschließlich Volumenreste innerhalb der nativen Float64-Rechengrenze."""
-    bounds = body.bounding_box()
-    # Ein exakt flacher Hüllquader beweist Nullvolumen. Das native Integral
-    # kann für solche Kontaktflächen trotzdem positive oder negative
-    # Rundungsreste liefern; sie rechtfertigen keinen geometrischen Rückfall.
-    if any(bounds[index + 3] <= bounds[index] for index in range(3)):
-        return True
-    # Gedrehte oder gekrümmte Nullhüllen besitzen einen räumlichen Hüllquader.
-    # Die Fehlerfortpflanzung über Differenzen, Kreuz- und Skalarprodukt hat
-    # die Form gamma(8) * Koordinatengröße * Oberfläche: Positionsunsicherheit
-    # mal Fläche ergibt Volumenunsicherheit. Das Band folgt Float64, nicht
-    # einer Drucktoleranz, EPS_GEOM oder einer absoluten Volumenschranke.
-    relative_error = 8.0 * np.finfo(np.float64).eps
-    roundoff = (
-        relative_error
-        / (1.0 - relative_error)
-        * max(abs(value) for value in bounds)
-        * body.surface_area()
-    )
-    return math.isfinite(roundoff) and abs(volume) <= roundoff
+def _kernel(
+    kind: BooleanKind,
+    bodies: list[trimesh.Trimesh],
+    like: MeshData,
+    cancelled: CancelToken | None = None,
+) -> MeshData | None:
+    """Rechnet in Float64 und verwirft belegte Kontaktreste auch neben echten Volumenkörpern.
 
-
-def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) -> MeshData | None:
-    """Rechnet in Float64 und verwirft belegte Kontaktreste auch neben echten Volumenkörpern."""
-    import manifold3d
-
+    Die Rechnung selbst ist ``kernel_jobs.boolean`` — an großen Körpern im
+    Hilfsprozess (``kernel_process``): Aufbau und Verknüpfung halten den
+    Interpreter sonst an, am Spiderman (885 570 Dreiecke) 636 ms für den
+    Aufbau und 225 ms für eine Bohrung (``gil_kern.py``, 27.09.2026).
+    Kontaktreste innerhalb der Float64-Rechengrenze entscheidet
+    ``kernel_jobs.native_contact``.
+    """
     if not all(
         body.is_watertight and body.is_winding_consistent and signed_volume(body) > 0.0
         for body in bodies
     ):
         raise ValueError("Not all meshes are positive closed volumes")
-    manifolds = [
-        manifold3d.Manifold(
-            manifold3d.Mesh64(
-                # Die native Schnittstelle braucht schreibbare C-Puffer;
-                # ein vorheriges Mesh64-Ergebnis kann schreibgeschützt sein.
-                np.require(body.vertices, dtype=np.float64, requirements=("C", "W")),
-                np.require(body.faces, dtype=np.uint64, requirements=("C", "W")),
-            )
-        )
-        for body in bodies
-    ]
-    if any(body.status() != manifold3d.Error.NoError for body in manifolds):
-        raise ValueError("Manifold could not take over an input mesh")
-    operation = {
-        "union": manifold3d.OpType.Add,
-        "difference": manifold3d.OpType.Subtract,
-        "intersection": manifold3d.OpType.Intersect,
-    }[kind]
-    result = manifold3d.Manifold.batch_boolean(manifolds, operation)
-    if result.status() != manifold3d.Error.NoError:
+    arrays: dict[str, np.ndarray] = {}
+    for index, body in enumerate(bodies):
+        arrays[f"vertices{index}"] = np.asarray(body.vertices)
+        arrays[f"faces{index}"] = np.asarray(body.faces)
+    arrays_out, reported = kernel_process.run(
+        "boolean",
+        arrays,
+        {"bodies": len(bodies), "kind": kind},
+        weight=sum(len(body.faces) for body in bodies),
+        cancelled=cancelled,
+    )
+    if reported["outcome"] == "failed":
         return None
-    volume = result.volume()
-    if _native_contact(result, volume):
+    if reported["outcome"] == "empty":
         return like.replacing(trimesh.Trimesh())
-    if not math.isfinite(volume) or volume < 0.0:
-        return None
-    parts = result.decompose()
-    kept = [part for part in parts if not _native_contact(part, part.volume())]
-    if not kept:
-        return like.replacing(trimesh.Trimesh())
-    if len(kept) == len(parts):
-        kept = [result]
-    vertices: list[np.ndarray] = []
-    faces: list[np.ndarray] = []
-    vertex_offset = 0
-    for part in kept:
-        built = part.to_mesh64()
-        vertices.append(
-            np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True)
-        )
-        faces.append(np.asarray(built.tri_verts, dtype=np.int64) + vertex_offset)
-        vertex_offset += len(vertices[-1])
     # Die Schalen bleiben orientiert nebeneinander: Eine native Vereinigung
     # würde negative Innenschalen als eigenständige Körper behandeln und füllen.
     built = trimesh.Trimesh(
         # Die Ausgabe besitzt ihre Puffer: Nachfolgende Netzoperationen
         # dürfen nicht am schreibgeschützten Speicher des Kerns hängen.
-        vertices=np.concatenate(vertices) if len(vertices) > 1 else vertices[0],
-        faces=np.concatenate(faces) if len(faces) > 1 else faces[0],
+        vertices=arrays_out["vertices"],
+        faces=arrays_out["faces"],
         process=False,
     )
     return like.replacing(_tidied(built))
@@ -848,7 +819,7 @@ def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
     if mesh.triangle_count == 0:
         return allow_empty
     # Ein positives Volumen hat keine Mindestgröße aus einer Längentoleranz.
-    # Kontaktreste entfernt bereits ``_native_contact`` anhand der nativen
+    # Kontaktreste entfernt bereits ``kernel_jobs.native_contact`` anhand der nativen
     # Rechengrenze; ein echter kleiner Schnitt muss als Messwert erhalten
     # bleiben. Ob er für eine Passung oder Restwand zählt, prüft der Aufrufer.
     return bool(mesh.raw.is_watertight) and signed_volume(mesh.raw) > 0.0

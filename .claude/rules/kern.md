@@ -128,6 +128,43 @@ Die Regel gilt der Bibliothek, nicht dem Verzeichnis, in dem sie auffiel. In
   `test_recognition_selects_triangles_and_corners_through_plain_arrays` hält
   `perceive` frei davon.
 
+## Ein Kernaufruf an einem ganzen Körper rechnet im Hilfsprozess
+
+`manifold3d` hält den GIL in jedem Aufruf (Aufbau aus `Mesh64`, `simplify`,
+`refine_to_length`, Boolesche, `decompose`, `to_mesh64`); ein Arbeiterfaden, der
+ihn ruft, hält das Fenster an (RM-212).
+
+- **Jeder `manifold3d`-Aufruf an einem Körper, der groß sein kann, ist eine
+  Rechnung in `geom/kernel_jobs.py` und läuft über `kernel_process.run`** —
+  ebenso jede andere Bibliothek, die an ganzen Körpern den GIL hält
+  (`scipy.sparse.csgraph` in `mesh.face_components`) —
+  unter `OFFLOAD_ABOVE` Dreiecken und im Hauptfaden hier, sonst im
+  Hilfsprozess. Eine neue Rechnung steht in `JOBS` und bekommt ihren Fall in
+  `tests/test_kernel_process.py` (Bitgleichheit).
+- **Eine Rechnung kennt nur Felder und Zahlen**: kein Import aus dem Kern,
+  Grenzen als Zahl vom Aufrufer (sonst gilt ein Umstellen im Test nicht im
+  Hilfsprozess), eigene zusammenhängende Ausgabefelder, nie ein Körper des
+  Kerns. Verschweißen, Slots und Befunde bleiben beim Aufrufer.
+- **Eine Rechnung ruft kein BLAS** (kein `@`, `dot`, `einsum`, `linalg` außer
+  einer Norm entlang einer Achse): Der Hilfsprozess startet mit einem
+  BLAS-Faden (`HELPER_ENVIRONMENT`, spart je Bibliothek einen Puffer je
+  Rechenkern), und über BLAS hinge das Ergebnis an der Fadenzahl.
+  `test_the_jobs_call_no_blas` hält es.
+- **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
+  Verfeinerung die erwartete des Ergebnisses.
+- **Der Abbruch reicht als Token hinein** und beendet den Hilfsprozess; wer um
+  einen Aufruf breit fängt (`except Exception`), lässt `OperationCancelled`
+  durch. Ein toter Hilfsprozess ist `KernelHelperLostError` (Regel 17), ein
+  stummer ein Rückfall in den Prozess.
+- **Millionen Werte werden stückweise zu Python-Zahlen**
+  (`geom.mesh.python_values`), nie in einem `tolist`, `tuple`, `sorted` oder
+  `repr` am Stück — jeder davon ist ein C-Aufruf unter dem GIL, und nach
+  *Kanten verfeinern* trägt eine Fläche Millionen Dreiecksnummern. Zahlenreihen
+  in einen Hash gehen als `array("q", …)`, nicht als Text.
+- **Ein Hauptmodul, das den Kern nebenläufig ruft, rechnet nur unter
+  `__main__`** — der Hilfsprozess lädt es noch einmal (`spawn`); im Paket ruft
+  `app/ui/app.py` zuerst `freeze_support()`.
+
 ## Eine neue gemerkte Frage wird geteilt oder gebunden — ausdrücklich
 
 Eine Kopie für einen Nebenfaden (`copy_with_answers`) liest vom Original nur
