@@ -1383,6 +1383,8 @@ def test_outline_import_waits_for_the_shown_contours(
     path = tmp_path / "contours.svg"
     path.write_bytes(SOURCE)
     window.open_path(path)
+    # Gelesen und geplant wird im Arbeiter (RM-224); die Konturwahl öffnet danach.
+    assert window.session.wait_for_idle()
     dialog = window.findChild(OutlineDialog)
     assert dialog is not None
     assert not window.session.history.operations
@@ -13896,7 +13898,11 @@ def test_a_resize_before_the_toolbar_exists_does_not_end_the_start(qt_app: QAppl
     try:
         early.resizeEvent(QResizeEvent(QSize(800, 600), QSize(640, 480)))
     finally:
+        # Gleich löschen, nicht erst im Abbau der Suite: Der fragt jedes
+        # Hauptfenster nach ``release``, und ein halb gebautes hat nichts zum
+        # Loslassen — es endete dort mit ``AttributeError`` (``_ask_dialog``).
         early.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_the_window_title_names_the_model_once_it_is_read(window: MainWindow) -> None:
@@ -18848,9 +18854,12 @@ def test_an_edge_question_shows_the_edge_line_in_the_dialog_and_emphasises_by_to
     )
 
     class Answer(module.AskDialog):
-        def __init__(self, question, choices, parent=None, *, labels=None):
+        # ``**rest`` nimmt ``as_buttons`` mit (seit ``c2ebc0fe0``) und jedes
+        # weitere Schlüsselwort: Ohne es endete ``_on_ask`` am Ersatzdialog mit
+        # einem ``TypeError`` statt mit der Frage.
+        def __init__(self, question, choices, parent=None, *, labels=None, **rest):
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels)
+            super().__init__(question, choices, parent, labels=labels, **rest)
 
         def exec(self):
             shown.append(("dialog", None))
@@ -18906,9 +18915,12 @@ def test_a_feature_question_names_its_candidates_like_the_tree(
     monkeypatch.setattr(window.viewport, "show_candidates", lambda *args: None)
 
     class Answer(module.AskDialog):
-        def __init__(self, question, choices, parent=None, *, labels=None):
+        # ``**rest`` nimmt ``as_buttons`` mit (seit ``c2ebc0fe0``) und jedes
+        # weitere Schlüsselwort: Ohne es endete ``_on_ask`` am Ersatzdialog mit
+        # einem ``TypeError`` statt mit der Frage.
+        def __init__(self, question, choices, parent=None, *, labels=None, **rest):
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels)
+            super().__init__(question, choices, parent, labels=labels, **rest)
 
         def exec(self):
             self.list.setCurrentRow(0)
