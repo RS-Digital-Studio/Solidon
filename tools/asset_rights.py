@@ -31,6 +31,13 @@ APPLICATION_NON_MEDIA_PATHS: Final = {
     "app/examples/CLAUDE.md",
     "app/examples/LICENSE",
 }
+#: Der Stempel der Bildanleitungen, je Sprache neben ihren Bildern
+#: (``app/images/manual/<sprache>/guides.json``, ``tools/make_guides.py``): Er
+#: sagt, für welchen Stand die Bilder entstanden sind — kein Medium, und die
+#: Anwendung liest ihn nicht. Am Ort erkannt statt als feste Pfadliste, damit
+#: eine neue Sprache keinen Eintrag hier braucht. Mit 0.5.1 lag er zum ersten
+#: Mal im Baum, und der Paketbau hielt am „unbekannten Dateiformat“ an.
+GUIDE_STAMP: Final = "guides.json"
 WEBSITE_NON_MEDIA_SUFFIXES: Final = {
     "",
     ".css",
@@ -128,6 +135,14 @@ ART_SUFFIXES: Final = {
     # Website-Loops von 0.5.0 WebP — ein Zehntel der Bytes von PNG.
     "video": {".mp4", ".png", ".webm", ".webp"},
 }
+
+
+def _application_non_media(relative: str) -> bool:
+    """Eine Datei im Anwendungs-Lieferbaum, die kein Medium ist und keines sein muss."""
+    if relative in APPLICATION_NON_MEDIA_PATHS:
+        return True
+    parts = relative.split("/")
+    return len(parts) == 5 and parts[:3] == ["app", "images", "manual"] and parts[4] == GUIDE_STAMP
 
 
 def _fail(path: Path, detail: str) -> RuntimeError:
@@ -517,7 +532,7 @@ def _application_media(root: Path, manifest: Path) -> set[str]:
                 raise _fail(manifest, f"Anwendungsdatei verlässt den Quellbaum: {relative}.")
             if path.suffix.lower() in DELIVERED_SUFFIXES:
                 result.add(relative)
-            elif relative not in APPLICATION_NON_MEDIA_PATHS:
+            elif not _application_non_media(relative):
                 raise _fail(
                     manifest,
                     f"unbekanntes Dateiformat im Anwendungs-Lieferbaum: {relative}.",
@@ -776,7 +791,7 @@ def _artifact_media(artifact: Path, manifest: Path) -> dict[str, Path]:
             continue
         suffix = path.suffix.lower()
         if suffix not in DELIVERED_SUFFIXES:
-            if source_path not in APPLICATION_NON_MEDIA_PATHS:
+            if not _application_non_media(source_path):
                 raise _fail(
                     manifest,
                     f"unbekanntes Dateiformat im fertigen Kundenartefakt: {relative}.",

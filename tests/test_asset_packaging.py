@@ -425,6 +425,42 @@ def test_a_web_only_record_cannot_clear_application_media(tmp_path: Path) -> Non
         _require("win32", manifest, tmp_path)
 
 
+def test_only_the_guide_stamp_passes_as_non_media_in_the_source_tree(tmp_path: Path) -> None:
+    """Der Stempel der Bildanleitungen reist mit; jede andere fremde Datei hält den Bau an."""
+    stamp = "app/images/manual/de/guides.json"
+    manifest = _manifest(
+        tmp_path,
+        [_asset("app/examples/frei.svg")],
+        media=("app/examples/frei.svg", stamp),
+    )
+
+    _require("win32", manifest, tmp_path)
+    for stray in ("app/images/manual/de/notiz.json", "app/images/guides.json"):
+        (tmp_path / stray).write_bytes(b"{}")
+        with pytest.raises(RuntimeError, match=f"unbekanntes Dateiformat.*{stray}"):
+            _require("win32", manifest, tmp_path)
+        (tmp_path / stray).unlink()
+
+
+def test_only_the_guide_stamp_passes_as_non_media_in_the_artifact(tmp_path: Path) -> None:
+    """Im fertigen Paket gilt dieselbe Ausnahme, und nur sie."""
+    root, manifest, spec, checker, artifact = _built_artifact(tmp_path, "linux")
+    (artifact / "_internal/app/images/manual/de").mkdir(parents=True)
+    (artifact / "_internal/app/images/manual/de/guides.json").write_bytes(b"{}")
+    asset_rights.write_customer_artifact_receipt(
+        artifact, "linux", manifest=manifest, root=root, checker=checker, spec=spec
+    )
+    asset_rights.require_customer_artifact_cleared(
+        artifact, "linux", manifest=manifest, root=root, checker=checker, spec=spec
+    )
+
+    (artifact / "_internal/app/images/manual/de/notiz.json").write_bytes(b"{}")
+    with pytest.raises(RuntimeError, match=r"unbekanntes Dateiformat im fertigen Kundenartefakt"):
+        asset_rights.require_customer_artifact_cleared(
+            artifact, "linux", manifest=manifest, root=root, checker=checker, spec=spec
+        )
+
+
 def test_unknown_local_media_format_stops_the_upload_gate(tmp_path: Path) -> None:
     """Neue Medienendungen müssen bewusst klassifiziert statt übersehen werden."""
     manifest = _manifest(
