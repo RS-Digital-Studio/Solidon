@@ -211,6 +211,10 @@ GROUPS = print_settings.GROUPS
 #: Farbknopf etwa nennt in seinem Tooltip den Hexwert, den sonst nichts zeigt.
 _OWN_TIP: Final = "solidonOwnTip"
 
+#: Wie weit der Dialog beim Wachsen vom Rand der nutzbaren Bildschirmfläche
+#: bleibt, in Punkten — Platz für Rahmen und Titelleiste des Fensters.
+SCREEN_MARGIN: Final = 48
+
 #: Die Kennung des Eintrags „Eigener Prozess" im Stufenfeld — keine Stufe,
 #: sondern der Zustand, dass der gewählte Prozess zu keiner gehört
 #: (:meth:`PrintSettingsDialog._show_own_process`).
@@ -3698,7 +3702,7 @@ class PrintSettingsDialog(QDialog):
         wanted = self.height() + tallest + frame + 12
         screen = self.screen()
         if screen is not None:
-            wanted = min(wanted, screen.availableGeometry().height() - 48)
+            wanted = min(wanted, screen.availableGeometry().height() - SCREEN_MARGIN)
         self.resize(max(self._room_for_tabs(), self.width()), max(wanted, self.height()))
 
     def _room_for_tabs(self) -> int:
@@ -3716,7 +3720,7 @@ class PrintSettingsDialog(QDialog):
         room = self.tabs.tabBar().sizeHint().width() + 2 * ROOMY
         screen = self.screen()
         if screen is not None:
-            room = min(room, screen.availableGeometry().width() - 48)
+            room = min(room, screen.availableGeometry().width() - SCREEN_MARGIN)
         return room
 
     def _build_slicer(self) -> QWidget:
@@ -4017,7 +4021,7 @@ class PrintSettingsDialog(QDialog):
         wanted = self.sizeHint().height()
         screen = self.screen()
         if screen is not None:
-            wanted = min(wanted, screen.availableGeometry().height() - 48)
+            wanted = min(wanted, screen.availableGeometry().height() - SCREEN_MARGIN)
         self.resize(self.width(), max(self.height(), wanted))
 
     def _forget_result(self) -> None:
