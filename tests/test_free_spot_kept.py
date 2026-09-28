@@ -38,12 +38,17 @@ def _evaluated(project: Project, profile: Profile) -> Any:
     return result
 
 
-def _import(project: Project, history: History, name: str, payload: bytes) -> str:
-    """Eine Datei über den Einlesplan, wie Fenster und Kommandozeile sie einfügen."""
+def _offered(project: Project, name: str, payload: bytes) -> Any:
+    """Die Datei als Quelle im Projekt und ihr Einlesplan, noch nicht im Verlauf."""
     key = f"src_{len(project.document.sources) + 1}"
     project.document.sources[key] = Source(id=key, kind="import", path=f"sources/{name}", sha256="")
     project.sources[key] = payload
-    chosen = import_plan(key, name, payload, "mm", first_model=not project.document.ops)
+    return import_plan(key, name, payload, "mm", first_model=not project.document.ops)
+
+
+def _import(project: Project, history: History, name: str, payload: bytes) -> str:
+    """Eine Datei über den Einlesplan, wie Fenster und Kommandozeile sie einfügen."""
+    chosen = _offered(project, name, payload)
     history.apply(chosen.title, [chosen.draft])
     return project.document.ops[-1].outputs[0]
 
@@ -196,24 +201,72 @@ def test_the_spot_stands_in_the_step_and_its_key_reads_the_scene_no_longer(
     assert not reads_scene(spec.params, step.params), "danach liest er nicht mehr"
 
 
+def _box(x: float, y: float, z: float) -> bytes:
+    return bytes(trimesh.creation.box(extents=(x, y, z)).export(file_type="stl"))
+
+
 def test_a_model_without_room_says_so_and_offers_to_arrange(profile: Profile) -> None:
-    """F10: Wo keine Platte Platz hat, steht nicht „an die erste freie Stelle“,
-    sondern ein eigener Satz mit dem Weg *Auf dem Bett anordnen*."""
+    """F10, N6: Sind alle zwölf Platten voll, steht nicht „an die erste freie
+    Stelle“, sondern ein eigener Satz mit dem Weg *Auf dem Bett anordnen* —
+    der verteilt neu, und der Würfel passt auf jedes leere Bett."""
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
-    _import(project, history, "a.stl", CUBE)
-    huge = trimesh.creation.box(extents=(300.0, 300.0, 10.0))
-    _import(project, history, "gross.stl", bytes(huge.export(file_type="stl")))
+    for number in range(12):
+        _import(project, history, f"p{number}.stl", _box(240.0, 240.0, 5.0))
+    cube = _import(project, history, "w.stl", CUBE)
+
+    result = _evaluated(project, profile)
+
+    assert result.scene.objects[cube].plate == 11, "neben der letzten erlaubten Platte"
+    step = project.document.ops[-1].id
+    said = [entry for entry in result.scene.report.findings if entry.op_id == step]
+    codes = {entry.code for entry in said}
+    assert "arrange.no_free_spot" in codes
+    assert "arrange.free_spot" not in codes
+    refusal = next(entry for entry in said if entry.code == "arrange.no_free_spot")
+    assert [action.id for action in refusal.suggestions] == ["arrange_on_bed"]
+
+
+@pytest.mark.parametrize(
+    ("name", "size"),
+    [("breit", (300.0, 300.0, 10.0)), ("hoch", (20.0, 20.0, 300.0))],
+)
+def test_an_oversized_model_is_told_by_the_build_volume_check(
+    profile: Profile, name: str, size: tuple[float, float, float]
+) -> None:
+    """N6: Zu breit oder zu hoch für jedes Bett ist kein Platzmangel.
+
+    *Auf dem Bett anordnen* macht ein 300er Teil nicht passend, und „steht
+    über die Druckfläche hinaus“ ist für ein zu hohes Teil falsch. Das sagt
+    die Bauraumprüfung mit ihren eigenen Auswegen, und nur sie.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    _import(project, history, "w.stl", CUBE)
+    _import(project, history, f"{name}.stl", _box(*size))
 
     result = _evaluated(project, profile)
 
     codes = {entry.code for entry in result.scene.report.findings}
-    assert "arrange.no_free_spot" in codes
-    assert "arrange.free_spot" not in codes
-    refusal = next(
-        entry for entry in result.scene.report.findings if entry.code == "arrange.no_free_spot"
-    )
-    assert [action.id for action in refusal.suggestions] == ["arrange_on_bed"]
+    assert "arrange.no_free_spot" not in codes
+    assert "arrange.out_of_build_volume" in codes
+
+
+def test_a_model_longer_than_its_old_field_keeps_its_spot(profile: Profile) -> None:
+    """N3: Ein weiteres Modell von 2,5 m bekam eine Stelle jenseits von
+    ±1000 mm; festgehalten wies das eigene Feld sie ab, und die Kette hielt
+    am Ladeschritt an. Zweimal ausgewertet steht es beide Male gleich."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    _import(project, history, "w.stl", CUBE)
+    long = _import(project, history, "lang.stl", _box(2500.0, 100.0, 10.0))
+
+    first = _evaluated(project, profile).scene.objects[long]
+    assert project.document.ops[-1].params.get("spot_x") is not None
+    second = _evaluated(project, profile).scene.objects[long]
+
+    assert tuple(second.mesh.bounds.minimum) == pytest.approx(tuple(first.mesh.bounds.minimum))
+    assert second.plate == first.plate
 
 
 def test_a_model_that_did_not_move_gets_no_finding(profile: Profile) -> None:
@@ -394,3 +447,40 @@ def test_a_file_standing_on_its_second_plate_lands_where_its_spot_was_found(
     assert result.scene.objects[part].plate == step.params["spot_plate"] - 1
     assert result.scene.objects[part].plate == 0, "neben dem Würfel war Platz"
     assert not _overlapping(result)
+
+
+# --- An der Einfügemarke --------------------------------------------------------
+
+
+def test_a_model_inserted_before_a_kept_one_searches_its_spot_at_the_end(
+    profile: Profile,
+) -> None:
+    """p18 (N4): Ein Modell an der Einfügemarke vor einem festgehaltenen.
+
+    Vor dem Ladeschritt des Blocks eingefügt, sah der zweite Block nur die
+    Szene vor der Marke. Der erste, dessen Stelle schon feststand, stand dort
+    noch nicht, und beide lagen deckungsgleich. Gesucht wird jetzt am
+    Endstand, und die Stelle steht gleich im Entwurf.
+    """
+    from app.core.scene.revision import searched_at_the_end
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    _import(project, history, "a.stl", CUBE)
+    _import(project, history, "b.stl", BLOCK)
+    _evaluated(project, profile)
+    marker = project.document.ops[1].id
+
+    chosen = _offered(project, "c.stl", BLOCK)
+    drafts = searched_at_the_end(
+        project.document,
+        chosen.title,
+        [chosen.draft],
+        evaluate=lambda document: evaluate(document, profile, sources=ProjectSources(project)),
+    )
+    assert drafts[0].params.get("spot_x") is not None, "die Stelle steht im Entwurf"
+    history.commit(history.plan_insert(marker, chosen.title, drafts))
+    result = _evaluated(project, profile)
+
+    assert len(result.scene.objects) == 3
+    assert not _overlapping(result), "der eingefügte Block liegt nicht auf dem festgehaltenen"

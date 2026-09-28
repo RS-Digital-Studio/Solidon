@@ -31,7 +31,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `gathered.py` | Große Sammelwerte wandern aus dem Stapel in den Container (§12) |
 | `foreign.py` | Was eine fremde Projektdatei außer Geometrie mitbringt (§32) |
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan` |
-| `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit` |
+| `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
 | `evaluate.py` | Die Auswertung (§15.1) |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
