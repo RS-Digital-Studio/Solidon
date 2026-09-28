@@ -19,6 +19,7 @@ einem modalen Meldungsfenster.
 
 from __future__ import annotations
 
+import re
 from html import escape, unescape
 from pathlib import Path
 
@@ -800,6 +801,138 @@ def test_a_translation_keeps_every_link_of_its_page(language: str) -> None:
 
     differing = [key for key in source if translated.get(key) != source[key]]
     assert not differing, f"{language}: andere Verweise als im Deutschen auf {differing}"
+
+
+#: Ein Weg im Text einer Seite: *Datei → Exportieren*, **Hilfe → Über Solidon**.
+#: Ein Weg ist ausgezeichnet wie jedes Bedienelement; ein Pfeil außerhalb einer
+#: Auszeichnung ist einer, den der Abgleich nicht sähe, und zählt selbst als Fund.
+MENU_WAY = re.compile(r"\*{1,2}([^*\n]*→[^*\n]*)\*{1,2}")
+
+
+def _plain(text: str) -> str:
+    """Ein Menütext, wie ihn ein Satz schreibt: ohne Auslassung und Satzpunkt."""
+    return text.replace("…", "").strip(" .:")
+
+
+def _ways_of_the_written_pages() -> dict[str, tuple[list[list[str]], int]]:
+    """Je geschriebene Seite ihre Wege, Glied für Glied, und die Zahl ihrer Pfeile.
+
+    In der eingestellten Sprache. Die Bildanleitungen stehen nicht dabei:
+    Ihre Wege prüft ``test_guides`` an den Markierungen der Schritte.
+    """
+    from app.core import guides
+
+    taught = {guide.key for guide in guides.GUIDES}
+    found: dict[str, tuple[list[list[str]], int]] = {}
+    for page in manual.pages():
+        if page.generated or page.key in taught:
+            continue
+        text = page.text()
+        ways = [[_plain(part) for part in way.split("→")] for way in MENU_WAY.findall(text)]
+        found[page.key] = (ways, text.count("→"))
+    return found
+
+
+def _menus_of_the_bar() -> set[str]:
+    """Die Menüs der Leiste, in der eingestellten Sprache.
+
+    Die festen vier baut das Hauptfenster mit ``self._menu(tr(…))``; gelesen
+    wird der Quelltext, denn ein Fenster zu bauen ist ein Fenstertest und läuft
+    nur beim Release. Dazu die Gruppen des Registers, die es in die Leiste
+    schaffen. Was darunter steht, weiß erst das gebaute Fenster:
+    ``test_wording.test_every_menu_path_in_the_texts_exists_in_the_menu_bar``.
+    """
+    import ast
+
+    from app.core.registry.registry import group_title
+    from app.core.registry.surfaces import in_the_menu_bar
+
+    source = Path(__file__).parent.parent / "app" / "ui" / "main_window.py"
+    fixed = [
+        node.args[0].args[0].value
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "_menu"
+        and node.args
+        and isinstance(node.args[0], ast.Call)
+        and isinstance(node.args[0].func, ast.Name)
+        and node.args[0].func.id == "tr"
+        and isinstance(node.args[0].args[0], ast.Constant)
+    ]
+    assert len(fixed) >= 4, f"nur {fixed} als Menü gefunden — das Muster greift nicht mehr"
+    grouped = {
+        _plain(group_title(category)) for category in CATEGORIES if in_the_menu_bar(category)
+    }
+    return {_plain(tr(title)) for title in fixed} | grouped
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_a_way_in_a_written_page_is_the_one_the_interface_shows(language: str) -> None:
+    """Jeder Weg *A → B* einer geschriebenen Seite besteht aus Texten der Oberfläche.
+
+    Konzept Handbuch §6, HB-11. Ein umbenannter Menüeintrag machte das Handbuch
+    bisher still falsch, und in fünf Sprachen merkte es niemand: Die Prüfung
+    am gebauten Fenster läuft nur beim Release und nur auf Deutsch.
+
+    Geprüft wird je Sprache, dass der Weg an einem Menü der Leiste beginnt,
+    dass jedes Glied ein Text der Oberfläche ist und dass die Übersetzung
+    Glied für Glied so heißt, wie der Katalog Menü und Eintrag übersetzt — und
+    endet der Weg auf einer Operation, dass er ihr Menüweg ist
+    (``registry.surfaces.menu_path``). Ob ein Eintrag, der keine Operation
+    ist, unter genau diesem Menü steht, weiß nur das Fenster; das prüft
+    ``test_wording`` beim Release am Deutschen, dem jede Übersetzung hier
+    Glied für Glied folgen muss.
+    """
+    from app.core.registry.surfaces import menu_path
+    from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    reference = next(other for other in available_languages() if other != SOURCE_LANGUAGE)
+    known = set(read_catalog(reference))
+    catalog = {key: key for key in known} if language == SOURCE_LANGUAGE else read_catalog(language)
+    said: dict[str, set[str]] = {}
+    for key, value in catalog.items():
+        said.setdefault(_plain(key), set()).add(_plain(value))
+
+    source = _ways_of_the_written_pages()
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        translated = _ways_of_the_written_pages()
+        bar = _menus_of_the_bar()
+        operations = {_plain(str(spec.title)): spec for spec in REGISTRY.all()}
+        findings: list[str] = []
+        for key, (ways, arrows) in translated.items():
+            if arrows != sum(len(way) - 1 for way in ways):
+                findings.append(f"{key}: ein Pfeil steht außerhalb eines ausgezeichneten Wegs")
+            german = source[key][0]
+            if len(ways) != len(german):
+                findings.append(f"{key}: {len(ways)} Wege statt {len(german)} wie im Deutschen")
+                continue
+            for meant, way in zip(german, ways, strict=True):
+                shown = " → ".join(way)
+                unknown = [part for part in meant if part not in said]
+                if unknown:
+                    findings.append(f"{key}: {unknown} ist kein Text der Oberfläche")
+                    continue
+                if way[0] not in bar:
+                    findings.append(f"{key}: *{shown}* beginnt an keinem Menü der Leiste")
+                if len(way) != len(meant) or any(
+                    part not in said[original] for original, part in zip(meant, way, strict=False)
+                ):
+                    findings.append(f"{key}: *{shown}* heißt nicht wie *{' → '.join(meant)}*")
+                    continue
+                operation = operations.get(way[-1])
+                where = menu_path(operation) if operation is not None else ""
+                if where and shown != " → ".join(_plain(part) for part in where.split("→")):
+                    findings.append(f"{key}: *{shown}* ist nicht der Menüweg {where!r}")
+    finally:
+        set_language("de")
+
+    ways_seen = sum(len(ways) for ways, _arrows in translated.values())
+    assert ways_seen >= 10, f"nur {ways_seen} Wege gefunden — das Muster greift nicht mehr"
+    assert not findings, f"{language}:\n" + "\n".join(findings)
 
 
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
