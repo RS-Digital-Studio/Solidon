@@ -141,15 +141,19 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Aufgaben*, mit Kapitelmarken. Er läuft beim Release nach `make_guides.py`
   (`/erzeugen`); die Filme liegen unter `marketing/` und werden von Hand
   hochgeladen.
-- **Durchsicht von Strang B:** Die Release-Sitzung hat B gelesen (Teil 1 die
-  deutschen Seiten, Teil 2 die Übersetzungen mit 42 Befunden,
-  `F:\3D Druck.review-051\reports\strang-b-uebersetzung.md`). Der Agent von B
-  behebt sie auf `handbuch-texte`; danach gibt die Release-Sitzung B frei.
-- **Als Nächstes:** B nach der Behebung und C zusammenführen (Kataloge
-  schlüsselweise), danach `python -m app.i18n.extract`.
-  `tools/make_manual.py` Zeile ~722/~728 (Texte „von den ersten fünfzehn
-  Minuten“) auf „Wo fange ich an?“ nachziehen, Tor, Meldung „Handbuch
-  fertig“.
+- **B und C zusammengeführt,** beide nach der Durchsicht der
+  Release-Sitzung (`F:\3D Druck.review-051\reports\strang-b-uebersetzung.md`
+  mit 42 Befunden, vor dem Merge behoben), die Kataloge schlüsselweise. Ohne
+  Kopf- und Fußzeile bleibt im PDF jede Seite vor dem ersten Kapitelziel,
+  nicht eine feste Zahl von Seiten: Das Verzeichnis wächst mit den
+  Anleitungen und je Sprache. Beschreibung und Vorspann der Handbuchseite,
+  Start- und Funktionsseiten der Website und der Changelog 0.5.1 sprechen
+  vom neuen Anfang und den fünfzehn Anleitungen.
+- **Als Nächstes:** Die Release-Sitzung bringt texte-051 und ihr
+  Oberflächenpaket nach `main` und sagt Bescheid. Dann `main` hereinholen,
+  die geänderten Namen im Handbuch nachziehen
+  (`F:\3D Druck.review-051\reports\texte-schluss.md`, „Für das Handbuch“),
+  die Bilder neu aufnehmen, die sie nennt, Tor, Meldung „Handbuch fertig“.
 
 ## §1 Befund
 
