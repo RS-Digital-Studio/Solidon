@@ -3095,6 +3095,23 @@ def test_the_selection_window_starts_closed_and_opens_on_a_selection(
     assert not window.feature_dock.isHidden(), "und beim Merkmal darin bleibt es"
 
 
+def _close_the_feature_window(window: MainWindow) -> None:
+    """Das Merkmalfenster zumachen wie mit seinem Kreuz — am gezeigten Hauptfenster.
+
+    Das Merkmalfenster ist seit ``9d8d33395`` ein natives Fenster, weil es über
+    der Grafikfläche liegt (``overlay.hold_above_the_view``). Solange das
+    Hauptfenster nie gezeigt wurde, ist sein ``QWindow`` oberste Ebene, und
+    ``close()`` geht an ihm vorbei — kein Schließereignis, kein Verbergen, das
+    Fenster bleibt offen. Im Betrieb steht das Hauptfenster; also hier auch.
+    """
+    window.show()
+    QApplication.processEvents()
+    handle = window.feature_dock.windowHandle()
+    assert handle is None or not handle.isTopLevel(), "das Merkmalfenster hängt im Hauptfenster"
+    window.feature_dock.close()
+    QApplication.processEvents()
+
+
 def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWindow) -> None:
     """Wer es zumacht, hat für **diese** Auswahl entschieden.
 
@@ -3122,8 +3139,7 @@ def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWin
     QApplication.processEvents()
     assert not window.feature_dock.isHidden()
 
-    window.feature_dock.close()
-    QApplication.processEvents()
+    _close_the_feature_window(window)
     assert window.feature_dock.dismissed, "das Zumachen ist gemerkt"
 
     # Dasselbe Merkmal noch einmal ist keine neue Auswahl — hier gilt die
@@ -3156,8 +3172,7 @@ def test_reopening_the_feature_window_takes_the_decision_back(window: MainWindow
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
-    window.feature_dock.close()
-    QApplication.processEvents()
+    _close_the_feature_window(window)
     assert window.feature_dock.dismissed
 
     window.feature_dock.toggleViewAction().trigger()
@@ -3723,8 +3738,7 @@ def test_closing_the_feature_window_takes_its_preview_along(window: MainWindow) 
     """
     _a_drawn_preview(window)
 
-    window.feature_dock.close()
-    QApplication.processEvents()
+    _close_the_feature_window(window)
 
     assert window.viewport.difference is None, "der Differenzkörper geht mit"
     assert not window.viewport._comparing, "und der anwendungsweite Filter auch"
