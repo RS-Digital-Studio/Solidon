@@ -793,15 +793,15 @@ def page_html(language: str, prefix: str) -> str:
     title = f"{site_text('Handbuch: 3D-Modelle für den Druck vorbereiten', language)} — {APP_NAME}"
     pages = len(manual.pages())
     description = site_text(
-        "Das Handbuch zu Solidon3D: {pages} Kapitel von den ersten fünfzehn Minuten "
-        "bis zu jeder Operation mit ihren Werten und Bereichen. Die Referenzhälfte "
-        "kommt aus demselben Register wie die Menüs.",
+        "Das Handbuch zu Solidon3D: {pages} Kapitel von „Wo fange ich an?“ über "
+        "Anleitungen in Bildern bis zu jeder Operation mit ihren Werten und "
+        "Bereichen. Die Referenzhälfte kommt aus demselben Register wie die Menüs.",
         language,
     ).format(pages=pages)
     lede = site_text(
-        "{pages} Kapitel — von den ersten fünfzehn Minuten bis zur Referenz "
-        "jeder Operation, erzeugt aus derselben Quelle wie das Handbuch in der "
-        "Anwendung.",
+        "{pages} Kapitel — von „Wo fange ich an?“ über Anleitungen in Bildern bis "
+        "zur Referenz jeder Operation, erzeugt aus derselben Quelle wie das "
+        "Handbuch in der Anwendung.",
         language,
     ).format(pages=pages)
     canonical = f"{SITE}{page_for(language)[0]}"
