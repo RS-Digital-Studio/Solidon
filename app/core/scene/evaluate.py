@@ -716,6 +716,7 @@ def _evaluate(
                 quality,
                 implementation_version=spec.cache_version,
                 material_profiles=material_profiles,
+                process=spec.reads_process,
             )
         except AppError as error:
             findings.append(_finding_from(error, operation))
@@ -4632,6 +4633,7 @@ def _key_after_answers(
         quality,
         implementation_version=spec.cache_version,
         material_profiles=material_profiles,
+        process=spec.reads_process,
     )
 
 
