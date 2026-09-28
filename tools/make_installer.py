@@ -172,8 +172,15 @@ def stale_reason() -> str:
     nichts daran fiele auf, bis ein Kunde es installiert.
     """
     built = (SOURCE_DIR / f"{APP_NAME}.exe").stat().st_mtime
+    # Bytecode ist kein Quelltext: Jeder spätere Schritt, der ``app`` importiert
+    # (im Paketjob der Rauchtest ``tools/check_frozen_helper.py``), legt
+    # ``__pycache__`` neu an, und der fertige Bau galt sonst als älter als app/.
     newest = max(
-        (path.stat().st_mtime for path in (ROOT / "app").rglob("*") if path.is_file()),
+        (
+            path.stat().st_mtime
+            for path in (ROOT / "app").rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        ),
         default=0.0,
     )
     if newest > built:
