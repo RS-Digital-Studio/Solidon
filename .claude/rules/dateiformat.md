@@ -168,7 +168,11 @@ statt Speicherüberlauf.
 `threemf._parse_model` innerhalb von `_reading_trees` — stückweise, je Stück
 eingefroren (`gc.freeze`), am Ende in Scheiben freigegeben und aufgetaut;
 nichts bleibt eingefroren (`gc.get_freeze_count() == 0`, Test). Wer nur
-zählt, baut keine Geometrie (`_StructureOnly`).
+zählt, baut keine Geometrie (`_StructureOnly`). Ein Stück, ein Zahlenblock
+und ein Freigabeblock halten den GIL je höchstens wenige Millisekunden
+(`XML_CHUNK`, `NUMBER_BLOCK`) — so lange wartet jeder Griff des Hauptthreads.
+Objekte und Materialgruppen sucht `_outside_meshes`, nie `findall(".//…")`
+über das Modell: Das lief in C durch alle Ecken und Dreiecke (Test).
 
 **STEP ist eine Baugruppe** (Format 33): je Komponenteninstanz ein exakter
 Körper mit Weltlage, Namen und Flächenfarben über XCAF
