@@ -1118,12 +1118,53 @@ ITALIAN_VOI = re.compile(
 
 #: Dasselbe für die Höflichkeitsform „Lei“: die Imperative am Satzanfang, mit
 #: denen Befunde ihre Handlung nennen, und „Faccia clic“.
+#: Die Lei-Imperative von -are-Verben („Incolli“, „Configuri“) sind zugleich
+#: Du-Indikative; sie zählen deshalb nur am Satzanfang, auch mit vorangestelltem
+#: Pronomen („Lo selezioni“).
 ITALIAN_LEI = re.compile(
-    r"(?:^|[.!?:;—]\s+)(Scelga|Selezioni|Verifichi|Controlli|Modifichi|Riprovi|Inserisca|"
-    r"Disegni|Sposti|Aumenti|Riduca|Trascini|Imposti|Salvi|Chiuda|Metta|Apra|Attenda|"
-    r"Faccia clic|Ripari|Riavvii|Indichi|Allunghi|Termini)\b",
-    re.MULTILINE,
+    r"(?:^|[.!?:;—]\s+)(?:(?:lo|la|li|ne)\s+)?(Scelga|Selezioni|Verifichi|Controlli|Modifichi|"
+    r"Riprovi|Inserisca|Disegni|Sposti|Aumenti|Riduca|Trascini|Imposti|Salvi|Chiuda|Metta|Apra|"
+    r"Attenda|Ripari|Riavvii|Indichi|Allunghi|Termini|Incolli|Copi|Allinei|Configuri|Reinstalli|"
+    r"Renda|Ridisegni|Spunti|Raccordi|Rimuova|Aggiunga|Aggiungale|Parli|Consegni|Assegni|"
+    r"Clicchi|Scriva|Rivolga|Tolga|Usi|Lasci|Faccia(?: di nuovo)? clic)\b",
+    re.MULTILINE | re.IGNORECASE,
 )
+#: Nach einer Konjunktion nur Lei-Formen, die nie ein Du-Indikativ sind (-a statt -i),
+#: und Wendungen, die es in keiner anderen Person gibt.
+ITALIAN_LEI_INSIDE = re.compile(
+    r"\b(?:oppure|o|poi|e|quindi)\s+(?:(?:lo|la|li|ne|mi)\s+)?(?:scelga|inserisca|riduca|"
+    r"chiuda|metta|apra|attenda|rimuova|aggiunga|scriva|rivolga|tolga|renda|"
+    r"faccia(?: di nuovo)? clic)\b"
+    r"|\b(?:si rivolga|può rivolgersi|mi scriva|lo apra|la apra|ne clicchi)\b"
+)
+#: Wo die Quelle „Ihr“ oder „Sie“ als Anrede sagt, darf it nicht „sua“, „può“
+#: oder „lei“ sagen — außer der Satz enthält die Du-Form. „Ihr“ nach einem
+#: Satzzeichen ist oft „ihr“ am Satzanfang und zählt nicht; „si può“ ist
+#: unpersönlich.
+GERMAN_YOUR = re.compile(
+    r"^Ihr(?:e|en|em|er|es)?\b|(?<![.!?:;]\s)\bIhr(?:e|en|em|er|es)?\b|\bIhnen\b"
+)
+GERMAN_YOU = re.compile(
+    r"\b(?:können|könnten|sehen|haben|möchten|wollen) Sie\b|\bSie (?:können|haben|möchten|sehen)\b"
+    r"|\bfür Sie\b|\bwie Sie\b"
+)
+ITALIAN_FORMAL = re.compile(r"\b(?:sua|suo|sue|suoi|lei)\b", re.IGNORECASE)
+ITALIAN_FORMAL_VERB = re.compile(r"(?<!\bsi )(?<!\bSi )\b(?:può|Può)\b|\b(?:lei|Lei)\b")
+ITALIAN_TU = re.compile(r"\b(?:tuo|tua|tuoi|tue|ti|te|tu)\b", re.IGNORECASE)
+
+
+def _italian_formal(key: str, value: str) -> str | None:
+    """Warum ein it-Eintrag „Lei“ oder „voi“ spricht — oder ``None``."""
+    for pattern in (ITALIAN_VOI, ITALIAN_LEI, ITALIAN_LEI_INSIDE):
+        match = pattern.search(value)
+        if match:
+            return match.group(0).strip()
+    if not ITALIAN_TU.search(value):
+        if GERMAN_YOUR.search(key) and ITALIAN_FORMAL.search(value):
+            return "sua/suo/lei für „Ihr“"
+        if GERMAN_YOU.search(key) and ITALIAN_FORMAL_VERB.search(value):
+            return "può/lei für „Sie“"
+    return None
 
 
 def _manual_only() -> set[str]:
@@ -1148,18 +1189,21 @@ def test_italian_says_tu_outside_the_manual() -> None:
     """Italienisch spricht den Kunden mit „tu“ an (Imperativ der 2. Person).
 
     Entschieden am 27.09.2026 nach Kundensicht: 429 Einträge mit „tu“ gegen 31
-    mit „voi“, daneben rund hundert mit „Lei“. Die Handbuchseiten und
-    Anleitungen stellt die Handbuch-Sitzung um; sie sind hier ausgenommen,
-    solange sie nur dort stehen.
+    mit „voi“, daneben rund hundert mit „Lei“. Das Sprachreview fand danach
+    37 weitere Lei-Stellen mitten im Satz („oppure mi scriva“), mit Pronomen
+    („Faccia di nuovo clic“) und als „sua“/„può“ für „Ihr“/„Sie“; die prüft
+    :func:`_italian_formal` mit. Die Handbuchseiten und Anleitungen stellt die
+    Handbuch-Sitzung um; sie sind hier ausgenommen, solange sie nur dort
+    stehen.
     """
     manual_only = _manual_only()
     catalog = read_catalog("it")
     voi = [
-        f"{key[:50]!r}: {match.group(0).strip()!r}"
+        f"{key[:50]!r}: {why!r}"
         for key, value in catalog.items()
         if key not in manual_only
-        for match in [ITALIAN_VOI.search(value) or ITALIAN_LEI.search(value)]
-        if match
+        for why in [_italian_formal(key, value)]
+        if why
     ]
     assert not voi, "it spricht „voi“ oder „Lei“:\n" + "\n".join(voi)
 
