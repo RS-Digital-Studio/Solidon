@@ -28,6 +28,7 @@ from app.core.types import (
     LayerInfo,
     MaterialSlot,
     Polygon,
+    SettingAdvice,
     SliceResult,
 )
 
@@ -3922,6 +3923,32 @@ def test_an_object_override_carries_the_measures_of_its_group() -> None:
     assert keys["skirt_loops"] == "0"
     # Nur die betroffene Gruppe — die Wandzahl des Teils ist die der Platte.
     assert "wall_loops" not in keys
+
+
+def test_an_object_override_carries_only_the_advised_paths() -> None:
+    """Ein Rat je Teil schreibt seine Pfade, nicht deren ganze Gruppe (Durchsicht 0.5.1, B1).
+
+    Über die Gruppe bekam ein Teil mit Passungsrat am Bambu P1S 21 Objektwerte
+    statt vier, darunter die innere Vollfüllung mit 270 statt Bambus 250 mm/s,
+    und der Slicer druckte sie so. Was der Rat nicht nennt, gehört der Platte.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    advice = [
+        SettingAdvice("speed.outer_wall", 30.0, settings.speed.outer_wall, "Passung"),
+        SettingAdvice("shell.wall_count", 4, settings.shell.wall_count, "Passung"),
+        SettingAdvice("infill.density", 0.4, settings.infill.density, "Passung"),
+    ]
+
+    assert set(handover.object_keys(settings, advice, "orca")) == {
+        "outer_wall_speed",
+        "wall_loops",
+        "sparse_infill_density",
+    }
+    assert set(handover.object_keys(settings, advice, "prusa")) == {
+        "external_perimeter_speed",
+        "perimeters",
+        "fill_density",
+    }
 
 
 def test_without_advice_a_part_gets_no_override() -> None:

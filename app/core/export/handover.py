@@ -747,25 +747,29 @@ def object_keys(
 ) -> dict[str, str]:
     """Die Abweichungen eines Teils in der Sprache des Slicers (§29).
 
-    Übernommen wird die ganze Gruppe, nicht nur der geänderte Wert. Wer die
-    Haftungsart auf Brim stellt, braucht auch dessen Breite — und die Maße der
-    Arten, die *nicht* gewählt sind, müssen auf null, sonst läuft unter dem
-    Teil zusätzlich ein Raft mit (siehe :func:`_only_chosen_adhesion`).
+    Geschrieben werden die Pfade des Rats und ihre Partner aus
+    :data:`COUPLED_PATHS`, nicht die ganze Gruppe. Wer die Haftungsart auf
+    Brim stellt, braucht auch dessen Breite — und die Maße der Arten, die
+    *nicht* gewählt sind, müssen auf null, sonst läuft unter dem Teil
+    zusätzlich ein Raft mit (siehe :func:`_only_chosen_adhesion`). Die übrigen
+    Werte der Gruppe gehören der Platte: Über die Gruppe bekam ein Teil mit
+    Passungsrat am Bambu P1S 21 Objektwerte statt vier, darunter die innere
+    Vollfüllung mit 270 statt Bambus 250 mm/s, und der Slicer druckte sie so
+    (Durchsicht 0.5.1, B1).
 
     Dazu, was sich sonst noch geändert hat. Nicht jeder Schlüssel steht in der
     Zuordnungstabelle: die Stützdichte etwa wird für PrusaSlicer und die
-    Orca-Familie erst zu einem Linienabstand gerechnet, und über die Gruppe
+    Orca-Familie erst zu einem Linienabstand gerechnet, und über den Pfad
     allein wäre sie nicht zu finden. Ein Vergleich findet sie, ohne dass
     irgendwo eine zweite Liste gepflegt werden muss.
     """
     if not advice:
         return {}
-    groups = {entry.path.partition(".")[0] for entry in advice}
-    keys = {
-        entry.key for entry in slicer_keys.TABLES[flavour] if entry.path.partition(".")[0] in groups
-    }
+    applied = _applied(settings, advice)
+    paths = _with_partners(frozenset(entry.path for entry in advice), applied)
+    keys = {entry.key for entry in slicer_keys.TABLES[flavour] if entry.path in paths}
     before = as_mapping(settings, flavour)
-    changed = as_mapping(_applied(settings, advice), flavour)
+    changed = as_mapping(applied, flavour)
     written = {
         key: value for key, value in changed.items() if key in keys or before.get(key) != value
     }
