@@ -96,6 +96,10 @@ Abziehen (nicht boolesch), jede Kante sichtbar (nicht Facetten), ohne Zufall
 `test_wording::test_no_customer_text_uses_a_designer_word` hält die Wortliste
 für Quelle und Englisch, `test_a_quoted_control_is_named_as_the_control_says`,
 dass ein zitierter Knopf in jeder Sprache so heißt wie der Knopf.
+Eine Druckeinstellung in einem Befund heißt, wie das Feld des Druckdialogs,
+mit dem Wert, wie er dort steht (`print_settings_dialog.setting_title`,
+`shown_value`) — nie Punktpfad oder `True`; ein Befund je Teil trägt dessen
+`object_id`, damit der Klick es wählt (`writer.PART_SETTING_CODES`).
 
 **Ein Text, der eine Grenze beschreibt, altert mit der Grenze.** Wer eine
 Fähigkeit hinzufügt, sucht vorher die Sätze, die ihre Abwesenheit versprechen —

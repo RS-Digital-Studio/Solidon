@@ -285,7 +285,13 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   ein Slicer nicht je Teil annimmt, bleibt plattenweit
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
-  den das Teil bekommt. Eine eigene Wahl gilt der Platte.
+  den das Teil bekommt. Eine eigene Wahl gilt der Platte. Ein Objektwert
+  trägt die Pfade seines Rats und deren Partner (`COUPLED_PATHS`), nie die
+  ganze Gruppe — sonst schriebe er Solidons Tabellenwerte über die des
+  Herstellers (`handover.object_keys`). **Ein übernommener Vorschlag
+  verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
+  jedes (`writer._unserved`, `export.part_setting_all`); die Platte bleibt,
+  damit `slice_model` dieselbe rechnet.
 - **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
   nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
   (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres

@@ -121,6 +121,7 @@ from app.core.errors import (
     Action,
     AppError,
 )
+from app.core.export.writer import PART_SETTING_CODES
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import imported_group_for_bed
 from app.core.log import get_logger
@@ -1171,12 +1172,41 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
             and not (finding.code in {"perceive.mended", "perceive.orphaned"} and key == "feature")
         ]
     )
+    if finding.code in PART_SETTING_CODES and "setting" in finding.values:
+        extra.append(_setting_line(finding))
     if finding.object_id and "object" not in finding.values:
         identifier = str(finding.object_id)
         extra.insert(0, (names or {}).get(identifier, identifier))
     if not extra:
         return str(finding.message)
     return f"{finding.message} — {' · '.join(extra)}"
+
+
+def _setting_line(finding: Finding) -> str:
+    """Die Einstellung eines Teils, wie der Druckdialog sie zeigt: „Stützen: Automatisch".
+
+    Der Befund trägt Punktpfad und Rohwert (``writer.PART_SETTING_CODES``);
+    beides stand bis zur Durchsicht 0.5.1 (B4) so im Tooltip —
+    „Einstellung: support.style", „Wert: True". Beschriftung und Anzeige kommen
+    aus derselben Quelle wie im Dialog, damit der Bericht nach dem Export den
+    Wert nennt, den der Kunde dort übernommen hat.
+    """
+    from app.ui.print_settings_dialog import setting_title, shown_value
+
+    path = str(finding.values["setting"])
+    return f"{setting_title(path)}: {shown_value(path, finding.values.get('value'))}"
+
+
+def _value_lines(finding: Finding) -> list[str]:
+    """Die Werte eines Befunds als „Beschriftung: Wert" — eine Einstellung je
+    Teil mit Feldname und Wert statt Pfad und Rohwert (:func:`_setting_line`)."""
+    if finding.code in PART_SETTING_CODES and "setting" in finding.values:
+        return [_setting_line(finding)] + [
+            value_line(key, value)
+            for key, value in finding.values.items()
+            if key not in ("setting", "value")
+        ]
+    return [value_line(key, value) for key, value in finding.values.items()]
 
 
 def _origin_text(created_by: int | None, document: Document | None) -> str:
@@ -5186,6 +5216,12 @@ class ReportPanel(QWidget):
             )
             if len(bodies) == 1:
                 context.append(self._names.get(bodies[0], bodies[0]))
+            # Eine Einstellung je Teil nennt Feld und Wert in der Zeile, wenn
+            # alle Mitglieder denselben tragen; die Teile stehen im Tooltip.
+            if finding.code in PART_SETTING_CODES:
+                shared = {_setting_line(one) for one in members if "setting" in one.values}
+                if len(shared) == 1:
+                    context.append(shared.pop())
             if finding.op_id is not None:
                 step = f"{tr('Schritt')} {finding.op_id}"
                 if self._document is not None:
@@ -5310,7 +5346,7 @@ class ReportPanel(QWidget):
         step = _origin_text(finding.op_id, self._document)
         if step:
             details.append(step)
-        details.extend(value_line(key, value) for key, value in finding.values.items())
+        details.extend(_value_lines(finding))
         detail_text = " · ".join(details)
         item.setToolTip(detail_text)
         # Tastatur und Bildschirmleser bekommen dieselbe Diagnose wie die
@@ -5458,11 +5494,12 @@ class ReportPanel(QWidget):
         if finding.object_id is not None:
             identifier = str(finding.object_id)
             parts.append(self._names.get(identifier, identifier))
-        parts.extend(
-            value_line(key, value)
+        shown = {
+            key: value
             for key, value in finding.values.items()
             if key not in ("count", "object", "objects", "entries", "name")
-        )
+        }
+        parts.extend(_value_lines(dataclasses.replace(finding, values=shown)))
         return " · ".join(parts) if parts else "?"
 
     def _on_menu(self, position: QPoint) -> None:
