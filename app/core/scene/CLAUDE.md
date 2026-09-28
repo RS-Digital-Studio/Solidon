@@ -138,6 +138,8 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   `_with_nested_context` für `OperationSpec.reads_other_bodies` immer ein, für
   einen Schalter mit `ParamSpec.reads_scene` nur, solange er an ist und seine
   Antwortfelder (`answered_by`) leer sind (`registry.params.reads_scene`).
+  Die Antworten reisen mit dem Eintrag (`CachedResult.answered`, auch auf der
+  Platte): Ein Treffer gibt sie weiter wie ein frischer Lauf.
 - **Merkmale reisen durch beide Ebenen** (`cache.feature_to_data`): Maßquellen
   (fehlende bleiben unbekannt; `bore_advice` trennt Beleg, Schätzung und
   Vorgabe) und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter

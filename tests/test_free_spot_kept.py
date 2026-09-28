@@ -236,3 +236,108 @@ def test_a_model_that_did_not_move_gets_no_finding(profile: Profile) -> None:
     codes = {entry.code for entry in result.scene.report.findings}
     assert not codes & {"arrange.free_spot", "arrange.no_free_spot"}, codes
     assert project.document.ops[0].params["spot_plate"] == 1, "festgehalten wird trotzdem"
+
+
+# --- Die Antwort reist mit dem Ergebnis (Sonde p12, Fälle 2 bis 4) -----------
+
+
+def _disk_cache(folder: Path) -> Any:
+    """Speicher über Platte wie in der Anwendung, die Platte im Temp-Ordner."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene.cache import DiskCache, ResultCache
+
+    return ResultCache(disk=DiskCache(codec=MeshCodec(), directory=folder))
+
+
+def _run(project: Project, profile: Profile, cache: Any, *, keep: bool = True) -> Any:
+    """Ein Lauf mit Cache; ``keep=False`` ist ein Ergebnis, das die Sitzung verwirft."""
+    result = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+    assert result.complete, [entry.values for entry in result.scene.report.findings]
+    if keep:
+        History(project.document).record_answers(result.answers)
+    return result
+
+
+def _pair(unit: str = "mm") -> tuple[Project, History, str]:
+    """Würfel, dann der Block als weiteres Modell; zurück kommt der Block."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    for name, payload in (("a.stl", CUBE), ("b.stl", BLOCK)):
+        key = f"src_{len(project.document.sources) + 1}"
+        project.document.sources[key] = Source(
+            id=key, kind="import", path=f"sources/{name}", sha256=""
+        )
+        project.sources[key] = payload
+        chosen = import_plan(key, name, payload, unit, first_model=not project.document.ops)
+        history.apply(chosen.title, [chosen.draft])
+    return project, history, project.document.ops[-1].outputs[0]
+
+
+def _stays_when_the_first_goes(
+    project: Project, history: History, profile: Profile, cache: Any, block: str
+) -> None:
+    """Die festgehaltene Stelle trägt: Ohne den Würfel davor bleibt der Block liegen."""
+    before = _run(project, profile, cache).scene.objects[block].mesh.bounds.minimum
+    history.remove_operations([project.document.ops[0].id])
+    after = _run(project, profile, cache).scene.objects[block].mesh.bounds.minimum
+    assert tuple(after) == pytest.approx(tuple(before)), "der Block wandert nicht"
+
+
+def test_an_undo_before_the_result_still_keeps_the_spot(profile: Profile, tmp_path: Path) -> None:
+    """p12 (2): Strg+Z, bevor das erste Ergebnis kam, Strg+Y danach.
+
+    Der verworfene Lauf legt sein Ergebnis in den Cache, die Sitzung schreibt
+    seine Antwort aber nicht. Nach dem Redo kam der Schritt aus dem Cache —
+    ohne Antwort, und die Stelle blieb leer: Der Block wanderte, sobald
+    davor etwas gelöscht wurde.
+    """
+    cache = _disk_cache(tmp_path / "cache")
+    project, history, block = _pair()
+    _run(project, profile, cache, keep=False)
+    history.undo()
+    _run(project, profile, cache)
+    history.redo()
+    _run(project, profile, cache)
+
+    step = project.document.ops[-1]
+    assert step.params.get("spot_x") is not None and step.params.get("spot_y") is not None
+    assert step.params.get("spot_plate") == 1
+    _stays_when_the_first_goes(project, history, profile, cache, block)
+
+
+def test_a_second_project_with_the_same_files_keeps_the_spot(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """p12 (3): Projektwechsel — der Speicher ist leer, die Platte kennt den Schritt."""
+    cache = _disk_cache(tmp_path / "cache")
+    project, _history, _block = _pair()
+    _run(project, profile, cache)
+    cache.clear()
+
+    project, history, block = _pair()
+    _run(project, profile, cache)
+
+    assert cache.statistics.disk_hits, "der Ladeschritt kam von der Platte"
+    step = project.document.ops[-1]
+    assert step.params.get("spot_x") is not None, "die Antwort kam mit"
+    _stays_when_the_first_goes(project, history, profile, cache, block)
+
+
+def test_a_restart_keeps_the_spot_and_the_unit(profile: Profile, tmp_path: Path) -> None:
+    """p12 (4): Neustart — ein frischer Speicher über derselben Platte.
+
+    Mit der Stelle reist jede Antwort des Schritts, auch die erkannte Einheit.
+    """
+    folder = tmp_path / "cache"
+    project, _history, _block = _pair(unit="auto")
+    _run(project, profile, _disk_cache(folder))
+
+    cache = _disk_cache(folder)
+    project, history, block = _pair(unit="auto")
+    _run(project, profile, cache)
+
+    assert cache.statistics.disk_hits, "der Ladeschritt kam von der Platte"
+    step = project.document.ops[-1]
+    assert step.params.get("spot_x") is not None, "die Antwort kam mit"
+    assert step.params.get("unit") == "mm", "die erkannte Einheit auch"
+    _stays_when_the_first_goes(project, history, profile, cache, block)

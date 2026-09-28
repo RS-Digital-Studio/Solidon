@@ -756,6 +756,25 @@ def test_the_disk_level_survives_a_new_process(tmp_path: Path) -> None:
     assert restored.objects[0].mesh.triangle_count == 42
 
 
+def test_the_answers_of_a_step_survive_the_disk_and_a_damaged_one_is_dropped(
+    tmp_path: Path,
+) -> None:
+    """§15.7: Die Antworten reisen mit dem Eintrag; eine falsche Gestalt ist ein
+    beschädigter Eintrag und wird neu gerechnet, nicht halb gelesen."""
+    answered = {"unit": "mm", "spot_x": 12.5, "spot_y": -3.0, "spot_plate": 2}
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("key", CachedResult(objects=(make_object("obj_1"),), answered=answered))
+
+    restored = DiskCache(codec=FakeCodec(), directory=tmp_path).get("key")
+    assert restored is not None and restored.answered == answered
+
+    stored = disk._folder("key") / "objects.json"
+    data = json.loads(stored.read_text(encoding="utf-8"))
+    data["answered"] = [["unit", "mm"]]
+    stored.write_text(json.dumps(data), encoding="utf-8")
+    assert DiskCache(codec=FakeCodec(), directory=tmp_path).get("key") is None
+
+
 def test_a_cache_entry_may_disappear_before_its_access_time_is_updated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

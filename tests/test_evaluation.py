@@ -5265,6 +5265,32 @@ def test_a_large_import_is_shown_before_its_recognition(monkeypatch) -> None:
     assert not session.picture_first(), "danach rechnet eine Änderung wie bisher"
 
 
+def test_the_run_after_the_picture_carries_the_answers_of_the_load(monkeypatch) -> None:
+    """Die erkannte Einheit kommt beim Ladeweg mit Bild im Ergebnis an (§15.7).
+
+    Der zweite Lauf findet den Ladeschritt im Cache; die Antwort reist mit dem
+    Eintrag, und der Arbeiter muss sie nicht aus dem ersten Lauf nachtragen.
+    """
+    from app.ui import session as session_module
+    from app.ui.session import Session, _EvaluationWorker
+
+    monkeypatch.setattr(session_module, "PICTURE_FIRST_TRIANGLES", 1)
+    session = Session()
+    assert session.import_model(MESHES / "plate_holes.stl", unit="auto")
+    running = session._worker
+    session.cancel_evaluation()
+    if running is not None:
+        assert running.wait(60_000)
+    session.cancel_signal.reset()
+    assert session.picture_first()
+    load = session.project.document.ops[0]
+
+    result = _EvaluationWorker(session, picture_first=True)._evaluate(session)
+
+    assert session.cache.statistics.hits, "der zweite Lauf nahm den Ladeschritt aus dem Cache"
+    assert result.answers.get(load.id, {}).get("unit") == "mm"
+
+
 def test_a_small_import_is_not_shown_twice(monkeypatch) -> None:
     """Unter der Schwelle kommt kein Bild: Die Erkennung ist schneller als ein
     zweiter Aufbau von Baum, Bericht und Ansicht (KUNDE-14)."""

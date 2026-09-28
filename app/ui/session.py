@@ -348,10 +348,8 @@ class _EvaluationWorker(Worker):
             result = session.run_evaluation()
         finally:
             session._pending.replay = None
-        if picture.answers:
-            # Eine Antwort des ersten Laufs (die Einheit beim Laden) steht nur
-            # in seinem Ergebnis: Der zweite fand den Schritt im Cache.
-            result = dataclasses.replace(result, answers={**picture.answers, **result.answers})
+        # Die Antworten des ersten Laufs trägt auch der zweite: Den Ladeschritt
+        # findet er im Cache, und der Eintrag reist mit ihnen (§15.7).
         return result
 
     def work(self) -> None:
