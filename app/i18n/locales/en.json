@@ -5537,7 +5537,7 @@
   "Suchradius": "Search radius",
   "Suchradius vergrößern": "Increase search radius",
   "Suchradius verkleinern": "Reduce search radius",
-  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils.": "Finds the orientation with the least support for every body in the scene, then rearranges the bed. Each one gets its own — the best lie follows from the geometry of the single part.",
+  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Finds the orientation with the least support for every body in the scene, then rearranges the bed. Each one gets its own, and whatever already stands without supports stays standing.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Searches names and explanations. Enter jumps to the next hit.",
   "Sucht in der Bausteinbibliothek": "Searches the part library",
   "Suchwörter\u0004Ball": "ball",

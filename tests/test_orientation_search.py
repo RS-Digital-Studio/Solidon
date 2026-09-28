@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -717,6 +718,54 @@ def test_the_umbrella_is_not_left_upside_down() -> None:
         f"{found.best.direction}: {found.best.support_volume:.0f} mm³ "
         f"gegen {upside_down.support_volume:.0f} mm³ kopfüber"
     )
+
+
+def _shaft_with_a_pin_hole() -> MeshData:
+    """Ein Schaft wie im Minigolf-Satz: 19,2 x 19,2 x 200 mm, oben quer gebohrt.
+
+    Stehend braucht nur die Decke der Bohrung eine Brücke von 5 mm; liegend
+    auf der Seite, durch die die Bohrung senkrecht läuft, braucht er gar
+    nichts und steht auf der größeren Fläche.
+    """
+    shaft = trimesh.creation.box(extents=(19.2, 19.2, 200.0))
+    pin = trimesh.creation.cylinder(radius=2.5, height=30.0, sections=48)
+    pin.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (0.0, 1.0, 0.0)))
+    pin.apply_translation((0.0, 0.0, 90.0))
+    return place_on_bed(MeshData.of(shaft.difference(pin, engine="manifold")))
+
+
+def test_a_shaft_that_stands_without_support_keeps_standing() -> None:
+    """Roberts Minigolf-Satz (28.09.2026): Die Schäfte kamen stehend und wurden
+    stehend gedruckt. Die Suche legte sie hin, weil liegend weniger Stützraum
+    blieb — nach der Regel der Druckvorschläge braucht die stehende Lage aber
+    keine Stütze. Und die Suche hört dann sofort auf: Die übrigen Lagen zu
+    werten kostete je Schaft rund 3 s.
+
+    Die Gegenprobe steht vorn: Liegend misst der grobe Schnitt wirklich weniger
+    Stützraum, sonst prüfte der Test nichts.
+    """
+    from app.core.knowledge import profiles
+    from app.core.slice.orientation import SEARCH_LAYER_HEIGHT
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    body = _shaft_with_a_pin_hole()
+    footing = profile.printer.layer_height / 2.0
+    standing, lying = (
+        judge(
+            body,
+            direction,
+            SEARCH_LAYER_HEIGHT,
+            footing,
+            overhang_angle=profile.overhang_limit_degrees,
+        )
+        for direction in ((0.0, 0.0, -1.0), (1.0, 0.0, 0.0))
+    )
+    assert lying.support_volume < standing.support_volume
+
+    found = search(body, profile=profile)
+
+    assert found.best.direction == (0.0, 0.0, -1.0)
+    assert found.findings[0].values["candidates"] == 1, "keine weitere Lage gewertet"
 
 
 def _pool_holder() -> MeshData:

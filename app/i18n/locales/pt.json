@@ -5537,7 +5537,7 @@
   "Suchradius": "Raio de pesquisa",
   "Suchradius vergrößern": "Aumentar o raio de pesquisa",
   "Suchradius verkleinern": "Reduzir o raio de pesquisa",
-  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils.": "Procura para cada corpo da cena a posição com menos suportes e depois reorganiza a mesa. Cada um recebe a sua — a melhor posição decorre da geometria da peça individual.",
+  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Procura para cada corpo da cena a posição com menos suportes e depois reorganiza a mesa. Cada um recebe a sua, e o que já fica de pé sem suportes continua de pé.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Procura em nomes e explicações. Enter salta para o resultado seguinte.",
   "Sucht in der Bausteinbibliothek": "Pesquisa na biblioteca de blocos",
   "Suchwörter\u0004Ball": "bola",

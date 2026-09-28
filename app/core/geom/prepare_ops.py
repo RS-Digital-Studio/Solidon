@@ -17119,7 +17119,7 @@ class OrientParams(BaseParams):
     doc=_(
         "Sucht für jeden Körper der Szene die Lage mit dem geringsten "
         "Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine "
-        "eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils."
+        "eigene Lage, und was schon ohne Stützen steht, bleibt stehen."
     ),
 )
 def orient_for_print_op(ctx: OpContext) -> OpResult:

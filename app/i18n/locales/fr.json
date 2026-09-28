@@ -5537,7 +5537,7 @@
   "Suchradius": "Rayon de recherche",
   "Suchradius vergrößern": "Augmenter le rayon de recherche",
   "Suchradius verkleinern": "Réduire le rayon de recherche",
-  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils.": "Cherche pour chaque corps de la scène la position au moindre support, puis réorganise le plateau. Chacun reçoit la sienne — la meilleure position découle de la géométrie de la pièce elle-même.",
+  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Cherche pour chaque corps de la scène la position au moindre support, puis réorganise le plateau. Chacun reçoit la sienne, et ce qui tient déjà debout sans supports reste debout.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Cherche dans les noms et les explications. Entrée passe au résultat suivant.",
   "Sucht in der Bausteinbibliothek": "Cherche dans la bibliothèque de blocs",
   "Suchwörter\u0004Ball": "boule; balle",

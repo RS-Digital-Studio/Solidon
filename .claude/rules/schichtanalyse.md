@@ -145,10 +145,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als
   `NARROW_WEB_AREA` mm² davon, und ist sie schneller als `NARROW_WEB_SPEED`,
   wird dieses Tempo vorgeschlagen — kurze Bodenbahnen zwischen Löchern reißen
-  im Herstellertempo, auch an einem großen Teil mit wenigen langen Stegen.
-  Beide Grenzen sind am Korpus geeicht. Über
-  dem Herstellerprofil bremst der Vorschlag nur (`dateiformat.md`, „Auf dem
-  Herstellerprofil wird nur die Abweichung geschrieben“).
+  im Herstellertempo. Über dem Herstellerprofil bremst der Vorschlag nur
+  (`dateiformat.md`, „Auf dem Herstellerprofil wird nur die Abweichung
+  geschrieben“).
 - **Kein Vorschlag überstimmt, was das Profil für denselben Zweck trägt**:
   Mindestzeit je Schicht nur ohne eine, kein Brim über Orcas Auto-Brim
   (`AUTO_BRIM_FLAVOURS`). Die Hersteller stimmen beides ab.
@@ -266,6 +265,8 @@ Nähte kennt sie nicht; sie trägt `source="internal"` (Regel 14).
   Rand überlebt die Ausdünnung nicht. **Die sechs Achsen werden immer
   geschnitten**, weil die Heuristik an einem Gitter jede liegende Lage vor die
   stehende reiht; höchstens `FINALISTS` + sechs Achsen + Ausgangslage.
+  **Was steht und nach `advise.support_need` keine Stütze braucht, bleibt**
+  (`orientation.stays`).
 - **Eine dünne Wand ist nicht allein deshalb undruckbar** (Arachne); unter der
   Mindestbahnbreite verlangt der Befund die Kontrolle im Slicer.
 - **`taper_length` misst Außenkontur auf einem Keil** — einer Wand, deren

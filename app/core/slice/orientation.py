@@ -387,6 +387,45 @@ def settled(baseline: Candidate, floor: float, footprint: float, best_footprint:
     return footprint >= best_footprint * (1.0 - SUPPORT_TIE)
 
 
+def stays(
+    mesh: MeshData,
+    baseline: Candidate,
+    profile: Profile,
+    floor: float,
+    overhang_angle: float | None,
+    cancelled: CancelToken | None = None,
+) -> bool:
+    """Bleibt die gelieferte Lage, weil sie steht und keine Stütze braucht?
+
+    **Die Lage, in der ein Teil kommt, hat jemand gewählt.** Roberts
+    Minigolf-Satz (28.09.2026): Die Schäfte, 19,2 x 19,2 x 200 mm, stehen in der
+    STL und wurden stehend gedruckt. Die Suche legte sie hin, weil liegend
+    0,26 statt 0,51 cm³ Stützraum blieben und die Standfläche größer war —
+    nach der Regel der Druckvorschläge braucht aber auch die stehende Lage
+    keine Stütze (keine Insel, 97 mm² Überhang). Liegend verlor der Schaft
+    seine runde Außenwand, jeder brauchte schräg 117 x 181 mm der Platte, und
+    der Satz lag auf drei Platten.
+
+    Gefragt wird deshalb dieselbe Regel wie beim Vorschlag „Stützen nötig“
+    (``advise.support_need``), im Druckraster des Profils statt im groben der
+    Suche. Nur was so Stützen braucht oder nicht steht, wird gedreht.
+    """
+    if not stands(baseline, floor):
+        return False
+    from app.core.slice import advise
+
+    result = slice_body(
+        mesh,
+        profile.printer.layer_height,
+        first_layer_height=profile.printer.layer_height,
+        overhang_angle=overhang_angle,
+        bridge_from=profile.minimum_wall_thickness,
+        cancelled=cancelled,
+        support_volume=False,
+    )
+    return not advise.support_need(result).needed
+
+
 def best_face_candidate(
     mesh: MeshData,
     *,
@@ -495,7 +534,22 @@ def search(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
 
-    directions = _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
+    # **Was stützenfrei steht, bleibt — ohne die übrigen Lagen zu werten.**
+    # Gemessen an Roberts Minigolf-Projekt (28.09.2026): Je Schaft gingen rund
+    # 3 s in die 214 Lagen der Vorauswahl, vor allem in die Frage, wo jede aufs
+    # Bett passt (``fitting_transform``, 12 ms je Lage) — und danach blieb der
+    # Schaft ohnehin stehen (:func:`stays`). Die Prüfung kommt deshalb vor der
+    # Vorauswahl; wo sie nicht greift, kostet sie einen Schnitt.
+    kept = (
+        baseline is not None
+        and profile is not None
+        and stays(proxy, baseline, profile, floor, overhang_angle, cancelled)
+    )
+    directions = (
+        [baseline_direction]
+        if kept
+        else _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
+    )
     # **Die Vorauswahl sieht Achsen und tragende Flächen am Original.** Die
     # Kandidatenliste beginnt mit der Ausgangslage, den sechs Achsen und den
     # größten ebenen Flächen des Körpers — und die Ausdünnung, an der die
@@ -541,7 +595,7 @@ def search(
         ),
     )
     initial = next((entry for entry in scored if entry.direction == baseline_direction), None)
-    complete = (
+    complete = kept or (
         baseline is not None
         and initial is not None
         and settled(baseline, floor, initial.footprint, max(entry.footprint for entry in scored))
