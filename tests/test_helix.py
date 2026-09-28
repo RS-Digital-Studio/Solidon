@@ -262,6 +262,39 @@ def test_a_mirrored_bolt_is_measured_left_handed() -> None:
     assert left.turns == pytest.approx(right.turns, abs=0.05)
 
 
+def test_a_turned_bolt_keeps_its_thread_and_a_mirrored_one_is_read_again() -> None:
+    """Gedreht reist die erkannte Wendel mit, gespiegelt wird sie neu gelesen.
+
+    Eine starre Bewegung vermerkt ihren Eingang am Netz, und die Erkennung
+    überträgt, was dort schon erkannt war — ein Rechtsgewinde bleibt rechts.
+    Eine Spiegelung ist ebenso starr, macht aber aus dem Rechts- ein
+    Linksgewinde; sie bekommt keinen Vermerk, und die Erkennung liest die Hand
+    am gespiegelten Netz selbst.
+    """
+    from app.core.geom.transform import apply, rotation, scaling
+    from app.core.perceive import features as features_module
+    from app.core.perceive.features import carry_detection, moved_from, movement_note
+
+    mesh = _bolt("M6")
+    features_module.forget_cache()
+    threads = [entry for entry in detect(mesh).values() if entry.kind == "thread"]
+    assert len(threads) == 1
+    assert threads[0].params["handedness"] == "right"
+
+    turned = apply(mesh, rotation("y", 90.0))
+    found = moved_from(turned, [mesh])
+    assert found is not None
+    assert carry_detection(mesh, turned, found[1])
+    carried = [entry for entry in detect(turned).values() if entry.kind == "thread"]
+    assert [entry.params["handedness"] for entry in carried] == ["right"]
+
+    mirrored = apply(mesh, scaling((-1.0, 1.0, 1.0)))
+    assert movement_note(mirrored) == ()
+    assert moved_from(mirrored, [mesh]) is None
+    read = [entry for entry in detect(mirrored).values() if entry.kind == "thread"]
+    assert [entry.params["handedness"] for entry in read] == ["left"]
+
+
 def _printed(size: float, pitch: float, length: float, *, mirrored: bool = False) -> MeshData:
     """Das Gewinde, das diese Anwendung selbst druckt — abgeflachter Kamm, 48 Segmente je Umlauf.
 

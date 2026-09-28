@@ -37,7 +37,10 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 - **Erst der Merker.** Die Auswertung fragt vor jeder Erkennung
   (`scene.evaluate._with_features`): `detect` legt jede vollständige Erkennung
-  unter `_mesh_key` ab; `carry_detection` (starr bewegt, Beleg `moved_twin`),
+  unter `_mesh_key` ab; `carry_detection` (starr bewegt, Beleg `moved_twin`;
+  ohne gemeldete Matrix nennt der Bewegungsvermerk `note_movement` aus
+  `geom.transform.apply` Eingang und Matrix, geglaubt über `moved_from`, auf
+  der Platte als `moved_from` im Eintrag),
   `carry_refined_detection` (feiner geteilt, `note_refinement`, Beleg
   `refined_twin`; der Vermerk reist als `<n>.origin.npy` durch den
   Plattencache) und `known_detection` (Live-Vorschau) antworten ohne Rechnung.

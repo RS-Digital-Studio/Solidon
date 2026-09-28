@@ -87,7 +87,8 @@ der Aufrufer)
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen
-Fläche entfällt, statt zu wachsen) · `ops.py` („Transformation“,
+Fläche entfällt, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
+Spiegelung am Netz, `perceive.features.note_movement`) · `ops.py` („Transformation“,
 `place_on_bed`, `place_group_on_bed` ohne vorberechneten Versatz;
 `repair_object` gibt einen heilen Eingang unverändert zurück) · `align.py` ·
 `orient.py` (Kandidatenlagen, Stützraum `Orientation.support`; Stapel auf bis
@@ -212,7 +213,8 @@ ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
   Entscheidung Robert).
 - Anordnung, Bauraumprüfung und Orientierung teilen den Druckbereichsvertrag
   aus `core/build_area.py`. Ein Körper: die Op meldet ihre Matrix; mehrere:
-  sie bewegt die Merkmale selbst — nie beides. `SearchResult.transform` trägt
+  sie bewegt die Merkmale selbst — nie beides; die Erkennung findet die
+  Matrix je Körper dann am Bewegungsvermerk des Netzes. `SearchResult.transform` trägt
   die ganze Bewegung samt B-Rep; `fits` entscheidet über die Fläche,
   `oversize` nur über Maße.
 - `back_onto_bed` (`keep_on_bed`): die Vorgabe ist aus, den Haken setzt der

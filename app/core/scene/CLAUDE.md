@@ -51,7 +51,10 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 
 - **`_with_features`** bindet nach jedem Ausgabeübergang, auch am Cachetreffer,
   die Merkmale ans neue Netz; ohne Erkennung bleibt die Ausgabe, ohne Zuordnung
-  und Waisenbefund. Belege am exakten Körper (Regel in `operationen.md`):
+  und Waisenbefund. Die Bewegung je Ausgabe sagt `_motion_of`: die gemeldete,
+  sonst der belegte Bewegungsvermerk am Netz (`perceive.features.moved_from`)
+  mit seinem Eingang — so gehen Ausrichten, Anordnen und Musterkopien über
+  mehrere Körper denselben Weg wie ein einzelnes Verschieben. Belege am exakten Körper (Regel in `operationen.md`):
   `_needed_after`, `_checked_continuations`, `_unchanged_continuations`,
   `_unproven_native_references`, `blocked_references` →
   `orphans.check(blocked=)`; ausgestellt von `_preserved_exact_features` und
@@ -143,7 +146,9 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   bindet — vorbereitete Objekte zu cachen ist verworfen. `_warm_figures` fasst
   Kennzahlen im Arbeiter an. Exakte Körper bleiben im Speicher, neu belegte
   Träger werden neu gerechnet; Teilungsvermerke liegen neben dem Netz
-  (`_refinement_to_disk`).
+  (`_refinement_to_disk`), Bewegungsvermerke im Eintrag
+  (`_movement_to_disk`, `moved_from`) — beide bleiben Zusagen, die erst die
+  Erkennung am Eingang belegt.
 - **`object_hash(features=)`** bindet die veröffentlichten Merkmale
   (`feature_digest`: Nummern als `int64`, Zahlen über `float()`;
   `FeatureMemo`); gleiche reservierte Namen beweisen keine gleiche Bindung; der

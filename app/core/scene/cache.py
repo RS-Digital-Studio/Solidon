@@ -545,6 +545,55 @@ def _refinement_from_disk(folder: Path, record: Any, mesh: Mesh) -> None:
     restore_refinement_note(mesh, source, origin)
 
 
+def _movement_to_disk(mesh: Mesh) -> list[dict[str, Any]] | None:
+    """Der Bewegungsvermerk eines starr bewegten Netzes für die Platte — falls es einen trägt.
+
+    Derselbe Grund wie bei :func:`_refinement_to_disk`: Der Vermerk
+    (``perceive.features.movement_note``) lebt im Speicher des Netzes, und ohne
+    ihn lief die Erkennung nach dem Wiederöffnen an jedem ausgerichteten oder
+    angeordneten Körper neu, den der Plattencache lieferte.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import movement_note
+
+    if not isinstance(mesh, MeshData):
+        return None
+    note = movement_note(mesh)
+    if not note:
+        return None
+    return [
+        {"source": key.hex(), "matrix": [[float(value) for value in row] for row in cells]}
+        for key, cells in note
+    ]
+
+
+def _movement_from_disk(record: Any, mesh: Mesh) -> None:
+    """Legt einen gelesenen Bewegungsvermerk wieder an das Netz.
+
+    Geprüft wird hier nur die Form; ob er stimmt, prüft
+    ``perceive.features.moved_from`` am Eingang und an der Geometrie.
+    """
+    import math
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import MOVEMENT_NOTE_DEPTH, restore_movement_note
+
+    if not isinstance(mesh, MeshData) or not isinstance(record, list):
+        raise TypeError("moved_from")
+    if not record or len(record) > MOVEMENT_NOTE_DEPTH:
+        raise ValueError("moved_from")
+    note = []
+    for entry in record:
+        key = bytes.fromhex(str(entry["source"]))
+        cells = np.asarray(entry["matrix"], dtype=np.float64)
+        if len(key) != 16 or cells.shape != (4, 4) or not all(map(math.isfinite, cells.flat)):
+            raise ValueError("moved_from")
+        note.append((key, cells))
+    restore_movement_note(mesh, tuple(note))
+
+
 def _feature_from_data(data: dict[str, Any], *, face_count: int | None = None) -> Feature:
     indices = tuple(data["face_indices"])
     return Feature(
@@ -762,6 +811,8 @@ class DiskCache:
                 mesh = self.codec.loads((folder / entry["mesh"]).read_bytes())
                 if "refined_from" in entry:
                     _refinement_from_disk(folder, entry["refined_from"], mesh)
+                if "moved_from" in entry:
+                    _movement_from_disk(entry["moved_from"], mesh)
                 _warm_figures(mesh)
                 objects_list.append(
                     SceneObject(
@@ -875,6 +926,9 @@ class DiskCache:
                 refined = _refinement_to_disk(folder, position, entry.mesh)
                 if refined is not None:
                     record["refined_from"] = refined
+                moved = _movement_to_disk(entry.mesh)
+                if moved is not None:
+                    record["moved_from"] = moved
                 entries.append(record)
             payload: dict[str, Any] = {"format_version": CACHE_FORMAT_VERSION, "objects": entries}
             if result.findings:

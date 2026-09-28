@@ -273,14 +273,27 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     dieselbe Bewegung auf jeder Maschine dieselben Zahlen gibt (RM-187). Was
     das Quellnetz über seine Topologie wusste, nimmt die Kopie mit
     (:func:`_carry_cache`).
+
+    **Und eine starre Bewegung vermerkt, woher das Netz kommt**
+    (``perceive.features.note_movement``): Die Auswertung überträgt damit die
+    erkannten Merkmale des Eingangs, statt sie am bewegten Netz neu zu suchen —
+    auch dort, wo die Operation mehrere Körper je mit eigener Matrix bewegt und
+    deshalb keine meldet. Eine Spiegelung dreht den Umlaufsinn und bekommt
+    keinen Vermerk; ihr Gewinde wechselt die Hand.
     """
+    from app.core.perceive.features import note_movement
+
     body = mesh.raw.copy()
     moved(body, matrix)
     _carry_cache(mesh.raw, body, matrix)
-    return replace(
+    result = replace(
         mesh.replacing(body),
         cavity=apply(mesh.cavity, matrix) if mesh.cavity is not None else None,
     )
+    cells = np.asarray(matrix, dtype=np.float64)
+    if is_rigid(cells) and float(np.linalg.det(cells[:3, :3])) > 0.0:
+        note_movement(mesh, result, cells)
+    return result
 
 
 def is_rigid(matrix: np.ndarray) -> bool:

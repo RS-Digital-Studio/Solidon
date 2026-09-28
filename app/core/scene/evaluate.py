@@ -65,6 +65,7 @@ from app.core.perceive.features import (
     detect,
     freeform_dropped,
     known_detection,
+    moved_from,
     moved_twin,
     recognised_as_freeform,
     refined_features,
@@ -980,6 +981,7 @@ def _evaluate(
                 (position + index / len(result.objects)) / total,
                 (position + (index + 1) / len(result.objects)) / total,
             )
+            motion, moved_source = _motion_of(placed, result.transform, inputs, index)
             try:
                 prepared_objects[object_id] = _with_features(
                     placed,
@@ -990,7 +992,7 @@ def _evaluate(
                     # genauso wenig im Dokument wie die einer Operation.
                     watched,
                     findings,
-                    result.transform,
+                    motion,
                     previous_bounds.get(object_id),
                     recorded,
                     referenced_features.get(object_id, set()) | referenced_anywhere,
@@ -1008,11 +1010,12 @@ def _evaluate(
                     # gilt: roher Schlüssel plus Ausgabeindex — nicht der
                     # Objekthash danach, der die Wahl selbst enthielte.
                     scope=f"{key}:{index}",
-                    # Der Eingang an derselben Stelle, wenn es einen gibt:
-                    # Bei einer gemeldeten Bewegung der Beleg, dass die
-                    # Ausgabe sein bewegter Zwilling ist. Ob er es ist,
+                    # Der Eingang an derselben Stelle, wenn es einen gibt —
+                    # oder der, aus dem die Ausgabe belegt bewegt wurde
+                    # (:func:`_motion_of`): Bei einer Bewegung der Beleg, dass
+                    # die Ausgabe sein bewegter Zwilling ist. Ob er es ist,
                     # prüft ``carry_detection`` am Netz, nicht am Index.
-                    source_mesh=inputs[index].mesh if index < len(inputs) else None,
+                    source_mesh=moved_source,
                     # Die alten Merkmale jeder Ausgabe stammen bei einem
                     # einzigen Eingang aus ihm — auch die der zweiten Hälfte
                     # nach *Teilen* (RM-217).
@@ -3274,6 +3277,41 @@ def _ask_once_for_large_bodies(
             on_recognition_answer(operation.id, key, record)
         decided[object_id] = allowed
     return decided
+
+
+def _motion_of(
+    placed: SceneObject,
+    reported: Transform | None,
+    inputs: Sequence[SceneObject],
+    index: int,
+) -> tuple[Transform | None, Mesh | None]:
+    """Die starre Bewegung dieser Ausgabe und der Eingang, den sie bewegt hat.
+
+    Die gemeldete Bewegung einer Operation (``OpResult.transform``) gilt für
+    ihren einen Körper, und der Eingang an derselben Stelle ist ihr Beleg.
+    **Wer mehrere Körper je mit eigener Matrix bewegt, meldet keine** —
+    *Druckoptimal ausrichten* und *Auf dem Bett anordnen* über der ganzen Szene,
+    die Kopien eines Musters —, und bis zum 28.09.2026 lief die Erkennung an
+    jedem dieser Netze vollständig neu: am Minigolf-Satz 323 von 441 Sekunden
+    einer Auswertung, jede Schraube sechseinhalb Sekunden je Schritt. Dort
+    nennt der Bewegungsvermerk am Netz (``perceive.features.moved_from``)
+    Eingang und Matrix — geglaubt erst, wenn dieselben Dreiecke an den bewegten
+    Ecken liegen. Danach geht die Ausgabe denselben Weg wie nach einer
+    gemeldeten Bewegung: übertragene Erkennung, nachgeführte Merkmale.
+
+    Nur am Netz; ein exakter Körper führt seine Merkmale in der Operation
+    selbst nach (``transform.moved_object``).
+    """
+    source = inputs[index].mesh if index < len(inputs) else None
+    if reported is not None or not isinstance(placed.mesh, MeshData):
+        return reported, source
+    noted = moved_from(
+        placed.mesh, [entry.mesh for entry in inputs if isinstance(entry.mesh, MeshData)]
+    )
+    if noted is None:
+        return None, source
+    moved_source, matrix = noted
+    return cast(Transform, matrix), moved_source
 
 
 def _with_features(
