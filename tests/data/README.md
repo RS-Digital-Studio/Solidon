@@ -122,7 +122,8 @@ Altformate liegen unter `projects/example_v<N>.p3d`, eine Datei je
 Formatversion von 1 bis zur vorletzten, dazu die Sonderfälle mit eigenem
 Inhalt (`drilled_v6`, `split_v10`, `scad_v12`, `painted_v13`, `circle_v18`,
 `generated_glb_v24`, `matching_answers_v26`, `sketch_v30` — Skizzen aus der
-Zeit vor Ellipse und Kurvenbedingungen), und werden von
+Zeit vor Ellipse und Kurvenbedingungen —, `further_model_v37` — ein zweites
+Modell an seinen Dateikoordinaten, vor der freien Stelle), und werden von
 `test_project.py` durch die Migrationskette geschickt; eine neue
 Formatversion bringt ihre Beispieldatei mit (AGENTS.md, Checkliste
 Dateiformat).

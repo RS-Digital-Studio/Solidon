@@ -65,8 +65,15 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
 - **3MF und STEP sind Baugruppen.** STEP liest der Plan über
   `brep.step.read_assembly`, schreibt die Kennungen in `load_step.bodies` und
   legt sie als `ImportPlan.choices` daneben; die Zahl der Ausgänge steht vor
-  der Operation fest (§11). Beim ersten Modell kommen `place_on_bed` und
-  `centre` dazu; geht die Baugruppe nicht auf, wählt der Plan `*`.
+  der Operation fest (§11). Geht die Baugruppe nicht auf, wählt der Plan `*`.
+- **Die Lage schreibt der Plan in den Ladeschritt** (§17.1, Schritt 6;
+  `plan._placement`): das erste Modell `place_on_bed` und `centre`, jedes
+  weitere `place_on_bed` und `free_spot`, ohne Angabe nichts.
+  `ops._to_a_free_spot` legt alle Körper der Datei als Block an die erste
+  freie Stelle (`geom.prepare.first_free_spot`, gelesen aus `ctx.scene`,
+  Schlüssel über `ParamSpec.reads_scene`); eine Datei mit mehreren Platten
+  rückt hinter die letzte belegte (`plates_behind`). `load_step` fragt
+  dieselben Helfer.
 - **Native 3MF-Farben** — Werkzeugpaletten (Orca/Bambu-Metadaten,
   Prusa-Konfiguration), Objekt- und Part-Werkzeuge, bemalte Dreiecke — werden
   Materialslots; Prusa-Volumen behalten ihre Dreiecksbereiche.

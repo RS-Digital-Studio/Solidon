@@ -870,15 +870,26 @@ def test_the_first_model_of_a_project_lands_in_the_middle_of_the_bed() -> None:
     assert first.draft.params["centre"] is True
 
 
-def test_a_further_model_keeps_its_place() -> None:
-    """Die Gegenprobe, und der Grund für sie: Ein zweites Modell in die Mitte
-    zu schieben legte es in das erste hinein. Dafür gibt es *Auf dem Bett
-    anordnen* (§29)."""
+def test_a_further_model_is_planned_for_a_free_place() -> None:
+    """Die Gegenprobe zum ersten Modell (§17.1, Schritt 6; Robert, 28.09.2026).
+
+    In die Mitte geschoben läge ein zweites Modell im ersten; an seinen
+    Dateikoordinaten lag es meist außerhalb, obwohl auf den Platten Platz war.
+    Es kommt aufgesetzt an die erste freie Stelle — und auch das steht als
+    Parameter in der Operation.
+    """
     from app.core.ingest import plan
 
-    later = plan.import_plan("src_1", "modell.stl", _stl(_cube()))
+    later = plan.import_plan("src_1", "modell.stl", _stl(_cube()), first_model=False)
     assert "centre" not in later.draft.params
-    assert "place_on_bed" not in later.draft.params
+    assert later.draft.params["place_on_bed"] is True
+    assert later.draft.params["free_spot"] is True
+    first = plan.import_plan("src_1", "modell.stl", _stl(_cube()), first_model=True)
+    assert "free_spot" not in first.draft.params, "das erste bleibt mittig"
+    undecided = plan.import_plan("src_1", "modell.stl", _stl(_cube()))
+    assert not {"place_on_bed", "centre", "free_spot"} & set(undecided.draft.params), (
+        "ohne Angabe des Aufrufers bleibt die Lage der Datei"
+    )
 
 
 def test_only_a_mesh_is_placed_and_centred() -> None:
@@ -935,7 +946,8 @@ def test_the_window_actually_asks_for_the_first_model(qt_app: object) -> None:
 
 def test_a_second_model_is_not_dragged_into_the_first(qt_app: object) -> None:
     """Die Gegenprobe am selben Weg — und der Grund für sie steht in der
-    Geometrie: Zentriert läge das zweite Modell im ersten."""
+    Geometrie: Zentriert läge das zweite Modell im ersten. Es geht an eine
+    freie Stelle (Robert, 28.09.2026)."""
     from app.ui.session import Session
 
     session = Session()
@@ -945,7 +957,187 @@ def test_a_second_model_is_not_dragged_into_the_first(qt_app: object) -> None:
     second = session.history.operations[-1]
     assert second.op == "load"
     assert second.params.get("centre") is not True
-    assert second.params.get("place_on_bed") is not True
+    assert second.params.get("place_on_bed") is True
+    assert second.params.get("free_spot") is True
+
+
+# --- weitere Modelle an eine freie Stelle (Robert, 28.09.2026) --------------------
+
+
+def _box_stl(width: float, depth: float, height: float) -> bytes:
+    """Ein Quader um den Ursprung, wie eine heruntergeladene Datei ihn bringt."""
+    body = trimesh.creation.box(extents=(width, depth, height))
+    return bytes(body.export(file_type="stl"))
+
+
+def _imported_in_turn(profile: Profile, *files: tuple[str, bytes]) -> Any:
+    """Die Dateien nacheinander über den Einlesplan — wie Fenster und Kommandozeile."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    for number, (name, payload) in enumerate(files, start=1):
+        key = f"src_{number}"
+        project.document.sources[key] = Source(
+            id=key, kind="import", path=f"sources/{name}", sha256=""
+        )
+        project.sources[key] = payload
+        chosen = import_plan(key, name, payload, "mm", first_model=not project.document.ops)
+        history.apply(chosen.title, [chosen.draft])
+    return project, history
+
+
+def _scene(project: Project, profile: Profile, **options: Any) -> Any:
+    result = evaluate(project.document, profile, sources=ProjectSources(project), **options)
+    assert result.complete, [entry.values for entry in result.scene.report.findings]
+    return result
+
+
+def _apart(one: Any, other: Any, spacing: float) -> bool:
+    """Halten zwei Körper in der Aufsicht den Abstand — in irgendeiner Richtung?"""
+    a, b = one.mesh.bounds, other.mesh.bounds
+    return bool(
+        a.maximum[0] + spacing <= b.minimum[0] + 1e-6
+        or b.maximum[0] + spacing <= a.minimum[0] + 1e-6
+        or a.maximum[1] + spacing <= b.minimum[1] + 1e-6
+        or b.maximum[1] + spacing <= a.minimum[1] + 1e-6
+    )
+
+
+def test_a_further_model_lands_in_a_free_place_on_the_first_plate(profile: Profile) -> None:
+    """Zwei Würfel aus ``cube_clean.stl``: Der erste liegt mittig, der zweite
+    kommt auf dieselbe Platte an die erste freie Stelle — hinten links, wie
+    *Auf dem Bett anordnen* (§29) —, ganz auf der Druckfläche, im Abstand der
+    Anordnung und aufgesetzt. Der erste bleibt, wo er war.
+    """
+    from app.core.build_area import fits_on_bed
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project, _history = _imported_in_turn(profile, ("erster.stl", cube), ("zweiter.stl", cube))
+
+    result = _scene(project, profile)
+    first, second = result.scene.objects["obj_1"], result.scene.objects["obj_2"]
+    assert first.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0)), "der erste bleibt"
+    assert (first.plate, second.plate) == (0, 0), "Platz war auf der ersten Platte"
+    assert fits_on_bed(second.mesh, profile.printer), "ganz auf der Druckfläche"
+    assert second.mesh.bounds.minimum[2] == pytest.approx(0.0), "aufgesetzt"
+    assert _apart(first, second, ARRANGE_SPACING), "und mit dem Abstand der Anordnung"
+    # Die hinterste, dann linkeste Stelle der Fläche mit Rand (-123 … 123).
+    assert second.mesh.bounds.minimum[0] == pytest.approx(-123.0)
+    assert second.mesh.bounds.maximum[1] == pytest.approx(123.0)
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "load.free_spot" in codes, "und der Bericht sagt, wo es hinkam"
+
+
+def test_a_further_model_goes_to_the_next_plate_when_the_first_is_full(
+    profile: Profile,
+) -> None:
+    """Eine Platte von 230 mm auf dem 256er Bett lässt keinen Platz: Der Würfel
+    kommt auf die nächste, dort mittig, weil sie leer ist; der dritte legt sich
+    auf dieser zweiten Platte neben ihn, nicht in ihn."""
+    from app.core.build_area import fits_on_bed
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project, _history = _imported_in_turn(
+        profile,
+        ("platte.stl", _box_stl(230.0, 230.0, 4.0)),
+        ("erster.stl", cube),
+        ("zweiter.stl", cube),
+    )
+
+    result = _scene(project, profile)
+    plate, first, second = (result.scene.objects[key] for key in ("obj_1", "obj_2", "obj_3"))
+    assert [entry.plate for entry in (plate, first, second)] == [0, 1, 1]
+    assert fits_on_bed(first.mesh, profile.printer)
+    assert fits_on_bed(second.mesh, profile.printer)
+    assert first.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0)), "eine leere Platte: mittig"
+    assert _apart(first, second, ARRANGE_SPACING), "der dritte nicht im zweiten"
+    assert plate.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0)), "die Platte bleibt liegen"
+
+
+def test_an_assembly_as_further_model_moves_as_one(profile: Profile) -> None:
+    """Eine 3MF-Baugruppe als weiteres Modell: alle Körper auf einmal, an eine
+    freie Stelle, die Teile behalten ihre Lage zueinander (§17.1, Schritt 6)."""
+    from app.core.build_area import fits_on_bed
+    from app.core.export import threemf
+    from app.core.geom.prepare import ARRANGE_SPACING
+
+    links = trimesh.creation.box((10.0, 10.0, 10.0))
+    links.apply_translation((100.0, 50.0, 15.0))
+    rechts = trimesh.creation.box((10.0, 10.0, 10.0))
+    rechts.apply_translation((140.0, 50.0, 15.0))
+    group = threemf.write_assembly(
+        [
+            threemf.AssemblyPart(mesh=MeshData.of(links), name="Links"),
+            threemf.AssemblyPart(mesh=MeshData.of(rechts), name="Rechts"),
+        ]
+    )
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project, _history = _imported_in_turn(profile, ("wuerfel.stl", cube), ("gruppe.3mf", group))
+
+    result = _scene(project, profile)
+    first, left, right = (result.scene.objects[key] for key in ("obj_1", "obj_2", "obj_3"))
+    assert [entry.plate for entry in (first, left, right)] == [0, 0, 0]
+    for body in (left, right):
+        assert fits_on_bed(body.mesh, profile.printer), body.name
+        assert _apart(first, body, ARRANGE_SPACING), body.name
+        assert body.mesh.bounds.minimum[2] == pytest.approx(0.0), body.name
+    shift = [b - a for a, b in zip(left.mesh.bounds.centre, right.mesh.bounds.centre, strict=True)]
+    assert shift == pytest.approx([40.0, 0.0, 0.0]), "die Teile behalten ihre Lage zueinander"
+
+
+def test_an_older_further_load_keeps_the_place_of_its_file(profile: Profile) -> None:
+    """Ein Ladeschritt ohne den Schalter — gespeichert vor dem 28.09.2026 —
+    rechnet wie gespeichert: Das zweite Modell bleibt an seinen Dateikoordinaten."""
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project = new_project("centauri-carbon-2", "petg")
+    for key in ("src_1", "src_2"):
+        project.document.sources[key] = Source(
+            id=key, kind="import", path=f"sources/{key}.stl", sha256=""
+        )
+        project.sources[key] = cube
+    history = History(project.document)
+    history.apply(
+        _("Modell laden"),
+        [
+            OperationDraft(
+                op="load",
+                params={"source": "src_1", "unit": "mm", "place_on_bed": True, "centre": True},
+            )
+        ],
+    )
+    history.apply(
+        _("Modell laden"),
+        [OperationDraft(op="load", params={"source": "src_2", "unit": "mm"})],
+    )
+
+    result = _scene(project, profile)
+    second = result.scene.objects["obj_2"]
+    assert second.plate == 0
+    assert tuple(second.mesh.bounds.minimum) == pytest.approx((-10.0, -10.0, -10.0))
+    assert "load.free_spot" not in {entry.code for entry in result.scene.report.findings}
+
+
+def test_the_free_place_follows_the_model_before_it(profile: Profile) -> None:
+    """Die freie Stelle hängt an dem, was davor liegt — also auch der Schlüssel.
+
+    Wird der erste Würfel in Zentimetern gelesen, wird er 200 mm groß, und auf
+    der ersten Platte bleibt kein Platz für den zweiten. Mit Cache darf dann
+    nicht das alte Ergebnis zurückkommen (§15, ``ParamSpec.reads_scene``).
+    """
+    from app.core.scene.cache import ResultCache
+
+    cube = (MESHES / "cube_clean.stl").read_bytes()
+    project, history = _imported_in_turn(profile, ("erster.stl", cube), ("zweiter.stl", cube))
+    cache = ResultCache()
+    before = _scene(project, profile, cache=cache).scene.objects["obj_2"]
+    assert before.plate == 0
+
+    history.change_params(project.document.ops[0].id, {"unit": "cm"})
+    after = _scene(project, profile, cache=cache).scene.objects["obj_2"]
+
+    assert after.plate == 1, "kein Platz mehr neben 200 mm — die nächste Platte"
+    assert after.mesh.bounds.centre[:2] == pytest.approx((0.0, 0.0))
 
 
 # --- die Lade-Operation ---------------------------------------------------------

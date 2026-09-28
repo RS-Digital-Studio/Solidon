@@ -109,6 +109,7 @@ def param(
     required: bool | None = None,
     subtractive_on: tuple[str | bool, ...] | None = None,
     targets_feature: bool = False,
+    reads_scene: bool = False,
     feature_kinds: tuple[str, ...] = (),
     optional: bool = False,
     sketch_planes: tuple[str, ...] = (),
@@ -124,6 +125,10 @@ def param(
 
     ``targets_feature`` markiert einen Parameter, der ein Merkmal als **Ziel**
     nennt — siehe :attr:`app.core.types.ParamSpec.targets_feature`.
+
+    ``reads_scene`` markiert einen Schalter, unter dem die Operation die
+    übrigen Körper der Szene liest — siehe
+    :attr:`app.core.types.ParamSpec.reads_scene`.
 
     ``feature_kinds`` nennt die Merkmalsarten, die ein Merkmalsparameter
     annimmt — siehe :attr:`app.core.types.ParamSpec.feature_kinds`.
@@ -148,6 +153,7 @@ def param(
             "required": required,
             "subtractive_on": subtractive_on,
             "targets_feature": targets_feature,
+            "reads_scene": reads_scene,
             "feature_kinds": tuple(feature_kinds),
             "optional": optional,
             "sketch_planes": tuple(sketch_planes),
@@ -225,6 +231,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 depends_on=metadata["depends_on"],
                 subtractive_on=metadata["subtractive_on"],
                 targets_feature=metadata["targets_feature"],
+                reads_scene=metadata["reads_scene"],
                 feature_kinds=metadata["feature_kinds"],
                 optional=metadata["optional"],
                 sketch_planes=metadata["sketch_planes"],

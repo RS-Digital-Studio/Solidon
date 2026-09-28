@@ -1858,6 +1858,19 @@ class ParamSpec:
     "up_to"``: Eine zweite Operation mit Zielfläche hätte ihren Parameter exakt
     so nennen müssen, sonst hätte der Cache still ein veraltetes Ergebnis
     geliefert."""
+    reads_scene: bool = False
+    """Solange dieser Schalter an ist, liest die Operation die übrigen Körper
+    der Szene (Regel 3: lesen, nie ändern).
+
+    Die Schwester von ``OperationSpec.reads_other_bodies``, nur an einem Wert
+    statt an der ganzen Operation: *Modell einfügen* legt ein weiteres Modell
+    an die erste freie Stelle (``free_spot``, §17.1 Schritt 6) und muss dafür
+    wissen, was schon liegt. Ein Ladeschritt ohne den Schalter — jeder, der vor
+    dem 28.09.2026 gespeichert wurde — liest nichts davon und soll auch nicht
+    neu rechnen, wenn davor etwas anderes geändert wird. Der Cache-Schlüssel
+    bekommt die Hashes aller Objekte deshalb nur, solange der Wert wahr ist
+    (``evaluate._with_nested_context``), und nur dann gilt der Schritt als
+    Zugriff auf eine frühere Importgruppe (``ingest.plan.imported_group``)."""
     feature_kinds: tuple[str, ...] = ()
     """Welche Merkmalsarten dieser Merkmalsparameter annimmt — leer heißt jede.
 

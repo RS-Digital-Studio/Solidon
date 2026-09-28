@@ -85,6 +85,13 @@ entfernen; Normalen vereinheitlichen; Komponenten zählen, Kleinstteile
 erzwingen. Die Kette ist die Op `load` — ihre Parameter bleiben im Stapel
 sichtbar und änderbar.
 
+- **Die Lage steht im Ladeschritt, nie als Regel der Auswertung** (§17.1,
+  Schritt 6): das erste Modell aufgesetzt und mittig, jedes weitere aufgesetzt
+  an die erste freie Stelle (`free_spot`, Format 38, Robert 28.09.2026). Ein
+  neuer Lageschalter bekommt die Vorgabe, unter der alte Schritte liegen
+  bleiben, und eine Formatstufe — ein älteres Programm hielte sonst an dem
+  unbekannten Parameter an (`registry.params.validate`).
+
 - **Was zum Lesen eines Formats gehört, ist kein Befund**: STL verschweißt
   schweigend (`normalise(weld_is_reading=True)`, von `import_model` an der
   Endung gesetzt); OBJ, PLY und 3MF behalten den Befund. „Das Modell besteht

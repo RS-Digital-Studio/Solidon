@@ -101,6 +101,20 @@ class LoadParams(BaseParams):
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
         ),
     )
+    #: Robert, 28.09.2026: Ein weiteres Modell lag an seinen Dateikoordinaten
+    #: meist außerhalb, obwohl auf den Platten Platz war. Der Einlesplan setzt
+    #: den Schalter für jedes Modell nach dem ersten; Vorgabe aus, damit ein
+    #: älterer Ladeschritt liegen bleibt, wo er gespeichert wurde.
+    free_spot: bool = param(
+        title=_("An eine freie Stelle legen"),
+        default=False,
+        reads_scene=True,
+        doc=_(
+            "Legt das Modell neben die Teile, die schon im Projekt liegen: an die erste "
+            "freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. Geht vor "
+            "„Mittig auf das Bett legen“."
+        ),
+    )
     coordinates: str = param(
         title=_("Quellachsen"),
         default="legacy_raw",
@@ -383,18 +397,20 @@ def load(ctx: OpContext) -> OpResult:
             _named(result.findings, part.name) if len(parts) > 1 else list(result.findings)
         )
 
+    # **Mehrere Platten stehen schon an ihrer Stelle** (RM-252): Der Leser
+    # hat jedes Teil auf seine Platte gelegt, gemessen von der Bettmitte
+    # (``threemf._plate_layout``). Die Mitte des gemeinsamen Hüllquaders
+    # aller Platten wäre keine Mitte irgendeiner Platte.
+    several_plates = len({part.plate for part in parts}) > 1
     if (params.place_on_bed or params.centre) and len(outputs) > 1:
-        # **Mehrere Platten stehen schon an ihrer Stelle** (RM-252): Der Leser
-        # hat jedes Teil auf seine Platte gelegt, gemessen von der Bettmitte
-        # (``threemf._plate_layout``). Die Mitte des gemeinsamen Hüllquaders
-        # aller Platten wäre keine Mitte irgendeiner Platte.
-        several_plates = len({part.plate for part in parts}) > 1
         outputs = _group_on_bed(
             outputs,
             findings,
             place_on_bed=params.place_on_bed,
             centre=params.centre and not several_plates,
         )
+    if params.free_spot:
+        outputs = _to_a_free_spot(ctx, outputs, findings, several_plates=several_plates)
 
     if len(parts) > 1:
         findings.append(
@@ -548,24 +564,105 @@ def _group_on_bed(
     Liegt die Gruppe schon richtig, geschieht nichts und wird nichts gemeldet:
     ein Befund über eine Verschiebung um null wäre Lärm.
     """
-    boxes = [as_mesh_data(entry.mesh).bounds for entry in outputs]
-    low = [min(float(box.minimum[axis]) for box in boxes) for axis in range(3)]
-    high = [max(float(box.maximum[axis]) for box in boxes) for axis in range(3)]
-    group = BoundingBox((low[0], low[1], low[2]), (high[0], high[1], high[2]))
-    offset = bed_offset(group, place_on_bed=place_on_bed, centre=centre)
+    offset = bed_offset(_bounds_of(outputs), place_on_bed=place_on_bed, centre=centre)
     if all(is_zero(value) for value in offset):
         return outputs
-
-    lift = translation(offset)
-    moved = [
-        dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
-    ]
-    # Ein Befund mit Ort zeigt auf den Körper, und der steht jetzt woanders.
-    findings[:] = moved_findings(findings, offset)
+    moved = _moved(outputs, findings, offset)
     findings.append(
         group_on_bed_finding(offset, place_on_bed=place_on_bed, centre=centre, several=True)
     )
     return moved
+
+
+def _bounds_of(outputs: Sequence[SceneObject]) -> BoundingBox:
+    """Der gemeinsame Hüllquader aller Körper einer Datei."""
+    boxes = [as_mesh_data(entry.mesh).bounds for entry in outputs]
+    low = [min(float(box.minimum[axis]) for box in boxes) for axis in range(3)]
+    high = [max(float(box.maximum[axis]) for box in boxes) for axis in range(3)]
+    return BoundingBox((low[0], low[1], low[2]), (high[0], high[1], high[2]))
+
+
+def _moved(outputs: list[SceneObject], findings: list[Finding], offset: Vec3) -> list[SceneObject]:
+    """Alle Körper um denselben Versatz — und die Befunde mit Ort mit ihnen."""
+    lift = translation(offset)
+    # Ein Befund mit Ort zeigt auf den Körper, und der steht jetzt woanders.
+    findings[:] = moved_findings(findings, offset)
+    return [
+        dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
+    ]
+
+
+def _to_a_free_spot(
+    ctx: OpContext,
+    outputs: list[SceneObject],
+    findings: list[Finding],
+    *,
+    several_plates: bool,
+) -> list[SceneObject]:
+    """Ein weiteres Modell an die erste freie Stelle (§17.1, Schritt 6).
+
+    Alle Körper der Datei gehen **auf einmal**, als ein Block: Die Teile
+    behalten ihre Lage zueinander, wie beim ersten Modell. Eine Datei mit
+    mehreren Platten behält ihre Aufteilung und kommt hinter die letzte
+    belegte Platte — dort überlappt nichts, und jedes Teil bleibt an seiner
+    Stelle (:func:`plates_behind`).
+    """
+    if several_plates:
+        first = plates_behind(ctx)
+        if first == 0:
+            return outputs
+        findings.append(plates_behind_finding(first))
+        return [dataclasses.replace(entry, plate=entry.plate + first) for entry in outputs]
+    offset, plate = free_spot_offset(ctx, _bounds_of(outputs))
+    if not all(is_zero(value) for value in offset):
+        outputs = _moved(outputs, findings, offset)
+    findings.append(free_spot_finding(plate))
+    return [dataclasses.replace(entry, plate=plate) for entry in outputs]
+
+
+def free_spot_offset(ctx: OpContext, group: BoundingBox) -> tuple[Vec3, int]:
+    """Versatz und Platte für ein weiteres Modell — für Netz und STEP.
+
+    Gelesen wird die Szene vor diesem Schritt, nur lesend (Regel 3); das
+    Ergebnis folgt aus Parametern und Stapel (§15.1), und der Schlüssel kennt
+    die Szene über ``ParamSpec.reads_scene``. Abstand und Plattenzahl sind die
+    Vorgaben von *Auf dem Bett anordnen*.
+    """
+    from app.core.geom.prepare import first_free_spot
+
+    occupied = [(entry.mesh.bounds, entry.plate) for entry in ctx.scene.objects.values()]
+    (dx, dy), plate = first_free_spot(group, ctx.profile, occupied)
+    return (dx, dy, 0.0), plate
+
+
+def plates_behind(ctx: OpContext) -> int:
+    """Die erste Platte hinter der letzten, auf der in der Szene etwas liegt."""
+    return max((entry.plate for entry in ctx.scene.objects.values()), default=-1) + 1
+
+
+def free_spot_finding(plate: int) -> Finding:
+    """Wohin ein weiteres Modell gekommen ist — die Platte, wie der Kunde sie zählt."""
+    return Finding(
+        code="load.free_spot",
+        severity="info",
+        message=_(
+            "Das Modell kam an die erste freie Stelle auf Platte {number}.", number=plate + 1
+        ),
+        values={"plate": plate + 1},
+    )
+
+
+def plates_behind_finding(first: int) -> Finding:
+    """Ab welcher Platte eine Datei mit mehreren Platten liegt."""
+    return Finding(
+        code="load.plates_behind",
+        severity="info",
+        message=_(
+            "Die Platten der Datei kommen hinter die vorhandenen, ab Platte {number}.",
+            number=first + 1,
+        ),
+        values={"plate": first + 1},
+    )
 
 
 def group_on_bed_finding(

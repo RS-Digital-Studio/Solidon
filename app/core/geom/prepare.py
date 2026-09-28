@@ -2296,6 +2296,11 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
 #: statt einer Liste, die niemand mehr überblickt.
 MAX_PLATES = 12
 
+#: Die Luft zwischen zwei Teilen, die *Auf dem Bett anordnen* vorgibt — und die
+#: ein weiteres Modell beim Einlesen bekommt (§17.1, Schritt 6). Eine Stelle,
+#: damit beide Wege denselben Abstand halten.
+ARRANGE_SPACING: Final = 5.0
+
 
 def compensate_elephant_foot(
     mesh: MeshData,
@@ -2752,6 +2757,63 @@ def arrange_on_bed(
             )
         )
     return Arrangement(meshes=arranged, plates=assigned, findings=findings)
+
+
+def first_free_spot(
+    body: BoundingBox,
+    profile: Profile,
+    occupied: Sequence[tuple[BoundingBox, int]],
+    *,
+    spacing: float = ARRANGE_SPACING,
+    plates: int = MAX_PLATES,
+) -> tuple[tuple[float, float], int]:
+    """Wohin ein weiteres Modell kommt, ohne dass etwas anderes sich bewegt (§17.1, §29).
+
+    **Der Anlass** (Robert, 28.09.2026: „wenn wir ein weiteres modell
+    hinzufügen zu einem schon vorhandenen landet es immer außerhalb, obwohl auf
+    den anderen platten noch platz ist"). Ein weiteres Modell blieb an seinen
+    Dateikoordinaten, und die liegen selten dort, wo auf dem Bett Platz ist.
+
+    Dieselbe Regel wie :func:`arrange_on_bed`, Platte für Platte in ihrer
+    Reihenfolge: die hinterste, dann linkeste freie Stelle, mit ``spacing`` zu
+    jedem Nachbarn und zum Rand. Was schon liegt (``occupied``, Grenzen und
+    Platte), bleibt liegen und belegt seinen Platz auf seiner Platte. Eine
+    leere Platte nimmt das Modell immer, und dort liegt es mittig wie jedes
+    Modell auf einem leeren Bett. Passt es auf keine belegte Platte, kommt es
+    auf die nächste; ist keine mehr erlaubt, liegt es neben der letzten, ohne
+    Überschneidung, und :func:`check_build_volume` sagt es.
+
+    ``body`` sind die Grenzen des ganzen Modells: Eine Baugruppe wird als
+    Ganzes gelegt, die Teile behalten ihre Lage zueinander. Gelegt wird ein
+    Quader aus diesen Grenzen, nie die Form — der Platz eines Quaders ist nie
+    zu knapp bemessen, und für einen exakten Körper muss nichts vernetzt werden.
+    Zurück kommen der Versatz in X und Y und die Platte; die Höhe bleibt dem
+    Aufsetzen.
+    """
+
+    def block(bounds: BoundingBox) -> MeshData:
+        # Eine flache Fläche ist in einer Achse null breit; ein Quader braucht
+        # in jeder Achse etwas, sonst hat er keine Seiten.
+        low = [float(value) for value in bounds.minimum]
+        high = [max(float(bounds.maximum[axis]), low[axis] + EPS_GEOM) for axis in range(3)]
+        return MeshData.of(trimesh.creation.box(bounds=[low, high]))
+
+    moving = block(body)
+    area = printable_area(profile.printer, margin=spacing)
+    last = max((plate for _bounds, plate in occupied), default=-1)
+    final = min(last + 1, max(plates, 1) - 1)
+    for plate in range(final + 1):
+        standing = [(block(bounds), 0) for bounds, at in occupied if at == plate]
+        trial = arrange_on_bed([moving], profile, spacing, plates=1, occupied=standing)
+        placed = trial.meshes[0]
+        if standing and plate < final and not fits_xy(placed, area):
+            continue
+        shift = (
+            float(placed.bounds.minimum[0] - moving.bounds.minimum[0]),
+            float(placed.bounds.minimum[1] - moving.bounds.minimum[1]),
+        )
+        return shift, plate
+    return (0.0, 0.0), final
 
 
 def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spacing: float) -> bool:

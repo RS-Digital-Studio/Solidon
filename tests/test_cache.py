@@ -1926,6 +1926,32 @@ def test_the_key_reads_the_bodies_that_were_not_chosen() -> None:
     assert "#scene" not in quiet, "wer die Szene nicht liest, hängt nicht an ihr"
 
 
+@pytest.mark.parametrize("op", ["load", "load_step"])
+def test_a_load_hangs_on_the_scene_only_while_it_looks_for_a_free_spot(op: str) -> None:
+    """Die freie Stelle eines weiteren Modells liest die Szene (``reads_scene``).
+
+    Mit dem Schalter gehört jeder Körper davor in den Schlüssel; ohne ihn — in
+    jedem Ladeschritt, der vor dem 28.09.2026 gespeichert wurde — bleibt der
+    Schlüssel, wie er war: Ein schwerer Import rechnet nicht neu, weil davor
+    etwas anderes geändert wurde.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+
+    spec = REGISTRY.get(op)
+    looking = {"free_spot": True}
+    before = _with_nested_context(spec.params, looking, {}, None, None, {"obj_1": "a1"})
+    after = _with_nested_context(spec.params, looking, {}, None, None, {"obj_1": "a2"})
+    assert before["#scene"] != after["#scene"], "wandert der erste Körper, kippt der Schlüssel"
+
+    for values in ({"free_spot": False}, {}):
+        quiet = _with_nested_context(spec.params, values, {}, None, None, {"obj_1": "a1"})
+        assert "#scene" not in quiet, values
+
+
 def test_an_exact_sketch_plane_hashes_only_its_named_body() -> None:
     """Eine gleichnamige Fläche eines anderen Körpers ist keine Abhängigkeit.
 

@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 37
+FORMAT_VERSION: Final = 38
 
 
 @dataclass(frozen=True, slots=True)
@@ -1016,6 +1016,23 @@ def _keep_edge_groups_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _place_further_models_freely(data: dict[str, Any]) -> dict[str, Any]:
+    """37 → 38: Ein weiteres Modell kommt an eine freie Stelle (Robert, 28.09.2026).
+
+    Neue Ladeschritte nach dem ersten tragen ``free_spot`` (``load`` und
+    ``load_step``) und legen das Modell aufgesetzt an die erste freie Stelle.
+    Ein älterer Schritt trägt den Schalter nicht, und ohne ihn bleibt das
+    Modell an seinen Dateikoordinaten wie gespeichert — umzuschreiben ist
+    also nichts (festgehalten an ``tests/data/projects/further_model_v37.p3d``).
+
+    Die Stufe steht für die andere Richtung wie 32 → 33: Ein älteres Programm
+    hielte an dem unbekannten Parameter mitten in der Auswertung an, als wäre
+    die Datei kaputt; mit der Versionsgrenze sagt es, dass ein Update sie
+    öffnet.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1054,6 +1071,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=34, to_version=35, apply=_keep_repairs_as_they_were),
     Step(from_version=35, to_version=36, apply=_mark_own_print_settings),
     Step(from_version=36, to_version=37, apply=_keep_edge_groups_as_they_were),
+    Step(from_version=37, to_version=38, apply=_place_further_models_freely),
 )
 
 

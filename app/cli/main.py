@@ -451,10 +451,10 @@ def command_import(args: argparse.Namespace) -> int:
     # Die Einheitenfrage kommt erst nach dem Plan: nur ein Netz hat sie. STEP
     # trägt seine Einheit selbst, eine flache Zeichnung hat keine dritte
     # Dimension — dort wäre die Frage eine Zumutung ohne Zweck.
-    # Das erste Modell eines Projekts kommt mittig auf die Platte (§17.1,
-    # Schritt 6). Gefragt wird der Stapel und nicht die Szene: Er steht fest,
-    # bevor irgendetwas ausgewertet ist, und die Operation trägt die
-    # Entscheidung danach selbst.
+    # Das erste Modell eines Projekts kommt mittig auf die Platte, jedes weitere
+    # an die erste freie Stelle (§17.1, Schritt 6). Gefragt wird der Stapel und
+    # nicht die Szene: Er steht fest, bevor irgendetwas ausgewertet ist, und die
+    # Operation trägt die Entscheidung danach selbst.
     first_model = not project.document.ops
     # Und derselbe freie Name wie im Fenster: Zweimal dieselbe Datei ergibt
     # zwei Körper, die sich im Baum auseinanderhalten lassen.

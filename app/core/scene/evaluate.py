@@ -4681,9 +4681,17 @@ def _with_nested_context(
     (``reads_other_bodies``), und der Schlüssel bekommt die Hashes **aller**
     Objekte: Die Eingänge stehen ohnehin darin, doppelt schadet nicht, und
     „alle außer den Eingängen" wüsste hier niemand — die Eingangsliste steht
-    an der Operation, nicht am Parametersatz."""
+    an der Operation, nicht am Parametersatz.
+
+    **Die fünfte hängt an einem Schalter** (``ParamSpec.reads_scene``): Ein
+    weiteres Modell an eine freie Stelle (``load.free_spot``) liest die Szene
+    wie die vierte, aber nur, solange der Schalter an ist — ein älterer
+    Ladeschritt ohne ihn behält seinen Schlüssel."""
     context: dict[str, Any] = {}
-    if reads_other_bodies and hashes is not None:
+    scene_read = reads_other_bodies or any(
+        spec.reads_scene and resolved.get(spec.name, spec.default) for spec in params_class.spec()
+    )
+    if scene_read and hashes is not None:
         # Sortiert, weil ein Schlüssel aus einer Wörterbuchreihenfolge kein
         # Schlüssel ist: Zwei gleiche Szenen müssen denselben ergeben.
         context["#scene"] = tuple(sorted(hashes.items()))

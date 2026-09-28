@@ -82,6 +82,18 @@ class LoadStepParams(BaseParams):
             "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
         ),
     )
+    #: Derselbe Schalter wie an ``load`` (Robert, 28.09.2026); Vorgabe aus, damit
+    #: ein älterer Ladeschritt liegen bleibt, wo er gespeichert wurde.
+    free_spot: bool = param(
+        title=_("An eine freie Stelle legen"),
+        default=False,
+        reads_scene=True,
+        doc=_(
+            "Legt das Modell neben die Teile, die schon im Projekt liegen: an die erste "
+            "freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. Geht vor "
+            "„Mittig auf das Bett legen“."
+        ),
+    )
     copy: int = param(
         title=_("Kopie"),
         default=0,
@@ -208,12 +220,13 @@ def _whole_file(ctx: OpContext, params: LoadStepParams, payload: bytes, stem: st
 
     solid = step.read(payload)
     findings = [_loaded(solid.face_count, solid.edge_count), _metadata_lost(), *_not_closed(solid)]
-    placed = _bed_offset(step.shape_bounds(solid.shape), params, several=False)
-    if placed is not None:
-        solid = Solid(solid.shape.Moved(TopLoc_Location(placed[0])))
-        findings.append(placed[1])
+    offset, placing, plate = _bed_offset(ctx, step.shape_bounds(solid.shape), params, several=False)
+    if offset is not None:
+        solid = Solid(solid.shape.Moved(TopLoc_Location(offset)))
+    findings.extend(placing)
     name = _named_copy(stem, params, single=True)
-    return OpResult(outputs=[_object(name, solid, cancelled=ctx.cancelled)], findings=findings)
+    entry = dataclasses.replace(_object(name, solid, cancelled=ctx.cancelled), plate=plate)
+    return OpResult(outputs=[entry], findings=findings)
 
 
 def _metadata_lost() -> Finding:
@@ -254,10 +267,10 @@ def _assembly(
         )
     chosen = [by_key[key] for key in keys]
     findings: list[Finding] = []
-    placed = _bed_offset(_group_bounds(chosen), params, several=len(chosen) > 1)
-    offset = placed[0] if placed is not None else None
-    if placed is not None:
-        findings.append(placed[1])
+    offset, placing, plate = _bed_offset(
+        ctx, _group_bounds(chosen), params, several=len(chosen) > 1
+    )
+    findings.extend(placing)
     # Farben sind eine Aussage der Datei erst, wenn sie mehr als eine kennt —
     # dieselbe Regel wie bei der 3MF (``threemf._groups_of``): Die eine Farbe,
     # in der ein CAD-Programm alles zeigt, hat niemand als Filament gewählt.
@@ -292,6 +305,7 @@ def _assembly(
                 kind="brep",
                 features=features,
                 material_slots=materials,
+                plate=plate,
             )
         )
         if dropped:
@@ -429,33 +443,48 @@ def _group_bounds(
 
 
 def _bed_offset(
+    ctx: OpContext,
     bounds: tuple[float, float, float, float, float, float],
     params: LoadStepParams,
     *,
     several: bool,
-) -> tuple[Any, Finding] | None:
-    """Der gemeinsame Versatz aufs Bett und in seine Mitte — und sein Befund.
+) -> tuple[Any, list[Finding], int]:
+    """Der gemeinsame Versatz aufs Bett, in seine Mitte oder an die erste
+    freie Stelle — mit seinen Befunden und der Platte.
 
-    Dieselbe Regel wie beim Netz (``ingest.ops._group_on_bed``, §17.1 Schritt
-    6): Eine Baugruppe geht als Ganzes, die Teile behalten ihre Lage
-    zueinander. Verschoben wird über eine Lage an der Form, nicht über Dreiecke
-    — der Körper bleibt exakt.
+    Dieselbe Regel wie beim Netz (``ingest.ops._group_on_bed`` und
+    ``_to_a_free_spot``, §17.1 Schritt 6): Eine Baugruppe geht als Ganzes, die
+    Teile behalten ihre Lage zueinander. Verschoben wird über eine Lage an der
+    Form, nicht über Dreiecke — der Körper bleibt exakt. Ohne Versatz ist die
+    Lage ``None``.
     """
-    if not (params.place_on_bed or params.centre):
-        return None
-    from OCP.gp import gp_Trsf, gp_Vec
+    from app.core.ingest.ops import free_spot_finding, free_spot_offset, group_on_bed_finding
 
-    from app.core.ingest.ops import group_on_bed_finding
-
+    findings: list[Finding] = []
     group = BoundingBox(bounds[:3], bounds[3:])
     offset = bed_offset(group, place_on_bed=params.place_on_bed, centre=params.centre)
+    if not all(abs(value) <= EPS_GEOM for value in offset):
+        findings.append(
+            group_on_bed_finding(
+                offset, place_on_bed=params.place_on_bed, centre=params.centre, several=several
+            )
+        )
+    plate = 0
+    if params.free_spot:
+        seated = BoundingBox(
+            (bounds[0] + offset[0], bounds[1] + offset[1], bounds[2] + offset[2]),
+            (bounds[3] + offset[0], bounds[4] + offset[1], bounds[5] + offset[2]),
+        )
+        (dx, dy, _dz), plate = free_spot_offset(ctx, seated)
+        offset = (offset[0] + dx, offset[1] + dy, offset[2])
+        findings.append(free_spot_finding(plate))
     if all(abs(value) <= EPS_GEOM for value in offset):
-        return None
+        return None, findings, plate
+    from OCP.gp import gp_Trsf, gp_Vec
+
     trsf = gp_Trsf()
     trsf.SetTranslation(gp_Vec(*offset))
-    return trsf, group_on_bed_finding(
-        offset, place_on_bed=params.place_on_bed, centre=params.centre, several=several
-    )
+    return trsf, findings, plate
 
 
 def _composed(offset: Any, placement: Any) -> Any:

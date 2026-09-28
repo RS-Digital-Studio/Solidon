@@ -31,7 +31,10 @@ def _imported_pair(lower_z=-5.0):
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/paar.3mf", sha256=checksum(payload)
     )
-    prepared = plan.import_plan("src_1", "paar.3mf", payload, first_model=False)
+    # Ohne Lageentscheidung: Die Datei behält ihre Koordinaten wie jeder weitere
+    # Import, der vor dem 28.09.2026 gespeichert wurde. Nur dann gibt es unter
+    # der Platte etwas gemeinsam aufzusetzen.
+    prepared = plan.import_plan("src_1", "paar.3mf", payload)
     history.apply(prepared.title, [prepared.draft])
     return project, history, project.document.ops[-1].outputs
 
@@ -186,6 +189,24 @@ def test_a_later_cross_body_reference_ends_the_import_group_offer(profile):
             )
         ],
     )
+    assert plan.imported_group(project.document, targets[0], live) == ()
+
+
+def test_a_later_import_looking_for_a_free_spot_ends_the_import_group_offer(profile):
+    """Ein weiteres Modell an eine freie Stelle liest die Lage der Gruppe (``reads_scene``)."""
+    project, history, targets = _imported_pair()
+    live = evaluate(project.document, profile, sources=ProjectSources(project)).scene.objects
+    payload = project.sources["src_1"]
+    project.sources["src_2"] = payload
+    project.document.sources["src_2"] = Source(
+        id="src_2", kind="import", path="sources/noch.3mf", sha256=checksum(payload)
+    )
+    kept = plan.import_plan("src_2", "noch.3mf", payload)
+    history.apply(kept.title, [kept.draft])
+    assert plan.imported_group(project.document, targets[0], live) == targets, "liest nichts"
+    history.undo()
+    placed = plan.import_plan("src_2", "noch.3mf", payload, first_model=False)
+    history.apply(placed.title, [placed.draft])
     assert plan.imported_group(project.document, targets[0], live) == ()
 
 

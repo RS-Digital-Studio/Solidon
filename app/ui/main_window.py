@@ -21393,7 +21393,8 @@ class MainWindow(QMainWindow):
     def _place_on_bed_after_error(self, error: AppError) -> None:
         """Ein Klick gegen den häufigsten Befund von Weg 1 (§17.1, §2.7).
 
-        Ein weiterer Import behält seine Koordinaten. Ein am Befund angebotenes
+        Ein Import ohne Lageentscheidung (ältere Schritte, ausgeschaltete
+        Haken) behält seine Koordinaten. Ein am Befund angebotenes
         gemeinsames Aufsetzen gilt für dessen gespeicherte Importgruppe; erst
         nach erneuter Prüfung entsteht ein eigener rücknehmbarer Schritt.
         Einzelhandlungen behalten ihren bisherigen Umfang (Regel 19).
