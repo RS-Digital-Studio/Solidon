@@ -18880,9 +18880,12 @@ def test_an_edge_question_shows_the_edge_line_in_the_dialog_and_emphasises_by_to
     )
 
     class Answer(module.AskDialog):
-        def __init__(self, question, choices, parent=None, *, labels=None):
+        # ``as_buttons`` seit ``c2ebc0fe0``: Kanten brauchen die Liste, weil die
+        # markierte Zeile im Bild leuchtet — Knöpfe gibt es hier nie.
+        def __init__(self, question, choices, parent=None, *, labels=None, as_buttons=False):
+            assert not as_buttons, "Kandidaten stehen in der Liste"
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels)
+            super().__init__(question, choices, parent, labels=labels, as_buttons=as_buttons)
 
         def exec(self):
             shown.append(("dialog", None))
@@ -18938,9 +18941,12 @@ def test_a_feature_question_names_its_candidates_like_the_tree(
     monkeypatch.setattr(window.viewport, "show_candidates", lambda *args: None)
 
     class Answer(module.AskDialog):
-        def __init__(self, question, choices, parent=None, *, labels=None):
+        # ``as_buttons`` seit ``c2ebc0fe0``: Merkmale brauchen die Liste, weil
+        # die markierte Zeile im Bild leuchtet — Knöpfe gibt es hier nie.
+        def __init__(self, question, choices, parent=None, *, labels=None, as_buttons=False):
+            assert not as_buttons, "Kandidaten stehen in der Liste"
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels)
+            super().__init__(question, choices, parent, labels=labels, as_buttons=as_buttons)
 
         def exec(self):
             self.list.setCurrentRow(0)
