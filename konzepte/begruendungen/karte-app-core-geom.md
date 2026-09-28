@@ -1481,12 +1481,18 @@ Sacklochboden `FEATURE_OVERLAP` Spiel, nicht zehn Nanometer, und
   Übergang als einen geschlossenen Rotationskörper. Die tatsächliche Op
   und ihre Vorschau verwenden das Material des Zielkörpers.
   Das Werkzeug reicht exakt von null bis zur negativen Eingabetiefe; ein
-  Blindboden erhält keine Überlappungszugabe, auch nicht beim Mittenanker.
-  Durchgangsaufrufer wählen ausdrücklich größere Höhen. An den bekannten
-  lokalen Werkzeugenden bereinigt `drill()` ausschließlich Float64-Rauschen
-  der Koordinatentransformation, je Vertex begrenzt durch die wirklichen
-  Matrixterme. Echte Flächenabstände oberhalb dieser Rechengrenze bleiben
-  erhalten; Materialtoleranz und globale Schweißtoleranz ändern sich nicht.
+  Blindboden im Material erhält keine Überlappungszugabe, auch nicht beim
+  Mittenanker. Durchgangsaufrufer wählen ausdrücklich größere Höhen.
+  **Seit RM-274 wandert das Werkzeug in die Welt**, der Körper bleibt, wo er
+  ist: Vorher lag er für den Schnitt im Rahmen der Bohrung, und die Rundung
+  von Hin- und Rückweg versetzte am Gartenschlauchhalter 17 490 Ecken, die der
+  Schnitt nie berührte. Die Bereinigung an den Werkzeugenden, die im Rahmen
+  Körperecken im Float64-Rauschen genau auf eine Endebene legte, gibt es
+  damit nicht mehr. An ihre Stelle tritt `_open_ends`: Ein Ende, das näher
+  als die Schweißtoleranz in einer Körperfläche liegt, deren Dreiecke vom
+  Werkzeug weg zeigen, reicht um `BOOLEAN_OVERLAP` in die Luft dahinter —
+  bündig ließe die Differenz an einer schrägen oder float32-Fläche eine Haut
+  stehen; zeigt die Fläche zum Werkzeug, bleibt das Ende genau.
 
 - **Merkmalswerkzeuge umfassen die belegte vollständige Form.**
   `feature_placement_geometry()` bestimmt den wirklichen Materialanschluss

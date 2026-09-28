@@ -397,6 +397,46 @@ def test_resizing_a_bore_does_not_use_lapack_rounding_for_its_centre(
         forget_cache()
 
 
+def _drilled_along_the_face() -> str:
+    """*Bohrung setzen* mit freier Richtung an der schräg liegenden Platte (RM-274).
+
+    Das Werkzeug wandert über den Rahmen der Bohrung in die Welt, die Enden in
+    einer Fläche mit Luft dahinter bekommen die Zugabe (``prepare._open_ends``):
+    Sackloch, Aufweitung (Übergang über die exakten Winkelfunktionen) und ein
+    Boden in der Unterseite. Bis zur Durchsicht 0.5.1 lag der Körper im Rahmen,
+    und den Rückweg rechnete ``np.linalg.inv``. **Das Langloch fehlt hier mit
+    Grund:** Seine Bögen tastet ``sketch_solid._arc_points`` über ``math.atan2``,
+    ``math.cos`` und ``math.sin`` ab, und das ist ein offener Posten von RM-187
+    (mit ihm wird dieser Weg rot).
+    """
+    from app.core.geom.transform import apply, moved_points, rotation, turned
+
+    turn = rotation("x", 33.0)
+    tilted = apply(_plate(), turn)
+    normal = turned(np.array([[0.0, 0.0, 1.0]]), turn)[0]
+    prints = []
+    for spot, values in (
+        ((5.0, 8.0), {"depth": 3.0}),
+        ((-5.0, 12.0), {"depth": 5.0, "widening_diameter": 9.0, "widening_depth": 1.5}),
+        ((25.0, 8.0), {"depth": 8.0}),
+    ):
+        mouth = moved_points(np.array([[spot[0], spot[1], 8.0]]), turn)[0]
+        drilled = _registered(
+            "drill_hole",
+            tilted,
+            diameter=4.0,
+            x=float(mouth[0]),
+            y=float(mouth[1]),
+            z=float(mouth[2]),
+            nx=float(normal[0]),
+            ny=float(normal[1]),
+            nz=float(normal[2]),
+            **values,
+        )
+        prints.append(_mesh_print(drilled))
+    return "|".join(prints)
+
+
 def _turned_plate() -> str:
     """*Drehen* um die eigene Mitte — um 37 Grad, also keine Vierteldrehung."""
     return _mesh_print(_registered("rotate_object", _plate(), axis="z", angle=37.0))
@@ -648,6 +688,7 @@ _WAYS: dict[str, Callable[[], str]] = {
     "corner_chamfer": lambda: _worked_corner(False),
     "corner_fillet": lambda: _worked_corner(True),
     "curved_mouth": _curved_mouth,
+    "drill_hole": _drilled_along_the_face,
     "fill_band": _bore_wall_band,
     "fill_bridged": _top_with_holes,
     "import_repair": _mended_import,
@@ -770,36 +811,6 @@ def test_a_pocket_circle_takes_the_same_corners_as_the_lathe() -> None:
     table = lathe.circle_points(sections=ARC_STEPS, radius=7.5, centre=(1.25, -2.5))
 
     assert fingerprint(ring) == fingerprint(table)
-
-
-def test_a_rigid_inverse_moves_without_blas() -> None:
-    """Die Verschiebung der Umkehrbewegung wird elementweise gerechnet.
-
-    ``turn.T @ t`` ging durch BLAS, und das zieht Multiplikation und Addition
-    je nach CPU zu einer FMA zusammen — die letzte Stelle hing an der
-    Maschine, und die Verschiebung wirkt auf jeden Punkt des Körpers. Der
-    Sollwert ist hier die Rechnung selbst, Schritt für Schritt in Python: Jede
-    Operation rundet einzeln, genau wie ``transform.moved_points``.
-    """
-    cos, sin = units.circle_point(7, 2)
-    matrix = np.array(
-        [
-            [cos, -sin, 0.0, 12.345678901],
-            [sin, cos, 0.0, -98.7654321],
-            [0.0, 0.0, 1.0, 3.14159],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
-    )
-
-    back = lathe.rigid_inverse(matrix)
-
-    for row in range(3):
-        expected = -(
-            float(matrix[0, row]) * float(matrix[0, 3])
-            + float(matrix[1, row]) * float(matrix[1, 3])
-            + float(matrix[2, row]) * float(matrix[2, 3])
-        )
-        assert float(back[row, 3]) == expected
 
 
 def test_a_mirrored_revolve_still_points_outward() -> None:

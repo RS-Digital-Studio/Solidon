@@ -447,6 +447,26 @@ def test_text_preview_and_real_body_share_geometry_and_orientation(normal, profi
     assert plain.volume < 0.9 * tool.volume, (plain.volume, tool.volume)
 
 
+def _placed_like_the_cut(tool, normal, position):
+    """Das Vorschauwerkzeug in den Rahmen der Fläche gelegt, wie die Operation es tut.
+
+    Seit RM-274 wandert das Werkzeug in die Welt, statt dass der Körper in den
+    Rahmen der Bohrung wandert; die Boolesche bekommt es also in Weltlage. Die
+    Richtung wird wie in ``prepare.drill`` über ``math.hypot`` normiert.
+    """
+    from app.core.geom.transform import moved
+    from app.core.sketch.planes import frame_of
+
+    length = math.hypot(*normal)
+    frame = frame_of(tuple(value / length for value in normal), position)
+    matrix = np.eye(4)
+    matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    matrix[:3, 3] = position
+    placed = tool.raw.copy()
+    moved(placed, matrix)
+    return np.asarray(placed.vertices)
+
+
 def test_drill_preview_and_actual_cut_share_the_same_local_tool(profile, monkeypatch):
     import app.core.geom.prepare as module
 
@@ -465,7 +485,11 @@ def test_drill_preview_and_actual_cut_share_the_same_local_tool(profile, monkeyp
     module.drill(
         mesh, position=(0.0, 0.0, 4.0), axis="z", normal=(0.3, 0.4, 0.5), profile=profile, **values
     )
-    assert captured[0].raw.vertices == pytest.approx(preview.raw.vertices, abs=1e-12)
+    # Die schräge Mündungsebene geht nur durch die Stelle, nicht durch die
+    # Oberseite: Kein Ende liegt in einer Fläche, das Werkzeug bleibt das der Vorschau.
+    assert captured[0].raw.vertices == pytest.approx(
+        _placed_like_the_cut(preview, (0.3, 0.4, 0.5), (0.0, 0.0, 4.0)), abs=1e-12
+    )
 
 
 def test_only_real_placement_operations_accept_surface_values():
@@ -1151,10 +1175,20 @@ def test_through_drilling_stays_open_after_removing_blind_allowances(
     assert result.solver.strategy == "direct"
 
 
-@pytest.mark.parametrize("gap", [-1e-9, 1e-9])
+@pytest.mark.parametrize("gap", [-1e-3, 1e-3, -1e-9, 1e-9])
 @pytest.mark.parametrize("widened", [False, True])
 def test_a_real_offset_from_the_drill_mouth_survives_roundoff_cleanup(gap, widened, profile):
-    """Ein Abstand oberhalb des Float64-Rechenfehlers bleibt ein echter Abstand."""
+    """Ein Abstand über der Schweißtoleranz bleibt ein echter Abstand, einer darunter nicht.
+
+    **Die Grenze ist seit RM-274 die Schweißtoleranz** (``units.weld_tolerance``,
+    am Würfel 20 mm 3,5·10⁻⁵ mm) und nicht mehr der Float64-Rechenfehler. Das
+    Werkzeug liegt in der Welt, und dort trifft es eine schräge Fläche nicht
+    genau; eine Mündung, die näher als zwei Orte, die das Verschweißen für einen
+    hält, an der Fläche liegt, liegt in ihr und reicht in die Luft davor. Mit
+    der alten Grenze behielt eine eingelesene float32-Fläche eine Haut über der
+    Bohrung (``tests/test_cut_in_world.py``). Ein Tausendstel Millimeter bleibt
+    ein echter Abstand: darüber eine Haut, darunter Luft.
+    """
     from app.core.geom.mesh import ray_hit_distances
     from app.core.geom.prepare import drill
     from app.core.sketch.planes import frame_of
@@ -1187,7 +1221,8 @@ def test_a_real_offset_from_the_drill_mouth_survives_roundoff_cleanup(gap, widen
     hits = ray_hit_distances(
         local.triangles, np.asarray((0.0, 0.0, 11.0)), np.asarray((0.0, 0.0, -1.0))
     )
-    expected = 1.0 - gap if gap > 0.0 else 3.0
+    # Eine echte Haut über der Mündung bleibt; unter der Schweißtoleranz ist sie keine.
+    expected = 1.0 - gap if gap > 1e-6 else 3.0
     assert float(hits.min()) == pytest.approx(expected, abs=5e-14)
     assert result.mesh.is_watertight
 
@@ -1310,7 +1345,9 @@ def test_drill_preview_and_actual_operation_use_the_objects_material(profile, mo
 
     monkeypatch.setattr(module, "boolean", record)
     run("drill_hole", source, profile, **values, z=5.0, nx=0.3, ny=0.4, nz=0.5)
-    assert captured[0].raw.vertices == pytest.approx(preview.raw.vertices, abs=1e-12)
+    assert captured[0].raw.vertices == pytest.approx(
+        _placed_like_the_cut(preview, (0.3, 0.4, 0.5), (0.0, 0.0, 5.0)), abs=1e-12
+    )
     from app.core.knowledge.profiles import for_object
 
     assert np.ptp(preview.raw.vertices[:, 0]) == pytest.approx(

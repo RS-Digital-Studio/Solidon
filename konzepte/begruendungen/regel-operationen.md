@@ -352,6 +352,34 @@ Szene landet** (`prepare_ops._without_scars` mit `simplify`), legt es ebenso
 zurück. Das ist die Voraussetzung dafür, dass der Merker über die
 Körpergrenze (`kern.md`) nach einem Schritt trifft.
 
+**Und an seinem Ort: Das Werkzeug wandert in die Welt** (RM-274). *Bohrung
+setzen* mit der Normalen einer angeklickten Fläche, *Bohrung ändern* und *Zum
+Langloch ziehen* legten bis zur Durchsicht 0.5.1 den ganzen Körper in den
+Rahmen der Bohrung und zurück. Am Gartenschlauchhalter (Ø 3 × 2 mm in die
+größte Fläche, Normale +y) standen danach 17 490 Ecken außerhalb des Schnitts
+woanders, 352 862 von 392 696 Dreiecken waren bitgleich, und der Merker über
+die Körpergrenze rechnete 1 078 statt 79 Fragen neu. Mit dem Werkzeug in der
+Welt ist das Ergebnis Bit für Bit das des achsparallelen Wegs (0 versetzt,
+Merker 79). Die gemischte Ecke von *Verrunden* und *Fase* rechnet weiter im
+Rahmen ihres Knotens, weil Bereich und Zielkörper genau in dessen drei Ebenen
+liegen und eine gedrehte Ecke sie in der Welt nicht träfe; dafür bekommt jede
+durchgereichte Ecke ihre Weltkoordinate zurück (am L-Profil mit Kugel vorher
+481 von 511 fernen Ecken versetzt, gedreht alle, danach keine).
+
+**Ein Werkzeugende in einer Fläche mit Luft dahinter reicht über sie hinaus**
+(`prepare._open_ends`). Ein Werkzeug in Weltlage, das bündig in einer schrägen
+Fläche endet, lässt eine Haut stehen — gemessen an einer um 17,5° gedrehten
+Platte an der Mündung, bei 33° am Boden in der Unterseite, an jeder auf
+float32 gerundeten Fläche. Der Weg über den Rahmen bereinigte nur
+Float64-Rauschen und ließ deshalb an einer schrägen STL-Fläche über jedem
+Sackloch, Langloch und jeder Aufweitung eine Scheibe in der Mündung stehen
+(zwei Teile, keine Bohrung erkannt). In der Fläche heißt näher als die
+Schweißtoleranz; Luft dahinter heißt, alle Dreiecke dort, die die Scheibe um
+die Achse berühren, zeigen vom Werkzeug weg. Eine Haut unter der
+Schweißtoleranz ist damit keine mehr — am Würfel 20 mm liegt die Grenze bei
+3,5·10⁻⁵ mm, ein Tausendstel Millimeter bleibt ein echter Abstand
+(`test_surface_placement.py::test_a_real_offset_from_the_drill_mouth_survives_roundoff_cleanup`).
+
 **An einem eingelesenen Netz ist „koplanar" nur fast koplanar** (RM-166,
 14.09.2026). Eine STL trägt float32, und ein Fasenkeil, dessen Flanke exakt in
 der Körperfläche steht, ließ dort Haut ohne Dicke stehen — per Index dicht,

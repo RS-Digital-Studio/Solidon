@@ -126,16 +126,16 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
   Befund** (`boolean.parts_united`); mehrschalige Körper gehen durch
   `boolean()`.
 - **Was der Kern nicht geschnitten hat, kommt in der Darstellung des Eingangs
-  zurück** (`attributes.in_source_layout`: Eckenfolge je Dreieck, Reihenfolge
-  der Ecken; Dreiecksfolge und Koordinaten bleiben die des Kerns), auch
-  außerhalb von `boolean()` (`prepare_ops._without_scars`) — die Erkennung liest
-  Normalen aus der Eckenfolge.
+  und an seinem Ort zurück** (`attributes.in_source_layout`,
+  `prepare_ops._without_scars`): Werkzeuge wandern in die Welt, nie Körper in
+  ihren Rahmen (`prepare.drill` u. a.); sonst holt `edges._back_in_place`
+  durchgereichte Ecken zurück.
 - **„Koplanar robust" gilt nur für exakt koplanare float64-Geometrie.** Am
   float32-Netz einer STL bekommen abziehende Keile `BOOLEAN_OVERLAP` als
-  Flankenüberstand (`edges.rounding_tool`), Stufe 2 entnadelt nur mit der
+  Überstand (`edges.rounding_tool`), ebenso Werkzeugenden in Flächen mit Luft
+  dahinter (`prepare._open_ends`); Stufe 2 entnadelt nur mit der
   Zusicherung des Imports (`boolean._welded_input`), die Ausgabe wird wie im
-  Slicer verschweißt und nur dicht bei gleichem Volumen übernommen
-  (`boolean._tidied`).
+  Slicer verschweißt (`boolean._tidied`).
 
 ## Befunde statt Protokoll
 
