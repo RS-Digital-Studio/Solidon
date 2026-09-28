@@ -17,18 +17,67 @@ it into `website/version.json`.
 
 ## 0.5.1
 
+### Printing and slicer handover
+
+- In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
+- The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
+- Accepted suggestions apply only to the part that needs them: supports, brim and the values for a fit, in every supported slicer. The print settings name the parts.
+- The *Fine*, *Draft* and *Strong* qualities now choose your slicer's matching process, for example “0.12mm Fine” for *Fine*.
+- The quality levels in the print dialog now appear in the language of the interface.
+- Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, as in Elegoo's own profile.
+- Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
+- If you have measured your printer's overhang, the slicer too only adds supports from that angle, as long as the layer height and bead width of the measurement apply.
+- The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
+- The print settings show what will be printed: the manufacturer's profile is the basis, and your own values are marked and can be reset one by one.
+- You choose the build plate in the print settings, and the bed temperature follows it. If the manufacturer does not approve the plate for your filament, Solidon says so before printing.
+- Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
+- On round outer walls Solidon suggests a *Scarf seam*, in every supported slicer. The print takes 2 to 4 percent longer as a result.
+- If your slicer works out the brim itself, as ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer do, Solidon suggests none of its own. The slicer's brim gives tall parts more rim.
+- If a brim, skirt or raft reaches beyond the bed, Solidon says so when handing over to the slicer and offers *Arrange on the bed*.
+- If the slicer refuses a part that is too tall, Solidon names both heights and offers *Split the model*, *Scale down to the build volume* or another printer.
+- If Bambu Studio hangs after slicing, Solidon takes the finished print file instead of giving up after five minutes.
+- Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
+- The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
+- With PrusaSlicer, printing now starts as it does with Prusa itself, with bed levelling, purge line and printer check.
+- PETG now goes to PrusaSlicer as PETG, no longer as PLA.
+- If the first layer has narrow webs, even a few long ones on a large part, Solidon suggests laying it at 50 mm/s. The short lines stick better that way.
+- Solidon now only suggests a longer *Minimum layer time* where your profile has none. Before, the suggestion came for almost every part with a chamfer or a tip.
+- Where your slicer limits speed by volumetric flow itself, Solidon no longer suggests a speed limit of its own for it.
+- If you adopt the values of a filament profile and then change the filament, the values of the new one apply again.
+- The first layer now prints lines as wide as your printer's profile, usually 0.5 mm on a 0.4 nozzle. With Cura, the head no longer crawls between them.
+- With Cura, printing now begins with your printer's start code, as with the manufacturer. If Cura does not know the printer or the print file lacks the start code, Solidon tells you.
+- With Cura, the first layer now uses the acceleration from the manufacturer's profile instead of the full printing acceleration.
+- Supports from Cura now follow the factory profiles: connected, with a loose top and moderate speed.
+- With Cura, overhanging walls now print more slowly, as with the manufacturer. Prints with many overhangs take up to about 20 percent longer.
+- With Cura, infill now prints after the walls, and travel moves avoid supports and retract the filament on long paths.
+- The profile for the Cura window now matches the printer set up in Cura. Before, Cura rejected it for some printers or did not show it.
+- The print settings no longer offer the volumetric flow for Cura, because Cura does not read it.
+- New are the Creality Ender-3 V3 SE and V3 KE. Until now an SE got the values of the much faster Ender-3 V3.
+- A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
+- New suggestion *Keep channels clear*: once applied, the handover blocks supports in the channels in every supported slicer. The Cura window receives the block and the per-part values too.
+- Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.
+- When a part stands on many small feet, Solidon suggests a brim where your slicer does not work one out itself, even if the feet together would have enough area.
+- A narrow sloping strip along the outer wall no longer counts in the report as a long bridge.
+- The report now only shows the hint to calibrate your material's tolerances on models with fits. Only there does Solidon use them.
+- The handover to Cura transfers the first layers without fan as a ramp-up. A warning only comes when the finished print file really differs.
+- On large models, *Split the model* finds the seam up to twice as fast, and on multi-colour ones in a fraction of the time. Splitting works as before.
+- When Solidon splits a model automatically into three or more pieces, the names are numbered and name the connectors, such as “Wall rail 2 of 3 · Pins and holes”.
+- A printed screw, nut or seal from the parts catalogue no longer counts in the report as a fragmented body. It is a part of its own, and that is intended.
+- Printed screws and nuts now have play at the head and the seating face too, and stay removable when printed together with the part. Older projects report the change when opened.
+- With a countersunk screw from the parts catalogue, a body made of faces and edges stays watertight on export: the part and the screw each go into the file closed.
+
 ### Editing holes
 
 - A bore with a countersink on one side and a chamfer on the other can be tilted, moved and duplicated. Before, Solidon declined there.
 - A tilted bore or countersink no longer cuts away what stands in front of its mouth, such as a rib or the honeycomb next to it.
 - A countersunk bore in a curved face can be moved, including by clicking in the view. After moving, tilting or removing it, the old spot closes flush with the face.
 - A countersunk bore with a rounded mouth edge on a flat face can be moved, duplicated and removed together with the rounding. Before, a dip was left behind.
-- A tilted blind bore, such as a magnet pocket without a lip, stays fully open at its mouth. Before, a thin skin on the deeper side half covered the opening.
+- Blind holes, slots and widenings in a sloping face, and tilted blind bores such as a magnet pocket without a lip, stay fully open at the mouth. Before, a thin skin was left there.
 - Moving and duplicating warn when the wall to the neighbouring bore gets too thin or breaks open.
 - If a bore runs out of the side of the part after moving, duplicating or tilting, Solidon now says so at stepped places too. A copy that was not created is noticed.
 - On ribs and in honeycombs, a tilted bore no longer wrongly reports that it runs over the edge.
 - After moving, tilting or duplicating, the feature panel shows the dimensions the result really has.
-- After moving a bore, features away from the change stay just as they were, and applying it on large models finishes much faster.
+- Drilling, moving, *Change bore* and pulling into a slot leave the model away from the bore just as it was. Recognition afterwards finishes much faster on large models.
 - If a bore cut fails unnoticed on a body made of faces and edges, such as one from a STEP file, Solidon notices and computes it again. Before, a broken body could be left behind.
 - On bodies made of faces and edges, bore steps are ready in seconds: on a perforated plate from a STEP file, *Change bore* takes 2 instead of about 120 seconds.
 - On bodies made of faces and edges, *Cut pocket* no longer returns a faulty body.
@@ -36,15 +85,23 @@ it into `website/version.json`.
 - The handle at the end of a slot can be grabbed anywhere in the opening, and it no longer jumps to the pointer on the first drag.
 - Slots take their chamfers and their sloped mouth with them when moved or duplicated. Before, the chamfers stayed at the old spot.
 - A magnet pocket from the parts catalogue can be moved, duplicated, multiplied and removed, together with the lip that holds the magnet.
-- On a magnet pocket, *Change bore* changes the diameter together with the lip. *Hole diameter only* keeps the opening for the magnet and warns if it gets too tight.
+- On a magnet pocket, *Change bore* with *Include countersink, steps and narrowing* changes the diameter together with the lip. *Hole diameter only* keeps the opening and warns if it gets too tight.
 - Set at an angle to the face, the opening of a magnet pocket, a screw hole or a bearing seat stays clear. Before, a wedge of material stood over it.
+- If a magnet pocket or keyhole hanger stands at an angle to the face, Solidon says that its lip only holds on one side and offers *Correct the input*.
 - If a part such as a magnet pocket removes nothing at the chosen spot, Solidon says so and suggests clicking the face instead.
 - On a magnet pocket with a lip, *Pull into a slot* now declines on bodies made of faces and edges too, instead of cutting through the lip.
+- When you put a thread, a heat-set insert or a nut trap on a bore, the dialog names the fitting size at the top and preselects exactly that one.
 - On a countersink, *Change feature* cuts the new size as if it had been countersunk that way from the start. Before, Solidon declined or left a thin skin across the bore.
 - When parts of a model are stuck into each other, Solidon unites them before computing, as they will be printed. Volume and bores are then right, and the report says so.
 - When you widen a bore, the precise preview shows all the removed material, even on large models and on bodies with enclosed channels.
 - While you type a dimension on a large figure, the coarse preview appears in under a second instead of up to nineteen, and the preview of a bore on it succeeds.
 - If a step on an open model can only compute approximately and the volume grows, the report names the deviation and offers *Repair first, then recalculate*.
+
+### Fillets and chamfers
+
+- The edge choice *Horizontal*, *Top* or *Bottom* no longer takes in the rim of a bore in a side wall. If you mean it, pick it on its own; older projects compute as saved.
+- On an imported model, the rim of a bore is filleted or chamfered as deep as on a designed part. Before, with large radii the rounding came out up to a fifth too shallow.
+- If the size does not fit every edge of an edge choice such as *All* or *Vertical*, Solidon works the edges it fits and shows the others with *Show the place*, instead of refusing.
 
 ### Dimensions in the view
 
@@ -61,13 +118,14 @@ it into `website/version.json`.
 
 - Features are recognised automatically up to 1.5 million triangles. Up to five million, Solidon asks first and names the memory needed and the time on your computer.
 - If you decline full recognition, *Recognise all features* in the report catches up later. If it takes too long, *Load without feature recognition* loads the model without it.
-- On large models, *Detect features at a spot* finds faces, pockets and flattened areas where it used to report too many triangles. The spot can also be chosen with the keyboard.
-- Large models are recognised much faster: a generated doll's house bed with 1.2 million triangles in 27 seconds instead of 174. Cancel takes effect within a few seconds.
+- On large models, *Detect features at a spot* finds faces where it used to report too many triangles. The spot can also be chosen with the keyboard.
+- Large models and lattices are recognised much faster: a generated doll's house bed with 1.2 million triangles in 27 seconds instead of 174. Cancel takes effect within a few seconds.
 - Lettering and struts appear in the tree as rounded sides instead of dozens of fillets with changing radii.
 - Outlines made of arcs and lines are recognised arc by arc with their radius. *Convert to faces and edges* is many times faster as a result.
 - A stepped pin no longer counts as a thread. Cylinders and bores that this mix-up had swallowed are back.
 - The lip of a magnet pocket is called a narrowing in the tree and names its opening. No action turns it into a countersink any more.
-- After *Refine edges*, Solidon recognises fillets, bores and lettering just as on the original, even after an additional bore.
+- After *Refine edges*, Solidon recognises fillets, bores and lettering just as on the original, even after another bore. Equal roundings keep their names, even after *Move*.
+- A pattern around a round grip, such as knurling on a lid, keeps its centre and direction as you keep editing.
 - After *Split* and *Cut away*, a divided face keeps its name on the largest piece, and fits on it stay valid.
 - Click the rim edge of a bore lying on its side, and it is named “Vertical”, matching how it really stands.
 - If a model has more than 5,000 features, Solidon keeps the largest instead of showing none at all. Scaling does not shuffle their names.
@@ -78,6 +136,7 @@ it into `website/version.json`.
 - Open seams are closed on import and repair without joining parts that merely touch. An intact model stays unchanged.
 - Overlaps are now resolved by *Repair* itself. When the parts of an imported model are stuck into each other, the report offers *Resolve overlaps*.
 - A surface without thickness stays open and offers *Give it thickness*. A large opening names its place with *Show the place*, and *Leave open* leaves only that one open.
+- After an opening has been closed on import, *Show the place* outlines the whole new face in a colour of its own.
 - A part turned inside out next to a hollow body is set right without losing the cavity. A part inside another part's material is reported instead of guessed.
 - The report after importing is shorter: findings the result disproves drop out, and where something can be done there is a button instead of advice.
 - The mesh defects map shows intact areas in the body's colour so that single defects stand out, and carries *Repair* right in the legend.
@@ -89,57 +148,21 @@ it into `website/version.json`.
 - If a model is too fine for *Refine edges*, the report offers *Reduce triangles and try again* with a number that really works.
 - If *Smooth* would turn a body inside out, Solidon says so and offers *Refine edges and try again* with an edge length that works.
 - Large assemblies import faster: the repair while importing a pirate ship with 1.2 million triangles takes about 30 percent less time.
+- While a large 3MF file opens, the window stays responsive, even while the model is being read.
 
-### Printing and slicer handover
+### Manual and website
 
-- In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
-- The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
-- The *Fine*, *Draft* and *Strong* qualities now choose your slicer's matching process, for example “0.12mm Fine” for *Fine*.
-- The quality levels in the print dialog now appear in the language of the interface.
-- Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, so the nozzle oozes less along the way.
-- Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
-- The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
-- The print settings show what will be printed: the manufacturer's profile is the basis, and your own values are marked and can be reset one by one.
-- You choose the build plate in the print settings, and the bed temperature follows it. If the manufacturer does not approve the plate for your filament, Solidon says so before printing.
-- Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
-- If a brim, skirt or raft reaches beyond the bed, Solidon says so when handing over to the slicer and offers *Arrange on the bed*.
-- If the slicer refuses a part that is too tall, Solidon names both heights and offers *Split the model*, *Scale down to the build volume* or another printer.
-- If Bambu Studio hangs after slicing, Solidon takes the finished print file instead of giving up after five minutes.
-- Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
-- The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
-- With PrusaSlicer, printing now starts as it does with Prusa itself, with bed levelling, purge line and printer check.
-- PETG now goes to PrusaSlicer as PETG, no longer as PLA.
-- If the first layer has narrow webs, Solidon suggests laying it at 50 mm/s. The short lines stick better that way.
-- Where your slicer limits speed by volumetric flow itself, Solidon no longer suggests a speed limit of its own for it.
-- If you adopt the values of a filament profile and then change the filament, the values of the new one apply again.
-- The first layer now prints lines as wide as your printer's profile, usually 0.5 mm on a 0.4 nozzle. With Cura, the head no longer crawls between them.
-- With Cura, printing now begins with your printer's start code, as with the manufacturer. If Cura does not know the printer, Solidon tells you.
-- With Cura, the first layer now uses the acceleration from the manufacturer's profile instead of the full printing acceleration.
-- Supports from Cura now follow the factory profiles: connected, with a loose top and moderate speed.
-- With Cura, overhanging walls now print more slowly, as with the manufacturer. Prints with many overhangs take up to about 20 percent longer.
-- With Cura, infill now prints after the walls, and travel moves avoid supports and retract the filament on long paths.
-- The profile for the Cura window now matches the printer set up in Cura. Before, Cura rejected it for some printers or did not show it.
-- The print settings no longer offer the volumetric flow for Cura, because Cura does not read it.
-- New are the Creality Ender-3 V3 SE and V3 KE. Until now an SE got the values of the much faster Ender-3 V3.
-- A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
-- New suggestion *Keep channels clear*: once applied, the handover blocks supports in the channels in every supported slicer, for Cura when slicing from Solidon.
-- Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.
-- When a part stands on many small feet, Solidon suggests a brim, even if the feet together would have enough area.
-- A narrow sloping strip along the outer wall no longer counts in the report as a long bridge.
-- The handover to Cura transfers the first layers without fan as a ramp-up. A warning only comes when the finished print file really differs.
-- On large models, *Split the model* finds the seam up to twice as fast, and on multi-colour ones in a fraction of the time. Splitting works as before.
-- A printed screw, nut or seal from the parts catalogue no longer counts in the report as a fragmented body. It is a part of its own, and that is intended.
-- With a countersunk screw from the parts catalogue, a body made of faces and edges stays watertight on export: the part and the screw each go into the file closed.
-
-### Assistant with a local model
-
-- The model choice also recommends a smaller model for cards from 10 GB of graphics memory and names for each the memory it takes and how well it handles multi-part requests.
-- The assistant gets full detail only for the actions that fit the request. That leaves room for history and answer, and requests succeed much more often.
-- The local model stays loaded for three minutes after an answer, and the next question no longer waits for the model to start.
-- An answer that finds no end stops after a fixed length and is reported as cut off, instead of occupying the graphics card until the ten-minute time limit.
+- Fifteen guides show step by step, in pictures from the application, how to check, print and repair a model, build, split and label a part, or print in two colours.
+- The manual begins at “Where do I start?” and leads from there to every guide. F1 in an operation's dialog opens its guide or its entry.
+- An overview picture explains the window: each number in the picture marks one area.
+- The search in the manual finds the right page even with everyday words, lists it first and opens it where the word appears.
+- The reference names, for every operation, where to find it in the menu or in the selection panel.
+- The explanatory pages are a third shorter. Where a picture guide covers their topic, a link to it follows at the end of the page.
+- On the website and in the PDF, the manual is organised as in the application, from the first steps to the reference. In the PDF, bookmarks lead to every chapter.
 
 ### Operation and system
 
+- Large calculations such as previews and *Refine edges* run in a separate process: the window stays responsive, and *Cancel* works at once. A second Solidon process runs alongside for this.
 - While loading and during long calculations, a clock counts the elapsed time, even when the progress stands still for a while.
 - A model on a slow or unresponsive drive no longer freezes the window when you open it.
 - If a file in *Recently opened* has been moved, Solidon says so and offers *Choose another file*.
@@ -151,16 +174,23 @@ it into `website/version.json`.
 - After splitting, the report no longer shows buttons that do nothing on lines about the old body.
 - A freely drawn sketch without dimensions no longer generates a notice in the report.
 - An error report names folders under your user directory without your username, even when Solidon itself is installed there.
+- In *First steps*, your slicer's printer is there as soon as it opens. Before, the suggestion came only after seconds, and *Done* took the generic printer until then.
+- You choose the slicer in the print settings above the profiles, even when that section is collapsed.
+- A printer you choose in the print settings is also used for the next new project. If your slicer is set to a different printer, the settings offer it with one click.
+- If you choose a different printer or slicer, the remembered machine profile of the previous one no longer applies.
+- In the parameter bar and in an operation's dialog, a typed number outside the limits is refused instead of being silently cut short, and Solidon names the limit.
+- The question before deleting a step names the dependent steps that go with it.
+- The history names a changed parameter by its label and shows the value before and after.
+- The handle on a selected face now shows only the arrow you move it with.
+- Without text, *Put text on* says that the text is missing instead of declaring the preview unavailable.
+- In every translation, *Cut* and *Split* now have different names, and the Italian interface addresses you informally throughout.
 
-### Manual and website
+### Assistant with a local model
 
-- Fifteen guides show step by step, in pictures from the application, how to check, print and repair a model, build, split and label a part, or print in two colours.
-- The manual begins at “Where do I start?” and leads from there to every guide. F1 in an operation's dialog opens its guide or its entry.
-- An overview picture explains the window: each number in the picture marks one area.
-- The search in the manual finds the right page even with everyday words, lists it first and opens it where the word appears.
-- The reference names, for every operation, where to find it in the menu or in the selection panel.
-- The explanatory pages are a third shorter. Where a picture guide covers their topic, a link to it follows at the end of the page.
-- On the website and in the PDF, the manual is organised as in the application, from the first steps to the reference. In the PDF, bookmarks lead to every chapter.
+- The model choice also recommends a smaller model for cards from 10 GB of graphics memory and names for each the memory it takes and how well it handles multi-part requests.
+- The assistant gets full detail only for the actions that fit the request. That leaves room for history and answer, and requests succeed much more often.
+- The local model stays loaded for three minutes after an answer, and the next question no longer waits for the model to start.
+- An answer that finds no end stops after a fixed length and is reported as cut off, instead of occupying the graphics card until the ten-minute time limit.
 
 ## 0.5.0
 

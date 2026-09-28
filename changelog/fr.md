@@ -18,18 +18,67 @@ dans `website/version.json`.
 
 ## 0.5.1
 
+### Imprimer et transmettre au slicer
+
+- Dans PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.
+- Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
+- Les suggestions appliquées ne valent que pour la pièce qui en a besoin : supports, brim et valeurs d'un ajustement, dans chaque slicer pris en charge. Les réglages d'impression nomment les pièces.
+- Les niveaux « Fin », « Brouillon » et « Résistant » choisissent désormais le processus correspondant de votre slicer, par exemple « 0.12mm Fine » pour « Fin ».
+- Les niveaux de qualité de la boîte de dialogue d'impression s'affichent désormais dans la langue de l'interface.
+- La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, comme dans le profil d'Elegoo.
+- Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
+- Si vous avez mesuré le surplomb de votre imprimante, le slicer ne pose lui aussi de supports qu'à partir de cet angle, tant que hauteur de couche et largeur de cordon restent celles de la mesure.
+- Le rapport calcule lui aussi désormais les surplombs avec l'angle à partir duquel votre profil de slicer ajoute des supports.
+- Les réglages d'impression montrent ce qui sera imprimé : la base est le profil du fabricant, et vos propres valeurs sont marquées et se rétablissent une par une.
+- Vous choisissez le plateau d'impression dans les réglages d'impression, et la température du lit suit. Si le fabricant n'autorise pas ce plateau pour votre filament, Solidon le dit avant.
+- Sans « Appliquer les suggestions », aucune pièce ne reçoit plus de brim sans le demander, ni à l'export ni lors de la transmission au slicer.
+- Sur les parois extérieures rondes, Solidon propose une « Couture en biseau », dans chaque slicer pris en charge. L'impression dure ainsi 2 à 4 % de plus.
+- Si votre slicer calcule lui-même le brim, comme ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, Solidon n'en propose pas. Celui du slicer donne plus de bord aux pièces hautes.
+- Si un brim, un skirt ou un raft dépasse du plateau, Solidon le signale lors du transfert au slicer et propose « Disposer sur le plateau ».
+- Si le slicer refuse une pièce trop haute, Solidon indique les deux hauteurs et propose « Scinder le modèle », « Réduire au volume d'impression » ou une autre imprimante.
+- Si Bambu Studio reste bloqué après la découpe, Solidon reprend le fichier d'impression terminé au lieu de signaler un échec au bout de cinq minutes.
+- Les projets de 0.5.0 impriment à la vitesse de votre imprimante. Ce que vous y aviez réglé vous-même est conservé.
+- La vitesse de la première couche vaut désormais aussi pour son remplissage. Avant, le slicer posait le fond à la vitesse du fabricant, 105 mm/s sur la Centauri Carbon 2.
+- Avec PrusaSlicer, l'impression commence désormais comme chez Prusa : avec mesure du plateau, ligne de purge et contrôle de l'imprimante.
+- Le PETG part désormais vers PrusaSlicer comme PETG, et non plus comme PLA.
+- Si la première couche a des passages étroits, même quelques longs sur une grande pièce, Solidon propose de la poser à 50 mm/s. Les lignes courtes adhèrent ainsi mieux.
+- Solidon ne propose plus un « Temps minimal par couche » plus long que là où votre profil n'en a pas. Avant, la suggestion venait sur presque toute pièce avec un chanfrein ou une pointe.
+- Là où votre slicer limite déjà la vitesse selon le débit volumique, Solidon ne propose plus de limite de vitesse propre.
+- Si vous reprenez les valeurs d'un profil de filament puis changez de filament, les valeurs du nouveau s'appliquent à nouveau.
+- La première couche imprime désormais des lignes aussi larges que le profil de votre imprimante, souvent 0,5 mm avec une buse de 0,4. Avec Cura, la tête ne se traîne plus entre elles.
+- Avec Cura, l'impression commence désormais par le code de démarrage de votre imprimante, comme chez le fabricant. Si Cura ignore l'imprimante ou si ce code manque au fichier, Solidon le dit.
+- Avec Cura, la première couche utilise désormais l'accélération du profil du fabricant au lieu de l'accélération d'impression complète.
+- Les supports de Cura suivent désormais le modèle des profils d'usine : reliés, avec un toit léger et une vitesse modérée.
+- Avec Cura, les parois en surplomb s'impriment désormais plus lentement, comme chez le fabricant. Les impressions avec beaucoup de surplombs durent jusqu'à 20 % de plus.
+- Avec Cura, le remplissage s'imprime désormais après les parois, et les déplacements évitent les supports et rétractent le filament sur les longs trajets.
+- Le profil pour la fenêtre de Cura correspond désormais à l'imprimante configurée dans Cura. Avant, Cura le refusait pour certaines imprimantes ou ne l'affichait pas.
+- Les réglages d'impression ne proposent plus le débit volumique pour Cura, car Cura ne le lit pas.
+- Nouvelles : les Creality Ender-3 V3 SE et V3 KE. Jusqu'ici, une SE recevait les valeurs de l'Ender-3 V3, bien plus rapide.
+- Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
+- Nouvelle suggestion « Garder les canaux libres » : appliquée, elle bloque les supports dans les canaux, dans tout slicer pris en charge. La fenêtre de Cura reçoit ce blocage et les valeurs par pièce.
+- Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.
+- Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim là où votre slicer n'en calcule pas lui-même, même si les pieds réunis auraient assez de surface.
+- Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
+- Le rapport n'invite plus à calibrer les tolérances de votre matériau que sur les modèles avec ajustements. Solidon ne s'en sert que là.
+- La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
+- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. La division se fait comme avant.
+- Quand Solidon divise automatiquement un modèle en trois morceaux ou plus, les noms se numérotent et citent les connecteurs, par exemple « Baguette murale 2 sur 3 · Goupilles et trous ».
+- Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
+- Les vis et écrous imprimés ont aussi du jeu sous la tête et à l'appui, et restent démontables même imprimés avec la pièce. Les projets plus anciens signalent le changement à l'ouverture.
+- Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
+
 ### Modifier les perçages
 
 - Un perçage avec une fraisure d'un côté et un chanfrein de l'autre se laisse incliner, déplacer et dupliquer. Avant, Solidon refusait.
 - Un perçage ou une fraisure inclinés n'enlèvent plus ce qui se trouve devant leur entrée, comme une nervure ou le nid d'abeille voisin.
 - Un perçage fraisé sur une face bombée se laisse déplacer, y compris par un clic dans la vue. Après déplacement, inclinaison ou suppression, l'ancien emplacement affleure la face.
 - Un perçage fraisé à l'entrée arrondie sur une face plane se laisse déplacer, dupliquer et supprimer avec son arrondi. Avant, un creux restait.
-- Un perçage borgne incliné, comme une poche à aimant sans lèvre, reste entièrement ouvert à son entrée. Avant, une fine peau du côté le plus profond recouvrait à moitié l'ouverture.
+- Trous borgnes, trous oblongs et élargissements sur une face inclinée, et perçages borgnes inclinés comme une poche à aimant sans lèvre, restent ouverts à l'entrée. Avant, une fine peau y restait.
 - Déplacer et dupliquer avertissent quand la paroi vers le perçage voisin devient trop mince ou se rompt.
 - Si un perçage sort sur le côté de la pièce après déplacement, duplication ou inclinaison, Solidon le dit aussi aux endroits en retrait. Une copie non créée est signalée.
 - Sur les nervures et dans les nids d'abeille, un perçage incliné ne signale plus à tort qu'il dépasse le bord.
 - Après un déplacement, une inclinaison ou une duplication, le panneau des caractéristiques montre les cotes réelles du résultat.
-- Après le déplacement d'un perçage, les caractéristiques éloignées de la modification restent telles qu'elles étaient, et l'application sur les grands modèles se termine bien plus vite.
+- Percer, déplacer, « Modifier le trou » et l'étirement en trou oblong laissent le modèle tel quel hors du perçage. La reconnaissance qui suit finit bien plus vite sur les grands modèles.
 - Si une découpe de perçage échoue en silence sur un corps fait de faces et d'arêtes, issu par exemple d'un STEP, Solidon le remarque et recalcule. Avant, un corps cassé pouvait rester.
 - Sur les corps faits de faces et d'arêtes, les étapes de perçage sont prêtes en quelques secondes : sur une plaque perforée issue d'un STEP, « Modifier le trou » prend 2 secondes au lieu d'environ 120.
 - Sur les corps faits de faces et d'arêtes, « Découper une poche » ne renvoie plus de corps défectueux.
@@ -37,15 +86,23 @@ dans `website/version.json`.
 - La poignée au bout d'un trou oblong se saisit n'importe où dans l'ouverture, et elle ne saute plus vers le pointeur au premier mouvement.
 - Les trous oblongs emportent leurs chanfreins et leur entrée oblique lors d'un déplacement ou d'une duplication. Avant, les chanfreins restaient à l'ancien emplacement.
 - Une poche à aimant du catalogue de blocs se laisse déplacer, dupliquer, multiplier et supprimer, avec la lèvre qui retient l'aimant.
-- Sur une poche à aimant, « Modifier le trou » change le diamètre avec la lèvre. « Diamètre du trou uniquement » garde l'ouverture pour l'aimant et avertit si elle devient trop juste.
+- Sur une poche à aimant, « Modifier le trou » avec « Inclure la fraisure, les épaulements et le rétrécissement » change le diamètre avec la lèvre. « Diamètre du trou uniquement » garde l'ouverture.
 - Placée en biais par rapport à la face, l'ouverture d'une poche à aimant, d'un trou de vis ou d'un logement de roulement reste dégagée. Avant, un coin de matière la surplombait.
+- Si une poche à aimant ou une suspension en trou de serrure est inclinée par rapport à la face, Solidon signale que sa lèvre ne retient que d'un côté et propose « Corriger la saisie ».
 - Si un bloc comme une poche à aimant n'enlève rien à l'endroit choisi, Solidon le signale et conseille de cliquer sur la face.
 - Sur une poche à aimant avec lèvre, « Étirer en trou oblong » refuse aussi sur les corps faits de faces et d'arêtes, plutôt que de trancher la lèvre.
+- Quand vous posez un filetage, un insert à chaud ou un piège à écrou sur un perçage, la boîte de dialogue indique en haut la taille qui convient et présélectionne celle-là.
 - Sur une fraisure, « Modifier l'élément » découpe la nouvelle cote comme si elle avait été fraisée ainsi dès le départ. Avant, Solidon refusait ou laissait une fine peau en travers du perçage.
 - Quand des pièces d'un modèle s'emboîtent, Solidon les unit avant le calcul, comme elles seront imprimées. Volume et perçages sont alors justes, et le rapport le dit.
 - Quand vous agrandissez un perçage, l'aperçu précis montre toute la matière enlevée, même sur les grands modèles et sur les corps aux canaux fermés.
 - Pendant la saisie d'une cote sur une grande figure, l'aperçu grossier apparaît en moins d'une seconde au lieu de dix-neuf au plus, et l'aperçu d'un perçage y réussit.
 - Si une étape sur un modèle ouvert ne calcule qu'approximativement et que le volume augmente, le rapport indique l'écart et propose « Réparer d'abord, puis recalculer ».
+
+### Congés et chanfreins
+
+- Le choix d'arêtes « Horizontal », « Haut » ou « Bas » ne prend plus le bord d'un perçage latéral. Pour le traiter, choisissez-le seul ; les anciens projets calculent comme enregistrés.
+- Sur un modèle importé, le bord d'un perçage est arrondi ou chanfreiné aussi profondément que sur une pièce construite. Avant, avec de grands rayons, le congé restait jusqu'à un cinquième trop plat.
+- Si la cote ne tient pas sur chaque arête d'un choix comme « Tous » ou « Vertical », Solidon traite celles où elle tient et montre les autres avec « Montrer l'endroit », au lieu de refuser.
 
 ### Cotes dans la vue
 
@@ -62,13 +119,14 @@ dans `website/version.json`.
 
 - Les caractéristiques sont reconnues d'elles-mêmes jusqu'à 1,5 million de triangles. Jusqu'à cinq millions, Solidon demande d'abord et indique la mémoire nécessaire et la durée sur votre ordinateur.
 - Refusée, la reconnaissance complète se rattrape avec « Reconnaître toutes les caractéristiques » dans le rapport. Trop longue, « Charger sans reconnaissance des caractéristiques » l'omet.
-- Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces, des logements et des méplats là où il signalait trop de triangles. L'endroit se choisit aussi au clavier.
-- Les grands modèles sont reconnus bien plus vite : un lit de maison de poupée généré, 1,2 million de triangles, en 27 secondes au lieu de 174. Annuler agit en quelques secondes.
+- Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces là où il signalait trop de triangles. L'endroit se choisit aussi au clavier.
+- Grands modèles et treillis sont reconnus bien plus vite : un lit de maison de poupée généré, 1,2 million de triangles, en 27 secondes au lieu de 174. Annuler agit en quelques secondes.
 - Lettrages et entretoises apparaissent dans l'arbre comme des côtés arrondis au lieu de dizaines de congés aux rayons changeants.
 - Les contours faits d'arcs et de droites sont reconnus arc par arc avec leur rayon. « Convertir en faces et arêtes » est ainsi bien plus rapide.
 - Un tenon épaulé ne passe plus pour un filetage. Les cylindres et les perçages que cette confusion avait avalés sont de retour.
 - La lèvre d'une poche à aimant s'appelle rétrécissement dans l'arbre et nomme son ouverture. Aucune action n'en fait plus une fraisure.
-- Après « Affiner les arêtes », Solidon reconnaît congés, perçages et lettrages comme sur l'original, même après un perçage supplémentaire.
+- Après « Affiner les arêtes », Solidon reconnaît congés, perçages et lettrages comme sur l'original, même après un autre perçage. Des congés identiques gardent leur nom, même après « Déplacer ».
+- Un motif autour d'une poignée ronde, comme un moletage sur un couvercle, garde son centre et sa direction quand vous continuez à modifier.
 - Après « Diviser » et « Découper », une face divisée garde son nom sur le plus grand morceau, et les ajustements qui s'y trouvent restent valides.
 - Si vous cliquez sur l'arête de bord d'un perçage couché, elle s'appelle « Vertical », comme il se tient réellement.
 - Si un modèle a plus de 5 000 caractéristiques, Solidon garde les plus grandes au lieu de n'en afficher aucune. Une mise à l'échelle ne mélange pas leurs noms.
@@ -78,7 +136,8 @@ dans `website/version.json`.
 - S'il manque à un modèle un morceau de paroi de perçage ou une partie de cône de fraisure, Solidon comble le trou par une paroi, pas par un couvercle en travers.
 - Les coutures ouvertes se ferment à l'import et à la réparation sans relier des pièces qui ne font que se toucher. Un modèle intact reste inchangé.
 - Les recouvrements sont désormais résolus par « Réparer » lui-même. Quand les pièces d'un modèle importé s'emboîtent, le rapport propose « Résoudre les recouvrements ».
-- Une surface sans épaisseur reste ouverte et propose « Donner une épaisseur ». Une grande ouverture se montre avec « Montrer l’endroit », et « Laisser ouvert » ne laisse qu'elle ouverte.
+- Une surface sans épaisseur reste ouverte et propose « Donner une épaisseur ». Une grande ouverture se montre avec « Montrer l'endroit », et « Laisser ouvert » ne laisse qu'elle ouverte.
+- Après la fermeture d'une ouverture à l'import, « Montrer l'endroit » entoure toute la nouvelle face d'une couleur à part.
 - Une pièce retournée à côté d'un corps creux est remise à l'endroit sans perdre la cavité. Une pièce dans la matière d'une autre est signalée au lieu d'être devinée.
 - Le rapport après l'import est plus court : les constats que le résultat dément disparaissent, et là où l'on peut agir, un bouton remplace le conseil.
 - La carte des défauts de maillage montre les zones saines dans la couleur du corps, pour que chaque défaut ressorte, et porte « Réparer » directement dans la légende.
@@ -90,57 +149,21 @@ dans `website/version.json`.
 - Si un modèle est trop fin pour « Affiner les arêtes », le rapport propose « Réduire les triangles et réessayer » avec un nombre qui fonctionne vraiment.
 - Si « Lisser » risque de retourner un corps, Solidon le signale et propose « Affiner les arêtes et réessayer » avec une longueur d'arête qui fonctionne.
 - Les grands assemblages s'importent plus vite : la réparation à l'import d'un bateau pirate de 1,2 million de triangles prend environ 30 % de temps en moins.
+- À l'ouverture de gros fichiers 3MF, la fenêtre reste utilisable, même pendant la lecture du modèle.
 
-### Imprimer et transmettre au slicer
+### Manuel et site web
 
-- Dans PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.
-- Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.
-- Les niveaux « Fin », « Brouillon » et « Résistant » choisissent désormais le processus correspondant de votre slicer, par exemple « 0.12mm Fine » pour « Fin ».
-- Les niveaux de qualité de la boîte de dialogue d'impression s'affichent désormais dans la langue de l'interface.
-- La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, pour que la buse suinte moins en route.
-- Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
-- Le rapport calcule lui aussi désormais les surplombs avec l'angle à partir duquel votre profil de slicer ajoute des supports.
-- Les réglages d'impression montrent ce qui sera imprimé : la base est le profil du fabricant, et vos propres valeurs sont marquées et se rétablissent une par une.
-- Vous choisissez le plateau d'impression dans les réglages d'impression, et la température du lit suit. Si le fabricant n'autorise pas ce plateau pour votre filament, Solidon le dit avant.
-- Sans « Appliquer les suggestions », aucune pièce ne reçoit plus de brim sans le demander, ni à l'export ni lors de la transmission au slicer.
-- Si un brim, un skirt ou un raft dépasse du plateau, Solidon le signale lors du transfert au slicer et propose « Disposer sur le plateau ».
-- Si le slicer refuse une pièce trop haute, Solidon indique les deux hauteurs et propose « Scinder le modèle », « Réduire au volume d'impression » ou une autre imprimante.
-- Si Bambu Studio reste bloqué après la découpe, Solidon reprend le fichier d'impression terminé au lieu de signaler un échec au bout de cinq minutes.
-- Les projets de 0.5.0 impriment à la vitesse de votre imprimante. Ce que vous y aviez réglé vous-même est conservé.
-- La vitesse de la première couche vaut désormais aussi pour son remplissage. Avant, le slicer posait le fond à la vitesse du fabricant, 105 mm/s sur la Centauri Carbon 2.
-- Avec PrusaSlicer, l'impression commence désormais comme chez Prusa : avec mesure du plateau, ligne de purge et contrôle de l'imprimante.
-- Le PETG part désormais vers PrusaSlicer comme PETG, et non plus comme PLA.
-- Si la première couche a des passages étroits, Solidon propose de la poser à 50 mm/s. Les lignes courtes adhèrent ainsi mieux.
-- Là où votre slicer limite déjà la vitesse selon le débit volumique, Solidon ne propose plus de limite de vitesse propre.
-- Si vous reprenez les valeurs d'un profil de filament puis changez de filament, les valeurs du nouveau s'appliquent à nouveau.
-- La première couche imprime désormais des lignes aussi larges que le profil de votre imprimante, souvent 0,5 mm avec une buse de 0,4. Avec Cura, la tête ne se traîne plus entre elles.
-- Avec Cura, l'impression commence désormais par le code de démarrage de votre imprimante, comme chez le fabricant. Si Cura ne connaît pas l'imprimante, Solidon vous le dit.
-- Avec Cura, la première couche utilise désormais l'accélération du profil du fabricant au lieu de l'accélération d'impression complète.
-- Les supports de Cura suivent désormais le modèle des profils d'usine : reliés, avec un toit léger et une vitesse modérée.
-- Avec Cura, les parois en surplomb s'impriment désormais plus lentement, comme chez le fabricant. Les impressions avec beaucoup de surplombs durent jusqu'à 20 % de plus.
-- Avec Cura, le remplissage s'imprime désormais après les parois, et les déplacements évitent les supports et rétractent le filament sur les longs trajets.
-- Le profil pour la fenêtre de Cura correspond désormais à l'imprimante configurée dans Cura. Avant, Cura le refusait pour certaines imprimantes ou ne l'affichait pas.
-- Les réglages d'impression ne proposent plus le débit volumique pour Cura, car Cura ne le lit pas.
-- Nouvelles : les Creality Ender-3 V3 SE et V3 KE. Jusqu'ici, une SE recevait les valeurs de l'Ender-3 V3, bien plus rapide.
-- Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
-- Nouvelle suggestion « Garder les canaux libres » : appliquée, la transmission bloque les supports dans les canaux de chaque slicer pris en charge, pour Cura en tranchant depuis Solidon.
-- Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.
-- Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
-- Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
-- La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
-- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. La division se fait comme avant.
-- Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
-- Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
-
-### Assistant avec un modèle local
-
-- Le choix du modèle recommande aussi un modèle plus petit pour les cartes dès 10 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.
-- L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes réussissent bien plus souvent.
-- Le modèle local reste chargé trois minutes après une réponse, et la question suivante n'attend plus son démarrage.
-- Une réponse qui ne trouve pas de fin s'arrête après une longueur fixe et est signalée comme coupée, au lieu d'occuper la carte graphique jusqu'à la limite de dix minutes.
+- Quinze guides montrent pas à pas, avec des images de l'application, comment vérifier, imprimer et réparer un modèle, construire et diviser une pièce, y mettre du texte ou imprimer en deux couleurs.
+- Le manuel commence par « Par où commencer ? » et mène de là à chaque guide. F1 dans la boîte de dialogue d'une opération ouvre son guide ou son entrée.
+- Une image d'ensemble explique la fenêtre : chaque numéro de l'image désigne une zone.
+- La recherche du manuel trouve la bonne page même avec des mots courants, l'affiche en premier et l'ouvre à l'endroit où figure le mot.
+- La référence indique pour chaque opération où la trouver dans le menu ou dans le panneau de sélection.
+- Les pages explicatives sont plus courtes d'un tiers. Quand un guide en images traite leur sujet, un lien vers lui figure en fin de page.
+- Sur le site web et dans le PDF, le manuel est organisé comme dans l'application, des premiers pas à la référence. Dans le PDF, des signets mènent à chaque chapitre.
 
 ### Utilisation et système
 
+- Les gros calculs comme l'aperçu ou « Affiner les arêtes » tournent dans un processus à part : la fenêtre reste utilisable et « Annuler » agit aussitôt. Un second processus Solidon tourne pour cela.
 - Pendant le chargement et les longs calculs, une horloge compte le temps écoulé, même quand la progression reste immobile un moment.
 - Un modèle sur un disque lent ou qui ne répond pas ne fige plus la fenêtre à l'ouverture.
 - Si un fichier de « Ouverts récemment » a été déplacé, Solidon le dit et propose « Choisir un autre fichier ».
@@ -152,16 +175,23 @@ dans `website/version.json`.
 - Après la division, le rapport ne montre plus, sur les lignes concernant l'ancien corps, de boutons sans effet.
 - Un dessin tracé librement sans cote ne génère plus d'avertissement dans le rapport.
 - Un rapport d'erreur nomme les dossiers sous votre répertoire utilisateur sans votre nom d'utilisateur, même si Solidon lui-même y est installé.
+- Dans « Premiers pas », l'imprimante de votre slicer est là dès l'ouverture. Avant, la proposition arrivait après quelques secondes, et « Terminé » prenait jusque-là l'imprimante générique.
+- Le slicer se choisit dans les réglages d'impression au-dessus des profils, même quand cette section est repliée.
+- L'imprimante choisie dans les réglages d'impression vaut aussi pour le prochain nouveau projet. Si votre slicer est réglé sur une autre imprimante, les réglages la proposent en un clic.
+- Si vous choisissez une autre imprimante ou un autre slicer, le profil de machine mémorisé du précédent ne s'applique plus.
+- Dans la barre des paramètres et dans la boîte de dialogue d'une opération, un nombre saisi hors limites est refusé au lieu d'être tronqué en silence, et Solidon indique la limite.
+- La question avant de supprimer une étape nomme les étapes dépendantes qui partent avec elle.
+- L'historique nomme un paramètre modifié par son libellé et montre la valeur avant et après.
+- La poignée d'une face sélectionnée ne montre plus que la flèche qui sert à la déplacer.
+- Sans texte, « Appliquer du texte » dit que le texte manque au lieu de déclarer l'aperçu indisponible.
+- Dans toutes les traductions, « Séparer » et « Diviser » portent désormais des noms différents, et l'interface italienne tutoie partout.
 
-### Manuel et site web
+### Assistant avec un modèle local
 
-- Quinze guides montrent pas à pas, avec des images de l'application, comment vérifier, imprimer et réparer un modèle, construire et diviser une pièce, y mettre du texte ou imprimer en deux couleurs.
-- Le manuel commence par « Par où commencer ? » et mène de là à chaque guide. F1 dans la boîte de dialogue d'une opération ouvre son guide ou son entrée.
-- Une image d'ensemble explique la fenêtre : chaque numéro de l'image désigne une zone.
-- La recherche du manuel trouve la bonne page même avec des mots courants, l'affiche en premier et l'ouvre à l'endroit où figure le mot.
-- La référence indique pour chaque opération où la trouver dans le menu ou dans le panneau de sélection.
-- Les pages explicatives sont plus courtes d'un tiers. Quand un guide en images traite leur sujet, un lien vers lui figure en fin de page.
-- Sur le site web et dans le PDF, le manuel est organisé comme dans l'application, des premiers pas à la référence. Dans le PDF, des signets mènent à chaque chapitre.
+- Le choix du modèle recommande aussi un modèle plus petit pour les cartes dès 10 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.
+- L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes réussissent bien plus souvent.
+- Le modèle local reste chargé trois minutes après une réponse, et la question suivante n'attend plus son démarrage.
+- Une réponse qui ne trouve pas de fin s'arrête après une longueur fixe et est signalée comme coupée, au lieu d'occuper la carte graphique jusqu'à la limite de dix minutes.
 
 ## 0.5.0
 
