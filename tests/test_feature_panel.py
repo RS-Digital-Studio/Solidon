@@ -1960,6 +1960,7 @@ def test_an_answer_from_the_worker_builds_the_panel_without_asking_the_core(
 
 def test_the_waiting_panel_names_the_feature_and_offers_nothing(qt_app: QApplication) -> None:
     """Bis die Handlungen da sind, stehen Name, Maß und ein Satz — und keine Zeile (RM-232)."""
+    from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QLabel
 
     from app.i18n import tr
@@ -1970,16 +1971,30 @@ def test_the_waiting_panel_names_the_feature_and_offers_nothing(qt_app: QApplica
     found = features.detect(mesh)
     hole_id = next(key for key, value in found.items() if value.kind == "hole")
     panel = FeaturePanel()
-    panel.show_feature(hole_id, found[hole_id], features=found, mesh=mesh)
-    assert panel._runs, "vorher bot das Fenster etwas an"
+    try:
+        panel.show_feature(hole_id, found[hole_id], features=found, mesh=mesh)
+        assert panel._runs, "vorher bot das Fenster etwas an"
 
-    panel.show_pending(hole_id, found[hole_id])
+        panel.show_pending(hole_id, found[hole_id])
 
-    texts = [label.text() for label in panel.findChildren(QLabel) if label.isVisibleTo(panel)]
-    heading = f"{cavity_name(hole_id, found[hole_id], ())}  ·  {feature_measure(found[hole_id])}"
-    assert heading in texts
-    assert tr("Die Handlungen werden ermittelt …") in texts
-    assert not panel._runs, "keine Zeile, die etwas anbietet"
+        texts = [label.text() for label in panel.findChildren(QLabel) if label.isVisibleTo(panel)]
+        heading = (
+            f"{cavity_name(hole_id, found[hole_id], ())}  ·  {feature_measure(found[hole_id])}"
+        )
+        assert heading in texts
+        assert tr("Die Handlungen werden ermittelt …") in texts
+        assert not panel._runs, "keine Zeile, die etwas anbietet"
+    finally:
+        # **Gelöscht, solange die Hülle hier lebt.** Die Zeilen, die
+        # ``show_pending`` per ``deleteLater`` wegräumt, halten über ihre
+        # Signale Verweise auf das Fenster. Ohne Elternteil hing seine Hülle
+        # danach nur noch an ihnen: Im Abbau der Suite fiel der letzte
+        # Verweis mitten in der Zustellung ihrer Löschung, Python löschte das
+        # Fenster samt noch wartender Geschwister, und der Prozess endete mit
+        # „Fatal Python error: Aborted“ — seit dem Entstehen des Tests, drei
+        # von drei gebunden. Im Programm hat das Fenster einen Elternteil.
+        panel.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_a_partly_reused_panel_matches_a_fresh_one_and_tabs_like_the_eye(
