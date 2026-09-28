@@ -292,6 +292,69 @@ def test_every_chosen_body_gets_its_own_orientation(document: Document, profile:
         assert hoehe < 20.0, f"{kennung} steht noch hochkant ({hoehe:.1f} mm)"
 
 
+def test_copies_share_one_search(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kopien teilen ihre Suche (``orientation.turned_like``): Sie tragen
+    dasselbe Netz an anderem Ort, und *Druckoptimal ausrichten* suchte für jede
+    neu — am Minigolf-Satz sechzehnmal für drei Formen. Eine gekippte Kopie
+    ist eine andere Lage und sucht selbst."""
+    from app.core.geom import prepare_ops
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        _("Kippen"),
+        [
+            OperationDraft(
+                op="rotate_object", inputs=("obj_1",), params={"axis": "y", "angle": 90.0}
+            )
+        ],
+    )
+    for _copy in range(2):
+        history.apply(_("Verdoppeln"), [OperationDraft(op="duplicate_object", inputs=("obj_1",))])
+    history.apply(
+        _("Kippen"),
+        [
+            OperationDraft(
+                op="rotate_object", inputs=("obj_3",), params={"axis": "x", "angle": 90.0}
+            )
+        ],
+    )
+    history.apply(
+        _("Ausrichten"),
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1", "obj_2", "obj_3"),
+                params={"candidates": 24},
+            )
+        ],
+    )
+    calls: list[Any] = []
+    real = prepare_ops.search
+
+    def counted(mesh: Any, **kwargs: Any) -> Any:
+        calls.append(mesh)
+        return real(mesh, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "search", counted)
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    assert len(calls) == 2, "obj_2 übernimmt die Suche von obj_1, obj_3 ist gekippt"
+    heights = {key: result.scene.objects[key].mesh.bounds.size[2] for key in ("obj_1", "obj_2")}
+    assert heights["obj_2"] == pytest.approx(heights["obj_1"])
+    assert all(result.scene.objects[key].mesh.bounds.size[2] < 20.0 for key in ("obj_1", "obj_3"))
+
+
 def _towers(document: Document) -> tuple[Project, list[str]]:
     """Zwei stehende Türme mit 15 mm Luft — die beim Hinlegen ineinanderlaufen."""
     project = new_project("centauri-carbon-2", "petg")

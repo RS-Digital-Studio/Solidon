@@ -761,3 +761,50 @@ def search(
         findings=findings,
         transform=matrix,
     )
+
+
+def shape_key(mesh: MeshData) -> bytes:
+    """Woran zwei Netze dieselbe Form in derselben Lage sind — gleich, wo sie stehen.
+
+    Die Ecken relativ zur kleinsten Ecke, auf einen Mikrometer gerundet, und
+    die Dreiecke. Eine verschobene Kopie trifft denselben Schlüssel, eine
+    gekippte nicht: Für sie gilt eine andere Lage. Trifft die Rundung eine
+    Kante zwischen zwei Werten, fehlt nur der Treffer, und es wird gesucht.
+    """
+    import hashlib
+
+    vertices = np.asarray(mesh.raw.vertices, dtype=np.float64)
+    digest = hashlib.blake2b(digest_size=16)
+    if len(vertices):
+        digest.update(np.round(vertices - vertices.min(axis=0), 6).tobytes())
+    digest.update(np.asarray(mesh.raw.faces, dtype=np.int64).tobytes())
+    return digest.digest()
+
+
+def turned_like(
+    mesh: MeshData, earlier: SearchResult, profile: Profile | None, margin: float = 0.0
+) -> SearchResult | None:
+    """Die Lage einer früheren Suche für ein Netz derselben Form (:func:`shape_key`).
+
+    Kopien tragen dasselbe Netz an anderem Ort, und *Druckoptimal ausrichten*
+    suchte für jede neu — an Roberts Minigolf-Satz sechzehnmal für drei
+    Formen. Übernommen wird die Richtung; wohin der Körper damit aufs Bett
+    kommt, rechnet :func:`search` für ihn selbst (``fitting_transform``).
+    ``None``, wenn die Lage hier nicht passt — dann sucht der Aufrufer.
+    """
+    direction = earlier.best.direction
+    matrix = (
+        print_transform(mesh, direction)
+        if profile is None
+        else fitting_transform(mesh, direction, profile.printer, margin=margin)
+    )
+    if matrix is None:
+        return None
+    return SearchResult(
+        mesh=apply(mesh, matrix),
+        best=earlier.best,
+        tried=earlier.tried,
+        baseline=earlier.baseline,
+        findings=earlier.findings,
+        transform=matrix,
+    )
