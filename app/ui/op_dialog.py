@@ -221,6 +221,7 @@ class ValueField(QWidget):
         self.spin.setMaximum(
             self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
         )
+        self._name_limits()
         if self._shown is not None:
             # Der Drehknopf bewegt sich um denselben **physischen** Betrag wie
             # in Millimetern. Qts Vorgabe ist 1.0, und ein ganzer Zoll je Klick
@@ -415,9 +416,23 @@ class ValueField(QWidget):
             self.spin.setMaximum(
                 self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
             )
+            self._name_limits()
             self._core = core
             self.spin.setValue(self._as_shown(core))
         self.captionChanged.emit(self.caption())
+
+    def _name_limits(self) -> None:
+        """Der Satz einer abgelehnten Zahl nennt die Grenzen des Schemas.
+
+        Das Drehfeld eines Feldes mit „wie gemessen“ reicht eine Stufe unter den
+        Mindestwert (dort steht der Sonderwert); der Satz sagte deshalb
+        „Untergrenze -0,01 mm“, wo 0 gilt (Code-Review 0.5.1, U-3).
+        """
+        entry = self._entry
+        self.spin.name_limits(
+            self._as_shown(entry.minimum) if entry.minimum is not None else None,
+            self._as_shown(entry.maximum) if entry.maximum is not None else None,
+        )
 
     def set_value(self, value: Any) -> None:
         """Trägt Zahl oder Ausdruck ein und stellt das Feld passend."""
@@ -2008,23 +2023,7 @@ class OperationDialog(QDialog):
             isinstance(editor, SealPathField) and not editor.valid
             for editor in self._editors.values()
         )
-        no_count = next(
-            (
-                editor.problem()
-                for editor in self._editors.values()
-                if isinstance(editor, CountField) and not editor.valid
-            ),
-            "",
-        ) or next(
-            (
-                said
-                for editor in self._editors.values()
-                if isinstance(editor, ValueField)
-                and not isinstance(editor, CountField)
-                and (said := editor.refusal())
-            ),
-            "",
-        )
+        no_count = self._field_refusal()
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
@@ -2077,6 +2076,26 @@ class OperationDialog(QDialog):
         button.setStatusTip(reason)
         button.setAccessibleDescription(reason)
 
+    def _field_refusal(self) -> str:
+        """Warum ein Zahlenfeld gerade nichts übernimmt — die eine Quelle für Knopf und Klick.
+
+        Eine Stückzahl, die keine ganze Zahl im Bereich ergibt, und jede Zahl
+        oder jeder Ausdruck jenseits der Grenzen (:meth:`ValueField.refusal`),
+        auch an der Stückzahl. Knopfzustand (:meth:`_follow_source_pending`)
+        und :meth:`can_accept` fragten das getrennt: Eine Stückzahl über der
+        Grenze ließ den Knopf aktiv, und der Klick bewirkte nichts
+        (Code-Review 0.5.1, U-2).
+        """
+        for editor in self._editors.values():
+            if not isinstance(editor, ValueField):
+                continue
+            said = editor.refusal()
+            if not said and isinstance(editor, CountField) and not editor.valid:
+                said = editor.problem()
+            if said:
+                return said
+        return ""
+
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
@@ -2101,9 +2120,7 @@ class OperationDialog(QDialog):
             for editor in self._editors.values()
         ):
             return False
-        if any(
-            isinstance(editor, ValueField) and editor.refusal() for editor in self._editors.values()
-        ):
+        if self._field_refusal():
             return False
         preview_ready = self.preview_check is None or self.preview_check()
         return not (

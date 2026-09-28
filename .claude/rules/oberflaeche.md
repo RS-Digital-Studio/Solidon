@@ -174,13 +174,20 @@ danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
 `valueFromText`. Als Typprüfung bleibt `QDoubleSpinBox` richtig.
 
-**Eine Grenze lehnt ab, sie kürzt nicht:** Qt verwirft an einem Feld mit
-Obergrenze 100 die Null von „150“, und die Eingabetaste übernimmt 15. Wo der
-Kunde Grenzen tippt, steht ein `labels.BoundedSpin` (Parameterleiste,
-`op_dialog.ValueField`): Die Zahl bleibt markiert stehen, `valueRefused`
-meldet sie, der Anzeigende nennt die Grenze (`limit_sentence`) und, wo sie
-änderbar ist, den Weg dorthin; der Operationsdialog sperrt *Übernehmen* mit
-demselben Satz. Pfeile und Rad klemmen.
+**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an zwei Orten:** Qt verwirft
+an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
+übernimmt 15. Die **Parameterleiste** und die Zahlenfelder des
+**Operationsdialogs** (`op_dialog.ValueField`, auch die Stückzahl) tragen ein
+`labels.BoundedSpin`: Eine Zahl jenseits der Grenzen bleibt markiert stehen,
+`valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas
+(`limit_sentence`, `name_limits`) und, wo sie änderbar ist, den Weg dorthin;
+der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
+(`OperationDialog._field_refusal`). Eine Nachkommastelle zu viel wird wie
+überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. **Noch nicht
+umgestellt und still kürzend:** das Merkmalfenster (`FeaturePanel`,
+`configure_feature_field`) und die Druckeinstellungen
+(`print_settings_dialog`); die Ausweitung steht nach 0.5.1 im Register von
+`ROADMAP.md`.
 
 ## Gestufte Tiefe
 

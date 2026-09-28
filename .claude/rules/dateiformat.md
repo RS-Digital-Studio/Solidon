@@ -59,8 +59,10 @@ welcher (§24.5, §32).
 Ein Titel aus dem Code trägt `title_translatable` (seit Format 6): `title` ist
 die Message-ID, aufgelöst erst bei der Anzeige; ohne Markierung ist er wörtlich
 (Nutzernamen werden nie übersetzt). Transaktionstitel über `_()`, nie `tr()` —
-sonst friert die Sprache des Speicherzeitpunkts ein. Zusammengesetzte Titel
-(`f"{tr('Parameter')} {name}"`) bleiben wörtlich. Die Titel der
+sonst friert die Sprache des Speicherzeitpunkts ein. Auch ein zusammengesetzter
+Titel ist ein `_()` mit Platzhalter (`session._parameter_title`:
+`_("Parameter {name}", name=title or name)`, der Titel selbst übersetzbar);
+wörtlich bleibt nur, was der Nutzer benannt hat. Die Titel der
 Beispiel-Bauer sammelt `EXTRA_SOURCES` in `app/i18n/extract.py` ein.
 
 ## Ein Platzhalterwert kann selbst übersetzbar sein

@@ -234,7 +234,9 @@ and_names_the_way_on`.
 
   Geantwortet wird gestuft, nach dem, was der Befund hergibt: **Ort** → die
   Kamera fliegt hin und eine vergängliche Marke steht dort (`mark_finding`,
-  Ring in Auswahlfarbe plus Titel — der Ring vor dem Material an seiner
+  Ring plus Titel, seit dem Code-Review 0.5.1 in der Befundfarbe statt der
+  Auswahlfarbe — der gewählte Körper trägt die Auswahlfarbe, und der Ring
+  verschwand darin — der Ring vor dem Material an seiner
   Stelle, sein Radius aus dem Abstand in der Perspektive, der Titel in der
   Oben-Richtung der Kamera darüber; Bildbeleg RM-074, 22.09.2026); **Körper** → er wird ausgewählt und trägt
   damit Auswahlfarbe, Objektbaum und Statuszeile; **`op_id`** → der Verlauf

@@ -532,13 +532,25 @@ class BoundedSpin(NumberSpin):
     valueRefused = Signal(float)
     """Eine getippte Zahl liegt außerhalb der Grenzen und wurde nicht übernommen."""
 
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._named_limits: tuple[float | None, float | None] = (None, None)
+
     def validate(self, text: str, pos: int) -> Any:
         """Wie :class:`NumberSpin` — nur ist eine Zahl jenseits der Grenzen ein
-        Zwischenstand und kein Tippfehler."""
+        Zwischenstand und kein Tippfehler.
+
+        **Nur jenseits der Grenzen, und nur mit erlaubter Stellenzahl.** Eine
+        Nachkommastelle zu viel („1,875“ bei zwei Stellen) bleibt Qts Urteil:
+        Die Taste verfällt, und übernommen wird 1,87 wie im gewöhnlichen Feld.
+        Als Zwischenstand verwarf die Eingabetaste sonst die ganze Zahl und
+        stellte still den alten Wert zurück (Code-Review 0.5.1, U-1).
+        """
         checked: Any = super().validate(text, pos)
         if checked[0] != QValidator.State.Invalid:
             return checked
-        if self._typed_number(text) is not None:
+        number = self._typed_number(text)
+        if number is not None and self._places(text) <= self.decimals() and self._outside(number):
             return QValidator.State.Intermediate, text, pos
         return checked
 
@@ -549,15 +561,33 @@ class BoundedSpin(NumberSpin):
             return None
         return float(body.replace(",", "."))
 
+    def _places(self, text: str) -> int:
+        """Wie viele Nachkommastellen getippt sind."""
+        body = self._digits_only(self._as_shown(text))
+        _whole, separator, fraction = body.replace(",", ".").partition(".")
+        return len(fraction) if separator else 0
+
+    def _outside(self, number: float) -> bool:
+        """Ob eine Zahl jenseits der Grenzen liegt — auf die halbe Anzeigestufe."""
+        slack = 0.5 * 10.0 ** -self.decimals()
+        return number > self.maximum() + slack or number < self.minimum() - slack
+
+    def name_limits(self, low: float | None, high: float | None) -> None:
+        """Welche Grenzen der Satz nennt, wo sie von den Qt-Grenzen abweichen.
+
+        Ein Feld mit „wie gemessen“ trägt seinen Sonderwert eine Stufe unter
+        dem Mindestwert (``setSpecialValueText``); genannt wird der Mindestwert
+        des Schemas, nicht die Stufe darunter („-0,01 mm“ statt 0, U-3).
+        ``None`` heißt: die Qt-Grenze.
+        """
+        self._named_limits = (low, high)
+
     def refused_value(self) -> float | None:
         """Die getippte Zahl, wenn sie außerhalb der Grenzen liegt — sonst ``None``."""
         number = self._typed_number(self.lineEdit().text())
-        if number is None:
+        if number is None or not self._outside(number):
             return None
-        slack = 0.5 * 10.0 ** -self.decimals()
-        if number > self.maximum() + slack or number < self.minimum() - slack:
-            return number
-        return None
+        return number
 
     def refusal(self, unit: str = "") -> str:
         """Der Satz zur abgelehnten Zahl, in der Schreibweise des Feldes — leer ohne Ablehnung.
@@ -569,7 +599,11 @@ class BoundedSpin(NumberSpin):
         if number is None:
             return ""
         above = number > self.maximum()
-        limit = self.maximum() if above else self.minimum()
+        low, high = self._named_limits
+        if above:
+            limit = high if high is not None else self.maximum()
+        else:
+            limit = low if low is not None else self.minimum()
         suffix = self.suffix() or (f" {unit}" if unit else "")
         return limit_sentence(
             self.textFromValue(number) + suffix, self.textFromValue(limit) + suffix, above=above

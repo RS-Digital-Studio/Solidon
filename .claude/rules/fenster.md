@@ -210,8 +210,10 @@ nötig:
   denselben Originaltreffer.
 - **Ein Klick auf einen Befund bleibt nie folgenlos** (§2.7), gestuft: **Ort**
   → die Kamera fliegt hin, eine vergängliche Marke steht dort (`mark_finding`:
-  Ring in Auswahlfarbe vor dem Material, Radius aus dem Abstand, Titel in
-  Oben-Richtung der Kamera); **Körper** → er wird ausgewählt; **`op_id`** → der
+  Ring in der Befundfarbe `FINDING_COLOUR` vor dem Material, nie in der
+  Auswahlfarbe, Radius aus dem Abstand, Titel auf eigenem Grund in
+  Oben-Richtung der Kamera, bei `Finding.outline` dazu der Rand der Fläche —
+  `ansicht.md`, „Was gefärbt wird“); **Körper** → er wird ausgewählt; **`op_id`** → der
   Verlauf zeigt den Schritt (`HistoryPanel.point_at`), auch ohne Körper.
   Fallen: Der Ort kommt aus der Szene und wird für die Ansicht verschoben
   (`view_point_of`); der Ort eines Kartenbefunds wird in `_map_ready`
