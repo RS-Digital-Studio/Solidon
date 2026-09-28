@@ -251,12 +251,13 @@ Nähte kennt sie nicht; sie trägt `source="internal"` (Regel 14).
   `profiles.analysis_limits`. Die Schichtanalyse nimmt Zahlen, keine Profile;
   **wer sie zwischenspeichert, nimmt sie in den Schlüssel**.
 - **Die Orientierungssuche misst Stützräume am Ersatznetz und den Stand am
-  Original** (`judge(footing_mesh=…)`, auch in der Vorauswahl) — ein schmaler
-  Rand überlebt die Ausdünnung nicht. **Die sechs Achsen werden immer
-  geschnitten**, weil die Heuristik an einem Gitter jede liegende Lage vor die
+  Original** (`judge(footing_mesh=…)`, auch in der Vorauswahl). **Die sechs
+  Achsen werden immer geschnitten**, weil die Heuristik liegende Lagen vor
   stehende reiht; höchstens `FINALISTS` + sechs Achsen + Ausgangslage.
   **Was steht und nach `advise.support_need` keine Stütze braucht, bleibt,**
   **wenn der Gewinner Stütze braucht** (`orientation.stays`, am Original).
+  **Auto Splits Vorauswahl hält einen Platz für eine Lage, die steht**
+  (`ranked_orientations(standing=…)`).
 - **Eine dünne Wand ist nicht allein deshalb undruckbar** (Arachne); unter der
   Mindestbahnbreite verlangt der Befund die Kontrolle im Slicer.
 - **`taper_length` misst Außenkontur auf einem Keil** — einer Wand, deren
