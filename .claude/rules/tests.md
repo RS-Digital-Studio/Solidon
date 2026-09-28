@@ -323,6 +323,12 @@ manchmal verwirft die Probe den Fix statt des Tests.
   wird gegen den Bestand gegriffen, bevor es in einen Docstring kommt. Ein
   Kommentar, der eine Falle richtig benennt, ist keine Zusicherung; eine Zahl
   darin wird nachgerechnet.
+- **An der Maschine vorbei**: Ein Fall, der am letzten Bit steht (Löserlauf
+  am Budget, Urteil an einer Schwelle), sichert nichts über **eine** Rechnung
+  zu — auf einem anderen Runner kippt sie. Er wird über Lagen geprüft, die
+  eigene Rechnung und feste Muster aus `platform_noise(pattern)`: „in keiner
+  Lage“ für den Schutz, „in mindestens einer“ für die Gegenprobe
+  (`test_refine.py`, `GUARD_PATTERNS`).
 
 ## Ein Verbotstest über eine leere Menge ist immer grün
 
