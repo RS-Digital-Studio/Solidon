@@ -982,8 +982,10 @@ def _evaluate(
                 (position + index / len(result.objects)) / total,
                 (position + (index + 1) / len(result.objects)) / total,
             )
-            motion, moved_source = _motion_of(placed, result.transform, inputs, index)
             try:
+                # Im Fang wie die Erkennung selbst: Der Beleg vergleicht jede
+                # Ecke, und ein Speicherfehler dabei ist ein Befund am Schritt.
+                motion, moved_source = _motion_of(placed, result.transform, inputs, index)
                 prepared_objects[object_id] = _with_features(
                     placed,
                     previous_features.get(object_id, {}),
@@ -3302,12 +3304,22 @@ def _motion_of(
 
     Nur am Netz; ein exakter Körper führt seine Merkmale in der Operation
     selbst nach (``transform.moved_object``).
+
+    **Die Bewegung einer Ausgabe führt von ihrem eigenen Eingang aus**, wenn es
+    ihn gibt: Ihre alten Merkmale liegen dort, und mit ihnen rechnet die
+    Auswertung die Matrix nach. Gleicht ein Zwischennetz der Operation bitgenau
+    dem Eingang eines anderen Körpers — die Kopie wurde vorher allein mit
+    derselben Drehung ausgerichtet —, nennt der Vermerk zuerst diesen, und der
+    Matrix fehlte die Drehung. Eine neue Ausgabe (die Kopie eines Musters) hat
+    keine alten Merkmale und nimmt jeden Eingang, aus dem sie belegt bewegt ist.
     """
     source = inputs[index].mesh if index < len(inputs) else None
     if reported is not None or not isinstance(placed.mesh, MeshData):
         return reported, source
+    own = [entry for entry in inputs if entry.id == placed.id]
     noted = moved_from(
-        placed.mesh, [entry.mesh for entry in inputs if isinstance(entry.mesh, MeshData)]
+        placed.mesh,
+        [entry.mesh for entry in (own or inputs) if isinstance(entry.mesh, MeshData)],
     )
     if noted is None:
         return None, source
@@ -3766,8 +3778,15 @@ def _with_features(
         # danach. Die Zuordnung darunter läuft unverändert und findet, was
         # sie bis zum 22.09.2026 nach 1,3 s Neuerkennung auch fand: alles
         # beim Alten. Ohne Beleg — anderes Netz, Skalierung, kein Eintrag im
-        # Merker — rechnet die Erkennung wie zuvor.
-        if transform is not None and isinstance(source_mesh, MeshData):
+        # Merker — rechnet die Erkennung wie zuvor. **In der Vorschau nur, wenn
+        # ein Folgeschritt die Merkmale liest**: Die Zuordnung nach dem
+        # Übertrag kostete dort mehr, als er spart (acht Organizer mit je 898
+        # Merkmalen: 3,7 statt 2,45 s je getippter Zahl).
+        if (
+            transform is not None
+            and isinstance(source_mesh, MeshData)
+            and (detect_features or referenced or needed)
+        ):
             carry_detection(source_mesh, mesh, transform, check_cancelled=watch.raise_if_cancelled)
         if refinement is not None and isinstance(source_mesh, MeshData):
             carry_refined_detection(

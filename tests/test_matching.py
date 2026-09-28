@@ -1193,6 +1193,158 @@ def test_a_movement_note_is_a_promise_not_a_proof() -> None:
     assert moved_from(chained, [mesh]) is None, "zu weit zurück, also neu erkennen"
 
 
+def test_the_copies_of_a_pattern_keep_their_features_without_a_search(profile, monkeypatch) -> None:
+    """*Kopien in Reihe oder Kreis* bewegt jede Kopie mit eigener Matrix — und erkennt nicht neu.
+
+    Die dritte Operation, für die der Bewegungsvermerk gebaut ist, neben
+    *Druckoptimal ausrichten* und *Auf dem Bett anordnen*: Das Muster meldet
+    keine Matrix, jede Kopie ist eine neue Ausgabe ohne alte Merkmale. Lage und
+    Normale folgen der von außen bestimmten Drehung (Kabsch).
+    """
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import evaluate
+
+    forget_cache()
+    project, sources = _plate_project(
+        [("Muster", "pattern", {"kind": "circular", "count": 4, "angle": 360.0, "axis": "z"})]
+    )
+    runs = _counted_recognitions(monkeypatch)
+    only_loaded, only_loaded_sources = _plate_project([])
+    loaded = evaluate(only_loaded.document, profile, sources=only_loaded_sources)
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at is None
+    assert runs == [1], "erkannt wird beim Laden, die Kopien übernehmen"
+    origin = loaded.scene.objects[only_loaded.document.ops[0].outputs[0]]
+    outputs = project.document.ops[-1].outputs
+    assert len(outputs) == 4, "das Original und drei Kopien"
+    for object_id in outputs[1:]:
+        body = result.scene.objects[object_id]
+        turn, shift = _rigid_between(origin.mesh, body.mesh)
+        assert not np.allclose(turn, np.eye(3), atol=1e-6), "die Kopie ist gedreht"
+        assert set(body.features) == set(origin.features)
+        for name, feature in origin.features.items():
+            moved = body.features[name]
+            assert moved.face_indices == feature.face_indices
+            if "centre" in feature.params:
+                expected = turn @ np.asarray(feature.params["centre"]) + shift
+                assert np.allclose(moved.params["centre"], expected, atol=1e-6)
+            if "normal" in feature.params:
+                expected = turn @ np.asarray(feature.params["normal"])
+                assert np.allclose(moved.params["normal"], expected, atol=1e-9)
+
+
+def test_the_motion_of_an_output_starts_at_its_own_input() -> None:
+    """Gleicht ein Zwischennetz dem Eingang eines anderen Körpers, zählt der eigene Eingang.
+
+    Die Kopie wurde vorher allein mit derselben Drehung ausgerichtet, ohne
+    Anordnen. Beim Ausrichten beider dreht das Original erst — das Zwischennetz
+    gleicht der Kopie Bit für Bit — und wird dann verschoben. Der Vermerk nennt
+    zuerst das Zwischennetz, also die Kopie; die alten Merkmale des Originals
+    liegen aber an seinem eigenen Eingang, und die Matrix muss von dort aus
+    gehen: gedreht und verschoben, nicht nur verschoben.
+    """
+    from app.core.geom.transform import composed, rotation
+    from app.core.scene.evaluate import _motion_of
+    from app.core.types import SceneObject
+
+    mesh = body("plate_holes.stl")
+    turn = rotation("x", 90.0)
+    shift = translation((30.0, 0.0, 0.0))
+    original = SceneObject(id="obj_1", name="Platte", mesh=mesh)
+    copy = SceneObject(id="obj_2", name="Kopie", mesh=apply(mesh, turn))
+    placed = replace(original, mesh=apply(apply(mesh, turn), shift))
+    assert np.array_equal(
+        np.asarray(apply(mesh, turn).raw.vertices), np.asarray(copy.mesh.raw.vertices)
+    ), "das Zwischennetz gleicht der Kopie bitgenau"
+
+    motion, source = _motion_of(placed, None, [original, copy], 0)
+
+    assert source is mesh, "die Bewegung beginnt am eigenen Eingang"
+    assert motion is not None
+    assert np.allclose(np.asarray(motion), composed(shift, turn), rtol=0.0, atol=1e-12)
+
+
+def test_a_preview_of_arranged_copies_carries_nothing_nobody_reads(profile) -> None:
+    """Die Vorschau eines Dialogs zeigt Geometrie und überträgt keine Merkmale, die niemand liest.
+
+    Übertragen ist billiger als erkennen, die Zuordnung danach aber nicht: An
+    acht Ausfertigungen eines Organizers mit 898 Merkmalen kostete jede
+    getippte Zahl im Dialog *Auf dem Bett anordnen* 3,7 statt 2,45 Sekunden,
+    weil jede übertragene Erkennung den frühen Ausstieg der Vorschau aufhob.
+    Die genaue Auswertung danach überträgt wie zuvor.
+    """
+    import copy as copying
+
+    from app.core.perceive.features import forget_cache, known_detection
+    from app.core.scene import evaluate
+    from app.core.scene.cache import ResultCache
+
+    forget_cache()
+    project, sources = _plate_project(
+        [
+            ("Duplizieren", "duplicate_object", {"count": 3}),
+            ("Anordnen", "arrange_bed", {}),
+        ]
+    )
+    cache = ResultCache()
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert first.stopped_at is None
+    preview_document = copying.deepcopy(project.document)
+    preview_document.ops[-1].params["spacing"] = 12.0
+
+    preview = evaluate(
+        preview_document, profile, sources=sources, cache=cache, detect_features=False
+    )
+
+    assert preview.stopped_at is None
+    placed = [preview.scene.objects[name] for name in preview_document.ops[-1].outputs]
+    assert len(placed) == 3
+    assert all(known_detection(entry.mesh) is None for entry in placed), (
+        "die Vorschau hat übertragen, obwohl kein Schritt die Merkmale liest"
+    )
+    exact = evaluate(preview_document, profile, sources=sources, cache=cache)
+    assert all(
+        known_detection(exact.scene.objects[name].mesh) is not None
+        for name in preview_document.ops[-1].outputs
+    ), "die genaue Auswertung überträgt"
+
+
+def test_a_failing_proof_of_movement_is_a_finding_not_a_crash(profile, monkeypatch) -> None:
+    """Ein Fehler im Beleg der Bewegung hält am Schritt an, statt aus der Auswertung zu fliegen.
+
+    Der Beleg vergleicht jede Ecke des Netzes (``moved_twin``); an sehr großen
+    Körpern kann dabei der Speicher ausgehen. Derselbe Fang wie um die
+    Erkennung macht daraus einen Befund am Schritt.
+    """
+    import importlib
+
+    from app.core.perceive.features import forget_cache
+    from app.core.scene import evaluate
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    proven = evaluation.moved_from
+
+    def exhausted(moved, sources):
+        # Erst wenn der Beleg rechnet, also an einem belegbar bewegten Netz.
+        if proven(moved, sources) is not None:
+            raise MemoryError("proof of movement")
+        return None
+
+    forget_cache()
+    project, sources = _plate_project(
+        [
+            ("Duplizieren", "duplicate_object", {"count": 2}),
+            ("Anordnen", "arrange_bed", {}),
+        ]
+    )
+    monkeypatch.setattr(evaluation, "moved_from", exhausted)
+
+    result = evaluate(project.document, profile, sources=sources)
+
+    assert result.stopped_at == project.document.ops[-1].id
+
+
 def _same_surface(before: MeshData, after: MeshData, old: Feature, new: Feature) -> None:
     """Das übertragene Merkmal deckt dieselbe Fläche wie das alte — nur feiner geteilt."""
     assert new.kind == old.kind

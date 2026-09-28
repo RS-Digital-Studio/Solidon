@@ -53,7 +53,8 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   die Merkmale ans neue Netz; ohne Erkennung bleibt die Ausgabe, ohne Zuordnung
   und Waisenbefund. Die Bewegung je Ausgabe sagt `_motion_of`: die gemeldete,
   sonst der belegte Bewegungsvermerk am Netz (`perceive.features.moved_from`)
-  mit seinem Eingang — so gehen Ausrichten, Anordnen und Musterkopien über
+  mit seinem Eingang, dem eigenen, wo es ihn gibt; die Vorschau überträgt nur,
+  was ein Folgeschritt liest — so gehen Ausrichten, Anordnen und Musterkopien über
   mehrere Körper denselben Weg wie ein einzelnes Verschieben. Belege am exakten Körper (Regel in `operationen.md`):
   `_needed_after`, `_checked_continuations`, `_unchanged_continuations`,
   `_unproven_native_references`, `blocked_references` →
