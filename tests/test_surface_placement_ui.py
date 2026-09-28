@@ -2826,8 +2826,13 @@ def test_measure_fields_wait_for_a_second_enter_and_commit_all_texts(
     assert host.begun and controller.active
     assert host.values()["diameter"] == pytest.approx(6.0)
     assert host.values()["depth"] == pytest.approx(7.0)
-    assert not controller._accept_pending
+    # Das frühe Enter wartet auf das Werkzeug (``5a90d4361``, Kunde Weg b) —
+    # und schreibt trotzdem keinen Schritt, solange die Pflicht zur gezeigten
+    # Vorschau nicht erfüllt ist: Die prüft :meth:`accept` selbst.
+    assert controller._accept_pending
     assert session.wait_for_idle(30_000)
+    for _ in range(20):
+        QApplication.processEvents()
     assert len(session.project.document.ops) == before
     assert controller.active and not during
     host.block_apply(None)
@@ -2910,8 +2915,12 @@ def test_measure_fields_keep_draft_on_tab_camera_and_release_but_escape_discards
     editor.selectAll()
     QTest.keyClicks(editor, "7")
     QTest.keyClick(editor, Qt.Key.Key_Return)
-    assert not controller._accept_pending
+    # Die Eingabetaste gleich nach der letzten Ziffer wartet auf das Werkzeug,
+    # statt still zu verfallen (``5a90d4361``, Durchsicht 0.5.1, Kunde Weg b);
+    # Escape nimmt auch den wartenden Abschluss mit.
+    assert controller._accept_pending
     QTest.keyClick(editor, Qt.Key.Key_Escape)
+    assert not controller._accept_pending
     assert not controller.active and not host.begun
     assert not controller._watched and not controller._field_targets
     assert session.wait_for_idle(30_000)
@@ -3122,7 +3131,6 @@ def test_the_flow_runs_on_a_host_without_a_window(
 
 def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplication) -> None:
     """Die Maßgruppe und der gemeinsame Abschluss bleiben bei geschlossenem Panel nutzbar."""
-    from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
     from app.ui.labels import LengthSpin
@@ -3143,7 +3151,9 @@ def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplicati
         diameter = round(field.value_mm() + 0.5, 2)
         editor.selectAll()
         QTest.keyClicks(editor, QLocale().toString(diameter, "f", 2))
-        QTest.keyClick(editor, Qt.Key.Key_Return)
+        # Ohne Eingabetaste: Die übernimmt seit ``5a90d4361`` selbst, sobald
+        # Werkzeug und Vorschau stehen (Kunde Weg b). Geprüft wird hier der
+        # Knopf der Maßgruppe bei geschlossenem Panel.
         assert flow.dialog.begun and flow.active
         before = len(window.session.project.document.ops)
         _display_measure_preview(window, flow)
