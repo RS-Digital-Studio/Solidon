@@ -85,8 +85,11 @@ MOST_HELPERS: Final = 3
 IDLE_KEPT: Final = 1
 
 #: Wie viele Starts hintereinander scheitern dürfen, bevor diese Sitzung ohne
-#: Hilfsprozess weiterrechnet.
-STARTS_BEFORE_GIVING_UP: Final = 2
+#: Hilfsprozess weiterrechnet. Einer: Bereit ist ein Hilfsprozess nach 0,4 bis
+#: 0,8 s, aus dem Quellbaum wie aus dem Paket; wer in :data:`STARTUP_SECONDS`
+#: nicht antwortet, antwortet nicht (etwa ein Paket ohne ``freeze_support``),
+#: und ein zweiter Versuch kostete den Kunden die Frist noch einmal.
+STARTS_BEFORE_GIVING_UP: Final = 1
 
 _CONTEXT: Final = multiprocessing.get_context("spawn")
 

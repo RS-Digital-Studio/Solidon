@@ -22,7 +22,8 @@ sie nichts kennt außer ihren Feldern und Zahlen:
 * Grenzen und Toleranzen kommen als Zahl vom Aufrufer, nicht als Import: Was
   ein Test an ``mesh_ops`` umstellt, gilt damit auch im Hilfsprozess, und das
   Modul zieht außer ``numpy`` und ``manifold3d`` nichts nach, was den Start
-  des Hilfsprozesses verlängert.
+  des Hilfsprozesses verlängert (``component_labels`` lädt trimesh erst, wenn
+  es gefragt wird).
 * ``check`` steht zwischen zwei Kernaufrufen. Im Prozess wirft es den Abbruch
   (``CancelToken.raise_if_cancelled``), im Hilfsprozess beendet es ihn, wenn
   sein Elternprozess nicht mehr lebt. Einen laufenden Kernaufruf hält keines
@@ -46,6 +47,7 @@ import os
 import pickle
 import traceback
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from multiprocessing import shared_memory
 from typing import Any, Final
 
@@ -410,6 +412,24 @@ def min_gap(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> O
     return {}, {"gap": float(first.min_gap(second, float(values["search"])))}
 
 
+def component_labels(arrays: Mapping[str, np.ndarray], values: Values, check: Check) -> Outcome:
+    """Die Zusammenhangsnummer jedes der ``count`` Knoten eines Graphen aus ``edges``.
+
+    Die Frage von ``mesh.face_components``, gestellt wie
+    ``trimesh.graph.connected_components`` mit ``engine="scipy"`` sie stellt
+    (``connected_component_labels``). ``scipy.sparse.csgraph`` hält den GIL wie
+    der Kern: an den 5,8 Mio. Dreiecken des verfeinerten Spielwürfels 0,22 bis
+    0,26 s am Stück (RM-212, ``sonden/hilfsprozess/buchhaltung.py``). trimesh
+    wird erst hier geladen — der Hilfsprozess startet ohne es.
+    """
+    from trimesh import graph
+
+    # trimesh trägt hier keine Typen; die Antwort ist ein Feld ganzer Zahlen.
+    labelled: Any = graph.connected_component_labels
+    labels = labelled(arrays["edges"], node_count=int(values["count"]))
+    return {"labels": np.ascontiguousarray(labels)}, {}
+
+
 #: Was der Hilfsprozess rechnen darf — nach Namen, und sonst nichts.
 JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcome]]] = {
     "display_simplify": display_simplify,
@@ -422,6 +442,7 @@ JOBS: Final[dict[str, Callable[[Mapping[str, np.ndarray], Values, Check], Outcom
     "boolean": boolean,
     "simplify_closed": simplify_closed,
     "min_gap": min_gap,
+    "component_labels": component_labels,
 }
 
 
@@ -631,7 +652,10 @@ def serve(connection: Any) -> None:
         try:
             connection.recv()
         except EOFError, OSError:
-            out.unlink()
+            # Unter POSIX kann der Elternprozess den Namen schon weggenommen
+            # haben (``copied``), bevor er starb.
+            with suppress(OSError):
+                out.unlink()
             _closed(out)
             return
         _closed(out)

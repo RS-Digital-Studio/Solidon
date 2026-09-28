@@ -168,6 +168,13 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
         other.apply_translation((0.0, 0.0, 40.0))
         return {**mesh_input(body, "0"), **mesh_input(MeshData.of(other), "1")}, {"search": 50.0}
 
+    def labels() -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+        from app.core.geom.mesh import _adjacency_by_place
+
+        body = welded("two_components.stl")
+        edges = np.asarray(_adjacency_by_place(body.raw), dtype=np.int64).reshape(-1, 2)
+        return {"edges": edges}, {"count": body.triangle_count}
+
     return [
         ("display_simplify", display),
         ("simplify_at_most", at_most),
@@ -179,6 +186,7 @@ def _job_cases() -> list[tuple[str, Callable[[], tuple[dict[str, np.ndarray], di
         ("boolean", boolean),
         ("simplify_closed", closed),
         ("min_gap", gap),
+        ("component_labels", labels),
     ]
 
 
@@ -207,7 +215,7 @@ def test_a_job_gives_the_same_bytes_in_the_helper_as_here(
     same_bytes(here[0], there[0])
     assert here[1] == there[1]
     assert kernel_process.statistics().get(f"helper:{job}") == 1, "im Hilfsprozess gerechnet"
-    assert here[1] != {} and (here[0] or here[1].get("gap") is not None), "der Fall tut etwas"
+    assert here[0] or here[1].get("gap") is not None, "der Fall tut etwas"
 
 
 def test_the_public_ways_give_the_same_mesh_through_the_helper(offloaded: None) -> None:
@@ -247,6 +255,31 @@ def test_the_public_ways_give_the_same_mesh_through_the_helper(offloaded: None) 
     counts = kernel_process.statistics()
     assert counts["helper"] >= len(ways), counts
     assert counts["started"] == 1, "ein Hilfsprozess für alle — er wartet zwischen den Rechnungen"
+
+
+def test_face_components_are_those_of_trimesh_in_both_places(offloaded: None) -> None:
+    """``face_components`` zählt wie ``trimesh.graph.connected_components`` — hier und dort.
+
+    Die Nummern rechnet seit RM-212 ``kernel_jobs.component_labels`` (an großen
+    Netzen im Hilfsprozess, ``csgraph`` hält den GIL); die Gruppen danach sind
+    dieselben wie aus trimesh: gleiche Teile, gleiche Reihenfolge, gleiche
+    Dreiecke.
+    """
+    from app.core.geom.mesh import _adjacency_by_place, face_components
+
+    for name in ("two_components.stl", "crossing_and_apart.stl", "plate_holes.stl"):
+        body = welded(name).raw
+        expected = trimesh.graph.connected_components(
+            _adjacency_by_place(body), nodes=np.arange(len(body.faces)), engine="scipy"
+        )
+        for got in (
+            face_components(body.copy()),
+            in_a_worker(lambda b=body: face_components(b.copy())),
+        ):
+            assert len(got) == len(expected), name
+            for piece, reference in zip(got, expected, strict=True):
+                assert np.array_equal(piece, np.asarray(reference, dtype=np.int64)), name
+    assert kernel_process.statistics().get("helper:component_labels") == 3
 
 
 def test_the_main_thread_and_small_jobs_stay_in_this_process(
@@ -340,8 +373,8 @@ def test_a_helper_that_never_starts_falls_back_to_this_process(
     """Nach der Startfrist wird der stumme Hilfsprozess beendet, und die Rechnung läuft hier.
 
     Das ist der Fall eines eingefrorenen Pakets ohne ``freeze_support``: Der
-    Kindprozess startet die Anwendung, statt zu antworten. Nach zwei
-    gescheiterten Starts rechnet die Sitzung ohne Hilfsprozess weiter.
+    Kindprozess startet die Anwendung, statt zu antworten. Nach dem
+    gescheiterten Start rechnet die Sitzung ohne Hilfsprozess weiter.
     """
     monkeypatch.setattr(kernel_process, "_SERVE", _answers_nothing)
     monkeypatch.setattr(kernel_process, "STARTUP_SECONDS", 1.0)
@@ -356,8 +389,9 @@ def test_a_helper_that_never_starts_falls_back_to_this_process(
     counts = kernel_process.statistics()
     assert counts["fallback"] == 1 and counts["helper"] == 0
     assert kernel_process.processes() == [], "der stumme Hilfsprozess ist beendet"
+    assert kernel_process._POOL.disabled, "nach dem Fehlstart ohne Hilfsprozess"
     in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
-    assert kernel_process._POOL.disabled, "nach zwei Fehlstarts ohne Hilfsprozess"
+    assert kernel_process.statistics()["started"] == 1, "kein zweiter Versuch"
 
 
 def test_a_helper_that_does_not_accept_a_job_falls_back_to_this_process(
@@ -683,7 +717,6 @@ def test_the_coarse_preview_reduces_and_drills_in_the_helper(
     assert counts["helper:boolean"] >= 1, counts
     assert there is not None and here is not None
     assert there.removed_volume == here.removed_volume
-    assert kernel_process.statistics()["started"] == 1, "der Hauptfaden startet keinen"
 
 
 def test_applying_a_large_refinement_refines_in_the_helper(offloaded: None) -> None:

@@ -6,6 +6,7 @@ import dataclasses
 import hashlib
 import math
 import threading
+from array import array
 from collections import OrderedDict
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -16,7 +17,13 @@ import numpy as np
 from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
-from app.core.geom.mesh import MeshData, refined_units, remember_refined_units
+from app.core.geom.mesh import (
+    PYTHON_VALUES_CHUNK,
+    MeshData,
+    python_values,
+    refined_units,
+    remember_refined_units,
+)
 from app.core.perceive import features as detection
 from app.core.perceive import recognition_time
 from app.core.perceive.helix import _facet_of_face
@@ -322,28 +329,53 @@ def _seeds(
     return tuple(sorted(int(np.min(group)) for group in groups))
 
 
+def _in_order(indices: Sequence[int]) -> tuple[int, ...]:
+    """Die Dreiecksnummern aufsteigend — dasselbe Tupel wie ``tuple(sorted(indices))``.
+
+    Eine lange Reihe wird nicht in einem Stück sortiert: ``sorted`` über die
+    3 979 168 Nummern der größten Fläche des verfeinerten Spielwürfels hielt
+    den Hauptfaden bis zu 0,26 s an, obwohl sie schon aufsteigen (RM-212,
+    ``features.refined_features`` legt sie so an). Stückweise nach numpy,
+    dort geprüft und nur, wenn nötig, sortiert; eine schon aufsteigende Reihe
+    kommt unverändert zurück.
+    """
+    if len(indices) < _ROW_AS_FIELD:
+        return tuple(sorted(indices))
+    values = np.concatenate(
+        [
+            np.fromiter(indices[start : start + PYTHON_VALUES_CHUNK], dtype=np.int64)
+            for start in range(0, len(indices), PYTHON_VALUES_CHUNK)
+        ]
+    )
+    if bool(np.all(values[1:] >= values[:-1])):
+        return indices if isinstance(indices, tuple) else tuple(indices)
+    return tuple(python_values(np.sort(values)))
+
+
 def _numbered(features: Sequence[Feature]) -> dict[FeatureId, Feature]:
-    """Gleiche Originalflächen zusammenlegen und unabhängig vom Suchlauf benennen."""
+    """Gleiche Originalflächen zusammenlegen und unabhängig vom Suchlauf benennen.
+
+    Die Dreiecksnummern eines Merkmals werden einmal sortiert, nicht dreimal
+    (Schlüssel, Reihenfolge, Ergebnis): Jedes ``sorted`` über die 3 979 168
+    Nummern der größten Fläche des verfeinerten Spielwürfels hielt den
+    Hauptfaden 0,1 bis 0,26 s am Stück an (RM-212). Der Schlüssel ist dieselbe
+    Reihenfolge wie vorher, das Ergebnis dasselbe.
+    """
     unique: dict[tuple[str, tuple[int, ...]], Feature] = {}
     for feature in features:
-        key = feature.kind, tuple(sorted(feature.face_indices))
+        key = feature.kind, _in_order(feature.face_indices)
         previous = unique.get(key)
         if previous is None or float(feature.params.get("local_search_radius", math.inf)) < float(
             previous.params.get("local_search_radius", math.inf)
         ):
             unique[key] = feature
-    ordered = sorted(
-        unique.values(), key=lambda entry: (entry.kind, tuple(sorted(entry.face_indices)))
-    )
     counts: dict[str, int] = {}
     result = {}
-    for feature in ordered:
+    for (_kind, faces), feature in sorted(unique.items(), key=lambda item: item[0]):
         stem = "curve" if feature.kind == "curved_face" else feature.kind
         counts[stem] = counts.get(stem, 0) + 1
         identifier = f"{stem}_{counts[stem]}"
-        result[identifier] = replace(
-            feature, id=identifier, face_indices=tuple(sorted(feature.face_indices))
-        )
+        result[identifier] = replace(feature, id=identifier, face_indices=faces)
     return result
 
 
@@ -1269,23 +1301,65 @@ def forget_known() -> None:
         _KNOWN.clear()
 
 
-def _plain(value: Any) -> Any:
-    """Ein Wert als ausgeschriebene Grundform — für einen Abdruck ohne gekürzte Felder."""
+#: Ab wie vielen Einträgen eine Zahlenreihe als ``int64``-Feld in den Abdruck
+#: geht statt Zahl für Zahl (:func:`_fed`) — Dreiecksnummern eines Merkmals.
+_ROW_AS_FIELD: Final = 1024
+
+
+def _fed(digest: Any, value: Any) -> None:
+    """Ein Wert in den Abdruck einer Nachmessung — ausgeschrieben, eindeutig gerahmt.
+
+    Gleiche Werte geben dieselben Bytes, verschiedene verschiedene: Datenklassen
+    feldweise mit Namen, Zuordnungen nach dem Schlüssel als Text, Kommazahlen
+    als ``hex`` (keine gekürzte Stelle), jeder Teil mit Art und Länge davor.
+    **Und Stück für Stück, nicht als ein Text**: Bis hierher entstand der
+    Abdruck als ein ``repr`` über alle Merkmale, und nach *Kanten verfeinern*
+    trägt die größte Fläche des Spielwürfels 3 979 168 Dreiecksnummern — der
+    Text über sie hielt den Hauptfaden 0,5 bis 0,8 s am Stück an (RM-212). Eine
+    lange Reihe ganzer Zahlen geht deshalb als ``int64``-Feld hinein
+    (``array``, der Hash gibt den GIL beim Rechnen her).
+    """
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return tuple(
-            (item.name, _plain(getattr(value, item.name))) for item in dataclasses.fields(value)
-        )
+        digest.update(b"D")
+        for item in dataclasses.fields(value):
+            _fed(digest, item.name)
+            _fed(digest, getattr(value, item.name))
+        digest.update(b"d")
+        return
     if isinstance(value, Mapping):
-        return tuple(sorted((str(key), _plain(item)) for key, item in value.items()))
+        digest.update(b"M%d:" % len(value))
+        for key, item in sorted(
+            ((str(key), item) for key, item in value.items()), key=lambda pair: pair[0]
+        ):
+            _fed(digest, key)
+            _fed(digest, item)
+        return
     if isinstance(value, np.ndarray):
-        return ("array", value.dtype.str, value.shape, value.tobytes())
+        digest.update(f"A{value.dtype.str}{value.shape}:".encode())
+        digest.update(value.tobytes())
+        return
     if isinstance(value, (list, tuple)):
-        return tuple(_plain(item) for item in value)
+        if len(value) >= _ROW_AS_FIELD and type(value[0]) is int:
+            try:
+                row = array("q", value)
+            except TypeError, OverflowError:
+                row = None
+            if row is not None:
+                digest.update(b"I%d:" % len(value))
+                digest.update(row)
+                return
+        digest.update(b"T%d:" % len(value))
+        for item in value:
+            _fed(digest, item)
+        return
     if isinstance(value, (float, np.floating)):
-        return float(value).hex()
+        text = float(value).hex().encode()
+        digest.update(b"F%d:" % len(text) + text)
+        return
     if isinstance(value, np.integer):
-        return int(value)
-    return value
+        value = int(value)
+    text = repr(value).encode("utf-8")
+    digest.update(b"R%d:" % len(text) + text)
 
 
 def _known_key(
@@ -1294,19 +1368,22 @@ def _known_key(
     required: Collection[FeatureId] | None,
     standing: Collection[FeatureId],
 ) -> bytes:
-    """Wovon eine Nachmessung abhängt: Netz, Merkmale, Anspruch, Budgets."""
+    """Wovon eine Nachmessung abhängt: Netz, Merkmale, Anspruch, Budgets.
+
+    Ein Abdruck für den Merker dieses Prozesses (:data:`_KNOWN`), nirgends
+    gespeichert; seine Bytes gehen über :func:`_fed`.
+    """
     digest = hashlib.blake2b(digest_size=20)
     digest.update(detection._mesh_key(mesh))
-    digest.update(
-        repr(
-            (
-                tuple((name, _plain(features[name])) for name in sorted(features)),
-                None if required is None else tuple(sorted(required)),
-                tuple(sorted(standing)),
-                LOCAL_FACE_LIMIT,
-                MANTLE_PROOF_LIMIT,
-            )
-        ).encode("utf-8")
+    _fed(digest, [(name, features[name]) for name in sorted(features)])
+    _fed(
+        digest,
+        (
+            None if required is None else tuple(sorted(required)),
+            tuple(sorted(standing)),
+            LOCAL_FACE_LIMIT,
+            MANTLE_PROOF_LIMIT,
+        ),
     )
     return digest.digest()
 

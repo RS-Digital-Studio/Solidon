@@ -2093,9 +2093,16 @@ class ObjectTree(QWidget):
                 # Bohrung bekommt deshalb kein Feld, das nichts täte.
                 if getattr(feature, "kind", "") in ("face", "curved_face"):
                     self._faces.add((object_id, feature_id))
-                    face_slots = {
-                        mesh.slots[face] if mesh.slots else 0 for face in feature.face_indices
-                    }
+                    # Ohne Slots trägt jedes Dreieck Slot 0 — ohne einen Gang
+                    # über sie: An der größten Fläche des verfeinerten
+                    # Spielwürfels (3 979 168 Dreiecke) kostete er den
+                    # Hauptfaden 0,1 bis 0,2 s je Szenenaufbau (RM-212).
+                    slots = mesh.slots
+                    face_slots = (
+                        {slots[face] for face in feature.face_indices}
+                        if slots
+                        else ({0} if feature.face_indices else set())
+                    )
                     self._show_filament(
                         child,
                         tuple(slot for slot in definitions if slot.index in face_slots),

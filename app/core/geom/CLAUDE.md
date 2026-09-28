@@ -72,7 +72,8 @@ unter „Boolesches geht durch die Rückfallkette“.
 `__init__.py` trägt nur den Paketdocstring.
 
 **Grundlage** — `mesh.py` (die Hülle um den Kern, §9; `read_mesh`,
-`unique_edges`, `edge_table`; `on_surface` über einen Index, den hält, wer
+`unique_edges`, `edge_table`; `python_values` für Millionen Werte als
+Python-Zahlen, stückweise; `on_surface` über einen Index, den hält, wer
 denselben Körper mehrmals fragt — `prepare.surface_index_of`;
 `ray_hits_batch`, dessen Index nur wählt, welche Paare rechnen, nie ihren
 Wert; `lifted_caps`, Zwilling von `brep.edit.collared`) · `boolean.py` ·
@@ -86,7 +87,8 @@ neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 der Aufrufer)
 
 **Der Netzkern im Hilfsprozess** (RM-212) — `kernel_jobs.py` (jeder lange
-`manifold3d`-Aufruf als reine Rechnung, Felder hinein, Felder heraus; `JOBS`
+Aufruf, der an ganzen Körpern den GIL hält — `manifold3d`, der Zusammenhang
+über `csgraph` —, als reine Rechnung, Felder hinein, Felder heraus; `JOBS`
 ist der einzige Weg in den Hilfsprozess; dazu seine Seite `serve` und der
 gemeinsame Speicher `pack`/`copied`) · `kernel_process.py` (`run` wählt: hier
 oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
