@@ -1193,8 +1193,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "ganze Teilung. Wer die Ebene eintippen will, nimmt *Teilen* rechts am "
             "gewählten Körper, mit Achse und Position; null Stifte heißt dort nur "
             "schneiden.\n\n"
-            "**Die Hälften heißen, was sie sind:** „… A · Stifte“ und „… B · Löcher“. "
-            "Beim Export sagt der Dateiname, welches Teil man in der Hand hat."
+            "**Die Stücke heißen, was sie sind:** „… A · Stifte“ und „… B · Löcher“. "
+            "Macht *Automatisch teilen* drei oder mehr Stücke, zählt es sie: „… 1 von "
+            "3 · Stifte“, „… 2 von 3 · Stifte und Löcher“, „… 3 von 3 · Löcher“. Beim "
+            "Export sagt der Dateiname, welches Teil man in der Hand hat."
         ),
     ),
     Page(
