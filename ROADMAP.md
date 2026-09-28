@@ -67,7 +67,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Die Auskunft steht (`boolean.parts_not_united` mit *Stelle zeigen*, `ae178de8c`); offen die Geometrie: Teil 10 kreuzt sich 1 121-mal selbst, die 21 Teile lassen sich deshalb nicht vereinigen — gekippt 15° liegen 32,6 mm³ jenseits der alten Kappe, Verdoppeln bleibt ohne Wirkung, Versetzen „geht nicht mehr durch“; Weg über das Auflösen der Eigenkreuzung |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
-| [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt, 4 Abstürze am zweifarbigen Besteckeinsatz sind ein Fehler von ElegooSlicer/OrcaSlicer (Originalprojekt stürzt ohne Solidon ab). Offen für Robert: den Fehler dort melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für die Orca-Familie auf Baumstützen ausweicht |
+| [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt. Die 4 Abstürze am zweifarbigen Besteckeinsatz brauchen Solidons aufbereitetes Netz mit Gitterstützen; das Originalprojekt stürzt nicht ab. Offen: was an Solidons Netz den Slicer abstürzen lässt — erst danach eine Meldung beim Hersteller |
 | [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); Curas Fenster bekommt mit Stufe E eine 3MF mit Sperre und Werten je Teil; offen die Sichtprüfung im Cura-Fenster |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
@@ -2031,7 +2031,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-252"></a>
 
-- [ ] **RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerfehler bleibt zu melden.**
+- [ ] **RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt.**
   Begonnen am 26.09.2026 auf Roberts Frage, ob Vorschläge und Übergabe an
   alle unterstützten Slicer bei jedem Modell klappen. Das Werkzeug liegt in
   `.claude/.state/uebergabe-korpus-2026-09-26/`: `alle.py` fährt 28 Modelle,
@@ -2062,12 +2062,21 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   12,3 MB → 50 kB Ausgabe, Druckdatei entsteht; `e401ce900`), und eine 3MF mit mehreren
   Platten kommt auf ihre Platten (`a32a54ba2`). Korpusrest nachgefahren: 225 Läufe, 204
   mit Druckdatei, 17 zu Recht abgelehnt. Vier Abstürze von ElegooSlicer/OrcaSlicer am
-  zweifarbigen Besteckeinsatz sind ein Fehler des Slicers: Das Originalprojekt stürzt
-  auch ohne Solidon ab, sobald `enable_support = 1` und `support_type = normal(auto)`
-  gesetzt sind (Rückgabe `0xC0000409`, `F:\3D
-  Druck.review-051\sonden\druck\besteck_bisekt.out`). Offen für Robert: den Fehler bei
-  Elegoo und OrcaSlicer melden, und ob der Stützvorschlag bei mehrfarbigen Teilen für
-  die Orca-Familie auf Baumstützen ausweicht (eine Regel gegen einen fremden Fehler).
+  zweifarbigen Besteckeinsatz galten als Fehler des Slicers; die Bisektion
+  (`F:\3D Druck.review-051\sonden\druck\besteck_bisekt.out`) ging aber von Solidons
+  Übergabedatei aus und setzte nur Plattenwerte zurück. **Nachgestellt am 28.09.2026:**
+  Das Originalprojekt schneidet in ElegooSlicer 1.5.3.4 auch mit `enable_support = 1`
+  und `support_type = normal(auto)` (Rückgabe 0, G-Code;
+  `output/review/rm252-meldung-2026-09-28/`), und mit dem rohen Netz der Datei läuft
+  Solidons Übergabe mit Gitterstützen durch (`besteck_absturz3.out`: 908 min, 670 m
+  Stütze); abgestürzt ist nur Solidons aufbereitetes Netz mit Gitterstützen
+  (`besteck_absturz2.out`). OrcaSlicer 2.4.2 liest das Elegoo-Projekt nicht
+  (`CLI::run found error`) und taugt dort nicht als Gegenprobe. Offen: was an Solidons
+  Netz (gleiche Dreieckzahl, dicht, fünf Schalen) den Slicer abstürzen lässt — ein
+  Fehler Solidons, oder einer des Slicers, den Solidon auslöst. Erst danach eine Meldung
+  beim Hersteller. Die Frage, ob der Stützvorschlag bei mehrfarbigen Teilen auf
+  Baumstützen ausweicht, ist seit Entscheidung J entschärft: Vorgeschlagen wird die
+  Stützart des Slicers.
 
 <a id="rm-257"></a>
 
