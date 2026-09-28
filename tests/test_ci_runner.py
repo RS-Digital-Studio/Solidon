@@ -368,9 +368,16 @@ def _process_alive(pid: int) -> bool:
     except ProcessLookupError:
         return False
     status = Path(f"/proc/{pid}/stat")
-    if status.exists():
+    if not Path("/proc").is_dir():
+        return True  # macOS: ohne /proc genügt die Antwort von ``kill``
+    # Gelesen, nicht vorher gefragt: Der Prozess kann zwischen ``kill`` und dem
+    # Lesen enden und abgeholt werden. Linux meldet das dann als
+    # ``ProcessLookupError`` (ESRCH) oder als fehlende Datei — beides heißt
+    # „nicht mehr am Leben“ (CI 0.5.1, ubuntu).
+    try:
         return status.read_text().rsplit(")", 1)[1].split()[0] != "Z"
-    return True
+    except FileNotFoundError, ProcessLookupError:
+        return False
 
 
 def test_timeout_ends_children_and_grandchildren_without_qt(tmp_path: Path) -> None:
