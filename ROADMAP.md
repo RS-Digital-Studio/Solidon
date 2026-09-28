@@ -62,7 +62,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen; dazu am Langloch die Tiefe mit oder ohne Fase und der zweite Satz einer Kopie über die Kante (Durchsicht 0.5.1) |
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: PLA-Vorgabe 50…100 % je Drucker und Curas Schichtzeitschwelle (80 s aus der Kurve heben den Lüfter in Schicht 1); der Hilfslüfter des Centauri (`M106 P2 S0`) ist Elegoos eigener Wert. Offen außerdem Kammerlüfter und unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
-| [RM-229 — Geteilte Stücke heißen nach einem Buchstabenpfad](#rm-229) | Geometrie, Erkennung und Druckvorbereitung | Anordnen legt ein Teil, das nur ohne Rand passt, mittig und meldet den schmaleren Rand (`58e654ac5`); offen allein die Nummerierung geteilter Stücke — Entscheidung Robert |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
 | [RM-254 — Splinestücke, die einander bestätigen, und ein ganzer Splinefleck bleiben Verrundungen](#rm-254) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-243: am `Screen-Cover_RS.stl` noch R 11,2 (zwei Stücke) und das Wandband R 13,73 an den Buchstaben, an verrauschten Ellipsen ein bis vier von acht bis fünfzehn Stücken — eine Bestätigung, die kurze Stücke nicht gegenseitig trägt, ohne dem Korbbogen echte Bögen zu nehmen |
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Die Auskunft steht (`boolean.parts_not_united` mit *Stelle zeigen*, `ae178de8c`); offen die Geometrie: Teil 10 kreuzt sich 1 121-mal selbst, die 21 Teile lassen sich deshalb nicht vereinigen — gekippt 15° liegen 32,6 mm³ jenseits der alten Kappe, Verdoppeln bleibt ohne Wirkung, Versetzen „geht nicht mehr durch“; Weg über das Auflösen der Eigenkreuzung |
@@ -74,11 +73,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-273 — Das Übernehmen rechnet die Operation noch einmal](#rm-273) | Geometrie, Erkennung und Druckvorbereitung | Gartenschlauchhalter, Versetzen einer Bohrung übernehmen: 16 bis 17,5 s unter Last, davon 9 bis 10 s die Operation in voller Güte nach der Vorschau in Entwurfsgüte (rund 5 s ihre örtliche Nachmessung) — das Vorschauergebnis übernehmen, wo beide Güten dieselbe Geometrie liefern, sonst die Nachmessung im Übernehmen auslassen |
-| [RM-274 — *Bohrung setzen* mit freier Richtung versetzt Ecken, die der Schnitt nicht berührt](#rm-274) | Geometrie, Erkennung und Druckvorbereitung | `prepare.drill` legt mit Normale den ganzen Körper in den Rahmen der Bohrung und zurück: am Gartenschlauchhalter 17 572 von 196 326 Ecken versetzt (achsparallel 97) — das Werkzeug in die Welt legen statt den Körper in den Rahmen, `_restore_drill_end_planes` mitziehen |
-| [RM-275 — Der Bezug eines Musters auf einem runden Träger kippt zwischen gleichen Zellen](#rm-275) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: Welche Rändelzelle Mitte und Richtung stellt, entscheidet ein Knick, der an der Darstellung hängt (vor `e6e6f3ba0` beim Bohren, danach an zwei Deckeln beim Versetzen) — die Wahl davon lösen, am Korpus gegen die Schrittfolge messen |
-| [RM-276 — Eine gedruckte Schraube liegt ohne Spiel an ihrem Sitz](#rm-276) | Geometrie, Erkennung und Druckvorbereitung | Senkkopf bündig in der Senkung, Sechskantkopf ohne Abstand auf der Fläche; an Ort und Stelle gedruckt verschweißt der Kopf. Empfehlung: das Spiel aus dem Materialprofil auch an der Kopfauflage (Maßänderung, `LIBRARY_VERSION`, neuer Bereichsnachweis), nicht vor dem Tag v0.5.1 |
-| [RM-277 — Eine schräg gesetzte Magnettasche verliert auf der hohen Seite ihre Lippe](#rm-277) | Geometrie, Erkennung und Druckvorbereitung | Die Öffnung ist seit `bba2c6ea7` frei; die Lippe fehlt unter 10° auf 31 %, unter 20° auf 41 % des Umfangs, ohne Befund — ein Hinweis am Schritt mit *Eingabe korrigieren*, neuer Satz in sechs Sprachen |
-| [RM-279 — „Alle waagerechten Kanten“ nimmt die Ränder einer Querbohrung mit](#rm-279) | Geometrie, Erkennung und Druckvorbereitung | `edges.choose` fragt `flat`, und das gilt an jedem Ring (Quader mit Querbohrung Ø 6: 10 Kanten, darunter beide Bohrungsränder); `edge_lie_of` steht seit `6bcffec39`. Zu entscheiden: alte Projekte über eine Migration wie gespeichert, oder das neue Verhalten ab einer Version mit Meldung |
+| [RM-284 — Der exakte Kern baut eine verkleinerte Kantengruppe nicht immer](#rm-284) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Kanten, die OpenCASCADE zusammen nicht baut, einzeln bauen oder wie am Netz auslassen und nennen |
+| [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Zählung beim Löschen nachführen; Entscheidung zu alten Läufen (Migration) |
+| [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
+| [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Geht mit 0.5.1 (Robert): fertig für `main` und der Release-Sitzung gemeldet, Changelog steht. Fertig: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Offen: HB-5 (Gruppen im Fenster), HB-7 (F1), weitere Anleitungen, kürzere Erklärseiten |
@@ -95,10 +93,14 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 74–79 ms bis zum ersten Bild mit Maßen (Median je Runde, der Stand davor 97–104 ms, abwechselnd unter leichter Last), 30 von 32 warmen Klicks unter 100 ms (`0273b8d23`, `c2bff45f1`); offen die Abnahme auf ruhiger Maschine am eingeschalteten zweiten Monitor — gemessen wurde auf dem Ersatzbildschirm in der Fläche des MSI |
-| [RM-258 — Beim Parsen großer 3MF steht der Hauptfaden bis 2 s ohne GIL und ohne CPU](#rm-258) | Bedienung und Darstellung | Freigabe Robert für einen nativen Stapelabtaster (`py-spy`, MIT, nur Entwicklerwerkzeug), dann eine halbe Stunde messen |
-| [RM-271 — An einer Magnettasche heißt die Wahl „Senkung und Stufen mitnehmen“](#rm-271) | Bedienung und Darstellung | Entscheidung Robert: Name bleibt, oder die Wahl heißt an einer Kette mit Verengung anders (berührt Handbuch, `website/funktionen.html` und ältere Changelog-Einträge) |
+| [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
+| [RM-271 — An einer Magnettasche heißt die Wahl „Senkung und Stufen mitnehmen“](#rm-271) | Bedienung und Darstellung | Name gebaut (0.5.1: „Senkung, Stufen und Verengung mitnehmen“); offen nur die Handbuchseite `features`, dann schließen |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Nach 0.5.1: 40 Oberflächenstellen nach dem Muster von `afc251ae4`, Wächter über die Oberfläche |
+| [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
+| [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | Nach 0.5.1: fünf Wortlaute und ein Wächter |
+| [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -112,6 +114,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-137 — Sitzungsende im tatsächlichen Editorbetrieb abnehmen](#rm-137) | Tests und Entwicklungswerkzeuge | Echtes SessionEnd und Freigabe des Sitzungsgebiets nach Neustart beobachten |
 | [RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen](#rm-234) | Tests und Entwicklungswerkzeuge | Gepinnter Ubuntu-Releasejob 107485122706 erreicht die Fensterverträge und besteht; „Neueste Versionen" enthält heute nur Kerntests. Der vollständige macOS-Taglauf 35982366247 ist grün; die unabhängige Ergebnismeldung der Fensterverträge bei rotem Kernschritt ist im Workflow gebaut (`0a0e4eef0`, `78e151e85`), offen ihr Nachweis an einem echten Lauf |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie; bis dahin Intel Default Settings, einmal MemTest86, Release-Pakete in der CI bauen oder doppelt bauen und bitweise vergleichen |
+| [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Hänger nachstellen, den wartenden Finalizer benennen; klären, ob die Anwendung betroffen ist |
+| [RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1](#rm-293) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: vier kleine Stellen |
+| [RM-294 — Tragende Dateien des Review-Ordners ins Repository holen](#rm-294) | Tests und Entwicklungswerkzeuge | Vor dem Aufräumen des Review-Ordners (nach dem Release) |
+| [RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1](#rm-295) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: zwei Tests schärfen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Plan bis 01.11. mit Takt und Messpunkten liegt vor (`marketing/reichweite/analyse-und-plan.md`, `36487f9b`); drei Facebook-Beiträge für 24., 26. und 28.09. in der Meta Business Suite eingeplant; YouTube-Änderungen (14) freigegeben, in Studio nicht umgesetzt; Video V3 freigegeben, nicht gedreht. Offen: Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -518,6 +524,17 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   die Weltlage drehen statt das Netz in die lokale** — ein paar hundert Punkte statt
   Zehntausenden, was zugleich schneller wäre. Der zweite Weg ändert die Logik der Operation und
   gehört deshalb gemessen, bevor er gebaut wird.
+
+  **Erledigt 28.09.2026 (Release 0.5.1, Paket bohren, `94aa590eb`):** entschieden für den
+  zweiten Weg — das Werkzeug liegt in der Welt, für `drill`, `resize_bore`, `slot_bore` und
+  die gemischte Ecke ([RM-274](ROADMAP-ARCHIV.md#rm-274)); das Netz außerhalb des Schnitts
+  bleibt Bit für Bit. Neu offen aus demselben Paket: Die Bögen eines Langlochs tastet
+  `sketch_solid._arc_points` über `math.atan2`, `math.cos` und `math.sin` ab (betrifft jeden
+  abgetasteten Skizzenbogen; der Langlochfall des Wegs `drill_hole` änderte unter Rauschen
+  seinen Abdruck), und die übrigen `math.tan` in Werkzeugmaßen (*Senkung*) sind gemessen,
+  nicht ersetzt. Vorschlag des Pakets: `_without_scars` legt nach dem Schließen koplanare
+  Dreiecke im ganzen Körper zusammen und nimmt ferne Ecken weg — auf das Umfeld der
+  Änderung begrenzen (`reports/bohren-schluss.md` §6–7).
 
   Abnahme: `tests/test_platform_identity.py` grün auf allen drei Runnern, und der Bohrungstest
   ebenfalls.
@@ -1854,27 +1871,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   CC2 (Orca-Bestand `Generic PLA @Elegoo Centauri`, ElegooSlicer `ECC2/*`: nur PLA-CF
   setzt den Hilfslüfter) — kein Fehler Solidons.
 
-<a id="rm-229"></a>
-
-- [ ] **RM-229 — Geteilte Stücke heißen nach einem Buchstabenpfad.**
-  Aus der Durchsicht 0.5.0 (trennen): Ein Körper, der mit dem Anordnungsrand
-  nicht auf die Platte passt, wird trotzdem an die Kante gelegt und steht über
-  (gemessen: x bis 108,5 bei freigegebenen 108); das Ergebnis meldet es richtig
-  als `arrange.out_of_build_volume`, eine Lage in der Mitte mit kleinerem Rand
-  wäre die freundlichere Antwort — Auto Split umgeht es seit `0367d202` über
-  `bed_margin`. Und mehrfach geteilte Stücke heißen „Wandleiste B A · Stifte";
-  das mittlere Stück trägt Stifte **und** Löcher, heißt aber nur „· Stifte"
-  (`prepare_ops.half_names`, bewusst so entschieden). Weg: in
-  `prepare.arrange_on_bed` den Rand vor dem Überstand verkleinern; für Auto
-  Split mit drei und mehr Stücken eine Nummerierung („Wandleiste 1 von 3") —
-  Entscheidung bei Robert. Abnahme: kein Überstand, wo die Mitte passt; Namen,
-  die Stifte und Löcher richtig nennen.
-
-  **Durchsicht v0.5.1 (26.09.2026):** Was in einer Achse nur ohne den Rand passt, liegt
-  dort auf der Bettmitte, geprüft gegen Bett und Sperrzonen; `check_build_volume` meldet
-  `arrange.narrow_margin` als Hinweis mit dem verbleibenden Abstand statt „über den
-  Bauraum hinaus“ (`58e654ac5`). Offen: die Nummerierung geteilter Stücke (Robert).
-
 <a id="rm-230"></a>
 
 - [ ] **RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt.**
@@ -2364,100 +2360,71 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Nummerierung), sonst stehen blieben. Abnahme: Versetzen einer Bohrung am
   Gartenschlauchhalter übernimmt in unter 10 s auf ruhiger Maschine.
 
-<a id="rm-274"></a>
+<a id="rm-284"></a>
 
-- [ ] **RM-274 — *Bohrung setzen* mit freier Richtung versetzt Ecken, die der Schnitt nicht
-  berührt.** Aus der Durchsicht v0.5.1 (rest-merker, „Für Nachbarn“). Beim Klick auf eine
-  Fläche setzt das Fenster die Richtung aus deren Normale (`nx/ny/nz`,
-  `scene/placement.py`), und `prepare.drill` legt dann den ganzen Körper in den Rahmen der
-  Bohrung (`transform.moved(local_body, world_to_local)`), schneidet dort und legt ihn mit
-  `to_world` zurück. Die Rundung der Hin- und Rückrechnung versetzt Ecken, die der Schnitt
-  nicht berührt: Am Gartenschlauchhalter (Ø 3 × 2 mm in die größte Fläche, Normale +y,
-  Sonde `F:\3D Druck.review-051\sonden\rest-merker\p13_bohren.py`) stehen danach 17 572
-  von 196 326 Ecken nicht mehr an ihrem Ort, 39 840 Dreiecke sind nicht mehr bitgleich;
-  achsparallel gebohrt sind es 97 Ecken und 374 Dreiecke. Folgen: Der Merker über die
-  Körpergrenze rechnet dort 1 078 statt 79 Fragen neu (Erkennung danach 13,7 statt 10,7 s
-  unter Last), und die Erkennung liest die versetzten Stellen in den letzten Stellen neu —
-  dieselbe Fernwirkung, die `e6e6f3ba0` für die Darstellung behoben hat, hier über die
-  Koordinaten. Weg: das Werkzeug in die Welt legen statt den Körper in den Rahmen, dann
-  bleibt jede unberührte Ecke bitgleich; `_restore_drill_end_planes` rechnet heute im
-  Rahmen und muss mitziehen (die Endebenen sind Vertrag des Bohrungsgebiets). Derselbe Weg
-  steht für `prepare.resize_bore` in [RM-187](#rm-187) offen. Abnahme: Nach *Bohrung
-  setzen* mit Normale stehen alle Ecken außerhalb des Schnitts an ihrem Ort, Bit für Bit,
-  und die Erkennung danach trifft wie achsparallel gebohrt.
+- [ ] **RM-284 — Der exakte Kern baut eine verkleinerte Kantengruppe nicht immer.** Aus dem Release 0.5.1 (Paket kanten, Teil 2 von
+  [RM-279](ROADMAP-ARCHIV.md#rm-279)). Seit 0.5.1 bearbeitet eine Kantengruppe am Netz die
+  Kanten, die das Maß tragen, und nennt die übrigen (`edges.too_narrow`). Der exakte Kern
+  stellt dieselbe Frage und gibt OpenCASCADE nur die tragenden Kanten; baut OpenCASCADE den
+  Rest nicht oder offen, bleibt es dort bei der Absage mit der größten Zahl. Gemessen:
+  Hohlkasten 3 mm, „alle“, R 2 (17 Kanten, jede einzeln baubar, zusammen nicht);
+  pegboard-goot Verrunden (zwei Rundungen, Kanten 212 und 221 tesselliert OpenCASCADE offen,
+  bei jedem Radius und auch einzeln — vorbestehend); gs-100 und pb3041 (die Kanten der
+  Tessellierung decken sich nicht mit den exakten). Ein halbierendes Neubauen war zu langsam
+  (15 bis 37 s je Vorschau) und lieferte an pb3041 einen offenen Körper. Sonden
+  `F:\3D Druck.review-051\sonden\kanten\`, Bericht `reports/kanten-schluss.md` §6–7. Weg:
+  die Kanten, die OpenCASCADE zusammen nicht baut, einzeln oder in kleineren Gruppen bauen,
+  oder am exakten Körper dieselbe Auslassung wie am Netz mit Befund. Abnahme: Hohlkasten
+  3 mm „alle“ R 2 rundet am exakten Kern, was am Netz gerundet wird, oder nennt die
+  ausgelassenen Kanten wie das Netz.
 
-<a id="rm-275"></a>
+<a id="rm-287"></a>
 
-- [ ] **RM-275 — Der Bezug eines Musters auf einem runden Träger kippt zwischen gleichen
-  Zellen.** Aus der Durchsicht v0.5.1 (rest-merker, Korpusfolge
-  `F:\3D Druck.review-051\sonden\rest-merker\k51_vergleich.txt`). Auf einem runden Träger,
-  dem Rändel am Gewürzdeckel (derselbe Deckel wie [RM-225](#rm-225)), sind alle Zellen
-  gleich, und welche davon Mitte und Richtung des Musters stellt, entscheidet in
-  `perceive/patterns.py` ein Knick, der an der Darstellung des Netzes hängt: Vor
-  `e6e6f3ba0` drehte der Bezug beim Bohren weit weg vom Muster, danach an zwei Deckeln
-  beim Versetzen. Am Korpus sind das die sechs Fälle, in denen der Stand nach `e1b897ca2`
-  mehr Merkmale des vorigen Schritts verliert als der Stand davor. Eine solche Wahl darf
-  nicht an der Darstellung hängen (`.claude/rules/kern.md`); dieselbe Familie wie
-  [RM-210](#rm-210). Weg: die Wahl des Bezugs von Ecken- und Dreiecksfolge lösen und am
-  Korpus gegen die Schrittfolge messen. Abnahme: Am Gewürzdeckel bleiben Mitte und
-  Richtung des Rändelmusters über die vier Schritte der Korpusfolge gleich.
+- [ ] **RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte.** Aus dem Release 0.5.1 (Paket texte, Code-Review T-2;
+  Abschluss von [RM-229](ROADMAP-ARCHIV.md#rm-229)). Seit 0.5.1 zählt *Automatisch teilen*
+  ab drei Stücken durch. Zwei Ränder: (a) Läufe aus älteren Projekten tragen `piece_count`,
+  `number_a` und `number_b` nicht und behalten den Buchstabenpfad mit richtigem Zusatz; aus
+  einem einzelnen Schritt lässt sich der Lauf nicht ablesen, eine Nummerierung bräuchte
+  eine Migration (`format_version`) — Rückfrage. (b) Wird ein Schnitt des Laufs gelöscht
+  oder ausgeschaltet, bleibt die gespeicherte Zählung stehen: Leiste 600 mm, drei Stücke,
+  letzter Schnitt gelöscht → „Leiste 1 von 3 · Stifte“ neben „Leiste · Löcher“
+  (`prepare_ops.stem_of`, Beleg `F:\3D Druck.review-051\laeufe\rev-code-t11.txt`). Weg für
+  (b): die Zählung beim Löschen und Ausschalten nachführen oder bei Nummer 0 ohne weiteren
+  Schnitt auf A/B zurückfallen. Abnahme: nach dem Löschen eines Schnitts stimmen Nummern
+  und Zahl der Stücke; zu (a) eine Entscheidung.
 
-<a id="rm-276"></a>
+<a id="rm-289"></a>
 
-- [ ] **RM-276 — Eine gedruckte Schraube liegt ohne Spiel an ihrem Sitz.** Aus der
-  Durchsicht v0.5.1 (rest-schraube, Registersatz 1). Der Senkkopf liegt bündig in seiner
-  Senkung — dieselbe 90°-Flanke, derselbe Außendurchmesser, 42 deckungsgleiche Ecken am
-  oberen Rand (`F:\3D Druck.review-051\sonden\rest-schraube\s4_head.txt`) —, der
-  Sechskantkopf steht ohne Abstand auf der Fläche; Spiel hat nur das Gewinde. Als
-  Baugruppe ist das richtig, an Ort und Stelle in einem Stück gedruckt verschweißt der Kopf
-  aber mit dem Träger. Der Hinweis im Baustein („zusammen mit der Mutter aus demselben
-  Material drucken“) sagt nicht, dass die Schraube zum Drucken vom Träger getrennt und
-  hingelegt werden muss. Seit `bba2c6ea7` meldet eine gedruckte Schraube keinen Zerfall
-  mehr, sie ist gewollt ein eigenes Teil (`separate_from_host`, `leaves_separate_parts`).
-  Zwei Wege, beide mit Maßänderung und `LIBRARY_VERSION`: (a) das Spiel aus dem
-  Materialprofil auch an der Kopfauflage (Senkung weiter oder Kopf um das Spiel
-  angehoben), dann lässt sie sich an Ort und Stelle drucken; (b) beim Übergeben an den
-  Slicer jedes lösbare Teil als eigenes Objekt. Die Durchsicht empfiehlt (a): Es hält die
-  Zusage „lösbar“ auch für den, der das Projekt so druckt, wie er es sieht. Nicht in der
-  Durchsicht gebaut, weil es ein Maß an einem ausgelieferten Baustein kurz vor dem Tag
-  ändert und einen neuen Bereichsnachweis braucht. Abnahme: Zwischen Kopf und Sitz steht
-  an beiden Kernen das Spiel aus dem Materialprofil, `LIBRARY_VERSION` und der
-  Bereichsnachweis sind nachgezogen.
+- [ ] **RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
+  `3018613e6`, `F:\3D Druck.review-051\reports\review-gesamt-dd95985e5.md`; B1–B4 gehören
+  zum Paket und werden vor dem Tag behoben). (B6) Nach dem Übernehmen zeigt der Druckdialog
+  einen Wert je Teil als Wert der Platte (`print_settings_dialog.py`). (B7) `plate_paths`
+  und `for_part` fragen Volumenstromdeckel, die der Dialog für Orca und Prusa verwirft
+  (`advise.py`). (B8) `fit_kinds_for` zählt ausgeschaltete Passungsschritte mit
+  (`fits.py`). (B9) Der Rat je Teil schneidet einen Körper, und die Stützsperre schneidet
+  ihn noch einmal; `result` wird nie übergeben, der Dateiexport hat keinen Abbruch
+  (`writer.py`). (B10) *Fertig* in den Ersten Schritten hält den Oberflächen-Thread bis zu
+  zehn Sekunden (`first_run.py`). (B11) Zwei Stellen entscheiden, ob eine gemerkte
+  Maschine noch gilt (`print_settings_dialog.py`). (B12) `SCARF_MIN_LOOP` ist eine
+  abgeschriebene Ableitung (`advise.py`). (B13) Test und Docstring für `flavour=None`, den
+  kein Aufrufer übergibt. Dazu die vollständige Lösung zu B2: der Plattenwert der eigenen
+  Wahl neben dem übernommenen Wert je Teil braucht ein Feld im Format. Abnahme: je Befund
+  behoben oder mit Grund verworfen.
 
-<a id="rm-277"></a>
+<a id="rm-292"></a>
 
-- [ ] **RM-277 — Eine schräg gesetzte Magnettasche verliert auf der hohen Seite ihre
-  Lippe.** Aus der Durchsicht v0.5.1 (rest-schraube, Registersatz 2). Mit einer Richtung
-  schräg zur Fläche („Richtung X/Y/Z“ im Dialog, Assistent oder Kommandozeile) ist die
-  Öffnung seit `bba2c6ea7` bis über die Fläche frei; vorher trafen 15 bis 17 von 36
-  Strahlen entlang der Achse Material. Die Lippe liegt aber 0 bis 0,4 mm unter der
-  Mündungsebene, und auf der hohen Seite liegt die Fläche um bis zu R · tan(Neigung)
-  darunter (R = 4,125 mm bei 8×3). Gerechnet am Taschenrand: Unter 10° fehlt die Lippe auf
-  113° des Umfangs (31 %), unter 20° auf 149° (41 %), dazwischen ist sie nur zum Teil da.
-  Kein Befund sagt es. Weg: ein Hinweis am Schritt, wenn eine Haltelippe schräg zur Fläche
-  gesetzt wird (sinngemäß „hält nur auf einer Seite — senkrecht zur Fläche setzen“), mit
-  *Eingabe korrigieren*; ein neuer Satz in sechs Sprachen, Wortwahl nach
-  `oberflaeche.md`. Die Erkennung liest die gekippte Lippe danach ebenfalls nicht
-  ([RM-262](#rm-262)). Abnahme: Eine Magnettasche 8×3, unter 10° gesetzt, trägt an beiden
-  Kernen den Hinweis mit *Eingabe korrigieren*, gerade gesetzt keinen.
-
-<a id="rm-279"></a>
-
-- [ ] **RM-279 — „Alle waagerechten Kanten“ nimmt die Ränder einer Querbohrung mit.** Aus
-  der Durchsicht v0.5.1 (rest-kunde, Registersatz 1). Ein geschlossener Ring hat keine
-  Richtung von Anfang zu Ende, und `flat` (`|z| < 0,1`) gilt an jedem Ring. Die
-  Beschriftung fragt seit `6bcffec39` `edges.edge_lie_of` (ein Ring nach der Ebene, in der
-  er liegt, [RM-269](ROADMAP-ARCHIV.md#rm-269)); die Auswahl nach Lage (`edges.choose`,
-  `"horizontal"` und der Höhenvergleich von `"top"`/`"bottom"`) fragt weiter `flat`.
-  Gemessen (`F:\3D Druck.review-051\sonden\rest-kunde\s269_auswahl.txt`): Ein Quader
-  40 × 30 × 20 mit Querbohrung Ø 6 → *alle waagerechten Kanten* wählt 10 Kanten, darunter
-  beide stehenden Bohrungsränder; *Verrunden* an „waagerecht“ rundet dort die Mündungen
-  mit. Nicht in der Durchsicht gebaut, weil eine andere Antwort gespeicherte Projekte beim
-  Öffnen anders rechnet — dieselbe Operation, andere Kanten. Weg: entscheiden, ob alte
-  Projekte über eine Migration (`format_version`, `cache_version`) wie gespeichert rechnen
-  oder das neue Verhalten ab einer Version gilt und die Änderung gemeldet wird; dann
-  `choose` über `edge_lie_of` fragen. Abnahme: Querbohrung → „waagerecht“ ohne die Ringe;
-  alte Projekte rechnen wie gespeichert oder melden die Änderung.
+- [ ] **RM-292 — Laufzeitreste der Durchsicht 0.5.1.** Aus der Durchsicht v0.5.1 (Inventar 1.5, 1.7, 1.8,
+  `F:\3D Druck.review-051\RESTE-INVENTAR.md`). (a) `carpet-corner-clip.step` braucht bis
+  „geöffnet“ 201 s (unter Last, nebenbei beobachtet, nicht gegen HEAD gemessen; Vermutung:
+  exaktes Volumen im UV-Rückfall wie REST-BOHRUNG-01, `b0d344e5c`). (b) Die
+  Eigenkreuzungs- und Überschneidungssuche kostet 7,5 bis 8,3 s (Besenhalter:
+  `intersections._candidates` 5,8 von 6,4 s, darin `_separated` 2,9 s; große Hälfte des
+  Laptop-Ständers 8,3 s einmal je Modell beim ersten Booleschen Schritt). (c) Die
+  Schichtanalyse ineinandersteckender Teile schneidet über `polygonize` und `unary_union`
+  (60 % der Schnitte, je Schicht rund 5 ms, hält den GIL). Die Größenänderung einer großen
+  Bohrung (rund 26 s, Inventar 1.6) gehört zu [RM-132](#rm-132) und [RM-193](#rm-193).
+  Abnahme: je Punkt am HEAD nachgemessen; bleibt es langsam, eingegrenzt und mit Ziel
+  geführt.
 
 ## Bedienung und Darstellung
 
@@ -3178,17 +3145,25 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-258"></a>
 
-- [ ] **RM-258 — Beim Parsen großer 3MF steht der Hauptfaden bis 2 s ohne GIL und ohne
-  CPU.** Aus der Durchsicht v0.5.1 (fenster, Rest von FENSTER-03). Das stückweise Parsen
-  hat die GIL-Lücken beim Einlesen des Mausoleum-Drachen beseitigt (längste Lücke im
-  Nebenfaden 4,6 → 0,13 s, `d5889e1a1`). Der Qt-Takt steht trotzdem bis 2 s: ein
-  Python-Faden daneben ohne Lücke, der Hauptfaden 0,03 s CPU in 4,3 s Lücke, in `exec()`
-  ohne Python-Rahmen; bei HEAD in den GIL-Lücken verborgen. Ausgeschlossen:
-  Speicherbereiniger, Ladeanzeige, Picker-Aufwärmen, Zeitgebertyp, GIL-Abgabe zwischen
-  den Stücken. Nächster Schritt: ein nativer Stapelabtaster am Hauptfaden während des
-  Drachenimports (etwa `py-spy dump --native`) — nicht Teil des Pakets, braucht aber die
-  Freigabe, es in die Arbeitsumgebung zu holen. Abnahme: das Fenster bleibt während
-  großer Importe flüssig (längste Lücke im Qt-Takt unter 200 ms).
+- [~] **RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF.** Aus der Durchsicht
+  v0.5.1 (fenster, Rest von FENSTER-03). Die Ursache ist mit Release 0.5.1 behoben (Paket
+  3mf, `5a6f0bfa3`, Merge `1d13f09bb`): Der Hauptfaden wartete bei jedem Python-Einstieg
+  eines Neuzeichnens auf den GIL, unter Windows bis zum nächsten Takt des
+  Systemzeitgebers (15,6 ms je Griff, rund hundert Griffe je Bild). Kleinere Stücke im
+  3MF-Leser, Umschaltintervall 1 ms (`leash.GIL_SWITCH_S`), 1 ms Zeitgeberauflösung,
+  solange ein Arbeiter läuft, der Sekundentakt der Ladeanzeige malt nur ihren Block, die
+  Suche nach der 3D-Maus läuft im Nebenfaden. Längste Lücke im Qt-Takt am
+  Mausoleum-Drachen vorher 2,5 bis 2,7 s, nachher 0,16 bis 0,31 s (gebunden, im Wechsel,
+  unter Last). Offen stehen einmal je Import über 200 ms: das erste Bild der
+  Arbeitsfläche (0,15 bis 0,31 s) und der Aufbau der Rückfrage zur Vollerkennung (0,14
+  bis 0,55 s; zweimal länger als vorher gemessen, unter 90 bis 100 % Last — auf ruhiger
+  Maschine nachmessen). Hebel: weniger Griffe des Hauptfadens je Bild, vor allem der
+  Anwendungsfilter `ApplicationEvents`, der für jedes Ereignis in Python läuft. Nebenbei:
+  `threemf._outside_meshes` läuft in Python über alles außerhalb der Netze, bei sehr
+  großen `texture2dgroup` oder `colorgroup` spürbar. Messung
+  `F:\3D Druck.review-051\sonden\3mf\` (Reihen `abt`, `ab4`), Bericht
+  `reports/3mf-schluss.md`. Abnahme: das Fenster bleibt während großer Importe flüssig,
+  längste Lücke im Qt-Takt unter 200 ms, auch beim ersten Bild und bei der Rückfrage.
 
 <a id="rm-271"></a>
 
@@ -3202,6 +3177,13 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   bleibt (die Lippe ist eine Stufe der Kette), oder die Wahl heißt an einer Kette mit
   Verengung anders (texte schlägt den Namen vor). Abnahme: bei neuem Namen Katalog,
   Satz, Handbuch und `funktionen.html` nachgezogen, `test_wording` grün.
+
+  **Stand 28.09.2026 (Release 0.5.1, Paket texte, `dff5ac944`):** Entschieden über die
+  Release-Sitzung nach Kundensicht: An einer Kette mit Verengung heißt die Wahl „Senkung,
+  Stufen und Verengung mitnehmen“. Katalog, Satz `resize.narrowing_swallowed`, Wahlsätze,
+  `website/funktionen.html` und die fünf `features.html` sind nachgezogen, `test_wording`
+  grün. Die Handbuchseite trägt den Namen mit dem Merge des Handbuchumbaus (bis dahin die
+  austragbare Ausnahme `NAME_WARTET_AUF_HANDBUCH`); danach schließen.
 
 <a id="rm-278"></a>
 
@@ -3237,6 +3219,68 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `frame_next_scene` auch nach einem Skalieren, das über den Rahmen hinauswächst. Abnahme:
   die Frage entschieden und begründet; wird gebaut, steht der Organizer nach ×2,3 ganz im
   Bild, und ein Verschieben lässt die Kamera weiter in Ruhe.
+
+<a id="rm-285"></a>
+
+- [ ] **RM-285 — Feste Doppelpunkte hinter übersetzten Teilen.** Aus dem Release 0.5.1 (Handbuch-Sitzung, Wächter aus
+  `afc251ae4`; Sprachreview U6). An 108 Stellen verbindet der Code einen übersetzten Teil
+  mit einem festen „: “ (f-String mit `{tr(…)}` oder `{_(…)}` direkt vor `": "`): 40 in
+  `app/ui`, für Kunden sichtbar — Druckeinstellungen („Druckzeit: …“, „Material: …“),
+  Statusmeldungen („Exportiert: …“, „Geslicet: …“, „Geteilt: …“), Prüfbericht
+  („Herkunft: …“), Tour, Support-Dialog und die Kurzhilfe im Verlauf
+  (`panels._changed_parameters`) —, 5 in `app/core` ohne Agent und Wahrnehmung, 22 in
+  `app/cli`, 41 in `app/core/agent` und `perceive/digest.py` (nur fürs Sprachmodell). Im
+  Französischen fehlt damit das Leerzeichen vor dem Doppelpunkt, das der Katalog sonst
+  setzt (`.claude/rules/uebersetzung.md`). Das Handbuch ist seit `afc251ae4` frei davon,
+  sein Wächter liest nur das Handbuch. Weg: den Doppelpunkt in den übersetzten Satz
+  (`_("Druckzeit: {value}", value=…)`), zuerst die 40 Oberflächenstellen, dazu ein Wächter
+  über die Oberfläche; CLI und Agententexte danach oder bewusst ausnehmen. Abnahme: kein
+  fester Doppelpunkt hinter einem übersetzten Teil in `app/ui`, der Wächter ist am Stand
+  davor rot.
+
+<a id="rm-286"></a>
+
+- [ ] **RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen.** Aus dem Release 0.5.1 (Oberflächenpaket,
+  Code-Review U-5, U-6, U-8). Seit 0.5.1 lehnen Parameterleiste und Operationsdialog eine
+  getippte Zahl jenseits der Grenzen ab, statt sie still zu kürzen (`labels.BoundedSpin`,
+  `.claude/rules/oberflaeche.md`). Still gekürzt wird weiter im Merkmalfenster
+  (`FeaturePanel`, `configure_feature_field`) und in den Druckeinstellungen
+  (`print_settings_dialog`). Zwei Ränder desselben Wegs: Schaltet man *fx* mit einem
+  Ausdruck jenseits der Grenze aus, klemmt `op_dialog._switch` den Wert still (`setValue`,
+  `_core` hält den Ausdruckswert; Beleg `F:\3D Druck.review-051\laeufe\rev-code-u1.txt`) —
+  die Zahl als Text ins Feld setzen, damit `BoundedSpin` ablehnt; und die Kurzhilfe einer
+  Grenzänderung im Verlauf zeigt „40,00 mm → 40,00 mm“ (`panels._changed_parameters`
+  vergleicht nur den Wert, `edit_parameter` trägt denselben Titel). Abnahme: an allen vier
+  Orten wird eine Zahl jenseits der Grenze abgelehnt und die Grenze genannt; die Kurzhilfe
+  nennt die geänderte Grenze.
+
+<a id="rm-290"></a>
+
+- [ ] **RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1.** Aus dem Release 0.5.1 (Sprach- und Code-Review der
+  Pakete texte und ui, `F:\3D Druck.review-051\reports\review-sprache-ui-texte.md`,
+  `review-code-ui-texte.md`). (a) fr und it nennen *Merkmal bearbeiten* (Knopf der
+  örtlichen Erkennung) und *Merkmal ändern* (Operation) gleich („Modifier l'élément“,
+  „Modifica elemento“); it verletzt dabei „Ändern → Cambia“, was auch alle Operationstitel
+  „… ändern“ und deren Handbuchzitate beträfe. (b) en heißt *Trennen* „Cut“ und
+  *Abschneiden* „Cut away“, it „Taglia“ gegen „Tagliare via“; der Wächter vergleicht Stämme
+  nur bei Einwortnamen, und vier it-Operationstitel stehen im Infinitiv statt im Imperativ
+  („Tagliare via“, „Uniformare i triangoli“, „Verificare il percorso di montaggio“,
+  „Tagliare un campo di fori“). (c) „nebeneinander legen“ im Hinweis zu
+  aneinanderliegenden Hälften ist zusammenzuschreiben (neuer Schlüssel in fünf
+  Katalogen). (d) Der it-Wächter findet Lei-Indikative ohne Pronomen nicht („finché non
+  modifica“). (e) Die Sätze der Bausteine sagen an gemessenen Bohrungen eine Größe als
+  Tatsache („Bohrungsmaß: 5,20 mm (eingepasst). In diese Bohrung passt ein Innengewinde
+  M6.“), obwohl eine Messung eine Größe als Einschätzung nennt (`placement.py`,
+  Entscheidung Durchsicht 0.5.0) — `at_hole_advice` den Messstatus mitgeben. Abnahme: je
+  Punkt nachgezogen, der Wächter mit Gegenprobe.
+
+<a id="rm-291"></a>
+
+- [ ] **RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht.** Aus der Durchsicht v0.5.1 (Inventar 1.4,
+  `reports/fenster.md`, Empfehlung). Heute liegen vier deckende Arme als Widgets über der
+  Ansicht (`app/ui/viewport.py`, FENSTER-17, `336c7fdc8`). Weg: die Arme in den Renderer,
+  Fokus und Namen weiter über ein kleines Widget. Kein Fehler. Abnahme: das Fadenkreuz
+  zeichnet der Renderer, Tastaturweg und Name bleiben.
 
 ## KI und Generatoren
 
@@ -3540,6 +3584,61 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `F:\3D Druck.review-051\reports\ast-flake.md`. Abnahme: nach dem Tausch keine
   sporadischen Abrisse dieser Familie mehr, belegt mit einer verschränkten Reihe der
   Sprachprüfung unter Last wie in ast-flake, und MemTest86 ohne Befund.
+
+<a id="rm-288"></a>
+
+- [ ] **RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler.** Aus dem Release 0.5.1. Zweimal blieb
+  `tools/affected_tests.py --run` über fast die ganze Suite (Gruppe `plain`, ein Prozess)
+  stundenlang stehen, beide Male in `tests/conftest.py` im `gc.collect()` von
+  `_collect_released_ui` beim Aufbau von `_windows_live_until_their_test_ends`, fast ohne
+  CPU — gestartet am 28.09.2026 gegen 00:53 und 01:06 in zwei Arbeitsbäumen mit
+  verschiedenen Änderungen. `py-spy dump --native`: der Hauptfaden mit GIL im Sammler,
+  daneben der Poller-Faden von wgpu im `Condition.wait`; welcher Finalizer wartet, zeigt
+  der Stapel ohne Symbole nicht. Das Tor mit `-n 8` traf es nie; ein Nachstellversuch als
+  Einzelprozess mit `faulthandler_timeout=300` lief ohne Hänger über die Hälfte der Suite
+  (`F:\3D Druck.review-051\laeufe\repro-gc.txt`). Zu klären ist auch, ob derselbe
+  Sammlerlauf die Anwendung hängen kann (Finalizer eines wgpu-Objekts gegen den Poller) —
+  dort läuft der Sammler von selbst. Bis dahin wählen Sitzungen betroffene Tests gezielt
+  oder fahren das Tor. Abnahme: der Einzelprozess läuft durch, oder die Ursache ist
+  benannt und behoben.
+
+<a id="rm-293"></a>
+
+- [ ] **RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1.** Aus der Durchsicht v0.5.1 (Inventar 1.10 bis 1.13).
+  (a) `analysis._plane_segments` reicht einen möglicherweise nur lesbaren Puffer an den
+  übersetzten Kern (`np.ascontiguousarray(...)` → `_chain.plane_segments`); eine Kopie bei
+  nicht schreibbarem Puffer finge jeden künftigen Erzeuger. (b) `threemf._reading_trees`
+  taut mit `gc.unfreeze()` den ganzen Prozess auf, `leash.undisturbed` verträgt keine
+  überlappende Nutzung aus zwei Fäden — zwei gleichzeitige 3MF-Lesevorgänge tauen einander
+  auf. (c) Veralteter Kommentar in `app/ui/loading.py` (`ProgressTiming.remaining` nennt
+  die Spanne statt des bleibenden Grunds, Pausen ohne Anteil). (d) Der Kommentar an
+  `features.WHOLE_BODY_ANSWERS` nennt 75 statt gut 90 MB. Abnahme: je Punkt behoben.
+
+<a id="rm-294"></a>
+
+- [ ] **RM-294 — Tragende Dateien des Review-Ordners ins Repository holen.** Aus der Durchsicht v0.5.1 (Inventar 1.9). Offene
+  Registerpunkte verweisen auf Dateien unter `F:\3D Druck.review-051\` (Sonden, Profile,
+  Patches, Berichte); der Ordner liegt nur auf dieser Maschine und soll nach dem Release
+  aufgeräumt werden. Tragend sind vor allem der Drehweg
+  `sonden\rest-muendung\prepare_ops_mit_drehen_heute.patch` ([RM-262](#rm-262)), der
+  exakte Prototyp `sonden\rest-muendung\m19_exakt_band.py` ([RM-259](#rm-259)), die Sonden
+  von RM-273 und RM-278 bis RM-280 und die Belege der Punkte RM-284 bis RM-293. Weg: vor
+  dem Aufräumen die tragenden Dateien nach `konzepte/` holen und die Verweise umschreiben
+  — vorher auf Kundendaten und Namen prüfen, das Repository wird öffentlich; was nur
+  Rohdaten sind, bleibt beim Verweis auf die Messung. Abnahme: kein offener Registerpunkt
+  verweist mehr auf den Review-Ordner.
+
+<a id="rm-295"></a>
+
+- [ ] **RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1.** Aus dem Release 0.5.1 (Code-Review texte/ui, U-9 und
+  T-3). (a) `test_viewport_decisions.py::test_the_finding_mark_never_wears_the_colour_of_the_selection`
+  vergleicht nur zwei Konstanten; die Gegenprobe (Ring zurück auf `SELECTED_COLOUR`) bleibt
+  grün, rot wird nur der Fenstertest `test_a_finding_with_a_rim_outlines_the_new_face` —
+  den Namen auf das Geprüfte eingrenzen. (b) In `test_translations.py` prüfen
+  `test_french_names_the_escape_key_as_its_keyboard_does`,
+  `test_italian_says_tu_outside_the_manual` und `test_no_entry_mixes_two_apostrophes` eine
+  erhobene Menge ohne Zusicherung, dass sie nicht leer ist (`.claude/rules/tests.md`). Abnahme:
+  beide Gegenproben rot.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 

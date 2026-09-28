@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-28 | [Release-Sitzung 0.5.1: sechs Punkte geschlossen (28.09.2026)](#release-sitzung-051-sechs-punkte-geschlossen-28092026) |
 | 2026-09-28 | [Übergabe auf dem Herstellerprofil, Stufe E: ein Punkt geschlossen (28.09.2026)](#übergabe-auf-dem-herstellerprofil-stufe-e-ein-punkt-geschlossen-28092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-c-f-und-l-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-a-und-b-ein-punkt-geschlossen-27092026) |
@@ -33029,3 +33030,230 @@ teilweise umgesetzt und bleiben offen.
   (`tests/data/projects/print_settings_v33.p3d`, Stufe „Fein“): Die Tempi von damals
   gelten nicht als Wahl, vier Wände und 25 % Füllung schon
   (`test_a_file_from_0_5_0_keeps_what_someone_set`).
+
+## Release-Sitzung 0.5.1: sechs Punkte geschlossen (28.09.2026)
+
+Nach dem Einfrieren des Umfangs (Robert, 28.09.2026 gegen 03:30: „mach deine laufenden
+Punkte noch fertig die nächsten machen wir nach 0.5.1“) hat die Release-Sitzung die
+laufenden Pakete als eigene Zweige bauen lassen, jedes unabhängig geprüft — Code, dazu die
+Texte in allen sechs Sprachen — und über einen Prüfbaum mit grünem Entwicklungstor nach
+main gebracht: Kantengruppen (`9f19b44d6`, `cbef27715`), Schraube, Musterbezug und Bohren
+(`cbef27715`), Textpaket samt Nachtrag (`f74ce7f81`). Berichte, Sonden und Läufe liegen
+unter `F:\3D Druck.review-051\` (`reports/`, `sonden/`, `laeufe/`). Sechs Punkte sind damit
+geschlossen. RM-271 wartet auf die Handbuchseite, RM-258 und RM-187 sind fortgeschrieben,
+die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
+
+<a id="rm-229"></a>
+
+- [x] **RM-229 — Geteilte Stücke heißen nach einem Buchstabenpfad.**
+  Aus der Durchsicht 0.5.0 (trennen): Ein Körper, der mit dem Anordnungsrand
+  nicht auf die Platte passt, wird trotzdem an die Kante gelegt und steht über
+  (gemessen: x bis 108,5 bei freigegebenen 108); das Ergebnis meldet es richtig
+  als `arrange.out_of_build_volume`, eine Lage in der Mitte mit kleinerem Rand
+  wäre die freundlichere Antwort — Auto Split umgeht es seit `0367d202` über
+  `bed_margin`. Und mehrfach geteilte Stücke heißen „Wandleiste B A · Stifte";
+  das mittlere Stück trägt Stifte **und** Löcher, heißt aber nur „· Stifte"
+  (`prepare_ops.half_names`, bewusst so entschieden). Weg: in
+  `prepare.arrange_on_bed` den Rand vor dem Überstand verkleinern; für Auto
+  Split mit drei und mehr Stücken eine Nummerierung („Wandleiste 1 von 3") —
+  Entscheidung bei Robert. Abnahme: kein Überstand, wo die Mitte passt; Namen,
+  die Stifte und Löcher richtig nennen.
+
+  **Durchsicht v0.5.1 (26.09.2026):** Was in einer Achse nur ohne den Rand passt, liegt
+  dort auf der Bettmitte, geprüft gegen Bett und Sperrzonen; `check_build_volume` meldet
+  `arrange.narrow_margin` als Hinweis mit dem verbleibenden Abstand statt „über den
+  Bauraum hinaus“ (`58e654ac5`). Offen: die Nummerierung geteilter Stücke (Robert).
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket texte):** Entscheidung Robert über die
+  Release-Sitzung (27.09.2026, Kundensicht): *Automatisch teilen* zählt ab drei Stücken
+  durch, in der Reihenfolge der fertigen Stücke („Wandleiste 1 von 3 · Stifte“, „2 von 3
+  · Stifte und Löcher“, „3 von 3 · Löcher“); der Zusatz nennt die Verbinder, die ein
+  Stück nach dem Schnitt trägt (`prepare_ops._connectors_of`), zwei Stücke bleiben
+  „A · Stifte“ und „B · Löcher“. Die Felder `piece_count`, `number_a`, `number_b` stehen
+  mit Vorgabe 0 an *Teilen* und *An gezeichneter Linie trennen* — kein Formatwechsel,
+  alte Schritte rechnen wie vorher, `cache_version="1"` für beide. Das Code-Review fand,
+  dass eine schräge Naht als `split_line` die Felder nicht kannte und der ganze Lauf
+  absagte (T-1); behoben mit dem Fix des Prüfers. Tests
+  `test_prepare.py::test_pieces_of_a_run_of_three_or_more_are_numbered_and_say_what_they_carry`,
+  `::test_two_pieces_keep_their_letters`,
+  `test_autosplit.py::test_auto_split_numbers_three_or_more_pieces_and_names_what_each_carries`,
+  `::test_a_run_with_a_tilted_seam_numbers_its_pieces_too` (ohne den Fix rot).
+  `49ced8d81`, `5d61f668a`; auf main mit `5a8475c9f` und `f74ce7f81`. Reste:
+  [RM-287](ROADMAP.md#rm-287).
+
+<a id="rm-274"></a>
+
+- [x] **RM-274 — *Bohrung setzen* mit freier Richtung versetzt Ecken, die der Schnitt nicht
+  berührt.** Aus der Durchsicht v0.5.1 (rest-merker, „Für Nachbarn“). Beim Klick auf eine
+  Fläche setzt das Fenster die Richtung aus deren Normale (`nx/ny/nz`,
+  `scene/placement.py`), und `prepare.drill` legt dann den ganzen Körper in den Rahmen der
+  Bohrung (`transform.moved(local_body, world_to_local)`), schneidet dort und legt ihn mit
+  `to_world` zurück. Die Rundung der Hin- und Rückrechnung versetzt Ecken, die der Schnitt
+  nicht berührt: Am Gartenschlauchhalter (Ø 3 × 2 mm in die größte Fläche, Normale +y,
+  Sonde `F:\3D Druck.review-051\sonden\rest-merker\p13_bohren.py`) stehen danach 17 572
+  von 196 326 Ecken nicht mehr an ihrem Ort, 39 840 Dreiecke sind nicht mehr bitgleich;
+  achsparallel gebohrt sind es 97 Ecken und 374 Dreiecke. Folgen: Der Merker über die
+  Körpergrenze rechnet dort 1 078 statt 79 Fragen neu (Erkennung danach 13,7 statt 10,7 s
+  unter Last), und die Erkennung liest die versetzten Stellen in den letzten Stellen neu —
+  dieselbe Fernwirkung, die `e6e6f3ba0` für die Darstellung behoben hat, hier über die
+  Koordinaten. Weg: das Werkzeug in die Welt legen statt den Körper in den Rahmen, dann
+  bleibt jede unberührte Ecke bitgleich; `_restore_drill_end_planes` rechnet heute im
+  Rahmen und muss mitziehen (die Endebenen sind Vertrag des Bohrungsgebiets). Derselbe Weg
+  steht für `prepare.resize_bore` in [RM-187](#rm-187) offen. Abnahme: Nach *Bohrung
+  setzen* mit Normale stehen alle Ecken außerhalb des Schnitts an ihrem Ort, Bit für Bit,
+  und die Erkennung danach trifft wie achsparallel gebohrt.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket bohren):** Das Werkzeug liegt in der Welt
+  statt des Körpers im Rahmen der Bohrung — für *Bohrung setzen*, *Bohrung ändern* (der
+  Drehweg aus [RM-187](ROADMAP.md#rm-187)), *Zum Langloch ziehen* und die gemischte Ecke
+  von Verrunden und Fase (`_back_in_place`). Am Gartenschlauchhalter standen vorher
+  17 475 von 196 326 Ecken außerhalb des Schnitts an einem neuen Ort, an einer schrägen
+  Fläche 174 094; jetzt keine, das Netz außerhalb bleibt Bit für Bit, und die Erkennung
+  danach rechnet 79 statt 10 774 Fragen neu. Nebenbefund behoben: An einer schrägen
+  STL-Fläche blieb in der Mündung von Sackloch, Langloch und Aufweitung eine hauchdünne
+  Haut stehen. Die Erkennung schließt eine Kerbe im Fleck nur noch über eine glatte Naht
+  (`perceive.features._candidates_at`); am Korpus (539 Körper) anders nur die zwei
+  gleichen Teile der Taschentuchbox, richtig gelesen. Tests `test_cut_in_world.py` (u. a.
+  `test_a_bore_along_a_tilted_normal_leaves_every_corner_outside_the_cut_in_place`,
+  `test_a_bore_into_a_tilted_face_of_an_stl_opens_at_its_mouth`),
+  `test_mesh_edges.py::test_a_mixed_corner_leaves_every_corner_away_from_its_edges_in_place`,
+  `test_features.py::test_a_triangle_beyond_an_edge_never_closes_a_notch`. `94aa590eb`,
+  `33aebf566`, `2b3db2fc4`; Merge `9e3a8d8a9`.
+
+<a id="rm-275"></a>
+
+- [x] **RM-275 — Der Bezug eines Musters auf einem runden Träger kippt zwischen gleichen
+  Zellen.** Aus der Durchsicht v0.5.1 (rest-merker, Korpusfolge
+  `F:\3D Druck.review-051\sonden\rest-merker\k51_vergleich.txt`). Auf einem runden Träger,
+  dem Rändel am Gewürzdeckel (derselbe Deckel wie [RM-225](#rm-225)), sind alle Zellen
+  gleich, und welche davon Mitte und Richtung des Musters stellt, entscheidet in
+  `perceive/patterns.py` ein Knick, der an der Darstellung des Netzes hängt: Vor
+  `e6e6f3ba0` drehte der Bezug beim Bohren weit weg vom Muster, danach an zwei Deckeln
+  beim Versetzen. Am Korpus sind das die sechs Fälle, in denen der Stand nach `e1b897ca2`
+  mehr Merkmale des vorigen Schritts verliert als der Stand davor. Eine solche Wahl darf
+  nicht an der Darstellung hängen (`.claude/rules/kern.md`); dieselbe Familie wie
+  [RM-210](#rm-210). Weg: die Wahl des Bezugs von Ecken- und Dreiecksfolge lösen und am
+  Korpus gegen die Schrittfolge messen. Abnahme: Am Gewürzdeckel bleiben Mitte und
+  Richtung des Rändelmusters über die vier Schritte der Korpusfolge gleich.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket muster):** Welche Zelle eines Musters auf
+  einem runden Träger Mitte und Richtung stellt, hängt nicht mehr an Ecken- und
+  Dreiecksfolge: Die Mitte eines vollen Umlaufs liegt gegenüber der Lücke in der festen
+  Richtung, unter gleichen Lücken entscheidet `patterns.SEAM_DIRECTION`. Am Gewürzdeckel
+  bleiben Mitte und Richtung des Rändels über alle vier Schritte der Korpusfolge gleich,
+  an allen 24 Deckelkörpern. Dazu (Inventar der Durchsicht 1.1): Gleich große
+  Verrundungen behalten nach *Kanten verfeinern*, einer Bohrung und *Verschieben* ihren
+  Namen — Siebhalter 48 von 48 (vorher 45), Fettpressenhalter 22 von 22 (vorher 20); am
+  Korpus (346 Körper) sanken die Verluste bei unveränderten Maßen von 355, 167 und 165 auf
+  null. Tests
+  `test_pattern_features.py::test_the_middle_of_a_full_turn_lies_opposite_the_gap_at_the_fixed_direction`,
+  `::test_the_reference_of_a_full_turn_does_not_hang_on_the_order_of_the_mesh`,
+  `::test_equal_gaps_choose_the_seam_by_the_fixed_direction_not_by_rounding`,
+  `test_matching.py::test_twins_keep_their_names_where_their_surface_stays`,
+  `::test_only_a_clearly_nearest_surface_settles_twins`. `db15a8063`, `db6dd8216`; Merge
+  `8592537f5`.
+
+<a id="rm-276"></a>
+
+- [x] **RM-276 — Eine gedruckte Schraube liegt ohne Spiel an ihrem Sitz.** Aus der
+  Durchsicht v0.5.1 (rest-schraube, Registersatz 1). Der Senkkopf liegt bündig in seiner
+  Senkung — dieselbe 90°-Flanke, derselbe Außendurchmesser, 42 deckungsgleiche Ecken am
+  oberen Rand (`F:\3D Druck.review-051\sonden\rest-schraube\s4_head.txt`) —, der
+  Sechskantkopf steht ohne Abstand auf der Fläche; Spiel hat nur das Gewinde. Als
+  Baugruppe ist das richtig, an Ort und Stelle in einem Stück gedruckt verschweißt der Kopf
+  aber mit dem Träger. Der Hinweis im Baustein („zusammen mit der Mutter aus demselben
+  Material drucken“) sagt nicht, dass die Schraube zum Drucken vom Träger getrennt und
+  hingelegt werden muss. Seit `bba2c6ea7` meldet eine gedruckte Schraube keinen Zerfall
+  mehr, sie ist gewollt ein eigenes Teil (`separate_from_host`, `leaves_separate_parts`).
+  Zwei Wege, beide mit Maßänderung und `LIBRARY_VERSION`: (a) das Spiel aus dem
+  Materialprofil auch an der Kopfauflage (Senkung weiter oder Kopf um das Spiel
+  angehoben), dann lässt sie sich an Ort und Stelle drucken; (b) beim Übergeben an den
+  Slicer jedes lösbare Teil als eigenes Objekt. Die Durchsicht empfiehlt (a): Es hält die
+  Zusage „lösbar“ auch für den, der das Projekt so druckt, wie er es sieht. Nicht in der
+  Durchsicht gebaut, weil es ein Maß an einem ausgelieferten Baustein kurz vor dem Tag
+  ändert und einen neuen Bereichsnachweis braucht. Abnahme: Zwischen Kopf und Sitz steht
+  an beiden Kernen das Spiel aus dem Materialprofil, `LIBRARY_VERSION` und der
+  Bereichsnachweis sind nachgezogen.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket schraube):** Weg (a): Sechskantkopf und
+  Schraube stehen um das Spiel aus dem Materialprofil über der Fläche, die Senkung rückt
+  senkrecht zur 90°-Flanke um das Spiel vom Senkkopf ab (Mündung + 2·√2·Spiel, der Kopf
+  bleibt bündig), die gedruckte Mutter steht um das Spiel über ihrer Fläche. Gemessen in
+  Einbaulage (PETG, 0,25 mm): Kopf ↔ Sitz vorher 0,000 mm an beiden Kernen, jetzt
+  0,250 mm (exakter Senkkopf an der Tessellation 0,244 mm). Der Hinweis beider Bausteine
+  sagt, dass das Teil aus dem Material des Trägers gedruckt auch mitgedruckt lösbar
+  bleibt. `LIBRARY_VERSION` 21 mit gemeinsamem `PartChange`; ein Projekt aus Stand 20
+  nennt die Änderung beim Öffnen. Bereichsnachweis der Verbindungsbausteine neu, alle
+  bestanden. Tests `test_parts.py::test_a_printed_screw_keeps_the_profile_play_to_its_seat`,
+  `::test_a_printed_nut_keeps_the_profile_play_to_its_face`,
+  `test_parts_catalog.py::test_an_old_project_with_a_printed_screw_is_told_about_the_seat_play`,
+  dazu `test_exact_parts.py`. `06dc3a5b9`; Merge `f5be67cb4`.
+
+<a id="rm-277"></a>
+
+- [x] **RM-277 — Eine schräg gesetzte Magnettasche verliert auf der hohen Seite ihre
+  Lippe.** Aus der Durchsicht v0.5.1 (rest-schraube, Registersatz 2). Mit einer Richtung
+  schräg zur Fläche („Richtung X/Y/Z“ im Dialog, Assistent oder Kommandozeile) ist die
+  Öffnung seit `bba2c6ea7` bis über die Fläche frei; vorher trafen 15 bis 17 von 36
+  Strahlen entlang der Achse Material. Die Lippe liegt aber 0 bis 0,4 mm unter der
+  Mündungsebene, und auf der hohen Seite liegt die Fläche um bis zu R · tan(Neigung)
+  darunter (R = 4,125 mm bei 8×3). Gerechnet am Taschenrand: Unter 10° fehlt die Lippe auf
+  113° des Umfangs (31 %), unter 20° auf 149° (41 %), dazwischen ist sie nur zum Teil da.
+  Kein Befund sagt es. Weg: ein Hinweis am Schritt, wenn eine Haltelippe schräg zur Fläche
+  gesetzt wird (sinngemäß „hält nur auf einer Seite — senkrecht zur Fläche setzen“), mit
+  *Eingabe korrigieren*; ein neuer Satz in sechs Sprachen, Wortwahl nach
+  `oberflaeche.md`. Die Erkennung liest die gekippte Lippe danach ebenfalls nicht
+  ([RM-262](#rm-262)). Abnahme: Eine Magnettasche 8×3, unter 10° gesetzt, trägt an beiden
+  Kernen den Hinweis mit *Eingabe korrigieren*, gerade gesetzt keinen.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket schraube):** Ein Baustein erklärt seine
+  Haltelippe (`RetainingLip`: Wort, Höhe, Umriss) — die Magnettasche am Taschenrand, das
+  Schlüsselloch am Kopfrand über dem eingehängten Kopf. `ops._lip_on_a_slant` misst je
+  Umrisspunkt, wie tief die Ebene der Fläche entlang der Achse unter der Mündung liegt;
+  tiefer, als die Lippe reicht, kommt an beiden Kernen die Warnung
+  `parts.lip_on_a_slant` mit *Eingabe korrigieren*, gerade gesetzt keine. Die Grenze
+  folgt aus Höhe und Umriss (8×3 in PETG ab 5,54°, Schlüsselloch M4 ab 7,4°). Neuer
+  Satz in sechs Sprachen. Dass die Erkennung eine gekippte Lippe nicht liest, bleibt bei
+  [RM-262](ROADMAP.md#rm-262). Tests
+  `test_parts.py::test_a_magnet_pocket_set_at_a_slant_says_its_lip_holds_on_one_side`,
+  `::test_a_keyhole_set_at_a_slant_says_its_ledge_holds_on_one_side`. `b42806f06`; Merge
+  `f5be67cb4`.
+
+<a id="rm-279"></a>
+
+- [x] **RM-279 — „Alle waagerechten Kanten“ nimmt die Ränder einer Querbohrung mit.** Aus
+  der Durchsicht v0.5.1 (rest-kunde, Registersatz 1). Ein geschlossener Ring hat keine
+  Richtung von Anfang zu Ende, und `flat` (`|z| < 0,1`) gilt an jedem Ring. Die
+  Beschriftung fragt seit `6bcffec39` `edges.edge_lie_of` (ein Ring nach der Ebene, in der
+  er liegt, [RM-269](ROADMAP-ARCHIV.md#rm-269)); die Auswahl nach Lage (`edges.choose`,
+  `"horizontal"` und der Höhenvergleich von `"top"`/`"bottom"`) fragt weiter `flat`.
+  Gemessen (`F:\3D Druck.review-051\sonden\rest-kunde\s269_auswahl.txt`): Ein Quader
+  40 × 30 × 20 mit Querbohrung Ø 6 → *alle waagerechten Kanten* wählt 10 Kanten, darunter
+  beide stehenden Bohrungsränder; *Verrunden* an „waagerecht“ rundet dort die Mündungen
+  mit. Nicht in der Durchsicht gebaut, weil eine andere Antwort gespeicherte Projekte beim
+  Öffnen anders rechnet — dieselbe Operation, andere Kanten. Weg: entscheiden, ob alte
+  Projekte über eine Migration (`format_version`, `cache_version`) wie gespeichert rechnen
+  oder das neue Verhalten ab einer Version gilt und die Änderung gemeldet wird; dann
+  `choose` über `edge_lie_of` fragen. Abnahme: Querbohrung → „waagerecht“ ohne die Ringe;
+  alte Projekte rechnen wie gespeichert oder melden die Änderung.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket kanten):** (i) Weg B, entschieden von der
+  Release-Sitzung nach Roberts Vorgabe vom 25.09.2026: *Waagerecht*, *Oben* und *Unten*
+  nehmen einen runden Rand nur, wenn er waagerecht liegt (`edges.choose` fragt
+  `edge_lie_of`); die Mündung einer Querbohrung gehört zu keiner Gruppe, *Senkrecht*
+  rechnet wie bisher. Alte Projekte rechnen wie gespeichert: Format 37 mit Migration
+  36→37 (`rings_by_plane`). Am Netz wird ein Bohrungsrand so tief verrundet oder
+  angefast wie am exakten Körper; vorher blieb bei großen Radien bis zu einem Fünftel
+  Material stehen. (ii) Gruppenabsage nach Lesart 2 (revidiert die getestete Absage aus
+  `00b09a2da`): Eine Gruppe bearbeitet die Kanten, die das Maß tragen, und nennt die
+  übrigen im Befund `edges.too_narrow` mit dem Maß, das dort passt, und *Stelle zeigen*;
+  trägt keine Kante das Maß, bleibt die Absage, eine einzeln gewählte Kante hält weiter
+  an. Tests `test_mesh_edges.py::test_a_group_takes_a_rim_only_when_it_lies_flat`,
+  `::test_the_mouth_of_a_bore_is_rounded_as_deep_as_pappus_says`,
+  `::test_both_kernels_leave_out_what_does_not_fit_on_a_thin_wall`,
+  `test_project.py::test_v36_rounding_at_horizontal_keeps_the_mouths_of_a_cross_bore`,
+  `::test_v36_edge_groups_on_both_undo_sides_keep_counting_rings_as_flat`,
+  `test_brep.py::test_both_kernels_ask_the_same_question_of_a_thin_walled_box`,
+  `test_operation_ui.py::test_the_rim_switch_sits_at_the_back_and_follows_the_group`.
+  `6e8d0bedc`, `4e145c801`, `53ad8b785`, `81b797456`; Merges `9f19b44d6`, `cbef27715`.
+  Rest am exakten Kern: [RM-284](ROADMAP.md#rm-284).
