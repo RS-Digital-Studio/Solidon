@@ -606,6 +606,38 @@ Neu als Überschrift: Die Regel fasst die „Wer … anfasst, misst beide
 Seiten“-Sätze der einzelnen Erkennungsregeln zusammen. Die Modellreihen
 stehen bei ihren Regeln in den folgenden Abschnitten.
 
+## Ein Löserlauf entfällt nur mit dem Nein des Stapels
+
+RM-209, RM-132, RM-193 (Paket stapel der Release-Sitzung 0.5.1). Eine
+Verfeinerung, die ihr Budget ausschöpft, liefert nichts (RM-210) — an der
+Kumiko-Schale 442 von 467 Kegelläufen, am Meshy-Murmelbrett 4 995 von 15 800
+Kegel- und 1 487 von 5 203 Ringläufen, jeder hundert Auswertungen lang. Neun
+Siebe aus Fleckmerkmalen sind gemessen und verworfen (Tabelle in RM-209), und
+ein Nachweis aus der Geometrie scheidet aus: Einen fast ebenen Splitter nähert
+ein Kegel mit 85° beliebig gut an; ob der Löser dorthin kommt, steht nur im
+Lauf.
+
+Deshalb rechnet `refine.exhausted` den Lauf selbst, für alle Flecken einer
+Runde zugleich — SciPys `trf_no_bounds` Zweig für Zweig in NumPy — und
+übernimmt nur das sichere Nein. Gemessen gegen den echten Lauf (Sonden
+`p55`, `p59`, `p63` im Paket stapel):
+
+- Weg nach hundert Auswertungen: median 2,5e-14, höchstens 2,8e-11 relativ in
+  den Parametern; gleiche Auswertungszahl in 465 von 467 Kegelläufen der
+  Kumiko-Schale.
+- An jedem bestätigten Lauf dieselbe Schrittfolge wie im echten Lauf, dieselbe
+  Zahl innerer Newton-Schritte, und die Abweichung in den Größen, an denen
+  Zweige hängen, nutzt höchstens 5,8e-4 des Abstands zur Schwelle
+  (`DECISION_MARGIN`; Kumiko, Drache, Meshy).
+- Keine falsche Absage an allen Läufen von Kumiko-Schale, Drache, Freiform und
+  Meshy-Murmelbrett (21 000 Läufe, 4 846 sicher vergeblich an Meshy).
+
+Die feste Arbeit je Runde (gut hundert NumPy-Aufrufe, die Zerlegung je Problem
+etwa vier Mikrosekunden) lohnt sich erst in Gruppen von einigen Dutzend
+Problemen; darunter rechnet der echte Löser (`MIN_BATCH`). Große Flecken mit
+Tausenden Stützpunkten spart der Stapel nicht: Dort ist die Rechnung, nicht der
+Aufruf, das Teure.
+
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
 *Ursprüngliche Überschrift: „Auf einer Freiform sind Kugel, Ring, Kegel und
