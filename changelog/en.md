@@ -26,7 +26,7 @@ it into `website/version.json`.
 - The quality levels in the print dialog now appear in the language of the interface.
 - Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, as in Elegoo's own profile.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
-- If you have measured your printer's overhang, the slicer too only adds supports from that angle, as long as the layer height and line width of the measurement apply.
+- If you have measured your printer's overhang, the slicer too only adds supports from that angle, as long as the layer height and bead width of the measurement apply.
 - The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
 - The print settings show what will be printed: the manufacturer's profile is the basis, and your own values are marked and can be reset one by one.
 - You choose the build plate in the print settings, and the bed temperature follows it. If the manufacturer does not approve the plate for your filament, Solidon says so before printing.
@@ -61,7 +61,7 @@ it into `website/version.json`.
 - The report now only shows the hint to calibrate your material's tolerances on models with fits. Only there does Solidon use them.
 - The handover to Cura transfers the first layers without fan as a ramp-up. A warning only comes when the finished print file really differs.
 - On large models, *Split the model* finds the seam up to twice as fast, and on multi-colour ones in a fraction of the time. Splitting works as before.
-- When Solidon splits a model automatically into three or more pieces, the names count through and name the connectors, such as “Wall strip 2 of 3 · Pins and holes”.
+- When Solidon splits a model automatically into three or more pieces, the names are numbered and name the connectors, such as “Wall rail 2 of 3 · Pins and holes”.
 - A printed screw, nut or seal from the parts catalogue no longer counts in the report as a fragmented body. It is a part of its own, and that is intended.
 - Printed screws and nuts now have play at the head and the seating face too, and stay removable when printed together with the part. Older projects report the change when opened.
 - With a countersunk screw from the parts catalogue, a body made of faces and edges stays watertight on export: the part and the screw each go into the file closed.
@@ -90,7 +90,7 @@ it into `website/version.json`.
 - If a magnet pocket or keyhole hanger stands at an angle to the face, Solidon says that its lip only holds on one side and offers *Correct the input*.
 - If a part such as a magnet pocket removes nothing at the chosen spot, Solidon says so and suggests clicking the face instead.
 - On a magnet pocket with a lip, *Pull into a slot* now declines on bodies made of faces and edges too, instead of cutting through the lip.
-- When you put a thread, a heat-set insert or a nut trap on a bore, the dialog names the size that fits at the top and preselects exactly that one.
+- When you put a thread, a heat-set insert or a nut trap on a bore, the dialog names the fitting size at the top and preselects exactly that one.
 - On a countersink, *Change feature* cuts the new size as if it had been countersunk that way from the start. Before, Solidon declined or left a thin skin across the bore.
 - When parts of a model are stuck into each other, Solidon unites them before computing, as they will be printed. Volume and bores are then right, and the report says so.
 - When you widen a bore, the precise preview shows all the removed material, even on large models and on bodies with enclosed channels.
@@ -101,7 +101,7 @@ it into `website/version.json`.
 
 - The edge choice *Horizontal*, *Top* or *Bottom* no longer takes in the rim of a bore in a side wall. If you mean it, pick it on its own; older projects compute as saved.
 - On an imported model, the rim of a bore is filleted or chamfered as deep as on a designed part. Before, with large radii the rounding came out up to a fifth too shallow.
-- If a radius or chamfer does not fit every edge of an edge choice such as *All* or *Vertical*, Solidon works the rest and shows with *Show the place* where it does not fit, instead of declining.
+- If the size does not fit every edge of an edge choice such as *All* or *Vertical*, Solidon works the edges it fits and shows the others with *Show the place*, instead of refusing.
 
 ### Dimensions in the view
 
