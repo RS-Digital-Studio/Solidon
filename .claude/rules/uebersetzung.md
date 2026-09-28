@@ -90,7 +90,11 @@ Passstift→goupille · Trennebene→plan de coupe · Startwert→graine ·
 Baugruppe→assemblage · Merkmal→caractéristique · Werkzeug→outil ·
 Ansicht→vue · Drucker→imprimante · Materialprofil→profil de matériau.
 Ton: Anrede „vous", Infinitiv bei Bedienaktionen, gewöhnliche Leerzeichen
-(keine geschützten).
+(keine geschützten). Vor : ; ? ! steht eines, auch wo der Code einen Satz
+zusammensetzt: Das Satzzeichen zwischen zwei übersetzten Teilen gehört in den
+Katalogeintrag mit Platzhaltern (`_("Gilt für: {kinds}", kinds=…)`), nicht fest
+in den Code — sonst stand an jeder Operation der Referenz „Objets: 0 → 1“
+(`test_french_sets_a_space_before_colon_semicolon_and_question_mark`).
 
 **Italienisch:** Operation→operazione · Transaktion→transazione ·
 Baustein→blocco · Teil→pezzo · Passung→accoppiamento · Spiel→gioco ·

@@ -285,7 +285,13 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     group = next((entry for entry in VARIANT_GROUPS if spec.name in entry.members), None)
     if group is not None:
         steps.append(str(group.title))
-        return " → ".join(steps) + f" ({group.choice}: {spec.title})"
+        # Der Doppelpunkt gehört zum übersetzten Satz: Französisch setzt davor
+        # ein Leerzeichen.
+        return (
+            " → ".join(steps)
+            + " "
+            + str(_("({choice}: {title})", choice=group.choice, title=spec.title))
+        )
 
     steps.append(str(spec.title))
     return " → ".join(steps)
@@ -295,7 +301,8 @@ def _panel_place(spec: OperationSpec) -> str:
     """Der Ort einer Handlung rechts im Fenster, mit der Auswahl, die sie braucht."""
     if spec.applies_to:
         kinds = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to if kind)
-        return f"{_('Handlungen rechts')} ({_('bei gewähltem Merkmal')}: {kinds})"
+        selection = _("bei gewähltem Merkmal: {kinds}", kinds=kinds)
+        return f"{_('Handlungen rechts')} ({selection})"
     return f"{_('Handlungen rechts')} ({_('bei gewähltem Körper')})"
 
 
@@ -512,10 +519,11 @@ def caveat_line(spec: OperationSpec, markup: bool = False) -> str:
     """
     if not spec.caveat:
         return ""
-    label = str(_("Wann nicht"))
+    # Der Doppelpunkt gehört zum übersetzten Satz: Französisch setzt davor
+    # ein Leerzeichen.
     if markup:
-        return f"**{label}:** {spec.caveat}"
-    return f"{label}: {spec.caveat}"
+        return str(_("**Wann nicht:** {caveat}", caveat=spec.caveat))
+    return str(_("Wann nicht: {caveat}", caveat=spec.caveat))
 
 
 def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:
@@ -676,7 +684,9 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             # Teil 4) — wer in der Referenz liest, sucht als Nächstes den Knopf.
             # ``menu_path`` antwortet aus denselben Daten wie Menü, Katalog und
             # Auswahlfenster, dieselbe Auskunft, die der Chat bekommt.
-            lines.append(f"**{_('Ort')}:** {menu_path(spec, source)}")
+            # Doppelpunkte stehen in dieser Referenz im übersetzten Satz:
+            # Französisch setzt davor ein Leerzeichen.
+            lines.append(str(_("**Ort:** {path}", path=menu_path(spec, source))))
             lines.append("")
             if spec.caveat:
                 # Eigener Absatz mit eigenem Wort davor: In den doc-Satz
@@ -686,9 +696,17 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 lines.append(caveat_line(spec, markup=True))
                 lines.append("")
             facts = [
-                f"{_('Objekte')}: "
-                f"{f'≥ {spec.minimum_inputs}' if spec.consumes == VARIABLE else spec.consumes} → "
-                f"{'…' if spec.produces == VARIABLE else spec.produces}",
+                str(
+                    _(
+                        "Objekte: {consumes} → {produces}",
+                        consumes=(
+                            f"≥ {spec.minimum_inputs}"
+                            if spec.consumes == VARIABLE
+                            else spec.consumes
+                        ),
+                        produces="…" if spec.produces == VARIABLE else spec.produces,
+                    )
+                ),
                 str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),
                 str(_("ohne Zufall") if spec.deterministic else _("mit Startwert")),
             ]
@@ -699,7 +717,7 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 # Schlüsseln: „Features: face, hole" ist eine Zeile aus dem
                 # Register, keine aus einem Handbuch.
                 named = ", ".join(str(FEATURE_TITLES.get(kind, kind)) for kind in spec.applies_to)
-                facts.append(f"{_('Gilt für')}: {named}")
+                facts.append(str(_("Gilt für: {kinds}", kinds=named)))
             lines.append(" · ".join(facts))
             lines.append("")
             parameters = spec.params.spec()

@@ -178,8 +178,17 @@ def _where_to_start_page() -> Page:
     """
 
     def listed(part: guides.GuidePart) -> str:
+        # Der Doppelpunkt gehört zum übersetzten Satz: Französisch setzt davor
+        # ein Leerzeichen.
         return "\n".join(
-            f"* [{guide.title}](manual:{guide.key}): {guide.summary}"
+            "* "
+            + str(
+                _(
+                    "{guide}: {summary}",
+                    guide=f"[{guide.title}](manual:{guide.key})",
+                    summary=guide.summary,
+                )
+            )
             for guide in guides.GUIDES
             if guide.part == part
         )
@@ -1661,7 +1670,7 @@ def rules_text() -> str:
             )
         ),
         "",
-        f"{_('Version')}: {collection.version}",
+        str(_("Version: {version}", version=collection.version)),
         "",
     ]
     for rule in collection.rules:
@@ -2452,6 +2461,7 @@ def without_figures(body: str) -> str:
         figure = figures.find(match.group(1))
         if figure is None or not figure.in_text:
             return ""
-        return f"*{_('Abbildung')}: {plain(str(figure.alt))}*"
+        described = _("Abbildung: {description}", description=plain(str(figure.alt)))
+        return f"*{described}*"
 
     return FIGURE_PATTERN.sub(describe, body)

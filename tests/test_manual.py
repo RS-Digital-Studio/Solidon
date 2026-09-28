@@ -460,7 +460,7 @@ def test_every_operation_names_where_it_is_found() -> None:
     text = documentation()
     for spec in REGISTRY.all():
         entry = text.split(f"(`{spec.name}`)", 1)[1].split("\n### ", 1)[0]
-        assert f"**{tr('Ort')}:** {menu_path(spec)}" in entry, spec.name
+        assert tr("**Ort:** {path}", path=menu_path(spec)) in entry, spec.name
 
 
 def test_the_written_pages_come_first() -> None:
@@ -1240,8 +1240,35 @@ def test_the_reference_names_the_feature_kinds() -> None:
 
     text = documentation(category="holes")
 
-    assert f"{tr('Gilt für')}: {tr('Fläche')}" in text
+    assert tr("Gilt für: {kinds}", kinds=tr("Fläche")) in text
     assert "face" not in text.split("|")[0], "der Schlüssel steht nicht in der Faktenzeile"
+
+
+def test_french_sets_a_space_before_colon_semicolon_and_question_mark() -> None:
+    """Das französische Handbuch setzt vor „:“, „;“, „?“ und „!“ ein Leerzeichen.
+
+    Die Übersetzungen tun das von selbst. Wo aber der Code zwei übersetzte
+    Teile mit einem festen „: “ verband, stand „Objets: 0 → 1“ und „**Où:**“
+    an jeder Operation der Referenz. Der Doppelpunkt gehört deshalb in den
+    übersetzten Satz. Code, Verweisziele und Adressen zählen nicht.
+    """
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    install_catalog("fr", read_catalog("fr"))
+    set_language("fr")
+    try:
+        text = manual.as_markdown()
+    finally:
+        set_language("de")
+    text = re.sub(r"`[^`]*`", "", text)
+    text = re.sub(r"\]\([^)]*\)", "]", text)
+    text = re.sub(r"https?://\S+", "", text)
+    tight = [
+        text[max(0, found.start() - 40) : found.end() + 10].replace("\n", " ")
+        for found in re.finditer(r"(?<=[\w)*»”…])[:;!?](?=\s|$|\*)", text, re.MULTILINE)
+    ]
+    assert not tight, "ohne Leerzeichen davor:\n" + "\n".join(tight[:10])
 
 
 def test_every_category_page_that_has_a_figure_opens_with_it() -> None:

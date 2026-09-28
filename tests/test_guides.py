@@ -329,7 +329,7 @@ def test_the_text_output_keeps_the_steps_and_drops_their_pictures() -> None:
         assert page is not None, guide.key
         text = manual.without_figures(page.text())
         assert "figure:" not in text
-        assert f"*{tr('Abbildung')}:" not in text, guide.key
+        assert "*" + tr("Abbildung: {description}", description="") not in text, guide.key
         numbered = len(guide.steps) > 1
         for number, one in enumerate(guide.steps, 1):
             line = f"**{number}.** {one.text}" if numbered else str(one.text)
