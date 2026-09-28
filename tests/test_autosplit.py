@@ -2047,6 +2047,47 @@ def test_auto_split_leaves_no_dead_fit_after_two_cuts(profile: Profile) -> None:
         assert fit.a.object_id in live and fit.b.object_id in live, fit.name
 
 
+@pytest.mark.parametrize(("length", "count"), [(600.0, 3), (900.0, 4)])
+def test_auto_split_numbers_three_or_more_pieces_and_names_what_each_carries(
+    profile: Profile, length: float, count: int
+) -> None:
+    """„Leiste 2 von 3 · Stifte und Löcher“ statt „Leiste B A · Stifte“ (RM-229).
+
+    Der Plan trägt jedem Schnitt die Nummern seiner Stücke ein, gezählt in der
+    Reihenfolge der fertigen Stücke; ein Stück, das derselbe Lauf gleich weiter
+    teilt, bekommt keine. Der Zusatz folgt den Verbindern, die das Stück trägt
+    — welche Hälfte die Stifte bekommt, entscheidet der Plan je Naht.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": length, "depth": 60.0, "height": 40.0, "name": "Leiste"},
+            )
+        ],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(length, 60.0, 40.0)))
+
+    applied = apply_split(project.document, block, "obj_1", profile)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert len(applied.object_ids) == count
+    notes = {(True, False): "Stifte", (False, True): "Löcher", (True, True): "Stifte und Löcher"}
+    names = []
+    for number, object_id in enumerate(applied.object_ids, start=1):
+        entry = result.scene.objects[object_id]
+        features = entry.features.items()
+        carries = (
+            any(key.startswith("pin_") and f.provenance == "generated" for key, f in features),
+            any(key.startswith("bore_") and f.provenance == "generated" for key, f in features),
+        )
+        names.append(source_text(entry.name))
+        assert source_text(entry.name) == f"Leiste {number} von {count} · {notes[carries]}"
+    assert all(" A" not in name and " B" not in name for name in names), names
+
+
 def test_one_undo_restores_a_complete_multi_cut_auto_split(profile: Profile) -> None:
     """Mehrere Auto-Split-Nähte sind genau eine History-Transaktion."""
     project = new_project("centauri-carbon-2", "petg")

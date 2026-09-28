@@ -34,14 +34,25 @@ Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
 - **Formatnamen:** STL, 3MF, STEP, GLB, OBJ, PLY, OFF, SVG, DXF, G-Code.
 - **Normbezeichnungen** (M4, DIN 912) und selbstbenennende Werte (mm, 6x3,
   DejaVu Sans, gyroid).
-- **Tastennamen:** aus „Strg" wird „Ctrl" wie im Englischen; F1, Esc, Tab,
-  Enter bleiben.
+- **Tastennamen:** aus „Strg" wird „Ctrl" wie im Englischen; F1, Esc und Tab
+  bleiben. Französisch schreibt „Échap“, weil französische Tastaturen die
+  Taste so beschriften. Die Eingabetaste heißt, wie der Bestand sie nennt:
+  en/pt Enter, es Intro, fr Entrée, it Invio.
 
 ## Glossare je Sprache — verbindlich
 
 Wer einen neuen Schlüssel nachträgt, nimmt diese Wörter. Sie sind über den
 ganzen Bestand durchgehalten; ein abweichendes Synonym lässt die Oberfläche
 auseinanderlaufen, ohne dass ein Test es merkt.
+
+**Ausnahme zu Maß → cota/quota:** Wo die Oberfläche „medidas“/„misure“ sagt
+— am Haken „Maße als Parameter anlegen“ und in so beschrifteten Dialogen —,
+folgen Anleitungen der Oberfläche, denn der Kunde sucht das Wort im Fenster.
+
+**Apostroph:** Französisch und Italienisch schreiben ihn gerade (`'`) wie die
+Mehrheit des Bestands, und kein Eintrag mischt beide Formen — ein Menüeintrag
+mit „’“ neben einem Satz, der ihn mit „'“ zitiert, ist für den Kunden derselbe
+Knopf, für die Zitatprüfung ein anderer.
 
 **Vorher lesen: Der Genus zieht durch den Satz.** `bloque`, `bloc` und `bloco`
 sind maskulin, `pieza`, `pièce` und `peça` feminin. Wer beim Baustein nur das
@@ -102,9 +113,11 @@ Stützen→supporti · Gewinde→filettatura · Senkung→svasatura ·
 Aushöhlen→svuotamento · Passstift→spina · Trennebene→piano di taglio ·
 Startwert→seme · Baugruppe→assieme · Merkmal→caratteristica ·
 Werkzeug→strumento · Ansicht→vista · Drucker→stampante ·
-Materialprofil→profilo del materiale · Op-Stapel→pila.
-Ton: Imperativ 2. Person bei Bedienaktionen, volle Akzente,
-Anführungszeichen «…» (so steht es im ganzen Bestand).
+Materialprofil→profilo del materiale · Op-Stapel→pila ·
+Schritt (im Verlauf)→passaggio. „Passo“ ist schon Steigung und Schrittweite;
+Tour- und Anleitungsschritte und „passo dopo passo“ bleiben „passo“.
+Ton: Imperativ 2. Person bei Bedienaktionen („tu“, nicht „voi“ oder „Lei“),
+volle Akzente, Anführungszeichen «…» (so steht es im ganzen Bestand).
 
 **Eine italienische Kollision ist vorentschieden:** „Bearbeiten“ (Edit) heißt
 im Bestand **Modifica**, zwei Menüs dürfen nicht gleich heißen — also **Ändern →
@@ -128,6 +141,13 @@ Werkzeug→ferramenta · Ansicht→vista · Drucker→impressora ·
 Materialprofil→perfil de material.
 Ton: Orthographie nach Acordo Ortográfico 1990, europäisch geprägt aber in
 Brasilien lesbar, Infinitiv bei Bedienaktionen, volle Diakritika.
+
+**Das Werkzeug *Trennen* und die Operation *Teilen* heißen in jeder Sprache
+verschieden** — en Cut/Split, es Separar/Dividir, fr Séparer/Diviser, it
+Taglia/Dividi, pt Separar/Dividir. Das Werkzeug folgt *An gezeichneter Linie
+trennen*, die es anlegt, die Operation *Automatisch teilen*, dessen Schritte sie
+sind; ein gemeinsamer Name schickte den Kunden an den falschen Ort
+(`test_no_tool_or_operation_shares_its_name_with_another`).
 
 ## Übersetzen heißt neu schreiben, nicht flicken
 

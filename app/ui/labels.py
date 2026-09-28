@@ -890,7 +890,9 @@ def colour_name(value: str) -> str:
 _CHOICE_NAMES: dict[str, TranslatableText] = {
     "whole_face": _("Gesamte Fläche"),
     "keep": _("Nur Bohrungsdurchmesser"),
-    "follow": _("Senkung und Stufen mitnehmen"),
+    # Die Kette einer Magnettasche trägt statt der Senkung eine Verengung, und
+    # die geht mit (RM-271) — der Name nennt, was mitgehen kann.
+    "follow": _("Senkung, Stufen und Verengung mitnehmen"),
     "legacy_raw": _("Unveränderte Quellachsen"),
     "gltf": _("glTF: Y nach oben"),
     "clearance": _("Spielpassung"),
@@ -1108,10 +1110,10 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
     "whole_face": _("Füllt die gewählte ebene Fläche bis zum Rand; Bohrungen bleiben frei."),
-    "keep": _("Außenmaße und Lage der vorhandenen Senkung und Stufen bleiben erhalten."),
+    "keep": _("Außenmaße und Lage von Senkung, Stufen und Verengung bleiben erhalten."),
     "follow": _(
-        "Einführbreite, Senkungswinkel und Stufentiefen bleiben erhalten; "
-        "die Durchmesser ändern sich gemeinsam."
+        "Alle Durchmesser ändern sich gemeinsam, auch die Öffnung einer Verengung; "
+        "Breiten, Winkel und Tiefen bleiben."
     ),
     "legacy_raw": _("Behält die Achsen der Quelldatei bei, wie in älteren Projekten."),
     "gltf": _("Richtet GLB und GLTF von Y-oben auf Solidons Z-oben aus."),
@@ -2267,6 +2269,16 @@ def explain_choices(box: QComboBox) -> None:
 #: ``_()``-Literale, damit der Extraktor sie sieht.
 _SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = SIDE_NAMES
 
+#: Die Innenwand je Seite, in derselben Ordnung wie :data:`_SIDES`. Ein eigener
+#: Text je Seite und kein „{side} innen“: Das Adjektiv richtet sich nach dem
+#: Genus der Seite, fr „Face supérieure intérieure“ gegen „Côté gauche
+#: intérieur“ — das kann ein Platzhalter nicht (Durchsicht 0.5.1).
+_INNER_SIDES: tuple[tuple[TranslatableText, TranslatableText], ...] = (
+    (_("Rechte Seite innen"), _("Linke Seite innen")),
+    (_("Rückseite innen"), _("Vorderseite innen")),
+    (_("Oberseite innen"), _("Unterseite innen")),
+)
+
 #: Ab wann eine Normale als achsparallel gilt. Darunter ist die Fläche schräg,
 #: und ein Seitenname wäre eine Behauptung.
 _AXIS_ALIGNED = 0.9
@@ -2324,8 +2336,8 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
             for axis, (positive, negative) in enumerate(_SIDES):
                 value = float(normal[axis])
                 if abs(value) >= _AXIS_ALIGNED:
-                    side = str(positive if value > 0 else negative)
-                    return str(tr("{side} innen").format(side=side)) if inner else side
+                    names = _INNER_SIDES[axis] if inner else (positive, negative)
+                    return str(names[0] if value > 0 else names[1])
         return tr("Schrägfläche innen") if inner else tr("Schrägfläche")
     # Eine gerundete Seite zeigt nirgendwohin — sie ist der Bogen eines D,
     # der Mantel eines o. Innen ist sie, wenn sie hohl liegt: die Innenwand

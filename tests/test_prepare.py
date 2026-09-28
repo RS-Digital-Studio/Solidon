@@ -1215,6 +1215,105 @@ def test_splitting_says_that_the_halves_still_lie_together(
     assert hinweis.severity == "info", "nichts ist schiefgegangen"
 
 
+def _connectors(entry: SceneObject) -> tuple[bool, bool]:
+    """Trägt das Stück erzeugte Stifte, erzeugte Löcher?"""
+    features = entry.features.items()
+    pins = any(
+        key.startswith("pin_") and f.kind == "pin" and f.provenance == "generated"
+        for key, f in features
+    )
+    bores = any(key.startswith("bore_") and f.provenance == "generated" for key, f in features)
+    return pins, bores
+
+
+@pytest.mark.parametrize("count", [3, 4])
+def test_pieces_of_a_run_of_three_or_more_are_numbered_and_say_what_they_carry(
+    count: int, profile: Profile
+) -> None:
+    """„Leiste 2 von 3 · Stifte und Löcher“ statt „Leiste B A · Stifte“ (RM-229).
+
+    Mehrfach geteilte Stücke hießen nach ihrem Buchstabenpfad, und das
+    Mittelstück trug Stifte **und** Löcher, hieß aber nur „· Stifte“. Ab drei
+    Stücken zählt ein Lauf durch; jeder Name nennt, was das Stück trägt.
+    Geschnitten wird wie *Automatisch teilen*: jeweils das letzte Stück weiter,
+    von links nach rechts, mit den Nummern, die der Plan einträgt.
+    """
+    document = new_project("centauri-carbon-2", "petg").document
+    history = History(document)
+    length = 100.0 * count
+    history.apply(
+        _("Anlegen"),
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": length, "depth": 30.0, "height": 20.0, "name": "Leiste"},
+            )
+        ],
+    )
+    rest = "obj_1"
+    for cut in range(1, count):
+        last = cut == count - 1
+        history.apply(
+            _("Teilen"),
+            [
+                OperationDraft(
+                    op="split_pinned",
+                    inputs=(rest,),
+                    params={
+                        "axis": "x",
+                        "position": -length / 2.0 + 100.0 * cut,
+                        "pins": 2,
+                        "first_pin": 1 + 2 * (cut - 1),
+                        "piece_count": count,
+                        "number_a": cut,
+                        "number_b": count if last else 0,
+                    },
+                )
+            ],
+        )
+        rest = document.ops[-1].outputs[1]
+
+    result = evaluate(document, profile)
+
+    assert result.complete
+    pieces = sorted(result.scene.objects.values(), key=lambda entry: entry.mesh.bounds.minimum[0])
+    assert len(pieces) == count
+    notes = {(True, False): "Stifte", (False, True): "Löcher", (True, True): "Stifte und Löcher"}
+    expected = ["Stifte", *["Stifte und Löcher"] * (count - 2), "Löcher"]
+    assert [notes[_connectors(entry)] for entry in pieces] == expected, "Stifte sitzen an A"
+    assert [str(entry.name) for entry in pieces] == [
+        f"Leiste {number} von {count} · {note}" for number, note in enumerate(expected, start=1)
+    ]
+
+
+def test_two_pieces_keep_their_letters(profile: Profile) -> None:
+    """Bei zwei Stücken bleibt „A · Stifte“ / „B · Löcher“ (RM-229).
+
+    So kennen es Handbuch, Beispiele und Dateinamen; eine Zählung „1 von 2“
+    sagte nichts, was A und B nicht schon sagen.
+    """
+    document = new_project("centauri-carbon-2", "petg").document
+    history = History(document)
+    history.apply(
+        _("Anlegen"),
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 200.0, "depth": 30.0, "height": 20.0, "name": "Leiste"},
+            )
+        ],
+    )
+    history.apply(
+        _("Teilen"),
+        [OperationDraft(op="split_pinned", inputs=("obj_1",), params={"axis": "x", "pins": 2})],
+    )
+
+    result = evaluate(document, profile)
+
+    names = sorted(str(entry.name) for entry in result.scene.objects.values())
+    assert names == ["Leiste A · Stifte", "Leiste B · Löcher"]
+
+
 def test_several_cuts_say_once_that_the_parts_lie_together(
     document: Document, profile: Profile
 ) -> None:
@@ -1243,7 +1342,8 @@ def test_several_cuts_say_once_that_the_parts_lie_together(
     findings = result.scene.report.findings
     halves = [entry for entry in findings if entry.code == "prepare.halves_in_place"]
     assert len(halves) == 1, [str(entry.message) for entry in findings]
-    assert str(halves[0].message).startswith("Die Teile liegen noch aneinander"), "Mehrzahl"
+    plural = "Die Teile liegen im Modell noch aneinander"
+    assert str(halves[0].message).startswith(plural), "Mehrzahl"
     assert not [entry for entry in findings if entry.code == "perceive.orphaned"]
 
 

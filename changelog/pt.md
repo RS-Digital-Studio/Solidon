@@ -68,7 +68,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um pino escalonado já não conta como rosca. Voltam os cilindros e furos que essa confusão tinha engolido.
 - O lábio de um alojamento de íman chama-se estreitamento na árvore e nomeia a sua abertura. Nenhuma ação o transforma mais num escareamento.
 - Depois de «Refinar as arestas», o Solidon reconhece arredondamentos, furos e letreiros tal como no original, mesmo depois de um furo adicional.
-- Depois de «Separar» e «Cortar fora», uma face dividida mantém o nome na peça maior, e os ajustes nela continuam válidos.
+- Depois de «Dividir» e «Cortar fora», uma face dividida mantém o nome na peça maior, e os ajustes nela continuam válidos.
 - Se clicar na aresta de bordo de um furo deitado, ela chama-se «Vertical», tal como está realmente.
 - Se um modelo tem mais de 5 000 características, o Solidon mantém as maiores em vez de ficar sem nenhuma. Escalar não baralha os seus nomes.
 

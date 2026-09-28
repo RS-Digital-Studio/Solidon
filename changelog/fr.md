@@ -69,7 +69,7 @@ dans `website/version.json`.
 - Un tenon épaulé ne passe plus pour un filetage. Les cylindres et les perçages que cette confusion avait avalés sont de retour.
 - La lèvre d'une poche à aimant s'appelle rétrécissement dans l'arbre et nomme son ouverture. Aucune action n'en fait plus une fraisure.
 - Après « Affiner les arêtes », Solidon reconnaît congés, perçages et lettrages comme sur l'original, même après un perçage supplémentaire.
-- Après « Séparer » et « Découper », une face divisée garde son nom sur le plus grand morceau, et les ajustements qui s'y trouvent restent valides.
+- Après « Diviser » et « Découper », une face divisée garde son nom sur le plus grand morceau, et les ajustements qui s'y trouvent restent valides.
 - Si vous cliquez sur l'arête de bord d'un perçage couché, elle s'appelle « Vertical », comme il se tient réellement.
 - Si un modèle a plus de 5 000 caractéristiques, Solidon garde les plus grandes au lieu de n'en afficher aucune. Une mise à l'échelle ne mélange pas leurs noms.
 

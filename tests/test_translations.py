@@ -1002,3 +1002,180 @@ def test_context_keywords_reach_the_runtime_catalog(language: str) -> None:
         assert str(_("Slot {number}", number=3)).endswith("3")
     finally:
         set_language(SOURCE_LANGUAGE)
+
+
+#: Werkzeuge der Zeile, die eine Operation auslösen, dürfen wie sie heißen.
+#: *Bewegen* legt Schritte *Verschieben* an — zwei deutsche Wörter für einen
+#: Handgriff, in den anderen Sprachen eines.
+TOOL_IS_ITS_OPERATION = frozenset({("Bewegen", "Verschieben")})
+
+
+def _toolbar_names() -> list[str]:
+    """Die Namen der Werkzeugzeile, gelesen an ``self.tools.add(…, tr("…"))``."""
+    tree = ast.parse((UI_DIR / "main_window.py").read_text(encoding="utf-8"))
+    names = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add"
+            and isinstance(node.func.value, ast.Attribute)
+            and node.func.value.attr == "tools"
+            and len(node.args) > 1
+        ):
+            continue
+        label = node.args[1]
+        if (
+            isinstance(label, ast.Call)
+            and label.args
+            and isinstance(label.args[0], ast.Constant)
+            and isinstance(label.args[0].value, str)
+        ):
+            names.append(label.args[0].value)
+    return names
+
+
+@pytest.mark.parametrize(
+    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+)
+def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> None:
+    """Zwei Dinge unter einem Namen sucht der Kunde am falschen Ort.
+
+    Gemessen in der Durchsicht 0.5.1: Das Werkzeug *Trennen* (eine gezogene
+    Linie) und die Operation *Teilen* (eine eingetippte Ebene) hießen en, es,
+    fr und pt gleich — „Split“, „Separar“, „Séparer“ —, it „Dividi“ gegen
+    „Dividere“, dasselbe Verb. Verglichen werden ganze Namen und bei
+    Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
+    Katalogruppen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    catalog = read_catalog(language)
+    tools = _toolbar_names()
+    titles = sorted({spec.title.msgid for spec in REGISTRY.all()})
+    assert "Trennen" in tools and len(tools) >= 5, f"Werkzeugzeile nicht gelesen: {tools}"
+    assert len(titles) > 100, f"nur {len(titles)} Operationstitel — dann prüft das nichts"
+
+    def said(text: str) -> str:
+        return catalog.get(text) or text
+
+    clashes = []
+    seen: dict[str, str] = {}
+    for title in titles:
+        name = said(title)
+        if name in seen:
+            clashes.append(f"{seen[name]!r} und {title!r} heißen beide {name!r}")
+        seen[name] = title
+    for tool in tools:
+        for title in titles:
+            if title == tool or (tool, title) in TOOL_IS_ITS_OPERATION:
+                continue
+            a, b = said(tool), said(title)
+            one_word = " " not in a and " " not in b
+            if a == b or (one_word and _stem(a) == _stem(b)):
+                clashes.append(f"Werkzeug {tool!r} ({a!r}) und Operation {title!r} ({b!r})")
+    assert not clashes, f"{language}: gleiche Namen\n" + "\n".join(clashes)
+
+
+#: Handbuchseiten, die fr noch „Esc“ schreiben. Die Seiten gehören der
+#: Handbuch-Sitzung; ist eine nachgezogen, fliegt sie hier heraus.
+FRENCH_ESC_ON_MANUAL_PAGES = (
+    "Für den Umriss, den kein Grundkörper hergibt.",
+    "Wer noch nie mit einem Konstruktionsprogramm gearbeitet hat, fängt hier an.",
+)
+
+
+def test_french_names_the_escape_key_as_its_keyboard_does() -> None:
+    """Französische Tastaturen beschriften die Taste „Échap“.
+
+    Durchsicht 0.5.1: 15-mal „Échap“ gegen 7-mal „Esc“, zum Teil im selben
+    Fenster. Entscheidung der Release-Sitzung: „Échap“ überall
+    (``.claude/rules/uebersetzung.md``, Tastennamen).
+    """
+    catalog = read_catalog("fr")
+    found = sorted(key for key, value in catalog.items() if re.search(r"\bEsc\b", value))
+    unexpected = [key for key in found if not key.startswith(FRENCH_ESC_ON_MANUAL_PAGES)]
+    assert not unexpected, "fr sagt „Esc“ statt „Échap“:\n" + "\n".join(unexpected)
+    stale = [
+        start for start in FRENCH_ESC_ON_MANUAL_PAGES if not any(k.startswith(start) for k in found)
+    ]
+    assert not stale, f"nachgezogen — aus FRENCH_ESC_ON_MANUAL_PAGES austragen: {stale}"
+
+
+#: Woran man die Anrede „voi“ erkennt: Pronomen, Hilfsverben und die
+#: Imperative, mit denen Befunde und Hinweise einen Satz beginnen. Kuratiert
+#: wie ``GERMAN_STEMS`` — ein Partizip im Plural („facce selezionate“) sieht
+#: aus wie ein Imperativ, deshalb nur am Satzanfang.
+ITALIAN_VOI = re.compile(
+    r"\b(voi|vostr[oaie]|avete|potete|potrete|dovete|volete|avevate)\b"
+    r"|(?:^|[.!?:;—]\s+)(Selezionate|Scegliete|Modificate|Aumentate|Riducete|Spostate|"
+    r"Ruotate|Verificate|Inserite|Annullate|Trascinate|Disegnate|Convertite|Liberate|"
+    r"Assegnate|Associate|Inseritela|Annullatelo|Aumentatene|Modificateli)\b",
+    re.MULTILINE,
+)
+
+#: Dasselbe für die Höflichkeitsform „Lei“: die Imperative am Satzanfang, mit
+#: denen Befunde ihre Handlung nennen, und „Faccia clic“.
+ITALIAN_LEI = re.compile(
+    r"(?:^|[.!?:;—]\s+)(Scelga|Selezioni|Verifichi|Controlli|Modifichi|Riprovi|Inserisca|"
+    r"Disegni|Sposti|Aumenti|Riduca|Trascini|Imposti|Salvi|Chiuda|Metta|Apra|Attenda|"
+    r"Faccia clic|Ripari|Riavvii|Indichi|Allunghi|Termini)\b",
+    re.MULTILINE,
+)
+
+
+def _manual_only() -> set[str]:
+    """Texte, die nur auf Handbuchseiten und in Anleitungen stehen — die gehören
+    der Handbuch-Sitzung und ziehen dort nach."""
+    return message_ids(
+        [
+            PACKAGE_DIR / "core" / "manual.py",
+            PACKAGE_DIR / "core" / "guides.py",
+            PACKAGE_DIR.parent / "tools" / "make_guides.py",
+        ]
+    ) - message_ids(
+        [
+            path
+            for path in sorted(PACKAGE_DIR.rglob("*.py"))
+            if path.name not in {"manual.py", "guides.py"}
+        ]
+    )
+
+
+def test_italian_says_tu_outside_the_manual() -> None:
+    """Italienisch spricht den Kunden mit „tu“ an (Imperativ der 2. Person).
+
+    Entschieden am 27.09.2026 nach Kundensicht: 429 Einträge mit „tu“ gegen 31
+    mit „voi“, daneben rund hundert mit „Lei“. Die Handbuchseiten und
+    Anleitungen stellt die Handbuch-Sitzung um; sie sind hier ausgenommen,
+    solange sie nur dort stehen.
+    """
+    manual_only = _manual_only()
+    catalog = read_catalog("it")
+    voi = [
+        f"{key[:50]!r}: {match.group(0).strip()!r}"
+        for key, value in catalog.items()
+        if key not in manual_only
+        for match in [ITALIAN_VOI.search(value) or ITALIAN_LEI.search(value)]
+        if match
+    ]
+    assert not voi, "it spricht „voi“ oder „Lei“:\n" + "\n".join(voi)
+
+
+@pytest.mark.parametrize("language", ["fr", "it"])
+def test_no_entry_mixes_two_apostrophes(language: str) -> None:
+    """Ein Text schreibt den Apostroph auf eine Art (``uebersetzung.md``).
+
+    Durchsicht 0.5.1: „Supprimer l’étape“ neben „l'étape“ im Satz, der den
+    Menüeintrag zitiert; für den Kunden derselbe Knopf, für die Zitatprüfung
+    ein anderer.
+    """
+    manual_only = _manual_only()
+    mixed = [
+        key[:60]
+        for key, value in read_catalog(language).items()
+        if key not in manual_only and "'" in value and "’" in value
+    ]
+    assert not mixed, f"{language}: beide Apostrophe in einem Text:\n" + "\n".join(mixed)
