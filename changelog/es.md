@@ -27,7 +27,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los niveles de calidad del diálogo de impresión aparecen ahora en el idioma de la interfaz.
 - La velocidad de desplazamiento también viene de la impresora: la Centauri Carbon 2 se desplaza a 500 en lugar de 150 mm/s, como en el propio perfil de Elegoo.
 - Solidon toma el ángulo de voladizo del perfil del fabricante de su impresora: 60 en lugar de 45 grados en Elegoo, Bambu y Creality. Chaflanes y pendientes suaves ya no reciben soportes innecesarios.
-- Si ha medido el voladizo de su impresora, también el slicer pone soportes solo a partir de ese ángulo, mientras rijan la altura de capa y el ancho de línea de la medición.
+- Si ha medido el voladizo de su impresora, también el slicer pone soportes solo a partir de ese ángulo, mientras rijan la altura de capa y el ancho de cordón de la medición.
 - También el informe calcula ahora los voladizos con el ángulo a partir del cual su perfil del slicer pone soportes.
 - Los ajustes de impresión muestran lo que se imprime: la base es el perfil del fabricante, y sus propios valores están marcados y se pueden restablecer uno a uno.
 - La placa de impresión se elige en los ajustes de impresión y la temperatura de la cama la sigue. Si el fabricante no autoriza la placa para su filamento, Solidon lo avisa antes.
@@ -41,7 +41,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La velocidad de la primera capa vale ahora también para su relleno. Antes el slicer hacía el fondo a la velocidad del fabricante, 105 mm/s en la Centauri Carbon 2.
 - Con PrusaSlicer, la impresión empieza ahora como con la propia Prusa: con nivelación de la cama, línea de purga y comprobación de la impresora.
 - El PETG llega ahora a PrusaSlicer como PETG, ya no como PLA.
-- Si la primera capa tiene pasos estrechos, aunque sean unos pocos largos en una pieza grande, Solidon propone hacerla a 50 mm/s. Así las líneas cortas se adhieren mejor.
+- Si la primera capa tiene tramos estrechos, aunque sean unos pocos largos en una pieza grande, Solidon propone hacerla a 50 mm/s. Así las líneas cortas se adhieren mejor.
 - Solidon solo propone un «Tiempo mínimo por capa» más largo donde su perfil no tiene ninguno. Antes, la sugerencia aparecía en casi cualquier pieza con chaflán o punta.
 - Donde su slicer ya limita la velocidad según el caudal volumétrico, Solidon ya no propone un límite de velocidad propio.
 - Si adopta los valores de un perfil de filamento y después cambia de filamento, vuelven a regir los valores del nuevo.
@@ -62,9 +62,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El informe solo muestra ya el aviso de calibrar las tolerancias de su material en modelos con ajustes. Solo ahí las usa Solidon.
 - La entrega a Cura transmite las primeras capas sin ventilador como arranque progresivo. Solo avisa si el archivo de impresión final difiere de verdad.
 - En modelos grandes, «Dividir el modelo» encuentra la costura hasta el doble de rápido, y en los de varios colores en una fracción del tiempo. La división funciona como antes.
-- Si Solidon divide un modelo automáticamente en tres o más trozos, los nombres se numeran y nombran los conectores, por ejemplo «Listón 2 de 3 · Pasadores y agujeros».
+- Si Solidon divide un modelo automáticamente en tres o más piezas, los nombres se numeran y nombran los conectores, por ejemplo «Listón de pared 2 de 3 · Pasadores y agujeros».
 - Un tornillo, tuerca o junta impresos del catálogo de bloques ya no cuentan en el informe como un cuerpo fragmentado. Es una pieza propia, y así está previsto.
-- Los tornillos y tuercas impresos tienen holgura también en la cabeza y en el apoyo, y se sueltan aunque se impriman con la pieza. Los proyectos antiguos avisan del cambio al abrirlos.
+- Los tornillos y tuercas impresos tienen holgura también en la cabeza y en el apoyo, y siguen siendo desmontables aunque se impriman con la pieza. Los proyectos antiguos avisan del cambio al abrirlos.
 - Con un tornillo avellanado del catálogo de bloques, un cuerpo de caras y aristas se mantiene estanco al exportar: la pieza y el tornillo entran en el archivo cada uno cerrado.
 
 ### Editar taladros
@@ -86,7 +86,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El tirador del extremo de una ranura se agarra en cualquier punto de la abertura, y ya no salta hacia el puntero en el primer arrastre.
 - Las ranuras se llevan consigo sus chaflanes y su boca oblicua al desplazarlas o duplicarlas. Antes, los chaflanes se quedaban en el sitio antiguo.
 - Un bolsillo para imán del catálogo de bloques se puede desplazar, duplicar, multiplicar y eliminar, junto con el labio que sujeta el imán.
-- En un bolsillo para imán, «Cambiar orificio» con «Incluir avellanado, escalones y estrechamiento» cambia el diámetro junto con el labio. «Solo diámetro del orificio» mantiene la abertura.
+- En un bolsillo para imán, «Cambiar orificio» con «Incluir avellanado, escalones y estrechamiento» cambia diámetro y labio. «Solo diámetro del orificio» mantiene la abertura y avisa si queda estrecha.
 - Si se coloca en ángulo respecto a la cara, la abertura de un bolsillo para imán, un orificio para tornillo o un asiento de rodamiento queda libre. Antes había una cuña de material encima.
 - Si un bolsillo para imán o un colgador de ojo de cerradura queda inclinado respecto a la cara, Solidon avisa de que su labio solo sujeta por un lado y ofrece «Corregir la entrada».
 - Si un bloque como un bolsillo para imán no elimina nada en el punto elegido, Solidon lo indica y aconseja hacer clic en la cara.
@@ -102,7 +102,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - La elección de aristas «Horizontal», «Superior» o «Abajo» ya no incluye el borde de un taladro lateral. Si lo quiere, elíjalo aparte; los proyectos antiguos calculan como se guardaron.
 - En un modelo importado, el borde de un taladro se redondea o achaflana tan hondo como en una pieza construida. Antes, con radios grandes, el redondeo salía hasta un quinto más plano.
-- Si un radio o chaflán no cabe en todas las aristas de una elección como «Todos» o «Vertical», Solidon trabaja las demás y muestra con «Mostrar el punto» dónde no cabe, en vez de negarse.
+- Si la cota no cabe en todas las aristas de una elección como «Todos» o «Vertical», Solidon trabaja las que sí caben y muestra las demás con «Mostrar el punto», en vez de negarse.
 
 ### Cotas en la vista
 
@@ -120,7 +120,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las características se reconocen solas hasta 1,5 millones de triángulos. Hasta cinco millones, Solidon pregunta antes e indica la memoria necesaria y la duración en su ordenador.
 - Rechazado el reconocimiento completo, «Reconocer todas las características» lo recupera en el informe. Si tarda demasiado, «Cargar sin reconocimiento de características» lo omite.
 - En modelos grandes, «Detectar detalles en un punto» encuentra caras donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.
-- Los modelos grandes y las celosías se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 s en vez de 174. Cancelar actúa en pocos segundos.
+- Los modelos grandes y las retículas se reconocen mucho más rápido: una cama de casa de muñecas generada, de 1,2 millones de triángulos, en 27 s en vez de 174. Cancelar actúa en pocos segundos.
 - Rótulos y tirantes aparecen en el árbol como lados redondeados en lugar de decenas de redondeos con radios cambiantes.
 - Los contornos de arcos y rectas se reconocen arco a arco con su radio. «Convertir en caras y aristas» es así mucho más rápido.
 - Un tetón escalonado ya no cuenta como rosca. Vuelven los cilindros y taladros que esa confusión se había tragado.
@@ -175,7 +175,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras la división, el informe ya no muestra en las líneas del cuerpo antiguo botones que no hacen nada.
 - Un dibujo trazado libremente sin cota ya no genera un aviso en el informe.
 - Un informe de error nombra las carpetas de su directorio de usuario sin su nombre de usuario, incluso si Solidon está instalado allí.
-- En «Primeros pasos», la impresora de su slicer aparece nada más abrir. Antes la sugerencia llegaba al cabo de segundos, y «Terminado» tomaba hasta entonces la impresora genérica.
+- En «Primeros pasos», la impresora de su slicer aparece nada más abrir. Antes la sugerencia llegaba al cabo de unos segundos, y «Terminado» tomaba hasta entonces la impresora genérica.
 - El slicer se elige en los ajustes de impresión encima de los perfiles, aunque esa sección esté plegada.
 - La impresora que elija en los ajustes de impresión pasa también al siguiente proyecto nuevo. Si su slicer está en otra impresora, el diálogo la ofrece con un clic.
 - Si elige otra impresora u otro slicer, el perfil de máquina recordado del anterior deja de valer.
