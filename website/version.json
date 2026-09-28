@@ -1,676 +1,616 @@
 {
-  "version": "0.5.0",
+  "version": "0.5.1",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.5.0.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.5.0.exe",
-      "size": 158837408,
-      "sha256": "c0b9b1ee16fba56215d551723843bdc56c71b31a3646d9f6a20471b542fa216c"
+      "file": "Solidon3D-Setup-0.5.1.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.5.1.exe",
+      "size": 176963464,
+      "sha256": "a3885e47ed1d021ba898f2c507f22afa76503c2cc1e7d82de7008485c39180d2"
     },
     "linux": {
-      "file": "Solidon3D-0.5.0-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.0-x86_64.flatpak",
-      "size": 180910272,
-      "sha256": "9e37bec147b1ef9f332a14a5f4fe21fb68f175e987d244df311e4eb4b9d9e9b4"
+      "file": "Solidon3D-0.5.1-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.5.1-x86_64.flatpak",
+      "size": 199274144,
+      "sha256": "248a11c2d0b9bfdbd30757251650d484a6f770769c69119c1a2228672c50e9f9"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.5.0-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.0-macos-arm64.pkg",
-      "size": 183369091,
-      "sha256": "9dabe2351f7bfcc923fba700c23ba6d692e903db7d3ba60f5d335fb8568b217b"
+      "file": "Solidon3D-0.5.1-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.5.1-macos-arm64.pkg",
+      "size": 201512785,
+      "sha256": "78be40aaef8df067bc5c7a84b9068138b0cd3763231f61fa2e63e6414e1b868b"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.5.0-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.5.0-macos-x86_64.pkg",
-      "size": 199629635,
-      "sha256": "bd57a71d68e1388d4239895b4bfdcd17db700aa906b45edd82a4594873baaa02"
+      "file": "Solidon3D-0.5.1-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.5.1-macos-x86_64.pkg",
+      "size": 217772648,
+      "sha256": "f0b009cfc72d975a2e9ec15a5811e0507cce384656c3799021dc3e7794ccf249"
     }
   },
   "changes": {
     "de": [
-      "Die Erkennung an eingelesenen Modellen ist um ein Vielfaches schneller: Eine Lochplatte mit 200 000 Dreiecken steht in einer Sekunde, eine glatte Freiform brauchte vorher Minuten.",
-      "Kleine Flächen wie die Spitze eines Nockens, angeschnittene Bohrungen und Mündungsfasen werden am Netz und am exakten Körper gleich erkannt.",
-      "Geschlossene Hohlräume und verschachtelte Luftkammern werden als Ganzes erkannt. Eine Bohrung, die in einen Hohlraum führt, erscheint nicht mehr als Phantom.",
-      "Importierte Gewinde werden vermessen: Steigung, Gangzahl, Rechts- oder Linksgang und Nenndurchmesser. Auch gespiegelte Teile behalten die richtige Händigkeit.",
-      "Ein Wabenmuster, ein Rändel, Rippen, Wellen oder Noppen stehen im Baum als ein Muster mit Teilung, Zellbreite und Tiefe — auch um einen Griff. Vorher waren es Hunderte Flächen.",
-      "Ein Muster lässt sich mit einem Klick entfernen oder mit neuer Teilung, Zellbreite und Tiefe neu setzen. Die Zellen bleiben, wo sie waren.",
-      "Eine Textur um einen Zylinder folgt der Rundung: Rillen sind überall gleich tief, und ein Muster um den ganzen Umfang schließt ohne Naht. Die Teilung rückt dafür auf das Maß, das aufgeht.",
-      "Zeichnen auf einem gewählten Teil zeigt nur noch dieses Teil im Bild; die übrigen bleiben verborgen, bis *Nachbarn zeigen* sie wieder einblendet.",
-      "Hochziehen auf einer gewählten Fläche fügt den neuen Körper an, statt anzuhalten — vorher ging es nie über die Skizze hinaus.",
-      "Eine Tasche schneidet dort, wo Sie sie gezeichnet haben, auch wenn die Fläche nicht in der Mitte des Teils liegt.",
-      "Grundkörper entstehen immer mit echten Flächen und Kanten. Der Haken „Flächen und Kanten später bearbeiten“ ist gefallen; alte Projekte rechnen unverändert.",
-      "Bohrung, Langloch, Senkung, Zapfen, Kuppel und Kegelstumpf bleiben am exakten Körper exakt, wenn Sie sie versetzen, verdoppeln, drehen oder entfernen.",
-      "Wulst und Kehle lassen sich versetzen, verdoppeln, drehen, ändern und entfernen. Ein Gewinde lässt sich ändern und verschließen.",
-      "Eine angeklickte Bohrung zeigt ihre Maße sofort im Bild: Abstände zu den Kanten, Mitte und Durchmesser, mit Zahlenfeldern zum Tippen.",
-      "Die Maßfelder stehen neben dem Teil statt darauf, und ihre Linien kreuzen sich nicht.",
-      "Der Bezug eines Maßes, Kante, Mitte oder Achse, lässt sich per Rechtsklick auf das Maß wechseln oder im Modell anklicken.",
-      "Im Verlauf lässt sich ein neuer Schritt vor einem vorhandenen einfügen, statt ihn nur ans Ende anzuhängen.",
-      "Ein Schritt im Verlauf lässt sich mit der Maus an eine andere Stelle ziehen oder Zeile für Zeile verschieben.",
-      "Ein Schritt lässt sich ausschalten und später wieder einschalten, ohne ihn zu löschen; abhängige Schritte ruhen mit.",
-      "Resin-Drucker sind da: Zwei allgemeine Geräte nach Bauraum stehen in der Druckerliste, ein eigener lässt sich mit Pixelgröße und Mindestwand anlegen.",
-      "Ein Resin-Projekt bekommt keine Ratschläge zu Düse, Brim oder Brücken mehr, und die Mindestwand kommt aus dem Druckerprofil.",
-      "Die Datei lässt sich in jedem Programm öffnen, auch im Slicer eines Resin-Herstellers, dessen Einstellungen Solidon nicht kennt.",
-      "Eine eingelesene Baugruppe lässt sich mit einem Klick als Ganzes auf das Bett setzen. Die Teile behalten ihre Lage zueinander.",
-      "Ein glTF ohne plausible Größe wird nicht mehr in Metern geglaubt. Solidon fragt nach der Einheit und zeigt die Maße je Lesart.",
-      "Ein Modell mit offenen Stellen wird beim Einlesen geschlossen, statt nur gemeldet: Löcher im Netz, umgekehrte Flächen, Kanten mit drei Flächen. Große Öffnungen nennt der Prüfbericht eigens.",
-      "Jede Handlung quittiert ihr Ergebnis kurz dort, wo Sie geklickt haben, zusätzlich zur Statuszeile.",
-      "Ein Programmfehler hinterlässt ein lokales Protokoll, das dem Supportbericht beiliegt. Von allein wird nichts gesendet.",
-      "Die Einrichtung für „Modell aus Text“ holt das fehlende Bildmodell selbst, statt Sie auf einen Ordner zu verweisen."
+      "In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer gilt das Profil des Herstellers. Solidon schreibt nur, was Sie ändern oder an Vorschlägen übernehmen.",
+      "Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.",
+      "Übernommene Vorschläge gelten nur dem Teil, das sie braucht: Stützen, Brim und die Werte einer Passung, in jedem unterstützten Slicer. Der Druckdialog nennt die Teile.",
+      "Eine Bohrung mit Senkung auf der einen und Fase auf der anderen Seite lässt sich kippen, versetzen und verdoppeln. Vorher sagte Solidon dort ab.",
+      "Eine gekippte Bohrung oder Senkung schneidet nichts mehr weg, was vor ihrer Mündung steht, etwa eine Rippe oder die Waben daneben.",
+      "Eine Senkbohrung in einer gewölbten Fläche lässt sich versetzen, auch per Klick im Bild. Nach Versetzen, Kippen oder Entfernen schließt die alte Stelle glatt mit der Fläche.",
+      "Die Kantenwahl *Waagerecht*, *Oben* oder *Unten* nimmt den Rand einer seitlichen Bohrung nicht mehr mit. Wer ihn meint, wählt ihn einzeln; ältere Projekte rechnen wie gespeichert.",
+      "Am eingelesenen Modell wird der Rand einer Bohrung so tief verrundet oder angefast wie am konstruierten Teil. Vorher fiel die Rundung bei großen Radien bis zu einem Fünftel zu flach aus.",
+      "Passt das Maß nicht an jede Kante einer Kantenwahl wie *Alle* oder *Senkrecht*, bearbeitet Solidon die passenden und zeigt die anderen mit *Stelle zeigen*, statt ganz abzusagen.",
+      "Von Bohrung zu Bohrung stehen die Maße im Bild in einem Drittel der Zeit. Der erste Klick auf ein Merkmal hält das Fenster auch an großen Modellen nicht mehr an.",
+      "Ein Klick auf eine Bohrung zeigt keine Zwischenbilder mehr: Auswahlfenster und Maßkarte erscheinen gleich an ihrem Platz, ohne zu springen.",
+      "Ein Klick auf die Pfeile einer gewählten Bohrung hält die Auswahl nicht mehr fest: Die nächste Bohrung lässt sich wie gewohnt anklicken.",
+      "Merkmale werden bis 1,5 Millionen Dreiecke von selbst erkannt. Bis fünf Millionen fragt Solidon vorher und nennt den Speicherbedarf und die Dauer auf Ihrem Rechner.",
+      "Wer die volle Erkennung ablehnt, holt sie später mit *Alle Merkmale erkennen* im Prüfbericht oder auf der Kommandozeile nach. Dauert sie zu lange, lädt *Ohne Merkmalserkennung laden* das Modell ohne.",
+      "An großen Modellen findet *Merkmale an einer Stelle erkennen* Flächen, wo es vorher zu viele Dreiecke meldete. Die Stelle lässt sich auch per Tastatur wählen.",
+      "Ein großes Modell steht nach dem Einlesen gleich im Bild, seine Merkmale folgen. Vorher erschien es erst, wenn die Erkennung fertig war.",
+      "Eine 3MF aus Bambu Studio, OrcaSlicer oder ElegooSlicer mit mehreren Platten legt jedes Teil auf seine Platte, an seine Stelle darauf. Vorher kamen alle auf eine, viele neben das Bett.",
+      "Fünfzehn Anleitungen zeigen Schritt für Schritt in Bildern aus der Anwendung, wie man ein Modell prüft, druckt und repariert, ein Teil baut, teilt und beschriftet oder zweifarbig druckt.",
+      "Das Handbuch beginnt bei „Wo fange ich an?“ und führt von dort zu jeder Anleitung. F1 im Dialog einer Operation schlägt ihre Anleitung oder ihren Eintrag auf.",
+      "Große Rechnungen wie Vorschau und *Kanten verfeinern* laufen in einem eigenen Prozess: Das Fenster bleibt bedienbar, und *Abbrechen* wirkt sofort. Dafür läuft ein zweiter Solidon-Prozess mit.",
+      "Beim Laden und bei langen Rechnungen zählt eine Uhr die verstrichene Zeit mit, auch wenn der Fortschritt stillsteht, und die Restzeit springt nicht mehr, wenn ein neuer Teil der Rechnung beginnt.",
+      "Die Modellauswahl empfiehlt auch ein kleineres Modell für Karten ab 10 GB Grafikspeicher und nennt je Modell den Speicherbedarf und wie gut es mehrteilige Aufträge schafft.",
+      "Der Assistent bekommt nur die Handlungen ausführlich, die zur Anfrage passen. So bleibt Platz für Verlauf und Antwort, und Aufträge gelingen deutlich öfter."
     ],
     "en": [
-      "Recognition on imported models is many times faster: a plate with 200,000 triangles and its holes is ready in one second, where a smooth free-form shape used to take minutes.",
-      "Small faces such as the tip of a cam, cut-off holes and mouth chamfers are recognised the same way on a mesh and on an exact body.",
-      "Closed cavities and nested air chambers are recognised as a whole. A hole leading into a cavity no longer appears as a phantom.",
-      "Imported threads are measured: pitch, number of starts, right- or left-hand and nominal diameter. Mirrored parts keep the correct handedness.",
-      "A honeycomb, a knurl, ribs, waves or dimples appear in the tree as one pattern with pitch, cell width and depth — around a handle too. Before, they were hundreds of faces.",
-      "A pattern can be removed with one click or set again with a new pitch, cell width and depth. The cells stay where they were.",
-      "A texture around a cylinder follows the curve: grooves are equally deep everywhere, and a pattern around the full circumference closes without a seam. The pitch moves to the value that fits.",
-      "Drawing on a chosen part shows only that part in the view; the others stay hidden until *Show neighbours* brings them back.",
-      "Extruding on a chosen face now attaches the new body instead of stopping — before, it never got past the sketch.",
-      "A pocket cuts where you drew it, even when the face is not centred on the part.",
-      "Primitives are always created with true faces and edges. The checkbox “Edit faces and edges later” is gone; old projects compute unchanged.",
-      "Hole, slot, counterbore, boss, dome and truncated cone stay exact on an exact body when you move, duplicate, rotate or remove them.",
-      "Beads and grooves can be moved, duplicated, rotated, changed and removed. A thread can be changed and closed.",
-      "A clicked hole shows its dimensions in the view at once: distances to the edges, centre and diameter, with number fields for typing.",
-      "The dimension fields stand next to the part instead of on it, and their lines do not cross.",
-      "The reference of a dimension, edge, centre or axis, can be changed by right-clicking the dimension or by clicking in the model.",
-      "A new step can now be inserted before an existing one in the history, not only appended at the end.",
-      "A step in the history can be dragged to another place with the mouse, or moved line by line.",
-      "A step can be switched off and later on again without deleting it; dependent steps rest with it.",
-      "Resin printers have arrived: two generic devices by build volume are in the printer list, and your own can be added with pixel size and minimum wall.",
-      "A resin project no longer gets advice about nozzle, brim or bridges, and the minimum wall comes from the printer profile.",
-      "The file can be opened in any program, including a resin manufacturer's slicer whose settings Solidon does not know.",
-      "An imported assembly can be placed on the bed as a whole with one click. The parts keep their position relative to each other.",
-      "A glTF without a plausible size is no longer believed to be in metres. Solidon asks for the unit and shows the dimensions for each reading.",
-      "A model with open areas is closed while it is read instead of merely reported: holes in the mesh, reversed faces, edges with three faces. Large openings are named separately in the check report.",
-      "Every action briefly confirms its result where you clicked, in addition to the status line.",
-      "A program error leaves a local log that is attached to the support report. Nothing is sent on its own.",
-      "The setup for “Model from text” fetches the missing image model itself instead of pointing you to a folder."
+      "In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.",
+      "The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.",
+      "Accepted suggestions apply only to the part that needs them: supports, brim and the values for a fit, in every supported slicer. The print settings name the parts.",
+      "A bore with a countersink on one side and a chamfer on the other can be tilted, moved and duplicated. Before, Solidon declined there.",
+      "A tilted bore or countersink no longer cuts away what stands in front of its mouth, such as a rib or the honeycomb next to it.",
+      "A countersunk bore in a curved face can be moved, including by clicking in the view. After moving, tilting or removing it, the old spot closes flush with the face.",
+      "The edge choice *Horizontal*, *Top* or *Bottom* no longer takes in the rim of a bore in a side wall. If you mean it, pick it on its own; older projects compute as saved.",
+      "On an imported model, the rim of a bore is filleted or chamfered as deep as on a designed part. Before, with large radii the rounding came out up to a fifth too shallow.",
+      "If the size does not fit every edge of an edge choice such as *All* or *Vertical*, Solidon works the edges it fits and shows the others with *Show the place*, instead of refusing.",
+      "From bore to bore, the dimensions in the view appear in a third of the time. The first click on a feature no longer freezes the window, even on large models.",
+      "Clicking a bore shows no intermediate pictures any more: the selection panel and the dimension card appear in place straight away, without jumping.",
+      "Clicking the arrows on a selected bore no longer keeps the selection stuck: the next bore can be clicked as usual.",
+      "Features are recognised automatically up to 1.5 million triangles. Up to five million, Solidon asks first and names the memory needed and the time on your computer.",
+      "If you decline full recognition, *Recognise all features* in the report or on the command line catches up later. If it takes too long, *Load without feature recognition* loads the model without it.",
+      "On large models, *Detect features at a spot* finds faces where it used to report too many triangles. The spot can also be chosen with the keyboard.",
+      "A large model appears in the view right after import, and its features follow. Before, it only appeared once recognition was finished.",
+      "A 3MF with several plates from Bambu Studio, OrcaSlicer or ElegooSlicer puts every part on its own plate, in its position there. Before, they all landed on one plate, many of them beside the bed.",
+      "Fifteen guides show step by step, in pictures from the application, how to check, print and repair a model, build, split and label a part, or print in two colours.",
+      "The manual begins at “Where do I start?” and leads from there to every guide. F1 in an operation's dialog opens its guide or its entry.",
+      "Large calculations such as previews and *Refine edges* run in a separate process: the window stays responsive, and *Cancel* works at once. A second Solidon process runs alongside for this.",
+      "While loading and during long calculations, a clock counts the elapsed time even when progress stands still, and the remaining time no longer jumps when a new part of the calculation begins.",
+      "The model choice also recommends a smaller model for cards from 10 GB of graphics memory and names for each the memory it takes and how well it handles multi-part requests.",
+      "The assistant gets full detail only for the actions that fit the request. That leaves room for history and answer, and requests succeed much more often."
     ],
     "es": [
-      "El reconocimiento en modelos importados es muchas veces más rápido: una placa con 200 000 triángulos y sus agujeros está lista en un segundo, donde una forma libre lisa tardaba minutos.",
-      "Las caras pequeñas como la punta de una leva, los agujeros cortados y los chaflanes de boca se reconocen igual en una malla y en un cuerpo exacto.",
-      "Las cavidades cerradas y las cámaras de aire anidadas se reconocen como un todo. Un agujero que lleva a una cavidad ya no aparece como fantasma.",
-      "Las roscas importadas se miden: paso, número de entradas, sentido derecho o izquierdo y diámetro nominal. Las piezas reflejadas conservan el sentido correcto.",
-      "Un panal, un moleteado, nervios, ondas u hoyuelos aparecen en el árbol como un patrón con paso, ancho de celda y profundidad, también alrededor de un mango. Antes eran cientos de caras.",
-      "Un patrón se elimina con un clic o se vuelve a poner con nuevo paso, ancho de celda y profundidad. Las celdas se quedan donde estaban.",
-      "Una textura alrededor de un cilindro sigue la curvatura: las ranuras tienen la misma profundidad y un patrón en toda la circunferencia cierra sin costura. El paso se ajusta al valor que encaja.",
-      "Dibujar sobre una pieza elegida muestra solo esa pieza en la vista; las demás quedan ocultas hasta que «Mostrar vecinas» las devuelve.",
-      "Extruir sobre una cara elegida ahora une el nuevo cuerpo en vez de detenerse; antes nunca pasaba del boceto.",
-      "Una cavidad corta donde usted la ha dibujado, aunque la cara no esté centrada en la pieza.",
-      "Los cuerpos básicos se crean siempre con caras y aristas reales. La casilla «Editar caras y aristas más tarde» ha desaparecido; los proyectos antiguos se calculan sin cambios.",
-      "Agujero, ranura, avellanado, tetón, cúpula y tronco de cono se mantienen exactos en un cuerpo exacto al desplazarlos, duplicarlos, girarlos o eliminarlos.",
-      "Los cordones y las gargantas se pueden desplazar, duplicar, girar, cambiar y eliminar. Una rosca se puede cambiar y cerrar.",
-      "Un agujero al que se hace clic muestra sus medidas de inmediato en la vista: distancias a las aristas, centro y diámetro, con campos numéricos para escribir.",
-      "Los campos de medida están junto a la pieza en lugar de sobre ella, y sus líneas no se cruzan.",
-      "La referencia de una medida, arista, centro o eje, se puede cambiar con clic derecho sobre la medida o haciendo clic en el modelo.",
-      "En el historial ahora se puede insertar un paso nuevo antes de uno existente, no solo añadirlo al final.",
-      "Un paso del historial se puede arrastrar con el ratón a otro lugar, o moverlo línea a línea.",
-      "Un paso se puede desactivar y volver a activar más tarde sin borrarlo; los pasos dependientes quedan en reposo con él.",
-      "Han llegado las impresoras de resina: dos equipos genéricos por volumen de impresión están en la lista, y una propia se puede crear con tamaño de píxel y pared mínima.",
-      "Un proyecto de resina ya no recibe consejos sobre boquilla, brim o puentes, y la pared mínima viene del perfil de la impresora.",
-      "El archivo se puede abrir en cualquier programa, también en el slicer de un fabricante de resina cuyos ajustes Solidon no conoce.",
-      "Un conjunto importado se puede colocar sobre la cama como un todo con un clic. Las piezas conservan su posición relativa.",
-      "Un glTF sin un tamaño plausible ya no se toma por metros. Solidon pregunta la unidad y muestra las medidas de cada lectura.",
-      "Un modelo con zonas abiertas se cierra al leerlo en vez de solo avisarlo: agujeros en la malla, caras invertidas, aristas con tres caras. Las aberturas grandes se nombran aparte en el informe.",
-      "Cada acción confirma brevemente su resultado donde ha hecho clic, además de en la línea de estado.",
-      "Un error del programa deja un registro local que se adjunta al informe de soporte. Nada se envía por sí solo.",
-      "La configuración de «Modelo a partir de texto» descarga por sí misma el modelo de imagen que falta en vez de remitirle a una carpeta."
+      "En PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.",
+      "El nivel «Estándar» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.",
+      "Las sugerencias aplicadas valen solo para la pieza que las necesita: soportes, brim y los valores de un ajuste, en cada slicer compatible. Los ajustes de impresión nombran las piezas.",
+      "Un taladro con avellanado en un lado y chaflán en el otro se puede inclinar, desplazar y duplicar. Antes, Solidon lo rechazaba.",
+      "Un taladro o avellanado inclinado ya no corta lo que está delante de su boca, como una nervadura o el panal de al lado.",
+      "Un taladro avellanado en una cara curva se puede desplazar, también con un clic en la vista. Tras desplazarlo, inclinarlo o quitarlo, el punto antiguo queda a ras con la cara.",
+      "La elección de aristas «Horizontal», «Superior» o «Abajo» ya no incluye el borde de un taladro lateral. Si lo quiere, elíjalo aparte; los proyectos antiguos calculan como se guardaron.",
+      "En un modelo importado, el borde de un taladro se redondea o achaflana tan hondo como en una pieza construida. Antes, con radios grandes, el redondeo salía hasta un quinto más plano.",
+      "Si la cota no cabe en todas las aristas de una elección como «Todos» o «Vertical», Solidon trabaja las que sí caben y muestra las demás con «Mostrar el punto», en vez de negarse.",
+      "De taladro en taladro, las cotas en la vista aparecen en un tercio del tiempo. El primer clic en una característica ya no congela la ventana, ni siquiera en modelos grandes.",
+      "Un clic en un taladro ya no muestra imágenes intermedias: el panel de selección y la tarjeta de cotas aparecen directamente en su sitio, sin saltar.",
+      "Un clic en las flechas de un taladro seleccionado ya no retiene la selección: el siguiente taladro se puede seleccionar como siempre.",
+      "Las características se reconocen solas hasta 1,5 millones de triángulos. Hasta cinco millones, Solidon pregunta antes e indica la memoria necesaria y la duración en su ordenador.",
+      "Rechazado el reconocimiento completo, se recupera con «Reconocer todas las características» en el informe o en la línea de comandos. Si tarda, «Cargar sin reconocimiento de características» lo omite.",
+      "En modelos grandes, «Detectar detalles en un punto» encuentra caras donde antes indicaba demasiados triángulos. El punto también se elige con el teclado.",
+      "Un modelo grande aparece en la vista nada más importarlo, y sus características llegan después. Antes solo aparecía al terminar el reconocimiento.",
+      "Un 3MF con varias placas de Bambu Studio, OrcaSlicer o ElegooSlicer pone cada pieza en su placa, en su sitio. Antes iban todas a una, muchas fuera de la cama.",
+      "Quince guías muestran paso a paso, con imágenes de la aplicación, cómo comprobar, imprimir y reparar un modelo, construir, dividir y rotular una pieza o imprimir a dos colores.",
+      "El manual empieza en «¿Por dónde empiezo?» y lleva desde ahí a cada guía. F1 en el diálogo de una operación abre su guía o su entrada.",
+      "Los cálculos grandes, como la vista previa o «Refinar las aristas», van en un proceso aparte: la ventana responde y «Cancelar» actúa al instante. Para ello corre un segundo proceso de Solidon.",
+      "Al cargar y en cálculos largos, un reloj cuenta el tiempo transcurrido aunque el progreso se detenga, y el tiempo restante ya no salta cuando empieza una nueva parte del cálculo.",
+      "La elección de modelo recomienda también un modelo más pequeño para tarjetas desde 10 GB de memoria gráfica e indica para cada uno la memoria que ocupa y cómo resuelve encargos de varias partes.",
+      "El asistente recibe en detalle solo las acciones que encajan con la petición. Así queda sitio para el historial y la respuesta, y los encargos salen bien mucho más a menudo."
     ],
     "fr": [
-      "La reconnaissance sur les modèles importés est bien plus rapide : une plaque de 200 000 triangles et ses perçages sont prêts en une seconde, là où une forme libre lisse prenait des minutes.",
-      "Les petites faces comme la pointe d'une came, les perçages coupés et les chanfreins d'entrée sont reconnus de la même façon sur un maillage et sur un corps exact.",
-      "Les cavités fermées et les chambres d'air imbriquées sont reconnues comme un tout. Un perçage qui débouche dans une cavité n'apparaît plus comme un fantôme.",
-      "Les filetages importés sont mesurés : pas, nombre de filets, sens droit ou gauche et diamètre nominal. Les pièces en miroir gardent le bon sens.",
-      "Un nid d'abeille, un moletage, des nervures, des vagues ou des picots apparaissent dans l'arbre comme un seul motif avec pas, largeur de cellule et profondeur — autour d'une poignée aussi.",
-      "Un motif se supprime d'un clic ou se repose avec un nouveau pas, une nouvelle largeur de cellule et une nouvelle profondeur. Les cellules restent où elles étaient.",
-      "Une texture autour d'un cylindre suit la courbure : les rainures ont partout la même profondeur, et un motif sur toute la circonférence se referme sans couture. Le pas passe à la valeur qui convient.",
-      "Dessiner sur une pièce choisie ne montre plus que cette pièce dans la vue ; les autres restent masquées jusqu'à ce que « Afficher les voisines » les fasse revenir.",
-      "Extruder sur une face choisie rattache désormais le nouveau corps au lieu de s'arrêter — avant, ça ne dépassait jamais l'esquisse.",
-      "Une poche coupe là où vous l'avez dessinée, même quand la face n'est pas centrée sur la pièce.",
-      "Les corps de base sont toujours créés avec de vraies faces et arêtes. La case « Modifier faces et arêtes plus tard » a disparu ; les anciens projets se calculent sans changement.",
-      "Perçage, trou oblong, lamage, tenon, dôme et tronc de cône restent exacts sur un corps exact quand vous les déplacez, dupliquez, tournez ou supprimez.",
-      "Les bourrelets et les gorges se laissent déplacer, dupliquer, tourner, modifier et supprimer. Un filetage se laisse modifier et fermer.",
-      "Un perçage cliqué montre aussitôt ses cotes dans la vue : distances aux arêtes, centre et diamètre, avec des champs numériques pour saisir.",
-      "Les champs de cote se placent à côté de la pièce plutôt que dessus, et leurs lignes ne se croisent pas.",
-      "La référence d'une cote, arête, centre ou axe, se change par clic droit sur la cote ou par un clic dans le modèle.",
-      "Dans l'historique, une nouvelle étape peut désormais s'insérer avant une étape existante, pas seulement s'ajouter à la fin.",
-      "Une étape de l'historique se fait glisser à la souris vers un autre endroit, ou se déplace ligne par ligne.",
-      "Une étape se désactive et se réactive plus tard sans être supprimée ; les étapes qui en dépendent restent en veille avec elle.",
-      "Les imprimantes résine sont là : deux appareils génériques par volume d'impression figurent dans la liste, et la vôtre se crée avec taille de pixel et paroi minimale.",
-      "Un projet résine ne reçoit plus de conseils sur la buse, le brim ou les ponts, et la paroi minimale vient du profil de l'imprimante.",
-      "Le fichier s'ouvre dans n'importe quel programme, y compris le slicer d'un fabricant de résine dont Solidon ne connaît pas les réglages.",
-      "Un assemblage importé se pose sur le plateau d'un seul clic, comme un tout. Les pièces gardent leur position les unes par rapport aux autres.",
-      "Un glTF sans taille plausible n'est plus cru en mètres. Solidon demande l'unité et montre les cotes pour chaque lecture.",
-      "Un modèle aux zones ouvertes est refermé à la lecture au lieu d'être seulement signalé : trous, faces inversées, arêtes à trois faces. Les grandes ouvertures sont nommées à part dans le rapport.",
-      "Chaque action confirme brièvement son résultat là où vous avez cliqué, en plus de la ligne d'état.",
-      "Une erreur du programme laisse un journal local, joint au rapport de support. Rien n'est envoyé de lui-même.",
-      "La configuration de « Modèle à partir d'un texte » télécharge elle-même le modèle d'image manquant au lieu de vous renvoyer vers un dossier."
+      "Dans PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.",
+      "Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.",
+      "Les suggestions appliquées ne valent que pour la pièce qui en a besoin : supports, brim et valeurs d'un ajustement, dans chaque slicer pris en charge. Les réglages d'impression nomment les pièces.",
+      "Un perçage avec une fraisure d'un côté et un chanfrein de l'autre se laisse incliner, déplacer et dupliquer. Avant, Solidon refusait.",
+      "Un perçage ou une fraisure inclinés n'enlèvent plus ce qui se trouve devant leur entrée, comme une nervure ou le nid d'abeille voisin.",
+      "Un perçage fraisé sur une face bombée se laisse déplacer, y compris par un clic dans la vue. Après déplacement, inclinaison ou suppression, l'ancien emplacement affleure la face.",
+      "Le choix d'arêtes « Horizontal », « Haut » ou « Bas » ne prend plus le bord d'un perçage latéral. Pour le traiter, choisissez-le seul ; les anciens projets calculent comme enregistrés.",
+      "Sur un modèle importé, le bord d'un perçage est arrondi ou chanfreiné aussi profondément que sur une pièce construite. Avant, avec de grands rayons, le congé restait jusqu'à un cinquième trop plat.",
+      "Si la cote ne tient pas sur chaque arête d'un choix comme « Tous » ou « Vertical », Solidon traite celles où elle tient et montre les autres avec « Montrer l'endroit », au lieu de refuser.",
+      "D'un perçage à l'autre, les cotes dans la vue apparaissent en un tiers du temps. Le premier clic sur une caractéristique ne fige plus la fenêtre, même sur un grand modèle.",
+      "Un clic sur un perçage ne montre plus d'images intermédiaires : le panneau de sélection et la carte des cotes apparaissent directement à leur place, sans sauter.",
+      "Un clic sur les flèches d'un perçage sélectionné ne bloque plus la sélection : le perçage suivant se clique comme d'habitude.",
+      "Les caractéristiques sont reconnues d'elles-mêmes jusqu'à 1,5 million de triangles. Jusqu'à cinq millions, Solidon demande d'abord et indique la mémoire nécessaire et la durée sur votre ordinateur.",
+      "Refusée, la reconnaissance se rattrape par « Reconnaître toutes les caractéristiques » du rapport ou en ligne de commande. Trop longue, « Charger sans reconnaissance des caractéristiques » l'omet.",
+      "Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces là où il signalait trop de triangles. L'endroit se choisit aussi au clavier.",
+      "Un grand modèle apparaît dans la vue dès l'import, ses caractéristiques suivent. Avant, il n'apparaissait qu'une fois la reconnaissance terminée.",
+      "Un 3MF à plusieurs plateaux venu de Bambu Studio, OrcaSlicer ou ElegooSlicer place chaque pièce sur son plateau, à sa place. Avant, toutes arrivaient sur un seul, beaucoup hors du plateau.",
+      "Quinze guides montrent pas à pas, avec des images de l'application, comment vérifier, imprimer et réparer un modèle, construire et diviser une pièce, y mettre du texte ou imprimer en deux couleurs.",
+      "Le manuel commence par « Par où commencer ? » et mène de là à chaque guide. F1 dans la boîte de dialogue d'une opération ouvre son guide ou son entrée.",
+      "Les gros calculs comme l'aperçu ou « Affiner les arêtes » tournent dans un processus à part : la fenêtre reste utilisable et « Annuler » agit aussitôt. Un second processus Solidon tourne pour cela.",
+      "Pendant le chargement et les longs calculs, une horloge compte le temps écoulé même si la progression s'arrête, et le temps restant ne saute plus quand une autre partie du calcul commence.",
+      "Le choix du modèle recommande aussi un modèle plus petit pour les cartes dès 10 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.",
+      "L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes réussissent bien plus souvent."
     ],
     "it": [
-      "Il riconoscimento sui modelli importati è molte volte più veloce: una piastra da 200 000 triangoli con i suoi fori è pronta in un secondo, dove una forma libera liscia richiedeva minuti.",
-      "Le facce piccole come la punta di una camma, i fori tagliati e gli smussi d'imbocco sono riconosciuti allo stesso modo su una mesh e su un corpo esatto.",
-      "Le cavità chiuse e le camere d'aria annidate sono riconosciute come un tutto. Un foro che sbocca in una cavità non compare più come fantasma.",
-      "Le filettature importate vengono misurate: passo, numero di principi, verso destro o sinistro e diametro nominale. Le parti specchiate mantengono il verso corretto.",
-      "Un nido d'ape, una zigrinatura, nervature, onde o bugne compaiono nell'albero come un motivo con passo, larghezza di cella e profondità, anche intorno a un'impugnatura. Prima erano centinaia di facce.",
-      "Un motivo si rimuove con un clic o si rimette con nuovo passo, larghezza di cella e profondità. Le celle restano dov'erano.",
-      "Una texture intorno a un cilindro segue la curvatura: le scanalature sono ugualmente profonde, e un motivo lungo tutta la circonferenza si chiude senza giunzione. Il passo va al valore che torna.",
-      "Disegnare su una parte scelta mostra solo quella parte nella vista; le altre restano nascoste finché «Mostra vicine» non le fa tornare.",
-      "Estrudere su una faccia scelta ora unisce il nuovo corpo invece di fermarsi — prima non andava mai oltre lo schizzo.",
-      "Una tasca taglia dove l'avete disegnata, anche quando la faccia non è centrata sulla parte.",
-      "I corpi base nascono sempre con facce e spigoli reali. La casella «Modificare facce e spigoli più tardi» è sparita; i progetti vecchi si calcolano senza cambiamenti.",
-      "Foro, asola, lamatura, perno, cupola e tronco di cono restano esatti su un corpo esatto quando li spostate, duplicate, ruotate o rimuovete.",
-      "Cordoni e gole si possono spostare, duplicare, ruotare, modificare e rimuovere. Una filettatura si può modificare e chiudere.",
-      "Un foro cliccato mostra subito le sue quote nella vista: distanze dagli spigoli, centro e diametro, con campi numerici per digitare.",
-      "I campi delle quote stanno accanto alla parte invece che sopra, e le loro linee non si incrociano.",
-      "Il riferimento di una quota, spigolo, centro o asse, si cambia con clic destro sulla quota o con un clic nel modello.",
-      "Nella cronologia si può ora inserire un nuovo passaggio prima di uno esistente, non solo aggiungerlo in fondo.",
-      "Un passaggio della cronologia si trascina con il mouse in un altro punto, oppure si sposta riga per riga.",
-      "Un passaggio si può disattivare e riattivare più tardi senza eliminarlo; i passaggi dipendenti restano in sospeso con lui.",
-      "Le stampanti a resina sono arrivate: due apparecchi generici per volume di stampa stanno nell'elenco, e una propria si crea con dimensione del pixel e parete minima.",
-      "Un progetto a resina non riceve più consigli su ugello, brim o ponti, e la parete minima viene dal profilo della stampante.",
-      "Il file si apre in qualsiasi programma, anche nello slicer di un produttore di resina di cui Solidon non conosce le impostazioni.",
-      "Un assieme importato si può appoggiare sul piano come un tutto con un clic. Le parti mantengono la loro posizione reciproca.",
-      "Un glTF senza una dimensione plausibile non viene più creduto in metri. Solidon chiede l'unità e mostra le misure per ogni lettura.",
-      "Un modello con zone aperte viene chiuso durante la lettura invece di essere solo segnalato: buchi, facce invertite, spigoli con tre facce. Le aperture grandi sono indicate a parte nel rapporto.",
-      "Ogni azione conferma brevemente il suo risultato dove avete cliccato, oltre che nella riga di stato.",
-      "Un errore del programma lascia un registro locale, allegato alla segnalazione al supporto. Nulla viene inviato da solo.",
-      "La configurazione di «Modello dal testo» scarica da sola il modello d'immagine mancante invece di rimandarvi a una cartella."
+      "In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modifichi o accetti dai suggerimenti.",
+      "Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.",
+      "I suggerimenti applicati valgono solo per il pezzo che ne ha bisogno: supporti, brim e valori di un accoppiamento, in ogni slicer supportato. Le impostazioni di stampa nominano i pezzi.",
+      "Un foro con svasatura da un lato e smusso dall'altro si può inclinare, spostare e duplicare. Prima Solidon rifiutava.",
+      "Un foro o una svasatura inclinati non tagliano più ciò che sta davanti alla loro imboccatura, come una nervatura o il nido d'ape accanto.",
+      "Un foro svasato su una faccia bombata si può spostare, anche con un clic nella vista. Dopo lo spostamento, l'inclinazione o la rimozione, il vecchio punto torna a filo con la faccia.",
+      "La scelta di spigoli «Orizzontale», «Alto» o «Basso» non prende più il bordo di un foro laterale. Se lo vuoi, sceglilo da solo; i progetti più vecchi calcolano come salvati.",
+      "Su un modello importato il bordo di un foro viene raccordato o smussato alla stessa profondità di un pezzo costruito. Prima, con raggi grandi, il raccordo veniva fino a un quinto troppo piatto.",
+      "Se la quota non sta su ogni spigolo di una scelta come «Tutti» o «Verticale», Solidon lavora quelli in cui sta e mostra gli altri con «Mostra il punto», invece di rifiutare.",
+      "Da un foro all'altro le quote nella vista compaiono in un terzo del tempo. Il primo clic su una caratteristica non blocca più la finestra, nemmeno sui modelli grandi.",
+      "Un clic su un foro non mostra più immagini intermedie: pannello di selezione e scheda delle quote compaiono subito al loro posto, senza saltare.",
+      "Un clic sulle frecce di un foro selezionato non blocca più la selezione: il foro successivo si può cliccare come sempre.",
+      "Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul tuo computer.",
+      "Rifiutato il riconoscimento completo, lo recuperi con «Riconosci tutte le caratteristiche» nel rapporto o da riga di comando. Se è lento, «Carica senza riconoscimento delle caratteristiche» lo salta.",
+      "Sui modelli grandi «Riconosci elementi in un punto» trova facce dove prima segnalava troppi triangoli. Il punto si sceglie anche da tastiera.",
+      "Un modello grande compare nella vista subito dopo l'importazione, e le sue caratteristiche seguono. Prima compariva solo a riconoscimento finito.",
+      "Un 3MF con più piatti da Bambu Studio, OrcaSlicer o ElegooSlicer mette ogni pezzo sul suo piatto, al suo posto. Prima finivano tutti su uno, molti fuori dal piano.",
+      "Quindici guide mostrano passo per passo, con immagini dell'applicazione, come verificare, stampare e riparare un modello, costruire e dividere un pezzo, scriverci sopra o stampare a due colori.",
+      "Il manuale inizia da «Da dove comincio?» e porta da lì a ogni guida. F1 nella finestra di dialogo di un'operazione apre la sua guida o la sua voce.",
+      "I calcoli grandi come l'anteprima o «Affina gli spigoli» girano in un processo a parte: la finestra resta utilizzabile e «Annulla» agisce subito. Per questo gira un secondo processo di Solidon.",
+      "Durante il caricamento e i calcoli lunghi un orologio conta il tempo trascorso anche se l'avanzamento si ferma, e il tempo restante non salta più quando inizia una nuova parte del calcolo.",
+      "La scelta del modello consiglia anche un modello più piccolo per schede da 10 GB di memoria grafica e indica per ciascuno la memoria che occupa e quanto bene gestisce richieste in più parti.",
+      "L'assistente riceve in dettaglio solo le azioni adatte alla richiesta. Resta così spazio per cronologia e risposta, e le richieste riescono molto più spesso."
     ],
     "pt": [
-      "O reconhecimento em modelos importados é muitas vezes mais rápido: uma placa com 200 000 triângulos e os seus furos fica pronta num segundo, onde uma forma livre lisa demorava minutos.",
-      "Faces pequenas como a ponta de um came, furos cortados e chanfros de boca são reconhecidos da mesma forma numa malha e num corpo exato.",
-      "Cavidades fechadas e câmaras de ar encaixadas são reconhecidas como um todo. Um furo que dá para uma cavidade já não aparece como fantasma.",
-      "Roscas importadas são medidas: passo, número de entradas, sentido direito ou esquerdo e diâmetro nominal. Peças espelhadas mantêm o sentido correto.",
-      "Um favo de mel, um recartilhado, nervuras, ondas ou saliências aparecem na árvore como um padrão com passo, largura de célula e profundidade — também à volta de um punho. Antes eram centenas de faces.",
-      "Um padrão remove-se com um clique ou volta a pôr-se com novo passo, largura de célula e profundidade. As células ficam onde estavam.",
-      "Uma textura à volta de um cilindro segue a curvatura: as ranhuras têm a mesma profundidade, e um padrão à volta de toda a circunferência fecha sem costura. O passo passa para o valor que fecha.",
-      "Desenhar numa peça escolhida mostra apenas essa peça na vista; as restantes ficam ocultas até «Mostrar vizinhas» as trazer de volta.",
-      "Extrudir numa face escolhida agora anexa o novo corpo em vez de parar — antes nunca passava do esboço.",
-      "Uma cavidade corta onde a desenhou, mesmo quando a face não está centrada na peça.",
-      "Os corpos básicos são sempre criados com faces e arestas reais. A opção «Editar faces e arestas mais tarde» desapareceu; projetos antigos calculam-se sem alterações.",
-      "Furo, furo oblongo, rebaixo, pino, cúpula e tronco de cone mantêm-se exatos num corpo exato quando os desloca, duplica, roda ou remove.",
-      "Cordões e gargantas podem ser deslocados, duplicados, rodados, alterados e removidos. Uma rosca pode ser alterada e fechada.",
-      "Um furo clicado mostra logo as suas cotas na vista: distâncias às arestas, centro e diâmetro, com campos numéricos para escrever.",
-      "Os campos de cota ficam ao lado da peça em vez de em cima dela, e as suas linhas não se cruzam.",
-      "A referência de uma cota, aresta, centro ou eixo, muda-se com clique direito na cota ou com um clique no modelo.",
-      "No histórico já se pode inserir um novo passo antes de um existente, não apenas acrescentá-lo ao fim.",
-      "Um passo do histórico arrasta-se com o rato para outro lugar, ou move-se linha a linha.",
-      "Um passo pode ser desligado e voltado a ligar mais tarde sem o apagar; os passos dependentes ficam em repouso com ele.",
-      "As impressoras de resina chegaram: dois aparelhos genéricos por volume de impressão estão na lista, e uma própria cria-se com tamanho do píxel e parede mínima.",
-      "Um projeto de resina já não recebe conselhos sobre bico, brim ou pontes, e a parede mínima vem do perfil da impressora.",
-      "O ficheiro abre-se em qualquer programa, também no slicer de um fabricante de resina cujas definições o Solidon não conhece.",
-      "Um conjunto importado pode ser assente na mesa como um todo com um clique. As peças mantêm a sua posição relativa.",
-      "Um glTF sem um tamanho plausível já não é tomado como metros. O Solidon pergunta a unidade e mostra as medidas para cada leitura.",
-      "Um modelo com zonas abertas é fechado ao ser lido em vez de apenas comunicado: buracos na malha, faces invertidas, arestas com três faces. As aberturas grandes são indicadas à parte no relatório.",
-      "Cada ação confirma brevemente o seu resultado onde clicou, além da linha de estado.",
-      "Um erro do programa deixa um registo local que é anexado ao relatório de apoio. Nada é enviado por si só.",
-      "A configuração de «Modelo a partir de texto» descarrega por si própria o modelo de imagem em falta em vez de o remeter para uma pasta."
+      "No PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale o perfil do fabricante. O Solidon só escreve o que altera ou aceita das sugestões.",
+      "O nível «Padrão» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.",
+      "As sugestões aplicadas valem só para a peça que precisa delas: suportes, brim e os valores de um ajuste, em cada slicer suportado. As definições de impressão indicam as peças.",
+      "Um furo com escareamento de um lado e chanfro do outro pode ser inclinado, deslocado e duplicado. Antes, o Solidon recusava.",
+      "Um furo ou escareamento inclinado já não corta o que está à frente da sua boca, como uma nervura ou o favo ao lado.",
+      "Um furo escareado numa face curva pode ser deslocado, também com um clique na vista. Depois de deslocado, inclinado ou removido, o local antigo fica rente com a face.",
+      "A escolha de arestas «Horizontal», «Em cima» ou «Em baixo» já não inclui o bordo de um furo lateral. Se o quiser, escolha-o à parte; os projetos antigos calculam como foram guardados.",
+      "Num modelo importado, o bordo de um furo é arredondado ou chanfrado tão fundo como numa peça construída. Antes, com raios grandes, o arredondamento ficava até um quinto mais raso.",
+      "Se a cota não cabe em todas as arestas de uma escolha como «Todos» ou «Vertical», o Solidon trabalha as que cabem e mostra as outras com «Mostrar o ponto», em vez de recusar.",
+      "De furo em furo, as cotas na vista aparecem num terço do tempo. O primeiro clique numa característica já não congela a janela, mesmo em modelos grandes.",
+      "Um clique num furo já não mostra imagens intermédias: o painel de seleção e o cartão de cotas aparecem logo no seu lugar, sem saltar.",
+      "Um clique nas setas de um furo selecionado já não mantém a seleção presa: o furo seguinte pode ser clicado como habitualmente.",
+      "As características são reconhecidas sozinhas até 1,5 milhões de triângulos. Até cinco milhões, o Solidon pergunta antes e indica a memória necessária e a duração no seu computador.",
+      "Recusado o reconhecimento completo, recupera-se com «Reconhecer todas as características» no relatório ou na linha de comandos. Se demorar, «Carregar sem reconhecimento de características» salta-o.",
+      "Em modelos grandes, «Detetar elementos num local» encontra faces onde antes indicava triângulos a mais. O local também se escolhe com o teclado.",
+      "Um modelo grande aparece na vista logo depois de importado, e as suas características vêm a seguir. Antes só aparecia quando o reconhecimento terminava.",
+      "Um 3MF com várias placas do Bambu Studio, OrcaSlicer ou ElegooSlicer põe cada peça na sua placa, no seu lugar. Antes iam todas para uma, muitas fora da mesa.",
+      "Quinze guias mostram passo a passo, com imagens da aplicação, como verificar, imprimir e reparar um modelo, construir e dividir uma peça, aplicar-lhe texto ou imprimir a duas cores.",
+      "O manual começa em «Por onde começo?» e leva daí a cada guia. F1 na caixa de diálogo de uma operação abre o seu guia ou a sua entrada.",
+      "Os cálculos grandes, como a pré-visualização ou «Refinar as arestas», correm num processo à parte: a janela continua utilizável e «Cancelar» atua logo. Para isso corre um segundo processo do Solidon.",
+      "Ao carregar e em cálculos longos, um relógio conta o tempo decorrido mesmo com o progresso parado, e o tempo restante já não salta quando começa uma nova parte do cálculo.",
+      "A escolha do modelo recomenda também um modelo mais pequeno para placas a partir de 10 GB de memória gráfica e indica para cada um a memória que ocupa e como resolve pedidos com várias partes.",
+      "O assistente recebe em detalhe só as ações que servem o pedido. Fica assim espaço para o histórico e a resposta, e os pedidos resultam muito mais vezes."
     ]
   },
   "notes_by_language": {
-    "de": "Zeichnen kennt jetzt ein Ziel: Wer auf einem Teil zeichnet, sieht nur dieses Teil und kann direkt anfügen statt anzuhalten. STEP-Baugruppen kommen als benannte, farbige Einzelkörper, Resin-Drucker sind eingerichtet, und der Verlauf lässt sich einfügen, verschieben und ausschalten. Die Windows-Anwendung und das Setup sind digital signiert.",
-    "en": "Drawing now has a target: draw on a part and see only that part, with a direct attach instead of a stop. STEP assemblies arrive as named, coloured separate bodies, resin printers are set up, and history steps can be inserted, moved and switched off. The Windows application and installer are digitally signed.",
-    "es": "Dibujar ahora tiene un objetivo: dibuje sobre una pieza y vea solo esa pieza, con una unión directa en vez de un bloqueo. Los ensamblajes STEP llegan como cuerpos independientes con nombre y color, las impresoras de resina ya están integradas, y los pasos del historial se pueden insertar, mover y desactivar. La aplicación y el instalador de Windows están firmados digitalmente.",
-    "fr": "Le dessin a désormais une cible : dessinez sur une pièce et ne voyez qu'elle, avec un rattachement direct au lieu d'un blocage. Les assemblages STEP arrivent en corps séparés, nommés et colorés, les imprimantes résine sont intégrées, et les étapes de l'historique s'insèrent, se déplacent et se désactivent. L’application Windows et son programme d’installation sont signés numériquement.",
-    "it": "Disegnare ha ora una destinazione: disegnate su una parte e vedete solo quella, con un collegamento diretto invece di un blocco. Gli assiemi STEP arrivano come corpi separati, nominati e colorati, le stampanti a resina sono integrate, e i passaggi della cronologia si possono inserire, spostare e disattivare. L’applicazione Windows e il programma di installazione sono firmati digitalmente.",
-    "pt": "Desenhar tem agora um alvo: desenhe numa peça e veja apenas essa peça, com uma ligação direta em vez de um bloqueio. Os conjuntos STEP chegam como corpos separados, com nome e cor próprios, as impressoras de resina já estão integradas, e os passos do histórico podem ser inseridos, movidos e desligados. A aplicação Windows e o instalador têm assinatura digital."
+    "de": "Gedruckt wird jetzt mit dem Profil des Herstellers: Solidon schreibt nur noch, was Sie ändern oder an Vorschlägen übernehmen, und ein Vorschlag gilt dem Teil, das ihn braucht. Das Handbuch beginnt bei „Wo fange ich an?“ und zeigt in fünfzehn Anleitungen mit Bildern aus der Anwendung, wie es geht. Bohrungen lassen sich zuverlässiger bearbeiten, und ein weiteres Modell kommt an eine freie Stelle der Druckplatten.",
+    "en": "Printing now uses the manufacturer's profile: Solidon only writes what you change or accept from its suggestions, and a suggestion applies to the part that needs it. The manual starts at “Where do I start?” and shows how things work in fifteen guides with pictures from the application. Holes can be edited more reliably, and a further model goes to a free spot on the build plates.",
+    "es": "Ahora se imprime con el perfil del fabricante: Solidon solo escribe lo que usted cambia o acepta de sus sugerencias, y cada sugerencia se aplica a la pieza que la necesita. El manual empieza en «¿Por dónde empiezo?» y muestra en quince guías con imágenes de la aplicación cómo se hace. Los taladros se editan con más fiabilidad, y un modelo más va a un sitio libre de las placas de impresión.",
+    "fr": "L'impression se fait désormais avec le profil du fabricant : Solidon n'écrit plus que ce que vous modifiez ou acceptez de ses suggestions, et une suggestion s'applique à la pièce qui en a besoin. Le manuel commence par « Par où commencer ? » et montre en quinze guides illustrés d'images de l'application comment faire. Les perçages se modifient de façon plus fiable, et un modèle supplémentaire va à un emplacement libre des plateaux d'impression.",
+    "it": "Ora si stampa con il profilo del produttore: Solidon scrive solo ciò che cambi o accetti tra i suoi suggerimenti, e ogni suggerimento vale per il pezzo che ne ha bisogno. Il manuale comincia da «Da dove comincio?» e mostra in quindici guide con immagini dell'applicazione come si fa. I fori si modificano in modo più affidabile, e un altro modello va in un punto libero dei piatti di stampa.",
+    "pt": "Agora imprime-se com o perfil do fabricante: o Solidon só escreve o que altera ou aceita das suas sugestões, e cada sugestão aplica-se à peça que dela precisa. O manual começa em «Por onde começo?» e mostra em quinze guias com imagens da aplicação como se faz. Os furos editam-se com mais fiabilidade, e um modelo adicional vai para um lugar livre das placas de impressão."
   },
   "groups": {
     "de": [
       {
+        "title": "Drucken und Übergabe an den Slicer",
+        "points": [
+          "In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print und OrcaSlicer gilt das Profil des Herstellers. Solidon schreibt nur, was Sie ändern oder an Vorschlägen übernehmen.",
+          "Die Stufe *Standard* druckt mit Tempo und Beschleunigung aus dem Herstellerprofil, statt jeden Drucker auf 40 mm/s zu bremsen. Am Centauri Carbon 2 sind große Teile so 40 bis 50 Prozent früher fertig.",
+          "Übernommene Vorschläge gelten nur dem Teil, das sie braucht: Stützen, Brim und die Werte einer Passung, in jedem unterstützten Slicer. Der Druckdialog nennt die Teile."
+        ]
+      },
+      {
+        "title": "Bohrungen bearbeiten",
+        "points": [
+          "Eine Bohrung mit Senkung auf der einen und Fase auf der anderen Seite lässt sich kippen, versetzen und verdoppeln. Vorher sagte Solidon dort ab.",
+          "Eine gekippte Bohrung oder Senkung schneidet nichts mehr weg, was vor ihrer Mündung steht, etwa eine Rippe oder die Waben daneben.",
+          "Eine Senkbohrung in einer gewölbten Fläche lässt sich versetzen, auch per Klick im Bild. Nach Versetzen, Kippen oder Entfernen schließt die alte Stelle glatt mit der Fläche."
+        ]
+      },
+      {
+        "title": "Verrunden und Fasen",
+        "points": [
+          "Die Kantenwahl *Waagerecht*, *Oben* oder *Unten* nimmt den Rand einer seitlichen Bohrung nicht mehr mit. Wer ihn meint, wählt ihn einzeln; ältere Projekte rechnen wie gespeichert.",
+          "Am eingelesenen Modell wird der Rand einer Bohrung so tief verrundet oder angefast wie am konstruierten Teil. Vorher fiel die Rundung bei großen Radien bis zu einem Fünftel zu flach aus.",
+          "Passt das Maß nicht an jede Kante einer Kantenwahl wie *Alle* oder *Senkrecht*, bearbeitet Solidon die passenden und zeigt die anderen mit *Stelle zeigen*, statt ganz abzusagen."
+        ]
+      },
+      {
+        "title": "Maße im Bild",
+        "points": [
+          "Von Bohrung zu Bohrung stehen die Maße im Bild in einem Drittel der Zeit. Der erste Klick auf ein Merkmal hält das Fenster auch an großen Modellen nicht mehr an.",
+          "Ein Klick auf eine Bohrung zeigt keine Zwischenbilder mehr: Auswahlfenster und Maßkarte erscheinen gleich an ihrem Platz, ohne zu springen.",
+          "Ein Klick auf die Pfeile einer gewählten Bohrung hält die Auswahl nicht mehr fest: Die nächste Bohrung lässt sich wie gewohnt anklicken."
+        ]
+      },
+      {
         "title": "Erkennen",
         "points": [
-          "Die Erkennung an eingelesenen Modellen ist um ein Vielfaches schneller: Eine Lochplatte mit 200 000 Dreiecken steht in einer Sekunde, eine glatte Freiform brauchte vorher Minuten.",
-          "Kleine Flächen wie die Spitze eines Nockens, angeschnittene Bohrungen und Mündungsfasen werden am Netz und am exakten Körper gleich erkannt.",
-          "Geschlossene Hohlräume und verschachtelte Luftkammern werden als Ganzes erkannt. Eine Bohrung, die in einen Hohlraum führt, erscheint nicht mehr als Phantom.",
-          "Importierte Gewinde werden vermessen: Steigung, Gangzahl, Rechts- oder Linksgang und Nenndurchmesser. Auch gespiegelte Teile behalten die richtige Händigkeit."
+          "Merkmale werden bis 1,5 Millionen Dreiecke von selbst erkannt. Bis fünf Millionen fragt Solidon vorher und nennt den Speicherbedarf und die Dauer auf Ihrem Rechner.",
+          "Wer die volle Erkennung ablehnt, holt sie später mit *Alle Merkmale erkennen* im Prüfbericht oder auf der Kommandozeile nach. Dauert sie zu lange, lädt *Ohne Merkmalserkennung laden* das Modell ohne.",
+          "An großen Modellen findet *Merkmale an einer Stelle erkennen* Flächen, wo es vorher zu viele Dreiecke meldete. Die Stelle lässt sich auch per Tastatur wählen."
         ]
       },
       {
-        "title": "Muster",
+        "title": "Einlesen und Reparieren",
         "points": [
-          "Ein Wabenmuster, ein Rändel, Rippen, Wellen oder Noppen stehen im Baum als ein Muster mit Teilung, Zellbreite und Tiefe — auch um einen Griff. Vorher waren es Hunderte Flächen.",
-          "Ein Muster lässt sich mit einem Klick entfernen oder mit neuer Teilung, Zellbreite und Tiefe neu setzen. Die Zellen bleiben, wo sie waren.",
-          "Eine Textur um einen Zylinder folgt der Rundung: Rillen sind überall gleich tief, und ein Muster um den ganzen Umfang schließt ohne Naht. Die Teilung rückt dafür auf das Maß, das aufgeht."
+          "Ein großes Modell steht nach dem Einlesen gleich im Bild, seine Merkmale folgen. Vorher erschien es erst, wenn die Erkennung fertig war.",
+          "Eine 3MF aus Bambu Studio, OrcaSlicer oder ElegooSlicer mit mehreren Platten legt jedes Teil auf seine Platte, an seine Stelle darauf. Vorher kamen alle auf eine, viele neben das Bett."
         ]
       },
       {
-        "title": "Zeichnen",
+        "title": "Handbuch und Website",
         "points": [
-          "Zeichnen auf einem gewählten Teil zeigt nur noch dieses Teil im Bild; die übrigen bleiben verborgen, bis *Nachbarn zeigen* sie wieder einblendet.",
-          "Hochziehen auf einer gewählten Fläche fügt den neuen Körper an, statt anzuhalten — vorher ging es nie über die Skizze hinaus.",
-          "Eine Tasche schneidet dort, wo Sie sie gezeichnet haben, auch wenn die Fläche nicht in der Mitte des Teils liegt."
-        ]
-      },
-      {
-        "title": "Bearbeiten am exakten Modell",
-        "points": [
-          "Grundkörper entstehen immer mit echten Flächen und Kanten. Der Haken „Flächen und Kanten später bearbeiten“ ist gefallen; alte Projekte rechnen unverändert.",
-          "Bohrung, Langloch, Senkung, Zapfen, Kuppel und Kegelstumpf bleiben am exakten Körper exakt, wenn Sie sie versetzen, verdoppeln, drehen oder entfernen.",
-          "Wulst und Kehle lassen sich versetzen, verdoppeln, drehen, ändern und entfernen. Ein Gewinde lässt sich ändern und verschließen."
-        ]
-      },
-      {
-        "title": "Bohren und Maße im Bild",
-        "points": [
-          "Eine angeklickte Bohrung zeigt ihre Maße sofort im Bild: Abstände zu den Kanten, Mitte und Durchmesser, mit Zahlenfeldern zum Tippen.",
-          "Die Maßfelder stehen neben dem Teil statt darauf, und ihre Linien kreuzen sich nicht.",
-          "Der Bezug eines Maßes, Kante, Mitte oder Achse, lässt sich per Rechtsklick auf das Maß wechseln oder im Modell anklicken."
-        ]
-      },
-      {
-        "title": "Verlauf",
-        "points": [
-          "Im Verlauf lässt sich ein neuer Schritt vor einem vorhandenen einfügen, statt ihn nur ans Ende anzuhängen.",
-          "Ein Schritt im Verlauf lässt sich mit der Maus an eine andere Stelle ziehen oder Zeile für Zeile verschieben.",
-          "Ein Schritt lässt sich ausschalten und später wieder einschalten, ohne ihn zu löschen; abhängige Schritte ruhen mit."
-        ]
-      },
-      {
-        "title": "Prüfen und Drucken",
-        "points": [
-          "Resin-Drucker sind da: Zwei allgemeine Geräte nach Bauraum stehen in der Druckerliste, ein eigener lässt sich mit Pixelgröße und Mindestwand anlegen.",
-          "Ein Resin-Projekt bekommt keine Ratschläge zu Düse, Brim oder Brücken mehr, und die Mindestwand kommt aus dem Druckerprofil.",
-          "Die Datei lässt sich in jedem Programm öffnen, auch im Slicer eines Resin-Herstellers, dessen Einstellungen Solidon nicht kennt."
-        ]
-      },
-      {
-        "title": "Einlesen",
-        "points": [
-          "Eine eingelesene Baugruppe lässt sich mit einem Klick als Ganzes auf das Bett setzen. Die Teile behalten ihre Lage zueinander.",
-          "Ein glTF ohne plausible Größe wird nicht mehr in Metern geglaubt. Solidon fragt nach der Einheit und zeigt die Maße je Lesart.",
-          "Ein Modell mit offenen Stellen wird beim Einlesen geschlossen, statt nur gemeldet: Löcher im Netz, umgekehrte Flächen, Kanten mit drei Flächen. Große Öffnungen nennt der Prüfbericht eigens."
+          "Fünfzehn Anleitungen zeigen Schritt für Schritt in Bildern aus der Anwendung, wie man ein Modell prüft, druckt und repariert, ein Teil baut, teilt und beschriftet oder zweifarbig druckt.",
+          "Das Handbuch beginnt bei „Wo fange ich an?“ und führt von dort zu jeder Anleitung. F1 im Dialog einer Operation schlägt ihre Anleitung oder ihren Eintrag auf."
         ]
       },
       {
         "title": "Bedienung und System",
         "points": [
-          "Jede Handlung quittiert ihr Ergebnis kurz dort, wo Sie geklickt haben, zusätzlich zur Statuszeile.",
-          "Ein Programmfehler hinterlässt ein lokales Protokoll, das dem Supportbericht beiliegt. Von allein wird nichts gesendet.",
-          "Die Einrichtung für „Modell aus Text“ holt das fehlende Bildmodell selbst, statt Sie auf einen Ordner zu verweisen."
+          "Große Rechnungen wie Vorschau und *Kanten verfeinern* laufen in einem eigenen Prozess: Das Fenster bleibt bedienbar, und *Abbrechen* wirkt sofort. Dafür läuft ein zweiter Solidon-Prozess mit.",
+          "Beim Laden und bei langen Rechnungen zählt eine Uhr die verstrichene Zeit mit, auch wenn der Fortschritt stillsteht, und die Restzeit springt nicht mehr, wenn ein neuer Teil der Rechnung beginnt."
+        ]
+      },
+      {
+        "title": "Assistent mit lokalem Modell",
+        "points": [
+          "Die Modellauswahl empfiehlt auch ein kleineres Modell für Karten ab 10 GB Grafikspeicher und nennt je Modell den Speicherbedarf und wie gut es mehrteilige Aufträge schafft.",
+          "Der Assistent bekommt nur die Handlungen ausführlich, die zur Anfrage passen. So bleibt Platz für Verlauf und Antwort, und Aufträge gelingen deutlich öfter."
         ]
       }
     ],
     "en": [
       {
+        "title": "Printing and slicer handover",
+        "points": [
+          "In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.",
+          "The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.",
+          "Accepted suggestions apply only to the part that needs them: supports, brim and the values for a fit, in every supported slicer. The print settings name the parts."
+        ]
+      },
+      {
+        "title": "Editing holes",
+        "points": [
+          "A bore with a countersink on one side and a chamfer on the other can be tilted, moved and duplicated. Before, Solidon declined there.",
+          "A tilted bore or countersink no longer cuts away what stands in front of its mouth, such as a rib or the honeycomb next to it.",
+          "A countersunk bore in a curved face can be moved, including by clicking in the view. After moving, tilting or removing it, the old spot closes flush with the face."
+        ]
+      },
+      {
+        "title": "Fillets and chamfers",
+        "points": [
+          "The edge choice *Horizontal*, *Top* or *Bottom* no longer takes in the rim of a bore in a side wall. If you mean it, pick it on its own; older projects compute as saved.",
+          "On an imported model, the rim of a bore is filleted or chamfered as deep as on a designed part. Before, with large radii the rounding came out up to a fifth too shallow.",
+          "If the size does not fit every edge of an edge choice such as *All* or *Vertical*, Solidon works the edges it fits and shows the others with *Show the place*, instead of refusing."
+        ]
+      },
+      {
+        "title": "Dimensions in the view",
+        "points": [
+          "From bore to bore, the dimensions in the view appear in a third of the time. The first click on a feature no longer freezes the window, even on large models.",
+          "Clicking a bore shows no intermediate pictures any more: the selection panel and the dimension card appear in place straight away, without jumping.",
+          "Clicking the arrows on a selected bore no longer keeps the selection stuck: the next bore can be clicked as usual."
+        ]
+      },
+      {
         "title": "Recognition",
         "points": [
-          "Recognition on imported models is many times faster: a plate with 200,000 triangles and its holes is ready in one second, where a smooth free-form shape used to take minutes.",
-          "Small faces such as the tip of a cam, cut-off holes and mouth chamfers are recognised the same way on a mesh and on an exact body.",
-          "Closed cavities and nested air chambers are recognised as a whole. A hole leading into a cavity no longer appears as a phantom.",
-          "Imported threads are measured: pitch, number of starts, right- or left-hand and nominal diameter. Mirrored parts keep the correct handedness."
+          "Features are recognised automatically up to 1.5 million triangles. Up to five million, Solidon asks first and names the memory needed and the time on your computer.",
+          "If you decline full recognition, *Recognise all features* in the report or on the command line catches up later. If it takes too long, *Load without feature recognition* loads the model without it.",
+          "On large models, *Detect features at a spot* finds faces where it used to report too many triangles. The spot can also be chosen with the keyboard."
         ]
       },
       {
-        "title": "Patterns",
+        "title": "Importing and repairing",
         "points": [
-          "A honeycomb, a knurl, ribs, waves or dimples appear in the tree as one pattern with pitch, cell width and depth — around a handle too. Before, they were hundreds of faces.",
-          "A pattern can be removed with one click or set again with a new pitch, cell width and depth. The cells stay where they were.",
-          "A texture around a cylinder follows the curve: grooves are equally deep everywhere, and a pattern around the full circumference closes without a seam. The pitch moves to the value that fits."
+          "A large model appears in the view right after import, and its features follow. Before, it only appeared once recognition was finished.",
+          "A 3MF with several plates from Bambu Studio, OrcaSlicer or ElegooSlicer puts every part on its own plate, in its position there. Before, they all landed on one plate, many of them beside the bed."
         ]
       },
       {
-        "title": "Drawing",
+        "title": "Manual and website",
         "points": [
-          "Drawing on a chosen part shows only that part in the view; the others stay hidden until *Show neighbours* brings them back.",
-          "Extruding on a chosen face now attaches the new body instead of stopping — before, it never got past the sketch.",
-          "A pocket cuts where you drew it, even when the face is not centred on the part."
-        ]
-      },
-      {
-        "title": "Editing on the exact model",
-        "points": [
-          "Primitives are always created with true faces and edges. The checkbox “Edit faces and edges later” is gone; old projects compute unchanged.",
-          "Hole, slot, counterbore, boss, dome and truncated cone stay exact on an exact body when you move, duplicate, rotate or remove them.",
-          "Beads and grooves can be moved, duplicated, rotated, changed and removed. A thread can be changed and closed."
-        ]
-      },
-      {
-        "title": "Drilling and dimensions in the view",
-        "points": [
-          "A clicked hole shows its dimensions in the view at once: distances to the edges, centre and diameter, with number fields for typing.",
-          "The dimension fields stand next to the part instead of on it, and their lines do not cross.",
-          "The reference of a dimension, edge, centre or axis, can be changed by right-clicking the dimension or by clicking in the model."
-        ]
-      },
-      {
-        "title": "History",
-        "points": [
-          "A new step can now be inserted before an existing one in the history, not only appended at the end.",
-          "A step in the history can be dragged to another place with the mouse, or moved line by line.",
-          "A step can be switched off and later on again without deleting it; dependent steps rest with it."
-        ]
-      },
-      {
-        "title": "Checking and printing",
-        "points": [
-          "Resin printers have arrived: two generic devices by build volume are in the printer list, and your own can be added with pixel size and minimum wall.",
-          "A resin project no longer gets advice about nozzle, brim or bridges, and the minimum wall comes from the printer profile.",
-          "The file can be opened in any program, including a resin manufacturer's slicer whose settings Solidon does not know."
-        ]
-      },
-      {
-        "title": "Importing",
-        "points": [
-          "An imported assembly can be placed on the bed as a whole with one click. The parts keep their position relative to each other.",
-          "A glTF without a plausible size is no longer believed to be in metres. Solidon asks for the unit and shows the dimensions for each reading.",
-          "A model with open areas is closed while it is read instead of merely reported: holes in the mesh, reversed faces, edges with three faces. Large openings are named separately in the check report."
+          "Fifteen guides show step by step, in pictures from the application, how to check, print and repair a model, build, split and label a part, or print in two colours.",
+          "The manual begins at “Where do I start?” and leads from there to every guide. F1 in an operation's dialog opens its guide or its entry."
         ]
       },
       {
         "title": "Operation and system",
         "points": [
-          "Every action briefly confirms its result where you clicked, in addition to the status line.",
-          "A program error leaves a local log that is attached to the support report. Nothing is sent on its own.",
-          "The setup for “Model from text” fetches the missing image model itself instead of pointing you to a folder."
+          "Large calculations such as previews and *Refine edges* run in a separate process: the window stays responsive, and *Cancel* works at once. A second Solidon process runs alongside for this.",
+          "While loading and during long calculations, a clock counts the elapsed time even when progress stands still, and the remaining time no longer jumps when a new part of the calculation begins."
+        ]
+      },
+      {
+        "title": "Assistant with a local model",
+        "points": [
+          "The model choice also recommends a smaller model for cards from 10 GB of graphics memory and names for each the memory it takes and how well it handles multi-part requests.",
+          "The assistant gets full detail only for the actions that fit the request. That leaves room for history and answer, and requests succeed much more often."
         ]
       }
     ],
     "es": [
       {
+        "title": "Imprimir y entregar al slicer",
+        "points": [
+          "En PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print y OrcaSlicer rige el perfil del fabricante. Solidon solo escribe lo que usted cambia o acepta de las sugerencias.",
+          "El nivel «Estándar» imprime con las velocidades y aceleraciones del perfil del fabricante en lugar de frenar a 40 mm/s. En una Centauri Carbon 2, las piezas grandes tardan un 40-50 % menos.",
+          "Las sugerencias aplicadas valen solo para la pieza que las necesita: soportes, brim y los valores de un ajuste, en cada slicer compatible. Los ajustes de impresión nombran las piezas."
+        ]
+      },
+      {
+        "title": "Editar taladros",
+        "points": [
+          "Un taladro con avellanado en un lado y chaflán en el otro se puede inclinar, desplazar y duplicar. Antes, Solidon lo rechazaba.",
+          "Un taladro o avellanado inclinado ya no corta lo que está delante de su boca, como una nervadura o el panal de al lado.",
+          "Un taladro avellanado en una cara curva se puede desplazar, también con un clic en la vista. Tras desplazarlo, inclinarlo o quitarlo, el punto antiguo queda a ras con la cara."
+        ]
+      },
+      {
+        "title": "Redondear y achaflanar",
+        "points": [
+          "La elección de aristas «Horizontal», «Superior» o «Abajo» ya no incluye el borde de un taladro lateral. Si lo quiere, elíjalo aparte; los proyectos antiguos calculan como se guardaron.",
+          "En un modelo importado, el borde de un taladro se redondea o achaflana tan hondo como en una pieza construida. Antes, con radios grandes, el redondeo salía hasta un quinto más plano.",
+          "Si la cota no cabe en todas las aristas de una elección como «Todos» o «Vertical», Solidon trabaja las que sí caben y muestra las demás con «Mostrar el punto», en vez de negarse."
+        ]
+      },
+      {
+        "title": "Cotas en la vista",
+        "points": [
+          "De taladro en taladro, las cotas en la vista aparecen en un tercio del tiempo. El primer clic en una característica ya no congela la ventana, ni siquiera en modelos grandes.",
+          "Un clic en un taladro ya no muestra imágenes intermedias: el panel de selección y la tarjeta de cotas aparecen directamente en su sitio, sin saltar.",
+          "Un clic en las flechas de un taladro seleccionado ya no retiene la selección: el siguiente taladro se puede seleccionar como siempre."
+        ]
+      },
+      {
         "title": "Reconocimiento",
         "points": [
-          "El reconocimiento en modelos importados es muchas veces más rápido: una placa con 200 000 triángulos y sus agujeros está lista en un segundo, donde una forma libre lisa tardaba minutos.",
-          "Las caras pequeñas como la punta de una leva, los agujeros cortados y los chaflanes de boca se reconocen igual en una malla y en un cuerpo exacto.",
-          "Las cavidades cerradas y las cámaras de aire anidadas se reconocen como un todo. Un agujero que lleva a una cavidad ya no aparece como fantasma.",
-          "Las roscas importadas se miden: paso, número de entradas, sentido derecho o izquierdo y diámetro nominal. Las piezas reflejadas conservan el sentido correcto."
+          "Las características se reconocen solas hasta 1,5 millones de triángulos. Hasta cinco millones, Solidon pregunta antes e indica la memoria necesaria y la duración en su ordenador.",
+          "Rechazado el reconocimiento completo, se recupera con «Reconocer todas las características» en el informe o en la línea de comandos. Si tarda, «Cargar sin reconocimiento de características» lo omite.",
+          "En modelos grandes, «Detectar detalles en un punto» encuentra caras donde antes indicaba demasiados triángulos. El punto también se elige con el teclado."
         ]
       },
       {
-        "title": "Patrones",
+        "title": "Importar y reparar",
         "points": [
-          "Un panal, un moleteado, nervios, ondas u hoyuelos aparecen en el árbol como un patrón con paso, ancho de celda y profundidad, también alrededor de un mango. Antes eran cientos de caras.",
-          "Un patrón se elimina con un clic o se vuelve a poner con nuevo paso, ancho de celda y profundidad. Las celdas se quedan donde estaban.",
-          "Una textura alrededor de un cilindro sigue la curvatura: las ranuras tienen la misma profundidad y un patrón en toda la circunferencia cierra sin costura. El paso se ajusta al valor que encaja."
+          "Un modelo grande aparece en la vista nada más importarlo, y sus características llegan después. Antes solo aparecía al terminar el reconocimiento.",
+          "Un 3MF con varias placas de Bambu Studio, OrcaSlicer o ElegooSlicer pone cada pieza en su placa, en su sitio. Antes iban todas a una, muchas fuera de la cama."
         ]
       },
       {
-        "title": "Dibujo",
+        "title": "Manual y sitio web",
         "points": [
-          "Dibujar sobre una pieza elegida muestra solo esa pieza en la vista; las demás quedan ocultas hasta que «Mostrar vecinas» las devuelve.",
-          "Extruir sobre una cara elegida ahora une el nuevo cuerpo en vez de detenerse; antes nunca pasaba del boceto.",
-          "Una cavidad corta donde usted la ha dibujado, aunque la cara no esté centrada en la pieza."
-        ]
-      },
-      {
-        "title": "Editar sobre el modelo exacto",
-        "points": [
-          "Los cuerpos básicos se crean siempre con caras y aristas reales. La casilla «Editar caras y aristas más tarde» ha desaparecido; los proyectos antiguos se calculan sin cambios.",
-          "Agujero, ranura, avellanado, tetón, cúpula y tronco de cono se mantienen exactos en un cuerpo exacto al desplazarlos, duplicarlos, girarlos o eliminarlos.",
-          "Los cordones y las gargantas se pueden desplazar, duplicar, girar, cambiar y eliminar. Una rosca se puede cambiar y cerrar."
-        ]
-      },
-      {
-        "title": "Taladrar y medidas en la vista",
-        "points": [
-          "Un agujero al que se hace clic muestra sus medidas de inmediato en la vista: distancias a las aristas, centro y diámetro, con campos numéricos para escribir.",
-          "Los campos de medida están junto a la pieza en lugar de sobre ella, y sus líneas no se cruzan.",
-          "La referencia de una medida, arista, centro o eje, se puede cambiar con clic derecho sobre la medida o haciendo clic en el modelo."
-        ]
-      },
-      {
-        "title": "Historial",
-        "points": [
-          "En el historial ahora se puede insertar un paso nuevo antes de uno existente, no solo añadirlo al final.",
-          "Un paso del historial se puede arrastrar con el ratón a otro lugar, o moverlo línea a línea.",
-          "Un paso se puede desactivar y volver a activar más tarde sin borrarlo; los pasos dependientes quedan en reposo con él."
-        ]
-      },
-      {
-        "title": "Comprobar e imprimir",
-        "points": [
-          "Han llegado las impresoras de resina: dos equipos genéricos por volumen de impresión están en la lista, y una propia se puede crear con tamaño de píxel y pared mínima.",
-          "Un proyecto de resina ya no recibe consejos sobre boquilla, brim o puentes, y la pared mínima viene del perfil de la impresora.",
-          "El archivo se puede abrir en cualquier programa, también en el slicer de un fabricante de resina cuyos ajustes Solidon no conoce."
-        ]
-      },
-      {
-        "title": "Importar",
-        "points": [
-          "Un conjunto importado se puede colocar sobre la cama como un todo con un clic. Las piezas conservan su posición relativa.",
-          "Un glTF sin un tamaño plausible ya no se toma por metros. Solidon pregunta la unidad y muestra las medidas de cada lectura.",
-          "Un modelo con zonas abiertas se cierra al leerlo en vez de solo avisarlo: agujeros en la malla, caras invertidas, aristas con tres caras. Las aberturas grandes se nombran aparte en el informe."
+          "Quince guías muestran paso a paso, con imágenes de la aplicación, cómo comprobar, imprimir y reparar un modelo, construir, dividir y rotular una pieza o imprimir a dos colores.",
+          "El manual empieza en «¿Por dónde empiezo?» y lleva desde ahí a cada guía. F1 en el diálogo de una operación abre su guía o su entrada."
         ]
       },
       {
         "title": "Manejo y sistema",
         "points": [
-          "Cada acción confirma brevemente su resultado donde ha hecho clic, además de en la línea de estado.",
-          "Un error del programa deja un registro local que se adjunta al informe de soporte. Nada se envía por sí solo.",
-          "La configuración de «Modelo a partir de texto» descarga por sí misma el modelo de imagen que falta en vez de remitirle a una carpeta."
+          "Los cálculos grandes, como la vista previa o «Refinar las aristas», van en un proceso aparte: la ventana responde y «Cancelar» actúa al instante. Para ello corre un segundo proceso de Solidon.",
+          "Al cargar y en cálculos largos, un reloj cuenta el tiempo transcurrido aunque el progreso se detenga, y el tiempo restante ya no salta cuando empieza una nueva parte del cálculo."
+        ]
+      },
+      {
+        "title": "Asistente con modelo local",
+        "points": [
+          "La elección de modelo recomienda también un modelo más pequeño para tarjetas desde 10 GB de memoria gráfica e indica para cada uno la memoria que ocupa y cómo resuelve encargos de varias partes.",
+          "El asistente recibe en detalle solo las acciones que encajan con la petición. Así queda sitio para el historial y la respuesta, y los encargos salen bien mucho más a menudo."
         ]
       }
     ],
     "fr": [
       {
+        "title": "Imprimer et transmettre au slicer",
+        "points": [
+          "Dans PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print et OrcaSlicer, le profil du fabricant s'applique. Solidon n'écrit que ce que vous modifiez ou acceptez des suggestions.",
+          "Le niveau « Standard » reprend les vitesses et accélérations du fabricant au lieu de tout brider à 40 mm/s. Sur une Centauri Carbon 2, les grandes pièces prennent 40 à 50 % de temps en moins.",
+          "Les suggestions appliquées ne valent que pour la pièce qui en a besoin : supports, brim et valeurs d'un ajustement, dans chaque slicer pris en charge. Les réglages d'impression nomment les pièces."
+        ]
+      },
+      {
+        "title": "Modifier les perçages",
+        "points": [
+          "Un perçage avec une fraisure d'un côté et un chanfrein de l'autre se laisse incliner, déplacer et dupliquer. Avant, Solidon refusait.",
+          "Un perçage ou une fraisure inclinés n'enlèvent plus ce qui se trouve devant leur entrée, comme une nervure ou le nid d'abeille voisin.",
+          "Un perçage fraisé sur une face bombée se laisse déplacer, y compris par un clic dans la vue. Après déplacement, inclinaison ou suppression, l'ancien emplacement affleure la face."
+        ]
+      },
+      {
+        "title": "Congés et chanfreins",
+        "points": [
+          "Le choix d'arêtes « Horizontal », « Haut » ou « Bas » ne prend plus le bord d'un perçage latéral. Pour le traiter, choisissez-le seul ; les anciens projets calculent comme enregistrés.",
+          "Sur un modèle importé, le bord d'un perçage est arrondi ou chanfreiné aussi profondément que sur une pièce construite. Avant, avec de grands rayons, le congé restait jusqu'à un cinquième trop plat.",
+          "Si la cote ne tient pas sur chaque arête d'un choix comme « Tous » ou « Vertical », Solidon traite celles où elle tient et montre les autres avec « Montrer l'endroit », au lieu de refuser."
+        ]
+      },
+      {
+        "title": "Cotes dans la vue",
+        "points": [
+          "D'un perçage à l'autre, les cotes dans la vue apparaissent en un tiers du temps. Le premier clic sur une caractéristique ne fige plus la fenêtre, même sur un grand modèle.",
+          "Un clic sur un perçage ne montre plus d'images intermédiaires : le panneau de sélection et la carte des cotes apparaissent directement à leur place, sans sauter.",
+          "Un clic sur les flèches d'un perçage sélectionné ne bloque plus la sélection : le perçage suivant se clique comme d'habitude."
+        ]
+      },
+      {
         "title": "Reconnaissance",
         "points": [
-          "La reconnaissance sur les modèles importés est bien plus rapide : une plaque de 200 000 triangles et ses perçages sont prêts en une seconde, là où une forme libre lisse prenait des minutes.",
-          "Les petites faces comme la pointe d'une came, les perçages coupés et les chanfreins d'entrée sont reconnus de la même façon sur un maillage et sur un corps exact.",
-          "Les cavités fermées et les chambres d'air imbriquées sont reconnues comme un tout. Un perçage qui débouche dans une cavité n'apparaît plus comme un fantôme.",
-          "Les filetages importés sont mesurés : pas, nombre de filets, sens droit ou gauche et diamètre nominal. Les pièces en miroir gardent le bon sens."
+          "Les caractéristiques sont reconnues d'elles-mêmes jusqu'à 1,5 million de triangles. Jusqu'à cinq millions, Solidon demande d'abord et indique la mémoire nécessaire et la durée sur votre ordinateur.",
+          "Refusée, la reconnaissance se rattrape par « Reconnaître toutes les caractéristiques » du rapport ou en ligne de commande. Trop longue, « Charger sans reconnaissance des caractéristiques » l'omet.",
+          "Sur les grands modèles, « Détecter les éléments à un endroit » trouve des faces là où il signalait trop de triangles. L'endroit se choisit aussi au clavier."
         ]
       },
       {
-        "title": "Motifs",
+        "title": "Importer et réparer",
         "points": [
-          "Un nid d'abeille, un moletage, des nervures, des vagues ou des picots apparaissent dans l'arbre comme un seul motif avec pas, largeur de cellule et profondeur — autour d'une poignée aussi.",
-          "Un motif se supprime d'un clic ou se repose avec un nouveau pas, une nouvelle largeur de cellule et une nouvelle profondeur. Les cellules restent où elles étaient.",
-          "Une texture autour d'un cylindre suit la courbure : les rainures ont partout la même profondeur, et un motif sur toute la circonférence se referme sans couture. Le pas passe à la valeur qui convient."
+          "Un grand modèle apparaît dans la vue dès l'import, ses caractéristiques suivent. Avant, il n'apparaissait qu'une fois la reconnaissance terminée.",
+          "Un 3MF à plusieurs plateaux venu de Bambu Studio, OrcaSlicer ou ElegooSlicer place chaque pièce sur son plateau, à sa place. Avant, toutes arrivaient sur un seul, beaucoup hors du plateau."
         ]
       },
       {
-        "title": "Dessin",
+        "title": "Manuel et site web",
         "points": [
-          "Dessiner sur une pièce choisie ne montre plus que cette pièce dans la vue ; les autres restent masquées jusqu'à ce que « Afficher les voisines » les fasse revenir.",
-          "Extruder sur une face choisie rattache désormais le nouveau corps au lieu de s'arrêter — avant, ça ne dépassait jamais l'esquisse.",
-          "Une poche coupe là où vous l'avez dessinée, même quand la face n'est pas centrée sur la pièce."
-        ]
-      },
-      {
-        "title": "Modifier sur le modèle exact",
-        "points": [
-          "Les corps de base sont toujours créés avec de vraies faces et arêtes. La case « Modifier faces et arêtes plus tard » a disparu ; les anciens projets se calculent sans changement.",
-          "Perçage, trou oblong, lamage, tenon, dôme et tronc de cône restent exacts sur un corps exact quand vous les déplacez, dupliquez, tournez ou supprimez.",
-          "Les bourrelets et les gorges se laissent déplacer, dupliquer, tourner, modifier et supprimer. Un filetage se laisse modifier et fermer."
-        ]
-      },
-      {
-        "title": "Percer et cotes dans la vue",
-        "points": [
-          "Un perçage cliqué montre aussitôt ses cotes dans la vue : distances aux arêtes, centre et diamètre, avec des champs numériques pour saisir.",
-          "Les champs de cote se placent à côté de la pièce plutôt que dessus, et leurs lignes ne se croisent pas.",
-          "La référence d'une cote, arête, centre ou axe, se change par clic droit sur la cote ou par un clic dans le modèle."
-        ]
-      },
-      {
-        "title": "Historique",
-        "points": [
-          "Dans l'historique, une nouvelle étape peut désormais s'insérer avant une étape existante, pas seulement s'ajouter à la fin.",
-          "Une étape de l'historique se fait glisser à la souris vers un autre endroit, ou se déplace ligne par ligne.",
-          "Une étape se désactive et se réactive plus tard sans être supprimée ; les étapes qui en dépendent restent en veille avec elle."
-        ]
-      },
-      {
-        "title": "Vérifier et imprimer",
-        "points": [
-          "Les imprimantes résine sont là : deux appareils génériques par volume d'impression figurent dans la liste, et la vôtre se crée avec taille de pixel et paroi minimale.",
-          "Un projet résine ne reçoit plus de conseils sur la buse, le brim ou les ponts, et la paroi minimale vient du profil de l'imprimante.",
-          "Le fichier s'ouvre dans n'importe quel programme, y compris le slicer d'un fabricant de résine dont Solidon ne connaît pas les réglages."
-        ]
-      },
-      {
-        "title": "Importer",
-        "points": [
-          "Un assemblage importé se pose sur le plateau d'un seul clic, comme un tout. Les pièces gardent leur position les unes par rapport aux autres.",
-          "Un glTF sans taille plausible n'est plus cru en mètres. Solidon demande l'unité et montre les cotes pour chaque lecture.",
-          "Un modèle aux zones ouvertes est refermé à la lecture au lieu d'être seulement signalé : trous, faces inversées, arêtes à trois faces. Les grandes ouvertures sont nommées à part dans le rapport."
+          "Quinze guides montrent pas à pas, avec des images de l'application, comment vérifier, imprimer et réparer un modèle, construire et diviser une pièce, y mettre du texte ou imprimer en deux couleurs.",
+          "Le manuel commence par « Par où commencer ? » et mène de là à chaque guide. F1 dans la boîte de dialogue d'une opération ouvre son guide ou son entrée."
         ]
       },
       {
         "title": "Utilisation et système",
         "points": [
-          "Chaque action confirme brièvement son résultat là où vous avez cliqué, en plus de la ligne d'état.",
-          "Une erreur du programme laisse un journal local, joint au rapport de support. Rien n'est envoyé de lui-même.",
-          "La configuration de « Modèle à partir d'un texte » télécharge elle-même le modèle d'image manquant au lieu de vous renvoyer vers un dossier."
+          "Les gros calculs comme l'aperçu ou « Affiner les arêtes » tournent dans un processus à part : la fenêtre reste utilisable et « Annuler » agit aussitôt. Un second processus Solidon tourne pour cela.",
+          "Pendant le chargement et les longs calculs, une horloge compte le temps écoulé même si la progression s'arrête, et le temps restant ne saute plus quand une autre partie du calcul commence."
+        ]
+      },
+      {
+        "title": "Assistant avec un modèle local",
+        "points": [
+          "Le choix du modèle recommande aussi un modèle plus petit pour les cartes dès 10 Go de mémoire graphique et indique pour chacun la mémoire occupée et sa réussite sur les demandes à plusieurs étapes.",
+          "L'assistant ne reçoit en détail que les actions qui correspondent à la demande. Il reste de la place pour l'historique et la réponse, et les demandes réussissent bien plus souvent."
         ]
       }
     ],
     "it": [
       {
+        "title": "Stampare e passare allo slicer",
+        "points": [
+          "In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale il profilo del produttore. Solidon scrive solo ciò che modifichi o accetti dai suggerimenti.",
+          "Il livello «Standard» stampa con velocità e accelerazioni del profilo del produttore invece di frenare tutto a 40 mm/s. Su una Centauri Carbon 2 i pezzi grandi richiedono il 40-50 % di tempo in meno.",
+          "I suggerimenti applicati valgono solo per il pezzo che ne ha bisogno: supporti, brim e valori di un accoppiamento, in ogni slicer supportato. Le impostazioni di stampa nominano i pezzi."
+        ]
+      },
+      {
+        "title": "Modificare i fori",
+        "points": [
+          "Un foro con svasatura da un lato e smusso dall'altro si può inclinare, spostare e duplicare. Prima Solidon rifiutava.",
+          "Un foro o una svasatura inclinati non tagliano più ciò che sta davanti alla loro imboccatura, come una nervatura o il nido d'ape accanto.",
+          "Un foro svasato su una faccia bombata si può spostare, anche con un clic nella vista. Dopo lo spostamento, l'inclinazione o la rimozione, il vecchio punto torna a filo con la faccia."
+        ]
+      },
+      {
+        "title": "Raccordi e smussi",
+        "points": [
+          "La scelta di spigoli «Orizzontale», «Alto» o «Basso» non prende più il bordo di un foro laterale. Se lo vuoi, sceglilo da solo; i progetti più vecchi calcolano come salvati.",
+          "Su un modello importato il bordo di un foro viene raccordato o smussato alla stessa profondità di un pezzo costruito. Prima, con raggi grandi, il raccordo veniva fino a un quinto troppo piatto.",
+          "Se la quota non sta su ogni spigolo di una scelta come «Tutti» o «Verticale», Solidon lavora quelli in cui sta e mostra gli altri con «Mostra il punto», invece di rifiutare."
+        ]
+      },
+      {
+        "title": "Quote nella vista",
+        "points": [
+          "Da un foro all'altro le quote nella vista compaiono in un terzo del tempo. Il primo clic su una caratteristica non blocca più la finestra, nemmeno sui modelli grandi.",
+          "Un clic su un foro non mostra più immagini intermedie: pannello di selezione e scheda delle quote compaiono subito al loro posto, senza saltare.",
+          "Un clic sulle frecce di un foro selezionato non blocca più la selezione: il foro successivo si può cliccare come sempre."
+        ]
+      },
+      {
         "title": "Riconoscimento",
         "points": [
-          "Il riconoscimento sui modelli importati è molte volte più veloce: una piastra da 200 000 triangoli con i suoi fori è pronta in un secondo, dove una forma libera liscia richiedeva minuti.",
-          "Le facce piccole come la punta di una camma, i fori tagliati e gli smussi d'imbocco sono riconosciuti allo stesso modo su una mesh e su un corpo esatto.",
-          "Le cavità chiuse e le camere d'aria annidate sono riconosciute come un tutto. Un foro che sbocca in una cavità non compare più come fantasma.",
-          "Le filettature importate vengono misurate: passo, numero di principi, verso destro o sinistro e diametro nominale. Le parti specchiate mantengono il verso corretto."
+          "Le caratteristiche vengono riconosciute da sole fino a 1,5 milioni di triangoli. Fino a cinque milioni Solidon chiede prima e indica la memoria necessaria e la durata sul tuo computer.",
+          "Rifiutato il riconoscimento completo, lo recuperi con «Riconosci tutte le caratteristiche» nel rapporto o da riga di comando. Se è lento, «Carica senza riconoscimento delle caratteristiche» lo salta.",
+          "Sui modelli grandi «Riconosci elementi in un punto» trova facce dove prima segnalava troppi triangoli. Il punto si sceglie anche da tastiera."
         ]
       },
       {
-        "title": "Motivi",
+        "title": "Importare e riparare",
         "points": [
-          "Un nido d'ape, una zigrinatura, nervature, onde o bugne compaiono nell'albero come un motivo con passo, larghezza di cella e profondità, anche intorno a un'impugnatura. Prima erano centinaia di facce.",
-          "Un motivo si rimuove con un clic o si rimette con nuovo passo, larghezza di cella e profondità. Le celle restano dov'erano.",
-          "Una texture intorno a un cilindro segue la curvatura: le scanalature sono ugualmente profonde, e un motivo lungo tutta la circonferenza si chiude senza giunzione. Il passo va al valore che torna."
+          "Un modello grande compare nella vista subito dopo l'importazione, e le sue caratteristiche seguono. Prima compariva solo a riconoscimento finito.",
+          "Un 3MF con più piatti da Bambu Studio, OrcaSlicer o ElegooSlicer mette ogni pezzo sul suo piatto, al suo posto. Prima finivano tutti su uno, molti fuori dal piano."
         ]
       },
       {
-        "title": "Disegno",
+        "title": "Manuale e sito web",
         "points": [
-          "Disegnare su una parte scelta mostra solo quella parte nella vista; le altre restano nascoste finché «Mostra vicine» non le fa tornare.",
-          "Estrudere su una faccia scelta ora unisce il nuovo corpo invece di fermarsi — prima non andava mai oltre lo schizzo.",
-          "Una tasca taglia dove l'avete disegnata, anche quando la faccia non è centrata sulla parte."
-        ]
-      },
-      {
-        "title": "Modificare sul modello esatto",
-        "points": [
-          "I corpi base nascono sempre con facce e spigoli reali. La casella «Modificare facce e spigoli più tardi» è sparita; i progetti vecchi si calcolano senza cambiamenti.",
-          "Foro, asola, lamatura, perno, cupola e tronco di cono restano esatti su un corpo esatto quando li spostate, duplicate, ruotate o rimuovete.",
-          "Cordoni e gole si possono spostare, duplicare, ruotare, modificare e rimuovere. Una filettatura si può modificare e chiudere."
-        ]
-      },
-      {
-        "title": "Forare e quote nella vista",
-        "points": [
-          "Un foro cliccato mostra subito le sue quote nella vista: distanze dagli spigoli, centro e diametro, con campi numerici per digitare.",
-          "I campi delle quote stanno accanto alla parte invece che sopra, e le loro linee non si incrociano.",
-          "Il riferimento di una quota, spigolo, centro o asse, si cambia con clic destro sulla quota o con un clic nel modello."
-        ]
-      },
-      {
-        "title": "Cronologia",
-        "points": [
-          "Nella cronologia si può ora inserire un nuovo passaggio prima di uno esistente, non solo aggiungerlo in fondo.",
-          "Un passaggio della cronologia si trascina con il mouse in un altro punto, oppure si sposta riga per riga.",
-          "Un passaggio si può disattivare e riattivare più tardi senza eliminarlo; i passaggi dipendenti restano in sospeso con lui."
-        ]
-      },
-      {
-        "title": "Verificare e stampare",
-        "points": [
-          "Le stampanti a resina sono arrivate: due apparecchi generici per volume di stampa stanno nell'elenco, e una propria si crea con dimensione del pixel e parete minima.",
-          "Un progetto a resina non riceve più consigli su ugello, brim o ponti, e la parete minima viene dal profilo della stampante.",
-          "Il file si apre in qualsiasi programma, anche nello slicer di un produttore di resina di cui Solidon non conosce le impostazioni."
-        ]
-      },
-      {
-        "title": "Importare",
-        "points": [
-          "Un assieme importato si può appoggiare sul piano come un tutto con un clic. Le parti mantengono la loro posizione reciproca.",
-          "Un glTF senza una dimensione plausibile non viene più creduto in metri. Solidon chiede l'unità e mostra le misure per ogni lettura.",
-          "Un modello con zone aperte viene chiuso durante la lettura invece di essere solo segnalato: buchi, facce invertite, spigoli con tre facce. Le aperture grandi sono indicate a parte nel rapporto."
+          "Quindici guide mostrano passo per passo, con immagini dell'applicazione, come verificare, stampare e riparare un modello, costruire e dividere un pezzo, scriverci sopra o stampare a due colori.",
+          "Il manuale inizia da «Da dove comincio?» e porta da lì a ogni guida. F1 nella finestra di dialogo di un'operazione apre la sua guida o la sua voce."
         ]
       },
       {
         "title": "Uso e sistema",
         "points": [
-          "Ogni azione conferma brevemente il suo risultato dove avete cliccato, oltre che nella riga di stato.",
-          "Un errore del programma lascia un registro locale, allegato alla segnalazione al supporto. Nulla viene inviato da solo.",
-          "La configurazione di «Modello dal testo» scarica da sola il modello d'immagine mancante invece di rimandarvi a una cartella."
+          "I calcoli grandi come l'anteprima o «Affina gli spigoli» girano in un processo a parte: la finestra resta utilizzabile e «Annulla» agisce subito. Per questo gira un secondo processo di Solidon.",
+          "Durante il caricamento e i calcoli lunghi un orologio conta il tempo trascorso anche se l'avanzamento si ferma, e il tempo restante non salta più quando inizia una nuova parte del calcolo."
+        ]
+      },
+      {
+        "title": "Assistente con modello locale",
+        "points": [
+          "La scelta del modello consiglia anche un modello più piccolo per schede da 10 GB di memoria grafica e indica per ciascuno la memoria che occupa e quanto bene gestisce richieste in più parti.",
+          "L'assistente riceve in dettaglio solo le azioni adatte alla richiesta. Resta così spazio per cronologia e risposta, e le richieste riescono molto più spesso."
         ]
       }
     ],
     "pt": [
       {
+        "title": "Imprimir e entregar ao slicer",
+        "points": [
+          "No PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print e OrcaSlicer vale o perfil do fabricante. O Solidon só escreve o que altera ou aceita das sugestões.",
+          "O nível «Padrão» imprime com as velocidades e acelerações do perfil do fabricante em vez de travar cada impressora a 40 mm/s. Numa Centauri Carbon 2, as peças grandes levam 40 a 50 % menos tempo.",
+          "As sugestões aplicadas valem só para a peça que precisa delas: suportes, brim e os valores de um ajuste, em cada slicer suportado. As definições de impressão indicam as peças."
+        ]
+      },
+      {
+        "title": "Editar furos",
+        "points": [
+          "Um furo com escareamento de um lado e chanfro do outro pode ser inclinado, deslocado e duplicado. Antes, o Solidon recusava.",
+          "Um furo ou escareamento inclinado já não corta o que está à frente da sua boca, como uma nervura ou o favo ao lado.",
+          "Um furo escareado numa face curva pode ser deslocado, também com um clique na vista. Depois de deslocado, inclinado ou removido, o local antigo fica rente com a face."
+        ]
+      },
+      {
+        "title": "Arredondar e chanfrar",
+        "points": [
+          "A escolha de arestas «Horizontal», «Em cima» ou «Em baixo» já não inclui o bordo de um furo lateral. Se o quiser, escolha-o à parte; os projetos antigos calculam como foram guardados.",
+          "Num modelo importado, o bordo de um furo é arredondado ou chanfrado tão fundo como numa peça construída. Antes, com raios grandes, o arredondamento ficava até um quinto mais raso.",
+          "Se a cota não cabe em todas as arestas de uma escolha como «Todos» ou «Vertical», o Solidon trabalha as que cabem e mostra as outras com «Mostrar o ponto», em vez de recusar."
+        ]
+      },
+      {
+        "title": "Cotas na vista",
+        "points": [
+          "De furo em furo, as cotas na vista aparecem num terço do tempo. O primeiro clique numa característica já não congela a janela, mesmo em modelos grandes.",
+          "Um clique num furo já não mostra imagens intermédias: o painel de seleção e o cartão de cotas aparecem logo no seu lugar, sem saltar.",
+          "Um clique nas setas de um furo selecionado já não mantém a seleção presa: o furo seguinte pode ser clicado como habitualmente."
+        ]
+      },
+      {
         "title": "Reconhecimento",
         "points": [
-          "O reconhecimento em modelos importados é muitas vezes mais rápido: uma placa com 200 000 triângulos e os seus furos fica pronta num segundo, onde uma forma livre lisa demorava minutos.",
-          "Faces pequenas como a ponta de um came, furos cortados e chanfros de boca são reconhecidos da mesma forma numa malha e num corpo exato.",
-          "Cavidades fechadas e câmaras de ar encaixadas são reconhecidas como um todo. Um furo que dá para uma cavidade já não aparece como fantasma.",
-          "Roscas importadas são medidas: passo, número de entradas, sentido direito ou esquerdo e diâmetro nominal. Peças espelhadas mantêm o sentido correto."
+          "As características são reconhecidas sozinhas até 1,5 milhões de triângulos. Até cinco milhões, o Solidon pergunta antes e indica a memória necessária e a duração no seu computador.",
+          "Recusado o reconhecimento completo, recupera-se com «Reconhecer todas as características» no relatório ou na linha de comandos. Se demorar, «Carregar sem reconhecimento de características» salta-o.",
+          "Em modelos grandes, «Detetar elementos num local» encontra faces onde antes indicava triângulos a mais. O local também se escolhe com o teclado."
         ]
       },
       {
-        "title": "Padrões",
+        "title": "Importar e reparar",
         "points": [
-          "Um favo de mel, um recartilhado, nervuras, ondas ou saliências aparecem na árvore como um padrão com passo, largura de célula e profundidade — também à volta de um punho. Antes eram centenas de faces.",
-          "Um padrão remove-se com um clique ou volta a pôr-se com novo passo, largura de célula e profundidade. As células ficam onde estavam.",
-          "Uma textura à volta de um cilindro segue a curvatura: as ranhuras têm a mesma profundidade, e um padrão à volta de toda a circunferência fecha sem costura. O passo passa para o valor que fecha."
+          "Um modelo grande aparece na vista logo depois de importado, e as suas características vêm a seguir. Antes só aparecia quando o reconhecimento terminava.",
+          "Um 3MF com várias placas do Bambu Studio, OrcaSlicer ou ElegooSlicer põe cada peça na sua placa, no seu lugar. Antes iam todas para uma, muitas fora da mesa."
         ]
       },
       {
-        "title": "Desenho",
+        "title": "Manual e site",
         "points": [
-          "Desenhar numa peça escolhida mostra apenas essa peça na vista; as restantes ficam ocultas até «Mostrar vizinhas» as trazer de volta.",
-          "Extrudir numa face escolhida agora anexa o novo corpo em vez de parar — antes nunca passava do esboço.",
-          "Uma cavidade corta onde a desenhou, mesmo quando a face não está centrada na peça."
-        ]
-      },
-      {
-        "title": "Editar no modelo exato",
-        "points": [
-          "Os corpos básicos são sempre criados com faces e arestas reais. A opção «Editar faces e arestas mais tarde» desapareceu; projetos antigos calculam-se sem alterações.",
-          "Furo, furo oblongo, rebaixo, pino, cúpula e tronco de cone mantêm-se exatos num corpo exato quando os desloca, duplica, roda ou remove.",
-          "Cordões e gargantas podem ser deslocados, duplicados, rodados, alterados e removidos. Uma rosca pode ser alterada e fechada."
-        ]
-      },
-      {
-        "title": "Furar e cotas na vista",
-        "points": [
-          "Um furo clicado mostra logo as suas cotas na vista: distâncias às arestas, centro e diâmetro, com campos numéricos para escrever.",
-          "Os campos de cota ficam ao lado da peça em vez de em cima dela, e as suas linhas não se cruzam.",
-          "A referência de uma cota, aresta, centro ou eixo, muda-se com clique direito na cota ou com um clique no modelo."
-        ]
-      },
-      {
-        "title": "Histórico",
-        "points": [
-          "No histórico já se pode inserir um novo passo antes de um existente, não apenas acrescentá-lo ao fim.",
-          "Um passo do histórico arrasta-se com o rato para outro lugar, ou move-se linha a linha.",
-          "Um passo pode ser desligado e voltado a ligar mais tarde sem o apagar; os passos dependentes ficam em repouso com ele."
-        ]
-      },
-      {
-        "title": "Verificar e imprimir",
-        "points": [
-          "As impressoras de resina chegaram: dois aparelhos genéricos por volume de impressão estão na lista, e uma própria cria-se com tamanho do píxel e parede mínima.",
-          "Um projeto de resina já não recebe conselhos sobre bico, brim ou pontes, e a parede mínima vem do perfil da impressora.",
-          "O ficheiro abre-se em qualquer programa, também no slicer de um fabricante de resina cujas definições o Solidon não conhece."
-        ]
-      },
-      {
-        "title": "Importar",
-        "points": [
-          "Um conjunto importado pode ser assente na mesa como um todo com um clique. As peças mantêm a sua posição relativa.",
-          "Um glTF sem um tamanho plausível já não é tomado como metros. O Solidon pergunta a unidade e mostra as medidas para cada leitura.",
-          "Um modelo com zonas abertas é fechado ao ser lido em vez de apenas comunicado: buracos na malha, faces invertidas, arestas com três faces. As aberturas grandes são indicadas à parte no relatório."
+          "Quinze guias mostram passo a passo, com imagens da aplicação, como verificar, imprimir e reparar um modelo, construir e dividir uma peça, aplicar-lhe texto ou imprimir a duas cores.",
+          "O manual começa em «Por onde começo?» e leva daí a cada guia. F1 na caixa de diálogo de uma operação abre o seu guia ou a sua entrada."
         ]
       },
       {
         "title": "Utilização e sistema",
         "points": [
-          "Cada ação confirma brevemente o seu resultado onde clicou, além da linha de estado.",
-          "Um erro do programa deixa um registo local que é anexado ao relatório de apoio. Nada é enviado por si só.",
-          "A configuração de «Modelo a partir de texto» descarrega por si própria o modelo de imagem em falta em vez de o remeter para uma pasta."
+          "Os cálculos grandes, como a pré-visualização ou «Refinar as arestas», correm num processo à parte: a janela continua utilizável e «Cancelar» atua logo. Para isso corre um segundo processo do Solidon.",
+          "Ao carregar e em cálculos longos, um relógio conta o tempo decorrido mesmo com o progresso parado, e o tempo restante já não salta quando começa uma nova parte do cálculo."
+        ]
+      },
+      {
+        "title": "Assistente com modelo local",
+        "points": [
+          "A escolha do modelo recomenda também um modelo mais pequeno para placas a partir de 10 GB de memória gráfica e indica para cada um a memória que ocupa e como resolve pedidos com várias partes.",
+          "O assistente recebe em detalhe só as ações que servem o pedido. Fica assim espaço para o histórico e a resposta, e os pedidos resultam muito mais vezes."
         ]
       }
     ]
   },
-  "changes_total": 94,
-  "notes_version": "0.5.0",
-  "signature": "1691396fcc1c3fe8b66607ef58dc01127a1b084b430ae252056eacbe6554abc6ee3573b0e4d205d327b6c873711de6e02bc4ded679b0db05259eea848dd33a02"
+  "changes_total": 183,
+  "notes_version": "0.5.1",
+  "signature": "78eaa1da7c1c9d8bbac694a457fe12dda26ba0c158440a6d7acb14caa312ce19f189d9cf4b01d8100038c71d4fc0f8a46728b71c8dcd9265f4ff5f0b0176de03"
 }
