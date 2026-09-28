@@ -223,7 +223,13 @@ def _absaetze(körper: str) -> list[str]:
     for roh in körper.split("\n\n"):
         if roh.lstrip().startswith(("![", "*", "-", "|", "#")):
             continue
-        ohne_markup = re.sub(r"[*`]", "", roh)
+        # Ein Verweis steht auf der Seite als sein Text, und eine nummerierte
+        # Legende als Liste, deren Ziffern das Markup zeichnet und nicht der
+        # Text: Seit dem Handbuchumbau (0.5.1) meldete der Vergleich sieben
+        # Absätze als fehlend, die alle dastanden.
+        ohne_verweis = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", roh)
+        ohne_ziffern = re.sub(r"(?m)^\s*\d+\.\s+", "", ohne_verweis)
+        ohne_markup = re.sub(r"[*`]", "", ohne_ziffern)
         text = _vergleichbar(ohne_markup)
         if len(text) >= 60:
             absätze.append(text)
