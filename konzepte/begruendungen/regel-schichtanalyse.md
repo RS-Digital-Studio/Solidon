@@ -608,6 +608,27 @@ stehen bei ihren Regeln in den folgenden Abschnitten.
 
 ## Ein Löserlauf entfällt nur mit dem Nein des Stapels
 
+*Warum der Stapel schnell rechnen darf* (Review stapel, B3): `kern.md` erlaubt
+schnelle Wege für Anzeige, Bericht und exakt nachgeprüfte Vorauswahlen. Das
+Nein des Stapels prüft niemand nach — es nimmt den echten Lauf weg. Getragen
+wird es von seinen Abständen: Unter `platform_noise()` (ein ULP auf BLAS,
+einsum, LAPACK, Winkelfunktionen) kippte an fünf Beulenkugeln mit 1 484
+Läufen kein Urteil und keines war falsch (Review-Sonde G); ohne Abstände gab
+es unter 4 700 synthetischen Aufgaben genau ein falsches Nein (Ring an einem
+Zylinderstück, Sonde H), mit Abständen keines. Beides steht als Test in
+`tests/test_refine.py`.
+
+*Was der Stapel festhält* (Review stapel, B1 und B4): Er liest jede Lesung
+der Runde vorab; der Merker hält davon nur `SUPPORT_CACHE_LIMIT`, und
+`classify` las jede ein zweites Mal, ebenso `_rigid_key` (Freiform der
+Leistungstests 3 896 statt 1 949 Lesungen). Deshalb antworten beide in der
+Runde aus dem Wissen des Stapels. Die Lesungen der Runde hält er bewusst fest,
+solange sie läuft — jeder Plan trug die seine ohnehin. Der Stapellauf selbst
+behält vom Weg nur das laufende Maximum von Plan-Schatten-Abstand und Betrag;
+der ganze Weg wog an einem vollen Block 149 MiB. Die Blockgröße folgt der
+gemessenen Spitze (`BATCH_BYTES`, `BATCH_PEAK_FACTOR`): am Meshy-Murmelbrett
+höchstens 64 statt 299 MiB je Block, Urteile Problem für Problem gleich.
+
 RM-209, RM-132, RM-193 (Paket stapel der Release-Sitzung 0.5.1). Eine
 Verfeinerung, die ihr Budget ausschöpft, liefert nichts (RM-210) — an der
 Kumiko-Schale 442 von 467 Kegelläufen, am Meshy-Murmelbrett 4 995 von 15 800

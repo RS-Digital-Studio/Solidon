@@ -322,8 +322,19 @@ def _rigid_key(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[Any, ...] |
 
     ``None`` heißt: Dieser Fleck weist sich nicht aus — er ist zu klein zum
     Einpassen oder zu groß für die quadratischen Kosten
-    (:data:`RIGID_KEY_POINTS`).
+    (:data:`RIGID_KEY_POINTS`). In einer Runde des Stapels antwortet dessen
+    Wissen (:func:`_screened_fits` hat die Kennzahl schon gerechnet).
     """
+    screened = _SCREENED.get()
+    if screened is not None and screened.body is body:
+        known = screened.shapes.get(_patch_key(patch), _UNKNOWN)
+        if known is not _UNKNOWN:
+            return cast("tuple[Any, ...] | None", known)
+    return _rigid_key_read(body, patch)
+
+
+def _rigid_key_read(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[Any, ...] | None:
+    """Die Rechnung von :func:`_rigid_key`."""
     if _face_count(body, patch) < MIN_PATCH_FACES:
         return None
     corners = np.asarray(body.faces, dtype=np.int64)[list(patch)]
@@ -7403,6 +7414,16 @@ def _surface_support(
         check_cancelled()
     if _face_count(body, patch) < MIN_PATCH_FACES:
         return None
+    # **In einer Runde des Stapels liegt die Lesung schon vor** (B1 des
+    # Reviews): :func:`_screened_fits` liest jeden Fleck der Runde vorab, der
+    # Merker hält davon aber nur :data:`SUPPORT_CACHE_LIMIT` — ohne diese
+    # Zeile las ``classify`` jede Lesung ein zweites Mal (Freiform der
+    # Leistungstests 3 896 statt 1 949 Lesungen).
+    screened = _SCREENED.get()
+    if screened is not None and screened.body is body:
+        known = screened.supports.get(_patch_key(patch))
+        if known is not None:
+            return known
     support: _SurfaceSupport | None = remembered(
         "support",
         body,
@@ -7813,9 +7834,33 @@ def _refined_fit(
 #: sicher ausschöpft. Es gilt nur, solange die Runde läuft (:func:`_screening`),
 #: und nur im Faden, der sie rechnet — eine Kopie für einen Nebenfaden rechnet
 #: ohne und bekommt dieselben Antworten.
-_SCREENED: ContextVar[Mapping[tuple[Any, ...], tuple[Any, bool]] | None] = ContextVar(
-    "solidon_screened_fits", default=None
-)
+@dataclass(frozen=True, slots=True, eq=False)
+class _Screened:
+    """Das Wissen einer Runde: je Einpassung Plan und Urteil, je Fleck Lesung und Kennzahl.
+
+    ``fits`` ist nach Einpassung und Lesung geschlüsselt (``support.digest``,
+    beim Kegel dazu die Linientoleranz), ``supports`` und ``shapes`` nach dem
+    Abdruck der Dreiecksliste (:func:`_patch_key`) — für ``body`` und nur für
+    ihn. Die Lesungen hält der Stapel ohnehin, solange die Runde läuft: Jeder
+    Plan trägt die seine.
+    """
+
+    body: trimesh.Trimesh
+    fits: dict[tuple[Any, ...], tuple[Any, bool]]
+    supports: dict[bytes, _SurfaceSupport]
+    shapes: dict[bytes, tuple[Any, ...] | None]
+
+
+_SCREENED: ContextVar[_Screened | None] = ContextVar("solidon_screened_fits", default=None)
+
+#: Steht für „nicht im Wissen" — ``None`` ist dort eine Antwort.
+_UNKNOWN: Final = object()
+
+
+def _patch_key(patch: Sequence[int]) -> bytes:
+    """Der Abdruck einer Dreiecksliste für das Wissen des Stapels, nur von ihrem Inhalt abhängig."""
+    return hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest()
+
 
 #: Welcher Anteil einer Runde am Balken auf den Stapel entfällt. Gemessen am
 #: Meshy-Murmelbrett und an der Kumiko-Schale — nur fürs Anzeigen, keine Toleranz.
@@ -7829,7 +7874,7 @@ def _screened_fits(
     shapes: set[tuple[Any, ...]] | None = None,
     check_cancelled: Callable[[], None] | None = None,
     share: _Share = _UNHEARD,
-) -> dict[tuple[Any, ...], tuple[Any, bool]]:
+) -> _Screened:
     """Die Kegel- und Ringläufe vieler Flecken auf einmal: Plan und sicheres Nein.
 
     **Der Stapel entscheidet, wo gerechnet werden muss, nicht was herauskommt**
@@ -7847,9 +7892,15 @@ def _screened_fits(
     deckungsgleichen nur der erste. ``None`` heißt: jeden Fleck fragen (der
     Mantelnachweis teilt nichts). Schon beantwortete Lesungen
     (:func:`_by_geometry`) bleiben draußen.
+
+    Lesung und Kennzahl jedes Flecks legt der Stapel mit ab, damit die Runde
+    sie nicht ein zweites Mal rechnet (:func:`_surface_support`,
+    :func:`_rigid_key`).
     """
     tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
     entries: dict[tuple[Any, ...], tuple[Any, bool]] = {}
+    supports: dict[bytes, _SurfaceSupport] = {}
+    rigid: dict[bytes, tuple[Any, ...] | None] = {}
     asked: list[tuple[tuple[Any, ...], refine.Problem]] = []
     seen = None if shapes is None else set(shapes)
     for patch in patches:
@@ -7858,7 +7909,12 @@ def _screened_fits(
         support = _surface_support(body, patch, check_cancelled)
         if support is None:
             continue
-        shape = None if seen is None else _rigid_key(body, patch)
+        name = _patch_key(patch)
+        supports[name] = support
+        shape = None
+        if seen is not None:
+            shape = rigid[name] if name in rigid else _rigid_key_read(body, patch)
+            rigid[name] = shape
         if seen is None or shape is None or shape not in seen:
             if seen is not None and shape is not None:
                 seen.add(shape)
@@ -7885,7 +7941,7 @@ def _screened_fits(
         if verdict:
             entries[key] = (entries[key][0], True)
     share.reach(1.0)
-    return entries
+    return _Screened(body, entries, supports, rigid)
 
 
 @contextmanager
@@ -7962,7 +8018,11 @@ def _fit_cone_measured(
     derselbe.
     """
     screened = _SCREENED.get()
-    entry = None if screened is None else screened.get(("fit_cone", support.digest, line_tolerance))
+    entry = (
+        None
+        if screened is None
+        else screened.fits.get(("fit_cone", support.digest, line_tolerance))
+    )
     if entry is None:
         plan = _cone_plan(support, line_tolerance, check_cancelled)
         exhausted = False
@@ -8321,7 +8381,7 @@ def _fit_torus_measured(
     Stapel dieser Runde schon kennen (:data:`_SCREENED`).
     """
     screened = _SCREENED.get()
-    entry = None if screened is None else screened.get(("fit_torus", support.digest))
+    entry = None if screened is None else screened.fits.get(("fit_torus", support.digest))
     if entry is None:
         plan = _torus_plan(support)
         exhausted = False

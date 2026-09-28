@@ -42,8 +42,13 @@ halten (Herkunft und Zahlen bei den Konstanten):
 Die Verschiebung des Schattens ist ein festes Muster, kein Zufall (Regel 9).
 Der Stapel entscheidet keine Geometrie: Seine Antwort nimmt nur einen
 Löserlauf weg, dessen Ergebnis ``None`` gewesen wäre; wo er zögert, rechnet
-der echte Löser. Deshalb darf er schnell rechnen (``kern.md``: exakt
-nachgeprüfte Vorauswahl — hier nachgeprüft durch die Abstände), und die
+der echte Löser. Deshalb darf er schnell rechnen — nicht als nachgeprüfte
+Vorauswahl (sein Nein prüft niemand nach, es nimmt den Lauf weg), sondern als
+eigene Klasse der Regel: ein sicheres Nein, das nur einen leeren Lauf
+auslässt, mit Abstand zu jedem Zweig und Abbruch und bestätigt vom Schatten
+(``schichtanalyse.md``; unter Plattformrauschen hält es
+``tests/test_refine.py``). Rechnet eine andere Maschine anders, kippt ein
+Urteil höchstens zu „nicht sicher“, und das kostet nur Zeit. Die
 Reihenfolge der Probleme im Stapel ändert keine Zahl eines Problems: Jedes
 wird auf eine Zeilenzahl aufgefüllt, die nur von ihm selbst abhängt.
 
@@ -52,18 +57,55 @@ wird auf eine Zeilenzahl aufgefüllt, die nur von ihm selbst abhängt.
 Bit gleich, nur ohne die Hülle aus Argumentprüfung und ``VectorFunction``,
 die ein Fünftel der Löserzeit kostete.
 
-Die Rechnung folgt SciPy (BSD-3-Clause, Copyright © 2001 bis 2002 Enthought, Inc.,
-2003 SciPy Developers); die Residuen und Ableitungen von Kegel und Ring sind
-dieselben Formeln wie in :func:`app.core.perceive.features._fit_cone_measured`
+Die Rechnung folgt SciPy (BSD-3-Clause; Vermerk, Bedingungen und
+Haftungsausschluss stehen wortgleich unter diesem Docstring); die Residuen
+und Ableitungen von Kegel und Ring sind dieselben Formeln wie in
+:func:`app.core.perceive.features._fit_cone_measured`
 und ``_fit_torus_measured`` — wer dort eine ändert, ändert sie hier mit
 (``tests/test_refine.py`` hält beide aneinander).
 """
+
+# Die Funktionen solve, _trust_region_step und der Stapellauf _run/_trust_step
+# übertragen Code aus SciPy 1.18.1 (scipy/optimize/_lsq/trf.py, common.py:
+# trf_no_bounds, solve_lsq_trust_region, update_tr_radius, check_termination).
+# Dafür gilt SciPys Lizenz, wortgleich aus scipy-1.18.1.dist-info/LICENSE.txt:
+#
+# Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above
+#    copyright notice, this list of conditions and the following
+#    disclaimer in the documentation and/or other materials provided
+#    with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, NamedTuple
 
 import numpy as np
 
@@ -100,9 +142,16 @@ SHADOW_NOISE: Final = 1e-9
 #: Lauf trägt die Verschiebung ungefähr unverstärkt weiter.
 SHADOW_AGREEMENT: Final = 1e-6
 
-#: Wie viele Gleitkommazahlen ein Stapel je Feld höchstens hält (Zeilen mal
-#: Probleme) — eine Speichergrenze, keine Toleranz.
-BATCH_ELEMENTS: Final = 262_144
+#: Wie viel Speicher ein Stapelblock höchstens belegen soll — eine
+#: Speichergrenze, keine Toleranz. Ein Speicherfehler kostet die ganze
+#: Erkennung des Körpers (``kern.md``).
+BATCH_BYTES: Final = 64 * 2**20
+
+#: Die Spitze eines Blocks als Vielfaches eines Ableitungsfelds von Plan und
+#: Schatten (2 mal Probleme mal (Zeilen + 3) mal Größe mal 8 Byte). Gemessen mit
+#: ``tracemalloc`` an allen Zeilenzahlen von 16 bis 4 096 am
+#: Meshy-Murmelbrett, Kegel und Ring: 4,1 bis 9,9.
+BATCH_PEAK_FACTOR: Final = 10
 
 #: Die kleinste Zeilenzahl, auf die ein Problem aufgefüllt wird — Splitter
 #: aus sechs bis sechzehn Stützpunkten rechnen in einer Gruppe.
@@ -348,7 +397,8 @@ def exhausted(
         if len(members) < MIN_BATCH:
             done += len(members)
             continue
-        chunk = max(MIN_BATCH, BATCH_ELEMENTS // (rows + 3))
+        columns = 6 if kind == ConeProblem.__name__ else 7
+        chunk = max(1, BATCH_BYTES // (2 * (rows + 3) * columns * 8 * BATCH_PEAK_FACTOR))
         for start in range(0, len(members), chunk):
             part = members[start : start + chunk]
             chosen = [problems[index] for index in part]
@@ -357,12 +407,10 @@ def exhausted(
             evaluate = _cone_residual if cone else _torus_residual
             count = len(part)
             stacked = {key: np.concatenate((value, value)) for key, value in data.items()}
-            safe, track = _run(stacked, size, evaluate, precision, evaluations, check_cancelled)
-            plan, shadow = slice(0, count), slice(count, 2 * count)
-            with np.errstate(invalid="ignore"):
-                width = np.maximum(1.0, np.nanmax(np.abs(track[plan]), axis=(1, 2)))
-                apart = np.nanmax(np.abs(track[plan] - track[shadow]), axis=(1, 2)) / width
-            verdicts = safe[plan] & safe[shadow] & (apart <= SHADOW_AGREEMENT)
+            safe, apart, _status, _x = _run(
+                stacked, size, evaluate, precision, evaluations, check_cancelled
+            )
+            verdicts = safe[:count] & safe[count:] & (apart <= SHADOW_AGREEMENT)
             for index, verdict in zip(part, verdicts.tolist(), strict=True):
                 answers[index] = verdict
             done += len(part)
@@ -526,6 +574,17 @@ def _shadow_pattern(evaluation: np.ndarray, size: int) -> np.ndarray:
     return pattern
 
 
+class _Outcome(NamedTuple):
+    """Was ein Stapellauf zurückgibt: je Zeile sicher ja/nein, Status (0 = Budget, 1/2 = Abbruch
+    über eine Toleranz, 3 = nicht sicher zu machen) und letzte angenommene Parameter; je Paar
+    das größte Auseinander von Plan und Schatten."""
+
+    safe: np.ndarray
+    apart: np.ndarray
+    status: np.ndarray
+    x: np.ndarray
+
+
 def _run(
     data: _Data,
     size: int,
@@ -533,16 +592,18 @@ def _run(
     precision: float,
     evaluations: int,
     check_cancelled: Callable[[], None] | None,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Ein Stapellauf über Plan und Schatten; je Zeile, ob sie sicher ausschöpft, und ihr Weg.
+) -> _Outcome:
+    """Ein Stapellauf über Plan und Schatten: je Zeile sicher ja/nein, je Paar ihr Abstand.
 
     Die zweite Hälfte der Zeilen ist der Schatten der ersten: Jede ihrer
     Auswertungen ist um :data:`SHADOW_NOISE` im festen Muster verschoben
-    (:func:`_shadow_pattern`). Der Weg hält nach jeder Auswertung die
-    angenommenen Parameter fest (``track[zeile, auswertung]``). Eine Zeile
-    verlässt den Stapel mit ihrem Partner, sobald eine von beiden nicht mehr
-    sicher werden kann; was sie zum Urteil beitragen, steht in den Feldern
-    über alle Zeilen (``final_*``).
+    (:func:`_shadow_pattern`). Plan und Schatten gehen im Gleichschritt — je
+    Runde eine Auswertung —, also vergleicht der Lauf nach jeder Runde ihre
+    angenommenen Parameter und behält nur das größte Auseinander, bezogen auf
+    den größten Betrag des Plans (mindestens eins); der ganze Weg wog an einem
+    vollen Block 149 MiB (Review B4). Eine Zeile verlässt den Stapel mit ihrem
+    Partner, sobald eine von beiden nicht mehr sicher werden kann; was sie zum
+    Urteil beitragen, steht in den Feldern über alle Zeilen (``final_*``).
     Zerlegungen und Produkte rechnen über BLAS und LAPACK: Der Lauf ist eine
     Vorhersage mit Abstand, keine Geometrie (``kern.md``).
     """
@@ -554,10 +615,26 @@ def _run(
     final_status = np.full(count, _RUNNING, dtype=np.int64)
     final_stop = np.full(count, np.inf)
     final_decision = np.full(count, np.inf)
-    track = np.full((count, evaluations + 1, size), np.nan)
+    final_x = np.full((count, size), np.nan)
+    apart = np.zeros(half)
+    width = np.ones(half)
+    position = np.full(count, -1, dtype=np.int64)
+    pairs = np.arange(half)
 
     ids = np.arange(count)
     x = data.pop("initial").copy()
+
+    def follow() -> None:
+        """Nach jeder Runde: größter Betrag des Plans, größtes Auseinander von Plan und Schatten."""
+        position[:] = -1
+        position[ids] = np.arange(len(ids))
+        planned = ids < half
+        width[ids[planned]] = np.maximum(width[ids[planned]], np.max(np.abs(x[planned]), axis=1))
+        both = pairs[(position[pairs] >= 0) & (position[pairs + half] >= 0)]
+        if len(both):
+            gap = np.max(np.abs(x[position[both]] - x[position[both + half]]), axis=1)
+            apart[both] = np.maximum(apart[both], gap)
+
     nfev = np.ones(count, dtype=np.int64)
 
     def shaded(
@@ -581,7 +658,7 @@ def _run(
     turn = np.zeros((count, size, size))
     projected = np.zeros((count, size))
     status = np.where(sound, _RUNNING, 0)
-    track[:, 1] = x
+    follow()
     tiny = float(np.finfo(float).tiny)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         while True:
@@ -605,6 +682,7 @@ def _run(
             if leaving.any():
                 gone = ids[leaving]
                 final_status[gone] = status[leaving]
+                final_x[gone] = x[leaving]
                 final_stop[gone] = stop[leaving]
                 final_decision[gone] = np.where(sound[leaving], decision[leaving], -np.inf)
                 keep = ~leaving
@@ -704,13 +782,13 @@ def _run(
                 sound[taken] &= np.all(np.isfinite(jacobian_new[taken]), axis=(1, 2))
             # Nach einer Annahme wird neu zerlegt; aufgebrauchtes Budget geht zur äußeren Prüfung.
             fresh = accepted | (~ended & (nfev >= evaluations))
-            track[ids, np.minimum(nfev, evaluations)] = x
+            follow()
     safe: np.ndarray = (
         (final_status == 0)
         & (final_stop >= STOP_MARGIN_DECADES)
         & (final_decision >= DECISION_MARGIN)
     )
-    return safe, track
+    return _Outcome(safe, apart / width, final_status, final_x)
 
 
 def _trust_step(

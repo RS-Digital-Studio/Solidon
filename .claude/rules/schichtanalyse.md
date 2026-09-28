@@ -318,7 +318,9 @@ dort nur ihre Fehlgriffe. Im Zweifel bleibt ein Merkmal, was es war.
 
 Nur `refine.exhausted` lässt einen Kegel- oder Ringlauf aus, kein Sieb aus
 Fleckmerkmalen. Seine Residuen folgen `_cone_from_plan`/`_torus_from_plan`
-(`tests/test_refine.py`).
+(`tests/test_refine.py`). Er rechnet schnell, weil sein Nein nur einen leeren
+Lauf auslässt und Abstand zu jedem Zweig und Abbruch hält, bestätigt vom
+Schatten — keine nachgeprüfte Vorauswahl (`kern.md`).
 
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 

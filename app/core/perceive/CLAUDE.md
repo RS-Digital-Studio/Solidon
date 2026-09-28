@@ -44,7 +44,9 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
   Plattencache) und `known_detection` (Live-Vorschau) antworten ohne Rechnung.
 - **Vergebliche Löserläufe entfallen im Stapel**: Vor jeder Runde (ganze
   Flecken, Stücke, Mantelnachweis) legt `_screened_fits` Plan und Urteil
-  aller Kegel- und Ringläufe in `_SCREENED` (`_screening`);
+  aller Kegel- und Ringläufe in `_SCREENED` (`_screening`), dazu je Fleck
+  Lesung und Kennzahl, aus denen `_surface_support` und `_rigid_key` in der
+  Runde antworten;
   `_fit_cone_measured`/`_fit_torus_measured` lassen nur die sicher
   vergeblichen aus, alles andere rechnet der Löser Zahl für Zahl.
 - **Wo neu gerechnet wird, antworten Einpassungen und Nachweise über die
