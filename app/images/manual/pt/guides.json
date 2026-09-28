@@ -1,0 +1,64 @@
+{
+  "guides": {
+    "change-a-dimension": {
+      "fingerprint": "7110d3255ef5d25f",
+      "version": "0.5.1"
+    },
+    "draw-and-pull": {
+      "fingerprint": "9a81dce71484af6d",
+      "version": "0.5.1"
+    },
+    "drill-a-hole": {
+      "fingerprint": "75b6a7845f0149c1",
+      "version": "0.5.1"
+    },
+    "first-part": {
+      "fingerprint": "6065e864cd755021",
+      "version": "0.5.1"
+    },
+    "housing-with-lid": {
+      "fingerprint": "8cd7c15ff836e43d",
+      "version": "0.5.1"
+    },
+    "label-a-part": {
+      "fingerprint": "6349edca1b12be25",
+      "version": "0.5.1"
+    },
+    "move-and-turn": {
+      "fingerprint": "e63130cbfbd66d11",
+      "version": "0.5.1"
+    },
+    "print-a-model": {
+      "fingerprint": "2ef8c07d607aa26c",
+      "version": "0.5.1"
+    },
+    "repair-a-model": {
+      "fingerprint": "97d159374d5c9649",
+      "version": "0.5.1"
+    },
+    "round-edges": {
+      "fingerprint": "c4f6ffc63aa75ea7",
+      "version": "0.5.1"
+    },
+    "split-a-large-part": {
+      "fingerprint": "1a1174279a70ec26",
+      "version": "0.5.1"
+    },
+    "thread-a-hole": {
+      "fingerprint": "d033b856d1c70ecf",
+      "version": "0.5.1"
+    },
+    "two-colours": {
+      "fingerprint": "24996ca1e45dfeec",
+      "version": "0.5.1"
+    },
+    "undo-a-step": {
+      "fingerprint": "3812de3f2c0b23c6",
+      "version": "0.5.1"
+    },
+    "window-overview": {
+      "fingerprint": "5676c73a3592a8a2",
+      "version": "0.5.1"
+    }
+  }
+}

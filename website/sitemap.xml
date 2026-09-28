@@ -53,7 +53,12 @@
   </url>
   <url>
     <loc>https://solidon3d.de/en/manual.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/handbuch.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
@@ -108,7 +113,12 @@
   </url>
   <url>
     <loc>https://solidon3d.de/es/manual.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/handbuch.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/manual.html"/>
     <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
@@ -163,7 +173,12 @@
   </url>
   <url>
     <loc>https://solidon3d.de/fr/manual.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/handbuch.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/manual.html"/>
     <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
@@ -189,6 +204,11 @@
   <url>
     <loc>https://solidon3d.de/handbuch.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/handbuch.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
@@ -243,7 +263,12 @@
   </url>
   <url>
     <loc>https://solidon3d.de/it/manual.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/handbuch.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/manual.html"/>
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
@@ -308,6 +333,11 @@
   </url>
   <url>
     <loc>https://solidon3d.de/pt/manual.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/handbuch.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/manual.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
