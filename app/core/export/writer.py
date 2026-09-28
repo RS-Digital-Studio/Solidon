@@ -1336,6 +1336,48 @@ def _unserved(
     ]
 
 
+def _served_elsewhere(
+    others: Sequence[SceneObject],
+    paths: frozenset[str],
+    split: PartSplit,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+    document: Document | None,
+    cancelled: CancelToken | None,
+) -> frozenset[str]:
+    """Welche dieser Pfade ein Teil des Auftrags auf einer anderen Platte verlangt.
+
+    Durchsicht 0.5.1, N1: *Slicen* schreibt je Platte eine Datei, und
+    :func:`_unserved` sah nur die eigene. Lag der Pilz, der Stützen verlangt,
+    auf Platte 1, bekam auf Platte 2 jeder Klotz Stützen — der Ausgangsfehler
+    von Entscheidung G, auf den übrigen Platten zurück. Gefragt wird derselbe
+    Rat je Teil wie beim Schreiben (:func:`_part_values`), und nur, solange
+    ein Pfad noch offen ist.
+    """
+    open_paths = set(paths)
+    served: set[str] = set()
+    for entry in others:
+        if not open_paths:
+            break
+        values = _part_values(
+            entry,
+            mesh_for_export(entry.mesh, profile),
+            split,
+            profile,
+            flavour,
+            setup,
+            slot_profiles,
+            document,
+            cancelled,
+        )
+        hit = {item.path for item in values.applied} & open_paths
+        served |= hit
+        open_paths -= hit
+    return frozenset(served)
+
+
 def _finding_value(value: object) -> float | str:
     """Ein Einstellungswert, wie ihn ein Befund trägt: Zahl, Wahrheitswert oder Wort."""
     return value if isinstance(value, int | float | str) else str(value)
@@ -1563,6 +1605,7 @@ def write_assembly(
     checked: Sequence[Finding] | None = None,
     cancelled: CancelToken | None = None,
     for_window: bool = False,
+    job: Sequence[SceneObject] | None = None,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
@@ -1583,6 +1626,12 @@ def write_assembly(
 
     ``plate`` schränkt auf eine Druckplatte ein; ohne Angabe geht alles hinein,
     was übergeben wurde.
+
+    ``job`` nennt den ganzen Auftrag, wenn diese Datei nur einen Teil davon
+    trägt — *Slicen* schreibt je Platte eine. Ob ein übernommener Vorschlag je
+    Teil von keinem Teil verlangt wird (:func:`_unserved`), entscheidet dann
+    der ganze Auftrag, nicht diese Platte. Ohne Angabe ist die Datei der
+    Auftrag.
 
     ``place_on_bed`` legt die Teile in Bettkoordinaten — für die Übergabe an
     den Slicer, die sie mit ``--arrange 0`` auch durchsetzt. Beim Export einer
@@ -1660,8 +1709,26 @@ def write_assembly(
         for entry in chosen
     }
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
-    # als Objektwert an jedem Teil, und der Bericht sagt es.
+    # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
+    # keines des ganzen Auftrags: Verlangt es ein Teil auf einer anderen
+    # Platte, bleibt es auf dieser still (:func:`_served_elsewhere`).
     everywhere = _unserved(split, accepted, part_values.values())
+    if split is not None and everywhere and job is not None:
+        from app.core.export import handover
+
+        here = {entry.id for entry in chosen}
+        served = _served_elsewhere(
+            [entry for entry in job if entry.id not in here],
+            frozenset(item.path for item in everywhere),
+            split,
+            profile,
+            flavour,
+            setup,
+            handover.chosen_slot_profiles(job, split.plate),
+            document,
+            cancelled,
+        )
+        everywhere = [item for item in everywhere if item.path not in served]
     if split is not None and everywhere:
         part_values = {
             key: _values_for(split, values.applied, values.unavailable, flavour, everywhere)

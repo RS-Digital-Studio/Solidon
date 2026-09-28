@@ -1804,6 +1804,9 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         document=job.document,
         cancelled=job.cancelled,
         for_window=job.for_window,
+        # Ob ein übernommener Vorschlag je Teil verlangt ist, entscheidet der
+        # ganze Auftrag, nicht diese eine Platte (Durchsicht 0.5.1, N1).
+        job=[entry for entry in objects if entry.plate in job.plates],
     )
     return PlateRun(
         plate=plate,
