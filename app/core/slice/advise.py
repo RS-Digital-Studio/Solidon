@@ -646,11 +646,14 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
 
 
 #: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: Der Skirt
-#: berührt es nicht, und „automatisch“ heißt bei PrusaSlicer und Cura die Art
-#: aus Solidons Tabelle, die das Teil nicht kennt. Wo der Slicer seinen Brim
-#: selbst aus dem Teil rechnet, gilt „automatisch“ als gehalten
-#: (:func:`_unanchored`).
-UNANCHORED: Final = frozenset({"skirt", "auto"})
+#: berührt es nicht, „keine“ auch nicht, und „automatisch“ heißt bei
+#: PrusaSlicer und Cura die Art aus Solidons Tabelle, die das Teil nicht kennt.
+#: Wo der Slicer seinen Brim selbst aus dem Teil rechnet, gilt „automatisch“
+#: als gehalten (:func:`_unanchored`). „Keine“ ist die Grundlage an Prusas
+#: eigenen Druckern (``skirts = 0``, ``brim_width = 0``, der Startcode zieht
+#: eine Spüllinie); ohne sie bekam dort kein Turm einen Brim, auch nicht je
+#: Teil (Durchsicht 0.5.1, B3).
+UNANCHORED: Final = frozenset({"skirt", "auto", "none"})
 
 #: Die Slicerfamilien, deren „automatisch“ den Brim aus dem Teil rechnet: Orcas
 #: ``auto_brim`` aus Höhe, Flächenmomenten der Grundfläche und Tempo, bis 18 mm

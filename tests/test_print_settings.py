@@ -481,17 +481,21 @@ def test_a_tall_slim_part_asks_for_a_brim() -> None:
     assert "adhesion.kind" in _paths(entries)
 
 
-@pytest.mark.parametrize(("flavour", "asks"), [("orca", False), ("prusa", True), ("cura", True)])
-def test_the_orca_auto_brim_already_holds_a_part(flavour: str, asks: bool) -> None:
+@pytest.mark.parametrize(
+    ("flavour", "kind", "asks"),
+    [("orca", "auto", False), ("prusa", "none", True), ("cura", "auto", True)],
+)
+def test_the_orca_auto_brim_already_holds_a_part(flavour: str, kind: str, asks: bool) -> None:
     """Orcas Auto-Brim rechnet aus Höhe, Grundfläche und Tempo selbst und hielt
     mehr als Solidons Brim fester Breite: 1,9 statt 0,9 m Randbahn an den
     200 mm hohen Schäften der Minigolf-Platte, 0,93 statt 0,40 m an der
     Waschschüssel (ElegooSlicer, 27.09.2026). Über ihm schweigen die drei
-    Brim-Regeln — kleine Standfläche, kleine Füße, hoch und schmal. PrusaSlicer
-    und Cura haben keinen; dort heißt „automatisch“ die Art aus der Tabelle,
-    und die Regeln bleiben."""
+    Brim-Regeln — kleine Standfläche, kleine Füße, hoch und schmal. Cura hat
+    keinen; dort heißt „automatisch“ die Art aus der Tabelle, und die Regeln
+    bleiben. PrusaSlicer auch nicht, und seine Grundlage liest an Prusas
+    eigenen Druckern „keine“ (``_prusa_adhesion``), die ebenso wenig hält."""
     profile = profiles.make_profile("centauri-carbon-2", "pla")
-    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", kind)
     slim = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 200.0))
     cases = (
         advise.advise(settings, profile, _layers(80.0, 80.0, 80.0), flavour=flavour),

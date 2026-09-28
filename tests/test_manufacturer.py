@@ -26,7 +26,7 @@ from app.core.knowledge import print_settings, profiles
 from app.core.scene import serialise
 from app.core.scene.project import load
 from app.core.slice import advise
-from app.core.types import MaterialSlot, PrintSettings, Profile, SlotOverride
+from app.core.types import BoundingBox, MaterialSlot, PrintSettings, Profile, SlotOverride
 
 
 def _write(path: Path, document: dict[str, object]) -> Path:
@@ -1093,6 +1093,20 @@ def test_prusas_bundle_is_read_back_like_the_orca_family(prusa_bundle: Path) -> 
     assert base.temperature.nozzle == 230
     assert base.filament.max_flow == pytest.approx(24.0)
     assert not base.explicit
+
+
+def test_a_slim_part_on_prusas_own_printer_gets_a_brim(prusa_bundle: Path) -> None:
+    """Prusas eigene Drucker legen weder Skirt noch Brim, die Grundlage liest
+    „keine" — und die hält einen Turm auf 16 mm² so wenig wie ein Skirt. Am
+    MK4S bekam er ohne diese Lesart keinen Brim, weder für die Platte noch je
+    Teil (Durchsicht 0.5.1, B3)."""
+    base = manufacturer.base_settings(_mk4s(), "standard", _prusa_setup(prusa_bundle)).settings
+    tower = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(4.0, 4.0, 80.0))
+
+    assert base.adhesion.kind == "none"
+    assert "adhesion.kind" in [
+        entry.path for entry in advise.for_part(base, tower, 16.0, flavour="prusa")
+    ]
 
 
 def test_prusas_automatic_support_angle_is_half_an_outer_wall(prusa_bundle: Path) -> None:
