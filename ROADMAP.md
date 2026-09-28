@@ -78,6 +78,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-297 — Stapel der Erkennung: Reste aus dem Review](#rm-297) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: fünf kleine Stellen und eine Speicheranzeige |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Deckel der Hilfsprozesse, gemeinsamer Speicher unter Linux/macOS, breite Fänge |
+| [RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu](#rm-300) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Ursache der geänderten Prozesswerte |
+| [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
+| [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Alles in 0.5.1 (Robert), der Tag wartet auf „Handbuch fertig“. Auf `main`: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Für 0.5.1 fertig und gemeldet: HB-5 bis HB-13 (fünfzehn Anleitungen, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter, Film), `main` mit texte-051 und Oberflächenpaket nachgezogen. Offen nach 0.5.1: Feldabnahme (§11 des Konzepts), Nummernplatzierung auf Text in zwei Bildern |
@@ -908,6 +911,13 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Kippstelle sei bekannt (`_cylinder_contour`, `hull.geom_type`), ist damit
   berichtigt. Ob die übrigen Kippen weiter eingegrenzt werden oder das Handbuch
   die Grenze der Zusage „drehfest“ nennt, entscheidet Robert.
+
+  **Nachtrag 28.09.2026 (Release 0.5.1, Review von `merkmale-an-kopien`):** Seit starr
+  bewegte Körper die Erkennung ihres Ursprungs erben, erkennt eine frische Erkennung in
+  gedrehter Lage an 9 von 30 Korpusmodellen anderes als die übertragene. Ein Projekt aus
+  0.5.0, dessen Folgeschritt nach dem Ausrichten auf ein nur so erkanntes Merkmal zeigt,
+  hält deshalb mit Befund an diesem Schritt an
+  (`F:\3D Druck.review-051\reports\review-kopien.md`).
 
 <a id="rm-132"></a>
 
@@ -2371,6 +2381,19 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Wahl neben dem übernommenen Wert je Teil braucht ein Feld im Format. Abnahme: je Befund
   behoben oder mit Grund verworfen.
 
+  **Nachtrag 28.09.2026 (Review des Nachtrags `211789878`):** (N3) `writer._same_value`
+  ist ein zweites „derselbe Einstellungswert“ neben `print_settings.same_value`, mit
+  `EPS_DISPLAY` statt `EPS_SETTING` und ohne dessen Bool-Abfrage (`True` gleich `1.0`);
+  heute unschädlich, zusammenlegen. (N4) Die Kommandozeile nennt bei Einstellungen je Teil
+  weder Teil noch Einstellung: `print_findings` bündelt nach Satz; Feldnamen, Einheiten und
+  Wahlbezeichnungen liegen im Qt-Dialog (`print_settings_dialog.FIELDS`,
+  `labels.choice_label`), und die Kommandozeile lädt kein Qt. Weg: die Feldtabelle in den
+  Kern, Dialog und Kommandozeile lesen sie. (N8) Im seltenen Fall von B2 (ein übernommener
+  Vorschlag, den kein Teil verlangt) wird jeder Körper einmal je Platte befragt statt
+  einmal (`writer._served_elsewhere`). (N9) Der Docstring von `orientation.shape_key`
+  nennt einen Mikrometer, gerundet wird auf einen Nanometer. N6 (Dateiexport einer
+  Auswahl ohne den ganzen Auftrag) ist behoben (`effaef006`).
+
 <a id="rm-292"></a>
 
 - [ ] **RM-292 — Laufzeitreste der Durchsicht 0.5.1.** Aus der Durchsicht v0.5.1 (Inventar 1.5, 1.7, 1.8,
@@ -2431,6 +2454,38 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   ab (Kommandozeile, Tests, Export). (f) Der Rauchtest im Paketjob verlangt das eigene Ende
   in der Produktfrist von 0,5 s; auf einem langsamen Mac-Runner bleibt ein kleines
   Wackelrisiko. Abnahme: je Punkt behoben oder mit Grund begrenzt.
+
+<a id="rm-300"></a>
+
+- [ ] **RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu.** Aus dem Release 0.5.1 (Review von
+  `speicher-ohne-prozesswerte`, `F:\3D Druck.review-051\reports\review-speicher.md`, F2).
+  An Roberts Minigolf-Projekt rechnete nach *Im Slicer öffnen* der ganze Verlauf gut zwei
+  Minuten neu, weil sich die Prozesswerte geändert hatten. Seit 0.5.1 behalten Laden,
+  Kopieren und Bewegen ihr Ergebnis (`reads_process`); fast die ganze Zeit liegt aber in
+  *Druckoptimal ausrichten*, das die Werte zu Recht liest. Offen ist, warum sich die Werte
+  beim Öffnen des Slicers überhaupt ändern. Spur im Code, nicht am Lauf belegt:
+  `evaluate.py:403` überschreibt das wirksame Profil der Sitzung mit den gespeicherten
+  Einstellungen, und `_plate_job` schreibt beim ersten Öffnen die Einstellungen des Dialogs
+  ins Projekt. Abnahme: *Im Slicer öffnen* ohne geänderte Einstellung rechnet nichts neu.
+
+<a id="rm-301"></a>
+
+- [ ] **RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons.** Aus dem Release 0.5.1 (Gesamtprüfung, Sichtprüfung B5 im
+  Cura-Fenster). Ist in Cura ein anderer Drucker aktiv als in Solidon, folgen Profil und
+  Bettlage im Cura-Fenster Curas Maschine (`CuraActiveMachine`), Temperaturen und Tempi aber
+  Solidons Drucker. Entscheidung der Release-Sitzung: Die Übergabe nennt dann beide Drucker
+  und bietet den aus Cura mit einem Klick an; vorher prüfen, wie weit das Angebot des
+  Druckdialogs („Ist Ihr Slicer auf einen anderen Drucker eingestellt …“) Cura schon
+  abdeckt. Abnahme: Übergabe an Cura mit abweichendem Drucker nennt beide.
+
+<a id="rm-302"></a>
+
+- [ ] **RM-302 — Merkmale an Kopien: Reste aus dem Review.** Aus dem Release 0.5.1 (Review von `merkmale-an-kopien`,
+  `F:\3D Druck.review-051\reports\review-kopien.md`). (a) Der Beleg `moved_twin` läuft
+  je bewegtem Körper und Auswertung zwei- bis dreimal, rund 32 ms je Aufruf bei 1,3
+  Millionen Dreiecken. (b) In `.claude/rules/operationen.md` fehlt seit dem Merge der Satz,
+  dass ein einzelner Körper seine Matrix meldet; beim nächsten Verdichten gehört er zurück.
+  Abnahme: ein Beleg je Körper und Auswertung, der Satz steht wieder.
 
 ## Bedienung und Darstellung
 
