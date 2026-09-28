@@ -9350,6 +9350,10 @@ def test_import_bed_action_keeps_the_import_group_and_ignores_selection(
     assert [restored[key].mesh.bounds.minimum[2] for key in targets] == pytest.approx(
         [-100.0 + 2.0 * index for index in range(count)]
     )
+    # Zweimal zurück: erst das Ausschalten der Haken (``keep_the_files_place``
+    # ist ein eigener Schritt), dann der Import selbst.
+    window.action_undo()
+    window.session.wait_for_idle()
     window.action_undo()
     window.session.wait_for_idle()
     assert set(window.session.last_result.scene.objects) == {"obj_1"}
