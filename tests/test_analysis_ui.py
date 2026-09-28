@@ -118,8 +118,20 @@ def test_report_navigation_keeps_the_selected_feature_and_its_measure_group(
     window: MainWindow,
     route: str,
 ) -> None:
-    """Ein Berichtsklick beendet auch am echten Fenster keinen begonnenen Bohrungsentwurf."""
+    """Ein Berichtsklick beendet auch am echten Fenster keinen begonnenen Bohrungsentwurf.
+
+    Die Maße im Bild brauchen einen Renderer (``MainWindow._measure_in_the_view``
+    steigt ohne aus), und offscreen gibt es keinen — ohne die Attrappe stand
+    nach dem Klick keine Maßgruppe, und der Test war seit seiner Entstehung rot.
+    """
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.object_tree.select_object("obj_1")
     window.object_tree.select_feature("obj_1", "hole_1")
+    if window._quiet_placement is None:
+        window.feature_panel._in_view.click()
+    assert window.session.wait_for_idle(30_000)
+    for _ in range(40):
+        QApplication.processEvents()
     host, flow = window._quiet_host, window._quiet_placement
     assert host is not None and flow is not None
     host.begin_edit()
@@ -613,14 +625,22 @@ def test_a_bundle_context_menu_uses_the_same_body_choice_as_its_button(
     chosen: tuple[str, ...],
 ) -> None:
     """Der Rechtsklick bietet dieselbe Körperwahl und denselben Abbruchweg."""
+    import trimesh
     from PySide6.QtWidgets import QMenu
 
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
     from app.ui import panels
 
     host = MainWindow(Session(), UiSettings())
     report = panels.ReportPanel(host)
     bodies = ("obj_1", "obj_2", "obj_3", "obj_4")
-    report._live_objects = frozenset(bodies)
+    # Die lebenden Körper sind eine Zuordnung Kennung → Szenenobjekt, keine
+    # Menge mehr: Die örtliche Suche fragt je Körper, ob er ein Netz ist.
+    report._live_objects = {
+        body: SceneObject(id=body, name=body, mesh=MeshData.of(trimesh.creation.box()))
+        for body in bodies
+    }
     report.add_findings(
         [
             Finding(
@@ -939,9 +959,21 @@ def test_the_map_goes_away_again(window: MainWindow) -> None:
 
 
 def test_without_a_selection_the_bar_says_what_is_missing(window: MainWindow) -> None:
+    """Bei mehreren Körpern und keiner Auswahl sagt die Leiste, was fehlt.
+
+    Mit genau einem Körper gibt es nichts zu wählen — die Karte nimmt ihn
+    selbst (KUNDE-15, ``3b57b3644``,
+    ``test_the_defect_map_needs_no_choice_with_one_body``). Deshalb kommt hier
+    ein zweiter Körper dazu.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and len(result.scene.objects) == 2
     window.object_tree.tree.clearSelection()
     window._on_map_changed("wall")
 
+    assert window.object_tree.selected() is None, "bei zwei Körpern wählt niemand still"
     assert "Objekt" in window.analysis_bar.legend.note.text()
 
 

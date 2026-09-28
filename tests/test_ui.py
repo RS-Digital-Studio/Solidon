@@ -3203,6 +3203,23 @@ def test_the_selection_window_starts_closed_and_opens_on_a_selection(
     assert not window.feature_dock.isHidden(), "und beim Merkmal darin bleibt es"
 
 
+def _close_the_feature_window(window: MainWindow) -> None:
+    """Das Merkmalfenster zumachen wie mit seinem Kreuz — am gezeigten Hauptfenster.
+
+    Das Merkmalfenster ist seit ``9d8d33395`` ein natives Fenster, weil es über
+    der Grafikfläche liegt (``overlay.hold_above_the_view``). Solange das
+    Hauptfenster nie gezeigt wurde, ist sein ``QWindow`` oberste Ebene, und
+    ``close()`` geht an ihm vorbei — kein Schließereignis, kein Verbergen, das
+    Fenster bleibt offen. Im Betrieb steht das Hauptfenster; also hier auch.
+    """
+    window.show()
+    QApplication.processEvents()
+    handle = window.feature_dock.windowHandle()
+    assert handle is None or not handle.isTopLevel(), "das Merkmalfenster hängt im Hauptfenster"
+    window.feature_dock.close()
+    QApplication.processEvents()
+
+
 def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWindow) -> None:
     """Wer es zumacht, hat für **diese** Auswahl entschieden.
 
@@ -3230,8 +3247,7 @@ def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWin
     QApplication.processEvents()
     assert not window.feature_dock.isHidden()
 
-    window.feature_dock.close()
-    QApplication.processEvents()
+    _close_the_feature_window(window)
     assert window.feature_dock.dismissed, "das Zumachen ist gemerkt"
 
     # Dasselbe Merkmal noch einmal ist keine neue Auswahl — hier gilt die
@@ -3264,8 +3280,7 @@ def test_reopening_the_feature_window_takes_the_decision_back(window: MainWindow
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
-    window.feature_dock.close()
-    QApplication.processEvents()
+    _close_the_feature_window(window)
     assert window.feature_dock.dismissed
 
     window.feature_dock.toggleViewAction().trigger()
@@ -3831,8 +3846,7 @@ def test_closing_the_feature_window_takes_its_preview_along(window: MainWindow) 
     """
     _a_drawn_preview(window)
 
-    window.feature_dock.close()
-    QApplication.processEvents()
+    _close_the_feature_window(window)
 
     assert window.viewport.difference is None, "der Differenzkörper geht mit"
     assert not window.viewport._comparing, "und der anwendungsweite Filter auch"
@@ -4486,10 +4500,20 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
         fields[("X", "Y", "Z")[axis]].set_value_mm(wanted_position[axis])
         QApplication.processEvents()
     if position_source == "normal":
-        # Eine Koordinate senkrecht zur Fläche verlässt sie: Die Maßgruppe
-        # geht, und es gilt die normale Feldvorschau mit den Feldern rechts.
+        # Eine Koordinate senkrecht zur Fläche verlässt sie. Mitten im Tippen
+        # entscheidet die Zahl noch nichts: Die Maßgruppe bleibt, Übernehmen
+        # wartet und sagt warum (``5a90d4361``, ``refuse_typed_position``).
+        # Erst die Eingabetaste gibt die Stelle frei — dann geht die
+        # Maßgruppe, und es gilt die normale Feldvorschau mit den Feldern rechts.
+        from PySide6.QtTest import QTest
+
         from app.ui.labels import LengthSpin
 
+        assert flow.active and flow._typed_off_surface
+        assert not flow._measure_accept.isEnabled()
+        QTest.keyClick(fields["Z"].lineEdit(), Qt.Key.Key_Return)
+        for _ in range(20):
+            QApplication.processEvents()
         assert not flow.active
         fields = {
             field.accessibleName().rsplit(" — ", 1)[-1]: field
@@ -4536,13 +4560,14 @@ def test_panel_dimensions_and_placement_position_are_adopted_together(
 def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, next_action: str
 ) -> None:
-    """Während das Werkzeug rechnet, ist Übernehmen gesperrt; Kontextwechsel legen nichts ab.
+    """Ein Klick, während das Werkzeug rechnet, wartet; Kontextwechsel legen nichts ab.
 
-    Bis zum 20.09.2026 merkte sich die Platzierung einen frühen Klick und holte
-    ihn nach, sobald das Werkzeug stand. Seit die Maßgruppe auf die
-    **dargestellte** Vorschau wartet, gibt es diesen Klick nicht mehr: Der
-    Knopf ist grau, solange gerechnet wird, und ein Übernehmen gilt erst nach
-    dem Bild, das der Kunde gesehen hat (``requires_displayed_preview``).
+    Vom 20.09.2026 an war der Knopf grau, solange gerechnet wurde. Ein Klick
+    gleich nach dem Tippen fiel damit still auf einen grauen Knopf (Durchsicht
+    0.5.1, Kunde Weg b, ``5a90d4361``): Warten ist keine Sperre. Der Klick
+    wartet auf das Werkzeug und danach auf die dargestellte Vorschau
+    (``requires_displayed_preview``); erst dann entsteht der Schritt. Jeder
+    Kontextwechsel davor nimmt den wartenden Klick mit.
     """
     from app.core.scene import placement
 
@@ -4552,17 +4577,34 @@ def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
     prepare = placement.prepare_tool
 
     def held_prepare(*args: Any, **kwargs: Any) -> Any:
+        # Angehalten wird nur der Arbeiter der getippten Zahl. Den Start eines
+        # neuen Flusses rechnet der kleine Körper im Hauptfaden
+        # (``AT_ONCE_BELOW``); dort angehalten stünde die Ereignisschleife
+        # bis zur Frist — nach *selection* und *cancel* 15 s je Fall.
+        if threading.current_thread() is threading.main_thread():
+            return prepare(*args, **kwargs)
         entered.set()
         assert proceed.wait(15)
         return prepare(*args, **kwargs)
 
     monkeypatch.setattr(placement, "prepare_tool", held_prepare)
+    # Ob der Schritt erst nach dem Bild kommt, das der Kunde gesehen hat.
+    shown_when_applied: list[bool] = []
+    apply_placed = window._apply_placed_feature
+
+    def applied(op: str, values: Any) -> Any:
+        approval = window._preview_approval
+        shown_when_applied.append(approval is not None and approval.displayed)
+        return apply_placed(op, values)
+
+    monkeypatch.setattr(window, "_apply_placed_feature", applied)
     wanted = fields["Durchmesser"].value_mm() + 1.0
     fields["Durchmesser"].set_value_mm(wanted)
     try:
         assert entered.wait(5), "das neue Werkzeug rechnet"
-        assert not flow._measure_accept.isEnabled()
+        assert flow._measure_accept.isEnabled(), "Warten ist keine Sperre"
         flow._measure_accept.click()
+        assert flow._accept_pending, "der Klick wartet auf das Werkzeug"
         assert len(window.session.project.document.ops) == before
         if next_action == "cancel":
             window.feature_panel._cancel.click()
@@ -4593,19 +4635,18 @@ def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
             angle.setValue(angle.value() + 15.0)
         proceed.set()
         assert window.session.wait_for_idle(30_000)
+        for _ in range(40):
+            QApplication.processEvents()
+        assert window.session.wait_for_idle(30_000)
 
-        if next_action == "accept":
-            # Übernehmen wartet auf die dargestellte Vorschau (20.09.2026).
-            assert len(window.session.project.document.ops) == before
-            window._feature_preview.stop()
-            window._preview_feature_change()
-            assert window.session.wait_for_idle(30_000)
-            for _ in range(40):
-                QApplication.processEvents()
-            assert flow._measure_accept.isEnabled()
-            flow._measure_accept.click()
-            assert window.session.wait_for_idle(30_000)
+        if next_action in ("accept", "operation"):
+            # Der wartende Klick hängt nach dem Werkzeug an der dargestellten
+            # Vorschau (20.09.2026) und wird dann ohne zweiten Klick ein
+            # Schritt. Eine fremde Handlung, die die begonnene Änderung
+            # abweist (``_quiet_command_allowed``), ist ohne Wirkung — auch
+            # auf den wartenden Klick; sonst verfiele er wieder still.
             assert len(window.session.project.document.ops) == before + 1
+            assert shown_when_applied == [True], "erst nach dem gezeigten Bild"
             step = window.session.project.document.ops[-1]
             assert step.op == "resize_hole" and step.params["at_feature"] == hole
             assert step.params["diameter"] == pytest.approx(wanted)
@@ -4613,7 +4654,9 @@ def test_a_pending_feature_placement_accept_belongs_to_its_current_context(
             assert len(window.session.project.document.ops) == (
                 0 if next_action == "project" else before
             )
-            assert flow.active == (next_action in ("edit", "operation"))
+            assert flow.active == (next_action == "edit")
+            assert not flow._accept_pending, "der Kontextwechsel nahm den Klick mit"
+            assert not shown_when_applied
     finally:
         proceed.set()
         assert window.session.wait_for_idle(30_000)
@@ -18996,12 +19039,18 @@ def test_an_edge_question_shows_the_edge_line_in_the_dialog_and_emphasises_by_to
     )
 
     class Answer(module.AskDialog):
-        # ``**rest`` nimmt ``as_buttons`` mit (seit ``c2ebc0fe0``) und jedes
-        # weitere Schlüsselwort: Ohne es endete ``_on_ask`` am Ersatzdialog mit
-        # einem ``TypeError`` statt mit der Frage.
-        def __init__(self, question, choices, parent=None, *, labels=None, **rest):
+        # ``as_buttons`` seit ``c2ebc0fe0``: Kanten brauchen die Liste, weil die
+        # markierte Zeile im Bild leuchtet — Knöpfe gibt es hier nie. ``**rest``
+        # nimmt jedes weitere Schlüsselwort mit; ohne es endete ``_on_ask`` am
+        # Ersatzdialog mit einem ``TypeError`` statt mit der Frage.
+        def __init__(
+            self, question, choices, parent=None, *, labels=None, as_buttons=False, **rest
+        ):
+            assert not as_buttons, "Kandidaten stehen in der Liste"
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels, **rest)
+            super().__init__(
+                question, choices, parent, labels=labels, as_buttons=as_buttons, **rest
+            )
 
         def exec(self):
             shown.append(("dialog", None))
@@ -19057,12 +19106,18 @@ def test_a_feature_question_names_its_candidates_like_the_tree(
     monkeypatch.setattr(window.viewport, "show_candidates", lambda *args: None)
 
     class Answer(module.AskDialog):
-        # ``**rest`` nimmt ``as_buttons`` mit (seit ``c2ebc0fe0``) und jedes
-        # weitere Schlüsselwort: Ohne es endete ``_on_ask`` am Ersatzdialog mit
-        # einem ``TypeError`` statt mit der Frage.
-        def __init__(self, question, choices, parent=None, *, labels=None, **rest):
+        # ``as_buttons`` seit ``c2ebc0fe0``: Merkmale brauchen die Liste, weil die
+        # markierte Zeile im Bild leuchtet — Knöpfe gibt es hier nie. ``**rest``
+        # nimmt jedes weitere Schlüsselwort mit; ohne es endete ``_on_ask`` am
+        # Ersatzdialog mit einem ``TypeError`` statt mit der Frage.
+        def __init__(
+            self, question, choices, parent=None, *, labels=None, as_buttons=False, **rest
+        ):
+            assert not as_buttons, "Kandidaten stehen in der Liste"
             built.append(dict(labels or {}))
-            super().__init__(question, choices, parent, labels=labels, **rest)
+            super().__init__(
+                question, choices, parent, labels=labels, as_buttons=as_buttons, **rest
+            )
 
         def exec(self):
             self.list.setCurrentRow(0)

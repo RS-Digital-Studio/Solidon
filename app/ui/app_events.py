@@ -15,13 +15,24 @@ Art angemeldet haben (:func:`listen`). Die Zuhörer bleiben, was sie waren —
 Objekte mit ``eventFilter`` —, und entscheiden wie zuvor, ob sie das Ereignis
 schlucken. Wer stirbt, fällt von selbst heraus, so wie Qt einen gelöschten
 Filter vergisst.
+
+**Angemeldet wird schwach.** ``installEventFilter`` hielt keinen Python-Verweis
+auf den Filter; ein Verteiler, der seine Zuhörer fest hält, hielt dagegen den
+Vorher-Vergleich einer Ansicht und über ihn die Ansicht selbst samt Renderer am
+Leben, nachdem sie zu war (``test_real_viewport_comparison_filter_is_released``).
+Ein Zuhörer mit Elternteil lebt so lange wie der; einer ohne muss von seinem
+Besitzer gehalten werden, wie unter Qt auch.
 """
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Iterable
 
 from PySide6.QtCore import QCoreApplication, QEvent, QMetaObject, QObject
+
+#: Ein angemeldeter Zuhörer: seine Kennung und ein schwacher Verweis auf ihn.
+_Entry = tuple[int, "weakref.ReferenceType[QObject]"]
 
 
 class ApplicationEvents(QObject):
@@ -29,18 +40,22 @@ class ApplicationEvents(QObject):
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._listeners: dict[QEvent.Type, tuple[QObject, ...]] = {}
+        self._listeners: dict[QEvent.Type, tuple[_Entry, ...]] = {}
         #: Je Zuhörer, unter seiner Kennung, die Verbindung, die ihn bei seinem
         #: Tod abmeldet.
         self._farewells: dict[int, QMetaObject.Connection] = {}
 
     def listen(self, listener: QObject, kinds: Iterable[QEvent.Type]) -> None:
         """``listener.eventFilter`` bekommt die Ereignisse dieser Arten — einmal je Art."""
+        ident = id(listener)
+
+        def gone(_reference: weakref.ReferenceType[QObject]) -> None:
+            self._drop(ident)
+
         for kind in kinds:
             present = self._listeners.get(kind, ())
-            if not any(known is listener for known in present):
-                self._listeners[kind] = (*present, listener)
-        ident = id(listener)
+            if not any(known() is listener for _ident, known in present):
+                self._listeners[kind] = (*present, (ident, weakref.ref(listener, gone)))
         if ident not in self._farewells and self.listening(listener):
             # **Nach der Kennung, nicht nach dem Objekt:** ``destroyed`` reicht
             # einen frischen Wrapper um das sterbende C++-Objekt, nicht den, der
@@ -59,13 +74,15 @@ class ApplicationEvents(QObject):
 
     def listening(self, listener: QObject) -> bool:
         """Ob dieser Zuhörer irgendeine Art angemeldet hat. Der Test fragt danach."""
-        return any(known is listener for present in self._listeners.values() for known in present)
+        return any(
+            known() is listener for present in self._listeners.values() for _ident, known in present
+        )
 
     def _drop(self, ident: int) -> None:
         """Den Zuhörer mit dieser Kennung aus allen Arten nehmen."""
         self._farewells.pop(ident, None)
         for kind, present in list(self._listeners.items()):
-            kept = tuple(known for known in present if id(known) != ident)
+            kept = tuple(entry for entry in present if entry[0] != ident)
             if kept:
                 self._listeners[kind] = kept
             else:
@@ -76,7 +93,11 @@ class ApplicationEvents(QObject):
         listeners = self._listeners.get(event.type())
         if listeners is None:
             return False
-        return any(listener.eventFilter(watched, event) for listener in listeners)
+        for _ident, known in listeners:
+            listener = known()
+            if listener is not None and listener.eventFilter(watched, event):
+                return True
+        return False
 
 
 def application_events() -> ApplicationEvents | None:

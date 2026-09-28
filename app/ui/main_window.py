@@ -16094,6 +16094,7 @@ class MainWindow(QMainWindow):
         )
         if width <= 0.0:
             return
+        waited = self.viewport.slot_drag_waits()
         self.viewport.reshape_slot(
             float(params.get("slot_length") or 0.0),
             float(params.get("slot_angle") or 0.0),
@@ -16103,6 +16104,16 @@ class MainWindow(QMainWindow):
             if all(isinstance(params.get(axis), int | float) for axis in ("x", "y", "z"))
             else None,
         )
+        # **Beginnt hier das Warten des Zugs, zeichnet die Maßgruppe neu.** Der
+        # Abbau des Bohrungsflusses nimmt den Zug zurück, und erst diese Zeile
+        # setzt ihn für den Langlochfluss wieder. Am kleinen Körper hat der
+        # neue Fluss sein Bild da schon fertig (``AT_ONCE_BELOW``), mit dem
+        # runden Umriss der Mündung neben dem gezogenen Langloch — bis zur
+        # nächsten Kamerageste (``test_surface_placement_ui``,
+        # ``test_the_measures_stay_in_the_view_while_a_pulled_slot_waits``).
+        flow = self._quiet_placement
+        if not waited and self.viewport.slot_drag_waits() and flow is not None and flow.active:
+            flow.redraw()
 
     def _preview_feature_change(self) -> None:
         """Der tatsächliche Übernahmeauftrag läuft durch denselben Freigabepfad wie im Menü."""

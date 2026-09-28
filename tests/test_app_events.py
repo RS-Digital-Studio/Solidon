@@ -4,10 +4,11 @@ Ein Klick von Bohrung zu Bohrung schickt rund 2 400 Ereignisse durch die
 Anwendung. Jeder eigene Filter an ihr kostete je Ereignis einen Aufruf in
 Python; drei davon 17 ms je Klick (RM-232, Durchsicht 0.5.1). Geprüft wird,
 dass der Verteiler nur weiterreicht, was jemand angemeldet hat, dass ein
-Zuhörer schlucken darf, dass ein toter Zuhörer herausfällt — und dass kein
-Modul wieder einen eigenen Filter an die Anwendung hängt.
+Zuhörer schlucken darf, dass ein toter Zuhörer herausfällt, dass der Verteiler
+keinen am Leben hält — und dass kein Modul wieder einen eigenen Filter an die
+Anwendung hängt.
 
-Die drei Tests mit Qt-Objekten brauchen die Anwendung (``qt_app``) und laufen
+Die vier Tests mit Qt-Objekten brauchen die Anwendung (``qt_app``) und laufen
 damit in der Fenstergruppe, beim Release; der Wächter über den Quelltext läuft
 in jedem Tor.
 """
@@ -79,6 +80,32 @@ def test_a_forgotten_or_destroyed_listener_hears_nothing_more(qt_app: object) ->
     events.eventFilter(QObject(), QEvent(QEvent.Type.KeyPress))
     assert kept.heard == [QEvent.Type.KeyPress]
     assert forgotten.heard == []
+
+
+def test_the_distributor_keeps_no_listener_alive(qt_app: object) -> None:
+    """Angemeldet wird schwach, wie ``installEventFilter`` es tat.
+
+    Der Verteiler hielt seine Zuhörer fest und damit den Vorher-Vergleich einer
+    geschlossenen Ansicht samt Ansicht und Renderer
+    (``test_widget_lifetime::test_real_viewport_comparison_filter_is_released``).
+    Ein Zuhörer, den niemand mehr hält, geht, und der Verteiler vergisst ihn.
+    """
+    import gc
+    import weakref
+
+    events = ApplicationEvents()
+    kept, dropped = _Listener(), _Listener()
+    events.listen(kept, (QEvent.Type.KeyPress,))
+    events.listen(dropped, (QEvent.Type.KeyPress,))
+    gone = weakref.ref(dropped)
+    del dropped
+    gc.collect()
+    assert gone() is None, "der Verteiler hält keinen Zuhörer am Leben"
+    assert events.listening(kept)
+    events.eventFilter(QObject(), QEvent(QEvent.Type.KeyPress))
+    assert kept.heard == [QEvent.Type.KeyPress]
+    assert list(events._listeners) == [QEvent.Type.KeyPress]
+    assert len(events._listeners[QEvent.Type.KeyPress]) == 1, "und vergisst den gegangenen"
 
 
 def test_no_module_hangs_its_own_filter_on_the_application() -> None:

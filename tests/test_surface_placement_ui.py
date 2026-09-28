@@ -63,6 +63,17 @@ class _Renderer:
         self.lines: list[dict[str, Any]] = []
         self.surfaces: list[dict[str, Any]] = []
         self.removed: list[Any] = []
+        #: Angehaltene Bilder und Freigaben — wie ``render_fakes.RecordingRenderer``.
+        #: Der Fluss hält das Bild an, solange die Fläche am Merkmal entsteht
+        #: (``PlacementFlow._hold_frames``, seit ``a255b14f8``).
+        self.holds: list[int] = []
+        self.releases = 0
+
+    def hold_frames(self, milliseconds: int) -> None:
+        self.holds.append(int(milliseconds))
+
+    def release_frames(self) -> None:
+        self.releases += 1
 
     def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
         item = _Item(_args[0] if _args else None, _kwargs.get("capacity"))
@@ -1439,7 +1450,12 @@ def test_feature_hover_reuses_the_body_prepared_outside_qt(
 ) -> None:
     """Mausbewegungen und Maße dürfen den Merkmalskörper nicht erneut im Qt-Thread berechnen."""
     import app.core.geom.prepare_ops as module
+    from app.ui import placement_flow
 
+    # Der Weg über den Arbeiter: Am kleinen Körper entsteht die Fläche beim
+    # Start seit ``f01f8b622`` einmal gleich im Hauptfaden (``AT_ONCE_BELOW``);
+    # hier geht es darum, dass danach nichts sie noch einmal rechnet.
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     original, session, viewport, _dialog = flow
     original.dispose()
     object_id = original.inputs_of()[0]
@@ -1954,6 +1970,8 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
     qt_app: QApplication,
 ) -> None:
     """Importierte Langlöcher zeigen Länge und Breite direkt an den Kantenmaßen."""
+    from PySide6.QtTest import QTest
+
     window = _window_with_a_renderer()
     try:
         window.open_path(MESHES / "plate_coarse_slots.stl")
@@ -1971,13 +1989,24 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
             for field in flow._measure_group.findChildren(LengthSpin)
         }
         assert {"Länge des Langlochs", "Breite"} <= fields.keys()
-        fields["Länge des Langlochs"].set_value_mm(12.0)
+        # Getippt, wie der Kunde tippt: Erst eine Taste im Feld beginnt den
+        # Entwurf (``QuietHost.begin_edit``), und erst ein begonnener Entwurf
+        # führt den Umriss nach. ``set_value_mm`` ging daran vorbei, und der
+        # Test war seit seiner Entstehung rot, ohne dass es ein Lauf zeigte.
+        editor = fields["Länge des Langlochs"].lineEdit()
+        editor.selectAll()
+        QTest.keyClicks(editor, QLocale().toString(12.0, "f", 2))
         for _ in range(40):
             QApplication.processEvents()
         handle = window.viewport._slot_handle
         assert handle is not None and handle.length == pytest.approx(12.0)
+        # Die Zahl steht im Entwurf, den *Übernehmen* liest. Das Merkmalfenster
+        # rechts bekommt sie beim Tippen bewusst nicht zurück („Wer gerade
+        # liest, schreibt nicht zurück“, ``MainWindow._place_measures``); sein
+        # Zwilling zeigt die Länge ohnehin nicht, solange die Maßgruppe steht.
         armed = window.feature_panel._runs[window.feature_panel._armed]
-        assert armed.op == "slot_hole" and armed.values()["slot_length"] == pytest.approx(12.0)
+        assert armed.op == "slot_hole"
+        assert flow.dialog.values()["slot_length"] == pytest.approx(12.0)
         _display_measure_preview(window, flow)
         before = len(window.session.project.document.ops)
         flow.accept()
@@ -1985,6 +2014,8 @@ def test_an_imported_slot_opens_its_own_measures_and_keeps_the_handles_in_sync(
             QApplication.processEvents()
             window.session.wait_for_idle()
         assert len(window.session.project.document.ops) == before + 1
+        added = window.session.project.document.ops[-1]
+        assert added.op == "slot_hole" and added.params["slot_length"] == pytest.approx(12.0)
         assert window.session.last_result.stopped_at is None
         window.session.undo()
         window.session.wait_for_idle()
@@ -2148,7 +2179,7 @@ def _another_hole(window, object_id: str, hole: str) -> str:
 
 
 def test_a_click_at_a_hole_holds_the_picture_until_its_surface_is_there(
-    qt_app: QApplication,
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein Bild je Bohrungsklick statt zweier (RM-232).
 
@@ -2157,22 +2188,45 @@ def test_a_click_at_a_hole_holds_the_picture_until_its_surface_is_there(
     brachte die Maße. Der Fluss hält das Bild an, solange er die Fläche am
     Merkmal rechnet, und gibt es frei, sobald sie steht — ein Anhalten, eine
     Freigabe, mit der Frist aus ``FRAME_HOLD_MS``.
+
+    Das gilt für den Weg über den Arbeiter. An einem kleinen Körper entsteht
+    die Fläche seit ``f01f8b622`` gleich im Klick (``AT_ONCE_BELOW``); dort
+    sind Anhalten und Freigabe beide schon vorbei, wenn der Klick zurückkehrt.
+    Die Platte liegt unter der Grenze, der Arbeiterweg wird deshalb mit
+    ``AT_ONCE_BELOW = 0`` erzwungen und danach der Klickweg geprüft.
     """
+    from app.ui import placement_flow
     from app.ui.placement_flow import FRAME_HOLD_MS
 
+    at_once_below = placement_flow.AT_ONCE_BELOW
+    monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", 0)
     window = _window_with_a_renderer()
     try:
         object_id, first_hole = _a_selected_hole(window)
         renderer = window.viewport.renderer
         first = _measures_in_the_view(window)
         assert first is not None and first._surface is not None
+        entry = window.session.last_result.scene.objects[object_id]
+        assert entry.mesh.triangle_count < at_once_below, "die Platte ist ein kleiner Körper"
         assert renderer.holds and set(renderer.holds) == {FRAME_HOLD_MS}
         assert renderer.releases == len(renderer.holds), "freigegeben, sobald die Fläche steht"
-        window.object_tree.select_feature(object_id, _another_hole(window, object_id, first_hole))
+        second_hole = _another_hole(window, object_id, first_hole)
+        window.object_tree.select_feature(object_id, second_hole)
         assert renderer.releases == len(renderer.holds) - 1, "angehalten, solange sie rechnet"
         second = _measures_in_the_view(window)
         assert second is not None and second is not first and second._surface is not None
         assert renderer.releases == len(renderer.holds) and not second._frames_held
+
+        # Am kleinen Körper rechnet der Klick selbst: angehalten und
+        # freigegeben, bevor er zurückkehrt, und die Fläche steht schon.
+        monkeypatch.setattr(placement_flow, "AT_ONCE_BELOW", at_once_below)
+        holds_before = len(renderer.holds)
+        window.object_tree.select_feature(object_id, first_hole)
+        assert len(renderer.holds) > holds_before, "auch der Klickweg hält das Bild an"
+        assert renderer.releases == len(renderer.holds), "und gibt es im Klick wieder frei"
+        third = window._quiet_placement
+        assert third is not None and third is not second and third._surface is not None
+        assert not third._frames_held
     finally:
         window.end_quiet_placement()
         QApplication.processEvents()
@@ -2787,8 +2841,13 @@ def test_measure_fields_wait_for_a_second_enter_and_commit_all_texts(
     assert host.begun and controller.active
     assert host.values()["diameter"] == pytest.approx(6.0)
     assert host.values()["depth"] == pytest.approx(7.0)
-    assert not controller._accept_pending
+    # Das frühe Enter wartet auf das Werkzeug (``5a90d4361``, Kunde Weg b) —
+    # und schreibt trotzdem keinen Schritt, solange die Pflicht zur gezeigten
+    # Vorschau nicht erfüllt ist: Die prüft :meth:`accept` selbst.
+    assert controller._accept_pending
     assert session.wait_for_idle(30_000)
+    for _ in range(20):
+        QApplication.processEvents()
     assert len(session.project.document.ops) == before
     assert controller.active and not during
     host.block_apply(None)
@@ -2871,8 +2930,12 @@ def test_measure_fields_keep_draft_on_tab_camera_and_release_but_escape_discards
     editor.selectAll()
     QTest.keyClicks(editor, "7")
     QTest.keyClick(editor, Qt.Key.Key_Return)
-    assert not controller._accept_pending
+    # Die Eingabetaste gleich nach der letzten Ziffer wartet auf das Werkzeug,
+    # statt still zu verfallen (``5a90d4361``, Durchsicht 0.5.1, Kunde Weg b);
+    # Escape nimmt auch den wartenden Abschluss mit.
+    assert controller._accept_pending
     QTest.keyClick(editor, Qt.Key.Key_Escape)
+    assert not controller._accept_pending
     assert not controller.active and not host.begun
     assert not controller._watched and not controller._field_targets
     assert session.wait_for_idle(30_000)
@@ -3083,7 +3146,6 @@ def test_the_flow_runs_on_a_host_without_a_window(
 
 def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplication) -> None:
     """Die Maßgruppe und der gemeinsame Abschluss bleiben bei geschlossenem Panel nutzbar."""
-    from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
     from app.ui.labels import LengthSpin
@@ -3104,7 +3166,9 @@ def test_measure_group_has_the_only_apply_and_cancel_controls(qt_app: QApplicati
         diameter = round(field.value_mm() + 0.5, 2)
         editor.selectAll()
         QTest.keyClicks(editor, QLocale().toString(diameter, "f", 2))
-        QTest.keyClick(editor, Qt.Key.Key_Return)
+        # Ohne Eingabetaste: Die übernimmt seit ``5a90d4361`` selbst, sobald
+        # Werkzeug und Vorschau stehen (Kunde Weg b). Geprüft wird hier der
+        # Knopf der Maßgruppe bei geschlossenem Panel.
         assert flow.dialog.begun and flow.active
         before = len(window.session.project.document.ops)
         _display_measure_preview(window, flow)

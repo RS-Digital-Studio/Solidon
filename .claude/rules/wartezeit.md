@@ -502,7 +502,10 @@ und ihr Ende nimmt sofort die jüngste Stelle.
   `_FeatureAnswersWorker`: Bis zur Antwort steht nur, was feststeht, gebaut
   wird nur, was noch gewählt ist, und ein Absturz ist ein Fehlerbericht.
 * **Ein Filter an der Anwendung, nicht einer je Anliegen:** `app_events.listen`
-  und `app_events.forget` (`test_app_events` prüft den Quelltext).
+  und `app_events.forget` (`test_app_events` prüft den Quelltext). Der
+  Verteiler hält seine Zuhörer schwach wie `installEventFilter` — fest
+  gehalten überlebte die geschlossene Ansicht samt Renderer; ein Zuhörer
+  braucht deshalb einen Elternteil oder einen Besitzer.
 * **Die Vorbereitung zählt, statt zu verschneiden:** `placement._patch_area`
   baut die Fläche aus ihrem Rand und prüft sie; nur Abgelehntes geht durch
   `union_all`.

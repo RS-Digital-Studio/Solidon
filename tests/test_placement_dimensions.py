@@ -364,8 +364,10 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
     Renderer — **dieselben Elemente bei jedem Aufbau, mit neuen Punkten**:
     Je Kamerageste zehn Elemente abzuräumen und neu anzulegen kostete zwölf
     von zweiundzwanzig Millisekunden an Pipelines (gemessen 21.09.2026). Ohne
-    Fläche sind sie ausgeblendet, mit dem Fluss kommen sie heraus.
+    Fläche sind sie ausgeblendet, mit dem verworfenen Satz kommen sie heraus.
     """
+    from app.ui import placement_flow
+
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     viewport.renderer.world_to_display = lambda point: (80 + point[0] * 20, 80 + point[1] * 20, 0.5)
     flow.redraw()
@@ -408,9 +410,17 @@ def test_dimension_ink_lives_in_the_renderer_and_leaves_with_the_surface(
         assert not canvas.shown, "ohne Fläche steht keine Tinte im Bild"
         assert not any(item.visible for item in first_items), "die Elemente sind ausgeblendet"
         assert not renderer.removed, "und bleiben für den nächsten Aufbau"
+        # Mit dem Fluss legt der Abbau die Tinte verborgen für den nächsten
+        # Fluss an derselben Ansicht ab (``_park_floating``, seit ``9d8d33395``);
+        # erst wer den abgelegten Satz verwirft, räumt sie aus dem Renderer.
         flow.dispose()
+        parked = placement_flow._PARKED.get(id(viewport))
+        assert parked is not None and parked["_canvas"] is canvas, "die Tinte ist abgelegt"
+        assert not canvas.shown, "verborgen"
+        assert not any(item in renderer.removed for item in first_items), "nicht abgeräumt"
+        placement_flow._discard_floating(placement_flow._PARKED.pop(id(viewport)))
         assert all(item in renderer.removed for item in first_items), (
-            "mit dem Fluss kommen sie aus dem Renderer"
+            "mit dem verworfenen Satz kommen sie aus dem Renderer"
         )
     finally:
         flow.dispose()
