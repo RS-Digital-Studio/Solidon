@@ -1657,6 +1657,46 @@ def test_the_licence_the_installer_shows_is_the_agreement_and_not_the_notice() -
     assert "Lizenzvertrag" in licence.read_text(encoding="utf-8")[:400]
 
 
+def test_bytecode_written_after_the_build_does_not_make_it_stale(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der Paketjob startet nach dem Bau den Rauchtest des Hilfsprozesses
+    (``tools/check_frozen_helper.py``), und der importiert ``app`` aus dem
+    Quellbaum. Die ``__pycache__``-Dateien, die dabei entstehen, sind jünger als
+    die gebaute Anwendung — und ``stale_reason`` hielt den fertigen Bau deshalb
+    für älter als app/: Im vollen CI-Lauf vor 0.5.1 scheiterte die
+    Signierübergabe für Windows daran. Bytecode ist kein Quelltext; eine
+    geänderte Quelldatei macht den Bau weiter veraltet."""
+    from tools import make_installer
+
+    root = tmp_path
+    source = root / "dist" / make_installer.APP_NAME
+    source.mkdir(parents=True)
+    module = root / "app" / "core" / "modul.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("WERT = 1\n", encoding="utf-8")
+    application = source / f"{make_installer.APP_NAME}.exe"
+    application.write_bytes(b"Programm")
+    built = application.stat().st_mtime
+    os.utime(module, (built - 60, built - 60))
+    cache = module.parent / "__pycache__" / "modul.cpython-314.pyc"
+    cache.parent.mkdir()
+    cache.write_bytes(b"Bytecode")
+    os.utime(cache, (built + 60, built + 60))
+
+    monkeypatch.setattr(make_installer, "ROOT", root)
+    monkeypatch.setattr(make_installer, "SOURCE_DIR", source)
+    monkeypatch.setattr(make_installer, "manifest_reason", lambda: "")
+    monkeypatch.setattr(
+        make_installer.asset_rights, "require_customer_artifact_cleared", lambda *args: None
+    )
+
+    assert make_installer.stale_reason() == ""
+
+    os.utime(module, (built + 60, built + 60))
+    assert "älter als app/" in make_installer.stale_reason(), "eine neuere Quelldatei zählt weiter"
+
+
 def test_the_windows_signing_handoff_binds_every_installer_input(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
