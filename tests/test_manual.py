@@ -1165,6 +1165,26 @@ def test_a_page_can_be_opened_by_name(qt_app: QApplication) -> None:
     assert "Material" in window.contents.currentItem().text()
 
 
+def test_an_unknown_page_keeps_the_shown_one_and_says_so_in_the_log(
+    qt_app: QApplication, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Schlüssel ohne Seite verpufft nicht still: Das Protokoll nennt ihn."""
+    import logging
+
+    window = ManualWindow()
+    try:
+        window.show_page("tolerances")
+        shown = window.text.toPlainText()
+        with caplog.at_level(logging.WARNING):
+            window.show_page("holes")
+
+        assert window.text.toPlainText() == shown, "die gezeigte Seite bleibt"
+        assert "'holes'" in caplog.text, caplog.text
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_a_link_to_another_page_opens_it_in_the_window(qt_app: QApplication) -> None:
     """Ein Klick auf ``manual:<schlüssel>`` schlägt die Seite auf, im selben Fenster."""
     from PySide6.QtCore import QUrl
@@ -1198,7 +1218,9 @@ def test_a_generated_chapter_shows_its_title_in_the_window_too(qt_app: QApplicat
     assert page is not None
     assert shown.startswith(str(page.title)), shown[:80]
 
-    window.show_page("holes")
+    # Das Referenzkapitel trägt den Vorsatz ``ref-``; „holes“ allein ist
+    # keine Seite, und das Fenster stünde weiter auf „Wonach Solidon urteilt“.
+    window.show_page(manual.reference_key("holes"))
     reference = window.text.toPlainText()
     assert reference.startswith(str(CATEGORIES["holes"])), reference[:80]
     # Der Kategoriename darf im Fließtext vorkommen; nur die Titelzeile zählt.

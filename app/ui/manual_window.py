@@ -576,6 +576,13 @@ class ManualWindow(QMainWindow):
         ``spot`` schlägt sie an dieser Stelle auf, markiert: F1 im
         Operationsdialog meint den Eintrag der Operation, nicht den Anfang
         eines Referenzkapitels mit zwanzig anderen.
+
+        Ein Schlüssel ohne Seite lässt die gezeigte stehen und schreibt eine
+        Warnung ins Protokoll: Jeder Aufrufer der Anwendung nennt eine Seite,
+        die es gibt (geprüft in ``test_manual.py`` und ``test_guides.py``), und
+        ein Fehlgriff soll im Fehlerbericht stehen statt still zu verpuffen —
+        so blieb ein umbenanntes Referenzkapitel (``ref-<kategorie>``) in einem
+        Test unbemerkt, der die alte Seite weiter für die neue hielt.
         """
         self.search.clear()
         for index, page in enumerate(self._visible):
@@ -595,6 +602,7 @@ class ManualWindow(QMainWindow):
             if spot:
                 self._show_spot(spot)
             return
+        _log.warning("manual page %r is not among the pages shown", key)
 
 
 # ``OVERSAMPLING`` stand hier bis zum 07.09.2026 als eigene Kopie, mit
