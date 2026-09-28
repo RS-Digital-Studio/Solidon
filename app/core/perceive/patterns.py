@@ -133,6 +133,29 @@ REGULAR_SHARE: Final = 0.9
 #: Zelle ändert, ändert sie nicht um fünf Prozent.
 SAME_MEASURE: Final = 0.05
 
+#: Die feste Weltrichtung, nach der unter gleichen Zellen gewählt wird —
+#: welche Lücke eines ganz umlaufenden Musters die Naht seiner Abwicklung
+#: trägt, welche von gleich nahen Zellen sein Anker ist (RM-275).
+#:
+#: Um einen Zylinder herum sind alle Zellen gleich, und nichts am Muster
+#: sagt, wo es beginnt; entscheiden kann nur etwas außerhalb davon. Bis zum
+#: 27.09.2026 war es die erste Ebenenachse: Die Naht lag ihr gegenüber, und
+#: am Gewürzdeckel lag dort genau eine Mulde — welcher Seite sie zufiel,
+#: entschied das Vorzeichen einer Summe nahe null, und nach einem Schritt weit
+#: weg stand die Mitte des Musters eine Zelle weiter. Jede Wahl auf einem
+#: Kreis kippt irgendwo; die Kippe gehört dorthin, wo ein konstruiertes Muster
+#: nicht liegt. Konstruiert wird in runden Winkeln zu den Weltachsen, und
+#: diese Richtung (1, φ, φ²) mit dem Goldenen Schnitt φ steht zu keiner
+#: Weltachse und keiner Ebene aus zwei davon in einem runden Winkel — um Z
+#: und um X projiziert unter 58,28 Grad, um Y unter 69,09 Grad.
+_GOLDEN: Final = (1.0 + math.sqrt(5.0)) / 2.0
+_GOLDEN_LENGTH: Final = math.sqrt(1.0 + _GOLDEN**2 + _GOLDEN**4)
+SEAM_DIRECTION: Final[tuple[float, float, float]] = (
+    1.0 / _GOLDEN_LENGTH,
+    _GOLDEN / _GOLDEN_LENGTH,
+    _GOLDEN**2 / _GOLDEN_LENGTH,
+)
+
 #: Ab welcher Richtungsänderung eine Ecke des Mündungsumrisses zählt — fünf
 #: Grad; alles darunter ist eine Naht zwischen zwei Dreiecken derselben Kante.
 CORNER_DEGREES: Final = 5.0
@@ -429,8 +452,19 @@ def _anchor_of(pattern: Pattern) -> Vec3:
     Stummel — bei unveränderter Teilung (Review, 22.09.2026).
     """
     centre = np.asarray(pattern.centre, dtype=float)
-    nearest = min(pattern.cells, key=lambda cell: float(np.linalg.norm(cell.centre - centre)))
-    return _vec(nearest.centre)
+    distances = [float(np.linalg.norm(cell.centre - centre)) for cell in pattern.cells]
+    # **Gleich nahe Zellen unterscheidet die Rundung nicht** (RM-275): Hat das
+    # Feld eine gerade Zellenzahl, liegt seine Mitte zwischen zwei oder vier
+    # Zellen, und die nächste war die mit dem kleineren Rundungsrest — nach
+    # einem Schritt weit weg eine andere. Unter den gleich nahen entscheidet
+    # die feste Weltrichtung, wie für die Naht.
+    reach = min(distances) + SAME_MEASURE * pattern.pitch
+    tied = [
+        cell for cell, distance in zip(pattern.cells, distances, strict=True) if distance <= reach
+    ]
+    towards = np.asarray(SEAM_DIRECTION, dtype=float)
+    chosen = max(tied, key=lambda cell: float((cell.centre - centre) @ towards))
+    return _vec(chosen.centre)
 
 
 def find_patterns(
@@ -757,6 +791,13 @@ def _rim_patterns(
         group = around[name]
         if len(group) < MIN_STRIPS:
             continue
+        # Die Naht zwischen die Stücke, wie zwischen ganze Zellen
+        # (:meth:`_CellMeasure.seam_between`) — sonst lag sie der ersten
+        # Ebenenachse gegenüber und schnitt am Gewürzdeckel eine Mulde, die
+        # nach dem Vorzeichen einer Summe nahe null der einen oder der
+        # anderen Seite zufiel (RM-275).
+        if name not in measure.seamed:
+            measure.seam_between(name, [piece.indices for piece in group])
         measured = [(piece, measure(piece.indices, (name,))) for piece in group]
         cells = [cell for _piece, cell in measured if cell is not None]
         for candidates in _congruent_groups(cells):
@@ -925,6 +966,8 @@ class _CellMeasure:
             if feature.kind == "face"
         }
         self.frames: dict[FeatureId, Frame] = {}
+        self.seamed: set[FeatureId] = set()
+        """Die Zylinder, deren Naht schon zwischen Zellen gelegt ist (:meth:`seam_between`)."""
 
     def __call__(
         self, indices: np.ndarray, carrier: tuple[FeatureId, ...], *, clipped: bool = False
@@ -999,7 +1042,8 @@ class _CellMeasure:
         Hälften zerfallen — dann fände die Gittersuche zwei Felder, und das
         Rechteck um beide wäre der ganze Umfang. Die Lücke ist am Winkel der
         Stücke gemessen; bei einem ganz umlaufenden Feld ist jede Lücke eine
-        Wand breit, und die Naht liegt dann in einer davon.
+        Wand breit, und die Naht liegt dann in einer davon — in welcher, sagt
+        :func:`_seam_reference`, nicht die Rundung.
         """
         frame = self._frame_for(name, reference=None)
         if frame is None or frame.kind != "cylinder" or not pieces:
@@ -1008,20 +1052,47 @@ class _CellMeasure:
             [self.points[self.triangles[indices]].reshape(-1, 3).mean(axis=0) for indices in pieces]
         )
         flat, _heights = frame.developed(centroids)
-        reference = _seam_reference(flat[:, 0] / frame.radius)
+        reference = _seam_reference(flat[:, 0] / frame.radius, _seam_toward(frame))
         x_axis = frame.x_axis * math.cos(reference) + frame.y_axis * math.sin(reference)
         seamed = self._frame_for(name, reference=x_axis)
         if seamed is not None:
             self.frames[name] = seamed
+            self.seamed.add(name)
 
 
-def _seam_reference(angles: np.ndarray) -> float:
-    """Der Winkel, dem die Naht gegenüberliegen soll: die Mitte der größten Lücke plus π."""
+def _seam_toward(frame: Frame) -> float:
+    """Unter welchem Winkel der Abwicklung :data:`SEAM_DIRECTION` liegt.
+
+    Gemessen an der Welt, nicht an der Achse: Dieselbe Richtung, um die
+    andersherum eingepasste Achse abgewickelt, liegt an derselben Stelle des
+    Mantels. Steht die Achse genau in dieser Richtung, gilt die erste Achse.
+    """
+    towards = np.asarray(SEAM_DIRECTION, dtype=float)
+    across = towards - frame.normal * float(towards @ frame.normal)
+    if float(np.linalg.norm(across)) < EPS_GEOM:
+        return 0.0
+    return math.atan2(float(across @ frame.y_axis), float(across @ frame.x_axis))
+
+
+def _seam_reference(angles: np.ndarray, toward: float) -> float:
+    """Der Winkel, dem die Naht gegenüberliegen soll: die Mitte der größten Lücke plus π.
+
+    **Gleich große Lücken unterscheidet die Rundung nicht** (RM-275). Ein ganz
+    umlaufendes Muster hat nur solche, und die größte war die mit dem
+    größten Rundungsrest — am Gewürzdeckel nach einem Schritt weit weg eine
+    andere, und die Mitte des Musters sprang um eine Zelle. Gleich groß heißt
+    bis auf :data:`SAME_MEASURE` der größten; unter ihnen trägt die Naht die
+    Lücke, deren Mitte ``toward`` am nächsten liegt (:data:`SEAM_DIRECTION`).
+    Ein Feld, das nicht ganz herumläuft, hat eine Lücke, die größer ist als
+    alle anderen, und die Naht liegt wie zuvor in ihr.
+    """
     ordered = np.sort(np.mod(angles, 2.0 * math.pi))
     gaps = np.diff(np.append(ordered, ordered[0] + 2.0 * math.pi))
-    widest = int(np.argmax(gaps))
-    seam = float(ordered[widest]) + float(gaps[widest]) / 2.0
-    return seam + math.pi
+    middles = ordered + gaps / 2.0
+    candidates = np.flatnonzero(gaps >= float(gaps.max()) * (1.0 - SAME_MEASURE))
+    away = np.abs((middles[candidates] - toward + math.pi) % (2.0 * math.pi) - math.pi)
+    chosen = int(candidates[int(np.argmin(away))])
+    return float(middles[chosen]) + math.pi
 
 
 def _carriers_of(
@@ -1290,7 +1361,8 @@ class Frame:
 
     Die Naht der Abwicklung liegt der ersten Achse gegenüber (``θ = ±π``).
     Bei der Erkennung wählt :func:`_seam_reference` die erste Achse so, dass
-    die Naht in die größte Lücke zwischen den Zellen fällt. Ein gelesenes
+    die Naht in die größte Lücke zwischen den Zellen fällt — bei gleich großen
+    in die an :data:`SEAM_DIRECTION`, auch um Randstücke. Ein gelesenes
     Muster trägt danach seine Normale als erste Achse: Die Naht liegt seiner
     Mitte gegenüber, und ein Feld, das nicht ganz herumläuft, hat dort seine
     Lücke (:func:`frame_for`).

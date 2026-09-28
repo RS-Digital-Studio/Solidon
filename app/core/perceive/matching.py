@@ -35,7 +35,7 @@ from app.core.log import get_logger
 from app.core.perceive.match_records import valid_fingerprint
 from app.core.perceive.surfaces import radial_scales, transformed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import _
 
 if TYPE_CHECKING:
@@ -718,6 +718,92 @@ def match(
     if result.ambiguous:
         _log.info("feature matching left %d ambiguous", len(result.ambiguous))
     return result
+
+
+def settled_by_surface(
+    result: MatchResult,
+    old_places: Mapping[FeatureId, np.ndarray],
+    new_places: Mapping[FeatureId, np.ndarray],
+    diagonal: float,
+) -> MatchResult:
+    """Offene Zwillinge an der Lage ihrer Oberfläche entscheiden.
+
+    **Drei Bögen desselben Grats sind für :func:`match` ein Merkmal dreimal**:
+    dieselbe Art, Mitte, Achse und Größe — der Merkmalsvektor kennt nichts
+    anderes. Jede Auswertung meldete sie mehrdeutig; ohne Verweis kamen sie
+    unter neuen Namen zurück, mit Verweis fragte die Zuordnung den Kunden,
+    was die Geometrie beantwortet. Am Ring des Siebhalters traf es drei von
+    48 Verrundungen, nach *Kanten verfeinern*, *Bohrung setzen* weit weg und
+    *Verschieben* gleichermaßen (Durchsicht 0.5.1).
+
+    ``old_places`` und ``new_places`` sind je Merkmal der flächengewichtete
+    Schwerpunkt seiner Dreiecke, beide im Rahmen des neuen Körpers. Ein Paar
+    gilt nur, wenn es so nah liegt, wie :func:`cost` eine Lage annimmt
+    (:data:`POSITION_TOLERANCE` mal Diagonale bis :data:`MATCH_THRESHOLD`),
+    und wenn es **für beide Seiten** mit Vorsprung das nächste ist: der
+    zweitnächste um :data:`AMBIGUITY_MARGIN` weiter und dazu um mehr als
+    ``units.MAX_FACET_SAG`` — was näher beieinander liegt, unterscheidet das
+    Netz nicht. Die Untergrenze der Zuordnung (:data:`AMBIGUITY_FLOOR`, ein
+    Zwanzigstel der Lagetoleranz) gilt hier nicht: Sie trennt Kandidaten, die
+    beide praktisch auf der Stelle liegen; eine Oberfläche, die genau dort
+    liegt, und eine zweite 0,08 mm daneben — die Stufen einer geprägten
+    Schrift an der Bildschirmabdeckung — sind das nicht. Was sich so nicht
+    trennt, bleibt offen und wird gefragt, sobald ein Verweis daran hängt
+    (Regel 21). Wer die Lage nicht kennt — ein Merkmal ohne Dreiecke —,
+    entscheidet nichts.
+    """
+    if not result.ambiguous:
+        return result
+    scale = POSITION_TOLERANCE * max(diagonal, EPS_GEOM)
+    taken = set(result.mapping.values())
+    claimants: dict[FeatureId, list[FeatureId]] = {}
+    for old_id, candidates in result.ambiguous.items():
+        for candidate in candidates:
+            if candidate not in taken:
+                claimants.setdefault(candidate, []).append(old_id)
+
+    def apart(old_id: FeatureId, new_id: FeatureId) -> float:
+        one, two = old_places.get(old_id), new_places.get(new_id)
+        if one is None or two is None:
+            return math.inf
+        return float(np.linalg.norm(np.asarray(one, dtype=float) - np.asarray(two, dtype=float)))
+
+    def clearly_nearest(distances: list[float]) -> int | None:
+        """Welcher Abstand mit Vorsprung der kleinste ist — oder keiner."""
+        ordered = sorted((value, index) for index, value in enumerate(distances))
+        if not ordered or not ordered[0][0] / scale <= MATCH_THRESHOLD:
+            return None
+        best, index = ordered[0]
+        runner = ordered[1][0] if len(ordered) > 1 else math.inf
+        return index if runner > best * (1.0 + AMBIGUITY_MARGIN) + MAX_FACET_SAG else None
+
+    settled: dict[FeatureId, FeatureId] = {}
+    for old_id, candidates in result.ambiguous.items():
+        free = [candidate for candidate in candidates if candidate not in taken]
+        forth = [apart(old_id, candidate) for candidate in free]
+        pick = clearly_nearest(forth) if not any(map(math.isinf, forth)) else None
+        if pick is None:
+            continue
+        chosen = free[pick]
+        rivals = claimants[chosen]
+        back = [apart(rival, chosen) for rival in rivals]
+        if any(map(math.isinf, back)):
+            continue
+        nearest = clearly_nearest(back)
+        if nearest is not None and rivals[nearest] == old_id:
+            settled[old_id] = chosen
+    if not settled:
+        return result
+    return replace(
+        result,
+        mapping={**result.mapping, **settled},
+        ambiguous={
+            old_id: candidates
+            for old_id, candidates in result.ambiguous.items()
+            if old_id not in settled
+        },
+        fresh=tuple(name for name in result.fresh if name not in set(settled.values())),
+    )
 
 
 def require_injective(mapping: Mapping[str, str]) -> None:
