@@ -102,7 +102,7 @@ dans `website/version.json`.
 
 - Le choix d'arêtes « Horizontal », « Haut » ou « Bas » ne prend plus le bord d'un perçage latéral. Pour le traiter, choisissez-le seul ; les anciens projets calculent comme enregistrés.
 - Sur un modèle importé, le bord d'un perçage est arrondi ou chanfreiné aussi profond que sur une pièce construite. Avant, avec de grands rayons, le congé restait jusqu'à un cinquième trop plat.
-- Si un rayon ou un chanfrein ne tient pas sur chaque arête de la sélection, Solidon traite celles où il tient et montre les autres avec « Montrer l'endroit ». Avant, toute l'étape refusait.
+- Si un rayon ou un chanfrein ne tient pas sur chaque arête d'un choix comme « Tous » ou « Vertical », Solidon traite les autres au lieu de refuser, et « Montrer l'endroit » indique où.
 
 ### Cotes dans la vue
 
@@ -179,12 +179,12 @@ dans `website/version.json`.
 - Le slicer se choisit dans les réglages d'impression au-dessus des profils, même quand cette section est repliée.
 - L'imprimante choisie dans les réglages d'impression vaut aussi pour le prochain nouveau projet. Si votre slicer est réglé sur une autre imprimante, les réglages la proposent en un clic.
 - Si vous choisissez une autre imprimante ou un autre slicer, le profil de machine mémorisé du précédent ne s'applique plus.
-- Un nombre saisi hors des limites d'un champ est refusé au lieu d'être tronqué en silence, et Solidon indique la limite.
+- Dans la barre des paramètres et dans la boîte de dialogue d'une opération, un nombre saisi hors limites est refusé au lieu d'être tronqué en silence, et Solidon indique la limite.
 - La question avant de supprimer une étape nomme les étapes dépendantes qui partent avec elle.
 - L'historique nomme un paramètre modifié par son libellé et montre la valeur avant et après.
 - La poignée d'une face sélectionnée ne montre plus que la flèche qui sert à la déplacer.
 - Sans texte, « Appliquer du texte » dit que le texte manque au lieu de déclarer l'aperçu indisponible.
-- L'outil « Séparer » et l'opération « Diviser » portent désormais des noms différents dans chaque langue, et l'interface italienne tutoie partout.
+- Dans toutes les traductions, « Séparer » et « Diviser » portent désormais des noms différents, et l'interface italienne tutoie partout.
 
 ### Assistant avec un modèle local
 

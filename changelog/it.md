@@ -101,7 +101,7 @@ scrive in `website/version.json`.
 
 - La scelta di spigoli «Orizzontale», «Alto» o «Basso» non prende più il bordo di un foro laterale. Se lo vuoi, sceglilo da solo; i progetti più vecchi calcolano come salvati.
 - Su un modello importato il bordo di un foro viene raccordato o smussato in profondità come su un pezzo costruito. Prima, con raggi grandi, il raccordo veniva fino a un quinto troppo piatto.
-- Se un raggio o uno smusso non sta su ogni spigolo della selezione, Solidon lavora gli spigoli dove sta e mostra gli altri con «Mostra il punto». Prima rifiutava l'intero passaggio.
+- Se un raggio o uno smusso non sta su ogni spigolo di una scelta come «Tutti» o «Verticale», Solidon lavora gli altri e mostra con «Mostra il punto» dove non sta, invece di rifiutare.
 
 ### Quote nella vista
 
@@ -178,12 +178,12 @@ scrive in `website/version.json`.
 - Lo slicer si sceglie nelle impostazioni di stampa sopra i profili, anche quando quella sezione è chiusa.
 - La stampante scelta nelle impostazioni di stampa vale anche per il prossimo progetto nuovo. Se il tuo slicer è impostato su un'altra stampante, le impostazioni te la propongono con un clic.
 - Se scegli un'altra stampante o un altro slicer, il profilo macchina memorizzato del precedente non vale più.
-- Un numero digitato fuori dai limiti di un campo viene rifiutato invece di essere troncato in silenzio, e Solidon indica il limite.
+- Nella barra dei parametri e nella finestra di un'operazione, un numero digitato fuori dai limiti viene rifiutato invece di essere troncato in silenzio, e Solidon indica il limite.
 - La domanda prima di eliminare un passaggio nomina i passaggi dipendenti che vengono eliminati insieme.
 - La cronologia indica un parametro modificato con la sua etichetta e mostra il valore prima e dopo.
 - La maniglia di una faccia selezionata mostra solo la freccia con cui la sposti.
 - Senza testo, «Applica testo» dice che manca il testo invece di dichiarare l'anteprima non disponibile.
-- Lo strumento «Taglia» e l'operazione «Dividi» hanno ora nomi diversi in ogni lingua, e l'interfaccia italiana dà del tu ovunque.
+- In tutte le traduzioni «Taglia» e «Dividi» hanno ora nomi diversi, e l'interfaccia italiana dà del tu ovunque.
 
 ### Assistente con modello locale
 

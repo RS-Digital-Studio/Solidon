@@ -101,7 +101,7 @@ it into `website/version.json`.
 
 - The edge choice *Horizontal*, *Top* or *Bottom* no longer takes in the rim of a bore in a side wall. If you mean it, pick it on its own; older projects compute as saved.
 - On an imported model, the rim of a bore is filleted or chamfered as deep as on a designed part. Before, with large radii the rounding came out up to a fifth too shallow.
-- If a radius or chamfer does not fit every edge of the selection, Solidon works the edges where it fits and shows the rest with *Show the place*. Before, the whole step declined.
+- If a radius or chamfer does not fit every edge of an edge choice such as *All* or *Vertical*, Solidon works the rest and shows with *Show the place* where it does not fit, instead of declining.
 
 ### Dimensions in the view
 
@@ -178,12 +178,12 @@ it into `website/version.json`.
 - You choose the slicer in the print settings above the profiles, even when that section is collapsed.
 - A printer you choose in the print settings is also used for the next new project. If your slicer is set to a different printer, the settings offer it with one click.
 - If you choose a different printer or slicer, the remembered machine profile of the previous one no longer applies.
-- A typed number outside a field's limits is refused instead of being silently cut short, and Solidon names the limit.
+- In the parameter bar and in an operation's dialog, a typed number outside the limits is refused instead of being silently cut short, and Solidon names the limit.
 - The question before deleting a step names the dependent steps that go with it.
 - The history names a changed parameter by its label and shows the value before and after.
 - The handle on a selected face now shows only the arrow you move it with.
 - Without text, *Put text on* says that the text is missing instead of declaring the preview unavailable.
-- The *Cut* tool and the *Split* operation now have different names in every language, and the Italian interface addresses you informally throughout.
+- In every translation, *Cut* and *Split* now have different names, and the Italian interface addresses you informally throughout.
 
 ### Assistant with a local model
 

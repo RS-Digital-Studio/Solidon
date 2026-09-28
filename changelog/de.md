@@ -126,7 +126,7 @@ Nutzen da und sonst nichts.
 
 - Die Kantenwahl *Waagerecht*, *Oben* oder *Unten* nimmt den Rand einer seitlichen Bohrung nicht mehr mit. Wer ihn meint, wählt ihn einzeln; ältere Projekte rechnen wie gespeichert.
 - Am eingelesenen Modell wird der Rand einer Bohrung so tief verrundet oder angefast wie am konstruierten Teil. Vorher fiel die Rundung bei großen Radien bis zu einem Fünftel zu flach aus.
-- Passt ein Radius oder eine Fase nicht an jede Kante der Auswahl, bearbeitet Solidon die Kanten, an denen das Maß passt, und zeigt die übrigen mit *Stelle zeigen*. Vorher sagte der ganze Schritt ab.
+- Passen Radius oder Fase nicht an jede Kante einer Kantenwahl wie *Alle* oder *Senkrecht*, bearbeitet Solidon die übrigen und zeigt mit *Stelle zeigen*, wo das Maß nicht passt, statt ganz abzusagen.
 
 ### Maße im Bild
 
@@ -203,12 +203,12 @@ Nutzen da und sonst nichts.
 - Den Slicer wählen Sie im Druckdialog über den Profilen, auch wenn dieser Abschnitt zugeklappt ist.
 - Einen Drucker, den Sie im Druckdialog wählen, bekommt auch das nächste neue Projekt. Ist Ihr Slicer auf einen anderen Drucker eingestellt, bietet der Dialog diesen mit einem Klick an.
 - Wählen Sie einen anderen Drucker oder Slicer, gilt das gemerkte Maschinenprofil des vorigen nicht mehr.
-- Eine getippte Zahl außerhalb der Grenzen eines Feldes wird abgelehnt statt still gekürzt, und Solidon nennt die Grenze.
+- In der Parameterleiste und im Dialog einer Operation wird eine getippte Zahl außerhalb der Grenzen abgelehnt statt still gekürzt, und Solidon nennt die Grenze.
 - Die Nachfrage vor dem Löschen eines Schritts nennt die abhängigen Schritte, die mitgehen.
 - Der Verlauf nennt einen geänderten Parameter mit seiner Beschriftung und zeigt den Wert davor und danach.
 - Der Griff an einer gewählten Fläche zeigt nur noch den Pfeil, mit dem Sie sie verschieben.
 - Ohne Text sagt *Text aufbringen*, dass der Text fehlt, statt die Vorschau für nicht verfügbar zu erklären.
-- Das Werkzeug *Trennen* und die Operation *Teilen* heißen jetzt in jeder Sprache verschieden, und die italienische Oberfläche duzt durchgehend.
+- In den Übersetzungen heißen *Trennen* und *Teilen* jetzt überall verschieden, und die italienische Oberfläche duzt durchgehend.
 
 ### Assistent mit lokalem Modell
 

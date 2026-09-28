@@ -102,7 +102,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - La elección de aristas «Horizontal», «Superior» o «Abajo» ya no incluye el borde de un taladro lateral. Si lo quiere, elíjalo aparte; los proyectos antiguos calculan como se guardaron.
 - En un modelo importado, el borde de un taladro se redondea o achaflana tan hondo como en una pieza construida. Antes, con radios grandes, el redondeo salía hasta un quinto más plano.
-- Si un radio o un chaflán no cabe en todas las aristas de la selección, Solidon trabaja las aristas donde cabe y muestra las demás con «Mostrar el punto». Antes se negaba todo el paso.
+- Si un radio o chaflán no cabe en todas las aristas de una elección como «Todos» o «Vertical», Solidon trabaja las demás y muestra con «Mostrar el punto» dónde no cabe, en vez de negarse.
 
 ### Cotas en la vista
 
@@ -179,12 +179,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El slicer se elige en los ajustes de impresión encima de los perfiles, aunque esa sección esté plegada.
 - La impresora que elija en los ajustes de impresión pasa también al siguiente proyecto nuevo. Si su slicer está en otra impresora, el diálogo la ofrece con un clic.
 - Si elige otra impresora u otro slicer, el perfil de máquina recordado del anterior deja de valer.
-- Un número tecleado fuera de los límites de un campo se rechaza en vez de recortarse en silencio, y Solidon indica el límite.
+- En la barra de parámetros y en el diálogo de una operación, un número tecleado fuera de los límites se rechaza en vez de recortarse en silencio, y Solidon indica el límite.
 - La pregunta antes de borrar un paso nombra los pasos dependientes que se van con él.
 - El historial nombra un parámetro cambiado con su etiqueta y muestra el valor antes y después.
 - El tirador de una cara seleccionada muestra solo la flecha con la que se desplaza.
 - Sin texto, «Aplicar texto» dice que falta el texto en vez de dar la vista previa por no disponible.
-- La herramienta «Separar» y la operación «Dividir» se llaman ahora distinto en cada idioma, y la interfaz italiana tutea en todas partes.
+- En todas las traducciones, «Separar» y «Dividir» se llaman ahora de forma distinta, y la interfaz italiana tutea en todas partes.
 
 ### Asistente con modelo local
 

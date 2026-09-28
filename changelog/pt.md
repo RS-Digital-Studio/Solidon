@@ -101,7 +101,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - A escolha de arestas «Horizontal», «Em cima» ou «Em baixo» já não inclui o bordo de um furo lateral. Se o quiser, escolha-o à parte; os projetos antigos calculam como foram guardados.
 - Num modelo importado, o bordo de um furo é arredondado ou chanfrado tão fundo como numa peça construída. Antes, com raios grandes, o arredondamento ficava até um quinto mais raso.
-- Se um raio ou um chanfro não cabe em todas as arestas da seleção, o Solidon trabalha as arestas onde cabe e mostra as restantes com «Mostrar o ponto». Antes recusava o passo inteiro.
+- Se um raio ou chanfro não cabe em todas as arestas de uma escolha como «Todos» ou «Vertical», o Solidon trabalha as restantes e mostra com «Mostrar o ponto» onde não cabe, em vez de recusar.
 
 ### Cotas na vista
 
@@ -178,12 +178,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O slicer escolhe-se nas definições de impressão por cima dos perfis, mesmo com essa secção recolhida.
 - A impressora escolhida nas definições de impressão passa também para o próximo projeto novo. Se o seu slicer estiver noutra impressora, as definições oferecem-na com um clique.
 - Se escolher outra impressora ou outro slicer, o perfil de máquina memorizado do anterior deixa de valer.
-- Um número escrito fora dos limites de um campo é recusado em vez de ser cortado em silêncio, e o Solidon indica o limite.
+- Na barra de parâmetros e na janela de uma operação, um número escrito fora dos limites é recusado em vez de ser cortado em silêncio, e o Solidon indica o limite.
 - A pergunta antes de apagar um passo indica os passos dependentes que vão com ele.
 - O histórico indica um parâmetro alterado pela sua etiqueta e mostra o valor antes e depois.
 - A pega de uma face selecionada mostra só a seta com que a desloca.
 - Sem texto, «Aplicar texto» diz que falta o texto em vez de dar a pré-visualização como indisponível.
-- A ferramenta «Separar» e a operação «Dividir» têm agora nomes diferentes em cada língua, e a interface italiana trata por tu em todo o lado.
+- Em todas as traduções, «Separar» e «Dividir» têm agora nomes diferentes, e a interface italiana trata por tu em todo o lado.
 
 ### Assistente com modelo local
 
