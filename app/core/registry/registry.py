@@ -684,6 +684,23 @@ class OperationSpec:
     wie bei den drei benannten Lesarten daneben, nur ohne Parameter, an dem
     sie hinge — hier wird nicht ein bestimmter Träger gelesen, sondern die
     Szene als Ganzes."""
+    reads_process: bool = True
+    """Liest Prozesswerte des Profils: Schichthöhe, Bahnbreite, Überhanggrenze
+    oder was daraus folgt — Mindestwand, Überhangwinkel, kleinstes druckbares
+    Volumen, kleinste Aufstandsfläche, Exporttoleranz, Schichtanalyse
+    (``hashing._profile_parts``).
+
+    Der Druckdialog setzt diese Werte (``profiles.for_process``), und mit
+    ihnen im Schlüssel rechnete nach „Im Slicer öffnen" der ganze Verlauf neu —
+    am Minigolf-Satz auch Einlesen und Kopieren, die keinen davon lesen
+    (28.09.2026). ``False`` nimmt sie aus dem Schlüssel dieses Schritts.
+
+    **Die Vorgabe ist sicher**: Ein falscher Treffer gäbe eine veraltete
+    Geometrie zurück, und das ist schlimmer als eine langsame Rechnung.
+    ``False`` steht nur, wo die Operation und alles, was sie aufruft,
+    belegt keinen Prozesswert liest; ``tests/test_cache.py`` führt die Liste
+    mit Beleg und lässt jede davon an einem Profil laufen, das beim Lesen
+    eines Prozesswerts abbricht."""
     also_on_body: bool = False
     """Gilt auch ohne gewähltes Merkmal, am ganzen Körper.
 
@@ -1024,6 +1041,7 @@ def register_op(
     requires_body: str = "",
     whole_scene: bool = False,
     reads_other_bodies: bool = False,
+    reads_process: bool = True,
     also_on_body: bool = False,
     edges_on_mesh: bool = False,
     produces_from: str | None = None,
@@ -1063,6 +1081,7 @@ def register_op(
                 requires_body=requires_body,
                 whole_scene=whole_scene,
                 reads_other_bodies=reads_other_bodies,
+                reads_process=reads_process,
                 also_on_body=also_on_body,
                 edges_on_mesh=edges_on_mesh,
                 produces_from=produces_from,

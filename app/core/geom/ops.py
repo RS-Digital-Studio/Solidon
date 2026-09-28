@@ -288,6 +288,8 @@ def _stood_still(matrix: object) -> list[Finding]:
 
 @register_op(
     name="translate_object",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     cache_version="2",
     title=_("Verschieben"),
     category="transform",
@@ -368,6 +370,8 @@ class RotateParams(BaseParams):
 
 @register_op(
     name="rotate_object",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     cache_version="2",
     title=_("Drehen"),
     category="transform",
@@ -603,6 +607,8 @@ class MirrorParams(BaseParams):
 
 @register_op(
     name="mirror_object",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Spiegeln"),
     category="transform",
     params=MirrorParams,
@@ -1008,6 +1014,8 @@ class PlaceOnBedParams(BaseParams):
 
 @register_op(
     name="place_on_bed",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Auf das Bett setzen"),
     category="transform",
     params=PlaceOnBedParams,
@@ -1024,6 +1032,8 @@ def place_object_on_bed(ctx: OpContext) -> OpResult:
 
 @register_op(
     name="place_group_on_bed",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Gemeinsam auf das Bett setzen"),
     category="transform",
     params=PlaceOnBedParams,

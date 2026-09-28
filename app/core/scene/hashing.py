@@ -2,7 +2,8 @@
 
 Der Hash einer Operation deckt alles, wovon ihr Ergebnis abhängt: die
 Operation selbst, ihre aufgelösten Parameter, die Hashes ihrer Eingaben,
-Profil, Qualitätsstufe und Startwert. Daraus fallen zwei Folgen:
+Profil (die Prozesswerte darin nur, wenn sie sie liest), Qualitätsstufe und
+Startwert. Daraus fallen zwei Folgen:
 
 * eine Parameteränderung entwertet nur den Zweig darunter — der Rest kommt aus
   dem Cache, und genau das hält eine Parameteränderung unter zwei
@@ -50,10 +51,73 @@ def digest(*parts: Any) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
 
 
-def profile_key(profile: Profile) -> str:
+#: Die beiden Arten von Profilwerten in :func:`_profile_parts`: fest am Drucker
+#: und Material, oder aus den Druckeinstellungen des Projekts.
+_FIXED = False
+_PROCESS = True
+
+#: Steht vor einem Profilschlüssel ohne Prozesswerte, damit er nie einem
+#: vollständigen gleicht.
+_WITHOUT_PROCESS = "without-process"
+
+
+def _profile_parts(profile: Profile) -> tuple[tuple[bool, Any], ...]:
+    """Jeder Profilwert des Schlüssels, in seiner Reihenfolge, mit seiner Art.
+
+    **Prozesswerte** sind, was ``profiles.for_process`` aus den
+    Druckeinstellungen setzt — Schichthöhe, Bahnbreite, Stützschwelle — und
+    was sich nur daraus ableitet: Mindestwand und Überhanggrenze, in die auch
+    eine Probe am eigenen Drucker nur über diese beiden eingeht. Der Druckdialog
+    ändert sie, ohne dass sich an Drucker oder Material etwas ändert; ein
+    Schritt, der keinen davon liest, behält sein Ergebnis
+    (``OperationSpec.reads_process``).
+
+    Die Reihenfolge ist die des vollständigen Schlüssels, wie er vor der
+    Trennung stand: Er benennt auch Filamentbuchungen
+    (``filament_usage.usage_requests``), und ein anderer Wert ließe eine schon
+    gebuchte Platte wie eine ungebuchte aussehen.
+    """
+    printer = profile.printer
+    material = profile.material
+    return (
+        (_FIXED, printer.id),
+        (_FIXED, printer.technology),
+        (_FIXED, printer.nozzle_diameter),
+        (_PROCESS, printer.layer_height),
+        (_PROCESS, printer.extrusion_width),
+        (_FIXED, printer.pixel_size),
+        (_FIXED, printer.minimum_wall),
+        (_FIXED, printer.build_volume),
+        (_FIXED, printer.printable_area),
+        (_FIXED, printer.bed_exclusions),
+        (_FIXED, printer.printable_height),
+        (_FIXED, printer.nozzles),
+        # Die Überhanggrenze des Herstellers (27.09.2026). Sie wirkt über
+        # ``profile.overhang_limit_degrees`` darunter — aber nur ohne passende
+        # Probe; das Feld selbst steht hier, damit der Schlüssel nicht davon
+        # abhängt, ob gerade eine Messung davorsteht.
+        (_PROCESS, printer.overhang_limit),
+        (_FIXED, material.id),
+        (_FIXED, material.clearance),
+        (_FIXED, material.press),
+        (_FIXED, material.hole_compensation),
+        (_FIXED, material.elephant_foot),
+        (_FIXED, material.shrinkage),
+        (_FIXED, material.youngs_modulus),
+        (_FIXED, material.yield_strength),
+        (_FIXED, material.layer_bond_ratio),
+        (_PROCESS, profile.minimum_wall_thickness),
+        (_PROCESS, profile.overhang_limit_degrees),
+    )
+
+
+def profile_key(profile: Profile, *, process: bool = True) -> str:
     """Was an einem Profil ein Ergebnis ändern kann: Toleranzen,
     Düsengeometrie — und das Verfahren, denn ein auf Resin umgestelltes
     Projekt darf seine Befunde nicht aus dem FDM-Cache holen.
+
+    ``process=False`` lässt die Prozesswerte aus (:func:`_profile_parts`) —
+    für einen Schritt, der keinen davon liest. Die Vorgabe nimmt sie auf.
 
     **Und die Zahl der Düsen.** *Auf dem Bett anordnen* und *Druckoptimal
     ausrichten* legen die Filamente nur dann auf eigene Platten, wenn der
@@ -66,38 +130,10 @@ def profile_key(profile: Profile) -> str:
     Welches Feld hier fehlen darf, weil keine Operation es liest, hält
     ``tests/test_cache.py`` je Feld fest: Ein neues Profilfeld ist damit eine
     Entscheidung und keine stille Lücke im Schlüssel."""
-    printer = profile.printer
-    material = profile.material
-    return digest(
-        printer.id,
-        printer.technology,
-        printer.nozzle_diameter,
-        printer.layer_height,
-        printer.extrusion_width,
-        printer.pixel_size,
-        printer.minimum_wall,
-        printer.build_volume,
-        printer.printable_area,
-        printer.bed_exclusions,
-        printer.printable_height,
-        printer.nozzles,
-        # Die Überhanggrenze des Herstellers (27.09.2026). Sie wirkt über
-        # ``profile.overhang_limit_degrees`` darunter — aber nur ohne passende
-        # Probe; das Feld selbst steht hier, damit der Schlüssel nicht davon
-        # abhängt, ob gerade eine Messung davorsteht.
-        printer.overhang_limit,
-        material.id,
-        material.clearance,
-        material.press,
-        material.hole_compensation,
-        material.elephant_foot,
-        material.shrinkage,
-        material.youngs_modulus,
-        material.yield_strength,
-        material.layer_bond_ratio,
-        profile.minimum_wall_thickness,
-        profile.overhang_limit_degrees,
-    )
+    parts = _profile_parts(profile)
+    if process:
+        return digest(*(value for _kind, value in parts))
+    return digest(_WITHOUT_PROCESS, *(value for kind, value in parts if kind is _FIXED))
 
 
 def operation_hash(
@@ -109,19 +145,31 @@ def operation_hash(
     *,
     implementation_version: str = "",
     material_profiles: Mapping[str, Profile] | None = None,
+    process: bool = True,
 ) -> str:
-    """Die Identität eines gerechneten Ergebnisses."""
+    """Die Identität eines gerechneten Ergebnisses.
+
+    ``process`` sagt, ob der Schritt Prozesswerte liest
+    (``OperationSpec.reads_process``); ohne sie bleibt sein Schlüssel, wenn
+    der Druckdialog Schichthöhe, Bahnbreite oder Stützschwelle ändert. Das
+    gilt für das Projektprofil und für das Profil jedes Eingangs mit eigenem
+    Material gleich."""
     return digest(
         cache.CACHE_FORMAT_VERSION,
         operation.op,
         params,
         list(input_hashes),
-        profile_key(profile),
+        profile_key(profile, process=process),
         quality,
         operation.seed,
         implementation_version,
         *(
-            [{name: profile_key(value) for name, value in material_profiles.items()}]
+            [
+                {
+                    name: profile_key(value, process=process)
+                    for name, value in material_profiles.items()
+                }
+            ]
             if material_profiles
             else []
         ),

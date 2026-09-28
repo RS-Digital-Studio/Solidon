@@ -138,6 +138,15 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   `OperationSpec.cache_version` (der geladene Stand), `CACHE_FORMAT_VERSION`
   (Stand der Erkennung, kein Projektformat). Beschädigtes wird neu gerechnet
   (`_DAMAGED_ENTRY`).
+- **Prozesswerte nur im Schlüssel eines Schritts, der sie liest**: Schichthöhe,
+  Bahnbreite, Stützschwelle und was aus ihnen folgt (`hashing._profile_parts`)
+  setzt der Druckdialog. **Die Vorgabe liest** (`OperationSpec.reads_process`),
+  denn ein falscher Treffer liefert veraltete Geometrie; `False` nur mit Beleg
+  über die Operation und alles, was sie aufruft, eingetragen in
+  `_STEPS_WITHOUT_PROCESS` (`tests/test_cache.py`), das jede davon an einem
+  wachenden Profil laufen lässt. Wer einer freigestellten Operation einen
+  Prozesswert zu lesen gibt, nimmt `False` heraus. Der volle `profile_key`
+  bleibt bytegleich — er benennt auch Filamentbuchungen.
 - **Merkmale reisen durch beide Ebenen** (`cache.feature_to_data`): Maßquellen
   (fehlende bleiben unbekannt; `bore_advice` trennt Beleg, Schätzung und
   Vorgabe) und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter

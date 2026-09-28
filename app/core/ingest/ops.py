@@ -182,6 +182,8 @@ class LoadParams(BaseParams):
 
 @register_op(
     name="load",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     # Der Befund ``ingest.very_large`` reist in der rohen Ausgabe mit; ein
     # geänderter Satz darüber verlangt einen neuen Eintrag, keinen alten.
     # 4: Das Schließen in Schritt 4b füllt Löcher in ihrer Form, Außen gilt
@@ -467,6 +469,8 @@ class LoadOutlineParams(BaseParams):
 
 @register_op(
     name="load_outline",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Zeichnung hochziehen"),
     category="import",
     params=LoadOutlineParams,

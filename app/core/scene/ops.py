@@ -28,6 +28,8 @@ class RenameObjectParams(BaseParams):
 
 @register_op(
     name="rename_object",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Objekt umbenennen"),
     category="scene",
     params=RenameObjectParams,
@@ -44,6 +46,8 @@ def rename_object(ctx: OpContext) -> OpResult:
 
 @register_op(
     name="delete_object",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Objekt entfernen"),
     category="scene",
     params=BaseParams,
@@ -99,6 +103,8 @@ class DuplicateObjectParams(BaseParams):
 
 @register_op(
     name="duplicate_object",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     title=_("Objekt duplizieren"),
     category="scene",
     params=DuplicateObjectParams,
@@ -237,6 +243,8 @@ class PatternParams(BaseParams):
 
 @register_op(
     name="pattern",
+    # Liest keinen Prozesswert (Beleg: ``_STEPS_WITHOUT_PROCESS`` in tests/test_cache.py).
+    reads_process=False,
     # Nicht „Muster": Das Wort heißt in dieser Anwendung schon etwas anderes —
     # *Textur aufbringen* hat einen Parameter „Muster", und der meint Rändel
     # und Wabe. Ein Menüeintrag und ein Feld mit demselben Wort für zwei

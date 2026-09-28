@@ -465,6 +465,28 @@ Ergebnisse im Speicher- und Dateicache. Die Version beschreibt den geladenen
 Code beziehungsweise die registrierten Rezeptdaten, nicht eine inzwischen
 anderweitig geänderte Datei.
 
+**Prozesswerte nur im Schlüssel eines Schritts, der sie liest** (28.09.2026,
+`CACHE_FORMAT_VERSION` 32). „Im Slicer öffnen“ schreibt die Einstellungen des
+Druckdialogs ins Projekt, und `profiles.for_process` setzt daraus Schichthöhe,
+Bahnbreite und Stützschwelle ins Auswertungsprofil. Solange jeder
+Schrittschlüssel diese Werte trug, lief danach der ganze Verlauf neu — am
+Minigolf-Satz (12 Schritte, 16 Körper) auch Einlesen und Kopieren, die keinen
+davon lesen. `hashing._profile_parts` führt jeden Profilwert mit seiner Art;
+Prozesswerte sind die drei Druckerfelder und die daraus folgende Mindestwand
+und Überhanggrenze, in die auch eine Probe am eigenen Drucker nur über diese
+beiden eingeht. Die Vorgabe am Register liest (`reads_process=True`), weil ein
+falscher Treffer eine veraltete Geometrie zurückgäbe — schlimmer als eine
+langsame Rechnung. Freigestellt sind nur die Schritte in
+`tests/test_cache.py::_STEPS_WITHOUT_PROCESS`, je mit dem Beleg am Code; die
+Wache (`_ProcessGuard`) lässt jeden an einem Profil laufen, das beim Lesen
+eines Prozesswerts abbricht. Der volle Schlüssel blieb bytegleich, weil er auch
+Filamentbuchungen benennt (`filament_usage.usage_requests`). Gemessen am
+Minigolf-Satz, im Wechsel in einem Prozess: Einlesen und Kopieren entfallen,
+die zweite Auswertung bleibt aber von den beiden Ausrichtungsschritten
+bestimmt (49 bis 97 s unter Fremdlast), die alle drei Werte lesen und zu Recht
+neu rechnen; Einlesen und Kopieren kosteten dort unter einer Sekunde, weil der
+inhaltsgeschlüsselte Merkmalsmerker warm war.
+
 `CACHE_FORMAT_VERSION` versieht auch den Operationshash mit dem Stand der
 Geometrie- und Merkmalsauskunft. Eine geänderte Erkennung entwertet damit
 Speicher- und Platteneinträge gemeinsam. Dokumentwerte und gespeicherte

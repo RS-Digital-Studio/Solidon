@@ -127,7 +127,11 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   (``geom.attributes.in_source_layout``). Ein älterer Eintrag trägt die des
 #:   Kerns, und die Erkennung läse nach dem Öffnen in den letzten Stellen
 #:   anders als in der Sitzung.
-CACHE_FORMAT_VERSION: Final = 31
+#: - 32 (28.09.2026): Ein Schritt, der keinen Prozesswert liest
+#:   (``OperationSpec.reads_process``), trägt Schichthöhe, Bahnbreite und
+#:   Überhanggrenze nicht mehr im Schlüssel — Laden, Kopieren und Verschieben
+#:   bleiben, wenn der Druckdialog sie ändert.
+CACHE_FORMAT_VERSION: Final = 32
 
 
 @dataclass(frozen=True, slots=True)

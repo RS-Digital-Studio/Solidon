@@ -31,8 +31,8 @@ steht, was je Schritt dazugehört.
 Dann zwei bestehende Ops desselben Gebiets und die aktuelle Signatur von
 `register_op` in `app/core/registry/registry.py` lesen. Die Felder der
 Checkliste sind nur die Grundfelder: `requires_kind`, `reads_other_bodies`,
-`touches_features`, `material_params` und `cache_version` bewusst setzen oder
-bewusst weglassen. Aufrufer und Einstiege bestimmen — Menü, Auswahlfenster am
+`reads_process`, `touches_features`, `material_params` und `cache_version`
+bewusst setzen oder bewusst weglassen. Aufrufer und Einstiege bestimmen — Menü, Auswahlfenster am
 Merkmal, Befehlspalette, Agent, Kommandozeile.
 
 ## Je Schritt

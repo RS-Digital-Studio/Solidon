@@ -435,8 +435,31 @@ def _changed(value: object) -> object:
     raise AssertionError(f"no changed value for {value!r}")
 
 
+#: Prozesswerte (``hashing._profile_parts``): was der Druckdialog setzt
+#: (``profiles.for_process``) und was nur über die daraus folgende Mindestwand
+#: und Überhanggrenze wirkt — die Probe am eigenen Drucker gilt nur mit
+#: passender Schichthöhe und Bahnbreite. Ein Schritt mit
+#: ``reads_process=False`` behält seinen Schlüssel, wenn sich eines davon
+#: ändert; jedes andere Feld des Schlüssels ändert auch seinen.
+_PRINTER_PROCESS_FIELDS = frozenset({"layer_height", "extrusion_width", "overhang_limit"})
+_MATERIAL_PROCESS_FIELDS = frozenset(
+    {
+        "minimum_wall",
+        "overhang_angle",
+        "calibration_printer",
+        "calibration_nozzle_diameter",
+        "calibration_layer_height",
+        "calibration_extrusion_width",
+    }
+)
+
+
 def test_every_profile_field_is_in_the_key_or_named_as_unread(profile: Profile) -> None:
-    """Jedes Drucker- und Materialfeld ändert den Schlüssel — oder steht mit Grund oben."""
+    """Jedes Drucker- und Materialfeld ändert den Schlüssel — oder steht mit Grund oben.
+
+    Und den Schlüssel ohne Prozesswerte ändert genau das, was kein Prozesswert
+    ist: Fehlte dort ein festes Feld, käme ein Schritt, der es liest, nach
+    einem Druckerwechsel mit dem alten Ergebnis aus dem Speicher."""
     printer_fields = {field.name for field in dataclasses.fields(profile.printer)}
     material_fields = {field.name for field in dataclasses.fields(profile.material)}
     assert set(_PRINTER_FIELDS_NO_OPERATION_READS) <= printer_fields
@@ -460,15 +483,503 @@ def test_every_profile_field_is_in_the_key_or_named_as_unread(profile: Profile) 
             other = dataclasses.replace(calibrated.printer, technology="resin")
         else:
             other = dataclasses.replace(calibrated.printer, **{name: _changed(value)})
-        assert profile_key(calibrated) != profile_key(
-            dataclasses.replace(calibrated, printer=other)
-        ), f"printer.{name} does not enter the profile key"
+        changed = dataclasses.replace(calibrated, printer=other)
+        assert profile_key(calibrated) != profile_key(changed), (
+            f"printer.{name} does not enter the profile key"
+        )
+        same_without_process = profile_key(calibrated, process=False) == profile_key(
+            changed, process=False
+        )
+        assert same_without_process == (name in _PRINTER_PROCESS_FIELDS), (
+            f"printer.{name} is on the wrong side of the process split"
+        )
     for name in sorted(material_fields - set(_MATERIAL_FIELDS_NO_OPERATION_READS)):
         value = getattr(calibrated.material, name)
         other_material = dataclasses.replace(calibrated.material, **{name: _changed(value)})
-        assert profile_key(calibrated) != profile_key(
-            dataclasses.replace(calibrated, material=other_material)
-        ), f"material.{name} does not enter the profile key"
+        changed = dataclasses.replace(calibrated, material=other_material)
+        assert profile_key(calibrated) != profile_key(changed), (
+            f"material.{name} does not enter the profile key"
+        )
+        same_without_process = profile_key(calibrated, process=False) == profile_key(
+            changed, process=False
+        )
+        assert same_without_process == (name in _MATERIAL_PROCESS_FIELDS), (
+            f"material.{name} is on the wrong side of the process split"
+        )
+    assert printer_fields >= _PRINTER_PROCESS_FIELDS
+    assert material_fields >= _MATERIAL_PROCESS_FIELDS
+
+
+def test_the_full_profile_key_keeps_its_value(profile: Profile) -> None:
+    """Der vollständige Schlüssel ist derselbe wie vor der Trennung.
+
+    Er benennt nicht nur Cacheeinträge, sondern auch Filamentbuchungen
+    (``filament_usage.usage_requests``): Ein anderer Wert ließe eine gebuchte
+    Platte ungebucht aussehen, und sie würde ein zweites Mal abgebucht."""
+    printer = profile.printer
+    material = profile.material
+    before_split = digest(
+        printer.id,
+        printer.technology,
+        printer.nozzle_diameter,
+        printer.layer_height,
+        printer.extrusion_width,
+        printer.pixel_size,
+        printer.minimum_wall,
+        printer.build_volume,
+        printer.printable_area,
+        printer.bed_exclusions,
+        printer.printable_height,
+        printer.nozzles,
+        printer.overhang_limit,
+        material.id,
+        material.clearance,
+        material.press,
+        material.hole_compensation,
+        material.elephant_foot,
+        material.shrinkage,
+        material.youngs_modulus,
+        material.yield_strength,
+        material.layer_bond_ratio,
+        profile.minimum_wall_thickness,
+        profile.overhang_limit_degrees,
+    )
+    assert profile_key(profile) == before_split
+    assert profile_key(profile, process=False) != before_split
+
+
+def test_a_step_without_process_values_keeps_its_key_across_the_print_dialog(
+    profile: Profile,
+) -> None:
+    """Schichthöhe, Bahnbreite und Stützschwelle ändern nur den Schlüssel eines
+    Schritts, der sie liest — auch am Profil eines Eingangs mit eigenem
+    Material. Drucker und Material ändern jeden."""
+    from app.core.knowledge import print_settings
+    from app.core.knowledge import profiles as profile_table
+
+    operation = Operation(id=1, op="load")
+    settings = print_settings.resolve(profile)
+    changed = profile_table.for_process(
+        profile,
+        print_settings.with_choice(
+            print_settings.with_choice(
+                print_settings.with_choice(settings, "layers.layer_height", 0.12),
+                "layers.line_width",
+                0.62,
+            ),
+            "support.threshold_angle",
+            33.0,
+        ),
+    )
+    assert changed.printer.layer_height == pytest.approx(0.12)
+    assert changed.printer.extrusion_width == pytest.approx(0.62)
+    assert changed.overhang_limit_degrees == pytest.approx(33.0)
+    liner = dataclasses.replace(profile, material=profile_table.material("tpu-95a"))
+    changed_liner = dataclasses.replace(changed, material=liner.material)
+
+    def key(current: Profile, own: Profile, *, process: bool) -> str:
+        return operation_hash(
+            operation,
+            {},
+            ["h1"],
+            current,
+            "fine",
+            material_profiles={"obj_1": own},
+            process=process,
+        )
+
+    assert key(profile, liner, process=False) == key(changed, changed_liner, process=False)
+    assert key(profile, liner, process=True) != key(changed, changed_liner, process=True)
+    assert key(profile, liner, process=True) != key(profile, liner, process=False)
+    other_material = dataclasses.replace(profile, material=profile_table.material("pla"))
+    assert key(profile, liner, process=False) != key(other_material, liner, process=False)
+    wider = dataclasses.replace(
+        profile,
+        printer=dataclasses.replace(profile.printer, build_volume=(400.0, 400.0, 400.0)),
+    )
+    assert key(profile, liner, process=False) != key(wider, liner, process=False)
+
+
+#: Die Schritte, die keinen Prozesswert lesen (``OperationSpec.reads_process``),
+#: je mit dem Beleg aus dem Code. Belegt heißt: die Operation und alles, was
+#: sie aufruft, liest weder Schichthöhe, Bahnbreite noch Überhanggrenze, keine
+#: daraus abgeleitete Größe am Profil (Mindestwand, Überhangwinkel, kleinstes
+#: Volumen, kleinste Aufstandsfläche, Exporttoleranz) und keine
+#: Schichtanalyse. Die Merkmalserkennung danach (``evaluate._with_features``,
+#: ``perceive.features``) bekommt kein Profil. Ein neuer Eintrag ist eine
+#: Entscheidung mit Beleg, keine Liste zum Auffüllen.
+_STEPS_WITHOUT_PROCESS: dict[str, str] = {
+    "load": "Leser, normalise und Baugruppenlage ohne Profil; liest nur "
+    "printer.build_volume für die Einheitenfrage (plausible_reach)",
+    "load_step": "brep.step und brep.features ohne Profil; ctx.profile wird nicht gelesen",
+    "load_outline": "outline.extrude ohne Profil; ctx.profile wird nicht gelesen",
+    "duplicate_object": "kopiert Szenenobjekte; ctx.profile wird nicht gelesen",
+    "rename_object": "ersetzt den Namen; ctx.profile wird nicht gelesen",
+    "delete_object": "gibt nichts aus; ctx.profile wird nicht gelesen",
+    "pattern": "moved_object ohne Profil; die Bauraumprüfung liest nur printer.build_volume",
+    "translate_object": "moved_object ohne Profil; _held_on_bed → back_onto_bed → "
+    "arrange_on_bed/placement_offset/check_build_volume lesen nur Druckfläche, Höhe, "
+    "Sperrzonen und build_volume",
+    "rotate_object": "wie translate_object; named_pivot und anchor_point ohne Profil",
+    "mirror_object": "anchor_point und moved_object ohne Profil; ctx.profile wird nicht gelesen",
+    "place_on_bed": "moved_object ohne Profil; ctx.profile wird nicht gelesen",
+    "place_group_on_bed": "moved_object ohne Profil; ctx.profile wird nicht gelesen",
+}
+
+
+def test_only_proven_steps_leave_the_process_values_out() -> None:
+    """Die Vorgabe liest: Frei ist nur, was oben mit Beleg steht."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    free = {spec.name for spec in REGISTRY.all() if not spec.reads_process}
+    assert free == set(_STEPS_WITHOUT_PROCESS)
+    # Die Gegenprobe der Leser: Sie behalten die Vorgabe.
+    for name in ("orient_for_print", "scale_object", "fit_to_size", "arrange_bed", "hollow_object"):
+        assert REGISTRY.get(name).reads_process, name
+
+
+#: Was :class:`_ProcessGuard` je Teil des Profils nicht lesen lässt.
+_GUARDED_NAMES: dict[str, frozenset[str]] = {
+    "profile": frozenset(
+        {
+            "has_process_calibration",
+            "minimum_wall_thickness",
+            "overhang_limit_degrees",
+            "smallest_printable_volume",
+            "smallest_first_layer",
+            "export_deflection",
+        }
+    ),
+    "printer": _PRINTER_PROCESS_FIELDS | {"smallest_detail"},
+    "material": _MATERIAL_PROCESS_FIELDS,
+}
+
+
+class _ProcessGuard:
+    """Ein Profil, das beim Lesen eines Prozesswerts abbricht.
+
+    Am Profil selbst sind es alle Eigenschaften — jede der sechs rechnet mit
+    einem Prozesswert —, am Drucker Schichthöhe, Bahnbreite, Überhanggrenze
+    und das kleinste Detail, am Material die Probe."""
+
+    def __init__(self, wrapped: object, part: str = "profile") -> None:
+        self._wrapped = wrapped
+        self._part = part
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _GUARDED_NAMES[self._part]:
+            raise AssertionError(f"reads the process value {self._part}.{name}")
+        value = getattr(self._wrapped, name)
+        if self._part == "profile" and name in ("printer", "material"):
+            return _ProcessGuard(value, name)
+        return value
+
+
+def _guarded_run(
+    profile: Profile,
+    name: str,
+    inputs: list[SceneObject],
+    params: Mapping[str, Any],
+    *,
+    others: tuple[SceneObject, ...] = (),
+    sources: Any = None,
+) -> Any:
+    """Ruft die registrierte Operation mit einem wachenden Profil auf."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    guard: Any = _ProcessGuard(profile)
+    spec = REGISTRY.get(name)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in (*inputs, *others)}, profile=guard),
+            inputs=inputs,
+            params=spec.params(**params),
+            profile=guard,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+            sources=sources,
+        )
+    )
+
+
+def _loaded_plate(profile: Profile) -> SceneObject:
+    from app.core.geom.mesh import read_mesh
+    from tests.helpers import MESHES
+
+    mesh = read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "load",
+        "load_step",
+        "load_outline",
+        "duplicate_object",
+        "rename_object",
+        "delete_object",
+        "pattern",
+        "translate_object",
+        "rotate_object",
+        "mirror_object",
+        "place_on_bed",
+        "place_group_on_bed",
+    ],
+)
+def test_a_step_without_process_values_never_reads_one(profile: Profile, case: str) -> None:
+    """Jeder freigestellte Schritt läuft an einem Profil, das beim Lesen eines
+    Prozesswerts abbricht — auf den Wegen, die das Profil überhaupt fragen:
+    Einheitenfrage beim Laden, Bauraum eines Musters, Rückholung aufs Bett um
+    einen Nachbarn herum."""
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.geom.transform import moved_object, translation
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+    from tests.helpers import MESHES
+
+    load_operations()
+    assert case in _STEPS_WITHOUT_PROCESS
+    plate = _loaded_plate(profile)
+    if case in ("load", "load_step", "load_outline"):
+        project = new_project("centauri-carbon-2", "petg")
+        if case == "load":
+            path, payload = "sources/plate_holes.stl", (MESHES / "plate_holes.stl").read_bytes()
+            runs: list[dict[str, Any]] = [{"source": "src_1", "unit": "auto"}]
+        elif case == "load_step":
+            from app.core.brep.kernel import available
+
+            if not available():
+                pytest.skip("ohne OpenCASCADE gibt es kein STEP")
+            from app.core.brep import step
+            from app.core.ingest.plan import selection
+
+            data = Path(__file__).parent / "data" / "step" / "multibody.step"
+            path, payload = "sources/multibody.step", data.read_bytes()
+            keys = [body.key for body in step.read_assembly(payload, "multibody").bodies]
+            runs = [
+                {"source": "src_1"},
+                {
+                    "source": "src_1",
+                    "bodies": selection(["*"]),
+                    "place_on_bed": True,
+                    "centre": True,
+                },
+                {
+                    "source": "src_1",
+                    "bodies": selection(keys),
+                    "place_on_bed": True,
+                    "centre": True,
+                },
+            ]
+        else:
+            path = "sources/zeichnung.svg"
+            payload = (
+                b'<svg xmlns="http://www.w3.org/2000/svg">'
+                b'<path d="M0 0 H20 V10 H0 Z M5 2 H15 V8 H5 Z"/></svg>'
+            )
+            runs = [{"source": "src_1", "height": 3.0}]
+        project.document.sources["src_1"] = Source(id="src_1", kind="import", path=path, sha256="")
+        project.sources["src_1"] = payload
+        for params in runs:
+            result = _guarded_run(profile, case, [], params, sources=ProjectSources(project))
+            assert result.outputs
+        return
+    neighbour = SceneObject(
+        id="obj_9",
+        name="Nachbar",
+        mesh=moved_object(plate, translation((0.0, 0.0, 0.0))).mesh,
+    )
+    width = profile.printer.build_volume[0]
+    if case == "duplicate_object":
+        assert len(_guarded_run(profile, case, [plate], {"count": 3}).outputs) == 3
+    elif case == "rename_object":
+        assert _guarded_run(profile, case, [plate], {"name": "B"}).outputs[0].name == "B"
+    elif case == "delete_object":
+        assert _guarded_run(profile, case, [plate], {}).outputs == []
+    elif case == "pattern":
+        assert len(_guarded_run(profile, case, [plate], {"count": 3, "spacing": 30.0}).outputs) == 3
+        ring = {"kind": "circular", "count": 4, "angle": 360.0}
+        assert len(_guarded_run(profile, case, [plate], ring).outputs) == 4
+    elif case in ("translate_object", "rotate_object"):
+        # Fünf Millimeter vor dem rechten Rand, dann darüber hinaus bewegt; der
+        # Nachbar steht, wo das Zurückschieben ihn hinlegte — also ordnet die
+        # Rückholung um ihn herum neu ein (``back_onto_bed`` → ``arrange_on_bed``).
+        bounds = as_mesh_data(plate.mesh).bounds
+        inside = width / 2.0 - bounds.size[0] / 2.0 - 5.0 - bounds.centre[0]
+        edge = dataclasses.replace(moved_object(plate, translation((inside, 0.0, 0.0))), id="obj_1")
+        near = dataclasses.replace(neighbour, mesh=edge.mesh)
+        params: dict[str, Any] = (
+            {"dx": 60.0, "keep_on_bed": True}
+            if case == "translate_object"
+            else {"axis": "z", "angle": 45.0, "about": "centre", "keep_on_bed": True}
+        )
+        moved = _guarded_run(profile, case, [edge], params, others=(near,))
+        codes = {finding.code for finding in moved.findings}
+        assert codes & {"transform.rearranged_on_bed", "transform.nudged_onto_bed"}, codes
+        alone = _guarded_run(profile, case, [edge], params)
+        assert {finding.code for finding in alone.findings} & {"transform.nudged_onto_bed"}
+    elif case == "mirror_object":
+        assert _guarded_run(profile, case, [plate], {"axis": "x"}).outputs
+    elif case == "place_on_bed":
+        assert _guarded_run(profile, case, [plate], {}).outputs
+    else:
+        second = dataclasses.replace(neighbour, id="obj_2")
+        assert len(_guarded_run(profile, case, [plate, second], {}).outputs) == 2
+
+
+def test_the_guard_catches_a_step_that_reads_the_process(profile: Profile) -> None:
+    """Die Wache fängt, was sie fangen soll: *Skalieren* fragt das kleinste
+    druckbare Volumen, und das rechnet mit Schichthöhe und Bahnbreite."""
+    from app.core.bootstrap import load_operations
+    from app.core.types import PrinterProfile
+
+    load_operations()
+    with pytest.raises(AssertionError, match="process value"):
+        _guarded_run(profile, "scale_object", [_loaded_plate(profile)], {"factor": 0.5})
+    # Eine neue abgeleitete Größe am Profil ist eine Entscheidung: Jede
+    # rechnet heute mit einem Prozesswert, und die Wache muss sie kennen.
+    derived = {name for name, value in vars(Profile).items() if isinstance(value, property)}
+    assert derived == _GUARDED_NAMES["profile"]
+    on_printer = {
+        name for name, value in vars(PrinterProfile).items() if isinstance(value, property)
+    }
+    assert on_printer - {"is_resin"} == _GUARDED_NAMES["printer"] - _PRINTER_PROCESS_FIELDS
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        ("layers.layer_height", 0.12),
+        ("layers.line_width", 0.62),
+        ("support.threshold_angle", 33.0),
+    ],
+)
+def test_the_print_dialog_does_not_reload_or_copy_again(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, path: str, value: float
+) -> None:
+    """Nur Schichthöhe, Bahnbreite oder Stützschwelle ändern: Laden, Kopieren
+    und Verschieben kommen aus dem Speicher — kein neues Einlesen, keine neue
+    Merkmalserkennung —, und *Druckoptimal ausrichten*, das alle drei liest,
+    rechnet neu.
+
+    Der Anlass (28.09.2026): „Im Slicer öffnen" schreibt die Einstellungen des
+    Dialogs ins Projekt, und am Minigolf-Satz lief danach der ganze Verlauf
+    neu — Einlesen, Erkennung und Ausrichtung, über zwei Minuten.
+
+    Die Erkennung zählt hier nur mit: Ein neu eingelesenes, bitgleiches Netz
+    fände sie auch unter dem alten Schlüssel im Merker. Unterscheiden tun
+    Einlesen und Operationsaufrufe. Und die Gegenprobe am Ende: Ein festes
+    Druckerfeld, das die freigestellten Schritte lesen (der Bauraum), rechnet
+    sie neu."""
+    from collections import Counter
+
+    from app.core.bootstrap import load_operations
+    from app.core.ingest import ops as ingest_ops
+    from app.core.knowledge import print_settings
+    from app.core.perceive import features as features_module
+    from app.core.registry import REGISTRY
+    from app.core.registry.registry import Registry
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources
+    from tests.helpers import plate_project
+
+    load_operations()
+    calls: Counter[str] = Counter()
+
+    def counted(name: str, fn: Any) -> Any:
+        def run(ctx: Any) -> Any:
+            calls[name] += 1
+            return fn(ctx)
+
+        return run
+
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(dataclasses.replace(spec, fn=counted(spec.name, spec.fn)))
+    reading = ingest_ops.normalise
+    fitting = features_module._fitted
+
+    def normalise(*args: Any, **kwargs: Any) -> Any:
+        calls["#read"] += 1
+        return reading(*args, **kwargs)
+
+    def fitted(*args: Any, **kwargs: Any) -> Any:
+        calls["#detect"] += 1
+        return fitting(*args, **kwargs)
+
+    monkeypatch.setattr(ingest_ops, "normalise", normalise)
+    monkeypatch.setattr(features_module, "_fitted", fitted)
+
+    project = plate_project()
+    document = project.document
+    history = History(document)
+    history.apply(
+        "Kopieren",
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 2})],
+    )
+    history.apply(
+        "Verschieben",
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_2",),
+                params={"dx": 60.0, "keep_on_bed": True},
+            )
+        ],
+    )
+    history.apply(
+        "Ausrichten",
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1", "obj_2"),
+                params={"candidates": 24, "arrange": True},
+            )
+        ],
+    )
+    document.print_settings = print_settings.resolve(profile)
+    sources = ProjectSources(project)
+    cache = ResultCache()
+    features_module.forget_cache()
+
+    first = evaluate(document, profile, cache=cache, sources=sources, registry=registry)
+    assert first.complete, first.scene.report.findings
+    assert calls["load"] == calls["duplicate_object"] == calls["translate_object"] == 1
+    assert calls["orient_for_print"] == 1
+    assert calls["#read"] == 1
+    assert calls["#detect"] > 0, "the first evaluation must detect, or the count below says nothing"
+
+    calls.clear()
+    document.print_settings = print_settings.with_choice(document.print_settings, path, value)
+    second = evaluate(document, profile, cache=cache, sources=sources, registry=registry)
+
+    assert second.complete, second.scene.report.findings
+    assert second.scene.profile is not None
+    assert second.scene.profile != first.scene.profile, "the change must reach the profile"
+    assert calls["load"] == 0
+    assert calls["#read"] == 0
+    assert calls["duplicate_object"] == 0
+    assert calls["translate_object"] == 0
+    assert calls["#detect"] == 0
+    assert calls["orient_for_print"] == 1
+
+    calls.clear()
+    larger = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, build_volume=(300.0, 300.0, 300.0))
+    )
+    third = evaluate(document, larger, cache=cache, sources=sources, registry=registry)
+    assert third.complete, third.scene.report.findings
+    assert calls["load"] == calls["duplicate_object"] == calls["translate_object"] == 1
+    assert calls["orient_for_print"] == 1
 
 
 def test_the_nozzle_count_reaches_the_cached_arrangement() -> None:
