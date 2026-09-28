@@ -83,6 +83,9 @@ INSTALLER_ORCHESTRATION_FILES = frozenset(
         "tools/CLAUDE.md",
         "packaging/CLAUDE.md",
         "Signierung/README.md",
+        # Der Release-Skill beschreibt dieselbe Kette; kein Paket liest ihn.
+        ".claude/skills/erzeugen/SKILL.md",
+        ".agents/skills/erzeugen/SKILL.md",
     }
 )
 ARCHIVE_NAME = "windows-signing-input.zip"
