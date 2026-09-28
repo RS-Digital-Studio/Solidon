@@ -19323,3 +19323,37 @@ def test_a_closing_window_takes_no_late_feature_answer(
 
     assert window._answers_worker is None
     assert reported == [], "das schließende Fenster meldete einen Fehler, den niemand liest"
+
+
+@pytest.mark.parametrize("closing", [False, True])
+def test_a_late_manufacturer_foundation_starts_no_run_in_a_closing_window(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, closing: bool
+) -> None:
+    """Kommt die Herstellergrundlage nach ``release``, wird nicht mehr ausgewertet.
+
+    Seit ``e0e3cf982`` (Entscheidung L) wertet das Fenster ein zweites Mal
+    aus, wenn die Grundlage eine andere Stützschwelle bringt als die Tabelle,
+    mit der der erste Lauf rechnete. ``_start_foundation`` fragte nach dem
+    Schließen, ``_foundation_found`` nicht: Im Abbau der Suite startete eine
+    späte Grundlage einen Auswertungsarbeiter, dessen Frage niemand mehr
+    beantwortete, und der Prozess endete danach mit 0xC0000409 — jeder Lauf von
+    ``test_active_matching_questions_end_when_their_evaluation_is_invalidated``
+    in den Varianten mit neuem Lauf. Die Gegenprobe ohne Schließen wertet aus.
+    """
+    from app.core.export import manufacturer
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+
+    runs: list[bool] = []
+    key = ("grundlage",)
+    window.session.last_result = EvaluationResult(scene=Scene(objects={}))
+    monkeypatch.setattr(window, "_foundation_key", lambda _quality: key)
+    monkeypatch.setattr(window.session, "evaluation_follows", lambda _settings: False)
+    monkeypatch.setattr(window.session, "evaluate_async", lambda: runs.append(True))
+    foundation = manufacturer.Foundation(settings=window.effective_print_settings())
+    if closing:
+        window.release()
+
+    window._foundation_found(key, foundation)
+
+    assert runs == ([] if closing else [True])
