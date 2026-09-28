@@ -484,13 +484,16 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
 
     Die Namen, die einen Zustand brauchen — ein offener Dialog, ein gewählter
     Befund, ein Schritt im Verlauf —, prüft erst die Aufnahme beim Release;
-    hier geht es um die, die immer da sind.
+    hier geht es um die, die immer da sind. Die Ziele im Druckdialog gehören
+    zu den ersten: Er läuft modal über ``exec()`` und ist am frischen Fenster
+    nicht offen (am 28.09.2026 war der Test deshalb im Release-Probelauf rot).
     """
     from app.ui import guide_targets
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
+    printing = set(guide_targets._PRINT)
     stateful = {
         "dialog",
         "dialog.accept",
@@ -499,6 +502,7 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
         "sketch.plane",
         "report.action",
         "history.last",
+        *printing,
     }
     window = MainWindow(Session(), UiSettings())
     try:
@@ -506,7 +510,7 @@ def test_the_fixed_targets_resolve_on_a_real_window(qt_app: object) -> None:
             assert guide_targets.widget_for(window, name) is not None, name
         for name in ("tool:transform", "transform:rotate"):
             assert guide_targets.widget_for(window, name) is not None, name
-        for name in ("dialog", "dialog.naming", "parameters.first", "sketch.plane"):
+        for name in ("dialog", "dialog.naming", "parameters.first", "sketch.plane", *printing):
             with pytest.raises(guide_targets.MissingTargetError):
                 guide_targets.widget_for(window, name)
         with pytest.raises(guide_targets.MissingTargetError):

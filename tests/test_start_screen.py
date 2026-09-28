@@ -1179,7 +1179,13 @@ def test_the_manual_button_names_its_action(qt_app: QApplication) -> None:
     assert knopf.sizeHint().width() <= 2 * max(nachbarn), (
         f"{knopf.text()!r} misst {knopf.sizeHint().width()}, die Nachbarn {nachbarn}"
     )
-    assert "fünfzehn" in knopf.toolTip(), "was wegfällt, steht im Hinweis"
+    # Was wegfällt, steht im Hinweis: die Seite, die er öffnet (seit HB-5 „Wo
+    # fange ich an?“ statt der ersten fünfzehn Minuten).
+    from app.core import manual
+
+    first = manual.find(manual.WHERE_TO_START)
+    assert first is not None
+    assert str(first.title) in knopf.toolTip(), "was wegfällt, steht im Hinweis"
 
 
 def test_the_filter_survives_a_half_dismantled_screen(screen: StartScreen) -> None:

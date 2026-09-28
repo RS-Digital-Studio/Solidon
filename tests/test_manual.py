@@ -1067,18 +1067,24 @@ def test_the_search_lists_the_best_page_first_and_opens_it_where_the_word_stands
     qt_app: QApplication,
 ) -> None:
     """Die Liste folgt der Rangfolge des Kerns, und die Seite schlägt an der
-    Fundstelle auf, markiert (Konzept Handbuch §7). „abrunden" steht nirgends
-    im Handbuch und führt über die Kundenwörter zu *Verrunden*, weit unten in
-    der Referenz."""
+    Fundstelle auf, markiert (Konzept Handbuch §7). „Elefantenfuß" steht weit
+    unten in der Referenz mitten im Text. „abrunden" trifft seit HB-8 den Titel
+    der Anleitung *Kanten abrunden oder anfasen*, und ein Titeltreffer
+    beginnt oben, ohne Markierung."""
     from app.core import manual_search
 
     window = ManualWindow()
     try:
-        window.search.setText("abrunden")
-        found = manual_search.search("abrunden")
+        window.search.setText("Elefantenfuß")
+        found = manual_search.search("Elefantenfuß")
         assert found and found[0].spot
         assert window.contents.item(0).text() == str(found[0].page.title)
         assert window.text.textCursor().selectedText() == found[0].spot
+        window.search.setText("abrunden")
+        found = manual_search.search("abrunden")
+        assert found and not found[0].spot, "ein Titeltreffer hat keine Fundstelle im Text"
+        assert window.contents.item(0).text() == str(found[0].page.title)
+        assert not window.text.textCursor().hasSelection()
     finally:
         window.close()
         window.deleteLater()
