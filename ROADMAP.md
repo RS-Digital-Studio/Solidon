@@ -3399,7 +3399,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
   erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
   mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
-  auf Platte 2 kommt.
+  auf Platte 2 kommt. Dazu aus der dritten Nachprüfung (Nachtrag
+  `e85c77ed0`, schon ab `bc901772c`): Ein abgebrochener Import an der Einfügemarke lässt
+  seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
 
 <a id="rm-306"></a>
 
