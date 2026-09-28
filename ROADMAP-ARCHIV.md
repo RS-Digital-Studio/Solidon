@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-28 | [Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)](#release-sitzung-051-zweite-runde-zwei-punkte-geschlossen-28092026) |
 | 2026-09-28 | [Release-Sitzung 0.5.1: sechs Punkte geschlossen (28.09.2026)](#release-sitzung-051-sechs-punkte-geschlossen-28092026) |
 | 2026-09-28 | [Übergabe auf dem Herstellerprofil, Stufe E: ein Punkt geschlossen (28.09.2026)](#übergabe-auf-dem-herstellerprofil-stufe-e-ein-punkt-geschlossen-28092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-c-f-und-l-ein-punkt-geschlossen-27092026) |
@@ -33257,3 +33258,115 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   `test_operation_ui.py::test_the_rim_switch_sits_at_the_back_and_follows_the_group`.
   `6e8d0bedc`, `4e145c801`, `53ad8b785`, `81b797456`; Merges `9f19b44d6`, `cbef27715`.
   Rest am exakten Kern: [RM-284](ROADMAP.md#rm-284).
+
+## Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)
+
+Nach Handbuchumbau, Stapel und Hilfsprozess (auf main mit `016fdc423`, `c3636d210`,
+`813b6490a`, `c6c312951`). RM-212 ist gebaut bis auf die Dauer der genauen Vorschau
+(RM-296), RM-271 trägt seinen Namen jetzt auch im Handbuch. RM-209, RM-132 und
+RM-193 sind mit dem Stapelumbau fortgeschrieben und bleiben offen; die Reste der
+Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
+
+<a id="rm-212"></a>
+
+- [x] **RM-212 — Die Vorschau großer Teile hält den Hauptthread und rechnet vergeblich.**
+  Was nach der vierten Runde von RM-208 bleibt (Bericht vorschau, Ansicht
+  B18/B19, fenster). Drei Posten, jeder gemessen: `manifold3d.simplify` hält den
+  GIL, die erste grobe Vorschau steht deshalb einmal je Körper im Hauptthread
+  (Platte 0,57 s, Voronoi-Spiderman 2,0 s); derselbe Stillstand trifft
+  `decimate_for_display` im Arbeiter des Viewports. Der Anzeigeweg fährt an
+  Netzen, die der Kern nicht unter das Ziel bringt, sechs vergebliche
+  Kernschritte, bevor das Raster drankommt (Spiderman 4,1 s, Piratenschiff
+  4,8 s). Und die genaue Vorschau großer Teile bleibt langsam (Senkplatte mit
+  311 296 Dreiecken 8–15 s, davon Boolesche Stufe 4,8 s, `compare_scenes` 4 s,
+  Erkennung 1,8 s; Piratenschiff 20–37 s); sie hat seit `a4f2428c` Balken und
+  *Abbrechen*, schneller wird sie erst mit einem Tausch des Hohlraums am lokalen
+  Ausschnitt statt am ganzen Körper. Bewusst nicht gebaut: ein Merker „grobe
+  Stufe scheitert hier" (an den drei Rückweg-Modellen versucht jede Zahl erst
+  grob, 0,1–0,5 s). Weg: das Raster vorziehen, sobald die Kernkurve flach wird;
+  `simplify` in einen Unterprozess oder vor die erste Vorschau ziehen; den
+  lokalen Tausch als eigene Stufe der genauen Vorschau. Abnahme: keine grobe
+  Vorschau über 0,2 s im Hauptthread, Spiderman und Piratenschiff unter 1 s bis
+  zum Raster, Senkplatte genau unter 3 s — gemessen mit
+  `sonden/vorschau/probe_preview.py` auf ruhiger Maschine.
+
+  **Stand 26.09.2026.** Der zweite Posten ist erledigt, anders als gedacht:
+  Das Raster vorzuziehen hätte nichts gebracht, denn sein Netz ist offen, und
+  jede Bohrung darauf scheitert. Die grobe Vorschau verkleinert jetzt auf die
+  Schranke selbst (`COARSE_PREVIEW_TARGET` = 150 000) und nimmt das
+  geschlossene Kernergebnis; der Anzeigeweg lässt dabei Splitter dünner als
+  die Toleranz weg (`_without_slivers`), und `_as_mesh` verschweißt nur, wo
+  das Netz dicht bleibt. Vorher und nachher hintereinander gemessen: Spiderman
+  grob danach 17,8–18,9 → 0,6 s, Piratenschiff 11,1–13,4 → 0,7 s, Eiffelturm
+  2,8 → 1,7 s, alle drei vorher Absage und genau; die Schüssel zahlt
+  0,22 → 0,5 s für 0,1 statt 1,8 % Abweichung. Längster GIL-Stillstand:
+  Spiderman 799 → 324 ms, Piratenschiff 819 → 492, Eiffelturm 664 → 120,
+  Platte 250, Schüssel 89. Die genaue Vorschau der Senkplatte liegt bei
+  4,3–5,7 s (Review: 8–15), und sie war bei Ø 6 und 6,5 unvollständig: Der
+  Schnitt „danach minus davor" lief in Splitter; `difference.compare` nimmt
+  seither die Volumenbilanz statt des Schnitts, der leer sein muss
+  (`_empty_by_balance`). Übrig: `resize_hole` 2,9 s (vier Boolesche 1,9 s,
+  volle Nacherkennung unter 1,5 Mio. Dreiecken 1,1 s), Vergleich 1,8 s
+  (Beschnitt 0,6, Schnitt am dichten Ausschnitt mit 150 000 Dreiecken 1,0).
+  Für den ersten Posten gibt es nur zwei Wege — einen Hilfsprozess für die
+  Kernaufrufe oder einen Kern, der den GIL hergibt (eigenes Rad oder
+  Beitrag an `manifold3d`) —, und beide sind eine Entscheidung Roberts.
+  Sonden und Messungen: `.claude/.state/rm-212-2026-09-26/`.
+
+  **Durchsicht v0.5.1 (26./27.09.2026):** Die genaue Vorschau rechnet auch an Körpern mit
+  Hohlräumen die Bilanz (Gartenschlauchhalter, Bohrung Ø 6 → 7: vorher „unvollständig“,
+  jetzt 60,715 mm³, `61225727b`). *Bohrung ändern* und *Merkmal versetzen* am Netz messen
+  örtlich nach statt mit der ganzen Merkmalssuche (Gartenschlauchhalter 92,8 → 10,8 s
+  und 87,7 → 12,5 s, `51c17b7a6`); davon lebt auch die genaue Vorschau, die ohne
+  Erkennung rechnet. Die Vorschau von *Kanten verfeinern* rechnet keine Boolesche
+  Differenz mehr, wo die Operation die Form zusagt (`retriangulates`), und zeigt die
+  Dreieckszahl; eine zu feine Länge sagt sie am Original ab statt an der groben Kopie
+  (`expected_triangles`) — Spielwürfel 0,05 mm 17 min ohne Ergebnis → 0,58 s,
+  Spielbrett 1 mm 16 min → Absage mit Knopf in 6 s (`ce8b91c7c`). **Neu gemessen und
+  offen:** Beim Übernehmen großer Verfeinerungen steht der Hauptfaden 14,1 bis 14,6 s
+  (Spielwürfel 0,05 mm, 5,8 Mio. Dreiecke) bzw. 5,7 s (Spielbrett), weil `manifold3d`
+  den GIL auch in `refine_to_length` hält — derselbe Posten wie beim ersten
+  Verkleinern, derselbe Weg (Hilfsprozess, Entscheidung Robert). Bericht
+  `F:\3D Druck.review-051\reports\rest-vorschau.md`.
+
+  **Abschluss 28.09.2026 (Release 0.5.1, Paket hilfsprozess):** Entschieden von
+  Robert (27.09.2026): Große Aufrufe des Netzkerns laufen ab `OFFLOAD_ABOVE` Dreiecken in
+  einem Hilfsprozess (`geom.kernel_process`, `geom.kernel_jobs`), mit denselben Bytes wie
+  im Prozess der Anwendung; die Felder reisen über gemeinsamen Speicher. Grobe Vorschau an
+  fünf Modellen: längster Stillstand im Hauptfaden höchstens 99 ms statt bis 874 ms
+  (Lochplatte, Spiderman, Piratenschiff, Eiffelturm, Waschschüssel); Übernehmen von
+  *Kanten verfeinern* am Spielwürfel 0,05 mm 94 ms statt 21 s, am Spielbrett 128 ms statt
+  6,6 s; *Abbrechen* 0,2 bis 0,3 s statt 8 bis 15 s; bitgleich (26 Fälle, je Rechnung ein
+  Test). Nach dem Review: Kommt kein Hilfsprozess zustande oder fehlt gemeinsamer
+  Speicher, rechnet der Aufrufer hier weiter, Speichermangel wird als Hinweis gemeldet; ein
+  verlorener Hilfsprozess kommt in der Booleschen Kette als er selbst an; kein Temp-Ordner
+  bleibt liegen; der Rauchtest `tools/check_frozen_helper.py` startet den Hilfsprozess aus
+  dem gebauten Paket auf allen Runnern. Am gebauten Windows-Paket belegt. Der Stillstand
+  der genauen Vorschau an der Senkplatte ist gelöst (1,1 s → unter 0,1 s), ihre Dauer
+  nicht: [RM-296](ROADMAP.md#rm-296). Tests `tests/test_kernel_process.py`,
+  `tests/test_packaging.py`. `a55e844ad`, `575841694`, `06ba8cf88`, `48f5231c3`,
+  `35dff6278`, `2e832f605`; Merge `813b6490a`. Reste: [RM-298](ROADMAP.md#rm-298).
+
+<a id="rm-271"></a>
+
+- [x] **RM-271 — An einer Magnettasche heißt die Wahl „Senkung und Stufen mitnehmen“.**
+  Aus der Durchsicht v0.5.1 (rest-lippe). *Bohrung ändern* nimmt seit `8e1e3aca5` die
+  Haltelippe mit. Die Wahl im Dialog heißt an jeder Kette so, auch wo die Kette eine
+  Verengung ist, und der Satz `resize.narrowing_swallowed` zitiert den Knopf so (der
+  Wächter verlangt das wörtliche Zitat). Ein anderer Name berührt `core/manual.py`, die
+  von Hand gepflegte `website/funktionen.html` und ältere Changelog-Einträge. Warum
+  Robert: ein Knopfname, der in Handbuch, Website und Changelog steht. Optionen: Der Name
+  bleibt (die Lippe ist eine Stufe der Kette), oder die Wahl heißt an einer Kette mit
+  Verengung anders (texte schlägt den Namen vor). Abnahme: bei neuem Namen Katalog,
+  Satz, Handbuch und `funktionen.html` nachgezogen, `test_wording` grün.
+
+  **Stand 28.09.2026 (Release 0.5.1, Paket texte, `dff5ac944`):** Entschieden über die
+  Release-Sitzung nach Kundensicht: An einer Kette mit Verengung heißt die Wahl „Senkung,
+  Stufen und Verengung mitnehmen“. Katalog, Satz `resize.narrowing_swallowed`, Wahlsätze,
+  `website/funktionen.html` und die fünf `features.html` sind nachgezogen, `test_wording`
+  grün. Die Handbuchseite trägt den Namen mit dem Merge des Handbuchumbaus (bis dahin die
+  austragbare Ausnahme `NAME_WARTET_AUF_HANDBUCH`); danach schließen.
+
+  **Abschluss 28.09.2026 (Release 0.5.1):** Die Handbuchseite trägt den neuen Namen seit
+  dem Merge des Handbuchumbaus (`016fdc423`); die austragbare Ausnahme
+  `NAME_WARTET_AUF_HANDBUCH` ist ausgetragen, `test_wording` grün.
