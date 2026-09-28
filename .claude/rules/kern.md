@@ -77,7 +77,9 @@ Ersatzwerkzeuge: `app/core/geom/CLAUDE.md` („Plattformgleich gerechnet"). Ein
 neuer Weg zu Geometrie kommt in `tests/test_platform_identity.py` (`_WAYS`),
 der jede Rechnung um ein ULP verrauscht und den BLAS-Kern tauscht; der
 Fingerabdruck darf sich nicht rühren. Anzeige, Berichtsmessung und exakt
-nachgeprüfte Vorauswahlen dürfen schnell rechnen — der Kommentar sagt, warum.
+nachgeprüfte Vorauswahlen dürfen schnell rechnen — der Kommentar sagt, warum;
+ebenso ein sicheres Nein mit Abstand und Schattenlauf (`schichtanalyse.md`,
+„Ein Löserlauf entfällt nur mit dem Nein des Stapels“).
 
 ## Eine Merkmalsnummer kommt aus dem Körper, nie aus der Reihenfolge
 
