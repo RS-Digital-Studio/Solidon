@@ -282,6 +282,7 @@ def test_a_display_body_drops_the_shells_the_kernel_left_without_thickness(
     """
     import manifold3d
 
+    from app.core.geom import kernel_jobs
     from app.core.units import MAX_FACET_SAG
 
     def solid(*bodies: trimesh.Trimesh) -> manifold3d.Manifold:
@@ -303,6 +304,9 @@ def test_a_display_body_drops_the_shells_the_kernel_left_without_thickness(
         def __init__(self, simplified: manifold3d.Manifold) -> None:
             self.simplified = simplified
 
+        def is_empty(self) -> bool:
+            return False
+
         def simplify(self, _tolerance: float) -> manifold3d.Manifold:
             return self.simplified
 
@@ -311,13 +315,15 @@ def test_a_display_body_drops_the_shells_the_kernel_left_without_thickness(
     assert body.triangle_count > 1_000
 
     box, sliver = _box_with_a_shell_on_its_edge(MAX_FACET_SAG / 10.0)
-    monkeypatch.setattr(mesh_ops, "_as_solid", lambda _mesh: _Kernel(solid(box, sliver)))
+    # Der Körper des Kerns entsteht in der Rechnung selbst (``kernel_jobs.solid``,
+    # RM-212); im Hauptfaden rechnet sie im Prozess, und dort steht der Ersatz.
+    monkeypatch.setattr(kernel_jobs, "solid", lambda *_args: _Kernel(solid(box, sliver)))
     shown = mesh_ops.decimate_for_display(body, 1_000)
     assert shown.is_watertight, "das Verschweißen riss die Kante auf"
     assert shown.triangle_count == len(box.faces), "der Splitter bleibt draußen"
 
     _box, real = _box_with_a_shell_on_its_edge(MAX_FACET_SAG * 4.0)
-    monkeypatch.setattr(mesh_ops, "_as_solid", lambda _mesh: _Kernel(solid(box, real)))
+    monkeypatch.setattr(kernel_jobs, "solid", lambda *_args: _Kernel(solid(box, real)))
     kept = mesh_ops.decimate_for_display(body, 1_000)
     assert kept.triangle_count == len(box.faces) + len(real.faces), "eine echte Schale bleibt"
     # Und sie bleibt dicht: Der Kern gibt zwei Schalen, die sich an einer

@@ -34,6 +34,25 @@ Paketfreigabe. Signierung und Veröffentlichung behalten ihre eigenen Grenzen.
   stehenden Test liefert `faulthandler` nach zwei Minuten den Stapel. Ein
   Fristablauf ist ein roter Lauf und sperrt die Paketierung.
 
+## Der Einstieg des Pakets startet auch den Hilfsprozess des Kerns
+
+Im Paket ist `sys.executable` die Anwendung selbst; der Hilfsprozess
+(`core.geom.kernel_process`, `spawn`) startet genau sie noch einmal. Deshalb
+ruft `app/ui/app.py` — der Einstieg der Spec — im `__main__`-Block zuerst
+`multiprocessing.freeze_support()`, vor Absturzprotokoll und Qt; sonst öffnet
+der Hilfsprozess ein zweites Fenster und die Rechnung fällt nach der
+Startfrist in den Prozess zurück. `tests/test_kernel_process.py` hält die
+Reihenfolge; `multiprocessing` darf nicht in die `excludes`.
+
+**Der Paketjob startet den Hilfsprozess aus dem gebauten Paket**, direkt nach
+*Bauen* und auf allen vier Runnern (`tools/check_frozen_helper.py`): eine
+Boolesche bitgleich, danach weder Prozess noch Temp-Ordner — kein anderer
+Schritt startet das gebaute Programm. `tests/test_packaging.py` hält den
+Schritt. Jeder Prozess des Pakets bekommt vom Laufzeithaken
+`pyi_rth_mplconfig` einen Temp-Ordner, den erst `atexit` wegräumt; der
+Hilfsprozess räumt seinen beim Start weg (`kernel_jobs.serve`), weil er meist
+hart endet.
+
 ## Die Version wird vor dem Bau erhöht, und nur über das Werkzeug
 
 `tools/bump_version.py` fasst beide Orte an, die die Zahl tragen —

@@ -21,7 +21,6 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import Any, Final, Literal, NamedTuple, cast
 
-import manifold3d
 import numpy as np
 
 from app.core.deferred import trimesh
@@ -37,6 +36,7 @@ from app.core.errors import (
     NotManifoldError,
     ValidationError,
 )
+from app.core.geom import kernel_process
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import (
     MeshData,
@@ -294,7 +294,13 @@ def _decimate_with_solver(
     )
 
 
-def decimate_for_display(mesh: MeshData, target: int, *, sag: float | None = None) -> MeshData:
+def decimate_for_display(
+    mesh: MeshData,
+    target: int,
+    *,
+    sag: float | None = None,
+    cancelled: CancelToken | None = None,
+) -> MeshData:
     """Weniger Dreiecke für ein Bild — in Millisekunden und an jedem Netz.
 
     ``sag`` ist der Sehnenfehler in Millimetern, mit dem der erste Weg
@@ -334,7 +340,7 @@ def decimate_for_display(mesh: MeshData, target: int, *, sag: float | None = Non
     """
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
         return mesh
-    reduced = _display_manifold_decimation(mesh, target, sag)
+    reduced = _display_manifold_decimation(mesh, target, sag, cancelled)
     if reduced is None:
         reduced = _clustered_for_display(mesh, target, sag)
     _log.info("display: %d to %d triangles", mesh.triangle_count, reduced.triangle_count)
@@ -365,7 +371,9 @@ def raster_for_display(mesh: MeshData, target: int, *, sag: float | None = None)
     return _clustered_for_display(mesh, target, sag)
 
 
-def _display_manifold_decimation(mesh: MeshData, target: int, sag: float | None) -> MeshData | None:
+def _display_manifold_decimation(
+    mesh: MeshData, target: int, sag: float | None, cancelled: CancelToken | None = None
+) -> MeshData | None:
     """Der erste Weg von :func:`decimate_for_display` — oder ``None``.
 
     ``None`` heißt: Der Kern nimmt das Netz nicht, oder es kommt in
@@ -378,65 +386,35 @@ def _display_manifold_decimation(mesh: MeshData, target: int, sag: float | None)
     bevor der zweite Weg drankam.
 
     Was der Kern dabei an Splittern stehen lässt, geht nicht mit
-    (:func:`_without_slivers`).
+    (``kernel_jobs.without_slivers``). Die Rechnung selbst ist
+    ``kernel_jobs.display_simplify``; an großen Netzen rechnet sie der
+    Hilfsprozess (``kernel_process``), damit das Fenster nicht steht — die
+    Vorschau und die Anzeige ab §31 fragen beide von einem Arbeiterfaden aus.
     """
     from app.core.units import MAX_FACET_SAG
 
-    try:
-        solid = _as_solid(mesh)
-    except NotManifoldError:
-        return None
     tolerance = sag if sag is not None and sag > 0.0 else MAX_FACET_SAG
-    best = None
-    best_tolerance = tolerance
-    for _step in range(DISPLAY_SEARCH_STEPS):
-        candidate = solid.simplify(tolerance)
-        if candidate.is_empty():
-            break
-        if best is not None and candidate.num_tri() >= best.num_tri():
-            break
-        best, best_tolerance = candidate, tolerance
-        if candidate.num_tri() <= target:
-            break
-        tolerance *= DISPLAY_TOLERANCE_GROWTH
-    if best is None or best.num_tri() > target or best.num_tri() >= mesh.triangle_count:
+    arrays, reported = kernel_process.run(
+        "display_simplify",
+        _kernel_input(mesh),
+        {
+            "target": target,
+            "tolerance": tolerance,
+            "growth": DISPLAY_TOLERANCE_GROWTH,
+            "steps": DISPLAY_SEARCH_STEPS,
+            "triangles": mesh.triangle_count,
+        },
+        weight=mesh.triangle_count,
+        cancelled=cancelled,
+    )
+    if not reported["found"]:
         return None
-    best = _without_slivers(best, best_tolerance)
-    if best is None:
-        return None
-    return _as_mesh(mesh, best)
+    return _as_mesh(mesh, arrays)
 
 
-def _without_slivers(solid: Any, tolerance: float) -> Any | None:
-    """Der vereinfachte Körper ohne die Schalen, die dünner sind als ``tolerance``.
-
-    ``manifold3d.simplify`` lässt dort, wo es dünne Stellen zusammenzieht,
-    kleine geschlossene Schalen stehen: an der Piratenschiff-Baugruppe
-    (1 223 836 Dreiecke, ein Teil) bei 0,2 mm zwölf Stück aus vier bis
-    vierzehn Dreiecken, im Mittel 0,003 bis 0,03 mm dick, manche verkehrt
-    herum und alle an Kanten des Rumpfs anliegend (26.09.2026, RM-212).
-    :func:`_as_mesh` verschweißt ihre Ecken mit denen des Rumpfs, vier
-    Kanten trugen danach vier Flächen, und die Boolesche Kette lehnte das
-    grobe Netz der Vorschau ab — jede Zahl im Bohrdialog rechnete genau.
-
-    Gemessen wird die mittlere Dicke einer Schale, doppeltes Volumen durch
-    Oberfläche. Was dünner ist als die Toleranz, mit der der Kern gerade
-    vereinfacht hat, hat unter dessen eigener Zusage keine Form mehr; das
-    dünnste echte Teil an vier Kundenmodellen (Waschschüssel, Eiffelturm,
-    Spiderman, Piratenschiff, je bei 0,05 und 0,2 mm) war über 1 mm dick.
-    ``None``, wenn nichts übrig bliebe.
-    """
-    import manifold3d
-
-    parts = solid.decompose()
-    if len(parts) < 2:
-        return solid
-    kept = [part for part in parts if 2.0 * abs(part.volume()) > tolerance * part.surface_area()]
-    if len(kept) == len(parts):
-        return solid
-    if not kept:
-        return None
-    return manifold3d.Manifold.compose(kept)
+def _kernel_input(mesh: MeshData) -> dict[str, np.ndarray]:
+    """Eckpunkte und Dreiecke eines Netzes für eine Rechnung aus ``kernel_jobs`` — ohne Kopie."""
+    return {"vertices": np.asarray(mesh.raw.vertices), "faces": np.asarray(mesh.raw.faces)}
 
 
 def _clustered_for_display(mesh: MeshData, target: int, sag: float | None) -> MeshData:
@@ -596,16 +574,16 @@ def _exactly_flattened(mesh: MeshData, cancelled: CancelToken | None) -> MeshDat
     """
     if not mesh.raw.is_volume:
         return None
-    try:
-        solid = _as_solid(mesh)
-    except NotManifoldError:
+    arrays, reported = kernel_process.run(
+        "simplify_at_most",
+        _kernel_input(mesh),
+        {"tolerance": 0.0, "most": mesh.triangle_count * (1.0 - FLATTEN_MIN_SHARE)},
+        weight=mesh.triangle_count,
+        cancelled=cancelled,
+    )
+    if not reported["found"]:
         return None
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
-    flat = solid.simplify(0.0)
-    if flat.is_empty() or flat.num_tri() > mesh.triangle_count * (1.0 - FLATTEN_MIN_SHARE):
-        return None
-    result = _as_mesh(mesh, flat)
+    result = _as_mesh(mesh, arrays)
     if not result.is_watertight or result.component_count != mesh.component_count:
         return None
     # Punktgleiche Oberflächen haben dasselbe Volumen — bis auf das Rauschen
@@ -650,34 +628,23 @@ def _manifold_decimation(
     """
     if not mesh.raw.is_volume:
         return None
-    try:
-        solid = _as_solid(mesh)
-    except NotManifoldError:
-        return None
-
     limit = max(mesh.bounds.diagonal, 1.0) * DEVIATION_WARN
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
-    best = solid.simplify(limit)
-    if best.is_empty() or best.num_tri() > target:
+    arrays, reported = kernel_process.run(
+        "simplify_search",
+        _kernel_input(mesh),
+        {
+            "target": target,
+            "limit": limit,
+            "steps": SIMPLIFY_SEARCH_STEPS,
+            "resolution": SIMPLIFY_SEARCH_RESOLUTION,
+        },
+        weight=mesh.triangle_count,
+        cancelled=cancelled,
+    )
+    if not reported["found"]:
         return None
 
-    low = 0.0
-    high = limit
-    for _step in range(SIMPLIFY_SEARCH_STEPS):
-        if high - low <= limit * SIMPLIFY_SEARCH_RESOLUTION:
-            break
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        middle = (low + high) / 2.0
-        candidate = solid.simplify(middle)
-        if not candidate.is_empty() and candidate.num_tri() <= target:
-            high = middle
-            best = candidate
-        else:
-            low = middle
-
-    result = _as_mesh(mesh, best)
+    result = _as_mesh(mesh, arrays)
     if not result.is_watertight or result.component_count != mesh.component_count:
         return None
     if not math.isfinite(result.volume) or result.volume <= 0.0:
@@ -1254,8 +1221,8 @@ def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None)
             # konform, und ein Vorschlag aus der konformen Zählung wäre dort
             # wieder abgelehnt worden. Dieselben Zählungen fragt die Vorschau
             # (:func:`expected_remesh`).
-            _conforming_ahead(mesh, edge)
-            conforming = _split_conforming(mesh, edge, cancelled)
+            expected = _conforming_ahead(mesh, edge)
+            conforming = _split_conforming(mesh, edge, cancelled, expected=expected)
             if conforming is not None:
                 _log.info(
                     "remeshed %d to %d triangles", mesh.triangle_count, conforming.triangle_count
@@ -1284,7 +1251,7 @@ def remesh(mesh: MeshData, edge: float, *, cancelled: CancelToken | None = None)
 
 
 def _split_conforming(
-    mesh: MeshData, edge: float, cancelled: CancelToken | None
+    mesh: MeshData, edge: float, cancelled: CancelToken | None, *, expected: int = 0
 ) -> MeshData | None:
     """Konform teilen, bis keine Kante mehr über ``edge`` liegt — ``None``, wenn
     der exakte Kern den Körper nicht annimmt.
@@ -1302,51 +1269,33 @@ def _split_conforming(
     nächstgelegenen Oberfläche gesucht zu werden. Ohne eigene Nummern fasst
     der Kern koplanare Nachbarn unter einer zusammen, und zwei Filamente auf
     einer ebenen Fläche wären eines.
+
+    **Im Hilfsprozess, sobald das Ergebnis groß wird** (``kernel_process``,
+    ``expected`` ist die Vorabzählung von :func:`remesh`): Am Spielwürfel
+    (0,05 mm, 5,8 Mio. Dreiecke) hielten der zweite und dritte Durchgang das
+    Fenster 15,0 und 22,7 s am Stück an. Die Rechnung ist
+    ``kernel_jobs.refine_conforming``.
     """
-    faces = np.asarray(mesh.raw.faces, dtype=np.uint64)
-    solid = manifold3d.Manifold(
-        manifold3d.Mesh64(
-            vert_properties=np.asarray(mesh.raw.vertices, dtype=np.float64),
-            tri_verts=faces,
-            face_id=np.arange(len(faces), dtype=np.uint64),
-        )
+    arrays, reported = kernel_process.run(
+        "refine_conforming",
+        _kernel_input(mesh),
+        {
+            "edge": edge,
+            "most": MAX_REMESH_TRIANGLES,
+            "passes": MAX_SUBDIVISIONS,
+            "slack": EPS_GEOM,
+        },
+        weight=max(mesh.triangle_count, expected),
+        cancelled=cancelled,
     )
-    if solid.is_empty():
+    if reported["empty"]:
         return None
-    passes = 0
-    while True:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        solid = solid.refine_to_length(edge)
-        built = solid.to_mesh64()
-        corners = np.asarray(built.tri_verts, dtype=np.int64)
-        if len(corners) > MAX_REMESH_TRIANGLES:
-            raise _too_fine(mesh, edge, len(corners), _conforming_count(mesh, until_short=True))
-        # **Eigene Puffer, nicht der Speicher des Kerns** (Durchsicht 0.5.1): Die
-        # Ecken aus ``vert_properties`` sind nur lesbar, und die Schichtanalyse
-        # des Prüfberichts (``slice._chain.plane_segments``) nimmt keinen
-        # solchen Puffer — nach *Kanten verfeinern* brach sie ab, und dem
-        # Bericht fehlten Inseln, Überhänge und Brücken.
-        points = np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True)
-        passes += 1
-        if passes >= MAX_SUBDIVISIONS or _longest_side(points, corners) <= edge + EPS_GEOM:
-            break
-    body = trimesh.Trimesh(vertices=points, faces=corners, process=False)
-    return _inherited(mesh, body, np.asarray(built.face_id, dtype=np.int64))
-
-
-def _longest_side(points: np.ndarray, corners: np.ndarray) -> float:
-    """Die längste Dreiecksseite, Seite für Seite gemessen.
-
-    Ohne die Kanten erst zu gruppieren — das wäre an acht Millionen Dreiecken
-    ein Sortierlauf je Durchgang. Normen über eine Achse rechnen auf jeder
-    Maschine gleich; an dieser Zahl hängt, ob ein weiterer Durchgang folgt.
-    """
-    longest = 0.0
-    for first, second in ((0, 1), (1, 2), (2, 0)):
-        sides = points[corners[:, second]] - points[corners[:, first]]
-        longest = max(longest, float(np.linalg.norm(sides, axis=1).max(initial=0.0)))
-    return longest
+    if reported["too_many"]:
+        raise _too_fine(
+            mesh, edge, int(reported["too_many"]), _conforming_count(mesh, until_short=True)
+        )
+    body = trimesh.Trimesh(vertices=arrays["vertices"], faces=arrays["faces"], process=False)
+    return _inherited(mesh, body, arrays["origin"])
 
 
 def _inherited(mesh: MeshData, body: Any, origin: np.ndarray) -> MeshData:
@@ -1402,69 +1351,49 @@ def _inherited(mesh: MeshData, body: Any, origin: np.ndarray) -> MeshData:
 # zwischen beiden.
 
 
-def _as_solid(mesh: MeshData) -> Any:
-    """Das Netz als Körper des exakten Kerns, oder ein guter Satz dazu, warum
-    nicht.
+def _not_a_solid(mesh: MeshData) -> NotManifoldError:
+    """Warum der exakte Kern dieses Netz nicht nimmt — mit dem Weg dorthin.
 
     Der Kern nimmt kein Netz an, das kein Volumen umschließt — er gibt
-    wortlos einen leeren Körper zurück. Genau das ist in P16.2 an
-    ``generated_figure.stl`` passiert: Die Datei trägt absichtlich die Fehler
-    eines Generators, und heraus kam nichts. Ein Objekt, das beim Unterteilen
-    verschwindet, ist die Sorte Fehler, die niemand mit seiner Ursache
-    verbindet; also wird hier angehalten, mit dem Weg dorthin (Regel 17).
+    wortlos einen leeren Körper zurück (``empty`` einer Rechnung aus
+    ``kernel_jobs``). Genau das ist in P16.2 an ``generated_figure.stl``
+    passiert: Die Datei trägt absichtlich die Fehler eines Generators, und
+    heraus kam nichts. Ein Objekt, das beim Unterteilen verschwindet, ist die
+    Sorte Fehler, die niemand mit seiner Ursache verbindet; also wird
+    angehalten, mit dem Weg dorthin (Regel 17).
     """
-    # ``Mesh64``, nicht ``Mesh``: der einfache Eingang nimmt ``float32``, und
-    # der Kern rechnet in doppelter Genauigkeit (Regel 6). Bei einem Eckpunkt
-    # auf 100 mm liegt zwischen zwei ``float32`` rund ein hundertstel
-    # Mikrometer — unter jeder Fertigungstoleranz, aber es ist ein Verlust, den
-    # niemand zu bezahlen hat, wenn der Kern die doppelte Breite selbst anbietet.
-    solid = manifold3d.Manifold(
-        manifold3d.Mesh64(
-            np.asarray(mesh.raw.vertices, dtype=np.float64),
-            np.asarray(mesh.raw.faces, dtype=np.uint64),
-        )
+    return NotManifoldError(
+        detail=_(
+            "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig "
+            "vernetzen noch unterteilen. Erst reparieren, dann noch einmal."
+        ),
+        # Jede innere Kante trägt zwei Halbkanten, jede offene eine: aus
+        # 3F = 2·E_innen + E_offen und E = E_innen + E_offen folgt
+        # E_offen = 2E - 3F. Andersherum gerechnet kommt dieselbe Zahl mit
+        # negativem Vorzeichen heraus, und ein Befund über minus achtzehn
+        # offene Kanten ist schlimmer als keiner.
+        open_edges=int(len(mesh.raw.edges_unique) * 2 - len(mesh.raw.faces) * 3),
     )
-    if solid.is_empty():
-        raise NotManifoldError(
-            detail=_(
-                "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig "
-                "vernetzen noch unterteilen. Erst reparieren, dann noch einmal."
-            ),
-            # Jede innere Kante trägt zwei Halbkanten, jede offene eine: aus
-            # 3F = 2·E_innen + E_offen und E = E_innen + E_offen folgt
-            # E_offen = 2E - 3F. Andersherum gerechnet kommt dieselbe Zahl mit
-            # negativem Vorzeichen heraus, und ein Befund über minus achtzehn
-            # offene Kanten ist schlimmer als keiner.
-            open_edges=int(len(mesh.raw.edges_unique) * 2 - len(mesh.raw.faces) * 3),
-        )
-    return solid
 
 
-def _as_mesh(mesh: MeshData, solid: Any) -> MeshData:
+def _as_mesh(mesh: MeshData, arrays: dict[str, np.ndarray]) -> MeshData:
     """Zurück ins Netz — verschweißt nur, wo das Netz dabei dicht bleibt.
 
-    Der Kern gibt ein Netz heraus, das per Index dicht ist. Eckpunkte an
-    derselben Stelle trägt es, wo eine Eigenschaft die Ecke teilt oder zwei
-    Schalen einander berühren; :func:`_as_solid` gibt ihm keine
-    Eigenschaften, ein Würfel kommt mit acht Ecken zurück (gemessen
-    26.09.2026). Verschweißt wird trotzdem — teilt der Kern doch einmal eine
-    Ecke, wäre das Netz ohne das nur scheinbar geschlossen —, übernommen aber
-    nur, wenn es nicht aufreißt: Zwei Schalen, die sich an einer Kante
-    berühren, legen verschweißt vier Flächen an diese Kante. Am Eiffelturm
-    (zwei Teile) und an den Splittern des Piratenschiffs riss genau das das
-    grobe Netz der Vorschau auf, und die Boolesche Kette lehnte es ab
-    (RM-212). Dieselbe Entscheidung trifft ``boolean._tidied`` für die
-    Ausgabe der Booleschen Operationen.
+    ``arrays`` sind Eckpunkte und Dreiecke aus dem Kern
+    (``kernel_jobs.mesh_arrays``), eigene Puffer. Der Kern gibt ein Netz
+    heraus, das per Index dicht ist. Eckpunkte an derselben Stelle trägt es,
+    wo eine Eigenschaft die Ecke teilt oder zwei Schalen einander berühren;
+    ``kernel_jobs.solid`` gibt ihm keine Eigenschaften, ein Würfel kommt mit
+    acht Ecken zurück (gemessen 26.09.2026). Verschweißt wird trotzdem —
+    teilt der Kern doch einmal eine Ecke, wäre das Netz ohne das nur
+    scheinbar geschlossen —, übernommen aber nur, wenn es nicht aufreißt: Zwei
+    Schalen, die sich an einer Kante berühren, legen verschweißt vier Flächen
+    an diese Kante. Am Eiffelturm (zwei Teile) und an den Splittern des
+    Piratenschiffs riss genau das das grobe Netz der Vorschau auf, und die
+    Boolesche Kette lehnte es ab (RM-212). Dieselbe Entscheidung trifft
+    ``boolean._tidied`` für die Ausgabe der Booleschen Operationen.
     """
-    built = solid.to_mesh64()
-    body = trimesh.Trimesh(
-        # Eigene Puffer, wie in ``boolean._kernel``: Ohne das Verschweißen
-        # hingen die Felder sonst am Speicher des Kerns, und
-        # ``fast_simplification`` nimmt nur eigene C-Puffer an.
-        vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True),
-        faces=np.array(built.tri_verts, dtype=np.int64, order="C", copy=True),
-        process=False,
-    )
+    body = trimesh.Trimesh(vertices=arrays["vertices"], faces=arrays["faces"], process=False)
     welded = body.copy()
     welded.merge_vertices()
     if len(welded.vertices) < len(body.vertices) and (
@@ -1493,18 +1422,21 @@ def refined(mesh: MeshData, edge: float) -> MeshData:
     Schnitt auf der Voxelstufe). Für ein Werkzeug, das gleich gebogen wird,
     zählt nur, dass jede Schale dicht bleibt.
     """
-    built = _as_solid(mesh).refine_to_length(edge).to_mesh64()
-    body = trimesh.Trimesh(
-        # Eigene Puffer wie in :func:`_split_conforming`: nur lesbare Ecken nimmt
-        # die Schichtanalyse nicht an.
-        vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True),
-        faces=np.array(built.tri_verts, dtype=np.int64, order="C", copy=True),
-        process=False,
+    arrays, reported = kernel_process.run(
+        "refine_once",
+        _kernel_input(mesh),
+        {"edge": edge},
+        weight=max(mesh.triangle_count, estimated_triangles(mesh, edge)),
     )
+    if reported["empty"]:
+        raise _not_a_solid(mesh)
+    body = trimesh.Trimesh(vertices=arrays["vertices"], faces=arrays["faces"], process=False)
     return mesh.replacing(body)
 
 
-def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
+def uniform(
+    mesh: MeshData, edge: float, deviation: float, *, cancelled: CancelToken | None = None
+) -> MeshData:
     """Gleichmäßige Kantenlängen — nach oben wie nach unten.
 
     Der Unterschied zu :func:`remesh`, gemessen an ``plate_holes``: Teilen
@@ -1520,17 +1452,29 @@ def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
     ``deviation``. Erst danach wird geteilt. Mit ``deviation = 0`` fällt der
     erste Schritt aus und die Form bleibt exakt.
     """
-    _evenly_ahead(mesh, edge)
-    solid = _as_solid(mesh)
+    expected = _evenly_ahead(mesh, edge)
     try:
-        evened = _as_mesh(mesh, solid.simplify(deviation).refine_to_length(edge))
+        arrays, reported = kernel_process.run(
+            "simplify_and_refine",
+            _kernel_input(mesh),
+            {"deviation": deviation, "edge": edge},
+            weight=max(mesh.triangle_count, expected),
+            cancelled=cancelled,
+        )
+        if reported["empty"]:
+            raise _not_a_solid(mesh)
+        # Das Verschweißen danach gehört dazu: An acht Millionen Dreiecken geht
+        # auch dort der Speicher aus.
+        evened = _as_mesh(mesh, arrays)
     except MemoryError as error:
         raise _out_of_memory(mesh, edge, until_short=False) from error
     _log.info("evened %d to %d triangles", mesh.triangle_count, evened.triangle_count)
     return evened
 
 
-def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
+def subdivided(
+    mesh: MeshData, edge: float, angle: float, *, cancelled: CancelToken | None = None
+) -> MeshData:
     """Zwischen den Dreiecken interpolieren, scharfe Kanten stehen lassen.
 
     Reines Teilen setzt neue Punkte in die Ebene der Facette, aus der sie
@@ -1550,11 +1494,18 @@ def subdivided(mesh: MeshData, edge: float, angle: float) -> MeshData:
     Eckpunktnormalen und kennt keine Vierecke. Die Kugel wird darüber genauso
     rund (33 436 mm³ von 33 510 möglichen).
     """
-    _evenly_ahead(mesh, edge)
-    solid = _as_solid(mesh)
-    smoothed = solid.calculate_normals(0, angle).smooth_by_normals(0)
+    expected = _evenly_ahead(mesh, edge)
     try:
-        return _as_mesh(mesh, smoothed.refine_to_length(edge))
+        arrays, reported = kernel_process.run(
+            "smooth_and_refine",
+            _kernel_input(mesh),
+            {"angle": angle, "edge": edge},
+            weight=max(mesh.triangle_count, expected),
+            cancelled=cancelled,
+        )
+        if reported["empty"]:
+            raise _not_a_solid(mesh)
+        return _as_mesh(mesh, arrays)
     except MemoryError as error:
         raise _out_of_memory(mesh, edge, until_short=False) from error
 
@@ -1631,7 +1582,7 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     if params.method == "fast":
-        return _decimated_fast(source, before, params.triangles)
+        return _decimated_fast(source, before, params.triangles, ctx.cancelled)
     after, solver, measured = _decimate_with_solver(before, params.triangles, ctx.cancelled)
     findings = _deviation_findings(
         before,
@@ -1672,7 +1623,9 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
     )
 
 
-def _decimated_fast(source: SceneObject, before: MeshData, target: int) -> OpResult:
+def _decimated_fast(
+    source: SceneObject, before: MeshData, target: int, cancelled: CancelToken | None = None
+) -> OpResult:
     """*Dreiecke verringern* auf dem Anzeigeweg — :func:`decimate_for_display`, sonst nichts.
 
     Keine zweite Herleitung: Toleranz, Rückfall aufs Raster und Farbübertrag
@@ -1682,7 +1635,7 @@ def _decimated_fast(source: SceneObject, before: MeshData, target: int) -> OpRes
     Ansicht, 23.09.2026). Der Befund sagt, dass nicht gemessen wurde, statt
     „kaum verschoben" vorzutäuschen.
     """
-    after = decimate_for_display(before, target)
+    after = decimate_for_display(before, target, cancelled=cancelled)
     findings = (
         [
             Finding(
@@ -2095,7 +2048,7 @@ def remesh_uniform(ctx: OpContext) -> OpResult:
     params = cast(UniformParams, ctx.params)
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
-    after = uniform(before, params.edge, params.deviation)
+    after = uniform(before, params.edge, params.deviation, cancelled=ctx.cancelled)
     ctx.cancelled.raise_if_cancelled()
     findings = [
         Finding(
@@ -2182,7 +2135,7 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
     params = cast(SubdivideParams, ctx.params)
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
-    after = subdivided(before, params.edge, params.angle)
+    after = subdivided(before, params.edge, params.angle, cancelled=ctx.cancelled)
     ctx.cancelled.raise_if_cancelled()
     findings = _deviation_findings(before, after, source.id, cancelled=ctx.cancelled)
     findings.append(

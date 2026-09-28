@@ -38,6 +38,7 @@ from app.core.geom.mesh import (
     MeshData,
     face_components,
     fully_stitched,
+    python_values,
     refined_units,
     refined_units_key,
     triple_products,
@@ -1162,11 +1163,13 @@ def _mesh_key(mesh: MeshData) -> bytes:
         if known is not None:
             key = bytes(known)
     if key is None:
-        key = hashlib.blake2b(
-            np.ascontiguousarray(body.vertices, dtype=np.float64).tobytes()
-            + np.ascontiguousarray(body.faces, dtype=np.int64).tobytes(),
-            digest_size=16,
-        ).digest()
+        # Gestreamt statt als ein Bytestück: ``tobytes`` und die Verkettung
+        # kopierten an 5,8 Mio. Dreiecken zweimal 209 MB unter dem GIL; der
+        # Abdruck ist derselbe, und ``update`` gibt den GIL beim Rechnen her.
+        hasher = hashlib.blake2b(digest_size=16)
+        hasher.update(np.ascontiguousarray(body.vertices, dtype=np.float64))
+        hasher.update(np.ascontiguousarray(body.faces, dtype=np.int64))
+        key = hasher.digest()
         if cache is not None:
             cache["solidon_mesh_key"] = key
     # **Und der Ursprung je Dreieck, wo das Netz einen trägt** (R1): Er
@@ -1863,7 +1866,10 @@ def refined_features(
         lengths = starts[rows + 1] - starts[rows]
         before = np.cumsum(lengths) - lengths
         places = np.repeat(starts[rows] - before, lengths) + np.arange(int(lengths.sum()))
-        return tuple(np.sort(order[places]).tolist())
+        # In Stücken zum Tupel (``python_values``): Die größte Fläche des
+        # verfeinerten Spielwürfels hat 3 979 168 Dreiecke, und ein Tupel aus
+        # einem Stück hielt den Hauptfaden 150 ms an (RM-212).
+        return tuple(python_values(np.sort(order[places])))
 
     carried: dict[FeatureId, Feature] = {}
     for name, feature in features.items():

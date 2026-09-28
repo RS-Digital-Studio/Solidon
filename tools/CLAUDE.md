@@ -84,6 +84,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `make_download.py` · `sign_version.py` | Download-Kasten und Versionsliste aus `DELIVERED` · unterschreibt `website/version.json` |
 | `asset_rights.py` | Prüft `ASSET-RIGHTS.toml` fail-closed vor Kundenbau und Upload; schreibt den Bytebeleg ins Artefakt, den jeder Paketierer erneut prüft |
 | `make_sbom.py` · `make_licence_notices.py` | Stückliste aus PyInstallers Analyse und dem fertigen Paket, nicht aus `pip freeze` · Lizenzbeilage aus genau dieser SBOM, `--release-check` fail-closed |
+| `check_frozen_helper.py` | Rauchtest im Paketjob direkt nach dem Bauen: startet den Hilfsprozess des Kerns aus dem gebauten Paket, rechnet eine Boolesche bitgleich nach, beendet ihn hart und sanft und verlangt danach weder Prozess noch Temp-Ordner; schreibt nichts ins Paket |
 | `setup_activation_server.py` · `deploy_activation_server.py` · `licence_archive.py` | Startwert, Betreiberzugang und Datenbank vorbereiten · mit Sicherung ausliefern · Dateisperre und Satzformat des Lizenzarchivs |
 | `upload_website.py` · `make_stats_access.py` | Website hochladen · Zugang zur Statistik nach `appdata/stats-access.php`, nie in den öffentlichen Baum |
 | `setup_comfyui.py` · `start-solidon3d.cmd` | ComfyUI für Solidon einrichten · Start per Doppelklick aus dem Arbeitsbaum |

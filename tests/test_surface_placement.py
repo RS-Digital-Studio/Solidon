@@ -1239,8 +1239,8 @@ def test_a_coplanar_drill_mouth_keeps_its_bottom_after_welding(widened, profile,
     module = import_module("app.core.geom.boolean")
     original = module._run_stage
 
-    def skip_direct(kind, meshes, stage, seed):
-        return None if stage == "direct" else original(kind, meshes, stage, seed)
+    def skip_direct(kind, meshes, stage, seed, cancelled=None):
+        return None if stage == "direct" else original(kind, meshes, stage, seed, cancelled)
 
     monkeypatch.setattr(module, "_run_stage", skip_direct)
     result = drill(
