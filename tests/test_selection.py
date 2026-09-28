@@ -2569,6 +2569,38 @@ def test_the_handle_of_a_chosen_face_pushes_that_face(window: MainWindow) -> Non
     )
 
 
+def test_the_grip_of_a_chosen_face_shows_one_arrow_along_it(window: MainWindow) -> None:
+    """Am gebauten Fenster: Die gewählte Fläche trägt einen Pfeil, keinen Ring.
+
+    Vorher standen an jeder Fläche der Platte drei Pfeile entlang der
+    Weltachsen und drei Ringe (Handbuchbilder *Bohrung setzen*, *Beschriften*,
+    *Zwei Farben*, *Gewinde*) — gezogen wurde davon nur der Weg entlang der
+    Richtung. Jede der sechs Flächen, damit auch die seitlichen zählen.
+    """
+    import numpy as np
+
+    view = window.viewport
+    view.renderer = _DepthRenderer()
+    view.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    flaechen = [
+        (fid, f)
+        for fid, f in entry.features.items()
+        if f.kind == "face" and f.params.get("normal") is not None
+    ]
+    assert len(flaechen) == 6, "die Platte hat sechs Flächen"
+    for face_id, feature in flaechen:
+        window.object_tree.select_object("obj_1")
+        view.select_feature(face_id)
+        griff = view._gizmo
+        assert griff is not None, f"{face_id}: kein Griff an der gewählten Fläche"
+        assert len(griff.items) == 1, f"{face_id}: {len(griff.items)} Teile statt eines Pfeils"
+        assert griff.items[0].name == "gizmo:arrow:2"
+        assert np.allclose(griff.axes[2], feature.params["normal"]), face_id
+        assert view._scale_handle is None, "kein Würfel am Merkmal"
+        assert view._gizmo_label_texts == ["<->"], view._gizmo_label_texts
+
+
 @pytest.mark.skipif(
     not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
     reason="OpenCASCADE is an optional dependency",

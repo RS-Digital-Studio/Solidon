@@ -163,6 +163,18 @@ def deviation_host(
     host.viewport.show_scene(result)
     host.object_tree.show_scene(result)
     host.object_tree.select_object("obj_1")
+    # Die Druckgrundlage steht, wie nach dem ersten Lauf: Ihr Arbeiter startet
+    # mit der Auswertung, nicht mit dem Klick auf einen Befund, und gezählt
+    # werden hier die Arbeiter der Karte. Die Auswertung ist oben ersetzt.
+    from app.core.export import manufacturer
+    from app.core.knowledge import print_settings
+
+    quality = print_settings.DEFAULT_QUALITY
+    host.settings.print_quality = quality
+    host._foundation_cache = (
+        host._foundation_key(quality),
+        manufacturer.base_settings(host.session.profile, quality, None),
+    )
     workers: list[Any] = []
     monkeypatch.setattr(host._leash, "start", workers.append)
     try:

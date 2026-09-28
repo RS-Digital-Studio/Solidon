@@ -150,6 +150,16 @@ Winkel als `support.threshold_angle`. Ein Projekt von vorher bekommt ihn als
 Vorschlag. **Wer einen Winkel an einer Stelle einführt, reicht ihn bis in jede
 Vorauswahl durch**: Die Orientierungsheuristik urteilte bis dahin fest mit 45.
 
+Mit Entscheidung L (Stufe L der Übergabe auf dem Herstellerprofil) rechnet die
+Auswertung mit `Session.evaluation_profile` — den wirksamen Einstellungen des
+Fensters, im Hauptthread vor jedem Lauf geholt —, Druckdialog-Rat und
+Kanalsperre der Übergabe mit `profiles.for_process(..., effective=True)`.
+Projekte aus 0.5.0 tragen 45 Grad ohne eigene Wahl; deshalb gilt die Schwelle
+aus einem gespeicherten Satz nur als eigene Wahl. Kommt die Grundlage mit
+anderer Schwelle erst nach dem Lauf, wertet das Fenster neu aus
+(`Session.evaluation_follows`). (Aus der Regel verschoben, als sie beim Merge
+der Release-Sitzung 0.5.1 über ihr Budget wuchs.)
+
 **Und ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen.** Eine
 Fläche, die um α gegen die Senkrechte überhängt, trägt die Normale z = −sin α;
 über der Grenze heißt z < −sin(Grenze). Die Vorauswahl verglich mit dem

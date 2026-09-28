@@ -2187,6 +2187,10 @@ def test_the_preview_shows_the_log_it_sends(
     In der Vorschau standen Name und Größe; mitgereist wären die Zeilen —
     samt Dateipfaden, in denen der Windows-Kontoname steht. Textanhänge
     stehen jetzt im Wortlaut in der Vorschau.
+
+    Seit ``c3271ecd8`` (RM-231) geht das Protokoll mit ``~`` statt des
+    Nutzerordners hinaus; die Vorschau zeigt genau diese Zeile, und der
+    Kontoname steht nirgends darin.
     """
     from app.ui import support_dialog
     from app.ui.support_dialog import KIND_BUG, SupportDialog
@@ -2199,7 +2203,15 @@ def test_the_preview_shows_the_log_it_sends(
     dialog._refresh()
     try:
         assert dialog.with_log.isChecked(), "vorangekreuzt — genau darum geht es"
-        assert zeile in dialog.preview.toPlainText()
+        preview = dialog.preview.toPlainText()
+        assert "error report written to ~/bericht-1" in preview
+        assert "beispielkonto" not in preview
+        sent = next(
+            entry.data.decode("utf-8")
+            for entry in dialog.ticket().attachments
+            if entry.name == "protokoll.txt"
+        )
+        assert sent in preview, "gezeigt wird, was mitgeht"
     finally:
         dialog.release()
 
@@ -2214,6 +2226,25 @@ def own_feedback_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     hinterlassen hatte, und die Reihenfolge entschied über den Ausgang.
     """
     monkeypatch.setattr(feedback, "user_config_dir", lambda: tmp_path)
+
+
+def _window_with_room() -> MainWindow:
+    """Ein Fenster im Arbeitsbereich, über dessen Ansicht die Karte Platz hat.
+
+    Seit ``336c7fdc8`` (RM-233) fragt die Karte nur, wo sie zwischen den Karten
+    zu sehen ist (``SurveyNotice.has_room``). Ein frisches Fenster zeigt den
+    Startbildschirm, und die Ansicht darunter ist verborgen und 100 × 30 Punkte
+    groß — dort fragt die Karte zu Recht nicht. Ohne Größe und leeres Projekt
+    prüften die Tests darunter nur, dass sie sich zurückhält.
+    """
+    window = MainWindow(Session(), UiSettings())
+    window.resize(1600, 1000)
+    window.show()
+    assert window.start_empty()
+    for _ in range(5):
+        QApplication.processEvents()
+    assert window._survey_notice.has_room(), "sonst prüft keiner der Tests die Einladung"
+    return window
 
 
 def test_the_survey_asks_with_a_card_and_not_with_a_window(
@@ -2245,7 +2276,7 @@ def test_the_survey_asks_with_a_card_and_not_with_a_window(
         "_cached",
         activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
     )
-    window = MainWindow(Session(), UiSettings())
+    window = _window_with_room()
     try:
         assert not window._survey_notice.isVisible(), "vor der Zeit steht nichts da"
 
@@ -2277,9 +2308,10 @@ def test_saying_no_to_the_survey_holds(
         "_cached",
         activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
     )
-    window = MainWindow(Session(), UiSettings())
+    window = _window_with_room()
     try:
         window._offer_survey()
+        assert window._survey_notice.isVisibleTo(window.viewport), "erst gefragt, dann abgelehnt"
         window._survey_notice.no.click()
 
         assert not window._survey_notice.isVisible()
@@ -2303,7 +2335,7 @@ def test_nobody_is_asked_while_the_window_is_calculating(
         "_cached",
         activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
     )
-    window = MainWindow(Session(), UiSettings())
+    window = _window_with_room()
     try:
         monkeypatch.setattr(type(window.session), "busy", property(lambda self: True))
 

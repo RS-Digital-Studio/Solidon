@@ -86,6 +86,11 @@ PRUSA_MODEL_CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
 #: verloren, ohne dass es jemand merkt.
 PRUSA_CONFIG_HEADER = "; von Solidon geschrieben"
 
+#: Curas Namensraum für Werte je Objekt (``ThreeMFWriter`` in Cura 5.13). Das
+#: Fenster liest sie aus ``<metadatagroup>`` am Objekt, als ``cura:<schlüssel>``;
+#: libSavitar streift das Präfix ab (``SceneNode::fillByXMLNode``).
+CURA_NAMESPACE = "http://software.ultimaker.com/xml/cura/3mf/2015/10"
+
 
 def write(mesh: MeshData, slots: list[MaterialSlot] | None = None, name: str = "") -> bytes:
     """Ein Körper als 3MF-Container, mit einem Material je Slot."""
@@ -288,6 +293,7 @@ def write_assembly(
     prusa_config: Mapping[str, str] | None = None,
     across: Sequence[AssemblyPart] | None = None,
     blocker_as_part: bool = True,
+    cura: bool = False,
 ) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
@@ -327,22 +333,30 @@ def write_assembly(
     Textzeilen führt (:data:`PRUSA_CONFIG_PATH`). Zwei Parameter für einen
     Zweck, weil es zwei Formate sind — und Formate sind das, was dieses Modul
     kennt.
+
+    ``cura`` ist Curas Schreibweise für sein Fenster: die Werte je Teil als
+    ``cura:``-Metadaten am Objekt (:data:`CURA_NAMESPACE`), die Stützsperre als
+    Komponente neben dem Körper mit ``anti_overhang_mesh``, und keine Beilage
+    der anderen Familien. Die Komponente und nicht ein eigenes Objekt: Cura
+    setzt ein freistehendes Objekt aufs Bett und ordnet es für sich an, ein
+    Kind einer Gruppe wandert mit ihr.
     """
     if not parts:
         raise ValueError("an assembly needs at least one part")
 
     materials = merge_slots(parts, across=across)
-    model = _assembly_xml(parts, materials, name, bed, layout, blocker_as_part)
+    model = _assembly_xml(parts, materials, name, bed, layout, blocker_as_part or cura, cura)
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
         container.writestr("[Content_Types].xml", _content_types())
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
-        container.writestr(SETTINGS_PATH, _settings_xml(parts, materials, blocker_as_part))
-        container.writestr(
-            PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml(parts, materials, blocker_as_part)
-        )
+        if not cura:
+            container.writestr(SETTINGS_PATH, _settings_xml(parts, materials, blocker_as_part))
+            container.writestr(
+                PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml(parts, materials, blocker_as_part)
+            )
         if project_settings:
             container.writestr(
                 PROJECT_SETTINGS_PATH,
@@ -408,7 +422,11 @@ def _prusa_settings_xml(
             ET.SubElement(
                 blocker,
                 "metadata",
-                {"type": "volume", "key": "volume_type", "value": "SupportBlocker"},
+                {
+                    "type": "volume",
+                    "key": "volume_type",
+                    "value": slicer_keys.PRUSA_SUPPORT_BLOCKER,
+                },
             )
             ET.SubElement(
                 blocker,
@@ -460,7 +478,7 @@ def _settings_xml(
             # anlegt; die Matrix ist die Einheit, gelegt wird über den Build.
             for child, kind, title in (
                 (helpers[number][0], "normal_part", part.name),
-                (helpers[number][1], "support_blocker", str(_("Stützsperre"))),
+                (helpers[number][1], slicer_keys.ORCA_SUPPORT_BLOCKER, str(_("Stützsperre"))),
             ):
                 piece = ET.SubElement(node, "part", {"id": str(child), "subtype": kind})
                 if title:
@@ -679,11 +697,13 @@ def _assembly_xml(
     bed: tuple[float, float] | None = None,
     layout: tuple[float, float] | None = None,
     blocker_as_part: bool = True,
+    cura: bool = False,
 ) -> bytes:
     """Das Modell-XML einer Baugruppe: ein ``object`` je Teil, ein ``item`` je
     Teil im Build. Eine Stützsperre wird ein eigenes Teil desselben Objekts
     oder ein Bereich hinter den Dreiecken des Körpers — je nachdem, welche
-    Schreibweise der Slicer liest (``slicer_keys.helpers_as_parts``).
+    Schreibweise der Slicer liest (``slicer_keys.helpers_as_parts``). Mit
+    ``cura`` tragen Körper und Sperre ihre Werte als ``cura:``-Metadaten.
     """
     plates = sorted({part.plate for part in parts})
     root = ET.Element(
@@ -693,6 +713,7 @@ def _assembly_xml(
             "xml:lang": "de-DE",
             "xmlns": CORE_NAMESPACE,
             "xmlns:slic3rpe": PRUSA_NAMESPACE,
+            **({"xmlns:cura": CURA_NAMESPACE} if cura else {}),
         },
     )
     ET.SubElement(root, "metadata", {"name": "Application"}).text = f"{APP_NAME} {APP_VERSION}"
@@ -756,6 +777,8 @@ def _assembly_xml(
                 **named,
             },
         )
+        if cura and part.settings:
+            _cura_values(body, part.settings)
         blocks.append(
             _write_geometry(
                 body,
@@ -788,6 +811,10 @@ def _assembly_xml(
                     "name": str(_("Stützsperre")),
                 },
             )
+            if cura:
+                # Curas Stützsperre ist ein Netz mit diesem Wert — so legt
+                # sein eigenes Werkzeug „Stützblocker“ sie an.
+                _cura_values(shield, {slicer_keys.CURA_SUPPORT_BLOCKER: "True"})
             blocks.append(
                 _write_geometry(shield, part.support_blocker, group_id, {}, number=own[1])
             )
@@ -812,6 +839,15 @@ def _assembly_xml(
         ET.tostring(root, encoding="utf-8")
     )
     return _fill_in(document, blocks)
+
+
+def _cura_values(parent: ET.Element, values: Mapping[str, str]) -> None:
+    """Werte je Objekt, wie Curas Fenster sie liest: ``cura:<schlüssel>`` in
+    der ``metadatagroup`` des Objekts, vor dessen Netz (3MF-Kern, Reihenfolge
+    der Kinder von ``object``)."""
+    group = ET.SubElement(parent, "metadatagroup")
+    for key, value in sorted(values.items()):
+        ET.SubElement(group, "metadata", {"name": f"cura:{key}", "type": "xs:string"}).text = value
 
 
 def _helper_ids(parts: Sequence[AssemblyPart]) -> dict[int, tuple[int, int]]:

@@ -59,8 +59,10 @@ welcher (§24.5, §32).
 Ein Titel aus dem Code trägt `title_translatable` (seit Format 6): `title` ist
 die Message-ID, aufgelöst erst bei der Anzeige; ohne Markierung ist er wörtlich
 (Nutzernamen werden nie übersetzt). Transaktionstitel über `_()`, nie `tr()` —
-sonst friert die Sprache des Speicherzeitpunkts ein. Zusammengesetzte Titel
-(`f"{tr('Parameter')} {name}"`) bleiben wörtlich. Die Titel der
+sonst friert die Sprache des Speicherzeitpunkts ein. Auch ein zusammengesetzter
+Titel ist ein `_()` mit Platzhalter (`session._parameter_title`:
+`_("Parameter {name}", name=title or name)`, der Titel selbst übersetzbar);
+wörtlich bleibt nur, was der Nutzer benannt hat. Die Titel der
 Beispiel-Bauer sammelt `EXTRA_SOURCES` in `app/i18n/extract.py` ein.
 
 ## Ein Platzhalterwert kann selbst übersetzbar sein
@@ -168,7 +170,11 @@ statt Speicherüberlauf.
 `threemf._parse_model` innerhalb von `_reading_trees` — stückweise, je Stück
 eingefroren (`gc.freeze`), am Ende in Scheiben freigegeben und aufgetaut;
 nichts bleibt eingefroren (`gc.get_freeze_count() == 0`, Test). Wer nur
-zählt, baut keine Geometrie (`_StructureOnly`).
+zählt, baut keine Geometrie (`_StructureOnly`). Ein Stück, ein Zahlenblock
+und ein Freigabeblock halten den GIL je höchstens wenige Millisekunden
+(`XML_CHUNK`, `NUMBER_BLOCK`) — so lange wartet jeder Griff des Hauptthreads.
+Objekte und Materialgruppen sucht `_outside_meshes`, nie `findall(".//…")`
+über das Modell: Das lief in C durch alle Ecken und Dreiecke (Test).
 
 **STEP ist eine Baugruppe** (Format 33): je Komponenteninstanz ein exakter
 Körper mit Weltlage, Namen und Flächenfarben über XCAF
@@ -193,23 +199,35 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
 
 ## Was welcher Slicer bekommt
 
+- **Die Schrägnaht braucht Art und Länge** (`shell.scarf_seam`): Elegoos
+  Basisprozess führt `seam_slope_min_length = 0`, und mit der Art allein setzt
+  ElegooSlicer keine Rampe. Geschrieben werden nur Außenwand und glatte
+  Schleifen mit `slicer_keys.SCARF_LENGTH`; Bambu Studio bekommt dazu
+  `override_filament_scarf_seam_setting`, sonst sticht die Schrägnaht seines
+  Filaments (Elegoo, Orca und Creality kennen den Schlüssel nicht und
+  übergehen ihn). Cura: `scarf_joint_seam_length` je Netz. Die Grundlage liest
+  „an“ nur mit einer Länge über null.
 - **Eine Stützsperre gehört zu ihrem Objekt, und jede Familie schreibt sie
   anders** (`slicer_keys.helpers_as_parts`): Orca-Familie als eigenes Teil
   (`model_settings.config` nennt die zweite Komponente `support_blocker`),
   PrusaSlicer als Bereich (Dreiecke hinter denen des Körpers, `SupportBlocker`
   in der Beilage, Modell mit `slic3rpe:Version3mf`, sonst übergeht PrusaSlicer
   die Beilage), CuraEngine als eigenes Netz mit `anti_overhang_mesh=true`
-  (`slicer_keys.takes_mesh_settings`; im Cura-Fenster gilt sie nicht, der
-  Befund nennt den Handgriff). Jede Familie druckt die fremde Schreibweise als
+  (`slicer_keys.takes_mesh_settings`), Curas Fenster als Komponente neben
+  ihrem Körper mit `cura:anti_overhang_mesh` (ein freistehendes Objekt setzt
+  Cura aufs Bett). Jede Familie druckt die fremde Schreibweise als
   Kunststoff — geprüft wird an der **Modellbahn** mit und ohne Sperre, nicht
   an der Stütze. Geschrieben nur in die direkte Übergabe, nie in eine
   gespeicherte 3MF.
-- **Cura bekommt kein 3MF** (`cura`; CuraEngine liest keines):
-  `write_assembly` gibt ein STL aller Teile der Platte fürs Fenster, daneben
-  je Teil ein Netz und eine Netzliste für die Kommandozeile (`-s` nach `-l`
-  gilt nur diesem Netz). Eine Netzliste, die nicht hält (fremder Pfad,
-  fehlende Datei, Wert mit Umbruch), hält die Übergabe an, statt still ohne
-  Sperre zu rechnen.
+- **CuraEngine bekommt kein 3MF, Curas Fenster schon** (`cura`): Für die
+  Kommandozeile gibt `write_assembly` ein STL aller Teile der Platte, daneben
+  je Teil ein Netz und eine Netzliste (`-s` nach `-l` gilt nur diesem Netz).
+  Eine Netzliste, die nicht hält (fremder Pfad, fehlende Datei, Wert mit
+  Umbruch), hält die Übergabe an, statt still ohne Sperre zu rechnen. Das
+  Fenster (`for_window`) bekommt dieselben Netze mit denselben Werten als 3MF
+  in Curas Schreibweise (`cura:<schlüssel>` am Objekt, Wahrheitswerte `True`,
+  `handover.for_the_cura_window`), um den halben Bauraum verschoben wie die
+  Konsole — Cura ordnet eine 3MF beim Laden nicht an.
 - **Mehrere Platten in eine Datei, wo der Slicer Platten kennt**
   (`knows_plates`): Orca-Familie mit je einem `plate`-Block, Teile
   plattenweise im Raster — `ceil(sqrt(n))` Spalten, Zeilen nach unten, ein
@@ -255,6 +273,25 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
 - **`with_path` setzt keine Herkunft**: Dialog `with_choice`, übernommener
   Vorschlag `with_accepted` (`advise.apply`), Zurücksetzen `without_choice`;
   eine Rücklesung aus einem Profil ist keine Wahl.
+- **Das Gemessene gilt auf dem Raster seiner Probe**
+  (`manufacturer.measured_on`): Wirksame Einstellungen entstehen über
+  `manufacturer.effective`, im Druckdialog über sein Attribut `settings`. Eine
+  andere Schichthöhe oder Bahnbreite setzt den gemessenen Überhangwinkel auf
+  die Grundlage ohne Messung zurück (`Foundation.unmeasured`), sonst stützten
+  Analyse und Slicer nach einer Probe, die für diesen Druck nichts sagt.
+- **Was aus dem Körper folgt, steht am Teil** (`handover.split_for_parts`):
+  Ein übernommener Pfad aus `advise.PART_PATHS` ohne plattenweiten Grund
+  (`advise.plate_paths`) fällt auf der Platte auf die Grundlage zurück, und
+  der Rat je Körper schreibt ihn als Objektwert (`writer._part_values`).
+  Export und Druckdialog fragen diesen Rat an einer Stelle
+  (`writer.part_advice`, je Spule über `handover.slot_processes`), sonst nennt
+  die Zeile im Dialog ein Teil, das die Datei nicht bekommt. CuraEngine nimmt
+  nur `CURA_PER_MESH` je Netz: Dort behält die Platte die Übernahme, ein Teil
+  ohne Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was
+  ein Slicer nicht je Teil annimmt, bleibt plattenweit
+  (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
+  fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
+  den das Teil bekommt. Eine eigene Wahl gilt der Platte.
 - **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
   nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
   (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres

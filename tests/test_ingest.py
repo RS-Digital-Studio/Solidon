@@ -379,6 +379,7 @@ def test_the_place_of_a_finding_moves_with_an_assembly_set_on_the_bed() -> None:
             severity="warning",
             message="",
             location=(100.0, 100.0, 55.0),
+            outline=(((95.0, 95.0, 55.0), (105.0, 95.0, 55.0)),),
         )
     ]
 
@@ -388,6 +389,10 @@ def test_the_place_of_a_finding_moves_with_an_assembly_set_on_the_bed() -> None:
     assert low[2] == pytest.approx(0.0)
     # Die Oberseite des ersten Würfels, wo die Öffnung war, liegt jetzt bei 10.
     assert findings[0].location == pytest.approx((100.0, 100.0, 10.0))
+    # Und ihr Rand mit ihr — *Stelle zeigen* umrandet die neue Fläche dort, wo sie liegt.
+    ((first_end, second_end),) = findings[0].outline
+    assert first_end == pytest.approx((95.0, 95.0, 10.0))
+    assert second_end == pytest.approx((105.0, 95.0, 10.0))
 
 
 def test_closing_holes_on_import_stops_when_asked_to() -> None:

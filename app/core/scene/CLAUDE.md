@@ -39,7 +39,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
-| `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet |
+| `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
 | `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_of`: wo sitzt, was schon da ist |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |
@@ -94,7 +94,10 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   eine beschnittene erzeugte Fläche ohne Stück fällt heraus
   (`perceive.generated_lost`).
 - **Die Zuordnungsfrage** (`_answer_matches`) fragt Verwiesenes zuerst, auch
-  ohne Nachfolger, Abbrechen beginnt die Gruppe neu; Unverwiesenes ohne Wahl
+  ohne Nachfolger, Abbrechen beginnt die Gruppe neu; verwiesen heißt am Netz
+  **nach** dem Schritt (`_needed_after`) — den eigenen Verweis löst der Schritt
+  an seinem Eingang auf, eine Textur fragt nicht nach der Fläche, die sie
+  ersetzt hat; Unverwiesenes ohne Wahl
   wird ohne Dialog nicht weitergeführt. `_WatchedAsk` macht aus einer
   geschlossenen Frage `QUESTION_LEFT_OPEN` mit *Eingabe korrigieren* und
   *Verlauf zeigen*.

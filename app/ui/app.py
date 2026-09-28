@@ -47,7 +47,7 @@ from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
 from app.ui import app_events, cursors, window_chrome
 from app.ui.icons import application_icon
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import Worker, WorkerLeash, configure_gil_switching
 from app.ui.qt_platform import prefer_x11_for_the_viewport
 from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
@@ -467,6 +467,9 @@ def main(argv: list[str] | None = None) -> int:
     # X11-Display, läuft die Anwendung darauf (``app.ui.qt_platform``).
     prefer_x11_for_the_viewport()
     enable_hidpi()
+    # Der Hauptfaden bekommt den GIL neben einem rechnenden Arbeiter nach
+    # einer Millisekunde statt nach fünf (``leash.GIL_SWITCH_S``, RM-258).
+    configure_gil_switching()
     existing = QApplication.instance()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
     application.setWindowIcon(application_icon())

@@ -952,6 +952,46 @@ def test_the_model_xml_is_read_in_pieces_and_nothing_stays_frozen(
     assert len(tree) == 0, "freigegeben"
 
 
+def test_objects_and_materials_are_found_without_entering_a_mesh() -> None:
+    """Objekte und Materialgruppen wie ``findall(".//")`` — ohne ins Netz zu steigen (RM-258).
+
+    ``findall`` mit ``.//`` suchte in C durch alle Ecken und Dreiecke und hielt
+    den GIL dabei am Stück, am Mausoleum-Drachen 110 bis 160 ms je Suche; so
+    lange wartete der Hauptfaden bei jedem Griff. Ein ``object`` im Netz gibt es
+    im Format nicht — steht dort eines, darf es nicht gefunden werden, sonst
+    stiege die Suche doch hinab.
+    """
+    model = ET.fromstring(
+        f'<model xmlns="{CORE}"><resources>'
+        '<basematerials id="5"><base name="Rot" displaycolor="#FF0000"/></basematerials>'
+        '<object id="1"><mesh><vertices><vertex x="0" y="0" z="0"/></vertices>'
+        '<triangles><object id="99"/></triangles></mesh></object>'
+        '<object id="2"><components><component objectid="1"/></components></object>'
+        '</resources><build><item objectid="2"/></build></model>'
+    )
+    tag = f"{{{CORE}}}object"
+    found = threemf_reader._outside_meshes(model, tag)
+    assert [entry.get("id") for entry in found] == ["1", "2"], (
+        "Dokumentreihenfolge, nichts aus dem Netz"
+    )
+    assert [entry.get("id") for entry in model.findall(f".//{tag}")] == ["1", "99", "2"]
+    assert list(threemf_reader._objects_in(model)) == ["1", "2"]
+    assert threemf_reader._materials_in(model) == {"5": [("Rot", (1.0, 0.0, 0.0))]}
+
+
+def test_no_search_over_the_whole_model_holds_the_interpreter() -> None:
+    """Kein ``findall(".//object")`` oder ``".//basematerials"`` mehr im Leser (RM-258).
+
+    Die Wache zur Suche oben: Wer die Abkürzung zurückholt, hält den GIL am
+    Drachen wieder 110 bis 160 ms am Stück.
+    """
+    import inspect
+
+    source = inspect.getsource(threemf_reader)
+    for tag in ("object", "basematerials"):
+        assert f'.//{{{{{{CORE_NAMESPACE}}}}}}{tag}"' not in source, tag
+
+
 # --- die Verdopplung ------------------------------------------------------------
 
 

@@ -2045,6 +2045,45 @@ def test_an_inner_face_is_named_as_such() -> None:
     assert feature_name("face_1", outer) in feature_name("face_2", inner)
 
 
+@pytest.mark.parametrize("language", ["de", "en", "es", "fr", "it", "pt"])
+def test_an_inner_side_agrees_with_its_side_in_every_language(language: str) -> None:
+    """Die Innenwand heißt wie ihre Seite, und das Adjektiv folgt deren Genus.
+
+    Durchsicht 0.5.1: „{side} innen“ war fr „{side} intérieur“ und ergab an
+    der Oberseite „Face supérieure intérieur“. Jetzt hat jede Seite ihren
+    eigenen Text.
+    """
+    from app.core.types import Feature
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.labels import feature_name
+
+    def face(normal: tuple[float, float, float], inner: bool) -> Feature:
+        params: dict[str, Any] = {"normal": normal, "centre": (0.0, 0.0, 0.0), "area": 100.0}
+        if inner:
+            params["inner"] = True
+        return Feature(id="face_1", kind="face", provenance="detected", params=params)
+
+    install_language(language)
+    set_language(language)
+    try:
+        names = {}
+        for axis in range(3):
+            for sign in (1.0, -1.0):
+                normal = tuple(sign if index == axis else 0.0 for index in range(3))
+                outer = feature_name("face_1", face(normal, inner=False))  # type: ignore[arg-type]
+                inner = feature_name("face_1", face(normal, inner=True))  # type: ignore[arg-type]
+                assert inner.startswith(outer + " ") and inner != outer, (outer, inner)
+                names[normal] = inner
+        if language == "de":
+            assert names[(0.0, 0.0, 1.0)] == "Oberseite innen"
+        if language == "fr":
+            assert names[(0.0, 0.0, 1.0)] == "Face supérieure intérieure"
+            assert names[(-1.0, 0.0, 0.0)] == "Côté gauche intérieur"
+    finally:
+        set_language("de")
+
+
 def test_a_fillet_smaller_than_any_tool_is_none() -> None:
     """Dieselbe Schranke wie bei Bohrung und Zapfen — sie fehlte hier.
 

@@ -688,6 +688,45 @@ def test_a_missing_wall_is_closed_and_said_so() -> None:
     assert all(low[axis] - 1e-6 <= wide.location[axis] <= high[axis] + 1e-6 for axis in range(3))
 
 
+@pytest.mark.parametrize("name", ["partially_open.stl", "broken_open.stl"])
+def test_a_closed_opening_carries_its_rim_for_the_view(name: str) -> None:
+    """*Stelle zeigen* kann die neue Fläche umranden, weil der Befund ihren Rand trägt.
+
+    Vorher trug er nur die Mitte: Die Ansicht setzte einen Ring in der
+    Auswahlfarbe auf einen Körper in der Auswahlfarbe, und die neue Fläche war
+    nicht zu erkennen (Handbuchbild *Ein Modell reparieren*, 3). Der Sollwert
+    kommt aus dem Eingang, nicht aus der Reparatur: Jede Randkante des Befunds
+    ist eine offene Kante des gelesenen Netzes, und zusammen schließen sie
+    einen Ring um die Mitte.
+    """
+    body, _welded = merge_vertices(raw(name))
+    points = np.asarray(body.raw.vertices, dtype=float)
+    table = edge_table(body.raw)
+    pairs = np.asarray(body.raw.edges, dtype=np.int64)[table.rows(1)]
+    open_edges = {
+        tuple(sorted((tuple(points[first].tolist()), tuple(points[second].tolist()))))
+        for first, second in pairs.tolist()
+    }
+
+    result = repair(body)
+    wide = next(f for f in result.findings if f.code == "repair.wide_hole_filled")
+
+    assert wide.outline, "der Befund trägt den Rand der geschlossenen Öffnung"
+    rim = {tuple(sorted((tuple(map(float, a)), tuple(map(float, b))))) for a, b in wide.outline}
+    assert rim <= open_edges, "jede Randkante war vorher offen"
+    corners: dict[tuple[float, ...], int] = {}
+    for first, second in rim:
+        corners[first] = corners.get(first, 0) + 1
+        corners[second] = corners.get(second, 0) + 1
+    assert set(corners.values()) == {2}, "ein geschlossener Ring, keine losen Enden"
+    assert wide.location is not None
+    middle = np.mean(np.asarray(list(corners), dtype=float), axis=0)
+    span = float(np.ptp(np.asarray(list(corners), dtype=float), axis=0).max())
+    assert float(np.linalg.norm(middle - np.asarray(wide.location))) <= 0.5 * span, (
+        "der Ring liegt um die Stelle, zu der die Kamera fliegt"
+    )
+
+
 def test_filling_a_closed_body_changes_nothing() -> None:
     body, _welded = merge_vertices(raw("cube_clean.stl"))
     same, worked = fill_holes(body)

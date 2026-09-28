@@ -2047,6 +2047,47 @@ def test_auto_split_leaves_no_dead_fit_after_two_cuts(profile: Profile) -> None:
         assert fit.a.object_id in live and fit.b.object_id in live, fit.name
 
 
+@pytest.mark.parametrize(("length", "count"), [(600.0, 3), (900.0, 4)])
+def test_auto_split_numbers_three_or_more_pieces_and_names_what_each_carries(
+    profile: Profile, length: float, count: int
+) -> None:
+    """„Leiste 2 von 3 · Stifte und Löcher“ statt „Leiste B A · Stifte“ (RM-229).
+
+    Der Plan trägt jedem Schnitt die Nummern seiner Stücke ein, gezählt in der
+    Reihenfolge der fertigen Stücke; ein Stück, das derselbe Lauf gleich weiter
+    teilt, bekommt keine. Der Zusatz folgt den Verbindern, die das Stück trägt
+    — welche Hälfte die Stifte bekommt, entscheidet der Plan je Naht.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": length, "depth": 60.0, "height": 40.0, "name": "Leiste"},
+            )
+        ],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(length, 60.0, 40.0)))
+
+    applied = apply_split(project.document, block, "obj_1", profile)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert len(applied.object_ids) == count
+    notes = {(True, False): "Stifte", (False, True): "Löcher", (True, True): "Stifte und Löcher"}
+    names = []
+    for number, object_id in enumerate(applied.object_ids, start=1):
+        entry = result.scene.objects[object_id]
+        features = entry.features.items()
+        carries = (
+            any(key.startswith("pin_") and f.provenance == "generated" for key, f in features),
+            any(key.startswith("bore_") and f.provenance == "generated" for key, f in features),
+        )
+        names.append(source_text(entry.name))
+        assert source_text(entry.name) == f"Leiste {number} von {count} · {notes[carries]}"
+    assert all(" A" not in name and " B" not in name for name in names), names
+
+
 def test_one_undo_restores_a_complete_multi_cut_auto_split(profile: Profile) -> None:
     """Mehrere Auto-Split-Nähte sind genau eine History-Transaktion."""
     project = new_project("centauri-carbon-2", "petg")
@@ -2544,17 +2585,20 @@ def test_a_seam_follows_the_material_it_is_printed_in(material: str) -> None:
     assert all(fit.tolerance == "auto:" for fit in project.document.fits)
 
 
-def z_shape() -> MeshData:
+def z_shape(longer: float = 0.0) -> MeshData:
     """Zwei lange Stäbe, versetzt, verbunden durch eine schräge Strebe.
 
     400 mm lang, also zu lang für jedes Bett bis 256. Jede achsparallele Ebene,
     die beide Hälften aufs Bett bringt (x zwischen etwa −45 und 45), schneidet
     mindestens zwei Stäbe, meist dazu die Strebe — zwei oder drei Konturen, so
     viele Brücken. Eine schräge Ebene quer zur Strebe schneidet nur die Strebe.
+
+    ``longer`` verlängert den ersten Stab nach außen: Dann braucht das Teil
+    einen Schnitt mehr, und die schräge Naht wird der zweite eines Laufs.
     """
     import manifold3d as m
 
-    first = m.Manifold.cube((240.0, 20.0, 20.0)).translate((-200.0, -10.0, 0.0))
+    first = m.Manifold.cube((240.0 + longer, 20.0, 20.0)).translate((-200.0 - longer, -10.0, 0.0))
     second = m.Manifold.cube((240.0, 20.0, 20.0)).translate((-40.0, 140.0, 0.0))
     strut = (
         m.Manifold.cube((math.hypot(160.0, 150.0), 20.0, 20.0), center=True)
@@ -2628,6 +2672,39 @@ def test_a_tilted_plane_is_tried_when_every_upright_one_cuts_three_bars(profile:
     assert "fit.missing_feature" not in codes, codes
     for object_id in applied.object_ids:
         assert autosplit.fits(result.scene.objects[object_id].mesh, profile), object_id
+
+
+def test_a_run_with_a_tilted_seam_numbers_its_pieces_too(profile: Profile) -> None:
+    """Ab drei Stücken zählt ein Lauf auch dann, wenn eine Naht schräg liegt (RM-229, RM-080 T3).
+
+    Eine schräge Naht geht als *An gezeichneter Linie trennen* in den Verlauf.
+    Die Zählung schrieb ihre drei Felder in jeden Schritt des Laufs, und
+    ``SplitLineParams`` kannte sie nicht: Die ganze Teilung scheiterte mit
+    „Diesen Parameter gibt es bei dieser Operation nicht.“ (Durchsicht 0.5.1).
+    Sollwert: drei Stücke aus dem Plan, gezählt in ihrer Reihenfolge.
+    """
+    mesh = z_shape(longer=250.0)
+    plan = plan_split(mesh, "obj_1", profile)
+    assert [draft.op for draft in plan.drafts] == ["split_pinned", "split_line"], (
+        "der Prüfkörper trifft den Fall: zweiter Schnitt schräg"
+    )
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/1_z.stl", sha256=""
+    )
+    project.sources["src_1"] = mesh.raw.export(file_type="stl")
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+
+    applied = apply_planned(project.document, plan, "obj_1")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    names = [source_text(result.scene.objects[entry].name) for entry in applied.object_ids]
+    assert [name.split(" · ")[0] for name in names] == [
+        f"1_z {number} von 3" for number in (1, 2, 3)
+    ], names
 
 
 def test_an_upright_seam_that_is_good_enough_stays_upright(profile: Profile) -> None:

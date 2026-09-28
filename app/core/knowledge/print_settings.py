@@ -263,6 +263,15 @@ def resolve(
             if printer.first_layer_line_factor is not None and not legacy
             else round(printer.extrusion_width * 1.07, 3)
         )
+    # Eine Probe gilt auf dem Raster, auf dem sie gedruckt wurde
+    # (``Profile.has_process_calibration``): „Fein" mit 0,12 mm ist ein anderes
+    # als die Probe mit 0,20 mm, und dann stützt der Slicer ab der Grenze ohne
+    # Messung.
+    process = (
+        profile
+        if printer.is_resin
+        else replace(profile, printer=replace(printer, layer_height=round(layer_height, 3)))
+    )
 
     settings = PrintSettings(
         id=f"{quality}-{profile.material.id}",
@@ -313,7 +322,7 @@ def resolve(
         # (``Profile.overhang_limit_degrees``). Bis zum 27.09.2026 stand hier
         # immer die Startregel, auch über einer Kalibrierung, und sie ersetzte
         # in jeder Übergabe den Winkel des Herstellers.
-        support=SupportSettings(threshold_angle=profile.overhang_limit_degrees),
+        support=SupportSettings(threshold_angle=process.overhang_limit_degrees),
         adhesion=AdhesionSettings(kind=_adhesion(stuff.get("adhesion", "skirt"))),
         retraction=RetractionSettings(
             length=float(stuff.get("retraction_length", 0.8)),

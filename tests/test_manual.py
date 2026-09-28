@@ -1712,7 +1712,7 @@ def test_the_manual_names_a_face_the_way_the_labels_do() -> None:
         assert str(positiv) in text or str(negativ) in text, (
             f"weder „{positiv}“ noch „{negativ}“ steht im Handbuch"
         )
-    innen = str(tr("{side} innen")).format(side=str(labels._SIDES[2][0]))
+    innen = str(labels._INNER_SIDES[2][0])
     assert innen in text, f"„{innen}“ — der Name der Innenwand steht nicht im Handbuch"
 
 
@@ -2084,7 +2084,7 @@ def test_every_manual_language_describes_the_released_generator_chain(language: 
         (
             "fr",
             "Échanger des fichiers de blocs",
-            "Ni le fichier, ni l’auteur, ni la licence, ni la provenance "
+            "Ni le fichier, ni l'auteur, ni la licence, ni la provenance "
             "ne sont transmis à RS Digital.",
         ),
         (

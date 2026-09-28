@@ -29,10 +29,8 @@ optional; ohne ihn läuft derselbe Schnitt über `shapely.polygonize`.
   (Fläche, Löcher, Geometrieart, Überhang).
 - **Der übersetzte Weg rundet wie GEOS** auf sechs Stellen, obwohl er genauer
   könnte: Zwei Wege durch dieselbe Rechnung unterscheiden sich nicht in der
-  letzten Stelle, auch nicht zum Besseren — die neunte Stelle wurde hinter
-  `buffer` und Differenz zu anderer Topologie.
-- **Eine weitere Python-Idee bringt dort nichts**: Python ist rund fünfzigfach
-  langsamer, drei Ansätze sind gemessen.
+  letzten Stelle, auch nicht zum Besseren.
+- **Keine weitere Python-Idee für den Schnitt** — drei sind gemessen.
 
 ## Die Einstellungen bleiben trotzdem hier
 
@@ -72,8 +70,7 @@ G-Code zurück.
 
 **Der Bauraum wird an den Bahnen nachgemessen** (`gcode.printed_extent`,
 `handover.off_the_bed`), denn CuraEngine prüft ihn nicht. `G2`/`G3` zählen
-mit; die Stelle wird über alle Bewegungen nachgeführt (Z steht selten in
-derselben Zeile, `G1 Y30 E0.5` behält sein X). Geprüft wird in
+mit; die Stelle wird über alle Bewegungen nachgeführt. Geprüft wird in
 Maschinenkoordinaten, Ursprung an der Bettecke, getrennt von der Verschiebung
 der Eingabe (CuraEngine verschiebt selbst, Prusa- und Orca-Projekte enthalten
 sie); eine Bettkontur in der Druckdatei geht dem Druckerprofil vor. Gemeldet,
@@ -100,18 +97,13 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   je Schicht — kleine Stegunterseiten tragen sich selbst. Ein Ergebnis ohne
   Stücke gilt schichtweise als eines; lange Stege fängt die Brückenregel.
 - **Den Stützwinkel sagt, womit der Slicer stützt** (Konzept Herstellerprofil,
-  Entscheidung L): gemessen, sonst die Schwelle des gewählten
-  Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`, sonst die
-  Startregel (`Profile.overhang_limit_degrees`). Die Auswertung rechnet mit
-  `Session.evaluation_profile` — den wirksamen Einstellungen des Fensters, im
-  Hauptthread vor jedem Lauf geholt —, Druckdialog-Rat und Kanalsperre der
-  Übergabe mit `profiles.for_process(..., effective=True)`. Aus einem
-  gespeicherten Satz gilt die Schwelle nur als eigene Wahl (Projekte aus 0.5.0
-  tragen 45° ohne Wahl); kommt die Grundlage mit anderer Schwelle erst nach
-  dem Lauf, wertet das Fenster neu aus (`Session.evaluation_follows`).
-  `print_settings.resolve` schreibt den Druckerwert als
-  `support.threshold_angle`. **Wer einen Winkel einführt, reicht ihn bis in
-  jede Vorauswahl durch.**
+  Entscheidung L): gemessen auf dem Raster der Probe, sonst die Schwelle des
+  gewählten Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`,
+  sonst die Startregel (`Profile.overhang_limit_degrees`). Auswertung,
+  Druckdialog-Rat und Kanalsperre rechnen mit den wirksamen Einstellungen
+  (`Session.evaluation_profile`, `profiles.for_process(..., effective=True)`);
+  aus einem gespeicherten Satz gilt die Schwelle nur als eigene Wahl.
+  **Wer einen Winkel einführt, reicht ihn bis in jede Vorauswahl durch.**
 - **Ein Überhangwinkel wird an der Normalen mit dem Sinus verglichen**
   (z < −sin(Grenze)) und an einem Winkel ungleich 45 geprüft, wo sich Sinus
   und Kosinus unterscheiden
@@ -134,16 +126,22 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
-  als Vorschlag; `for_part` setzt beim Export weiter nur Summenregel und
-  schlanken Körper.
+  als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
+  seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
+- **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
+  Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
+  der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über
+  `SCARF_MIN_HEIGHT`. Eine Ecke versteckt die Naht selbst.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
-  `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) und ist sie schneller als
-  `NARROW_WEB_SPEED`, wird dieses Tempo vorgeschlagen — kurze Bodenbahnen
-  zwischen Löchern reißen im Herstellertempo. Die Grenzen sind an drei
-  Modellen gemessen, die Gesamtprüfung über den Korpus prüft sie nach. Über
-  dem Herstellerprofil bremst der Vorschlag nur (`dateiformat.md`, „Auf dem
-  Herstellerprofil wird nur die Abweichung geschrieben“).
+  `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als
+  `NARROW_WEB_AREA` mm² davon, und ist sie schneller als `NARROW_WEB_SPEED`,
+  wird dieses Tempo vorgeschlagen. Über dem Herstellerprofil bremst der
+  Vorschlag nur (`dateiformat.md`, „Auf dem Herstellerprofil wird nur die
+  Abweichung geschrieben“).
+- **Kein Vorschlag überstimmt, was das Profil für denselben Zweck trägt**:
+  Mindestzeit je Schicht nur ohne eine, kein Brim über Orcas Auto-Brim
+  (`AUTO_BRIM_FLAVOURS`).
 - **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`), auch
   passende — ein Würfel schaltet die Stützen eines anderen nicht ab.
   Filamentwerte werden je tatsächlichem Slot aufgelöst und nur darin
@@ -329,7 +327,7 @@ Merkmalszahl und Fleckenrand trennen Konstruiertes nicht von Figuren.
 
 ### Die Haut wird nicht in Splitter zerlegt
 
-Entscheidung Robert: das Beste für alle draußen, auch für den Zahntechniker.
+Entscheidung Robert.
 
 - **Haut** sind Flecken ohne Grundform, die nach Krümmung in Splitter
   zerfallen (`FREEFORM_SPLINTERS`, `FREEFORM_PIECE_SHARE`), zusammen über
@@ -348,8 +346,6 @@ Entscheidung Robert: das Beste für alle draußen, auch für den Zahntechniker.
 - **Raue Tafeln sind ein eigener Auslöser** (`features._rough_facet_area`,
   `FREEFORM_ROUGH_SHARE`/`_MIX`/`_BEND`) — nicht in der Splittersumme und nicht
   über alle verrauschten Facetten; beides kostete Konstruiertes.
-- Der Scan-Körper der Tests liegt unter der Schwelle; sein Test patcht sie,
-  weil er die Mechanik prüft, nicht die Zahl.
 
 ### Was an einer Bohrung hängt, bleibt
 
@@ -365,9 +361,8 @@ mit (`relations.cavity_chain_at`).
 `features._without_thread_turns` verwirft Zylinder ohne Wendelbeleg nur an
 **einem Teil**, mit **derselben Materialseite**, und wenn jeder weitere
 Abschnitt in den Lauf **hineinläuft und mehr Neues bringt, als er teilt**
-(`_one_run`) — alles aus der Wendel, keine neue Zahl; Radius und Fortschritt
-allein verwarfen echte Zylinder. Gemessen wird an gedruckten Gewinden ohne
-Wendelsuche und am Korpus je Stapel.
+(`_one_run`) — alles aus der Wendel, keine neue Zahl. Gemessen wird an
+gedruckten Gewinden ohne Wendelsuche und am Korpus je Stapel.
 
 ## Ein Bogen hat einen Radius und liegt auf seinem Kreis
 
@@ -390,8 +385,7 @@ Wendelsuche und am Korpus je Stapel.
 - **Ein bestätigter Kreis ist ein Bogen** und hält die Folge an: ein zweites
   Stück wie in `_same_cylinder`, eines auf dem Kreis des anderen
   (`_lies_on_the_cylinder`), oder ein gezeichneter Bogen. Eine Richtung
-  genügt; der Preis — kurze Splinestücke bestätigen sich — ist Registerpunkt
-  RM-254.
+  genügt (Preis: RM-254).
 - **Zwei Wechsel in dieselbe Richtung sind ein Verlauf**: unbestätigte,
   tangential folgende Kreise (über Splitter und formlose Stücke hinweg) mit
   Schritten unter `CURVATURE_JUMP`, ein engerer und ein weiterer Nachbar. Eine
@@ -442,9 +436,7 @@ als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
   native Differenz; ein Strahl auf einer Kante nimmt die nächste Richtung.
 - `void` steht in `MOVABLE_KINDS` (belegt von
   `test_a_cavity_inside_the_body_moves_without_losing_material`), nicht in
-  `DUPLICABLE_KINDS` (niemand legt eine zweite Luftblase an; Robert); Größe
-  und Drehung fehlen mangels Maß. Solidon benennt und urteilt nicht — es kann
-  eine Magnetaussparung sein.
+  `DUPLICABLE_KINDS` (Robert); Größe und Drehung fehlen mangels Maß.
 
 ## Eine Formtoleranz wird an fremden Netzen gemessen, nicht nur an eigenen
 

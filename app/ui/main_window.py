@@ -6713,26 +6713,49 @@ class MainWindow(QMainWindow):
 
         Das ist die vom Nutzer gewünschte Ausnahme zu Regel 19. Die Handlung
         bleibt als eine Transaktion rücknehmbar; die Nachfrage macht vor allem
-        sichtbar, wenn spätere abhängige Schritte mit entfernt werden.
+        sichtbar, wenn spätere abhängige Schritte mit entfernt werden — **und
+        nennt sie beim Namen** (Regel 19, :func:`history.named_steps`): Wer
+        „Quader anlegen“ löscht, liest, dass „2 Bohrung setzen“ mitgeht.
         """
+        from app.core.scene.history import named_steps
+
         chosen = tuple(dict.fromkeys(int(op_id) for op_id in op_ids))
         removing = self.session.removal_closure(chosen)
         if not removing:
             return
-        if len(chosen) > 1 and len(removing) > len(chosen):
-            message = tr(
-                "Mit den gewählten Schritten werden auch weitere spätere abhängige Schritte "
-                "gelöscht. Strg+Z stellt alle gemeinsam wieder her."
-            )
+        dependents = [
+            entry
+            for entry in self.session.project.document.ops
+            if entry.id in removing and entry.id not in chosen
+        ]
+        if dependents:
+            if len(chosen) > 1:
+                head = (
+                    tr("Mit den gewählten Schritten wird auch dieser abhängige Schritt gelöscht:")
+                    if len(dependents) == 1
+                    else tr(
+                        "Mit den gewählten Schritten werden auch diese abhängigen Schritte "
+                        "gelöscht:"
+                    )
+                )
+                back = tr("Strg+Z stellt alle gemeinsam wieder her.")
+            elif len(dependents) == 1:
+                head = tr("Mit dem gewählten Schritt wird auch dieser abhängige Schritt gelöscht:")
+                back = tr("Strg+Z stellt beide wieder her.")
+            else:
+                head = tr(
+                    "Mit dem gewählten Schritt werden auch diese abhängigen Schritte gelöscht:"
+                )
+                back = tr("Strg+Z stellt alle gemeinsam wieder her.")
+            names, rest = named_steps(dependents)
+            lines = [f"· {name}" for name in names]
+            if rest:
+                lines.append("· " + tr("und {count} weitere").format(count=rest))
+            message = head + "\n" + "\n".join(lines) + "\n\n" + back
         elif len(chosen) > 1:
             message = tr(
                 "Die gewählten Schritte werden aus dem Verlauf gelöscht. "
                 "Strg+Z stellt alle gemeinsam wieder her."
-            )
-        elif len(removing) > len(chosen):
-            message = tr(
-                "Mit dem gewählten Schritt werden auch spätere abhängige Schritte "
-                "gelöscht. Strg+Z stellt alle gemeinsam wieder her."
             )
         else:
             message = tr(
@@ -13985,12 +14008,21 @@ class MainWindow(QMainWindow):
             return
         target = None if kind == "deviation" else maps.location_of(entry, finding)
         if target is not None:
-            self._show_finding_at(str(finding.message), entry, target)
+            self._show_finding_at(str(finding.message), entry, target, finding.outline)
         if kind is not None:
             self._analysis_map(kind, entry.id, finding=finding if target is None else None)
 
-    def _show_finding_at(self, title: str, entry: Any, target: Vec3) -> None:
+    def _show_finding_at(
+        self,
+        title: str,
+        entry: Any,
+        target: Vec3,
+        outline: tuple[tuple[Vec3, Vec3], ...] = (),
+    ) -> None:
         """Zur Stelle eines Befunds fliegen und sie markieren, mit ``title`` an der Marke.
+
+        ``outline`` ist der Rand einer Stelle, die eine Fläche ist
+        (``Finding.outline``) — die Ansicht umrandet sie.
 
         **Aus der Szene in die Ansicht, einmal.** Der Ort eines Befunds liegt in
         Szenenkoordinaten; im Bild steht der Körper auf seiner Platte und
@@ -14026,7 +14058,7 @@ class MainWindow(QMainWindow):
         # ein Teil jeder Größe. Gemessen werden konnte es nur an einem: Über
         # alle elf Beispiele trägt genau ein Befund einen Ort.
         self.viewport.fly_to(shown, reach=1.4 * float(entry.mesh.bounds.diagonal))
-        self.viewport.mark_finding(target, title, entry.id)
+        self.viewport.mark_finding(target, title, entry.id, outline)
 
     def _show_layers_after_error(self, error: AppError) -> None:
         """*Schichten ansehen*: den Körper des Befunds wählen und die Schichtansicht öffnen.
@@ -14062,7 +14094,18 @@ class MainWindow(QMainWindow):
             return
         self.viewport.clear_finding_mark()
         target = (float(place[0]), float(place[1]), float(place[2]))
-        self._show_finding_at(str(error.title), entry, target)
+        # **Die neue Fläche umrandet**, nicht nur ihre Mitte beringt: Der Ring
+        # allein lag auf einem Körper in der Auswahlfarbe, und die Stelle war
+        # nicht zu erkennen (Handbuchbild *Ein Modell reparieren*, 3).
+        rim = error.values.get("outline") or ()
+        outline = tuple(
+            (
+                (float(first[0]), float(first[1]), float(first[2])),
+                (float(second[0]), float(second[1]), float(second[2])),
+            )
+            for first, second in rim
+        )
+        self._show_finding_at(str(error.title), entry, target, outline)
 
     # --- der Agent (§26) --------------------------------------------------------
 
@@ -17117,6 +17160,7 @@ class MainWindow(QMainWindow):
                     feature=feature,
                     features=entry.features if entry else None,
                     mesh=as_mesh_data(entry.mesh) if entry else None,
+                    spec=spec,
                 )
                 # **Eine Frage ohne Antwortweg ist keine Frage, sondern eine
                 # Sackgasse.** Wo keine Normgröße passt, endet der Satz aus dem
@@ -19598,8 +19642,7 @@ class MainWindow(QMainWindow):
             # ohnehin neu.
             self._print_findings.cancel()
         else:
-            effective = self.effective_print_settings()
-            self._print_findings.start(result, self._print_profile(effective), effective)
+            self._start_print_findings(result, self.effective_print_settings())
         steps, planned = self._split_findings
         if planned and steps == len(self.session.project.document.ops):
             # Die Befunde der Suche stehen in keinem Schritt; jede Auswertung
@@ -19951,6 +19994,13 @@ class MainWindow(QMainWindow):
         self._foundation_cache = (key, foundation)
         if self._foundation_pending == key:
             self._foundation_pending = None
+        # **Ein Fenster, das losgelassen wird, fängt nichts mehr an** — wie
+        # ``_start_foundation``. Die Grundlage kam sonst nach ``release`` an,
+        # und die zweite Auswertung (Entscheidung L) startete einen Arbeiter an
+        # der Sitzung eines geschlossenen Fensters: eine Frage, die niemand
+        # beantwortet, und ein laufender Faden beim Beenden (0xC0000409).
+        if self._close_requested:
+            return
         result = self.session.last_result
         if result is None or key != self._foundation_key(foundation.settings.quality):
             return
@@ -19965,7 +20015,16 @@ class MainWindow(QMainWindow):
         self.filaments.show_scene(list(result.scene.objects.values()), settings)
         self._update_facts()
         if result is not self.session.picture:
-            self._print_findings.start(result, self._print_profile(settings), settings)
+            self._start_print_findings(result, settings)
+
+    def _start_print_findings(self, result: Any, settings: PrintSettings) -> None:
+        """Die Befunde der Schichtanalyse für diesen Stand rechnen lassen.
+
+        Ob die Szene Passungen trägt, fragt das Dokument hier im Hauptthread,
+        mit den gebauten: Nur dann gehört der Hinweis zur Kalibrierung dazu.
+        """
+        fitted = bool(fit_checks.fit_kinds_for(self.session.project.document, result.scene.objects))
+        self._print_findings.start(result, self._print_profile(settings), settings, fitted=fitted)
 
     def _print_profile(self, settings: PrintSettings) -> Profile:
         """Das Profil der Druckbefunde: das des Projekts mit dem Raster und der

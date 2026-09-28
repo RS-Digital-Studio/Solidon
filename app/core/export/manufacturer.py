@@ -37,6 +37,7 @@ from app.core import discover
 from app.core.errors import OPEN_PRINT_SETTINGS, ExternalToolError
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import print_settings as settings_table
+from app.core.knowledge import profiles
 from app.core.log import get_logger
 from app.core.types import Finding, PrintSettings, Profile, QualityPreset
 from app.core.units import exact_atan_degrees, is_zero
@@ -70,7 +71,15 @@ class Foundation:
     """Punktpfad → Herstellerwert, den Solidon nicht übersetzen kann."""
     measured: Mapping[str, object] = field(default_factory=dict)
     """Was der Kunde an seinem Drucker gemessen hat (§28.3) und deshalb
-    geschrieben wird wie eine eigene Wahl — heute der Überhangwinkel."""
+    geschrieben wird wie eine eigene Wahl — heute der Überhangwinkel. Nur,
+    wenn die Probe auf dem Raster dieser Grundlage entstand."""
+    unmeasured: Mapping[str, object] = field(default_factory=dict)
+    """Was an den messbaren Pfaden ohne Messung gilt: der Wert des Herstellers,
+    sonst Solidons Tabelle. Dahin fällt ein Wert zurück, wenn Schichthöhe oder
+    Bahnbreite das Raster der Probe verlassen (:func:`measured_on`)."""
+    profile: Profile | None = None
+    """Drucker und Material, für die diese Grundlage gilt — ihre Probe
+    entscheidet, ob eine Messung auf einem anderen Raster noch gilt."""
     staged: frozenset[str] = frozenset()
     """Was die gewählte Stufe über den Standardprozess legt (:data:`STAGE_PATHS`)
     und deshalb geschrieben wird — „Fein" heißt 0,12 mm, auch wenn darunter
@@ -445,6 +454,9 @@ def _read_process(
     style = _support_style(values)
     if style is not None:
         read["support.style"] = style
+    scarf = _scarf_seam(values)
+    if scarf is not None:
+        read["shell.scarf_seam"] = scarf
     angle = _support_angle(values)
     if angle is not None:
         read["support.threshold_angle"] = angle
@@ -496,6 +508,26 @@ def _support_style(values: Mapping[str, Any]) -> str | None:
     if kind.startswith("normal"):
         return "grid"
     return "auto"
+
+
+def _scarf_seam(values: Mapping[str, Any]) -> bool | None:
+    """Die Schrägnaht an, wenn Art **und** Länge greifen.
+
+    Elegoos Basisprozess führt ``seam_slope_type = none`` mit der Länge 0 —
+    und mit der Art allein setzt ElegooSlicer keine Rampe (gemessen am
+    Minigolf-Schaft, 0 von 1000 Außenschleifen). Fehlt die Länge in der
+    Kette, gilt die Vorgabe des Programms, und die ist bei Orca und Bambu
+    größer als null.
+    """
+    kind = _text(values.get("seam_slope_type"))
+    if kind is None:
+        return None
+    if kind.casefold() == "none":
+        return False
+    if (_text(values.get("seam_slope_entire_loop")) or "0").casefold() in ("1", "true"):
+        return True
+    length = _text(values.get("seam_slope_min_length"))
+    return length is None or (_float(length) or 0.0) > 0.0
 
 
 def _support_angle(values: Mapping[str, Any]) -> float | None:
@@ -724,6 +756,9 @@ PRUSA_PROGRAM_DEFAULTS: Final[Mapping[str, str]] = {
     "retract_length": "2",
     "retract_lift": "0",
     "retract_speed": "40",
+    "scarf_seam_entire_loop": "0",
+    "scarf_seam_length": "20",
+    "scarf_seam_placement": "nowhere",
     "seam_position": "aligned",
     "skirt_distance": "6",
     "skirts": "1",
@@ -874,6 +909,7 @@ def _read_prusa(
     take("speed.first_layer", _prusa_first_layer_speed(values, solid_speed))
     take("speed.outer_wall_acceleration", _prusa_outer_wall_acceleration(values))
     take("support.style", _prusa_support_style(values))
+    take("shell.scarf_seam", _prusa_scarf_seam(values))
     outer_width = _prusa_outer_width(values, context)
     take("support.threshold_angle", _prusa_support_angle(values, read, outer_width))
     take("support.xy_gap", _prusa_support_gap(values, outer_width))
@@ -978,6 +1014,20 @@ def _prusa_support_style(values: Mapping[str, Any]) -> str | None:
     if style == "grid":
         return "grid"
     return "auto"
+
+
+def _prusa_scarf_seam(values: Mapping[str, Any]) -> bool | None:
+    """Die Schrägnaht an, wenn sie einen Ort hat und eine Länge — wie
+    :func:`_scarf_seam` für die Orca-Familie."""
+    placement = _prusa_first(values.get("scarf_seam_placement"))
+    if placement is None:
+        return None
+    if placement == "nowhere":
+        return False
+    if _prusa_first(values.get("scarf_seam_entire_loop")) == "1":
+        return True
+    length = _prusa_first(values.get("scarf_seam_length"))
+    return length is None or (_float(length) or 0.0) > 0.0
 
 
 def _prusa_outer_width(values: Mapping[str, Any], context: _Context) -> float | None:
@@ -1112,12 +1162,72 @@ def _prusa_material(values: Mapping[str, Any]) -> dict[str, object]:
     return read
 
 
-def _measured(profile: Profile) -> dict[str, object]:
-    """Was der Kunde an seinem Drucker gemessen hat und die Übergabe tragen muss."""
-    measured = profile.material.overhang_angle
-    if profile.has_process_calibration and measured is not None and 0.0 < measured < 90.0:
+def _measured(profile: Profile, settings: PrintSettings) -> dict[str, object]:
+    """Was der Kunde an seinem Drucker gemessen hat und die Übergabe tragen muss
+    — wenn die Probe auf dem Raster dieser Einstellungen entstand."""
+    process = profiles.for_process(profile, settings)
+    measured = process.material.overhang_angle
+    if process.has_process_calibration and measured is not None and 0.0 < measured < 90.0:
         return {"support.threshold_angle": measured}
     return {}
+
+
+def _unmeasured(profile: Profile, read: Mapping[str, object]) -> dict[str, object]:
+    """Was an den messbaren Pfaden ohne Probe gilt: der Wert des Herstellers,
+    sonst die Grenze des Druckers aus Solidons Tabelle."""
+    table = replace(profile, material=replace(profile.material, overhang_angle=None))
+    return {
+        "support.threshold_angle": read.get("support.threshold_angle", table.overhang_limit_degrees)
+    }
+
+
+def _table_foundation(profile: Profile, fallback: PrintSettings, **known: Any) -> Foundation:
+    """Solidons Tabelle als Grundlage — mit der Messung, wo sie auf ihr gilt."""
+    return Foundation(
+        fallback,
+        measured=_measured(profile, fallback),
+        unmeasured=_unmeasured(profile, {}),
+        profile=profile,
+        **known,
+    )
+
+
+def _with_measurement(
+    profile: Profile, base: PrintSettings, read: Mapping[str, object]
+) -> tuple[PrintSettings, dict[str, object], dict[str, object]]:
+    """Die Messung, bezogen auf das Raster der fertigen Grundlage.
+
+    Erst danach, denn der Hersteller liest Schichthöhe und Bahnbreite mit, und
+    die Stufe legt ihre Schichthöhe darüber — nach beiden fragt die Probe.
+    """
+    measured = _measured(profile, base)
+    unmeasured = _unmeasured(profile, read)
+    for path, value in {**unmeasured, **measured}.items():
+        base = settings_table.with_path(base, path, value)
+    return base, measured, unmeasured
+
+
+def measured_on(settings: PrintSettings, foundation: Foundation) -> PrintSettings:
+    """Die Messung gilt auf dem Raster, mit dem gedruckt wird (§28.3).
+
+    Die Grundlage trägt den gemessenen Überhangwinkel, wenn die Probe auf ihrem
+    Raster entstand. Wer danach Schichthöhe oder Bahnbreite ändert, druckt auf
+    einem anderen — dann gilt wieder, was die Grundlage ohne Messung sagt, und
+    wer auf das Raster der Probe zurückkehrt, bekommt die Messung zurück. Eine
+    eigene Wahl und ein übernommener Vorschlag bleiben, was sie sind.
+
+    Bis hierher hing die Messung am Raster der Grundlage: Nach einer anderen
+    Bahnbreite rechneten Schichtanalyse und Übergabe weiter mit dem Winkel
+    einer Probe, die für diesen Druck nichts mehr sagt.
+    """
+    if foundation.profile is None:
+        return settings
+    measured = _measured(foundation.profile, settings)
+    result = settings
+    for path, value in foundation.unmeasured.items():
+        if path not in settings.explicit:
+            result = settings_table.with_path(result, path, measured.get(path, value))
+    return result
 
 
 #: Was eine Stufe ausmacht, wenn sie über dem Standardprozess des Herstellers
@@ -1296,18 +1406,17 @@ def base_settings(
     und die Übergabe schreibt sie dann vollständig.
     """
     fallback = settings_table.resolve(profile, quality)
-    measured = _measured(profile)
     if setup is None or setup.flavour not in ("orca", "prusa") or not setup.base_process:
-        return Foundation(fallback, measured=measured)
+        return _table_foundation(profile, fallback)
     if setup.flavour == "prusa":
-        return _prusa_foundation(profile, quality, setup, fallback, measured)
+        return _prusa_foundation(profile, quality, setup, fallback)
     from app.core.export import handover
 
     roots = handover._profile_roots(setup)
     try:
         process_file = handover.profile_file(setup.base_process, setup, "process")
         if process_file is None:
-            return Foundation(fallback, measured=measured, unreadable=setup.base_process)
+            return _table_foundation(profile, fallback, unreadable=setup.base_process)
         process = slicer_profiles.resolve_values(process_file, roots=roots)
         machine_name = handover.machine_for(setup, profile)
         machine_file = (
@@ -1326,7 +1435,7 @@ def base_settings(
         # Eine Kette, die sich nicht auflösen lässt, ist keine Grundlage: dann
         # gilt Solidons Tabelle, und die Übergabe schreibt sie ganz.
         _log.warning("manufacturer profile unreadable, using Solidon's table: %s", problem)
-        return Foundation(fallback, measured=measured, unreadable=setup.base_process)
+        return _table_foundation(profile, fallback, unreadable=setup.base_process)
 
     model = (
         _machine_model(machine_file, str(machine.get("printer_model", "")), roots)
@@ -1345,7 +1454,6 @@ def base_settings(
     if filament_file is not None:
         filament_read, refuses = _read_filament(filament, machine, plate, filament_file)
         read.update(filament_read)
-    read.update(measured)
     staged = (
         _stage_values(profile, quality) if _runs_the_standard_process(process_file, machine) else {}
     )
@@ -1355,6 +1463,7 @@ def base_settings(
         base = settings_table.with_path(base, path, value)
     for path, value in staged.items():
         base = settings_table.with_path(base, path, value)
+    base, measured, unmeasured = _with_measurement(profile, base, read)
     for path in foreign:
         # Was der Hersteller anders nennt, als Solidon es kennt, bleibt für
         # Solidons eigene Rechnung beim Rückfall — aber nicht als Aussage:
@@ -1365,6 +1474,8 @@ def base_settings(
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
         measured=measured,
+        unmeasured=unmeasured,
+        profile=profile,
         staged=frozenset(staged),
         machine=machine_name,
         process=setup.base_process,
@@ -1380,7 +1491,6 @@ def _prusa_foundation(
     quality: QualityPreset,
     setup: SlicerSetup,
     fallback: PrintSettings,
-    measured: Mapping[str, object],
 ) -> Foundation:
     """Die Grundlage aus Drucker, Prozess und Filament eines Prusa-Bündels.
 
@@ -1392,18 +1502,15 @@ def _prusa_foundation(
         chain = prusa_chain(profile, setup)
     except ExternalToolError as problem:
         _log.warning("Prusa profile unreadable, using Solidon's table: %s", problem)
-        return Foundation(
-            fallback, measured=measured, unreadable=setup.base_process, has_plates=False
-        )
+        return _table_foundation(profile, fallback, unreadable=setup.base_process, has_plates=False)
     if chain is None:
-        return Foundation(fallback, measured=measured, has_plates=False)
+        return _table_foundation(profile, fallback, has_plates=False)
     context = _Context(nozzle=profile.printer.nozzle_diameter)
     read, foreign = _read_prusa({**PRUSA_PROGRAM_DEFAULTS, **chain.values}, context)
     if not chain.filament:
         # Ohne Filament des Bestands gilt Solidons Material, nicht PrusaSlicers
         # eingebaute 200 °C bei kaltem Bett.
         read = {path: value for path, value in read.items() if not _material_path(path)}
-    read.update(measured)
     standard = _prusa_first(chain.values.get("default_print_profile"))
     staged = _stage_values(profile, quality) if chain.process == standard else {}
 
@@ -1412,6 +1519,7 @@ def _prusa_foundation(
         base = settings_table.with_path(base, path, value)
     for path, value in staged.items():
         base = settings_table.with_path(base, path, value)
+    base, measured, unmeasured = _with_measurement(profile, base, read)
     for path in foreign:
         read.pop(path, None)
     return Foundation(
@@ -1419,6 +1527,8 @@ def _prusa_foundation(
         from_profile=frozenset(read) - frozenset(measured) - frozenset(staged),
         foreign=foreign,
         measured=measured,
+        unmeasured=unmeasured,
+        profile=profile,
         staged=frozenset(staged),
         machine=chain.printer,
         process=chain.process,
@@ -1483,10 +1593,11 @@ def findings(foundation: Foundation) -> list[Finding]:
 
 def effective(stored: PrintSettings | None, foundation: Foundation) -> PrintSettings:
     """Was gedruckt wird: die Grundlage, darüber die eigene Wahl und die
-    übernommenen Vorschläge des Projekts."""
+    übernommenen Vorschläge des Projekts — und die Messung, wo sie auf dem
+    Raster des Projekts gilt (:func:`measured_on`)."""
     if stored is None:
         return foundation.settings
-    return settings_table.on_base(stored, foundation.settings)
+    return measured_on(settings_table.on_base(stored, foundation.settings), foundation)
 
 
 def written_paths(settings: PrintSettings, foundation: Foundation) -> frozenset[str] | None:
@@ -1494,8 +1605,16 @@ def written_paths(settings: PrintSettings, foundation: Foundation) -> frozenset[
 
     Mit Herstellerprofil darunter nur, was abweichen soll, was gemessen ist
     und was die Stufe über den Standardprozess legt; ohne eines schreibt
-    Solidon wie bisher alles (Konzept, Entscheidung D).
+    Solidon wie bisher alles (Konzept, Entscheidung D). Gemessen heißt: auf
+    dem Raster dieser Einstellungen anders als ohne Probe — nach einer
+    anderen Bahnbreite gilt wieder der Wert des Herstellers, und den kennt
+    der Slicer selbst.
     """
     if not foundation.has_profile:
         return None
-    return settings.explicit | frozenset(foundation.measured) | foundation.staged
+    measured = frozenset(
+        path
+        for path, value in foundation.unmeasured.items()
+        if not settings_table.same_value(settings_table.read_path(settings, path), value)
+    )
+    return settings.explicit | measured | foundation.staged

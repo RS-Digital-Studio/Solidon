@@ -55,7 +55,7 @@ er:** `skirt`, `brim`, `raft` mit „Skirt-Runden“, „Brim-Breite“,
 anders heißt als sein Feld, ist eine Fährte ins Nichts.
 
 **Jedes Feld sagt, was es tut — und zwar alle**, sonst lernt niemand, dass es
-hier Sätze gibt: die Druckeinstellungen über `note`, die 1337 Parameter der 142
+hier Sätze gibt: die Druckeinstellungen über `note`, die 1343 Parameter der 142
 Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
@@ -173,6 +173,21 @@ Trennzeichen ist das Dezimaltrennzeichen**, alle davor trennen Tausender; nur
 danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
 `valueFromText`. Als Typprüfung bleibt `QDoubleSpinBox` richtig.
+
+**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an zwei Orten:** Qt verwirft
+an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
+übernimmt 15. Die **Parameterleiste** und die Zahlenfelder des
+**Operationsdialogs** (`op_dialog.ValueField`, auch die Stückzahl) tragen ein
+`labels.BoundedSpin`: Eine Zahl jenseits der Grenzen bleibt markiert stehen,
+`valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas
+(`limit_sentence`, `name_limits`) und, wo sie änderbar ist, den Weg dorthin;
+der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
+(`OperationDialog._field_refusal`). Eine Nachkommastelle zu viel wird wie
+überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. **Noch nicht
+umgestellt und still kürzend:** das Merkmalfenster (`FeaturePanel`,
+`configure_feature_field`) und die Druckeinstellungen
+(`print_settings_dialog`); die Ausweitung steht nach 0.5.1 im Register von
+`ROADMAP.md`.
 
 ## Gestufte Tiefe
 

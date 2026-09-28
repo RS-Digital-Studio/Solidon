@@ -20,7 +20,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 import pytest
 
-from tests.php_probe import free_port, php_command, php_executable
+from tests.php_probe import WITHOUT_OPCACHE, free_port, php_command, php_executable
 
 ROOT = Path(__file__).parent.parent
 API = ROOT / "website" / "api"
@@ -36,6 +36,16 @@ ENDPOINTS = (
     "count.php",
     "stats.php",
 )
+
+
+def test_every_php_test_server_runs_without_opcache() -> None:
+    """Parallele Prüfserver mit OPcache führten unter Windows fremden Opcode aus
+    und brachen ab (``tests/php_probe.WITHOUT_OPCACHE``). Jeder Server hier
+    beginnt mit ``php_command``, und das nimmt den Schalter mit."""
+    command = php_command()
+
+    assert command[1:3] == list(WITHOUT_OPCACHE)
+    assert _php_command(command, free_port())[1:3] == list(WITHOUT_OPCACHE)
 
 
 def _php_command(

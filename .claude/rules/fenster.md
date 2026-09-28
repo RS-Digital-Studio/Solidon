@@ -85,8 +85,9 @@ Reiter, ein anderes Projekt räumt ihn weg. Die Erkennungswerte passen zu
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
 
-- **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte und den
-  Rückweg über Strg+Z.
+- **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte beim
+  Namen, mit Nummer und Titel wie im Verlauf (`history.named_steps`: bis vier
+  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
   Alternative — auch das Schließen — lädt mit begrenzter Erkennung. Das ist
@@ -209,8 +210,10 @@ nötig:
   denselben Originaltreffer.
 - **Ein Klick auf einen Befund bleibt nie folgenlos** (§2.7), gestuft: **Ort**
   → die Kamera fliegt hin, eine vergängliche Marke steht dort (`mark_finding`:
-  Ring in Auswahlfarbe vor dem Material, Radius aus dem Abstand, Titel in
-  Oben-Richtung der Kamera); **Körper** → er wird ausgewählt; **`op_id`** → der
+  Ring in der Befundfarbe `FINDING_COLOUR` vor dem Material, nie in der
+  Auswahlfarbe, Radius aus dem Abstand, Titel auf eigenem Grund in
+  Oben-Richtung der Kamera, bei `Finding.outline` dazu der Rand der Fläche —
+  `ansicht.md`, „Was gefärbt wird“); **Körper** → er wird ausgewählt; **`op_id`** → der
   Verlauf zeigt den Schritt (`HistoryPanel.point_at`), auch ohne Körper.
   Fallen: Der Ort kommt aus der Szene und wird für die Ansicht verschoben
   (`view_point_of`); der Ort eines Kartenbefunds wird in `_map_ready`

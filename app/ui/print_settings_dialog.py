@@ -75,7 +75,7 @@ from app.core.errors import (
 )
 from app.core.export import handover, manufacturer, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, knows_plates, takes_a_machine_profile
-from app.core.export.writer import arrangement_holds, write_assembly
+from app.core.export.writer import arrangement_holds, part_advice, write_assembly
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.attributes import used_slots
@@ -83,7 +83,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.fits import active_fits
+from app.core.scene.fits import fit_kinds_for
 from app.core.slice import advise, gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import estimate
@@ -186,27 +186,6 @@ class Field:
     einen Tooltip hat, lehrt niemanden, dass es Tooltips gibt (Konsistenz vor
     Vollständigkeit). ``tests/test_print_settings_ui.py`` hält das fest."""
 
-
-#: Operationen, die eine Passung **herstellen**, ohne sie einzutragen.
-#:
-#: Jede von ihnen legt zwei Flächen mit einem gerechneten Spiel aufeinander —
-#: aus dem Materialprofil oder der Normteiltabelle. Für den Druck heißt das
-#: dasselbe wie eine eingetragene Passung: die Außenwand muss auf Maß, und
-#: schnell darf sie dabei nicht sein.
-FITTING_OPS: frozenset[str] = frozenset(
-    {
-        "create_lid",
-        "screw_lid",
-        "split_pinned",
-        "insert_snap_fit",
-        "insert_dowel",
-        "insert_magnet_pocket",
-        "insert_heatset_m4",
-        "insert_nut_trap",
-        "insert_printed_thread",
-        "thread_exact",
-    }
-)
 
 #: Gruppen in der Reihenfolge, in der sie erscheinen.
 #: Die Reiter der Tiefe, in der Reihenfolge, in der sie stehen.
@@ -394,6 +373,16 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Wo die Naht jeder Schicht sitzt — die Stelle, an der eine Bahn beginnt und endet. "
             "Ausgerichtet ergibt eine sichtbare Linie, zufällig verteilt sie sich."
+        ),
+    ),
+    Field(
+        "shell.scarf_seam",
+        _("Schrägnaht"),
+        "shell",
+        kind="bool",
+        note=_(
+            "Setzt Anfang und Ende der Außenwand schräg übereinander statt an eine Stelle. "
+            "Runde Teile zeigen dann keine Nahtlinie; es kostet etwas Druckzeit."
         ),
     ),
     Field(
@@ -841,8 +830,8 @@ FIELDS: tuple[Field, ...] = (
             ),
         ),
         note=_(
-            "Was zusätzlich auf das Bett kommt, damit das Teil hält. Automatisch entscheidet der "
-            "Slicer nach Teil und Material. Brim legt einen Rand an, Raft eine ganze Unterlage; "
+            "Was zusätzlich aufs Bett kommt, damit das Teil hält. Automatisch entscheidet der "
+            "Slicer nach Teil und Material. Brim legt einen Rand an, Raft eine Unterlage; "
             "Skirt berührt das Teil nicht und hält nur die Düse im Fluss."
         ),
     ),
@@ -1610,6 +1599,11 @@ class _PlateJob:
     #: (``writer._support_blocker``); ohne ihn griff *Abbrechen* erst danach.
     #: Der Arbeiter setzt ihn selbst (``replace``), der Dialog kennt ihn nicht.
     cancelled: CancelToken | None = None
+    #: Ob die Dateien ein Fenster öffnet statt der Kommandozeile. Curas Fenster
+    #: bekommt dann eine 3MF mit Stützsperre und Werten je Teil statt des STL
+    #: der Konsole (``writer.write_assembly``, RM-257). Auch das setzt der
+    #: Arbeiter selbst.
+    for_window: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1741,6 +1735,7 @@ def _prepare_plates(job: _PlateJob) -> ProjectRun:
         scene=job.scene,
         document=job.document,
         cancelled=job.cancelled,
+        for_window=job.for_window,
     )
     by_plate: dict[int, tuple[MaterialSlot, ...]] = {}
     for plate in job.plates:
@@ -1773,6 +1768,7 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         scene=job.scene,
         document=job.document,
         cancelled=job.cancelled,
+        for_window=job.for_window,
     )
     return PlateRun(
         plate=plate,
@@ -1801,6 +1797,14 @@ class _TargetedAdvice(SettingAdvice):
     slot: MaterialSlot | None = None
     effective: PrintSettings | None = None
     unavailable: TranslatableText | str = ""
+    parts: tuple[str, ...] = ()
+    """Die Teile, an die der Export diesen Vorschlag schreibt, wenn er nur
+    einigen gilt (Konzept Herstellerprofil, Entscheidung G). Leer heißt: die
+    ganze Platte."""
+
+
+#: So viele Teilenamen stehen in einer Zeile des Rats; die übrigen zählt sie.
+SHOWN_PART_NAMES: Final = 3
 
 
 def _advice_identity(entry: SettingAdvice) -> object:
@@ -1827,6 +1831,9 @@ class _AdviceWorker(Worker):
         fit_kinds: tuple[str, ...],
         connectors: tuple[float, ...],
         previous: Mapping[str, tuple[float, float, SliceResult]],
+        *,
+        part_fits: Mapping[str, tuple[str, ...]] | None = None,
+        flavour: SlicerFlavour = "orca",
     ) -> None:
         super().__init__()
         self.objects = objects
@@ -1837,6 +1844,12 @@ class _AdviceWorker(Worker):
         self.fit_kinds = fit_kinds
         self.connectors = connectors
         self.previous = previous
+        self.part_fits = part_fits or {}
+        """Die Passungen je Körper, im Hauptthread aus dem Dokument gelesen —
+        der Export fragt sie je Teil (:func:`writer.part_advice`)."""
+        self.flavour = flavour
+        """Die Familie, für die die Teile benannt werden; ohne Slicer die der
+        gespeicherten 3MF."""
         self.cancelled = CancelSignal()
         self.analysis_context: tuple[Any, ...] | None = None
         """Für welchen Geometriestand dieser Arbeiter misst (``_analysis_context``)."""
@@ -1882,34 +1895,12 @@ class _AdviceWorker(Worker):
             self.progressed.emit(index + 1, len(self.objects), str(body.name))
             mesh = as_mesh_data(body.mesh)
             own_profile = profiles.for_object(self.profile, body)
-            slots = threemf.assembly_slots(
-                threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
+            # Dieselben Spulen, die der Export je Teil fragt (Entscheidung G).
+            processes = handover.slot_processes(
+                body, self.settings, self.profile, self.setup, self.slot_profiles
             )
-            present = set(used_slots(mesh))
-            processes: list[tuple[MaterialSlot, Profile, PrintSettings]] = []
-            for original in slots:
-                if original.index not in present:
-                    continue
-                chosen = self.slot_profiles.get(threemf.slot_identity(original), "")
-                slot = replace(original, material=chosen) if chosen else original
-                material = profiles.material_id_for_type(slot.material_type or "")
-                material_profile = (
-                    replace(own_profile, material=profiles.material(material))
-                    if material
-                    else own_profile
-                )
-                effective = handover.settings_for_slot(
-                    self.settings, self.profile, slot, self.setup
-                )
-                processes.append(
-                    (
-                        slot,
-                        profiles.for_process(material_profile, effective, effective=True),
-                        effective,
-                    )
-                )
             angle = min(
-                (process.overhang_limit_degrees for _slot, process, _effective in processes),
+                (process.profile.overhang_limit_degrees for process in processes),
                 default=profiles.for_process(
                     own_profile, self.settings, effective=True
                 ).overhang_limit_degrees,
@@ -1922,7 +1913,7 @@ class _AdviceWorker(Worker):
             # nicht, und ein Ergebnis, das einen Materialwechsel überlebt,
             # spräche über einen Drucker, den niemand mehr gemeint hat.
             wall = max(
-                (process.minimum_wall_thickness for _slot, process, _effective in processes),
+                (process.profile.minimum_wall_thickness for process in processes),
                 default=profiles.for_process(
                     own_profile, self.settings, effective=True
                 ).minimum_wall_thickness,
@@ -1954,18 +1945,19 @@ class _AdviceWorker(Worker):
             results[body.id] = (angle, wall, result)
             if not self.rules_wanted:
                 continue
-            for slot, material_profile, effective in processes:
+            for process in processes:
                 entries = advise.advise(
-                    effective,
-                    material_profile,
+                    process.settings,
+                    process.profile,
                     result,
                     bounds=mesh.bounds,
                     fit_kinds=self.fit_kinds,
                     connectors=self.connectors,
+                    flavour=self.flavour,
                 )
                 common.append(
                     (
-                        effective,
+                        process.settings,
                         [
                             entry
                             for entry in entries
@@ -1973,12 +1965,12 @@ class _AdviceWorker(Worker):
                         ],
                     )
                 )
-                key = threemf.slot_identity(slot)
+                key = threemf.slot_identity(process.slot)
                 if key not in materials:
-                    materials[key] = (slot, [])
+                    materials[key] = (process.slot, [])
                 materials[key][1].append(
                     (
-                        effective,
+                        process.settings,
                         [
                             entry
                             for entry in entries
@@ -1986,7 +1978,7 @@ class _AdviceWorker(Worker):
                         ],
                     )
                 )
-        entries = advise.combine(self.settings, common)
+        entries = self._with_parts(advise.combine(self.settings, common), results)
         for slot, groups in materials.values():
             for entry in advise.combine(groups[0][0], groups):
                 entries.append(
@@ -2037,6 +2029,66 @@ class _AdviceWorker(Worker):
             ]
         self.cancelled.raise_if_cancelled()
         self.done.emit(entries, results)
+
+    def _with_parts(
+        self,
+        entries: list[SettingAdvice],
+        results: Mapping[str, tuple[float, float, SliceResult]],
+    ) -> list[SettingAdvice]:
+        """Nennt an jedem Vorschlag, der je Teil geschrieben wird, die Teile.
+
+        Übernommen gilt ein Vorschlag aus der Geometrie dem Körper, der ihn
+        verlangt (Konzept Herstellerprofil, Entscheidung G); die Zeile sagt,
+        welchem („Brim · Turm“). Gefragt wird, was der Export fragt: dieselbe
+        Trennung (:func:`handover.split_for_parts`, mit allen Vorschlägen
+        übernommen, wie die Liste sie vorbelegt) und derselbe Rat je Teil
+        (:func:`writer.part_advice`), mit den Schichten, die hier schon
+        gemessen sind. Gilt er allen Teilen oder der Platte, bleibt die Zeile,
+        wie sie war.
+        """
+        if len(self.objects) < 2:
+            return entries
+        candidates = {entry.path for entry in entries if entry.path in advise.PART_PATHS}
+        if not candidates:
+            return entries
+        split = handover.split_for_parts(
+            advise.apply(self.settings, entries), self.profile, self.setup, self.flavour
+        )
+        candidates &= split.per_part
+        if not candidates:
+            return entries
+        wanted: dict[str, list[str]] = {}
+        for body in self.objects:
+            self.cancelled.raise_if_cancelled()
+            if not self.rules_wanted:
+                return entries
+            for entry in part_advice(
+                body,
+                as_mesh_data(body.mesh),
+                split.base,
+                self.profile,
+                self.setup,
+                self.slot_profiles,
+                result=results[body.id][2],
+                fit_kinds=self.part_fits.get(body.id, ()),
+                flavour=self.flavour,
+            ):
+                if entry.path in candidates:
+                    wanted.setdefault(entry.path, []).append(str(body.name))
+        named: list[SettingAdvice] = []
+        for entry in entries:
+            parts = tuple(wanted.get(entry.path, ()))
+            if entry.path in candidates and 0 < len(parts) < len(self.objects):
+                entry = _TargetedAdvice(
+                    path=entry.path,
+                    value=entry.value,
+                    was=entry.was,
+                    reason=entry.reason,
+                    severity=entry.severity,
+                    parts=parts,
+                )
+            named.append(entry)
+        return named
 
 
 class _StockWorker(Worker):
@@ -2250,7 +2302,7 @@ class _OpenInSlicerWorker(Worker):
     def __init__(self, job: _PlateJob) -> None:
         super().__init__()
         self.cancelled = CancelSignal()
-        self._job = replace(job, cancelled=self.cancelled)
+        self._job = replace(job, cancelled=self.cancelled, for_window=True)
 
     def cancel(self) -> None:
         """Weitere Platten und das Öffnen nach dem aktuellen Schreiben verwerfen."""
@@ -2504,6 +2556,33 @@ class PrintSettingsDialog(QDialog):
     _oversize_shown: OutOfBuildVolume | bool | None
     """Was die Zeile zeigt — ``False``, solange sie nie gebaut wurde."""
 
+    @property
+    def settings(self) -> PrintSettings:
+        """Was gedruckt wird: die Grundlage, darüber eigene Wahl und Vorschläge."""
+        return self._settings
+
+    @settings.setter
+    def settings(self, value: PrintSettings) -> None:
+        # **Die Messung gilt auf dem Raster, mit dem gedruckt wird**
+        # (``manufacturer.measured_on``). Jede Zuweisung geht hier durch, auch
+        # eine andere Bahnbreite im Feld: Danach stützten Analyse und Übergabe
+        # sonst weiter ab dem Winkel einer Probe, die für diesen Druck nichts
+        # mehr sagt.
+        self._settings = manufacturer.measured_on(value, self._measuring_foundation(value))
+
+    def _measuring_foundation(self, settings: PrintSettings) -> manufacturer.Foundation:
+        """Die Grundlage, an der die Messung hängt — die gelesene, solange sie zu
+        Drucker, Material und Stufe passt, sonst Solidons Tabelle."""
+        foundation: manufacturer.Foundation | None = getattr(self, "_foundation", None)
+        key: tuple[object, ...] | None = getattr(self, "_foundation_key", None)
+        if (
+            foundation is not None
+            and key is not None
+            and key[1:] == (self.session.profile, settings.quality)
+        ):
+            return foundation
+        return manufacturer.base_settings(self.session.profile, settings.quality, None)
+
     def __init__(
         self,
         session: Session,
@@ -2756,6 +2835,7 @@ class PrintSettingsDialog(QDialog):
         # stand auf ihrem ersten Eintrag: ein Gerät, das nirgends galt.
         _select_data(self.printer_choice, self.session.profile.printer.id)
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
+        self.printer_choice.activated.connect(self._printer_picked)
 
         # **Die Düse steht neben dem Drucker, weil sie zu ihm gehört.** Die
         # Tabelle führt jedes Gerät mit 0,4 — wer eine andere aufschraubt,
@@ -3253,6 +3333,20 @@ class PrintSettingsDialog(QDialog):
         # Ein anderer Drucker hat einen anderen Bauraum.
         self._show_slicer_state()
 
+    def _printer_picked(self, _index: int) -> None:
+        """Wer hier seinen Drucker wählt, druckt auch das nächste Projekt darauf.
+
+        Neue Projekte beginnen mit dem Drucker aus den Einstellungen. Stand dort
+        der allgemeine, legte jedes neue Projekt ihn wieder an, auch nachdem
+        der Kunde im Druckdialog seinen Centauri Carbon 2 gewählt hatte (Robert,
+        27.09.2026: „sollte vorausgewählt sein"). Nur die ausdrückliche Wahl
+        zählt (``activated``); ein Projekt, das einen anderen Drucker mitbringt,
+        ändert die Vorgabe nicht.
+        """
+        chosen = str(self.printer_choice.currentData() or "")
+        if chosen:
+            self.ui_settings.printer = chosen
+
     def _refill_slicer_profiles(self) -> None:
         """Die Profilfelder folgen dem Drucker des Projekts (§29).
 
@@ -3640,6 +3734,9 @@ class PrintSettingsDialog(QDialog):
         das ist es nicht. Es ist der Abschnitt, den im Regelfall niemand
         braucht.
         """
+        holder = QWidget(self)
+        outer = QVBoxLayout(holder)
+        outer.setContentsMargins(0, 0, 0, 0)
         self.slicer_inner = QWidget(self)
         form = QFormLayout(self.slicer_inner)
 
@@ -3650,10 +3747,21 @@ class PrintSettingsDialog(QDialog):
         # stand der Kunde vor einer Sackgasse statt vor einer Wahl (Robert,
         # 30.08.2026).
         #
-        # Die Zeile erscheint nur bei mehreren — bei einem wäre sie ein
-        # Auswahlfeld mit einem Eintrag, also eine Frage ohne Antwortmöglichkeit
-        # (§2.4).
-        self.slicer_choice = QComboBox(self.slicer_inner)
+        # **Über dem Kasten, nicht darin.** Die Zeile stand im zugeklappten
+        # „Profile des Slicers", und wo die Profile von selbst passen, bleibt
+        # der zu — Robert fand die Wahl nicht (27.09.2026: „den Slicer kann ich
+        # in den Druckeinstellungen nicht einstellen"). Wer den Slicer wechselt,
+        # trifft eine Entscheidung; die Profile darunter folgen ihr. Und die
+        # Zeile bleibt, auch wenn der Kasten verschwindet — bei einem Programm
+        # ohne Familie gäbe es sonst keinen Weg zurück.
+        #
+        # Bei mehreren eine Auswahl; bei einem sein Name — ein Auswahlfeld mit
+        # einem Eintrag wäre eine Frage ohne Antwortmöglichkeit (§2.4), welcher
+        # Slicer rechnet, bleibt trotzdem eine Auskunft.
+        slicer_row = QWidget(holder)
+        slicer_form = QFormLayout(slicer_row)
+        slicer_form.setContentsMargins(0, 0, 0, 0)
+        self.slicer_choice = QComboBox(slicer_row)
         self.slicer_choice.activated.connect(self._slicer_chosen)
         slicer_note = tr(
             "Welcher Slicer die Druckdatei rechnet. Die Wahl bleibt gemerkt und gilt "
@@ -3663,15 +3771,25 @@ class PrintSettingsDialog(QDialog):
         self.slicer_choice.setStatusTip(slicer_note)
         self.slicer_choice.setAccessibleDescription(slicer_note)
         self.slicer_choice.setAccessibleName(tr("Slicer"))
+        self.slicer_single = QLabel("", slicer_row)
+        self.slicer_single.setToolTip(slicer_note)
+        self.slicer_single.setAccessibleDescription(slicer_note)
         # Der Satz gehört an beide Hälften der Zeile: Wer eine Zeile nicht
         # versteht, zeigt auf das Wort davor und nicht auf den Kasten daneben.
-        slicer_label = QLabel(tr("Slicer"), self.slicer_inner)
-        slicer_label.setToolTip(slicer_note)
-        slicer_label.setStatusTip(slicer_note)
-        slicer_label.setAccessibleDescription(slicer_note)
-        form.addRow(slicer_label, self.slicer_choice)
+        self.slicer_label = QLabel(tr("Slicer"), slicer_row)
+        self.slicer_label.setToolTip(slicer_note)
+        self.slicer_label.setStatusTip(slicer_note)
+        self.slicer_label.setAccessibleDescription(slicer_note)
+        slicer_field = QWidget(slicer_row)
+        field_row = QHBoxLayout(slicer_field)
+        field_row.setContentsMargins(0, 0, 0, 0)
+        field_row.addWidget(self.slicer_choice, 1)
+        field_row.addWidget(self.slicer_single, 1)
+        slicer_form.addRow(self.slicer_label, slicer_field)
         self.slicer_choice.setVisible(False)
-        slicer_label.setVisible(False)
+        self.slicer_single.setVisible(False)
+        self.slicer_label.setVisible(False)
+        outer.addWidget(slicer_row)
 
         self.machine_choice = QComboBox(self.slicer_inner)
         self.machine_choice.setEnabled(False)
@@ -3778,13 +3896,22 @@ class PrintSettingsDialog(QDialog):
         self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_inner)
         self.profile_note.setWordWrap(True)
         form.addRow(self.profile_note)
+        # Der Drucker, auf den der Slicer eingestellt ist, wenn das Projekt
+        # einen anderen trägt — ein Klick statt der Suche in der Liste oben
+        # (:meth:`_offer_the_slicers_printer`).
+        self.adopt_printer = QPushButton("", self.slicer_inner)
+        self.adopt_printer.clicked.connect(self._adopt_the_slicers_printer)
+        self.adopt_printer.setVisible(False)
+        self._slicers_printer = ""
+        form.addRow(self.adopt_printer)
         self.slicer_box = collapsible(tr("Profile des Slicers"), self.slicer_inner, open_now=False)
         self.slicer_toggle = _toggle_of(self.slicer_box)
         if self.slicer_toggle is not None:
             self.slicer_toggle.toggled.connect(self._unfold_slicer)
+        outer.addWidget(self.slicer_box)
         # Erst jetzt: die Auswahl steht, und ``_slicer_path`` ist längst gesetzt.
         self._fill_slicer_choice()
-        return self.slicer_box
+        return holder
 
     def error_handlers(self) -> dict[str, Callable[[AppError], None]]:
         """Die Handlungen des Fensters, ergänzt um die des Slicer-Wegs.
@@ -3964,6 +4091,7 @@ class PrintSettingsDialog(QDialog):
             box.clear()
             box.setEnabled(False)
         self.profile_note.setText(tr("Der Profilbestand wird durchgesehen …"))
+        self._offer_the_slicers_printer("")
 
     def _start_profile_search(self) -> None:
         # Die Halteleine hält ältere Arbeiter bis zum Ende. Ihre Signale
@@ -4061,12 +4189,21 @@ class PrintSettingsDialog(QDialog):
         if not machines:
             # Regel 17: Der Satz sagte, was fehlt, und hörte dort auf. Was hilft,
             # ist eine Handlung — die Profile entstehen, wenn der Slicer einmal
-            # gelaufen ist und einen Drucker kennt.
+            # gelaufen ist und einen Drucker kennt. Abgelehnt wird der Auftrag
+            # nur von der Orca-Familie; PrusaSlicer bekommt dann Solidons Satz
+            # (Stufe C, ``_profile_gap``).
+            flavour = slicer_keys.flavour_of(self._slicer_path.name) if self._slicer_path else None
             self.profile_note.setText(
                 tr(
                     "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. "
                     "Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht "
                     "sein Profil hier."
+                )
+                if flavour is not None and takes_a_machine_profile(flavour)
+                else tr(
+                    "Keine Profile gefunden — dieser Slicer bekommt dann Solidons eigene "
+                    "Werte. Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; "
+                    "danach steht sein Profil hier."
                 )
             )
             self._show_slicer_state()
@@ -4111,7 +4248,18 @@ class PrintSettingsDialog(QDialog):
         # Sichtbar wurde es an einem Test, der unter Last einmal rot war: Er
         # setzt die drei Auswahlen von Hand und schließt den Dialog, und dazwischen
         # kam die Antwort der Suche.
-        remembered = already or self.ui_settings.slicer_machine_profile
+        # Die gemerkte Maschine gilt nur für den Drucker und den Slicer, für die
+        # sie gewählt wurde — dieselbe Regel wie beim Export
+        # (:func:`remembered_setup`). Ohne sie trug ein Projekt auf dem
+        # allgemeinen Drucker das Maschinenprofil des Centauri Carbon 2: Der
+        # Slicer rechnete mit 256 mm Bett, Solidon mit 220.
+        own = (
+            self.ui_settings.slicer_machine_profile
+            if self.ui_settings.slicer_profile_printer in ("", self.session.profile.printer.id)
+            and self.ui_settings.slicer_profile_slicer in ("", str(self._slicer_path or ""))
+            else ""
+        )
+        remembered = already or own
         index = self.machine_choice.findData(remembered) if remembered else -1
         if index < 0 and chosen is not None:
             index = self.machine_choice.findData(slicer_profiles.identity(chosen))
@@ -4178,8 +4326,12 @@ class PrintSettingsDialog(QDialog):
                 self.profile_note.setText(
                     tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
                 )
+            self._offer_the_slicers_printer(self._printer_of_the_slicer())
             self._open_slicer_section()
         else:
+            # Passt ein Profil, gibt es keinen Drucker mehr zu übernehmen — auch
+            # nicht nach dem Klick auf den Knopf, der genau das bewirkt hat.
+            self._offer_the_slicers_printer("")
             self.profile_note.setText(
                 tr(
                     "Automatisch zugeordnet. Was hier steht, bringt der Slicer mit; Solidon legt "
@@ -4187,6 +4339,58 @@ class PrintSettingsDialog(QDialog):
                 )
             )
         self._show_slicer_state()
+
+    def _printer_of_the_slicer(self) -> str:
+        """Welchen Drucker Solidons der Slicer eingestellt hat — leer, wenn
+        es derselbe wie im Projekt ist oder keiner, den Solidon kennt.
+
+        Aus der Konfiguration des Slicers (:func:`slicer_profiles.chosen_machine`),
+        dieselbe Auskunft, mit der die Erstinbetriebnahme ihren Drucker vorschlägt.
+        """
+        if self._slicer_path is None:
+            return ""
+        flavour = slicer_keys.flavour_of(self._slicer_path.name)
+        if flavour not in ("orca", "prusa"):
+            return ""
+        machine = slicer_profiles.chosen_machine(flavour, self._slicer_path)
+        found = slicer_profiles.printer_for(machine, profiles.printer_profiles()) if machine else ""
+        if not found or found == self.session.profile.printer.id:
+            return ""
+        return found if self.printer_choice.findData(found) >= 0 else ""
+
+    def _offer_the_slicers_printer(self, printer_id: str) -> None:
+        """Der Knopf „{printer} übernehmen" unter dem Hinweis — oder keiner.
+
+        Trägt das Projekt einen anderen Drucker als den, auf den der Slicer
+        eingestellt ist, passt kein Profil von selbst, und der Hinweis bat, eines
+        zu wählen. Ein Profil des anderen Druckers hätte aber eine Maschine
+        beschrieben, mit der Solidon nicht rechnet — richtig ist, den Drucker zu
+        wechseln (Robert, 27.09.2026: allgemeiner Drucker im Projekt, der
+        ElegooSlicer auf dem Centauri Carbon 2).
+        """
+        self._slicers_printer = printer_id
+        if not printer_id:
+            self.adopt_printer.setVisible(False)
+            return
+        title = str(profiles.printer(printer_id).title)
+        self.adopt_printer.setText(str(tr("{printer} übernehmen")).replace("{printer}", title))
+        why = str(
+            tr("{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.")
+        )
+        why = why.replace("{slicer}", _slicer_title(self._slicer_path) if self._slicer_path else "")
+        why = why.replace("{printer}", title)
+        self.adopt_printer.setToolTip(why)
+        self.adopt_printer.setStatusTip(why)
+        self.adopt_printer.setAccessibleDescription(why)
+        self.adopt_printer.setVisible(True)
+
+    def _adopt_the_slicers_printer(self) -> None:
+        """Den Drucker des Slicers wählen, als hätte der Kunde ihn oben gewählt."""
+        index = self.printer_choice.findData(self._slicers_printer)
+        if index < 0:
+            return
+        self.printer_choice.setCurrentIndex(index)
+        self._printer_picked(index)
 
     def _machine_chosen(self) -> None:
         if self._profiles:
@@ -5509,13 +5713,27 @@ class PrintSettingsDialog(QDialog):
         QCoreApplication.processEvents()
         return not self._slicers_pending
 
+    def wait_for_profiles(self, timeout_ms: int = 30_000) -> bool:
+        """Auf die Profilsuche warten und ihre Antwort zustellen.
+
+        Derselbe Vertrag wie :meth:`wait_for_slicers`, eine Stufe später: Nach
+        einem gefundenen Slicer sieht der Dialog seinen Profilbestand durch,
+        auch bei PrusaSlicer (Stufe C), und bis dahin bleibt *Slicen* zu.
+        Zurück kommt, ob die Suche fertig wurde.
+        """
+        worker = self._profile_worker
+        if worker is not None and worker.isRunning():
+            worker.wait(timeout_ms)
+        QCoreApplication.processEvents()
+        return not self._profiles_pending
+
     def _fill_slicer_choice(self) -> None:
-        """Die Auswahl füllen — sichtbar nur, wenn es etwas zu wählen gibt.
+        """Die Auswahl füllen — als Auswahl nur, wenn es etwas zu wählen gibt.
 
         Eine Zeile mit einem einzigen Eintrag ist eine Frage ohne
-        Antwortmöglichkeit (§2.4); bei einem Slicer bleibt sie weg. Der volle
-        Pfad steht im Tooltip: Zwei Installationen desselben Programms
-        unterscheiden sich am Ordner, nicht am Namen.
+        Antwortmöglichkeit (§2.4); bei einem Slicer steht sein Name, bei
+        keinem nichts. Der volle Pfad steht im Tooltip: Zwei Installationen
+        desselben Programms unterscheiden sich am Ordner, nicht am Namen.
         """
         with QSignalBlocker(self.slicer_choice):
             self.slicer_choice.clear()
@@ -5529,11 +5747,11 @@ class PrintSettingsDialog(QDialog):
 
         several = len(self._slicers) > 1
         self.slicer_choice.setVisible(several)
-        layout = self.slicer_inner.layout()
-        if isinstance(layout, QFormLayout):
-            label = layout.labelForField(self.slicer_choice)
-            if label is not None:
-                label.setVisible(several)
+        single = self._slicers[0] if len(self._slicers) == 1 else None
+        self.slicer_single.setText(_slicer_title(single) if single is not None else "")
+        self.slicer_single.setToolTip(str(single) if single is not None else "")
+        self.slicer_single.setVisible(single is not None)
+        self.slicer_label.setVisible(bool(self._slicers))
 
     def _slicer_chosen(self, index: int) -> None:
         """Ein anderer Slicer: merken und die Profile neu durchsehen.
@@ -5973,76 +6191,25 @@ class PrintSettingsDialog(QDialog):
         return slicer_keys.flavour_of(self._slicer_path.name)
 
     def _connector_diameters(self) -> tuple[float, ...]:
-        """Die Durchmesser der Zapfen, die beim Teilen entstanden sind.
-
-        Aus den Merkmalen und nicht aus dem Stapel: Die Stiftplanung rechnet
-        den Durchmesser aus der Schnittfläche, er ist also kein Parameter, den
-        jemand eingetragen hätte. Wo er steht, ist das erzeugte Merkmal.
-
-        Nur die Zapfen, nicht die Bohrungen — es ist dasselbe Maß plus Spiel,
-        und zweimal gezählt sähe es nach doppelt so vielen Verbindern aus.
-
-        **Und nur die erzeugten.** Ein „Zapfen" aus der Merkmalserkennung ist
-        eine Vermutung über eine Form, und sein Durchmesser ist, was der
-        Erkenner hineingepasst hat — an einem gerippten Bogen kann das alles
-        sein. Gemessen an einem heruntergeladenen Sockel von 160 auf 231 auf
-        14 mm: erkannt wurden zehn Zapfen, der dickste mit **Ø 631,6 mm**, und
-        die Wandregel daneben rechnete daraus einen Vorschlag von **376 Wänden**.
-        *Vorschläge übernehmen* schrieb ihn ins Projekt. Eine Vermutung darf
-        keine Einstellung setzen; der Docstring oben sagt es seit je — „wo er
-        steht, ist das **erzeugte** Merkmal".
-        """
-        result = self.session.last_result
-        if result is None:
+        """Die Zapfendurchmesser der Körper auf der Platte
+        (:func:`app.core.slice.advise.connector_diameters`)."""
+        if self.session.last_result is None:
             return ()
-        return tuple(
-            float(feature.params["diameter"])
-            for entry in self._plate_bodies()
-            for feature in entry.features.values()
-            if feature.kind == "pin"
-            and feature.provenance == "generated"
-            and "diameter" in feature.params
-        )
+        return advise.connector_diameters(self._plate_bodies())
 
     def _fits_in_play(self) -> tuple[str, ...]:
-        """Welche Passungen trägt dieses Projekt — eingetragene und gebaute?
+        """Welche Passungen die Körper der Platte tragen
+        (:func:`app.core.scene.fits.fit_kinds_for`)."""
+        return fit_kinds_for(
+            self.session.project.document, {body.id for body in self._plate_bodies()}
+        )
 
-        Eingetragene Passungen tragen ihre Art und gegebenenfalls eine
-        Bedingung. Ein Deckel ohne Kragen deaktiviert seine Beziehung; der
-        ergänzende Blick auf den Stapel darf sie nicht wieder einschalten.
-        Er gilt deshalb nur für Schritte ohne ausdrücklich gebundene Passung,
-        etwa eine ältere Mutternfalle mit Spiel aus der Normteiltabelle.
-
-        Zurück kommen die **Arten**, nicht bloß ein Ja: eine bündige Passung
-        verlangt eine Einstellung mehr als ein Schiebesitz, und die Regel
-        nebenan kann das nur unterscheiden, wenn sie es erfährt. Was aus dem
-        Stapel kommt, zählt als Schiebesitz — welche Flächen ein Baustein
-        aufeinanderlegt, steht nirgends, und eine geratene Art wäre schlechter
-        als keine.
-        """
+    def _part_fits(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """Dieselbe Frage je Körper — so fragt der Export je Teil
+        (:func:`app.core.export.writer.part_advice`). Im Hauptthread, denn das
+        Dokument gehört ihm."""
         document = self.session.project.document
-        wanted = {body.id for body in self._plate_bodies()}
-        relevant_operations: set[int] = set()
-        for operation in reversed(document.ops):
-            if wanted.intersection(operation.outputs):
-                relevant_operations.add(operation.id)
-                wanted.update(operation.inputs)
-        kinds = [
-            entry.kind
-            for entry in active_fits(document)
-            if entry.a.object_id in wanted or entry.b.object_id in wanted
-        ]
-        bound_operations = {
-            entry.when_positive[0] for entry in document.fits if entry.when_positive is not None
-        }
-        if any(
-            entry.op in FITTING_OPS
-            and entry.id in relevant_operations
-            and entry.id not in bound_operations
-            for entry in document.ops
-        ):
-            kinds.append("clearance")
-        return tuple(dict.fromkeys(kinds))
+        return tuple((body.id, fit_kinds_for(document, {body.id})) for body in self._plate_bodies())
 
     def _bounds(self) -> BoundingBox | None:
         """Der Hüllquader über alles, was auf die Platte geht — daran hängt der
@@ -6182,7 +6349,7 @@ class PrintSettingsDialog(QDialog):
             self._analysis_context(),
             self.settings,
             self.session.profile,
-            self._fits_in_play(),
+            self._part_fits(),
             self._connector_diameters(),
             self.session.busy,
             self._slicer_path,
@@ -6269,6 +6436,9 @@ class PrintSettingsDialog(QDialog):
             self._fits_in_play(),
             self._connector_diameters(),
             previous,
+            part_fits=dict(self._part_fits()),
+            # Ohne Slicer schreibt der Export die 3MF wie für die Orca-Familie.
+            flavour=flavour or "orca",
         )
         worker.analysis_context = analysis_context
         context = self._advice_request
@@ -6487,6 +6657,8 @@ class PrintSettingsDialog(QDialog):
             becomes = self._shown(entry.path, entry.value)
             title = self._advice_title(entry)
             reason = "\n".join(part for part in (str(entry.reason), str(unavailable)) if part)
+            # Alle Teile am ganzen Eintrag, auch die, die der Titel zählt.
+            said = "\n".join(part for part in (reason, self._advice_parts(entry)) if part)
             item = QTreeWidgetItem(
                 [
                     f"{marker}{title}",
@@ -6516,7 +6688,7 @@ class PrintSettingsDialog(QDialog):
             # eigenen Teil passt, war genau der abgeschnittene. Er steht jetzt
             # zusätzlich am ganzen Eintrag.
             for column in range(3):
-                item.setToolTip(column, reason)
+                item.setToolTip(column, said)
             self.advice_view.addTopLevelItem(item)
         del blocker
         waiting = self._advice_pending or bool(self._advice_problem)
@@ -6565,12 +6737,34 @@ class PrintSettingsDialog(QDialog):
             self.advice_view.resizeColumnToContents(column)
 
     def _advice_title(self, entry: SettingAdvice) -> str:
-        """Wie ein Vorschlag heißt — in der Liste und in der Meldung danach."""
+        """Wie ein Vorschlag heißt — in der Liste und in der Meldung danach.
+
+        Gilt er nur einigen Teilen, stehen sie dahinter („Brim · Turm“), bei
+        vielen die ersten und die Zahl der übrigen; alle nennt
+        :meth:`_advice_parts`.
+        """
         field = self._fields.get(entry.path)
         title = str(field.title) if field else entry.path
         if isinstance(entry, _TargetedAdvice) and entry.slot is not None and entry.slot.name:
             title = f"{title} · {entry.slot.name}"
+        if isinstance(entry, _TargetedAdvice) and entry.parts:
+            names = entry.parts
+            if len(names) > SHOWN_PART_NAMES:
+                rest = str(tr("und {count} weitere")).replace(
+                    "{count}", str(len(names) - SHOWN_PART_NAMES + 1)
+                )
+                title = f"{title} · {', '.join(names[: SHOWN_PART_NAMES - 1])} {rest}"
+            else:
+                title = f"{title} · {', '.join(names)}"
         return title
+
+    @staticmethod
+    def _advice_parts(entry: SettingAdvice) -> str:
+        """Die Zeile, die alle Teile eines Vorschlags je Teil nennt — für den
+        Tooltip und den Bildschirmleser, denn der Titel kürzt ab vier Teilen."""
+        if not isinstance(entry, _TargetedAdvice) or not entry.parts:
+            return ""
+        return f"{tr('Gilt für')}: {', '.join(entry.parts)}"
 
     def _chosen_advice(self) -> list[SettingAdvice]:
         """Die angehakten Vorschläge, in der Reihenfolge der Liste."""

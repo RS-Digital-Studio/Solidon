@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from tests.php_probe import free_port, php_executable
+from tests.php_probe import WITHOUT_OPCACHE, free_port, php_executable
 
 ROOT = Path(__file__).parent.parent
 WEBSITE = ROOT / "website"
@@ -283,7 +283,7 @@ def test_retired_endpoint_is_404_without_state_or_mail(tmp_path: Path, method: s
         }
     )
     process = subprocess.Popen(
-        [php, "-S", f"127.0.0.1:{port}", "-t", str(WEBSITE)],
+        [php, *WITHOUT_OPCACHE, "-S", f"127.0.0.1:{port}", "-t", str(WEBSITE)],
         env=environment,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

@@ -481,6 +481,49 @@ def test_a_tall_slim_part_asks_for_a_brim() -> None:
     assert "adhesion.kind" in _paths(entries)
 
 
+@pytest.mark.parametrize(("flavour", "asks"), [("orca", False), ("prusa", True), ("cura", True)])
+def test_the_orca_auto_brim_already_holds_a_part(flavour: str, asks: bool) -> None:
+    """Orcas Auto-Brim rechnet aus Höhe, Grundfläche und Tempo selbst und hielt
+    mehr als Solidons Brim fester Breite: 1,9 statt 0,9 m Randbahn an den
+    200 mm hohen Schäften der Minigolf-Platte, 0,93 statt 0,40 m an der
+    Waschschüssel (ElegooSlicer, 27.09.2026). Über ihm schweigen die drei
+    Brim-Regeln — kleine Standfläche, kleine Füße, hoch und schmal. PrusaSlicer
+    und Cura haben keinen; dort heißt „automatisch“ die Art aus der Tabelle,
+    und die Regeln bleiben."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    slim = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 200.0))
+    cases = (
+        advise.advise(settings, profile, _layers(80.0, 80.0, 80.0), flavour=flavour),
+        advise.advise(
+            settings, profile, _standing_on(242.8, 198.6, 2.8, *[108.1] * 9), flavour=flavour
+        ),
+        advise.advise(settings, profile, _layers(*[600.0] * 6), bounds=slim, flavour=flavour),
+        advise.for_part(settings, slim, 400.0, flavour=flavour),
+        advise.for_part(
+            settings,
+            BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0)),
+            60.0,
+            flavour=flavour,
+        ),
+    )
+
+    assert [("adhesion.kind" in _paths(entries)) for entries in cases] == [asks] * len(cases)
+
+
+def test_without_a_known_slicer_automatic_adhesion_stays_unanchored() -> None:
+    """Ohne Slicer ist offen, ob „automatisch“ etwas rechnet — dann bleibt es
+    bei der Vorsicht, und ein Skirt hält auch unter Orca nichts fest."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    table = print_settings.resolve(profile)
+    automatic = print_settings.with_path(table, "adhesion.kind", "auto")
+    skirt = print_settings.with_path(table, "adhesion.kind", "skirt")
+    slim = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 200.0))
+
+    assert "adhesion.kind" in _paths(advise.for_part(automatic, slim, 400.0))
+    assert "adhesion.kind" in _paths(advise.for_part(skirt, slim, 400.0, flavour="orca"))
+
+
 def test_warping_material_on_an_open_printer_is_a_finding_not_a_change() -> None:
     """Die Materialtabelle setzt für ABS schon Brim und wenig Lüfter — es gibt
     nichts zu ändern. Gesagt werden muss es trotzdem."""
@@ -1228,6 +1271,7 @@ ORCA_VALUES = {
         "crosshatch",
     },
     "seam_position": {"aligned", "nearest", "back", "aligned_back", "random"},
+    "seam_slope_type": {"none", "external", "all"},
     "support_type": {"normal(auto)", "tree(auto)", "normal(manual)", "tree(manual)"},
     "brim_type": {"no_brim", "outer_only", "auto_brim", "inner_only", "outer_and_inner"},
     "wall_sequence": {"inner wall/outer wall", "outer wall/inner wall", "inner-outer-inner wall"},
@@ -1252,6 +1296,79 @@ def test_orca_gets_names_it_knows(key: str) -> None:
             )
             continue
         assert written in ORCA_VALUES[key], f"{path}={choice} wird zu {written!r}"
+
+
+def test_the_scarf_seam_reaches_every_slicer_with_its_length() -> None:
+    """Die Schrägnaht braucht ihre Länge: Elegoos Basisprozess führt
+    ``seam_slope_min_length = 0``, und mit der Art allein setzte ElegooSlicer am
+    Minigolf-Schaft keine einzige Rampe (0 von 1000 Außenschleifen, mit 20 mm
+    997). Jede Familie bekommt deshalb Art und Länge, nur für die Außenwand
+    und, wo es geht, nur an glatten Schleifen."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    on = print_settings.with_path(print_settings.resolve(profile), "shell.scarf_seam", True)
+
+    orca = handover.values_for(on, profile, "orca")
+    prusa = handover.values_for(on, profile, "prusa")
+    cura = handover.values_for(on, profile, "cura")
+
+    assert {key: orca[key] for key in orca if key.startswith("seam_slope_")} == {
+        "seam_slope_type": "external",
+        "seam_slope_min_length": "20",
+        "seam_slope_conditional": "1",
+        "seam_slope_inner_walls": "0",
+    }
+    # Bambu Studio führt die Schrägnaht auch im Filament, und das sticht ohne
+    # diesen Schalter: am P1S kein einziger Rampenanfang.
+    assert orca["override_filament_scarf_seam_setting"] == "1"
+    assert {key: prusa[key] for key in prusa if key.startswith("scarf_seam_")} == {
+        "scarf_seam_placement": "contours",
+        "scarf_seam_length": "20",
+        "scarf_seam_only_on_smooth": "1",
+        "scarf_seam_on_inner_perimeters": "0",
+    }
+    assert cura["scarf_joint_seam_length"] == "20"
+    assert "scarf_joint_seam_length" in handover.CURA_PER_MESH, "Cura nimmt sie je Netz"
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ({}, None),
+        ({"seam_slope_type": "none", "seam_slope_min_length": "20"}, False),
+        # Elegoos Basisprozess: Art gesetzt, Länge null — keine Rampe.
+        ({"seam_slope_type": "external", "seam_slope_min_length": "0"}, False),
+        ({"seam_slope_type": "external", "seam_slope_min_length": "20"}, True),
+        # Ohne Länge in der Kette gilt die Vorgabe des Programms, größer null.
+        ({"seam_slope_type": "all"}, True),
+        (
+            {
+                "seam_slope_type": "external",
+                "seam_slope_min_length": "0",
+                "seam_slope_entire_loop": "1",
+            },
+            True,
+        ),
+    ],
+)
+def test_the_foundation_reads_a_scarf_seam_only_when_it_ramps(
+    values: dict[str, str], expected: bool | None
+) -> None:
+    """Die Grundlage liest „an" nur, wo der Slicer wirklich eine Rampe setzt —
+    sonst stünde im Dialog eine Schrägnaht, die nicht gedruckt wird."""
+    from app.core.export import manufacturer
+
+    assert manufacturer._scarf_seam(values) is expected
+    prusa = {
+        "seam_slope_type": "scarf_seam_placement",
+        "seam_slope_min_length": "scarf_seam_length",
+        "seam_slope_entire_loop": "scarf_seam_entire_loop",
+    }
+    placement = {"none": "nowhere", "external": "contours", "all": "everywhere"}
+    translated = {
+        prusa[key]: placement.get(value, value) if key == "seam_slope_type" else value
+        for key, value in values.items()
+    }
+    assert manufacturer._prusa_scarf_seam(translated) is expected
 
 
 def _possible(path: str) -> tuple[object, ...]:
@@ -2734,6 +2851,40 @@ def test_open_in_slicer_starts_the_window_with_the_file(
     assert options["close_fds"] is True
     assert options["stdout"] == handover.subprocess.DEVNULL
     assert "OPENAI_API_KEY" not in options["env"]
+
+
+def test_the_console_gets_the_same_plate_as_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Übernommene Stützen stehen an den Teilen, die sie brauchen, und die
+    Platte bleibt auf der Grundlage (Konzept Herstellerprofil, Entscheidung
+    G). ``slice_model`` fragt dafür dieselbe Trennung wie ``write_assembly``
+    — sonst schriebe die Datei die Stützen je Teil, und der Prozess des
+    Konsolenlaufs schaltete sie für alle ein."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    assert settings.support.style == "none", "die Vorbedingung des Tests"
+    settings = print_settings.with_accepted(settings, "support.style", "auto")
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    processes: list[dict[str, object]] = []
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        path = Path(command[command.index("--load-settings") + 1].split(";")[-1])
+        processes.append(json.loads(path.read_text(encoding="utf-8")))
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    handover.slice_model(
+        model, settings, profile, handover.SlicerSetup(executable=executable, flavour="orca")
+    )
+
+    assert len(processes) == 1
+    assert processes[0]["enable_support"] in ("0", ["0"])
 
 
 def test_an_unknown_arrange_flag_falls_back_and_reports(
@@ -5412,6 +5563,11 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     keine sauber. Das Aufgreifen misst sich an einem Slicer ohne
     Profilpflicht; den Wächter der Orca-Familie hält
     ``tests/test_print_settings_ui.py`` fest.
+
+    Seit Stufe C sieht der Dialog auch bei PrusaSlicer den Profilbestand
+    durch, und bis dahin ist der Knopf zu. Der Test wartet deshalb auch auf
+    diese Suche. Findet sie nichts, druckt PrusaSlicer mit Solidons Werten,
+    und der Hinweis darf nicht behaupten, er lehne den Auftrag ab.
     """
     from app.core import discover
     from app.ui.print_settings_dialog import PrintSettingsDialog
@@ -5431,9 +5587,12 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
 
     dialog.recheck_slicer()
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
+    assert dialog.wait_for_profiles(), "die Profilsuche kam nicht zurück"
 
     assert dialog.slice_button.isEnabled(), "jetzt gibt es einen"
     assert dialog.setup_button.isHidden(), "und nichts mehr zu holen"
+    assert "lehnt" not in dialog.profile_note.text(), dialog.profile_note.text()
+    assert "Solidons eigene Werte" in dialog.profile_note.text()
 
 
 def test_a_wall_below_one_nozzle_line_becomes_a_finding_not_a_suggestion() -> None:
@@ -5702,6 +5861,15 @@ def test_several_slicers_become_a_choice(
         "Cura",
     ], "benannt nach dem Installationsordner, nicht nach der Datei"
     assert dialog._slicer_path == drei[0]
+    # Die Wahl steht über dem Abschnitt der Profile, nicht in ihm: zugeklappt
+    # war sie nicht zu finden (Robert, 27.09.2026: „den slicer kann ich im
+    # druckeinstellungen auch nicht einstellen").
+    toggle = dialog.slicer_toggle
+    assert toggle is not None
+    toggle.setChecked(False)
+    assert not dialog.slicer_inner.isVisibleTo(dialog), "der Abschnitt ist zu"
+    assert dialog.slicer_choice.isVisibleTo(dialog), "und der Slicer bleibt wählbar"
+    assert dialog.slicer_label.isVisibleTo(dialog)
 
     monkeypatch.setattr(discover, "find_programs", lambda *_args: drei[:1])
     einer = PrintSettingsDialog(Session(), UiSettings())
@@ -5958,7 +6126,7 @@ def test_slot_advice_uses_inherited_values_and_the_adopted_group_reaches_both_ou
     from app.core.types import SlotOverride
 
     parent = _filament_profile(
-        tmp_path, "Grundlage", slow_down_layer_time=["8"], filament_max_volumetric_speed=["3"]
+        tmp_path, "Grundlage", slow_down_layer_time=["0"], filament_max_volumetric_speed=["3"]
     )
     own = _filament_profile(tmp_path, "Meine Spule", inherits=parent.stem)
     slot = MaterialSlot(0, "Meine Spule", material=str(own), material_type="PLA")
@@ -6244,3 +6412,148 @@ def test_cura_fan_in_the_off_layers_is_measured_in_the_print_file() -> None:
     longer = print_settings.with_path(settings, "cooling.disable_first_layers", 2)
     found = handover.fan_in_off_layers(held, longer, "cura")
     assert found is not None and "Schicht 2 mit 50 %" in found.message.translate("de")
+
+
+def _standing_box(name: str, extents: tuple[float, float, float]) -> Any:
+    """Ein Quader, der auf dem Bett steht, als Körper der Szene."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    mesh = trimesh.creation.box(extents=extents)
+    mesh.apply_translation((0.0, 0.0, extents[2] / 2.0))
+    return SceneObject(id=f"obj_{name}", name=name, mesh=MeshData.of(mesh))
+
+
+def _advice_of(bodies: tuple[Any, ...], settings: Any, profile: Any, flavour: Any = "orca") -> list:
+    """Der Rat des Druckdialogs für diese Körper, ohne Fenster gerechnet."""
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    worker = _AdviceWorker(bodies, settings, profile, None, {}, (), (), {}, flavour=flavour)
+    got: list[list] = []
+    worker.done.connect(lambda entries, _results: got.append(entries))
+    worker.work()
+    assert got, "der Arbeiter kam ohne Rat zurück"
+    return got[0]
+
+
+def test_the_advice_names_the_part_the_export_gives_it_to(tmp_path: Path) -> None:
+    """Die Zeile im Druckdialog nennt das Teil, an das der Export den
+    übernommenen Vorschlag schreibt (Konzept Herstellerprofil, Stufe E).
+
+    Seit Entscheidung G gilt ein Vorschlag aus der Geometrie dem Körper, der
+    ihn verlangt. Die Zeile sagte davon nichts: „Haftung: Skirt → Brim" las
+    sich wie ein Rand um jedes Teil. Jetzt steht der Turm daran — und genau
+    der Turm bekommt den Brim in der Datei, Platte und Klotz nicht.
+    """
+    from app.core.export.writer import write_assembly
+    from app.ui.print_settings_dialog import _TargetedAdvice
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.adhesion.kind == "skirt", "die Vorbedingung des Tests"
+    bodies = (
+        _standing_box("Turm", (4.0, 4.0, 80.0)),
+        _standing_box("Platte", (60.0, 60.0, 10.0)),
+        _standing_box("Klotz", (30.0, 30.0, 10.0)),
+    )
+
+    entries = _advice_of(bodies, settings, profile)
+
+    brim = [entry for entry in entries if entry.path == "adhesion.kind"]
+    assert len(brim) == 1 and brim[0].value == "brim", entries
+    assert isinstance(brim[0], _TargetedAdvice)
+    assert brim[0].parts == ("Turm",)
+    written, _findings = write_assembly(
+        list(bodies),
+        tmp_path,
+        project_name="Satz",
+        profile=profile,
+        settings=advise.apply(settings, brim),
+    )
+    config = ET.fromstring(zipfile.ZipFile(written).read("Metadata/model_settings.config"))
+    branded = {
+        own.get("name", ""): own.get("brim_type")
+        for node in config.iter("object")
+        if (own := {meta.get("key"): meta.get("value") for meta in node.findall("metadata")})
+    }
+    assert branded == {"Turm": "outer_only", "Platte": None, "Klotz": None}
+
+
+@pytest.mark.parametrize("case", ["one_body", "every_body", "plate_wide_slicer"])
+def test_a_proposal_for_the_whole_plate_names_no_part(case: str) -> None:
+    """Die Gegenproben: Ein Körper allein, ein Vorschlag, den jedes Teil
+    verlangt, und ein Slicer, der keine Werte je Teil annimmt — dann gilt die
+    Zeile der Platte, und sie nennt kein Teil."""
+    from app.ui.print_settings_dialog import _TargetedAdvice
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile, "standard")
+    tower = _standing_box("Turm", (4.0, 4.0, 80.0))
+    bodies: tuple[Any, ...] = (tower,)
+    flavour = "orca"
+    if case == "every_body":
+        bodies = (tower, _standing_box("Mast", (5.0, 5.0, 90.0)))
+    elif case == "plate_wide_slicer":
+        bodies = (tower, _standing_box("Platte", (60.0, 60.0, 10.0)))
+        flavour = "other"
+
+    entries = _advice_of(bodies, settings, profile, flavour)
+
+    brim = [entry for entry in entries if entry.path == "adhesion.kind"]
+    assert len(brim) == 1 and brim[0].value == "brim", entries
+    assert not isinstance(brim[0], _TargetedAdvice) or not brim[0].parts
+
+
+def test_a_long_list_of_parts_is_counted_in_the_line_and_named_in_full_beside_it() -> None:
+    """Drei Teile stehen in der Zeile, ab vier die ersten zwei und die Zahl der
+    übrigen; der Tooltip und der Bildschirmleser bekommen alle."""
+    from types import SimpleNamespace
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _TargetedAdvice
+
+    host = SimpleNamespace(_fields={"adhesion.kind": SimpleNamespace(title="Haftung")})
+
+    def entry(*parts: str) -> _TargetedAdvice:
+        return _TargetedAdvice(
+            path="adhesion.kind", value="brim", was="skirt", reason="", parts=parts
+        )
+
+    few = entry("Turm", "Mast", "Fahne")
+    many = entry("Scheibe 1", "Scheibe 2", "Scheibe 3", "Scheibe 4", "Scheibe 5")
+
+    assert PrintSettingsDialog._advice_title(host, few) == "Haftung · Turm, Mast, Fahne"
+    assert (
+        PrintSettingsDialog._advice_title(host, many)
+        == "Haftung · Scheibe 1, Scheibe 2 und 3 weitere"
+    )
+    assert PrintSettingsDialog._advice_parts(many) == (
+        "Gilt für: Scheibe 1, Scheibe 2, Scheibe 3, Scheibe 4, Scheibe 5"
+    )
+    assert PrintSettingsDialog._advice_parts(entry()) == ""
+
+
+def test_opening_curas_window_writes_the_3mf_the_console_writes_an_stl(tmp_path: Path) -> None:
+    """*Im Slicer öffnen* verlangt die Datei fürs Fenster (RM-257): bei Cura die
+    3MF mit Sperre und Werten je Teil. *Slicen* bleibt beim STL mit Netzliste,
+    denn CuraEngine liest keine 3MF."""
+    from app.ui.print_settings_dialog import _OpenInSlicerWorker, _PlateJob, _prepare_plate
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    job = _PlateJob(
+        objects=(_standing_box("Klotz", (20.0, 20.0, 10.0)),),
+        plates=(0,),
+        folder=tmp_path,
+        name="t",
+        setup=handover.SlicerSetup(tmp_path / "CuraEngine.exe", "cura"),
+        settings=print_settings.resolve(profile, "standard"),
+        profile=profile,
+        slot_profiles={},
+    )
+
+    window = _OpenInSlicerWorker(job)._job
+
+    assert window.for_window and not job.for_window
+    assert _prepare_plate(window, 0).model.suffix == ".3mf"
+    assert _prepare_plate(job, 0).model.suffix == ".stl"

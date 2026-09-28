@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import replace
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from app.core.errors import (
     CALIBRATE_MATERIAL,
@@ -43,6 +43,7 @@ from app.core.slice.analysis import (
     narrow_share,
     narrowest_measured,
     piece_area,
+    smooth_outline_height,
     tapered_layers,
     thinnest_spot,
     total_overhang,
@@ -52,12 +53,16 @@ from app.core.types import (
     Finding,
     PrintSettings,
     Profile,
+    SceneObject,
     SettingAdvice,
     Severity,
     SliceResult,
 )
-from app.core.units import EPS_GEOM, is_close
+from app.core.units import EPS_GEOM, is_close, is_zero
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.export.slicer_keys import SlicerFlavour
 
 _log = get_logger(__name__)
 
@@ -81,6 +86,13 @@ NARROW_WEB_LINES: Final = 6.0
 #: Die Minigolf-Platte trägt 22 % darin, der Wedge-Lock 4 %, die Waschschüssel
 #: auf ihren Füßen 2 % (``analysis.narrow_share``, 27.09.2026).
 NARROW_WEB_SHARE: Final = 0.10
+
+#: Ab welcher Fläche schmaler Stege in der ersten Schicht deren Tempo zählt,
+#: in mm² — auch unter :data:`NARROW_WEB_SHARE`. Der Rumpf ``Gövde59`` der
+#: Minigolf-Platte, an dem die Bodenbahnen rissen, trägt 195 mm² bei 8,6 %;
+#: im Korpus von 186 Körpern liegt der nächste darunter bei 106 mm²
+#: (Besenhalter), der Wedge-Lock bei 78 (Eichung 27.09.2026).
+NARROW_WEB_AREA: Final = 100.0
 
 #: Das Tempo der ersten Schicht über schmalen Stegen, in mm/s. Mit 50 mm/s für
 #: die ganze erste Schicht lief Roberts zweiter Druck der Platte sauber; es ist
@@ -138,8 +150,9 @@ CAREFUL_ACCELERATION = 2000.0
 #: geschlossen wird — bei einem Federarm ist genau das der Bruch.
 LINES_FOR_CLASSIC = 3.0
 
-#: Mindestschichtzeit in Sekunden für solche Spitzen. Weniger, und der Turm
-#: kippt in sich zusammen; mehr, und die Düse kokelt auf der Stelle.
+#: Mindestschichtzeit in Sekunden für solche Spitzen, wo sonst keine gilt.
+#: Weniger, und der Turm kippt in sich zusammen; mehr, und die Düse kokelt auf
+#: der Stelle.
 THIN_LAYER_SECONDS = 15.0
 
 #: Weiche Filamente stauchen im Antrieb, statt zu fördern. Darüber wird der
@@ -191,6 +204,16 @@ CHAMBER_FOR_WARPING: Final = 50
 #: falsch sind.
 NARROW_LINE_SHARE: Final = 0.85
 
+#: Ab welchem Umfang eine glatte Außenschleife ihre Naht als Linie zeigt, in
+#: mm: zwei Rampen der Schrägnaht (``slicer_keys.SCARF_LENGTH``). Ein Stift
+#: unter Ø 13 mm hat keinen Platz für die Rampe, und seine Naht fällt kaum auf.
+SCARF_MIN_LOOP: Final = 40.0
+
+#: Über wie viel Höhe die glatte Außenwand reichen muss, bevor die Schrägnaht
+#: vorgeschlagen wird, in mm. Auf einem flachen Rand wird keine Linie aus der
+#: Naht, und die Rampe kostet trotzdem Zeit.
+SCARF_MIN_HEIGHT: Final = 10.0
+
 
 def advise(
     settings: PrintSettings,
@@ -200,6 +223,7 @@ def advise(
     bounds: BoundingBox | None = None,
     fit_kinds: Sequence[str] = (),
     connectors: Sequence[float] = (),
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Was an diesen Einstellungen für dieses Teil nicht passt (§29).
 
@@ -225,7 +249,7 @@ def advise(
     advice += _from_machine(settings, profile)
     advice += _from_material(settings, profile)
     if result is not None:
-        advice += _from_geometry(settings, profile, result, bounds)
+        advice += _from_geometry(settings, profile, result, bounds, flavour)
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
     # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
@@ -621,10 +645,36 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     return advice
 
 
-#: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: der Skirt
-#: berührt es nicht, und der Auto-Brim des Slicers fragt seine eigene Regel,
-#: nicht die Füße und nicht die Höhe, die Solidon misst.
+#: Haftungsarten, die ein Teil auf wenig Fläche nicht sicher halten: Der Skirt
+#: berührt es nicht, und „automatisch“ heißt bei PrusaSlicer und Cura die Art
+#: aus Solidons Tabelle, die das Teil nicht kennt. Wo der Slicer seinen Brim
+#: selbst aus dem Teil rechnet, gilt „automatisch“ als gehalten
+#: (:func:`_unanchored`).
 UNANCHORED: Final = frozenset({"skirt", "auto"})
+
+#: Die Slicerfamilien, deren „automatisch“ den Brim aus dem Teil rechnet: Orcas
+#: ``auto_brim`` aus Höhe, Flächenmomenten der Grundfläche und Tempo, bis 18 mm
+#: breit (OrcaSlicer ``Brim.cpp``, ``configBrimWidthByVolumeGroups``).
+#: PrusaSlicer und CuraEngine kennen keinen; dort heißt „automatisch“ die Art
+#: aus Solidons Tabelle (``handover._adhesion_for`` fragt dieselbe Menge).
+AUTO_BRIM_FLAVOURS: Final[frozenset[SlicerFlavour]] = frozenset({"orca"})
+
+
+def _unanchored(settings: PrintSettings, flavour: SlicerFlavour | None) -> bool:
+    """Hält die Haftungsart ein Teil auf wenig Fläche nicht sicher?
+
+    **Über Orcas Auto-Brim nicht** (:data:`AUTO_BRIM_FLAVOURS`): Er
+    rechnet aus Höhe und Grundfläche selbst, und Solidons Brim ersetzte ihn
+    durch die feste Breite des Profils — mit weniger Halt: den 200 mm hohen
+    Schäften der Minigolf-Platte im ElegooSlicer 0,9 statt 1,9 m Randbahn, der
+    Waschschüssel auf zwölf Füßen 0,40 statt 0,93 m. Ohne bekannten Slicer
+    bleibt es bei der Vorsicht, denn dann ist offen, ob „automatisch“ etwas
+    rechnet.
+    """
+    kind = settings.adhesion.kind
+    if kind == "auto" and flavour in AUTO_BRIM_FLAVOURS:
+        return False
+    return kind in UNANCHORED
 
 
 def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]:
@@ -706,6 +756,7 @@ def _from_geometry(
     profile: Profile,
     result: SliceResult,
     bounds: BoundingBox | None,
+    flavour: SlicerFlavour | None = None,
 ) -> list[SettingAdvice]:
     """Der eigentliche Gewinn: das Teil bestimmt seine Einstellungen mit."""
     advice: list[SettingAdvice] = []
@@ -859,9 +910,10 @@ def _from_geometry(
             )
         )
 
-    # **Auch über dem Auto-Brim des Slicers** (Entscheidung J): Er entscheidet
-    # nach seiner Regel, Solidon nach der Geometrie.
-    unanchored = settings.adhesion.kind in UNANCHORED
+    # **Über „automatisch“ nur, wo der Slicer nichts rechnet** (Entscheidung J,
+    # :func:`_unanchored`): Orcas Auto-Brim fragt Höhe und Grundfläche selbst
+    # und hält mehr als Solidons Brim fester Breite.
+    unanchored = _unanchored(settings, flavour)
     if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and unanchored:
         advice.append(
             _advice(
@@ -914,13 +966,18 @@ def _from_geometry(
     # Tempo, wo ein nennenswerter Teil der ersten Schicht in schmalen Stegen
     # liegt; über dem Herstellerprofil macht der Vorschlag die Wände der ersten
     # Schicht dabei nie schneller (``handover._followers_not_faster``).
-    if (
-        result.layers
-        and settings.speed.first_layer > NARROW_WEB_SPEED + EPS_GEOM
-        and narrow_share(
-            result.layers[0], NARROW_WEB_LINES * settings.layers.first_layer_line_width
-        )
-        >= NARROW_WEB_SHARE
+    #
+    # **Nennenswert als Anteil oder als Fläche.** Gerissen ist es am Rumpf
+    # ``Gövde59``, 8,6 % seiner ersten Schicht in Stegen — ein großes Teil mit
+    # wenigen, aber langen Stegen. Gegen den Anteil allein blieb die Regel dort
+    # stumm (:data:`NARROW_WEB_AREA`).
+    web_share = (
+        narrow_share(result.layers[0], NARROW_WEB_LINES * settings.layers.first_layer_line_width)
+        if result.layers and settings.speed.first_layer > NARROW_WEB_SPEED + EPS_GEOM
+        else 0.0
+    )
+    if result.layers and (
+        web_share >= NARROW_WEB_SHARE or web_share * result.layers[0].area >= NARROW_WEB_AREA
     ):
         advice.append(
             _advice(
@@ -1038,7 +1095,39 @@ def _from_geometry(
             )
         )
 
-    if _has_thin_layers(result) and settings.cooling.minimum_layer_time < THIN_LAYER_SECONDS:
+    # **Eine runde Außenwand hat keine Ecke für die Naht.** Roberts
+    # Minigolf-Schäfte (Ø 25,7 mm, 200 mm hoch, 27.09.2026) trugen mit Elegoos
+    # Naht „aligned“ eine Linie über die ganze Höhe: Der Slicer fand keine
+    # Ecke, in der er sie verstecken kann, und am Ende jeder Schleife stand
+    # die Düse zum Rückzug still. Die Schrägnaht setzt Anfang und Ende flach
+    # übereinander; nur an der Außenwand kostete sie je Schaft 8 von 558
+    # Minuten.
+    if (
+        not settings.shell.scarf_seam
+        and smooth_outline_height(result, SCARF_MIN_LOOP, profile.printer.nozzle_diameter)
+        >= SCARF_MIN_HEIGHT
+    ):
+        advice.append(
+            _advice(
+                settings,
+                path="shell.scarf_seam",
+                value=True,
+                reason=_(
+                    "Die Außenwand ist rund, und die Naht findet keine Ecke: Sie bleibt als "
+                    "Linie sichtbar. Eine Schrägnaht setzt Anfang und Ende flach "
+                    "übereinander und kostet etwas Druckzeit."
+                ),
+            )
+        )
+
+    # **Nur, wo keine Mindestzeit gilt.** Genau dafür ist sie da: Der Slicer
+    # bremst jede Schicht, die schneller fertig wäre. Die Hersteller stimmen sie
+    # je Filament auf ihre Lüfter ab (Elegoo 4 s, Prusa 6 s, Curas Definitionen
+    # 8 s, im Orca-Bestand 5 bis 25 s), Solidons Stufen tragen eigene (5 bis
+    # 12 s). Mit „weniger als 15 s“ überstimmte der Vorschlag sie im Druckerplan
+    # der Gesamtprüfung 97-mal — an jedem Teil mit einer kleinen Schicht oben,
+    # auch dort, wo die Platte in dieser Höhe noch andere Teile druckt.
+    if _has_thin_layers(result) and is_zero(settings.cooling.minimum_layer_time):
         advice.append(
             _advice(
                 settings,
@@ -1259,37 +1348,126 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
     ]
 
 
-def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> list[SettingAdvice]:
+#: Was je Teil geschrieben wird, wenn sein Grund an der Geometrie hängt
+#: (Konzept Herstellerprofil, Entscheidung G): Stützen mit Art, Ort und
+#: Sperre, die Haftung, die Werte einer Passung, Wände und Füllung um
+#: Verbinder, Wandgenerator und Bahnbreite an schmalen Stellen. Temperatur,
+#: Kühlung, Rückzug und Volumenstrom bleiben plattenweit — sie hängen an der
+#: Spule, nicht am Teil.
+PART_PATHS: Final = frozenset(
+    {
+        "support.style",
+        "support.placement",
+        "support.block_channels",
+        "adhesion.kind",
+        "shell.precise_outer_wall",
+        "shell.outer_wall_first",
+        "shell.ironing",
+        "shell.scarf_seam",
+        "speed.outer_wall",
+        "speed.outer_wall_acceleration",
+        "shell.wall_count",
+        "infill.density",
+        "shell.wall_generator",
+        "layers.line_width",
+    }
+)
+
+
+def plate_paths(settings: PrintSettings, profile: Profile) -> frozenset[str]:
+    """Was die plattenweiten Regeln an diesen Einstellungen ändern wollen.
+
+    Maschine, Material und Volumenstrom (:func:`advise` ohne Schnitt, Passung
+    und Verbinder). ``_from_material`` bremst weiches Filament auch an der
+    Außenwand und legt bei ABS einen Brim; ein übernommener Vorschlag auf so
+    einem Pfad gilt der ganzen Platte, auch wo die Geometrie ihn ebenfalls
+    verlangt.
+    """
+    return frozenset(entry.path for entry in advise(settings, profile))
+
+
+def connector_diameters(bodies: Sequence[SceneObject]) -> tuple[float, ...]:
+    """Die Durchmesser der Zapfen, die beim Teilen an diesen Körpern entstanden sind.
+
+    Aus den Merkmalen und nicht aus dem Stapel: Die Stiftplanung rechnet den
+    Durchmesser aus der Schnittfläche, er ist kein eingetragener Parameter.
+    Nur erzeugte Zapfen (``provenance == "generated"``): Ein erkannter ist eine
+    Vermutung über eine Form, und an einem heruntergeladenen Sockel von 160 auf
+    231 auf 14 mm passte die Erkennung einen „Zapfen" von Ø 631,6 mm hinein —
+    die Wandregel schlug daraus 376 Wände vor, und *Vorschläge übernehmen*
+    schrieb sie ins Projekt. Nur die Zapfen, nicht ihre Bohrungen: dasselbe
+    Maß plus Spiel, zweimal gezählt sähe es nach doppelt so vielen Verbindern
+    aus.
+    """
+    return tuple(
+        float(feature.params["diameter"])
+        for entry in bodies
+        for feature in entry.features.values()
+        if feature.kind == "pin"
+        and feature.provenance == "generated"
+        and "diameter" in feature.params
+    )
+
+
+def for_part(
+    settings: PrintSettings,
+    bounds: BoundingBox,
+    footprint: float,
+    *,
+    profile: Profile | None = None,
+    result: SliceResult | None = None,
+    fit_kinds: Sequence[str] = (),
+    connectors: Sequence[float] = (),
+    flavour: SlicerFlavour | None = None,
+) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
-    Die Druckbetthaftung ist die eine Einstellung, die je Teil zählt statt je
-    Auftrag: sie hängt daran, worauf ein Körper steht, und das ist bei jedem
-    ein anderer Wert. Beim Gewürzset stehen zwölf Behälter auf Ø 40 und drei
-    Streuscheiben auf je drei 1,1-mm-Federarmen — dieselbe Platte, und der
-    Brim gehört nur unter die Scheiben. Ohne diese Unterscheidung gäbe es nur
-    „alle bekommen einen" oder „keiner".
+    Die Druckbetthaftung zählt je Teil statt je Auftrag: sie hängt daran,
+    worauf ein Körper steht. Beim Gewürzset stehen zwölf Behälter auf Ø 40 und
+    drei Streuscheiben auf je drei 1,1-mm-Federarmen — dieselbe Platte, und der
+    Brim gehört nur unter die Scheiben.
 
-    Temperatur, Kühlung und Stützen bleiben plattenweit: sie hängen am Material
-    oder an der Maschine, und je Teil verstellt wären sie ein Widerspruch, den
-    der Slicer auflösen müsste.
+    **Mit ``profile`` alles, was an der Geometrie dieses Teils hängt**
+    (Entscheidung G): der Rat aus Schnitt, Passung und Verbindern, beschränkt
+    auf :data:`PART_PATHS`. So bekommt nur der Körper Stützen, der sie
+    braucht, und die übrigen drucken wie die Platte. Die Haftungsregeln hier
+    kommen danach und behalten beim Brim das letzte Wort: Sie kennen die
+    Grundfläche aus dem Schnitt, die Regel der Platte nur den Hüllquader.
+    Über Orcas Auto-Brim schweigen sie (:func:`_unanchored`).
     """
-    if settings.adhesion.kind not in UNANCHORED:
-        return []
-    if 0.0 < footprint < SMALL_FOOTPRINT:
-        reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
-    elif _slender(bounds):
-        reason = _("Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
-    else:
-        return []
-    return [
-        _advice(
-            settings,
-            path="adhesion.kind",
-            value="brim",
-            reason=reason,
-            severity="warning",
-        )
-    ]
+    advice: list[SettingAdvice] = []
+    if profile is not None:
+        advice += [
+            entry
+            for entry in advise(
+                settings,
+                profile,
+                result,
+                bounds=bounds,
+                fit_kinds=fit_kinds,
+                connectors=connectors,
+                flavour=flavour,
+            )
+            if entry.path in PART_PATHS
+        ]
+    if _unanchored(settings, flavour):
+        if 0.0 < footprint < SMALL_FOOTPRINT:
+            reason = _("Dieses Teil steht auf zu wenig Fläche, um ohne Brim zu halten.")
+        elif _slender(bounds):
+            reason = _("Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
+        else:
+            reason = None
+        if reason is not None:
+            advice.append(
+                _advice(
+                    settings,
+                    path="adhesion.kind",
+                    value="brim",
+                    reason=reason,
+                    severity="warning",
+                )
+            )
+    return _merged(settings, advice)
 
 
 def _may_need_support(
@@ -1344,7 +1522,11 @@ def _has_thin_layers(result: SliceResult) -> bool:
 
 
 def warnings_for(
-    settings: PrintSettings, profile: Profile, result: SliceResult | None = None
+    settings: PrintSettings,
+    profile: Profile,
+    result: SliceResult | None = None,
+    *,
+    fitted: bool = True,
 ) -> list[Finding]:
     """Was gesagt gehört, obwohl keine Einstellung es behebt (§17.3).
 
@@ -1360,6 +1542,11 @@ def warnings_for(
     Und für Resin nichts — aus demselben Grund wie bei :func:`advise`: ASA
     ist ein Filament, das Bett heizt kein Harz, und eine Brücke gibt es in
     einem Harzbad nicht (Resin-Konzept B4).
+
+    ``fitted`` sagt, ob die Szene Passungen trägt, eingetragene oder gebaute
+    (``scene.fits.fit_kinds_for``). Nur dort wirken die Toleranzen des
+    Materials; ohne sie stand der Hinweis zur Kalibrierung an jedem Teil einer
+    frischen Installation und sagte nichts über den Druck (Durchsicht 0.5.1).
     """
     findings: list[Finding] = []
     if profile.printer.is_resin:
@@ -1384,7 +1571,7 @@ def warnings_for(
             )
         )
 
-    if not profile.material.calibrated:
+    if fitted and not profile.material.calibrated:
         # **Einmal gesagt und mit dem Weg dorthin.** Der Satz stand in keinem
         # Bericht, weil ``warnings_for`` keinen Aufrufer hatte (Durchsicht
         # 0.5.0); jetzt steht er im Prüfbericht, und der Knopf daneben öffnet

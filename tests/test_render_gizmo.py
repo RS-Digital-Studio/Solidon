@@ -19,6 +19,7 @@ from app.ui.render.gizmo import (
     HIGHLIGHT,
     Gizmo,
     closest_axis_parameter,
+    normal_frame,
     ray_plane_hit,
     rotation_matrix,
 )
@@ -198,6 +199,58 @@ def test_dragging_an_arrow_moves_the_body_along_its_axis_only(scene: tuple, rota
     assert len(releases) == 1 and np.allclose(releases[0], matrix)
     assert not gizmo.pressing
     gizmo.remove()
+
+
+def test_the_frame_of_a_direction_is_right_handed_and_ends_on_it() -> None:
+    """Der Rahmen einer Fläche: dritte Achse ist ihre Richtung, alle drei rechtshändig."""
+    for normal in ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.6, 0.0, 0.8)):
+        frame = normal_frame(normal)
+        assert np.allclose(frame[2], normal)
+        assert np.allclose(np.linalg.norm(frame, axis=1), 1.0)
+        assert np.allclose(np.cross(frame[0], frame[1]), frame[2]), normal
+
+
+def test_the_grip_of_a_face_is_one_arrow_along_the_face_and_no_ring(scene: tuple) -> None:
+    """An einer Fläche nur, was sie kann: ein Pfeil entlang ihrer Richtung.
+
+    Die Handbuchbilder zeigten an der gewählten Oberseite drei Pfeile und drei
+    Ringe, und beim Loslassen zählte nur der Weg entlang der Richtung — was
+    quer oder im Kreis gezogen wurde, verfiel still. Gemessen an einer schrägen
+    Richtung, denn an einer Weltachse fiele ein Rahmen aus Weltachsen nicht auf.
+    """
+    renderer, body, previous, releases = scene
+    previous.remove()
+    normal = (0.0, -0.6, 0.8)
+    gizmo = Gizmo(
+        renderer,
+        body,
+        scale=0.4,
+        axes=normal_frame(normal),
+        rotation=False,
+        arrows=(2,),
+        release_callback=releases.append,
+    )
+    renderer.render()
+    try:
+        assert len(gizmo.items) == 1, "ein Pfeil, kein Ring"
+        assert gizmo.items[0].colour() == AXIS_COLOURS[2]
+        x, y = arrow_tip_pixel(renderer, gizmo, 2)
+        gizmo.handle(hover(x, y))
+        assert gizmo.handle(press(x, y)), "der Pfeil nimmt die Geste"
+        far = np.asarray(gizmo.origin) + gizmo.axes[2] * gizmo._arrow_length * 1.5
+        fx, fy, _depth = renderer.world_to_display((float(far[0]), float(far[1]), float(far[2])))
+        assert gizmo.handle(move(fx, fy))
+        shift = body.matrix()[:3, 3]
+        assert float(np.linalg.norm(shift)) > 2.0, shift
+        direction = shift / np.linalg.norm(shift)
+        assert np.allclose(direction, normal, atol=1e-6), "der Zug geht entlang der Fläche"
+        assert gizmo.handle(release(fx, fy))
+        assert len(releases) == 1
+        # Neben dem einen Pfeil ist nichts zu greifen — dort lag vorher ein Ring.
+        gizmo.handle(hover(5, 5))
+        assert not gizmo.handle(press(5, 5))
+    finally:
+        gizmo.remove()
 
 
 def test_dragging_a_ring_turns_the_body_about_its_axis(scene: tuple) -> None:

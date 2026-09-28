@@ -439,7 +439,10 @@ für echte Sichtbarkeit `isVisibleTo(eltern)`.
   das Baum-Vorschaubild nur das Raster (`mesh_ops.raster_for_display`).
 * **Freigegeben heißt: nichts mehr anfangen** — `ObjectTree.release` leert den
   Vorrat, bevor es wartet; sonst überlebt ein nachgestarteter Zeichner den
-  Prozess.
+  Prozess. Das gilt auch für den Slot eines späten Ergebnisses: Wer daraus
+  etwas startet (`_foundation_found` → zweite Auswertung), fragt
+  `_close_requested` wie der Start selbst — sonst läuft beim Beenden ein
+  Faden, dessen Frage niemand beantwortet.
 
 ### Ein Arbeiter ist nur nebenläufig, wenn er den GIL hergibt
 
@@ -450,6 +453,29 @@ Pixel genügt das Raster; wo der exakte Kern bleibt (Anzeige ab §31), ist das
 ein offener Punkt, kein Freibrief. `shapely` und `numpy` geben ihn meist her
 (`_SculptWallWorker`); eine Prüfung, die nach jeder Geste neu anläuft, bekommt
 einen Abbruchschalter (`maps.wall_thickness_map`).
+
+**Der Hauptthread greift je Bild hundertmal nach dem GIL** — jeder
+Python-Filter, jede Python-Überschreibung, jeder Slot ist ein Griff, und neben
+einem rechnenden Arbeiter wartet jeder. Daraus folgt:
+
+* **Umschalten nach 1 ms** (`leash.GIL_SWITCH_S`, gesetzt in `main` über
+  `configure_gil_switching`); kürzer nicht, darunter dreht sich unter Windows
+  jeder Wartende im Kreis.
+* **`Worker.run` verlangt unter Windows 1 ms Zeitgeberauflösung**, solange
+  `work` läuft (`_prompt_handover`) — sonst endet jede Wartefrist erst am
+  nächsten Takt, 15,6 ms je Griff. Ein Arbeiter erbt das nur über
+  `leash.Worker`.
+* **Kein C-Aufruf im Arbeiter hält den GIL länger als wenige Millisekunden**:
+  große Listen in Blöcken, großes XML in Stücken (`threemf.XML_CHUNK`,
+  `NUMBER_BLOCK`), keine Suche mit `.//` über ein ganzes Netz.
+* **Was im Takt neu malt, malt nur, was sich ändert** — ein Rechteck statt
+  der Fläche, ein deckendes Widget mit `WA_OpaquePaintEvent`
+  (`LoadingVeil._block_rect`); sonst malt jeder Takt das Fenster darunter mit.
+* **Gerätefragen laufen im Daemon-Faden** (`SpaceMouseController._search`), wie
+  Dateiblicke (nächster Abschnitt).
+* **Messfalle:** Ein `QTimer` bis 20 ms (oder jeder präzise) hebt selbst die
+  Zeitgeberauflösung des Prozesses; eine Sonde mit 5-ms-Takt misst die
+  15,6-ms-Wartezeit nie. Gemessen wird mit einem groben Takt ab 25 ms.
 
 ### Ein Blick auf eine Datei ist eine Netzfrage
 

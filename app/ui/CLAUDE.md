@@ -91,7 +91,7 @@ Karte, dort das Gesetz.
 | Datei | Zweck |
 |---|---|
 | `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`); `evaluation_profile` ist das Profil der Auswertung samt wirksamer Stützschwelle des Fensters (Entscheidung L), `evaluation_follows` sagt, ob eine spät gelesene Grundlage neu auswerten lässt |
-| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `stop_watching_the_dying` für Ereignisfilter, die ihr Objekt überleben |
+| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `stop_watching_the_dying` für Ereignisfilter, die ihr Objekt überleben; `configure_gil_switching` (Umschaltintervall beim Start), `Worker.run` mit 1 ms Zeitgeberauflösung unter Windows |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung: Mauszeiger, Fensterchrom, Navigationstasten, Nutzungsuhr, Dateiempfang und Vorher-Vergleich melden dort ihre Ereignisarten an |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 
@@ -133,7 +133,7 @@ Karte, dort das Gesetz.
 
 | Datei | Zweck |
 |---|---|
-| `op_dialog.py` | **aus dem Parameterschema erzeugt** (§10, §2.4) — kein Dialog wird von Hand gebaut; wer einen tippt, hat das Register umgangen. Feldarten (`ValueField`, `CountField`, …), `offer_naming` (§13), `aim_again` zurück in die Platzierung; F1 → `manualRequested` |
+| `op_dialog.py` | **aus dem Parameterschema erzeugt** (§10, §2.4) — kein Dialog wird von Hand gebaut; wer einen tippt, hat das Register umgangen. Feldarten (`ValueField`, `CountField`, …), `offer_naming` (§13), `aim_again` zurück in die Platzierung |
 | `dialogs.py` | Fragen und Fehler (§2.7, §21.3): `AskDialog`, `ErrorNotice`, Freischaltung online und per Datei, `DonationDialog`, `AboutDialog`, `confirm_export`, `confirm_handover`, `open_link` |
 | `outline_dialog.py` | SVG-/DXF-Konturen wählen und ihre echte Extrusion sehen (§19.2); `values()` liefert nur `load_outline`-Werte |
 | `step_dialog.py` | die Körper einer STEP-Baugruppe wählen; Vorschau als Hüllquader |
@@ -226,8 +226,8 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `manual_window.py` | das Handbuchfenster (§2.7, §19.2), Teile als Überschriften; Rangfolge und Fundstelle aus `core/manual_search.py` |
-| `guide_targets.py` | was ein Name der Bildanleitungen meint (`widget_for`, `area_for`, `action_for`) — für Tour und `tools/make_guides.py`; ein fehlendes Ziel ist `MissingTargetError` |
+| `manual_window.py` | das Handbuchfenster (§2.7, §19.2); Rangfolge und Fundstelle aus `core/manual_search.py` |
+| `guide_targets.py` | was ein Name der Bildanleitungen meint (`widget_for`, `area_for`, `action_for`), für Tour und `tools/make_guides.py`; fehlt es: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |
 | `shortcut_schemes.py` | zwei Kürzelbelegungen, eine Quelle; `NavigationKeys` lässt Pos1, Ende, Bild auf und Bild ab dem fokussierten Inhalt |

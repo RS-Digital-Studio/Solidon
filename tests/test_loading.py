@@ -37,8 +37,15 @@ from app.ui.loading import (
 
 
 def _running(veil: LoadingVeil, seconds: float) -> None:
-    """Tut so, als liefe der Lauf schon so lange."""
-    veil.timing.started = time.monotonic() - seconds
+    """Tut so, als liefe der Lauf schon so lange.
+
+    Die Restschätzung zählt seit ``49d898d48`` ab dem Beginn der laufenden
+    Teilrechnung (``ProgressTiming._counted_from``), nicht ab dem Anfang des
+    Vorgangs — ein Lauf, der schon so lange rechnet, hat beide so weit hinten.
+    """
+    since = time.monotonic() - seconds
+    veil.timing.started = since
+    veil.timing._counted_from = since
 
 
 @pytest.mark.parametrize(
@@ -151,10 +158,56 @@ def test_clock_runs_without_animation_or_new_progress(
         veil.deleteLater()
 
 
+def test_the_clock_repaints_the_block_not_the_whole_window(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Sekundentakt malt Symbol und Zeilen neu, nicht den ganzen Schleier (RM-258).
+
+    Mit dem ganzen Schleier malte jeder Takt das ganze Fenster darunter —
+    rund fünfzig Widgets, und neben einem rechnenden Arbeiter kostet jedes
+    einen Griff nach dem GIL. Der Schleier deckt, was unter ihm liegt, und
+    sagt es Qt, damit darunter nichts mitgemalt wird.
+    """
+    from PySide6.QtCore import Qt
+
+    import app.ui.loading as loading_module
+
+    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
+    veil = LoadingVeil()
+    try:
+        veil.resize(1600, 900)
+        veil.begin("Modell wird gelesen", at_once=True)
+        assert veil.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        asked: list[tuple[object, ...]] = []
+        monkeypatch.setattr(veil, "update", lambda *area: asked.append(area))
+        veil.timing._tick.timeout.emit()
+        veil.step(0.4, "Merkmale werden erkannt")
+        block = veil._block_rect()
+        assert asked and all(area == (block,) for area in asked), asked
+        assert (
+            block.width() <= loading_module.COLUMN + 1
+            and block.height() <= loading_module.BLOCK_HEIGHT + 1
+        )
+        assert veil.rect().contains(block)
+        mark_left = (veil.width() - loading_module.MARK_SIZE) / 2
+        assert (
+            block.left() <= mark_left and block.right() >= mark_left + loading_module.MARK_SIZE - 1
+        )
+    finally:
+        veil.end()
+        veil.deleteLater()
+
+
 def test_hiding_the_veil_does_not_stop_the_shared_clock(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Die Statuszeile braucht die Uhr weiterhin, wenn ein Modell sichtbar ist."""
+    """Die Statuszeile braucht die Uhr weiterhin, wenn ein Modell sichtbar ist.
+
+    Nach dem Schleier misst die Rechnung weiter (``timing.step`` bei 130 s):
+    Ein Anteil, der länger als ``ESTIMATE_AFTER_S`` stillsteht, bekommt seit
+    ``a5e6bf614`` keine Restschätzung mehr, und ohne den zweiten Schritt prüfte
+    die Zeile nur diese Regel statt der weiterlaufenden Uhr.
+    """
     import app.ui.loading as loading_module
 
     now = [100.0]
@@ -164,8 +217,10 @@ def test_hiding_the_veil_does_not_stop_the_shared_clock(
     try:
         timing.begin()
         veil.begin("Modell wird gelesen", at_once=True)
-        veil.step(0.5, "Merkmale werden erkannt")
+        veil.step(0.25, "Merkmale werden erkannt")
         veil.end()
+        now[0] = 130.0
+        timing.step(0.5, "Merkmale werden erkannt")
         now[0] = 135.0
         timing._tick.timeout.emit()
         assert not veil.showing

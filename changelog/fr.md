@@ -69,7 +69,7 @@ dans `website/version.json`.
 - Un tenon épaulé ne passe plus pour un filetage. Les cylindres et les perçages que cette confusion avait avalés sont de retour.
 - La lèvre d'une poche à aimant s'appelle rétrécissement dans l'arbre et nomme son ouverture. Aucune action n'en fait plus une fraisure.
 - Après « Affiner les arêtes », Solidon reconnaît congés, perçages et lettrages comme sur l'original, même après un perçage supplémentaire.
-- Après « Séparer » et « Découper », une face divisée garde son nom sur le plus grand morceau, et les ajustements qui s'y trouvent restent valides.
+- Après « Diviser » et « Découper », une face divisée garde son nom sur le plus grand morceau, et les ajustements qui s'y trouvent restent valides.
 - Si vous cliquez sur l'arête de bord d'un perçage couché, elle s'appelle « Vertical », comme il se tient réellement.
 - Si un modèle a plus de 5 000 caractéristiques, Solidon garde les plus grandes au lieu de n'en afficher aucune. Une mise à l'échelle ne mélange pas leurs noms.
 
@@ -128,7 +128,7 @@ dans `website/version.json`.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim, même si les pieds réunis auraient assez de surface.
 - Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
 - La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
-- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. Le découpage se fait comme avant.
+- Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. La division se fait comme avant.
 - Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
 - Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
 

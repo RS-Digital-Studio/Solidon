@@ -496,6 +496,70 @@ def test_a_worker_without_work_says_so(qt_app: QApplication) -> None:
     assert seen and "NotImplementedError" in seen[0]
 
 
+def test_a_worker_asks_for_millisecond_timers_only_while_it_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unter Windows verlangt jeder Arbeiter für seine Laufzeit 1 ms Zeitgeberauflösung (RM-258).
+
+    Ohne sie wartet der Hauptfaden je Griff nach dem GIL bis zum nächsten Takt
+    des Systemzeitgebers, 15,6 ms — hundert Griffe je Bild waren die 2 s, die
+    das Fenster beim Einlesen großer 3MF stand. Zurückgegeben wird sie auch,
+    wenn die Arbeit wirft, sonst hielte ein zerbrochener Arbeiter den
+    Systemzeitgeber für immer wach.
+    """
+    from types import SimpleNamespace
+
+    import app.ui.leash as leash_module
+
+    calls: list[tuple[str, int]] = []
+    winmm = SimpleNamespace(
+        timeBeginPeriod=lambda period: calls.append(("begin", period)),
+        timeEndPeriod=lambda period: calls.append(("end", period)),
+    )
+    monkeypatch.setattr(leash_module, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(leash_module.ctypes, "windll", SimpleNamespace(winmm=winmm), raising=False)
+    during: list[list[tuple[str, int]]] = []
+
+    class _Rechnet(Worker):
+        def work(self) -> None:
+            during.append(list(calls))
+            raise RuntimeError("zerbrochen")
+
+    arbeiter = _Rechnet()
+    arbeiter.run()  # im Testfaden: gemeint ist die Klammer um ``work``, nicht der Thread
+
+    assert during == [[("begin", 1)]], "verlangt, bevor gerechnet wird"
+    assert calls == [("begin", 1), ("end", 1)], "und danach zurückgegeben, auch nach einem Fehler"
+
+    calls.clear()
+    monkeypatch.setattr(leash_module, "sys", SimpleNamespace(platform="linux"))
+    arbeiter.run()
+    assert calls == [], "andere Systeme warten ohnehin auf die Frist genau"
+
+
+def test_the_start_hands_the_interpreter_over_every_millisecond() -> None:
+    """``main`` setzt das Umschaltintervall auf :data:`GIL_SWITCH_S` (RM-258).
+
+    Bei den fünf Millisekunden von Python wartet jeder Griff des Hauptfadens
+    neben einem rechnenden Arbeiter bis zu fünf Millisekunden. Die Funktion
+    allein beweist nichts — der Start muss sie rufen.
+    """
+    import inspect
+    import sys
+
+    import app.ui.app as app_module
+    from app.ui.leash import GIL_SWITCH_S, configure_gil_switching
+
+    before = sys.getswitchinterval()
+    try:
+        configure_gil_switching()
+        assert sys.getswitchinterval() == pytest.approx(GIL_SWITCH_S)
+    finally:
+        sys.setswitchinterval(before)
+    assert GIL_SWITCH_S >= 0.001, "darunter dreht sich unter Windows jeder Wartende im Kreis"
+    assert "configure_gil_switching()" in inspect.getsource(app_module.main)
+
+
 def test_every_worker_in_the_surface_uses_the_base_class() -> None:
     """Von dreiundzwanzig Arbeitern fing genau einer eine unerwartete Ausnahme.
 

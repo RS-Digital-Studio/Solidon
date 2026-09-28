@@ -58,7 +58,7 @@ from app.core.scene import placement
 from app.core.sketch.profile import strictly_crossing
 from app.core.types import Feature, SceneObject, Vec3
 from app.core.units import EPS_GEOM
-from app.i18n import tr
+from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, feature_name, length, wheel_needs_focus
 from app.ui.leash import stop_watching_the_dying
@@ -554,20 +554,48 @@ def _answers_at_once(mesh: Any) -> bool:
 
 
 def _answer_now(
-    compute: Callable[[], Any], done: Callable[[Any], None], failed: Callable[[str], None]
+    compute: Callable[[], Any],
+    done: Callable[[Any], None],
+    failed: Callable[[str], None],
+    refused: Callable[[AppError], None] | None = None,
 ) -> None:
-    """Eine Platzierungsfrage gleich beantworten — mit denselben zwei Ausgängen wie im Arbeiter.
+    """Eine Platzierungsfrage gleich beantworten — mit denselben Ausgängen wie im Arbeiter.
 
-    Scheitert die Rechnung, bekommt ``failed`` denselben Satz, den der Arbeiter
-    geschickt hätte (``leash.Worker``), und das Protokoll dieselbe Zeile.
+    **Eine Absage des Kerns ist ein Zustand, kein Absturz** (``AppError``, wie
+    im ``_PreviewWorker``): Ein leeres Textfeld beim Start von *Text
+    aufbringen* ist die Regel, und der Satz der Ausnahme geht an ``refused``
+    und danach ``done(None)`` — ohne Protokollzeile. Bis dahin schrieb jeder
+    Start einen vollen Traceback, und in der Leiste stand „Vorschau nicht
+    verfügbar“, bevor ein Buchstabe getippt war.
+
+    Scheitert die Rechnung unerwartet, bekommt ``failed`` denselben Satz, den
+    der Arbeiter geschickt hätte (``leash.Worker``), und das Protokoll
+    dieselbe Zeile.
     """
     try:
         value = compute()
+    except AppError as refusal:
+        if refused is None:
+            failed(f"{type(refusal).__name__}: {refusal}")
+            return
+        refused(refusal)
+        done(None)
+        return
     except Exception as problem:  # derselbe Fang wie im Arbeiter
         _log.exception("placement answer did not come back")
         failed(f"{type(problem).__name__}: {problem}")
         return
     done(value)
+
+
+def refusal_sentence(refusal: AppError) -> str:
+    """Der Satz einer Absage für die Leiste — das Detail, sonst der Titel.
+
+    Dieselbe Regel wie ``session._reason_of``: Der Titel nennt die Art, das
+    übersetzte Detail den Grund („Ohne Text gibt es nichts aufzubringen.“).
+    """
+    detail = refusal.detail
+    return str(detail) if isinstance(detail, TranslatableText) else str(refusal.title)
 
 
 def on_the_copy(copy: Any, compute: Callable[[], Any]) -> Callable[[], Any]:
@@ -1344,6 +1372,9 @@ class PlacementFlow(QObject):
         self._surface_busy = False
         self._tool_busy = False
         self._tool_again = False
+        #: Was die Leiste vor einer Absage des Werkzeugs sagte, und der Satz der
+        #: Absage — damit ein gültiger Wert den alten Satz zurückholt.
+        self._refused_note: tuple[str, str] | None = None
         self._tool: Item | None = None
         self._addition: Item | None = None
         self._tool_context: placement.PlacementTool | None = None
@@ -3403,6 +3434,13 @@ class PlacementFlow(QObject):
                 spec, entered, profile, source=source, feature=feature, parameters=resolved
             )
 
+        # Warum es kein Werkzeug gibt — der Satz der Absage aus dem Kern. Er
+        # ersetzt den allgemeinen Satz in der Leiste (``done``).
+        refusal: list[str] = []
+
+        def refused(error: AppError) -> None:
+            refusal[:] = [refusal_sentence(error)]
+
         def done(context: placement.PlacementTool | None) -> None:
             if not isValid(self) or self._disposed:
                 return
@@ -3456,13 +3494,29 @@ class PlacementFlow(QObject):
                         self._tool_context = context
                         self._tool_key = key
                         self._set_values()
+                        if self._refused_note is not None:
+                            # Die Absage ist erledigt (ein Buchstabe im
+                            # Textfeld): Die Leiste sagt wieder, was sie davor
+                            # sagte, statt den alten Grund stehen zu lassen.
+                            if self._note.text() == self._refused_note[1]:
+                                self._note.setText(self._refused_note[0])
+                            self._refused_note = None
                     else:
-                        self._note.setText(
-                            tr(
+                        sentence = (
+                            refusal[0]
+                            if refusal
+                            else tr(
                                 "Vorschau nicht verfügbar. "
                                 "Die Werte bearbeiten und erneut platzieren."
                             )
                         )
+                        before = (
+                            self._refused_note[0]
+                            if self._refused_note is not None
+                            else self._note.text()
+                        )
+                        self._refused_note = (before, sentence)
+                        self._note.setText(sentence)
                 self.redraw()
             if self._tool_again and self.active:
                 self._request_tool()
@@ -3471,9 +3525,9 @@ class PlacementFlow(QObject):
                 self.accept()
 
         if at_once and source is not None and _answers_at_once(source.mesh):
-            _answer_now(compute, done, lambda _detail: done(None))
+            _answer_now(compute, done, lambda _detail: done(None), refused)
             return
-        self.session.placement_async(compute, done, lambda _detail: done(None))
+        self.session.placement_async(compute, done, lambda _detail: done(None), refused)
 
     def _reference_entries(self, index: int) -> list[tuple[str, tuple[str, str]]]:
         """Menü und Modellwahl verwenden dieselben belegten Referenzen."""

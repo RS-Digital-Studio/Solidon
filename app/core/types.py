@@ -1155,6 +1155,10 @@ class ShellSettings:
     """Außenwand zuerst gibt die genauere Kontur, innen zuerst die bessere
     Haftung an Überhängen."""
     seam_position: SeamPosition = "aligned"
+    scarf_seam: bool = False
+    """Setzt Anfang und Ende der Außenwand schräg übereinander, statt an einer
+    Stelle. Eine runde Außenwand hat keine Ecke, in der die Naht verschwindet;
+    so bleibt dort keine Linie stehen. Kostet etwas Druckzeit."""
     wall_generator: WallGenerator = "arachne"
     """Vorgabe ist ``arachne``: es trifft schmale Stege, die auf keine ganze
     Zahl von Bahnen aufgehen, statt eine Lücke zu lassen (§2.4)."""
@@ -1582,6 +1586,13 @@ class Finding:
     values: Mapping[str, float | str | TranslatableText] = field(default_factory=dict)
     location: Vec3 | None = None
     """Wohin die Kamera fliegt, wenn die Warnung angeklickt wird (§18.4)."""
+    outline: tuple[tuple[Vec3, Vec3], ...] = ()
+    """Die Randkanten einer Stelle, die eine Fläche ist — *Stelle zeigen* umrandet sie.
+
+    Eine eben geschlossene große Öffnung ist kein Netzfehler mehr, keine
+    Karte färbt sie; die Mitte allein zeigte einen Ring auf einem Teil, das
+    überall gleich aussieht. Nicht in der Projektdatei: Die Auswertung
+    erzeugt den Befund bei jedem Lauf neu."""
     source: MetricSource = "internal"
     suggestions: tuple[Action, ...] = ()
     """Konkrete Auswege, wenn der Befund aus einer Ausnahme entstand (§2.7)."""

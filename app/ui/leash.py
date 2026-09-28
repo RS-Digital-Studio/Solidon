@@ -42,7 +42,9 @@ die Ursache steht drei Dateien weiter.
 
 from __future__ import annotations
 
+import ctypes
 import gc
+import sys
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -77,6 +79,61 @@ WAIT_TIMEOUT_MS: Final = 2000
 #: Fenster den Kunden auf. Bis zum 07.09.2026 stand die Zahl zweimal, in
 #: ``generate_dialog`` und ``support_dialog``, mit wortgleichem Kommentar.
 DIALOG_WAIT_MS: Final = 50
+
+#: Nach wie vielen Sekunden ein rechnender Faden den GIL an einen wartenden
+#: abgeben muss (``sys.setswitchinterval``, Vorgabe von Python 5 ms).
+#:
+#: **Der Hauptfaden greift nicht einmal je Bild nach dem GIL, sondern hundertmal**
+#: (RM-258): jeder Python-Filter, jede Python-Überschreibung, jeder Slot ist ein
+#: Griff, und am Mausoleum-Drachen stand der Sekundentakt der Ladeanzeige für
+#: 60 bis 200 solcher Einstiege je Sekunde. Rechnet daneben ein Arbeiter, wartet
+#: jeder Griff bis zum Ende des Intervalls — und unter Windows bis zum nächsten
+#: Takt des Systemzeitgebers, 15,6 ms, wenn der Prozess keine feinere Auflösung
+#: verlangt (:func:`_prompt_handover`). Hundert Griffe zu 15,6 ms waren die 2 s,
+#: die der Qt-Takt beim Parsen großer 3MF stand, ohne CPU und ohne Python-Rahmen
+#: im Hauptfaden (``sonden/3mf/p01_nativ.py``, ``py-spy dump --native``: der
+#: Hauptfaden in ``PyGILState_Ensure`` unter ``sendThroughApplicationEventFilters``).
+#:
+#: **Kürzer als 1 ms nicht:** Darunter rundet CPython die Wartezeit unter Windows
+#: auf null, der wartende Faden dreht sich im Kreis, und zwei rechnende Fäden
+#: reichen den GIL nach jedem Befehl hin und her (``sonden/3mf/p03_umschalten.py``:
+#: Durchsatz zweier Rechner 0,80 gegen 1,00). Bei 1 ms bleibt er gleich.
+GIL_SWITCH_S: Final = 0.001
+
+
+def configure_gil_switching() -> None:
+    """Das Umschaltintervall des Interpreters auf :data:`GIL_SWITCH_S` setzen.
+
+    Einmal beim Start (``app.ui.app.main``); es gilt dem ganzen Prozess.
+    """
+    sys.setswitchinterval(GIL_SWITCH_S)
+
+
+@contextmanager
+def _prompt_handover() -> Iterator[None]:
+    """Solange ein Arbeiter läuft, verlangt der Prozess 1 ms Zeitgeberauflösung.
+
+    **Unter Windows wartet ein Faden auf den GIL mit Frist** — und die Frist
+    endet erst am nächsten Takt des Systemzeitgebers. Ohne eigene Anforderung
+    sind das seit Windows 10 2004 für diesen Prozess 15,6 ms, gleich was andere
+    Programme verlangen und gleich wie kurz :data:`GIL_SWITCH_S` ist (gemessen,
+    ``sonden/3mf/p03_umschalten.py``: ein Griff 15,6 ms bei 5 ms und bei 1 ms
+    Intervall, mit ``timeBeginPeriod(1)`` 1,5 ms). Verlangt wird die Auflösung
+    nur, solange ein Arbeiter läuft: Sie hält den Systemzeitgeber wach und
+    kostet im Leerlauf Strom. Windows zählt ``timeBeginPeriod`` und ``timeEndPeriod``
+    selbst — mehrere Arbeiter nebeneinander brauchen keinen eigenen Zähler.
+    Andere Systeme warten ohnehin auf die Frist genau.
+    """
+    if sys.platform != "win32":
+        yield
+        return
+    winmm = ctypes.windll.winmm
+    winmm.timeBeginPeriod(1)
+    try:
+        yield
+    finally:
+        winmm.timeEndPeriod(1)
+
 
 #: Jeder gehaltene Arbeiter, über alle Leinen hinweg.
 #:
@@ -228,7 +285,8 @@ class Worker(QThread):
 
     def run(self) -> None:
         try:
-            self.work()
+            with _prompt_handover():
+                self.work()
         except Exception as problem:  # genau der Sinn dieser Klasse
             _log.exception("worker %s did not come back", type(self).__name__)
             self.crashed.emit(f"{type(problem).__name__}: {problem}")

@@ -399,13 +399,36 @@ def test_the_minimum_layer_time_reason_stays_with_the_measurement() -> None:
     Ein gleichmäßig dünner Stab hat kleine Schichten und keine Verjüngung —
     der Satz beschrieb einen Körper, den niemand gemessen hatte.
     """
-    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "cooling.minimum_layer_time", 0.0
+    )
     rod = result_with([0.0] * 20, area=advise.THIN_LAYER_AREA / 2.0)
 
     entries = advise.advise(settings, profiles.make_profile(), rod)
 
     chosen = next(entry for entry in entries if entry.path == "cooling.minimum_layer_time")
     assert "spitz" not in str(chosen.reason), "das Teil verjüngt sich nicht, es ist überall dünn"
+
+
+def test_a_minimum_layer_time_of_the_profile_stays() -> None:
+    """Die Mindestzeit je Schicht ist die Antwort des Slicers auf kleine
+    Schichten, und die Hersteller stimmen sie auf ihre Lüfter ab (Elegoo 4 s,
+    Prusa 6 s). Vorgeschlagen wird nur, wo keine gilt — mit 15 s überstimmte
+    der Rat sie im Druckerplan der Gesamtprüfung 97-mal."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    rod = result_with([0.0] * 20, area=advise.THIN_LAYER_AREA / 2.0)
+
+    def advised(seconds: float) -> bool:
+        settings = print_settings.with_path(
+            print_settings.resolve(profile), "cooling.minimum_layer_time", seconds
+        )
+        return "cooling.minimum_layer_time" in {
+            entry.path for entry in advise.advise(settings, profile, rod)
+        }
+
+    assert not advised(4.0), "Elegoos Wert"
+    assert not advised(8.0), "Solidons Stufe"
+    assert advised(0.0), "ohne Mindestzeit legt die Düse auf weiches Material"
 
 
 # --- eine Überhanglinie, nicht zwei ---------------------------------------------
@@ -775,6 +798,70 @@ def test_narrow_webs_get_a_slow_first_layer() -> None:
     assert not first_layer_advice(_plate_with_webs(2.0), slow), "schon langsam genug"
 
 
+def _slotted_plate(slots: int, length: float) -> MeshData:
+    """Eine Platte 150 × 80 × 2 mm mit ``slots`` Schlitzen zu 22 × ``length``
+    mm nebeneinander, dazwischen Stege von 2 mm — viel Steg auf einer großen
+    ersten Schicht, wie beim Bahnteil ``Gövde59`` aus Roberts Minigolf-Satz
+    (8,6 % der ersten Schicht, 195 mm², 27.09.2026)."""
+    plate = trimesh.creation.box(extents=(150.0, 80.0, 2.0))
+    step = 22.0 + 2.0
+    start = -(slots * step - 2.0) / 2.0 + 11.0
+    cuts = []
+    for index in range(slots):
+        cut = trimesh.creation.box(extents=(22.0, length, 4.0))
+        cut.apply_translation((start + index * step, 0.0, 0.0))
+        cuts.append(cut)
+    body = trimesh.boolean.difference([plate, *cuts], engine="manifold")
+    body.apply_translation((0.0, 0.0, 1.0))
+    return MeshData.of(body)
+
+
+def test_a_large_part_with_long_narrow_webs_gets_a_slow_first_layer() -> None:
+    """Gefragt wird auch die Fläche der Stege, nicht nur ihr Anteil.
+
+    Robert, 27.09.2026: Der Rumpf ``Gövde59`` trägt 8,6 % seiner ersten
+    Schicht in Stegen unter drei Millimetern, zusammen 195 mm², und genau dort
+    rissen bei 105 mm/s die Bodenbahnen. Gegen den Anteil allein blieb die
+    Regel stumm: Geeicht war sie an der ganzen Platte (22 % mit den Schäften),
+    gefragt wird sie je Teil. Im Korpus (186 Körper) liegen nur sieben
+    zwischen 3 und 10 %; mit 100 mm² kommen der Rumpf und ein Besenhalter
+    dazu, der Wedge-Lock mit 78 mm² nicht.
+    """
+    from app.core.slice.analysis import narrow_share
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    fast = print_settings.with_path(print_settings.resolve(profile), "speed.first_layer", 105.0)
+    width = advise.NARROW_WEB_LINES * fast.layers.first_layer_line_width
+
+    def measured(body: MeshData) -> tuple[float, float, list[SettingAdvice]]:
+        result = slice_body(
+            body,
+            fast.layers.layer_height,
+            first_layer_height=fast.layers.first_layer_height,
+            overhang_angle=profile.overhang_limit_degrees,
+            bridge_from=profile.minimum_wall_thickness,
+            support_volume=False,
+        )
+        share = narrow_share(result.layers[0], width)
+        entries = advise.advise(fast, profile, result, bounds=body.bounds)
+        return (
+            share,
+            share * result.layers[0].area,
+            [entry for entry in entries if entry.path == "speed.first_layer"],
+        )
+
+    share, area, advice = measured(_slotted_plate(5, 60.0))
+    assert share < advise.NARROW_WEB_SHARE, "die Vorbedingung: unter dem Anteil"
+    assert area >= advise.NARROW_WEB_AREA, "die Vorbedingung: über der Fläche"
+    assert [number(entry) for entry in advice] == [pytest.approx(advise.NARROW_WEB_SPEED)]
+
+    share, area, advice = measured(_slotted_plate(2, 20.0))
+    assert share < advise.NARROW_WEB_SHARE and area < advise.NARROW_WEB_AREA, (
+        "die Gegenprobe: ein kurzer Steg auf einer großen Platte"
+    )
+    assert not advice
+
+
 def _plate_on_a_sloped_foot(angle: float) -> MeshData:
     """Eine Platte 60 mm im Quadrat, deren untere 4 mm ringsum unter ``angle``
     gegen die Senkrechte nach außen laufen — die Bodenkante des Bahnteils
@@ -813,3 +900,145 @@ def test_a_sloped_foot_the_printer_carries_gets_no_supports() -> None:
 
     assert support_advised("generic-220"), "unter der Startregel ist es ein Überhang"
     assert not support_advised("centauri-carbon-2")
+
+
+# --- je Teil (Konzept Herstellerprofil, Entscheidung G) ---------------------------
+
+
+def test_a_part_asks_for_supports_only_where_its_own_geometry_needs_them() -> None:
+    """Was an der Geometrie hängt, gilt dem Körper: Der mit der freien Decke
+    bekommt Stützen, der daneben ohne Überhang nichts. Plattenweite Regeln —
+    Maschine, Material, Volumenstrom — gehören nicht in den Rat je Teil."""
+    from app.core.types import BoundingBox
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    box = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(40.0, 40.0, 20.0))
+
+    hanging = advise.for_part(
+        settings, box, 1600.0, profile=profile, result=result_with([0.0, 0.0, 138.0, 0.0])
+    )
+    plain = advise.for_part(
+        settings, box, 1600.0, profile=profile, result=result_with([0.0, 0.0, 0.0, 0.0])
+    )
+
+    assert "support.style" in paths(hanging)
+    assert paths(hanging) <= advise.PART_PATHS
+    assert "support.style" not in paths(plain)
+    assert advise.for_part(settings, box, 1600.0) == [], "ohne Profil nur die Brim-Regeln"
+
+
+def test_a_material_reason_keeps_its_value_on_the_plate() -> None:
+    """ABS auf einem offenen Drucker verlangt einen Brim wegen des Materials.
+    Übernommen gilt er der ganzen Platte, auch wo die Geometrie eines Teils ihn
+    ebenfalls verlangt (:func:`advise.plate_paths`)."""
+    abs_open = profiles.make_profile("prusa-mk4s", "abs")
+    pla_open = profiles.make_profile("prusa-mk4s", "pla")
+
+    def skirted(profile: Profile) -> PrintSettings:
+        # Eine Grundlage mit Schürze, wie der Hersteller sie oft trägt;
+        # Solidons Tabelle legt für ABS schon selbst einen Brim.
+        return print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "skirt")
+
+    assert "adhesion.kind" in advise.plate_paths(skirted(abs_open), abs_open)
+    assert "adhesion.kind" not in advise.plate_paths(skirted(pla_open), pla_open)
+
+
+def test_the_stack_tells_which_body_carries_a_fit() -> None:
+    """Der Deckel legt zwei Flächen mit Spiel aufeinander; der Stift daneben
+    trägt keine Passung. Der Dialog fragt für die Platte, der Export je Teil
+    (``fits.fit_kinds_for``)."""
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.fits import fit_kinds_for
+    from app.core.types import Document
+
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    history.apply(
+        "Dose", [OperationDraft(op="create_cylinder", params={"diameter": 40.0, "height": 20.0})]
+    )
+    history.apply(
+        "Stift", [OperationDraft(op="create_cylinder", params={"diameter": 8.0, "height": 10.0})]
+    )
+    lid = history.apply(
+        "Deckel", [OperationDraft(op="create_lid", inputs=("obj_1",), params={"thickness": 2.4})]
+    )
+    result = evaluate(document, profiles.make_profile())
+    lid_outputs = set(document.ops[-1].outputs)
+    pin_id = next(
+        entry.id
+        for entry in result.scene.objects.values()
+        if entry.id not in lid_outputs and entry.id != "obj_1"
+    )
+
+    assert lid is not None
+    assert fit_kinds_for(document, lid_outputs) == ("clearance",)
+    assert fit_kinds_for(document, {pin_id}) == ()
+
+
+# --- Schrägnaht an runden Außenwänden -------------------------------------------
+
+
+def _standing(mesh: trimesh.Trimesh) -> SliceResult:
+    """Der Körper auf dem Bett, geschnitten im Raster von 0,2 mm."""
+    mesh.apply_translation((0.0, 0.0, -mesh.bounds[0][2]))
+    return slice_body(MeshData.of(mesh), 0.2)
+
+
+def test_a_round_outer_wall_asks_for_a_scarf_seam() -> None:
+    """Roberts Minigolf-Schäfte (27.09.2026): Auf der runden Außenwand fand die
+    Naht keine Ecke und zog sich als Linie über 200 mm. Der runde Körper
+    bekommt die Schrägnaht vorgeschlagen, der eckige nicht — dort verschwindet
+    die Naht in einer Kante —, und ein Stift unter zwei Rampenlängen Umfang
+    auch nicht."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+
+    def scarf(mesh: trimesh.Trimesh) -> list[SettingAdvice]:
+        return [
+            entry
+            for entry in advise.advise(settings, profile, _standing(mesh))
+            if entry.path == "shell.scarf_seam"
+        ]
+
+    round_one = scarf(trimesh.creation.cylinder(radius=12.5, height=40.0, sections=128))
+    assert [(entry.value, entry.severity) for entry in round_one] == [(True, "info")]
+    assert not scarf(trimesh.creation.box(extents=(25.0, 25.0, 40.0)))
+    assert not scarf(trimesh.creation.cylinder(radius=4.0, height=40.0, sections=64))
+    assert not scarf(trimesh.creation.cylinder(radius=12.5, height=6.0, sections=128)), (
+        "unter der Mindesthöhe wird aus der Naht keine Linie"
+    )
+    assert "shell.scarf_seam" in advise.PART_PATHS
+
+
+def test_a_polygon_with_corners_hides_its_seam_itself() -> None:
+    """Glatt heißt: kein Knick über 25°, das Gegenstück zu Orcas Schwelle von
+    155°. Ein Zwölfkant knickt an jeder Ecke um 30° und behält seine Naht in
+    einer Ecke; mit 128 Seiten knickt der Zylinder um knapp 3°."""
+    from app.core.slice.analysis import smooth_outline_height
+
+    twelve = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=12))
+    fine = _standing(trimesh.creation.cylinder(radius=12.5, height=20.0, sections=128))
+
+    assert smooth_outline_height(twelve, advise.SCARF_MIN_LOOP, 0.4) == 0.0
+    assert smooth_outline_height(fine, advise.SCARF_MIN_LOOP, 0.4) == pytest.approx(20.0, abs=0.3)
+
+
+def test_a_tight_rounding_is_a_corner_for_the_slicer() -> None:
+    """Der Knick zählt über Arme von der Düsenbreite, wie im Slicer. Zwischen
+    benachbarten Facetten gemessen, galt der Rumpf von Roberts Minigolf-Satz
+    als glatt — seine engen Rundungen knicken dort nur wenige Grad je Facette —,
+    und ElegooSlicer sah Ecken von 45° und setzte keine Schrägnaht. Eine
+    Rundung von 0,3 mm ist eine Ecke, eine von 4 mm nicht."""
+    import shapely
+
+    from app.core.slice.analysis import smooth_outline_height
+
+    def extruded(radius: float) -> SliceResult:
+        outline = shapely.box(-10.0, -10.0, 10.0, 10.0).buffer(radius, quad_segs=16)
+        return _standing(trimesh.creation.extrude_polygon(outline, 20.0))
+
+    assert smooth_outline_height(extruded(0.3), advise.SCARF_MIN_LOOP, 0.4) == 0.0
+    assert smooth_outline_height(extruded(4.0), advise.SCARF_MIN_LOOP, 0.4) == pytest.approx(
+        20.0, abs=0.3
+    )

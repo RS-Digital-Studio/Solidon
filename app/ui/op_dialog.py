@@ -48,17 +48,19 @@ from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line, inactive_dependency
 from app.core.registry.surfaces import normal_fields_of
 from app.core.types import ParamSpec
-from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.labels import (
-    NumberSpin,
+    BoundedSpin,
     RowCheckBox,
     caption_toggles,
     choice_label,
     circle_measure,
     display_unit,
     explain_choices,
+    limit_sentence,
+    localised,
     set_circle_measure,
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
@@ -209,7 +211,7 @@ class ValueField(QWidget):
         Platz gäbe es keinen Wert, der „habe ich nicht gesagt" bedeutet, und
         eine Bestätigung im Dialog schöbe jedes Loch in den Ursprung."""
 
-        self.spin = NumberSpin(self)
+        self.spin = BoundedSpin(self)
         self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
@@ -220,6 +222,7 @@ class ValueField(QWidget):
         self.spin.setMaximum(
             self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
         )
+        self._name_limits()
         if self._shown is not None:
             # Der Drehknopf bewegt sich um denselben **physischen** Betrag wie
             # in Millimetern. Qts Vorgabe ist 1.0, und ein ganzer Zoll je Klick
@@ -359,6 +362,12 @@ class ValueField(QWidget):
 
         self.toggle.toggled.connect(self._switch)
         self.spin.valueChanged.connect(self.changed)
+        # **Eine Zahl jenseits der Grenzen wird abgelehnt, nicht gekürzt**
+        # (:class:`BoundedSpin`): Der Satz steht unter dem Feld, sobald sie
+        # getippt ist, und der Dialog sperrt *Übernehmen* mit demselben Satz.
+        self._refused_shown = False
+        self.spin.valueRefused.connect(lambda _number: self._show_refusal())
+        self.spin.lineEdit().textEdited.connect(lambda _text: self._show_refusal())
         self.text.textChanged.connect(self._on_text)
         # Ohne diese Zeile läuft ``eventFilter`` nie — und damit bliebe der
         # Weg zu, den Handbuch und Parameterdialog beschreiben.
@@ -408,9 +417,23 @@ class ValueField(QWidget):
             self.spin.setMaximum(
                 self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
             )
+            self._name_limits()
             self._core = core
             self.spin.setValue(self._as_shown(core))
         self.captionChanged.emit(self.caption())
+
+    def _name_limits(self) -> None:
+        """Der Satz einer abgelehnten Zahl nennt die Grenzen des Schemas.
+
+        Das Drehfeld eines Feldes mit „wie gemessen“ reicht eine Stufe unter den
+        Mindestwert (dort steht der Sonderwert); der Satz sagte deshalb
+        „Untergrenze -0,01 mm“, wo 0 gilt (Code-Review 0.5.1, U-3).
+        """
+        entry = self._entry
+        self.spin.name_limits(
+            self._as_shown(entry.minimum) if entry.minimum is not None else None,
+            self._as_shown(entry.maximum) if entry.maximum is not None else None,
+        )
 
     def set_value(self, value: Any) -> None:
         """Trägt Zahl oder Ausdruck ein und stellt das Feld passend."""
@@ -494,7 +517,71 @@ class ValueField(QWidget):
 
     # --- Umschalten -------------------------------------------------------------
 
+    def refusal(self) -> str:
+        """Warum dieses Feld gerade nichts übernimmt — leer, wenn es trägt.
+
+        Im Zahlenmodus die getippte Zahl jenseits der Grenzen
+        (:meth:`BoundedSpin.refusal`), im Ausdrucksmodus ein Ausdruck, der
+        jenseits der Grenzen des Schemas landet: „=@breite*100“ ergab 1500 mm
+        bei einer Obergrenze von 1000, und der Hinweis sagte nur „= 1500 mm“.
+        """
+        if not self.toggle.isChecked():
+            return self.spin.refusal()
+        value = self._expression_value()
+        if value is None:
+            return ""
+        low, high = self._entry.minimum, self._entry.maximum
+        unit = f" {self._entry.unit}" if self._entry.unit else ""
+        if high is not None and value > high + EPS_DISPLAY:
+            return limit_sentence(
+                localised(f"{value:g}") + unit, localised(f"{high:g}") + unit, above=True
+            )
+        if low is not None and value < low - EPS_DISPLAY:
+            return limit_sentence(
+                localised(f"{value:g}") + unit, localised(f"{low:g}") + unit, above=False
+            )
+        return ""
+
+    def _expression_value(self) -> float | None:
+        """Was der Ausdruck im Feld ergibt — ``None``, wenn er nichts ergibt."""
+        entered = self.text.text().strip()
+        if not entered:
+            return None
+        try:
+            written = expressions.canonical(entered, self._parameter_values)
+            expressions.check(written)
+            return float(expressions.evaluate(written, self._parameter_values))
+        except AppError, TypeError, ValueError:
+            return None
+
+    def _show_refusal(self) -> None:
+        """Zeigt oder räumt den Satz einer abgelehnten Zahl unter dem Zahlenfeld."""
+        if self.toggle.isChecked():
+            return
+        said = self.spin.refusal()
+        if said:
+            self.hint.setText(said)
+            self.hint.setVisible(True)
+            self.spin.setAccessibleDescription(said)
+        elif self._refused_shown:
+            self.hint.setText("")
+            self.hint.setVisible(False)
+            self.spin.setAccessibleDescription("")
+        if bool(said) != self._refused_shown:
+            self._refused_shown = bool(said)
+            # Der Dialog fragt den Knopf neu (``_follow_source_pending``).
+            self.changed.emit()
+
     def _switch(self, to_expression: bool) -> None:
+        if not to_expression:
+            # **Zurück zur Zahl heißt: die Zahl, die der Ausdruck ergab.** Das
+            # Drehfeld stand sonst auf seinem Anfangswert — an einem gebundenen
+            # Quader auf dem Mindestmaß 0,1 mm statt der 40 mm der Breite.
+            value = self._expression_value()
+            if value is not None:
+                with QSignalBlocker(self.spin):
+                    self._core = value
+                    self.spin.setValue(self._as_shown(value))
         self.spin.setVisible(not to_expression)
         self.text.setVisible(to_expression)
         self.parameter_button.setVisible(to_expression)
@@ -702,7 +789,7 @@ class ValueField(QWidget):
             self.hint.setText(tr("Der Ausdruck muss eine ganze Zahl ergeben. Passen Sie ihn an."))
             return
         unit = f" {self._entry.unit}" if self._entry.unit else ""
-        self.hint.setText(f"= {value:g}{unit}")
+        self.hint.setText(self.refusal() or f"= {value:g}{unit}")
 
 
 class CountField(ValueField):
@@ -1954,14 +2041,7 @@ class OperationDialog(QDialog):
             isinstance(editor, SealPathField) and not editor.valid
             for editor in self._editors.values()
         )
-        no_count = next(
-            (
-                editor.problem()
-                for editor in self._editors.values()
-                if isinstance(editor, CountField) and not editor.valid
-            ),
-            "",
-        )
+        no_count = self._field_refusal()
         missing_sketch = self._missing_sketch()
         missing_material = self._missing_material()
         # Und ein Pflicht-Ziel ohne Eintrag (Bedienweg-Durchsicht 14.09.2026):
@@ -2014,6 +2094,26 @@ class OperationDialog(QDialog):
         button.setStatusTip(reason)
         button.setAccessibleDescription(reason)
 
+    def _field_refusal(self) -> str:
+        """Warum ein Zahlenfeld gerade nichts übernimmt — die eine Quelle für Knopf und Klick.
+
+        Eine Stückzahl, die keine ganze Zahl im Bereich ergibt, und jede Zahl
+        oder jeder Ausdruck jenseits der Grenzen (:meth:`ValueField.refusal`),
+        auch an der Stückzahl. Knopfzustand (:meth:`_follow_source_pending`)
+        und :meth:`can_accept` fragten das getrennt: Eine Stückzahl über der
+        Grenze ließ den Knopf aktiv, und der Klick bewirkte nichts
+        (Code-Review 0.5.1, U-2).
+        """
+        for editor in self._editors.values():
+            if not isinstance(editor, ValueField):
+                continue
+            said = editor.refusal()
+            if not said and isinstance(editor, CountField) and not editor.valid:
+                said = editor.problem()
+            if said:
+                return said
+        return ""
+
     def can_accept(self) -> bool:
         """Alle Eingaben und die Freigabe derselben Vorschau erneut prüfen."""
         for editor in (*self.findChildren(QSpinBox), *self.findChildren(QDoubleSpinBox)):
@@ -2037,6 +2137,8 @@ class OperationDialog(QDialog):
             and not editor.valid
             for editor in self._editors.values()
         ):
+            return False
+        if self._field_refusal():
             return False
         preview_ready = self.preview_check is None or self.preview_check()
         return not (
@@ -2612,9 +2714,10 @@ class OperationDialog(QDialog):
             editor.validityChanged.connect(self._follow_source_pending)
         elif isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
             editor.changed.connect(self.valuesChanged)
-            if isinstance(editor, CountField):
-                # Ob die Stückzahl trägt, entscheidet der Knopf mit — bei
-                # jeder Eingabe, nicht erst beim Klick.
+            if isinstance(editor, ValueField):
+                # Ob die Stückzahl trägt und ob eine Zahl innerhalb ihrer
+                # Grenzen liegt, entscheidet der Knopf mit — bei jeder
+                # Eingabe, nicht erst beim Klick.
                 editor.changed.connect(self._follow_source_pending)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(self.valuesChanged)

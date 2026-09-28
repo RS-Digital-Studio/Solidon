@@ -1596,3 +1596,139 @@ def test_the_last_demo_day_is_said_in_the_singular(qt_app: object) -> None:
     last = demo_line(Activation(days_left=1, deadline=date(2026, 10, 30)))
     assert "heute letzter Tag" in last and "Tage" not in last, last
     assert "2 Tage" in demo_line(Activation(days_left=2, deadline=date(2026, 10, 30)))
+
+
+def test_a_refusal_names_the_limit_it_hits() -> None:
+    """Der Satz einer abgelehnten Zahl nennt die Grenze — ohne Fenster."""
+    from app.ui.labels import limit_sentence
+
+    above = limit_sentence("150,00 mm", "100,00 mm", above=True)
+    below = limit_sentence("0,05 mm", "0,10 mm", above=False)
+    assert "150,00 mm" in above and "100,00 mm" in above and "Obergrenze" in above
+    assert "0,05 mm" in below and "0,10 mm" in below and "Untergrenze" in below
+
+
+def test_a_bounded_field_refuses_a_typed_number_instead_of_cutting_it(qt_app: object) -> None:
+    """„150“ über der Obergrenze 100 wird abgelehnt — nicht still zu „15“.
+
+    Gemessen an der Parameterleiste (Durchsicht 0.5.1): Qt nahm die Null nicht
+    an, die Eingabetaste übernahm „15“, und im Modell stand 15. Hier: Die
+    Zahl bleibt markiert stehen, der Wert bleibt, ``valueRefused`` meldet sie,
+    und Pfeil nach oben klemmt an der Grenze.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import BoundedSpin
+
+    field = BoundedSpin()
+    try:
+        field.setDecimals(2)
+        field.setRange(0.1, 100.0)
+        field.setValue(40.0)
+        field.setKeyboardTracking(False)
+        field.show()
+        changed: list[float] = []
+        refused: list[float] = []
+        field.valueChanged.connect(changed.append)
+        field.valueRefused.connect(refused.append)
+
+        field.setFocus()
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), "150")
+        assert field.lineEdit().text() == "150", "keine Ziffer verfällt"
+        QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+
+        assert refused == [pytest.approx(150.0)]
+        assert changed == [], "nichts übernommen — vorher kam 15 an"
+        assert field.value() == pytest.approx(40.0)
+        assert field.lineEdit().text() == "150" and field.lineEdit().hasSelectedText()
+        assert "100" in field.refusal() and "150" in field.refusal()
+        field.interpretText()
+        assert field.lineEdit().text() == "150", "auch ein Auswerten von außen verwirft sie nicht"
+
+        # Gegenprobe: eine Zahl innerhalb geht durch.
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), "90")
+        QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+        assert changed and changed[-1] == pytest.approx(90.0)
+        assert field.refusal() == ""
+
+        # Drehen klemmt an der Grenze, wie ein Zug.
+        field.setValue(99.5)
+        field.stepBy(5)
+        assert field.value() == pytest.approx(100.0)
+    finally:
+        field.deleteLater()
+
+
+def test_a_bounded_field_rounds_one_decimal_too_many_like_any_field(qt_app: object) -> None:
+    """„12,345“ in einem Feld mit zwei Stellen wird 12,34 — nicht still der alte Wert.
+
+    Code-Review 0.5.1, U-1: ``BoundedSpin.validate`` machte jede lesbare Zahl
+    zum Zwischenstand, auch eine Stelle zu viel innerhalb der Grenzen; die
+    Eingabetaste verwarf sie dann ganz (Parameterleiste, ohne
+    ``keyboardTracking``). Gemessen wird gegen ``NumberSpin`` als Sollwert.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import BoundedSpin, NumberSpin
+
+    results: dict[str, float] = {}
+    for kind in (NumberSpin, BoundedSpin):
+        field = kind()
+        try:
+            field.setDecimals(2)
+            field.setRange(0.1, 100.0)
+            field.setValue(40.0)
+            field.setKeyboardTracking(False)
+            field.show()
+            field.setFocus()
+            field.lineEdit().selectAll()
+            QTest.keyClicks(field.lineEdit(), "12,345")
+            QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+            results[kind.__name__] = field.value()
+        finally:
+            field.deleteLater()
+    assert results["NumberSpin"] == pytest.approx(12.34), results
+    assert results["BoundedSpin"] == pytest.approx(results["NumberSpin"]), results
+
+
+def test_a_refusal_names_the_limit_of_the_schema_not_the_step_below(qt_app: object) -> None:
+    """Ein Feld mit „wie gemessen“ nennt die Untergrenze 0, nicht -0,01 (U-3).
+
+    Das Drehfeld reicht eine Stufe unter den Mindestwert, dort steht der
+    Sonderwert. Geprüft an allen Operationsfeldern mit ``optional`` und
+    Mindestwert: Der Satz nennt den Mindestwert des Schemas.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    checked = 0
+    for spec in REGISTRY.all():
+        for entry in spec.params.spec():
+            if not (entry.optional and entry.minimum is not None and entry.unit == "mm"):
+                continue
+            field = ValueField(entry, None)
+            try:
+                field.show()
+                field.spin.lineEdit().selectAll()
+                # Unter dem Mindestwert: bei einem positiven die Hälfte (ein
+                # Minuszeichen nimmt das Feld dort gar nicht an), sonst fünf darunter.
+                below = entry.minimum / 2.0 if entry.minimum > 0.0 else entry.minimum - 5.0
+                QTest.keyClicks(
+                    field.spin.lineEdit(), field.spin.textFromValue(field._as_shown(below))
+                )
+                said = field.refusal()
+                assert "Untergrenze" in said, (spec.name, entry.name, said)
+                shown = field.spin.textFromValue(field._as_shown(entry.minimum))
+                assert f"Untergrenze {shown}" in said, (spec.name, entry.name, said)
+                checked += 1
+            finally:
+                field.deleteLater()
+    assert checked, "kein Feld mit „wie gemessen“ und Mindestwert gefunden"

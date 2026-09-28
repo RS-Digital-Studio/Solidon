@@ -38,7 +38,8 @@ und ist kein Testlauf.
   `Profile` nutzt Messwerte nur bei passendem Prozess, sonst zwei
   Linienbreiten und `PrinterProfile.overhang_limit`, ohne ihn die Startregel;
   derselbe Winkel geht als Stützgrenze in die Übergabe
-  (`print_settings.resolve`).
+  (`print_settings.resolve`, auf dem Raster der Stufe; ein anderes Raster
+  danach setzt `manufacturer.measured_on` zurück).
 - Ein Wechsel des Messprozesses nimmt keine Messung des anderen Felds mit;
   nicht gewählte Messfelder bleiben beim Speichern unverändert. Kalibrierung
   schreibt TOML-Kennungen als zitierte Literale — Leerraum, Punkte und

@@ -412,6 +412,27 @@ def apply_planned(
             )
         )
         pieces[step.part_index : step.part_index + 1] = list(outputs)
+    # **Ab drei Stücken zählt der Lauf** (RM-229): „Wandleiste 2 von 3“ statt
+    # des Buchstabenpfads „Wandleiste B A“. Gezählt wird in der Reihenfolge der
+    # fertigen Stücke; ein Stück, das ein späterer Schnitt desselben Laufs
+    # weiter teilt, bekommt keine Nummer (:func:`~app.core.geom.prepare_ops.half_names`).
+    if len(pieces) >= 3:
+        final = {piece: number for number, piece in enumerate(pieces, start=1)}
+        fields = ("number_a", "number_b")
+        prepared = [
+            replace(
+                draft,
+                params={
+                    **draft.params,
+                    "piece_count": len(pieces),
+                    **{
+                        key: final.get(output, 0)
+                        for key, output in zip(fields, draft.outputs or (), strict=True)
+                    },
+                },
+            )
+            for draft in prepared
+        ]
 
     def change(planned: Sequence[Any]) -> Any:
         """Alle Nahtpassungen aus den gemeinsam geplanten Ausgaben bilden."""

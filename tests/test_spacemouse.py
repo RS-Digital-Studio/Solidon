@@ -755,6 +755,97 @@ def test_a_blocked_first_interface_does_not_hide_an_accessible_device() -> None:
         reader.close()
 
 
+def test_an_offered_search_is_opened_without_searching_again() -> None:
+    """Was die Suche im Nebenfaden fand, öffnet der Hauptthread ohne eigene Suche (RM-258).
+
+    ``hid.enumerate()`` fragt jedes Gerät nach seinen Namen und griff dabei
+    immer wieder nach dem GIL; im Hauptthread stand das Fenster darin 170 bis
+    350 ms, während ein Arbeiter rechnete.
+    """
+    from app.ui.spacemouse import HidReader
+
+    searched: list[bool] = []
+    opened: list[bytes] = []
+
+    class Device:
+        def open_path(self, path: bytes) -> None:
+            opened.append(path)
+
+        def set_nonblocking(self, value: bool) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    def enumerate_devices() -> list[dict[str, Any]]:
+        searched.append(True)
+        return [
+            {"vendor_id": 0x256F, "product_id": 0xC635, "path": b"mouse"},
+            {"vendor_id": 0x046D, "product_id": 0xC52B, "path": b"keyboard"},
+        ]
+
+    reader = HidReader()
+    reader._module = SimpleNamespace(enumerate=enumerate_devices, device=Device)
+    found = reader.search()
+    assert searched == [True] and [entry["path"] for entry in found] == [b"mouse"]
+    assert not reader.is_open, "die Suche öffnet nichts"
+    reader.offer(found)
+    try:
+        assert reader.open()
+        assert searched == [True], "geöffnet wird, was gefunden war"
+        assert opened == [b"mouse"]
+    finally:
+        reader.close()
+    reader.offer([])
+    assert not reader.open(), "eine leere Suche öffnet nichts"
+    assert searched == [True]
+    try:
+        assert reader.open() and searched == [True, True], "danach sucht open wieder selbst"
+    finally:
+        reader.close()
+
+
+def test_the_controller_searches_off_the_main_thread(qt_app: QApplication) -> None:
+    """Der Zeitgeber sucht im Nebenfaden und öffnet im Hauptthread (RM-258)."""
+    import threading
+    import time
+
+    from app.ui.spacemouse import HidReader
+
+    where: dict[str, str] = {}
+
+    class Device:
+        def open_path(self, path: bytes) -> None:
+            where["open"] = threading.current_thread().name
+
+        def set_nonblocking(self, value: bool) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    def enumerate_devices() -> list[dict[str, Any]]:
+        where["search"] = threading.current_thread().name
+        return [{"vendor_id": 0x256F, "product_id": 0xC635, "path": b"mouse"}]
+
+    reader = HidReader()
+    reader._module = SimpleNamespace(enumerate=enumerate_devices, device=Device)
+    controller = SpaceMouseController(_Viewport(), _Settings(), lambda: None, reader=reader)
+    try:
+        controller._scan.timeout.emit()
+        assert controller._collect.isActive(), "das Ergebnis wird abgeholt, nicht erwartet"
+        deadline = time.monotonic() + 5.0
+        while not reader.is_open and time.monotonic() < deadline:
+            qt_app.processEvents()
+            time.sleep(0.005)
+        assert reader.is_open
+        assert where["search"] == "spacemouse-search"
+        assert where["open"] == threading.main_thread().name
+        assert controller._poll.isActive() and not controller._collect.isActive()
+    finally:
+        controller.stop()
+
+
 def test_driver_fallback_keeps_the_blocked_device_visible() -> None:
     """Ein nicht verfügbarer Mac-Treiber verdeckt keine HID-Zugriffssperre."""
     from app.ui.spacemouse import HidReader

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import QByteArray, QObject, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QObject, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QPushButton, QWidget
@@ -354,6 +354,10 @@ class LoadingVeil(QWidget):
         self._frames.setInterval(FRAME_MS)
         self._frames.timeout.connect(self._advance)
 
+        # **Der Schleier deckt, was unter ihm liegt** — der Verlauf füllt jedes
+        # Pixel. Ohne diese Angabe malte Qt bei jedem Neuzeichnen zuerst das
+        # ganze Fenster darunter, Tafeln und Baum eingeschlossen (RM-258).
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.hide()
 
     # --- Zustand ---------------------------------------------------------
@@ -435,7 +439,7 @@ class LoadingVeil(QWidget):
             return
         if not animations_enabled():
             self._shown = self._target
-        self.update()
+        self.update(self._block_rect())
 
     def end(self) -> None:
         """Der Lauf ist vorbei — auch, wenn die Anzeige nie kam."""
@@ -467,7 +471,7 @@ class LoadingVeil(QWidget):
             self._shown = self._target
             return
         self._shown += (self._target - self._shown) * EASING
-        self.update()
+        self.update(self._block_rect())
 
     # --- Anordnung -------------------------------------------------------
 
@@ -483,6 +487,20 @@ class LoadingVeil(QWidget):
         """Die Spalte, in der Überschrift, Linie und Text stehen."""
         width = min(float(COLUMN), max(self.width() - 2.0 * WIDE, 1.0))
         return QRectF((self.width() - width) / 2.0, 0.0, width, 0.0)
+
+    def _block_rect(self) -> QRect:
+        """Was Sekundentakt und Fortschritt neu malen: der Block, nicht die Fläche.
+
+        **Ein Neuzeichnen kostet neben einem rechnenden Arbeiter je Widget einen
+        Griff nach dem GIL** (``leash.GIL_SWITCH_S``). Mit dem ganzen Schleier
+        malte der Sekundentakt jedes Mal das ganze Fenster — rund fünfzig
+        Widgets, am Mausoleum-Drachen stand der Qt-Takt dabei bis 2 s
+        (``sonden/3mf/p01_nativ.py``). Symbol, Überschrift, Linie und die beiden
+        Textzeilen liegen in diesem Rechteck; der Verlauf darum ändert sich nie.
+        """
+        width = max(self._column().width(), float(MARK_SIZE))
+        left = (self.width() - width) / 2.0
+        return QRectF(left, self._block_top(), width, BLOCK_HEIGHT).toAlignedRect()
 
     def _place_button(self) -> None:
         width = max(self.cancel.sizeHint().width(), 96)

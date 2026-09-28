@@ -4748,3 +4748,96 @@ def test_a_released_measure_group_goes_back_only_without_a_parent(qt_app: QAppli
     finally:
         scroll.deleteLater()
         settle()
+
+
+def test_a_refusal_of_the_core_is_a_state_and_not_a_crash(caplog: pytest.LogCaptureFixture) -> None:
+    """Eine Absage beim Start der Platzierung schreibt keinen Traceback.
+
+    *Text aufbringen* startet mit leerem Textfeld (``label_text`` hat bewusst
+    keine Vorgabe), und das Werkzeug entsteht an einem kleinen Körper gleich im
+    Hauptfaden. Die ``ValidationError`` „Ohne Text gibt es nichts
+    aufzubringen.“ landete mit vollem Traceback im Protokoll, und in der Leiste
+    stand „Vorschau nicht verfügbar“. Ohne Fenster: nur die Weiche.
+    """
+    import logging
+
+    from app.core.errors import ValidationError
+    from app.i18n import _
+    from app.ui.placement_flow import _answer_now, refusal_sentence
+
+    def leer() -> Any:
+        raise ValidationError(
+            field="text", detail=_("Ohne Text gibt es nichts aufzubringen."), constraint="empty"
+        )
+
+    fertig: list[Any] = []
+    gescheitert: list[str] = []
+    abgesagt: list[str] = []
+    with caplog.at_level(logging.DEBUG, logger="app.ui.placement_flow"):
+        _answer_now(
+            leer,
+            fertig.append,
+            gescheitert.append,
+            lambda error: abgesagt.append(refusal_sentence(error)),
+        )
+    assert abgesagt == ["Ohne Text gibt es nichts aufzubringen."]
+    assert fertig == [None], "der Fluss erfährt, dass es kein Werkzeug gibt"
+    assert gescheitert == []
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING], caplog.records
+
+    # Gegenprobe: Das Unerwartete bleibt ein Fehler mit Protokollzeile.
+    def kaputt() -> Any:
+        raise RuntimeError("unerwartet")
+
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger="app.ui.placement_flow"):
+        _answer_now(kaputt, fertig.append, gescheitert.append, abgesagt.append)
+    assert gescheitert == ["RuntimeError: unerwartet"]
+    assert [r for r in caplog.records if r.exc_info], "ein echter Fehler behält seinen Traceback"
+
+
+def test_label_text_starts_with_the_sentence_of_the_empty_field(
+    flow: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Am Fluss: leeres Textfeld → der Satz der Absage, dann ein Buchstabe → weiter.
+
+    Vorher stand in der Leiste „Vorschau nicht verfügbar. Die Werte bearbeiten
+    und erneut platzieren.“, bevor jemand getippt hatte, und das Protokoll
+    trug „placement answer did not come back“ mit Traceback.
+    """
+    import logging
+
+    from PySide6.QtWidgets import QLineEdit
+
+    original, session, viewport, _original_dialog = flow
+    original.dispose()
+    object_id = original.inputs_of()[0]
+    spec = REGISTRY.get("label_text")
+    dialog = OperationDialog(spec, {object_id: "Würfel"})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+    try:
+        with caplog.at_level(logging.DEBUG, logger="app.ui.placement_flow"):
+            controller.start()
+            assert session.wait_for_idle(30_000)
+            QApplication.processEvents()
+        assert controller._note.text() == "Ohne Text gibt es nichts aufzubringen."
+        assert not [r for r in caplog.records if r.exc_info], "kein Traceback für ein leeres Feld"
+
+        editor = dialog._editors["text"]
+        line = editor if isinstance(editor, QLineEdit) else editor.findChild(QLineEdit)
+        assert line is not None
+        line.setText("A")
+        for _round in range(50):
+            QApplication.processEvents()
+            session.wait_for_idle(30_000)
+            if controller._tool_context is not None:
+                break
+        assert controller._tool_context is not None, "mit Text entsteht das Werkzeug"
+        assert controller._note.text() != "Ohne Text gibt es nichts aufzubringen."
+    finally:
+        controller.dispose()
+        assert session.wait_for_idle(30_000)
+        dialog.close()

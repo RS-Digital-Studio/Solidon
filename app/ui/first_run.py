@@ -69,6 +69,11 @@ from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 
 _log = get_logger(__name__)
 
+#: So lange wartet *Fertig* höchstens auf die Drucker des Slicers, in ms
+#: (:meth:`FirstRunDialog._await_printer_survey`). Gemessen braucht die Suche
+#: am ElegooSlicer mit 1001 Profilen rund eine Sekunde.
+PRINTER_SURVEY_WAIT_MS = 10_000
+
 #: Der Zustand jedes Programms steht als Wort in der Zeile, damit sich die
 #: Liste auch ohne Farbe liest (§19.1). Vorher stand dort ein Plus- und ein
 #: ein Minuszeichen — beides kurz, beides zu raten. In der einzigen Liste,
@@ -338,6 +343,8 @@ class FirstRunDialog(QDialog):
         self.printer_state.setWordWrap(True)
         set_level(self.printer_state, "caption")
         self._printer_survey: _PrinterSurvey | None = None
+        self._surveyed_slicer = ""
+        """Für welchen Slicer die Drucker zuletzt gesucht wurden."""
 
         self.printer = QComboBox(self)
         for identifier, printer in by_title(profiles.printer_profiles()):
@@ -594,6 +601,14 @@ class FirstRunDialog(QDialog):
         """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
         self.look()
+        # **Der Drucker des gemerkten Slicers gleich beim Öffnen**, nicht erst
+        # nach der Programmsuche: Bis dahin stand der allgemeine Drucker da,
+        # rund sechs Sekunden lang, und wer vorher *Fertig* drückte, bekam ihn
+        # statt des Druckers, auf den sein Slicer eingestellt ist (Robert,
+        # 27.09.2026: Centauri Carbon 2 im ElegooSlicer, „Allgemeiner
+        # FDM-Drucker 220 mm“ im Druckdialog).
+        if self.slicer.currentData():
+            self._slicer_changed()
 
     # --- nachsehen --------------------------------------------------------------
 
@@ -731,9 +746,31 @@ class FirstRunDialog(QDialog):
     # Antwort trifft einen Dialog, dessen Werte schon übernommen sind.
 
     def accept(self) -> None:
+        self._await_printer_survey()
         if not self._save_custom_printer():
             return
         super().accept()
+
+    def _await_printer_survey(self) -> None:
+        """Gespeichert wird die Druckerwahl nach der Suche, nicht die davor.
+
+        Solange die Drucker des Slicers gesucht werden, zeigt die Auswahl noch
+        den bisherigen Drucker, und erst die Antwort setzt den des Slicers
+        (:meth:`_fill_printers`). *Fertig* in dieser Zeit übernahm den
+        bisherigen. Die Suche dauert rund eine Sekunde; gewartet wird mit
+        Wartezeiger, und eine späte Antwort wird noch zugestellt. Die
+        Programmsuche daneben wartet weiter nicht (siehe unten): Ihr Ergebnis
+        wird nicht gespeichert.
+        """
+        survey = self._printer_survey
+        if survey is None or not survey.isRunning():
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            survey.wait(PRINTER_SURVEY_WAIT_MS)
+        finally:
+            QApplication.restoreOverrideCursor()
+        QCoreApplication.processEvents()
 
     def _language_changed(self) -> None:
         """Die Sprache wechselt sofort — auch im Dialog selbst.
@@ -1000,7 +1037,10 @@ class FirstRunDialog(QDialog):
                     self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
                 )
             _select(self.slicer, chosen)
-        if chosen:
+        # Nur ein Slicer, dessen Drucker noch niemand gesucht hat: Den
+        # gemerkten sucht der Aufbau schon, und eine zweite Suche sperrte die
+        # Auswahl ein weiteres Mal, womöglich während jemand darin wählt.
+        if chosen and chosen != self._surveyed_slicer:
             self._slicer_changed()
 
     def _choose_slicer_file(self) -> None:
@@ -1017,6 +1057,7 @@ class FirstRunDialog(QDialog):
         """Jede Auswahl bekommt eine eigene, gegen späte Antworten geschützte Suche."""
         self._printer_survey = None
         chosen = str(self.slicer.currentData() or "")
+        self._surveyed_slicer = chosen
         if not chosen:
             self._fill_printers(tuple(profiles.printer_profiles()))
             self.printer_state.clear()

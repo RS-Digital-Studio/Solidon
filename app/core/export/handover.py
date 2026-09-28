@@ -67,6 +67,8 @@ from app.core.export.slicer_keys import (
     takes_a_machine_profile,
     wants_bed_coordinates,
 )
+from app.core.geom.attributes import used_slots
+from app.core.geom.mesh import as_mesh_data
 from app.core.ingest.threemf import SETTINGS_PATH
 from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
@@ -86,6 +88,7 @@ from app.core.types import (
     PrinterProfile,
     PrintSettings,
     Profile,
+    SceneObject,
     SettingAdvice,
     SlotOverride,
     SlotProfileBinding,
@@ -681,7 +684,14 @@ def _adhesion_for(
     bekam Cura einen Skirt mit null Linien und PrusaSlicer an jedem Teil einen
     Brim (Review Stufe A+B, F5).
     """
-    if settings.adhesion.kind != "auto" or flavour not in ("prusa", "cura"):
+    from app.core.slice import advise
+
+    # „other“ übersetzt Solidon nicht; dort bleibt die Art, wie sie ist.
+    if (
+        settings.adhesion.kind != "auto"
+        or flavour in advise.AUTO_BRIM_FLAVOURS
+        or flavour == "other"
+    ):
         return settings
     table = print_settings.resolve(profile, settings.quality).adhesion
     measures = {
@@ -756,7 +766,135 @@ def object_keys(
     }
     before = as_mapping(settings, flavour)
     changed = as_mapping(_applied(settings, advice), flavour)
-    return {key: value for key, value in changed.items() if key in keys or before.get(key) != value}
+    written = {
+        key: value for key, value in changed.items() if key in keys or before.get(key) != value
+    }
+    return _with_automatic_prusa_support(written) if flavour == "prusa" else written
+
+
+def _with_automatic_prusa_support(written: dict[str, str]) -> dict[str, str]:
+    """Wer bei PrusaSlicer Stützen einschaltet, schaltet auch die automatischen ein.
+
+    Prusas Vorgabe ist ``support_material = 1`` mit ``support_material_auto =
+    0``: Stützen nur an gemalten Verstärkern (Entscheidung J). Für die Platte
+    stand die Regel in :func:`prusa_values`; der Objektwert eines Teils kannte
+    sie nicht, und der Pilz der Abnahme von Stufe E erbte „nur Verstärker":
+    kein einziger Stützweg im G-Code von PrusaSlicer 2.9.6, während
+    ElegooSlicer und CuraEngine ihn stützten (27.09.2026).
+    """
+    if written.get("support_material") == "1":
+        written["support_material_auto"] = "1"
+    return written
+
+
+#: Was CuraEngine je Netz annimmt, gelesen aus ``settable_per_mesh`` in
+#: ``fdmprinter.def.json`` (Cura 5.13): Wände, Füllung, Bahnbreite, Bügeln,
+#: Außenwand mit Tempo und Beschleunigung, die Schrägnaht, und ob überhaupt
+#: gestützt wird. Haftungsart (``adhesion_type``), Stützort (``support_type``)
+#: und Stützart (``support_structure``) gelten nur der ganzen Platte.
+CURA_PER_MESH: Final = frozenset(
+    {
+        "support_enable",
+        "infill_sparse_density",
+        "line_width",
+        "ironing_enabled",
+        "inset_direction",
+        "wall_line_count",
+        "speed_wall_0",
+        "acceleration_wall_0",
+        "scarf_joint_seam_length",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PartSplit:
+    """Welche übernommenen Vorschläge je Teil gelten und was die Platte behält
+    (Konzept Herstellerprofil, Entscheidung G).
+
+    Bei der Orca-Familie und PrusaSlicer trägt die Platte die Grundlage, und die
+    Teile, deren Geometrie es verlangt, bekommen den übernommenen Wert als
+    Objektwert. CuraEngine nimmt Haftungs-, Stützart und Stützort nicht je Netz
+    an; dort behält die Platte die Übernahme, und die Teile, die sie nicht
+    brauchen, bekommen je Netz die Grundlage zurück (``revert``) — so stützt
+    Cura nur das Teil, das es braucht, und mit der gewählten Stützart.
+    """
+
+    plate: PrintSettings
+    """Was die ganze Platte bekommt."""
+    base: PrintSettings
+    """Die Einstellungen ohne die Übernahmen je Teil: der Stand, an dem der Rat
+    je Körper gefragt wird."""
+    per_part: frozenset[str] = frozenset()
+    """Die Pfade, die je Teil geschrieben werden."""
+    revert: bool = False
+    unavailable: frozenset[str] = frozenset()
+    """Was die Geometrie je Teil will, der Slicer aber nicht je Teil annimmt —
+    es bleibt plattenweit, und der Export sagt, wo es nicht reicht."""
+
+
+def _part_paths(flavour: SlicerFlavour) -> frozenset[str]:
+    """Welche Pfade dieser Slicer je Teil annehmen kann."""
+    from app.core.slice import advise
+
+    if flavour in ("orca", "prusa"):
+        return advise.PART_PATHS
+    if flavour == "cura":
+        return frozenset(
+            entry.path
+            for entry in slicer_keys.TABLES["cura"]
+            if entry.path in advise.PART_PATHS and entry.key in CURA_PER_MESH
+        )
+    return frozenset()
+
+
+def cura_takes_whole(path: str) -> bool:
+    """Ob CuraEngine jeden Schlüssel dieses Pfads je Netz annimmt.
+
+    ``support.style`` geht dort nur halb: ob gestützt wird
+    (``support_enable``) je Netz, die Stützart (``support_structure``) nur für
+    die ganze Platte. Ein Teil bekommt dann den Wert der Platte, nicht seinen
+    eigenen.
+    """
+    keys = [entry.key for entry in slicer_keys.TABLES["cura"] if entry.path == path]
+    return bool(keys) and all(key in CURA_PER_MESH for key in keys)
+
+
+def split_for_parts(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    flavour: SlicerFlavour,
+) -> PartSplit:
+    """Trennt die übernommenen Vorschläge in plattenweite und solche je Teil.
+
+    Je Teil geht, was die Geometrie eines Körpers verlangt
+    (:data:`app.core.slice.advise.PART_PATHS`) und keine plattenweite Regel —
+    Maschine, Material, Volumenstrom (:func:`app.core.slice.advise.plate_paths`)
+    — ebenfalls. Die Grundlage ist die des Herstellerprofils, ohne eines
+    Solidons Tabelle (:func:`app.core.export.manufacturer.base_settings`).
+    ``write_assembly`` und ``slice_model`` fragen dasselbe und bekommen
+    dieselbe Platte.
+    """
+    from app.core.export import manufacturer
+    from app.core.slice import advise
+
+    wanted = frozenset(settings.accepted) & advise.PART_PATHS
+    if not wanted:
+        return PartSplit(settings, settings)
+    foundation = manufacturer.base_settings(profile, settings.quality, setup).settings
+    base = settings
+    for path in sorted(wanted):
+        base = print_settings.without_choice(base, path, foundation)
+    wanted -= advise.plate_paths(base, profiles.for_process(profile, base, effective=True))
+    per_part = wanted & _part_paths(flavour)
+    unavailable = wanted - per_part
+    trimmed = settings
+    for path in sorted(per_part):
+        trimmed = print_settings.without_choice(trimmed, path, foundation)
+    if flavour == "cura":
+        return PartSplit(settings, trimmed, per_part, revert=True, unavailable=unavailable)
+    return PartSplit(trimmed, trimmed, per_part, unavailable=unavailable)
 
 
 def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:
@@ -1358,6 +1496,9 @@ class CuraMachine:
     search_path: tuple[Path, ...] = ()
     codes: Mapping[str, str] = field(default_factory=dict)
     switches: Mapping[str, str] = field(default_factory=dict)
+    name: str = ""
+    """``machine_name`` der Definition — CuraEngine schreibt ihn als
+    ``;TARGET_MACHINE.NAME`` in den Kopf (:func:`cura_machine_differences`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1437,6 +1578,61 @@ def settings_for_slot(
         retraction=override.retraction or settings.retraction,
         filament=override.filament or settings.filament,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SlotProcess:
+    """Womit eine Spule eines Körpers druckt (§20, §29)."""
+
+    slot: MaterialSlot
+    """Die Spule, mit dem gewählten Filamentprofil, wo eines gewählt ist."""
+    profile: Profile
+    """Drucker und Material dieser Spule, bezogen auf das Druckraster."""
+    settings: PrintSettings
+    """Die Einstellungen, mit denen diese Spule fährt (:func:`settings_for_slot`)."""
+
+
+def slot_processes(
+    body: SceneObject,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+) -> tuple[SlotProcess, ...]:
+    """Jede Spule, die dieser Körper wirklich benutzt, mit Profil und Einstellungen.
+
+    Der Rat fragt je Spule und nicht nur nach Slot 0: Ein Griff aus TPU auf
+    einem Gehäuse aus PLA verlangt die langsame Außenwand, obwohl das Gehäuse
+    PLA ist. ``slot_profiles`` ordnet der Identität der ungewählten Spule
+    (:func:`threemf.slot_identity`) das gewählte Filamentprofil zu.
+
+    Druckdialog und Export fragen dieselbe Funktion (Konzept Herstellerprofil,
+    Entscheidung G): Solange der Export je Teil nur das Material von Slot 0
+    kannte, bekam ein Teil mit einer zweiten Spule einen übernommenen
+    Vorschlag nicht, den der Dialog für genau dieses Teil gezeigt hatte.
+    """
+    mesh = as_mesh_data(body.mesh)
+    own_profile = profiles.for_object(profile, body)
+    present = set(used_slots(mesh))
+    processes: list[SlotProcess] = []
+    for original in threemf.assembly_slots(
+        threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
+    ):
+        if original.index not in present:
+            continue
+        chosen = slot_profiles.get(threemf.slot_identity(original), "")
+        slot = replace(original, material=chosen) if chosen else original
+        material = profiles.material_id_for_type(slot.material_type or "")
+        material_profile = (
+            replace(own_profile, material=profiles.material(material)) if material else own_profile
+        )
+        effective = settings_for_slot(settings, profile, slot, setup)
+        processes.append(
+            SlotProcess(
+                slot, profiles.for_process(material_profile, effective, effective=True), effective
+            )
+        )
+    return tuple(processes)
 
 
 def unreachable_overrides(
@@ -1662,6 +1858,29 @@ def configured_slots(
     )
 
 
+def chosen_slot_profiles(
+    objects: Sequence[SceneObject], settings: PrintSettings
+) -> dict[threemf.SlotKey, str]:
+    """Welches Filamentprofil jede Spule des Auftrags bekommt, nach der Identität
+    der ungewählten Spule — die Zuordnung, die :func:`slot_processes` liest.
+
+    Über alle Körper des Auftrags zusammengelegt wie die Extruderliste der
+    Datei, denn gespeicherte Profile ohne Bindung zählen nach der Stelle in
+    dieser Liste (:func:`configured_slots`).
+    """
+    merged = threemf.merge_slots(
+        [
+            threemf.AssemblyPart(as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry))
+            for entry in objects
+        ]
+    )
+    return {
+        threemf.slot_identity(original): configured.material
+        for original, configured in zip(merged, configured_slots(merged, settings), strict=True)
+        if configured.material
+    }
+
+
 def with_slot_profiles(
     slots: Sequence[MaterialSlot], chosen: Sequence[str]
 ) -> tuple[MaterialSlot, ...]:
@@ -1829,9 +2048,7 @@ def prusa_values(
         followers=_PRUSA_FOLLOWERS,
     )
     document = dict(chain.values)
-    document.update(own)
-    if own.get("support_material") == "1":
-        document["support_material_auto"] = "1"
+    document.update(_with_automatic_prusa_support(dict(own)))
     for key in ("retract_length", "retract_speed", "retract_lift", "wipe"):
         if key in own:
             document[f"filament_{key}"] = own[key]
@@ -3225,7 +3442,41 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         search_path=search,
         codes=codes,
         switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
+        name=str(chain.get("machine_name") or ""),
     )
+
+
+def cura_machine_differences(
+    analysis: gcode.GcodeAnalysis, machine: CuraMachine | None
+) -> list[str]:
+    """Hat CuraEngine mit der Maschine gerechnet, die Solidon übergab?
+
+    Die Gegenprobe der Werte (:func:`verify_settings`) sieht es nicht:
+    CuraEngine schreibt keine Einstellungen in die Druckdatei. Ohne die
+    Maschine druckte der Drucker ohne die Bettvermessung oder das Startmakro
+    seines Herstellers (``M420 S1``, ``START_PRINT``). Geprüft werden der Name im
+    Kopf (``;TARGET_MACHINE.NAME``) und, der Reihe nach, jeder Befehl des
+    übergebenen Startcodes vor der ersten Schicht (Konzept Herstellerprofil,
+    Entscheidung K). Ohne Druckerdefinition gibt es nichts zu vergleichen, dort
+    spricht :func:`machine_missing`.
+    """
+    if machine is None or not machine.from_printer:
+        return []
+    differences: list[str] = []
+    found = analysis.settings.get("machine_name")
+    if machine.name and found is not None and found != machine.name:
+        differences.append(f"machine_name: {machine.name} → {found}")
+    position = 0
+    for line in machine.codes.get("machine_start_gcode", "").splitlines():
+        command = line.split(";", 1)[0].strip()
+        if not command:
+            continue
+        try:
+            position = analysis.start.index(command, position) + 1
+        except ValueError:
+            differences.append(f"machine_start_gcode: {command} → —")
+            break
+    return differences
 
 
 def _placeholder_values(chain: Mapping[str, object], written: Mapping[str, str]) -> dict[str, str]:
@@ -4058,6 +4309,9 @@ def slice_model(
         )
 
     started = time.perf_counter()
+    # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
+    # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
+    settings = split_for_parts(settings, profile, setup, setup.flavour).plate
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
@@ -4305,7 +4559,9 @@ def slice_model(
         # Nur die zusätzlich abgeleitete Position setzt mehrere tatsächlich
         # benutzte Werkzeuge voraus; ausdrückliche Sollwerte bleiben vollständig.
         written = config.written if len(metrics.used_tools) > 1 else requested_values
-        ignored = verify_settings(analysis.settings, written)
+        ignored = verify_settings(
+            analysis.settings, written, cura_machine_differences(analysis, config.cura_machine)
+        )
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
@@ -4478,6 +4734,15 @@ _CURA_CONTAINER_VERSION: Final = 4
 _CURA_PROFILE_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
 
 
+def for_the_cura_window(values: Mapping[str, str]) -> dict[str, str]:
+    """Werte in der Schreibweise von Curas Fenster: Wahrheitswerte als
+    ``True``/``False``, wie sein eigener Schreiber sie ablegt; die Konsole
+    liest ``true``/``false`` (:func:`values_for`)."""
+    return {
+        key: {"true": "True", "false": "False"}.get(value, value) for key, value in values.items()
+    }
+
+
 def cura_profile_beside(
     model: Path,
     settings: PrintSettings,
@@ -4568,9 +4833,8 @@ def cura_profile_beside(
         if position is not None:
             lines.append(f"position = {position}")
         lines += ["", "[values]"]
-        for key, value in sorted(values.items()):
-            written = {"true": "True", "false": "False"}.get(value, value)
-            lines.append(f"{key} = {written}")
+        for key, value in sorted(for_the_cura_window(values).items()):
+            lines.append(f"{key} = {value}")
         return "\n".join(lines) + "\n"
 
     shared = as_mapping(settings_for_handover(settings, profile, "cura", slots, setup), "cura")
@@ -4652,10 +4916,17 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
     return verify_settings(gcode.analyze(text).settings, written)
 
 
-def verify_settings(found: Mapping[str, str], written: Mapping[str, str]) -> list[Finding]:
-    """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen."""
+def verify_settings(
+    found: Mapping[str, str], written: Mapping[str, str], differences: Sequence[str] = ()
+) -> list[Finding]:
+    """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen.
 
-    ignored: list[str] = []
+    ``differences`` sind Abweichungen, die sich nicht als Wert vergleichen
+    lassen — bei CuraEngine Maschine und Startcode
+    (:func:`cura_machine_differences`). Sie stehen im selben Befund.
+    """
+
+    ignored: list[str] = list(differences)
     for key, wanted in written.items():
         if key in _RECOMPUTED:
             continue

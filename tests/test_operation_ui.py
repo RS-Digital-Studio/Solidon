@@ -38,7 +38,7 @@ from app.core.sketch import shapes
 from app.core.sketch.serialize import sketch_to_text
 from app.i18n import tr
 from app.ui.main_window import LID_OPS, MainWindow
-from app.ui.op_dialog import OperationDialog
+from app.ui.op_dialog import OperationDialog, ValueField
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests import ui_helpers
@@ -4286,6 +4286,116 @@ def test_a_bore_without_a_standard_size_offers_the_sizes_it_asks_about(
         f"die Antworten auf die eigene Frage fehlen im Hinweis: {gezeigt[0]!r}"
     )
     assert echt is not None
+
+
+def test_the_thread_dialog_at_a_bore_names_the_thread_it_chose(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Am Fenster: *Druckbares Gewinde* an der 5,20-mm-Bohrung sagt M6 und wählt M6.
+
+    Vorher: „Bohrungsmaß: 5,20 mm (eingepasst). Passt vermutlich zu M5
+    (Durchgangsloch fein).“ über der Vorauswahl M6 (Handbuchbild *Ein Gewinde
+    in eine Bohrung*, 4).
+    """
+    from app.ui import main_window as fenster
+
+    class _AbbruchError(Exception):
+        """Bricht den Aufbau ab, sobald Hinweis und Werte abgelesen sind."""
+
+    gezeigt: list[tuple[str, dict[str, object]]] = []
+
+    def merken(*args: object, **kwargs: object) -> object:
+        gezeigt.append((str(kwargs.get("note", "")), dict(kwargs.get("values") or {})))
+        raise _AbbruchError
+
+    monkeypatch.setattr(fenster, "OperationDialog", merken)
+    select(window)
+    window._on_feature_picked("hole_1")
+    with contextlib.suppress(_AbbruchError):
+        window.run_operation(REGISTRY.get("insert_printed_thread"))
+
+    assert gezeigt, "der Dialog wurde nie gebaut — der Test prüft nichts"
+    note, values = gezeigt[0]
+    assert "Innengewinde M6" in note and "Durchgangsloch" not in note, note
+    assert values.get("size") == "M6", values
+
+
+def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QApplication) -> None:
+    """*Objekt duplizieren*, Stückzahl über dem Höchstwert: Knopf gesperrt, mit dem Satz.
+
+    Code-Review 0.5.1, U-2: Knopfzustand und ``can_accept`` fragten die
+    Ablehnung getrennt; an der Stückzahl blieb der Knopf aktiv, und der Klick
+    bewirkte nichts. Jetzt eine Quelle (``_field_refusal``).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    spec = REGISTRY.get("duplicate_object")
+    count = next(entry for entry in spec.params.spec() if entry.name == spec.produces_from)
+    assert count.maximum is not None
+    dialog = OperationDialog(spec, {"obj_1": "Würfel"})
+    try:
+        field = dialog._editors[count.name]
+        assert isinstance(field, ValueField)
+        dialog.show()
+        field.spin.setFocus()
+        field.spin.lineEdit().selectAll()
+        QTest.keyClicks(field.spin.lineEdit(), str(int(count.maximum) + 5))
+        QTest.keyClick(field.spin.lineEdit(), Qt.Key.Key_Return)
+        QApplication.processEvents()
+        said = field.refusal()
+        assert "Obergrenze" in said, said
+        assert not dialog._accept_button.isEnabled(), "der Knopf ist gesperrt"
+        assert dialog._accept_button.toolTip() == said
+        assert not dialog.can_accept(), "und Knopf und Klick sagen dasselbe"
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
+def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
+    qt_app: QApplication,
+) -> None:
+    """Das Maß im Dialog: getippte Zahl über dem Höchstwert, gebundener Ausdruck darüber.
+
+    Vorher wurde aus getipptem „1500“ bei Höchstwert 1000 still 150, und
+    „=@breite*100“ zeigte „= 4000 mm“ ohne ein Wort zur Grenze. Und wer das
+    fx ausschaltete, sah das Mindestmaß 0,1 statt der Zahl des Ausdrucks.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(
+        spec, {}, values={"width": "=@breite"}, parameter_values={"breite": 40.0}
+    )
+    try:
+        field = dialog._editors["width"]
+        assert isinstance(field, ValueField)
+        field.text.setText("=@breite*100")
+        QApplication.processEvents()
+        assert "Obergrenze" in field.hint.text() and "4000" in field.hint.text(), field.hint.text()
+        dialog._follow_source_pending()
+        assert not dialog._accept_button.isEnabled()
+        assert "Obergrenze" in dialog._accept_button.toolTip()
+
+        field.text.setText("=@breite")
+        field.toggle.setChecked(False)
+        assert field.spin.value() == pytest.approx(40.0), "die Zahl des Ausdrucks, nicht 0,1"
+
+        dialog.show()
+        field.spin.setFocus()
+        field.spin.lineEdit().selectAll()
+        QTest.keyClicks(field.spin.lineEdit(), "1500")
+        QTest.keyClick(field.spin.lineEdit(), Qt.Key.Key_Return)
+        QApplication.processEvents()
+        assert "1500" in field.hint.text() and "1000" in field.hint.text(), field.hint.text()
+        assert not field.hint.isHidden()
+        assert not dialog.can_accept(), "eine abgelehnte Zahl wird nicht übernommen"
+        assert field.spin.lineEdit().text().startswith("1500"), "und bleibt stehen"
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
 
 
 @pytest.fixture
