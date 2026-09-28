@@ -4162,6 +4162,12 @@ def _with_features(
     watch.raise_if_cancelled()
     matched, _not_here = _divided_partners(previous, detected, matched, divided_source, before_step)
 
+    # **Gefragt wird nur, wer das Merkmal nach diesem Schritt noch braucht**
+    # (``needed``, :func:`_needed_after`) — dieselbe Lebensdauer wie beim
+    # Verlustbefund unten. ``referenced`` zählt auch den Verweis des Schritts
+    # selbst, der an seinem Eingang aufgelöst wird: Eine Textur über die ganze
+    # Oberseite fragte danach, welche ihrer 13 neuen Flächen die Oberseite
+    # fortführt, die sie gerade ersetzt hatte (Release 0.5.1, Fenstertests).
     _answer_matches(
         dataclasses.replace(entry, features=detected),
         matched,
@@ -4169,7 +4175,7 @@ def _with_features(
         ask,
         findings,
         recorded,
-        referenced,
+        set(needed) if needed is not None else referenced,
         watch,
         question_context,
         legacy_eligible,
