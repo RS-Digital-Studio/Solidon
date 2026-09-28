@@ -5550,6 +5550,52 @@ def test_the_movable_kinds_come_from_the_register(qt_app: QApplication) -> None:
     assert movable_feature_kinds() == frozenset(erwartet)
 
 
+def test_the_grip_draws_only_what_a_drag_can_do() -> None:
+    """Pfeile und Ringe je Lage — ohne Fenster, aus dem Register.
+
+    An einer gewählten Fläche standen drei Pfeile und drei Ringe; der Satz
+    daneben sagte „senkrecht zu sich selbst“, und beim Loslassen verfiel alles
+    außer dem Weg entlang der Richtung. An einer Kugel meldete ein Ring
+    *Merkmal drehen*, das die Kugel nicht annimmt.
+    """
+    import dataclasses
+
+    from app.core import bootstrap
+    from app.core.registry import REGISTRY
+    from app.core.types import Feature
+    from app.ui.viewport import GIZMO_TURN_OP, gizmo_build, turnable_feature_kinds
+
+    bootstrap.load_operations()
+    assert turnable_feature_kinds() == frozenset(REGISTRY.get(GIZMO_TURN_OP).applies_to)
+
+    flaeche = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.6, 0.8), "centre": (0.0, 0.0, 4.0)},
+    )
+    an_der_flaeche = gizmo_build(flaeche)
+    assert an_der_flaeche.normal == pytest.approx((0.0, 0.6, 0.8))
+    assert an_der_flaeche.arrows == (2,), "ein Pfeil entlang der Richtung"
+    assert not an_der_flaeche.rotation, "eine Fläche dreht nicht"
+
+    koerper = gizmo_build(None)
+    assert koerper.arrows == (0, 1, 2) and koerper.rotation and koerper.normal is None
+    baustein = gizmo_build(flaeche, part=True)
+    assert baustein.arrows == (0, 1, 2) and baustein.rotation, "der Baustein zieht als Ganzes"
+
+    verschiebbar = REGISTRY.get("move_feature").applies_to
+    nur_verschiebbar = sorted(set(verschiebbar) - turnable_feature_kinds())
+    drehbar = sorted(set(verschiebbar) & turnable_feature_kinds())
+    assert nur_verschiebbar and drehbar, "beide Lagen müssen vorkommen, sonst prüft das nichts"
+    for kind in nur_verschiebbar:
+        gebaut = gizmo_build(dataclasses.replace(flaeche, id=f"{kind}_1", kind=kind))
+        assert gebaut.arrows == (0, 1, 2) and not gebaut.rotation, kind
+    for kind in drehbar:
+        gebaut = gizmo_build(dataclasses.replace(flaeche, id=f"{kind}_1", kind=kind))
+        assert gebaut.arrows == (0, 1, 2) and gebaut.rotation, kind
+
+
 def test_the_handle_says_what_it_will_move(qt_app: QApplication) -> None:
     """Drei Lagen, drei Sätze — und keiner davon behauptet die Grenze.
 

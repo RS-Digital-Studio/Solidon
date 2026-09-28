@@ -97,6 +97,22 @@ def ray_plane_hit(
     return start + direction * step
 
 
+def normal_frame(normal: Sequence[float]) -> np.ndarray:
+    """Drei Achsen, deren dritte die Richtung ``normal`` ist — rechtshändig.
+
+    Der Griff an einer Fläche hat genau einen Pfeil, und der zeigt entlang
+    ihrer Richtung (Press/Pull). Mit den Weltachsen stand an einer schrägen
+    Fläche kein Pfeil, der ihre Richtung trifft; der Zug wurde auf sie
+    projiziert, und die Spitze lief dem Zeiger davon. Die beiden anderen
+    Achsen sind beliebig quer dazu — sie tragen keinen Pfeil.
+    """
+    third = _unit(normal)
+    helper = np.array([1.0, 0.0, 0.0]) if abs(float(third[0])) < 0.9 else np.array([0.0, 1.0, 0.0])
+    first = _unit(np.cross(helper, third).tolist())
+    second = np.cross(third, first)
+    return np.asarray([first, second, third], dtype=float)
+
+
 def rotation_matrix(axis: Vec3, origin: Vec3, degrees: float) -> np.ndarray:
     """Eine Drehung um eine Achse durch ``origin``, als 4-mal-4-Matrix."""
     u = _unit(axis)
@@ -114,6 +130,11 @@ def rotation_matrix(axis: Vec3, origin: Vec3, degrees: float) -> np.ndarray:
 class Gizmo:
     """Pfeile und Ringe an einem Griff der Szene.
 
+    ``arrows`` nennt die Achsen, die einen Pfeil tragen, ``rotation``, ob
+    jede davon auch einen Ring trägt. **Gezeichnet wird nur, was ein Zug
+    einlösen kann** (Regel in ``griffe.md``): An einer Fläche geht der Zug
+    nur entlang ihrer Richtung, an einer Kugel dreht nichts.
+
     ``release_callback`` bekommt beim Loslassen die Matrix des Zugs;
     ``interact_callback`` jeden Zwischenstand und darf eine berichtigte
     Matrix zurückgeben (der Magnet auf die Raste, §18.11) — die wird dann
@@ -130,6 +151,7 @@ class Gizmo:
         line_radius: float = 0.02,
         axes: np.ndarray | None = None,
         rotation: bool = True,
+        arrows: Sequence[int] = (0, 1, 2),
         release_callback: Callable[[np.ndarray], None] | None = None,
         interact_callback: Callable[[np.ndarray], np.ndarray | None] | None = None,
     ) -> None:
@@ -140,14 +162,19 @@ class Gizmo:
         self._origin = np.asarray(origin if origin is not None else target.centre(), dtype=float)
         self._axes = np.eye(3) if axes is None else _validated(axes)
         self._rotation = rotation
+        self._arrow_axes = tuple(sorted({int(index) for index in arrows}))
+        if not self._arrow_axes or not set(self._arrow_axes) <= {0, 1, 2}:
+            raise ValueError("arrows nennt die Achsen 0, 1 und 2")
         self._scale = float(scale)
         self._cached = target.matrix()
         self._length = float(target.length())
         self._arrow_length = self._length * scale * ARROW_SHARE
         self._ring_radius = self._length * scale * RING_SHARE
         self._line_radius = line_radius * self._arrow_length
-        self._arrows: list[Item] = []
-        self._rings: list[Item] = []
+        # Nach Achse, nicht nach Position: Ohne Pfeil an Achse 0 und 1 bleibt
+        # der Pfeil an Achse 2 blau und zieht entlang Achse 2.
+        self._arrows: dict[int, Item] = {}
+        self._rings: dict[int, Item] = {}
         self._selected: tuple[str, int] | None = None
         self.pressing = False
         self._pressed_at: tuple[int, int] | None = None
@@ -159,7 +186,7 @@ class Gizmo:
     # --- Aufbau --------------------------------------------------------------------
 
     def _build(self) -> None:
-        for index in range(3):
+        for index in self._arrow_axes:
             colour = AXIS_COLOURS[index]
             vertices, faces = shapes.arrow(
                 self._origin,
@@ -168,15 +195,13 @@ class Gizmo:
                 shaft_radius=self._line_radius,
                 tip_radius=TIP_RADIUS_SHARE * self._arrow_length,
             )
-            self._arrows.append(
-                self._renderer.add_surface(
-                    vertices,
-                    faces,
-                    name=f"gizmo:arrow:{index}",
-                    style=SurfaceStyle(
-                        colour=colour, lighting=False, keep_in_front=True, pickable=True
-                    ),
-                )
+            self._arrows[index] = self._renderer.add_surface(
+                vertices,
+                faces,
+                name=f"gizmo:arrow:{index}",
+                style=SurfaceStyle(
+                    colour=colour, lighting=False, keep_in_front=True, pickable=True
+                ),
             )
             if not self._rotation:
                 continue
@@ -185,20 +210,18 @@ class Gizmo:
                     self._origin, self._axes[index], self._ring_radius, RING_SEGMENTS
                 )
             )
-            self._rings.append(
-                self._renderer.add_lines(
-                    ring,
-                    name=f"gizmo:ring:{index}",
-                    colour=colour,
-                    width=RING_WIDTH,
-                    pickable=True,
-                    keep_in_front=True,
-                    connected=True,
-                )
+            self._rings[index] = self._renderer.add_lines(
+                ring,
+                name=f"gizmo:ring:{index}",
+                colour=colour,
+                width=RING_WIDTH,
+                pickable=True,
+                keep_in_front=True,
+                connected=True,
             )
 
     def remove(self) -> None:
-        for item in (*self._arrows, *self._rings):
+        for item in (*self._arrows.values(), *self._rings.values()):
             self._renderer.remove(item)
         self._arrows.clear()
         self._rings.clear()
@@ -216,7 +239,9 @@ class Gizmo:
         """
         return self.pressing and self._dragged
 
-    def fits(self, target: Item, *, rotation: bool, scale: float) -> bool:
+    def fits(
+        self, target: Item, *, rotation: bool, scale: float, arrows: Sequence[int] = (0, 1, 2)
+    ) -> bool:
         """Ob dieser Griff für ``target`` so gebaut ist, wie er jetzt gebraucht würde.
 
         Wahr, wenn Ziel, Ringe, Maßstab **und die Matrix des Ziels** die
@@ -234,6 +259,7 @@ class Gizmo:
         return (
             target is self.target
             and rotation == self._rotation
+            and tuple(sorted({int(index) for index in arrows})) == self._arrow_axes
             and math.isclose(scale, self._scale, rel_tol=SCALE_TOLERANCE, abs_tol=0.0)
             and np.array_equal(self._cached, target.matrix())
         )
@@ -264,7 +290,7 @@ class Gizmo:
 
     @property
     def items(self) -> tuple[Item, ...]:
-        return (*self._arrows, *self._rings)
+        return (*self._arrows.values(), *self._rings.values())
 
     # --- Gesten ----------------------------------------------------------------------
 
@@ -322,10 +348,10 @@ class Gizmo:
     def _hover(self, event: PointerEvent) -> None:
         found = self._renderer.pick_item(event.x, event.y)
         wanted: tuple[str, int] | None = None
-        for index, item in enumerate(self._arrows):
+        for index, item in self._arrows.items():
             if found is item:
                 wanted = ("arrow", index)
-        for index, item in enumerate(self._rings):
+        for index, item in self._rings.items():
             if found is item:
                 wanted = ("ring", index)
         if wanted != self._selected:

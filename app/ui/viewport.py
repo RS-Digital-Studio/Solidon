@@ -154,7 +154,7 @@ from app.ui.render.api import (
     hex_of,
 )
 from app.ui.render.edges import feature_edges, outline_edges
-from app.ui.render.gizmo import ARROW_SHARE, Gizmo, ray_plane_hit
+from app.ui.render.gizmo import ARROW_SHARE, Gizmo, normal_frame, ray_plane_hit
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_handle import SlotHandle, settled_length, shown_length
@@ -2824,10 +2824,14 @@ GIZMO_LEAST_PIXELS = 80.0
 #: Die Operationen, die ein Merkmal so ändern, wie der Griff es täte.
 #:
 #: **Beide, weil der Griff beides kann.** Er verschiebt und dreht in derselben
-#: Geste; wo nur eines von beidem ginge, ist er trotzdem der richtige Weg
-#: dorthin. Heute nehmen beide dieselben Arten — würde sich das je trennen,
-#: wäre ein Griff, der nur nach der einen fragt, an der anderen blind.
+#: Geste; wo nur eines von beidem geht, ist er trotzdem der richtige Weg
+#: dorthin. Die Arten beider laufen auseinander (Kugel und Hohlraum lassen sich
+#: versetzen, nicht drehen) — wo nur verschoben wird, trägt der Griff keine
+#: Ringe (:func:`turnable_feature_kinds`).
 GIZMO_FEATURE_OPS: Final = ("move_feature", "rotate_feature")
+
+#: Die Operation hinter den Ringen des Merkmalsgriffs.
+GIZMO_TURN_OP: Final = "rotate_feature"
 
 
 def movable_feature_kinds() -> frozenset[str]:
@@ -2858,6 +2862,63 @@ def movable_feature_kinds() -> frozenset[str]:
         if REGISTRY.has(name):
             kinds.update(REGISTRY.get(name).applies_to or ())
     return frozenset(kinds)
+
+
+def turnable_feature_kinds() -> frozenset[str]:
+    """An welchen Merkmalsarten die Ringe des Griffs etwas drehen — gefragt, nicht aufgezählt.
+
+    Ein Ring an einer Kugel meldete beim Loslassen *Merkmal drehen*, und die
+    Operation nimmt die Kugel nicht an: Der Zug endete in einem Fehler statt in
+    einem Schritt. Dieselbe Quelle wie :func:`movable_feature_kinds`, nur die
+    eine Operation.
+    """
+    from app.core.registry import REGISTRY
+
+    if not REGISTRY.has(GIZMO_TURN_OP):
+        return frozenset()
+    return frozenset(REGISTRY.get(GIZMO_TURN_OP).applies_to or ())
+
+
+class GizmoBuild(NamedTuple):
+    """Wie der Griff gebaut wird: Richtung einer Fläche oder Weltachsen, mit oder ohne Ringe."""
+
+    #: Die Richtung der Fläche, an der der eine Pfeil steht — ``None`` für
+    #: drei Pfeile entlang der Weltachsen.
+    normal: tuple[float, float, float] | None
+    rotation: bool
+
+    @property
+    def arrows(self) -> tuple[int, ...]:
+        """Die Achsen mit Pfeil: an einer Fläche nur die dritte (ihre Richtung)."""
+        return (2,) if self.normal is not None else (0, 1, 2)
+
+
+def gizmo_build(feature: Feature | None, *, part: bool = False) -> GizmoBuild:
+    """Welche Pfeile und Ringe der Griff an ``feature`` trägt (§18.11).
+
+    **Gezeichnet wird nur, was ein Zug einlösen kann** — ein Griff, der nichts
+    auslöst, ist schlimmer als keiner:
+
+    * **am Körper und am Baustein** drei Pfeile und drei Ringe: Der Körper
+      wird verschoben und gedreht, ein Baustein zieht als Ganzes mit;
+    * **an einer Fläche** ein Pfeil entlang ihrer Richtung und kein Ring —
+      der Zug ist Press/Pull (``faceDragged``), was quer dazu oder im Kreis
+      gezogen wird, verfiel beim Loslassen ohne ein Wort;
+    * **an jedem anderen Merkmal** drei Pfeile, Ringe nur, wo
+      :func:`turnable_feature_kinds` die Art führt.
+
+    Eine eigene Funktion und nicht Teil von :meth:`Viewport.set_gizmo`, damit
+    die Entscheidung ohne Renderer und ohne Fenster prüfbar ist.
+    """
+    if feature is None or part:
+        return GizmoBuild(normal=None, rotation=True)
+    if feature.kind == "face":
+        normal = feature.params.get("normal")
+        if normal is not None and len(normal) == 3:
+            return GizmoBuild(
+                normal=(float(normal[0]), float(normal[1]), float(normal[2])), rotation=False
+            )
+    return GizmoBuild(normal=None, rotation=feature.kind in turnable_feature_kinds())
 
 
 def placed_feature_kinds() -> frozenset[str]:
@@ -13455,11 +13516,18 @@ class Viewport(QWidget):
             # **Kein Bewegungsgriff, wo nichts zu bewegen ist.** An einem
             # Langloch gäbe er drei Pfeile, die keine Operation einlösen kann —
             # ein Griff, der nichts auslöst, ist schlimmer als keiner.
+            # **Und nur mit dem, was ein Zug hier einlöst** (:func:`gizmo_build`):
+            # an einer Fläche ein Pfeil entlang ihrer Richtung, an einer Kugel
+            # keine Ringe.
+            build = gizmo_build(marked, part=of_a_part)
             self._gizmo = Gizmo(
                 self.renderer,
                 actor,
                 scale=scale,
                 line_radius=GIZMO_LINE_RADIUS,
+                axes=None if build.normal is None else normal_frame(build.normal),
+                rotation=build.rotation,
+                arrows=build.arrows,
                 release_callback=self._on_gizmo_released,
                 interact_callback=self._on_gizmo_interacted,
             )

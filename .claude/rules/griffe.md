@@ -78,6 +78,13 @@ die berichtigte Matrix zurück, die gesetzt wird (`_on_gizmo_interacted`,
 *Bewegen* gilt dem Körper und trägt den Skalierwürfel; ein angeklicktes Merkmal
 ist selbst die Ansage (§2.6) — Griff ja, Würfel nein.
 
+* **Gezeichnet wird nur, was ein Zug einlöst** (`viewport.gizmo_build`): an
+  einer Fläche ein Pfeil entlang ihrer Richtung (`render.gizmo.normal_frame`,
+  `arrows=(2,)`) und kein Ring, an einem Merkmal Ringe nur, wo
+  `rotate_feature` die Art annimmt (`turnable_feature_kinds`), am Körper und
+  am Baustein alles. Ein Pfeil oder Ring, dessen Zug beim Loslassen verfällt,
+  ist schlimmer als keiner.
+
 * **An einer Fläche geht der Zug bis in den Verlauf**: `gizmo_feature` (wo),
   `gizmo_target` (was), `_face_seat` (Mitte und Normale), `faceDragged` meldet die
   **Kennung**, das Fenster macht `push_face` mit `face=<Kennung>` — mit der
