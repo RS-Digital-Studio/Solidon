@@ -154,10 +154,13 @@ it into `website/version.json`.
 
 ### Manual and website
 
-- The manual shows step by step, in pictures from the application, how to check and print a model, drill a hole and build your own part or an enclosure with a lid.
+- Fifteen guides show step by step, in pictures from the application, how to check, print and repair a model, build, split and label a part, or print in two colours.
+- The manual begins at “Where do I start?” and leads from there to every guide. F1 in an operation's dialog opens its guide or its entry.
 - An overview picture explains the window: each number in the picture marks one area.
 - The search in the manual finds the right page even with everyday words, lists it first and opens it where the word appears.
 - The reference names, for every operation, where to find it in the menu or in the selection panel.
+- The explanatory pages are a third shorter. Where a picture guide covers their topic, a link to it follows at the end of the page.
+- On the website and in the PDF, the manual is organised as in the application, from the first steps to the reference. In the PDF, bookmarks lead to every chapter.
 
 ## 0.5.0
 

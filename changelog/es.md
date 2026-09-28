@@ -155,10 +155,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manual y sitio web
 
-- El manual muestra paso a paso, con imágenes de la aplicación, cómo comprobar e imprimir un modelo, taladrar un agujero y construir una pieza propia o una carcasa con tapa.
+- Quince guías muestran paso a paso, con imágenes de la aplicación, cómo comprobar, imprimir y reparar un modelo, construir, dividir y rotular una pieza o imprimir a dos colores.
+- El manual empieza en «¿Por dónde empiezo?» y lleva desde ahí a cada guía. F1 en el diálogo de una operación abre su guía o su entrada.
 - Una imagen de conjunto explica la ventana: cada número de la imagen señala una zona.
 - La búsqueda del manual encuentra la página adecuada también con palabras cotidianas, la muestra primero y la abre donde aparece la palabra.
 - La referencia indica en cada operación dónde se encuentra en el menú o en el panel de selección.
+- Las páginas explicativas son un tercio más cortas. Si hay una guía con imágenes sobre su tema, el enlace aparece al final de la página.
+- En el sitio web y en el PDF, el manual está organizado como en la aplicación, de los primeros pasos a la consulta. En el PDF, los marcadores llevan a cada capítulo.
 
 ## 0.5.0
 

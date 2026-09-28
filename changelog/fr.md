@@ -155,10 +155,13 @@ dans `website/version.json`.
 
 ### Manuel et site web
 
-- Le manuel montre pas à pas, avec des images de l'application, comment vérifier et imprimer un modèle, percer un trou et construire sa propre pièce ou un boîtier avec couvercle.
+- Quinze guides montrent pas à pas, avec des images de l'application, comment vérifier, imprimer et réparer un modèle, construire et diviser une pièce, y mettre du texte ou imprimer en deux couleurs.
+- Le manuel commence par « Par où commencer ? » et mène de là à chaque guide. F1 dans la boîte de dialogue d'une opération ouvre son guide ou son entrée.
 - Une image d'ensemble explique la fenêtre : chaque numéro de l'image désigne une zone.
 - La recherche du manuel trouve la bonne page même avec des mots courants, l'affiche en premier et l'ouvre à l'endroit où figure le mot.
 - La référence indique pour chaque opération où la trouver dans le menu ou dans le panneau de sélection.
+- Les pages explicatives sont plus courtes d'un tiers. Quand un guide en images traite leur sujet, un lien vers lui figure en fin de page.
+- Sur le site web et dans le PDF, le manuel est organisé comme dans l'application, des premiers pas à la référence. Dans le PDF, des signets mènent à chaque chapitre.
 
 ## 0.5.0
 

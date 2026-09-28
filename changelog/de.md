@@ -179,10 +179,13 @@ Nutzen da und sonst nichts.
 
 ### Handbuch und Website
 
-- Das Handbuch zeigt Schritt für Schritt in Bildern aus der Anwendung, wie man ein Modell prüft und druckt, ein Loch bohrt und ein eigenes Teil oder ein Gehäuse mit Deckel baut.
+- Fünfzehn Anleitungen zeigen Schritt für Schritt in Bildern aus der Anwendung, wie man ein Modell prüft, druckt und repariert, ein Teil baut, teilt und beschriftet oder zweifarbig druckt.
+- Das Handbuch beginnt bei „Wo fange ich an?“ und führt von dort zu jeder Anleitung. F1 im Dialog einer Operation schlägt ihre Anleitung oder ihren Eintrag auf.
 - Ein Übersichtsbild erklärt das Fenster: Jede Nummer im Bild steht für einen Bereich.
 - Die Suche im Handbuch findet die passende Seite auch mit Alltagswörtern, zeigt sie zuerst und schlägt sie an der Stelle auf, an der das Wort steht.
 - Die Referenz nennt bei jeder Operation, wo sie im Menü oder im Auswahlfenster zu finden ist.
+- Die Erklärseiten sind um ein Drittel kürzer. Gibt es zu ihrem Thema eine Anleitung in Bildern, steht der Verweis darauf am Ende der Seite.
+- Auf der Website und im PDF ist das Handbuch gegliedert wie in der Anwendung, von den ersten Schritten bis zum Nachschlagen. Im PDF führen Lesezeichen zu jedem Kapitel.
 
 ## 0.5.0
 

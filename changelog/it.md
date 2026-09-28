@@ -154,10 +154,13 @@ scrive in `website/version.json`.
 
 ### Manuale e sito web
 
-- Il manuale mostra passo per passo, con immagini dell'applicazione, come verificare e stampare un modello, praticare un foro e costruire un proprio pezzo o una scatola con coperchio.
+- Quindici guide mostrano passo per passo, con immagini dell'applicazione, come verificare, stampare e riparare un modello, costruire e dividere un pezzo, scriverci sopra o stampare a due colori.
+- Il manuale inizia da «Da dove comincio?» e porta da lì a ogni guida. F1 nella finestra di dialogo di un'operazione apre la sua guida o la sua voce.
 - Un'immagine d'insieme spiega la finestra: ogni numero nell'immagine indica un'area.
 - La ricerca nel manuale trova la pagina giusta anche con parole di tutti i giorni, la mostra per prima e la apre dove compare la parola.
 - Il riferimento indica per ogni operazione dove trovarla nel menu o nel pannello di selezione.
+- Le pagine esplicative sono più brevi di un terzo. Se una guida per immagini tratta il loro argomento, il collegamento si trova in fondo alla pagina.
+- Sul sito web e nel PDF il manuale è organizzato come nell'applicazione, dai primi passi alla consultazione. Nel PDF i segnalibri portano a ogni capitolo.
 
 ## 0.5.0
 
