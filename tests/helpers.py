@@ -27,6 +27,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import struct
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +38,15 @@ import trimesh
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, new_project
-from app.core.types import Feature, OpResult, Profile, Quality, SceneObject, Source
+from app.core.types import (
+    BoundingBox,
+    Feature,
+    OpResult,
+    Profile,
+    Quality,
+    SceneObject,
+    Source,
+)
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -58,6 +67,59 @@ def exact_kernel() -> Any:
     from app.core.brep import edit
 
     return edit
+
+
+# --- Platzhalter für Szene und Cache ------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class FakeMesh:
+    """Ein Netz-Platzhalter mit festen Kennzahlen."""
+
+    triangles: int = 12
+    vertices: int = 8
+    size: tuple[float, float, float] = (10.0, 10.0, 10.0)
+    watertight: bool = True
+    components: int = 1
+    slots: tuple[int, ...] = dataclasses.field(default_factory=tuple)
+
+    @property
+    def vertex_count(self) -> int:
+        return self.vertices
+
+    @property
+    def triangle_count(self) -> int:
+        return self.triangles
+
+    @property
+    def bounds(self) -> BoundingBox:
+        return BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=self.size)
+
+    @property
+    def volume(self) -> float:
+        return self.size[0] * self.size[1] * self.size[2]
+
+    @property
+    def area(self) -> float:
+        width, depth, height = self.size
+        return 2 * (width * depth + width * height + depth * height)
+
+    @property
+    def is_watertight(self) -> bool:
+        return self.watertight
+
+    @property
+    def component_count(self) -> int:
+        return self.components
+
+    @property
+    def slot_indices(self) -> Sequence[int]:
+        return self.slots
+
+
+def make_object(object_id: str = "obj_1", name: str = "Teil", **kwargs: object) -> SceneObject:
+    """Ein Szenenobjekt auf einem :class:`FakeMesh` mit den genannten Kennzahlen."""
+    return SceneObject(id=object_id, name=name, mesh=FakeMesh(**kwargs))  # type: ignore[arg-type]
 
 
 # --- Der Schaft mit dem Ring (Wulst oder Kehle) -----------------------------------

@@ -11,7 +11,7 @@ from app.core.registry import REGISTRY, VARIABLE, Registry, op_params, param, re
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.types import BaseParams, Document, OpContext, OpResult, Profile, SceneObject
 from app.i18n import _
-from tests.conftest import FakeMesh
+from tests.helpers import FakeMesh
 
 
 @op_params

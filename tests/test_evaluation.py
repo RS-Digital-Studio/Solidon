@@ -30,7 +30,7 @@ from app.core.types import (
     SceneObject,
 )
 from app.i18n import _
-from tests.conftest import FakeMesh
+from tests.helpers import FakeMesh
 
 RUNS: dict[str, int] = {}
 MESHES = Path(__file__).parent / "data" / "meshes"

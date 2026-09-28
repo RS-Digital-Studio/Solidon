@@ -12,9 +12,10 @@ import threading
 import time
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -42,6 +43,7 @@ from app.ui.print_settings_dialog import (
     FIELDS,
     FILAMENT_FIELDS,
     GROUPS,
+    SCREEN_MARGIN,
     FilamentOverrideDialog,
     PrintSettingsDialog,
     _ColourButton,
@@ -4296,8 +4298,13 @@ def test_a_result_survives_a_state_refresh(dialog: PrintSettingsDialog, tmp_path
 # --- Was der Kundenweg am Dialog gefunden hat (D13) ---------------------------------
 
 
+@pytest.mark.parametrize("screen", ["this", "full"])
 def test_the_dialog_grows_when_the_profile_section_opens_itself(
-    qt_app: QApplication, session: Session, tmp_path: Path
+    qt_app: QApplication,
+    session: Session,
+    tmp_path: Path,
+    screen: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Die nachgereichte Klappe darf die Felder darüber nicht stauchen.
 
@@ -4306,6 +4313,12 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     Aufmachgröße, und wenn ``_open_slicer_section`` Sekunden später vier
     Profilzeilen einblendet, wird der Fehlbetrag aus dem oberen Bereich
     gepresst. Gemessen an der Kundenfahrt vom 30.08.2026 (Bild 2 gegen 1).
+
+    **Er wächst, soweit der Bildschirm reicht.** Auf dem Runner unter macOS
+    stand er schon auf der vollen nutzbaren Höhe (768 Punkte), und „größer als
+    vorher" war dort keine Frage an den Dialog, sondern an den Bildschirm.
+    ``full`` stellt genau diesen Bildschirm nach: nutzbar ist, was der Dialog
+    beim Aufmachen schon einnimmt.
     """
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
@@ -4321,11 +4334,22 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     before = dialog.height()
     field = dialog._editors["layers.layer_height"]
     tall_enough = field.sizeHint().height()
+    real = dialog.screen().availableGeometry()
+    if screen == "full":
+        tight = QRect(real.x(), real.y(), real.width(), before + SCREEN_MARGIN)
+        monkeypatch.setattr(
+            dialog, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(tight))
+        )
+    room = dialog.screen().availableGeometry().height() - SCREEN_MARGIN
 
     dialog._open_slicer_section()
     qt_app.processEvents()
 
-    assert dialog.height() > before, "der Dialog wächst mit der aufgeklappten Auswahl"
+    wanted = min(dialog.sizeHint().height(), room)
+    assert dialog.height() >= max(before, wanted), (
+        f"der Dialog wächst mit der aufgeklappten Auswahl bis {wanted}, steht auf {dialog.height()}"
+    )
+    assert dialog.height() > before or before >= room, "Platz war da, gewachsen ist er nicht"
     assert field.height() >= tall_enough, "und die Felder darüber behalten ihre Höhe"
 
 

@@ -69,7 +69,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Datei | Rolle |
 |---|---|
 | `conftest.py` | Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38), Marker `windowed` für jeden `qt_app`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
-| `helpers.py` | Was mehr als eine Testdatei liest, unter öffentlichem Namen (`exact_kernel`, `ridged_shaft`, `the_torus`, die Maße des Schafts) — nie `from tests.test_x import _privat`; was noch fehlt, nennt der Modul-Docstring |
+| `helpers.py` | Was mehr als eine Testdatei liest, unter öffentlichem Namen (`exact_kernel`, `FakeMesh`, `make_object`, `ridged_shaft`, `the_torus`, die Maße des Schafts) — nie `from tests.test_x import _privat` und nie aus `conftest`, das pytest als Plugin lädt und ein zweiter Import noch einmal ausführt; was noch fehlt, nennt der Modul-Docstring |
 | `ui_helpers.py` | Gemeinsame Fixtures der `test_ui*.py`; Fenster und Sitzung je Test frisch |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
 | `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`, ohne OPcache: `WITHOUT_OPCACHE`) |

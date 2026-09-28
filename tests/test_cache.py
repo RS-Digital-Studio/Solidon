@@ -19,7 +19,7 @@ from app.core.scene.cache import CACHE_FORMAT_VERSION, CachedResult, DiskCache, 
 from app.core.scene.hashing import digest, object_hash, operation_hash, profile_key
 from app.core.types import Mesh, Operation, Profile, SceneObject
 from app.i18n import TranslatableText
-from tests.conftest import FakeMesh, make_object
+from tests.helpers import FakeMesh, make_object
 
 
 @pytest.mark.parametrize("op,source", [("create_box", "facets"), ("create_brep_box", "native")])

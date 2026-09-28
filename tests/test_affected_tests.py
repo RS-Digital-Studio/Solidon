@@ -209,7 +209,7 @@ def selection_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
 
     from tools import affected_tests
 
-    # Die Gesamtsuite importiert dieses Modul etwa über test_cache. Ohne
+    # Die Gesamtsuite importiert dieses Modul etwa über test_toolchain. Ohne
     # eigenes Wurzelpaket benutzte importlib für den Korpus denselben Namen
     # tests.conftest und verlor dadurch dessen mittelbare Fenster-Fixture.
     importlib.import_module("tests.conftest")

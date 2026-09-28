@@ -221,7 +221,7 @@ def test_up_to_preselection_preserves_the_selected_body(qt_app: QApplication) ->
 
     from app.core.sketch.planes import frame_for
     from app.core.types import Feature, SceneObject
-    from tests.conftest import FakeMesh
+    from tests.helpers import FakeMesh
 
     objects = {}
     for object_id, height in (("obj_1", 20.0), ("obj_2", 50.0)):

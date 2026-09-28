@@ -33,7 +33,7 @@ from app.core.types import (
     Scene,
     SceneObject,
 )
-from tests.conftest import FakeMesh, make_object
+from tests.helpers import FakeMesh, make_object
 from tests.test_cache import FakeCodec
 
 # Über den Paketnamen käme die **Funktion** ``evaluate`` — das Paket exportiert

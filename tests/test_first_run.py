@@ -771,7 +771,10 @@ def test_a_report_describes_the_window_session_where_there_is_one(
     Auf Windows und macOS ist keine davon gesetzt; dann bleibt die Zeile weg,
     statt einen Strich zu zeigen.
     """
-    for key in (*reports.SESSION_KEYS, "WAYLAND_DISPLAY"):
+    # Auch der Merker der eigenen Plattformwahl: Stünde er aus einem früheren
+    # Aufruf von ``prefer_x11_for_the_viewport`` noch da, läse sich das „xcb“
+    # unten als Wahl der Anwendung.
+    for key in (*reports.SESSION_KEYS, "WAYLAND_DISPLAY", reports.QT_PLATFORM_BEFORE_VARIABLE):
         monkeypatch.delenv(key, raising=False)
     assert not any(key.lower() in reports.environment() for key in reports.SESSION_KEYS), (
         "wo nichts gesetzt ist, steht auch nichts"
@@ -2151,13 +2154,10 @@ def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> Non
     deshalb nur auf ausdrücklichen Wunsch mit (§37.2). Der Mittelweg gibt uns
     die Diagnose und dem Kunden sein Modell.
     """
-    import sys
-
-    sys.path.insert(0, "tests")
     from app.core.scene.evaluate import EvaluationResult
     from app.core.types import Scene
     from app.ui.support_dialog import KIND_BUG, SupportDialog
-    from conftest import make_object
+    from tests.helpers import make_object
 
     session = Session()
     session.last_result = EvaluationResult(scene=Scene(objects={"o1": make_object(name="Halter")}))

@@ -557,13 +557,28 @@ class _CapturedError(Exception):
     """Hält die Ringeinpassung an, sobald sie ihren Löser ruft."""
 
 
+#: Wie weit der echte Lauf am Wächterfall um das Budget streut, in
+#: Auswertungen. Gemessen: 97 hier, 98 unter Linux und 100 ohne Antwort unter
+#: Windows in der CI, 97 bis 105 unter dem Rauschen aus
+#: ``test_platform_identity`` (``sonden/cifix``, Paket CI-Fehlschläge 0.5.1).
+GUARD_EDGE = 10
+
+
 def test_the_guard_case_is_a_run_that_answers(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Die Voraussetzung der Wächterprobe: Der echte Ringlauf dort antwortet.
+    """Die Voraussetzung der Wächterprobe: Der echte Ringlauf dort antwortet, knapp am Budget.
 
     Residuen und Ableitung kommen aus der Ringeinpassung selbst
-    (``features._torus_from_plan``); der Lauf endet nach 97 Auswertungen über
-    ``xtol``, drei vor dem Budget.
+    (``features._torus_from_plan``). Wie viele Auswertungen der Lauf braucht,
+    hängt an der letzten Stelle der Maschine (:data:`GUARD_EDGE`) — hier endet
+    er drei vor dem Budget über ``xtol``, anderswo knapp dahinter. Zugesichert
+    wird, was auf jeder gilt: Mit Luft im Budget antwortet er, und zwar nahe
+    dessen Grenze, sodass ein Nein des Stapels ohne Abstand dort am letzten
+    Bit hängt. Mit den Abständen sagt der Stapel an diesem Fall nichts, auch
+    unter Plattformrauschen; ohne sie sagt er hier „vergeblich“
+    (:func:`test_without_any_margin_the_guard_case_is_turned_away`).
     """
+    from tests.test_platform_identity import platform_noise
+
     problem = _guard_case()
     start = problem.initial
     plan = features._TorusPlan(
@@ -594,14 +609,24 @@ def test_the_guard_case_is_a_run_that_answers(monkeypatch: pytest.MonkeyPatch) -
         features._torus_from_plan(plan, None)
     initial, residual, jacobian = captured[0]
     assert _same_bits(initial, start)
+    budget = features.ROUND_FIT_EVALUATIONS
+    # Das Budget begrenzt den Weg nicht, es beendet ihn nur: Mit mehr Luft
+    # geht der Löser dieselben Schritte und hält, wo er antwortet.
     real = refine.solve(
         residual,
         jacobian,
         initial,
         precision=features.ROUND_FIT_PRECISION,
-        evaluations=features.ROUND_FIT_EVALUATIONS,
+        evaluations=budget + 4 * GUARD_EDGE,
     )
-    assert (real.nfev, real.status) == (97, 3)
+    assert real.status != 0, f"the real run does not answer ({real.nfev}, {real.status})"
+    assert abs(real.nfev - budget) <= GUARD_EDGE, (
+        f"the real run answers after {real.nfev}, far from the budget of {budget}: "
+        "the case no longer guards anything"
+    )
+    assert verdicts_of([problem], monkeypatch) == [False], "with the margins the batch keeps quiet"
+    with platform_noise():
+        assert verdicts_of([problem], monkeypatch) == [False], "and so it does under noise"
 
 
 @pytest.mark.parametrize(

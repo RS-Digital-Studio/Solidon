@@ -578,7 +578,7 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
     monkeypatch.setattr(
         session,
         "placement_async",
-        lambda _compute, done, _failed: done(PlacementTool(flow._prepared_mesh)),
+        lambda _compute, done, _failed, _refused=None: done(PlacementTool(flow._prepared_mesh)),
     )
     monkeypatch.setattr(viewport.renderer, "add_surface", add_surface)
     try:
