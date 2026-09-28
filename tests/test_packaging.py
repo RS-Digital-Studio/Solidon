@@ -898,6 +898,75 @@ exit 0
     assert len(calls.read_text(encoding="utf-8").splitlines()) == 1
 
 
+#: Der Schritt, der den Hilfsprozess des Kerns aus dem gebauten Paket startet.
+_FROZEN_HELPER_STEP: Final = "Hilfsprozess im Paket starten"
+
+
+def _assert_frozen_helper_step(workflow: str) -> None:
+    """Direkt nach dem Bauen, auf jedem Runner, mit Frist, ohne erlaubten Fehler."""
+    package = job_block(workflow, "package")
+    names = re.findall(r"(?m)^      - name: (.+)$", package)
+    assert _FROZEN_HELPER_STEP in names, "der Paketjob startet den Hilfsprozess nicht"
+    assert names[names.index("Bauen") + 1] == _FROZEN_HELPER_STEP, "nicht direkt nach dem Bauen"
+    step = step_block(package, _FROZEN_HELPER_STEP)
+    assert re.search(r"(?m)^        run: python tools/check_frozen_helper\.py dist$", step)
+    assert not re.search(r"(?m)^        if:", step), "nicht auf allen vier Runnern"
+    assert "continue-on-error" not in step
+    minutes = re.search(r"(?m)^        timeout-minutes: (\d+)$", step)
+    assert minutes is not None and int(minutes.group(1)) <= 10, "ohne kurze Frist"
+    assert (ROOT / "tools" / "check_frozen_helper.py").is_file()
+
+
+def test_the_package_job_starts_the_kernel_helper_from_the_package() -> None:
+    """Kein anderer Schritt startet das gebaute Programm (Durchsicht RM-212, B1).
+
+    Im Paket startet der Hilfsprozess des Kerns die Anwendung selbst noch
+    einmal. Ohne diesen Schritt belegte nichts, dass Einstieg, Laufzeithaken
+    und Bundle ihn auf macOS und Linux tragen — scheiterte es dort, wartete der
+    erste große Schritt 30 s und rechnete danach wie vor RM-212.
+    """
+    _assert_frozen_helper_step(WORKFLOW.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (f"- name: {_FROZEN_HELPER_STEP}\n", "- name: Hilfsprozess prüfen\n"),
+        (
+            "        timeout-minutes: 5\n        run: python tools/check_frozen_helper.py dist\n",
+            "        timeout-minutes: 5\n        if: runner.os == 'Windows'\n"
+            "        run: python tools/check_frozen_helper.py dist\n",
+        ),
+        (
+            "        timeout-minutes: 5\n        run: python tools/check_frozen_helper.py dist\n",
+            "        timeout-minutes: 5\n        continue-on-error: true\n"
+            "        run: python tools/check_frozen_helper.py dist\n",
+        ),
+        (
+            "        timeout-minutes: 5\n        run: python tools/check_frozen_helper.py dist\n",
+            "        run: python tools/check_frozen_helper.py dist\n",
+        ),
+        ("run: python tools/check_frozen_helper.py dist\n", "run: echo übersprungen\n"),
+    ],
+)
+def test_the_frozen_helper_guard_rejects_a_weakened_step(before: str, after: str) -> None:
+    """Gegenproben: umbenannt, auf einen Runner beschränkt, Fehler erlaubt, ohne Frist, leer."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert before in workflow
+    with pytest.raises(AssertionError):
+        _assert_frozen_helper_step(workflow.replace(before, after, 1))
+
+
+def test_the_frozen_helper_check_fails_without_a_package(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein leeres ``dist`` ist rot, mit Satz — kein stilles Grün ohne Programm."""
+    from tools import check_frozen_helper as tool
+
+    assert tool.main([str(tmp_path)]) == 1
+    assert "::error::Die gebaute Anwendung fehlt" in capsys.readouterr().out
+
+
 def test_the_customer_package_builds_the_fast_slice_core() -> None:
     """Die geprüfte schnelle Schichtanalyse muss auch beim Kunden ankommen.
 

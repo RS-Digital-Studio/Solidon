@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import io
+import itertools
 import json
 import math
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any, Final, cast
@@ -970,11 +971,19 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     cache = getattr(mesh, "_cache", None)
     if cache is not None and _COMPONENTS_KEY in cache:
         return list(cast("tuple[np.ndarray, ...]", cache[_COMPONENTS_KEY]))
+    # Wie ``trimesh.graph.connected_components(…, engine="scipy")``: jede
+    # Nachbarschaft liegt zwischen zwei der ``count`` Dreiecke, also ist die
+    # Knotenmenge alles und die Gruppen sind die der Nummern. Die Nummern
+    # rechnet ``kernel_jobs.component_labels`` — an großen Netzen im
+    # Hilfsprozess, denn ``csgraph`` hält den GIL (RM-212).
+    from app.core.geom import kernel_process
+
+    edges = np.asarray(_adjacency_by_place(mesh), dtype=np.int64).reshape(-1, 2)
+    labels = kernel_process.run(
+        "component_labels", {"edges": edges}, {"count": count}, weight=count
+    )[0]["labels"]
     pieces = tuple(
-        np.asarray(piece, dtype=np.int64)
-        for piece in trimesh.graph.connected_components(
-            _adjacency_by_place(mesh), nodes=np.arange(count), engine="scipy"
-        )
+        np.asarray(piece, dtype=np.int64) for piece in trimesh.grouping.group(labels, min_len=1)
     )
     for piece in pieces:
         piece.flags.writeable = False
@@ -1020,6 +1029,28 @@ def triple_products(triangles: np.ndarray) -> np.ndarray:
     )
 
 
+#: Wie viele Werte eines Felds auf einmal zu Python-Zahlen werden
+#: (:func:`python_values`).
+PYTHON_VALUES_CHUNK: Final = 262_144
+
+
+def python_values(values: np.ndarray) -> Iterator[Any]:
+    """Die Werte eines eindimensionalen Felds als Python-Zahlen, Stück für Stück.
+
+    Dieselbe Folge wie ``values.tolist()``; ``math.fsum`` oder ``tuple``
+    darüber ergeben dieselbe Zahl, dasselbe Tupel. Nur ist ein ``tolist`` über
+    Millionen Werte ein einziger C-Aufruf, ``fsum`` oder ``tuple`` darüber ein
+    zweiter, und keiner gibt den GIL her: Am Spielwürfel nach *Kanten
+    verfeinern* (5,8 Mio. Dreiecke) hielt allein das Volumen den Hauptfaden
+    bis zu 300 ms an, obwohl ein Arbeiter rechnete (RM-212). Zwischen zwei
+    Stücken läuft hier Python, und dort wechselt der Interpreter den Faden.
+    """
+    return itertools.chain.from_iterable(
+        values[start : start + PYTHON_VALUES_CHUNK].tolist()
+        for start in range(0, len(values), PYTHON_VALUES_CHUNK)
+    )
+
+
 def enclosed_volume(body: trimesh.Trimesh) -> float:
     """Das Volumenintegral über die Oberfläche, bezogen auf den Ursprung.
 
@@ -1028,12 +1059,14 @@ def enclosed_volume(body: trimesh.Trimesh) -> float:
     0,29 s. Für ein geschlossenes Netz das Volumen, für ein offenes eine Zahl,
     die an der Lage hängt; so war sie es vorher auch. **Für eine Entscheidung
     gilt** :func:`signed_volume`: Weit vom Ursprung verliert diese Summe das
-    Volumen eines kleinen Körpers in der Rundung.
+    Volumen eines kleinen Körpers in der Rundung. Summiert wird in Stücken
+    (:func:`python_values`) — ``fsum`` rundet genau einmal, die Zahl ist
+    dieselbe.
     """
     triangles = np.asarray(body.triangles, dtype=np.float64)
     if not len(triangles):
         return 0.0
-    return math.fsum(triple_products(triangles).tolist()) / 6.0
+    return math.fsum(python_values(triple_products(triangles))) / 6.0
 
 
 def signed_volume(body: trimesh.Trimesh) -> float:

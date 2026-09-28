@@ -73,7 +73,10 @@ ohne Teilung, keinen doppelt und keine Datei geteilt (24.09.2026). Beide
 Aufteilungen teilen dieselbe Verteilung (`tools/ci_shards.py`). Eine
 gemeinsame Paketabhängigkeit wartet auf alle erforderlichen Jobs. Es gibt
 keinen spekulativen Paketbau und keine Änderung an Signierung oder
-Veröffentlichung.
+Veröffentlichung. Der Paketjob startet nach dem Bauen auf jedem Runner den
+Hilfsprozess des Kerns aus dem Paket (`tools/check_frozen_helper.py`, RM-212);
+das ist ein Rauchtest am Artefakt, kein Testlauf, und `tests/test_packaging.py`
+hält ihn.
 
 Die Auswahl stammt weiterhin aus Pytests Fixture-Graphen und Markern.
 Je eine versionierte Laufzeittabelle für Fenster und Kern beeinflusst

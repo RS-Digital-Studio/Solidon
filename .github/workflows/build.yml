@@ -452,6 +452,18 @@ jobs:
         # auch CPython, Bootloader und jede wirklich mitgereiste native Datei.
         run: pyinstaller packaging/solidon3d.spec --noconfirm
 
+      - name: Hilfsprozess im Paket starten
+        # Im Paket startet der Hilfsprozess des Kerns (RM-212) die Anwendung
+        # selbst noch einmal, und ihr Einstieg gibt an `freeze_support` ab. Ob
+        # Einstieg, Laufzeithaken und Bundle das tragen, sieht keine Suite, und
+        # kein anderer Schritt startet das gebaute Programm. Das Werkzeug ist
+        # der Elternprozess: Hilfsprozess aus dem Paket, eine Boolesche
+        # bitgleich zur Rechnung im Prozess, danach weder ein Prozess noch ein
+        # Temp-Ordner übrig. Ohne Fenster, und es schreibt nichts ins Paket —
+        # die Stückliste darunter sieht dasselbe Artefakt.
+        timeout-minutes: 5
+        run: python tools/check_frozen_helper.py dist
+
       - name: Laufzeit-Stückliste gegen CycloneDX 1.6 prüfen
         # Das JSON Schema ist die Referenzimplementierung von CycloneDX. Der
         # Abruf ist auf den offiziellen Release-Commit 1.6 festgeschrieben;

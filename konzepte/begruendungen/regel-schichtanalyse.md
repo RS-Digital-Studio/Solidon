@@ -606,6 +606,66 @@ Neu als Überschrift: Die Regel fasst die „Wer … anfasst, misst beide
 Seiten“-Sätze der einzelnen Erkennungsregeln zusammen. Die Modellreihen
 stehen bei ihren Regeln in den folgenden Abschnitten.
 
+## Ein Löserlauf entfällt nur mit dem Nein des Stapels
+
+*Warum der Stapel schnell rechnen darf* (Review stapel, B3): `kern.md` erlaubt
+schnelle Wege für Anzeige, Bericht und exakt nachgeprüfte Vorauswahlen. Das
+Nein des Stapels prüft niemand nach — es nimmt den echten Lauf weg. Getragen
+wird es von seinen Abständen: Unter `platform_noise()` (ein ULP auf BLAS,
+einsum, LAPACK, Winkelfunktionen) kippte an fünf Beulenkugeln mit 1 484
+Läufen kein Urteil und keines war falsch (Review-Sonde G); ohne Abstände gab
+es unter 4 700 synthetischen Aufgaben genau ein falsches Nein (Ring an einem
+Zylinderstück, Sonde H), mit Abständen keines. Beides steht als Test in
+`tests/test_refine.py`.
+
+*Was der Stapel festhält* (Review stapel, B1 und B4): Er liest jede Lesung
+der Runde vorab; der Merker hält davon nur `SUPPORT_CACHE_LIMIT`, und
+`classify` las jede ein zweites Mal, ebenso `_rigid_key` (Freiform der
+Leistungstests 3 896 statt 1 949 Lesungen). Deshalb antworten beide in der
+Runde aus dem Wissen des Stapels. Die Lesungen der Runde hält er bewusst fest,
+solange sie läuft, und das kostet Speicher: Am Meshy-Murmelbrett hält das Wissen
+192 bis 226 MiB je Runde — knapp die Hälfte der Lesungen gehört zu Flecken ohne
+Plan, dazu kommen in der Stückrunde 54 MiB Kennzahlen, die erst der Nachtrag
+festhält. Die Spitze des ganzen `detect` steigt dort um rund 90 MiB (2 388 → 2 481
+MiB, gemessen gegen `aa82afdff`; +3,9 % Arbeitssatz, +3,6 % zugesagter Speicher)
+für rund ein Viertel weniger Rechenzeit. Hebel für später: die Kennzahl als
+16-Byte-Abdruck statt des Feldes halten, das nähme die 54 MiB weg (Review
+stapel, B9). Der Stapellauf selbst
+behält vom Weg nur das laufende Maximum von Plan-Schatten-Abstand und Betrag;
+der ganze Weg wog an einem vollen Block 149 MiB. Die Blockgröße folgt der
+gemessenen Spitze (`BATCH_BYTES`, `BATCH_PEAK_FACTOR`): am Meshy-Murmelbrett
+höchstens 64 statt 299 MiB je Block, Urteile Problem für Problem gleich.
+
+RM-209, RM-132, RM-193 (Paket stapel der Release-Sitzung 0.5.1). Eine
+Verfeinerung, die ihr Budget ausschöpft, liefert nichts (RM-210) — an der
+Kumiko-Schale 442 von 467 Kegelläufen, am Meshy-Murmelbrett 4 995 von 15 800
+Kegel- und 1 487 von 5 203 Ringläufen, jeder hundert Auswertungen lang. Neun
+Siebe aus Fleckmerkmalen sind gemessen und verworfen (Tabelle in RM-209), und
+ein Nachweis aus der Geometrie scheidet aus: Einen fast ebenen Splitter nähert
+ein Kegel mit 85° beliebig gut an; ob der Löser dorthin kommt, steht nur im
+Lauf.
+
+Deshalb rechnet `refine.exhausted` den Lauf selbst, für alle Flecken einer
+Runde zugleich — SciPys `trf_no_bounds` Zweig für Zweig in NumPy — und
+übernimmt nur das sichere Nein. Gemessen gegen den echten Lauf (Sonden
+`p55`, `p59`, `p63` im Paket stapel):
+
+- Weg nach hundert Auswertungen: median 2,5e-14, höchstens 2,8e-11 relativ in
+  den Parametern; gleiche Auswertungszahl in 465 von 467 Kegelläufen der
+  Kumiko-Schale.
+- An jedem bestätigten Lauf dieselbe Schrittfolge wie im echten Lauf, dieselbe
+  Zahl innerer Newton-Schritte, und die Abweichung in den Größen, an denen
+  Zweige hängen, nutzt höchstens 5,8e-4 des Abstands zur Schwelle
+  (`DECISION_MARGIN`; Kumiko, Drache, Meshy).
+- Keine falsche Absage an allen Läufen von Kumiko-Schale, Drache, Freiform und
+  Meshy-Murmelbrett (21 000 Läufe, 4 846 sicher vergeblich an Meshy).
+
+Die feste Arbeit je Runde (gut hundert NumPy-Aufrufe, die Zerlegung je Problem
+etwa vier Mikrosekunden) lohnt sich erst in Gruppen von einigen Dutzend
+Problemen; darunter rechnet der echte Löser (`MIN_BATCH`). Große Flecken mit
+Tausenden Stützpunkten spart der Stapel nicht: Dort ist die Rechnung, nicht der
+Aufruf, das Teure.
+
 ## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale
 
 *Ursprüngliche Überschrift: „Auf einer Freiform sind Kugel, Ring, Kegel und

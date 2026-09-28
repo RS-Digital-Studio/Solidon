@@ -54,7 +54,7 @@ unter „Boolesches geht durch die Rückfallkette“.
 
 - **Native Stufen** übergeben `Mesh64` und lesen Status und Volumen vor der
   Rückvernetzung; flächiger Kontakt ergibt ein leeres Netz, ob das gilt, sagt
-  `allow_empty`. Kontaktreste entscheidet `_native_contact` an der
+  `allow_empty`. Kontaktreste entscheidet `kernel_jobs.native_contact` an der
   Float64-Grenze `gamma(8) * max|Koordinate| * Oberfläche` je Komponente —
   keine Drucktoleranz; `EPS_GEOM` ist kein Mindestvolumen. Verbleibende Schalen
   werden angefügt, nie neu vereinigt (das füllte Hohlräume).
@@ -72,7 +72,8 @@ unter „Boolesches geht durch die Rückfallkette“.
 `__init__.py` trägt nur den Paketdocstring.
 
 **Grundlage** — `mesh.py` (die Hülle um den Kern, §9; `read_mesh`,
-`unique_edges`, `edge_table`; `on_surface` über einen Index, den hält, wer
+`unique_edges`, `edge_table`; `python_values` für Millionen Werte als
+Python-Zahlen, stückweise; `on_surface` über einen Index, den hält, wer
 denselben Körper mehrmals fragt — `prepare.surface_index_of`;
 `ray_hits_batch`, dessen Index nur wählt, welche Paare rechnen, nie ihren
 Wert; `lifted_caps`, Zwilling von `brep.edit.collared`) · `boolean.py` ·
@@ -84,6 +85,15 @@ Originaldreiecke zu einem belegten `SurfacePatch`, Budget je Dreieck; keine
 neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
 der Aufrufer)
+
+**Der Netzkern im Hilfsprozess** (RM-212) — `kernel_jobs.py` (jeder lange
+Aufruf, der an ganzen Körpern den GIL hält — `manifold3d`, der Zusammenhang
+über `csgraph` —, als reine Rechnung, Felder hinein, Felder heraus; `JOBS`
+ist der einzige Weg in den Hilfsprozess; dazu seine Seite `serve` und der
+gemeinsame Speicher `pack`/`copied`) · `kernel_process.py` (`run` wählt: hier
+oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
+`shutdown`; `NOT_A_KERNEL_FAILURE` für breite Fänge). Die Regel steht in
+`kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen

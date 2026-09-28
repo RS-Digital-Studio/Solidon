@@ -16,6 +16,7 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 | Datei | Rolle |
 |---|---|
 | `features.py` | Vollerkennung `detect` (§21.1): Ebenen, `_fitted` in Runden (Zylinder, Krümmungssplit, Stadion, `_arcs_of_a_prism`, `_pieces_at_a_seam`), Zusammenlegen, `detect_holes`, `detect_voids`, `narrowings_marked`, Anschnitt, `is_a_freeform`, zuletzt `detect_curved_faces` (nie auf einer Freiform); Fits (Felder an `CylinderFit`, `ConeFit`, `StadiumFit`), Merker, `numbering_order` und die Fragen, die Kantenweg und Panel teilen (`planar_facet`, `planes_beside`, `replaces_an_edge`, `tangent_walls`, `sits_at_the_mouth_of`) |
+| `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`) |
 | `helix.py` | Gewinde am eingelesenen Netz: Spektrum `_best_pitch` (beide Vorzeichen), Kantenleser `_measured_helix`; was eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne. Bausteingewinde laufen nie hindurch (§24.1) |
 | `slots.py` | Langlöcher, topologisch: zwei Halbzylinder, zwei ebene Flanken (Gegenprobe `tests/test_slot_features.py`); `slots_from_stadiums`, `open_slots_instead_of_fillets`, `native_open_slot_measures`, Paarsuche `_PairPlan` |
 | `patterns.py` | Muster (§25): `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung |
@@ -41,6 +42,13 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
   `carry_refined_detection` (feiner geteilt, `note_refinement`, Beleg
   `refined_twin`; der Vermerk reist als `<n>.origin.npy` durch den
   Plattencache) und `known_detection` (Live-Vorschau) antworten ohne Rechnung.
+- **Vergebliche Löserläufe entfallen im Stapel**: Vor jeder Runde (ganze
+  Flecken, Stücke, Mantelnachweis) legt `_screened_fits` Plan und Urteil
+  aller Kegel- und Ringläufe in `_SCREENED` (`_screening`), dazu je Fleck
+  Lesung und Kennzahl, aus denen `_surface_support` und `_rigid_key` in der
+  Runde antworten;
+  `_fit_cone_measured`/`_fit_torus_measured` lassen nur die sicher
+  vergeblichen aus, alles andere rechnet der Löser Zahl für Zahl.
 - **Wo neu gerechnet wird, antworten Einpassungen und Nachweise über die
   Körpergrenze** (`_by_geometry`, `GEOMETRY_KEYED_ANSWERS`), bitgleich
   geschlüsselt nach Stützpunktlesung (`_SurfaceSupport.digest`), Toleranz vom

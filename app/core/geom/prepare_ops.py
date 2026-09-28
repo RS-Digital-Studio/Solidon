@@ -35,7 +35,7 @@ from app.core.errors import (
     InternalError,
     ValidationError,
 )
-from app.core.geom import lathe, transform
+from app.core.geom import kernel_process, lathe, transform
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     DRAFT_CHAIN,
@@ -2324,31 +2324,29 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
     Die Slots gehen danach wie nach jeder Booleschen von der nächsten
     Eingangsfläche auf die neuen Dreiecke über.
     """
-    import manifold3d
-
     from app.core.geom.attributes import in_source_layout, transfer
 
     joined = outcome.mesh
     raw = joined.raw
     if len(raw.faces) == 0 or not raw.is_watertight:
         return outcome
+    # Die Rechnung ist ``kernel_jobs.simplify_closed``, am ganzen Körper und an
+    # großen im Hilfsprozess (``kernel_process``) — sie hielt sonst den
+    # Interpreter an wie jeder Kernaufruf.
     try:
-        body = manifold3d.Manifold(
-            manifold3d.Mesh64(
-                np.require(raw.vertices, dtype=np.float64, requirements=("C", "W")),
-                np.require(raw.faces, dtype=np.uint64, requirements=("C", "W")),
-            )
+        arrays, reported = kernel_process.run(
+            "simplify_closed",
+            {"vertices": np.asarray(raw.vertices), "faces": np.asarray(raw.faces)},
+            {"tolerance": EPS_GEOM},
+            weight=len(raw.faces),
         )
-        if body.status() != manifold3d.Error.NoError:
-            return outcome
-        built = body.simplify(EPS_GEOM).to_mesh64()
+    except kernel_process.NOT_A_KERNEL_FAILURE:
+        raise
     except Exception:  # Der Kern hat eigene Fehlerklassen; die rohe Vereinigung bleibt.
         return outcome
-    candidate = trimesh.Trimesh(
-        vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, copy=True),
-        faces=np.array(built.tri_verts, dtype=np.int64, copy=True),
-        process=False,
-    )
+    if not reported["found"]:
+        return outcome
+    candidate = trimesh.Trimesh(vertices=arrays["vertices"], faces=arrays["faces"], process=False)
     # **Ein Volumen wird nicht mit einer Längentoleranz geprüft.** Hier stand
     # ``is_close``, und das vergleicht auf ``EPS_GEOM`` genau — einen
     # Mikrometer, gegen einen Körper von 21 190 Kubikmillimetern gehalten.

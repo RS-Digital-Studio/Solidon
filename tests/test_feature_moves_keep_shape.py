@@ -949,11 +949,11 @@ def test_boxes_cap_a_tilted_bore_only_on_the_lossless_stages(
     tried: list[str] = []
     run_stage = chain._run_stage
 
-    def capping_fails(kind: Any, meshes: Any, stage: Any, seed: Any) -> Any:
+    def capping_fails(kind: Any, meshes: Any, stage: Any, seed: Any, cancelled: Any = None) -> Any:
         if kind == "intersection" and len(meshes) > 2:
             tried.append(stage)
             raise ValueError("Probe: die Kappe hält auf keiner Stufe")
-        return run_stage(kind, meshes, stage, seed)
+        return run_stage(kind, meshes, stage, seed, cancelled)
 
     monkeypatch.setattr(chain, "_run_stage", capping_fails)
     source = _bored("mesh", RIBBED["gesenkt"], ribbed=True)

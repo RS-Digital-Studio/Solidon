@@ -77,7 +77,9 @@ Ersatzwerkzeuge: `app/core/geom/CLAUDE.md` („Plattformgleich gerechnet"). Ein
 neuer Weg zu Geometrie kommt in `tests/test_platform_identity.py` (`_WAYS`),
 der jede Rechnung um ein ULP verrauscht und den BLAS-Kern tauscht; der
 Fingerabdruck darf sich nicht rühren. Anzeige, Berichtsmessung und exakt
-nachgeprüfte Vorauswahlen dürfen schnell rechnen — der Kommentar sagt, warum.
+nachgeprüfte Vorauswahlen dürfen schnell rechnen — der Kommentar sagt, warum;
+ebenso ein sicheres Nein mit Abstand und Schattenlauf (`schichtanalyse.md`,
+„Ein Löserlauf entfällt nur mit dem Nein des Stapels“).
 
 ## Eine Merkmalsnummer kommt aus dem Körper, nie aus der Reihenfolge
 
@@ -127,6 +129,50 @@ Die Regel gilt der Bibliothek, nicht dem Verzeichnis, in dem sie auffiel. In
   sind nicht betroffen.
   `test_recognition_selects_triangles_and_corners_through_plain_arrays` hält
   `perceive` frei davon.
+
+## Ein Kernaufruf an einem ganzen Körper rechnet im Hilfsprozess
+
+`manifold3d` hält den GIL in jedem Aufruf (Aufbau aus `Mesh64`, `simplify`,
+`refine_to_length`, Boolesche, `decompose`, `to_mesh64`); ein Arbeiterfaden, der
+ihn ruft, hält das Fenster an (RM-212).
+
+- **Jeder `manifold3d`-Aufruf an einem Körper, der groß sein kann, ist eine
+  Rechnung in `geom/kernel_jobs.py` und läuft über `kernel_process.run`** —
+  ebenso jede andere Bibliothek, die an ganzen Körpern den GIL hält
+  (`scipy.sparse.csgraph` in `mesh.face_components`) —
+  unter `OFFLOAD_ABOVE` Dreiecken und im Hauptfaden hier, sonst im
+  Hilfsprozess. Eine neue Rechnung steht in `JOBS` und bekommt ihren Fall in
+  `tests/test_kernel_process.py` (Bitgleichheit).
+- **Eine Rechnung kennt nur Felder und Zahlen**: kein Import aus dem Kern,
+  Grenzen als Zahl vom Aufrufer (sonst gilt ein Umstellen im Test nicht im
+  Hilfsprozess), eigene zusammenhängende Ausgabefelder, nie ein Körper des
+  Kerns. Verschweißen, Slots und Befunde bleiben beim Aufrufer.
+- **Eine Rechnung ruft kein BLAS** (kein `@`, `dot`, `einsum`, `linalg` außer
+  einer Norm entlang einer Achse): Der Hilfsprozess startet mit einem
+  BLAS-Faden (`HELPER_ENVIRONMENT`, spart je Bibliothek einen Puffer je
+  Rechenkern), und über BLAS hinge das Ergebnis an der Fadenzahl.
+  `test_the_jobs_call_no_blas` hält es.
+- **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
+  Verfeinerung die erwartete des Ergebnisses.
+- **Der Abbruch reicht als Token hinein** und beendet den Hilfsprozess; wer um
+  einen Aufruf breit fängt (`except Exception`), lässt
+  `kernel_process.NOT_A_KERNEL_FAILURE` durch — Abbruch und verlorenen
+  Hilfsprozess —, sonst nimmt eine Rückfallkette still die nächste Stufe.
+  Ein toter Hilfsprozess ist `KernelHelperLostError` (Regel 17); einer, der
+  stumm bleibt oder eine Rechnung nicht übernehmen oder übergeben kann, ein
+  Rückfall in den Prozess. Fehlt dafür Speicher, kommt `MemoryError` wie aus
+  dem Prozess (Windows meldet ihn am gemeinsamen Speicher als `OSError`).
+- **Die Seite des Hilfsprozesses lässt nichts entweichen** (`serve`): Im
+  Windows-Fensterpaket ist `sys.stderr` `None`, und eine Ausnahme dort öffnete
+  ein Traceback-Fenster von PyInstaller.
+- **Millionen Werte werden stückweise zu Python-Zahlen**
+  (`geom.mesh.python_values`), nie in einem `tolist`, `tuple`, `sorted` oder
+  `repr` am Stück — jeder davon ist ein C-Aufruf unter dem GIL, und nach
+  *Kanten verfeinern* trägt eine Fläche Millionen Dreiecksnummern. Zahlenreihen
+  in einen Hash gehen als `array("q", …)`, nicht als Text.
+- **Ein Hauptmodul, das den Kern nebenläufig ruft, rechnet nur unter
+  `__main__`** — der Hilfsprozess lädt es noch einmal (`spawn`); im Paket ruft
+  `app/ui/app.py` zuerst `freeze_support()`.
 
 ## Eine neue gemerkte Frage wird geteilt oder gebunden — ausdrücklich
 

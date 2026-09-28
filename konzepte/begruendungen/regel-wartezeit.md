@@ -486,7 +486,7 @@ offen ist, und jede Zahl rechnete erst grob vergeblich und dann genau. Mit der
 Schranke als Ziel nimmt er das geschlossene Kernergebnis. Zwei Fallen lagen
 dahinter, beide im Rückweg ins Netz: `simplify` ließ am Piratenschiff zwölf
 Splitter neben dem Rumpf stehen, im Mittel dünner als seine Toleranz
-(`mesh_ops._without_slivers` lässt sie weg), und `_as_mesh` verschweißte
+(`kernel_jobs.without_slivers` lässt sie weg), und `_as_mesh` verschweißte
 Schalen, die sich an einer Kante berühren, bis vier Flächen an ihr hingen —
 am Eiffelturm zwei echte Teile (seither verschweißt es nur, wo das Netz dicht
 bleibt, wie `boolean._tidied`). Gemessen mit derselben Sonde, vorher und
@@ -577,6 +577,13 @@ Lochplatte 252 → 250 ms, Waschschüssel 60 → 89 ms, Eiffelturm 664 → 120 m
 Spiderman 799 → 324 ms, Piratenschiff 819 → 492 ms. Ganz weg ist es erst
 mit einem Kern, der den GIL hergibt — `manifold3d` gibt ihn bei keinem
 Aufruf her, auch nicht beim Bauen des Körpers (RM-212).
+
+**Weg ist es mit dem Hilfsprozess** (RM-212, Entscheidung Robert vom
+27.09.2026): Die Verkleinerung und die Bohrung am groben Netz rechnen dort
+(`geom.kernel_process`). Derselbe Weg, im Wechsel gemessen
+(`sonden/hilfsprozess/grob_stillstand.py`, 28.09.2026): Lochplatte 516 → 92 ms,
+Spiderman 573 → 7 ms, Piratenschiff 874 → 6 ms, Eiffelturm 425 → 75 ms,
+Waschschüssel 95 → 4 ms, derselbe Abtrag.
 
 **Und die Vorschau des Dialogs erkennt keine Merkmale** (22.09.2026).
 `preview_async` reicht `detect_features=False` bis in `evaluate`: Die
@@ -1142,8 +1149,10 @@ Zwei Sätze daraus:
   zwei Takten, solange der Arbeiter rechnet.
 * **Für zwanzig Pixel genügt das Raster.** Der exakte Kern bleibt, wo die
   Form zählt — in der Anzeige ab §31 und der Orientierungssuche —, und er
-  hält dort denselben GIL. Das ist ein offener Punkt der Ansicht, kein
-  Freibrief.
+  hält dort denselben GIL. Das war ein offener Punkt der Ansicht, kein
+  Freibrief — geschlossen mit dem Hilfsprozess (RM-212): Die Anzeige ab §31
+  dezimiert dort, und am Spielbrett nach *Kanten verfeinern* (4,1 Mio.
+  Dreiecke) stand das Fenster beim ganzen Übernehmen höchstens 128 ms.
 
 Die Wandprüfung der Formsitzung ist der zweite Fall derselben Woche: Sie lief
 im Hauptthread mit Wartezeiger, der Kommentar rechnete mit 273 ms, gemessen

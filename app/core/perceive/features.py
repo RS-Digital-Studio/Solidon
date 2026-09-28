@@ -24,7 +24,9 @@ import struct
 import threading
 import weakref
 from collections import Counter, OrderedDict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from typing import Any, Final, NamedTuple, cast
 
@@ -36,6 +38,7 @@ from app.core.geom.mesh import (
     MeshData,
     face_components,
     fully_stitched,
+    python_values,
     refined_units,
     refined_units_key,
     triple_products,
@@ -43,6 +46,7 @@ from app.core.geom.mesh import (
 )
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
+from app.core.perceive import refine
 from app.core.perceive.helix import Helix, _facet_of_face, find_helices
 from app.core.perceive.patterns import patterns_instead_of_cells
 from app.core.perceive.slots import ACROSS_THE_AXIS, PARALLEL_AXES, slots_instead_of_half_bores
@@ -319,8 +323,19 @@ def _rigid_key(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[Any, ...] |
 
     ``None`` heißt: Dieser Fleck weist sich nicht aus — er ist zu klein zum
     Einpassen oder zu groß für die quadratischen Kosten
-    (:data:`RIGID_KEY_POINTS`).
+    (:data:`RIGID_KEY_POINTS`). In einer Runde des Stapels antwortet dessen
+    Wissen (:func:`_screened_fits` hat die Kennzahl schon gerechnet).
     """
+    screened = _SCREENED.get()
+    if screened is not None and screened.body is body:
+        known = screened.shapes.get(_patch_key(patch), _UNKNOWN)
+        if known is not _UNKNOWN:
+            return cast("tuple[Any, ...] | None", known)
+    return _rigid_key_read(body, patch)
+
+
+def _rigid_key_read(body: trimesh.Trimesh, patch: Sequence[int]) -> tuple[Any, ...] | None:
+    """Die Rechnung von :func:`_rigid_key`."""
     if _face_count(body, patch) < MIN_PATCH_FACES:
         return None
     corners = np.asarray(body.faces, dtype=np.int64)[list(patch)]
@@ -1148,11 +1163,13 @@ def _mesh_key(mesh: MeshData) -> bytes:
         if known is not None:
             key = bytes(known)
     if key is None:
-        key = hashlib.blake2b(
-            np.ascontiguousarray(body.vertices, dtype=np.float64).tobytes()
-            + np.ascontiguousarray(body.faces, dtype=np.int64).tobytes(),
-            digest_size=16,
-        ).digest()
+        # Gestreamt statt als ein Bytestück: ``tobytes`` und die Verkettung
+        # kopierten an 5,8 Mio. Dreiecken zweimal 209 MB unter dem GIL; der
+        # Abdruck ist derselbe, und ``update`` gibt den GIL beim Rechnen her.
+        hasher = hashlib.blake2b(digest_size=16)
+        hasher.update(np.ascontiguousarray(body.vertices, dtype=np.float64))
+        hasher.update(np.ascontiguousarray(body.faces, dtype=np.int64))
+        key = hasher.digest()
         if cache is not None:
             cache["solidon_mesh_key"] = key
     # **Und der Ursprung je Dreieck, wo das Netz einen trägt** (R1): Er
@@ -1849,7 +1866,10 @@ def refined_features(
         lengths = starts[rows + 1] - starts[rows]
         before = np.cumsum(lengths) - lengths
         places = np.repeat(starts[rows] - before, lengths) + np.arange(int(lengths.sum()))
-        return tuple(np.sort(order[places]).tolist())
+        # In Stücken zum Tupel (``python_values``): Die größte Fläche des
+        # verfeinerten Spielwürfels hat 3 979 168 Dreiecke, und ein Tupel aus
+        # einem Stück hielt den Hauptfaden 150 ms an (RM-212).
+        return tuple(python_values(np.sort(order[places])))
 
     carried: dict[FeatureId, Feature] = {}
     for name, feature in features.items():
@@ -2531,19 +2551,30 @@ def _fitted(
         # **Erst jeder Fleck als Ganzes.** Was hier eine Form ergibt, ist
         # fertig und zählt für das Urteil unten nicht mehr mit.
         unresolved: list[int] = []
-        whole_weight = sum(
-            _fit_weight(patch) for patch in patches if _face_count(body, patch) >= MIN_PATCH_FACES
-        )
+        fitting = [patch for patch in patches if _face_count(body, patch) >= MIN_PATCH_FACES]
+        whole_weight = sum(_fit_weight(patch) for patch in fitting)
         weighed = 0.0
-        for patch_index, patch in enumerate(patches):
-            if check_cancelled is not None:
-                check_cancelled()
-            if _face_count(body, patch) < MIN_PATCH_FACES:
-                continue
-            if not classify(patch):
-                unresolved.append(patch_index)
-            weighed += _fit_weight(patch)
-            whole.reach(weighed / whole_weight)
+        # **Erst der Stapel, dann die Flecken der Reihe nach** (RM-209): Er sagt
+        # für alle zugleich, welcher Kegel- und Ringlauf sicher vergeblich
+        # wäre; ``classify`` fragt danach wie immer, und nur diese Läufe
+        # entfallen (:func:`_screened_fits`).
+        looping = whole.part(SCREEN_SHARE, 1.0)
+        with _screening(
+            body,
+            fitting,
+            shapes=no_cone_here,
+            check_cancelled=check_cancelled,
+            share=whole.part(0.0, SCREEN_SHARE),
+        ):
+            for patch_index, patch in enumerate(patches):
+                if check_cancelled is not None:
+                    check_cancelled()
+                if _face_count(body, patch) < MIN_PATCH_FACES:
+                    continue
+                if not classify(patch):
+                    unresolved.append(patch_index)
+                weighed += _fit_weight(patch)
+                looping.reach(weighed / whole_weight)
         share.reach(0.5)
 
         # **Dann die Nachtrennung — und mit ihr das Urteil über die Haut**
@@ -2622,106 +2653,129 @@ def _fitted(
         )
         weighed = 0.0
         by_piece = share.part(0.6, 0.92)
+        ordered_pieces = {
+            patch_index: _in_size_order(body, curvature_splits[patch_index])
+            for patch_index in unresolved
+        }
+        # Der Stapel fragt die Stücke, die ``classify`` gleich der Reihe nach
+        # fragt: die Stücke jedes geteilten Flecks, auf einer Haut nur die von
+        # Gewicht (RM-209, wie in der ersten Runde).
+        asked_pieces = [
+            piece
+            for pieces in ordered_pieces.values()
+            if len(pieces) > 1
+            for piece in pieces
+            if heavy(piece) or not freeform_skin
+        ]
+        piece_screening = _screening(
+            body,
+            asked_pieces,
+            shapes=no_cone_here,
+            check_cancelled=check_cancelled,
+            share=by_piece.part(0.0, SCREEN_SHARE),
+        )
+        by_piece = by_piece.part(SCREEN_SHARE, 1.0)
 
         # **Zuletzt die Stücke.** Sie kommen nach allen ganzen Flecken und
         # nicht mehr unmittelbar nach ihrem eigenen: Das Urteil über die Haut
         # muss vorher stehen, sonst hinge es daran, welcher Fleck zuerst
         # scheitert.
-        for patch_index in unresolved:
-            patch = patches[patch_index]
-            if check_cancelled is not None:
-                check_cancelled()
-            pieces = _in_size_order(body, curvature_splits[patch_index])
-            split_apart = len(pieces) > 1
-            if split_apart and freeform_skin:
-                # Die Haut einer Figur wird nicht in ihre Splitter zerlegt und
-                # eingepasst: am Drachen 27 554 Stücke aus zwei bis fünfzig
-                # Dreiecken mit drei Grad Normalenspreizung, deren Achse kein
-                # Löser bestimmen kann — 33 der 37 Sekunden für null Merkmale.
-                # Eingepasst wird, was Gewicht hat: der tangential
-                # eingeblendete Zapfen, die Verrundung, die Kugelecke (am
-                # Drachen 23 Stücke). Was die Haut an Bohrungen und Flächen
-                # trägt, liegt an ihren Rändern und ist längst ein eigener
-                # Fleck.
-                pieces = [piece for piece in pieces if heavy(piece)]
-            # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
-            # Liste ist Absicht, kein ``any`` mit Kurzschluss.
-            classified: list[bool] = []
-            if split_apart:
-                for piece in pieces:
-                    classified.append(classify(piece))
-                    weighed += _fit_weight(piece)
+        with piece_screening:
+            for patch_index in unresolved:
+                patch = patches[patch_index]
+                if check_cancelled is not None:
+                    check_cancelled()
+                pieces = ordered_pieces[patch_index]
+                split_apart = len(pieces) > 1
+                if split_apart and freeform_skin:
+                    # Die Haut einer Figur wird nicht in ihre Splitter zerlegt und
+                    # eingepasst: am Drachen 27 554 Stücke aus zwei bis fünfzig
+                    # Dreiecken mit drei Grad Normalenspreizung, deren Achse kein
+                    # Löser bestimmen kann — 33 der 37 Sekunden für null Merkmale.
+                    # Eingepasst wird, was Gewicht hat: der tangential
+                    # eingeblendete Zapfen, die Verrundung, die Kugelecke (am
+                    # Drachen 23 Stücke). Was die Haut an Bohrungen und Flächen
+                    # trägt, liegt an ihren Rändern und ist längst ein eigener
+                    # Fleck.
+                    pieces = [piece for piece in pieces if heavy(piece)]
+                # Jedes Stück wird gefragt, nicht nur bis zum ersten Treffer — die
+                # Liste ist Absicht, kein ``any`` mit Kurzschluss.
+                classified: list[bool] = []
+                if split_apart:
+                    for piece in pieces:
+                        classified.append(classify(piece))
+                        weighed += _fit_weight(piece)
+                        by_piece.reach(weighed / planned)
+                else:
+                    weighed += _fit_weight(patch)
                     by_piece.reach(weighed / planned)
-            else:
-                weighed += _fit_weight(patch)
-                by_piece.reach(weighed / planned)
-            # **Und ein Umriss ist kein Stapel von Kreisen** (RM-243): Reihen
-            # sich die Stücke als tangential wandernde Kreise aneinander, ist
-            # der Fleck die gerundete Seite eines Schriftzugs, einer Strebe,
-            # eines geschwungenen Griffs, und seine Stücke sind keine Merkmale.
-            # Stehen bleibt, was ein gezeichneter oder bestätigter Bogen ist —
-            # ein CAD-Umriss setzt Bögen und Splines nebeneinander.
-            # Zurückgezogen wird erst nach der Zusammenlegung
-            # (:func:`_off_the_outline`): Ein Stück, das dort mit einem anderen
-            # Fleck zu einer Fläche verschmilzt, ist bestätigt.
-            standing = (
-                _wandering_outline(body, pieces, check_cancelled) if any(classified) else None
-            )
-            if standing is not None:
-                for number, (piece, known) in enumerate(zip(pieces, classified, strict=True)):
-                    if known and number not in standing:
-                        outline[np.asarray(piece, dtype=np.intp)] = True
-            leftovers: list[list[int]] = [] if split_apart else [patch]
-            for piece, known in zip(pieces, classified, strict=False):
-                if not known:
-                    separated = _cylinder_beside_a_torus(
-                        body, mesh, piece, tori, check_cancelled=check_cancelled
-                    )
-                    if separated is not None:
-                        found.append(separated)
-                    else:
-                        leftovers.append(piece)
-            if not any(classified):
-                # **Dritte Runde, für den Mantel eines knapp aufgezogenen
-                # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß
-                # ist, und keine zwei Bögen, weil die Flanken für die
-                # Krümmungstrennung zu schmal sind. Als Ganzes ist er trotzdem
-                # eine Form — ein Prisma über einem Stadion —, und die wird hier
-                # eingepasst. Nach dem Split und nicht davor: Was zwei Bögen
-                # ergibt, setzt :mod:`app.core.perceive.slots` zusammen wie
-                # bisher.
-                stadium = fit_stadium(body, patch)
-                if stadium is not None and stadium.good and stadium.inward:
-                    stadiums.append((stadium, patch))
+                # **Und ein Umriss ist kein Stapel von Kreisen** (RM-243): Reihen
+                # sich die Stücke als tangential wandernde Kreise aneinander, ist
+                # der Fleck die gerundete Seite eines Schriftzugs, einer Strebe,
+                # eines geschwungenen Griffs, und seine Stücke sind keine Merkmale.
+                # Stehen bleibt, was ein gezeichneter oder bestätigter Bogen ist —
+                # ein CAD-Umriss setzt Bögen und Splines nebeneinander.
+                # Zurückgezogen wird erst nach der Zusammenlegung
+                # (:func:`_off_the_outline`): Ein Stück, das dort mit einem anderen
+                # Fleck zu einer Fläche verschmilzt, ist bestätigt.
+                standing = (
+                    _wandering_outline(body, pieces, check_cancelled) if any(classified) else None
+                )
+                if standing is not None:
+                    for number, (piece, known) in enumerate(zip(pieces, classified, strict=True)):
+                        if known and number not in standing:
+                            outline[np.asarray(piece, dtype=np.intp)] = True
+                leftovers: list[list[int]] = [] if split_apart else [patch]
+                for piece, known in zip(pieces, classified, strict=False):
+                    if not known:
+                        separated = _cylinder_beside_a_torus(
+                            body, mesh, piece, tori, check_cancelled=check_cancelled
+                        )
+                        if separated is not None:
+                            found.append(separated)
+                        else:
+                            leftovers.append(piece)
+                if not any(classified):
+                    # **Dritte Runde, für den Mantel eines knapp aufgezogenen
+                    # Langlochs** (RM-155): kein Zylinder, weil der Weg zu groß
+                    # ist, und keine zwei Bögen, weil die Flanken für die
+                    # Krümmungstrennung zu schmal sind. Als Ganzes ist er trotzdem
+                    # eine Form — ein Prisma über einem Stadion —, und die wird hier
+                    # eingepasst. Nach dem Split und nicht davor: Was zwei Bögen
+                    # ergibt, setzt :mod:`app.core.perceive.slots` zusammen wie
+                    # bisher.
+                    stadium = fit_stadium(body, patch)
+                    if stadium is not None and stadium.good and stadium.inward:
+                        stadiums.append((stadium, patch))
+                        tori.drop_patch(patch)
+                        continue
+                # **Vierte Runde, für die Bögen eines Prismas** (RM-219): Ein
+                # extrudierter Umriss aus tangentialen Bögen und Geraden zerfällt
+                # nach :data:`CURVATURE_JUMP` nicht, und auf das Ganze passt kein
+                # Zylinder. An einem Prisma ist der Radius genau genug, um an
+                # jedem Wechsel zu trennen (:func:`_arcs_of_a_prism`); eingepasst
+                # wird ein Stück nur, wenn es ein gezeichneter Bogen ist (:func:`_exactly_an_arc`).
+                arcs = [
+                    classify(arc)
+                    for leftover in leftovers
+                    for arc in _arcs_of_a_prism(body, leftover, check_cancelled)
+                    if _exactly_an_arc(body, arc, check_cancelled)
+                ]
+                # **Fünfte Runde, für eine Wand mit Absatz** (ERKENNUNG-11): Ein
+                # ganzer Fleck, den weder Krümmung noch Prisma geteilt haben, kann
+                # zwei Formen an einer weichen Naht sein — Wand und Haltelippe
+                # einer Magnettasche, Bohrung und flache Senkung. Geteilt wird nur
+                # dort (:func:`_pieces_at_a_seam`), und jedes Stück wird gefragt
+                # wie jedes andere.
+                seams = (
+                    [classify(piece) for piece in _pieces_at_a_seam(body, patch, check_cancelled)]
+                    if not split_apart and not any(arcs)
+                    else []
+                )
+                if any(classified) or any(arcs) or any(seams):
+                    # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
+                    # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
                     tori.drop_patch(patch)
-                    continue
-            # **Vierte Runde, für die Bögen eines Prismas** (RM-219): Ein
-            # extrudierter Umriss aus tangentialen Bögen und Geraden zerfällt
-            # nach :data:`CURVATURE_JUMP` nicht, und auf das Ganze passt kein
-            # Zylinder. An einem Prisma ist der Radius genau genug, um an
-            # jedem Wechsel zu trennen (:func:`_arcs_of_a_prism`); eingepasst
-            # wird ein Stück nur, wenn es ein gezeichneter Bogen ist (:func:`_exactly_an_arc`).
-            arcs = [
-                classify(arc)
-                for leftover in leftovers
-                for arc in _arcs_of_a_prism(body, leftover, check_cancelled)
-                if _exactly_an_arc(body, arc, check_cancelled)
-            ]
-            # **Fünfte Runde, für eine Wand mit Absatz** (ERKENNUNG-11): Ein
-            # ganzer Fleck, den weder Krümmung noch Prisma geteilt haben, kann
-            # zwei Formen an einer weichen Naht sein — Wand und Haltelippe
-            # einer Magnettasche, Bohrung und flache Senkung. Geteilt wird nur
-            # dort (:func:`_pieces_at_a_seam`), und jedes Stück wird gefragt
-            # wie jedes andere.
-            seams = (
-                [classify(piece) for piece in _pieces_at_a_seam(body, patch, check_cancelled)]
-                if not split_apart and not any(arcs)
-                else []
-            )
-            if any(classified) or any(arcs) or any(seams):
-                # Belegte Teilflächen ersetzen die unsichere Gesamtdeutung;
-                # dieselben Dreiecke zählen nicht zusätzlich als verworfener Ring.
-                tori.drop_patch(patch)
 
         share.reach(0.92)
         if check_cancelled is not None:
@@ -5781,17 +5835,31 @@ def _large_facet_faces_read(
     proofs = share.part(0.55, 1.0)
     planned = sum(_fit_weight(patch) for patch in patches)
     weighed = 0.0
-    for patch in patches:
-        weighed += _fit_weight(patch)
-        proofs.reach(weighed / planned)
-        if check_cancelled is not None:
-            check_cancelled()
-        if _face_count(body, patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch):
-            continue
-        if _a_sliver(body, patch):
-            continue
-        if _round_surface(body, mesh, patch, check_cancelled=check_cancelled):
-            planar.difference_update(patch)
+    proven = [
+        _face_count(body, patch) >= MIN_PATCH_FACES
+        and not recoverable.isdisjoint(patch)
+        and not _a_sliver(body, patch)
+        for patch in patches
+    ]
+    # Der Mantelnachweis fragt je Fleck Kegel und Ring; welcher Lauf sicher
+    # vergeblich wäre, sagt der Stapel vorher für alle (RM-209).
+    screening = proofs.part(0.0, SCREEN_SHARE)
+    proofs = proofs.part(SCREEN_SHARE, 1.0)
+    with _screening(
+        body,
+        [patch for patch, asked in zip(patches, proven, strict=True) if asked],
+        check_cancelled=check_cancelled,
+        share=screening,
+    ):
+        for patch, asked in zip(patches, proven, strict=True):
+            weighed += _fit_weight(patch)
+            proofs.reach(weighed / planned)
+            if check_cancelled is not None:
+                check_cancelled()
+            if not asked:
+                continue
+            if _round_surface(body, mesh, patch, check_cancelled=check_cancelled):
+                planar.difference_update(patch)
     return planar
 
 
@@ -7248,10 +7316,7 @@ def _by_geometry(
     Schlosses, wie in :func:`remembered`. ``body`` bestimmt nur, wer die
     Antwort mithält (:attr:`_Lineage.geometric`).
     """
-    key = hashlib.blake2b(
-        support.digest + _exact_bytes((read, ROUND_FIT_EVALUATIONS, FIT_SOLVER_POINTS)),
-        digest_size=16,
-    ).digest()
+    key = _geometry_key(support, *read)
     with _MEMORY_LOCK:
         lineage = _memory_of(body).lineage
         answers = _BY_GEOMETRY.setdefault(name, OrderedDict())
@@ -7268,6 +7333,22 @@ def _by_geometry(
         while len(answers) > CACHE_LIMIT_PER_QUESTION:
             answers.popitem(last=False)
     return value
+
+
+def _geometry_key(support: _SurfaceSupport, *read: Any) -> bytes:
+    """Der Schlüssel von :func:`_by_geometry`: Lesung, was die Frage sonst liest, Löserbudgets."""
+    return hashlib.blake2b(
+        support.digest + _exact_bytes((read, ROUND_FIT_EVALUATIONS, FIT_SOLVER_POINTS)),
+        digest_size=16,
+    ).digest()
+
+
+def _answered_by_geometry(name: str, support: _SurfaceSupport, *read: Any) -> bool:
+    """Ob :func:`_by_geometry` diese Frage an dieser Lesung schon beantwortet hat, ohne Rechnung."""
+    key = _geometry_key(support, *read)
+    with _MEMORY_LOCK:
+        answers = _BY_GEOMETRY.get(name)
+        return answers is not None and key in answers
 
 
 def _held_geometric(lineage: _Lineage, name: str, key: bytes) -> None:
@@ -7339,6 +7420,16 @@ def _surface_support(
         check_cancelled()
     if _face_count(body, patch) < MIN_PATCH_FACES:
         return None
+    # **In einer Runde des Stapels liegt die Lesung schon vor** (B1 des
+    # Reviews): :func:`_screened_fits` liest jeden Fleck der Runde vorab, der
+    # Merker hält davon aber nur :data:`SUPPORT_CACHE_LIMIT` — ohne diese
+    # Zeile las ``classify`` jede Lesung ein zweites Mal (Freiform der
+    # Leistungstests 3 896 statt 1 949 Lesungen).
+    screened = _SCREENED.get()
+    if screened is not None and screened.body is body:
+        known = screened.supports.get(_patch_key(patch))
+        if known is not None:
+            return known
     support: _SurfaceSupport | None = remembered(
         "support",
         body,
@@ -7698,15 +7789,30 @@ def _refined_fit(
         assert jacobian is not None
         return jacobian(values)
 
-    result = least_squares(
-        checked,
-        initial,
-        jac="2-point" if jacobian is None else checked_jacobian,
-        ftol=ROUND_FIT_PRECISION,
-        xtol=ROUND_FIT_PRECISION,
-        gtol=ROUND_FIT_PRECISION,
-        max_nfev=ROUND_FIT_EVALUATIONS,
-    )
+    # **Mit Ableitung rechnet der Nachbau, Schritt für Schritt wie SciPy**
+    # (:func:`refine.solve`, bitgleich): Die Hülle um ``least_squares`` —
+    # Argumentprüfung, ``VectorFunction``, ``OptimizeResult`` — kostete an der
+    # Kumiko-Schale ein Fünftel der Löserzeit. Ohne Ableitung schätzt SciPy sie
+    # aus Differenzen wie bisher.
+    result: Any
+    if jacobian is None:
+        result = least_squares(
+            checked,
+            initial,
+            jac="2-point",
+            ftol=ROUND_FIT_PRECISION,
+            xtol=ROUND_FIT_PRECISION,
+            gtol=ROUND_FIT_PRECISION,
+            max_nfev=ROUND_FIT_EVALUATIONS,
+        )
+    else:
+        result = refine.solve(
+            checked,
+            checked_jacobian,
+            initial,
+            precision=ROUND_FIT_PRECISION,
+            evaluations=ROUND_FIT_EVALUATIONS,
+        )
     if not result.success or not np.isfinite(result.x).all() or not np.isfinite(result.fun).all():
         return None
     # **Wer sein Budget ausschöpft, hat nicht gerechnet, sondern aufgehört**
@@ -7726,6 +7832,142 @@ def _refined_fit(
     if len(singular) < len(initial) or singular[-1] <= singular[0] * np.sqrt(np.finfo(float).eps):
         return None
     return np.asarray(result.x, dtype=float)
+
+
+#: Was der Stapel einer Runde über ihre Kegel- und Ringläufe weiß (RM-209):
+#: je Einpassung und Lesung (``support.digest``, beim Kegel dazu die
+#: Linientoleranz) der vorbereitete Plan und ob der Löserlauf sein Budget
+#: sicher ausschöpft. Es gilt nur, solange die Runde läuft (:func:`_screening`),
+#: und nur im Faden, der sie rechnet — eine Kopie für einen Nebenfaden rechnet
+#: ohne und bekommt dieselben Antworten.
+@dataclass(frozen=True, slots=True, eq=False)
+class _Screened:
+    """Das Wissen einer Runde: je Einpassung Plan und Urteil, je Fleck Lesung und Kennzahl.
+
+    ``fits`` ist nach Einpassung und Lesung geschlüsselt (``support.digest``,
+    beim Kegel dazu die Linientoleranz), ``supports`` und ``shapes`` nach dem
+    Abdruck der Dreiecksliste (:func:`_patch_key`) — für ``body`` und nur für
+    ihn. Die Lesungen hält der Stapel ohnehin, solange die Runde läuft: Jeder
+    Plan trägt die seine.
+    """
+
+    body: trimesh.Trimesh
+    fits: dict[tuple[Any, ...], tuple[Any, bool]]
+    supports: dict[bytes, _SurfaceSupport]
+    shapes: dict[bytes, tuple[Any, ...] | None]
+
+
+_SCREENED: ContextVar[_Screened | None] = ContextVar("solidon_screened_fits", default=None)
+
+#: Steht für „nicht im Wissen" — ``None`` ist dort eine Antwort.
+_UNKNOWN: Final = object()
+
+
+def _patch_key(patch: Sequence[int]) -> bytes:
+    """Der Abdruck einer Dreiecksliste für das Wissen des Stapels, nur von ihrem Inhalt abhängig."""
+    return hashlib.blake2b(np.asarray(patch, dtype=np.int64).tobytes(), digest_size=16).digest()
+
+
+#: Welcher Anteil einer Runde am Balken auf den Stapel entfällt. Gemessen am
+#: Meshy-Murmelbrett und an der Kumiko-Schale — nur fürs Anzeigen, keine Toleranz.
+SCREEN_SHARE: Final = 0.2
+
+
+def _screened_fits(
+    body: trimesh.Trimesh,
+    patches: Sequence[list[int]],
+    *,
+    shapes: set[tuple[Any, ...]] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+    share: _Share = _UNHEARD,
+) -> _Screened:
+    """Die Kegel- und Ringläufe vieler Flecken auf einmal: Plan und sicheres Nein.
+
+    **Der Stapel entscheidet, wo gerechnet werden muss, nicht was herauskommt**
+    (RM-209). Je Fleck entsteht der Plan, den :func:`_fit_cone_measured` und
+    :func:`_fit_torus_measured` ohnehin rechnen würden, und
+    :func:`refine.exhausted` sagt für alle zugleich, welcher Löserlauf sein
+    Budget sicher ausschöpft und damit nichts geliefert hätte. Nur dieses Nein
+    wird übernommen; jeder andere Lauf rechnet der echte Löser Zahl für Zahl
+    wie bisher. Die Antwort hängt an keiner Reihenfolge: Welche Flecken im
+    Stapel stehen, ändert kein Urteil über einen von ihnen.
+
+    ``shapes`` sind die Kennzahlen deckungsgleicher Flecken, deren Kegel schon
+    nichts hergab (:func:`_rigid_key`, ``classify``): Die fragt ``classify``
+    nicht mehr, also stehen sie nicht im Stapel, und von mehreren
+    deckungsgleichen nur der erste. ``None`` heißt: jeden Fleck fragen (der
+    Mantelnachweis teilt nichts). Schon beantwortete Lesungen
+    (:func:`_by_geometry`) bleiben draußen.
+
+    Lesung und Kennzahl jedes Flecks legt der Stapel mit ab, damit die Runde
+    sie nicht ein zweites Mal rechnet (:func:`_surface_support`,
+    :func:`_rigid_key`).
+    """
+    tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    entries: dict[tuple[Any, ...], tuple[Any, bool]] = {}
+    supports: dict[bytes, _SurfaceSupport] = {}
+    rigid: dict[bytes, tuple[Any, ...] | None] = {}
+    asked: list[tuple[tuple[Any, ...], refine.Problem]] = []
+    seen = None if shapes is None else set(shapes)
+    for patch in patches:
+        if check_cancelled is not None:
+            check_cancelled()
+        support = _surface_support(body, patch, check_cancelled)
+        if support is None:
+            continue
+        name = _patch_key(patch)
+        supports[name] = support
+        shape = None
+        if seen is not None:
+            shape = rigid[name] if name in rigid else _rigid_key_read(body, patch)
+            rigid[name] = shape
+        if seen is None or shape is None or shape not in seen:
+            if seen is not None and shape is not None:
+                seen.add(shape)
+            key: tuple[Any, ...] = ("fit_cone", support.digest, tolerance)
+            if key not in entries and not _answered_by_geometry("fit_cone", support, tolerance):
+                cone = _cone_plan(support, tolerance, check_cancelled)
+                entries[key] = (cone, False)
+                if cone is not None:
+                    asked.append((key, cone.problem()))
+        key = ("fit_torus", support.digest)
+        if key not in entries and not _answered_by_geometry("fit_torus", support):
+            ring = _torus_plan(support)
+            entries[key] = (ring, False)
+            if ring is not None:
+                asked.append((key, ring.problem()))
+    verdicts = refine.exhausted(
+        [problem for _key, problem in asked],
+        precision=ROUND_FIT_PRECISION,
+        evaluations=ROUND_FIT_EVALUATIONS,
+        check_cancelled=check_cancelled,
+        progress=share.reach,
+    )
+    for (key, _problem), verdict in zip(asked, verdicts, strict=True):
+        if verdict:
+            entries[key] = (entries[key][0], True)
+    share.reach(1.0)
+    return _Screened(body, entries, supports, rigid)
+
+
+@contextmanager
+def _screening(
+    body: trimesh.Trimesh,
+    patches: Sequence[list[int]],
+    *,
+    shapes: set[tuple[Any, ...]] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+    share: _Share = _UNHEARD,
+) -> Iterator[None]:
+    """Eine Runde mit dem Wissen des Stapels (:func:`_screened_fits`), danach ohne."""
+    screened = _screened_fits(
+        body, patches, shapes=shapes, check_cancelled=check_cancelled, share=share
+    )
+    token = _SCREENED.set(screened)
+    try:
+        yield
+    finally:
+        _SCREENED.reset(token)
 
 
 def fit_cone(
@@ -7774,7 +8016,72 @@ def _fit_cone_measured(
     line_tolerance: float,
     check_cancelled: Callable[[], None] | None,
 ) -> ConeFit | None:
-    """Die Kegeleinpassung an einer Lesung — sie liest nichts sonst."""
+    """Die Kegeleinpassung an einer Lesung — sie liest nichts sonst.
+
+    Hat der Stapel dieser Runde den Fleck schon vorbereitet (:data:`_SCREENED`),
+    kommt der Plan von dort, und ein sicher vergeblicher Löserlauf entfällt
+    (:func:`_screened_fits`); sonst entsteht der Plan hier, Zahl für Zahl
+    derselbe.
+    """
+    screened = _SCREENED.get()
+    entry = (
+        None
+        if screened is None
+        else screened.fits.get(("fit_cone", support.digest, line_tolerance))
+    )
+    if entry is None:
+        plan = _cone_plan(support, line_tolerance, check_cancelled)
+        exhausted = False
+    else:
+        plan, exhausted = entry
+    if plan is None:
+        return None
+    return _cone_from_plan(plan, check_cancelled, exhausted=exhausted)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class _ConePlan:
+    """Was die Kegeleinpassung vor dem Löser aus der Lesung liest (:func:`_cone_plan`)."""
+
+    support: _SurfaceSupport
+    line_tolerance: float
+    weights: np.ndarray
+    origin: np.ndarray
+    half_angle: float
+    points: np.ndarray
+    selected: np.ndarray
+    scale: float
+    samples: np.ndarray
+    apex: np.ndarray
+    initial_axis: np.ndarray
+    first: np.ndarray
+    second: np.ndarray
+    solving: np.ndarray
+    solving_apex: np.ndarray
+
+    def start(self) -> np.ndarray:
+        """Der Startwert des Lösers: Spitze, zwei Achsneigungen, Winkel."""
+        start: np.ndarray = np.r_[self.apex, 0.0, 0.0, self.half_angle]
+        return start
+
+    def problem(self) -> refine.ConeProblem:
+        """Dieselbe Aufgabe für den Stapel (:func:`refine.exhausted`)."""
+        return refine.ConeProblem(
+            points=self.solving,
+            apex=self.solving[self.solving_apex[0]] if len(self.solving_apex) else None,
+            axis=self.initial_axis,
+            first=self.first,
+            second=self.second,
+            initial=self.start(),
+        )
+
+
+def _cone_plan(
+    support: _SurfaceSupport,
+    line_tolerance: float,
+    check_cancelled: Callable[[], None] | None,
+) -> _ConePlan | None:
+    """Der Teil der Kegeleinpassung vor dem Löser; ``None``: kein Kegel zu verfeinern."""
     weights = support.areas / support.areas.sum()
     origin = weights @ support.centres
     centres = support.centres - origin
@@ -7822,6 +8129,42 @@ def _fit_cone_measured(
     solving_apex = (
         at_apex if rows is None or not len(at_apex) else np.flatnonzero(rows == int(at_apex[0]))
     )
+    return _ConePlan(
+        support=support,
+        line_tolerance=line_tolerance,
+        weights=weights,
+        origin=origin,
+        half_angle=half_angle,
+        points=points,
+        selected=selected,
+        scale=scale,
+        samples=samples,
+        apex=apex,
+        initial_axis=initial_axis,
+        first=first,
+        second=second,
+        solving=solving,
+        solving_apex=solving_apex,
+    )
+
+
+def _cone_from_plan(
+    plan: _ConePlan,
+    check_cancelled: Callable[[], None] | None,
+    *,
+    exhausted: bool = False,
+) -> ConeFit | None:
+    """Der Löser und das Maß der Kegeleinpassung.
+
+    ``exhausted`` sagt der Stapel (:func:`refine.exhausted`): Der Löserlauf
+    schöpft sein Budget sicher aus und hätte nichts geliefert — dann entfällt
+    er, und es geht weiter wie nach einem vergeblichen Lauf.
+    """
+    support, line_tolerance = plan.support, plan.line_tolerance
+    weights, origin, half_angle = plan.weights, plan.origin, plan.half_angle
+    points, selected, scale, samples = plan.points, plan.selected, plan.scale, plan.samples
+    apex, initial_axis, first, second = plan.apex, plan.initial_axis, plan.first, plan.second
+    solving, solving_apex = plan.solving, plan.solving_apex
 
     def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
         """Die Achse besitzt genau zwei Freiheitsgrade, keine freie Länge."""
@@ -7865,7 +8208,7 @@ def _fit_cone_measured(
             columns = np.vstack((columns, apex_rows))
         return columns
 
-    fitted = _refined_fit(np.r_[apex, 0.0, 0.0, half_angle], residual, check_cancelled, jacobian)
+    fitted = None if exhausted else _refined_fit(plan.start(), residual, check_cancelled, jacobian)
     normal_constrained = False
     if fitted is None and float(np.ptp(samples @ initial_axis)) <= line_tolerance / scale:
         # Ein einziger erhaltener Kreis bestimmt nicht sechs Kegelgrößen.
@@ -8038,7 +8381,60 @@ def _fit_torus_read(
 def _fit_torus_measured(
     support: _SurfaceSupport, check_cancelled: Callable[[], None] | None
 ) -> TorusFit | None:
-    """Die Ringeinpassung an einer Lesung — sie liest nichts sonst."""
+    """Die Ringeinpassung an einer Lesung — sie liest nichts sonst.
+
+    Wie beim Kegel: Den Plan und das Urteil über den Löserlauf kann der
+    Stapel dieser Runde schon kennen (:data:`_SCREENED`).
+    """
+    screened = _SCREENED.get()
+    entry = None if screened is None else screened.fits.get(("fit_torus", support.digest))
+    if entry is None:
+        plan = _torus_plan(support)
+        exhausted = False
+    else:
+        plan, exhausted = entry
+    if plan is None:
+        return None
+    return _torus_from_plan(plan, check_cancelled, exhausted=exhausted)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class _TorusPlan:
+    """Was die Ringeinpassung vor dem Löser aus der Lesung liest (:func:`_torus_plan`)."""
+
+    support: _SurfaceSupport
+    initial: TorusFit
+    origin: np.ndarray
+    scale: float
+    initial_axis: np.ndarray
+    first: np.ndarray
+    second: np.ndarray
+    solving: np.ndarray
+
+    def start(self) -> np.ndarray:
+        """Der Startwert des Lösers: Mitte, zwei Achsneigungen, Ring- und Röhrenradius."""
+        start: np.ndarray = np.r_[
+            (np.asarray(self.initial.centre) - self.origin) / self.scale,
+            0.0,
+            0.0,
+            self.initial.ring_radius / self.scale,
+            self.initial.tube_radius / self.scale,
+        ]
+        return start
+
+    def problem(self) -> refine.TorusProblem:
+        """Dieselbe Aufgabe für den Stapel (:func:`refine.exhausted`)."""
+        return refine.TorusProblem(
+            points=self.solving,
+            axis=self.initial_axis,
+            first=self.first,
+            second=self.second,
+            initial=self.start(),
+        )
+
+
+def _torus_plan(support: _SurfaceSupport) -> _TorusPlan | None:
+    """Der Teil der Ringeinpassung vor dem Löser; ``None``, wo es keinen Ring zu verfeinern gibt."""
     if int(support.round_corners.sum()) < 7:
         return None
     initial = fit_torus_samples(support.centres, support.normals, weights=support.areas)
@@ -8054,6 +8450,27 @@ def _fit_torus_measured(
     first, second = _plane_basis(initial_axis)
     rows = _solver_rows(len(local))
     solving = local if rows is None else local[rows]
+    return _TorusPlan(
+        support=support,
+        initial=initial,
+        origin=origin,
+        scale=scale,
+        initial_axis=initial_axis,
+        first=first,
+        second=second,
+        solving=solving,
+    )
+
+
+def _torus_from_plan(
+    plan: _TorusPlan,
+    check_cancelled: Callable[[], None] | None,
+    *,
+    exhausted: bool = False,
+) -> TorusFit | None:
+    """Der Löser und das Maß der Ringeinpassung; ``exhausted`` wie bei :func:`_cone_from_plan`."""
+    support, origin, scale = plan.support, plan.origin, plan.scale
+    initial_axis, first, second, solving = plan.initial_axis, plan.first, plan.second, plan.solving
 
     def parameters(values: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float]:
         """Ringmitte, zweiachsige Richtung und beide positiven Radien."""
@@ -8093,18 +8510,9 @@ def _fit_torus_measured(
         columns[:, 6] = -1.0
         return columns
 
-    fitted = _refined_fit(
-        np.r_[
-            (np.asarray(initial.centre) - origin) / scale,
-            0.0,
-            0.0,
-            initial.ring_radius / scale,
-            initial.tube_radius / scale,
-        ],
-        residual,
-        check_cancelled,
-        jacobian,
-    )
+    if exhausted:
+        return None
+    fitted = _refined_fit(plan.start(), residual, check_cancelled, jacobian)
     if fitted is None:
         return None
     centre, axis, ring, tube = parameters(fitted)

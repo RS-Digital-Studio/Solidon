@@ -20,7 +20,7 @@ import pytest
 import trimesh
 
 from app.core.errors import NotManifoldError, ValidationError
-from app.core.geom import mesh_ops
+from app.core.geom import kernel_jobs, mesh_ops
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
@@ -447,7 +447,8 @@ def test_manifold_fallback_does_not_take_over_an_open_mesh(
     def unexpected(*args: object, **kwargs: object) -> None:
         pytest.fail("ein offenes Netz darf nicht in den Volumenkern fallen")
 
-    monkeypatch.setattr(mesh_ops, "_as_solid", unexpected)
+    # Der Körper des Kerns entsteht in der Rechnung (``kernel_jobs.solid``, RM-212).
+    monkeypatch.setattr(kernel_jobs, "solid", unexpected)
     mesh_ops.decimate(opened, 1152)
 
 
