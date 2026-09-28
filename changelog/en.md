@@ -22,24 +22,36 @@ it into `website/version.json`.
 - In PrusaSlicer, ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer the manufacturer's profile applies. Solidon only writes what you change or accept from suggestions.
 - The *Standard* quality prints at the manufacturer's speeds and accelerations instead of holding every printer to 40 mm/s. On a Centauri Carbon 2, large parts finish 40 to 50 percent sooner.
 - Accepted suggestions apply only to the part that needs them: supports, brim and the values for a fit, in every supported slicer. The print settings name the parts.
-- The *Fine*, *Draft* and *Strong* qualities now choose your slicer's matching process, for example “0.12mm Fine” for *Fine*.
-- The quality levels in the print dialog now appear in the language of the interface.
-- Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, as in Elegoo's own profile.
+- If a part prints standing up without supports, *Orient for printing* leaves it standing instead of laying it on supports. A minigolf set of 16 parts then fits on one plate instead of four.
+- If a part does not fit on the bed in any position, the print settings say how much too large it is before slicing and offer *Split the model* and *Scale down to the build volume*.
+- Even where parts of a model merely touch, *Split the model* works, and the connectors sit the right way round in their holes at every seam. Before, the report showed collisions there.
 - Solidon takes the overhang angle from your printer's manufacturer profile, 60 instead of 45 degrees for Elegoo, Bambu and Creality. Chamfers and gentle slopes no longer get needless supports.
-- If you have measured your printer's overhang, the slicer too only adds supports from that angle, as long as the layer height and bead width of the measurement apply.
-- The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
+- On round outer walls Solidon suggests a *Scarf seam*, in every supported slicer. The print takes 2 to 4 percent longer as a result.
+- If your slicer works out the brim itself, as ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer do, Solidon suggests none of its own. The slicer's brim gives tall parts more rim.
+- The *Fine*, *Draft* and *Strong* qualities now choose your slicer's matching process, for example “0.12mm Fine” for *Fine*.
 - The print settings show what will be printed: the manufacturer's profile is the basis, and your own values are marked and can be reset one by one.
 - You choose the build plate in the print settings, and the bed temperature follows it. If the manufacturer does not approve the plate for your filament, Solidon says so before printing.
 - Without *Apply suggestions*, no part gets a brim unasked any more, neither on export nor when handing over to the slicer.
-- On round outer walls Solidon suggests a *Scarf seam*, in every supported slicer. The print takes 2 to 4 percent longer as a result.
-- If your slicer works out the brim itself, as ElegooSlicer, Bambu Studio, Creality Print and OrcaSlicer do, Solidon suggests none of its own. The slicer's brim gives tall parts more rim.
-- If a brim, skirt or raft reaches beyond the bed, Solidon says so when handing over to the slicer and offers *Arrange on the bed*.
-- If the slicer refuses a part that is too tall, Solidon names both heights and offers *Split the model*, *Scale down to the build volume* or another printer.
-- If Bambu Studio hangs after slicing, Solidon takes the finished print file instead of giving up after five minutes.
+- New suggestion *Keep channels clear*: once applied, the handover blocks supports in the channels in every supported slicer. The Cura window receives the block and the per-part values too.
+- A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
+- The print settings show their suggestions faster, on the drill holder after 4.3 instead of 7.6 seconds.
 - Projects from 0.5.0 print at your printer's speed. Whatever you had set yourself in them is kept.
 - The first-layer speed now also applies to its infill. Before, the slicer laid the bottom at the manufacturer's speed, 105 mm/s on the Centauri Carbon 2.
 - With PrusaSlicer, printing now starts as it does with Prusa itself, with bed levelling, purge line and printer check.
 - PETG now goes to PrusaSlicer as PETG, no longer as PLA.
+- In OrcaSlicer every printer gets its own machine and that machine's standard process preselected: the Sovol SV06 no longer the High-Speed version, the Ender-3 V3 no longer “0.12mm Fine”.
+- New are the Creality Ender-3 V3 SE and V3 KE. Until now an SE got the values of the much faster Ender-3 V3.
+- Identical copies are worked out only once by *Orient for printing*, which finishes the same minigolf set in less than a third of the time.
+- The quality levels in the print dialog now appear in the language of the interface.
+- Travel speed comes from the printer too: the Centauri Carbon 2 travels at 500 instead of 150 mm/s, as in Elegoo's own profile.
+- If you have measured your printer's overhang, the slicer too only adds supports from that angle, as long as the layer height and bead width of the measurement apply.
+- The report, too, now calculates overhangs with the angle from which your slicer profile adds supports.
+- If a brim, skirt or raft reaches beyond the bed, Solidon says so when handing over to the slicer and offers *Arrange on the bed*.
+- If the slicer refuses a part that is too tall, Solidon names both heights and offers *Split the model*, *Scale down to the build volume* or another printer.
+- If the slicer refuses a part that does not fit its plate, Solidon names the reason and offers *Split the model*, *Scale down to the build volume* and *Arrange on the bed*.
+- If Bambu Studio hangs after slicing, Solidon takes the finished print file instead of giving up after five minutes.
+- Large models can now be sliced with Cura too. Before, the run ended without a print file, for example on the Eiffel Tower with 313,000 triangles.
+- If Creality Print can only slice a 3MF in its own window, Solidon says so and leads to *Open in slicer …*.
 - If the first layer has narrow webs, even a few long ones on a large part, Solidon suggests laying it at 50 mm/s. The short lines stick better that way.
 - Solidon now only suggests a longer *Minimum layer time* where your profile has none. Before, the suggestion came for almost every part with a chamfer or a tip.
 - Where your slicer limits speed by volumetric flow itself, Solidon no longer suggests a speed limit of its own for it.
@@ -52,14 +64,14 @@ it into `website/version.json`.
 - With Cura, infill now prints after the walls, and travel moves avoid supports and retract the filament on long paths.
 - The profile for the Cura window now matches the printer set up in Cura. Before, Cura rejected it for some printers or did not show it.
 - The print settings no longer offer the volumetric flow for Cura, because Cura does not read it.
-- New are the Creality Ender-3 V3 SE and V3 KE. Until now an SE got the values of the much faster Ender-3 V3.
-- A ceiling over a water channel or tunnel no longer draws supports onto the model. If nothing else needs supports on the model, Solidon suggests them from the bed only.
-- New suggestion *Keep channels clear*: once applied, the handover blocks supports in the channels in every supported slicer. The Cura window receives the block and the per-part values too.
 - Grid supports arrive at the slicer as a real grid, with the direction changing each layer, instead of loose lines that shift during printing.
 - When a part stands on many small feet, Solidon suggests a brim where your slicer does not work one out itself, even if the feet together would have enough area.
 - A narrow sloping strip along the outer wall no longer counts in the report as a long bridge.
+- Lettering that stands as a separate part close to a wall no longer starts in mid-air in the report, and Solidon no longer suggests supports for it.
 - The report now only shows the hint to calibrate your material's tolerances on models with fits. Only there does Solidon use them.
 - The handover to Cura transfers the first layers without fan as a ramp-up. A warning only comes when the finished print file really differs.
+- After *Scale down to the build volume* the part still stands on the bed. Before, it lifted off, and the report said it was floating.
+- If a part only fits on the bed with a narrower margin, *Arrange on the bed* puts it in the middle instead of over the edge, and the report names the narrower margin.
 - On large models, *Split the model* finds the seam up to twice as fast, and on multi-colour ones in a fraction of the time. Splitting works as before.
 - When Solidon splits a model automatically into three or more pieces, the names are numbered and name the connectors, such as “Wall rail 2 of 3 · Pins and holes”.
 - A printed screw, nut or seal from the parts catalogue no longer counts in the report as a fragmented body. It is a part of its own, and that is intended.
@@ -75,6 +87,7 @@ it into `website/version.json`.
 - Blind holes, slots and widenings in a sloping face, and tilted blind bores such as a magnet pocket without a lip, stay fully open at the mouth. Before, a thin skin was left there.
 - Moving and duplicating warn when the wall to the neighbouring bore gets too thin or breaks open.
 - If a bore runs out of the side of the part after moving, duplicating or tilting, Solidon now says so at stepped places too. A copy that was not created is noticed.
+- A moved or duplicated bore from an STL file in a thin plate no longer wrongly reports that it no longer goes through.
 - On ribs and in honeycombs, a tilted bore no longer wrongly reports that it runs over the edge.
 - After moving, tilting or duplicating, the feature panel shows the dimensions the result really has.
 - Drilling, moving, *Change bore* and pulling into a slot leave the model away from the bore just as it was. Recognition afterwards finishes much faster on large models.
@@ -93,7 +106,7 @@ it into `website/version.json`.
 - When you put a thread, a heat-set insert or a nut trap on a bore, the dialog names the fitting size at the top and preselects exactly that one.
 - On a countersink, *Change feature* cuts the new size as if it had been countersunk that way from the start. Before, Solidon declined or left a thin skin across the bore.
 - When parts of a model are stuck into each other, Solidon unites them before computing, as they will be printed. Volume and bores are then right, and the report says so.
-- When you widen a bore, the precise preview shows all the removed material, even on large models and on bodies with enclosed channels.
+- When you widen a bore, the precise preview shows all the removed material, even on large models, with a section view and on bodies with enclosed channels.
 - While you type a dimension on a large figure, the coarse preview appears in under a second instead of up to nineteen, and the preview of a bore on it succeeds.
 - If a step on an open model can only compute approximately and the volume grows, the report names the deviation and offers *Repair first, then recalculate*.
 
@@ -113,13 +126,18 @@ it into `website/version.json`.
 - A bore draft you have started is no longer lost along the way: a click in the report, a tool change or Ctrl+Z first asks you to apply or cancel it.
 - Typing a coordinate no longer makes the dimension fields vanish after the second digit.
 - On large models, *Measure wall thickness* responds about four times as fast.
+- A click in the middle of a countersunk bore selects the bore rather than its countersink, and the dimensions name its edge by side, such as “Outer edge left” instead of “Outer edge 4”.
+- With an edge or a distance selected, the selection panel no longer says “No feature selected …”.
 
 ### Recognition
 
 - Features are recognised automatically up to 1.5 million triangles. Up to five million, Solidon asks first and names the memory needed and the time on your computer.
-- If you decline full recognition, *Recognise all features* in the report catches up later. If it takes too long, *Load without feature recognition* loads the model without it.
+- If you decline full recognition, *Recognise all features* in the report or on the command line catches up later. If it takes too long, *Load without feature recognition* loads the model without it.
 - On large models, *Detect features at a spot* finds faces where it used to report too many triangles. The spot can also be chosen with the keyboard.
+- On large models, *Detect features at a spot* starts searching straight away. Before, it first recomputed the whole model, 40 seconds per attempt on the mausoleum dragon.
 - Large models and lattices are recognised much faster: a generated doll's house bed with 1.2 million triangles in 27 seconds instead of 174. Cancel takes effect within a few seconds.
+- Copies and rotated or moved parts take over the features of their original instead of searching for them again. A project with many identical parts computes in less than half the time.
+- After a bore, a face of a designed body names its current area, and a new bore is no longer missing from the tree when another one was changed before.
 - Lettering and struts appear in the tree as rounded sides instead of dozens of fillets with changing radii.
 - Outlines made of arcs and lines are recognised arc by arc with their radius. *Convert to faces and edges* is many times faster as a result.
 - A stepped pin no longer counts as a thread. Cylinders and bores that this mix-up had swallowed are back.
@@ -129,9 +147,14 @@ it into `website/version.json`.
 - After *Split* and *Cut away*, a divided face keeps its name on the largest piece, and fits on it stay valid.
 - Click the rim edge of a bore lying on its side, and it is named “Vertical”, matching how it really stands.
 - If a model has more than 5,000 features, Solidon keeps the largest instead of showing none at all. Scaling does not shuffle their names.
+- A part with a single feature has the same name in the tree as in the history, such as “Magnet pocket” instead of “Blind hole 1”.
 
 ### Importing and repairing
 
+- A large model appears in the view right after import, and its features follow. Before, it only appeared once recognition was finished.
+- A 3MF with several plates from Bambu Studio, OrcaSlicer or ElegooSlicer puts every part on its own plate, at its place there. Before, all came onto one, many beside the bed.
+- A 3MF with several plates that is added to a project keeps its plates and places them after the existing ones.
+- A model without colours of its own keeps the body's colour after its holes are closed. Before, it turned grey, and *Convert texture to filaments* made a grey filament from it.
 - If a model is missing a piece of bore wall or part of a countersink cone, Solidon closes the gap as a wall, not as a lid across the bore.
 - Open seams are closed on import and repair without joining parts that merely touch. An intact model stays unchanged.
 - Overlaps are now resolved by *Repair* itself. When the parts of an imported model are stuck into each other, the report offers *Resolve overlaps*.
@@ -139,16 +162,18 @@ it into `website/version.json`.
 - After an opening has been closed on import, *Show the place* outlines the whole new face in a colour of its own.
 - A part turned inside out next to a hollow body is set right without losing the cavity. A part inside another part's material is reported instead of guessed.
 - The report after importing is shorter: findings the result disproves drop out, and where something can be done there is a button instead of advice.
-- The mesh defects map shows intact areas in the body's colour so that single defects stand out, and carries *Repair* right in the legend.
+- The mesh defects map shows intact areas in the body's colour so that single defects stand out, and carries *Repair* right in the legend. A single body is selected by the map itself.
 - The search for overlaps now reaches the end on models with fans of narrow triangles too. The mesh defects map and repair then see the whole model.
 - A 3MF from PrusaSlicer no longer loads modifiers, support blockers and support enforcers as solid material. A negative volume is subtracted from the part.
 - With *Refine edges*, all features stay and up to four times fewer triangles are created: a drill holder at 1 mm edge length in five seconds instead of fourteen minutes.
 - A closed model stays free of holes and keeps its filament colours. With too many triangles, Solidon names an edge length that really works.
-- The preview of *Refine edges* is ready in seconds instead of freezing the window, and a length that is too fine is declined right away.
+- The preview of *Refine edges* and *Reduce triangles* is ready in seconds instead of freezing the window, and a length that is too fine is declined right away.
 - If a model is too fine for *Refine edges*, the report offers *Reduce triangles and try again* with a number that really works.
 - If *Smooth* would turn a body inside out, Solidon says so and offers *Refine edges and try again* with an edge length that works.
 - Large assemblies import faster: the repair while importing a pirate ship with 1.2 million triangles takes about 30 percent less time.
 - While a large 3MF file opens, the window stays responsive, even while the model is being read.
+- If you import a renamed copy of a file you opened before, the body carries the new name. Before, it was named like the first file.
+- On large meshes, *Close open surface* computes in seconds: 1.8 instead of 24 seconds at 122,752 triangles.
 
 ### Manual and website
 
@@ -163,18 +188,23 @@ it into `website/version.json`.
 ### Operation and system
 
 - Large calculations such as previews and *Refine edges* run in a separate process: the window stays responsive, and *Cancel* works at once. A second Solidon process runs alongside for this.
-- While loading and during long calculations, a clock counts the elapsed time, even when the progress stands still for a while.
+- While loading and during long calculations, a clock counts the elapsed time even when progress stands still, and the remaining time no longer jumps when a new part of the calculation begins.
+- The automatic backup runs alongside the window and no longer stalls it, even with large models. If it cannot be written, Solidon says so.
 - A model on a slow or unresponsive drive no longer freezes the window when you open it.
 - If a file in *Recently opened* has been moved, Solidon says so and offers *Choose another file*.
 - A file that could not be read no longer ends up in *Recently opened*, and the next file no longer reports its name while loading.
+- A file without a readable model no longer stays behind as the first step, where every further file failed with “The chain stops”.
 - Recently opened projects on the start page open with one click.
 - With nothing selected, the selection panel offers what applies to all bodies: *Orient for printing*, *Arrange on the bed* and *Check overlaps*.
 - After *Split the model*, all parts stand fully in view.
 - Every halted step in the report has a button: *Correct the input* opens it with the cursor in the affected field.
-- After splitting, the report no longer shows buttons that do nothing on lines about the old body.
+- After *Split the model*, the report says in one sentence that the pieces still touch, instead of in over twenty lines, and lines about the old body no longer carry empty buttons.
 - A freely drawn sketch without dimensions no longer generates a notice in the report.
+- If the report holds only notes, it says “Ready to print” at the top, and a setup note is no longer preselected like a warning.
+- Warnings in the report carry a button: *Show the feature* on a fit that does not fit, *Open print settings* on findings about bed, supports, nozzle and brim.
 - An error report names folders under your user directory without your username, even when Solidon itself is installed there.
 - In *First steps*, your slicer's printer is there as soon as it opens. Before, the suggestion came only after seconds, and *Done* took the generic printer until then.
+- After import, the title bar carries the model's name instead of “Untitled”, and *First steps* names slicers by their name instead of their file name.
 - You choose the slicer in the print settings above the profiles, even when that section is collapsed.
 - A printer you choose in the print settings is also used for the next new project. If your slicer is set to a different printer, the settings offer it with one click.
 - If you choose a different printer or slicer, the remembered machine profile of the previous one no longer applies.
@@ -183,7 +213,10 @@ it into `website/version.json`.
 - The history names a changed parameter by its label and shows the value before and after.
 - The handle on a selected face now shows only the arrow you move it with.
 - Without text, *Put text on* says that the text is missing instead of declaring the preview unavailable.
-- In every translation, *Cut* and *Split* now have different names, and the Italian interface addresses you informally throughout.
+- After drawing, the tab from before is back on the right, such as the report. Until now the chat stood there, and *Hand over to the slicer …* was hidden.
+- The *Command palette …* finds operations in every language through everyday words too, such as “copy” or “calamita”. Until now it knew such words only in German.
+- When saving with *Save selection as a part …*, Solidon checks the wall thickness of the part many times faster.
+- In every translation, *Cut* and *Split* now have different names, keys are named as on the keyboard, and the Italian interface addresses you informally throughout.
 
 ### Assistant with a local model
 
