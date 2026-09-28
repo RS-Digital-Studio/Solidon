@@ -1283,7 +1283,12 @@ def test_the_workers_of_the_window_use_the_helper(
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_ABOVE", DECIMATE_FLOOR)
     monkeypatch.setattr(session_module, "COARSE_PREVIEW_TARGET", DECIMATE_FLOOR)
     collected: list[object] = []
+    coarsened: list[int] = []
     try:
+        # ``coarse`` wie der Operationsdialog (``MainWindow``): Erst dieser
+        # Rückruf schaltet die grobe Stufe frei (``_preview_outcome``). Ohne
+        # ihn rechnete die Vorschau genau, und verkleinert wurde nichts, das
+        # der Hilfsprozess hätte zählen können.
         session.preview_async(
             collected.append,
             [
@@ -1293,15 +1298,22 @@ def test_the_workers_of_the_window_use_the_helper(
                     inputs=(body,),
                 )
             ],
+            coarse=coarsened.append,
         )
         assert session.wait_for_idle(60_000)
         assert collected and collected[-1] is not None
+        assert coarsened, "die Vorschau nahm die grobe Stufe"
         assert kernel_process.statistics()["helper:display_simplify"] >= 1
 
-        session.history.apply(
+        # ``Session.apply`` wie das Übernehmen im Fenster: Es trägt den Schritt
+        # ein **und** startet den Auswertungsarbeiter. ``history.apply`` allein
+        # ändert nur den Stapel, und gerechnet würde nichts.
+        before = session.last_result
+        session.apply(
             "Verfeinern", [OperationDraft(op="remesh_mesh", params={"edge": 0.8}, inputs=(body,))]
         )
         assert session.wait_for_idle(60_000)
+        assert session.last_result is not before, "die Auswertung nach dem Übernehmen lief"
         assert session.last_result is not None and session.last_result.stopped_at is None
         assert kernel_process.statistics()["helper:refine_conforming"] == 1
     finally:
