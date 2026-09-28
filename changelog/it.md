@@ -154,6 +154,8 @@ scrive in `website/version.json`.
 - Un modello grande compare nella vista subito dopo l'importazione, e le sue caratteristiche seguono. Prima compariva solo a riconoscimento finito.
 - Un 3MF con più piatti da Bambu Studio, OrcaSlicer o ElegooSlicer mette ogni pezzo sul suo piatto, al suo posto. Prima finivano tutti su uno, molti fuori dal piano.
 - Un 3MF con più piatti aggiunto a un progetto mantiene i suoi piatti e li mette dopo quelli esistenti.
+- Un altro modello va al primo posto libero dei piatti, oppure su un piatto nuovo, e resta lì. Prima manteneva le coordinate del suo file, quasi sempre fuori dal piano.
+- Anche un modello da «Genera modello» viene appoggiato sul piano, al primo posto libero dei piatti.
 - Un modello senza colori propri resta nel colore del corpo dopo la chiusura dei fori. Prima diventava grigio, e «Converti la texture in filamenti» ne ricavava un filamento grigio.
 - Se a un modello manca un pezzo di parete di un foro o parte di un cono di svasatura, Solidon chiude il vuoto come parete, non come coperchio di traverso al foro.
 - Le cuciture aperte si chiudono all'importazione e alla riparazione senza unire parti che si toccano soltanto. Un modello integro resta invariato.

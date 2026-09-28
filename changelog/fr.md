@@ -155,6 +155,8 @@ dans `website/version.json`.
 - Un grand modèle apparaît dans la vue dès l'import, ses caractéristiques suivent. Avant, il n'apparaissait qu'une fois la reconnaissance terminée.
 - Un 3MF à plusieurs plateaux venu de Bambu Studio, OrcaSlicer ou ElegooSlicer place chaque pièce sur son plateau, à sa place. Avant, toutes arrivaient sur un seul, beaucoup hors du plateau.
 - Un 3MF à plusieurs plateaux ajouté à un projet garde ses plateaux et les range après ceux qui existent.
+- Un modèle supplémentaire va au premier emplacement libre des plateaux, ou sur un nouveau plateau, et y reste. Avant, il gardait les coordonnées de son fichier, souvent hors du plateau.
+- Un modèle issu de « Générer un modèle » est lui aussi posé sur le plateau, au premier emplacement libre.
 - Un modèle sans couleurs propres garde la couleur du corps après la fermeture de ses trous. Avant, il devenait gris, et « Convertir la texture en filaments » en tirait un filament gris.
 - S'il manque à un modèle un morceau de paroi de perçage ou une partie de cône de fraisure, Solidon comble le trou par une paroi, pas par un couvercle en travers.
 - Les coutures ouvertes se ferment à l'import et à la réparation sans relier des pièces qui ne font que se toucher. Un modèle intact reste inchangé.

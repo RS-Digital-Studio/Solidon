@@ -154,6 +154,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um modelo grande aparece na vista logo depois de importado, e as suas características vêm a seguir. Antes só aparecia quando o reconhecimento terminava.
 - Um 3MF com várias placas do Bambu Studio, OrcaSlicer ou ElegooSlicer põe cada peça na sua placa, no seu lugar. Antes iam todas para uma, muitas fora da mesa.
 - Um 3MF com várias placas acrescentado a um projeto mantém as suas placas e coloca-as a seguir às existentes.
+- Um modelo adicional vai para o primeiro lugar livre das placas, ou para uma placa nova, e fica lá. Antes mantinha as coordenadas do seu ficheiro, quase sempre fora da mesa.
+- Também um modelo de «Gerar modelo» fica pousado na mesa, no primeiro lugar livre das placas.
 - Um modelo sem cores próprias mantém a cor do corpo depois de fechados os seus furos. Antes ficava cinzento, e «Converter a textura em filamentos» fazia dele um filamento cinzento.
 - Se faltar a um modelo um pedaço de parede de furo ou parte de um cone de escareamento, o Solidon fecha a lacuna como parede, não como tampa atravessada no furo.
 - As costuras abertas fecham-se ao importar e reparar sem unir peças que apenas se tocam. Um modelo intacto fica inalterado.

@@ -154,6 +154,8 @@ it into `website/version.json`.
 - A large model appears in the view right after import, and its features follow. Before, it only appeared once recognition was finished.
 - A 3MF with several plates from Bambu Studio, OrcaSlicer or ElegooSlicer puts every part on its own plate, in its position there. Before, they all landed on one plate, many of them beside the bed.
 - A 3MF with several plates that is added to a project keeps its plates and places them after the existing ones.
+- A further model goes to the first free spot on the plates, or onto a new plate, and stays there. Before, it kept the coordinates of its file, usually beside the bed.
+- A model from *Generate model* is also set down on the bed at the first free spot on the plates.
 - A model without colours of its own keeps the body's colour after its holes are closed. Before, it turned grey, and *Convert texture to filaments* made a grey filament from it.
 - If a model is missing a piece of bore wall or part of a countersink cone, Solidon closes the gap as a wall, not as a lid across the bore.
 - Open seams are closed on import and repair without joining parts that merely touch. An intact model stays unchanged.

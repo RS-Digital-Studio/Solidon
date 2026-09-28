@@ -179,6 +179,8 @@ Nutzen da und sonst nichts.
 - Ein großes Modell steht nach dem Einlesen gleich im Bild, seine Merkmale folgen. Vorher erschien es erst, wenn die Erkennung fertig war.
 - Eine 3MF aus Bambu Studio, OrcaSlicer oder ElegooSlicer mit mehreren Platten legt jedes Teil auf seine Platte, an seine Stelle darauf. Vorher kamen alle auf eine, viele neben das Bett.
 - Eine 3MF mit mehreren Platten, die zu einem Projekt dazukommt, behält ihre Platten und reiht sie hinter die vorhandenen.
+- Ein weiteres Modell kommt an die erste freie Stelle der Druckplatten, sonst auf eine neue Platte, und bleibt dort liegen. Vorher lag es an den Koordinaten seiner Datei, meist neben dem Bett.
+- Auch ein Modell aus *Modell erzeugen* steht danach aufgesetzt an der ersten freien Stelle der Druckplatten.
 - Ein Modell ohne eigene Farben bleibt nach dem Schließen seiner Löcher in der Farbe des Körpers. Vorher wurde es grau, und *Textur in Filamente umrechnen* machte ein graues Filament daraus.
 - Fehlt einem Modell ein Stück Bohrungswand oder ein Teil eines Senkungskegels, schließt Solidon die Lücke als Wand, nicht als Deckel quer durch die Bohrung.
 - Offene Nähte werden beim Einlesen und Reparieren geschlossen, ohne Teile zu verbinden, die sich nur berühren. Ein heiles Modell bleibt unverändert.
