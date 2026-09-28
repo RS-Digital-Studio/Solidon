@@ -568,9 +568,17 @@ def _yield_to_the_window() -> None:
     der Verfeinerung des Spielwürfels im Hilfsprozess wachte der Hauptfaden aus
     einem 10-ms-Schlaf 912 und 419 ms zu spät auf, kein anderer Faden rechnete
     (``fenster-nachher-wuerfel2.txt``, 27.09.2026, 28 freigegebene Kerne unter
-    Last). Eine Stufe tiefer bekommt jeder Faden der Anwendung Vorrang; auf
-    einem ruhigen Rechner rechnet der Kern gleich schnell. Gelingt es nicht,
-    rechnet er eben mit gleicher Priorität.
+    Last). Eine Stufe tiefer bekommt jeder Faden der Anwendung Vorrang.
+
+    **Der Preis, gemessen**: Er weicht dann auch jedem fremden Programm. An der
+    Senkplatte (genaue Vorschau *Bohrung ändern*, 311 296 Dreiecke) auf einem
+    Rechner, den andere Programme zu 100 % auslasteten, brauchte er im Mittel
+    von drei Runden 10 bis 30 % länger als mit normaler Priorität (Ø 7:
+    13,3 statt 10,3 s, ``sonden/hilfsprozess/senkplatte.py``, 28.09.2026) —
+    auf freien Kernen weicht er niemandem. Gewählt ist das bedienbare Fenster:
+    Um das ging es (RM-212), und die längere Rechnung zeigt Balken und
+    *Abbrechen*. Gelingt das Zurückstellen nicht, rechnet er mit gleicher
+    Priorität.
     """
     try:
         if hasattr(os, "nice"):
