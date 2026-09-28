@@ -348,11 +348,13 @@ def test_the_offer_button_click_reaches_the_handler(qt_app: object) -> None:
     ``weak_slot``. Damit prüft kein bestehender Test mehr die ganze Kette
     Knopf → gewählte Zeile → Handler des Fensters; dieser hier drückt.
     """
+    import trimesh
     from PySide6.QtWidgets import QPushButton, QWidget
 
     from app.core.errors import AppError
+    from app.core.geom.mesh import MeshData
     from app.core.scene import EvaluationResult
-    from app.core.types import Finding, Report, Scene
+    from app.core.types import Finding, Report, Scene, SceneObject
     from app.ui.panels import ReportPanel
 
     received: list[AppError] = []
@@ -363,10 +365,14 @@ def test_the_offer_button_click_reaches_the_handler(qt_app: object) -> None:
 
     host = Host()
     panel = ReportPanel(host)
+    # Der Körper des Befunds lebt in der Szene: Handlungen an einem verbrauchten
+    # Körper bietet die Zeile nicht an (RM-268, ``_needs_live_body``).
+    body = SceneObject(id="obj_1", name="Teil", mesh=MeshData.of(trimesh.creation.box()))
     try:
         panel.show_result(
             EvaluationResult(
                 scene=Scene(
+                    objects={"obj_1": body},
                     report=Report(
                         findings=(
                             Finding(
@@ -376,7 +382,7 @@ def test_the_offer_button_click_reaches_the_handler(qt_app: object) -> None:
                                 object_id="obj_1",
                             ),
                         )
-                    )
+                    ),
                 )
             )
         )

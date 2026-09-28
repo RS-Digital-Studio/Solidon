@@ -123,16 +123,20 @@ def _prompt_handover() -> Iterator[None]:
     kostet im Leerlauf Strom. Windows zählt ``timeBeginPeriod`` und ``timeEndPeriod``
     selbst — mehrere Arbeiter nebeneinander brauchen keinen eigenen Zähler.
     Andere Systeme warten ohnehin auf die Frist genau.
+
+    **Als Verzweigung, nicht als frühe Rückkehr:** mypy prüft je Zielplattform,
+    und hinter ``if sys.platform != "win32": return`` hieß der Windows-Teil auf
+    Linux und macOS unerreichbar (CI, „Typen auf der Zielplattform“).
     """
-    if sys.platform != "win32":
+    if sys.platform == "win32":
+        winmm = ctypes.windll.winmm
+        winmm.timeBeginPeriod(1)
+        try:
+            yield
+        finally:
+            winmm.timeEndPeriod(1)
+    else:
         yield
-        return
-    winmm = ctypes.windll.winmm
-    winmm.timeBeginPeriod(1)
-    try:
-        yield
-    finally:
-        winmm.timeEndPeriod(1)
 
 
 #: Jeder gehaltene Arbeiter, über alle Leinen hinweg.
