@@ -197,8 +197,11 @@ Operation.
   `sketch_active` sagt ihr, dass im Zeichenmodus nur geschoben und gezoomt wird.
 * **Direkt über HID, neben dem Herstellertreiber**: `hidapi` (BSD-3 gewählt)
   öffnet *Multi-axis Controller*, 3DxWare darf mitlesen. Raw Input bleibt leer
-  (3DxWare reicht Rohdaten nur an bekannte Programme). Nicht blockierend, im
-  Hauptthread, ein Takt für Lesen und Fahren; die Vorzeichen stammen aus einer
+  (3DxWare reicht Rohdaten nur an bekannte Programme). Gelesen nicht
+  blockierend im Hauptthread, ein Takt für Lesen und Fahren; gesucht
+  (`hid.enumerate`) im Daemon-Faden (`SpaceMouseController._search`) und
+  geöffnet im Hauptthread — die Suche griff dort für jeden Gerätenamen nach dem
+  GIL und hielt neben einem Arbeiter das Fenster an; die Vorzeichen stammen aus einer
   aufgezeichneten Lesung (`tests/data/spacemouse/`), nicht aus einer Annahme.
 * **Auf dem Mac durch den Treiber**: 3DxWare hält das Gerät exklusiv.
   `DriverReader` lädt das `3DconnexionClient`-Framework des Kunden zur Laufzeit

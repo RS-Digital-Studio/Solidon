@@ -696,7 +696,7 @@ def _read_groups(payload: bytes, faces: int) -> Groups | None:
     if not materials:
         return None
 
-    objects = model.findall(f".//{{{CORE_NAMESPACE}}}object")
+    objects = _outside_meshes(model, f"{{{CORE_NAMESPACE}}}object")
     meshes = [entry for entry in objects if entry.find(f"{{{CORE_NAMESPACE}}}mesh") is not None]
     if len(meshes) != 1:
         return None
@@ -1215,6 +1215,8 @@ _TRIANGLES_TAG: Final = f"{{{CORE_NAMESPACE}}}triangles"
 #: Die Kinder der beiden Sammelknoten — sie werden gezählt, nicht gebaut.
 _VERTEX_TAG: Final = f"{{{CORE_NAMESPACE}}}vertex"
 _TRIANGLE_TAG: Final = f"{{{CORE_NAMESPACE}}}triangle"
+#: Die Hülle der beiden — was darin steht, sucht :func:`_outside_meshes` nicht ab.
+_MESH_TAG: Final = f"{{{CORE_NAMESPACE}}}mesh"
 
 #: Wie viele Kinder ein geleerter Teilbaum hatte. Kein Attribut des Formats: Es
 #: steht nur in dem Baum, den :func:`_model_without_geometry` baut, und lebt
@@ -2101,10 +2103,32 @@ def _inside(path: str | None) -> str:
     return (path or MODEL_PATH).lstrip("/")
 
 
+def _outside_meshes(model: ET.Element, tag: str) -> list[ET.Element]:
+    """Jedes Element ``tag`` des Baums in Dokumentreihenfolge — ohne in ein
+    ``mesh`` hinabzusteigen.
+
+    Wie ``findall(".//tag")``, aber **ohne die Millionen Ecken und Dreiecke zu
+    besuchen**: ``findall`` mit ``.//`` sucht in C durch den ganzen Baum und
+    hält den GIL dabei am Stück — am Mausoleum-Drachen 110 bis 160 ms je
+    Suche, in denen der Hauptfaden bei jedem Griff wartete (RM-258,
+    ``sonden/3mf/p02_griffe.py``). Objekte und Materialgruppen stehen in den
+    ``resources``, nie in einem Netz.
+    """
+    found: list[ET.Element] = []
+    pending = [model]
+    while pending:
+        node = pending.pop()
+        if node.tag == tag:
+            found.append(node)
+        if node.tag != _MESH_TAG:
+            pending.extend(reversed(node))
+    return found
+
+
 def _objects_in(model: ET.Element) -> dict[str, ET.Element]:
     """Jedes Objekt einer Modelldatei, nach ID."""
     found: dict[str, ET.Element] = {}
-    for entry in model.findall(f".//{{{CORE_NAMESPACE}}}object"):
+    for entry in _outside_meshes(model, f"{{{CORE_NAMESPACE}}}object"):
         identifier = entry.get("id")
         if identifier is not None:
             found[identifier] = entry
@@ -2179,9 +2203,15 @@ def _numbers_from(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarr
 #: **Am Stück hielt das Parsen den GIL 4 bis 5 Sekunden** (Durchsicht 0.5.1,
 #: FENSTER-03): Mausoleum Dragon.3mf, 195 MB Modell-XML, ``ET.fromstring`` —
 #: das Fenster stand, obwohl der Import im Arbeiter lief, und Windows schrieb
-#: „Keine Rückmeldung“. In Stücken dieser Größe gibt der Leser den GIL
-#: zwischen zwei Stücken ab; die längste Lücke im Nebenfaden war 31 ms.
-XML_CHUNK: Final = 256 * 1024
+#: „Keine Rückmeldung“. Zwischen zwei Stücken gibt der Leser den GIL ab.
+#:
+#: **Die Stückgröße ist die Wartezeit jedes Griffs des Hauptfadens** (RM-258):
+#: Innerhalb von ``feed`` sieht der Interpreter nicht nach wartenden Fäden,
+#: und der Hauptfaden greift beim Malen für jedes Python-Ereignis einmal nach
+#: dem GIL — hundertmal je Bild wartet er hundertmal auf das Ende eines
+#: Stücks. 256 KB hielten ihn 9 bis 20 ms am Stück, 32 KB höchstens 2,3 ms
+#: (``sonden/3mf/p04_bloecke.py``).
+XML_CHUNK: Final = 32 * 1024
 
 _TREES: ContextVar[list[ET.Element] | None] = ContextVar("threemf_trees", default=None)
 """Die Bäume, die der laufende Lesevorgang gebaut hat (:func:`_reading_trees`)."""
@@ -2266,10 +2296,14 @@ def _release(root: ET.Element) -> None:
 #: **Blöcke, damit der Hauptfaden atmet.** Die Umwandlung von Zeichenketten in
 #: Zahlen hält den GIL für die ganze Liste; am Mausoleum-Drachen (1,2 Mio.
 #: Ecken, 2,3 Mio. Dreiecke) stand das Fenster dabei bis 1,7 s still, obwohl
-#: der Import im Arbeiter lief. In Blöcken dieser Größe ist die längste Lücke
-#: im Nebenfaden 40 bis 60 ms, bei gleicher Gesamtzeit (Durchsicht 0.5.1,
+#: der Import im Arbeiter lief (Durchsicht 0.5.1,
 #: ``sonden/fenster/p06_xml_gil.py``).
-NUMBER_BLOCK: Final = 65_536
+#:
+#: **Ein Block ist eine Wartezeit je Griff des Hauptfadens**, wie ein Stück
+#: von :data:`XML_CHUNK` (RM-258): ``np.array`` über 65 536 Ecken hielt den
+#: GIL 40 ms am Stück, über 4 096 Ecken 2,3 ms; das Freigeben eines Blocks
+#: (``del node[:n]``) 19 ms gegen 0,6 ms (``sonden/3mf/p04_bloecke.py``).
+NUMBER_BLOCK: Final = 4_096
 
 
 def _read_numbers(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarray, np.ndarray]:
@@ -2475,7 +2509,7 @@ def _matrix(text: str | None) -> np.ndarray:
 def _materials_in(model: ET.Element) -> dict[str, list[tuple[str, tuple[float, float, float]]]]:
     """Jede ``basematerials``-Gruppe, nach ID, in Dokumentreihenfolge."""
     found: dict[str, list[tuple[str, tuple[float, float, float]]]] = {}
-    for group in model.findall(f".//{{{CORE_NAMESPACE}}}basematerials"):
+    for group in _outside_meshes(model, f"{{{CORE_NAMESPACE}}}basematerials"):
         identifier = group.get("id")
         if identifier is None:
             continue
