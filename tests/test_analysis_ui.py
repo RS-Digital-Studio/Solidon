@@ -939,9 +939,21 @@ def test_the_map_goes_away_again(window: MainWindow) -> None:
 
 
 def test_without_a_selection_the_bar_says_what_is_missing(window: MainWindow) -> None:
+    """Bei mehreren Körpern und keiner Auswahl sagt die Leiste, was fehlt.
+
+    Mit genau einem Körper gibt es nichts zu wählen — die Karte nimmt ihn
+    selbst (KUNDE-15, ``3b57b3644``,
+    ``test_the_defect_map_needs_no_choice_with_one_body``). Deshalb kommt hier
+    ein zweiter Körper dazu.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and len(result.scene.objects) == 2
     window.object_tree.tree.clearSelection()
     window._on_map_changed("wall")
 
+    assert window.object_tree.selected() is None, "bei zwei Körpern wählt niemand still"
     assert "Objekt" in window.analysis_bar.legend.note.text()
 
 
