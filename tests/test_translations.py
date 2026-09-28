@@ -1116,6 +1116,15 @@ ITALIAN_VOI = re.compile(
     re.MULTILINE,
 )
 
+#: Dasselbe für die Höflichkeitsform „Lei“: die Imperative am Satzanfang, mit
+#: denen Befunde ihre Handlung nennen, und „Faccia clic“.
+ITALIAN_LEI = re.compile(
+    r"(?:^|[.!?:;—]\s+)(Scelga|Selezioni|Verifichi|Controlli|Modifichi|Riprovi|Inserisca|"
+    r"Disegni|Sposti|Aumenti|Riduca|Trascini|Imposti|Salvi|Chiuda|Metta|Apra|Attenda|"
+    r"Faccia clic|Ripari|Riavvii|Indichi|Allunghi|Termini)\b",
+    re.MULTILINE,
+)
+
 
 def _manual_only() -> set[str]:
     """Texte, die nur auf Handbuchseiten und in Anleitungen stehen — die gehören
@@ -1139,8 +1148,9 @@ def test_italian_says_tu_outside_the_manual() -> None:
     """Italienisch spricht den Kunden mit „tu“ an (Imperativ der 2. Person).
 
     Entschieden am 27.09.2026 nach Kundensicht: 429 Einträge mit „tu“ gegen 31
-    mit „voi“. Die Handbuchseiten und Anleitungen stellt die Handbuch-Sitzung
-    um; sie sind hier ausgenommen, solange sie nur dort stehen.
+    mit „voi“, daneben rund hundert mit „Lei“. Die Handbuchseiten und
+    Anleitungen stellt die Handbuch-Sitzung um; sie sind hier ausgenommen,
+    solange sie nur dort stehen.
     """
     manual_only = _manual_only()
     catalog = read_catalog("it")
@@ -1148,10 +1158,10 @@ def test_italian_says_tu_outside_the_manual() -> None:
         f"{key[:50]!r}: {match.group(0).strip()!r}"
         for key, value in catalog.items()
         if key not in manual_only
-        for match in [ITALIAN_VOI.search(value)]
+        for match in [ITALIAN_VOI.search(value) or ITALIAN_LEI.search(value)]
         if match
     ]
-    assert not voi, "it spricht „voi“:\n" + "\n".join(voi)
+    assert not voi, "it spricht „voi“ oder „Lei“:\n" + "\n".join(voi)
 
 
 @pytest.mark.parametrize("language", ["fr", "it"])
