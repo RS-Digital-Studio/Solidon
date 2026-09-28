@@ -6670,3 +6670,68 @@ def test_an_accepted_suggestion_is_asked_of_the_whole_job_not_one_plate(
     run = _prepare_plate(alone, 1)
     assert len(_supported_parts(run.model, flavour)) == 1, "B2: kein Teil verlangt, alle tragen"
     assert "export.part_setting_all" in {entry.code for entry in run.findings}
+
+
+def test_the_file_export_of_a_selection_asks_the_whole_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review des Nachtrags 0.5.1, N6: Der Dateiexport aus dem Hauptfenster
+    schreibt nur die gewählten Körper, fragt übernommene Vorschläge aber am
+    ganzen Auftrag. Mit nur dem Klotz gewählt trug seine 3MF die übernommenen
+    Stützen des Pilzes, und der Bericht sagte, sie gälten allen Teilen — der
+    Druckdialog hatte sie dem Pilz zugeschrieben. Der Exportarbeiter hielt den
+    ganzen Auftrag schon (``_all_objects``) und gab ihn nicht weiter.
+
+    Gerufen wird ``_ExportWorker._assembly`` selbst, ohne Faden und ohne
+    Fenster; die Gegenprobe am Ende: Ist der Klotz der ganze Auftrag, gilt der
+    Vorschlag weiter jedem Teil (B2)."""
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+    from app.ui import main_window
+    from app.ui.settings import UiSettings
+
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    stem.apply_translation((0.0, 0.0, 10.0))
+    cap = trimesh.creation.box(extents=(40.0, 40.0, 3.0))
+    cap.apply_translation((0.0, 0.0, 21.5))
+    mushroom = SceneObject(
+        id="obj_1", name="Pilz", mesh=MeshData.of(trimesh.boolean.union([stem, cap])), plate=0
+    )
+    block = replace(_standing_box("Klotz", (30.0, 30.0, 10.0)), plate=1)
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_accepted(
+        print_settings.resolve(profile, "standard"), "support.style", "auto"
+    )
+    setup = handover.SlicerSetup(tmp_path / "elegoo-slicer.exe", "orca")
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *args: setup)
+
+    def export(job: tuple[Any, ...]) -> tuple[set[str], set[str]]:
+        folder = tmp_path / f"auftrag_{len(job)}"
+        folder.mkdir()
+        worker = SimpleNamespace(
+            _objects=[block],
+            _all_objects=job,
+            _target=folder / "Klotz.3mf",
+            _profile=profile,
+            _sources={},
+            _settings=settings,
+            _ui_settings=UiSettings(),
+            _material=profile.material.id,
+            _scene=None,
+            _document=None,
+            _checked=None,
+        )
+        (written,), findings = main_window._ExportWorker._assembly(worker)  # type: ignore[arg-type]
+        return _supported_parts(written, "orca"), {entry.code for entry in findings}
+
+    supported, codes = export((mushroom, block))
+    assert supported == set(), "der Pilz verlangt die Stützen, nicht der Klotz"
+    assert "export.part_setting_all" not in codes
+
+    supported, codes = export((block,))
+    assert len(supported) == 1, "B2: allein ist der Klotz der ganze Auftrag"
+    assert "export.part_setting_all" in codes

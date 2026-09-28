@@ -1357,6 +1357,10 @@ class _ExportWorker(Worker):
             scene=self._scene,
             document=self._document,
             checked=self._checked,
+            # Der ganze Auftrag, nicht nur die Auswahl: Verlangt ein nicht
+            # gewähltes Teil einen übernommenen Vorschlag, bleibt er dort und
+            # geht nicht an die gewählten (Review Nachtrag 0.5.1, N6).
+            job=self._all_objects,
         )
         return [written_path], list(findings)
 

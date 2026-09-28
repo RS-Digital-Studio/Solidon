@@ -293,7 +293,10 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   ganze Gruppe (`handover.object_keys`). **Ein übernommener Vorschlag
   verschwindet nie still**: Verlangt ihn kein Teil, geht er als Objektwert an
   jedes (`writer._unserved`, `export.part_setting_all`); die Platte bleibt,
-  damit `slice_model` dieselbe rechnet.
+  damit `slice_model` dieselbe rechnet. „Kein Teil“ heißt keines des ganzen
+  Auftrags: Jeder Aufrufer gibt `write_assembly` den Auftrag als `job` mit,
+  der Druckdialog die gewählten Platten, der Dateiexport alle Körper, auch
+  wenn nur einer gewählt ist.
 - **Die Druckplatte ist eine Angabe, keine Vermutung** (ohne `curr_bed_type`
   nimmt die Konsole „Cool Plate"): die im Druckdialog gewählte
   (`SlicerSetup.plate`), sonst die Standardplatte der Maschine oder ihres
