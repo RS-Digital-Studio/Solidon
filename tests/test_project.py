@@ -3606,3 +3606,102 @@ def test_v34_repair_steps_keep_leaving_crossings_alone(profile) -> None:
     )
     after = evaluate(project.document, profile, sources=ProjectSources(project))
     assert "repair.self_intersections" in {f.code for f in after.scene.report.findings}
+
+
+def test_v36_edge_groups_on_both_undo_sides_keep_counting_rings_as_flat() -> None:
+    """36 → 37 erfasst jede Kantengruppe, auch in den gespeicherten Fassungen.
+
+    Verrunden, Fase und Wulst wählen dieselben Gruppen; ein Schritt, der den
+    Schlüssel schon trägt, und ein fremder Schritt bleiben, wie sie sind.
+    """
+    from app.core.scene.migrations import _keep_edge_groups_as_they_were
+
+    data = {
+        "ops": [
+            {"op": "fillet_edges", "params": {"edges": "horizontal"}},
+            {"op": "chamfer_edges", "params": {}},
+            {"op": "bead_edges", "params": {"rings_by_plane": True}},
+            {"op": "drill_hole", "params": {}},
+        ],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"3": {"op": "chamfer_edges", "params": {}}}},
+                    "after": {"edited_ops": {"3": {"op": "chamfer_edges"}}},
+                    "note": {"edited_ops": {"5": {"op": "fillet_edges", "params": {}}}},
+                }
+            },
+            {"changes": ["kein Verlaufsstand"]},
+        ],
+    }
+
+    migrated = _keep_edge_groups_as_they_were(data)
+
+    assert [entry["params"] for entry in migrated["ops"]] == [
+        {"edges": "horizontal", "rings_by_plane": False},
+        {"rings_by_plane": False},
+        {"rings_by_plane": True},
+        {},
+    ]
+    changes = migrated["transactions"][0]["changes"]
+    assert changes["before"]["edited_ops"]["3"]["params"] == {"rings_by_plane": False}
+    assert changes["after"]["edited_ops"]["3"]["params"] == {"rings_by_plane": False}
+    assert changes["note"]["edited_ops"]["5"]["params"] == {}
+
+
+def test_v36_rounding_at_horizontal_keeps_the_mouths_of_a_cross_bore(profile) -> None:
+    """36 → 37: Ein altes *Verrunden* an „waagerecht“ rechnet wie gespeichert (RM-279).
+
+    ``edge_groups_v36.p3d`` hat der Stand vor RM-279 geschrieben: zwei Quader
+    40 × 30 × 20 mit Querbohrung Ø 6, einer als Netz, einer exakt, beide R 1
+    an „waagerecht“; am exakten stand der Radius erst auf 1,5. Damals zählten
+    die Mündungen der Bohrung als waagerecht und wurden mitgerundet. Die
+    Volumina hat derselbe Stand beim Schreiben gemessen. Mit dem Haken, den
+    ein neuer Schritt trägt, bleiben die Mündungen scharf — es geht weniger
+    weg; Strg+Z legt die alte Fassung wieder mit dem alten Weg zurück.
+
+    Der exakte Körper rechnet auf die Stelle genau wie gespeichert. Am Netz
+    hat RM-279 (i) die Rundung eines Rings selbst berichtigt (``cache_version``,
+    kein Format): Dieselben Kanten, aber die Mündung nicht mehr zu flach — das
+    Volumen darf sich um den Sehnenzug über der Rundungsfläche bewegen.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "edge_groups_v36.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 36
+    rounded = [entry for entry in original["ops"] if entry["op"] == "fillet_edges"]
+    assert len(rounded) == 2 and not any("rings_by_plane" in entry["params"] for entry in rounded)
+
+    project = load(path)
+    steps = [entry for entry in project.document.ops if entry.op == "fillet_edges"]
+    assert [entry.params for entry in steps] == [
+        {"radius": 1.0, "edges": "horizontal", "rings_by_plane": False}
+    ] * 2
+    edited = project.document.transactions[-1].changes
+    assert edited is not None
+    kept = [(state.edited_ops or {}).get(steps[1].id) for state in (edited.before, edited.after)]
+    assert [entry.params if entry is not None else None for entry in kept] == [
+        {"radius": 1.5, "edges": "horizontal", "rings_by_plane": False},
+        {"radius": 1.0, "edges": "horizontal", "rings_by_plane": False},
+    ], "auch die Fassungen hinter Strg+Z"
+
+    stored = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert stored.complete
+    volumes = {key: entry.mesh.volume for key, entry in stored.scene.objects.items()}
+    assert stored.scene.objects["obj_2"].kind == "brep"
+    # Zwei Mündungen zu R 1 an Ø 6: Rundungsfläche rund 2 · 34 mm², mal die Sehnengrenze.
+    from app.core.units import MAX_FACET_SAG
+
+    assert volumes["obj_1"] == pytest.approx(23026.0667, abs=2 * 34.0 * MAX_FACET_SAG)
+    assert volumes["obj_2"] == pytest.approx(23025.9949, abs=0.01)
+
+    history = History(project.document)
+    for entry in steps:
+        history.change_params(entry.id, {"rings_by_plane": True})
+    today = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert today.complete
+    for key in ("obj_1", "obj_2"):
+        # Zwei Mündungen zu R 1 an Ø 6 tragen nach Pappus rund 8,7 mm³ ab.
+        assert today.scene.objects[key].mesh.volume - volumes[key] > 5.0, key

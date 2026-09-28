@@ -1578,10 +1578,12 @@ def _remember(
 ) -> None:
     """Eine vollständige Erkennung unter dem Abdruck ihres Netzes ablegen.
 
-    Die drei Nebentabellen werden zusammen mit dem Ergebnis geführt, damit
-    Verdrängung und Nachfrage dieselben Einträge sehen — ob die Antwort
-    gerechnet wurde (:func:`detect`) oder von einem bewegten Zwilling stammt
-    (:func:`carry_detection`), ist für die Ablage dasselbe.
+    Die vier Nebentabellen — Flächenindizes als Gewicht der Verdrängung,
+    weggelassene Rundformen, das Freiformurteil und unlesbare Schalen —
+    werden zusammen mit dem Ergebnis geführt, damit Verdrängung und Nachfrage
+    dieselben Einträge sehen. Ob die Antwort gerechnet wurde (:func:`detect`)
+    oder von einem bewegten Zwilling stammt (:func:`carry_detection`), ist für
+    die Ablage dasselbe.
     """
     weight = sum(
         len(feature.face_indices)
@@ -6520,8 +6522,10 @@ def fit_stadium(
     :mod:`app.core.perceive.slots` (``ACROSS_THE_AXIS``).
 
     **Die Mittellinie.** In der Projektion liegen die Ecken auf einem Stadion,
-    und das ist in genau einer Richtung länger als quer dazu: die Hauptachse
-    der Punktwolke. Ihre Ausdehnung quer ist der Durchmesser, längs die
+    und das ist in genau einer Richtung länger als quer dazu: die Richtung der
+    größten Ausdehnung, aus den zwei Scheiteln gelesen — nicht die Hauptachse
+    der Punktwolke, die bei wenig Weg quer zeigen kann (siehe den Kommentar
+    im Rumpf). Ihre Ausdehnung quer ist der Durchmesser, längs die
     Gesamtlänge; die Differenz ist der Weg zwischen den Bogenmitten.
 
     **Der Rückstand** vergleicht jede Ecke mit der Kontur: über der Strecke

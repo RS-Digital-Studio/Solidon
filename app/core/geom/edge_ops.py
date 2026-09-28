@@ -80,7 +80,19 @@ _STATIONS_HOW = _(
 
 #: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
 _CHOICE_DOC = _(
-    "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte."
+    "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln "
+    "gewählte. Ein runder Rand gehört nur dazu, wenn er waagerecht liegt; eine Bohrung in "
+    "einer Seitenwand wählen Sie einzeln."
+)
+
+#: Wie runde Ränder zu den Gruppen stehen (RM-279) — ein Satz für alle drei.
+#: Er nennt den Namen, den die Beschriftung einer solchen Mündung zeigt: Sie
+#: heißt „Senkrecht“ und gehört trotzdem zu keiner Gruppe (``edges.choose``).
+_RINGS_DOC = _(
+    "Ein runder Rand wie die Mündung einer Bohrung zählt nur zu waagerecht, oben oder "
+    "unten, wenn er waagerecht liegt. In einer Seitenwand heißt er „Senkrecht“, gehört "
+    "aber zu keiner Gruppe — wählen Sie ihn dann einzeln. Ohne Haken zählt jeder runde "
+    "Rand als waagerecht, wie in Schritten aus älteren Versionen."
 )
 
 #: Und derselbe Satz zum Feld der einzeln gewählten Kanten.
@@ -89,6 +101,21 @@ _KEYS_DOC = _(
     "ihrer Nummer — ein Schritt davor darf etwas anderes ändern, ohne dass die "
     "Verrundung wandert."
 )
+
+
+def _rings_param() -> bool:
+    """Das Feld „Runde Ränder nach ihrer Lage“ — gleich an allen drei Operationen."""
+    return cast(
+        bool,
+        param(
+            title=_("Runde Ränder nach ihrer Lage"),
+            default=True,
+            placement="advanced",
+            doc=_RINGS_DOC,
+            # „senkrecht“ nimmt an beiden Wegen dieselben Kanten.
+            depends_on=("edges", ("horizontal", "top", "bottom")),
+        ),
+    )
 
 
 def _chosen_edges(choice: str, value: str) -> tuple[str, ...]:
@@ -173,6 +200,11 @@ class FilletParams(BaseParams):
         choices=EDGE_CHOICES,
         doc=_CHOICE_DOC,
     )
+    # **Aus nur für gespeicherte Schritte** (RM-279): Bis Format 36 zählte
+    # jeder Ring als waagerecht, auch die Mündung einer Querbohrung, und die
+    # Migration 36 → 37 schreibt ihnen den Haken aus, damit sie beim Öffnen
+    # dieselben Kanten treffen.
+    rings_by_plane: bool = _rings_param()
     edge_keys: str = param(
         title=_("Einzelne Kanten"),
         default="",
@@ -188,7 +220,9 @@ class FilletParams(BaseParams):
     # 8: die Berührlinien werden an beiden Kernen geprüft, und eine Gruppe
     # lässt gefaltete Züge aus (22.09.2026).
     # 9: Radius mit Verlauf (P6.1, 23.09.2026).
-    cache_version="9",
+    # 10: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
+    # 11: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
+    cache_version="11",
     title=_("Verrunden"),
     category="shaping",
     params=FilletParams,
@@ -218,6 +252,7 @@ def fillet_edges(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         rounded=True,
+        rings_by_plane=params.rings_by_plane,
         law=law,
     )
 
@@ -336,6 +371,11 @@ class ChamferParams(BaseParams):
         choices=EDGE_CHOICES,
         doc=_CHOICE_DOC,
     )
+    # **Aus nur für gespeicherte Schritte** (RM-279): Bis Format 36 zählte
+    # jeder Ring als waagerecht, auch die Mündung einer Querbohrung, und die
+    # Migration 36 → 37 schreibt ihnen den Haken aus, damit sie beim Öffnen
+    # dieselben Kanten treffen.
+    rings_by_plane: bool = _rings_param()
     edge_keys: str = param(
         title=_("Einzelne Kanten"),
         default="",
@@ -352,7 +392,9 @@ class ChamferParams(BaseParams):
     # 9: zwei Abstände oder Abstand und Winkel (P6.2, 23.09.2026).
     # 10: der exakte Kern fragt die Flächen an einem Punkt auf der Kante statt
     # am Linienschwerpunkt — an Bögen und Kreisen (P6.2, 23.09.2026).
-    cache_version="10",
+    # 11: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
+    # 12: ein gebogener Zug am Netz wird durch seine Knoten gezogen (RM-279).
+    cache_version="12",
     title=_("Fase anbringen"),
     category="shaping",
     params=ChamferParams,
@@ -379,6 +421,7 @@ def chamfer_edges(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         rounded=False,
+        rings_by_plane=params.rings_by_plane,
         shape=chamfer_shape(params),
     )
 
@@ -510,6 +553,11 @@ class BeadParams(BaseParams):
         choices=EDGE_CHOICES,
         doc=_CHOICE_DOC,
     )
+    # **Aus nur für gespeicherte Schritte** (RM-279): Bis Format 36 zählte
+    # jeder Ring als waagerecht, auch die Mündung einer Querbohrung, und die
+    # Migration 36 → 37 schreibt ihnen den Haken aus, damit sie beim Öffnen
+    # dieselben Kanten treffen.
+    rings_by_plane: bool = _rings_param()
     edge_keys: str = param(
         title=_("Einzelne Kanten"),
         default="",
@@ -523,7 +571,8 @@ class BeadParams(BaseParams):
 @register_op(
     name="bead_edges",
     result_kind="mesh",
-    cache_version="6",
+    # 7: ein stehender Ring gehört zu keiner Gruppe nach Lage (RM-279).
+    cache_version="7",
     title=_("Wulst anlegen"),
     category="shaping",
     params=BeadParams,
@@ -558,6 +607,7 @@ def bead_edges_op(ctx: OpContext) -> OpResult:
         cast(EdgeChoice, params.edges),
         _chosen_edges(params.edges, params.edge_keys),
         selected_edges=ctx.bound_edges.get("edge_keys"),
+        rings_by_plane=params.rings_by_plane,
         quality=ctx.quality,
         cancelled=ctx.cancelled,
     )
@@ -585,6 +635,7 @@ def _worked(
     keys: tuple[str, ...],
     *,
     rounded: bool,
+    rings_by_plane: bool = True,
     shape: ChamferShape | None = None,
     law: RadiusLaw | None = None,
 ) -> OpResult:
@@ -607,6 +658,7 @@ def _worked(
             choice,
             keys,
             selected_edges=bound,
+            rings_by_plane=rings_by_plane,
             profile=ctx.profile,
             rounded=rounded,
             cancelled=ctx.cancelled,
@@ -622,6 +674,7 @@ def _worked(
             choice,
             keys,
             selected_edges=bound,
+            rings_by_plane=rings_by_plane,
             quality=ctx.quality,
             cancelled=ctx.cancelled,
             narrowest=narrowest_face(ctx.profile),
@@ -639,6 +692,7 @@ def _worked(
         choice,
         keys,
         selected_edges=bound,
+        rings_by_plane=rings_by_plane,
         quality=ctx.quality,
         cancelled=ctx.cancelled,
         narrowest=narrowest_face(ctx.profile),
@@ -679,6 +733,7 @@ def _on_a_solid(
     keys: tuple[str, ...],
     *,
     selected_edges: Sequence[int] | None = None,
+    rings_by_plane: bool = True,
     profile: Profile | None,
     rounded: bool,
     cancelled: CancelToken,
@@ -703,6 +758,7 @@ def _on_a_solid(
                 choice,
                 keys,
                 selected_edges=selected_edges,
+                rings_by_plane=rings_by_plane,
                 cancelled=cancelled,
                 law=law,
             )
@@ -713,6 +769,7 @@ def _on_a_solid(
                 choice,
                 keys,
                 selected_edges=selected_edges,
+                rings_by_plane=rings_by_plane,
                 shape=shape,
                 cancelled=cancelled,
             )
@@ -727,6 +784,7 @@ def _on_a_solid(
             narrowest_face(profile),
             shape,
             law,
+            rings_by_plane=rings_by_plane,
         )
         if explained is None:
             raise
@@ -752,6 +810,8 @@ def _why_it_does_not_fit(
     narrowest: float,
     shape: ChamferShape | None = None,
     law: RadiusLaw | None = None,
+    *,
+    rings_by_plane: bool = True,
 ) -> GeometryError | None:
     """Warum der exakte Kern abgelehnt hat — mit demselben Satz wie am Netz, wo er passt.
 
@@ -771,7 +831,7 @@ def _why_it_does_not_fit(
     mesh = as_mesh_data(source.mesh)
     entries = edges_of(mesh)
     try:
-        chosen = wanted(entries, choice, keys)
+        chosen = wanted(entries, choice, keys, rings_by_plane=rings_by_plane)
     except GeometryError:
         return None
     try:
