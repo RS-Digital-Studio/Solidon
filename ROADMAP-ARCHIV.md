@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-28 | [Stützsperre im Cura-Fenster abgenommen: ein Punkt geschlossen (28.09.2026)](#stützsperre-im-cura-fenster-abgenommen-ein-punkt-geschlossen-28092026) |
 | 2026-09-28 | [Übergabe auf dem Herstellerprofil, Stufe E: ein Punkt geschlossen (28.09.2026)](#übergabe-auf-dem-herstellerprofil-stufe-e-ein-punkt-geschlossen-28092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-c-f-und-l-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-a-und-b-ein-punkt-geschlossen-27092026) |
@@ -33029,3 +33030,45 @@ teilweise umgesetzt und bleiben offen.
   (`tests/data/projects/print_settings_v33.p3d`, Stufe „Fein“): Die Tempi von damals
   gelten nicht als Wahl, vier Wände und 25 % Füllung schon
   (`test_a_file_from_0_5_0_keeps_what_someone_set`).
+
+## Stützsperre im Cura-Fenster abgenommen: ein Punkt geschlossen (28.09.2026)
+
+<a id="rm-257"></a>
+
+- [x] **RM-257 — Kanäle frei halten auch für Cura.** Aus der Durchsicht v0.5.1 (druck).
+  Nicht gebaut, weil es eine neue Fähigkeit ist und nicht die Behebung einer Zusage: Der
+  Changelog verspricht Cura nichts, und seit `12b7e9174` sagt der Druckdialog, wo Cura
+  die Kanäle von Hand sperrt (Stützblocker im Cura-Fenster). CuraEngine nimmt nach `-l
+  <datei>` Einstellungen je Netz an; ein zweites Netz mit `anti_overhang_mesh = true`
+  ist Curas Stützsperre — damit bekäme die Konsole dieselbe Sperre, das Cura-Fenster
+  (STL) nicht. Abnahme: Okarina in CuraEngine mit und ohne, Modellbahn gleich, Stütze im
+  Kanal weg.
+
+  **Für den Konsolenweg gebaut mit Stufe D** (`400dde0e2`, gemergt mit `c667d7dd5`): Jedes
+  Teil geht als eigenes Netz in CuraEngine, jede Sperre als Netz mit
+  `anti_overhang_mesh`. Gemessen an der Waschschüssel statt der Okarina, in CuraEngine
+  5.13 am K1 Max, Neptune 4 und Centauri Carbon 2: Stütze 38 % kürzer, Wände auf 0,1 m
+  gleich. **Das Fenster mit Stufe E** von [RM-281](ROADMAP.md#rm-281): *Im Slicer
+  öffnen* gibt Cura statt des zusammengelegten STL eine 3MF in seiner Schreibweise
+  (`writer._cura_window`): dieselben Netze und Werte wie die Konsole, je Objekt als
+  `cura:<schlüssel>`, die Sperre als Komponente neben ihrem Körper mit
+  `cura:anti_overhang_mesh`, um den halben Bauraum verschoben. Belegt an Curas
+  Quelltext: libSavitar liest die Metadaten am Objekt und streift `cura:` ab, eine
+  Komponente wird Kind einer Gruppe (die nicht einzeln aufs Bett fällt), und Uraniums
+  `MeshFileHandler` zentriert das Netz nach dem Lesen, sodass der Versatz einmal wirkt.
+
+  **Im Cura-Fenster abgenommen** (B5 der Durchsicht 0.5.1, Cura 5.13 mit Ender-3 V3 SE,
+  Dateien aus dem Fensterweg des Druckdialogs): Pilz und Klotz tragen *Generate Support*
+  als Einstellung je Objekt, an und aus, global bleibt die Stütze aus; geschnitten stützt
+  Cura nur den Pilzhut. Am Tunnelblock mit Kragarm führt die Objektliste die Sperre mit
+  Curas Stützblocker-Zeichen als *Don't support overlaps*; geschnitten stützt Cura den
+  Arm und lässt den Kanal frei, ohne Sperre füllt es ihn (2 h 49 min und 45 g gegen
+  3 h 5 min und 50 g). Dabei gefunden und behoben: Die 3MF war auf das Bett des Druckers
+  in Solidon gerechnet, Curas Leser zieht aber die halbe Bettgröße seiner aktiven
+  Maschine ab (`ThreeMFReader._read`) und ordnet nicht an. Ein Auftrag für den Centauri
+  Carbon 2 lag im Ender 18 mm aus der Mitte, einer von 210 mm Breite ragte über den Rand
+  und blieb ungeschnitten. Jetzt liegt der Auftrag mittig auf dem Bett der Maschine, die
+  in Cura aktiv ist (`d1c3d0462`, `CuraActiveMachine.bed`, Maschineneinstellungen
+  vor der Definition, ohne sie das Bett des Druckers), im Fenster belegt am selben
+  breiten Auftrag. Bilder 17, 18, 25, 31, 34, 35, 39 und 40 in
+  `output/review/b5-cura-2026-09-28/bilder/`.

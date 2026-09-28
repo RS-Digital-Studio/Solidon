@@ -68,7 +68,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-253 — Am Laptop-Ständer tragen Kippen und Verdoppeln einer Bohrung falsch ab](#rm-253) | Geometrie, Erkennung und Druckvorbereitung | Die Auskunft steht (`boolean.parts_not_united` mit *Stelle zeigen*, `ae178de8c`); offen die Geometrie: Teil 10 kreuzt sich 1 121-mal selbst, die 21 Teile lassen sich deshalb nicht vereinigen — gekippt 15° liegen 32,6 mm³ jenseits der alten Kappe, Verdoppeln bleibt ohne Wirkung, Versetzen „geht nicht mehr durch“; Weg über das Auflösen der Eigenkreuzung |
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt. Die 4 Abstürze am zweifarbigen Besteckeinsatz brauchen Solidons aufbereitetes Netz mit Gitterstützen; das Originalprojekt stürzt nicht ab. Offen: was an Solidons Netz den Slicer abstürzen lässt — erst danach eine Meldung beim Hersteller |
-| [RM-257 — Kanäle frei halten auch für Cura](#rm-257) | Geometrie, Erkennung und Druckvorbereitung | Konsolenweg gebaut mit Stufe D (`400dde0e2`, Waschschüssel: Stütze 38 % kürzer, Wände gleich); Curas Fenster bekommt mit Stufe E eine 3MF mit Sperre und Werten je Teil; offen die Sichtprüfung im Cura-Fenster |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
 | [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
@@ -2077,30 +2076,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   beim Hersteller. Die Frage, ob der Stützvorschlag bei mehrfarbigen Teilen auf
   Baumstützen ausweicht, ist seit Entscheidung J entschärft: Vorgeschlagen wird die
   Stützart des Slicers.
-
-<a id="rm-257"></a>
-
-- [~] **RM-257 — Kanäle frei halten auch für Cura.** Aus der Durchsicht v0.5.1 (druck).
-  Nicht gebaut, weil es eine neue Fähigkeit ist und nicht die Behebung einer Zusage: Der
-  Changelog verspricht Cura nichts, und seit `12b7e9174` sagt der Druckdialog, wo Cura
-  die Kanäle von Hand sperrt (Stützblocker im Cura-Fenster). CuraEngine nimmt nach `-l
-  <datei>` Einstellungen je Netz an; ein zweites Netz mit `anti_overhang_mesh = true`
-  ist Curas Stützsperre — damit bekäme die Konsole dieselbe Sperre, das Cura-Fenster
-  (STL) nicht. Abnahme: Okarina in CuraEngine mit und ohne, Modellbahn gleich, Stütze im
-  Kanal weg.
-
-  **Für den Konsolenweg gebaut mit Stufe D** (`400dde0e2`, gemergt mit `c667d7dd5`): Jedes
-  Teil geht als eigenes Netz in CuraEngine, jede Sperre als Netz mit
-  `anti_overhang_mesh`. Gemessen an der Waschschüssel statt der Okarina, in CuraEngine
-  5.13 am K1 Max, Neptune 4 und Centauri Carbon 2: Stütze 38 % kürzer, Wände auf 0,1 m
-  gleich. **Das Fenster mit Stufe E** von [RM-281](#rm-281): *Im Slicer öffnen* gibt Cura
-  statt des zusammengelegten STL eine 3MF in seiner Schreibweise (`writer._cura_window`):
-  dieselben Netze und Werte wie die Konsole, je Objekt als `cura:<schlüssel>`, die Sperre
-  als Komponente neben ihrem Körper mit `cura:anti_overhang_mesh`, um den halben Bauraum
-  verschoben. Belegt an Curas Quelltext: libSavitar liest die Metadaten am Objekt und
-  streift `cura:` ab, eine Komponente wird Kind einer Gruppe (die nicht einzeln aufs Bett
-  fällt), und Uraniums `MeshFileHandler` zentriert das Netz nach dem Lesen, sodass der
-  Versatz einmal wirkt. **Offen:** die Sichtprüfung im Cura-Fenster selbst.
 
 <a id="rm-281"></a>
 
