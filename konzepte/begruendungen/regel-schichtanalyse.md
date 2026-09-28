@@ -623,7 +623,14 @@ der Runde vorab; der Merker hält davon nur `SUPPORT_CACHE_LIMIT`, und
 `classify` las jede ein zweites Mal, ebenso `_rigid_key` (Freiform der
 Leistungstests 3 896 statt 1 949 Lesungen). Deshalb antworten beide in der
 Runde aus dem Wissen des Stapels. Die Lesungen der Runde hält er bewusst fest,
-solange sie läuft — jeder Plan trug die seine ohnehin. Der Stapellauf selbst
+solange sie läuft, und das kostet Speicher: Am Meshy-Murmelbrett hält das Wissen
+192 bis 226 MiB je Runde — knapp die Hälfte der Lesungen gehört zu Flecken ohne
+Plan, dazu kommen in der Stückrunde 54 MiB Kennzahlen, die erst der Nachtrag
+festhält. Die Spitze des ganzen `detect` steigt dort um rund 90 MiB (2 388 → 2 481
+MiB, gemessen gegen `aa82afdff`; +3,9 % Arbeitssatz, +3,6 % zugesagter Speicher)
+für rund ein Viertel weniger Rechenzeit. Hebel für später: die Kennzahl als
+16-Byte-Abdruck statt des Feldes halten, das nähme die 54 MiB weg (Review
+stapel, B9). Der Stapellauf selbst
 behält vom Weg nur das laufende Maximum von Plan-Schatten-Abstand und Betrag;
 der ganze Weg wog an einem vollen Block 149 MiB. Die Blockgröße folgt der
 gemessenen Spitze (`BATCH_BYTES`, `BATCH_PEAK_FACTOR`): am Meshy-Murmelbrett
