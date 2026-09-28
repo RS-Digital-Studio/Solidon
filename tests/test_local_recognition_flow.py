@@ -142,8 +142,10 @@ def test_f1_in_the_local_editor_opens_the_manual_at_its_operation(local_window, 
     opened = window._manual
     assert opened is not None and opened.isVisible()
     assert opened.current_page().key == page
-    if spot:
-        assert opened.text.textCursor().selectedText() == spot
+    # Scharf: Bekommt *Bohrung ändern* eine Anleitung, wird ``spot`` leer, und
+    # die Markierung wäre ohne dieses Assert nicht mehr geprüft.
+    assert spot
+    assert opened.text.textCursor().selectedText() == spot
     dialog.reject()
 
 

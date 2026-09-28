@@ -105,6 +105,19 @@ FIGURE_PATTERN: Final = re.compile(r"!\[\]\(figure:([a-z0-9-]+)\)")
 WHERE_TO_START: Final = "start"
 SPACEMOUSE_ACCESS: Final = "spacemouse-access"
 
+#: Der Vorsatz der erzeugten Referenzkapitel. Ohne ihn hießen „Die Bausteine“
+#: und das Kapitel „Bausteine“ beide ``parts``, „Zeichnen“ und „Skizze“ beide
+#: ``sketch``, und wer eine Seite beim Schlüssel suchte, bekam die erste:
+#: F1 in *Mutternfalle* landete oben auf der Erklärseite statt am Eintrag.
+#: Derselbe Wert ist der Anker der Website (``#ref-holes``).
+REFERENCE_PAGE_PREFIX: Final = "ref-"
+
+
+def reference_key(category: str) -> str:
+    """Der Seitenschlüssel des Referenzkapitels einer Kategorie."""
+    return f"{REFERENCE_PAGE_PREFIX}{category}"
+
+
 _SPACEMOUSE_LINUX = _(
     "**Linux (USB oder USB-Empfänger, mit systemd-logind)**\n\n"
     "Ein gefundenes Gerät kann noch für Ihren Benutzer gesperrt sein. Mit "
@@ -2321,7 +2334,7 @@ def pages(registry: Registry | None = None) -> tuple[Page, ...]:
     source = registry or REGISTRY
     generated = tuple(
         Page(
-            key=category,
+            key=reference_key(category),
             title=CATEGORIES[category],
             body=documentation(source, category=category),
             generated=True,
@@ -2379,7 +2392,7 @@ def help_for(operation: str, registry: Registry | None = None) -> tuple[str, str
         if operation in guide.teaches:
             return guide.key, ""
     spec = (registry or REGISTRY).get(operation)
-    return spec.category, f"{spec.title} ({spec.name})"
+    return reference_key(spec.category), f"{spec.title} ({spec.name})"
 
 
 def titled(page: Page, text: str) -> str:

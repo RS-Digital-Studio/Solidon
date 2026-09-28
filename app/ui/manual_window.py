@@ -583,9 +583,13 @@ class ManualWindow(QMainWindow):
                 continue
             row = self._row_of(index)
             if row == self.contents.currentRow():
-                # Schon offen: Qt meldet keinen Wechsel, und die Stelle wird
-                # vom Anfang der Seite aus gesucht, nicht von der letzten.
-                self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
+                # Schon offen: Qt meldet keinen Wechsel. Eine Stelle wird vom
+                # Anfang der Seite aus gesucht, nicht von der letzten; ohne
+                # Stelle bleibt die Seite, wo der Leser steht — F1 im Dialog
+                # eines Anleitungsschritts führt zum nächsten Schritt, nicht
+                # zurück zum ersten.
+                if spot:
+                    self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
             else:
                 self.contents.setCurrentRow(row)
             if spot:

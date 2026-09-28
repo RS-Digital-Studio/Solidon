@@ -436,7 +436,7 @@ def test_every_category_has_a_chapter() -> None:
     chapters = {page.key for page in manual.pages() if page.generated}
     knowledge = {page.key for page in manual.knowledge_pages()}
 
-    assert chapters - knowledge == set(REGISTRY.by_category())
+    assert chapters - knowledge == {manual.reference_key(name) for name in REGISTRY.by_category()}
 
 
 def test_every_operation_appears_by_name() -> None:
@@ -520,8 +520,22 @@ def test_the_explanations_cover_what_a_schema_cannot_say() -> None:
         assert topic in written, topic
 
 
+def test_no_two_pages_share_a_key() -> None:
+    """Ein Schlüssel, eine Seite: Wer beim Schlüssel sucht, bekommt die erste.
+
+    „Die Bausteine“ und das Kapitel „Bausteine“ hießen beide ``parts``,
+    „Zeichnen“ und „Skizze“ beide ``sketch``. F1 in *Mutternfalle* und in
+    *Tasche schneiden* schlug deshalb die Erklärseite auf, oben, statt den
+    Eintrag in der Referenz — bei 53 von 142 Operationen, in jeder Sprache.
+    """
+    keys = [page.key for page in manual.pages()]
+    assert keys, "keine Seiten gelesen — dann prüft das nichts"
+    twice = sorted({key for key in keys if keys.count(key) > 1})
+    assert not twice, f"doppelt vergeben: {twice}"
+
+
 def test_a_chapter_can_be_asked_for_on_its_own() -> None:
-    holes = manual.find("holes")
+    holes = manual.find(manual.reference_key("holes"))
 
     assert holes is not None
     assert str(CATEGORIES["holes"]) in str(holes.body)
@@ -545,7 +559,10 @@ def test_f1_on_every_other_operation_finds_its_entry_in_the_reference() -> None:
     from app.core import guides, markup
 
     taught = {name for guide in guides.GUIDES for name in guide.teaches}
-    pages = {page.key: markup.plain(page.text()) for page in manual.pages()}
+    # Die erste Seite je Schlüssel, wie das Handbuchfenster sie wählt.
+    pages: dict[str, str] = {}
+    for page in manual.pages():
+        pages.setdefault(page.key, markup.plain(page.text()))
     lost = []
     for spec in REGISTRY.all():
         if spec.name in taught:
@@ -567,7 +584,7 @@ def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
     from app.i18n import install_catalog, set_language
     from app.i18n.catalog import read_catalog
 
-    german = manual.find("holes")
+    german = manual.find(manual.reference_key("holes"))
     assert german is not None
     assert "0,2 … 200" in str(german.body)
     assert "0.2 … 200" not in str(german.body)
@@ -575,7 +592,7 @@ def test_the_reference_writes_numbers_the_way_the_language_does() -> None:
     install_catalog("en", read_catalog("en"))
     set_language("en")
     try:
-        english = manual.find("holes")
+        english = manual.find(manual.reference_key("holes"))
         assert english is not None
         assert "0.2 … 200" in str(english.body)
         assert "0,2 … 200" not in str(english.body)
@@ -1038,11 +1055,16 @@ def test_the_window_groups_the_pages_under_their_parts(qt_app: QApplication) -> 
 
 
 def test_a_page_opens_at_the_entry_it_was_asked_for(qt_app: QApplication) -> None:
-    """F1 im Dialog *Verrunden*: das Referenzkapitel, aufgeschlagen und markiert
-    an seinem Eintrag — auch wenn das Kapitel schon offen war."""
+    """F1 im Dialog *Mutternfalle*: das Referenzkapitel, aufgeschlagen und
+    markiert an seinem Eintrag — auch wenn das Kapitel schon offen war.
+
+    Eine Operation ohne Anleitung aus ``parts``: Dort heißt auch die
+    Erklärseite „Die Bausteine“, und F1 landete oben auf ihr statt am Eintrag.
+    """
     window = ManualWindow()
     try:
-        page, spot = manual.help_for("fillet_edges")
+        page, spot = manual.help_for("insert_nut_trap")
+        assert spot, "die Operation hat inzwischen eine Anleitung — eine andere wählen"
         for _attempt in range(2):
             window.show_page(page, spot)
             shown = window.current_page()
@@ -1581,8 +1603,9 @@ def test_the_knowledge_pages_stand_before_the_reference() -> None:
     """Wonach gerechnet wird, gehört vor die Liste dessen, was gerechnet werden
     kann."""
     keys = [page.key for page in manual.pages()]
-    assert keys.index("rules") < keys.index("scene")
-    assert keys.index("profiles") < keys.index("scene")
+    scene = keys.index(manual.reference_key("scene"))
+    assert keys.index("rules") < scene
+    assert keys.index("profiles") < scene
 
 
 def test_the_remote_page_lists_exactly_what_gets_through() -> None:
@@ -1870,6 +1893,71 @@ def test_f1_in_an_operation_dialog_opens_the_guide_that_teaches_it(qt_app: QAppl
         assert opened is not None and opened.isVisible()
         page = opened.current_page()
         assert page is not None and page.key == "drill-a-hole"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_f1_in_the_dialog_of_an_operation_without_a_guide_marks_its_entry(
+    qt_app: QApplication,
+) -> None:
+    """F1 in *Mutternfalle* und *Tasche schneiden*: das Referenzkapitel, an
+    ihrem Eintrag markiert — über den ganzen Weg der Anwendung.
+
+    Beide Kategorien teilten ihren Schlüssel mit einer Erklärseite („Die
+    Bausteine“, „Zeichnen“), und das Fenster nahm die erste Seite dieses
+    Namens: oben, ohne Markierung.
+    """
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.ui.main_window import MainWindow
+    from app.ui.op_dialog import OperationDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        help_key = QKeySequence(QKeySequence.StandardKey.HelpContents)
+        for name in ("insert_nut_trap", "sketch_pocket"):
+            key, spot = manual.help_for(name)
+            assert spot, f"{name} hat inzwischen eine Anleitung — eine andere wählen"
+            dialog = OperationDialog(REGISTRY.get(name), {}, window)
+            window._open_operation_dialog(dialog, lambda: None)
+            shortcut = next(
+                item for item in dialog.findChildren(QShortcut) if item.key() == help_key
+            )
+            shortcut.activated.emit()
+            opened = window._manual
+            assert opened is not None and opened.isVisible()
+            page = opened.current_page()
+            assert page is not None and page.key == key, name
+            assert opened.text.textCursor().selectedText() == spot, name
+            dialog.reject()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_f1_from_a_dialog_leaves_an_open_guide_where_it_is(qt_app: QApplication) -> None:
+    """Schritt 3 von *Ein Loch bohren* öffnet *Bohrung setzen*, F1 im Dialog
+    soll zum nächsten Schritt führen: Die offene Anleitung bleibt stehen, wo
+    der Leser ist, statt an den Anfang zu springen.
+    """
+    window = ManualWindow()
+    try:
+        window.resize(700, 400)
+        window.show()
+        page, spot = manual.help_for("drill_hole")
+        assert not spot, "die Operation hat keine Anleitung mehr — eine andere wählen"
+        window.show_page(page)
+        qt_app.processEvents()
+        bar = window.text.verticalScrollBar()
+        assert bar.maximum() > 0, "die Seite passt ins Fenster — dann prüft das nichts"
+        bar.setValue(bar.maximum() // 2)
+        before = bar.value()
+        window.show_page(page, spot)
+        qt_app.processEvents()
+        assert bar.value() == before
     finally:
         window.close()
         window.deleteLater()

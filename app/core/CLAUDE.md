@@ -109,7 +109,9 @@ kein Schritt ist, reist als `DocumentChange` mit (§15.5).
 **Dokumentation, ohne Qt gezeichnet** — `manual.py` (geschriebene Seiten,
 Bildanleitungen und Referenz aus dem Register, gegliedert in fünf Teile über
 `OUTLINE`; die erste Seite „Wo fange ich an?“ listet die Anleitungen aus
-`guides.GUIDES`; `help_for` sagt F1, wo eine Operation erklärt ist;
+`guides.GUIDES`; `help_for` sagt F1, wo eine Operation erklärt ist; die
+Referenzkapitel heißen `ref-<kategorie>` (`reference_key`), kein
+Seitenschlüssel kommt zweimal vor;
 `spacemouse_access_help`, USB-Regel nur bei bekannter
 Hersteller-/Produktkennung) · `manual_search.py` (die Suche im Handbuch:
 Rangfolge nach Titel, Kurzfassung, Stichwort und Text, Fundstelle je Seite;

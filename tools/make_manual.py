@@ -478,18 +478,16 @@ PDF_LINE = "#d8d4cd"
 
 
 def _anchor(page: manual.Page) -> str:
-    """Der Anker einer Seite — für erzeugte Kapitel mit Vorsatz.
+    """Der Anker einer Seite — für erzeugte Seiten mit Vorsatz.
 
-    Der Seitenschlüssel allein reicht nicht: die geschriebene Seite „Die
-    Bausteine" und das erzeugte Kapitel „Bausteine" heißen beide ``parts``,
-    und zwei gleiche ``id`` in einer Seite sind ungültiges HTML. Der Browser
-    springt dann bei beiden Verzeichniseinträgen an dieselbe Stelle — auf
-    die erste, und das ist die falsche.
-
-    Der Vorsatz sitzt am Anker und nicht am Schlüssel: ``manual.find`` führt
-    von einer Operation in ihr Kapitel und erwartet den Kategorienamen.
+    Die Referenzkapitel tragen den Vorsatz im Schlüssel
+    (``manual.reference_key``), die erzeugten Wissensseiten nur am Anker. So
+    bleiben es die Anker, auf die die Funktionsseiten der Website zeigen
+    (``#ref-holes``, ``#ref-models``).
     """
-    return f"ref-{page.key}" if page.generated else page.key
+    if page.generated and not page.key.startswith(manual.REFERENCE_PAGE_PREFIX):
+        return f"{manual.REFERENCE_PAGE_PREFIX}{page.key}"
+    return page.key
 
 
 def _parts(
@@ -771,12 +769,8 @@ def _footer(language: str) -> str:
 
 
 def page_html(language: str, prefix: str) -> str:
-    # Ein Verweis auf eine andere Seite springt zu ihrem Kapitel. Erste
-    # gewinnt, wie bei ``manual.find``: Die geschriebene Seite „Die Bausteine"
-    # und das erzeugte Kapitel „Bausteine" teilen sich den Schlüssel ``parts``.
-    anchors: dict[str, str] = {}
-    for page in manual.pages():
-        anchors.setdefault(page.key, _anchor(page))
+    # Ein Verweis auf eine andere Seite springt zu ihrem Kapitel.
+    anchors = {page.key: _anchor(page) for page in manual.pages()}
     body = _classify(
         manual.as_html(
             figure_source=lambda key: f"{prefix}/{key}.{_suffix(key)}",

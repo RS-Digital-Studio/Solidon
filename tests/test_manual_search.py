@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core import manual_search
+from app.core import manual, manual_search
 from app.core.bootstrap import load_operations
 from app.core.manual import Page
 from app.core.registry import REGISTRY
@@ -23,67 +23,66 @@ from app.i18n.catalog import available_languages, install_language
 load_operations()
 
 #: Suche, die Seiten, auf denen ein Kunde die Antwort findet, und ob sie aus
-#: dem Auftrag stammt. ``@G`` meint die erzeugte Seite dieses Schlüssels —
-#: „parts" ist das Kapitel *Die Bausteine*, „parts@G" die Referenz
-#: *Bausteine*. Die Ziele sind die aus der Messung; dazu kommen die
+#: dem Auftrag stammt. „parts" ist das Kapitel *Die Bausteine*, „ref-parts"
+#: die Referenz *Bausteine*. Die Ziele sind die aus der Messung; dazu kommen die
 #: Bildanleitungen, wo sie die Antwort sind, und bei *Bambu* und *Zoll* die
 #: Referenzseite, auf der Druckerliste und Einheit stehen.
 CUSTOMER_SEARCHES: tuple[tuple[str, tuple[str, ...], bool], ...] = (
-    ("Loch", ("drill-a-hole", "start", "holes@G"), True),
-    ("Bohrung", ("drill-a-hole", "start", "holes@G"), True),
-    ("Gewinde", ("thread-a-hole", "parts@G", "parts"), True),
-    ("Gehäuse", ("shaping@G", "prepare@G", "parts@G"), True),
-    ("Deckel", ("parts@G",), True),
-    ("drehen", ("move-and-turn", "moving", "transform@G"), True),
-    ("verschieben", ("move-and-turn", "moving", "transform@G"), True),
-    ("spiegeln", ("transform@G",), True),
-    ("Maß ändern", ("change-a-dimension", "features", "history", "moving", "transform@G"), True),
-    ("größer machen", ("moving", "transform@G"), True),
-    ("skalieren", ("moving", "transform@G"), True),
+    ("Loch", ("drill-a-hole", "start", "ref-holes"), True),
+    ("Bohrung", ("drill-a-hole", "start", "ref-holes"), True),
+    ("Gewinde", ("thread-a-hole", "ref-parts", "parts"), True),
+    ("Gehäuse", ("ref-shaping", "ref-prepare", "ref-parts"), True),
+    ("Deckel", ("ref-parts",), True),
+    ("drehen", ("move-and-turn", "moving", "ref-transform"), True),
+    ("verschieben", ("move-and-turn", "moving", "ref-transform"), True),
+    ("spiegeln", ("ref-transform",), True),
+    ("Maß ändern", ("change-a-dimension", "features", "history", "moving", "ref-transform"), True),
+    ("größer machen", ("moving", "ref-transform"), True),
+    ("skalieren", ("moving", "ref-transform"), True),
     ("rückgängig", ("undo-a-step", "history"), True),
     ("Slicer", ("print", "print-a-model"), True),
     ("exportieren", ("export",), True),
     ("zu groß", ("split-a-large-part", "splitting", "export"), True),
-    ("teilen", ("split-a-large-part", "splitting", "prepare@G"), True),
-    ("Text", ("label-a-part", "labels", "label@G"), True),
-    ("Schrift", ("label-a-part", "labels", "label@G"), True),
-    ("Rundung", ("round-edges", "features", "shaping@G"), True),
-    ("abrunden", ("round-edges", "features", "shaping@G"), True),
-    ("Fase", ("round-edges", "features", "shaping@G"), True),
-    ("Mutter", ("parts", "parts@G"), True),
-    ("Schraube", ("parts", "parts@G"), True),
-    ("Magnet", ("parts", "parts@G"), True),
-    ("reparieren", ("repair-a-model", "start", "trouble", "repair@G"), True),
-    ("Loch schließen", ("trouble", "repair@G", "holes@G"), True),
-    ("hohl", ("prepare@G", "shaping@G", "surfaces"), True),
+    ("teilen", ("split-a-large-part", "splitting", "ref-prepare"), True),
+    ("Text", ("label-a-part", "labels", "ref-label"), True),
+    ("Schrift", ("label-a-part", "labels", "ref-label"), True),
+    ("Rundung", ("round-edges", "features", "ref-shaping"), True),
+    ("abrunden", ("round-edges", "features", "ref-shaping"), True),
+    ("Fase", ("round-edges", "features", "ref-shaping"), True),
+    ("Mutter", ("parts", "ref-parts"), True),
+    ("Schraube", ("parts", "ref-parts"), True),
+    ("Magnet", ("parts", "ref-parts"), True),
+    ("reparieren", ("repair-a-model", "start", "trouble", "ref-repair"), True),
+    ("Loch schließen", ("trouble", "ref-repair", "ref-holes"), True),
+    ("hohl", ("ref-prepare", "ref-shaping", "surfaces"), True),
     ("Wandstärke", ("looking",), True),
     ("Stütze", ("print", "looking", "export"), True),
     ("Überhang", ("looking", "export"), True),
-    ("Farbe", ("two-colours", "moving", "colour@G"), True),
-    ("zweifarbig", ("two-colours", "moving", "colour@G", "labels"), True),
-    ("Skizze", ("draw-and-pull", "sketch", "sketch@G"), True),
+    ("Farbe", ("two-colours", "moving", "ref-colour"), True),
+    ("zweifarbig", ("two-colours", "moving", "ref-colour", "labels"), True),
+    ("Skizze", ("draw-and-pull", "sketch", "ref-sketch"), True),
     ("zeichnen", ("draw-and-pull", "sketch"), True),
-    ("Kreis", ("sketch", "sketch@G"), True),
+    ("Kreis", ("sketch", "ref-sketch"), True),
     ("Passung", ("tolerances",), True),
     ("Spiel", ("tolerances", "variants"), True),
     ("Toleranz", ("tolerances", "variants"), True),
-    ("Löcher", ("drill-a-hole", "start", "holes@G"), False),
-    ("gravieren", ("label-a-part", "labels", "label@G"), False),
-    ("Logo", ("sketch", "import@G", "surface@G"), False),
-    ("Zoll", ("start", "import@G"), False),
-    ("Scharnier", ("parts", "parts@G"), False),
-    ("Clip", ("parts", "parts@G"), False),
+    ("Löcher", ("drill-a-hole", "start", "ref-holes"), False),
+    ("gravieren", ("label-a-part", "labels", "ref-label"), False),
+    ("Logo", ("sketch", "ref-import", "ref-surface"), False),
+    ("Zoll", ("start", "ref-import"), False),
+    ("Scharnier", ("parts", "ref-parts"), False),
+    ("Clip", ("parts", "ref-parts"), False),
     ("Strg+Z", ("undo-a-step", "history"), False),
-    ("aufs Bett", ("transform@G", "export"), False),
-    ("glätten", ("mesh@G", "sculpting"), False),
-    ("kopieren", ("scene@G", "transform@G"), False),
+    ("aufs Bett", ("ref-transform", "export"), False),
+    ("glätten", ("ref-mesh", "sculpting"), False),
+    ("kopieren", ("ref-scene", "ref-transform"), False),
     ("messen", ("looking",), False),
-    ("Bambu", ("print", "extras", "profiles@G"), False),
+    ("Bambu", ("print", "extras", "profiles"), False),
 )
 
 
 def _name(page: Page) -> str:
-    return f"{page.key}@G" if page.generated else page.key
+    return page.key
 
 
 def _rank(found: list[manual_search.Found], targets: tuple[str, ...]) -> int | None:
@@ -134,7 +133,7 @@ def test_the_page_for_remote_programs_never_stands_before_the_answer(
         found = index.search(query)
         names = [_name(hit.page) for hit in found]
         rank = _rank(found, targets)
-        if "remote-tools@G" in names and (rank is None or names.index("remote-tools@G") < rank):
+        if "remote-tools" in names and (rank is None or names.index("remote-tools") < rank):
             ahead.append(query)
     assert not ahead, ahead
 
@@ -249,4 +248,4 @@ def test_a_customer_word_finds_the_chapter_of_its_operation_in_every_language(
     phrase = str(CUSTOMER_WORDS["fillet_edges"]).split(";")[0].strip()
     found = manual_search.search(phrase)
     first_three = {(hit.page.key, hit.page.generated) for hit in found[:3]}
-    assert (spec.category, True) in first_three, (phrase, _keys(found)[:5])
+    assert (manual.reference_key(spec.category), True) in first_three, (phrase, _keys(found)[:5])
