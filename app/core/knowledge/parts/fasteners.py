@@ -12,6 +12,7 @@ Dokumentation, statt es in einer Zahl zu verstecken.
 
 from __future__ import annotations
 
+import math
 from typing import Any, cast
 
 from app.core.errors import ValidationError
@@ -868,6 +869,22 @@ def _printed_thread(
     )
 
 
+SEPARATE_PARTS_KEEP_THEIR_PLAY = PartChange(
+    version="21",
+    date="2026-09-27",
+    reason=(
+        "Schraubenkopf und Mutter lagen ohne Abstand auf ihrem Sitz: der Senkkopf "
+        "deckungsgleich in seiner Senkung, Sechskantkopf und Mutter auf der Fläche. An "
+        "Ort und Stelle in einem Stück gedruckt verschweißten sie mit dem Träger (RM-276)."
+    ),
+    effect=_(
+        "Schraubenkopf und Mutter haben jetzt auch zum Sitz das Spiel aus dem "
+        "Materialprofil: Sechskantkopf und Mutter stehen um das Spiel über der Fläche, die "
+        "Senkung wird um das Spiel weiter. Gewinde, Länge und Kopf bleiben gleich."
+    ),
+)
+
+
 @op_params
 class PrintedScrewParams(BaseParams):
     size: str = param(
@@ -916,9 +933,10 @@ class PrintedScrewParams(BaseParams):
         "automatisch bündig gesenktem Senkkopf und passendem Außengewinde."
     ),
     caveat=_(
-        "Zusammen mit der gedruckten Mutter aus demselben Material drucken: Das Spiel "
-        "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
-        "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
+        "Nur aus dem Material des Teils, an dem sie sitzt: Gewinde und Kopf haben dessen "
+        "Spiel, dann bleibt die Schraube auch mitgedruckt lösbar. Für hohe "
+        "Lasten oder häufiges Lösen sind Metallschrauben mit Mutternfalle oder "
+        "Heat-Set-Buchse zuverlässiger."
     ),
     changes=[
         PRINTED_FASTENERS,
@@ -926,6 +944,7 @@ class PrintedScrewParams(BaseParams):
         PRINTED_SCREW_GEOMETRY_FIXED,
         THREAD_PROFILES_MATCH,
         THREAD_OPENS_AT_BOTH_ENDS,
+        SEPARATE_PARTS_KEEP_THEIR_PLAY,
     ],
 )
 def printed_screw(raw: BaseParams) -> PartResult:
@@ -933,7 +952,15 @@ def printed_screw(raw: BaseParams) -> PartResult:
     params = cast(PrintedScrewParams, raw)
     screw = standards.screw(params.size)
     diameter = screw.nominal - params.play
-    thread_top = 0.0
+    # **Auch der Kopf hat Spiel zu seinem Sitz** (RM-276). Er lag ohne Abstand
+    # auf dem Träger, und an Ort und Stelle in einem Stück gedruckt verschweißte
+    # die Berührungsfläche Kopf und Träger — lösbar war nur das Gewinde. Der
+    # Sechskantkopf steht deshalb um das Spiel über der Fläche, und die ganze
+    # Schraube mit ihm, damit die Gewindelänge unter dem Kopf gleich bleibt.
+    # Eine ebene Fuge hat nur eine Seite: das ganze Spiel, nicht die Hälfte je
+    # Flanke wie am Gewinde. Der Senkkopf bleibt bündig; bei ihm wird die
+    # Senkung weiter (:func:`_printed_screw_countersink`).
+    thread_top = params.play
     if params.countersunk:
         head_height = (screw.countersink - diameter) / 2.0
         thread_top = -head_height
@@ -943,7 +970,7 @@ def printed_screw(raw: BaseParams) -> PartResult:
         # z = 0 und damit vollständig **über** der Fläche.
         head = shapes.moved(head, (0.0, 0.0, -head_height))
     else:
-        head = shapes.hexagon(screw.head, screw.head_height)
+        head = shapes.moved(shapes.hexagon(screw.head, screw.head_height), (0.0, 0.0, thread_top))
 
     # Die Länge meint ausdrücklich das Gewinde **unter** dem Kopf. Beim
     # Senkkopf ist dessen schmale Spitze die Trennstelle; z = 0 ist dagegen
@@ -987,10 +1014,16 @@ def _printed_screw_countersink(raw: BaseParams) -> PartResult | None:
         return None
 
     screw = standards.screw(params.size)
-    depth = (screw.countersink - screw.clearance) / 2.0
-    cutter = shapes.cone(screw.clearance, screw.countersink, depth)
+    # **Die Senkung steht um das Spiel vom Kopf ab** (RM-276): Sie war der Kopf
+    # selbst — dieselbe 90°-Flanke, derselbe Außendurchmesser —, und an Ort und
+    # Stelle gedruckt verschweißten beide. Die Flanke rückt jetzt senkrecht zu
+    # sich um das Spiel nach außen; unter 45° sind das ``√2 · Spiel`` im Halbmesser.
+    # Der Kopf bleibt bündig mit der Fläche.
+    mouth = screw.countersink + 2.0 * math.sqrt(2.0) * params.play
+    depth = (mouth - screw.clearance) / 2.0
+    cutter = shapes.cone(screw.clearance, mouth, depth)
     cutter = shapes.moved(cutter, (0.0, 0.0, -depth))
-    return result(cutter, _countersink_feature(screw.countersink, 0.0, depth))
+    return result(cutter, _countersink_feature(mouth, 0.0, depth))
 
 
 @op_params
@@ -1016,15 +1049,17 @@ class PrintedNutParams(BaseParams):
     ),
     doc=_("Druckbare Sechskantmutter mit passendem Innengewinde."),
     caveat=_(
-        "Zusammen mit der gedruckten Schraube aus demselben Material drucken: Das Spiel "
-        "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
-        "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
+        "Nur aus dem Material der Schraube und des Teils, auf dem sie sitzt: Gewinde und "
+        "Auflage haben dessen Spiel, dann bleibt die Mutter auch mitgedruckt lösbar. "
+        "Für hohe Lasten oder häufiges Lösen sind Metallschrauben mit "
+        "Mutternfalle oder Heat-Set-Buchse zuverlässiger."
     ),
     changes=[
         PRINTED_FASTENERS,
         PRINTED_THREAD_ROOT_OVERLAPS_CORE,
         THREAD_PROFILES_MATCH,
         THREAD_OPENS_AT_BOTH_ENDS,
+        SEPARATE_PARTS_KEEP_THEIR_PLAY,
     ],
 )
 def printed_nut(raw: BaseParams) -> PartResult:
@@ -1033,20 +1068,24 @@ def printed_nut(raw: BaseParams) -> PartResult:
     screw = standards.screw(params.size)
     nut = standards.nut(params.size)
     depth = nut.height + 2.0 * BOOLEAN_OVERLAP
+    # Wie der Schraubenkopf steht die Mutter um das Spiel über der Fläche, auf
+    # der sie sitzt (RM-276): Ohne Abstand verschweißte sie an Ort und Stelle
+    # gedruckt mit dem Träger.
+    lift = params.play
     # Das Werkzeug reicht ein Hundertstel unter den Boden und über die Decke hinaus.
     cutter = form_of(
         _printed_thread(
-            params.size, depth, internal=True, play=params.play, bottom=-BOOLEAN_OVERLAP
+            params.size, depth, internal=True, play=params.play, bottom=lift - BOOLEAN_OVERLAP
         )
     )
-    body = subtract(shapes.hexagon(nut.width, nut.height), cutter)
+    body = subtract(shapes.moved(shapes.hexagon(nut.width, nut.height), (0.0, 0.0, lift)), cutter)
     return result(
         body,
         thread(
             "thread_1",
             screw.nominal,
             screw.pitch,
-            (0.0, 0.0, nut.height / 2.0),
+            (0.0, 0.0, lift + nut.height / 2.0),
             length=nut.height,
             internal=True,
         ),

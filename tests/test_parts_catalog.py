@@ -253,6 +253,72 @@ def test_a_project_from_an_older_library_is_told_what_moved() -> None:
         assert str(effect) in str(line.message)
 
 
+def test_an_old_project_with_a_printed_screw_is_told_about_the_seat_play(tmp_path: Path) -> None:
+    """RM-276: Ein Projekt aus Stand 20 mit Schraube und Mutter nennt beim Öffnen das Kopfspiel.
+
+    Der Weg des Kunden: eine gespeicherte Datei aus der Bibliothek vor dem
+    Kopfspiel, geladen und geprüft wie beim Öffnen im Fenster
+    (``Session`` ruft ``part_check.check``).
+    """
+    import json
+    import zipfile
+
+    from app.core.knowledge.parts.fasteners import SEPARATE_PARTS_KEEP_THEIR_PLAY
+    from app.core.scene.project import PROJECT_ENTRY
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.5, "depth": 0.0, "compensate": False},
+            )
+        ],
+    )
+    history.apply(
+        "Schraube",
+        [
+            OperationDraft(
+                op="insert_printed_screw", inputs=("obj_1",), params={"at_feature": "hole_1"}
+            )
+        ],
+    )
+    history.apply(
+        "Mutter",
+        [OperationDraft(op="insert_printed_nut", inputs=("obj_1",), params={"x": 12.0, "z": 10.0})],
+    )
+    saved = save(project, tmp_path / "stand-20.p3d")
+    older = tmp_path / "stand-20-alt.p3d"
+    with zipfile.ZipFile(saved) as source, zipfile.ZipFile(older, "w") as target:
+        for info in source.infolist():
+            payload = source.read(info)
+            if info.filename == PROJECT_ENTRY:
+                data = json.loads(payload)
+                data["parts_version"] = "20"
+                payload = json.dumps(data).encode("utf-8")
+            target.writestr(info, payload)
+
+    findings = part_check.check(load(older).document)
+
+    assert findings[0].code == "parts.changed"
+    assert findings[0].values["library_saved"] == "20"
+    lines = [
+        finding.message.values
+        for finding in findings
+        if finding.code == "parts.change" and finding.message.values
+    ]
+    assert lines == [
+        {"parts": "Gedruckte Mutter, Schraube", "change": SEPARATE_PARTS_KEEP_THEIR_PLAY.effect}
+    ]
+
+
 def test_a_library_12_project_is_told_about_all_three_geometry_fixes() -> None:
     """Die drei Maßkorrekturen aus Stand 13 erreichen die Projektmeldung."""
     from app.core.types import Operation
@@ -659,8 +725,8 @@ def test_a_changed_part_says_what_moved_and_that_the_old_state_is_gone() -> None
 
     assert [part.name for part in changed] == ["latch", "printed_nut"]
     for part in changed:
-        assert part.saved == "19" and part.now == "20"
-        assert part.changes and all(change.version == "20" for change in part.changes)
+        assert part.saved == "19" and part.now == PARTS.get(part.name).version
+        assert part.changes and all(int(change.version) > 19 for change in part.changes)
         assert all(change.effect for change in part.changes), "was es an den Maßen ändert"
         assert not part.earlier_available
     finding = next(f for f in part_check.check(document) if f.code == "parts.changed")

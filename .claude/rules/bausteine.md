@@ -55,6 +55,12 @@ Bauteil und nimmt nichts weg.
   Ansatzpunkt**, nicht durch den Körper — Strahlen durch alles zögen eine
   Tasche neben einer Wand durch die Wand. Ein Ansatzpunkt tief im Körper
   bleibt ein eingeschlossener Hohlraum.
+- **Eine Haltelippe unter der Mündung erklärt sich** (`retaining_lip`,
+  `RetainingLip`: Wort, Höhe, Umriss). Schräg gesetzt liegt die Fläche auf der
+  tiefen Seite unter der Mündung; wo sie am Umriss tiefer liegt als die Lippe
+  reicht, meldet die Operation `parts.lip_on_a_slant` mit *Eingabe
+  korrigieren* — die Grenze kommt aus Höhe und Umriss, nicht aus einer
+  Gradzahl.
 
 ## Ein lösbares Teil ist kein Zerfall
 
@@ -65,6 +71,12 @@ Assistentenprüfung — keine Namensliste dort. Zerfällt der **Träger** selbst
 (eine Senkung schneidet einen schmalen Streifen durch), sagt es die Operation
 mit `feature.body_split`: Nur sie hat Träger und Teil noch getrennt in der
 Hand.
+
+**Lösbar heißt auch an Ort und Stelle gedruckt lösbar**: Ein lösbares Teil
+hält zu seinem Sitz das ganze Spiel aus dem Materialprofil — Sechskantkopf
+und Mutter stehen um das Spiel über der Fläche, die Senkung steht um das Spiel
+senkrecht zur Flanke vom Senkkopf ab. Eine Berührungsfläche verschweißt im
+Druck, und das Gewinde allein macht kein Teil lösbar.
 
 ## Ein aufgesetzter Baustein beginnt bei null
 

@@ -574,11 +574,17 @@ def test_supported_thread_crests_stay_connected_to_their_core_or_shell(size: str
         screw.fn(screw.params(size=size, length=2.0, countersunk=False, play=1.0)).mesh,
         nut.fn(nut.params(size=size, play=1.0)).mesh,
     )
+    # Schraube und Mutter stehen um das Spiel über ihrer Fläche (RM-276): Der
+    # Schnitt liegt deshalb in der Mitte des Gewindes bzw. der Mutter, nicht
+    # an einer festen Höhe.
     sections = (
         built[0].raw.section(plane_origin=(0.0, 0.0, 1.0), plane_normal=(0.0, 0.0, 1.0)),
-        built[1].raw.section(plane_origin=(0.0, 0.0, -1.0), plane_normal=(0.0, 0.0, 1.0)),
+        built[1].raw.section(
+            plane_origin=(0.0, 0.0, built[1].bounds.minimum[2] + 1.0),
+            plane_normal=(0.0, 0.0, 1.0),
+        ),
         built[2].raw.section(
-            plane_origin=(0.0, 0.0, built[2].bounds.size[2] / 2.0),
+            plane_origin=(0.0, 0.0, built[2].bounds.minimum[2] + built[2].bounds.size[2] / 2.0),
             plane_normal=(0.0, 0.0, 1.0),
         ),
     )
@@ -3440,6 +3446,14 @@ def _slanted(
     """Quader 40 × 40 × 10, der Baustein bei (0, 0, ``z``), Richtung Z um ``angle`` um X gekippt."""
     from app.core.geom.mesh import as_mesh_data
 
+    result, axis = _slanted_result(profile, box, name, values, angle, z)
+    return as_mesh_data(result.scene.objects["obj_1"].mesh), axis
+
+
+def _slanted_result(
+    profile: Profile, box: str, name: str, values: dict[str, Any], angle: float, z: float = 10.0
+) -> tuple[Any, np.ndarray]:
+    """Wie :func:`_slanted`, mit der ganzen Auswertung samt Befunden."""
     axis = np.array([0.0, -np.sin(np.radians(angle)), np.cos(np.radians(angle))])
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
@@ -3458,7 +3472,7 @@ def _slanted(
     )
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete, [str(f.message) for f in result.scene.report.findings]
-    return as_mesh_data(result.scene.objects["obj_1"].mesh), axis
+    return result, axis
 
 
 @pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
@@ -3510,6 +3524,68 @@ def test_a_slanted_pocket_below_the_face_stays_below_it(profile: Profile, box: s
     slanted, _axis = _slanted(profile, box, "magnet_pocket", {"size": "8x3"}, 10.0, z=5.0)
 
     assert slanted.volume == pytest.approx(upright.volume, abs=0.5)
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("angle", [0.0, 5.0, 6.0, 10.0])
+def test_a_magnet_pocket_set_at_a_slant_says_its_lip_holds_on_one_side(
+    profile: Profile, box: str, angle: float
+) -> None:
+    """RM-277: Schräg zur Fläche gesetzt, verliert die Haltelippe auf der tiefen Seite ihren Halt.
+
+    Durchsicht 0.5.1 (rest-schraube): Die Lippe liegt 0 bis 0,4 mm unter der
+    Mündung, und auf der Seite, auf der die Fläche abfällt, liegt diese am
+    Taschenrand um ``R · tan(Neigung)`` darunter. Unter 10° fehlte die Lippe auf
+    31 % des Umfangs, unter 20° auf 41 %, und kein Befund sagte es. Die Grenze
+    kommt aus der Geometrie, nicht aus einer Gradzahl: Die Lippe fehlt auf einem
+    Teil des Umfangs, sobald ``R · tan(Neigung)`` die Lippenhöhe übersteigt —
+    bei 8×3 in PETG ``atan(0,4 / 4,125)`` = 5,54°. Darunter ist sie ringsum da,
+    nur auf einer Seite niedriger.
+    """
+    from app.core.errors import CORRECT_INPUT
+
+    result, _axis = _slanted_result(profile, box, "magnet_pocket", {"size": "8x3"}, angle)
+    said = [f for f in result.scene.report.findings if f.code == "parts.lip_on_a_slant"]
+
+    radius = (standards.magnet("8x3").diameter + profile.material.clearance) / 2.0
+    limit = np.degrees(np.arctan(0.4 / radius))
+    assert limit == pytest.approx(5.54, abs=0.01)
+    if angle <= limit:
+        assert not said, [str(f.message) for f in said]
+        return
+    assert len(said) == 1, [f.code for f in result.scene.report.findings]
+    assert said[0].severity == "warning"
+    assert said[0].suggestions == (CORRECT_INPUT,)
+    assert said[0].values["angle_deg"] == pytest.approx(angle, abs=0.1)
+    assert "Haltelippe" in str(said[0].message)
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("angle", [0.0, 5.0, 10.0])
+def test_a_keyhole_set_at_a_slant_says_its_ledge_holds_on_one_side(
+    profile: Profile, box: str, angle: float
+) -> None:
+    """RM-277, der Zwilling: Die Rückhaltekante des Schlüssellochs fehlt schräg gesetzt ebenso.
+
+    ``keeps_up`` dreht den Schlitz zur Seite, auf der die Fläche unter der
+    Mündung liegt; bei den Vorgaben (M4, Einhängeweg 8, Tiefe 4, Kopftiefe 2,5)
+    ist die Kante 1,5 mm dick, und der Kopfrand reicht 8 + 3,5 mm von der
+    Einstiegsöffnung — ab ``atan(1,5 / 11,5)`` = 7,4° fehlt sie dort
+    (Sonde ``schraube/s2_lippe``: unter 10° an 52 statt 17 von 72 Richtungen
+    am Kopfrand, die 17 sind der Schlitz des Schafts).
+    """
+    from app.core.errors import CORRECT_INPUT
+
+    result, _axis = _slanted_result(profile, box, "keyhole", {"size": "M4"}, angle)
+    said = [f for f in result.scene.report.findings if f.code == "parts.lip_on_a_slant"]
+
+    limit = np.degrees(np.arctan((4.0 - 2.5) / (8.0 + standards.screw("M4").head / 2.0)))
+    if angle <= limit:
+        assert not said, [str(f.message) for f in said]
+        return
+    assert len(said) == 1
+    assert said[0].suggestions == (CORRECT_INPUT,)
+    assert "Rückhaltekante" in str(said[0].message)
 
 
 # --- versioning (§24.4) -------------------------------------------------------------
@@ -4032,7 +4108,9 @@ def test_a_printed_screw_sits_in_its_bore_and_prepares_a_countersink(
     if countersunk:
         plate = min(components, key=lambda mesh: float(mesh.bounds[1][2]))
         mouth = _widest_bore(MeshData.of(plate), 9.9)
-        expected = standards.screw("M6").countersink
+        # Um das Spiel senkrecht zur 90°-Flanke weiter als der Kopf (RM-276).
+        play = profile.material.clearance
+        expected = standards.screw("M6").countersink + 2.0 * np.sqrt(2.0) * play
         assert mouth == pytest.approx(expected, abs=0.25), (
             "der Haken formt den Kopf, hat die gewählte Bohrung aber nicht mitgesenkt"
         )
@@ -4212,6 +4290,130 @@ def test_a_printed_countersink_is_a_named_clean_host_cut(size: str) -> None:
     assert not has_self_intersections(built.mesh)
     assert set(built.features) == {"countersink_1"}
     assert built.features["countersink_1"].kind == "cone"
+
+
+def _separate_part_and_host(box: str, drafts: list[OperationDraft], profile: Profile) -> Any:
+    """Quader 40 × 40 × 10 aus ``box``, dann ``drafts``: lösbares Teil und Träger getrennt.
+
+    Das kleinste Netzstück ist nicht allein das Teil — der Senkkopf bleibt am exakten Kern
+    ein Verbund aus Kegel und Gang —, also ist alles außer dem größten Stück das Teil.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import as_mesh_data
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op=box, params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    for draft in drafts:
+        history.apply(draft.op, [draft])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    pieces = sorted(
+        as_mesh_data(result.scene.objects["obj_1"].mesh).raw.split(only_watertight=False),
+        key=lambda piece: abs(float(piece.volume)),
+    )
+    assert len(pieces) >= 2, "das lösbare Teil liegt als eigenes Stück neben dem Träger"
+    return trimesh.util.concatenate(pieces[:-1]), pieces[-1]
+
+
+def _least_distance(points: Any, surface: Any) -> float:
+    """Der kleinste Abstand der Punkte zur Oberfläche (ohne ``rtree``, ``geom.mesh``)."""
+    from app.core.geom.mesh import on_surface
+
+    _closest, distance, _triangle = on_surface(surface, np.asarray(points, dtype=float))
+    return float(distance.min())
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+@pytest.mark.parametrize("countersunk", [False, True], ids=["hexagon", "countersunk"])
+def test_a_printed_screw_keeps_the_profile_play_to_its_seat(
+    profile: Profile, box: str, countersunk: bool
+) -> None:
+    """RM-276: Zwischen Kopf und Sitz steht das Spiel aus dem Materialprofil.
+
+    Durchsicht 0.5.1 (rest-schraube): Der Senkkopf lag bündig in seiner Senkung —
+    dieselbe 90°-Flanke, derselbe Außendurchmesser, 42 deckungsgleiche Ecken —,
+    der Sechskantkopf stand ohne Abstand auf der Fläche; Spiel hatte nur das
+    Gewinde. An Ort und Stelle in einem Stück gedruckt verschweißte der Kopf mit
+    dem Träger. Gemessen in Einbaulage an beiden Kernen: der kleinste Abstand
+    zwischen den Ecken des Kopfes (außerhalb der Bohrung) und dem Träger, und
+    umgekehrt. Am exakten Kern misst das an der Tessellation, deren Sehnen
+    höchstens ``MAX_FACET_SAG`` von der Fläche abweichen.
+    """
+    from app.core.units import EPS_DISPLAY, MAX_FACET_SAG
+
+    play = profile.material.clearance
+    bore = 5.5  # Durchgangsloch M5: Die Größe kommt aus der Bohrung.
+    screw, host = _separate_part_and_host(
+        box,
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": bore, "depth": 0.0, "compensate": False},
+            ),
+            OperationDraft(
+                op="insert_printed_screw",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "length": 12.0, "countersunk": countersunk},
+            ),
+        ],
+        profile,
+    )
+    centre = (np.asarray(host.bounds[0]) + np.asarray(host.bounds[1]))[:2] / 2.0
+    outside = bore / 2.0 + 0.02
+    head = np.asarray(screw.vertices, dtype=float)
+    head = head[np.hypot(*(head[:, :2] - centre).T) > outside]
+    seat = np.asarray(host.vertices, dtype=float)
+    seat = seat[(np.hypot(*(seat[:, :2] - centre).T) > outside) & (seat[:, 2] > 5.0)]
+    seat = seat[np.hypot(*(seat[:, :2] - centre).T) < 8.0]
+
+    # Die ebene Deckfläche hat unter dem Sechskantkopf keine Ecken; dort misst
+    # nur die eine Richtung.
+    gaps = [_least_distance(head, host)]
+    if len(seat):
+        gaps.append(_least_distance(seat, screw))
+    gap = min(gaps)
+
+    assert gap == pytest.approx(play, abs=MAX_FACET_SAG), f"Kopf ↔ Sitz {gap:.4f} mm"
+    if countersunk:
+        assert float(screw.bounds[1][2]) == pytest.approx(10.0, abs=EPS_DISPLAY), (
+            "der Senkkopf bleibt bündig mit der Fläche"
+        )
+    else:
+        assert float(head[:, 2].min()) == pytest.approx(10.0 + play, abs=EPS_DISPLAY), (
+            "der Sechskantkopf steht um das Spiel über der Fläche"
+        )
+
+
+@pytest.mark.parametrize("box", ["create_box", "create_brep_box"])
+def test_a_printed_nut_keeps_the_profile_play_to_its_face(profile: Profile, box: str) -> None:
+    """RM-276, der Zwilling: Die gedruckte Mutter lag ebenso ohne Abstand auf ihrer Fläche."""
+    from app.core.units import EPS_DISPLAY
+
+    play = profile.material.clearance
+    nut, host = _separate_part_and_host(
+        box,
+        [
+            OperationDraft(
+                op="insert_printed_nut",
+                inputs=("obj_1",),
+                params={"size": "M5", "x": 0.0, "y": 0.0, "z": 10.0, "nz": 1.0},
+            )
+        ],
+        profile,
+    )
+    top = np.asarray(host.vertices, dtype=float)
+    top = top[top[:, 2] > 5.0]
+
+    gap = min(_least_distance(nut.vertices, host), _least_distance(top, nut))
+
+    assert gap == pytest.approx(play, abs=EPS_DISPLAY), f"Mutter ↔ Fläche {gap:.4f} mm"
+    assert float(nut.bounds[0][2]) == pytest.approx(10.0 + play, abs=EPS_DISPLAY)
 
 
 def test_a_part_that_reaches_upwards_keeps_the_middle_of_the_bore(profile: Profile) -> None:
@@ -6125,7 +6327,8 @@ def test_a_named_thread_says_how_long_its_helix_is() -> None:
     faelle = (
         ("printed_thread", {"size": "M6", "length": 14.99, "play": 0.20}, 14.99, (0.0, 14.99)),
         ("printed_thread", {"size": "M8", "length": 12.0, "play": 0.15}, 12.0, (0.0, 12.0)),
-        ("printed_screw", {"size": "M5", "length": 12.0, "play": 0.15}, 12.0, (-12.0, 0.0)),
+        # Der Sechskantkopf steht um das Spiel über der Fläche, das Gewinde mit ihm (RM-276).
+        ("printed_screw", {"size": "M5", "length": 12.0, "play": 0.15}, 12.0, (-11.85, 0.15)),
     )
     for name, werte, erwartet, strecke in faelle:
         spec = PARTS.get(name)
