@@ -1719,6 +1719,112 @@ def test_a_changed_parameter_is_a_transaction(session: Session) -> None:
     assert document.parameters["width"].value == 120.0
 
 
+def test_a_parameter_change_is_named_as_the_panel_names_it() -> None:
+    """Der Verlauf sagt „Parameter Breite“, nicht „Parameter breite“.
+
+    Die Leiste beschriftet ein Maß mit seinem Titel (``parameter.title or
+    name``); der Verlauf schrieb den Schlüssel (Handbuchbild *Ein Maß ändern*,
+    3). Ohne Fenster: Titel der Transaktion und Kurzhilfe der Zeile.
+    """
+    from app.core.types import DocumentChange, DocumentState, Origin, Transaction
+    from app.i18n import _, set_language
+    from app.i18n.catalog import install_language
+    from app.ui.panels import _changed_parameters
+    from app.ui.session import _parameter_title
+
+    breite = Parameter(name="breite", value=40.0, unit="mm", title=_("Breite"))
+    assert str(_parameter_title(breite)) == "Parameter Breite"
+    assert str(_parameter_title(Parameter(name="wand", value=2.0))) == "Parameter wand", (
+        "ohne Titel bleibt der Name, wie in der Leiste"
+    )
+    install_language("en")
+    set_language("en")
+    try:
+        assert str(_parameter_title(breite)) == "Parameter Width", "der Eintrag folgt der Sprache"
+    finally:
+        set_language("de")
+
+    geaendert = Transaction(
+        id="t2",
+        title=_parameter_title(breite),
+        ops=(),
+        origin=Origin(by="user"),
+        changes=DocumentChange(
+            before=DocumentState(parameters={"breite": breite}),
+            after=DocumentState(parameters={"breite": dataclasses.replace(breite, value=90.0)}),
+        ),
+    )
+    tip = _changed_parameters(geaendert)
+    assert tip.startswith("Breite: ") and "→" in tip, tip
+    assert "40" in tip and "90" in tip, tip
+
+
+def test_the_history_row_of_a_parameter_change_carries_its_caption(window: MainWindow) -> None:
+    """Am Fenster: Zeile „Parameter Breite“, Kurzhilfe mit dem Wert davor und danach."""
+    from app.i18n import _
+
+    session = window.session
+    assert session.add_parameter(Parameter(name="breite", value=40.0, unit="mm", title=_("Breite")))
+    assert session.change_parameter("breite", 90.0)
+    session.wait_for_idle()
+    QApplication.processEvents()
+    rows = [window.history_panel.list.item(row) for row in range(window.history_panel.list.count())]
+    texts = [item.text() for item in rows]
+    assert "Parameter Breite" in texts, texts
+    assert not any("breite" in text for text in texts), texts
+    changed = [item for item in rows if item.text() == "Parameter Breite"][-1]
+    assert "→" in changed.toolTip() and "Schritte" not in changed.toolTip(), changed.toolTip()
+
+
+def test_a_number_over_the_limit_of_a_parameter_is_refused_with_the_limit(
+    window: MainWindow,
+) -> None:
+    """Obergrenze 100, getippt 150: kein stilles 15, sondern die Grenze und ein Weg zu ihr.
+
+    Vorher verfiel die Null beim Tippen, die Eingabetaste übernahm 15, und im
+    Modell stand 15 (Durchsicht 0.5.1). Jetzt bleibt der Parameter bei 40,
+    unter dem Feld steht die Obergrenze, und *Parameter ändern …* führt dorthin.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.i18n import _
+
+    session = window.session
+    assert session.add_parameter(
+        Parameter(name="breite", value=40.0, unit="mm", title=_("Breite"), maximum=100.0)
+    )
+    session.wait_for_idle()
+    QApplication.processEvents()
+    editor = window.parameters._editors["breite"]
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), "150")
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    for _round in range(3):
+        QApplication.processEvents()
+    session.wait_for_idle()
+
+    assert session.project.document.parameters["breite"].value == pytest.approx(40.0)
+    said = window.parameters.refusal_text()
+    assert "150" in said and "100" in said and "mm" in said, said
+    assert editor.lineEdit().text() == "150", "die abgelehnte Zahl bleibt stehen"
+
+    asked: list[str] = []
+    window.parameters.limitsRequested.disconnect()
+    window.parameters.limitsRequested.connect(asked.append)
+    change = next(
+        button
+        for button in window.parameters._refusal.findChildren(QPushButton)
+        if button.text() == tr("Parameter ändern …")
+    )
+    change.click()
+    for _round in range(3):
+        QApplication.processEvents()
+    assert asked == ["breite"], "der Weg zur Grenze öffnet genau dieses Maß"
+
+
 def test_the_same_value_again_changes_nothing(session: Session) -> None:
     """Eine Spinbox meldet auch, was sie schon anzeigte — daraus wird kein
     Verlaufseintrag."""
@@ -7262,6 +7368,42 @@ def test_history_deletion_warns_before_discarding_redo(
 
     assert not window.session.history.can_redo
     assert window.session.project.document.ops == []
+
+
+def test_history_deletion_names_the_dependent_step(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 19: Wer „Quader anlegen“ löscht, liest, dass „Bohrung setzen“ mitgeht.
+
+    Die Nachfrage sagte vorher nur „spätere abhängige Schritte“ (Handbuchbild
+    *Einen Schritt zurücknehmen*, 3).
+    """
+    from app.core.scene.history import OperationDraft
+
+    session = window.session
+    session.apply(tr("Quader anlegen"), [OperationDraft(op="create_box", inputs=(), params={})])
+    session.wait_for_idle()
+    body = session.project.document.ops[0].outputs[0]
+    session.apply(
+        tr("Bohrung setzen"),
+        [OperationDraft(op="drill_hole", inputs=(body,), params={"x": 0.0, "y": 0.0, "z": 10.0})],
+    )
+    session.wait_for_idle()
+    first, second = (entry.id for entry in session.project.document.ops)
+    shown: list[str] = []
+
+    def reject(box: QMessageBox) -> int:
+        shown.append(box.text())
+        next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen")).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", reject)
+    window.remove_history_operations((first,))
+
+    assert shown, "die Nachfrage muss kommen"
+    assert f"{second} {REGISTRY.get('drill_hole').title}" in shown[0], shown[0]
+    assert "Strg+Z" in shown[0], "und der Rückweg"
+    assert [entry.id for entry in session.project.document.ops] == [first, second]
 
 
 def test_shortcuts_with_a_modifier_stay_window_wide(window: MainWindow) -> None:
@@ -19271,8 +19413,8 @@ def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
     viewport = SimpleNamespace(
         view_point_of=lambda point, object_id: (point[0] + 100.0, point[1], point[2]),
         fly_to=lambda point, reach: calls.append(("fly", (point, reach))),
-        mark_finding=lambda point, title, object_id: calls.append(
-            ("mark", (point, title, object_id))
+        mark_finding=lambda point, title, object_id, outline=(): calls.append(
+            ("mark", (point, title, object_id, outline))
         ),
         clear_finding_mark=lambda: calls.append(("clear", None)),
     )
@@ -19296,8 +19438,19 @@ def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
     MainWindow._show_finding_at(view, "Offen", entry, place)  # type: ignore[arg-type]
 
     assert by_button == calls
-    assert calls == [("fly", ((101.0, 2.0, 3.0), 70.0)), ("mark", (place, "Offen", "obj_1"))]
+    assert calls == [("fly", ((101.0, 2.0, 3.0), 70.0)), ("mark", (place, "Offen", "obj_1", ()))]
     assert view._finding_awaiting_map is None
+
+    # **Mit Rand**: Die geschlossene Öffnung reist als Randkanten im Befund
+    # (``Finding.outline``) und kommt bei der Marke an — die Ansicht umrandet
+    # damit die neue Fläche (Handbuchbild *Ein Modell reparieren*, 3).
+    rim = (((0.0, 0.0, 3.0), (4.0, 0.0, 3.0)), ((4.0, 0.0, 3.0), (0.0, 0.0, 3.0)))
+    calls.clear()
+    MainWindow._show_error_place(  # type: ignore[arg-type]
+        view, errors.AppError(title="Offen", values={"location": place, "outline": rim})
+    )
+    marks = [call for call in calls if call[0] == "mark"]
+    assert marks == [("mark", (place, "Offen", "obj_1", rim))], marks
 
 
 def test_a_closing_window_takes_no_late_feature_answer(

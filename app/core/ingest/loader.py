@@ -907,16 +907,19 @@ def moved_findings(findings: Sequence[Finding], offset: Sequence[float]) -> list
     ``ingest.ops._group_on_bed``. Dort fehlte das Nachführen, und der Klick
     auf die große Öffnung einer 3MF flog ins Leere.
     """
+    shift = (float(offset[0]), float(offset[1]), float(offset[2]))
+
+    def moved(point: Sequence[float]) -> tuple[float, float, float]:
+        return (point[0] + shift[0], point[1] + shift[1], point[2] + shift[2])
+
     return [
         dataclasses.replace(
             entry,
-            location=(
-                entry.location[0] + float(offset[0]),
-                entry.location[1] + float(offset[1]),
-                entry.location[2] + float(offset[2]),
-            ),
+            location=moved(entry.location) if entry.location is not None else None,
+            # Der Rand einer geschlossenen Öffnung wandert mit (``Finding.outline``).
+            outline=tuple((moved(first), moved(second)) for first, second in entry.outline),
         )
-        if entry.location is not None
+        if entry.location is not None or entry.outline
         else entry
         for entry in findings
     ]

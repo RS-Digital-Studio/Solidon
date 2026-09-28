@@ -157,6 +157,12 @@ Rückkehrziel (`action_projection`).
 * **Eine Marke nennt nur das warnende Herkunftswort** (`compact=True` an
   `feature_label` und `measure_qualifier`) — „gemessen“ an jeder Marke drängte
   Beschriftungen hinaus.
+* **Die Befundmarke trägt nie die Auswahlfarbe** (`FINDING_COLOUR`): *Stelle
+  zeigen* wählt den Körper, und ein Ring in seiner Farbe verschwand darin. Ist
+  die Stelle eine Fläche (`Finding.outline`, etwa eine geschlossene Öffnung),
+  wird sie umrandet, der Satz steht auf eigenem Grund, und die Marke steht
+  `FINDING_OUTLINE_MS`. Der Rand reist mit dem Ort (`loader.moved_findings`)
+  und im Plattencache (`cache._finding_to_cache`), nicht in der Projektdatei.
 * **Schweben ist halbtransparent, Auswahl deckend** — Schweben kündigt an,
   ohne eine Auswahl zu behaupten.
 * **Eine Bohrungsmarkierung verschließt die Öffnung nicht**: Innenwand von beiden

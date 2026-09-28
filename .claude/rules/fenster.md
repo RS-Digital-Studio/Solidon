@@ -85,8 +85,9 @@ Reiter, ein anderes Projekt räumt ihn weg. Die Erkennungswerte passen zu
 Die gewollten Ausnahmen von Regel 19, und was sie davon abhält, zur Blockade zu
 werden:
 
-- **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte und den
-  Rückweg über Strg+Z.
+- **Löschen im Verlauf:** Die Nachfrage nennt mitbetroffene Schritte beim
+  Namen, mit Nummer und Titel wie im Verlauf (`history.named_steps`: bis vier
+  alle, sonst drei und „und N weitere“), und den Rückweg über Strg+Z.
 - **Die lange Merkmalserkennung wird angeboten** (§21.1): Oberhalb der
   automatischen Grenze nennt die Frage Dauer und Speicherbedarf; die
   Alternative — auch das Schließen — lädt mit begrenzter Erkennung. Das ist

@@ -1753,6 +1753,42 @@ def test_a_deletion_says_which_steps_it_takes() -> None:
     )
 
 
+def test_the_question_before_a_deletion_names_the_steps_that_go_with_it(
+    history: History, registry: Registry
+) -> None:
+    """Regel 19: Die Nachfrage vor dem Löschen nennt die abhängigen Schritte.
+
+    Sie sagte „Mit dem gewählten Schritt werden auch spätere abhängige Schritte
+    gelöscht.“ (Handbuchbild *Einen Schritt zurücknehmen*, 3) — welche, stand
+    nirgends. Genannt werden sie wie im Verlauf, mit Nummer und Titel; bei
+    vielen drei Namen und die übrige Zahl, bei vier alle vier.
+    """
+    from app.core.scene.history import named_steps
+
+    body = create(history)
+    first = history.operations[0].id
+
+    def dependents() -> list[Operation]:
+        closure = history.removal_closure([first])
+        return [entry for entry in history.operations if entry.id in closure and entry.id != first]
+
+    history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=(body,))])
+    names, rest = named_steps(dependents(), registry)
+    assert [str(name) for name in names] == [f"{history.operations[1].id} Reparieren"]
+    assert rest == 0
+
+    for _round in range(3):
+        history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=(body,))])
+    names, rest = named_steps(dependents(), registry)
+    assert len(names) == 4 and rest == 0, "vier stehen alle da — „und 1 weitere“ spart nichts"
+
+    for _round in range(2):
+        history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=(body,))])
+    names, rest = named_steps(dependents(), registry)
+    assert len(names) == 3 and rest == 3, (names, rest)
+    assert str(names[0]).startswith(str(history.operations[1].id)), "in der Folge des Stapels"
+
+
 def test_a_deleted_step_of_an_unknown_operation_keeps_its_number() -> None:
     """Was das Register nicht kennt, behält seine Nummer.
 

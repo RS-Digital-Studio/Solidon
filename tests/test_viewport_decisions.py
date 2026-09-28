@@ -5550,6 +5550,52 @@ def test_the_movable_kinds_come_from_the_register(qt_app: QApplication) -> None:
     assert movable_feature_kinds() == frozenset(erwartet)
 
 
+def test_the_grip_draws_only_what_a_drag_can_do() -> None:
+    """Pfeile und Ringe je Lage — ohne Fenster, aus dem Register.
+
+    An einer gewählten Fläche standen drei Pfeile und drei Ringe; der Satz
+    daneben sagte „senkrecht zu sich selbst“, und beim Loslassen verfiel alles
+    außer dem Weg entlang der Richtung. An einer Kugel meldete ein Ring
+    *Merkmal drehen*, das die Kugel nicht annimmt.
+    """
+    import dataclasses
+
+    from app.core import bootstrap
+    from app.core.registry import REGISTRY
+    from app.core.types import Feature
+    from app.ui.viewport import GIZMO_TURN_OP, gizmo_build, turnable_feature_kinds
+
+    bootstrap.load_operations()
+    assert turnable_feature_kinds() == frozenset(REGISTRY.get(GIZMO_TURN_OP).applies_to)
+
+    flaeche = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 0.6, 0.8), "centre": (0.0, 0.0, 4.0)},
+    )
+    an_der_flaeche = gizmo_build(flaeche)
+    assert an_der_flaeche.normal == pytest.approx((0.0, 0.6, 0.8))
+    assert an_der_flaeche.arrows == (2,), "ein Pfeil entlang der Richtung"
+    assert not an_der_flaeche.rotation, "eine Fläche dreht nicht"
+
+    koerper = gizmo_build(None)
+    assert koerper.arrows == (0, 1, 2) and koerper.rotation and koerper.normal is None
+    baustein = gizmo_build(flaeche, part=True)
+    assert baustein.arrows == (0, 1, 2) and baustein.rotation, "der Baustein zieht als Ganzes"
+
+    verschiebbar = REGISTRY.get("move_feature").applies_to
+    nur_verschiebbar = sorted(set(verschiebbar) - turnable_feature_kinds())
+    drehbar = sorted(set(verschiebbar) & turnable_feature_kinds())
+    assert nur_verschiebbar and drehbar, "beide Lagen müssen vorkommen, sonst prüft das nichts"
+    for kind in nur_verschiebbar:
+        gebaut = gizmo_build(dataclasses.replace(flaeche, id=f"{kind}_1", kind=kind))
+        assert gebaut.arrows == (0, 1, 2) and not gebaut.rotation, kind
+    for kind in drehbar:
+        gebaut = gizmo_build(dataclasses.replace(flaeche, id=f"{kind}_1", kind=kind))
+        assert gebaut.arrows == (0, 1, 2) and gebaut.rotation, kind
+
+
 def test_the_handle_says_what_it_will_move(qt_app: QApplication) -> None:
     """Drei Lagen, drei Sätze — und keiner davon behauptet die Grenze.
 
@@ -8824,6 +8870,61 @@ def test_the_finding_ring_stands_in_front_of_the_material_at_its_place(
         distances = np.linalg.norm(points - np.array((10.0, 5.0, 2.0)), axis=1)
         assert np.ptp(distances) < 1e-9 * max(1.0, float(distances.max())), (
             "und er steht genau um den Ort, nicht davor gezogen"
+        )
+    finally:
+        viewport._finding_timer.stop()
+        viewport.deleteLater()
+
+
+def test_the_finding_mark_never_wears_the_colour_of_the_selection() -> None:
+    """*Stelle zeigen* wählt den Körper — die Marke darauf darf nicht dessen Farbe tragen.
+
+    Ring und Satz standen in der Auswahlfarbe auf einem Körper in der
+    Auswahlfarbe (Handbuchbild *Ein Modell reparieren*, 3). Ohne Fenster.
+    """
+    from app.ui.viewport import FINDING_COLOUR, FINDING_MARK_MS, FINDING_OUTLINE_MS, SELECTED_COLOUR
+
+    assert FINDING_COLOUR.lower() != SELECTED_COLOUR.lower()
+    assert FINDING_OUTLINE_MS > FINDING_MARK_MS, "eine Fläche will länger angesehen werden"
+
+
+def test_a_finding_with_a_rim_outlines_the_new_face(qt_app: QApplication) -> None:
+    """Die neue Fläche einer geschlossenen Öffnung wird umrandet, nicht nur beringt.
+
+    Vorher stand ein bernsteinfarbener Ring auf einem bernsteinfarbenen
+    Würfel, und die neue Fläche war nicht zu erkennen. Jetzt: Rand aus den
+    Randkanten, vor dem Material, in der Befundfarbe; der Satz auf eigenem
+    Grund; die Marke steht länger.
+    """
+    from app.ui.viewport import FINDING_COLOUR, FINDING_OUTLINE_MS, Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    renderer.set_camera_pose(CameraPose((0.0, -80.0, 80.0), (0.0, 0.0, 20.0), (0.0, 0.0, 1.0)))
+    rim = (
+        ((-10.0, -10.0, 20.0), (10.0, -10.0, 20.0)),
+        ((10.0, -10.0, 20.0), (10.0, 10.0, 20.0)),
+        ((10.0, 10.0, 20.0), (-10.0, 10.0, 20.0)),
+        ((-10.0, 10.0, 20.0), (-10.0, -10.0, 20.0)),
+    )
+    viewport.mark_finding((0.0, 0.0, 20.0), "Eine große Öffnung wurde geschlossen.", "", rim)
+    try:
+        outline = renderer.entries("finding_outline")[-1]
+        assert outline.get("keep_in_front"), "der Rand liegt sonst im Material"
+        points = np.asarray(outline["item"].points, dtype=float)
+        assert points.shape == (8, 3)
+        assert np.allclose(points, np.asarray(rim, dtype=float).reshape(-1, 3))
+        assert outline["item"].colour() == FINDING_COLOUR
+        assert renderer.entries("finding_ring")[-1]["item"].colour() == FINDING_COLOUR
+        label = renderer.entries("finding_label")[-1]
+        assert label["style"].background is not None, "der Satz steht auf eigenem Grund"
+        assert viewport._finding_timer.interval() == FINDING_OUTLINE_MS
+
+        # Ohne Rand bleibt es beim Ring und der kurzen Frist.
+        viewport.mark_finding((0.0, 0.0, 20.0), "Stelle", "")
+        assert all(
+            getattr(actor, "name", "") != "finding_outline" for actor in viewport._finding_actors
         )
     finally:
         viewport._finding_timer.stop()

@@ -3050,6 +3050,35 @@ def _order_problem(
     return None
 
 
+def step_name(entry: Operation, registry: Registry = REGISTRY) -> TranslatableText | str:
+    """Ein Schritt beim Namen, wie der Verlauf ihn zeigt: Nummer und Titel.
+
+    Die Nummer ist das, wonach der Kunde im Verlauf sucht; ein Schritt, dessen
+    Operation das Register nicht kennt, behält sie allein.
+    """
+    try:
+        return _("{number} {title}", number=entry.id, title=registry.get(entry.op).title)
+    except AppError:
+        return str(entry.id)
+
+
+def named_steps(
+    entries: Sequence[Operation], registry: Registry = REGISTRY
+) -> tuple[tuple[TranslatableText | str, ...], int]:
+    """Welche Schritte beim Namen genannt werden, und wie viele danach nur als Zahl.
+
+    Für die Nachfrage vor dem Löschen im Verlauf (Regel 19): Sie nennt die
+    abhängigen Schritte, die mitgehen — „Bohrung setzen“ statt „spätere
+    abhängige Schritte“. **Drei Namen und dann eine Zahl**, wie im Titel der
+    Lösch-Transaktion (:func:`_deletion_title`); bleibt nur einer übrig, steht
+    auch er da, denn „und 1 weitere“ ist länger als sein Name.
+    """
+    named = tuple(step_name(entry, registry) for entry in entries)
+    if len(named) <= _NAMED_IN_TITLE + 1:
+        return named, 0
+    return named[:_NAMED_IN_TITLE], len(named) - _NAMED_IN_TITLE
+
+
 def _steps_title(
     entries: Sequence[Operation],
     registry: Registry,
@@ -3064,12 +3093,7 @@ def _steps_title(
     je Schritt in der Folge des Stapels, damit der Kunde im Verlauf findet,
     was gemeint ist.
     """
-    named: list[TranslatableText | str] = []
-    for entry in entries:
-        try:
-            named.append(_("{number} {title}", number=entry.id, title=registry.get(entry.op).title))
-        except AppError:
-            named.append(str(entry.id))
+    named = [step_name(entry, registry) for entry in entries]
     if len(named) == 1:
         return one(named[0])
     steps = named[0] if named else ""

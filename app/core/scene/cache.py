@@ -25,7 +25,7 @@ import zipfile
 import zlib
 from collections import OrderedDict
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Final, Protocol
 
@@ -734,6 +734,39 @@ def _folder_bytes(folder: Path) -> int:
     return total
 
 
+def _finding_to_cache(finding: Finding) -> dict[str, Any]:
+    """Ein Befund für den Plattencache — samt Rand, den die Projektdatei nicht trägt.
+
+    ``Finding.outline`` (der Rand einer geschlossenen Öffnung für *Stelle
+    zeigen*) steht nicht in :func:`finding_to_data`: Die Projektdatei behält
+    ihr Format, der Bericht wird ohnehin neu ausgewertet. Der Cache aber gibt
+    das Ergebnis eines Schritts zurück, als wäre er gerechnet worden — ohne
+    den Rand hätte ein warmer Cache *Stelle zeigen* still zurückgestuft.
+    """
+    data = finding_to_data(finding)
+    if finding.outline:
+        data["outline"] = [[list(first), list(second)] for first, second in finding.outline]
+    return data
+
+
+def _cached_finding(data: dict[str, Any]) -> Finding:
+    """Die Umkehrung von :func:`_finding_to_cache`; ein Eintrag ohne Rand bleibt ohne."""
+    finding = finding_from_data(data)
+    outline = data.get("outline")
+    if not outline:
+        return finding
+    return replace(
+        finding,
+        outline=tuple(
+            (
+                (float(first[0]), float(first[1]), float(first[2])),
+                (float(second[0]), float(second[1]), float(second[2])),
+            )
+            for first, second in outline
+        ),
+    )
+
+
 @dataclass(slots=True)
 class DiskCache:
     """Ergebnisse auf der Platte, benannt nach dem Operations-Hash (§38)."""
@@ -799,7 +832,7 @@ class DiskCache:
             # `findings` verschwindet die Voxel-Warnung, die §17.2 nie
             # stillschweigend lassen will. Sie wurden geschrieben — nur
             # gelesen hat sie niemand.
-            findings = tuple(finding_from_data(entry) for entry in data.get("findings", []))
+            findings = tuple(_cached_finding(entry) for entry in data.get("findings", []))
             solver = solver_from_data(data.get("solver"))
             raw_transform = data.get("transform")
             transform: Transform | None = (
@@ -878,7 +911,7 @@ class DiskCache:
                 entries.append(record)
             payload: dict[str, Any] = {"format_version": CACHE_FORMAT_VERSION, "objects": entries}
             if result.findings:
-                payload["findings"] = [finding_to_data(entry) for entry in result.findings]
+                payload["findings"] = [_finding_to_cache(entry) for entry in result.findings]
             if result.solver is not None:
                 payload["solver"] = solver_to_data(result.solver)
             if result.transform is not None:

@@ -1596,3 +1596,67 @@ def test_the_last_demo_day_is_said_in_the_singular(qt_app: object) -> None:
     last = demo_line(Activation(days_left=1, deadline=date(2026, 10, 30)))
     assert "heute letzter Tag" in last and "Tage" not in last, last
     assert "2 Tage" in demo_line(Activation(days_left=2, deadline=date(2026, 10, 30)))
+
+
+def test_a_refusal_names_the_limit_it_hits() -> None:
+    """Der Satz einer abgelehnten Zahl nennt die Grenze — ohne Fenster."""
+    from app.ui.labels import limit_sentence
+
+    above = limit_sentence("150,00 mm", "100,00 mm", above=True)
+    below = limit_sentence("0,05 mm", "0,10 mm", above=False)
+    assert "150,00 mm" in above and "100,00 mm" in above and "Obergrenze" in above
+    assert "0,05 mm" in below and "0,10 mm" in below and "Untergrenze" in below
+
+
+def test_a_bounded_field_refuses_a_typed_number_instead_of_cutting_it(qt_app: object) -> None:
+    """„150“ über der Obergrenze 100 wird abgelehnt — nicht still zu „15“.
+
+    Gemessen an der Parameterleiste (Durchsicht 0.5.1): Qt nahm die Null nicht
+    an, die Eingabetaste übernahm „15“, und im Modell stand 15. Hier: Die
+    Zahl bleibt markiert stehen, der Wert bleibt, ``valueRefused`` meldet sie,
+    und Pfeil nach oben klemmt an der Grenze.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import BoundedSpin
+
+    field = BoundedSpin()
+    try:
+        field.setDecimals(2)
+        field.setRange(0.1, 100.0)
+        field.setValue(40.0)
+        field.setKeyboardTracking(False)
+        field.show()
+        changed: list[float] = []
+        refused: list[float] = []
+        field.valueChanged.connect(changed.append)
+        field.valueRefused.connect(refused.append)
+
+        field.setFocus()
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), "150")
+        assert field.lineEdit().text() == "150", "keine Ziffer verfällt"
+        QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+
+        assert refused == [pytest.approx(150.0)]
+        assert changed == [], "nichts übernommen — vorher kam 15 an"
+        assert field.value() == pytest.approx(40.0)
+        assert field.lineEdit().text() == "150" and field.lineEdit().hasSelectedText()
+        assert "100" in field.refusal() and "150" in field.refusal()
+        field.interpretText()
+        assert field.lineEdit().text() == "150", "auch ein Auswerten von außen verwirft sie nicht"
+
+        # Gegenprobe: eine Zahl innerhalb geht durch.
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), "90")
+        QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+        assert changed and changed[-1] == pytest.approx(90.0)
+        assert field.refusal() == ""
+
+        # Drehen klemmt an der Grenze, wie ein Zug.
+        field.setValue(99.5)
+        field.stepBy(5)
+        assert field.value() == pytest.approx(100.0)
+    finally:
+        field.deleteLater()
