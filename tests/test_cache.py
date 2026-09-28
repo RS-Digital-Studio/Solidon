@@ -776,6 +776,18 @@ def test_a_step_without_process_values_never_reads_one(profile: Profile, case: s
         for params in runs:
             result = _guarded_run(profile, case, [], params, sources=ProjectSources(project))
             assert result.outputs
+        if case in ("load", "load_step"):
+            # Die freie Stelle (0.5.1) sucht auf dem Bett des Druckers um die
+            # Körper davor herum und liest dabei keinen Prozesswert — auch mit
+            # belegter Platte, wo sie wirklich suchen muss.
+            # Beim STEP der Weg eines neuen Imports: mit Körperauswahl.
+            chosen = {key: value for key, value in runs[-1].items() if key in ("source", "bodies")}
+            spot = {**(runs[0] if case == "load" else chosen), "free_spot": True}
+            result = _guarded_run(
+                profile, case, [], spot, sources=ProjectSources(project), others=(plate,)
+            )
+            assert result.outputs
+            assert result.answered, "die gefundene Stelle kommt als Antwort zurück"
         return
     neighbour = SceneObject(
         id="obj_9",
