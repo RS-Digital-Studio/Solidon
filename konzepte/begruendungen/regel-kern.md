@@ -142,6 +142,20 @@ bis 0,9 s.
   Zusammenhangsrechnung, mit einem Faden 21 und 135 MB; Arbeitssatz und
   Dauer der Verfeinerung blieben gleich (`speicher.py`). Das geht nur, weil
   keine Rechnung BLAS ruft — sonst hinge ihr Ergebnis an der Fadenzahl.
+- **Was nicht hinein- oder herauskommt, rechnet hier; fehlender Speicher ist
+  `MemoryError`** (Durchsicht RM-212, B2, 28.09.2026): Ein nicht anlegbarer
+  oder nicht zu öffnender gemeinsamer Speicher und ein Hilfsprozess, der vor
+  dem Senden starb, kamen als roher `OSError`, `PermissionError` oder
+  `BrokenPipeError` beim Kunden an. Windows lehnt einen Speicher über der
+  Zusagegrenze mit `WinError` 1455 oder 8 ab, nicht mit `MemoryError` — der
+  Speicherhinweis von `remesh`, `uniform` und `subdivided` griff auf diesem Weg
+  nie. Ein untätiger Hilfsprozess endet nach dem Schließen der Leitung in 32
+  bis 45 ms (`sonden/hilfsprozess/sanft_enden.py`); `GRACEFUL_SECONDS` (0,5 s)
+  lässt ihm das Zehnfache.
+- **Ein verlorener Hilfsprozess ist kein Kern, der aufgibt** (B3): Die
+  Boolesche Kette fing ihn als Stufenfehler, startete dieselbe Last noch
+  zweimal und nahm das Ergebnis still aus der Voxelstufe; `shared_volume`
+  antwortete „nichts gemeinsam“.
 
 ## Über die Körpergrenze merkt sich nur, wer außer seiner Lesung nichts liest
 

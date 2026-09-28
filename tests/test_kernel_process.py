@@ -21,13 +21,17 @@ setzt die Schwelle auf null und ruft aus einem Nebenfaden.
 from __future__ import annotations
 
 import ast
+import errno
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import textwrap
 import threading
 import time
 from collections.abc import Callable, Iterator
+from multiprocessing import shared_memory
 from pathlib import Path
 from typing import Any
 
@@ -512,6 +516,341 @@ def test_cancelling_a_real_kernel_call_in_the_helper(offloaded: None) -> None:
     assert not helper.is_alive()
 
 
+# --- Was nicht hinein- oder herauskommt (Durchsicht RM-212, B2) ---------------------------
+
+
+def _memory_refusal() -> OSError:
+    """Wie das Betriebssystem einen gemeinsamen Speicher ablehnt, für den der Speicher nicht reicht.
+
+    Unter Windows ``WinError 1455`` (Zusagegrenze) — gemessen an einem Speicher
+    über der Grenze, als ``OSError`` und nicht als ``MemoryError``.
+    """
+    if sys.platform == "win32":
+        return OSError(0, "Die Auslagerungsdatei ist zu klein.", None, 1455)
+    return OSError(errno.ENOMEM, "Cannot allocate memory")
+
+
+def _refusing(creating: OSError | None = None, opening: OSError | None = None) -> Any:
+    """Ein ``SharedMemory``, das Anlegen oder Öffnen mit dem genannten Fehler ablehnt."""
+    real = shared_memory.SharedMemory
+
+    def made(name: str | None = None, create: bool = False, size: int = 0, **rest: Any) -> Any:
+        problem = creating if create else opening
+        if problem is not None:
+            raise problem
+        return real(name=name, create=create, size=size, **rest)
+
+    return made
+
+
+def _cannot_open_the_input(connection: Any) -> None:
+    """Ein Hilfsprozess, dem das Betriebssystem den Speicher des Elternprozesses verweigert."""
+    kernel_jobs.shared_memory.SharedMemory = _refusing(
+        opening=PermissionError(13, "Zugriff verweigert")
+    )
+    kernel_jobs.serve(connection)
+
+
+def _cannot_map_the_input(connection: Any) -> None:
+    """Ein Hilfsprozess, dem für den Speicher des Elternprozesses der Speicher fehlt."""
+    kernel_jobs.shared_memory.SharedMemory = _refusing(opening=_memory_refusal())
+    kernel_jobs.serve(connection)
+
+
+def _no_room_for_the_result(connection: Any) -> None:
+    """Ein Hilfsprozess, dem das Betriebssystem den Speicher für Ergebnisse verweigert."""
+    kernel_jobs.shared_memory.SharedMemory = _refusing(creating=_memory_refusal())
+    kernel_jobs.serve(connection)
+
+
+def _cannot_make_the_result(connection: Any) -> None:
+    """Ein Hilfsprozess, der für Ergebnisse keinen Speicher anlegen kann, aus anderem Grund."""
+    kernel_jobs.shared_memory.SharedMemory = _refusing(
+        creating=OSError(errno.EMFILE, "Too many open files")
+    )
+    kernel_jobs.serve(connection)
+
+
+def _closes_its_end(connection: Any) -> None:
+    """Ein Hilfsprozess, der bereit meldet und seine Leitung schließt, ohne zu enden.
+
+    Das ist ein untätiger Hilfsprozess, der zwischen dem Blick auf ``alive``
+    und dem Senden der Rechnung stirbt: Der Elternprozess sieht ihn leben und
+    schreibt in eine geschlossene Leitung.
+    """
+    connection.send(("ready", os.getpid()))
+    connection.close()
+    time.sleep(600.0)
+
+
+def test_a_shared_memory_this_process_cannot_make_is_computed_here(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lässt sich der Speicher für die Rechnung nicht anlegen, rechnet sie hier.
+
+    Bis dahin kam ein roher ``OSError`` beim Kunden an.
+
+    Der Grund bleibt (ein Speicher, den das System nicht anlegt), die Sitzung
+    rechnet danach ohne Hilfsprozess.
+    """
+    arrays, values = _small_job()
+    expected = kernel_jobs.simplify_closed(arrays, dict(values), lambda: None)
+    assert kernel_process.warm_up()
+    monkeypatch.setattr(
+        kernel_jobs.shared_memory,
+        "SharedMemory",
+        _refusing(creating=OSError(errno.EMFILE, "Too many open files")),
+    )
+
+    got = in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+
+    same_bytes(expected[0], got[0])
+    counts = kernel_process.statistics()
+    assert counts["fallback"] == 1 and counts["helper"] == 0, counts
+    assert kernel_process._POOL.disabled, "der Grund bleibt — die Sitzung rechnet ohne ihn"
+    assert kernel_process.processes() == []
+
+
+def test_a_shared_memory_the_system_cannot_commit_is_the_memory_hint(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sagt das System den Speicher nicht zu, kommt ``MemoryError`` — und damit der Hinweis.
+
+    Unter Windows ist das ``OSError`` 1455 oder 8; ohne Umsetzung griff
+    ``except MemoryError`` in ``uniform`` nie, und der Kunde las „unerwarteter
+    Fehler“ mit ``WinError 1455`` statt „Für diese Kantenlänge reicht der
+    Arbeitsspeicher nicht“ samt Vorschlag.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom.mesh_ops import uniform
+
+    plate = welded("plate_holes.stl")
+    arrays, values = mesh_input(plate), {"tolerance": 1e-6}
+    monkeypatch.setattr(
+        kernel_jobs.shared_memory, "SharedMemory", _refusing(creating=_memory_refusal())
+    )
+
+    with pytest.raises(MemoryError):
+        in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+    with pytest.raises(ValidationError) as caught:
+        in_a_worker(lambda: uniform(plate, 1.0, 0.01))
+
+    assert caught.value.field == "edge"
+    assert "reachable" in caught.value.values, "der Vorschlag mit der doppelten Kantenlänge"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="die Zusagegrenze ist die von Windows")
+def test_windows_refuses_an_uncommittable_shared_memory_as_memory_error() -> None:
+    """Am echten System: 64 TiB gemeinsamer Speicher über der Zusagegrenze sind ``MemoryError``.
+
+    Angelegt wird nichts — Windows lehnt den Speicher beim Anlegen ab.
+    """
+    with pytest.raises(MemoryError):
+        segment = kernel_jobs._opened(create=True, size=2**46)
+        segment.close()
+        segment.unlink()
+
+
+@pytest.mark.parametrize(
+    ("serve", "expected"),
+    [(_cannot_open_the_input, None), (_cannot_map_the_input, MemoryError)],
+    ids=["verweigert", "speicher"],
+)
+def test_a_helper_that_cannot_open_the_input_does_not_take_the_job(
+    offloaded: None,
+    monkeypatch: pytest.MonkeyPatch,
+    serve: Callable[[Any], None],
+    expected: type[BaseException] | None,
+) -> None:
+    """Kann der Hilfsprozess den Speicher nicht öffnen, rechnet die Rechnung hier.
+
+    Bis dahin kam seine Ausnahme roh beim Kunden an (``PermissionError``).
+    Fehlt ihm der Speicher dafür, kommt ``MemoryError`` wie aus dem Prozess.
+    """
+    monkeypatch.setattr(kernel_process, "_SERVE", serve)
+    arrays, values = _small_job()
+    expected_bytes = kernel_jobs.simplify_closed(arrays, dict(values), lambda: None)
+
+    if expected is not None:
+        with pytest.raises(expected):
+            in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+        return
+    got = in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+    same_bytes(expected_bytes[0], got[0])
+    assert kernel_process.statistics()["fallback"] == 1
+    assert kernel_process._POOL.disabled
+    assert kernel_process.processes() == []
+
+
+def test_a_helper_whose_line_broke_does_not_take_the_job(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein untätiger Hilfsprozess mit geschlossener Leitung: Die Rechnung rechnet hier.
+
+    Bis dahin kam ein roher ``BrokenPipeError`` beim Kunden an.
+
+    Kein bleibender Grund — die nächste Rechnung startet einen frischen.
+    """
+    monkeypatch.setattr(kernel_process, "_SERVE", _closes_its_end)
+    arrays, values = _small_job()
+    expected = kernel_jobs.simplify_closed(arrays, dict(values), lambda: None)
+    assert kernel_process.warm_up()
+    time.sleep(0.5)
+
+    got = in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+
+    same_bytes(expected[0], got[0])
+    assert kernel_process.statistics()["fallback"] == 1
+    assert not kernel_process._POOL.disabled, "kein bleibender Grund"
+    assert kernel_process.processes() == []
+
+
+@pytest.mark.parametrize(
+    ("serve", "expected"),
+    [(_no_room_for_the_result, MemoryError), (_cannot_make_the_result, None)],
+    ids=["speicher", "anderes"],
+)
+def test_a_result_without_room_is_no_lost_helper(
+    offloaded: None,
+    monkeypatch: pytest.MonkeyPatch,
+    serve: Callable[[Any], None],
+    expected: type[BaseException] | None,
+) -> None:
+    """Fehlt im Hilfsprozess der Speicher für das Ergebnis, kommt ``MemoryError`` — er stirbt nicht.
+
+    Bis dahin fiel die Ausnahme aus ``serve``, der Hilfsprozess starb, und der
+    Kunde las ``KernelHelperLostError`` statt des Speicherhinweises (im
+    Windows-Paket dazu ein Traceback-Fenster von PyInstaller). Aus anderem
+    Grund rechnet die Rechnung hier.
+    """
+    monkeypatch.setattr(kernel_process, "_SERVE", serve)
+    arrays, values = _small_job()
+    expected_bytes = kernel_jobs.simplify_closed(arrays, dict(values), lambda: None)
+
+    if expected is not None:
+        with pytest.raises(expected):
+            in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+    else:
+        got = in_a_worker(lambda: kernel_process.run("simplify_closed", arrays, values, weight=1))
+        same_bytes(expected_bytes[0], got[0])
+        assert kernel_process.statistics()["fallback"] == 1
+    assert kernel_process.statistics()["lost"] == 0
+
+
+class _Line:
+    """Eine Leitung für ``serve`` im selben Prozess: liest aus einer Liste, schreibt in eine."""
+
+    def __init__(self, incoming: list[Any], broken_at: str) -> None:
+        self.incoming = incoming
+        self.sent: list[tuple[Any, ...]] = []
+        self.broken_at = broken_at
+
+    def send(self, message: tuple[Any, ...]) -> None:
+        if message[0] == self.broken_at:
+            raise BrokenPipeError(32, "Broken pipe")
+        self.sent.append(message)
+
+    def recv(self) -> Any:
+        if not self.incoming:
+            raise EOFError
+        return self.incoming.pop(0)
+
+
+@pytest.mark.parametrize("broken_at", ["ready", "accepted", "done"])
+def test_serve_ends_quietly_when_nobody_listens(
+    monkeypatch: pytest.MonkeyPatch, broken_at: str
+) -> None:
+    """Hört der Elternprozess nicht mehr zu, endet ``serve`` still — nichts fällt heraus.
+
+    Eine Ausnahme aus ``serve`` schriebe ``multiprocessing`` nach
+    ``sys.stderr``, und das ist im Windows-Fensterpaket ``None``: PyInstaller
+    zeigte dann einen Traceback in einem eigenen Fenster.
+    """
+    monkeypatch.setattr(kernel_jobs, "_yield_to_the_window", lambda: None)
+    arrays, values = _small_job()
+    segment, layout = kernel_jobs.pack(arrays)
+    assert segment is not None
+    try:
+        line = _Line([("job", "simplify_closed", segment.name, layout, values)], broken_at)
+        kernel_jobs.serve(line)
+    finally:
+        segment.close()
+        segment.unlink()
+    assert all(message[0] != broken_at for message in line.sent)
+
+
+# --- Die Boolesche Kette und ein verlorener Hilfsprozess (Durchsicht RM-212, B3) ----------
+
+
+def _dies_in_booleans(connection: Any) -> None:
+    """Ein Hilfsprozess, der jede Boolesche Rechnung annimmt und darin stirbt — wie am Speicher.
+
+    Die übrigen Rechnungen (der Zusammenhang vor der Kette) rechnet er: Die
+    Kette selbst soll den Tod sehen, nicht ein Aufruf davor.
+    """
+
+    def dies(arrays: Any, values: Any, check: Any) -> Any:
+        os._exit(3)
+
+    kernel_jobs.JOBS["boolean"] = dies
+    kernel_jobs.serve(connection)
+
+
+def test_the_boolean_chain_stops_at_a_lost_helper(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stirbt der Hilfsprozess in einer Stufe, hält der Schritt mit dieser Meldung an.
+
+    Bis dahin nahm die Kette die nächste Stufe: drei Hilfsprozesse gestartet
+    und verloren, das Ergebnis still aus der Voxelstufe — in der Vorschau
+    (zwei Stufen) der Rat, das Modell sei offen und gehöre repariert.
+    """
+    from app.core.geom.boolean import boolean
+
+    monkeypatch.setattr(kernel_process, "_SERVE", _dies_in_booleans)
+    plate = welded("plate_holes.stl")
+    tool = _cylinder_through(plate)
+
+    with pytest.raises(kernel_process.KernelHelperLostError):
+        in_a_worker(lambda: boolean("difference", [plate, tool]))
+
+    counts = kernel_process.statistics()
+    assert counts["lost"] == 1, counts
+    assert counts.get("helper:boolean", 0) == 0, counts
+
+
+def test_a_lost_helper_is_no_answer_about_shared_volume(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gestorbener Hilfsprozess heißt nicht „nichts gemeinsam“.
+
+    Eine Passung hieße sonst still frei.
+    """
+    from app.core.geom.boolean import shared_volume
+
+    monkeypatch.setattr(kernel_process, "_SERVE", _dies_in_booleans)
+    plate = welded("plate_holes.stl")
+    tool = _cylinder_through(plate)
+
+    with pytest.raises(kernel_process.KernelHelperLostError):
+        in_a_worker(lambda: shared_volume(plate.raw, tool.raw))
+
+
+def test_tidying_a_union_does_not_hide_a_lost_helper(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Aufräumen nach einer Vereinigung reicht einen gestorbenen Hilfsprozess weiter."""
+    from app.core.geom.boolean import boolean
+    from app.core.geom.prepare_ops import _without_scars
+
+    plate = welded("plate_holes.stl")
+    joined = boolean("union", [plate, _cylinder_through(plate)])
+    monkeypatch.setattr(kernel_process, "_SERVE", _dies_mid_job)
+
+    with pytest.raises(kernel_process.KernelHelperLostError):
+        in_a_worker(lambda: _without_scars(joined))
+
+
 # --- Keine Waisen ------------------------------------------------------------------------
 
 
@@ -529,6 +868,60 @@ def test_shutdown_leaves_no_helper_behind(offloaded: None) -> None:
         helper.join(10.0)
         assert not helper.is_alive()
     assert kernel_process.processes() == []
+
+
+def test_shutdown_lets_an_idle_helper_end_by_itself(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein untätiger Hilfsprozess endet beim ``shutdown`` selbst, auf dem gewöhnlichen Weg.
+
+    Hart beendet liefe sein ``atexit`` nicht — im Paket blieb dann der Ordner
+    des Laufzeithakens für matplotlib liegen (Durchsicht RM-212, B4). Die Frist
+    ist hier weit gesetzt: Geprüft wird, dass er selbst endet, nicht wie
+    schnell unter der Last der Suite.
+    """
+    monkeypatch.setattr(kernel_process, "GRACEFUL_SECONDS", 30.0)
+    assert kernel_process.warm_up()
+    helper = kernel_process.processes()[0]
+
+    kernel_process.shutdown()
+
+    assert helper.exitcode == 0, f"beendet statt selbst geendet: {helper.exitcode}"
+
+
+def _frozen_with_a_temp_folder(connection: Any) -> None:
+    """Ein Hilfsprozess wie im Paket: ``sys.frozen`` und der Ordner des Laufzeithakens.
+
+    ``pyi_rth_mplconfig`` legt jedem Prozess des Pakets einen leeren Ordner im
+    Temp-Verzeichnis an und setzt ``MPLCONFIGDIR`` darauf.
+    """
+    sys.frozen = True  # type: ignore[attr-defined]
+    folder = tempfile.mkdtemp()
+    os.environ["MPLCONFIGDIR"] = folder
+    Path(os.environ["KERNEL_TEST_MARK"]).write_text(folder, encoding="utf-8")
+    kernel_jobs.serve(connection)
+
+
+def test_a_frozen_helper_leaves_no_temp_folder(
+    offloaded: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Im Paket räumt der Hilfsprozess den Ordner des Laufzeithakens gleich beim Start weg.
+
+    Am gebauten ``Solidon3D.exe``: drei Starts, drei Ordner, alle liegen
+    geblieben — Abbrechen und ``shutdown`` beenden einen Hilfsprozess hart,
+    und ``atexit`` räumt dann nichts mehr (Durchsicht RM-212, B4).
+    """
+    mark = tmp_path / "ordner"
+    monkeypatch.setenv("KERNEL_TEST_MARK", str(mark))
+    monkeypatch.setattr(kernel_process, "_SERVE", _frozen_with_a_temp_folder)
+
+    assert kernel_process.warm_up()
+
+    folder = Path(mark.read_text(encoding="utf-8"))
+    try:
+        assert not folder.exists(), "der Ordner des Laufzeithakens liegt noch"
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def _alive(pid: int) -> bool:

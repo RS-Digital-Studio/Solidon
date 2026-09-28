@@ -34,7 +34,6 @@ from app.core.errors import (
     PROGRAMMING_ERRORS,
     SHOW_LOCATION,
     BooleanFailedError,
-    OperationCancelled,
 )
 from app.core.geom import kernel_process
 from app.core.geom.attributes import (
@@ -209,9 +208,11 @@ def boolean(
         attempted.append(stage)
         try:
             result = _run_stage(kind, meshes, stage, seed, cancelled)
-        except OperationCancelled:
-            # Der Hilfsprozess des Kerns wurde beendet (``kernel_process``) —
-            # ein Abbruch, kein Kern, der aufgegeben hat.
+        except kernel_process.NOT_A_KERNEL_FAILURE:
+            # Abgebrochen, oder der Hilfsprozess des Kerns ist gestorben — kein
+            # Kern, der aufgegeben hat. Die nächste Stufe bekäme dieselbe Last
+            # im nächsten Hilfsprozess und zuletzt die Voxelstufe im Prozess
+            # der Anwendung (Durchsicht RM-212, B3).
             raise
         except PROGRAMMING_ERRORS:
             # Die Stufen rufen mit eigenen Argumenten — ``voxelized(pitch=...)``,
@@ -788,7 +789,9 @@ def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
     """
     try:
         shared = _kernel("intersection", [first, second], MeshData.of(first))
-    except PROGRAMMING_ERRORS:
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
+        # Ein gestorbener Hilfsprozess ist keine Auskunft „nichts gemeinsam“:
+        # Eine Passung hieße sonst still frei (Durchsicht RM-212, B3).
         raise
     except Exception:  # Kerne scheitern auf kerneigene Arten
         return 0.0

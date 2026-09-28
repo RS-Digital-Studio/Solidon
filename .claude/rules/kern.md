@@ -153,9 +153,16 @@ ihn ruft, hält das Fenster an (RM-212).
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
   Verfeinerung die erwartete des Ergebnisses.
 - **Der Abbruch reicht als Token hinein** und beendet den Hilfsprozess; wer um
-  einen Aufruf breit fängt (`except Exception`), lässt `OperationCancelled`
-  durch. Ein toter Hilfsprozess ist `KernelHelperLostError` (Regel 17), ein
-  stummer ein Rückfall in den Prozess.
+  einen Aufruf breit fängt (`except Exception`), lässt
+  `kernel_process.NOT_A_KERNEL_FAILURE` durch — Abbruch und verlorenen
+  Hilfsprozess —, sonst nimmt eine Rückfallkette still die nächste Stufe.
+  Ein toter Hilfsprozess ist `KernelHelperLostError` (Regel 17); einer, der
+  stumm bleibt oder eine Rechnung nicht übernehmen oder übergeben kann, ein
+  Rückfall in den Prozess. Fehlt dafür Speicher, kommt `MemoryError` wie aus
+  dem Prozess (Windows meldet ihn am gemeinsamen Speicher als `OSError`).
+- **Die Seite des Hilfsprozesses lässt nichts entweichen** (`serve`): Im
+  Windows-Fensterpaket ist `sys.stderr` `None`, und eine Ausnahme dort öffnete
+  ein Traceback-Fenster von PyInstaller.
 - **Millionen Werte werden stückweise zu Python-Zahlen**
   (`geom.mesh.python_values`), nie in einem `tolist`, `tuple`, `sorted` oder
   `repr` am Stück — jeder davon ist ein C-Aufruf unter dem GIL, und nach

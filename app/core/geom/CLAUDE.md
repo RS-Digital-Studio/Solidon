@@ -92,7 +92,8 @@ Aufruf, der an ganzen Körpern den GIL hält — `manifold3d`, der Zusammenhang
 ist der einzige Weg in den Hilfsprozess; dazu seine Seite `serve` und der
 gemeinsame Speicher `pack`/`copied`) · `kernel_process.py` (`run` wählt: hier
 oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
-`shutdown`). Die Regel steht in `kern.md`.
+`shutdown`; `NOT_A_KERNEL_FAILURE` für breite Fänge). Die Regel steht in
+`kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen

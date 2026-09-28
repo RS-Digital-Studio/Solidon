@@ -85,6 +85,13 @@ MOST_HELPERS: Final = 3
 #: Wie viele untätige Hilfsprozesse auf die nächste Rechnung warten.
 IDLE_KEPT: Final = 1
 
+#: Wie lange ein untätiger Hilfsprozess nach dem Schließen der Leitung selbst
+#: enden darf, bevor er beendet wird, in Sekunden (:meth:`_Helper.stop`).
+#: Gemessen endet er in 32 bis 45 ms (``sonden/hilfsprozess/sanft_enden.py``,
+#: 28.09.2026, unter Last); die Frist lässt das Zehnfache, und so lange
+#: wartet das Beenden der Anwendung höchstens.
+GRACEFUL_SECONDS: Final = 0.5
+
 #: Wie viele Starts hintereinander scheitern dürfen, bevor diese Sitzung ohne
 #: Hilfsprozess weiterrechnet. Einer: Bereit ist ein Hilfsprozess nach 0,4 bis
 #: 0,8 s, aus dem Quellbaum wie aus dem Paket; wer in :data:`STARTUP_SECONDS`
@@ -135,6 +142,29 @@ class _HelperSilentError(Exception):
 
 class _HelperCancelledError(Exception):
     """Der Aufrufer hat abgebrochen, während der Hilfsprozess rechnete."""
+
+
+class _HelperRefusedError(Exception):
+    """Die Rechnung kam nicht in den Hilfsprozess oder ihr Ergebnis nicht heraus.
+
+    Sie wird dann hier gerechnet (Durchsicht RM-212, B2). ``lasting`` heißt:
+    Der Grund bleibt — ein gemeinsamer Speicher, der sich nicht anlegen oder
+    öffnen lässt —, und die Sitzung rechnet ohne Hilfsprozess weiter. Ein
+    Hilfsprozess, der vor der Annahme starb, ist kein bleibender Grund.
+    """
+
+    def __init__(self, why: str, *, lasting: bool) -> None:
+        super().__init__(why)
+        self.lasting = lasting
+
+
+#: Was ein breiter Fang um einen Kernaufruf durchlässt (``except Exception``):
+#: ein Abbruch und ein verlorener Hilfsprozess. Beides ist kein Kern, der auf
+#: seine Art aufgegeben hat. Ohne das nahm die Boolesche Kette nach einem
+#: gestorbenen Hilfsprozess still die nächste Stufe — dreimal gestartet, das
+#: Ergebnis aus der Voxelstufe, in der Vorschau der Rat, das Modell zu
+#: reparieren (Durchsicht RM-212, B3).
+NOT_A_KERNEL_FAILURE: Final = (OperationCancelled, KernelHelperLostError)
 
 
 @contextmanager
@@ -204,19 +234,43 @@ class _Helper:
         values: Values,
         cancelled: CancelToken | None,
     ) -> Outcome:
-        """Eine Rechnung im Hilfsprozess; seine Ausnahmen kommen hier wieder heraus."""
-        segment, layout = kernel_jobs.pack(arrays)
+        """Eine Rechnung im Hilfsprozess; seine Ausnahmen kommen hier wieder heraus.
+
+        Kam sie nicht hinein oder ihr Ergebnis nicht heraus, kommt
+        ``_HelperRefusedError``, und der Aufrufer rechnet hier (Durchsicht
+        RM-212, B2): Ein gemeinsamer Speicher ließ sich nicht anlegen oder
+        öffnen, oder der Hilfsprozess starb vor der Annahme. Bis dahin kam das
+        als roher ``OSError``, ``PermissionError`` oder ``BrokenPipeError``
+        beim Kunden an. Reicht der Speicher nicht, kommt ``MemoryError`` wie
+        aus einer Rechnung im Prozess — und mit ihm der Hinweis der Operation.
+        """
         try:
-            self.connection.send(
-                ("job", job, segment.name if segment is not None else None, layout, values)
-            )
-            reply = self._receive(cancelled, time.monotonic() + ACCEPT_SECONDS)
+            segment, layout = kernel_jobs.pack(arrays)
+        except OSError as unmade:
+            raise _HelperRefusedError(f"shared memory: {unmade}", lasting=True) from unmade
+        try:
+            try:
+                self.connection.send(
+                    ("job", job, segment.name if segment is not None else None, layout, values)
+                )
+            except OSError as broken:
+                raise _HelperRefusedError(f"send: {broken}", lasting=False) from broken
+            try:
+                reply = self._receive(cancelled, time.monotonic() + ACCEPT_SECONDS)
+            except _HelperLostError as lost:
+                raise _HelperRefusedError(f"lost before accepting: {lost}", lasting=False) from lost
             if reply[0] == "accepted":
                 reply = self._receive(cancelled, None)
         finally:
             if segment is not None:
                 segment.close()
                 segment.unlink()
+        if reply[0] == "refused":
+            problem = pickle.loads(reply[1])
+            if isinstance(problem, MemoryError):
+                problem.add_note(f"im Hilfsprozess des Kerns ({self.pid}):\n{reply[2]}")
+                raise problem
+            raise _HelperRefusedError(f"refused: {problem!r}", lasting=True)
         if reply[0] == "error":
             problem = pickle.loads(reply[1])
             problem.add_note(f"im Hilfsprozess des Kerns ({self.pid}):\n{reply[2]}")
@@ -270,10 +324,18 @@ class _Helper:
                     pass
                 raise _HelperLostError(f"exit code {self.process.exitcode}")
 
-    def stop(self) -> None:
-        """Beendet den Hilfsprozess sofort und wartet, bis er fort ist."""
+    def stop(self, *, graceful: bool = False) -> None:
+        """Beendet den Hilfsprozess und wartet, bis er fort ist.
+
+        ``graceful`` gilt einem untätigen: Er sieht das Ende der Leitung und
+        endet selbst, auf dem gewöhnlichen Weg samt ``atexit`` — erst nach
+        :data:`GRACEFUL_SECONDS` wird er beendet. Einer, der rechnet, endet
+        sofort; einen Kernaufruf hält nichts anderes an.
+        """
         with suppress(OSError):
             self.connection.close()
+        if graceful and self.ready:
+            self.process.join(timeout=GRACEFUL_SECONDS)
         if self.process.is_alive():
             self.process.kill()
         self.process.join(timeout=5.0)
@@ -348,6 +410,12 @@ class _Pool:
             self._bump("started")
         return helper
 
+    def disable(self, why: str) -> None:
+        """Diese Sitzung rechnet ab jetzt ohne Hilfsprozess — der Grund bleibt."""
+        with self._lock:
+            self.disabled = True
+        _log.warning("kernel helper disabled for this session (%s)", why)
+
     def _start_failed(self, why: str) -> None:
         with self._lock:
             self._failed_starts += 1
@@ -370,15 +438,18 @@ class _Pool:
                 keep = True
             self._lock.notify_all()
         if not keep:
-            self.discard(helper)
+            self.discard(helper, graceful=True)
 
-    def discard(self, helper: _Helper) -> None:
-        """Beendet einen Hilfsprozess, den niemand mehr braucht oder der nichts mehr taugt."""
+    def discard(self, helper: _Helper, *, graceful: bool = False) -> None:
+        """Beendet einen Hilfsprozess, den niemand mehr braucht oder der nichts mehr taugt.
+
+        ``graceful``: Er ist untätig und darf selbst enden (:meth:`_Helper.stop`).
+        """
         with self._lock:
             self._busy.discard(helper)
             if helper in self._idle:
                 self._idle.remove(helper)
-        helper.stop()
+        helper.stop(graceful=graceful)
         with self._lock:
             self._bump("stopped")
             self._lock.notify_all()
@@ -386,13 +457,16 @@ class _Pool:
     def shutdown(self) -> int:
         """Beendet jeden Hilfsprozess; die nächste Rechnung startet frisch."""
         with self._lock:
-            helpers = [*self._idle, *self._busy]
+            idle, busy = list(self._idle), list(self._busy)
             self._idle.clear()
             self._busy.clear()
             self._failed_starts = 0
             self.disabled = False
-        for helper in helpers:
+        for helper in idle:
+            helper.stop(graceful=True)
+        for helper in busy:
             helper.stop()
+        helpers = [*idle, *busy]
         with self._lock:
             self._bump("stopped", len(helpers))
             self._lock.notify_all()
@@ -460,6 +534,15 @@ def run(
         _POOL.count("fallback")
         _log.warning(
             "kernel helper %s did not accept %s; computing in this process", helper.pid, job
+        )
+        return function(arrays, plain, check)
+    except _HelperRefusedError as refused:
+        _POOL.discard(helper)
+        if refused.lasting:
+            _POOL.disable(str(refused))
+        _POOL.count("fallback")
+        _log.warning(
+            "kernel helper %s refused %s (%s); computing in this process", helper.pid, job, refused
         )
         return function(arrays, plain, check)
     except _HelperLostError as lost:

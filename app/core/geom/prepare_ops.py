@@ -2340,6 +2340,8 @@ def _without_scars(outcome: BooleanOutcome) -> BooleanOutcome:
             {"tolerance": EPS_GEOM},
             weight=len(raw.faces),
         )
+    except kernel_process.NOT_A_KERNEL_FAILURE:
+        raise
     except Exception:  # Der Kern hat eigene Fehlerklassen; die rohe Vereinigung bleibt.
         return outcome
     if not reported["found"]:

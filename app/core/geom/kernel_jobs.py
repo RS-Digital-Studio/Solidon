@@ -41,14 +41,18 @@ Modul und sonst keines aus dem Kern.
 
 from __future__ import annotations
 
+import errno
 import math
 import multiprocessing
 import os
 import pickle
+import sys
+import tempfile
 import traceback
 from collections.abc import Callable, Mapping
 from contextlib import suppress
 from multiprocessing import shared_memory
+from pathlib import Path
 from typing import Any, Final
 
 import manifold3d
@@ -463,6 +467,40 @@ Layout = list[tuple[str, str, tuple[int, ...], int]]
 #: Cachezeile; ``numpy`` rechnet auf ausgerichteten Feldern ohne Umweg.
 _ALIGNMENT: Final = 64
 
+#: Womit Windows einen gemeinsamen Speicher ablehnt, für den der Speicher nicht
+#: reicht: ``ERROR_NOT_ENOUGH_MEMORY``, ``ERROR_OUTOFMEMORY``,
+#: ``ERROR_NO_SYSTEM_RESOURCES``, ``ERROR_COMMITMENT_LIMIT``. Gemessen an einem
+#: Speicher über der Zusagegrenze: 1455 und 8 — als ``OSError``, nie als
+#: ``MemoryError`` (Durchsicht RM-212, B2).
+_WINDOWS_OUT_OF_MEMORY: Final = frozenset({8, 14, 1450, 1455})
+
+#: Dasselbe unter POSIX: kein Speicher, oder kein Platz in ``/dev/shm``.
+_POSIX_OUT_OF_MEMORY: Final = frozenset({errno.ENOMEM, errno.ENOSPC})
+
+
+def short_of_memory(problem: OSError) -> bool:
+    """Ob ein ``OSError`` um einen gemeinsamen Speicher heißt: Der Speicher reicht nicht."""
+    return (
+        getattr(problem, "winerror", None) in _WINDOWS_OUT_OF_MEMORY
+        or problem.errno in _POSIX_OUT_OF_MEMORY
+    )
+
+
+def _opened(**arguments: Any) -> shared_memory.SharedMemory:
+    """Ein gemeinsamer Speicher, angelegt oder geöffnet; Speichermangel als ``MemoryError``.
+
+    Aus dem ``OSError`` des Betriebssystems wird der Fehler, den die Rechnungen
+    kennen: ``mesh_ops.remesh``, ``uniform`` und ``subdivided`` sagen dem
+    Kunden dann, dass der Speicher nicht reicht, und schlagen eine gröbere
+    Einstellung vor — statt „unerwarteter Fehler“ mit ``WinError 1455``.
+    """
+    try:
+        return shared_memory.SharedMemory(track=False, **arguments)
+    except OSError as problem:
+        if short_of_memory(problem):
+            raise MemoryError(str(problem)) from problem
+        raise
+
 
 def pack(arrays: Mapping[str, np.ndarray]) -> tuple[shared_memory.SharedMemory | None, Layout]:
     """Legt ``arrays`` in einen neuen gemeinsamen Speicher; ``None`` ohne ein Byte.
@@ -470,7 +508,8 @@ def pack(arrays: Mapping[str, np.ndarray]) -> tuple[shared_memory.SharedMemory |
     ``track=False``: Unter POSIX meldete sich jeder Speicher sonst bei einem
     eigenen Aufräumprozess an. Aufgeräumt wird hier selbst — wer einen
     Speicher anlegt, gibt ihn frei, und der Empfänger nimmt unter POSIX den
-    Namen weg, sobald er ihn geöffnet hat.
+    Namen weg, sobald er ihn geöffnet hat. Reicht der Speicher nicht, kommt
+    ``MemoryError`` (:func:`_opened`).
     """
     layout: Layout = []
     plain: list[np.ndarray] = []
@@ -483,7 +522,7 @@ def pack(arrays: Mapping[str, np.ndarray]) -> tuple[shared_memory.SharedMemory |
         size += field.nbytes
     if size == 0:
         return None, layout
-    segment = shared_memory.SharedMemory(create=True, size=size, track=False)
+    segment = _opened(create=True, size=size)
     try:
         for (_name, dtype, shape, offset), field in zip(layout, plain, strict=True):
             target = np.ndarray(shape, dtype=np.dtype(dtype), buffer=segment.buf, offset=offset)
@@ -515,7 +554,7 @@ def copied(name: str | None, layout: Layout) -> Arrays:
     """
     if name is None:
         return views(None, layout)
-    segment = shared_memory.SharedMemory(name=name, track=False)
+    segment = _opened(name=name)
     try:
         arrays: Arrays = {}
         for field, dtype, shape, offset in layout:
@@ -596,6 +635,41 @@ def _yield_to_the_window() -> None:
         return
 
 
+def _without_a_temp_folder() -> None:
+    """Räumt im Paket den Ordner weg, den PyInstaller jedem Prozess für matplotlib anlegt.
+
+    Der Laufzeithaken ``pyi_rth_mplconfig`` legt beim Start jedes Prozesses
+    des Pakets einen leeren Ordner im Temp-Verzeichnis an, setzt
+    ``MPLCONFIGDIR`` darauf und räumt ihn erst in ``atexit`` weg. Ein
+    Hilfsprozess endet aber oft hart (Abbrechen, ``shutdown``): Am gebauten
+    ``Solidon3D.exe`` blieb je Start ein Ordner liegen (Durchsicht RM-212, B4:
+    drei Starts, drei Ordner). Der Hilfsprozess lädt nie matplotlib; entfernt
+    wird nur ein leerer Ordner direkt im Temp-Verzeichnis.
+    """
+    folder = os.environ.get("MPLCONFIGDIR")
+    if not getattr(sys, "frozen", False) or not folder:
+        return
+    path = Path(folder)
+    with suppress(OSError):
+        if path.parent.resolve() == Path(tempfile.gettempdir()).resolve():
+            path.rmdir()
+            del os.environ["MPLCONFIGDIR"]
+
+
+def _told(connection: Any, message: tuple[Any, ...]) -> bool:
+    """Sendet ``message`` an den Elternprozess — ``False``, wenn er nicht mehr zuhört."""
+    try:
+        connection.send(message)
+    except OSError:
+        return False
+    return True
+
+
+def _refusal(problem: BaseException) -> tuple[Any, ...]:
+    """Die Antwort, wenn der Hilfsprozess eine Rechnung nicht übernehmen oder übergeben kann."""
+    return ("refused", _portable(problem), traceback.format_exc())
+
+
 def serve(connection: Any) -> None:
     """Die Seite des Hilfsprozesses: Rechnungen annehmen, rechnen, zurückgeben.
 
@@ -603,9 +677,11 @@ def serve(connection: Any) -> None:
 
     1. ``("job", name, speicher, layout, zahlen)`` kommt an; der Hilfsprozess
        öffnet den Speicher und antwortet sofort ``("accepted",)`` — ein
-       Hilfsprozess, der das nicht tut, gilt als hängend.
-    2. Er rechnet und antwortet ``("done", speicher, layout, zahlen)`` oder
-       ``("error", ausnahme, stapel)``.
+       Hilfsprozess, der das nicht tut, gilt als hängend. Kann er ihn nicht
+       öffnen, antwortet er ``("refused", ausnahme, stapel)``.
+    2. Er rechnet und antwortet ``("done", speicher, layout, zahlen)``, bei
+       einer Ausnahme der Rechnung ``("error", ausnahme, stapel)`` — und
+       ``("refused", …)``, wenn für das Ergebnis kein Speicher anzulegen ist.
     3. Nach ``done`` wartet er auf ``("ack",)``: Unter Windows gibt es seinen
        Ergebnisspeicher nur, solange er ihn offen hält.
 
@@ -614,7 +690,26 @@ def serve(connection: Any) -> None:
     lebt (``check``). Ein Kernaufruf selbst ist nicht zu unterbrechen; das
     Beenden übernimmt der Elternprozess, unter Windows auch dessen Ende
     (``process.bind_helper``).
+
+    **Nichts entweicht ihm** (Durchsicht RM-212, B2). Eine Ausnahme aus
+    ``serve`` schriebe ``multiprocessing`` nach ``sys.stderr`` — im
+    Fensterpaket unter Windows ``None``: Der ``AttributeError`` liefe bis in
+    den Startcode von PyInstaller, und der zeigte einen Traceback in einem
+    eigenen Fenster, neben der Meldung der Anwendung. Hört der Elternprozess
+    nicht mehr zu, endet der Hilfsprozess still und auf dem gewöhnlichen Weg,
+    damit ``atexit`` noch aufräumt.
     """
+    try:
+        _without_a_temp_folder()
+        _serve(connection)
+    except BaseException:
+        if sys.stderr is not None:
+            with suppress(Exception):
+                traceback.print_exc()
+
+
+def _serve(connection: Any) -> None:
+    """Die Schleife von :func:`serve`, ohne ihren letzten Fang."""
     parent = multiprocessing.parent_process()
 
     def check() -> None:
@@ -622,7 +717,8 @@ def serve(connection: Any) -> None:
             os._exit(0)
 
     _yield_to_the_window()
-    connection.send(("ready", os.getpid()))
+    if not _told(connection, ("ready", os.getpid())):
+        return
     while True:
         try:
             message = connection.recv()
@@ -632,11 +728,14 @@ def serve(connection: Any) -> None:
             return
         _kind, job, name, layout, values = message
         try:
-            segment = shared_memory.SharedMemory(name=name, track=False) if name else None
+            segment = _opened(name=name) if name else None
         except Exception as problem:
-            connection.send(("error", _portable(problem), traceback.format_exc()))
+            if not _told(connection, _refusal(problem)):
+                return
             continue
-        connection.send(("accepted",))
+        if not _told(connection, ("accepted",)):
+            _closed(segment)
+            return
         failure: tuple[bytes, str] | None = None
         outcome: Outcome = ({}, {})
         arrays: Arrays = {}
@@ -649,12 +748,26 @@ def serve(connection: Any) -> None:
             arrays = {}
         _closed(segment)
         if failure is not None:
-            connection.send(("error", *failure))
+            if not _told(connection, ("error", *failure)):
+                return
             continue
         result, reported = outcome
-        out, out_layout = pack(result)
+        try:
+            out, out_layout = pack(result)
+        except Exception as problem:
+            del result, outcome
+            if not _told(connection, _refusal(problem)):
+                return
+            continue
         del result, outcome
-        connection.send(("done", out.name if out is not None else None, out_layout, reported))
+        if not _told(
+            connection, ("done", out.name if out is not None else None, out_layout, reported)
+        ):
+            if out is not None:
+                with suppress(OSError):
+                    out.unlink()
+                _closed(out)
+            return
         if out is None:
             continue
         try:
