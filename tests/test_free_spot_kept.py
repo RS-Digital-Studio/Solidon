@@ -341,3 +341,56 @@ def test_a_restart_keeps_the_spot_and_the_unit(profile: Profile, tmp_path: Path)
     assert step.params.get("spot_x") is not None, "die Antwort kam mit"
     assert step.params.get("unit") == "mm", "die erkannte Einheit auch"
     _stays_when_the_first_goes(project, history, profile, cache, block)
+
+
+# --- Platten der Datei ---------------------------------------------------------
+
+
+def _overlapping(result: Any) -> list[tuple[str, str]]:
+    """Paare von Körpern, deren Grundrisse sich auf derselben Platte schneiden."""
+    boxes = {
+        key: (entry.plate, entry.mesh.bounds.minimum, entry.mesh.bounds.maximum)
+        for key, entry in result.scene.objects.items()
+    }
+    return [
+        (a, b)
+        for a in boxes
+        for b in boxes
+        if a < b
+        and boxes[a][0] == boxes[b][0]
+        and all(
+            boxes[a][1][axis] < boxes[b][2][axis] and boxes[b][1][axis] < boxes[a][2][axis]
+            for axis in (0, 1)
+        )
+    ]
+
+
+def test_a_file_standing_on_its_second_plate_lands_where_its_spot_was_found(
+    profile: Profile,
+) -> None:
+    """p17 (A): Eine 3MF, deren einziges Teil auf Platte 2 der Datei steht.
+
+    Die freie Stelle wurde auf Platte 1 der Szene gefunden, neben dem Würfel;
+    zur Platte kam aber die Plattennummer der Datei dazu, und das Teil lag
+    auf Platte 2 mitten in der großen Platte dort. Die Nummer der Datei zählt
+    nur, wo ihre Aufteilung erhalten bleibt — bei mehreren Platten.
+    """
+    from app.core.ingest import threemf
+    from tests.test_threemf_assembly import plated_container
+
+    stride = 256.0 * (1.0 + threemf.SLICER_PLATE_GAP)
+    on_second = plated_container({"1": (2, stride + 128.0, 128.0)}, empty=(1,))
+    assert [part.plate for part in threemf.read_objects(on_second, plates=True)] == [1]
+    plate = bytes(trimesh.creation.box(extents=(240.0, 240.0, 5.0)).export(file_type="stl"))
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    _import(project, history, "w.stl", CUBE)
+    _import(project, history, "platte.stl", plate)
+    part = _import(project, history, "zweite.3mf", on_second)
+    result = _evaluated(project, profile)
+
+    step = project.document.ops[-1]
+    assert result.scene.objects[part].plate == step.params["spot_plate"] - 1
+    assert result.scene.objects[part].plate == 0, "neben dem Würfel war Platz"
+    assert not _overlapping(result)

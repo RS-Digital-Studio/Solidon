@@ -631,7 +631,7 @@ def _to_a_free_spot(
         spot=(params.spot_x, params.spot_y, params.spot_plate),
         keep_layout=several_plates,
     )
-    return _placed(outputs, findings, answered, placed)
+    return _placed(outputs, findings, answered, placed, keep_layout=several_plates)
 
 
 def _placed(
@@ -639,13 +639,27 @@ def _placed(
     findings: list[Finding],
     answered: dict[str, Any],
     placed: FreeSpot,
+    *,
+    keep_layout: bool,
 ) -> list[SceneObject]:
-    """Die Körper an ihre Stelle, die Befunde dazu, die Stelle in die Antwort."""
+    """Die Körper an ihre Stelle, die Befunde dazu, die Stelle in die Antwort.
+
+    **Die Platte der Datei zählt nur, wo ihre Aufteilung bleibt.** Der Leser
+    zählt leere Platten mit (``threemf._plate_layout``): Eine 3MF mit leerer
+    Platte 1 und allem auf Platte 2 bringt ihre Teile auf Platte 2, obwohl
+    die freie Stelle auf einer anderen Platte gefunden wurde — dazugezählt
+    stand das Teil mitten in dem, was dort schon lag (Review N2).
+    """
     if not all(is_zero(value) for value in placed.offset):
         outputs = _moved(outputs, findings, placed.offset)
     findings.extend(placed.findings)
     answered.update(placed.answered)
-    return [dataclasses.replace(entry, plate=entry.plate + placed.plate) for entry in outputs]
+    return [
+        dataclasses.replace(
+            entry, plate=entry.plate + placed.plate if keep_layout else placed.plate
+        )
+        for entry in outputs
+    ]
 
 
 def group_on_bed_finding(
