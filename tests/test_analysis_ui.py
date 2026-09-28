@@ -613,14 +613,22 @@ def test_a_bundle_context_menu_uses_the_same_body_choice_as_its_button(
     chosen: tuple[str, ...],
 ) -> None:
     """Der Rechtsklick bietet dieselbe Körperwahl und denselben Abbruchweg."""
+    import trimesh
     from PySide6.QtWidgets import QMenu
 
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
     from app.ui import panels
 
     host = MainWindow(Session(), UiSettings())
     report = panels.ReportPanel(host)
     bodies = ("obj_1", "obj_2", "obj_3", "obj_4")
-    report._live_objects = frozenset(bodies)
+    # Die lebenden Körper sind eine Zuordnung Kennung → Szenenobjekt, keine
+    # Menge mehr: Die örtliche Suche fragt je Körper, ob er ein Netz ist.
+    report._live_objects = {
+        body: SceneObject(id=body, name=body, mesh=MeshData.of(trimesh.creation.box()))
+        for body in bodies
+    }
     report.add_findings(
         [
             Finding(
