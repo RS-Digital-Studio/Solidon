@@ -27,7 +27,7 @@ dans `website/version.json`.
 - Les niveaux de qualité de la boîte de dialogue d'impression s'affichent désormais dans la langue de l'interface.
 - La vitesse des déplacements à vide vient aussi de l'imprimante : la Centauri Carbon 2 se déplace à 500 au lieu de 150 mm/s, comme dans le profil d'Elegoo.
 - Solidon prend l'angle de surplomb dans le profil constructeur de votre imprimante : 60 au lieu de 45 degrés chez Elegoo, Bambu et Creality. Chanfreins et pentes douces n'ont plus de supports inutiles.
-- Si vous avez mesuré le surplomb de votre imprimante, le slicer ne pose lui aussi de supports qu'à partir de cet angle, tant que hauteur de couche et largeur de ligne restent celles de la mesure.
+- Si vous avez mesuré le surplomb de votre imprimante, le slicer ne pose lui aussi de supports qu'à partir de cet angle, tant que hauteur de couche et largeur de cordon restent celles de la mesure.
 - Le rapport calcule lui aussi désormais les surplombs avec l'angle à partir duquel votre profil de slicer ajoute des supports.
 - Les réglages d'impression montrent ce qui sera imprimé : la base est le profil du fabricant, et vos propres valeurs sont marquées et se rétablissent une par une.
 - Vous choisissez le plateau d'impression dans les réglages d'impression, et la température du lit suit. Si le fabricant n'autorise pas ce plateau pour votre filament, Solidon le dit avant.
@@ -46,7 +46,7 @@ dans `website/version.json`.
 - Là où votre slicer limite déjà la vitesse selon le débit volumique, Solidon ne propose plus de limite de vitesse propre.
 - Si vous reprenez les valeurs d'un profil de filament puis changez de filament, les valeurs du nouveau s'appliquent à nouveau.
 - La première couche imprime désormais des lignes aussi larges que le profil de votre imprimante, souvent 0,5 mm avec une buse de 0,4. Avec Cura, la tête ne se traîne plus entre elles.
-- Avec Cura, l'impression commence désormais par le code de démarrage de votre imprimante. Si Cura ne connaît pas l'imprimante ou si ce code manque dans le fichier, Solidon vous le dit.
+- Avec Cura, l'impression commence désormais par le code de démarrage de votre imprimante, comme chez le fabricant. Si Cura ignore l'imprimante ou si ce code manque au fichier, Solidon le dit.
 - Avec Cura, la première couche utilise désormais l'accélération du profil du fabricant au lieu de l'accélération d'impression complète.
 - Les supports de Cura suivent désormais le modèle des profils d'usine : reliés, avec un toit léger et une vitesse modérée.
 - Avec Cura, les parois en surplomb s'impriment désormais plus lentement, comme chez le fabricant. Les impressions avec beaucoup de surplombs durent jusqu'à 20 % de plus.
@@ -55,14 +55,14 @@ dans `website/version.json`.
 - Les réglages d'impression ne proposent plus le débit volumique pour Cura, car Cura ne le lit pas.
 - Nouvelles : les Creality Ender-3 V3 SE et V3 KE. Jusqu'ici, une SE recevait les valeurs de l'Ender-3 V3, bien plus rapide.
 - Un plafond au-dessus d'un canal d'eau ou d'un tunnel n'attire plus de supports sur le modèle. Si rien d'autre n'en a besoin sur le modèle, Solidon les propose depuis le plateau uniquement.
-- Nouvelle suggestion « Garder les canaux libres » : appliquée, la transmission bloque les supports dans les canaux de chaque slicer. La fenêtre de Cura reçoit ce blocage et les valeurs par pièce.
+- Nouvelle suggestion « Garder les canaux libres » : appliquée, elle bloque les supports dans les canaux, dans tout slicer pris en charge. La fenêtre de Cura reçoit ce blocage et les valeurs par pièce.
 - Les supports en grille arrivent au slicer comme une vraie grille, dont la direction change à chaque couche, au lieu de lignes libres qui se décalent à l'impression.
 - Quand une pièce repose sur beaucoup de petits pieds, Solidon propose un brim là où votre slicer n'en calcule pas lui-même, même si les pieds réunis auraient assez de surface.
 - Une bande étroite et oblique le long de la paroi extérieure ne compte plus dans le rapport comme un long pont.
 - Le rapport n'invite plus à calibrer les tolérances de votre matériau que sur les modèles avec ajustements. Solidon ne s'en sert que là.
 - La transmission à Cura passe les premières couches sans ventilateur sous forme de montée progressive. L'avertissement ne vient que si le fichier d'impression diffère vraiment.
 - Sur les grands modèles, « Scinder le modèle » trouve la jointure jusqu'à deux fois plus vite, et sur les modèles multicolores en une fraction du temps. La division se fait comme avant.
-- Quand Solidon divise automatiquement un modèle en trois morceaux ou plus, les noms se numérotent et citent les connecteurs, par exemple « Baguette 2 sur 3 · Goupilles et trous ».
+- Quand Solidon divise automatiquement un modèle en trois morceaux ou plus, les noms se numérotent et citent les connecteurs, par exemple « Baguette murale 2 sur 3 · Goupilles et trous ».
 - Une vis, un écrou ou un joint imprimés du catalogue de blocs ne comptent plus dans le rapport comme un corps fragmenté. C'est une pièce à part, et c'est voulu.
 - Les vis et écrous imprimés ont aussi du jeu sous la tête et à l'appui, et restent démontables même imprimés avec la pièce. Les projets plus anciens signalent le changement à l'ouverture.
 - Avec une vis à tête fraisée du catalogue de blocs, un corps fait de faces et d'arêtes reste étanche à l'export : la pièce et la vis entrent chacune fermées dans le fichier.
@@ -101,8 +101,8 @@ dans `website/version.json`.
 ### Congés et chanfreins
 
 - Le choix d'arêtes « Horizontal », « Haut » ou « Bas » ne prend plus le bord d'un perçage latéral. Pour le traiter, choisissez-le seul ; les anciens projets calculent comme enregistrés.
-- Sur un modèle importé, le bord d'un perçage est arrondi ou chanfreiné aussi profond que sur une pièce construite. Avant, avec de grands rayons, le congé restait jusqu'à un cinquième trop plat.
-- Si un rayon ou un chanfrein ne tient pas sur chaque arête d'un choix comme « Tous » ou « Vertical », Solidon traite les autres au lieu de refuser, et « Montrer l'endroit » indique où.
+- Sur un modèle importé, le bord d'un perçage est arrondi ou chanfreiné aussi profondément que sur une pièce construite. Avant, avec de grands rayons, le congé restait jusqu'à un cinquième trop plat.
+- Si la cote ne tient pas sur chaque arête d'un choix comme « Tous » ou « Vertical », Solidon traite celles où elle tient et montre les autres avec « Montrer l'endroit », au lieu de refuser.
 
 ### Cotes dans la vue
 
@@ -136,7 +136,7 @@ dans `website/version.json`.
 - S'il manque à un modèle un morceau de paroi de perçage ou une partie de cône de fraisure, Solidon comble le trou par une paroi, pas par un couvercle en travers.
 - Les coutures ouvertes se ferment à l'import et à la réparation sans relier des pièces qui ne font que se toucher. Un modèle intact reste inchangé.
 - Les recouvrements sont désormais résolus par « Réparer » lui-même. Quand les pièces d'un modèle importé s'emboîtent, le rapport propose « Résoudre les recouvrements ».
-- Une surface sans épaisseur reste ouverte et propose « Donner une épaisseur ». Une grande ouverture se montre avec « Montrer l’endroit », et « Laisser ouvert » ne laisse qu'elle ouverte.
+- Une surface sans épaisseur reste ouverte et propose « Donner une épaisseur ». Une grande ouverture se montre avec « Montrer l'endroit », et « Laisser ouvert » ne laisse qu'elle ouverte.
 - Après la fermeture d'une ouverture à l'import, « Montrer l'endroit » entoure toute la nouvelle face d'une couleur à part.
 - Une pièce retournée à côté d'un corps creux est remise à l'endroit sans perdre la cavité. Une pièce dans la matière d'une autre est signalée au lieu d'être devinée.
 - Le rapport après l'import est plus court : les constats que le résultat dément disparaissent, et là où l'on peut agir, un bouton remplace le conseil.
