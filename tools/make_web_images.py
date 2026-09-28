@@ -517,6 +517,31 @@ def work_rect(window: Any, ratio: float | None = None) -> QRect:
     return QRect(area.right() + 1 - width, top, width, height)
 
 
+def fit_into(window: Any, dialog: Any, area: QRect, ratio: float) -> None:
+    """Setzt einen Dialog so in ``area``, dass ein Zuschnitt im Verhältnis ``ratio`` ihn ganz fasst.
+
+    Der Druckdialog wächst bis zur nutzbaren Bildschirmhöhe, seit 0.5.1 mit den
+    Vorschlägen je Teil auf über 1100 Punkte, und passte nicht mehr in den
+    Zuschnitt der freien Mitte (dort begrenzt die Breite über das Verhältnis
+    die Höhe): :func:`framed` brach ab, statt ihn anzuschneiden. Gekürzt wird
+    der Dialog selbst, sein Inhalt rollt wie beim Kunden auf einem kleineren
+    Schirm, und er steht danach mittig in der Fläche.
+    """
+    tallest = min(area.height(), round(area.width() / ratio)) - 2 * MARGIN
+    frame = frame_rect(window, dialog)
+    extra = frame.height() - dialog.height()
+    if frame.height() > tallest:
+        dialog.resize(dialog.width(), tallest - extra)
+        settle(10)
+        frame = frame_rect(window, dialog)
+    target = QPoint(
+        area.left() + (area.width() - frame.width()) // 2,
+        area.top() + (area.height() - frame.height()) // 2,
+    )
+    dialog.move(dialog.pos() + (target - frame.topLeft()))
+    settle(10)
+
+
 def free_rect(window: Any) -> QRect:
     """Die freie Mitte zwischen den beiden Karten, von deren Oberkante bis unten.
 
@@ -767,7 +792,16 @@ def _screens_child(language: str) -> int:
                 break
             settle(2)
         settle(20)
-        crop = framed(frame_rect(window, dialog), STEP_RATIO, free_rect(window))
+        # Die Slicerprofile zu, wie im Bild vor 0.5.1: Am allgemeinen Drucker
+        # verlangt ein gefundener PrusaSlicer ein Druckerprofil und klappt den
+        # Abschnitt auf, und samt der Slicerwahl darüber passte der Dialog nicht
+        # mehr in den Zuschnitt.
+        if dialog.slicer_toggle is not None:
+            dialog.slicer_toggle.setChecked(False)
+            settle(10)
+        free = free_rect(window)
+        fit_into(window, dialog, free, STEP_RATIO)
+        crop = framed(frame_rect(window, dialog), STEP_RATIO, free)
         save_still(grab(window, crop), "schritt-druck", language)
 
     while_open(PrintSettingsDialog, window.action_print_settings, print_dialog)
