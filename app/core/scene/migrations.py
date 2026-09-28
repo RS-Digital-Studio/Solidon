@@ -1020,8 +1020,9 @@ def _place_further_models_freely(data: dict[str, Any]) -> dict[str, Any]:
     """37 → 38: Ein weiteres Modell kommt an eine freie Stelle (Robert, 28.09.2026).
 
     Neue Ladeschritte nach dem ersten tragen ``free_spot`` (``load`` und
-    ``load_step``) und legen das Modell aufgesetzt an die erste freie Stelle.
-    Ein älterer Schritt trägt den Schalter nicht, und ohne ihn bleibt das
+    ``load_step``) und legen das Modell aufgesetzt an die erste freie Stelle;
+    ein erzeugtes Modell trägt ihn an ``fit_to_size`` (Weg 3). Ein älterer
+    Schritt trägt den Schalter nicht, und ohne ihn bleibt das
     Modell an seinen Dateikoordinaten wie gespeichert — umzuschreiben ist
     also nichts (festgehalten an ``tests/data/projects/further_model_v37.p3d``).
 

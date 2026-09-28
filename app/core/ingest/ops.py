@@ -110,9 +110,9 @@ class LoadParams(BaseParams):
         default=False,
         reads_scene=True,
         doc=_(
-            "Legt das Modell neben die Teile, die schon im Projekt liegen: an die erste "
-            "freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. Geht vor "
-            "„Mittig auf das Bett legen“."
+            "Setzt das Modell auf und legt es neben die Teile, die schon im Projekt liegen: "
+            "an die erste freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. "
+            "Geht vor „Mittig auf das Bett legen“."
         ),
     )
     coordinates: str = param(
@@ -599,7 +599,7 @@ def _to_a_free_spot(
     *,
     several_plates: bool,
 ) -> list[SceneObject]:
-    """Ein weiteres Modell an die erste freie Stelle (§17.1, Schritt 6).
+    """Ein weiteres Modell aufgesetzt an die erste freie Stelle (§17.1, Schritt 6).
 
     Alle Körper der Datei gehen **auf einmal**, als ein Block: Die Teile
     behalten ihre Lage zueinander, wie beim ersten Modell. Eine Datei mit
@@ -607,49 +607,30 @@ def _to_a_free_spot(
     belegte Platte — dort überlappt nichts, und jedes Teil bleibt an seiner
     Stelle (:func:`plates_behind`).
     """
+    # Gelesen wird die Szene vor diesem Schritt, nur lesend (Regel 3); der
+    # Schlüssel kennt sie über ``ParamSpec.reads_scene``.
+    from app.core.geom.prepare import first_free_spot, free_spot_finding, standing_in
+
+    group = _bounds_of(outputs)
     if several_plates:
         first = plates_behind(ctx)
+        seat = (0.0, 0.0, -float(group.minimum[2]))
+        if not is_zero(seat[2]):
+            outputs = _moved(outputs, findings, seat)
         if first == 0:
             return outputs
         findings.append(plates_behind_finding(first))
         return [dataclasses.replace(entry, plate=entry.plate + first) for entry in outputs]
-    offset, plate = free_spot_offset(ctx, _bounds_of(outputs))
+    offset, plate = first_free_spot(group, ctx.profile, standing_in(ctx.scene))
     if not all(is_zero(value) for value in offset):
         outputs = _moved(outputs, findings, offset)
     findings.append(free_spot_finding(plate))
     return [dataclasses.replace(entry, plate=plate) for entry in outputs]
 
 
-def free_spot_offset(ctx: OpContext, group: BoundingBox) -> tuple[Vec3, int]:
-    """Versatz und Platte für ein weiteres Modell — für Netz und STEP.
-
-    Gelesen wird die Szene vor diesem Schritt, nur lesend (Regel 3); das
-    Ergebnis folgt aus Parametern und Stapel (§15.1), und der Schlüssel kennt
-    die Szene über ``ParamSpec.reads_scene``. Abstand und Plattenzahl sind die
-    Vorgaben von *Auf dem Bett anordnen*.
-    """
-    from app.core.geom.prepare import first_free_spot
-
-    occupied = [(entry.mesh.bounds, entry.plate) for entry in ctx.scene.objects.values()]
-    (dx, dy), plate = first_free_spot(group, ctx.profile, occupied)
-    return (dx, dy, 0.0), plate
-
-
 def plates_behind(ctx: OpContext) -> int:
     """Die erste Platte hinter der letzten, auf der in der Szene etwas liegt."""
     return max((entry.plate for entry in ctx.scene.objects.values()), default=-1) + 1
-
-
-def free_spot_finding(plate: int) -> Finding:
-    """Wohin ein weiteres Modell gekommen ist — die Platte, wie der Kunde sie zählt."""
-    return Finding(
-        code="load.free_spot",
-        severity="info",
-        message=_(
-            "Das Modell kam an die erste freie Stelle auf Platte {number}.", number=plate + 1
-        ),
-        values={"plate": plate + 1},
-    )
 
 
 def plates_behind_finding(first: int) -> Finding:

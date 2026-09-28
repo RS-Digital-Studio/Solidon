@@ -89,9 +89,9 @@ class LoadStepParams(BaseParams):
         default=False,
         reads_scene=True,
         doc=_(
-            "Legt das Modell neben die Teile, die schon im Projekt liegen: an die erste "
-            "freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. Geht vor "
-            "„Mittig auf das Bett legen“."
+            "Setzt das Modell auf und legt es neben die Teile, die schon im Projekt liegen: "
+            "an die erste freie Stelle, Platte für Platte, wie „Auf dem Bett anordnen“. "
+            "Geht vor „Mittig auf das Bett legen“."
         ),
     )
     copy: int = param(
@@ -458,7 +458,8 @@ def _bed_offset(
     Form, nicht über Dreiecke — der Körper bleibt exakt. Ohne Versatz ist die
     Lage ``None``.
     """
-    from app.core.ingest.ops import free_spot_finding, free_spot_offset, group_on_bed_finding
+    from app.core.geom.prepare import first_free_spot, free_spot_finding, standing_in
+    from app.core.ingest.ops import group_on_bed_finding
 
     findings: list[Finding] = []
     group = BoundingBox(bounds[:3], bounds[3:])
@@ -475,8 +476,8 @@ def _bed_offset(
             (bounds[0] + offset[0], bounds[1] + offset[1], bounds[2] + offset[2]),
             (bounds[3] + offset[0], bounds[4] + offset[1], bounds[5] + offset[2]),
         )
-        (dx, dy, _dz), plate = free_spot_offset(ctx, seated)
-        offset = (offset[0] + dx, offset[1] + dy, offset[2])
+        (dx, dy, dz), plate = first_free_spot(seated, ctx.profile, standing_in(ctx.scene))
+        offset = (offset[0] + dx, offset[1] + dy, offset[2] + dz)
         findings.append(free_spot_finding(plate))
     if all(abs(value) <= EPS_GEOM for value in offset):
         return None, findings, plate

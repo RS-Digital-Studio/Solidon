@@ -17,7 +17,7 @@ vergessen würden:
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol
 
@@ -62,6 +62,7 @@ from app.core.types import (
     PlaneFrame,
     Profile,
     Quality,
+    Scene,
     Severity,
     SolverInfo,
     Vec3,
@@ -2766,7 +2767,7 @@ def first_free_spot(
     *,
     spacing: float = ARRANGE_SPACING,
     plates: int = MAX_PLATES,
-) -> tuple[tuple[float, float], int]:
+) -> tuple[Vec3, int]:
     """Wohin ein weiteres Modell kommt, ohne dass etwas anderes sich bewegt (§17.1, §29).
 
     **Der Anlass** (Robert, 28.09.2026: „wenn wir ein weiteres modell
@@ -2787,8 +2788,9 @@ def first_free_spot(
     Ganzes gelegt, die Teile behalten ihre Lage zueinander. Gelegt wird ein
     Quader aus diesen Grenzen, nie die Form — der Platz eines Quaders ist nie
     zu knapp bemessen, und für einen exakten Körper muss nichts vernetzt werden.
-    Zurück kommen der Versatz in X und Y und die Platte; die Höhe bleibt dem
-    Aufsetzen.
+    Zurück kommen der Versatz, der das Modell dorthin legt und **aufsetzt**,
+    und die Platte. Eingefügt (``load.free_spot``) wie erzeugt
+    (``fit_to_size.free_spot``, Weg 3) fragen dieselbe Funktion.
     """
 
     def block(bounds: BoundingBox) -> MeshData:
@@ -2811,9 +2813,35 @@ def first_free_spot(
         shift = (
             float(placed.bounds.minimum[0] - moving.bounds.minimum[0]),
             float(placed.bounds.minimum[1] - moving.bounds.minimum[1]),
+            -float(body.minimum[2]),
         )
         return shift, plate
-    return (0.0, 0.0), final
+    return (0.0, 0.0, -float(body.minimum[2])), final
+
+
+def standing_in(scene: Scene, ignore: Collection[ObjectId] = ()) -> list[tuple[BoundingBox, int]]:
+    """Was in der Szene liegen bleibt: Grenzen und Platte jedes Körpers.
+
+    ``ignore`` nennt die Körper, die gerade gelegt werden — *Auf Maß bringen*
+    ersetzt seinen Eingang, und der belegt keinen Platz neben sich selbst.
+    """
+    return [
+        (entry.mesh.bounds, entry.plate)
+        for key, entry in scene.objects.items()
+        if key not in ignore
+    ]
+
+
+def free_spot_finding(plate: int) -> Finding:
+    """Wohin ein weiteres Modell gekommen ist — die Platte, wie der Kunde sie zählt."""
+    return Finding(
+        code="arrange.free_spot",
+        severity="info",
+        message=_(
+            "Das Modell kam an die erste freie Stelle auf Platte {number}.", number=plate + 1
+        ),
+        values={"plate": plate + 1},
+    )
 
 
 def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spacing: float) -> bool:

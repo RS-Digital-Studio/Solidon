@@ -1025,7 +1025,7 @@ def test_a_further_model_lands_in_a_free_place_on_the_first_plate(profile: Profi
     assert second.mesh.bounds.minimum[0] == pytest.approx(-123.0)
     assert second.mesh.bounds.maximum[1] == pytest.approx(123.0)
     codes = {entry.code for entry in result.scene.report.findings}
-    assert "load.free_spot" in codes, "und der Bericht sagt, wo es hinkam"
+    assert "arrange.free_spot" in codes, "und der Bericht sagt, wo es hinkam"
 
 
 def test_a_further_model_goes_to_the_next_plate_when_the_first_is_full(
@@ -1115,7 +1115,7 @@ def test_an_older_further_load_keeps_the_place_of_its_file(profile: Profile) -> 
     second = result.scene.objects["obj_2"]
     assert second.plate == 0
     assert tuple(second.mesh.bounds.minimum) == pytest.approx((-10.0, -10.0, -10.0))
-    assert "load.free_spot" not in {entry.code for entry in result.scene.report.findings}
+    assert "arrange.free_spot" not in {entry.code for entry in result.scene.report.findings}
 
 
 def test_the_free_place_follows_the_model_before_it(profile: Profile) -> None:

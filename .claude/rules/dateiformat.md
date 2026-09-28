@@ -87,7 +87,8 @@ sichtbar und änderbar.
 
 - **Die Lage steht im Ladeschritt, nie als Regel der Auswertung** (§17.1,
   Schritt 6): das erste Modell aufgesetzt und mittig, jedes weitere aufgesetzt
-  an die erste freie Stelle (`free_spot`, Format 38, Robert 28.09.2026). Ein
+  an die erste freie Stelle (`free_spot`, Format 38, Robert 28.09.2026); ein
+  erzeugtes erst am fertigen Maß (`fit_to_size.free_spot`). Ein
   neuer Lageschalter bekommt die Vorgabe, unter der alte Schritte liegen
   bleiben, und eine Formatstufe — ein älteres Programm hielte sonst an dem
   unbekannten Parameter an (`registry.params.validate`).

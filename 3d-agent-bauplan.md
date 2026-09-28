@@ -1149,7 +1149,9 @@ baut daraus das normalisierte Szenenobjekt über dieselbe Eingangskette:
    letzte belegte Platte. Beides steht als Parameter in der Op (`centre`,
    `free_spot`), nicht als Regel bei der Auswertung; die freie Stelle rechnet
    die Op aus der Szene vor ihr, also aus Parametern und Stapel (§15.1). Ein
-   Ladeschritt ohne `free_spot` behält die Lage seiner Datei.
+   Ladeschritt ohne `free_spot` behält die Lage seiner Datei. Ein erzeugtes
+   Modell (Weg 3) ist ebenso ein weiteres Modell und folgt derselben Regel,
+   gelegt erst am fertigen Maß: `fit_to_size` trägt dafür denselben Schalter.
 
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar und
 änderbar bleiben. Verschweißen und Entfernen entarteter Dreiecke dürfen einen

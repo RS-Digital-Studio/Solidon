@@ -218,10 +218,12 @@ ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 - `back_onto_bed` (`keep_on_bed`): die Vorgabe ist aus, den Haken setzt der
   Zug (`MainWindow._on_transform_dragged`); geprüft wird der Eingang, bewegt
   nur in XY, die Matrix trägt beides, kein Plattenwechsel.
-- `first_free_spot` (`load.free_spot`, §17.1 Schritt 6): ein weiteres Modell
-  als Quader aus seinen Grenzen, Platte für Platte über `arrange_on_bed` mit
-  `occupied`; eine leere Platte nimmt es mittig. Abstand `ARRANGE_SPACING`,
-  dieselbe Vorgabe wie *Auf dem Bett anordnen*.
+- `first_free_spot` (`free_spot` an `load`, `load_step` und `fit_to_size`,
+  §17.1 Schritt 6): ein weiteres Modell als Quader aus seinen Grenzen,
+  aufgesetzt, Platte für Platte über `arrange_on_bed` mit `occupied`
+  (`standing_in`); eine leere Platte nimmt es mittig. Abstand
+  `ARRANGE_SPACING`, dieselbe Vorgabe wie *Auf dem Bett anordnen*; Weg 3
+  (`generate.into_project`) legt so erst am fertigen Maß.
 
 **Kanten und Flächen**:
 

@@ -30,7 +30,7 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
   mit Meter zuerst. `load` dreht die schon angewandten Knoten von Y-oben nach
   Z-oben; `legacy_raw` erhält alte Quellen, eine erzeugte GLB
   (`generate.into_project`) speichert `gltf` mit `mm`, die Zielgröße bleibt
-  der eigene Schritt `fit_to_size`.
+  der eigene Schritt `fit_to_size` — der mit `free_spot` auch die Lage setzt.
 - **Offene Stellen werden geschlossen** (Regel: `dateiformat.md`): `normalise`
   ruft `geom.repair.repair` ohne die schon gefahrenen Schritte, sobald das
   verschweißte Netz nicht dicht ist. Der Ladeschritt trägt `mend` (*Offene
