@@ -81,6 +81,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu](#rm-300) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Ursache der geänderten Prozesswerte |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
+| [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
+| [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Alles in 0.5.1 (Robert), der Tag wartet auf „Handbuch fertig“. Auf `main`: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Für 0.5.1 fertig und gemeldet: HB-5 bis HB-13 (fünfzehn Anleitungen, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter, Film), `main` mit texte-051 und Oberflächenpaket nachgezogen. Offen nach 0.5.1: Feldabnahme (§11 des Konzepts), Nummernplatzierung auf Text in zwei Bildern |
@@ -105,6 +107,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | Nach 0.5.1: fünf Wortlaute und ein Wächter |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
+| [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
+| [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -2487,6 +2491,26 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   dass ein einzelner Körper seine Matrix meldet; beim nächsten Verdichten gehört er zurück.
   Abnahme: ein Beleg je Körper und Auswertung, der Satz steht wieder.
 
+<a id="rm-304"></a>
+
+- [ ] **RM-304 — Freie Stelle nach Filament trennen.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `F:\3D Druck.review-051\reports\review-einfuegen.md`, F11;
+  Text der Gesamtprüfung). *Auf dem Bett anordnen* trennt nach Filament,
+  wo mehr Filamente als Düsen liegen (`prepare_ops._filament_groups`); `first_free_spot`
+  kennt keine Filamente, deshalb kann eine mehrfarbige 3MF auf eine Platte mit fremdem
+  Filament kommen. Weg: `first_free_spot` bekommt die Gruppen, oder §17.1 nennt die
+  Ausnahme. Abnahme: eine mehrfarbige 3MF als weiteres Modell landet nicht bei fremdem
+  Filament, oder der Bauplan sagt es.
+
+<a id="rm-305"></a>
+
+- [ ] **RM-305 — Hinter der zwölften Platte eine Regel.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `F:\3D Druck.review-051\reports\review-einfuegen.md`, F13;
+  Text der Gesamtprüfung). Eine dazukommende 3MF mit Platten rückt hinter
+  die letzte belegte, ohne Grenze (`plates_behind`); `first_free_spot` betrachtet nur Platten
+  bis `MAX_PLATES`. Liegt etwas auf Platte 13, landet ein weiteres Modell neben Platte 12
+  statt auf einer leeren späteren. Abnahme: eine Regel für beide.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -3335,6 +3359,16 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Entscheidung Durchsicht 0.5.0) — `at_hole_advice` den Messstatus mitgeben. Abnahme: je
   Punkt nachgezogen, der Wächter mit Gegenprobe.
 
+  **Nachtrag 28.09.2026 (Sprachreview des zweiten Changelog-Durchgangs,
+  `F:\3D Druck.review-051\reports\review-sprache-changelog2.md`):** (f) Die Kataloge fr und
+  it mischen typografische und gerade Apostrophe (fr 1 239 gegen 3 477, it 490 gegen
+  1 258), gegen die Entscheidung des Textpakets für den geraden; der Changelog setzt den
+  geraden, der Katalog etwa bei *Merkmal zeigen* („Montrer l’élément“, „Mostra
+  l’elemento“) den typografischen. (g) it „Ridurre i triangoli“ (*Dreiecke verringern*)
+  steht wie die Titel unter (b) im Infinitiv, verwandte Knöpfe im Imperativ („Riduci i
+  triangoli e riprova“). (h) it „Fare clic“ im Leersatz „Kein Merkmal gewählt …“ spricht
+  unpersönlich statt mit „tu“.
+
 <a id="rm-291"></a>
 
 - [ ] **RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht.** Aus der Durchsicht v0.5.1 (Inventar 1.4,
@@ -3351,6 +3385,32 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Spulennamen in `tools/make_guides.py` stehen in einer festen Tabelle für sechs Sprachen
   statt aus dem Katalog. Die Feldabnahme und die Nummernplatzierung auf Text in zwei
   Anleitungsbildern führt [RM-283](#rm-283). Abnahme: je eine Quelle.
+
+<a id="rm-303"></a>
+
+- [ ] **RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `F:\3D Druck.review-051\reports\review-einfuegen.md`, F14, N8;
+  Text der Gesamtprüfung). Der Zweig hat die Fenstertests
+  `test_ui.py` (sechs Tests mit `keep_the_files_place`),
+  `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
+  `test_generate_ui.py` (Schrittliste mit `place_on_bed`) angepasst; sie gelten mit dem
+  Release-Tor. Der Plattenwechsel nach dem Import (`_show_the_plate_of_the_import`) hat
+  keinen Fenstertest und gilt nur für Dateien vom Pfad: gesetzt in `_on_import_confirmed`,
+  das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
+  erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
+  mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
+  auf Platte 2 kommt.
+
+<a id="rm-306"></a>
+
+- [ ] **RM-306 — Zweites Modell in der Ecke oder zur Mitte.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `F:\3D Druck.review-051\reports\review-einfuegen.md`, F15;
+  Text der Gesamtprüfung). Das zweite Modell steht hinten links, nach der
+  Regel von *Auf dem Bett anordnen* (§29: hinterste, dann linkeste Stelle); zentriert wird
+  nur eine ganz neu angeordnete Platte. Robert wollte beim Anordnen „startpunkt mitte“
+  (§29, 09.09.2026). Frage: die Kandidaten der freien Stelle nach Abstand zur Plattenmitte
+  ordnen? Empfehlung der Release-Sitzung: ja, weil ein einzelnes weiteres Modell nahe der
+  Mitte besser zu sehen und zu erreichen ist. Abnahme: Entscheidung Robert, danach Test.
 
 ## KI und Generatoren
 
