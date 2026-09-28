@@ -19633,8 +19633,7 @@ class MainWindow(QMainWindow):
             # ohnehin neu.
             self._print_findings.cancel()
         else:
-            effective = self.effective_print_settings()
-            self._print_findings.start(result, self._print_profile(effective), effective)
+            self._start_print_findings(result, self.effective_print_settings())
         steps, planned = self._split_findings
         if planned and steps == len(self.session.project.document.ops):
             # Die Befunde der Suche stehen in keinem Schritt; jede Auswertung
@@ -20000,7 +19999,16 @@ class MainWindow(QMainWindow):
         self.filaments.show_scene(list(result.scene.objects.values()), settings)
         self._update_facts()
         if result is not self.session.picture:
-            self._print_findings.start(result, self._print_profile(settings), settings)
+            self._start_print_findings(result, settings)
+
+    def _start_print_findings(self, result: Any, settings: PrintSettings) -> None:
+        """Die Befunde der Schichtanalyse für diesen Stand rechnen lassen.
+
+        Ob die Szene Passungen trägt, fragt das Dokument hier im Hauptthread,
+        mit den gebauten: Nur dann gehört der Hinweis zur Kalibrierung dazu.
+        """
+        fitted = bool(fit_checks.fit_kinds_for(self.session.project.document, result.scene.objects))
+        self._print_findings.start(result, self._print_profile(settings), settings, fitted=fitted)
 
     def _print_profile(self, settings: PrintSettings) -> Profile:
         """Das Profil der Druckbefunde: das des Projekts mit dem Raster und der

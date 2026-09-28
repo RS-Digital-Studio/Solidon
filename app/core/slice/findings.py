@@ -91,6 +91,7 @@ def print_findings(
     *,
     cancelled: CancelToken | None = None,
     progress: Callable[[float], None] | None = None,
+    fitted: bool | None = None,
 ) -> list[Finding]:
     """Die Befunde der Schichtanalyse und der Druckeinstellungen für eine Szene.
 
@@ -102,8 +103,14 @@ def print_findings(
 
     Resin kennt keine Düse, keine Brücke und keine Bahn; dort bleibt allein
     die Insel, denn auch im Harzbad beginnt sie in der Flüssigkeit.
+
+    ``fitted``: Trägt die Szene Passungen? Wer das Dokument kennt, fragt
+    ``scene.fits.fit_kinds_for`` und zählt die gebauten mit; ohne Angabe gelten
+    die eingetragenen der Szene.
     """
-    findings = advise.warnings_for(settings, profile, None)
+    findings = advise.warnings_for(
+        settings, profile, None, fitted=bool(scene.fits) if fitted is None else fitted
+    )
     bodies = [entry for entry in scene.objects.values() if as_mesh_data(entry.mesh).triangle_count]
     search = len(bodies) <= ORIENT_SEARCH_BODIES and not profile.printer.is_resin
     for number, entry in enumerate(bodies):

@@ -71,7 +71,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | `helpers.py` | Was mehr als eine Testdatei liest, unter öffentlichem Namen (`exact_kernel`, `ridged_shaft`, `the_torus`, die Maße des Schafts) — nie `from tests.test_x import _privat`; was noch fehlt, nennt der Modul-Docstring |
 | `ui_helpers.py` | Gemeinsame Fixtures der `test_ui*.py`; Fenster und Sitzung je Test frisch |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
-| `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`) |
+| `php_probe.py` | Entscheidet für alle Endpunkttests über Skip oder Fehler und liefert die Befehlsbasis (`php_command()`, ohne OPcache: `WITHOUT_OPCACHE`) |
 | `agent_cases.py` · `scripted_backend.py` | Fälle der Agenten-Suite · Sprach- und Mesh-Modell mit vorgeschriebenen Antworten |
 
 ## Stolperfallen

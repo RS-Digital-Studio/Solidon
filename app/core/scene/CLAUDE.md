@@ -39,7 +39,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
 | `parameter_usage.py` | Direkte und abgeleitete Parameterverwendung je Operationsfeld (§13) |
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
-| `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet |
+| `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
 | `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_of`: wo sitzt, was schon da ist |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
@@ -36,6 +36,7 @@ from app.core.errors import (
 )
 from app.core.export import threemf
 from app.core.export.slicer_keys import (
+    CURA_SUPPORT_BLOCKER,
     SlicerFlavour,
     helpers_as_parts,
     needs_bed_translation,
@@ -45,6 +46,7 @@ from app.core.export.slicer_keys import (
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.prepare import check_build_volume
+from app.core.knowledge.print_settings import read_path
 from app.core.log import get_logger
 from app.core.types import (
     BoundingBox,
@@ -59,6 +61,7 @@ from app.core.types import (
     Scene,
     SceneObject,
     SettingAdvice,
+    SliceResult,
     Source,
     kind_of,
 )
@@ -70,7 +73,7 @@ if TYPE_CHECKING:
     # G-Code-Auswertung mit, und ein Export soll nicht davon abhängen, dass
     # ein Slicer im Spiel ist.
     from app.core.brep.kernel import Solid
-    from app.core.export.handover import SlicerSetup
+    from app.core.export.handover import PartSplit, SlicerSetup
     from app.core.knowledge.parts.registry import PartSpec
     from app.core.types import BaseParams
 
@@ -452,24 +455,34 @@ def check_adhesion_clearance(
     meshes: Sequence[MeshData],
     settings: PrintSettings,
     plates: Sequence[int] | None = None,
+    *,
+    per_part: Sequence[PrintSettings] | None = None,
 ) -> list[Finding]:
     """Passen die Ränder zwischen zwei Teilen noch nebeneinander?
 
     Die Körper selbst können reichlich Luft haben und der Druck trotzdem
     scheitern: Brim, Skirt und Stützstruktur stehen über den Körper hinaus, und
-    zwischen zwei Nachbarn zählt der Rand zweimal. Gemessen wird in der
+    zwischen zwei Nachbarn zählen beide Ränder. Gemessen wird in der
     Aufsicht, denn dort liegen sie — was sich in der Höhe überlappt, ist eine
     andere Frage (:func:`app.core.geom.prepare.check_collisions`).
+
+    ``per_part`` sind die Einstellungen, mit denen jedes Teil gedruckt wird —
+    ein Brim je Teil liegt nur um das eine (Entscheidung G).
     """
-    margin = clearance_margin(settings)
-    if margin <= 0.0:
+    margins = [
+        clearance_margin(per_part[index] if per_part is not None else settings)
+        for index in range(len(meshes))
+    ]
+    if all(margin <= 0.0 for margin in margins):
         return []
 
     findings: list[Finding] = []
-    needed = 2.0 * margin
     for first in range(len(meshes)):
         for second in range(first + 1, len(meshes)):
             if plates is not None and plates[first] != plates[second]:
+                continue
+            needed = margins[first] + margins[second]
+            if needed <= 0.0:
                 continue
             gap = _plane_gap(meshes[first].bounds, meshes[second].bounds)
             if gap >= needed - EPS_GEOM:
@@ -512,6 +525,8 @@ def check_adhesion_on_bed(
     settings: PrintSettings,
     profile: Profile,
     object_ids: Sequence[str] = (),
+    *,
+    per_part: Sequence[PrintSettings] | None = None,
 ) -> list[Finding]:
     """Liegt der Rand um jedes Teil noch auf dem Bett?
 
@@ -523,13 +538,17 @@ def check_adhesion_on_bed(
     den Bauraum. Ein Teil, das selbst neben dem Bett liegt, meldet die Prüfung
     des Bauraums; hier geht es nur um den Rand.
     """
-    reach = rim_reach(settings)
-    if reach <= 0.0:
-        return []
+    reaches = [
+        rim_reach(per_part[index] if per_part is not None else settings)
+        for index in range(len(meshes))
+    ]
     width, depth, _height = profile.printer.build_volume
     half = (width / 2.0, depth / 2.0)
     findings: list[Finding] = []
     for index, mesh in enumerate(meshes):
+        reach = reaches[index]
+        if reach <= 0.0:
+            continue
         box = mesh.bounds
         if any(
             box.minimum[axis] < -half[axis] - EPS_GEOM or box.maximum[axis] > half[axis] + EPS_GEOM
@@ -1081,29 +1100,67 @@ def _written(target: Path, payload: bytes) -> Path:
     return target
 
 
-def _part_settings(
-    mesh: MeshData, settings: PrintSettings | None, flavour: SlicerFlavour
-) -> tuple[dict[str, str], list[SettingAdvice]]:
-    """Was dieses Teil anders braucht als die Platte (§29) — und warum.
+#: Die Pfade, deren Rat je Teil aus dem Schnitt des Körpers kommt. Nur wenn
+#: einer davon je Teil geht, wird ein Körper eigens geschnitten; Passung und
+#: Verbinder kommen ohne aus.
+_SLICED_PART_PATHS: Final = frozenset(
+    {
+        "support.style",
+        "support.placement",
+        "support.block_channels",
+        "adhesion.kind",
+        "shell.wall_generator",
+        "shell.outer_wall_first",
+        "shell.scarf_seam",
+        "layers.line_width",
+    }
+)
 
-    Die Grundfläche kommt aus einem Schnitt knapp über dem Boden, nicht aus
-    der Bounding-Box: ein Teil, das auf drei schmalen Armen steht, hat eine
-    große Grundfläche und trotzdem kaum Halt. Genau dieser Fall ist der Grund
-    für die Unterscheidung.
 
-    **Der Rat reist mit heraus.** Bis zum 03.09.2026 gab diese Funktion nur die
-    Slicer-Schlüssel zurück, und der Grund, den ``SettingAdvice`` ausdrücklich
-    mitführt, endete hier. Sein Docstring sagt, warum es ihn gibt: „eine Zahl
-    ohne Begründung ist im Zweifel schlechter als die Vorgabe, weil niemand sie
-    nachprüfen kann." Der Kunde bekam einen Brim an drei von fünfzehn Teilen,
-    obwohl seine Platte auf Skirt steht, und keinen Satz dazu — dabei lag einer
-    fertig da: „Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren
-    kippen."
+@dataclass(frozen=True, slots=True)
+class _PartValues:
+    """Was ein Teil anders bekommt als die Platte, und warum."""
+
+    keys: dict[str, str]
+    """Die Objektwerte in der Sprache des Slicers."""
+    applied: list[SettingAdvice]
+    """Der Rat, den die Werte tragen."""
+    unavailable: list[SettingAdvice]
+    """Der Rat, den dieser Slicer je Teil nicht annimmt."""
+    effective: PrintSettings | None
+    """Womit dieses Teil gedruckt wird — für seine Stützsperre."""
+
+
+def part_advice(
+    entry: SceneObject,
+    mesh: MeshData,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+    *,
+    result: SliceResult | None,
+    fit_kinds: Sequence[str],
+    flavour: SlicerFlavour | None = None,
+) -> list[SettingAdvice]:
+    """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
+
+    Der Rat je Körper (:func:`advise.for_part`), gefragt für jede Spule, die
+    der Körper benutzt, mit deren Einstellungen und Material
+    (:func:`handover.slot_processes`), und zusammengeführt wie der Rat im
+    Druckdialog (:func:`advise.combine`). Der Export schreibt daraus die
+    Objektwerte, der Druckdialog nennt damit die Teile einer Zeile — beide
+    fragen diese Funktion, damit die Zeile kein Teil nennt, das die Datei nicht
+    bekommt.
+
+    Die Grundfläche kommt aus einem Schnitt knapp über dem Boden, nicht aus dem
+    Hüllquader: Ein Teil auf drei schmalen Armen hat eine große Grundfläche und
+    kaum Halt. Passungen (``fit_kinds``) und Zapfen zählen nur, wenn dieses
+    Teil sie trägt. ``flavour`` sagt, ob der Slicer unter „automatisch“ seinen
+    Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`).
     """
-    if settings is None:
-        return {}, []
-    # Beide erst hier: `handover` zieht die G-Code-Auswertung mit, und ein
-    # Export soll nicht davon abhängen, dass ein Slicer im Spiel ist.
+    # Erst hier: ``handover`` zieht die G-Code-Auswertung mit, und ein Export
+    # soll nicht davon abhängen, dass ein Slicer im Spiel ist.
     from app.core.export import handover
     from app.core.slice import advise
     from app.core.slice.analysis import cross_section
@@ -1111,22 +1168,160 @@ def _part_settings(
     lowest = float(mesh.bounds.minimum[2])
     section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
     footprint = 0.0 if section is None or section.is_empty else float(section.area)
-    # **Nur was übernommen ist** (RM-250, entschieden mit dem Konzept
-    # Herstellerprofil, 27.09.2026). Bis dahin setzte diese Stelle den Brim je
-    # Teil ohne Klick — gegen die Regel vom 26.09.2026, dass ohne „Vorschläge
-    # übernehmen" die Standardeinstellungen zum Slicer gehen. Gemessen an der
-    # Minigolf-Platte im ElegooSlicer: Die Ränder wichen vom Profil des
-    # Herstellers ab (8,5 statt 11,7 m), bei gleicher Konfiguration.
-    # **Bis Stufe E ist dieser Weg ein Vertrag, kein Ablauf**: Jeder
-    # Haftungsvorschlag setzt „brim", und übernommen gilt er der ganzen
-    # Platte — ``for_part`` findet dann nichts mehr zu tun. Stufe E legt die
-    # Platte auf ihre Grundlage und schreibt hier je Teil (RM-250).
-    advice = [
-        entry
-        for entry in advise.for_part(settings, mesh.bounds, footprint)
-        if entry.path in settings.accepted
+    connectors = advise.connector_diameters([entry])
+    groups = [
+        (
+            process.settings,
+            advise.for_part(
+                process.settings,
+                mesh.bounds,
+                footprint,
+                profile=process.profile,
+                result=result,
+                fit_kinds=fit_kinds,
+                connectors=connectors,
+                flavour=flavour,
+            ),
+        )
+        for process in handover.slot_processes(entry, settings, profile, setup, slot_profiles)
     ]
-    return handover.object_keys(settings, advice, flavour), advice
+    return advise.combine(settings, groups)
+
+
+def _part_values(
+    entry: SceneObject,
+    mesh: MeshData,
+    split: PartSplit | None,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    setup: SlicerSetup | None,
+    slot_profiles: Mapping[threemf.SlotKey, str],
+    document: Document | None,
+    cancelled: CancelToken | None,
+) -> _PartValues:
+    """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G) — und warum.
+
+    Gefragt wird der Rat je Körper (:func:`part_advice`) für die Pfade, die
+    der Split je Teil führt: Stützen nur am Körper, der sie braucht, ein Brim
+    nur unter dem, der schlank ist oder auf wenig Fläche steht, die Werte einer
+    Passung nur am Teil, das sie trägt.
+
+    **Der Rat reist mit heraus**: ein Wert ohne Begründung ist im Zweifel
+    schlechter als die Vorgabe, weil niemand ihn nachprüfen kann.
+    """
+    if split is None:
+        return _PartValues({}, [], [], None)
+    wanted = split.per_part | split.unavailable
+    if not wanted:
+        return _PartValues({}, [], [], split.plate)
+    from app.core.export import handover
+    from app.core.knowledge import profiles as profile_table
+    from app.core.scene.fits import fit_kinds_for
+    from app.core.slice import advise
+
+    result = (
+        _body_analysis(
+            entry,
+            mesh,
+            split.base,
+            profile_table.for_process(
+                profile_table.for_object(profile, entry), split.base, effective=True
+            ),
+            cancelled,
+        )
+        if wanted & _SLICED_PART_PATHS
+        else None
+    )
+    advice = part_advice(
+        entry,
+        mesh,
+        split.base,
+        profile,
+        setup,
+        slot_profiles,
+        result=result,
+        fit_kinds=fit_kinds_for(document, {entry.id}) if document is not None else (),
+        flavour=flavour,
+    )
+    applied = [item for item in advice if item.path in split.per_part]
+    unavailable = [item for item in advice if item.path in split.unavailable]
+    if not split.revert:
+        return _PartValues(
+            handover.object_keys(split.plate, applied, flavour),
+            applied,
+            unavailable,
+            advise.apply(split.plate, applied),
+        )
+    # **Cura umgekehrt**: Die Platte trägt die Übernahme. Was dieses Teil nicht
+    # braucht, bekommt es je Netz als Grundlage zurück; was es braucht, mit dem
+    # eigenen Wert, wo Cura den ganzen Pfad je Netz annimmt, sonst mit dem der
+    # Platte. Die Rücknahme ist kein Rat an den Kunden und trägt keinen Grund.
+    applied = [
+        item
+        if handover.cura_takes_whole(item.path)
+        else replace(item, value=read_path(split.plate, item.path))
+        for item in applied
+    ]
+    needed = {item.path for item in applied}
+    changes = applied + [
+        SettingAdvice(
+            path=path,
+            value=read_path(split.base, path),
+            was=read_path(split.plate, path),
+            reason="",
+        )
+        for path in sorted(split.per_part - needed)
+    ]
+    keys = {
+        key: value
+        for key, value in handover.object_keys(split.plate, changes, flavour).items()
+        if key in handover.CURA_PER_MESH
+    }
+    return _PartValues(keys, applied, unavailable, advise.apply(split.plate, changes))
+
+
+def _body_analysis(
+    entry: SceneObject,
+    mesh: MeshData,
+    settings: PrintSettings,
+    profile: Profile,
+    cancelled: CancelToken | None,
+    *,
+    detail: Literal["full", "support"] = "full",
+) -> SliceResult:
+    """Die Schichten dieses Körpers mit dem Raster und der Stützschwelle, die
+    hinausgehen — die des Prüfberichts, wenn er sie schon hat.
+
+    **Mit der Schwelle, mit der der Slicer stützt** (Konzept Herstellerprofil,
+    Entscheidung L): ``settings`` ist, was hinausgeht, samt der Grundlage des
+    Herstellers. Mit dem Profil allein sperrte Solidon Kanäle nach seiner
+    Tabelle, während der Slicer nach dem gewählten Prozess stützt.
+
+    **Erst die Schichten des Prüfberichts** (DRUCK-14, Durchsicht 0.5.1): Er
+    hat dasselbe Netz mit demselben Raster, Winkel und derselben Brückenbreite
+    schon geschnitten; am Eiffelturm aus dem Korpus kostete der zweite Schnitt
+    vor dem Start des Slicers den größten Teil von 17 s.
+    """
+    from app.core.knowledge import profiles as profile_table
+    from app.core.slice.analysis import slice_body
+    from app.core.slice.findings import remembered_analysis
+
+    wall, angle = profile_table.analysis_limits(
+        profile_table.for_process(profile, settings, effective=True), entry
+    )
+    result = remembered_analysis(mesh, settings, angle, wall)
+    if result is not None:
+        return result
+    return slice_body(
+        mesh,
+        settings.layers.layer_height,
+        first_layer_height=settings.layers.first_layer_height,
+        overhang_angle=angle,
+        bridge_from=wall,
+        detail=detail,
+        support_volume=False,
+        cancelled=cancelled,
+    )
 
 
 def _part_setting_findings(
@@ -1195,6 +1390,8 @@ def _support_blocker(
     settings: PrintSettings,
     profile: Profile,
     cancelled: CancelToken | None = None,
+    *,
+    result: SliceResult | None = None,
 ) -> tuple[MeshData | None, list[Finding]]:
     """Die Stützsperre für die Kanäle dieses Teils (§22.2, §29).
 
@@ -1212,35 +1409,15 @@ def _support_blocker(
     import manifold3d
     import shapely
 
-    from app.core.knowledge import profiles as profile_table
-    from app.core.slice.analysis import channel_space, model_support, slice_body
-    from app.core.slice.findings import remembered_analysis
+    from app.core.slice.analysis import channel_space, model_support
 
-    # **Mit der Schwelle, mit der der Slicer stützt** (Konzept Herstellerprofil,
-    # Entscheidung L): ``settings`` ist, was hinausgeht, samt der Grundlage des
-    # Herstellers. Mit dem Profil allein sperrte Solidon Kanäle nach seiner
-    # Tabelle, während der Slicer nach dem gewählten Prozess stützt — und die
-    # gemerkten Schichten des Druckdialogs träfen den Winkel nicht mehr.
-    wall, angle = profile_table.analysis_limits(
-        profile_table.for_process(profile, settings, effective=True), entry
-    )
-    # **Erst die Schichten des Prüfberichts** (DRUCK-14, Durchsicht 0.5.1): Er
-    # hat dasselbe Netz mit demselben Raster, Winkel und derselben
-    # Brückenbreite schon geschnitten, und seine Überhänge und Inseln sind
-    # dieselben wie hier (``detail="support"`` spart nur Breiten und Brücken).
-    # Dann trifft auch die gemerkte Kanalfrage des Druckdialogs.
-    result = remembered_analysis(mesh, settings, angle, wall)
+    # **Die Schichten des Prüfberichts, sonst ein eigener Schnitt**
+    # (:func:`_body_analysis`, DRUCK-14): mit dem Raster und der Stützschwelle,
+    # die hinausgehen (Entscheidung L). ``detail="support"`` spart Breiten und
+    # Brücken; hat der Rat je Teil den Körper schon geschnitten, gilt dessen
+    # Ergebnis.
     if result is None:
-        result = slice_body(
-            mesh,
-            settings.layers.layer_height,
-            first_layer_height=settings.layers.first_layer_height,
-            overhang_angle=angle,
-            bridge_from=wall,
-            detail="support",
-            support_volume=False,
-            cancelled=cancelled,
-        )
+        result = _body_analysis(entry, mesh, settings, profile, cancelled, detail="support")
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     model = model_support(result)
@@ -1306,6 +1483,7 @@ def write_assembly(
     document: Document | None = None,
     checked: Sequence[Finding] | None = None,
     cancelled: CancelToken | None = None,
+    for_window: bool = False,
 ) -> tuple[Path, list[Finding]]:
     """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
 
@@ -1314,7 +1492,9 @@ def write_assembly(
     eine Datei entsteht.
 
     Ein ausdrücklicher Dateiexport (`for_slicer=False`) bleibt 3MF.
-    Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format.
+    Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format,
+    Curas Fenster (``for_window``) eine 3MF in seiner Schreibweise
+    (:func:`_cura_window`).
 
     Der Unterschied zu :func:`write_plan` ist nicht das Format, sondern die
     Zahl der Dateien: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
@@ -1369,29 +1549,68 @@ def write_assembly(
     # — ein exakter Körper so fein, wie der Drucker es braucht.
     exported = {entry.id: mesh_for_export(entry.mesh, profile) for entry in chosen}
     findings += _tessellation_finding(chosen, profile)
+    split: PartSplit | None = None
+    slot_profiles: dict[threemf.SlotKey, str] = {}
+    if settings is not None:
+        from app.core.export import handover
+
+        # **Was nur einzelne Teile brauchen, steht an ihnen** (Konzept
+        # Herstellerprofil, Entscheidung G): Die Platte bekommt dort die
+        # Grundlage, bei Cura die Übernahme mit Rücknahme je Netz.
+        split = handover.split_for_parts(settings, profile, setup, flavour)
+        settings = split.plate
+        slot_profiles = handover.chosen_slot_profiles(objects, settings)
+    # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
+    # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch was der
+    # Slicer je Teil nicht annimmt, wird benannt.
+    part_values = {
+        entry.id: _part_values(
+            entry,
+            exported[entry.id],
+            split,
+            profile,
+            flavour,
+            setup,
+            slot_profiles,
+            document,
+            cancelled,
+        )
+        for entry in chosen
+    }
+    # Die Sperre nennt sich selbst, mit dem Namen des Teils
+    # (``export.support_blocker``); ein zweiter Satz dazu wäre derselbe.
+    findings += _part_setting_findings(
+        [
+            advice
+            for values in part_values.values()
+            for advice in values.applied
+            if advice.path != "support.block_channels"
+        ]
+    )
+    findings += _part_setting_findings(
+        [advice for values in part_values.values() for advice in values.unavailable],
+        applied=False,
+    )
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
-        # laufen, und der Preis zweier Filamente in einem Auftrag.
+        # laufen, und der Preis zweier Filamente in einem Auftrag — je Teil mit
+        # der Haftung, die es wirklich bekommt.
         meshes = [exported[entry.id] for entry in chosen]
+        own = [part_values[entry.id].effective or settings for entry in chosen]
         from app.core.export import handover
 
         findings += handover.setting_limitations(flavour, settings)
-        findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
-        findings += check_adhesion_on_bed(meshes, settings, profile, [entry.id for entry in chosen])
+        findings += check_adhesion_clearance(
+            meshes, settings, [entry.plate for entry in chosen], per_part=own
+        )
+        findings += check_adhesion_on_bed(
+            meshes, settings, profile, [entry.id for entry in chosen], per_part=own
+        )
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume
     bed = (width, depth) if place_on_bed and needs_bed_translation(flavour) else None
 
     as_stl = for_slicer and not reads_assembly_file(flavour)
-    # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
-    # die Schlüssel wie der Grund kommen aus demselben Aufruf. Auch ein Format
-    # ohne Einstellungen je Teil muss den unerfüllten Vorschlag benennen.
-    part_advice = {
-        entry.id: _part_settings(exported[entry.id], settings, flavour) for entry in chosen
-    }
-    findings += _part_setting_findings(
-        [advice for _keys, own in part_advice.values() for advice in own], applied=not as_stl
-    )
 
     if as_stl:
         if settings is not None:
@@ -1408,12 +1627,23 @@ def write_assembly(
             configured = handover.configured_slots(slots, settings)
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
+        if for_window and takes_mesh_settings(flavour):
+            target, noted = _cura_window(
+                chosen,
+                exported,
+                directory / (given_name(project_name, "projekt") + ".3mf"),
+                project_name,
+                part_values,
+                profile,
+                cancelled,
+            )
+            return target, findings + noted
         target = _written(
             directory / (given_name(project_name, "projekt") + ".stl"),
             _cura_assembly([exported[entry.id] for entry in chosen], bed),
         )
         if takes_mesh_settings(flavour):
-            findings += _cura_meshes(chosen, exported, target, settings, profile, bed, cancelled)
+            findings += _cura_meshes(chosen, exported, target, part_values, profile, bed, cancelled)
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
@@ -1423,16 +1653,20 @@ def write_assembly(
     # wird — ohne Stützen gibt es nichts zu sperren —, und nur, wenn der
     # Vorschlag übernommen ist (``support.block_channels``): Ohne ihn gehen die
     # Standardeinstellungen hinaus (Entscheidung Robert, 26.09.2026).
+    # Je Teil mit dessen Einstellungen: Stützt nur ein Teil, sperrt auch nur
+    # dieses seine Kanäle (Entscheidung G).
     blockers: dict[str, MeshData | None] = {}
-    if (
-        for_slicer
-        and settings is not None
-        and settings.support.style != "none"
-        and settings.support.block_channels
-    ):
+    if for_slicer:
         for entry in chosen:
+            own_settings = part_values[entry.id].effective
+            if (
+                own_settings is None
+                or own_settings.support.style == "none"
+                or not own_settings.support.block_channels
+            ):
+                continue
             blockers[entry.id], noted = _support_blocker(
-                entry, exported[entry.id], settings, profile, cancelled
+                entry, exported[entry.id], own_settings, profile, cancelled
             )
             findings += noted
     parts = [
@@ -1440,7 +1674,7 @@ def write_assembly(
             mesh=exported[entry.id],
             name=source_text(entry.name),
             slots=threemf.slots_for_object(entry),
-            settings=part_advice[entry.id][0],
+            settings=part_values[entry.id].keys,
             support_blocker=blockers.get(entry.id),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
             # dieselbe Datei — und dann muss dort stehen, welches Teil auf
@@ -1576,7 +1810,7 @@ def _cura_meshes(
     chosen: Sequence[SceneObject],
     exported: dict[str, MeshData],
     target: Path,
-    settings: PrintSettings | None,
+    part_values: Mapping[str, _PartValues],
     profile: Profile,
     bed: tuple[float, float] | None,
     cancelled: CancelToken | None,
@@ -1586,55 +1820,102 @@ def _cura_meshes(
     Bis zum 27.09.2026 bekam Cura alle Teile als ein STL, und die Sperre fiel
     dabei weg (``NOT_TAKEN_BY``). Als eigenes Netz mit ``anti_overhang_mesh``
     wirkt sie — gemessen im Prüfbericht Cura (Abschnitt 1.5): 18 476 Stützbewegungen
-    wurden 0, die Modellbahn blieb gleich. Das zusammengelegte STL bleibt die
-    Datei, die Curas Fenster öffnet; die Netze und ihre Liste
-    (``handover.write_cura_meshes``) liest nur die Kommandozeile.
+    wurden 0, die Modellbahn blieb gleich. Die Netze und ihre Liste
+    (``handover.write_cura_meshes``) liest die Kommandozeile; Curas Fenster
+    bekommt dieselben Netze mit denselben Werten als 3MF (:func:`_cura_window`).
 
-    Die Sperre gilt nur dem Slicen: Im Fenster setzt der Kunde sie selbst,
-    und der Befund sagt es ihm.
+    **Je Netz, was nur diesem Teil gilt** (Entscheidung G): Die Platte trägt
+    die Übernahme, ein Teil, das sie nicht braucht, bekommt die Grundlage
+    zurück (:class:`handover.PartSplit`, ``revert``) — so stützt Cura nur das
+    Teil, das es braucht, und sperrt nur dessen Kanäle.
     """
     from app.core.export import handover
 
-    findings: list[Finding] = []
-    blockers: dict[str, MeshData | None] = {}
-    if (
-        settings is not None
-        and settings.support.style != "none"
-        and settings.support.block_channels
-    ):
-        for entry in chosen:
-            blockers[entry.id], noted = _support_blocker(
-                entry, exported[entry.id], settings, profile, cancelled
-            )
-            findings += [
-                replace(
-                    finding,
-                    message=_(
-                        "In „{name}“ liegen Decken in schmalen Kanälen. Beim Slicen sperrt "
-                        "Solidon dort die Stützen; im Cura-Fenster setzen Sie dafür selbst "
-                        "einen Stützblocker.",
-                        name=source_text(entry.name),
-                    ),
-                )
-                for finding in noted
-            ]
+    blockers, findings = _cura_blockers(chosen, exported, part_values, profile, cancelled)
     meshes: list[handover.CuraMesh] = []
     for number, entry in enumerate(chosen, start=1):
         part = _written(
             target.with_name(f"{target.stem}-part-{number}.stl"),
             _cura_assembly([exported[entry.id]], bed),
         )
-        # Hier setzt Stufe E, was nur diesem Teil gilt (``support_enable``).
-        meshes.append(handover.CuraMesh(part))
+        meshes.append(handover.CuraMesh(part, part_values[entry.id].keys))
         blocker = blockers.get(entry.id)
         if blocker is not None:
             barrier = _written(
                 target.with_name(f"{target.stem}-blocker-{number}.stl"),
                 _cura_assembly([blocker], bed),
             )
-            meshes.append(handover.CuraMesh(barrier, {"anti_overhang_mesh": "true"}))
+            meshes.append(handover.CuraMesh(barrier, {CURA_SUPPORT_BLOCKER: "true"}))
     handover.write_cura_meshes(target, meshes)
     return findings
+
+
+def _cura_blockers(
+    chosen: Sequence[SceneObject],
+    exported: Mapping[str, MeshData],
+    part_values: Mapping[str, _PartValues],
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> tuple[dict[str, MeshData | None], list[Finding]]:
+    """Die Stützsperre je Teil, das gestützt wird und die Sperre übernommen
+    hat — mit dessen eigenen Einstellungen (Entscheidung G), für die
+    Kommandozeile und das Fenster dieselbe."""
+    findings: list[Finding] = []
+    blockers: dict[str, MeshData | None] = {}
+    for entry in chosen:
+        own = part_values[entry.id].effective
+        if own is None or own.support.style == "none" or not own.support.block_channels:
+            continue
+        blockers[entry.id], noted = _support_blocker(
+            entry, exported[entry.id], own, profile, cancelled
+        )
+        findings += noted
+    return blockers, findings
+
+
+def _cura_window(
+    chosen: Sequence[SceneObject],
+    exported: Mapping[str, MeshData],
+    target: Path,
+    project_name: str,
+    part_values: Mapping[str, _PartValues],
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> tuple[Path, list[Finding]]:
+    """Was Curas Fenster öffnet: dieselben Netze mit denselben Werten wie die
+    Kommandozeile (:func:`_cura_meshes`), als 3MF in Curas Schreibweise (RM-257).
+
+    Das Fenster bekam bis dahin das zusammengelegte STL: ohne Stützsperre, und
+    ohne die Werte je Teil — die Übernahme der Platte stützte dort jedes Teil.
+    Eine 3MF liest es mit Werten je Objekt (``cura:``-Metadaten,
+    :func:`threemf.write_assembly`), die Sperre als Komponente neben ihrem
+    Körper, damit sie beim Anordnen mitwandert.
+
+    **An derselben Stelle wie in der Kommandozeile**: Cura ordnet eine 3MF
+    beim Laden nicht an und misst von der Bettecke; Solidon rechnet um die
+    Bettmitte. Verschoben wird deshalb um den halben Bauraum des Druckers —
+    Curas aktive Maschine ist derselbe Drucker, auf den auch das Profil
+    daneben passt (:func:`handover.cura_profile_beside`).
+    """
+    from app.core.export import handover
+
+    blockers, findings = _cura_blockers(chosen, exported, part_values, profile, cancelled)
+    width, depth, _height = profile.printer.build_volume
+    parts = [
+        threemf.AssemblyPart(
+            mesh=exported[entry.id],
+            name=source_text(entry.name),
+            slots=threemf.slots_for_object(entry),
+            settings=handover.for_the_cura_window(part_values[entry.id].keys),
+            support_blocker=blockers.get(entry.id),
+        )
+        for entry in chosen
+    ]
+    written = _written(
+        target, threemf.write_assembly(parts, project_name, bed=(width, depth), cura=True)
+    )
+    _log.info("exported %d object(s) as a 3MF for Cura's window to %s", len(chosen), target.name)
+    return written, findings
 
 
 def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) -> bytes:

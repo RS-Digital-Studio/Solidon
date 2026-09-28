@@ -140,6 +140,56 @@ def test_cura_gets_the_start_code_of_its_printer(tmp_path: Path) -> None:
     assert command.index("machine_start_gcode=" + start) < command.index("-e0"), "global"
 
 
+def _printed(start: str, name: str = "Creality K1 Max") -> str:
+    """Der Kopf einer Druckdatei, wie CuraEngine 5.13 ihn schreibt: Name, eigene
+    Temperaturbefehle, der Startcode wörtlich, dann die erste Schicht."""
+    return (
+        f";FLAVOR:Marlin\n;TARGET_MACHINE.NAME:{name}\n\n;Generated with Cura_SteamEngine 5.13.0\n"
+        f"M140 S60\nM105\n{start}\nM82 ;absolute extrusion mode\nG92 E0\n"
+        ";LAYER_COUNT:2\n;LAYER:0\nG1 X10 Y10 E1\nM420 S1\n"
+    )
+
+
+def test_the_countercheck_sees_whether_cura_took_the_machine(tmp_path: Path) -> None:
+    """Entscheidung K: CuraEngine schreibt keine Einstellungen in die Datei,
+    also prüft die Gegenprobe den Namen im Kopf und den Startcode vor der
+    ersten Schicht, Befehl für Befehl und in seiner Reihenfolge."""
+    from app.core.slice import gcode
+
+    engine = _cura(tmp_path, start="G28 ;Home\nM420 S1 ;Bettnetz\nSTART_PRINT\n")
+    machine = _written(engine, "creality-k1-max", tmp_path).cura_machine
+    assert machine is not None and machine.name == "Creality K1 Max"
+
+    def differences(text: str) -> list[str]:
+        return handover.cura_machine_differences(gcode.analyze(text), machine)
+
+    assert differences(_printed("G28 ;Home\nM420 S1 ;Bettnetz\nSTART_PRINT")) == []
+    assert differences(_printed("G28\nM420 S1\nSTART_PRINT", name="Unknown")) == [
+        "machine_name: Creality K1 Max → Unknown"
+    ]
+    # Fehlt ein Befehl vor der ersten Schicht, zählt ein späterer nicht.
+    assert differences(_printed("G28 ;Home\nSTART_PRINT")) == ["machine_start_gcode: M420 S1 → —"]
+    # Und in seiner Reihenfolge: Ein Bettnetz vor dem Referenzfahren lädt ein
+    # Netz, das danach nicht mehr stimmt.
+    assert differences(_printed("M420 S1\nG28\nSTART_PRINT")) == [
+        "machine_start_gcode: M420 S1 → —"
+    ]
+    assert handover.cura_machine_differences(gcode.analyze(_printed("")), None) == []
+
+
+def test_the_countercheck_reports_the_machine_with_the_values() -> None:
+    """Ein Befund für alles, was der Slicer anders nahm — Werte wie Maschine."""
+    found = handover.verify_settings(
+        {"layer_height": "0.2"},
+        {"layer_height": "0.2"},
+        ["machine_start_gcode: M420 S1 → —"],
+    )
+
+    assert [entry.code for entry in found] == ["slicer.setting_ignored"]
+    assert found[0].values["count"] == 1
+    assert "M420 S1" in str(found[0].values["settings"])
+
+
 def test_a_calculation_in_a_placeholder_goes_through_solidons_own_evaluator(
     tmp_path: Path,
 ) -> None:

@@ -183,6 +183,28 @@ def test_an_uncalibrated_material_offers_the_calibration(petg) -> None:
     assert [action.id for action in notes[0].suggestions] == ["calibrate_material"]
 
 
+def test_the_calibration_note_needs_a_fit(petg) -> None:
+    """Die Toleranzen eines Materials wirken nur an Passungen. Ohne sie stand
+    der Hinweis an jedem Teil einer frischen Installation (Durchsicht 0.5.1,
+    Inventar 1.3) — und ein Hinweis, der immer dasteht, wird überlesen."""
+    profile, settings = petg
+    uncalibrated = replace(profile, material=replace(profile.material, calibrated=False))
+    scene = _scene(_floating_cube())
+
+    def notes(fitted: bool | None = None) -> int:
+        found = print_findings(scene, uncalibrated, settings, fitted=fitted)
+        return sum(entry.code == "settings.uncalibrated_material" for entry in found)
+
+    assert notes() == 0, "eine Szene ohne Passung"
+    assert notes(fitted=True) == 1, "eine gebaute Passung, vom Dokument gemeldet"
+    assert notes(fitted=False) == 0
+    assert advise.warnings_for(settings, uncalibrated, fitted=False) == [
+        entry
+        for entry in advise.warnings_for(settings, uncalibrated)
+        if entry.code != "settings.uncalibrated_material"
+    ]
+
+
 def test_the_analysis_is_kept_with_the_mesh(petg, monkeypatch: pytest.MonkeyPatch) -> None:
     """Dasselbe Netz wird nicht zweimal geschnitten — eine Auswertung nach
     einem Klick in den Baum darf keine Sekunde Schichtanalyse kosten."""

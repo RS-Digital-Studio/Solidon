@@ -62,8 +62,14 @@ def _assert_grouped_and_sorted(dialog: FirstRunDialog) -> None:
 
 @pytest.fixture
 def setup_dialog(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> FirstRunDialog:
-    """Die Zusatzprogramme haben für diese gezielten Bedienwege keine Bedeutung."""
+    """Die Zusatzprogramme haben für diese gezielten Bedienwege keine Bedeutung.
+
+    Auch kein gemerkter Slicer: Die Nutzerverzeichnisse gelten für den ganzen
+    Lauf, und ein Test des Druckdialogs, der vorher im selben Prozess den
+    Slicer wechselte, hinterließ seinen Pfad als Vorauswahl.
+    """
     monkeypatch.setattr(FirstRunDialog, "look", lambda _self: None)
+    discover.remember_path("slicer", "")
     return FirstRunDialog(UiSettings())
 
 
@@ -175,6 +181,44 @@ def test_selected_slicer_can_suggest_its_own_active_printer(
     setup_dialog.slicer.setCurrentIndex(1)
     assert setup_dialog.wait_for_survey()
     assert setup_dialog.printer.currentData() == "prusa-mk4s"
+
+
+def test_the_remembered_slicer_suggests_its_printer_and_done_waits_for_it(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der gemerkte Slicer schlägt seinen Drucker gleich beim Öffnen vor, und
+    *Fertig* speichert ihn auch, wenn die Suche noch läuft.
+
+    Robert, 27.09.2026: Der ElegooSlicer steht auf dem Centauri Carbon 2, im
+    Druckdialog stand danach der allgemeine Drucker. Die Drucker des Slicers
+    wurden erst nach der Programmsuche gesucht, rund sechs Sekunden nach dem
+    Öffnen, und *Fertig* nach vier Sekunden übernahm die Vorbelegung.
+    """
+    import threading
+
+    slicer = tmp_path / "elegoo-slicer.exe"
+    slicer.write_text("")
+    discover.remember_path("slicer", str(slicer))
+    name = profiles.printer("centauri-carbon-2").title
+    gate = threading.Event()
+
+    def slow_machine(*_args: object) -> str:
+        gate.wait(10.0)
+        return name
+
+    monkeypatch.setattr(FirstRunDialog, "look", lambda _self: None)
+    monkeypatch.setattr(first_run.slicer_profiles, "known_printers", lambda *_args: (name,))
+    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", slow_machine)
+    settings = UiSettings(printer=profiles.DEFAULT_PRINTER)
+
+    dialog = FirstRunDialog(settings)
+
+    assert dialog._printer_survey is not None, "die Drucker des gemerkten Slicers werden gesucht"
+    assert not dialog.printer.isEnabled(), "und die Auswahl sagt, dass sie noch kommt"
+    threading.Timer(0.3, gate.set).start()
+    dialog.accept()
+    dialog.apply_to(settings)
+    assert settings.printer == "centauri-carbon-2"
 
 
 def test_late_general_survey_keeps_the_selected_slicer_printer_and_material(

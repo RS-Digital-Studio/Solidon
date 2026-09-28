@@ -100,9 +100,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   je Schicht — kleine Stegunterseiten tragen sich selbst. Ein Ergebnis ohne
   Stücke gilt schichtweise als eines; lange Stege fängt die Brückenregel.
 - **Den Stützwinkel sagt, womit der Slicer stützt** (Konzept Herstellerprofil,
-  Entscheidung L): gemessen, sonst die Schwelle des gewählten
-  Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`, sonst die
-  Startregel (`Profile.overhang_limit_degrees`). Die Auswertung rechnet mit
+  Entscheidung L): gemessen auf dem Raster der Probe, sonst die Schwelle des
+  gewählten Herstellerprozesses, sonst `overhang_limit` aus `printers.toml`,
+  sonst die Startregel (`Profile.overhang_limit_degrees`). Die Auswertung rechnet mit
   `Session.evaluation_profile` — den wirksamen Einstellungen des Fensters, im
   Hauptthread vor jedem Lauf geholt —, Druckdialog-Rat und Kanalsperre der
   Übergabe mit `profiles.for_process(..., effective=True)`. Aus einem
@@ -134,16 +134,24 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   **Vorschlag, nicht Automatik** (Entscheidung Robert).
 - **Die kleine Standfläche wird auch je Fuß gefragt** (`advise._on_small_feet`):
   Erreicht keine von mehreren Inseln `SMALL_FOOTPRINT`, heißt es Brim — nur
-  als Vorschlag; `for_part` setzt beim Export weiter nur Summenregel und
-  schlanken Körper.
+  als Vorschlag. `for_part` fragt mit Profil jede Regel für `PART_PATHS`;
+  seine Brim-Regeln aus dem Schnitt behalten das letzte Wort.
+- **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
+  Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
+  der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über
+  `SCARF_MIN_HEIGHT`. Eine Ecke versteckt die Naht selbst.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
-  `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) und ist sie schneller als
-  `NARROW_WEB_SPEED`, wird dieses Tempo vorgeschlagen — kurze Bodenbahnen
-  zwischen Löchern reißen im Herstellertempo. Die Grenzen sind an drei
-  Modellen gemessen, die Gesamtprüfung über den Korpus prüft sie nach. Über
+  `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als
+  `NARROW_WEB_AREA` mm² davon, und ist sie schneller als `NARROW_WEB_SPEED`,
+  wird dieses Tempo vorgeschlagen — kurze Bodenbahnen zwischen Löchern reißen
+  im Herstellertempo, auch an einem großen Teil mit wenigen langen Stegen.
+  Beide Grenzen sind am Korpus geeicht. Über
   dem Herstellerprofil bremst der Vorschlag nur (`dateiformat.md`, „Auf dem
   Herstellerprofil wird nur die Abweichung geschrieben“).
+- **Kein Vorschlag überstimmt, was das Profil für denselben Zweck trägt**:
+  Mindestzeit je Schicht nur ohne eine, kein Brim über Orcas Auto-Brim
+  (`AUTO_BRIM_FLAVOURS`). Die Hersteller stimmen beides ab.
 - **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`), auch
   passende — ein Würfel schaltet die Stützen eines anderen nicht ab.
   Filamentwerte werden je tatsächlichem Slot aufgelöst und nur darin

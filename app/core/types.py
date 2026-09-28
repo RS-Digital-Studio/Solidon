@@ -1155,6 +1155,10 @@ class ShellSettings:
     """Außenwand zuerst gibt die genauere Kontur, innen zuerst die bessere
     Haftung an Überhängen."""
     seam_position: SeamPosition = "aligned"
+    scarf_seam: bool = False
+    """Setzt Anfang und Ende der Außenwand schräg übereinander, statt an einer
+    Stelle. Eine runde Außenwand hat keine Ecke, in der die Naht verschwindet;
+    so bleibt dort keine Linie stehen. Kostet etwas Druckzeit."""
     wall_generator: WallGenerator = "arachne"
     """Vorgabe ist ``arachne``: es trifft schmale Stege, die auf keine ganze
     Zahl von Bahnen aufgehen, statt eine Lücke zu lassen (§2.4)."""

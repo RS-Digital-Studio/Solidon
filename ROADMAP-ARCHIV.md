@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-28 | [Übergabe auf dem Herstellerprofil, Stufe E: ein Punkt geschlossen (28.09.2026)](#übergabe-auf-dem-herstellerprofil-stufe-e-ein-punkt-geschlossen-28092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-c-f-und-l-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Übergabe auf dem Herstellerprofil, Stufen A und B: ein Punkt geschlossen (27.09.2026)](#übergabe-auf-dem-herstellerprofil-stufen-a-und-b-ein-punkt-geschlossen-27092026) |
 | 2026-09-27 | [Durchsicht v0.5.1, dritte Runde: elf Punkte geschlossen (27.09.2026)](#durchsicht-v051-dritte-runde-elf-punkte-geschlossen-27092026) |
@@ -32908,6 +32909,57 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   geschrieben (Formatversion 35, Vorschaubilder aus demselben Lauf). Nachweis der
   Hauptsitzung: `test_examples`, `test_wording` ohne `rendered`, `test_translations`,
   `test_language_rules` und `test_tour` — 655 passed, Exit 0. `bd33620c5`.
+
+## Übergabe auf dem Herstellerprofil, Stufe E: ein Punkt geschlossen (28.09.2026)
+
+Aus [RM-281](ROADMAP.md#rm-281), Stufe E, abgeschlossen:
+
+<a id="rm-250"></a>
+
+- [x] **RM-250 — Der Brim je Teil beim Export ist eine Automatik.**
+  Gefunden am 26.09.2026 bei RM-247. `advise.for_part` setzt beim Export
+  einem einzelnen Teil einen Brim, wenn es auf weniger als `SMALL_FOOTPRINT`
+  steht oder schlank ist, auch wenn die Platte auf Schürze steht und niemand
+  „Vorschläge übernehmen" geklickt hat (seit 03.09.2026, mit Befund
+  `export.part_setting`). Roberts Vorgabe vom 26.09.2026 lautet: nur mit
+  „Vorschläge übernehmen" werden Einstellungen auf das Modell zugeschnitten,
+  sonst gehen die Standardeinstellungen zum Slicer. Zu entscheiden: Bleibt
+  die Automatik je Teil (sie verhindert, dass kleine Teile abreißen, und ist
+  im Prüfbericht benannt), oder wird sie ein Vorschlag je Teil im Druckdialog?
+  Die neue Regel für viele kleine Füße ist bewusst nur ein Vorschlag.
+
+  **Durchsicht v0.5.1 (26.09.2026, druck):** An der Schüssel stand deshalb schon bei
+  *Standard* `export.part_setting`. Drei Wege: **A** — Automatik behalten (heute): kein
+  abgerissenes Kleinteil, aber *Standard* ist nicht Standard, und der Kunde sieht den
+  Brim erst im Exportbericht. **B** — Vorschlag je Teil im Druckdialog: eine Zeile
+  „Brim · <Teil>“ mit Grund, vorbelegt angehakt wie alle; *Vorschläge übernehmen* nimmt
+  sie mit, ohne Klick geht Standard hinaus — folgerichtig zur Regel vom 26.09.2026 und
+  zum Vorschlag „kleine Füße“, der schon so gebaut ist; `_TargetedAdvice` trägt schon
+  Ziele (Spulen), ein Ziel „Teil“ wäre dieselbe Bauart. **C** — Automatik, aber vorher
+  sichtbar als gesetzte, abwählbare Zeile im Dialog. Empfehlung der Durchsicht: B.
+
+  **Entschieden am 27.09.2026 mit dem Konzept Herstellerprofil** (Entscheidung G, im
+  Wesentlichen Weg B): Ein Brim je Teil kommt nur noch mit der Übernahme des
+  Vorschlags, und dann nur an den Teilen, die ihn brauchen. Seit `aed31c787` schreibt
+  `writer._part_settings` nur noch Pfade aus `PrintSettings.accepted`; ohne Klick geht
+  Elegoos Auto-Brim hinaus. Gemessen im ElegooSlicer: Minigolf-Platte 11,67 m und
+  Waschschüssel 0,93 m Rand, jeweils gleich dem Lauf mit Elegoos Profil allein (vorher
+  8,51 und 0,40 m). **Gebaut mit Stufe E** von [RM-281](#rm-281): Ein übernommener Brim
+  steht nur an den Teilen, die ihn brauchen (`2cf02ad2d`), und die Zeile im Druckdialog
+  nennt sie („Haftung · Turm“, ab vier Teilen gezählt, alle im Tooltip). Zeile und
+  Export fragen denselben Rat je Teil (`writer.part_advice`), je Spule des Teils.
+
+  **Abgeschlossen am 28.09.2026 mit Stufe E** (`2cf02ad2d`, `074364017`, `83a8e3de1`):
+  Abgenommen am Minigolf-Satz mit einem Pilz, der ohne Stütze in die Luft druckt, in
+  ElegooSlicer, PrusaSlicer 2.9.6 und CuraEngine
+  (`output/review/gesamt-2026-09-27/stufe-e*`): Die Stütze steht nur am Pilz, die
+  Ränder der übrigen Teile sind geschlossen. Dabei zeigte sich, dass der Brim-Vorschlag
+  über Orcas Auto-Brim weniger Halt gab als dieser selbst — die feste Breite des Profils
+  (5 mm) statt der aus Höhe und Grundfläche gerechneten: an den 200 mm hohen Schäften
+  0,9 statt 1,9 m Randbahn, an der Waschschüssel 0,40 statt 0,93 m. Über dem Auto-Brim
+  der Orca-Familie schlägt Solidon deshalb keinen Brim mehr vor
+  (`advise.AUTO_BRIM_FLAVOURS`); bei PrusaSlicer und CuraEngine, die keinen haben, bleibt
+  der Vorschlag je Teil.
 
 ## Übergabe auf dem Herstellerprofil, Stufen C, F und L: ein Punkt geschlossen (27.09.2026)
 
