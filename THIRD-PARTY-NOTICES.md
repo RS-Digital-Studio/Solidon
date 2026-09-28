@@ -1,6 +1,6 @@
 # Drittanbieter-Lizenzen
 
-Erzeugt für Solidon3D 0.5.0 auf `win-amd64`.
+Erzeugt für Solidon3D 0.5.1 auf `win-amd64`.
 Diese Entwicklungsvorschau nennt die installierten Ziel-Wheels und ihre Lizenztexte.
 Die zusätzlichen nativen Laufzeitfamilien stehen erst in der Beilage des gebauten Pakets,
 erzeugt aus dessen tatsächlicher Stückliste (SBOM).
