@@ -151,6 +151,46 @@ def test_clock_runs_without_animation_or_new_progress(
         veil.deleteLater()
 
 
+def test_the_clock_repaints_the_block_not_the_whole_window(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Sekundentakt malt Symbol und Zeilen neu, nicht den ganzen Schleier (RM-258).
+
+    Mit dem ganzen Schleier malte jeder Takt das ganze Fenster darunter —
+    rund fünfzig Widgets, und neben einem rechnenden Arbeiter kostet jedes
+    einen Griff nach dem GIL. Der Schleier deckt, was unter ihm liegt, und
+    sagt es Qt, damit darunter nichts mitgemalt wird.
+    """
+    from PySide6.QtCore import Qt
+
+    import app.ui.loading as loading_module
+
+    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
+    veil = LoadingVeil()
+    try:
+        veil.resize(1600, 900)
+        veil.begin("Modell wird gelesen", at_once=True)
+        assert veil.testAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        asked: list[tuple[object, ...]] = []
+        monkeypatch.setattr(veil, "update", lambda *area: asked.append(area))
+        veil.timing._tick.timeout.emit()
+        veil.step(0.4, "Merkmale werden erkannt")
+        block = veil._block_rect()
+        assert asked and all(area == (block,) for area in asked), asked
+        assert (
+            block.width() <= loading_module.COLUMN + 1
+            and block.height() <= loading_module.BLOCK_HEIGHT + 1
+        )
+        assert veil.rect().contains(block)
+        mark_left = (veil.width() - loading_module.MARK_SIZE) / 2
+        assert (
+            block.left() <= mark_left and block.right() >= mark_left + loading_module.MARK_SIZE - 1
+        )
+    finally:
+        veil.end()
+        veil.deleteLater()
+
+
 def test_hiding_the_veil_does_not_stop_the_shared_clock(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
