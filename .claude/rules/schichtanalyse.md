@@ -149,6 +149,9 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
   Beide Grenzen sind am Korpus geeicht. Über
   dem Herstellerprofil bremst der Vorschlag nur (`dateiformat.md`, „Auf dem
   Herstellerprofil wird nur die Abweichung geschrieben“).
+- **Kein Vorschlag überstimmt, was das Profil für denselben Zweck trägt**:
+  Mindestzeit je Schicht nur ohne eine, kein Brim über Orcas Auto-Brim
+  (`AUTO_BRIM_FLAVOURS`). Die Hersteller stimmen beides ab.
 - **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`), auch
   passende — ein Würfel schaltet die Stützen eines anderen nicht ab.
   Filamentwerte werden je tatsächlichem Slot aufgelöst und nur darin

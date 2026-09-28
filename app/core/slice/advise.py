@@ -58,7 +58,7 @@ from app.core.types import (
     Severity,
     SliceResult,
 )
-from app.core.units import EPS_GEOM, is_close
+from app.core.units import EPS_GEOM, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 if TYPE_CHECKING:
@@ -150,8 +150,9 @@ CAREFUL_ACCELERATION = 2000.0
 #: geschlossen wird — bei einem Federarm ist genau das der Bruch.
 LINES_FOR_CLASSIC = 3.0
 
-#: Mindestschichtzeit in Sekunden für solche Spitzen. Weniger, und der Turm
-#: kippt in sich zusammen; mehr, und die Düse kokelt auf der Stelle.
+#: Mindestschichtzeit in Sekunden für solche Spitzen, wo sonst keine gilt.
+#: Weniger, und der Turm kippt in sich zusammen; mehr, und die Düse kokelt auf
+#: der Stelle.
 THIN_LAYER_SECONDS = 15.0
 
 #: Weiche Filamente stauchen im Antrieb, statt zu fördern. Darüber wird der
@@ -1119,7 +1120,14 @@ def _from_geometry(
             )
         )
 
-    if _has_thin_layers(result) and settings.cooling.minimum_layer_time < THIN_LAYER_SECONDS:
+    # **Nur, wo keine Mindestzeit gilt.** Genau dafür ist sie da: Der Slicer
+    # bremst jede Schicht, die schneller fertig wäre. Die Hersteller stimmen sie
+    # je Filament auf ihre Lüfter ab (Elegoo 4 s, Prusa 6 s, Curas Definitionen
+    # 8 s, im Orca-Bestand 5 bis 25 s), Solidons Stufen tragen eigene (5 bis
+    # 12 s). Mit „weniger als 15 s“ überstimmte der Vorschlag sie im Druckerplan
+    # der Gesamtprüfung 97-mal — an jedem Teil mit einer kleinen Schicht oben,
+    # auch dort, wo die Platte in dieser Höhe noch andere Teile druckt.
+    if _has_thin_layers(result) and is_zero(settings.cooling.minimum_layer_time):
         advice.append(
             _advice(
                 settings,

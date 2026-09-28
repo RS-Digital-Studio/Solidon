@@ -399,13 +399,36 @@ def test_the_minimum_layer_time_reason_stays_with_the_measurement() -> None:
     Ein gleichmäßig dünner Stab hat kleine Schichten und keine Verjüngung —
     der Satz beschrieb einen Körper, den niemand gemessen hatte.
     """
-    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "cooling.minimum_layer_time", 0.0
+    )
     rod = result_with([0.0] * 20, area=advise.THIN_LAYER_AREA / 2.0)
 
     entries = advise.advise(settings, profiles.make_profile(), rod)
 
     chosen = next(entry for entry in entries if entry.path == "cooling.minimum_layer_time")
     assert "spitz" not in str(chosen.reason), "das Teil verjüngt sich nicht, es ist überall dünn"
+
+
+def test_a_minimum_layer_time_of_the_profile_stays() -> None:
+    """Die Mindestzeit je Schicht ist die Antwort des Slicers auf kleine
+    Schichten, und die Hersteller stimmen sie auf ihre Lüfter ab (Elegoo 4 s,
+    Prusa 6 s). Vorgeschlagen wird nur, wo keine gilt — mit 15 s überstimmte
+    der Rat sie im Druckerplan der Gesamtprüfung 97-mal."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    rod = result_with([0.0] * 20, area=advise.THIN_LAYER_AREA / 2.0)
+
+    def advised(seconds: float) -> bool:
+        settings = print_settings.with_path(
+            print_settings.resolve(profile), "cooling.minimum_layer_time", seconds
+        )
+        return "cooling.minimum_layer_time" in {
+            entry.path for entry in advise.advise(settings, profile, rod)
+        }
+
+    assert not advised(4.0), "Elegoos Wert"
+    assert not advised(8.0), "Solidons Stufe"
+    assert advised(0.0), "ohne Mindestzeit legt die Düse auf weiches Material"
 
 
 # --- eine Überhanglinie, nicht zwei ---------------------------------------------

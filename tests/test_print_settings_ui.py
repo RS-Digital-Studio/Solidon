@@ -6136,7 +6136,7 @@ def test_accepted_material_advice_preserves_the_effective_filament_group(qt_app)
         settings,
         slot,
         SlotOverride(
-            cooling=replace(settings.cooling, minimum_layer_time=1, fan_speed=0.43),
+            cooling=replace(settings.cooling, minimum_layer_time=0, fan_speed=0.43),
         ),
     )
     dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=(slot,))], settings=settings)
@@ -6144,7 +6144,7 @@ def test_accepted_material_advice_preserves_the_effective_filament_group(qt_app)
     assert any(entry.path == "cooling.minimum_layer_time" for entry in dialog._current_advice())
     dialog._apply_advice()
     effective = handover.settings_for_slot(dialog.settings, dialog.session.profile, slot)
-    assert effective.cooling.minimum_layer_time > 1
+    assert effective.cooling.minimum_layer_time > 0
     assert effective.cooling.fan_speed == pytest.approx(0.43)
     assert handover.override_for(dialog.settings, slot).cooling == effective.cooling
 
@@ -6172,7 +6172,7 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
                 "nozzle_temperature": ["215"],
                 "fan_min_speed": ["43"],
                 "fan_max_speed": ["43"],
-                "slow_down_layer_time": ["1"],
+                "slow_down_layer_time": ["0"],
                 "filament_max_volumetric_speed": ["0.6"],
             }
         ),
@@ -6197,7 +6197,7 @@ def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values
     assert effective.filament.max_flow == pytest.approx(0.6)
     assert effective.temperature.nozzle == 215
     assert effective.cooling.fan_speed == pytest.approx(0.43)
-    assert effective.cooling.minimum_layer_time > 1
+    assert effective.cooling.minimum_layer_time > 0
     assert handover.override_for(dialog.settings, slot).cooling == effective.cooling
 
 
@@ -6437,6 +6437,9 @@ def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app
     settings = print_settings.with_choice(
         print_settings.resolve(profiles.make_profile()), "adhesion.kind", "brim"
     )
+    # Ohne Mindestzeit je Schicht, damit der kleine Würfel einen Rat für seine
+    # Spule bekommt (``advise`` schlägt sie nur vor, wo keine gilt).
+    settings = print_settings.with_choice(settings, "cooling.minimum_layer_time", 0.0)
     dialog = _print_advice_dialog(qt_app, [large, small], settings=settings)
     dialog._slicer_path = Path("PrusaSlicer.exe")
     dialog._refresh_advice()

@@ -6126,7 +6126,7 @@ def test_slot_advice_uses_inherited_values_and_the_adopted_group_reaches_both_ou
     from app.core.types import SlotOverride
 
     parent = _filament_profile(
-        tmp_path, "Grundlage", slow_down_layer_time=["8"], filament_max_volumetric_speed=["3"]
+        tmp_path, "Grundlage", slow_down_layer_time=["0"], filament_max_volumetric_speed=["3"]
     )
     own = _filament_profile(tmp_path, "Meine Spule", inherits=parent.stem)
     slot = MaterialSlot(0, "Meine Spule", material=str(own), material_type="PLA")
