@@ -1660,3 +1660,75 @@ def test_a_bounded_field_refuses_a_typed_number_instead_of_cutting_it(qt_app: ob
         assert field.value() == pytest.approx(100.0)
     finally:
         field.deleteLater()
+
+
+def test_a_bounded_field_rounds_one_decimal_too_many_like_any_field(qt_app: object) -> None:
+    """„12,345“ in einem Feld mit zwei Stellen wird 12,34 — nicht still der alte Wert.
+
+    Code-Review 0.5.1, U-1: ``BoundedSpin.validate`` machte jede lesbare Zahl
+    zum Zwischenstand, auch eine Stelle zu viel innerhalb der Grenzen; die
+    Eingabetaste verwarf sie dann ganz (Parameterleiste, ohne
+    ``keyboardTracking``). Gemessen wird gegen ``NumberSpin`` als Sollwert.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import BoundedSpin, NumberSpin
+
+    results: dict[str, float] = {}
+    for kind in (NumberSpin, BoundedSpin):
+        field = kind()
+        try:
+            field.setDecimals(2)
+            field.setRange(0.1, 100.0)
+            field.setValue(40.0)
+            field.setKeyboardTracking(False)
+            field.show()
+            field.setFocus()
+            field.lineEdit().selectAll()
+            QTest.keyClicks(field.lineEdit(), "12,345")
+            QTest.keyClick(field.lineEdit(), Qt.Key.Key_Return)
+            results[kind.__name__] = field.value()
+        finally:
+            field.deleteLater()
+    assert results["NumberSpin"] == pytest.approx(12.34), results
+    assert results["BoundedSpin"] == pytest.approx(results["NumberSpin"]), results
+
+
+def test_a_refusal_names_the_limit_of_the_schema_not_the_step_below(qt_app: object) -> None:
+    """Ein Feld mit „wie gemessen“ nennt die Untergrenze 0, nicht -0,01 (U-3).
+
+    Das Drehfeld reicht eine Stufe unter den Mindestwert, dort steht der
+    Sonderwert. Geprüft an allen Operationsfeldern mit ``optional`` und
+    Mindestwert: Der Satz nennt den Mindestwert des Schemas.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.ui.op_dialog import ValueField
+
+    load_operations()
+    checked = 0
+    for spec in REGISTRY.all():
+        for entry in spec.params.spec():
+            if not (entry.optional and entry.minimum is not None and entry.unit == "mm"):
+                continue
+            field = ValueField(entry, None)
+            try:
+                field.show()
+                field.spin.lineEdit().selectAll()
+                # Unter dem Mindestwert: bei einem positiven die Hälfte (ein
+                # Minuszeichen nimmt das Feld dort gar nicht an), sonst fünf darunter.
+                below = entry.minimum / 2.0 if entry.minimum > 0.0 else entry.minimum - 5.0
+                QTest.keyClicks(
+                    field.spin.lineEdit(), field.spin.textFromValue(field._as_shown(below))
+                )
+                said = field.refusal()
+                assert "Untergrenze" in said, (spec.name, entry.name, said)
+                shown = field.spin.textFromValue(field._as_shown(entry.minimum))
+                assert f"Untergrenze {shown}" in said, (spec.name, entry.name, said)
+                checked += 1
+            finally:
+                field.deleteLater()
+    assert checked, "kein Feld mit „wie gemessen“ und Mindestwert gefunden"

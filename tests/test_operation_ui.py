@@ -4320,6 +4320,39 @@ def test_the_thread_dialog_at_a_bore_names_the_thread_it_chose(
     assert values.get("size") == "M6", values
 
 
+def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QApplication) -> None:
+    """*Objekt duplizieren*, Stückzahl über dem Höchstwert: Knopf gesperrt, mit dem Satz.
+
+    Code-Review 0.5.1, U-2: Knopfzustand und ``can_accept`` fragten die
+    Ablehnung getrennt; an der Stückzahl blieb der Knopf aktiv, und der Klick
+    bewirkte nichts. Jetzt eine Quelle (``_field_refusal``).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    spec = REGISTRY.get("duplicate_object")
+    count = next(entry for entry in spec.params.spec() if entry.name == spec.produces_from)
+    assert count.maximum is not None
+    dialog = OperationDialog(spec, {"obj_1": "Würfel"})
+    try:
+        field = dialog._editors[count.name]
+        assert isinstance(field, ValueField)
+        dialog.show()
+        field.spin.setFocus()
+        field.spin.lineEdit().selectAll()
+        QTest.keyClicks(field.spin.lineEdit(), str(int(count.maximum) + 5))
+        QTest.keyClick(field.spin.lineEdit(), Qt.Key.Key_Return)
+        QApplication.processEvents()
+        said = field.refusal()
+        assert "Obergrenze" in said, said
+        assert not dialog._accept_button.isEnabled(), "der Knopf ist gesperrt"
+        assert dialog._accept_button.toolTip() == said
+        assert not dialog.can_accept(), "und Knopf und Klick sagen dasselbe"
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
 def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
     qt_app: QApplication,
 ) -> None:
