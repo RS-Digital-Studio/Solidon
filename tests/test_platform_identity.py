@@ -206,6 +206,10 @@ class _Noise:
 
     multiplier = np.uint64(0x9E3779B97F4A7C15)
 
+    def __init__(self, pattern: int = 0) -> None:
+        # Ein ungerader Faktor je Muster; Muster 0 ist das bisherige Rauschen.
+        self.multiplier = np.uint64((0x9E3779B97F4A7C15 * (2 * pattern + 1)) % 2**64)
+
     def array(self, result: object, operands: np.ndarray | None) -> object:
         values = np.asarray(result)
         if values.dtype.kind != "f":
@@ -248,9 +252,13 @@ def _operands(args: tuple[object, ...]) -> np.ndarray:
 
 
 @contextlib.contextmanager
-def platform_noise() -> Iterator[None]:
-    """Legt auf jede plattformabhängige Rechnung ein Rauschen von einem ULP."""
-    noise = _Noise()
+def platform_noise(pattern: int = 0) -> Iterator[None]:
+    """Legt auf jede plattformabhängige Rechnung ein Rauschen von einem ULP.
+
+    ``pattern`` wählt, welche Stellen wandern — eine andere Maschine in der
+    letzten Stelle. Jedes Muster ist fest: derselbe Lauf, dasselbe Rauschen.
+    """
+    noise = _Noise(pattern)
     undo: list[Callable[[], None]] = []
 
     def patch(module: Any, name: str, *, exact_on_operands: bool) -> None:
