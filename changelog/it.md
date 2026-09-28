@@ -26,7 +26,7 @@ scrive in `website/version.json`.
 - I livelli di qualità nella finestra di stampa appaiono ora nella lingua dell'interfaccia.
 - Anche la velocità degli spostamenti a vuoto viene dalla stampante: la Centauri Carbon 2 si sposta a 500 invece di 150 mm/s, come nel profilo di Elegoo.
 - Solidon prende l'angolo di sbalzo dal profilo del produttore della stampante: 60 invece di 45 gradi per Elegoo, Bambu e Creality. Smussi e pendenze lievi non ricevono più supporti inutili.
-- Se hai misurato lo sbalzo della tua stampante, anche lo slicer mette i supporti solo da quell'angolo, finché valgono l'altezza dello strato e la larghezza di linea della misura.
+- Se hai misurato lo sbalzo della tua stampante, anche lo slicer mette i supporti solo da quell'angolo, finché valgono l'altezza dello strato e la larghezza del cordone della misura.
 - Anche il rapporto calcola ora gli sbalzi con l'angolo a partire dal quale il tuo profilo dello slicer mette i supporti.
 - Le impostazioni di stampa mostrano ciò che viene stampato: la base è il profilo del produttore, i tuoi valori sono evidenziati e si ripristinano uno per uno.
 - Il piatto di stampa si sceglie nelle impostazioni di stampa e la temperatura del piano lo segue. Se il produttore non ammette il piatto per il tuo filamento, Solidon lo dice prima.
@@ -40,7 +40,7 @@ scrive in `website/version.json`.
 - La velocità del primo strato vale ora anche per il suo riempimento. Prima lo slicer stendeva il fondo alla velocità del produttore, 105 mm/s sulla Centauri Carbon 2.
 - Con PrusaSlicer la stampa inizia ora come con Prusa stessa: con livellamento del piano, linea di spurgo e controllo della stampante.
 - Il PETG arriva ora a PrusaSlicer come PETG, non più come PLA.
-- Se il primo strato ha passaggi stretti, anche pochi e lunghi su un pezzo grande, Solidon propone di stenderlo a 50 mm/s. Così le linee corte aderiscono meglio.
+- Se il primo strato ha tratti stretti, anche pochi e lunghi su un pezzo grande, Solidon propone di stenderlo a 50 mm/s. Così le linee corte aderiscono meglio.
 - Solidon propone un «Tempo minimo per strato» più lungo solo dove il tuo profilo non ne ha uno. Prima il suggerimento arrivava su quasi ogni pezzo con uno smusso o una punta.
 - Dove il tuo slicer limita già la velocità in base al flusso volumetrico, Solidon non propone più un proprio limite di velocità.
 - Se adotti i valori di un profilo di filamento e poi cambi filamento, tornano a valere i valori del nuovo.
@@ -54,14 +54,14 @@ scrive in `website/version.json`.
 - Le impostazioni di stampa non offrono più il flusso volumetrico per Cura, perché Cura non lo legge.
 - Nuove: le Creality Ender-3 V3 SE e V3 KE. Finora una SE riceveva i valori della molto più veloce Ender-3 V3.
 - Un soffitto sopra un canale d'acqua o un tunnel non richiama più supporti sul modello. Se nient'altro li richiede sul modello, Solidon li propone solo dal piano.
-- Nuovo suggerimento «Tenere liberi i canali»: applicato, il passaggio blocca i supporti nei canali in ogni slicer supportato. Anche la finestra di Cura riceve il blocco e i valori per pezzo.
+- Nuovo suggerimento «Tenere liberi i canali»: applicato, la consegna blocca i supporti nei canali in ogni slicer supportato. Anche la finestra di Cura riceve il blocco e i valori per pezzo.
 - I supporti a griglia arrivano allo slicer come vera griglia, con la direzione che cambia a ogni strato, invece che come linee sciolte che si spostano in stampa.
 - Se un pezzo poggia su molti piedini, Solidon propone un brim dove il tuo slicer non ne calcola uno da sé, anche se i piedini insieme avrebbero superficie sufficiente.
 - Una striscia stretta e inclinata lungo la parete esterna non conta più nel rapporto come un lungo ponte.
 - Il rapporto mostra l'avviso di calibrare le tolleranze del tuo materiale solo sui modelli con accoppiamenti. Solo lì Solidon le usa.
 - Il passaggio a Cura trasmette i primi strati senza ventola come avvio graduale. L'avviso arriva solo se il file di stampa finito si discosta davvero.
 - Sui modelli grandi, «Dividi il modello» trova la giunzione fino a due volte più in fretta, e su quelli multicolore in una frazione del tempo. La divisione avviene come prima.
-- Se Solidon divide automaticamente un modello in tre o più pezzi, i nomi vengono numerati e indicano i connettori, per esempio «Listello 2 di 3 · Spine e fori».
+- Se Solidon divide automaticamente un modello in tre o più pezzi, i nomi vengono numerati e indicano i connettori, per esempio «Listello da parete 2 di 3 · Spine e fori».
 - Una vite, un dado o una guarnizione stampati dal catalogo dei blocchi non contano più nel rapporto come un corpo frammentato. È un pezzo a sé, ed è voluto.
 - Viti e dadi stampati hanno gioco anche sotto la testa e sull'appoggio, e restano svitabili anche se stampati insieme al pezzo. I progetti più vecchi segnalano la modifica all'apertura.
 - Con una vite a testa svasata dal catalogo dei blocchi, un corpo fatto di facce e spigoli resta stagno all'esportazione: pezzo e vite entrano nel file ciascuno chiuso.
@@ -85,7 +85,7 @@ scrive in `website/version.json`.
 - La maniglia all'estremità di un'asola si afferra in qualsiasi punto dell'apertura, e al primo trascinamento non salta più verso il puntatore.
 - Le asole portano con sé gli smussi e l'imboccatura obliqua quando vengono spostate o duplicate. Prima gli smussi restavano nel punto vecchio.
 - Una tasca per magnete del catalogo dei blocchi si può spostare, duplicare, moltiplicare e rimuovere, insieme al labbro che trattiene il magnete.
-- Su una tasca per magnete, «Modifica foro» con «Includi svasatura, gradini e restringimento» cambia il diametro insieme al labbro. «Solo diametro del foro» mantiene l'apertura e avvisa se è stretta.
+- Su una tasca per magnete, «Modifica foro» con «Includi svasatura, gradini e restringimento» cambia il diametro con il labbro. «Solo diametro del foro» mantiene l'apertura e avvisa se diventa stretta.
 - Posizionata obliquamente rispetto alla faccia, l'apertura di una tasca per magnete, di un foro per vite o di una sede per cuscinetto resta libera. Prima un cuneo di materiale la copriva.
 - Se una tasca per magnete o un attacco a buco di serratura sta inclinato rispetto alla faccia, Solidon avvisa che il labbro tiene solo da un lato e propone «Correggi l'inserimento».
 - Se un blocco come una tasca per magnete non asporta nulla nel punto scelto, Solidon lo segnala e consiglia di fare clic sulla faccia.
@@ -100,8 +100,8 @@ scrive in `website/version.json`.
 ### Raccordi e smussi
 
 - La scelta di spigoli «Orizzontale», «Alto» o «Basso» non prende più il bordo di un foro laterale. Se lo vuoi, sceglilo da solo; i progetti più vecchi calcolano come salvati.
-- Su un modello importato il bordo di un foro viene raccordato o smussato in profondità come su un pezzo costruito. Prima, con raggi grandi, il raccordo veniva fino a un quinto troppo piatto.
-- Se un raggio o uno smusso non sta su ogni spigolo di una scelta come «Tutti» o «Verticale», Solidon lavora gli altri e mostra con «Mostra il punto» dove non sta, invece di rifiutare.
+- Su un modello importato il bordo di un foro viene raccordato o smussato alla stessa profondità di un pezzo costruito. Prima, con raggi grandi, il raccordo veniva fino a un quinto troppo piatto.
+- Se la quota non sta su ogni spigolo di una scelta come «Tutti» o «Verticale», Solidon lavora quelli in cui sta e mostra gli altri con «Mostra il punto», invece di rifiutare.
 
 ### Quote nella vista
 
