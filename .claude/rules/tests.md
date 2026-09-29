@@ -71,8 +71,9 @@ Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 - **`filterwarnings = ["error"]`**: Eine Warnung wird behoben, nicht
   unterdrückt. Ausnahmen nur für unbehebbaren Fremdcode, mit Meldungstext
   **und** auslösendem Modul, dem Nachweis, dass eigener Code sie nicht
-  auslöst, und einem Kommentar, wann sie wegfällt (das zeigt der wöchentliche
-  CI-Lauf gegen die neuesten Versionen).
+  auslöst, und einem Kommentar, wann sie wegfällt (das zeigt der Job „Neueste
+  Versionen“ in `build.yml`, der nur läuft, solange das Repository öffentlich
+  ist).
 
 ### Isolation heißt Betriebslage, nicht Nullzustand
 

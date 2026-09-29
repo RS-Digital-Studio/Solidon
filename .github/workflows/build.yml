@@ -7,8 +7,10 @@
 # Pytest-Sammlung bestimmt die vollständige Menge, Laufzeittabellen verteilen
 # sie nur. Fenster laufen je Datei in einem frischen Prozess. Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
-# Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben löst
-# wöchentlich frei auf und meldet, was eine neue Version bricht.
+# Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
+# `latest`) löst frei auf und meldet, was eine neue Version bricht — wöchentlich
+# und beim Handstart mit `check_latest`, aber nur, solange das Repository
+# öffentlich ist (siehe unten).
 #
 # Ein Push prüft nur Ubuntu; die volle Matrix mit Paketen läuft bei Tags und
 # beim Handstart. Signiert wird getrennt davon: Windows lokal über
