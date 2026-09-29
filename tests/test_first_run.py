@@ -9,15 +9,11 @@ from typing import Any
 from unittest import mock
 
 import pytest
+from PySide6.QtWidgets import QApplication
 
 from app.core import activation, feedback, tools, updates
 from app.core import report as reports
 from app.core.backends import llm
-
-pytest.importorskip("PySide6")
-
-from PySide6.QtWidgets import QApplication
-
 from app.ui import first_run
 from app.ui.first_run import FirstRunDialog, should_run
 from app.ui.main_window import MainWindow

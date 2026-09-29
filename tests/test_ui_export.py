@@ -7,9 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (

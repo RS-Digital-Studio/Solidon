@@ -1301,7 +1301,6 @@ def test_subdivision_stays_under_three_seconds() -> None:
 
     from app.core.geom.mesh_ops import subdivided
 
-    pytest.importorskip("manifold3d")
     mesh = medium_mesh()
     # Halbe vorhandene Kantenlänge: Das vervierfacht die Dreiecke und ist damit
     # dieselbe Arbeit, die das alte ``refine(2)`` gemessen hat. Die vorhandene
@@ -1324,7 +1323,6 @@ def test_evening_out_a_mesh_stays_under_three_seconds() -> None:
 
     from app.core.geom.mesh_ops import uniform
 
-    pytest.importorskip("manifold3d")
     mesh = medium_mesh()
     # Halbe vorhandene Kantenlänge: Das vervierfacht die Dreiecke und ist damit
     # dieselbe Arbeit, die das alte ``refine(2)`` gemessen hat. Die vorhandene

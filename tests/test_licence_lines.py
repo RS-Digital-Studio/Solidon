@@ -10,9 +10,6 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.core import activation

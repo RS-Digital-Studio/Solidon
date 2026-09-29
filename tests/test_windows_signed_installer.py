@@ -274,7 +274,6 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         sign_release,
         "verify_signature_identity",
         lambda *args: state["checks"].append("identity"),
-        raising=False,
     )
     state["args"] = {
         "repository": REPOSITORY,
@@ -417,7 +416,7 @@ def test_failed_authenticode_timestamp_or_identity_keeps_the_original_exe(
     def reject(*args: Any) -> None:
         raise sign_release.SigningError("Ungültige Signatur — nicht weiterbauen.")
 
-    monkeypatch.setattr(sign_release, step, reject, raising=False)
+    monkeypatch.setattr(sign_release, step, reject)
     with pytest.raises(sign_release.SigningError, match="Signatur"):
         tool.prepare(**ci_input["args"])
     application = ci_input["args"]["work"] / "stage/dist/Solidon3D/Solidon3D.exe"

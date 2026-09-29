@@ -14,9 +14,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QLabel, QWidget

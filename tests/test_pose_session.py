@@ -16,9 +16,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.pose import armature_from_text

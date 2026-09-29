@@ -15,10 +15,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-pytest.importorskip("scipy")
-
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtWidgets import QApplication
 

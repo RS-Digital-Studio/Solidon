@@ -6,9 +6,6 @@ import threading
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import (
     QApplication,

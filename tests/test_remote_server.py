@@ -24,9 +24,6 @@ from contextlib import suppress
 from typing import Any
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QCoreApplication
 
 from app.core.agent import remote
@@ -432,7 +429,7 @@ def test_busy_rejection_never_waits_for_request_bytes(
             thread.start()
         bridge.wait_for_calls(workers)
         # Der alte Weg wartet an dieser Stelle eine volle Sekunde in ``recv``.
-        monkeypatch.setattr(remote_server, "BUSY_REJECT_TIMEOUT", 1.0, raising=False)
+        monkeypatch.setattr(remote_server, "BUSY_REJECT_TIMEOUT", 1.0)
         silent = socket.create_connection(("127.0.0.1", running.port), timeout=2.0)
         time.sleep(0.05)
 

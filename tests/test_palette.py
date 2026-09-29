@@ -159,7 +159,6 @@ def test_a_legend_field_carries_readable_text_on_every_step() -> None:
     3,47 bei ``#21918c`` und 2,56 bei ``#28ae80``. Verglichen wird jetzt, was
     der Vergleich entscheiden soll: die zwei Kontraste gegeneinander.
     """
-    pytest.importorskip("PySide6")
 
     from app.ui.analysis_bar import _readable_on
 

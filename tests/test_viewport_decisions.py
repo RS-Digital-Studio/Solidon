@@ -51,11 +51,8 @@ import weakref
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
-
-pytest.importorskip("PySide6")
-
 import numpy as np
+import pytest
 import trimesh
 from PySide6.QtWidgets import QApplication
 
@@ -8450,7 +8447,7 @@ def test_a_large_new_scene_is_prepared_outside_the_qt_thread(
 
     monkeypatch.setattr(module, "feature_edges", edges)
     monkeypatch.setattr(module, "face_components", components)
-    monkeypatch.setattr(module, "SCENE_PREPARATION_ABOVE", 0, raising=False)
+    monkeypatch.setattr(module, "SCENE_PREPARATION_ABOVE", 0)
 
     viewport = Viewport()
     renderer = RecordingRenderer()
@@ -8512,7 +8509,7 @@ def test_switching_back_and_forth_between_two_results_prepares_each_only_once(
         return real_edges(*args, **kwargs)
 
     monkeypatch.setattr(module, "feature_edges", edges)
-    monkeypatch.setattr(module, "SCENE_PREPARATION_ABOVE", 0, raising=False)
+    monkeypatch.setattr(module, "SCENE_PREPARATION_ABOVE", 0)
 
     viewport = Viewport()
     renderer = RecordingRenderer()
@@ -8611,7 +8608,7 @@ def test_the_shadow_of_many_pieces_falls_outside_the_qt_thread_and_keeps_its_act
     before = np.asarray(actor.points).copy()
     added = len(renderer.entries("shadow:obj_1"))
 
-    monkeypatch.setattr(module, "SHADOW_PROJECTION_ABOVE", 0, raising=False)
+    monkeypatch.setattr(module, "SHADOW_PROJECTION_ABOVE", 0)
     seen.clear()
     renders = renderer.renders
     # Die Kamera auf die andere Seite: Das Licht folgt ihr, der Schatten auch.

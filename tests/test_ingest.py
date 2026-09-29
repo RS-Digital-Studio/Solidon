@@ -641,7 +641,7 @@ def test_a_3mf_with_too_many_archive_entries_is_refused(
 ) -> None:
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2, raising=False)
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2)
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as container:
         for index in range(3):
@@ -675,7 +675,7 @@ def test_a_zip64_directory_cannot_hide_entries_from_the_preflight(
 ) -> None:
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2, raising=False)
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2)
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as container:
         for index in range(3):
@@ -828,8 +828,8 @@ def test_a_3mf_with_an_extreme_compression_ratio_is_refused(
 ) -> None:
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 1, raising=False)
-    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0, raising=False)
+    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 1)
+    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0)
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
         container.writestr("3D/3dmodel.model", bytes(10_000))

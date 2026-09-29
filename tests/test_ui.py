@@ -18,9 +18,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6 import QtWidgets
 from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QContextMenuEvent, QKeySequence, QShortcut
@@ -15317,9 +15314,7 @@ def test_the_theme_stands_before_anything_is_shown(
     monkeypatch.setattr(app_module, "install_crash_logging", lambda: None)
 
     shown: list[bool] = []
-    monkeypatch.setattr(
-        "app.ui.dialogs.show_expired_demo", lambda state: shown.append(True), raising=False
-    )
+    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda state: shown.append(True))
 
     try:
         assert app_module.main([]) == 1, "eine abgelaufene Demo startet nicht"
@@ -15355,7 +15350,7 @@ def test_the_program_start_configures_https_before_reading_the_licence(
         "state",
         lambda: order.append("licence") or gone,
     )
-    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda _state: None, raising=False)
+    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda _state: None)
     monkeypatch.setattr(app_module, "install_crash_logging", lambda: None)
 
     assert app_module.main([]) == 1

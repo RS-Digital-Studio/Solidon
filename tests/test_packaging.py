@@ -1134,9 +1134,6 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
     hätte für diese Sprache stillschweigend nichts eingepackt, und ``load``
     findet die Variante zur Laufzeit selbst.
     """
-    import pytest
-
-    pytest.importorskip("PySide6")
     from PySide6.QtCore import QLibraryInfo
 
     from app.i18n.catalog import available_languages
