@@ -91,8 +91,8 @@ aus seinem Slicer: Richtung (nicht Normale), Außenseiten angleichen, geschlosse
 (nicht wasserdicht), auf einem Raster (nicht Voxelstufe), Vereinigen oder
 Abziehen (nicht boolesch), jede Kante sichtbar (nicht Facetten), ohne Zufall
 (nicht deterministisch). Begründet bleiben *Slot* im 3MF-Weg,
-*Extrusionsbreite* an der Wandstärkenleiter (Handbuch-Glossar; Angleichung an
-*Bahnbreite* offen unter RM-084) und *Rasterweite* hinter der Klappe.
+*Extrusionsbreite* an der Wandstärkenleiter (Handbuch-Glossar; die Angleichung an
+*Bahnbreite* führt RM-084) und *Rasterweite* hinter der Klappe.
 `test_wording::test_no_customer_text_uses_a_designer_word` hält die Wortliste
 für Quelle und Englisch, `test_a_quoted_control_is_named_as_the_control_says`,
 dass ein zitierter Knopf in jeder Sprache so heißt wie der Knopf.

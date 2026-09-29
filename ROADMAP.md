@@ -357,6 +357,10 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Abschluss, der den Riss nur verdeckt, gehört ausdrücklich **nicht** dazu — er machte das Tor
   grün, ohne dass jemand etwas gemessen hätte.
 
+  **Dazu aus `.claude/rules/wartezeit.md`:** `weak_slot` je Knopf an einer Knopfgruppe
+  riss `test_widget_lifetime` mit einer Zugriffsverletzung; die Regel verlangt deshalb den
+  gebundenen Empfänger an `QButtonGroup.buttonClicked`. Die Ursache ist nicht zugeordnet.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-ein-kunde-beim-öffnen-der-beispiele-sieht-23082026).
 
 <a id="rm-050"></a>
@@ -3017,6 +3021,13 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Offen bleibt der Zeile-für-Zeile-Durchgang durch den Bestand vor 0.5.0 in Anwendung und
   Website.
 
+  **Dazu, bisher nur im Register und in den Regeln:** aus der Sollliste der Durchsicht
+  0.5.0 A16 (das Presseversprechen „STL wird exakter Körper, STEP heraus“ gegen den Stand
+  von P4.0 halten), A23 (Leistungszahlen der Presse gegen eigene Messungen) und C12 (Namen
+  der Slicer-Übernahme); dazu *Extrusionsbreite* (Wandstärkenleiter, Handbuch-Glossar)
+  gegen *Bahnbreite* (Druckeinstellungen) vereinheitlichen
+  (`.claude/rules/oberflaeche.md`).
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#rückmeldung-und-freiwillige-unterstützung-gehören-in-die-app-startfläche-31082026).
 
 <a id="rm-090"></a>
@@ -3081,7 +3092,8 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   sie belegen ihre Motive und die jeweiligen Reparaturen. Die vollständige
   Welle 2 „kundenwege" mit allen folgenden Abnahmekriterien ist damit noch
   nicht gefahren. Was nur das echte Fenster zeigt (Schrift, Vulkan-Fläche, Fokus,
-  Bildschirmleser, gefühlte Wartezeit): die Punkte RM-197 bis RM-200 und RM-204
+  Bildschirmleser, gefühlte Wartezeit, Navigation mit Drehpunkt nach Änderungen an
+  `_NAVIGATION` oder `camera_step`): die Punkte RM-197 bis RM-200 und RM-204
   (sie bleiben je eigene Punkte und schließen in diesem Lauf; RM-174 und RM-205
   sind ohne ihn geschlossen, siehe Archiv);
   dazu ohne eigenen Punkt die Einladungszeile und Rückfragekarte über der

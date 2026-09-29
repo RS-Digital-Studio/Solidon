@@ -4,8 +4,8 @@ Der Viewport (§18) beschreibt, was im Bild steht; der Renderer entscheidet,
 wie es auf den Schirm kommt. Er steht hinter einem Vertrag (`api.py`), und
 hinter dem Vertrag steht **einer**: pygfx über wgpu — Vulkan, DX12 und
 Metal, in virtuellen Maschinen WARP oder lavapipe (Entscheidung Robert, nach
-einer Abnahme mit zwei Renderern). VTK direkt war die Messlatte und ist
-ausgebaut, PyVista ebenso; das Paket `vtk` ist ganz aus der Anwendung. Wer
+einer Abnahme mit zwei Renderern). Das Paket `vtk` gehört nicht zur
+Anwendung. Wer
 einen zweiten Renderer braucht, baut ihn hinter `api.py` und misst ihn mit
 `tests/test_render_contract.py`.
 

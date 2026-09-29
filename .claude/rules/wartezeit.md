@@ -352,8 +352,8 @@ Methode; Werte aus einer Schleife über
 `weak_slot(self, Editor._tool_chosen, name)` (`app/ui/leash.py`). **Haben die
 Knöpfe eine Gruppe, schlägt sie `weak_slot`:** ein Empfänger an
 `QButtonGroup.buttonClicked` als gebundene Methode (`ToolStrip._on_button`) —
-`weak_slot` je Knopf riss `test_widget_lifetime` mit einer Zugriffsverletzung,
-die Ursache ist offen.
+`weak_slot` je Knopf riss `test_widget_lifetime` mit einer Zugriffsverletzung
+(Ursache bei RM-021).
 
 * **Entscheidend ist, wer den Rückruf aufbewahrt:** Frei ist die gebundene
   Methode nur an einer Qt-Verbindung; in einem Python-Container

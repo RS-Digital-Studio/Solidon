@@ -334,7 +334,9 @@ Schema auf welche Taste was tut, und wo die Kamera danach steht. Was kein Test
 prüft, ist die Kette davor: Qt-Ereignis → Widget des Renderers →
 `PointerEvent`. Offscreen bleibt `Viewport.renderer` auf `None`, die Suite
 kann das Fenster also gar nicht erst nach der Bewegung fragen.
-`.claude/.state/steuerung-2026-09-03/` schließt die Lücke: ein echtes Fenster,
+`.claude/.state/steuerung-2026-09-03/` schloss die Lücke, solange es VTK gab (seit
+der Ablösung durch pygfx lief er nicht mehr; am 29.09.2026 mit dem Drehpunkt-Prüfstand
+entfernt, Stand in der Git-Historie): ein echtes Fenster,
 echte Ereignisse, die Kamerastellung vorher und nachher. Zu fahren nach jeder
 Änderung an `_NAVIGATION`, am Navigator oder an `camera_step` — **und vorher
 umzubauen**: Der Prüfstand schickt noch VTK-Ereignisse an einen Interactor,
