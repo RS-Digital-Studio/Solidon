@@ -7,8 +7,6 @@ from typing import Any
 
 import pytest
 
-pytest.importorskip("PySide6")
-
 
 def test_an_unreadable_settings_file_keeps_the_language_of_the_system(
     monkeypatch: Any, tmp_path: Path

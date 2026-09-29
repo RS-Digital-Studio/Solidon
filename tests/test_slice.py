@@ -962,7 +962,7 @@ def test_the_search_lays_a_flat_plate_down_instead_of_standing_it_up() -> None:
     liegende Lage ihre 1200 mm² und gewinnt gegen die 30-mm-hohe Kante.
     """
     plate = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 0.4)))
-    found = search(plate, count=60, seed=3)
+    found = search(plate, count=60)
 
     assert found.mesh.bounds.size[2] == pytest.approx(0.4, abs=0.1), "flach auf der Platte"
     assert found.best.first_layer_area == pytest.approx(1200.0, rel=0.05)
@@ -989,7 +989,7 @@ def test_a_part_that_already_stands_without_support_is_not_searched(
 
     monkeypatch.setattr(orientation, "judge", counting)
     box = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 20.0)))
-    found = search(box, count=200, seed=1)
+    found = search(box, count=200)
 
     assert len(calls) == 1, "nur die Ausgangslage wurde geschnitten"
     assert found.tried == 1
@@ -1025,7 +1025,7 @@ def test_the_search_slices_only_the_finalists_of_the_footprint_ranking(
     stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
     stem.apply_translation((0.0, 0.0, 10.0))
     mushroom = MeshData.of(trimesh.util.concatenate([cap, stem]))
-    found = search(mushroom, count=200, seed=2)
+    found = search(mushroom, count=200)
 
     from app.core.geom.orient import AXES
 
@@ -1042,7 +1042,7 @@ def test_a_standing_plate_is_laid_down_by_the_search() -> None:
     standing = MeshData.of(plate)
     assert standing.bounds.size[2] > 20.0, "sie steht wirklich"
 
-    found = search(standing, count=60, seed=3)
+    found = search(standing, count=60)
 
     assert found.mesh.bounds.size[2] == pytest.approx(0.4, abs=0.1), "flach auf der Platte"
     assert found.best.first_layer_area == pytest.approx(1200.0, rel=0.05)
@@ -1065,7 +1065,7 @@ def test_a_dense_body_is_judged_on_a_smaller_twin(monkeypatch: pytest.MonkeyPatc
     body = MeshData.of(dense)
     assert body.triangle_count > orientation.SEARCH_TRIANGLES
 
-    found = search(body, count=24, seed=4)
+    found = search(body, count=24)
 
     assert seen and seen[0] == body.triangle_count, "das volle Netz ging in die Dezimierung"
     assert found.mesh.triangle_count == body.triangle_count, "gedreht wird das echte Netz"

@@ -241,11 +241,8 @@ class Package:
 def _sha256(path: Path) -> str:
     """Die Prüfsumme einer Datei — in Blöcken, nicht am Stück: ein
     Installationspaket ist ein paar hundert Megabyte."""
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        while chunk := stream.read(1 << 20):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def kind_of(path: Path) -> str:

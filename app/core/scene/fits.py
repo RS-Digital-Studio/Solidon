@@ -309,6 +309,23 @@ FITTING_OPS: frozenset[str] = frozenset(
 )
 
 
+def numbered_name(fits: Collection[Fit], key: str) -> str:
+    """Der erste Name ``key_1``, ``key_2`` …, den noch keine dieser Passungen trägt.
+
+    Zwei Passungen mit gleichem Namen wären eine: Der Bericht nennt eine
+    Passung beim Namen, und die Karte der Passungen baut ``{name: fit}`` —
+    die zweite Verbindung fiele still aus der Prüfung. Wer zwei Stifte setzt,
+    hat zwei Paare. Gegenstücke und das Agentenwerkzeug ``add_fit`` benennen
+    hierüber; der Deckel zählt nach dem Namen der Objekte
+    (``lid_flow.unique_name``).
+    """
+    used = {entry.name for entry in fits}
+    number = 1
+    while f"{key}_{number}" in used:
+        number += 1
+    return f"{key}_{number}"
+
+
 def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str, ...]:
     """Welche Passungen diese Körper tragen — eingetragene und gebaute.
 

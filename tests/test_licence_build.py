@@ -140,7 +140,6 @@ def test_the_workflow_builds_the_licence_module_before_packaging() -> None:
     assert tool < packaging
 
 
-@pytest.mark.slow
 def test_every_activation_module_translates_to_c(tmp_path: Path) -> None:
     """Cython muss jedes Modul des Prüfpakets schlucken — das ist der Teil
     des Baus, der ohne C-Compiler prüfbar ist, und der, an dem eine neue

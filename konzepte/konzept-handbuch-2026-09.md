@@ -45,10 +45,11 @@ Statustabelle in §9. Mehr braucht es nicht; die Nachweise liegen unter
   Das Werkzeug öffnet ein echtes Fenster; die Bilder danach ansehen, erst
   dann gilt ein Schritt als gebaut.
 
-### Stand und nächster Schritt
+### Verlauf bis 0.5.1
 
-Diese Liste wird nach jedem Schritt fortgeschrieben, damit eine Sitzung, die
-am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
+Die Liste wurde nach jedem Schritt fortgeschrieben, damit eine Sitzung, die
+am Nutzungslimit endete, keine Arbeit mitnahm (Robert, 27.09.2026). Sie ist
+mit 0.5.1 abgeschlossen; was offen ist, steht bei RM-283.
 
 **Releaseabschluss:** Der Stand bis `559412ac4` liegt auf `main` und in
 `v0.5.1`; die folgenden Einträge dokumentieren die Entwicklung davor.
@@ -582,7 +583,7 @@ Nachweis.
   ohne Hilfe durch. Der Interessent aus dem Anlass ist dafür der natürliche
   erste Leser.
 
-## §12 Plan bis 0.5.1
+## §12 Plan bis 0.5.1 (abgeschlossen mit 0.5.1)
 
 Robert, 27.09.2026 abends: „alle punkte davon sollen noch in 0.5.1“ — alle
 offenen Pakete aus §9. Weil das viel ist, laufen drei Stränge nebeneinander.

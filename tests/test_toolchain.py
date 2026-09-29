@@ -1829,8 +1829,9 @@ def test_the_version_file_waits_for_its_packages(monkeypatch: pytest.MonkeyPatch
 
     version = upload.LOCAL_ROOT / "version.json"
     versprochen = upload.promised_files(json.loads(version.read_text(encoding="utf-8")))
-    if not versprochen:
-        pytest.skip("version.json führt noch keine Pakete — vor dem Release richtig")
+    assert versprochen, (
+        "die veröffentlichte version.json verspricht kein Paket — make_download.py hat sie geleert?"
+    )
 
     dateien = [version, upload.LOCAL_ROOT / "index.html"]
 

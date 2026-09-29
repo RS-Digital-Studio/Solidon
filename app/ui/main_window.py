@@ -1828,9 +1828,11 @@ def _sketch_param(op_name: str) -> str:
 #: Die Operation, in die der Ziehgriff der Querschau mündet (§30.1).
 #:
 #: Er zieht eine **Höhe** aus einem Umriss, und das ist genau das, was
-#: ``sketch_extrude`` tut. Dieselbe Vorwahl, die auch der Dialog bei „Fertig"
-#: trifft (``op_dialog.DEFAULT_SKETCH_USE``) — der Griff ist die kurze Hand
-#: für den häufigsten der fünf Wege, nicht ein sechster.
+#: ``sketch_extrude`` tut — aus einer gezeichneten Fläche wird im Normalfall
+#: ein Körper, indem man sie aufzieht. Der Griff ist die kurze Hand für den
+#: häufigsten der fünf Wege, nicht ein sechster; unter *Mehr* steht er deshalb
+#: vorn und nicht nach Titel, wo „Entlang eines Bogens führen", der seltenste
+#: Fall, oben stünde (:meth:`MainWindow._fill_finish_menu`).
 PULL_OP = "sketch_extrude"
 
 #: Wie der Höhenparameter dieser Operation heißt.
@@ -4874,7 +4876,7 @@ class MainWindow(QMainWindow):
         # viele Objekte darin liegen. „Verrunden" war damit bei einem Netz
         # anklickbar, und der Satz „Der gewählte Körper ist ein Netz" kam erst
         # nach dem ausgefüllten Dialog (Regel 19: keine Sackgassen).
-        kinds = self._kinds_of_selection(result)
+        kinds = self._kinds_of_selection()
 
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
@@ -5190,12 +5192,11 @@ class MainWindow(QMainWindow):
             # nichts geht, sondern eines, das noch gefüllt wird.
             handle.setVisible(not entries or any(entry.isEnabled() for entry in entries))
 
-    def _kinds_of_selection(self, result: Any) -> list[str]:
+    def _kinds_of_selection(self) -> list[str]:
         """Die Bauart jedes gewählten Körpers — Netz oder exakt.
 
         Gefragt wird der Baum: er hält Auswahl und Auswertung, und sein
-        Kontextmenü braucht dieselbe Antwort. ``result`` bleibt im Aufruf, weil
-        das Fenster hier schon eines in der Hand hat — der Baum hat dasselbe.
+        Kontextmenü braucht dieselbe Antwort.
         """
         return self.object_tree.kinds_of_selection()
 
@@ -6168,6 +6169,33 @@ class MainWindow(QMainWindow):
             {**plan.draft.params, "source": source_id}, answered, choices=plan.choices
         )
 
+    def _open_for_project(self, dialog: QDialog, on_finished: Callable[[bool], None]) -> None:
+        """Ein Dialog, der dem offenen Projekt gehört.
+
+        Wechselt das Projekt, wird er verworfen; geantwortet wird **genau
+        einmal**, danach hängt er nicht mehr am Projektsignal. ``on_finished``
+        bekommt, ob der Dialog angenommen wurde **und** das Projekt noch
+        dasselbe ist — eine Antwort für ein geschlossenes Projekt gilt nicht.
+        Öffnen bleibt beim Aufrufer.
+        """
+        project = self.session.project
+        completed = False
+
+        def project_changed() -> None:
+            if self.session.project is not project:
+                dialog.reject()
+
+        def finished(code: int) -> None:
+            nonlocal completed
+            if completed:
+                return
+            completed = True
+            self.session.projectChanged.disconnect(project_changed)
+            on_finished(code == QDialog.DialogCode.Accepted and self.session.project is project)
+
+        self.session.projectChanged.connect(project_changed)
+        dialog.finished.connect(finished)
+
     def _open_step_dialog(
         self,
         values: Mapping[str, Any],
@@ -6194,28 +6222,11 @@ class MainWindow(QMainWindow):
             choices=choices,
         )
 
-        def project_changed() -> None:
-            if self.session.project is not project:
-                dialog.reject()
-
-        completed = False
-
-        def finished(code: int) -> None:
-            nonlocal completed
-            if completed:
-                return
-            completed = True
-            self.session.projectChanged.disconnect(project_changed)
-            result = (
-                dialog.values()
-                if code == QDialog.DialogCode.Accepted and self.session.project is project
-                else None
-            )
-            answered(result)
+        def finished(accepted: bool) -> None:
+            answered(dialog.values() if accepted else None)
             dialog.deleteLater()
 
-        self.session.projectChanged.connect(project_changed)
-        dialog.finished.connect(finished)
+        self._open_for_project(dialog, finished)
         dialog.open()
 
     def _open_outline_dialog(
@@ -6249,28 +6260,11 @@ class MainWindow(QMainWindow):
             answered(None)
             return
 
-        def project_changed() -> None:
-            if self.session.project is not project:
-                dialog.reject()
-
-        completed = False
-
-        def finished(code: int) -> None:
-            nonlocal completed
-            if completed:
-                return
-            completed = True
-            self.session.projectChanged.disconnect(project_changed)
-            result = (
-                dialog.values()
-                if code == QDialog.DialogCode.Accepted and self.session.project is project
-                else None
-            )
-            answered(result)
+        def finished(accepted: bool) -> None:
+            answered(dialog.values() if accepted else None)
             dialog.deleteLater()
 
-        self.session.projectChanged.connect(project_changed)
-        dialog.finished.connect(finished)
+        self._open_for_project(dialog, finished)
         dialog.open()
 
     def action_save(self) -> None:
@@ -10396,7 +10390,7 @@ class MainWindow(QMainWindow):
         self._apply_sketch_body()
 
     def toggle_sketch_neighbours(self) -> None:
-        """Dasselbe wie der Knopf — für Taste, Befehlspalette und Tests."""
+        """Dasselbe wie der Knopf — für die Tests; die Taste N trägt der Knopf selbst."""
         if self.sketch_neighbours_button.isVisible() or self._sketch_panel is not None:
             self.sketch_neighbours_button.toggle()
 
@@ -12093,7 +12087,7 @@ class MainWindow(QMainWindow):
             result = self.session.last_result
             reason = self._reason_locked(
                 spec,
-                self._kinds_of_selection(result),
+                self._kinds_of_selection(),
                 len(result.scene.objects) if result else 0,
                 len(self.object_tree.selected_objects()),
             )
@@ -12919,7 +12913,7 @@ class MainWindow(QMainWindow):
             },
         )
 
-    def inputs_for_transform(self, op: str) -> tuple[ObjectId, ...]:
+    def inputs_for_transform(self) -> tuple[ObjectId, ...]:
         """Welche Körper eine Transformation trifft — leer heißt: keine Auswahl.
 
         **Weil ein Kunde, der zwei Teile markiert hat, zwei Teile meint.**
@@ -13269,7 +13263,7 @@ class MainWindow(QMainWindow):
                     # Ansage, und die wird ausgeführt.
                     params=self._drag_params(object_id, steps.offset),
                 )
-                for object_id in self.inputs_for_transform("translate_object")
+                for object_id in self.inputs_for_transform()
             )
         if steps.turns:
             pivot = self.pivot_for_transform()
@@ -13284,7 +13278,7 @@ class MainWindow(QMainWindow):
                         **pivot,
                     },
                 )
-                for object_id in self.inputs_for_transform("rotate_object")
+                for object_id in self.inputs_for_transform()
             )
         if steps.resizes:
             pivot = self.pivot_for_transform()
@@ -13294,7 +13288,7 @@ class MainWindow(QMainWindow):
                     inputs=(object_id,),
                     params={"factor": steps.scale, "keep_on_bed": True, **pivot},
                 )
-                for object_id in self.inputs_for_transform("scale_object")
+                for object_id in self.inputs_for_transform()
             )
         if drafts:
             # **Aufeinanderfolgende Züge sind eine Handlung** (§15.5, P9). Wer
@@ -13334,7 +13328,7 @@ class MainWindow(QMainWindow):
         Punkt skalieren will, nimmt den Dialog; der Zug ist für das
         Gleichmäßige da.
         """
-        chosen = self.inputs_for_transform("scale_object")
+        chosen = self.inputs_for_transform()
         if not chosen:
             return
         # Der Würfel greift alle markierten Körper — um ihre gemeinsame Mitte,
@@ -17353,7 +17347,7 @@ class MainWindow(QMainWindow):
                     # auseinanderzulaufen.
                     locked = self._reason_locked(
                         REGISTRY.get(name),
-                        self._kinds_of_selection(self.session.last_result),
+                        self._kinds_of_selection(),
                         len(objects),
                         len(chosen),
                     )
@@ -17678,7 +17672,7 @@ class MainWindow(QMainWindow):
         """
         document = self.session.project.document
         try:
-            fit = build_fit(dict(values), len(document.fits))
+            fit = build_fit(dict(values), document.fits)
         except ValueError as error:
             return str(error)
         if not self.session.add_fit(fit, origin=Origin(by="agent", model=REMOTE_ORIGIN)):
@@ -17950,30 +17944,21 @@ class MainWindow(QMainWindow):
         self._wire_step_choice(dialog)
         self._wire_organizer_choice(dialog)
 
-        project = self.session.project
-
-        def project_changed() -> None:
-            """Ein altes Werkzeug gehört beim Projektwechsel geschlossen."""
-            if self.session.project is not project:
-                dialog.reject()
-
-        def finished(code: int) -> None:
+        def finished(accepted: bool) -> None:
             prepared = getattr(dialog, "preview_order", None)
-            accepted = code == QDialog.DialogCode.Accepted and (
-                prepared is None or self._preview_can_apply(dialog, prepared())
-            )
-            self.session.projectChanged.disconnect(project_changed)
+            # Vor dem Abräumen gefragt: die Freigabe hängt an der Vorschau.
+            applies = accepted and (prepared is None or self._preview_can_apply(dialog, prepared()))
             self._op_dialog = None
             self.viewport.set_feature_gizmo_blocked(False)
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
             self.viewport.set_direct_picking(False)
             self._clear_preview()
-            if accepted and self.session.project is project:
+            if applies:
                 on_accept()
 
-        self.session.projectChanged.connect(project_changed)
-        dialog.finished.connect(finished)
+        # Ein altes Werkzeug gehört beim Projektwechsel geschlossen.
+        self._open_for_project(dialog, finished)
         # F1 im Dialog: die Anleitung zu dieser Operation oder ihr Eintrag in
         # der Referenz (Konzept Handbuch §7). Das F1 des Hauptfensters kommt
         # hier nicht an, der Dialog ist ein eigenes Fenster.
@@ -18055,29 +18040,13 @@ class MainWindow(QMainWindow):
             except AppError as error:
                 show_error(error, dialog)
                 return
-            project = self.session.project
-            completed = False
 
-            def project_changed() -> None:
-                if self.session.project is not project:
-                    editor.reject()
-
-            def finished(code: int) -> None:
-                nonlocal completed
-                if completed:
-                    return
-                completed = True
-                self.session.projectChanged.disconnect(project_changed)
-                if (
-                    code == QDialog.DialogCode.Accepted
-                    and self.session.project is project
-                    and isValid(field)
-                ):
+            def finished(accepted: bool) -> None:
+                if accepted and isValid(field):
                     field.set_value(editor.values()["layout"])
                 editor.deleteLater()
 
-            self.session.projectChanged.connect(project_changed)
-            editor.finished.connect(finished)
+            self._open_for_project(editor, finished)
             editor.open()
 
         field.choiceRequested.connect(choose)
@@ -19224,8 +19193,12 @@ class MainWindow(QMainWindow):
         self._finish_source_read((source_id, path.name))
 
     def _source_failed(self, worker: _SourceReadWorker, error: AppError) -> None:
-        """Dateifehler zeigen und den wartenden Feldknopf wieder freigeben."""
+        """Dateifehler zeigen und den wartenden Feldknopf wieder freigeben.
 
+        Dieselbe Wächterkette für jeden Fehler des Lesers: ein fremder Arbeiter
+        zählt nicht, nach einem Projektwechsel wird nur der Wartezustand
+        beendet, und ein bestätigter Abbruch ist kein Fehler.
+        """
         if self._source_worker is not worker:
             return
         if self._source_project is not self.session.project:
@@ -19239,17 +19212,7 @@ class MainWindow(QMainWindow):
 
     def _source_crashed(self, worker: _SourceReadWorker, detail: str) -> None:
         """Unerwartete Lesefehler ebenfalls aus dem Wartezustand holen."""
-
-        if self._source_worker is not worker:
-            return
-        if self._source_project is not self.session.project:
-            self._finish_source_read(None)
-            return
-        if worker.cancel.is_cancelled:
-            self._source_stopped(worker)
-            return
-        self._finish_source_read(None)
-        show_error(InternalError(detail=detail), self)
+        self._source_failed(worker, InternalError(detail=detail))
 
     def _source_stopped(self, worker: _SourceReadWorker) -> None:
         """Den bestätigten Abbruch ohne Dokumentänderung zurückmelden."""
@@ -21101,7 +21064,7 @@ class MainWindow(QMainWindow):
             if not self._preview_direct_order(order, lambda: self._commit_preview_order(order)):
                 self._commit_preview_order(order)
             return
-        chosen = self.inputs_for_transform(op)
+        chosen = self.inputs_for_transform()
         if not chosen:
             self.announce(_needs_objects(0))
             return
@@ -22994,11 +22957,6 @@ def _menu_lines(menu: Any, path: str = "") -> Iterator[tuple[str, Any]]:
             yield from _menu_lines(sub, f"{path} > {action.text()}" if path else action.text())
             continue
         yield path, action
-
-
-def registered_operations() -> list[OperationSpec]:
-    """Kleine Hilfe, die die Befehlspalette benutzt."""
-    return list(REGISTRY.all())
 
 
 def _image_path(event: QDragEnterEvent | QDropEvent) -> Path | None:

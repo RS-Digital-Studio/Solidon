@@ -89,7 +89,7 @@ def test_arc_sampling_keeps_the_directed_long_arc():
 
 @pytest.mark.parametrize("curve", ["circle", "spline"])
 def test_sampling_has_a_point_budget_even_for_difficult_curves(monkeypatch, spline_profile, curve):
-    monkeypatch.setattr(sketch_solid, "MAX_OUTLINE_POINTS", 20, raising=False)
+    monkeypatch.setattr(sketch_solid, "MAX_OUTLINE_POINTS", 20)
     profile = Profile(circle=((0.0, 0.0), 1000.0)) if curve == "circle" else spline_profile
     with pytest.raises(ValidationError, match="Vereinfachen"):
         sketch_solid.outline_points(profile, max_sag=MAX_FACET_SAG / 8.0)

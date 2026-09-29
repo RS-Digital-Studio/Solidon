@@ -283,19 +283,6 @@ def test_synchronise_preserves_metadata_stock_and_identity() -> None:
     assert actual.note == "Geprüft"
 
 
-def test_legacy_name_operations_reject_duplicate_labels() -> None:
-    spool()
-    spool()
-    for action in (
-        lambda: filaments.remember("PETG Rot", "#eeeeee"),
-        lambda: filaments.forget("PETG Rot"),
-    ):
-        with pytest.raises(ValidationError) as raised:
-            action()
-        assert raised.value.constraint == "ambiguous"
-    assert len(filaments.catalogue()) == 2
-
-
 def test_synchronise_adds_a_same_named_spool_of_another_colour_instead_of_refusing() -> None:
     """Zwei gleichnamige Handspulen halten die Übernahme nicht mehr auf (F4, 19.09.2026)."""
     spool()

@@ -28,7 +28,7 @@ from tests.helpers import (
     ridged_shaft,
     the_torus,
 )
-from tests.test_missing_ops import run
+from tests.helpers import run_operation as run
 from tests.test_thread_feature_ops import _studded_plate, _tapped_plate
 
 

@@ -16,15 +16,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.pose import armature_from_text
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.ui_helpers import with_a_body
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -32,18 +30,6 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 @pytest.fixture
 def window(qt_app: QApplication) -> MainWindow:
     return MainWindow(Session(), UiSettings())
-
-
-def with_a_body(window: MainWindow) -> str:
-    """Die saubere Figur aus dem Korpus — ein Körper, der ein Skelett verdient."""
-    window.open_path(MESHES / "clean_figure.stl")
-    window.session.wait_for_idle()
-    item = window.object_tree.tree.topLevelItem(0)
-    assert item is not None
-    item.setSelected(True)
-    object_id = window.object_tree.selected()
-    assert object_id
-    return str(object_id)
 
 
 def bone(

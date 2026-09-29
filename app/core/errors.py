@@ -18,7 +18,6 @@ from typing import Any, ClassVar, Final
 
 from app.core.types import Action as Action
 from app.core.types import FeatureRef, ObjectId, OpId, SolverStage, Vec3
-from app.core.units import UNIT_NAMES
 from app.i18n import TranslatableText, _
 
 # --- Handlungen ------------------------------------------------------------------
@@ -246,12 +245,7 @@ EXPORT_ONLY = Action("export_only", _("Nur exportieren und selbst slicen"))
 #: Satz über dem einzigen Knopf „Nur exportieren und selbst slicen."
 SHOW_SLICER_OUTPUT = Action("show_output", _("Ausgabe des Slicers ansehen"))
 CHECK_SLICER_PROFILE = Action("check_profile", _("Maschinenprofil prüfen"))
-#: Diese Schritte erfolgen im externen Slicer; der Fehlerdialog zeigt sie als Rat.
-SPLIT_BY_FILAMENT = Action(
-    "split_by_filament",
-    _("Das Modell im Slicer nach Filamenten in einzelne Körper aufteilen und erneut exportieren"),
-    primary=True,
-)
+#: Der Fehlerdialog zeigt diesen Schritt als Rat, nicht als Knopf.
 SPLIT_FILAMENT_FILES = Action(
     "split_filament_files",
     _("Die Filamente auf mehrere 3MF-Dateien aufteilen"),
@@ -487,8 +481,8 @@ class ValidationError(UserError):
     Wer hinsieht, liest zuerst einen Satz, der nicht stimmt, und sucht dann bei
     den Zahlen.
 
-    Drei Klassen sind genau deswegen entstanden — :class:`NeedsSolidError`,
-    :class:`SketchConflictError`, :class:`UnitUnknownError` —, jede mit
+    Zwei Klassen sind genau deswegen entstanden — :class:`NeedsSolidError`
+    und :class:`SketchConflictError` —, jede mit
     demselben Vermerk im Docstring. Sie bleiben, denn sie tragen eigene
     Vorschläge; was hier dazukommt, ist die Ursache statt des nächsten
     Einzelfalls: Wo keine Spanne verletzt wurde, gilt der Satz der Oberklasse,
@@ -636,33 +630,6 @@ class NativeReferenceLost(UserError):
             **_with_values(kwargs, references=[str(reference) for reference in references]),
         )
         self.references = references
-
-
-class UnitUnknownError(UserError):
-    """STL trägt keine Einheit, und die Heuristik war sich nicht sicher
-    genug (§17.1)."""
-
-    default_title: ClassVar[TranslatableText] = _(
-        "Die Einheit der Datei ließ sich nicht bestimmen."
-    )
-
-    def __init__(
-        self,
-        detail: TranslatableText | str | None = None,
-        candidates: tuple[str, ...] = ("mm", "cm", "in"),
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(detail=detail, **_with_values(kwargs, candidates=list(candidates)))
-        self.candidates = candidates
-        # Auf dem Knopf steht der Name, in der Kennung der Wert: „in" allein
-        # ist auf Deutsch ein Verhältniswort und keine Antwort (`units`).
-        self.suggestions = (
-            *(
-                Action(f"unit:{unit}", UNIT_NAMES.get(unit, unit), primary=unit == "mm")
-                for unit in candidates
-            ),
-            CANCEL,
-        )
 
 
 # --- Geometriefehler: die Geometrie ließ es nicht zu — mit Vorschlag -----------

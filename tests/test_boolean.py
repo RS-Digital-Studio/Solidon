@@ -25,6 +25,7 @@ from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import MaterialSlot, OpContext, OpResult, Scene, SceneObject
+from tests.helpers import two_cubes
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -300,14 +301,6 @@ def test_union_of_two_overlapping_cubes() -> None:
     assert not result.findings, "the plain case has nothing to report"
 
 
-def _two_cubes_in_one(offset: float) -> MeshData:
-    """Ein Körper aus zwei Würfeln mit 20 mm Kante, der zweite um ``offset`` entlang X."""
-    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
-    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
-    second.apply_translation((offset, 0.0, 0.0))
-    return MeshData.of(trimesh.util.concatenate([first, second]))
-
-
 @pytest.mark.parametrize(
     ("kind", "tool", "volume"),
     [
@@ -333,7 +326,7 @@ def test_parts_that_stick_into_each_other_are_united_first_and_it_says_so(
     deshalb zuerst, wie *Überschneidungen auflösen* es tut, und sagt es. Das
     Volumen ist danach das des Drucks — der gemeinsame Raum zählt einmal.
     """
-    body = _two_cubes_in_one(10.0)
+    body = two_cubes(10.0)
     assert body.component_count == 2
     assert body.volume == pytest.approx(16000.0), "vorher zählt der gemeinsame Raum doppelt"
     place, size = tool
@@ -424,7 +417,7 @@ def test_parts_that_cannot_be_united_say_so(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(
         boolean_module, "resolve_self_intersections", lambda mesh, _cancelled: (mesh, False)
     )
-    body = _two_cubes_in_one(10.0)
+    body = two_cubes(10.0)
 
     result = boolean("difference", [body, box(2.0, (-8.0, 0.0, 10.0))])
 
@@ -445,7 +438,7 @@ def test_a_tool_made_of_crossing_pieces_is_left_to_the_kernel() -> None:
     zu Teilen, die der Kunde nie hatte.
     """
     body = box(20.0, (0.0, 0.0, 0.0))
-    tool = _two_cubes_in_one(10.0)
+    tool = two_cubes(10.0)
     tool.raw.apply_translation((-15.0, 0.0, 12.0))
 
     kinds: tuple[BooleanKind, ...] = ("difference", "intersection")
@@ -456,7 +449,7 @@ def test_a_tool_made_of_crossing_pieces_is_left_to_the_kernel() -> None:
 
 def test_parts_that_only_share_a_tool_are_not_named_as_united() -> None:
     """Zwei getrennte Würfel, verbunden durch einen Steg: eine gewöhnliche Vereinigung."""
-    apart = _two_cubes_in_one(30.0)
+    apart = two_cubes(30.0)
     bar = trimesh.creation.box(extents=(40.0, 4.0, 4.0))
     bar.apply_translation((15.0, 0.0, 0.0))
 

@@ -118,7 +118,7 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
 
 def test_a_tilted_plate_is_laid_down_again() -> None:
     tilted = apply(corpus("plate_holes.stl"), rotation("x", 40.0))
-    found = search(tilted, count=48, seed=3)
+    found = search(tilted, count=48)
 
     assert found.mesh.bounds.size[2] == pytest.approx(8.0, abs=1.0), "flat on the plate"
     # ``tried`` zählt seit dem 06.09.2026 die **geschnittenen** Lagen — die
@@ -190,8 +190,8 @@ def test_a_pose_that_cannot_stand_never_wins(profile: Profile) -> None:
     profile = at_the_start_rule(profile)
     body = bar()
 
-    ohne = search(body, count=60, seed=0)
-    mit = search(body, count=60, seed=0, profile=profile)
+    ohne = search(body, count=60)
+    mit = search(body, count=60, profile=profile)
 
     assert mit.best.first_layer_area >= profile.smallest_first_layer, (
         "mit Profil steht die gewählte Lage"
@@ -262,7 +262,7 @@ def test_the_floor_only_ranks_and_never_refuses(profile: Profile) -> None:
     """
     tiny = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=2.0)))
 
-    found = search(tiny, count=24, seed=5, profile=profile)
+    found = search(tiny, count=24, profile=profile)
 
     assert found.mesh is not None, "eine Antwort kommt in jedem Fall"
     assert found.best.first_layer_area < profile.smallest_first_layer
@@ -271,7 +271,7 @@ def test_the_floor_only_ranks_and_never_refuses(profile: Profile) -> None:
 
 def test_a_real_footing_stays_quiet(profile: Profile) -> None:
     """Die Gegenprobe — sonst stünde der Satz unter jeder Suche."""
-    found = search(corpus("plate_holes.stl"), count=24, seed=5, profile=profile)
+    found = search(corpus("plate_holes.stl"), count=24, profile=profile)
 
     assert "orient.no_footing" not in {finding.code for finding in found.findings}
 
@@ -283,7 +283,7 @@ def test_the_search_beats_the_heuristic_where_it_counts() -> None:
     body = corpus("island_tower.stl")
 
     heuristic = orient_for_print(body).mesh
-    searched = search(body, count=200, seed=11).mesh
+    searched = search(body, count=200).mesh
 
     heuristic_support = slice_body(heuristic, 1.0).support_volume
     searched_support = slice_body(searched, 1.0).support_volume
@@ -295,7 +295,7 @@ def test_the_search_beats_the_heuristic_where_it_counts() -> None:
 
 def test_the_result_says_what_it_saved() -> None:
     body = apply(corpus("plate_holes.stl"), rotation("y", 55.0))
-    found = search(body, count=64, seed=5)
+    found = search(body, count=64)
 
     assert found.findings and found.findings[0].code == "orient.searched"
     assert found.findings[0].source == "internal", "§22.5: never mixed with G-code"
@@ -323,7 +323,7 @@ def test_the_search_can_be_cancelled() -> None:
     signal.cancel()
 
     with pytest.raises(OperationCancelled):
-        search(corpus("cube_clean.stl"), count=500, seed=1, cancelled=signal)
+        search(corpus("cube_clean.stl"), count=500, cancelled=signal)
 
 
 def test_the_search_reports_progress() -> None:
@@ -331,7 +331,6 @@ def test_the_search_reports_progress() -> None:
     search(
         MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 10.0))),
         count=12,
-        seed=1,
         progress=lambda fraction, text: seen.append(fraction),
     )
 
@@ -637,7 +636,7 @@ def test_a_ball_never_stands_no_matter_how_coarse_the_search_is(profile: Profile
     """
     ball = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0)))
 
-    found = search(ball, count=24, seed=5, profile=profile)
+    found = search(ball, count=24, profile=profile)
 
     assert found.best.first_layer_area < profile.smallest_first_layer
     assert "orient.no_footing" in {finding.code for finding in found.findings}
@@ -735,7 +734,7 @@ def test_the_search_stands_a_sleeve_on_its_wide_rim_despite_the_proxy(
     rough = _with_a_rough_wide_rim(upside_down)
     monkeypatch.setattr(orientation, "search_proxy", lambda _mesh: rough)
 
-    found = search(upside_down, count=24, seed=0, profile=profile)
+    found = search(upside_down, count=24, profile=profile)
 
     assert found.best.direction == (0.0, 0.0, 1.0), "gedreht: der weite Rand kommt nach unten"
     assert found.best.first_layer_area > 300.0
@@ -795,7 +794,6 @@ def _umbrella() -> MeshData:
     return boolean("difference", [canopy, *cuts]).mesh
 
 
-@pytest.mark.slow
 def test_the_umbrella_is_not_left_upside_down() -> None:
     """RM-190: *Druckoptimal ausrichten* ließ den Schirm kopfüber liegen.
 
@@ -1149,7 +1147,6 @@ def test_a_knife_edge_is_no_footing() -> None:
     assert stands(lying, profile.smallest_first_layer)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("workers", [None, 3], ids=["host", "three-workers"])
 def test_the_pool_holder_does_not_stand_on_a_knife_edge(
     workers: int | None, monkeypatch: pytest.MonkeyPatch

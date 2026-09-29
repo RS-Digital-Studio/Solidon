@@ -557,11 +557,8 @@ def render_manifest(components: tuple[ComponentNotice, ...]) -> str:
 
 def _file_digest(path: Path) -> str:
     """Hasht ein Release-Artefakt bytegenau und speicherschonend."""
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def _evidence_file(root: Path, value: object) -> Path:

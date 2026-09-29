@@ -143,7 +143,6 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Bestätigtes Schließen bricht die Frage vor Warten und Rendererfreigabe ab."""
-    pytest.importorskip("PySide6")
     from PySide6.QtGui import QCloseEvent
 
     from app.ui import main_window
@@ -237,7 +236,6 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
 
 def test_rejected_application_exit_touches_nothing() -> None:
     """Abbrechen lässt Arbeiter, Einstellungen, Nutzung und Viewport unberührt."""
-    pytest.importorskip("PySide6")
     from PySide6.QtGui import QCloseEvent
 
     from app.ui.main_window import MainWindow

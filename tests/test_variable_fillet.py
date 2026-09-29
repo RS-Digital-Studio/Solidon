@@ -32,6 +32,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, OpResult, Profile, Scene, SceneObject
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
+from tests.helpers import exact_kernel
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 #: Die obere vordere Kante des Quaders: entlang X, bei y = -15 und z = 20.
@@ -43,16 +44,6 @@ def block() -> MeshData:
     body = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
     body.apply_translation((0.0, 0.0, HEIGHT / 2.0))
     return MeshData(body)
-
-
-def exact_kernel() -> Any:
-    """Der exakte Kern — oder ein übersprungener Test, wo er fehlt (§36)."""
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("OpenCASCADE is an optional dependency")
-    from app.core.brep import edit
-
-    return edit
 
 
 def front_top_key(mesh: MeshData) -> str:

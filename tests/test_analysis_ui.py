@@ -15,9 +15,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QCoreApplication, QEvent, Qt, QThread
 from PySide6.QtWidgets import QApplication
 

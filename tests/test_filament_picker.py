@@ -9,9 +9,6 @@ weiterrechnet.
 from __future__ import annotations
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
@@ -221,11 +218,13 @@ def test_the_catalogue_is_offered_and_carries_name_and_colour(
     Namen daneben trotzdem abtippen.
     """
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember(
-        "PETG Rot",
-        "#cc2222",
-        material_type="PETG",
-        slicer_profile="Elegoo PETG PRO @ECC2",
+    filaments.save(
+        filaments.CatalogueFilament(
+            "PETG Rot",
+            "#cc2222",
+            material_type="PETG",
+            slicer_profile="Elegoo PETG PRO @ECC2",
+        )
     )
 
     field = FilamentField(0)
@@ -319,7 +318,7 @@ def test_a_catalogue_filament_does_not_take_slot_zero(
     Filament" plötzlich „PETG Rot" — und jedes Teil ohne Zuweisung wäre rot.
     """
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember("PLA Weiß", "#eeeeee")
+    filaments.save(filaments.CatalogueFilament("PLA Weiß", "#eeeeee"))
 
     field = FilamentField(0)
 
@@ -495,8 +494,8 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember("PETG Rot", "#c0392b")
-    filaments.remember("PLA Schwarz", "#1c1c1c")
+    filaments.save(filaments.CatalogueFilament("PETG Rot", "#c0392b"))
+    filaments.save(filaments.CatalogueFilament("PLA Schwarz", "#1c1c1c"))
 
     box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
     schwarz = MaterialSlot(index=0, name="PLA Schwarz", colour=(0.11, 0.11, 0.11))
@@ -530,14 +529,14 @@ def test_refreshing_the_rack_keeps_the_project_summary(
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember("PLA Weiß", "#ffffff", material_type="PLA")
+    filaments.save(filaments.CatalogueFilament("PLA Weiß", "#ffffff", material_type="PLA"))
     panel = FilamentPanel()
     panel.show_scene(
         [_assigned_body([MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))], (1,))]
     )
     project_state = panel._used
 
-    filaments.remember("TPU Schwarz", "#111111", material_type="TPU")
+    filaments.save(filaments.CatalogueFilament("TPU Schwarz", "#111111", material_type="TPU"))
     panel.refresh_catalogue()
 
     assert panel._used is project_state, "die Szenenzusammenfassung bleibt unangetastet"
@@ -592,7 +591,7 @@ def test_a_used_filament_separates_colour_from_print_values(
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember("PETG Rot", "#c0392b")
+    filaments.save(filaments.CatalogueFilament("PETG Rot", "#c0392b"))
     box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)), slots=(1,) * 12)
     panel = FilamentPanel()
     panel.show_scene(
@@ -673,7 +672,7 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember("PLA Weiß", "#f2f2f0")
+    filaments.save(filaments.CatalogueFilament("PLA Weiß", "#f2f2f0"))
     panel = FilamentPanel()
     panel.show_scene([])
     row = next(
@@ -1227,7 +1226,7 @@ def test_the_filament_card_shares_the_height_instead_of_taking_it(
     from app.ui.panels import MAX_ROWS
 
     for nummer in range(100):
-        filaments.remember(f"Viel {nummer:03d}", "#2980b9")
+        filaments.save(filaments.CatalogueFilament(f"Viel {nummer:03d}", "#2980b9"))
     ungefragt = FilamentPanel()
     assert ungefragt.list.count() > 2 * MAX_ROWS, "der Deckel wird nur bei vielen Zeilen geprüft"
     zeile = ungefragt.list.sizeHintForRow(0)
@@ -1254,7 +1253,9 @@ def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     for nummer in range(4):
-        filaments.remember(f"Spule {nummer}", "#c0392b", material_type="PETG")
+        filaments.save(
+            filaments.CatalogueFilament(f"Spule {nummer}", "#c0392b", material_type="PETG")
+        )
 
     panel = FilamentPanel()
     panel.show_scene(
@@ -1291,7 +1292,7 @@ def test_filament_card_room_includes_wrapped_hint_and_visible_controls(
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     for index in range(row_count):
-        filaments.remember(f"Spule {index:02d}", "#2980b9")
+        filaments.save(filaments.CatalogueFilament(f"Spule {index:02d}", "#2980b9"))
     host = QWidget()
     host.setFixedWidth(width)
     layout = QVBoxLayout(host)

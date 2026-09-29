@@ -14,9 +14,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.ui.style import LEVELS, NORMAL, ROOMY, SPACE, TIGHT, WIDE, stylesheet, type_scale

@@ -27,13 +27,13 @@ from app.core.ingest.loader import normalise
 from app.core.perceive.features import detect
 from app.core.types import Feature, Profile, SceneObject
 from tests.helpers import exact_kernel
+from tests.helpers import run_operation as run
 from tests.test_exact_feature_ops import (
     COUNTERSUNK_CAVITY,
     PIN_VOLUME,
     _countersunk_plate,
     _material_plate,
 )
-from tests.test_missing_ops import run
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 PLATE = (60.0, 40.0, 10.0)

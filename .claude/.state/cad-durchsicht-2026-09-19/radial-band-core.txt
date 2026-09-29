@@ -1,6 +1,0 @@
-tests/test_digest_and_fits.py
-tests/test_export.py
-tests/test_matching.py
-
-$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_digest_and_fits.py tests/test_export.py tests/test_matching.py
---> grün  Exit 0  271 passed in 4.40s

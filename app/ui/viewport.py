@@ -8883,10 +8883,6 @@ class Viewport(QWidget):
         self._clear_snap_preview()
         self._update_cursor()
 
-    @property
-    def measure_mode(self) -> MeasureMode:
-        return self._measure_mode
-
     def undo_measurement(self) -> None:
         """Nimmt das zuletzt gesetzte Maß zurück — nur dieses (§18.3).
 

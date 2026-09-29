@@ -1133,48 +1133,6 @@ def restore(identifier: str) -> CatalogueFilament:
     return _set_archived(identifier, False)
 
 
-def _legacy_match(
-    state: _Inventory, name: str, profile: str = "", colour: str = ""
-) -> CatalogueFilament | None:
-    """Der alte Namensweg darf nur eine tatsächlich eindeutige Spule bearbeiten."""
-    candidates = [
-        entry for entry in state.spools.values() if not entry.archived and entry.name == name
-    ]
-    if not candidates and profile:
-        candidates = [
-            entry
-            for entry in state.spools.values()
-            if not entry.archived
-            and (entry.slicer_profile.casefold(), entry.colour.casefold())
-            == (profile.casefold(), colour.casefold())
-        ]
-    if len(candidates) > 1:
-        raise ValidationError(
-            field="spool_identifier",
-            constraint="ambiguous",
-            detail=_("Mehrere Spulen tragen diesen Namen. Wählen Sie die gewünschte Spule aus."),
-        )
-    return candidates[0] if candidates else None
-
-
-def remember(
-    name: str, colour: str, material_type: str = "", slicer_profile: str = ""
-) -> CatalogueFilament:
-    """Kompatibler Namensweg; neue Oberflächen speichern ausschließlich nach Kennung."""
-    entry = _validated(CatalogueFilament(name, colour, material_type, slicer_profile))
-    with _transaction() as state:
-        current = _legacy_match(state, entry.name)
-        if current is not None:
-            entry = replace(
-                current,
-                name=entry.name,
-                colour=entry.colour,
-                material_type=entry.material_type,
-                slicer_profile=entry.slicer_profile,
-            )
-        return _save(state, entry)
-
-
 def _same_slicer_spools(state: _Inventory, entry: CatalogueFilament) -> list[CatalogueFilament]:
     """Die Spulen, die eine Übernahme aus dem Slicer schon einmal angelegt hat.
 
@@ -1243,16 +1201,6 @@ def synchronise(entries: list[CatalogueFilament]) -> tuple[CatalogueFilament, ..
                 entry = replace(entry, remaining_grams=None)
             _save(state, entry)
         return _sorted(state)
-
-
-def forget(name: str) -> bool:
-    """Kompatibler Namensweg archiviert eindeutig statt Identität und Verlauf zu löschen."""
-    with _transaction() as state:
-        current = _legacy_match(state, name)
-        if current is None:
-            return False
-        _save(state, replace(current, archived=True))
-        return True
 
 
 def _validate_positions(positions: Sequence[BookingPosition]) -> None:

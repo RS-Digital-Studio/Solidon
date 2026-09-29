@@ -31,6 +31,7 @@ from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, OpResult, Scene, SceneObject
+from tests.helpers import exact_kernel
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 ANGLE = 5.0
@@ -53,15 +54,6 @@ def hollow(wall: float = WALL) -> MeshData:
     inner = trimesh.creation.box(extents=(WIDTH - 2 * wall, DEPTH - 2 * wall, HEIGHT))
     inner.apply_translation((0.0, 0.0, wall + HEIGHT / 2.0))
     return boolean("difference", [block(), MeshData(inner)], quality="fine").mesh
-
-
-def exact_kernel() -> Any:
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("OpenCASCADE is an optional dependency")
-    from app.core.brep import edit
-
-    return edit
 
 
 def exact_block() -> Any:

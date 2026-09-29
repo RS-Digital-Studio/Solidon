@@ -27,18 +27,13 @@ geom = [
   # trimesh braucht einen Graphen für Wasserdichtheit und Komponenten; scipy
   # bringt zudem den Zuordnungslöser für das Feature-Matching aus §21.2 mit.
   "scipy>=1.13",
-  # Der Sprung auf 5 ist am 14.08.2026 gemacht. Er kostete zwei Zeilen: Zwei
-  # Stellen riefen ``trimesh.util.concatenate`` direkt auf, statt die
-  # Engführung ``mesh.concatenated`` zu nehmen, die es dafür gibt. Bezahlt
-  # hat er sich beim gleichmäßigen Vernetzen — dieselbe Lochplatte, dieselbe
-  # Kantenlänge, 22 636 Dreiecke statt 815 104.
+  # Ab 5.0 typisiert (``py.typed``), und das gleichmäßige Vernetzen liefert
+  # bei gleicher Kantenlänge einen Bruchteil der Dreiecke. Zusammengefügt wird
+  # über die Engführung ``mesh.concatenated``, nicht ``trimesh.util.concatenate``.
   "trimesh>=5.0",
-  # Nicht ``>=2.5``, wie es hier bis zum 14.08.2026 stand: ``mesh_ops`` baut den
-  # Körper über ``Mesh64`` (erst 3.0 — die einfache ``Mesh`` nimmt ``float32``
-  # und verstieße gegen Regel 6) und räumt mit ``Manifold.simplify`` auf, das
-  # es erst ab 3.1 gibt. Unter der alten Angabe war eine Version erlaubt, in
-  # der ``remesh_uniform`` mit einem AttributeError abbricht — geprüft hat das
-  # nie jemand, weil ``constraints.txt`` längst 3.5 festschreibt.
+  # ``mesh_ops`` baut den Körper über ``Mesh64`` (ab 3.0 — die einfache
+  # ``Mesh`` nimmt ``float32`` und verstieße gegen Regel 6) und räumt mit
+  # ``Manifold.simplify`` auf (ab 3.1).
   "manifold3d>=3.1",
   # trimeshs Cache prüft seine Arrays bei jedem Zugriff über einen Hash und
   # fällt ohne xxhash auf blake2b zurück — knapp 300 000 Aufrufe je Auswertung
@@ -49,12 +44,14 @@ geom = [
   # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
   "shapely>=2.0",
   # Konturhierarchie für denselben Schnitt: ohne den Graphen lässt sich ein
-  # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3. rtree stand
-  # hier bis zum 24.08.2026 daneben — es griff in fremde Seiten und ist durch
-  # app/core/geom/enclosure.py ersetzt (shapely/GEOS liefert die Kandidaten).
+  # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3.
   "networkx>=3.0",
   # Marching Cubes für die Voxelstufe der Booleschen Rückfallkette (§17.2). BSD-3.
   "scikit-image>=0.24",
+  # Liest das Höhenbild der Reliefoperation (``geom/displace.py``) und wird
+  # dort direkt importiert, nicht nur über scikit-image; Untergrenze wie dort.
+  # BSD-2.
+  "imageio>=2.33",
   # 3MF ist das Format, das Slicer bevorzugen, und es braucht einen
   # XML-Schreiber (§29). BSD-3.
   "lxml>=5.0",
@@ -67,24 +64,24 @@ geom = [
   "svg.path>=6.3",
   # Schriftkonturen für Netz und exakten Kern sowie DejaVu-Schriften.
   # Seit 3.8 mit eigenen Typdateien für die strikte Kernprüfung;
-  # direkte Laufzeitabhängigkeit, auch ohne VTK. LicenseRef-Matplotlib.
+  # direkte Laufzeitabhängigkeit. LicenseRef-Matplotlib.
   "matplotlib>=3.8",
 ]
 # Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
 ui = [
   "PySide6>=6.7",
   # Der Renderer hinter der Ansicht (§18): pygfx zeichnet über wgpu (Vulkan,
-  # Metal, DX12) und bringt wgpu, rendercanvas und pylinalg mit — alle vier
-  # BSD-2. Gemessen gegen VTK direkt und gewählt (Robert, 06.09.2026); der
-  # VTK-Renderer ist am selben Tag ausgebaut.
+  # Metal, DX12) und bringt pylinalg mit. BSD-2.
   "pygfx>=0.17",
+  # wgpu und rendercanvas kommen mit pygfx, ``app/ui/render`` importiert aber
+  # beide selbst (Adapterfrage, Leinwand im Widget und ohne Fenster); die
+  # Untergrenzen sind die von pygfx 0.17. BSD-2.
+  "wgpu>=0.30.1",
+  "rendercanvas>=2.6.1",
   # Die 3D-Maus (SpaceMouse) direkt über HID, ohne Herstellertreiber (§2.9,
   # Konzept 3D-Maus). Dreifach lizenziert; gewählt ist BSD-3.
   "hidapi>=0.14",
 ]
-# Kompatibler Extra-Name für bestehende Entwicklungsinstallationen; ``keyring``
-# gehört wegen der Geräteaktivierung inzwischen bereits zum Grundpaket.
-agent = ["keyring>=25.0"]
 # Der zweite Konstruktionskern (§30): echte Kanten, und damit exakte
 # Verrundungen, Fasen und STEP. Optional — ohne ihn sagen diese Operationen das
 # in einem Satz, und alles andere bleibt unberührt. Die Anbindung ist
@@ -99,25 +96,24 @@ dev = [
   # der CI für die Dateien, die Fenster bauen: ein natives Renderfenster
   # darf weder sterben noch bleiben — zerstören nimmt den Grafikzustand
   # mit, ansammeln füllt den Speicher des Runners. Ein Fork löst beides,
-  # weil er mit dem Test endet. Der Anlass war VTK; mit pygfx über wgpu
-  # gilt dasselbe. MIT, reine Testabhängigkeit.
+  # weil er mit dem Test endet. MIT, reine Testabhängigkeit.
   "pytest-forked>=1.6",
   # Verteilt den Rest der Suite auf mehrere Prozesse (`-n`). Gebraucht von
   # `.claude/scripts/suite-getrennt.sh`, das alles ohne Qt in einem Zug
-  # fährt — seriell 175 s, mit acht Prozessen 66 s.
+  # fährt; ohne das Paket liefe dort kein einziger dieser Tests.
   # Die Fenstergruppe bekommt es ausdrücklich nicht: dort stirbt ein Worker und
-  # reißt den ganzen Lauf mit einem `INTERNALERROR` ab.
-  #
-  # Stand hier bis zum 24.08.2026 nicht, obwohl das Skript es seit Langem ruft.
-  # Wer es nicht zufällig installiert hatte, bekam `unrecognized arguments: -n`
-  # — und das Tor zählte den ausgefallenen Lauf als *einen* Fehlschlag unter
-  # dreien, statt zu sagen, dass 3554 Tests gar nicht erst liefen. MIT, reine
+  # reißt den ganzen Lauf mit einem `INTERNALERROR` ab. MIT, reine
   # Testabhängigkeit; zieht execnet nach (ebenfalls MIT).
   "pytest-xdist>=3.6",
   "ruff>=0.6",
   "mypy>=1.11",
   # Wertet Umgebungsmarker für die Lizenzprüfung aus.
   "packaging>=24.0",
+  # Die Tests öffnen Bilder und Schriftdateien selbst (``PIL``, ``fontTools``);
+  # zur Laufzeit kommen beide über matplotlib und imageio, Untergrenzen wie
+  # dort. MIT-CMU bzw. MIT.
+  "pillow>=10.1",
+  "fonttools>=4.28.2",
   # Die SBOM-Tests prüfen auch Interpreter und PyInstaller-Bootloader. Deshalb
   # gehört das bereits für jeden Paketbau verwendete Werkzeug in denselben
   # reproduzierbaren Entwicklungssatz wie die Tests, die es belegen.
@@ -170,14 +166,14 @@ filterwarnings = [
   # benutzt es noch. Der eigene Kern kommt ohne diese Zuweisung aus,
   # deshalb eng auf dieses Fremdmodul begrenzt statt
   # numpy nach oben zu deckeln — eine Obergrenze hielte das ganze Projekt auf
-  # einer alten Version fest. Fällt weg, sobald scikit-image nachgezogen hat; der
-  # wöchentliche Lauf gegen die neuesten Versionen meldet es.
+  # einer alten Version fest. Fällt weg, sobald scikit-image nachgezogen hat; ob
+  # es so weit ist, zeigt der Job „Neueste Versionen“ in `build.yml` — nur,
+  # solange das Repository öffentlich ist, also rund um einen Release.
   'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:skimage\..*',
 ]
 markers = [
   "performance: misst gegen das Budget aus Bauplan §31",
   "windowed: baut Qt-Fenster außerhalb der qt_app-Fixture, auch im Kindprozess; nur beim Release",
-  "slow: dauert spürbar länger als ein Unit-Test",
   "rendered: vergleicht gegen erzeugte Seiten oder Bilder — braucht einen Lauf von /erzeugen",
 ]
 
@@ -196,7 +192,8 @@ target-version = "py314"
 # Sie mitzuformatieren wäre schlimmer als sie auszunehmen: Ein Messskript, das
 # umgeschrieben wurde, belegt seine Zahl nicht mehr. mypy trifft es nicht, das
 # läuft ohnehin nur über `files = ["app"]`. Dasselbe gilt für die Sonden der
-# Release-Durchsichten, die unverändert unter `konzepte/nachweise-release-*/`
+# Release-Durchsichten und der CAD-Durchsicht, die unverändert unter
+# `konzepte/nachweise-release-*/` und `konzepte/nachweise-cad-durchsicht-2026-09/`
 # liegen.
 #
 # Und die Druckprojekte werden es auch nicht.
@@ -208,6 +205,7 @@ extend-exclude = [
   ".codex-*/",
   "3D Drucker/",
   "konzepte/nachweise-release-*/",
+  "konzepte/nachweise-cad-durchsicht-2026-09/",
 ]
 
 [tool.ruff.per-file-target-version]
@@ -302,9 +300,8 @@ warn_unreachable = true
 exclude = "app/core/backends/data/comfyui/"
 
 [[tool.mypy.overrides]]
-# trimesh stand hier bis zum 14.08.2026 mit dabei. Seit 5.0 liefert es ein
-# `py.typed` und damit echte Typen — die Zeile hätte von da an nur noch
-# verdeckt, wenn ein Import daneben greift.
+# Pakete ohne `py.typed`. trimesh und scikit-image bringen es mit und stehen
+# deshalb nicht hier — eine Zeile verdeckte sonst, wenn ein Import daneben greift.
 module = [
   "manifold3d.*",
   "networkx.*",
@@ -313,7 +310,6 @@ module = [
   "rendercanvas.*",
   "hid",
   "scipy.*",
-  "skimage.*",
   "shapely.*",
   # Die OpenCASCADE-Anbindung ist eine kompilierte Erweiterung ohne Stubs (§30).
   "OCP.*",
@@ -322,12 +318,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # Plattformzweige sind auf jeder Plattform außer einer unerreichbar — genau
-# dafür sind sie da. Bei OpenSCAD ist es die Speichergrenze aus §32: RLIMIT_AS
-# auf POSIX, ein Job-Objekt auf Windows.
+# dafür sind sie da.
 module = [
   "app.core.paths",
   "app.core.discover",
-  "app.core.backends.openscad",
   # Und beim Update: welches Paket dieser Rechner braucht, entscheidet
   # dieselbe Abfrage (§37.2).
   "app.core.updates",
@@ -343,9 +337,8 @@ warn_unreachable = false
 # und `exchange` tragen weiter keine Signaturen, `skimage.measure` ebenso
 # wenig. Ein Aufruf dorthin lässt sich von hier aus nicht typisieren.
 #
-# Bis zum 14.08.2026 standen hier **sieben Paketbäume**. Gemessen betrifft es
-# 31 Aufrufe in diesen 18 Dateien — und `app.core.brep.*` gar nicht mehr, weil
-# `OCP.*` oben ohnehin als `Any` ankommt. Namentlich statt mit `*`, damit eine
+# `app.core.brep.*` steht nicht hier, weil `OCP.*` oben ohnehin als `Any`
+# ankommt. Namentlich statt mit `*`, damit eine
 # **neue** Datei, die untypisiert in eine fremde Bibliothek ruft, auffällt statt
 # stillschweigend mitgedeckt zu werden. Genau diese Sorte Fehler hat die
 # konvexe Zerlegung zwei Phasen lang getragen (siehe `errors.PROGRAMMING_ERRORS`).

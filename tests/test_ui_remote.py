@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6")
-
-
 from app.core.agent.tools import UNDO_TRANSACTION
 from app.core.scene import OperationDraft
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow

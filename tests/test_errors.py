@@ -23,7 +23,6 @@ from app.core.errors import (
     BooleanFailedError,
     GeometryError,
     InternalError,
-    UnitUnknownError,
     UserError,
     ValidationError,
 )
@@ -233,7 +232,6 @@ def test_hierarchy_matches_the_plan() -> None:
     assert issubclass(UserError, AppError)
     assert issubclass(ValidationError, UserError)
     assert issubclass(AmbiguityError, UserError)
-    assert issubclass(UnitUnknownError, UserError)
     assert issubclass(GeometryError, AppError)
     assert issubclass(errors.NotManifoldError, GeometryError)
     assert issubclass(BooleanFailedError, GeometryError)
@@ -252,28 +250,6 @@ def test_ambiguity_offers_the_candidates() -> None:
     ids = [action.id for action in error.suggestions]
     assert "choose:hole_3" in ids
     assert "choose:hole_4" in ids
-
-
-def test_unit_question_offers_the_units() -> None:
-    error = UnitUnknownError()
-    ids = [action.id for action in error.suggestions]
-    assert ids[:3] == ["unit:mm", "unit:cm", "unit:in"]
-
-
-def test_the_unit_buttons_are_named_and_not_abbreviated() -> None:
-    """Auf dem Knopf steht der Name der Einheit, nicht ihr Kürzel.
-
-    Neben einer Zahl ist „in" eindeutig; als Antwort auf eine Frage nicht —
-    auf Deutsch ist „in" ein Verhältniswort, und der Kunde sollte raten, was
-    der mittlere von drei Knöpfen bedeutet. Der Wert bleibt, wie er ist: die
-    Kennung trägt ihn (``unit:in``), die Beschriftung nennt ihn.
-    """
-    error = UnitUnknownError()
-    labels = [str(action.label) for action in error.suggestions[:3]]
-
-    assert labels == ["Millimeter (mm)", "Zentimeter (cm)", "Zoll (in)"], (
-        f"die Einheiten stehen als Kürzel auf den Knöpfen: {labels}"
-    )
 
 
 def test_boolean_failure_keeps_stages_and_seed() -> None:
@@ -479,7 +455,7 @@ _NOT_A_RANGE = frozenset(
         "invalid_mesh_array_size",
         # Lagerbestand und Buchungsidentität: fehlende oder archivierte Spule,
         # konkurrierende Änderung und unbestätigter Bestand sind keine Maßspanne.
-        "ambiguous", "archived", "conflict", "missing", "stock", "stock_conflict",
+        "archived", "conflict", "missing", "stock", "stock_conflict",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "expected_sha256",
         # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):

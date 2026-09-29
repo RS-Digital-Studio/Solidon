@@ -13,7 +13,7 @@
 > Bedienprotokolls — und zwei der gemessenen Lücken sind Kundenfehler von
 > heute, die nicht bis nach 0.4.3 warten sollten.
 >
-> Sonden und Protokolle: `.claude/.state/cad-durchsicht-2026-09-19/`.
+> Sonden und Protokolle: `konzepte/nachweise-cad-durchsicht-2026-09/`.
 >
 > **Entscheidung Robert, 19.09.2026, nach dieser Durchsicht:** 0.4.3 ist
 > draußen (Tag `v0.4.3` vom 18.09., `version.json` auf dem Server); die

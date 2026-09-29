@@ -25,7 +25,7 @@ jetzt sofort seine Fragen und trägt die Antworten nach.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
@@ -85,9 +85,10 @@ from app.ui.style import (
     ROOMY,
     TIGHT,
     WIDE,
+    ContentHeight,
     DialogScrollArea,
-    fit_dialog_to_screen,
     make_primary,
+    select_data,
     set_level,
 )
 
@@ -290,8 +291,7 @@ class FirstRunDialog(QDialog):
         super().__init__(parent)
         self.settings = settings
         self._discovered_printers = dict(discovered_printers or {})
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self.setWindowTitle(tr("Erste Schritte"))
         self.setMinimumWidth(680)
 
@@ -397,7 +397,7 @@ class FirstRunDialog(QDialog):
         # dahin bleibt die gespeicherte Vorgabe stehen; fremde Installationen
         # liefern weder einen Drucker noch ein Material für diese Auswahl.
         self._suggested_printer = printer_selection or settings.printer or profiles.DEFAULT_PRINTER
-        _select(self.printer, self._suggested_printer)
+        select_data(self.printer, self._suggested_printer)
         if discovered_printers is not None:
             # Beim Sprachwechsel ist die mitgebrachte Auswahl bereits eine
             # Nutzerentscheidung, keine ersetzbare Startvorgabe.
@@ -718,8 +718,7 @@ class FirstRunDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
+        floor = self._height.floor(self)
         # Die zusätzlichen Maße können auch mehr Breite brauchen, etwa in
         # Französisch und Italienisch. Zuerst die verfügbare natürliche Breite
         # setzen, erst danach die umgebrochenen Absätze in der Höhe messen.
@@ -747,10 +746,7 @@ class FirstRunDialog(QDialog):
         self._scroll.updateGeometry()
         layout.invalidate()
         layout.activate()
-        wanted = self.sizeHint().height()
-        self.resize(self.width(), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.settle(self, self.width(), max(self.sizeHint().height(), floor))
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
@@ -1117,7 +1113,7 @@ class FirstRunDialog(QDialog):
         if not self._persist_printer(entry):
             return False
         self._insert_printer_choice(name, entry.id)
-        _select(self.printer, entry.id)
+        select_data(self.printer, entry.id)
         self._suggested_printer = entry.id
         return True
 
@@ -1161,13 +1157,13 @@ class FirstRunDialog(QDialog):
         self.printer_name.setText(draft.name)
         for field, value in zip(self.printer_dimensions, draft.dimensions, strict=True):
             field.setValue(value)
-        _select(self.printer_technology, draft.technology)
+        select_data(self.printer_technology, draft.technology)
         self.printer_nozzle.setValue(draft.nozzle)
         self.printer_nozzles.setValue(draft.nozzles)
         self.printer_pixel.setValue(draft.pixel_size)
         self.printer_wall.setValue(draft.minimum_wall)
         self.printer_layer.setValue(draft.layer_height)
-        _select(self.printer, "__custom__")
+        select_data(self.printer, "__custom__")
 
     def _fill_slicers(self, found: tuple[Path, ...]) -> None:
         """Nachgereichte Programme erhalten die bereits getroffene Auswahl."""
@@ -1181,7 +1177,7 @@ class FirstRunDialog(QDialog):
                 self.slicer.setItemData(
                     self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
                 )
-            _select(self.slicer, chosen)
+            select_data(self.slicer, chosen)
         # Nur ein Slicer, dessen Drucker noch niemand gesucht hat: Den
         # gemerkten sucht der Aufbau schon, und eine zweite Suche sperrte die
         # Auswahl ein weiteres Mal, womöglich während jemand darin wählt.
@@ -1189,14 +1185,7 @@ class FirstRunDialog(QDialog):
             self._slicer_changed()
 
     def _choose_slicer_file(self) -> None:
-        """Portable Slicer und abweichende Installationspfade lassen sich ausdrücklich wählen."""
-        filename, _ = QFileDialog.getOpenFileName(self, tr("Slicer-Programm auswählen"))
-        if not filename:
-            return
-        if self.slicer.findData(filename) < 0:
-            self.slicer.addItem(slicer_title(Path(filename)), filename)
-            self.slicer.setItemData(self.slicer.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
-        _select(self.slicer, filename)
+        choose_slicer_file(self, self.slicer)
 
     def _slicer_changed(self) -> None:
         """Jede Auswahl bekommt eine eigene, gegen späte Antworten geschützte Suche."""
@@ -1258,23 +1247,15 @@ class FirstRunDialog(QDialog):
 
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
         """Nur passende Drucker anbieten und eine weiterhin passende Wahl erhalten."""
-        chosen = str(self.printer.currentData() or "")
         known = self._known_printers()
-        # Die Resin-Drucker hängen an keinem FDM-Slicer: Ein Slicer, der
-        # seine Drucker nennt, filtert die FDM-Liste — und lässt die andere
-        # Gruppe stehen, denn sie kommt aus dem eigenen Bestand.
-        allowed = (
-            set(identifiers)
-            | {profiles.DEFAULT_PRINTER}
-            | {name for name, entry in known.items() if entry.is_resin}
+        allowed = allowed_printers(identifiers, known)
+        preferred, self._suggested_printer = preferred_printer(
+            str(self.printer.currentData() or ""),
+            suggested,
+            self._suggested_printer,
+            allowed,
+            keep={"__custom__"},
         )
-        preferred = chosen
-        if suggested and (
-            chosen == self._suggested_printer or (chosen not in allowed and chosen != "__custom__")
-        ):
-            preferred = suggested
-        if preferred not in allowed and preferred != "__custom__":
-            preferred = profiles.DEFAULT_PRINTER
         with QSignalBlocker(self.printer):
             self.printer.clear()
             add_printer_choices(
@@ -1282,9 +1263,7 @@ class FirstRunDialog(QDialog):
                 {identifier: entry for identifier, entry in known.items() if identifier in allowed},
             )
             self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
-            _select(self.printer, preferred)
-        if preferred == suggested:
-            self._suggested_printer = suggested
+            select_data(self.printer, preferred)
         self.printer.setEnabled(True)
         self._printer_changed()
 
@@ -1329,10 +1308,16 @@ class FirstRunDialog(QDialog):
         )
 
 
-def _select(box: QComboBox, identifier: str) -> None:
-    index = box.findData(identifier)
-    if index >= 0:
-        box.setCurrentIndex(index)
+def choose_slicer_file(parent: QWidget, box: QComboBox) -> None:
+    """Portable Slicer und abweichende Installationspfade lassen sich ausdrücklich
+    wählen — im Erststart wie in den Einstellungen."""
+    filename, _ = QFileDialog.getOpenFileName(parent, tr("Slicer-Programm auswählen"))
+    if not filename:
+        return
+    if box.findData(filename) < 0:
+        box.addItem(slicer_title(Path(filename)), filename)
+        box.setItemData(box.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
+    select_data(box, filename)
 
 
 def group_printer_choices(box: QComboBox) -> None:
@@ -1405,6 +1390,60 @@ def add_printer_choices(box: QComboBox, entries: Mapping[str, PrinterProfile]) -
             box.addItem(str(printer.title), identifier)
             box.setItemData(box.count() - 1, str(printer.title), Qt.ItemDataRole.ToolTipRole)
     group_printer_choices(box)
+
+
+def allowed_printers(identifiers: Iterable[str], known: Mapping[str, PrinterProfile]) -> set[str]:
+    """Welche Drucker nach einer Slicer-Suche zur Wahl stehen — Erststart wie
+    Einstellungen.
+
+    Was der Slicer nennt, dazu der Standarddrucker und jeder Resin-Drucker: Die
+    Resin-Drucker hängen an keinem FDM-Slicer. Ein Slicer, der seine Drucker
+    nennt, filtert die FDM-Liste — und lässt die andere Gruppe stehen, denn sie
+    kommt aus dem eigenen Bestand.
+    """
+    return (
+        set(identifiers)
+        | {profiles.DEFAULT_PRINTER}
+        | {name for name, entry in known.items() if entry.is_resin}
+    )
+
+
+def preferred_printer(
+    chosen: str,
+    suggested: str,
+    last_suggested: str,
+    allowed: Collection[str],
+    *,
+    keep: Collection[str] = (),
+) -> tuple[str, str]:
+    """Welcher Drucker nach einer neuen Druckerliste gewählt ist, und welcher
+    Vorschlag danach als gemerkt gilt — Erststart wie Einstellungen.
+
+    Der Vorschlag des Slicers gilt, wenn er **in der Liste steht** und die Wahl
+    entweder noch auf dem letzten Vorschlag stand (der Kunde hat sie nicht
+    angefasst) oder selbst nicht mehr in der Liste steht. Eine bewusst andere
+    Wahl bleibt; eine Wahl außerhalb der Liste wird der Standarddrucker.
+    ``keep`` nennt Einträge, die ohne Liste bleiben dürfen — im Erststart
+    „Benutzerdefiniert …".
+
+    **Warum so, und nicht wie eine der zwei Fassungen davor.** Der Erststart
+    nahm auch einen Vorschlag, den es in der Liste nicht gab, und fiel dann auf
+    den Standarddrucker: ein passender, eingestellter Drucker ging für einen
+    Namen verloren, den niemand wählen kann — und der Kunde schnitt mit fremdem
+    Bett und fremder Düse. Die Einstellungen merkten einen Vorschlag nur, wenn
+    sie ihn eben übernommen hatten; stand die Wahl schon auf ihm, folgte sie
+    beim nächsten Slicerwechsel nicht mehr. Hier gilt beides richtig: nie ein
+    Vorschlag außerhalb der Liste, und gemerkt ist er, sobald die Wahl am Ende
+    auf ihm steht.
+    """
+    preferred = chosen
+    if suggested in allowed and (
+        chosen == last_suggested or (chosen not in allowed and chosen not in keep)
+    ):
+        preferred = suggested
+    if preferred not in allowed and preferred not in keep:
+        preferred = profiles.DEFAULT_PRINTER
+    return preferred, suggested if suggested and preferred == suggested else last_suggested
 
 
 def valid_printer_choice(box: QComboBox) -> bool:

@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -56,6 +55,9 @@ from app.ui.first_run import (
     PrinterComboBox,
     _PrinterSurvey,
     add_printer_choices,
+    allowed_printers,
+    choose_slicer_file,
+    preferred_printer,
     valid_printer_choice,
 )
 from app.ui.icons import icon
@@ -66,7 +68,15 @@ from app.ui.panels import align_forms, collapsible
 from app.ui.print_settings_dialog import _SlicerWorker
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
-from app.ui.style import NORMAL, ROOMY, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    WIDE,
+    ContentHeight,
+    DialogScrollArea,
+    make_primary,
+    select_data,
+)
 
 _log = get_logger(__name__)
 
@@ -117,8 +127,7 @@ class SettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.settings = settings
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self._closed = False
         self._leash = WorkerLeash(self)
         self._slicer_worker: _SlicerWorker | None = None
@@ -129,25 +138,25 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(460)
 
         self.language = _choices(self, {key: language_name(key) for key in available_languages()})
-        _select(self.language, settings.language)
+        select_data(self.language, settings.language)
         self.language.currentIndexChanged.connect(self._language_changed)
 
         self.unit = _choices(self, {key: key for key in DISPLAY_UNITS})
-        _select(self.unit, settings.display_unit)
+        select_data(self.unit, settings.display_unit)
 
         self.theme = _choices(self, THEMES)
-        _select(self.theme, settings.theme)
+        select_data(self.theme, settings.theme)
 
         self.navigation = _choices(self, NAVIGATION)
         self.navigation.setMinimumContentsLength(36)
-        _select(self.navigation, settings.navigation)
+        select_data(self.navigation, settings.navigation)
         self.navigation.setToolTip(self.navigation.currentText())
         self.navigation.currentTextChanged.connect(self.navigation.setToolTip)
 
         self.diff_palette = _choices(
             self, {key: str(DIFF_LABELS.get(key, key)) for key in DIFF_PALETTES}
         )
-        _select(self.diff_palette, settings.diff_palette)
+        select_data(self.diff_palette, settings.diff_palette)
 
         # Konzept P15, E7: wer aus Fusion kommt, hat E und F in den Fingern.
         # Die Vorgabe bleibt die des Registers; das hier legt einzelne Tasten
@@ -156,7 +165,7 @@ class SettingsDialog(QDialog):
         self.shortcuts = _choices(
             self, {key: str(label) for key, (label, _table) in SCHEMES.items()}
         )
-        _select(self.shortcuts, settings.shortcut_scheme)
+        select_data(self.shortcuts, settings.shortcut_scheme)
         self.shortcuts.setToolTip(
             tr("Welche Tasten die Operationen führen. Wirkt beim nächsten Start.")
         )
@@ -346,7 +355,7 @@ class SettingsDialog(QDialog):
         )
         self.printer.setMinimumContentsLength(20)
         add_printer_choices(self.printer, self._known_printers())
-        _select(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
+        select_data(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
         self.printer.setToolTip(self.printer.currentText())
         self.printer.currentTextChanged.connect(self.printer.setToolTip)
         # Die Materialliste folgt dem Verfahren des Druckers: Ein Harzdrucker
@@ -442,20 +451,9 @@ class SettingsDialog(QDialog):
 
     def _fit_content(self) -> None:
         """Eine Klappe erhält Platz und gibt ihn zurück; gezogene Höhen bleiben."""
-        layout = self.layout()
-        if layout is None or not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        wanted = self.sizeHint().height()
         # So breit wie die breiteste Zeile — sonst rollte der Inhalt waagerecht,
         # seit keine Zeile ihre Beschriftung mehr über das Feld stellt.
-        self.resize(max(self.width(), self.sizeHint().width()), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll, grow_width=True)
 
     def _application_group(self) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)
@@ -580,7 +578,7 @@ class SettingsDialog(QDialog):
                 self.slicer.setItemData(
                     self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
                 )
-            _select(self.slicer, chosen)
+            select_data(self.slicer, chosen)
         self.slicer_state.setText(
             ""
             if paths
@@ -599,13 +597,7 @@ class SettingsDialog(QDialog):
         self._slicers_found(())
 
     def _choose_slicer_file(self) -> None:
-        filename, _ = QFileDialog.getOpenFileName(self, tr("Slicer-Programm auswählen"))
-        if not filename:
-            return
-        if self.slicer.findData(filename) < 0:
-            self.slicer.addItem(slicer_title(Path(filename)), filename)
-            self.slicer.setItemData(self.slicer.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
-        _select(self.slicer, filename)
+        choose_slicer_file(self, self.slicer)
 
     def _slicer_changed(self) -> None:
         self._printer_survey = None
@@ -651,25 +643,17 @@ class SettingsDialog(QDialog):
         self._fit_soon()
 
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
-        chosen = str(self.printer.currentData() or "")
         known = self._known_printers()
-        allowed = (
-            set(identifiers)
-            | {profiles.DEFAULT_PRINTER}
-            | {name for name, entry in known.items() if entry.is_resin}
+        allowed = allowed_printers(identifiers, known)
+        preferred, self._suggested_printer = preferred_printer(
+            str(self.printer.currentData() or ""), suggested, self._suggested_printer, allowed
         )
-        preferred = chosen
-        if suggested in allowed and (chosen == self._suggested_printer or chosen not in allowed):
-            preferred = suggested
-            self._suggested_printer = suggested
-        if preferred not in allowed:
-            preferred = profiles.DEFAULT_PRINTER
         with QSignalBlocker(self.printer):
             self.printer.clear()
             add_printer_choices(
                 self.printer, {name: entry for name, entry in known.items() if name in allowed}
             )
-            _select(self.printer, preferred)
+            select_data(self.printer, preferred)
         self.printer.setEnabled(True)
         self.printer.setToolTip(self.printer.currentText())
         self.material.setEnabled(True)
@@ -793,7 +777,7 @@ class SettingsDialog(QDialog):
                 if printer is not None and printer.is_resin
                 else profiles.DEFAULT_PRINTER
             )
-            _select(self.material, profiles.material_for(material_printer, wanted))
+            select_data(self.material, profiles.material_for(material_printer, wanted))
 
     def _reset_disclosure(self) -> None:
         """Merkt die Wahl bis zum Speichern; Abbrechen verändert noch nichts."""
@@ -817,9 +801,3 @@ def _choices(parent: QWidget, entries: Mapping[str, str | TranslatableText]) -> 
     for key, label in entries.items():
         box.addItem(str(label), key)
     return box
-
-
-def _select(box: QComboBox, identifier: str) -> None:
-    index = box.findData(identifier)
-    if index >= 0:
-        box.setCurrentIndex(index)

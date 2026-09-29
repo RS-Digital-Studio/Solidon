@@ -30,7 +30,7 @@ from app.core.scene.history import History, OperationDraft
 from app.core.scene.placement import _creation_tool
 from app.core.scene.project import new_project
 from app.core.types import Profile
-from tests.test_missing_ops import run
+from tests.helpers import run_operation as run
 
 
 @pytest.fixture(autouse=True)

@@ -39,6 +39,7 @@ from app.core.types import (
     Scene,
     SceneObject,
 )
+from tests.helpers import evaluated_operation
 
 pytest.importorskip("OCP", reason="OpenCASCADE baut die analytischen Vorlagen")
 
@@ -557,36 +558,6 @@ def test_a_new_depth_says_nothing_about_the_countersink(profile: Profile, kernel
     assert not {"resize.widening_kept", "resize.cavity_sections_kept"} & set(_codes(findings))
 
 
-def _evaluated(source: SceneObject, profile: Profile, op: str, **params: Any):
-    """Eine Operation samt Zuordnung der Auswertung, wie ``_run`` für jede Operation."""
-    load_operations()
-    spec = REGISTRY.get(op)
-    result = spec.fn(
-        OpContext(
-            scene=Scene(objects={source.id: source}),
-            inputs=[source],
-            params=spec.params(**params),
-            profile=profile,
-            quality="fine",
-            seed=7,
-            progress=lambda *_args: None,
-            ask=lambda _question, choices: choices[0],
-            cancelled=NeverCancelled(),
-        )
-    )
-    findings: list[Finding] = list(result.findings)
-    evaluation = importlib.import_module("app.core.scene.evaluate")
-    changed = evaluation._with_features(
-        result.outputs[0],
-        source.features,
-        Operation(9, op, params=params),
-        lambda *_args: pytest.fail("unerwartete Zuordnungsfrage"),
-        findings,
-        previous_bounds=source.mesh.bounds,
-    )
-    return changed, findings
-
-
 def _sunk_blind(kernel: str) -> SceneObject:
     """Sackloch Ø 6 mit Senkung Ø 10: Boden bei z = 2, Senkung 10 … 12."""
     return _plate(
@@ -619,7 +590,7 @@ def test_a_tilted_countersunk_blind_hole_keeps_its_floor(profile: Profile, kerne
     source = _sunk_blind(kernel)
     floor = _floor(source, 2.0)
 
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, "rotate_feature", at_feature=_hole(source).id, axis="x", angle=10.0
     )
 
@@ -660,7 +631,7 @@ def test_a_tilted_blind_hole_stays_open_at_its_mouth(profile: Profile, kernel: s
     )
     source = _blind(kernel)
 
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, "rotate_feature", at_feature=_hole(source).id, axis="x", angle=10.0
     )
 
@@ -702,7 +673,7 @@ def test_a_moved_or_tilted_countersunk_bore_leaves_no_scars(
         else {"axis": "x", "angle": 10.0}
     )
 
-    changed, findings = _evaluated(source, profile, op, at_feature=hole.id, **params)
+    changed, findings = evaluated_operation(source, profile, op, at_feature=hole.id, **params)
 
     assert "perceive.orphaned" not in _codes(findings)
     assert changed.features[floor.id].kind == "face"
