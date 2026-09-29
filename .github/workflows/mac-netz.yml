@@ -38,7 +38,7 @@ jobs:
         # Derselbe Satz wie die Suite und gegen `constraints.txt`: Ein Netz,
         # das unter anderen Paketversionen entstanden ist, beantwortet die
         # Frage nicht, die hier gestellt wird.
-        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
       - name: Die Eingabe messen
         # Erster Messpunkt von RM-187: Weichen schon die Eckpunkte des

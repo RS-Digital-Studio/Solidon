@@ -615,7 +615,7 @@ def _assert_changed_orchestration_is_tested(workflow: str) -> None:
     tests = step_block(job, _INSTALLER_ORDER[1])
     condition = "        if: github.sha != inputs.source_commit\n"
     assert condition in install and condition in tests
-    assert '-c constraints.txt -e ".[dev,geom,ui,agent,brep]"' in install
+    assert '-c constraints.txt -e ".[dev,geom,ui,brep]"' in install
     assert "continue-on-error" not in tests and "shell: pwsh" in tests
     script = step_script(tests)
     assert (
@@ -648,7 +648,7 @@ _CONDITION = "        if: github.sha != inputs.source_commit\n"
             _CONDITION + "        shell: pwsh",
             _CONDITION + "        continue-on-error: true\n        shell: pwsh",
         ),
-        (",agent,brep]", ",agent]"),
+        (",ui,brep]", ",ui]"),
         (
             "          QT_QPA_PLATFORM: offscreen\n",
             "          QT_QPA_PLATFORM: offscreen\n          GH_TOKEN: ${{ github.token }}\n",

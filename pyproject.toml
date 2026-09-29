@@ -82,9 +82,6 @@ ui = [
   # Konzept 3D-Maus). Dreifach lizenziert; gewählt ist BSD-3.
   "hidapi>=0.14",
 ]
-# Kompatibler Extra-Name für bestehende Entwicklungsinstallationen; ``keyring``
-# gehört wegen der Geräteaktivierung inzwischen bereits zum Grundpaket.
-agent = ["keyring>=25.0"]
 # Der zweite Konstruktionskern (§30): echte Kanten, und damit exakte
 # Verrundungen, Fasen und STEP. Optional — ohne ihn sagen diese Operationen das
 # in einem Satz, und alles andere bleibt unberührt. Die Anbindung ist

@@ -52,12 +52,9 @@ def _notice_file(*, frozen: bool | None = None, executable: Path | None = None) 
 NOTICE_FILE: Final = _notice_file()
 
 #: Die Extras, deren Abhängigkeiten in der ausgelieferten Anwendung landen.
-#: Dieselbe Liste wie im Bau-Workflow (``.[geom,ui,agent,brep]``) — hier
-#: standen nur zwei der vier, und acht Pakete reisten ungeprüft und ohne
-#: Hinweis im Über-Dialog mit. Heute sind alle zulässig; die Lücke hätte
-#: erst das nächste transitive GPL-Paket unter ``agent`` oder ``brep``
-#: gezeigt.
-RUNTIME_EXTRAS: Final[tuple[str, ...]] = ("geom", "ui", "agent", "brep")
+#: Dieselbe Liste wie im Bau-Workflow (``.[geom,ui,brep]``): Fehlt hier eines,
+#: reisen seine Pakete ungeprüft und ohne Hinweis im Über-Dialog mit.
+RUNTIME_EXTRAS: Final[tuple[str, ...]] = ("geom", "ui", "brep")
 
 #: Pakete, die nur auf **einer** Plattform installiert werden, mit ihrer
 #: Lizenz.

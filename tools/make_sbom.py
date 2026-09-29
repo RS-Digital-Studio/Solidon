@@ -326,7 +326,7 @@ def runtime_graph(
         except (metadata.PackageNotFoundError, KeyError) as problem:
             raise RuntimeError(
                 f"Laufzeitpaket {name!r} fehlt. Installieren Sie "
-                '".[geom,ui,agent,brep]" gegen constraints.txt und erzeugen '
+                '".[geom,ui,brep]" gegen constraints.txt und erzeugen '
                 "Sie die Stückliste erneut."
             ) from problem
 
