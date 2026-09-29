@@ -35,38 +35,16 @@ from app.core.types import (
     Parameter,
     PlaneFrame,
     Profile,
-    Scene,
     SceneObject,
     Sketch,
     SketchConstraint,
     SketchElement,
     SolvedSketch,
 )
+from tests.helpers import run_with_parameters as run
 from tests.test_sketch import rectangle
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
-
-
-def run(
-    op: str,
-    entry: SceneObject | None = None,
-    parameters: dict[str, Parameter] | None = None,
-    **params: object,
-) -> OpResult:
-    spec = REGISTRY.get(op)
-    return spec.fn(
-        OpContext(
-            scene=Scene(objects={entry.id: entry} if entry else {}, parameters=parameters or {}),
-            inputs=[entry] if entry else [],
-            params=spec.params(**params),
-            profile=None,
-            quality="fine",
-            seed=None,
-            progress=lambda fraction, text: None,
-            ask=lambda question, choices: choices[0],
-            cancelled=NeverCancelled(),
-        )
-    )
 
 
 def solid_of(result: OpResult) -> Solid:

@@ -15,7 +15,7 @@ from app.core.perceive.matching import moved_features
 from app.core.types import SceneObject
 from app.core.units import EPS_GEOM
 from tests.helpers import CountingToken
-from tests.test_sketch_ops import run
+from tests.helpers import run_with_parameters as run
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 

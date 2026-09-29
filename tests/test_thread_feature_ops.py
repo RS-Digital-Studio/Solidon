@@ -26,8 +26,8 @@ from app.core.knowledge.parts import build, shapes
 from app.core.knowledge.parts.shapes import building
 from app.core.types import Feature, Profile, SceneObject
 from tests.helpers import exact_kernel
+from tests.helpers import run_operation as run
 from tests.test_exact_parts import _thread_volume
-from tests.test_missing_ops import run
 from tests.test_thread_import import BASES
 
 PLATE = (40.0, 40.0, 10.0)

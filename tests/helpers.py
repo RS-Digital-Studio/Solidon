@@ -10,16 +10,15 @@ Testfunktion daneben, damit pytest die Datei nicht als Test sammelt.
 Hier liegt nur, was **keinen** Fensteraufbau braucht: Ein Helfer, der Qt
 zieht, gehört nicht in eine Datei, die auch Kerntests importieren.
 
-**Noch nicht hier, weil ihre Quelldateien anderen Umbauten gehören**
-(Stand 21.09.2026): ``test_thread_feature_ops._studded_plate``/``_tapped_plate``
+**Noch nicht hier:** ``test_thread_feature_ops._studded_plate``/``_tapped_plate``
 (``test_filament_on_rings_and_threads``), ``test_cache.FakeCodec``
 (``test_native_references``), ``test_features._small_faces``/
 ``_stud_on_a_plate``/``_plate_with_a_chamfered_slot`` (``test_local_detection``,
 ``test_round_surface_measurements``, ``test_surface_patches``),
 ``test_slot_features.a_foreign_slot``, ``test_local_detection.blind_cylinder``/
-``bore_seed``, ``test_outline_dialog._until`` (Fensterdateien) und
-``test_partial_bores._exact_kernel`` — dieselbe Frage wie :func:`exact_kernel`
-hier, dort noch als eigene Kopie.
+``bore_seed``, ``test_outline_dialog._until`` (Fensterdateien),
+``test_sketch.rectangle``, ``test_prepare.cube`` und
+``test_outline_profiles.SOURCE``.
 """
 
 from __future__ import annotations
@@ -42,7 +41,9 @@ from app.core.scene.project import Project, new_project
 from app.core.types import (
     BoundingBox,
     Feature,
+    Finding,
     OpResult,
+    Parameter,
     Profile,
     Quality,
     SceneObject,
@@ -612,3 +613,96 @@ def assert_sketch_gradients(sketch: Sketch, *, step: float, atol: float) -> None
     assert np.allclose(analytic_flat, numeric, atol=atol), (
         f"größte Abweichung: {float(np.max(np.abs(analytic_flat - numeric))):.2e}"
     )
+
+
+# --- Eine Operation direkt am Register fahren ------------------------------------------
+
+
+def run_operation(
+    op: str, entry: SceneObject | None, profile: Profile, **params: object
+) -> OpResult:
+    """Eine registrierte Operation an ``entry`` fahren, ohne Szene und Verlauf drumherum."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry} if entry else {}),
+            inputs=[entry] if entry else [],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def run_with_parameters(
+    op: str,
+    entry: SceneObject | None = None,
+    parameters: dict[str, Parameter] | None = None,
+    **params: object,
+) -> OpResult:
+    """Wie :func:`run_operation`, aber ohne Profil und mit Projektparametern in der Szene."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry} if entry else {}, parameters=parameters or {}),
+            inputs=[entry] if entry else [],
+            params=spec.params(**params),
+            profile=None,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def evaluated_operation(
+    source: SceneObject, profile: Profile, op: str, **params: Any
+) -> tuple[SceneObject, list[Finding]]:
+    """Eine Operation samt der Merkmalszuordnung, die die Auswertung danach setzt."""
+    import importlib
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Operation, Scene
+
+    load_operations()
+    spec = REGISTRY.get(op)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda *_args: None,
+            ask=lambda _question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    findings: list[Finding] = list(result.findings)
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    changed = evaluation._with_features(
+        result.outputs[0],
+        source.features,
+        Operation(9, op, params=params),
+        lambda *_args: pytest.fail("unerwartete Zuordnungsfrage"),
+        findings,
+        previous_bounds=source.mesh.bounds,
+    )
+    return changed, findings

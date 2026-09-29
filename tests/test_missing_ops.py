@@ -30,6 +30,7 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Document, OpContext, Profile, Scene, SceneObject, Source
 from app.core.units import EPS_GEOM
+from tests.helpers import run_operation as run
 
 SVG = (
     b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
@@ -43,23 +44,6 @@ def block(width: float = 40.0, depth: float = 40.0, height: float = 40.0) -> Mes
     body = trimesh.creation.box(extents=(width, depth, height))
     body.apply_translation((0.0, 0.0, height / 2.0))
     return MeshData.of(body)
-
-
-def run(op: str, entry: SceneObject | None, profile: Profile, **params: object):
-    spec = REGISTRY.get(op)
-    return spec.fn(
-        OpContext(
-            scene=Scene(objects={entry.id: entry} if entry else {}),
-            inputs=[entry] if entry else [],
-            params=spec.params(**params),
-            profile=profile,
-            quality="fine",
-            seed=None,
-            progress=lambda fraction, text: None,
-            ask=lambda question, choices: choices[0],
-            cancelled=NeverCancelled(),
-        )
-    )
 
 
 # --- mirroring ------------------------------------------------------------------

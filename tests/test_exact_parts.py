@@ -29,7 +29,7 @@ from app.core.knowledge.parts.structure import MIN_RIB, RIB_SHARE
 from app.core.knowledge.parts.testbodies import LABEL_DEPTH
 from app.core.types import Profile, SceneObject
 from tests.helpers import exact_kernel
-from tests.test_missing_ops import run
+from tests.helpers import run_operation as run
 
 #: Volumen eines einbeschriebenen 48-Ecks gegen den Kreis — der einzige erlaubte
 #: Unterschied zwischen Netz und exaktem Körper bei runden Formen.
