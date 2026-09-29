@@ -161,15 +161,22 @@ git config core.hooksPath .githooks
 ```
 
 Die dritte Zeile ist einmal je Arbeitsplatz nötig und schaltet die Git-Hooks des
-Projekts ein — derzeit einen: Er pusht jeden Commit sofort. Ohne die Zeile
-passiert nichts weiter, als dass Commits liegen bleiben, bis jemand von Hand
-pusht. `core.hooksPath` ist eine lokale Einstellung; Git holt sie sich nicht aus
-dem Repository, deshalb steht sie hier und nicht in einer Datei.
+Projekts ein: `pre-commit` prüft Bezeichner und neue Übersetzungstexte,
+`commit-msg` die Umlautschreibung der Commit-Meldung, `post-commit` pusht jeden
+Commit sofort. Ohne die Zeile fehlen diese Prüfungen und der automatische Push.
+`core.hooksPath` ist eine lokale Einstellung; Git holt sie sich nicht aus dem
+Repository, deshalb steht sie hier und nicht in einer Datei.
+
+Je Änderung laufen die betroffenen Tests, vor einem Commit das Entwicklungstor
+aus Suite, Ruff, Formatprüfung und mypy. Fenster- und Leistungsprüfungen laufen
+ausschließlich beim Release.
 
 | Befehl | Zweck |
 |---|---|
-| `bash .claude/scripts/suite-getrennt.sh` | Suite wie in der CI, Fensterdateien getrennt |
-| `.venv/Scripts/python.exe -m pytest -q -m performance` | Leistungsbudgets aus §31 |
+| `.venv/Scripts/python.exe tools/affected_tests.py <datei> --run` | Betroffene Tests ohne Fenster und Leistung |
+| `bash .claude/scripts/suite-getrennt.sh` | Entwicklungssuite ohne Fenster und Leistung |
+| `bash .claude/scripts/suite-getrennt.sh --release` | Release-Suite einschließlich getrennter Fensterläufe |
+| `.venv/Scripts/python.exe -m pytest -q -m performance` | Leistungsbudgets aus §31, nur beim Release |
 | `.venv/Scripts/python.exe -m ruff check .` | Stil und Fehlerbilder |
 | `.venv/Scripts/python.exe -m ruff format --check .` | Formatierung prüfen |
 | `.venv/Scripts/python.exe -m mypy` | Typprüfung (strict) |
@@ -185,8 +192,16 @@ Verknüpfung.
 
 ## Paketieren
 
+Die Reihenfolge und Voraussetzungen für einen beauftragten Release stehen in
+[Erzeugen](.claude/skills/erzeugen/SKILL.md). Ein lokaler Probe- oder Ersatzbau
+verwendet einen eigenen Arbeitsbaum mit passender Entwicklungsumgebung und
+C-Compiler. Vor PyInstaller werden der Schichtkern und das Prüfmodul mit seinem
+signierten Manifest aus demselben Stand gebaut:
+
 ```
-.venv/Scripts/python.exe -m pip install -c constraints.txt pyinstaller
+.venv/Scripts/python.exe -m pip install -c constraints.txt pyinstaller cython setuptools
+.venv/Scripts/python.exe tools/build_slice_core.py
+.venv/Scripts/python.exe tools/build_licence_module.py
 .venv/Scripts/pyinstaller.exe packaging/solidon3d.spec --noconfirm
 ```
 

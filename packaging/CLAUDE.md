@@ -7,6 +7,12 @@ nicht im Entwicklungsbaum — sonst wandert hinein, was gerade offen ist
 Einzuhalten ist `.claude/rules/auslieferung.md` (lädt für `packaging/**`); das
 Warum und die Messwerte: `konzepte/begruendungen/karte-packaging.md`.
 
+Die Python-Installation verwendet daneben `pyproject.toml`: Dessen
+`package-data` nimmt die Anwendungsressourcen ausdrücklich mit, auch ohne
+editierbare Installation. `tests/test_packaging.py` vergleicht die echte
+Setuptools-Dateiauswahl mit den versionierten Ressourcen; lokale
+`egg-info`-Listen dürfen fehlende Einträge nicht verdecken.
+
 ## Die Karte
 
 | Datei | Für | Quelle |

@@ -1,9 +1,5 @@
-# Die Druckprojekte unter „3D Drucker/" sind ein eigenes Repository mit eigenem
-# `.git` und stehen unten unter `/3D Drucker/` ausgeschlossen (3ce454f9,
-# 23.08.2026). Am 22.08.2026 waren sie für einen Tag aufgenommen, damit sie auf
-# allen drei Maschinen liegen; der eigene Baum löst das besser, weil
-# STL-Dateien schnell hunderte Megabyte werden und was einmal in der Historie
-# liegt, nicht mehr herausgeht.
+# Die physischen Druckprojekte unter „3D Drucker/" haben ein eigenes
+# Repository und werden unabhängig von den Anwendungsquellen versioniert.
 
 # --- Python ------------------------------------------------------------------
 __pycache__/
@@ -49,8 +45,8 @@ venv/
 htmlcov/
 
 # --- Messdaten ----------------------------------------------------------------
-# Das Millionen-Dreieck-Modell waere 60 MB im Repository; make_corpus.py erzeugt
-# es bei Bedarf, die Messwerte sind ohnehin maschinenabhaengig (Bauplan §31).
+# Das Millionen-Dreieck-Modell wäre 60 MB im Repository; make_corpus.py erzeugt
+# es bei Bedarf, die Messwerte sind ohnehin maschinenabhängig (Bauplan §31).
 /tests/data/meshes/dense_1m.stl
 /tests/.performance.json
 
@@ -59,13 +55,16 @@ htmlcov/
 /out/
 # Lokale Vorschauen, Prüfberichte und wiederherstellbare Review-Zwischenstände.
 /output/
+# Ältere lokale Prüfstände und Sicherungen nutzen tmp/; auch auf einem
+# frischen Klon bleiben sie außerhalb von Git, ohne lokale exclude-Datei.
+/tmp/
 /.cache/
 
 # --- Erzeugte Auslieferungsdateien --------------------------------------------
-# Das Handbuch-PDF entsteht aus `tools/make_manual.py` und wiegt je Sprache gut
-# ein Megabyte. Was sich aus dem Quelltext erzeugen lässt, gehört nicht in die
-# Versionsgeschichte — die Website-Dateien schon, die werden hochgeladen.
-/Releases/
+# Installationspakete und lokale Auslieferungsnachweise bleiben auf der
+# Maschine. Die veröffentlichten Handbücher sind bewusst versioniert.
+/Releases/*
+!/Releases/Solidon3D-Handbuch-??.pdf
 
 # --- Zugang zum Webserver ------------------------------------------------------
 # Host, Benutzer und Passwort des Hosting-Pakets für tools/upload_website.py.
@@ -141,7 +140,7 @@ operator.token
 *.solidon-activation
 
 # Der Bericht von tools/run_ui_audit.py. Er entsteht bei jedem Lauf neu und
-# gehoert dem Rechner, auf dem er lief — nicht dem Repository.
+# gehört dem Rechner, auf dem er lief — nicht dem Repository.
 ui-audit/
 
 # Das Messprofil von tools/window_bench.py — Nutzerverzeichnisse einer

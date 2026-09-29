@@ -223,6 +223,55 @@ def test_every_data_directory_travels_with_the_package() -> None:
         )
 
 
+def test_the_python_package_includes_every_versioned_application_resource() -> None:
+    """Auch ohne editierbare Installation bleiben Bilder, Schriften und Lizenzen da.
+
+    Die echte Setuptools-Dateiauswahl liest die Paketkonfiguration, ohne ein
+    Kundenpaket zu bauen oder lokale ``egg-info``-Dateien zu erneuern. Ein
+    altes ``SOURCES.txt`` darf fehlende Paketdaten dabei nicht verdecken.
+    """
+    from setuptools import Distribution
+    from setuptools.command.build_py import build_py
+    from setuptools.config.pyprojecttoml import read_configuration
+
+    tracked = (
+        subprocess.run(
+            ["git", "ls-files", "-z", "--", "app"],
+            cwd=ROOT,
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode("utf-8")
+        .split("\0")
+    )
+    resources = {
+        Path(name)
+        for name in tracked
+        if name and Path(name).suffix not in {".py", ".pyi", ".pyx", ".md"}
+    }
+    assert resources, "die versionierten Anwendungsdaten fehlen in der Prüfung"
+
+    configuration = read_configuration(ROOT / "pyproject.toml")["tool"]["setuptools"]
+    distribution = Distribution(
+        {
+            "packages": configuration["packages"],
+            "package_data": configuration["package-data"],
+            "package_dir": {"": str(ROOT)},
+        }
+    )
+    command = build_py(distribution)
+    command.finalize_options()
+    command.manifest_files = {}
+    included = {
+        Path(name).relative_to(ROOT)
+        for package in configuration["packages"]
+        for name in command.find_data_files(package, command.get_package_dir(package))
+    }
+    missing = sorted(path.as_posix() for path in resources - included)
+    assert not missing, "Paketdaten fehlen in pyproject.toml:\n" + "\n".join(missing)
+    assert not any(path.name in {"CLAUDE.md", "AGENTS.md"} for path in included)
+
+
 def test_the_flatpak_email_portal_transport_travels_with_the_package() -> None:
     """Der Support-Entwurf braucht im Linux-Paket QtDBus samt dessen Qt-Hook."""
     assert "PySide6.QtDBus" in _literal_hidden_imports()

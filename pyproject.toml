@@ -141,7 +141,8 @@ solidon3d = "app.cli:launch"
 include = ["app*"]
 
 [tool.setuptools.package-data]
-"app.core.knowledge" = ["data/*.toml"]
+"app.core.knowledge" = ["data/*.toml", "data/third_party_licenses/*.txt"]
+"app.core.geom" = ["data/fonts/*.ttf"]
 # Die ComfyUI-Workflows sind Daten, kein Code (§27): ein anderer Generator
 # heißt eine andere Datei, kein Patch.
 "app.core.backends" = ["data/*.json"]
@@ -151,7 +152,15 @@ include = ["app*"]
 # Startbildschirm-Inhalt zugleich (§37.2). Die Handbuchbilder dazu — die
 # gezeichneten und gerenderten entstehen im Lauf, die Bildschirmfotos nicht,
 # also reisen sie als Dateien (ein Ordner je Sprache).
-"app" = ["examples/*.p3d", "examples/*.svg", "examples/LICENSE", "images/manual/*/*.png"]
+"app" = [
+  "examples/*.p3d",
+  "examples/*.svg",
+  "examples/LICENSE",
+  "images/icon/*.svg",
+  "images/manual/*/*.png",
+  "images/manual/*/*.webp",
+  "images/manual/*/guides.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -190,16 +199,8 @@ target-version = "py314"
 #
 # Und die Druckprojekte werden es auch nicht.
 #
-# „3D Drucker/" enthält Roberts physische Druckprojekte — parametrische Skripte
-# für Teile, die auf dem Elegoo laufen, kein Programmcode. Sie liegen seit dem
-# 22.08.2026 bewusst **im** Repository (`.gitignore` trägt die Begründung: Es
-# wird auf drei Maschinen gearbeitet, und ein Projekt, das nur auf einer liegt,
-# ist auf den anderen zweien nicht vorhanden). Versioniert werden sie deshalb
-# weiter — geprüft werden sie nicht: Ruff fand darin 367 Verstöße und wollte 17
-# Dateien umformatieren, und damit war das Tor rot, ohne dass an der Anwendung
-# irgendetwas anders war. Es ist dieselbe Falle wie die drei in `CLAUDE.md`,
-# nur eine neue Gestalt: nicht die Pipeline und nicht die Schlusszeile, sondern
-# ein fremder Ordner im Prüfpfad.
+# „3D Drucker/" enthält physische Druckprojekte in einem eigenen Repository.
+# Der Ordner ist hier ignoriert und gehört nicht in die Solidon-Prüfungen.
 extend-exclude = [".claude/.state/", ".codex-*/", "3D Drucker/"]
 
 [tool.ruff.per-file-target-version]

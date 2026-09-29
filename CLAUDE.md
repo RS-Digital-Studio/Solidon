@@ -121,6 +121,8 @@ changelog/    was im Update-Fenster steht, je Sprache eine Datei. Hier liegt
               bewusst keine CLAUDE.md: Test und make_download.py lesen jeden
               Dateinamen des Ordners als Sprache
 3D Drucker/   physische Druckprojekte — eigenes Repository, hier in .gitignore
+output/, tmp/ örtliche Prüfstände und Sicherungen, nicht versioniert
+Releases/     lokale Pakete; nur die veröffentlichten Handbuch-PDFs versioniert
 ```
 
 Jedes Verzeichnis mit Code trägt seine eigene Karte; `tests/test_directory_docs.py`
