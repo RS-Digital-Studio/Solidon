@@ -317,6 +317,19 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     keine Maschinenseite, und Regel 21 — nicht raten.
     """
     if setup.machine_profile:
+        if setup.flavour == "cura":
+            selected = profile_source(setup.machine_profile, setup, "machine")
+            if isinstance(selected, slicer_profiles.SlicerProfile) and (
+                (
+                    profile.printer.id.startswith("slicer-cura-")
+                    and selected.printer_id != profile.printer.id
+                )
+                or (
+                    profile.printer.cura_definition
+                    and selected.printer_model != profile.printer.cura_definition
+                )
+            ):
+                return ""
         if not _fits_the_printer(setup.machine_profile, profile):
             return ""
         return slicer_profiles.machine_with_nozzle(
@@ -325,7 +338,15 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
     if not chosen:
         return ""
-    same = slicer_profiles.printer_for(chosen, profiles.printer_profiles())
+    # Gleich benannte Profile verschiedener Slicer haben verschiedene IDs.
+    # Bei gleichem Namen bleibt der ausdrücklich ausgewählte Drucker vorn.
+    known = {profile.printer.id: profile.printer, **profiles.printer_profiles()}
+    known[profile.printer.id] = profile.printer
+    same = (
+        slicer_profiles.chosen_printer(setup.flavour, setup.executable, known)
+        if setup.flavour == "cura"
+        else slicer_profiles.printer_for(chosen, known)
+    )
     if same != profile.printer.id:
         _log.info(
             "slicer is set to %r (%s), the project prints on %s — no machine side handed over",
@@ -367,7 +388,8 @@ def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
     entscheidet, fragt nach „Elegoo Centauri Carbon 2 0" — einem Namen, den es
     nicht gibt. Der Prüfling galt damit als nicht zuordenbar und ging durch.
     """
-    known = profiles.printer_profiles()
+    known = {profile.printer.id: profile.printer, **profiles.printer_profiles()}
+    known[profile.printer.id] = profile.printer
     belongs = slicer_profiles.printer_for(machine_profile, known)
     if not belongs:
         belongs = slicer_profiles.printer_for(Path(machine_profile).stem, known)
@@ -1500,6 +1522,8 @@ class CuraMachine:
     search_path: tuple[Path, ...] = ()
     codes: Mapping[str, str] = field(default_factory=dict)
     switches: Mapping[str, str] = field(default_factory=dict)
+    settings: Mapping[str, str] = field(default_factory=dict)
+    """Belegte Hardwarewerte der konfigurierten Maschine, ohne Prozesswerte."""
     name: str = ""
     """``machine_name`` der Definition — CuraEngine schreibt ihn als
     ``;TARGET_MACHINE.NAME`` in den Kopf (:func:`cura_machine_differences`)."""
@@ -2248,6 +2272,7 @@ def write_config(
     # nicht hier, sondern in ``cura_machine`` (:func:`_command`).
     flat = flat_values()
     machine = _cura_machine(setup, profile, flat)
+    flat |= machine.settings
     flat |= machine.switches
     _without_line_break(flat, setup.name)
     target.write_text(
@@ -3427,8 +3452,26 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         return CuraMachine()
     own = _cura_printer_definition(setup.executable, profile.printer)
     definition = Path(own or base)
-    chain = slicer_profiles.resolve_values(definition)
-    known = _placeholder_values(chain, values)
+    roots = _profile_roots(setup)
+    source = profile_source(setup.machine_profile, setup, "machine")
+    if source is None:
+        source, _process = slicer_profiles.match(
+            slicer_profiles.find_profiles(setup.executable, "cura", ("machine",)), profile.printer
+        )
+        if source is None and profile.printer.id.startswith("slicer-cura-"):
+            raise slicer_profiles._incomplete_profile(Path(profile.printer.title))
+    if isinstance(source, slicer_profiles.SlicerProfile):
+        definition = source.path
+        own = str(definition)
+        chain = slicer_profiles.resolve_profile(source, roots)
+    else:
+        chain = slicer_profiles.resolve_values(definition, roots)
+    hardware = (
+        _cura_hardware_values(chain, values)
+        if (isinstance(source, slicer_profiles.SlicerProfile) and source.cura_instance is not None)
+        else {}
+    )
+    known = _placeholder_values(chain, {**values, **hardware})
     codes = {
         key: _filled(str(chain.get(key) or ""), known, key, setup.name) for key in MACHINE_CODES
     }
@@ -3446,8 +3489,34 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         search_path=search,
         codes=codes,
         switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
+        settings=hardware,
         name=str(chain.get("machine_name") or ""),
     )
+
+
+def _cura_hardware_values(
+    chain: Mapping[str, object], written: Mapping[str, str]
+) -> dict[str, str]:
+    """Native Hardware behalten; bewusst geänderte Projektmaße und Düse gehen vor."""
+    dimensions = {
+        "machine_width",
+        "machine_depth",
+        "machine_height",
+        "machine_nozzle_size",
+        "machine_extruder_count",
+    }
+    hardware = {
+        key: str(value).lower() if isinstance(value, bool) else _printed(value)
+        for key, value in chain.items()
+        if (key.startswith(("machine_", "extruder_")) or key == "gantry_height")
+        and key not in MACHINE_CODES
+        and not (key in dimensions and key in written)
+        and isinstance(value, (str, int, float, bool))
+    }
+    # Curas Ursprung ist eine Eigenschaft der Maschine, nicht immer vorn links.
+    if hardware.get("machine_center_is_zero", "").lower() == "true":
+        hardware.update({key: "0" for key in ("z_seam_x", "z_seam_y") if key in written})
+    return hardware
 
 
 def cura_machine_differences(

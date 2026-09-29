@@ -17,6 +17,25 @@ stehen in `.claude/rules/dateiformat.md`; Herleitungen in
 | `slicer_keys.py` | Wie eine Solidon-Einstellung in **jedem** Slicer heißt; die Prädikate je Familie |
 | `slicer_profiles.py` | Die Profile eines installierten Slicers; ein Durchgang liest jede Datei einmal (`ProfileDocuments`); `_prusa_store` hält den Prusa-Bestand, bis sich eine Bündeldatei ändert; `identity` (Kennung in einer Auswahl); `stage_process` und `standard_process` ordnen Stufe und Standardprozess zu (`STAGE_WORDS`); Prusa-Profile passen nur zum Drucker ihres Bündels (`SlicerProfile.vendor`) |
 
+## Drucker aus dem gewählten Slicer
+
+`slicer_profiles.discover_printers` leitet aus vollständigen Maschinenprofilen
+Bauraum, Druckkontur, Sperrzonen und Düse ab, ohne sie zu speichern. Stabile
+Kennungen unterscheiden Programm, Hersteller und Profil unabhängig vom
+Installationspfad. Bekannte Hardwarezusätze bleiben nur bei exakt passendem
+Modell und gleicher Düse erhalten; native Maße haben Vorrang. Der strikte
+Profilauflöser verwirft fehlende Eltern und nicht auswertbare Cura-Formeln.
+Erst die bestätigte Auswahl übernimmt ein Druckerprofil in den Nutzerbestand.
+
+Cura-Maschineninstanzen bleiben über `SlicerProfile.cura_instance` und die
+portable Auswahlkennung `cura-instance:<ID>` von gleich benannten
+Werksdefinitionen getrennt. `chosen_printer` ordnet die aktive Instanz zu;
+`resolve_profile` liest DefinitionChanges, Düsenvariante und Nutzercontainer.
+Die Übergabe übernimmt daraus Hardwarewerte sowie Start- und Endcode. Ein
+fehlender oder unvollständiger gespeicherter Stapel fällt nicht auf Werkswerte
+zurück. Bei gleich benannten Profilen verschiedener Slicer bleibt die vom
+Nutzer gewählte Druckerkennung maßgeblich.
+
 ## Auf dem Herstellerprofil schreibt die Übergabe nur die Abweichung
 
 `write_config` und `project_settings` fragen `base_settings`; liegt ein

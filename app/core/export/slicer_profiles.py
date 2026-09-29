@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import configparser
 import csv
+import hashlib
 import json
 import math
 import os
@@ -33,7 +34,7 @@ from typing import Any, Final, Literal
 from urllib.parse import unquote_plus
 from xml.etree import ElementTree as ET
 
-from app.core import discover
+from app.core import build_area, discover
 from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
 from app.core.export import prusa_conditions
 from app.core.export.slicer_keys import (
@@ -41,9 +42,10 @@ from app.core.export.slicer_keys import (
     has_readable_profiles,
     has_user_profile_tree,
 )
+from app.core.knowledge import profiles as knowledge_profiles
 from app.core.log import get_logger
 from app.core.types import CancelToken, PrinterProfile, QualityPreset
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, inscribed_ratio
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -146,6 +148,10 @@ class SlicerProfile:
     seines ersten Vorfahren mit Hersteller. Leer bei Vorlagen
     (``templates_profile = 1``) und bei eigenen Profilen ohne Herstellerbasis
     (:meth:`_PrusaStore.vendor_of`)."""
+    printer_id: str = ""
+    """Solidons stabile Kennung einer Cura-Maschine, unabhängig vom Anzeigenamen."""
+    cura_instance: Path | None = None
+    """Der konfigurierte Maschinenstapel; seine Definition bleibt unter ``path``."""
 
     def title(self, own: str = "eigenes") -> str:
         """Der Name für die Auswahl. Ein selbst angelegtes Profil wird
@@ -287,6 +293,16 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
     """
     if flavour == "prusa":
         return str(_prusa_presets(executable).get("printer", "")).strip()
+    if flavour == "cura":
+        for root in user_roots(flavour, executable):
+            active = _cura_active_id(root)
+            for path in sorted((root / "machine_instances").glob("*.global.cfg")):
+                parsed = _read_ini(path)
+                if parsed is not None and parsed.has_section("general"):
+                    general = parsed["general"]
+                    if active and general.get("id", "").strip() == active:
+                        return f"cura-instance:{active}"
+        return ""
     if not has_user_profile_tree(flavour):
         return ""
     for root in user_roots(flavour, executable):
@@ -1109,6 +1125,326 @@ def known_printers(flavour: SlicerFlavour, executable: Path) -> tuple[str, ...]:
     )
 
 
+def discover_printers(executable: Path, flavour: SlicerFlavour) -> tuple[PrinterProfile, ...]:
+    """Belegte Drucker des Slicers, ohne sie im Nutzerbestand zu speichern.
+
+    Die native Profilidentität bleibt erhalten, auch bei gleicher Maschine
+    mit anderer Düse. Unvollständige Erbketten, Formeln statt Maßen und kaputte
+    Konturen ergeben kein scheinbar brauchbares Druckerprofil. Die Auswahl
+    speichert später ausschließlich das ausdrücklich gewählte Profil.
+    """
+    roots = profile_roots(flavour, executable)
+    indexes: ProfileIndexes = {}
+    documents: ProfileDocuments = {}
+    known = knowledge_profiles.printer_profiles()
+    found: dict[str, PrinterProfile] = {}
+    for entry in find_profiles(executable, flavour, kinds=("machine",)):
+        try:
+            values = resolve_profile(
+                entry, roots, indexes=indexes, documents=documents, strict=True
+            )
+            printer = _discovered_printer(
+                entry, flavour, values, known, discover.program_mark(executable.name)
+            )
+            area = build_area.printable_area(printer)
+            if area.is_empty:
+                raise _incomplete_profile(entry.path)
+        except (
+            ExternalToolError,
+            ValidationError,
+            ValueError,
+            TypeError,
+            OverflowError,
+        ) as problem:
+            _log.debug("skipping incomplete printer %s: %s", entry.name, problem)
+            continue
+        found[printer.id] = printer
+    return tuple(sorted(found.values(), key=lambda printer: (printer.title.casefold(), printer.id)))
+
+
+def _profile_numbers(value: Any) -> tuple[float, ...]:
+    """Native Zahlenlisten, ohne eine fehlende Düse durch eine Vorgabe zu ersetzen."""
+    raw = value if isinstance(value, (list, tuple)) else str(value).split(",")
+    if any(isinstance(item, bool) for item in raw):
+        raise ValueError("boolean dimension")
+    numbers = tuple(float(item) for item in raw)
+    if not numbers or any(not math.isfinite(item) or item <= 0.0 for item in numbers):
+        raise ValueError("missing or invalid dimension")
+    return numbers
+
+
+def _cura_machine_instances(
+    roots: Sequence[Path],
+    indexes: ProfileIndexes,
+    documents: ProfileDocuments,
+) -> Iterator[tuple[SlicerProfile, dict[str, Any]]]:
+    """Eigene Cura-Maschinen einschließlich ihrer Maschinen- und Düsencontainer.
+
+    In der Stapelfolge steht die kleinste Nummer oben. Nur die drei
+    Hardwarecontainer werden gebraucht, keine Prozess- oder Materialwerte.
+    Ein referenzierter, aber fehlender Container macht die Maschine unbekannt.
+    """
+    definitions: dict[str, Path] = {}
+    installed_containers: dict[str, Path] = {}
+    for root in roots:
+        resources = _cura_resources(root)
+        for kind in ("definitions", "extruders"):
+            definitions.update(
+                {
+                    cura_definition_id(path): path
+                    for path in sorted((resources / kind).glob("*.def.json"))
+                }
+            )
+        installed_containers.update(
+            {
+                unquote_plus(path.name.removesuffix(".inst.cfg")): path
+                for path in sorted((resources / "variants").rglob("*.inst.cfg"))
+            }
+        )
+    for folder in roots:
+        if not (folder / "machine_instances").is_dir():
+            continue
+        containers = dict(installed_containers)
+        for kind in ("definition_changes", "variants", "user"):
+            containers.update(
+                {
+                    unquote_plus(path.name.removesuffix(".inst.cfg")): path
+                    for path in sorted((folder / kind).rglob("*.inst.cfg"))
+                }
+            )
+
+        def changes(
+            stack: Mapping[str, str],
+            source: Path,
+            paths: Mapping[str, Path] = containers,
+        ) -> dict[str, Any]:
+            values: dict[str, Any] = {}
+            for position in (_CURA_DEFINITION_CHANGES_INDEX, _CURA_VARIANT_INDEX, "0"):
+                identifier = stack.get(position, "").strip()
+                if not identifier or identifier.startswith("empty_"):
+                    continue
+                path = paths.get(identifier)
+                parsed = _read_ini(path) if path is not None else None
+                if parsed is None:
+                    raise _incomplete_profile(source)
+                if parsed.has_section("values"):
+                    # Formeln bleiben als ungültiger Wert stehen; sie dürfen
+                    # keinen vorhandenen Default wieder sichtbar machen.
+                    values.update(parsed["values"])
+            return values
+
+        for path in sorted((folder / "machine_instances").glob("*.global.cfg")):
+            parsed = _read_ini(path)
+            if parsed is None or not all(
+                parsed.has_section(name) for name in ("general", "containers")
+            ):
+                continue
+            general, stack = parsed["general"], parsed["containers"]
+            machine = general.get("id", "").strip()
+            definition = definitions.get(stack.get("7", ""))
+            if not machine or definition is None:
+                continue
+            try:
+                native = _cura_definition_values(
+                    definition,
+                    roots,
+                    strict=True,
+                    indexes=indexes,
+                    documents=documents,
+                    overrides=changes(stack, path),
+                )
+                trains = _cura_trains(folder, machine)
+                if trains:
+                    if [position for position, _stack in trains] != list(range(len(trains))):
+                        raise _incomplete_profile(path)
+                    nozzle_values = []
+                    for _position, train in trains:
+                        extruder = definitions.get(train.get("7", ""))
+                        if extruder is None:
+                            raise _incomplete_profile(path)
+                        hardware = _cura_definition_values(
+                            extruder,
+                            roots,
+                            strict=True,
+                            indexes=indexes,
+                            documents=documents,
+                            overrides=changes(train, path),
+                        )
+                        nozzle_values.append(
+                            _profile_numbers(
+                                hardware.get(
+                                    "machine_nozzle_size", native.get("machine_nozzle_size")
+                                )
+                            )[0]
+                        )
+                    count = _profile_numbers(native.get("machine_extruder_count", len(trains)))[0]
+                    if not count.is_integer() or int(count) != len(trains):
+                        raise _incomplete_profile(path)
+                    native["machine_nozzle_size"] = nozzle_values
+                    native["machine_extruder_count"] = len(trains)
+                yield (
+                    SlicerProfile(
+                        definition,
+                        general.get("name", machine).strip(),
+                        "machine",
+                        printer_model=cura_definition_id(definition),
+                        nozzle=_profile_numbers(native.get("machine_nozzle_size"))[0],
+                        section=machine,
+                        from_user=True,
+                        cura_instance=path,
+                    ),
+                    native,
+                )
+            except (ExternalToolError, ValueError, TypeError, OverflowError) as problem:
+                _log.debug("skipping incomplete Cura stack %s: %s", machine, problem)
+
+
+def _profile_points(value: Any) -> tuple[tuple[float, float], ...]:
+    """Orca-/Prusa-Koordinaten und Curas JSON-Konturen als reine Daten."""
+    if isinstance(value, str):
+        value = json.loads(value) if value.lstrip().startswith("[") else value.split(",")
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("invalid contour")
+    points = []
+    for item in value:
+        pair = item.split("x") if isinstance(item, str) else item
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            raise ValueError("invalid contour point")
+        if any(isinstance(number, bool) for number in pair):
+            raise ValueError("boolean coordinate")
+        point = (float(pair[0]), float(pair[1]))
+        if not all(math.isfinite(number) for number in point):
+            raise ValueError("nonfinite coordinate")
+        points.append(point)
+    return tuple(points)
+
+
+def _discovered_printer(
+    entry: SlicerProfile,
+    flavour: SlicerFlavour,
+    values: Mapping[str, Any],
+    known: Mapping[str, PrinterProfile],
+    source: str,
+) -> PrinterProfile:
+    """Native Bettkoordinaten einmal in Solidons zentrierte Kontur übersetzen."""
+    if str(values.get("printer_technology", "FFF")).upper() not in {"FFF", "FDM"}:
+        raise _incomplete_profile(entry.path)
+    exclusions: tuple[tuple[tuple[float, float], ...], ...] = ()
+    if flavour == "cura":
+        width = _profile_numbers(values.get("machine_width"))[0]
+        depth = _profile_numbers(values.get("machine_depth"))[0]
+        height = _profile_numbers(values.get("machine_height"))[0]
+        nozzles = _profile_numbers(values.get("machine_nozzle_size"))
+        count = _profile_numbers(values.get("machine_extruder_count", 1))[0]
+        if not count.is_integer():
+            raise _incomplete_profile(entry.path)
+        shape = str(values.get("machine_shape", "rectangular"))
+        if shape == "elliptic":
+            sections = 4
+            while max(width, depth) / 2.0 * (1.0 - inscribed_ratio(sections)) > MAX_FACET_SAG:
+                sections *= 2
+            contour = tuple(
+                (x * width / 2.0, y * depth / 2.0)
+                for x, y in (circle_point(sections, index) for index in range(sections))
+            )
+        elif shape == "rectangular":
+            contour = ()
+        else:
+            raise _incomplete_profile(entry.path)
+        # Cura definiert Sperrzonen relativ zur Bettmitte, unabhängig vom
+        # G-Code-Ursprung (machine_center_is_zero).
+        blocked = values.get("machine_disallowed_areas", [])
+        if isinstance(blocked, str):
+            blocked = json.loads(blocked)
+        if not isinstance(blocked, (list, tuple)):
+            raise _incomplete_profile(entry.path)
+        exclusions = tuple(_profile_points(points) for points in blocked)
+    else:
+        contour = _profile_points(
+            values.get("bed_shape" if flavour == "prusa" else "printable_area")
+        )
+        if len(contour) < 3:
+            raise _incomplete_profile(entry.path)
+        left, right = min(x for x, _y in contour), max(x for x, _y in contour)
+        front, back = min(y for _x, y in contour), max(y for _x, y in contour)
+        width, depth = right - left, back - front
+        if width <= 0.0 or depth <= 0.0:
+            raise _incomplete_profile(entry.path)
+        height = _profile_numbers(
+            values.get("max_print_height" if flavour == "prusa" else "printable_height")
+        )[0]
+        nozzles = _profile_numbers(values.get("nozzle_diameter"))
+        count = float(len(nozzles))
+        cx, cy = (left + right) / 2.0, (front + back) / 2.0
+        contour = tuple((x - cx, y - cy) for x, y in contour)
+        blocked = values.get("bed_exclude_area", [])
+        if blocked:
+            points = _profile_points(blocked)
+            # Orca benutzt eine Nullkontur ausdrücklich für „keine Sperrzone“.
+            if any(abs(number) > EPS_GEOM for point in points for number in point):
+                exclusions = (tuple((x - cx, y - cy) for x, y in points),)
+    vendor = entry.vendor or ("" if entry.from_user else _vendor_of(entry.path, "machine"))
+    # Bahnbreite und Schichthöhe sind Arbeitsvorgaben, keine Herstellermaße;
+    # sie folgen der belegten Düse, wie beim eigenen Druckerprofil.
+    model = (
+        entry.name
+        if flavour == "cura"
+        else entry.printer_model or str(values.get("printer_model", "")) or entry.name
+    )
+    if flavour == "cura" and entry.section:
+        definition = _read_cura_machine(entry.path)
+        model = definition.name if definition is not None else model
+    matched = known.get(printer_for(model, known))
+    # Ein Namenspräfix genügt für eine Vorauswahl, nicht für die Übernahme
+    # von Hardwarewissen: K1 Max ist kein K1. Düsenabhängige Vorgaben bleiben
+    # ebenfalls beim passenden Durchmesser.
+    if matched is not None and (
+        _printer_name(model) != _printer_name(matched.title)
+        or abs(matched.nozzle_diameter - nozzles[0]) > EPS_GEOM
+    ):
+        matched = None
+    base = matched or PrinterProfile(id="", title="", build_volume=(width, depth, height))
+    return replace(
+        base,
+        id=_printer_identifier(entry, flavour, source),
+        title=entry.name,
+        build_volume=(width, depth, height),
+        nozzle_diameter=nozzles[0],
+        nozzles=int(count),
+        layer_height=min(0.2, nozzles[0] / 2.0),
+        extrusion_width=round(nozzles[0] * 1.05, 3),
+        vendor=vendor,
+        printable_area=contour,
+        bed_exclusions=exclusions,
+        printable_height=None,
+        cura_definition=entry.printer_model if flavour == "cura" else "",
+        prusaslicer_printer=entry.name if flavour == "prusa" else "",
+    )
+
+
+def _printer_identifier(entry: SlicerProfile, flavour: SlicerFlavour, source: str) -> str:
+    """Die native Identität bleibt bei gleicher Beschriftung und nach Umzügen eindeutig."""
+    vendor = entry.vendor or ("" if entry.from_user else _vendor_of(entry.path, "machine"))
+    native_id = entry.section or (entry.printer_model if flavour == "cura" else entry.name)
+    digest = hashlib.sha256(
+        json.dumps((source, flavour, vendor, native_id, entry.name), ensure_ascii=False).encode(
+            "utf-8"
+        )
+    ).hexdigest()[:20]
+    return f"slicer-{flavour}-{digest}"
+
+
+def chosen_printer(
+    flavour: SlicerFlavour, executable: Path, known: Mapping[str, PrinterProfile]
+) -> str:
+    """Die aktive Maschine mit ihrer Identität, auch bei gleichem Cura-Anzeigenamen."""
+    chosen = chosen_machine(flavour, executable)
+    if flavour == "cura":
+        entry = profile_by_name(executable, flavour, chosen, "machine") if chosen else None
+        return entry.printer_id if entry is not None and entry.printer_id in known else ""
+    return printer_for(chosen, known)
+
+
 def supports_printer(flavour: SlicerFlavour, executable: Path, title: str) -> bool:
     """Kennt dieser Slicer den Drucker mit diesem Titel?
 
@@ -1202,7 +1538,9 @@ def machine_with_nozzle(
         if entry.kind == "machine"
     ]
     fits = [entry for entry in machines_here if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
-    current = [entry for entry in machines_here if entry.name == machine]
+    current = [
+        entry for entry in machines_here if entry.name == machine or identity(entry) == machine
+    ]
     if current and any(entry in fits for entry in current):
         return machine
     if not current or all(entry.nozzle <= 0.0 for entry in current):
@@ -1351,6 +1689,16 @@ def _cura_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[Sli
                     # Gleicher Titel bei anderem Durchmesser ist eine andere
                     # native Datei und darf nicht still ersetzt werden.
                     found[(kind, path.name)] = replace(profile, from_user=root in users)
+    if "machine" in wanted:
+        for entry, _native in _cura_machine_instances(profile_roots("cura", executable), {}, {}):
+            found[("machine", identity(entry))] = entry
+    source = discover.program_mark(executable.name)
+    found = {
+        key: replace(entry, printer_id=_printer_identifier(entry, "cura", source))
+        if entry.kind == "machine"
+        else entry
+        for key, entry in found.items()
+    }
     _log.info("found %d Cura profiles", len(found))
     return list(found.values())
 
@@ -1543,25 +1891,31 @@ def cura_definition_id(path: Path) -> str:
     return path.stem.removesuffix(".def")
 
 
-def _cura_definition_values(path: Path, roots: Sequence[Path]) -> dict[str, Any]:
+def _cura_definition_values(
+    path: Path,
+    roots: Sequence[Path],
+    *,
+    strict: bool = False,
+    indexes: ProfileIndexes | None = None,
+    documents: ProfileDocuments | None = None,
+    overrides: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Definitionsvererbung als Daten; berechnete Eigenschaften bleiben unbekannt."""
-    index = {
-        cura_definition_id(entry): entry
-        for root in roots
-        for entry in sorted((_cura_resources(root) / "definitions").glob("*.def.json"))
-    }
-    index.update(
-        {cura_definition_id(entry): entry for entry in sorted(path.parent.glob("*.def.json"))}
-    )
+    indexes = {} if indexes is None else indexes
+    index: dict[str, Path] = {}
+    for folder in [*(_cura_resources(root) / "definitions" for root in roots), path.parent]:
+        index_key: tuple[Path, ProfileKind | None] = (folder, "machine")
+        if index_key not in indexes:
+            indexes[index_key] = {
+                cura_definition_id(entry): entry for entry in sorted(folder.glob("*.def.json"))
+            }
+        index.update(indexes[index_key])
 
     def read(current: Path, active: frozenset[Path]) -> dict[str, dict[str, Any]]:
         if current in active or len(active) >= MAX_INHERITANCE:
             raise _incomplete_profile(path)
-        try:
-            loaded = json.loads(current.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as problem:
-            raise _incomplete_profile(path) from problem
-        if not isinstance(loaded, dict):
+        loaded = _load(current, documents)
+        if loaded is None:
             raise _incomplete_profile(path)
         definitions: dict[str, dict[str, Any]] = {}
         parent = loaded.get("inherits")
@@ -1586,16 +1940,31 @@ def _cura_definition_values(path: Path, roots: Sequence[Path]) -> dict[str, Any]
 
     values: dict[str, Any] = {}
     for key, properties in read(path, frozenset()).items():
+        if overrides is not None and key in overrides:
+            values[key] = overrides[key]
+            continue
         # Eine Formel überlagert auch einen vorhandenen default_value. Der
         # Default ist dann gerade nicht der Wert, den Cura berechnet.
         if "value" in properties:
             value = properties["value"]
             if isinstance(value, str):
+                if strict and key in {
+                    "machine_width",
+                    "machine_depth",
+                    "machine_height",
+                    "machine_shape",
+                    "machine_disallowed_areas",
+                    "machine_nozzle_size",
+                    "machine_extruder_count",
+                }:
+                    raise _incomplete_profile(path)
                 continue
         else:
             value = properties.get("default_value")
         if value is not None:
             values[key] = value
+    if overrides is not None:
+        values.update(overrides)
     return values
 
 
@@ -2195,6 +2564,8 @@ def identity(entry: SlicerProfile) -> str:
     eines), reist wie jeder Profilname in die Projektdatei (Regel 12), und
     :func:`app.core.export.handover.profile_source` löst ihn auf.
     """
+    if entry.cura_instance is not None:
+        return f"cura-instance:{entry.section}"
     if entry.section and entry.section != _PRUSA_HEAD:
         return entry.name
     return str(entry.path)
@@ -2204,7 +2575,11 @@ def profile_by_name(
     executable: Path, flavour: SlicerFlavour, name: str, kind: ProfileKind
 ) -> SlicerProfile | None:
     """Portable Identität auflösen; Prusa behält den Abschnitt neben dem Pfad."""
-    matches = [entry for entry in find_profiles(executable, flavour, (kind,)) if entry.name == name]
+    matches = [
+        entry
+        for entry in find_profiles(executable, flavour, (kind,))
+        if entry.name == name or identity(entry) == name
+    ]
     choices = [entry for entry in matches if entry.from_user] or matches
     return choices[0] if len(choices) == 1 else None
 
@@ -2215,21 +2590,44 @@ def resolve_profile(
     *,
     indexes: ProfileIndexes | None = None,
     cancelled: CancelToken | None = None,
+    strict: bool = False,
+    documents: ProfileDocuments | None = None,
 ) -> dict[str, Any]:
     """Native Werte ausschreiben, ohne Formeln oder G-Code auszuführen.
 
     Prusa-Werte bleiben INI-serialisiert (auch ``\\n`` in G-Code), Cura und
     Orca behalten die Werttypen ihrer Dateien. Eine Prusa-Bündeldatei braucht
     zwingend die Abschnittsidentität aus :func:`profile_by_name`.
+    ``strict`` lehnt fehlende Erbbasen und unbelegte Cura-Maschinenmaße ab;
+    ``documents`` teilt gelesene Dateien innerhalb einer Erhebung.
     """
     _check_cancelled(cancelled)
+    if profile.cura_instance is not None:
+        folders = tuple(
+            dict.fromkeys((*roots, profile.path.parent.parent, profile.cura_instance.parent.parent))
+        )
+        for entry, native in _cura_machine_instances(
+            folders,
+            indexes if indexes is not None else {},
+            documents if documents is not None else {},
+        ):
+            if entry.cura_instance == profile.cura_instance and entry.section == profile.section:
+                return native
+        raise _incomplete_profile(profile.cura_instance)
     if profile.path.suffix == ".ini":
         store = _prusa_store(roots, cancelled).store
         # Unter der Sperre: Eine Datei außerhalb der Wurzeln liest der Bestand
         # beim Auflösen nach, und zwei Aufrufer dürfen ihn dabei nicht teilen.
         with _PRUSA_LOCK:
             return dict(store.resolve(profile))
-    return resolve_values(profile.path, roots, indexes=indexes, cancelled=cancelled)
+    return resolve_values(
+        profile.path,
+        roots,
+        indexes=indexes,
+        cancelled=cancelled,
+        strict=strict,
+        documents=documents,
+    )
 
 
 def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
@@ -2291,6 +2689,8 @@ def resolve_values(
     *,
     indexes: ProfileIndexes | None = None,
     cancelled: CancelToken | None = None,
+    strict: bool = False,
+    documents: ProfileDocuments | None = None,
 ) -> dict[str, Any]:
     """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
 
@@ -2306,7 +2706,9 @@ def resolve_values(
     """
     _check_cancelled(cancelled)
     if path.name.endswith(".def.json"):
-        return _cura_definition_values(path, roots)
+        return _cura_definition_values(
+            path, roots, strict=strict, indexes=indexes, documents=documents
+        )
     if path.name.endswith(".xml.fdm_material"):
         return _cura_material_values(path)
     if path.name.endswith(".inst.cfg"):
@@ -2332,7 +2734,11 @@ def resolve_values(
         )
     values: dict[str, Any] = {}
     # Wurzel zuerst, Spezielles gewinnt
-    for loaded in reversed(_chain(path, roots, indexes=indexes, cancelled=cancelled)):
+    for loaded in reversed(
+        _chain(
+            path, roots, indexes=indexes, cancelled=cancelled, strict=strict, documents=documents
+        )
+    ):
         values.update({key: value for key, value in loaded.items() if key not in DESCRIBING_KEYS})
     return values
 
@@ -2377,6 +2783,7 @@ def _chain(
     indexes: ProfileIndexes | None = None,
     cancelled: CancelToken | None = None,
     documents: ProfileDocuments | None = None,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     """Die Profile der Erbkette, spezifisches zuerst.
 
@@ -2454,7 +2861,7 @@ def _chain(
         return chain
 
     # Bambu: Basis, Vorlagen in Listenreihenfolge, danach eigene Werte.
-    return list(reversed(visit(path, frozenset(), False)))
+    return list(reversed(visit(path, frozenset(), strict)))
 
 
 def _incomplete_profile(path: Path) -> ExternalToolError:
@@ -2726,17 +3133,37 @@ def match(
     dieses. Die Namenssuche traf dort am MINI und XL die abgelösten Profile
     ohne Input Shaper und den SV06 gar nicht (27.09.2026).
     """
+    native = [entry for entry in machines(profiles) if entry.printer_id == printer.id]
+    if (
+        printer.id.startswith("slicer-cura-")
+        and any(entry.printer_id.startswith("slicer-cura-") for entry in profiles)
+        and not native
+    ):
+        return None, None
     named_in_bundle = [
         entry
         for entry in machines(profiles)
         if printer.prusaslicer_printer and entry.name == printer.prusaslicer_printer
     ]
-    candidates = named_in_bundle or [
+    defined_in_cura = [
         entry
         for entry in machines(profiles)
-        if _names_the_printer(entry.printer_model, printer.title)
-        or _names_the_printer(entry.name, printer.title)
+        if printer.cura_definition
+        and entry.printer_model == printer.cura_definition
+        and entry.path.name.endswith(".def.json")
+        and entry.cura_instance is None
     ]
+    candidates = (
+        native
+        or named_in_bundle
+        or defined_in_cura
+        or [
+            entry
+            for entry in machines(profiles)
+            if _names_the_printer(entry.printer_model, printer.title)
+            or _names_the_printer(entry.name, printer.title)
+        ]
+    )
     if not candidates:
         return None, None
     # **Das Gerät selbst vor seinen Verwandten.** „Creality K1" beginnt auch

@@ -20,12 +20,237 @@ import pytest
 
 from app.core.export import slicer_profiles as sp
 from app.core.knowledge import profiles
-from app.core.types import PrinterProfile
+from app.core.types import PrinterProfile, Profile
 
 
 def _write(path: Path, document: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document), encoding="utf-8")
+
+
+@pytest.fixture
+def unknown_printers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Eine echte Profilkette einer nicht in Solidon eingebauten Maschine."""
+    root = tmp_path / "resources" / "profiles"
+    folder = root / "Acme" / "machine"
+    _write(
+        folder / "base.json",
+        {
+            "name": "Acme base",
+            "instantiation": "false",
+            "printable_area": ["10x20", "210x20", "210x170", "110x170", "110x220", "10x220"],
+            "printable_height": "240",
+            "nozzle_diameter": ["0.6", "0.6"],
+            "bed_exclude_area": ["10x20", "30x20", "30x40", "10x40"],
+        },
+    )
+    _write(
+        folder / "new.json",
+        {
+            "name": "Acme Unbekannt 0.6 nozzle",
+            "instantiation": "true",
+            "type": "machine",
+            "printer_model": "Acme Unbekannt",
+            "inherits": "Acme base",
+        },
+    )
+    monkeypatch.setattr(sp, "install_root", lambda _executable: root)
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    return root
+
+
+def test_discovery_imports_unknown_printer_geometry_and_source_nozzle(
+    unknown_printers: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core import build_area
+
+    def forbidden_write(*_args, **_kwargs):
+        pytest.fail("Die Erhebung darf kein Profil speichern")
+
+    monkeypatch.setattr(profiles, "save_printer", forbidden_write)
+    found = sp.discover_printers(unknown_printers / "slicer.exe", "orca")
+    assert len(found) == 1
+    printer = found[0]
+    assert printer.id.startswith("slicer-orca-")
+    assert printer.title == "Acme Unbekannt 0.6 nozzle"
+    assert printer.build_volume == pytest.approx((200, 200, 240))
+    assert printer.nozzle_diameter == pytest.approx(0.6)
+    assert printer.nozzles == 2
+    assert printer.printable_area[0] == pytest.approx((-100, -100))
+    assert build_area.printable_area(printer).area == pytest.approx(35000 - 400)
+    assert printer.vendor == "Acme"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"printable_height": "nan"},
+        {"nozzle_diameter": []},
+        {"nozzle_diameter": [True]},
+        {"printable_area": ["0x0", "10x10", "0x10", "10x0"]},
+        {"printable_area": ["0x0", "infx0", "0x10"]},
+        {"bed_exclude_area": ["0x0", "10x10"]},
+        {"inherits": "fehlende Basis"},
+        {"inherits": "Acme Unbekannt 0.6 nozzle"},
+        {"printer_technology": "SLA"},
+    ],
+)
+def test_discovery_never_substitutes_missing_or_invalid_machine_dimensions(
+    unknown_printers: Path,
+    change: dict[str, object],
+) -> None:
+    path = unknown_printers / "Acme" / "machine" / "base.json"
+    content = json.loads(path.read_text(encoding="utf-8"))
+    content.update(change)
+    _write(path, content)
+    assert sp.discover_printers(unknown_printers / "slicer.exe", "orca") == ()
+
+
+def test_discovered_identity_survives_installation_move_and_separates_nozzles(
+    unknown_printers: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import shutil
+
+    first = sp.discover_printers(unknown_printers / "slicer.exe", "orca")[0]
+    other_source = sp.discover_printers(unknown_printers / "bambu-studio.exe", "orca")[0]
+    assert other_source.id != first.id
+    moved = tmp_path / "other-installation"
+    shutil.copytree(unknown_printers, moved)
+    monkeypatch.setattr(sp, "install_root", lambda _executable: moved)
+    assert sp.discover_printers(moved / "slicer.exe", "orca")[0].id == first.id
+    _write(
+        moved / "Acme" / "machine" / "fine.json",
+        {
+            "name": "Acme Unbekannt 0.2 nozzle",
+            "instantiation": "true",
+            "type": "machine",
+            "printer_model": "Acme Unbekannt",
+            "inherits": "Acme base",
+            "nozzle_diameter": ["0.2"],
+        },
+    )
+    found = sp.discover_printers(moved / "slicer.exe", "orca")
+    assert len({printer.id for printer in found}) == 2
+    assert sorted(printer.nozzle_diameter for printer in found) == pytest.approx([0.2, 0.6])
+
+
+@pytest.mark.parametrize(
+    "title,nozzle,enclosed",
+    [
+        ("Acme Unbekannt", 0.6, True),
+        ("Acme", 0.6, False),
+        ("Acme Unbekannt", 0.4, False),
+    ],
+)
+def test_discovery_preserves_hardware_knowledge_only_for_matching_machine_and_nozzle(
+    unknown_printers: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    title: str,
+    nozzle: float,
+    enclosed: bool,
+) -> None:
+    known = PrinterProfile(
+        id="known",
+        title=title,
+        build_volume=(220, 220, 200),
+        nozzle_diameter=nozzle,
+        enclosed=True,
+        nozzle_temperature_max=320,
+        travel_speed=500,
+        flow_factor=1.75,
+        printable_height=190,
+    )
+    monkeypatch.setattr(profiles, "printer_profiles", lambda: {known.id: known})
+    printer = sp.discover_printers(unknown_printers / "slicer.exe", "orca")[0]
+    assert printer.enclosed is enclosed
+    assert printer.build_volume == pytest.approx((200, 200, 240))
+    assert printer.printable_height is None
+    assert printer.nozzle_diameter == pytest.approx(0.6)
+    assert printer.id != known.id
+    if enclosed:
+        assert printer.nozzle_temperature_max == 320
+        assert printer.travel_speed == pytest.approx(500)
+        assert printer.flow_factor == pytest.approx(1.75)
+
+
+def test_discovery_resolves_prusa_bundle_sections(
+    prusa_mini: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    bundle = prusa_mini.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    content = bundle.read_text(encoding="utf-8").replace(
+        "[printer:*common*]",
+        "[printer:*common*]\nbed_shape = -90x-90,90x-90,90x90,-90x90\nmax_print_height = 180",
+    )
+    bundle.write_text(content, encoding="utf-8")
+    found = sp.discover_printers(prusa_mini, "prusa")
+    assert len(found) == 2
+    assert len({printer.id for printer in found}) == 2
+    for printer in found:
+        assert printer.build_volume == pytest.approx((180, 180, 180))
+        assert printer.nozzle_diameter == pytest.approx(0.4)
+        assert printer.prusaslicer_printer == printer.title
+
+
+def test_discovery_resolves_cura_bed_shape_and_exclusions(
+    cura: Path, cura_bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core import build_area
+
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _write(
+        cura_bestand / "definitions" / "fdmprinter.def.json",
+        {
+            "version": 2,
+            "name": "FDM Drucker",
+            "metadata": {"visible": False},
+            "settings": {
+                "machine": {
+                    "children": {
+                        "machine_width": {"default_value": 200},
+                        "machine_depth": {"default_value": 160},
+                        "machine_height": {"default_value": 210},
+                        "machine_shape": {"default_value": "elliptic"},
+                        "machine_disallowed_areas": {
+                            "default_value": [[[-5, -5], [5, -5], [5, 5], [-5, 5]]]
+                        },
+                    }
+                }
+            },
+        },
+    )
+    found = sp.discover_printers(cura, "cura")
+    assert len(found) == 1
+    printer = found[0]
+    assert printer.cura_definition == "abax_pri3"
+    assert printer.build_volume == pytest.approx((200, 160, 210))
+    assert len(printer.printable_area) > 4
+    assert printer.bed_exclusions[0][0] == pytest.approx((-5, -5))
+    assert 25000 < build_area.printable_area(printer).area < 25100
+
+
+@pytest.mark.parametrize(
+    "key", ["machine_width", "machine_nozzle_size", "machine_disallowed_areas", "machine_shape"]
+)
+def test_discovery_rejects_cura_formula_even_with_generic_default(
+    cura: Path, cura_bestand: Path, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    path = cura_bestand / "definitions" / "abax_pri3.def.json"
+    content = json.loads(path.read_text(encoding="utf-8"))
+    content["overrides"].update(
+        {
+            "machine_width": {"default_value": 200},
+            "machine_depth": {"default_value": 200},
+            "machine_height": {"default_value": 200},
+        }
+    )
+    content["overrides"].setdefault(key, {})["value"] = "some_unknown_setting"
+    _write(path, content)
+    assert sp.discover_printers(cura, "cura") == ()
 
 
 @pytest.mark.parametrize("own", [False, True])
@@ -1286,6 +1511,237 @@ def test_cura_names_its_active_machine_with_nozzle_and_spool(
         variant="0.4mm Nozzle",
         material_type="PLA",
     )
+
+
+@pytest.fixture
+def cura_configured_printers(
+    cura_bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    root = _cura_konfiguration(tmp_path, monkeypatch)
+    _write(
+        cura_bestand / "definitions" / "fdmprinter.def.json",
+        {
+            "name": "FDM Drucker",
+            "metadata": {"visible": False},
+            "overrides": {
+                "machine_width": {"default_value": 200},
+                "machine_depth": {"default_value": 180},
+                "machine_height": {"default_value": 210},
+                "machine_extruder_count": {"default_value": 1},
+            },
+        },
+    )
+    _write(
+        cura_bestand / "definitions" / "fdmextruder.def.json",
+        {
+            "name": "Extruder",
+            "metadata": {"visible": False},
+            "settings": {},
+        },
+    )
+    for name in ("Meine Werkstatt", "Andere Maschine"):
+        _cura_maschine(root, name, "abax_pri3")
+        for folder, suffix, values in (
+            ("user", "user", ""),
+            (
+                "definition_changes",
+                "settings",
+                "machine_width = 240\nmachine_depth = 230\nmachine_height = 260\n"
+                "machine_extruder_count = 2"
+                if name == "Meine Werkstatt"
+                else "",
+            ),
+        ):
+            target = root / folder / f"{name.replace(' ', '+')}_{suffix}.inst.cfg"
+            target.parent.mkdir(exist_ok=True)
+            target.write_text(
+                f"[general]\nname = {name}_{suffix}\n[values]\n{values}\n", encoding="utf-8"
+            )
+    stack = root / "extruders" / "meine+werkstatt_0.extruder.cfg"
+    stack.write_text(
+        stack.read_text(encoding="utf-8").replace("5 = empty_variant", "5 = abax_0.6"),
+        encoding="utf-8",
+    )
+    variant = cura_bestand / "variants" / "abax_0.6.inst.cfg"
+    variant.parent.mkdir(exist_ok=True)
+    variant.write_text(
+        "[general]\nname = 0.6mm Nozzle\n[values]\nmachine_nozzle_size = 0.6\n", encoding="utf-8"
+    )
+    return root
+
+
+def test_discovery_reads_all_configured_cura_machines_and_the_actual_nozzle(
+    cura: Path,
+    cura_configured_printers: Path,
+) -> None:
+    found = {printer.title: printer for printer in sp.discover_printers(cura, "cura")}
+    assert {"Abax PRi3", "Meine Werkstatt", "Andere Maschine"} <= found.keys()
+    chosen = found["Meine Werkstatt"]
+    assert chosen.build_volume == pytest.approx((240, 230, 260))
+    assert chosen.nozzle_diameter == pytest.approx(0.6)
+    assert chosen.nozzles == 2
+    assert chosen.cura_definition == "abax_pri3"
+    assert chosen.id != found["Andere Maschine"].id != found["Abax PRi3"].id
+    assert sp.chosen_machine("cura", cura) == "cura-instance:Meine Werkstatt"
+    assert sp.chosen_printer("cura", cura, {p.id: p for p in found.values()}) == chosen.id
+    machine, _process = sp.match(sp.find_profiles(cura, "cura"), chosen)
+    assert machine is not None and machine.cura_instance is not None
+    assert sp.identity(machine) == sp.chosen_machine("cura", cura)
+    assert machine.nozzle == pytest.approx(chosen.nozzle_diameter)
+
+
+def test_cura_instance_with_factory_name_keeps_its_own_identity(
+    cura: Path, cura_configured_printers: Path
+) -> None:
+    """Der Anzeigename darf die aktive Maschine nicht durch die Werksmaße ersetzen."""
+    for path in (cura_configured_printers / "machine_instances").glob("*.global.cfg"):
+        text = path.read_text(encoding="utf-8")
+        if "id = Meine Werkstatt" in text:
+            path.write_text(
+                text.replace("name = Meine Werkstatt", "name = Abax PRi3"), encoding="utf-8"
+            )
+    found = {entry.id: entry for entry in sp.discover_printers(cura, "cura")}
+    chosen = found[sp.chosen_printer("cura", cura, found)]
+    assert chosen.title == "Abax PRi3"
+    assert chosen.build_volume == pytest.approx((240, 230, 260))
+    machine, _process = sp.match(sp.find_profiles(cura, "cura"), chosen)
+    assert machine is not None and machine.section == "Meine Werkstatt"
+    factory = next(
+        entry for entry in found.values() if entry.title == "Abax PRi3" and entry.id != chosen.id
+    )
+    factory_machine, _process = sp.match(sp.find_profiles(cura, "cura"), factory)
+    assert factory_machine is not None and factory_machine.cura_instance is None
+
+
+def test_cura_definition_matches_a_renamed_solidon_printer(cura: Path) -> None:
+    printer = PrinterProfile(
+        id="werkstatt",
+        title="Meine Werkstatt",
+        build_volume=(200, 180, 210),
+        cura_definition="abax_pri3",
+    )
+    machine, _process = sp.match(sp.find_profiles(cura, "cura"), printer)
+    assert machine is not None and machine.printer_model == "abax_pri3"
+
+
+def test_cura_instance_hardware_and_codes_reach_the_engine(
+    cura: Path, cura_configured_printers: Path, tmp_path: Path
+) -> None:
+    """Das echte Schreiben übernimmt DefinitionChanges und Nutzercontainer als Daten."""
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    path = cura_configured_printers / "user" / "Meine+Werkstatt_user.inst.cfg"
+    path.write_text(
+        "[general]\nname = Meine Werkstatt\n[values]\n"
+        "machine_start_gcode = G28\n  M117 Werkstatt\n  M109 S{material_print_temperature}\n"
+        "machine_end_gcode = M84\n  M117 Fertig\n"
+        "machine_center_is_zero = true\nmachine_gcode_flavor = RepRap (Marlin/Sprinter)\n",
+        encoding="utf-8",
+    )
+    found = {p.id: p for p in sp.discover_printers(cura, "cura")}
+    printer = found[sp.chosen_printer("cura", cura, found)]
+    profile = Profile(printer=printer, material=profiles.material("pla"))
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(cura, "cura", machine_profile=sp.chosen_machine("cura", cura))
+    written = handover.write_config(settings, profile, setup, tmp_path)
+    command = handover._command(setup, [tmp_path / "part.stl"], written, tmp_path)
+
+    assert written.written["machine_width"] == "240"
+    assert written.written["machine_depth"] == "230"
+    assert written.written["machine_height"] == "260"
+    assert written.written["machine_nozzle_size"] == "0.6"
+    assert written.written["machine_center_is_zero"] == "true"
+    assert written.written["z_seam_x"] == written.written["z_seam_y"] == "0"
+    assert (
+        f"machine_start_gcode=G28\nM117 Werkstatt\nM109 S{settings.temperature.nozzle}" in command
+    )
+    assert "machine_end_gcode=M84\nM117 Fertig" in command
+    assert written.cura_machine is not None
+    assert written.cura_machine.definition.name == "abax_pri3.def.json"
+
+    # Auch eine alte explizite Auswahl darf keinen fremden Maschinenstapel
+    # einschleusen, obwohl seine portable Kennung keinen Modellnamen trägt.
+    other = replace(setup, machine_profile="cura-instance:Andere Maschine")
+    assert handover.machine_for(other, profile) == ""
+    corrected = handover.write_config(settings, profile, other, tmp_path)
+    assert corrected.cura_machine is not None
+    assert corrected.cura_machine.codes == written.cura_machine.codes
+
+
+def test_same_machine_from_two_slicers_keeps_the_selected_printer(
+    unknown_printers: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gleicher Titel ist dasselbe Gerät, aber kein Auftrag zum Wechsel der Quell-ID."""
+    from app.core.export import handover
+
+    first = sp.discover_printers(unknown_printers, "orca")[0]
+    second = sp.discover_printers(unknown_printers.with_name("BambuStudio.exe"), "orca")[0]
+    known = {first.id: first, second.id: second}
+    assert first.id != second.id and first.title == second.title
+    monkeypatch.setattr(profiles, "printer_profiles", lambda: known)
+    monkeypatch.setattr(sp, "chosen_machine", lambda *_args: first.title)
+    profile = Profile(printer=second, material=profiles.material("pla"))
+    setup = handover.SlicerSetup(unknown_printers, "orca", machine_profile=first.title)
+    assert handover._fits_the_printer(first.title, profile)
+    assert handover.machine_for(setup, profile) == first.title
+    assert handover.machine_for(replace(setup, machine_profile=""), profile) == first.title
+    wrong = PrinterProfile(id="wrong", title="Other printer", build_volume=(100, 100, 100))
+    assert not handover._fits_the_printer(first.title, replace(profile, printer=wrong))
+
+
+def test_removed_cura_instance_never_silently_uses_factory_codes(
+    cura: Path, cura_configured_printers: Path, tmp_path: Path
+) -> None:
+    """Fehlt der gespeicherte Stapel, sind Herstellerdefaults kein Ersatz."""
+    from app.core.errors import ExternalToolError
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    found = {p.id: p for p in sp.discover_printers(cura, "cura")}
+    printer = found[sp.chosen_printer("cura", cura, found)]
+    profile = Profile(printer=printer, material=profiles.material("pla"))
+    path = cura_configured_printers / "definition_changes" / "Meine+Werkstatt_settings.inst.cfg"
+    path.write_text(
+        "[general]\nname = Unvollständig\n[values]\nmachine_width = =unknown\n", encoding="utf-8"
+    )
+    assert sp.match(sp.find_profiles(cura, "cura"), printer) == (None, None)
+    with pytest.raises(ExternalToolError) as caught:
+        handover.write_config(
+            print_settings.resolve(profile), profile, handover.SlicerSetup(cura, "cura"), tmp_path
+        )
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    "change", ["formula", "missing_variant", "missing_extruder", "invalid_count"]
+)
+def test_incomplete_cura_instance_does_not_fall_back_to_manufacturer_defaults(
+    cura: Path,
+    cura_configured_printers: Path,
+    change: str,
+) -> None:
+    root = cura_configured_printers
+    if change == "formula":
+        path = root / "definition_changes" / "Meine+Werkstatt_settings.inst.cfg"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "machine_width = 240", "machine_width = =200 + 40"
+            ),
+            encoding="utf-8",
+        )
+    else:
+        path = root / "extruders" / "meine+werkstatt_0.extruder.cfg"
+        replacements = {
+            "missing_variant": ("abax_0.6", "nicht_vorhanden"),
+            "missing_extruder": ("fdmextruder", "nicht_vorhanden"),
+            "invalid_count": ("position = 0", "position = 3"),
+        }
+        before, after = replacements[change]
+        path.write_text(path.read_text(encoding="utf-8").replace(before, after), encoding="utf-8")
+    names = {printer.title for printer in sp.discover_printers(cura, "cura")}
+    assert "Meine Werkstatt" not in names
+    assert "Andere Maschine" in names
 
 
 def test_cura_names_the_bed_of_its_active_machine(
