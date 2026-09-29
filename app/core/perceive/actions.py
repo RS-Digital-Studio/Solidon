@@ -1480,7 +1480,7 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
 #: Die Operationen, die an **einer angeklickten Kante** ansetzen.
 #:
 #: Beide leben im exakten Kern und tragen dieselbe Auswahl: Fünf Gruppen und
-#: ``named`` für einzeln gewählte Kanten (``brep.edit.EDGE_CHOICES``). Wer
+#: ``named`` für einzeln gewählte Kanten (``geom.edges.EDGE_CHOICES``). Wer
 #: eine Kante anklickt, hat ``named`` bereits beantwortet — einzugeben bleibt
 #: das Maß, das die Zeile führt, und was :data:`EDGE_SHAPE_FIELDS` dazu nennt.
 #:

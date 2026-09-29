@@ -70,18 +70,24 @@ def _oriented(direction: Any) -> Vec3:
     return positive_axis((direction.X(), direction.Y(), direction.Z()))
 
 
-#: Wie viel einer vollen Umdrehung eine zylindrische Fläche abdecken muss, um
-#: als Bohrung zu zählen. Darunter ist sie eine Verrundung oder eine gerundete
-#: Ecke, kein Loch.
-#:
-#: **Dieselbe Zahl wie am Netz** (``perceive.features.FULL_TURN_SPAN``, 300
-#: Grad; ``tests/test_partial_bores.py`` hält beide zusammen). Bis zum
-#: 20.09.2026 stand hier 0,9 — 324 Grad —, und ein Mantel von 315 Grad war am
-#: exakten Körper eine Verrundung und am Netz eine Bohrung (P1.5). Was er ist,
-#: sagt darüber hinaus ``partial``: Unter der vollen Umdrehung ist eine
-#: Bohrung angeschnitten, und ob sie für sich bearbeitbar ist, entscheidet
-#: ihre Nachbarschaft (``perceive.relations``), nicht der Winkel.
-FULL_TURN = 300.0 / 360.0
+def _full_turn() -> float:
+    """Wie viel Umfang eine zylindrische Fläche abdecken muss, um als Bohrung zu
+    zählen, im Bogenmaß. Darunter ist sie eine Verrundung oder eine gerundete
+    Ecke, kein Loch.
+
+    **Dieselbe Zahl wie am Netz**, von dort gelesen
+    (``perceive.features.FULL_TURN_SPAN``, 300 Grad) — träge wie jeder Import
+    von ``brep`` nach ``perceive`` (``tests/test_core_package_direction.py``).
+    Bis zum 20.09.2026 stand hier eine eigene Zahl, 0,9 der Umdrehung, und ein
+    Mantel von 315 Grad war am exakten Körper eine Verrundung und am Netz eine
+    Bohrung (P1.5). Was er ist, sagt darüber hinaus ``partial``: Unter der
+    vollen Umdrehung ist eine Bohrung angeschnitten, und ob sie für sich
+    bearbeitbar ist, entscheidet ihre Nachbarschaft (``perceive.relations``),
+    nicht der Winkel.
+    """
+    from app.core.perceive.features import FULL_TURN_SPAN
+
+    return FULL_TURN_SPAN / 360.0 * math.tau
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,7 +208,6 @@ def features_of(
             inside,
             neighbours,
             reach,
-            tolerance,
             surface=surfaces[index],
             cancelled=cancelled,
         )
@@ -229,7 +234,7 @@ def features_of(
         )
 
     found = _seam_split_cylinders_joined(
-        solid, found, named, neighbours, surfaces, inside, reach, tolerance, cancelled=cancelled
+        solid, found, named, surfaces, inside, reach, tolerance, cancelled=cancelled
     )
     found = _short_arcs_dropped(found, named, surfaces)
     found = _slots_instead_of_half_bores(
@@ -834,7 +839,7 @@ def _slots_instead_of_half_bores(
         surface = surface_of(index)
         if not isinstance(surface, CylinderSurface):
             continue
-        if surface.turn < FULL_TURN * 2.0 * math.pi:
+        if surface.turn < _full_turn():
             arcs.append(index)
     if len(arcs) < 2:
         return found
@@ -912,7 +917,6 @@ def _seam_split_cylinders_joined(
     solid: Solid,
     found: dict[FeatureId, Feature],
     named: dict[int, FeatureId],
-    neighbours: Any,
     surfaces: dict[int, Surface | None],
     inside: Any,
     reach: float,
@@ -931,7 +935,7 @@ def _seam_split_cylinders_joined(
     Zusammengeführt werden zwei zylindrische Nachbarflächen mit **derselben
     Achslinie**, demselben Radius und derselben Materialseite, die sich eine
     Kante teilen. Der gemeinsame Umfang entscheidet dann wie an einer einzelnen
-    Fläche: Verrundung unter :data:`FULL_TURN`, sonst Bohrung oder Zapfen, mit
+    Fläche: Verrundung unter :func:`_full_turn`, sonst Bohrung oder Zapfen, mit
     ``partial`` unter der vollen Umdrehung. Der Träger bleibt je Fläche
     erhalten — der Zuschnitt am Ende von :func:`features_of` liest ihn von den
     nativen Flächen ab.
@@ -1030,7 +1034,7 @@ def _seam_split_cylinders_joined(
         # Derselbe Schwerpunkt wie an einer einzelnen Verrundung: der der
         # Fläche, nicht der Achspunkt — ``_describe`` nennt ihn ``middle``.
         surface_middle: Vec3 = (middle[0] / weight, middle[1] / weight, middle[2] / weight)
-        if turn < FULL_TURN * math.tau:
+        if turn < _full_turn():
             kind: FeatureKind = "fillet"
             params: dict[str, Any] = {
                 "radius": radius,
@@ -1572,7 +1576,6 @@ def _describe(
     inside: Any,
     neighbours: Any,
     reach: float,
-    tolerance: float,
     *,
     surface: Surface | None,
     cancelled: CancelToken | None = None,
@@ -1651,7 +1654,7 @@ def _describe(
         # aus Normalen einpassen und über den Winkelbogen von einem Zapfen
         # trennen; hier ist beides schon entschieden. Dieselben Schlüssel wie
         # dort, nur ohne ``residual``: Es wurde nichts eingepasst.
-        if turn < FULL_TURN * 2.0 * 3.141592653589793:
+        if turn < _full_turn():
             # **``recess`` kommt hier nicht aus der Orientierung.** Für einen
             # vollen Zylinder trennt ``REVERSED`` Loch von Zapfen zuverlässig;
             # für einen Ausschnitt tut es das nicht — an den vier gleichen
@@ -1733,7 +1736,7 @@ def _describe(
                 surface.apex[2] + wide * axis[2],
             ),
             "recess": surface.inward,
-            **({"partial": True} if surface.turn < FULL_TURN * math.tau else {}),
+            **({"partial": True} if surface.turn < _full_turn() else {}),
         }
 
     if kind == GeomAbs_Cone:
@@ -1761,7 +1764,7 @@ def _describe(
             # Spiegelung kehrt auch am Kegel die Flächenparametrisierung um;
             # die Materialseite folgt beiden Orientierungen gemeinsam.
             "recess": (face.Orientation() == TopAbs_REVERSED) == cone.Position().Direct(),
-            **({"partial": True} if turn < FULL_TURN * math.tau else {}),
+            **({"partial": True} if turn < _full_turn() else {}),
         }
 
     if isinstance(surface, SphereSurface):
@@ -2022,6 +2025,6 @@ def _rounded_neighbours(
         surface = solid.surface(number, cancelled=cancelled)
         if not isinstance(surface, CylinderSurface):
             continue
-        if surface.turn < FULL_TURN * 2.0 * math.pi:
+        if surface.turn < _full_turn():
             rounded += 1
     return rounded

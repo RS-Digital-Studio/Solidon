@@ -1697,8 +1697,8 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   je nach Facettierung 345 bis 354 Grad misst, sondern am Rand: zwei
   gerade Linien längs der Achse, die die ganze Tiefe durchlaufen. Ein
   Querloch durch die Wand hat solche Linien nicht. Der exakte Kern sagt
-  dasselbe Wort aus dem Umfang der Fläche (`FULL_TURN` ist dieselbe Zahl
-  wie `FULL_TURN_SPAN`, 300 Grad; ein von der Naht geteilter Mantel wird
+  dasselbe Wort aus dem Umfang der Fläche (`brep.features._full_turn` liest
+  `FULL_TURN_SPAN`, 300 Grad; ein von der Naht geteilter Mantel wird
   vorher zusammengeführt, `_seam_split_cylinders_joined`). Was der Anschnitt
   bedeutet, sagt `relations._cut_open_neighbours`: Grenzt der Mantel an
   eine andere Höhlung, sind beide **berührt** — keine Kette, kein eigener

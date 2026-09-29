@@ -1490,8 +1490,8 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   Durchmesser, Achse, Bogenmitte und Richtung, nie Mündung und Weg
   (`slots.native_open_slot_measures`); keine pauschale Hochstufung. Die
   Umfangsschwelle steht
-  einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
-  ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).
+  einmal (`FULL_TURN_SPAN`, 300 Grad); der exakte Kern liest sie von dort
+  (`brep.features._full_turn`).
   Am Netz erkennt den Anschnitt der Rand (zwei Linien längs der Achse über
   die ganze Tiefe), am exakten Körper der Umfang — nach dem Zusammenführen
   der Nahtstücke. Eine gleiche Anzahl oder ein gleiches Volumen beweist
