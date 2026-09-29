@@ -2456,13 +2456,15 @@ def test_setting_a_slot_asks_at_both_ends_on_both_kernels(
 
 
 def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
-    """Die Zugabe gilt dem ersten Zug — danach bleibt die Breite.
+    """Die Breite bleibt über jeden Zug — keiner bekommt die Zugabe aus §39.
 
     Gemessen 11.09.2026 am Netz, Bohrung Ø 5 mit Materialtoleranz (5,1901):
     nach drei Zügen mit Zugabe 5,2057, 5,2213, 5,2371 — ein Sechzehntel
-    Millimeter je Zug, ein Viertel der Materialtoleranz nach dreien. Ohne
-    Zugabe am zweiten und dritten Zug bleibt die Änderung unter dem
-    Messrauschen der Bogeneinpassung (Fund des Reviews).
+    Millimeter je Zug, ein Viertel der Materialtoleranz nach dreien (Fund des
+    Reviews). Seit dem 22.09.2026 schneidet auch der erste Zug ohne Zugabe, und
+    am 29.09.2026 gemessen blieb die Breite über drei Züge Bit für Bit die der
+    Bohrung: 5,2. Die Toleranz hier stand auf 0,006 und 0,01 — eine Zugabe unter
+    einem halben Hundertstel je Zug wäre durchgerutscht.
     """
     mesh = drill(
         MeshData.of(trimesh.creation.box(extents=(80.0, 40.0, 10.0))),
@@ -2476,6 +2478,7 @@ def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
     ).mesh
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
     chosen = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    measured = float(entry.features[chosen].params["diameter"])
     widths: list[float] = []
     for length in (20.0, 24.0, 28.0):
         entry = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=length)
@@ -2483,8 +2486,48 @@ def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
         widths.append(float(slot.params["diameter"]))
         chosen = slot.id
 
-    assert abs(widths[1] - widths[0]) < 0.006, widths
-    assert abs(widths[2] - widths[0]) < 0.01, widths
+    assert widths == pytest.approx([measured] * 3, abs=1e-9), (measured, widths)
+
+
+def test_a_slot_says_the_width_it_cut(profile: Profile) -> None:
+    """``BoreResult.diameter`` ist der wirklich geschnittene Durchmesser — auch beim Langloch.
+
+    ``prepare.slot_bore`` schnitt mit ``(diameter + overlap) / 2`` und meldete
+    ``diameter``; die Vorgabe für ``overlap`` war die Zugabe aus §39
+    (Übergabe der Durchsicht vom 11.09.2026). Solange jeder Aufrufer
+    ``overlap=0.0`` gibt, fällt es nicht auf — wer es vergaß, bekam still ein
+    um 0,02 mm breiteres Langloch unter dem alten Maß. Die Zugabe sagt jetzt
+    der Aufrufer, wie am exakten Zwilling ``brep.edit.slot_bore``. Soll von
+    außen: der Abstand der Flanken im Mittelschnitt, exakte Geraden bei ±r.
+    """
+    import inspect
+
+    from app.core.geom.prepare import slot_bore
+
+    given = inspect.signature(slot_bore).parameters["overlap"].default
+    assert given is inspect.Parameter.empty, "die Zugabe sagt der Aufrufer, keine Vorgabe"
+    for overlap in (0.0, 0.1):
+        result = slot_bore(
+            plate(),
+            position=(0.0, 0.0, 0.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=5.0,
+            depth=10.0,
+            through=True,
+            length=20.0,
+            angle_deg=0.0,
+            profile=profile,
+            overlap=overlap,
+        )
+        section = result.mesh.raw.section(
+            plane_origin=[0.0, 0.0, 0.0], plane_normal=[0.0, 0.0, 1.0]
+        )
+        points = np.asarray(section.vertices)
+        inner = points[(np.abs(points[:, 0]) < 20.0) & (np.abs(points[:, 1]) < 10.0)]
+        width = float(np.ptp(inner[:, 1]))
+
+        assert width == pytest.approx(5.0 + overlap, abs=1e-9), overlap
+        assert result.diameter == pytest.approx(width, abs=1e-9), overlap
 
 
 def test_pulling_an_exact_slot_again_keeps_its_width_exactly(profile: Profile) -> None:

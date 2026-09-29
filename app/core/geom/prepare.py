@@ -971,9 +971,9 @@ def slot_bore(
     length: float,
     angle_deg: float,
     profile: Profile,
+    overlap: float,
     quality: Quality = "fine",
     seed: int | None = None,
-    overlap: float = FEATURE_OVERLAP,
 ) -> BoreResult:
     """Zieht eine erkannte Bohrung zu einem Langloch auseinander.
 
@@ -988,15 +988,16 @@ def slot_bore(
     aufzuschlagen machte aus einer Formänderung eine Maßänderung. Dieselbe
     Entscheidung wie bei :func:`resize_bore`.
 
-    ``overlap`` ist die Zugabe auf den Durchmesser, die den Werkzeugkörper von
-    der alten Bohrungswand fernhält (:data:`FEATURE_OVERLAP`). Der Aufrufer
-    entscheidet, ob es sie braucht: An einer **runden** Bohrung legte sich der
-    Körper ohne sie entlang zweier Linien an die Wand; an einem Langloch, das
-    schon eines ist, gibt es diese Wand nicht mehr — dort liegen nur die
-    Flanken aufeinander, und die rechnet ``manifold3d`` robust (gemessen
-    11.09.2026, Stufe ``direct`` über drei Züge). Mit der Zugabe wuchs die
-    Breite dagegen bei **jedem** Zug: 5,2057, 5,2213, 5,2371 an einem Loch,
-    das 5,1901 gemessen war.
+    ``overlap`` ist eine Zugabe auf den Durchmesser, und **der Aufrufer sagt
+    sie**, wie am exakten Zwilling :func:`app.core.brep.edit.slot_bore` —
+    eine Vorgabe gibt es nicht. Bis zum 29.09.2026 stand hier
+    :data:`FEATURE_OVERLAP`: Sie hielt den Körper von einer runden Bohrungswand
+    fern, an der er sich sonst entlang zweier Linien anlegte. Seit jeder Zug
+    die alte Öffnung vorher schließt, gibt es diese Wand nicht mehr, und jeder
+    Aufrufer gibt ``0.0`` — mit der Zugabe wuchs die Breite bei **jedem** Zug
+    (gemessen 11.09.2026: 5,2057, 5,2213, 5,2371 an einem Loch, das 5,1901
+    gemessen war). ``BoreResult.diameter`` nennt den geschnittenen Durchmesser,
+    samt Zugabe; bis dahin meldete es ``diameter``.
 
     **Und eine Länge gleich dem Durchmesser schneidet rund** (24.09.2026): So
     kommt ein Langloch, das bis auf seine Breite zurückgezogen wurde, wieder
@@ -1092,7 +1093,7 @@ def slot_bore(
             mesh,
             position=position,
             frame=frame,
-            diameter=diameter,
+            diameter=diameter + overlap,
             travel=travel,
             angle_deg=angle_deg,
             reach=depth / 2.0,
@@ -1102,7 +1103,7 @@ def slot_bore(
     return BoreResult(
         mesh=slotted,
         solver=outcome.solver,
-        diameter=diameter,
+        diameter=diameter + overlap,
         findings=findings,
     )
 

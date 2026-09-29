@@ -5556,7 +5556,7 @@ def test_invalid_detected_bore_geometry_has_a_translated_error(
         if operation == "resize":
             resize_bore(body, previous_diameter=6.0, **common)
         else:
-            slot_bore(body, length=20.0, angle_deg=0.0, **common)
+            slot_bore(body, length=20.0, angle_deg=0.0, overlap=0.0, **common)
 
     assert caught.value.field == "at_feature"
     assert caught.value.constraint == "no_geometry"
