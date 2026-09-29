@@ -1483,7 +1483,6 @@ def test_a_closed_body_gets_no_skip_note() -> None:
     assert "repair.self_intersections_skipped" not in codes
 
 
-@pytest.mark.slow
 @pytest.mark.performance
 def test_a_mesh_written_twice_loses_its_copies_in_linear_time() -> None:
     """Eine Schale, die ein Export zweimal schrieb, ist eine Gruppe je Dreieck.

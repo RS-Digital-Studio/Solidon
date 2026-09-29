@@ -87,7 +87,6 @@ def figure() -> tuple[MeshData, int]:
     return merged, steps
 
 
-@pytest.mark.slow
 def test_a_base_figure_comes_out_as_one_closed_body() -> None:
     """Bedingung 1: Was aus dem Aufbau fällt, muss ein Körper sein.
 
@@ -107,7 +106,6 @@ def test_a_base_figure_comes_out_as_one_closed_body() -> None:
     assert euler == 2, f"Euler-Charakteristik {euler} — die Form hat einen Durchgang"
 
 
-@pytest.mark.slow
 def test_a_base_figure_costs_at_most_fifteen_steps() -> None:
     """Bedingung 2: Der Weg über Primitive muss kürzer sein als ein Käfig.
 
@@ -120,7 +118,6 @@ def test_a_base_figure_costs_at_most_fifteen_steps() -> None:
     assert steps <= MAX_STEPS
 
 
-@pytest.mark.slow
 def test_a_base_figure_takes_an_even_mesh() -> None:
     """Bedingung 3: Der Pinsel braucht überall dieselbe Vertexdichte.
 
@@ -137,7 +134,6 @@ def test_a_base_figure_takes_an_even_mesh() -> None:
     assert evened.is_watertight
 
 
-@pytest.mark.slow
 def test_the_figure_changes_by_changing_a_number() -> None:
     """Bedingung 4: der eigentliche Grund, warum Primitive den Käfig schlagen.
 

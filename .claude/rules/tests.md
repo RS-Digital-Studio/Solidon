@@ -115,8 +115,9 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 
 ## Marker
 
-- `slow` für spürbar Langes, `performance` für Messungen gegen das Budget;
-  Messwerte je Lauf festhalten, mehr als ein Viertel schlechter ist ein Fehler.
+- `performance` für Messungen gegen das Budget; Messwerte je Lauf festhalten,
+  mehr als ein Viertel schlechter ist ein Fehler. Ein Marker, den kein Lauf
+  wählt oder abwählt, steuert nichts und wird nicht angelegt.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,

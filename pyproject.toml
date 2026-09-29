@@ -177,7 +177,6 @@ filterwarnings = [
 markers = [
   "performance: misst gegen das Budget aus Bauplan §31",
   "windowed: baut Qt-Fenster außerhalb der qt_app-Fixture, auch im Kindprozess; nur beim Release",
-  "slow: dauert spürbar länger als ein Unit-Test",
   "rendered: vergleicht gegen erzeugte Seiten oder Bilder — braucht einen Lauf von /erzeugen",
 ]
 

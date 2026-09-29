@@ -795,7 +795,6 @@ def _umbrella() -> MeshData:
     return boolean("difference", [canopy, *cuts]).mesh
 
 
-@pytest.mark.slow
 def test_the_umbrella_is_not_left_upside_down() -> None:
     """RM-190: *Druckoptimal ausrichten* ließ den Schirm kopfüber liegen.
 
@@ -1149,7 +1148,6 @@ def test_a_knife_edge_is_no_footing() -> None:
     assert stands(lying, profile.smallest_first_layer)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("workers", [None, 3], ids=["host", "three-workers"])
 def test_the_pool_holder_does_not_stand_on_a_knife_edge(
     workers: int | None, monkeypatch: pytest.MonkeyPatch
