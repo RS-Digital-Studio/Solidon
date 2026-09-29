@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from PySide6.QtCore import QByteArray, QSignalBlocker, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -35,6 +34,7 @@ from app.core.ingest.plan import BodyChoice, choice_of, selection
 from app.core.registry.params import body_keys
 from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
+from app.ui.filament_picker import swatch
 from app.ui.labels import colour_name, length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.outline_dialog import ContourField
@@ -185,21 +185,6 @@ class _RenderWorker(Worker):
             self.ready.emit(self.revision, svg)
 
 
-def _swatch(colours: Sequence[str]) -> QIcon:
-    """Ein Farbfeld je Körper: die Farben nebeneinander, ohne Farbe ein leeres Feld."""
-    pixmap = QPixmap(_SWATCH, _SWATCH)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setPen(QColor("#808080"))
-    if colours:
-        width = _SWATCH / len(colours)
-        for index, colour in enumerate(colours):
-            painter.fillRect(int(index * width), 0, int(width + 1), _SWATCH, QColor(colour))
-    painter.drawRect(0, 0, _SWATCH - 1, _SWATCH - 1)
-    painter.end()
-    return QIcon(pixmap)
-
-
 class StepBodiesDialog(QDialog):
     """Wählt die Körper einer STEP-Baugruppe; ``values`` passen in ``load_step``.
 
@@ -271,7 +256,9 @@ class StepBodiesDialog(QDialog):
         left.addWidget(self.summary)
         middle.addLayout(left, 1)
         right = QVBoxLayout()
-        right.addWidget(QLabel(tr("Lage in der Baugruppe"), self))
+        placed_title = QLabel(tr("Lage in der Baugruppe"), self)
+        set_level(placed_title, "section")
+        right.addWidget(placed_title)
         self.preview = QSvgWidget(self)
         self.preview.setAccessibleName(tr("Lage in der Baugruppe"))
         self.preview.setMinimumSize(320, 280)
@@ -344,7 +331,11 @@ class StepBodiesDialog(QDialog):
                     lines.append(tr("Gespiegelt eingesetzt"))
                 if not choice.solid:
                     lines.append(tr("Offene Flächen, kein geschlossener Körper"))
-                item = QListWidgetItem(_swatch(choice.colours), "\n".join(lines), self.bodies)
+                item = QListWidgetItem(
+                    swatch(choice.colours, _SWATCH, ring_when_empty=True),
+                    "\n".join(lines),
+                    self.bodies,
+                )
                 item.setData(Qt.ItemDataRole.UserRole, choice.key)
                 # Regel 18: Die Farbe steht auch als Wort da, nicht nur im Feld.
                 hints = [

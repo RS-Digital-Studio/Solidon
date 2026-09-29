@@ -1,7 +1,8 @@
 # `konzepte/` — das Warum
 
 Konzepte, Durchsichten, Nachweise und Entscheidungen. **Der Index ist
-`konzepte/README.md`** und nennt zu jedem den Stand.
+`konzepte/README.md`** und nennt zu jedem den Stand. Das Warum dieser Karte:
+`konzepte/begruendungen/karte-konzepte.md`.
 
 | Ort | Inhalt |
 |---|---|

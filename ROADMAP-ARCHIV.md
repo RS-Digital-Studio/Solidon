@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-29 | [Creality Print schneidet über die Konsole: ein Punkt geschlossen (29.09.2026)](#creality-print-schneidet-über-die-konsole-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Sichere schnelle Druckausrichtung: ein Punkt geschlossen (29.09.2026)](#sichere-schnelle-druckausrichtung-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Schnitt an der Bohrungswand: ein Punkt geschlossen (29.09.2026)](#schnitt-an-der-bohrungswand-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Teilen an der Spiegelnaht einer Figur: ein Punkt geschlossen (29.09.2026)](#teilen-an-der-spiegelnaht-einer-figur-ein-punkt-geschlossen-29092026) |
@@ -26994,6 +26995,18 @@ Die Filamentänderungen wurden über gesicherte Inhalte abgegrenzt; gemeinsame T
 werden nur mit ihren eigenen Änderungen committet. Der zusätzliche Anschlusslauf für Lager,
 Verbrauch, Projekte und Materialprofile bestand mit **247 Tests, 1 übersprungen**.
 
+**Nachtrag, bis zum 29.09.2026 in der Roadmap:** Löschen ist im Regal per
+Rechtsklick und im Spulendetail sowie Filamentpanel über einen Mülleimerknopf
+erreichbar; Wiederherstellen läuft über das Archiv. Hinzufügen trägt ein
+Plus-SVG; eigene Drucker lassen sich mit Name, Bauraum und Düse direkt anlegen.
+Die Durchsicht vom 19.09.2026 (vier Fehler, vier Regelverstöße, neun
+Bedienmängel, sieben Textmängel) ist vollständig behoben: Eine Bearbeitung der
+Angaben zählt nicht mehr als Bestandsfeststellung, eine automatische Buchung
+nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
+zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
+sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
+Datumsfelder haben einen Kalender.
+
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
 **RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern**
@@ -33549,3 +33562,70 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   Wiederholung ist grün. Fenster-, Erzeugnis- und Leistungsprüfungen gehören
   gemäß Projektvertrag zum Release und wurden hier nicht ausgeführt.
   Kein offener Rest und kein neuer Roadmappunkt.
+
+## Creality Print schneidet über die Konsole: ein Punkt geschlossen (29.09.2026)
+
+<a id="rm-164"></a>
+
+- [x] **RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF.** Das
+  Programm war installiert und wurde von Solidon gar nicht erkannt — `flavour_of` gab `None`,
+  und damit war es im Druckdialog nicht wählbar. Es ist ab Version 6 ein Orca-Abkömmling:
+  derselbe Profilbaum mit `machine_list`/`sub_path`, dieselben Schlüsselnamen; als `orca`
+  behandelt findet Solidon in Version 7.2 **4234 Profile** (459 Maschinen, 1240 Prozesse,
+  2535 Filamente). Seit dem 12.09.2026 steht es in `FLAVOUR_BY_NAME`, mit Fall in
+  `tests/test_print_settings.py`.
+
+  **Der Konsolenlauf ließ sich nicht abnehmen**: dreimal `0xC0000005` mitten im eigenen Start,
+  vor jeder Modellverarbeitung. Das Programm war auf dieser Maschine allerdings **nie
+  eingerichtet** — es stand im Dialog „Bitte wählen Sie den Softwaremodus" —, und ein Urteil
+  über seine Kommandozeile auf dieser Grundlage wäre voreilig. Ein Absturz wird seither als
+  Absturz gemeldet statt als „keine Druckdatei geschrieben" (`handover.crashed`), mit dem Rat,
+  den Slicer einmal von Hand zu starten.
+
+  Abnahme: Creality Print einrichten (Modus und Drucker wählen), dann drei Platten mit
+  mehreren Spulen übergeben — einmal über *Im Slicer öffnen*, einmal über *Slicen*. Läuft der
+  Konsolenweg auch dann nicht, gehört die Einschränkung benannt, statt sie den Kunden am
+  Absturz erfahren zu lassen.
+
+  **Durchsicht v0.5.1 (26.09.2026, druck, DRUCK-07):** Creality Print 7.2 rechnet über
+  die Kommandozeile keine 3MF — Solidons Übergabe, eine nackte aus trimesh, eine aus
+  PrusaSlicer, Bambu, Elegoo: jede endet mit −100 und „The print is empty“, dasselbe
+  Teil als STL schneidet. Die Meldung sagt das jetzt und führt zu *Im Slicer öffnen*
+  (`e401ce900`). Offen: einmal von Hand *Im Slicer öffnen* mit der Okarina und
+  *Vorschläge übernehmen*, im Fenster slicen und die Stütze in den Kanälen ansehen;
+  danach entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt
+  wird.
+
+  **Ursache gefunden und behoben (29.09.2026):** Die Konsole bricht am Schritt des
+  Reinigungsturms ab, weil das Objekt kein Werkzeug hat — Solidon schrieb `extruder` in
+  `model_settings.config` nur für Teile mit Spule. Am Würfel (Sonde
+  `output/review/rm164-2026-09-29/varianten.py`): unverändert −100, mit `extruder = 1` am
+  Objekt Exit 0; ohne Farbgruppe, ohne Beilagen oder nur mit dem Modell weiter −100.
+  Jetzt nennt jedes Objekt sein Werkzeug (`threemf._settings_xml`, auch ohne Spule das des
+  neutralen Platzes, das `tools_in_use` zählt), und der Satz „nur in seinem Fenster“ ist
+  gestrichen. *Slicen* mit Creality Print 7.2.2 am K1 über `slice_model`: Würfel,
+  PrusaSlicer-3MF, Wedge-Lock, Okarina, Blessed Family (zwei Platten), pista+biglie (zehn
+  Platten) schneiden mit Standard und Vorschlägen; Okarina mit Stützen überall 0 m Stütze
+  mit Sperre, 15,57 m ohne, Modellbahn beide Male 150,77 m; zweifarbiger Körper mit Spulen
+  wie im Druckdialog druckt beide Werkzeuge ohne Befund. Der Besteckeinsatz (231 mm) passt
+  nicht auf das 220er Bett und wird zu Recht abgelehnt.
+
+  **Fensterweg:** Die Okarina samt Sperre lädt und schneidet im Fenster (1 h 59 min,
+  15,7 g). Creality fragt bei jeder fremden 3MF nach dem Drucker, vorgewählt ist der dort
+  eingestellte (hier ein CR-10), und nimmt Prozess und Filament aus dessen Bestand: Nach dem
+  Schneiden stand in `full_print_config.json` der ganze Prozess des gewählten Druckers, vier
+  gewählte Wände und 37 % Füllung kamen nicht an — mit 7.2.2 wie mit 7.3.0, auch mit
+  `different_settings_to_system`, das `Check3mfVendor::get3mfConfig` im Quelltext liest.
+  Die Liste ist deshalb nicht ausgeliefert. Der Befund `slicer.window_asks_for_the_printer`
+  sagt vor dem Öffnen, welcher Drucker zu wählen ist, dass die Druckeinstellungen aus
+  Crealitys Profilen kommen und dass *Slicen* mit Solidons Einstellungen rechnet
+  (`cdb63c4e4` und Nachtrag).
+
+  **Creality Print 7.3.0.6149 (Update 29.09.2026):** Die Konsole startet nur mit `--cli`,
+  sonst öffnet sich die Oberfläche und der Lauf wartete bis zum Zeitlimit; `--arrange` kennt
+  sie nicht mehr (ein Projekt behält seine Lage), die Druckdatei schreibt sie nur mit
+  `--need-gcode-file`. `handover._creality_cli` gibt 7.3 diesen Aufruf; 7.2 lehnt `--cli` ab
+  und rechnet danach mit dem alten, gemerkt je Programm. Am K1 mit 7.3: Würfel,
+  PrusaSlicer-3MF, Wedge-Lock und pista+biglie mit Standard und Vorschlägen ohne Befund der
+  Gegenprobe; Okarina mit Stützen überall 0 m Stütze mit Sperre, 16,72 m ohne, Modellbahn
+  151,03 m; zweifarbig beide Werkzeuge. Sonden unter `output/review/rm164-2026-09-29/`.

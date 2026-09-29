@@ -94,7 +94,7 @@ samt Messreihe.
   Fenster plus `TRUNCATION_KEEPS`) bei einer Anfrage, die größer sein kann als
   das Fenster. Die Werkzeugzahl sagt nichts über die Größe. Die Messwerkzeuge
   fragen dieselbe Funktion.
-- **Stand 25.09.2026: 142 Operationen, 153 Werkzeuge** — die Zahlen hält
+- **142 Operationen, 153 Werkzeuge** — die Zahlen hält
   `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
   Werkzeug- und Tokenzahl in `backends/llm.py` gehören zur selben Zählung
   (`test_the_measured_prompt_matches_the_current_tool_count`; die Chronik

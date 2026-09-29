@@ -22,6 +22,7 @@ from app.core.geom.boolean import (
 )
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import (
+    MAX_PLATES,
     free_spot_param,
     placed_at_free_spot,
     spot_param,
@@ -187,10 +188,12 @@ def _held_on_bed(
     # **Wer schon daneben stand, wird nicht eingefangen** — geprüft am Eingang.
     if not fits_xy(source.mesh, printable_area(printer)):
         return moved, matrix, []
+    # Um die Körper der Platte, auf der er ankommt — nach einem Wechsel ist
+    # das nicht mehr die, von der er kam.
     others = [
         as_mesh_data(other.mesh)
         for key, other in ctx.scene.objects.items()
-        if key != source.id and other.plate == source.plate
+        if key != source.id and other.plate == moved.plate
     ]
     offset, findings = back_onto_bed(moved.mesh, others, ctx.profile)
     if max(abs(value) for value in offset) <= EPS_GEOM:
@@ -224,6 +227,21 @@ class TranslateParams(BaseParams):
         doc=_("Positiv geht nach oben. Zum Aufsetzen gibt es *Auf das Bett setzen*."),
     )
     keep_on_bed: bool = _keeping_on_bed()
+    plate: int = param(
+        title=_("Auf Platte"),
+        # **Null heißt: auf seiner Platte.** Die Platten zählen wie im
+        # Plattenwähler ab eins; jeder Schritt von vor diesem Feld bleibt so,
+        # wie er war. Das Fenster setzt es, wenn ein Zug auf einem anderen Bett
+        # endet (``MainWindow._on_transform_dragged``).
+        default=0,
+        minimum=0,
+        maximum=MAX_PLATES,
+        placement="advanced",
+        doc=_(
+            "Auf welche Druckplatte der Körper wandert, gezählt wie im Plattenwähler; "
+            "die Verschiebung gilt dann dort. Null lässt ihn auf seiner."
+        ),
+    )
 
 
 def _too_small_to_print(mesh: object, profile: object) -> list[Finding]:
@@ -316,11 +334,19 @@ def translate_object(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     matrix = translation((params.dx, params.dy, params.dz))
     moved = moved_object(source, matrix, cancelled=ctx.cancelled)
+    # **Die Platte wechselt, die Koordinaten nicht** (Robert, 29.09.2026: „wenn
+    # ich sie auf eine andere platte verschieben will springen sie auch"). Im
+    # Bild stehen die Betten nebeneinander, in der Szene übereinander; ein Zug
+    # hinüber ist deshalb ein kurzer Weg auf einer anderen Platte und kein
+    # langer auf der eigenen, den *Auf dem Bett halten* zurückholen müsste.
+    changed = params.plate > 0 and params.plate - 1 != source.plate
+    if changed:
+        moved = dataclasses.replace(moved, plate=params.plate - 1)
     moved, matrix, held = _held_on_bed(ctx, source, moved, matrix)
     return OpResult(
         outputs=[moved],
         transform=as_transform(matrix),
-        findings=[*_stood_still(matrix), *held],
+        findings=[*([] if changed else _stood_still(matrix)), *held],
     )
 
 

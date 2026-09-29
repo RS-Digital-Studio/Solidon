@@ -250,6 +250,11 @@ sie ist. Die Elemente tragen die Plattennummer im Namen — die Adresse für
 
 * **Ein Klick wird zurückgerechnet** (`plate_at`, `_from_view` ganz oben in
   `_on_picked`), sonst setzt er auf Platte 2 eine Bettbreite daneben — stumm.
+* **Ein Zug auf ein anderes Bett wechselt die Platte** (`across_plates`,
+  `Viewport.dropped_on_plate`, `MainWindow._drag_params` → `plate` an
+  *Verschieben*): Der Weg im Bild enthält die Strecke zwischen den Betten, die
+  es in der Szene nicht gibt; ohne Umrechnung holt *Auf dem Bett halten* den
+  Körper auf seine alte Platte zurück, und er springt.
 * **Plattenversatz und Auseinanderziehen liegen zusammen in `_view_offset`**
   (§18.8): jede Zeichenstelle bekommt beides oder keines. Maße, Fangmarke und
   Schichtkonturen gehen mit (`set_layer` nimmt den Körper der Schicht).

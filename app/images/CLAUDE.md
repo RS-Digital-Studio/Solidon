@@ -1,7 +1,7 @@
 # `app/images/` — was das Handbuch zeigt
 
 **Alles hier ist erzeugt.** Von Hand wird kein Bild bearbeitet und keines
-hinzugefügt.
+hinzugefügt. Das Warum: `konzepte/begruendungen/karte-app-images.md`.
 
 | Ordner | Inhalt | Werkzeug |
 |---|---|---|

@@ -174,7 +174,7 @@ entsteht im `_FoundationWorker`; `follow_print_settings` übernimmt sie.
 | Datei | Zweck |
 |---|---|
 | `filament_inventory.py` | das lokale Lager ohne Renderer (`InventoryView`): Spulen, Bestand, Archiv, Rücknahme mit Rückweg (`restore_booking`) |
-| `filament_picker.py` | Filamentwähler (Name, Typ und Farbe statt einer Zahl von 0 bis 7), gemeinsamer Spulendialog, Slicerfilamente (`_SlicerFilamentSearch` im Arbeiter); geschrieben wird über `CatalogueWrites` |
+| `filament_picker.py` | Filamentwähler (Name, Typ und Farbe statt einer Zahl von 0 bis 7), gemeinsamer Spulendialog, Slicerfilamente (`_SlicerFilamentSearch` im Arbeiter); geschrieben wird über `CatalogueWrites`; `swatch` (runder Farbpunkt) |
 | `filament_assignment.py` | Schnellauswahl an der Auswahl (`QuickFilamentPicker`, `spoolChosen`), ohne eigene Operation |
 | `filament_usage.py` | Buchungsangebote nach der Ausgabe (§20) |
 
@@ -210,7 +210,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `style.py` | Stylesheet, Typografie, Abstände (§19.3); `make_primary`, `rule`; `DialogScrollArea`, `fit_dialog_to_screen` für natürliche, monitorbegrenzte Dialoggrößen (`fenster.md`) |
+| `style.py` | Stylesheet, Typografie, Abstände (§19.3); `make_primary`, `rule`; `DialogScrollArea`, `fit_dialog_to_screen`, `fit_height_after_show`; Pfeil- und Hakenbilder |
 | `theme.py` | hell und dunkel (§19.3) |
 | `window_chrome.py` | die Titelleiste in den Farben der Anwendung (Windows malt sie und bekommt nur die Farbe gesagt); ein idempotent angemeldeter Wächter am Ereignisstrom |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |

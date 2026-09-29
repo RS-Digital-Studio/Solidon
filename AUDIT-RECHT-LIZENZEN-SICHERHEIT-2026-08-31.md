@@ -5,6 +5,12 @@
 **Produkt:** Solidon3D
 **Status:** interne Arbeitsakte; keine anwaltliche oder behördliche Freigabe
 
+> **Überholt am 23.09.2026.** Die Preisentscheidung (RM-092) hat die Demo-Grenze
+> dieser Akte aufgehoben; die Website nennt die Preise ab dem 01.11.2026. Die Listen
+> unten sind der Stand vom 01.09.2026 und keine Arbeitsliste — was davon offen ist,
+> führt das Register von `ROADMAP.md`: RM-002, RM-091, RM-093, RM-095, für den
+> Verkauf RM-061 und RM-092.
+
 ## Entscheidung
 
 Bis Version 1.0 veröffentlicht RS Digital ausschließlich kostenlose
@@ -58,84 +64,84 @@ folgenden Punkte für genau diese Fassung belegt sind.
 
 ### Anbieter und öffentliche Aussagen
 
-- [ ] Impressum mit den tatsächlich erforderlichen Anbieterangaben ist
-      vollständig und auf der veröffentlichten Website erreichbar.
-- [ ] Website, Anwendung, Handbuch und EULA bezeichnen die Fassung eindeutig
-      als kostenlose 0.x-Demo und nennen Enddatum beziehungsweise technische
-      Begrenzung vor dem Download.
-- [ ] Es gibt keinen Preis, keine Vorbestellung, keinen Kaufknopf und keine
-      Behauptung bereits feststehender 1.0-Vertrags- oder Supportbedingungen.
-- [ ] Zweckbestimmung, fehlende Validierung für sicherheitskritische
-      Anwendungen und die Bedeutung von „druckbar“ sind in EULA und
-      Sicherheitsakte widerspruchsfrei. Normale Produktkommunikation wird
-      nicht mit Warnlisten überfrachtet.
+- Impressum mit den tatsächlich erforderlichen Anbieterangaben ist
+  vollständig und auf der veröffentlichten Website erreichbar.
+- Website, Anwendung, Handbuch und EULA bezeichnen die Fassung eindeutig
+  als kostenlose 0.x-Demo und nennen Enddatum beziehungsweise technische
+  Begrenzung vor dem Download.
+- Es gibt keinen Preis, keine Vorbestellung, keinen Kaufknopf und keine
+  Behauptung bereits feststehender 1.0-Vertrags- oder Supportbedingungen.
+- Zweckbestimmung, fehlende Validierung für sicherheitskritische
+  Anwendungen und die Bedeutung von „druckbar“ sind in EULA und
+  Sicherheitsakte widerspruchsfrei. Normale Produktkommunikation wird
+  nicht mit Warnlisten überfrachtet.
 
 ### Datenschutz der realen Demowege
 
-- [ ] Datenschutzerklärung entspricht dem wirklichen Betrieb von Website und
-      Serverprotokollen, Aktivierung, Updateprüfung, Support/Rückmeldung,
-      PayPal-Link sowie optional Anthropic oder entferntem Ollama.
-- [ ] Für jeden aktiven Empfänger sind Rolle, Rechtsgrund, übermittelte Daten,
-      Speicherdauer, Löschung, Vertrag und gegebenenfalls Drittlandtransfer
-      intern belegt. Ein fehlender Nachweis sperrt nur den betroffenen Weg;
-      ein zwingender Weg sperrt die Demo.
-- [ ] Produktionsfristen für Serverprotokolle, Supportnachrichten,
-      Missbrauchsschutz, Reichweitenzeilen und Sicherungen sind eingerichtet
-      und durch einen wirklichen Löschlauf geprüft.
-- [ ] Die Informationsseiten verwenden keine nicht notwendigen Cookies,
-      Browserkennungen oder Telemetrie. Eine spätere Erweiterung öffnet dieses
-      Gate erneut.
+- Datenschutzerklärung entspricht dem wirklichen Betrieb von Website und
+  Serverprotokollen, Aktivierung, Updateprüfung, Support/Rückmeldung,
+  PayPal-Link sowie optional Anthropic oder entferntem Ollama.
+- Für jeden aktiven Empfänger sind Rolle, Rechtsgrund, übermittelte Daten,
+  Speicherdauer, Löschung, Vertrag und gegebenenfalls Drittlandtransfer
+  intern belegt. Ein fehlender Nachweis sperrt nur den betroffenen Weg;
+  ein zwingender Weg sperrt die Demo.
+- Produktionsfristen für Serverprotokolle, Supportnachrichten,
+  Missbrauchsschutz, Reichweitenzeilen und Sicherungen sind eingerichtet
+  und durch einen wirklichen Löschlauf geprüft.
+- Die Informationsseiten verwenden keine nicht notwendigen Cookies,
+  Browserkennungen oder Telemetrie. Eine spätere Erweiterung öffnet dieses
+  Gate erneut.
 
 ### Lizenzen, Assets und Lieferkette
 
-- [ ] Jedes ausgelieferte Paket enthält die erforderlichen Lizenztexte und
-      Hinweise; LGPL-/Quelltext-/Relinkpflichten sind am echten Kundenartefakt
-      geprüft.
-- [ ] SBOM, Paketinhalt, Abhängigkeiten und Asset-Rechte sind der konkreten
-      Demo zugeordnet. Unbelegte Bilder, Modelle, Gewichte oder Korpora werden
-      nicht mitgeliefert oder veröffentlicht.
-- [ ] Keine GPL-Abhängigkeit und kein fremder ausführbarer Quelltext werden
-      eingebaut; importierte Dateien und Bausteine behalten Herkunft, Autor
-      und Lizenz.
+- Jedes ausgelieferte Paket enthält die erforderlichen Lizenztexte und
+  Hinweise; LGPL-/Quelltext-/Relinkpflichten sind am echten Kundenartefakt
+  geprüft.
+- SBOM, Paketinhalt, Abhängigkeiten und Asset-Rechte sind der konkreten
+  Demo zugeordnet. Unbelegte Bilder, Modelle, Gewichte oder Korpora werden
+  nicht mitgeliefert oder veröffentlicht.
+- Keine GPL-Abhängigkeit und kein fremder ausführbarer Quelltext werden
+  eingebaut; importierte Dateien und Bausteine behalten Herkunft, Autor
+  und Lizenz.
 
 ### KI-Transparenz
 
-- [ ] Vor dem ersten Modellkontakt ist erkennbar, dass der Nutzer mit einem
-      KI-System interagiert.
-- [ ] Der Hinweis nennt den tatsächlichen Datenweg: Anthropic, lokales Ollama
-      oder vom Nutzer konfiguriertes entferntes Ollama. Ablehnen sendet
-      nichts.
-- [ ] Projektdatei und Netzgeometrie werden nicht als KI-Nutzlast versprochen,
-      wenn tatsächlich nur Steckbrief, Verlauf und gerenderte Ansichten
-      übertragen werden.
+- Vor dem ersten Modellkontakt ist erkennbar, dass der Nutzer mit einem
+  KI-System interagiert.
+- Der Hinweis nennt den tatsächlichen Datenweg: Anthropic, lokales Ollama
+  oder vom Nutzer konfiguriertes entferntes Ollama. Ablehnen sendet
+  nichts.
+- Projektdatei und Netzgeometrie werden nicht als KI-Nutzlast versprochen,
+  wenn tatsächlich nur Steckbrief, Verlauf und gerenderte Ansichten
+  übertragen werden.
 
 ### Sicherheitsbasis und Schwachstellenkontakt
 
-- [ ] Vertraulicher Sicherheitskontakt, betroffene Fassungen und erwartete
-      Angaben sind öffentlich erreichbar, ohne einen noch nicht aufgebauten
-      24/7- oder Behördenbetrieb zu behaupten.
-- [ ] Download-/Updateherkunft, Integrität, Signaturweg, Paket-Hashes,
-      Geheimnisgrenzen, Parser-/Importgrenzen und Prozessstarts sind für die
-      Demo geprüft.
-- [ ] Kritische bekannte Schwachstellen oder ungeklärte Codeausführung
-      sperren die Fassung. Sicherheitskorrekturen und Rücknahmen können an
-      betroffene Nutzer kommuniziert werden.
-- [ ] Die ab 11. September 2026 einschlägige CRA-Meldebereitschaft wird für
-      den tatsächlichen Anwendungsbereich gesondert belegt; die vollständige
-      CRA-Konformitätsakte bleibt bis zur allgemeinen Anwendung 2027 ein
-      eigenes Ausbauprogramm.
+- Vertraulicher Sicherheitskontakt, betroffene Fassungen und erwartete
+  Angaben sind öffentlich erreichbar, ohne einen noch nicht aufgebauten
+  24/7- oder Behördenbetrieb zu behaupten.
+- Download-/Updateherkunft, Integrität, Signaturweg, Paket-Hashes,
+  Geheimnisgrenzen, Parser-/Importgrenzen und Prozessstarts sind für die
+  Demo geprüft.
+- Kritische bekannte Schwachstellen oder ungeklärte Codeausführung
+  sperren die Fassung. Sicherheitskorrekturen und Rücknahmen können an
+  betroffene Nutzer kommuniziert werden.
+- Die ab 11. September 2026 einschlägige CRA-Meldebereitschaft wird für
+  den tatsächlichen Anwendungsbereich gesondert belegt; die vollständige
+  CRA-Konformitätsakte bleibt bis zur allgemeinen Anwendung 2027 ein
+  eigenes Ausbauprogramm.
 
 ### Freiwillige PayPal-Unterstützung
 
-- [ ] Die Zahlung heißt in allen Sprachen „freiwillige Unterstützung“ und
-      ist keine Bestellung, Gegenleistung, Freischaltung oder Anrechnung auf
-      einen späteren Kauf.
-- [ ] Vor dem Wechsel zu PayPal steht ein lokaler Hinweis; erst ein zweiter
-      ausdrücklicher Klick öffnet PayPal.
-- [ ] Es wird keine steuerliche Abzugsfähigkeit oder
-      Zuwendungsbestätigung versprochen. Datenschutz, wirklicher Buttontyp
-      und Buchführung entsprechen dem realen Konto. Andernfalls wird der
-      PayPal-Weg für die Demo abgeschaltet.
+- Die Zahlung heißt in allen Sprachen „freiwillige Unterstützung“ und
+  ist keine Bestellung, Gegenleistung, Freischaltung oder Anrechnung auf
+  einen späteren Kauf.
+- Vor dem Wechsel zu PayPal steht ein lokaler Hinweis; erst ein zweiter
+  ausdrücklicher Klick öffnet PayPal.
+- Es wird keine steuerliche Abzugsfähigkeit oder
+  Zuwendungsbestätigung versprochen. Datenschutz, wirklicher Buttontyp
+  und Buchführung entsprechen dem realen Konto. Andernfalls wird der
+  PayPal-Weg für die Demo abgeschaltet.
 
 ### Verbleibende zwingende Trigger
 

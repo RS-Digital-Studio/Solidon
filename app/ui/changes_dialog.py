@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, APP_VERSION, website_page_url
 from app.core import changes
+from app.core.markup import inline
 from app.i18n import get_language, tr
 from app.ui.style import NORMAL, no_primary, set_level
 
@@ -56,8 +57,9 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
     Ein Abschnitt ohne Gruppen (die Fassungen vor 0.2.0) liest sich wie
     bisher: eine Liste unter der Versionszeile.
 
-    ``html.escape`` auf jedem Punkt, obwohl der Text aus dem eigenen Paket
-    kommt und nicht von einem Server: Ein Punkt, der ein ``<`` enthält — „Wände
+    Jeder Punkt geht maskiert durch ``markup.inline`` (``groups_html``), obwohl
+    der Text aus dem eigenen Paket kommt und nicht von einem Server: Ein Punkt,
+    der ein ``<`` enthält — „Wände
     unter 2 Extrusionsbreiten" ließe sich so schreiben —, verschwände sonst
     samt allem bis zum nächsten ``>``. Das ist kein Angriff, nur ein Satz, der
     dann fehlt.
@@ -91,7 +93,10 @@ def groups_html(groups: tuple[changes.Group, ...]) -> str:
         if group.title:
             heading = html.escape(group.title)
             blocks.append(f'<p style="margin-top:10px;margin-bottom:0"><b><u>{heading}</u></b></p>')
-        points = "".join(f"<li>{html.escape(point)}</li>" for point in group.points)
+        # ``inline`` und nicht nur maskieren: Die Punkte heben Handlungen wie
+        # *Druckoptimal ausrichten* hervor, und maskiert standen die Sternchen
+        # im Text. Maskiert wird darin trotzdem alles andere.
+        points = "".join(f"<li>{inline(point)}</li>" for point in group.points)
         blocks.append(f'<ul style="margin-top:4px">{points}</ul>')
     return "".join(blocks)
 

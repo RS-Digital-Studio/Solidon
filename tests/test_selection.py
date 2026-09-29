@@ -1775,6 +1775,43 @@ def test_a_drag_over_the_edge_and_back_ends_where_the_steps_end(window: MainWind
     assert len(window.session.project.document.transactions) == vorher + 2
 
 
+def test_a_drag_onto_the_other_bed_moves_the_body_to_that_plate(window: MainWindow) -> None:
+    """Auf das andere Bett gezogen, liegt der Körper auf dessen Platte — dort,
+    wo er losgelassen wurde.
+
+    Robert, 29.09.2026: „wenn ich sie auf eine andere platte verschieben will
+    springen sie auch". Der Zug kam als Weg von über einer Bettbreite auf der
+    eigenen Platte an, und *Auf dem Bett halten* holte ihn zurück. Geprüft wird
+    der ganze Weg vom Zug bis zur Szene: Platte, Lage und dass nichts
+    zurückgeholt wurde.
+    """
+    from app.core.scene.history import OperationDraft
+    from app.ui.viewport import PLATE_GAP, TransformSteps
+
+    first, second = two_bodies(window)
+    window.session.apply(
+        "Auf Platte 2",
+        [OperationDraft(op="translate_object", inputs=(second,), params={"plate": 2})],
+    )
+    window.session.wait_for_idle()
+    assert window.session.last_result.scene.objects[second].plate == 1
+    window.object_tree.select_object(second)
+    anfang = centre_of(window, second)
+    extent = window.viewport._bed_extent
+    assert extent is not None, "ohne gezeigte Betten gibt es kein anderes zu treffen"
+
+    # Eine Bettbreite samt Lücke nach links und noch 20 mm dazu.
+    window._on_transform_dragged(TransformSteps(offset=(-(extent[0] + PLATE_GAP) - 20.0, 0.0, 0.0)))
+    window.session.wait_for_idle()
+
+    result = window.session.last_result
+    assert result.scene.objects[second].plate == 0, "der Körper muss auf Platte 1 liegen"
+    assert result.scene.objects[first].plate == 0
+    assert centre_of(window, second)[0] == pytest.approx(anfang[0] - 20.0, abs=1e-6)
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert not codes & {"transform.nudged_onto_bed", "transform.rearranged_on_bed"}, codes
+
+
 def test_turning_several_bodies_turns_them_as_a_group(window: MainWindow) -> None:
     """Zwei Teile gewählt, einmal gedreht — die Gruppe dreht, nicht jeder für sich.
 

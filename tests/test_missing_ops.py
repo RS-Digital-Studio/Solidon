@@ -1789,6 +1789,107 @@ def test_lettering_on_a_side_wall_reads_upright(profile: Profile) -> None:
     assert (top[:, 0].max() - top[:, 0].min()) > 2.0 * (top[:, 1].max() - top[:, 1].min())
 
 
+def _centre_across(body: MeshData, x: float) -> float:
+    """Die y-Mitte der Fläche, die ein Schnitt bei ``x`` quer durch den Körper legt."""
+    cut = body.raw.section(plane_origin=[x, 0.0, 0.0], plane_normal=[1.0, 0.0, 0.0])
+    assert cut is not None, f"bei x = {x} liegt kein Material"
+    planar, to_space = cut.to_2D()
+    polygons = planar.polygons_full
+    assert polygons, f"bei x = {x} liegt keine geschlossene Fläche"
+    area = sum(polygon.area for polygon in polygons)
+    local = (
+        sum(polygon.centroid.x * polygon.area for polygon in polygons) / area,
+        sum(polygon.centroid.y * polygon.area for polygon in polygons) / area,
+    )
+    point = to_space @ np.array([local[0], local[1], 0.0, 1.0])
+    return float(point[1])
+
+
+def test_text_on_both_sides_reads_from_each_side(profile: Profile) -> None:
+    """Eine Fahne liest man von beiden Seiten — ein Schritt setzt die Schrift auf beide.
+
+    So gefragt (Robert, 29.09.2026): Zum Minigolf-Satz gehören zwei Fahnen mit
+    1 und 2, gebraucht wurden 3 und 4. *Text aufbringen* setzte die Ziffer
+    nur auf die angeklickte Seite; die Rückseite hieß ein zweiter Schritt, von
+    Hand genau gegenüber. Jetzt sucht die Operation die Gegenseite dort, wo
+    die Richtung durch den Körper wieder austritt, und setzt dieselbe Schrift
+    dort auf — lesbar von außen, also gespiegelt zur Vorderseite.
+
+    Sollwerte aus der Konstruktion: zweimal die Glyphenfläche mal die Tiefe,
+    auf jeder Seite 0,6 mm über dem 2 mm dicken Tuch. Die Leserichtung zeigt
+    ein „L": Sein Schwerpunkt liegt links der Mitte, von vorn also bei
+    negativem y, von hinten bei positivem.
+    """
+    flag = trimesh.creation.box(extents=(2.0, 30.0, 20.0))
+    flag.apply_translation((0.0, 0.0, 10.0))
+    entry = SceneObject(id="obj_1", name="Fahne", mesh=MeshData.of(flag))
+    area = sum(shape.area for shape in outlines("L", 10.0))
+
+    result = run(
+        "label_text",
+        entry,
+        profile,
+        text="L",
+        size=10.0,
+        depth=0.6,
+        x=1.0,
+        y=0.0,
+        z=10.0,
+        nx=1.0,
+        ny=0.0,
+        nz=0.0,
+        both_sides=True,
+    )
+
+    body = as_mesh_data(result.outputs[0].mesh)
+    assert body.volume - 1200.0 == pytest.approx(2.0 * area * 0.6, rel=0.01)
+    assert body.bounds.minimum[0] == pytest.approx(-1.6, abs=0.01)
+    assert body.bounds.maximum[0] == pytest.approx(1.6, abs=0.01)
+    assert not [entry.code for entry in result.findings]
+    front, back = _centre_across(body, 1.3), _centre_across(body, -1.3)
+    assert front < -0.3 < 0.3 < back, f"vorn bei y = {front:.2f}, hinten bei y = {back:.2f}"
+    assert front == pytest.approx(-back, abs=0.05), (
+        "die Rückseite ist das Spiegelbild der Vorderseite"
+    )
+
+    # Ohne den Haken bleibt es bei einer Seite, wie jeder alte Schritt.
+    one = run(
+        "label_text", entry, profile, text="L", size=10.0, depth=0.6, x=1.0, z=10.0, nx=1.0, nz=0.0
+    )
+    assert as_mesh_data(one.outputs[0].mesh).bounds.minimum[0] == pytest.approx(-1.0, abs=0.01)
+
+
+def test_both_sides_without_a_way_through_says_so(profile: Profile) -> None:
+    """Tritt die Richtung nirgends aus dem Körper, gibt es keine Rückseite — gesagt, nicht geraten.
+
+    Die Schrift steht hier neben der Fahne. Vorn fällt sie ab (``label.fell_apart``),
+    und für hinten fehlt die Fläche; beides steht im Bericht, keines verschweigt
+    das andere.
+    """
+    flag = trimesh.creation.box(extents=(2.0, 30.0, 20.0))
+    flag.apply_translation((0.0, 0.0, 10.0))
+    entry = SceneObject(id="obj_1", name="Fahne", mesh=MeshData.of(flag))
+
+    result = run(
+        "label_text",
+        entry,
+        profile,
+        text="3",
+        size=10.0,
+        x=1.0,
+        y=200.0,
+        z=10.0,
+        nx=1.0,
+        nz=0.0,
+        both_sides=True,
+    )
+
+    said = {entry.code: entry for entry in result.findings}
+    assert "label.no_back_side" in said, f"gemeldet wurde: {sorted(said)}"
+    assert said["label.no_back_side"].severity == "warning"
+    assert said["label.no_back_side"].suggestions, "Regel 17: der Befund nennt einen Weg"
+
+
 def _plate() -> SceneObject:
     plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
     plate.apply_translation((0.0, 0.0, 2.0))
@@ -1997,6 +2098,35 @@ def test_text_on_an_exact_body_stays_exact_and_follows_the_curves(
     assert output.mesh.bounds.size[2] == pytest.approx(height, abs=EPS_GEOM)
     assert not result.findings
     assert step.read(step.write(output.mesh)).volume == pytest.approx(output.mesh.volume, rel=1e-9)
+
+
+def test_exact_text_on_both_sides_stays_exact(profile: Profile) -> None:
+    """*Auf beiden Seiten* am exakten Körper: oben und unten dieselbe Schrift, exakt.
+
+    Sollwert wie im Test darüber, aus Green und zweimal: Die Unterseite der
+    4 mm dicken Platte trägt denselben Text, der Körper wird 5,2 mm hoch und
+    bleibt ein exakter Körper aus einem Stück.
+    """
+    kernel = pytest.importorskip("app.core.brep.kernel")
+    if not kernel.available():
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    box = edit.box(40.0, 20.0, 4.0)
+    entry = SceneObject(id="obj_1", name="Platte", mesh=box, kind="brep", features=features_of(box))
+    result = run(
+        "label_text", entry, profile, text="Oo8", size=8.0, depth=0.6, z=4.0, both_sides=True
+    )
+
+    output = result.outputs[0]
+    assert output.kind == "brep"
+    assert isinstance(output.mesh, kernel.Solid)
+    assert output.mesh.is_closed and output.mesh.solid_count == 1
+    change = output.mesh.volume - box.volume
+    assert change == pytest.approx(2.0 * _glyph_area("Oo8", 8.0) * 0.6, rel=1e-9)
+    assert output.mesh.bounds.size[2] == pytest.approx(5.2, abs=EPS_GEOM)
+    assert not result.findings
 
 
 def test_exact_text_with_its_own_filament_keeps_the_slot_on_its_faces(profile: Profile) -> None:

@@ -313,6 +313,80 @@ def test_a_deep_part_does_not_waste_the_strip_beside_it(profile: Profile) -> Non
     )
 
 
+def block(width: float, depth: float, height: float) -> MeshData:
+    """Ein Quader auf dem Bett in den genannten Maßen."""
+    body = trimesh.creation.box(extents=(width, depth, height))
+    body.apply_translation((0.0, 0.0, height / 2.0))
+    return MeshData.of(body)
+
+
+def minigolf_set() -> list[MeshData]:
+    """Die Hüllmaße des Minigolf-Satzes aus Roberts Projekt vom 29.09.2026,
+    abgelesen nach *Druckoptimal ausrichten*, in der Reihenfolge der Szene.
+
+    Zwei Grundplatten, ein Loch, eine große Bahn, eine Drehscheibe, ein Rumpf
+    von 245 mm Tiefe (passt auf das 256er Bett nur mit schmalerem Rand) und
+    vier Fahnenstangen.
+    """
+    return [
+        block(130.0, 130.0, 25.0),
+        block(96.0, 128.0, 10.0),
+        block(94.3, 132.0, 37.0),
+        block(220.0, 220.0, 29.9),
+        block(90.0, 104.8, 7.0),
+        block(150.0, 245.0, 85.0),
+        *(block(9.7, 9.7, 122.0) for _ in range(4)),
+    ]
+
+
+def test_a_part_goes_to_the_first_plate_with_room(profile: Profile) -> None:
+    """Jedes Teil kommt auf die erste Platte, auf der es Platz hat — auch auf
+    eine, die schon hinter der Anordnung liegt.
+
+    So gefunden (Robert, 29.09.2026: „warum werden die nicht auf eine platte
+    was passt ausgerichtet?"): Die Anordnung blätterte nur vorwärts. War die
+    große Bahn auf Platte 3 gewandert, fand keine Platte davor mehr ein Teil,
+    und die Drehscheibe und die vier Stangen lagen neben dem Bett, während auf
+    Platte 1 und 2 Platz genug war. Mit zwölf erlaubten Platten wurden es
+    sechs statt vier.
+    """
+    parts = minigolf_set()
+
+    result = arrange_on_bed(parts, profile, spacing=10.0, plates=12)
+
+    assert result.plate_count == 4, f"four plates hold the set, not {result.plate_count}"
+    assert result.plates[4] == 1, "the turntable goes beside the hole on plate 2"
+    assert result.plates[6:] == [0, 0, 0, 0], "the poles fill the gap on plate 1"
+    codes = {finding.code for finding in result.findings}
+    assert codes <= {"arrange.narrow_margin"}, f"nothing is left beside a bed: {codes}"
+    for plate in range(result.plate_count):
+        on_plate = [
+            mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
+        ]
+        assert not check_collisions(on_plate), f"plate {plate}"
+
+
+def test_too_few_plates_leave_out_only_what_really_has_no_room(profile: Profile) -> None:
+    """Mit drei Platten bleibt nur der Rumpf ohne Platz — und der Bericht sagt,
+    dass eine vierte hülfe.
+
+    Der Rumpf passt nur ohne den vollen Rand auf das Bett; auf einer eigenen
+    Platte läge er mittig mit schmalerem Rand (RM-229). Eine Platte mehr hilft
+    ihm also, und der Rat muss dastehen.
+    """
+    parts = minigolf_set()
+
+    result = arrange_on_bed(parts, profile, spacing=10.0, plates=3)
+
+    beside = {
+        finding.object_id if finding.object_id is not None else finding.values.get("object")
+        for finding in result.findings
+        if finding.code in {"arrange.off_the_plate", "arrange.out_of_build_volume"}
+    }
+    assert beside == {5}, f"only the deep body lacks a place, not {beside}"
+    assert "arrange.needs_more_plates" in {finding.code for finding in result.findings}
+
+
 def test_what_is_packed_ends_up_in_the_middle_of_the_bed(profile: Profile) -> None:
     """Gepackt wird in der Ecke, gelegt wird in der Mitte (Robert, 09.09.2026).
 
@@ -660,6 +734,36 @@ def test_a_click_on_the_second_bed_lands_on_the_second_plate(
 
     back = viewport._from_view((pitch + 12.0, 4.0, 3.0))
     assert back == pytest.approx((12.0, 4.0, 3.0))
+
+
+def test_a_drag_onto_the_next_bed_is_a_short_way_on_that_plate() -> None:
+    """Ein Zug hinüber ist ein kurzer Weg auf der anderen Platte (§25).
+
+    Robert, 29.09.2026: „wenn ich sie auf eine andere platte verschieben will
+    springen sie auch". Die Betten stehen im Bild nebeneinander, in der Szene
+    übereinander; der Weg im Bild enthält deshalb die Strecke zwischen den
+    Betten, und genau die fällt heraus. Wo die Mitte landet, entscheidet — ein
+    Zug, der auf dem eigenen Bett bleibt, bleibt, wie er ist.
+    """
+    from app.ui.viewport import PLATE_GAP, across_plates
+
+    width = 256.0
+    pitch = width + PLATE_GAP
+
+    # Von Platte 3 zwei Betten nach links, 30 mm neben die alte Stelle.
+    shift, plate = across_plates(-60.0, -2 * pitch + 30.0, home=2, plates=3, width=width)
+    assert plate == 0
+    assert shift == pytest.approx(30.0)
+
+    # Nach rechts auf das Nachbarbett, dort 10 mm vor der Mitte.
+    shift, plate = across_plates(0.0, pitch - 10.0, home=0, plates=2, width=width)
+    assert (plate, shift) == (1, pytest.approx(-10.0))
+
+    # Auf dem eigenen Bett ändert sich nichts, auch über dessen Rand hinaus.
+    assert across_plates(0.0, 140.0, home=1, plates=3, width=width) == (140.0, 1)
+
+    # Rechts neben dem letzten Bett gibt es keine Platte; der Zug bleibt dort.
+    assert across_plates(0.0, 3 * pitch, home=1, plates=2, width=width) == (3 * pitch, 1)
 
 
 def test_a_single_plate_draws_exactly_what_it_always_did(

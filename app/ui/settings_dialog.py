@@ -330,6 +330,11 @@ class SettingsDialog(QDialog):
         self.search_progress = QProgressBar(self)
         self.search_progress.setRange(0, 0)
         self.search_progress.setTextVisible(False)
+        # Eine Anzeige je Suche, jede bei dem, was gesucht wird: Die Slicersuche
+        # lief unter dem Drucker an, zwei Zeilen unter ihrem Satz.
+        self.slicer_progress = QProgressBar(self)
+        self.slicer_progress.setRange(0, 0)
+        self.slicer_progress.setTextVisible(False)
 
         # Nach Verfahren gruppiert wie im Erststart — dieselben Drucker, dieselbe
         # Ordnung (RM-071).
@@ -395,19 +400,19 @@ class SettingsDialog(QDialog):
             self.unit,
             self.theme,
             self.updates,
+            self.slicer,
+            self.slicer_file,
             heading,
             self.navigation,
-            self.diff_palette,
+            self.spacemouse,
+            self.spacemouse_speed,
+            self.spacemouse_invert,
             self.shortcuts,
+            self.diff_palette,
             self.auto_accept,
             self.ai_disclosure_reset,
             self.remote,
             self.remote_port,
-            self.spacemouse,
-            self.spacemouse_speed,
-            self.spacemouse_invert,
-            self.slicer,
-            self.slicer_file,
             self.printer,
             self.search_again,
             self.material,
@@ -446,7 +451,9 @@ class SettingsDialog(QDialog):
         layout.invalidate()
         layout.activate()
         wanted = self.sizeHint().height()
-        self.resize(self.width(), max(wanted, self._user_height))
+        # So breit wie die breiteste Zeile — sonst rollte der Inhalt waagerecht,
+        # seit keine Zeile ihre Beschriftung mehr über das Feld stellt.
+        self.resize(max(self.width(), self.sizeHint().width()), max(wanted, self._user_height))
         fit_dialog_to_screen(self)
         self._fitted_height = self.height()
 
@@ -454,26 +461,44 @@ class SettingsDialog(QDialog):
         box = QGroupBox(tr("Anwendung"), self)
         form = QFormLayout(box)
         form.setVerticalSpacing(NORMAL)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        # **Eine Zeilenform für alle Zeilen.** Mit ``WrapLongRows`` stand die
+        # Beschriftung von „Slicer" und „Navigation" über ihrem Feld, die der
+        # übrigen daneben — zwei Formen in einem Dialog. Der Dialog wird dafür
+        # so breit, wie seine breiteste Zeile es verlangt.
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Anzeigeeinheit"), self.unit)
         form.addRow(tr("Thema"), self.theme)
         form.addRow("", self.updates)
+        # **Der Slicer gilt der Anwendung, nicht dem nächsten Projekt**: Er
+        # rechnet jede Druckdatei, auch die des offenen Projekts. Er steht
+        # zuletzt in dieser Gruppe und damit unmittelbar vor den Druckern, die
+        # aus ihm kommen.
+        slicer_row = QWidget(box)
+        slicer_layout = QHBoxLayout(slicer_row)
+        slicer_layout.setContentsMargins(0, 0, 0, 0)
+        slicer_layout.addWidget(self.slicer, 1)
+        slicer_layout.addWidget(self.slicer_file)
+        form.addRow(tr("Slicer"), slicer_row)
+        form.addRow(self.slicer_state)
+        form.addRow(self.slicer_progress)
         more = QWidget(box)
         details = QFormLayout(more)
         details.setContentsMargins(0, 0, 0, 0)
         details.setVerticalSpacing(NORMAL)
-        details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        # Was zusammengehört, steht beisammen: erst die Kamera (Navigation,
+        # 3D-Maus), dann die Tasten, das Bild, der Chat, die Fernsteuerung.
         details.addRow(tr("Navigation"), self.navigation)
-        details.addRow(tr("Differenzansicht"), self.diff_palette)
+        details.addRow("", self.spacemouse)
+        details.addRow(tr("Geschwindigkeit der 3D-Maus"), self.spacemouse_speed)
+        details.addRow("", self.spacemouse_invert)
         details.addRow(tr("Tastenbelegung"), self.shortcuts)
+        details.addRow(tr("Differenzansicht"), self.diff_palette)
         details.addRow("", self.auto_accept)
         details.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
         details.addRow("", self.remote)
         details.addRow(tr("Port der Fernsteuerung"), self.remote_port)
-        details.addRow("", self.spacemouse)
-        details.addRow(tr("Geschwindigkeit der 3D-Maus"), self.spacemouse_speed)
-        details.addRow("", self.spacemouse_invert)
         for row in (self.spacemouse, self.spacemouse_speed, self.spacemouse_invert):
             details.setRowVisible(row, self.settings.spacemouse_seen)
         self.advanced = collapsible(tr("Weitere Einstellungen"), more, open_now=False)
@@ -484,7 +509,7 @@ class SettingsDialog(QDialog):
         box = QGroupBox(tr("Vorgaben für neue Projekte"), self)
         form = QFormLayout(box)
         form.setVerticalSpacing(NORMAL)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         note = QLabel(
             tr(
                 "Diese Werte gelten für das nächste neue Projekt. Drucker und Material "
@@ -494,18 +519,11 @@ class SettingsDialog(QDialog):
         )
         note.setWordWrap(True)
         form.addRow(note)
-        slicer_row = QWidget(box)
-        slicer_layout = QHBoxLayout(slicer_row)
-        slicer_layout.setContentsMargins(0, 0, 0, 0)
-        slicer_layout.addWidget(self.slicer, 1)
-        slicer_layout.addWidget(self.slicer_file)
-        form.addRow(tr("Slicer"), slicer_row)
-        form.addRow(self.slicer_state)
         form.addRow(tr("Drucker"), self.printer)
         form.addRow(self.printer_choice_state)
         form.addRow(self.printer_state)
-        form.addRow(self.search_again)
         form.addRow(self.search_progress)
+        form.addRow(self.search_again)
         form.addRow(tr("Material"), self.material)
         return box
 
@@ -618,8 +636,10 @@ class SettingsDialog(QDialog):
         self.save.setToolTip(reason)
         self.save.setStatusTip(reason)
         self.save.setAccessibleDescription(reason)
-        self.search_progress.setVisible(pending or self._slicer_worker is not None)
-        self.search_progress.setAccessibleName(reason or self.slicer_state.text())
+        self.search_progress.setVisible(pending)
+        self.search_progress.setAccessibleName(reason or self.printer_state.text())
+        self.slicer_progress.setVisible(self._slicer_worker is not None)
+        self.slicer_progress.setAccessibleName(self.slicer_state.text())
         self.slicer_state.setVisible(bool(self.slicer_state.text()))
         self.printer_state.setVisible(bool(self.printer_state.text()))
 

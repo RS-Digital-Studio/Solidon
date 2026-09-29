@@ -182,7 +182,10 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   Reinigungsturmkoordinaten ergänzt der Konsolenweg nach Herstellermodus,
   Bettkontur und Turmbreite (rechteckig, 0 oder 90 Grad); ausdrückliche
   bleiben, Unbekanntes wird nicht geraten; bei mehreren benutzten Werkzeugen
-  prüft die Gegenprobe sie.
+  prüft die Gegenprobe sie. Ab 7.3 rechnet die Konsole nur mit `--cli` und
+  `--need-gcode-file`, ohne `--arrange` (`_creality_cli`); eine Fassung, die
+  `--cli` ablehnt, bekommt den alten Aufruf. Das Fenster fragt nach dem
+  Drucker und nimmt dessen Profile (`window_findings`).
 
 ### Die Prüfung vor dem Export
 

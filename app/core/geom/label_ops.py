@@ -581,6 +581,17 @@ class LabelParams(BaseParams):
         subtractive_on=("engraved",),
         doc=_("Erhaben druckt sich besser, vertieft bleibt beim Schleifen erhalten."),
     )
+    both_sides: bool = param(
+        title=_("Auf beiden Seiten"),
+        # **Vorn, weil es die Frage einer Fahne ist** (Robert, 29.09.2026: zum
+        # Minigolf-Satz gehörten Fahnen 1 und 2, gebraucht wurden 3 und 4).
+        # Aus heißt: eine Seite, wie jeder Schritt von vor diesem Feld.
+        default=False,
+        doc=_(
+            "Setzt denselben Text auch auf die Gegenseite, dort, wo die Richtung durch "
+            "den Körper wieder austritt — für Fahnen, Schilder und Anhänger."
+        ),
+    )
     slot: int = param(
         title=_("Filament"),
         default=0,
@@ -788,6 +799,62 @@ def _too_fine(
     )
 
 
+def opposite_side(mesh: MeshData, position: Vec3, normal: Vec3) -> Vec3 | None:
+    """Wo die Richtung ``-normal`` von ``position`` aus den Körper wieder verlässt.
+
+    **Der erste Austritt, nicht der erste Treffer.** Liegt der Punkt knapp vor
+    der Fläche, trifft der Strahl zuerst sie selbst — beim Eintritt, mit der
+    Außenseite gegen die Laufrichtung. Gesucht ist das erste Dreieck, dessen
+    Außenseite in Laufrichtung zeigt: dort endet das Material, und dort liegt
+    die Rückseite einer Fahne. ``None``, wenn der Strahl den Körper nie
+    verlässt, weil er ihn gar nicht trifft.
+
+    Elementweise wie jeder Strahl im Kern (``prepare.ray_hits_along``), die
+    Normalen aus :func:`~app.core.geom.mesh.stable_normals` — der Ort wird zu
+    Geometrie und soll auf jeder Maschine derselbe sein.
+    """
+    import math
+
+    from app.core.geom.mesh import stable_normals
+    from app.core.geom.prepare import ray_hits_along
+
+    length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
+    if length <= EPS_GEOM:
+        return None
+    way = np.array([-float(normal[0]), -float(normal[1]), -float(normal[2])]) / length
+    faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    if not len(faces):
+        return None
+    triangles = np.asarray(mesh.raw.vertices, dtype=float)[faces]
+    travel, hit = ray_hits_along(triangles, position, way)
+    if not len(travel):
+        return None
+    normals, _areas = stable_normals(mesh.raw)
+    outward = normals[hit]
+    leaving = outward[:, 0] * way[0] + outward[:, 1] * way[1] + outward[:, 2] * way[2] > 0.0
+    if not np.any(leaving):
+        return None
+    distance = float(np.min(travel[leaving]))
+    return (
+        float(position[0]) + float(way[0]) * distance,
+        float(position[1]) + float(way[1]) * distance,
+        float(position[2]) + float(way[2]) * distance,
+    )
+
+
+def _no_back_side() -> Finding:
+    """Die Rückseite fehlt: Die Richtung tritt nirgends aus dem Körper aus (Regel 17)."""
+    return Finding(
+        code="label.no_back_side",
+        severity="warning",
+        message=_(
+            "Auf der Rückseite steht kein Text: Die Richtung tritt dort nicht aus dem "
+            "Körper aus. Klicken Sie eine Fläche an, hinter der Material liegt."
+        ),
+        suggestions=(CORRECT_INPUT,),
+    )
+
+
 def placement_matrix(
     centre: Vec3,
     lift: float,
@@ -867,30 +934,55 @@ def _label_exact(ctx: OpContext, params: LabelParams, source: SceneObject) -> Op
             letters = replace(letters, face_slots=(params.slot,) * letters.face_count)
         slots = _with_slot_named(slots, params.slot)
     lift = -BOOLEAN_OVERLAP if mode == "raised" else -params.depth
-    matrix = placement_matrix(
-        letters.bounds.centre,
-        lift,
-        (params.x, params.y, params.z),
-        (params.nx, params.ny, params.nz),
-        params.angle,
-    )
-    placed = edit.transformed(letters, as_transform(matrix), cancelled=ctx.cancelled)
+    position = (params.x, params.y, params.z)
+    normal = (params.nx, params.ny, params.nz)
+    sides = [(position, normal)]
+    missing_back: Finding | None = None
+    if params.both_sides:
+        # Gefunden an der Tessellation, gesetzt am exakten Körper — dieselbe
+        # Frage wie am Netz (:func:`opposite_side`).
+        back = opposite_side(as_mesh_data(body), position, normal)
+        if back is None:
+            missing_back = _no_back_side()
+        else:
+            sides.append((back, (-normal[0], -normal[1], -normal[2])))
+    tools = [
+        edit.transformed(
+            letters,
+            as_transform(
+                placement_matrix(letters.bounds.centre, lift, where, facing, params.angle)
+            ),
+            cancelled=ctx.cancelled,
+        )
+        for where, facing in sides
+    ]
     kind: BooleanKind = "union" if mode == "raised" else "difference"
     ctx.cancelled.raise_if_cancelled()
     cut_slot = params.slot if mode == "engraved" else 0
-    result = edit.unified(edit.boolean(kind, [body, placed], cut_slot=cut_slot))
+    result = edit.unified(edit.boolean(kind, [body, *tools], cut_slot=cut_slot))
     ctx.cancelled.raise_if_cancelled()
     nothing = without_effect(body, result, kind, ctx.profile)
     apart = _fell_apart(body, result, mode)
-    buried = _buried(placed, body, result, mode)
+    buried = _buried(_Letters(sum(tool.volume for tool in tools)), body, result, mode)
     fine = _too_fine(params.text, params.size, params.font, params.style, ctx.profile)
     _log.info("labelled an exact body with %r, %s", params.text, mode)
     return OpResult(
         outputs=[
             dataclasses.replace(source, mesh=result, kind="brep", features={}, material_slots=slots)
         ],
-        findings=[finding for finding in (nothing, apart, buried, fine) if finding is not None],
+        findings=[
+            finding
+            for finding in (nothing, apart, buried, missing_back, fine)
+            if finding is not None
+        ],
     )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _Letters:
+    """Was :func:`_buried` von den gesetzten Buchstaben liest: ihr Volumen."""
+
+    volume: float
 
 
 @register_op(
@@ -940,10 +1032,21 @@ def label_text(ctx: OpContext) -> OpResult:
         params.text, params.size, params.font, params.depth, style=params.style, mode=mode
     )
 
-    placed = place(
-        body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
-    )
+    position = (params.x, params.y, params.z)
+    normal = (params.nx, params.ny, params.nz)
+    placed = place(body, position, normal, params.angle)
     body_mesh = as_mesh_data(source.mesh)
+    # **Die Rückseite trägt dieselbe Schrift, von außen lesbar** — gespiegelt
+    # zur Vorderseite, weil sie in die andere Richtung schaut. ``place``
+    # richtet sie mit der umgekehrten Normalen aufrecht aus.
+    tools = [placed]
+    missing_back: Finding | None = None
+    if params.both_sides:
+        back = opposite_side(body_mesh, position, normal)
+        if back is None:
+            missing_back = _no_back_side()
+        else:
+            tools.append(place(body, back, (-normal[0], -normal[1], -normal[2]), params.angle))
     slots = list(source.material_slots)
     if params.slot:
         # §20: Erhaben tragen die Buchstaben einen eigenen Slot in die
@@ -953,15 +1056,16 @@ def label_text(ctx: OpContext) -> OpResult:
         # bis zum 22.09.2026 stand das Feld dort ohne Wirkung. Beides macht
         # aus einer zweifarbigen Beschriftung eine Datei statt zwei.
         if mode == "raised":
-            placed = with_slot(placed, params.slot)
+            tools = [with_slot(tool, params.slot) for tool in tools]
         if not body_mesh.slots:
             body_mesh = with_slot(body_mesh, 0)
         slots = _with_slot_named(slots, params.slot)
+    letters = tools[0] if len(tools) == 1 else MeshData.of(concatenated([t.raw for t in tools]))
 
     kind: BooleanKind = "union" if mode == "raised" else "difference"
     outcome = boolean(
         kind,
-        [body_mesh, placed],
+        [body_mesh, *tools],
         quality=ctx.quality,
         cut_slot=params.slot if mode == "engraved" else 0,
         cancelled=ctx.cancelled,
@@ -983,7 +1087,7 @@ def label_text(ctx: OpContext) -> OpResult:
     apart = _fell_apart(body_mesh, outcome.mesh, mode)
     # **Und die dritte Hälfte.** Weder danebengefallen noch wirkungslos, sondern
     # im Körper verschwunden — die Volumenfrage, aber gegen die Schrift gehalten.
-    buried = _buried(placed, body_mesh, outcome.mesh, mode)
+    buried = _buried(letters, body_mesh, outcome.mesh, mode)
 
     _log.info("labelled with %r, %s", params.text, mode)
     return OpResult(
@@ -994,6 +1098,7 @@ def label_text(ctx: OpContext) -> OpResult:
             *([nothing] if nothing is not None else []),
             *([apart] if apart is not None else []),
             *([buried] if buried is not None else []),
+            *([missing_back] if missing_back is not None else []),
             *(
                 [fine]
                 if (

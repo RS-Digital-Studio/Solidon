@@ -367,7 +367,6 @@ class DisplaceParams(BaseParams):
         title=_("Fläche"),
         kind="feature",
         default="",
-        placement="advanced",
         doc=_(
             "Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — "
             "die anderen Arten brauchen keine."

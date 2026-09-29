@@ -55,8 +55,8 @@ bash .claude/scripts/suite-getrennt.sh
 .venv\Scripts\python.exe -m mypy
 ```
 
-**Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release** —
-auch nicht als betroffene Teilmenge. `pytest -q` am Stück kommt nicht durch
+**Fenstertests und Leistungsprüfungen nur beim Release** (`AGENTS.md`,
+„Arbeitsweise“). `pytest -q` am Stück kommt nicht durch
 (nativer Abriss nach rund 700 Fenstern); das Tor trennt die Fenstergruppe ab:
 
 ```
@@ -90,6 +90,7 @@ Temp-Ordner (§38) — außerhalb der Suite fehlt beides.
 ```
 app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   registry/   Register der Ops, Parameterschema, Flächenzuordnung
+  organizer/  reproduzierbare Fachaufteilungen (Teilungsbaum, Bau, Op)
   scene/      Szene, Stapel, Auswertung, Projektdatei, Parameter, Passungen
   geom/       Ops gegen manifold3d/trimesh, Boolesche Rückfallkette, Reparatur
   sketch/     Skizzen mit Zwangsbedingungen (§30.1): Löser, Profile, Ebenen

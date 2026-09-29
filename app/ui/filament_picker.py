@@ -49,13 +49,14 @@ from PySide6.QtCore import (
     QEvent,
     QObject,
     QPoint,
+    QRectF,
     QSignalBlocker,
     QSize,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QShowEvent
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -205,38 +206,58 @@ def slot_colours(index: int, slot: MaterialSlot | None) -> str:
     return " ".join([first, *extras])
 
 
-def swatch(colour: str | Sequence[str] | None) -> QIcon:
-    """Ein Farbfeld als Symbol — leer, wo es keine Farbe gibt.
+def swatch(
+    colour: str | Sequence[str] | None, size: int = SWATCH_PIXELS, *, ring_when_empty: bool = False
+) -> QIcon:
+    """Ein Farbpunkt als Symbol — leer, wo es keine Farbe gibt.
 
     Ein leeres Feld statt eines weißen: „keine Farbe" und „weißes Filament"
-    sind zwei Aussagen, und ein weißes Kästchen wäre die falsche von beiden.
+    sind zwei Aussagen, und ein weißer Punkt wäre die falsche von beiden.
+    ``ring_when_empty`` zeichnet dann den leeren Rand — für Listen, in denen
+    „ohne Farbe" selbst eine Auskunft ist (die Körper einer STEP-Datei).
 
-    **Mehrere Farben teilen sich das Feld in senkrechte Streifen**, in der
+    **Rund, nicht eckig.** In den Listen der Spulen, der STEP-Körper und der
+    Slicerprofile steht die Farbe unmittelbar neben einem Haken, und ein
+    weißes Quadrat las sich dort als zweites, leeres Ankreuzfeld. Ein Punkt
+    hat mit einem Kästchen nichts gemein.
+
+    **Mehrere Farben teilen den Punkt in senkrechte Streifen**, in der
     Reihenfolge der Spule: Ein zweifarbiges Filament ist rechts anders als
     links, ein vierfarbiges zeigt vier Streifen. Angenommen wird ein Feldwert
     mit Leerzeichen (:func:`colours_of`) oder eine Liste.
     """
     colours = colour.split() if isinstance(colour, str) else list(colour or ())
-    image = QPixmap(SWATCH_PIXELS, SWATCH_PIXELS)
-    if not colours:
-        image.fill(QColor(0, 0, 0, 0))
+    # In doppelter Auflösung gezeichnet: Ein Kreis aus vierzehn Bildpunkten
+    # ist auf einem Schirm mit 200 % sonst ein gestuftes Achteck.
+    scale = 2
+    image = QPixmap(size * scale, size * scale)
+    image.setDevicePixelRatio(scale)
+    image.fill(QColor(0, 0, 0, 0))
+    if not colours and not ring_when_empty:
         return QIcon(image)
-    image.fill(QColor(colours[0]))
     painter = QPainter(image)
-    if len(colours) > 1:
+    try:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        disc = QRectF(1.0, 1.0, size - 2.0, size - 2.0)
+        outline = QPainterPath()
+        outline.addEllipse(disc)
+        painter.setClipPath(outline)
         painter.setPen(Qt.PenStyle.NoPen)
-        # Ganzzahlige Streifengrenzen, der letzte nimmt den Rest: Bei 14
-        # Punkten und drei Farben sind das 4, 4 und 6 — sichtbar sind alle.
         for number, one in enumerate(colours):
-            left = SWATCH_PIXELS * number // len(colours)
-            right = SWATCH_PIXELS * (number + 1) // len(colours)
-            painter.fillRect(left, 0, right - left, SWATCH_PIXELS, QColor(one))
-    # Eine Umrandung, damit ein sehr helles Filament vor hellem Grund nicht
-    # verschwindet — dieselbe Vorsicht wie beim Farbknopf der Einstellungen.
-    painter.setPen(QColor(0, 0, 0, 90))
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawRect(0, 0, SWATCH_PIXELS - 1, SWATCH_PIXELS - 1)
-    painter.end()
+            left = disc.left() + disc.width() * number / len(colours)
+            right = disc.left() + disc.width() * (number + 1) / len(colours)
+            painter.fillRect(QRectF(left, 0.0, right - left, float(size)), QColor(one))
+        painter.setClipping(False)
+        # Ein mittleres Grau als Rand: Es hebt ein weißes Filament vom hellen
+        # und ein schwarzes vom dunklen Grund ab — ein halbdurchsichtiges
+        # Schwarz tat nur das erste.
+        ring = QPen(QColor(128, 128, 128))
+        ring.setWidthF(1.0)
+        painter.setPen(ring)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(disc)
+    finally:
+        painter.end()
     return QIcon(image)
 
 

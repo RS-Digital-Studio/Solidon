@@ -1088,12 +1088,10 @@ def test_the_rule_files_count_the_operations_parameters_and_tools_they_claim() -
     heute = re.search(
         r"heute sind es (\d+)\s+Operationen und\s+([a-zäöüß]+)\s+Zusatzwerkzeuge", agentenschicht
     )
-    stand = re.search(
-        r"Stand \d\d\.\d\d\.\d{4}: (\d+) Operationen, (\d+) Werkzeuge", agentenschicht
-    )
+    stand = re.search(r"\*\*(\d+) Operationen, (\d+) Werkzeuge\*\*", agentenschicht)
     assert parameter, "der Satz „… Parameter der … Operationen“ steht nicht mehr in oberflaeche.md"
     assert heute, "der Satz „heute sind es … Operationen und … Zusatzwerkzeuge“ fehlt"
-    assert stand, "die Zeile „Stand …: … Operationen, … Werkzeuge“ fehlt in agentenschicht.md"
+    assert stand, "die Zeile „**… Operationen, … Werkzeuge**“ fehlt in agentenschicht.md"
     genannt_zusatz = _ZAHLWORT.get(heute.group(2).lower())
     assert genannt_zusatz is not None, (
         f"unbekanntes Zahlwort in agentenschicht.md: {heute.group(2)!r} — in _ZAHLWORT eintragen"

@@ -1100,7 +1100,7 @@ def test_every_catalog_translates_all_three_target_paths_and_actions() -> None:
         "Datenschutz beim Betreiber dieses Ziels klären",
         "Solidon-Datenschutz",
         (
-            "Diese lokale Fassung wird mit Solidon ausgeliefert. Externe Links sind hier "
+            "Diese lokale Version wird mit Solidon ausgeliefert. Externe Links sind hier "
             "deaktiviert."
         ),
     )
