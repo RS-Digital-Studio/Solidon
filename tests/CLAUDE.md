@@ -17,6 +17,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein? | `test_lazy_exports.py` |
 | Deutsche Stämme in Bezeichnern? Alle Kataloge vollständig? | `test_language_rules.py` (ein AST je Datei für alle Sprachregeln) · `test_translations.py` (einmal extrahiert für alle Kataloge) |
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
+| Werden Normteilmaße vor dem Sortieren geprüft und bleiben gültige Größen stabil geordnet? | `test_standards.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
 | Jede Rückfallstufe einmal erzwungen? | `test_boolean.py` |
 | Wählt die schnelle FDM-Ausrichtung eine tragfähige Lage oder hält sie mit Befund an? | `test_fast_orientation_standing.py` — Korpusring, beide Güten, Profil, Abbruch und Resin-Ausnahme |

@@ -234,6 +234,8 @@ def _index(
             indexed[size] = kind(**values)
         except (TypeError, ValueError) as problem:
             raise _invalid(table_name, size, "fields", source) from problem
+        if order:
+            _finite_positive(getattr(indexed[size], order), table_name, size, order, source)
     if not order:
         return indexed
     # Nach dem Leitmaß, bei Gleichstand nach dem Namen: Zwei Buchsen mit
