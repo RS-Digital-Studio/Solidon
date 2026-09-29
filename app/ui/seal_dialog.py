@@ -33,6 +33,7 @@ from app.ui.dialogs import problem_text
 from app.ui.labels import area, feature_label
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.outline_dialog import _ProfileView
+from app.ui.panels import align_forms
 from app.ui.sketch_editor import SketchEditorDialog, Surroundings
 from app.ui.style import make_primary, no_primary
 
@@ -299,10 +300,17 @@ class SealPathDialog(QDialog):
         form.addRow(tr("Dichtweg aus"), self.mode)
         form.addRow(tr("Trägerfläche"), self.support)
         form.addRow(tr("Zeichnung"), self.sketch_button)
-        form.addRow(tr("Gegenfläche"), self.counterface)
         self._form = form
-        for field in (self.mode, self.support, self.counterface):
-            caption = form.labelForField(field)
+        # **Die Gegenfläche nach den Öffnungen**: Welche Öffnung abgedichtet
+        # wird, folgt aus der Trägerfläche, und erst dann ist die Frage, wogegen.
+        counter_form = QFormLayout()
+        counter_form.addRow(tr("Gegenfläche"), self.counterface)
+        for field, owner in (
+            (self.mode, form),
+            (self.support, form),
+            (self.counterface, counter_form),
+        ):
+            caption = owner.labelForField(field)
             if isinstance(caption, QLabel):
                 caption.setBuddy(field)
                 field.setAccessibleName(caption.text())
@@ -317,6 +325,8 @@ class SealPathDialog(QDialog):
         row.addWidget(self.contours, 1)
         row.addWidget(self.contour_view, 2)
         layout.addLayout(row, 1)
+        layout.addLayout(counter_form)
+        align_forms(self)
         self.status = QLabel(self)
         self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)

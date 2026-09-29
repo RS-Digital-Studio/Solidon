@@ -147,9 +147,10 @@ SCAN_MAX_MS: Final = 30_000
 #: Gerätefragen gibt ``hidapi`` den GIL ab und holt ihn für jeden Namen wieder;
 #: rechnet daneben ein Arbeiter, wartet jeder dieser Griffe. Beim Einlesen des
 #: Mausoleum-Drachen stand der Qt-Takt darin 170 bis 350 ms, zu den Zeiten der
-#: Suche (7,5 s, 15,5 s, 31,5 s nach dem Start; ``sonden/3mf/p05_waechter.py``,
-#: Hauptthread in ``HidD_GetProductString``). Allein dauert sie hier 25 bis
-#: 33 ms (29 Geräte, ``sonden/3mf/p06_hid.py``).
+#: Suche (7,5 s, 15,5 s, 31,5 s nach dem Start; Hauptthread in
+#: ``HidD_GetProductString``, ``p05_waechter.py``). Allein dauert sie hier 25 bis
+#: 33 ms (29 Geräte, ``p06_hid.py``). Beide Sonden liegen in
+#: ``konzepte/nachweise-release-0.5.1/sonden/3mf/``.
 SEARCH_POLL_MS: Final = 20
 #: Mehr Berichte je Takt werden nicht gelesen — ein Gerät, das schneller
 #: sendet, als wir zeichnen, darf den Takt nicht auffressen.

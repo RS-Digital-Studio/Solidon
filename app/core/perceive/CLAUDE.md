@@ -92,7 +92,7 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
   `surfaces_near`, ab `LOCAL_RADII_SHARE` der ganze Körper) mit denselben
   Antworten wie am ganzen Körper (`_known_answer`). Eine Kette misst sich oft
   erst an der Suche ihres Nachbarn; gesucht wird im eigenen, dann im belegten
-  Umfang (`recorded`, `transformed_searches`).
+  Umfang (`recorded`, `matching.transformed_features(...).candidates`).
 - **`features_in_region`** begrenzt die Auswahl an belegten Originalpunkten,
   ohne zweite Erkennung; `local_error` trägt den Grund als `constraint` mit
   Präfix `local_` — die Oberfläche steuert darüber, nie über Sätze.

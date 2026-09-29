@@ -2554,19 +2554,18 @@ def test_a_plate_outside_the_volume_offers_arranging(
     assert raised.value.values["output"], "die Ausgabe des Slicers bleibt lesbar"
 
 
-@pytest.mark.parametrize(
-    ("program", "points_to_the_window"),
-    [("CrealityPrint.exe", True), ("orca-slicer.exe", False)],
-)
-def test_creality_prints_empty_3mf_files_on_its_console(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, points_to_the_window: bool
+@pytest.mark.parametrize("program", ["CrealityPrint.exe", "orca-slicer.exe"])
+def test_an_empty_print_from_creality_says_what_the_family_says(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str
 ) -> None:
-    """Creality Print 7.2 rechnet über die Kommandozeile keine 3MF — nicht
-    Solidons Übergabe, nicht eine nackte aus trimesh, nicht eine aus
-    PrusaSlicer: jede endet mit -100 und „The print is empty", dasselbe Teil
-    als STL schneidet es (26.09.2026, RM-164). Der Kunde las „Der Slicer hat
-    keine Druckdatei geschrieben" und riet. Andere Programme der Familie sagen
-    den Satz, wenn alles neben der Platte liegt; für sie bleibt es beim alten."""
+    """Creality Print bekommt für „The print is empty" keine eigene Auskunft mehr.
+
+    Bis 0.5.1 hieß es dort „Creality Print rechnet eine 3MF-Datei nur in
+    seinem Fenster". Das stimmte nicht: Ohne ``extruder`` am Objekt ließ
+    Creality Print 7.2 das Teil auf der Konsole ohne Werkzeug; mit ihm
+    schneidet es Solidons 3MF samt Stützsperre und zwei Farben (RM-164,
+    29.09.2026, ``test_every_object_names_its_tool_even_without_a_spool``).
+    Sagt es den Satz trotzdem, gilt dieselbe Antwort wie für die Familie."""
     profile = profiles.make_profile()
     model = tmp_path / "platte.3mf"
     model.write_bytes(b"keine echte 3MF")
@@ -2582,7 +2581,8 @@ def test_creality_prints_empty_3mf_files_on_its_console(
     with pytest.raises(ExternalToolError) as raised:
         handover.slice_model(model, print_settings.resolve(profile), profile, setup)
 
-    assert ("Im Slicer öffnen" in str(raised.value)) is points_to_the_window, str(raised.value)
+    assert "Im Slicer öffnen" not in str(raised.value), str(raised.value)
+    assert str(raised.value.detail) == "Der Slicer hat keine Druckdatei geschrieben."
     assert raised.value.suggestions, "Regel 17"
 
 
@@ -2931,6 +2931,64 @@ def test_an_unknown_arrange_flag_falls_back_and_reports(
     assert len(commands) == 3, "die zweite Platte läuft in einem Zug"
     assert "--arrange" not in commands[2]
     assert any(entry.code == "slicer.arranged_itself" for entry in again.findings)
+
+
+def test_creality_print_slices_on_its_console_before_and_after_7_3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Creality Print 7.3 rechnet nur mit ``--cli``, 7.2 kennt den Schalter nicht.
+
+    Gemessen am 29.09.2026: 7.3.0.6149 startet ohne ``--cli`` die Oberfläche,
+    und der Lauf wartete bis zum Zeitlimit; mit ihm lehnt es ``--arrange`` ab
+    („Invalid option --arrange"), hält die Lage einer 3MF selbst und schreibt
+    ``plate_1.gcode`` nur mit ``--need-gcode-file``. Eine ältere Fassung, die
+    ``--cli`` ablehnt, rechnet einmal mit dem alten Aufruf weiter, gemerkt je
+    Programm; der Befund „selbst angeordnet" entsteht in keinem der Fälle.
+    """
+    profile = profiles.make_profile()
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"keine echte 3MF")
+    commands: list[list[str]] = []
+    refuses_cli: set[Path] = set()
+
+    def fake_run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        commands.append(list(command))
+        if Path(command[0]) in refuses_cli and "--cli" in command:
+            failed = _Finished(b"Invalid option --cli\n")
+            failed.returncode = 1
+            return failed
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", fake_run)
+    settings = print_settings.resolve(profile)
+
+    new = tmp_path / "neu" / "CrealityPrint.exe"
+    new.parent.mkdir()
+    new.write_bytes(b"")
+    outcome = handover.slice_model(
+        model, settings, profile, handover.SlicerSetup(new, "orca"), keep_arrangement=True
+    )
+    assert len(commands) == 1, "7.3 rechnet im ersten Lauf"
+    assert "--cli" in commands[0] and "--need-gcode-file" in commands[0]
+    assert "--arrange" not in commands[0], "7.3 kennt den Schalter nicht"
+    assert not any(entry.code == "slicer.arranged_itself" for entry in outcome.findings)
+
+    old = tmp_path / "alt" / "CrealityPrint.exe"
+    old.parent.mkdir()
+    old.write_bytes(b"")
+    refuses_cli.add(old)
+    for _ in range(2):
+        outcome = handover.slice_model(
+            model, settings, profile, handover.SlicerSetup(old, "orca"), keep_arrangement=True
+        )
+        assert not any(entry.code == "slicer.arranged_itself" for entry in outcome.findings)
+    assert len(commands) == 4, "einmal mit --cli abgelehnt, dann zweimal der alte Aufruf"
+    assert "--cli" in commands[1]
+    for command in commands[2:]:
+        assert "--cli" not in command and "--need-gcode-file" not in command
+        assert command[command.index("--arrange") + 1] == "0", "7.2 hält die Lage so"
 
 
 @pytest.mark.parametrize(
@@ -4147,6 +4205,34 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
     assert werte["bridge_angle"] == "45", "was nur geerbt ist, steht trotzdem in der Datei"
     assert werte["wall_loops"] == "2", "ohne eigene Wahl gilt der Hersteller"
     assert gewaehlt["wall_loops"] == "4", "die eigene Wahl liegt über dem geerbten"
+
+
+def test_the_creality_window_says_which_printer_to_pick() -> None:
+    """Creality Print fragt beim Öffnen einer fremden 3MF nach dem Drucker.
+
+    Vorgewählt ist der, der dort gerade eingestellt ist — am 29.09.2026 ein
+    CR-10 für eine Übergabe an den K1 (RM-164). Prozess und Filament nimmt das
+    Fenster aus dessen Profilen, gemessen mit 7.2.2 und 7.3.0 an
+    ``full_print_config.json``: Vier gewählte Wände und 37 % Füllung kamen nicht
+    an. Der Befund nennt den Drucker der Übergabe und den Weg mit Solidons
+    Einstellungen; andere Programme bekommen ihn nicht.
+    """
+    creality = handover.SlicerSetup(
+        executable=Path("CrealityPrint.exe"),
+        flavour="orca",
+        machine_profile="C:/Creality/machine/Creality K1 0.4 nozzle.json",
+    )
+    befunde = handover.window_findings(creality)
+    assert [befund.code for befund in befunde] == ["slicer.window_asks_for_the_printer"]
+    assert "„Creality K1 0.4 nozzle“" in str(befunde[0].message)
+    assert "eigenen Profilen" in str(befunde[0].message)
+    assert "„Slicen“" in str(befunde[0].message)
+    assert (
+        handover.window_findings(
+            handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+        )
+        == []
+    )
 
 
 def test_the_project_settings_ids_are_names_not_paths() -> None:

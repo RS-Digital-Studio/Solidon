@@ -304,7 +304,7 @@ zusammen. Drei Leser kommen ohne Rechnung aus:
   (Roberts Projekt, 12 Schritte, 16 Körper) rechnete sie 18-mal statt dreimal,
   14 davon am zweiten Ausrichten; die CPU-Zeit der ganzen Auswertung fiel von
   185–190 s auf 70–87 s (je zwei Läufe im Wechsel, Sonde
-  `output/review/merkmale-kopien-2026-09-28/`). Nebenbei wurde der Bericht
+  `konzepte/nachweise-release-0.5.1/review/merkmale-kopien-2026-09-28/`). Nebenbei wurde der Bericht
   lageunabhängig: Neu erkannt ließ derselbe Körper nach jeder Drehung eine
   andere Zahl Rundformen weg (37, 36, 35 — RM-210) und stand dreimal im
   Bericht, übertragen bleibt es bei einer Zahl. Seit dem 28.09.2026 vermerkt
@@ -702,7 +702,7 @@ Umfang des Merkmals, dann im belegten Suchumfang** — der schließt die ganze
 Umgebung der ursprünglichen Stelle ein und sprengte an dichten Netzen das
 Budget; weitergetragen wird der größere (`recorded` in `_recognise_region`).
 `local_search_radius` ist ein belegter diagnostischer Suchumfang um
-die Merkmalsmitte, kein Nutzermaß. `transformed_searches` nimmt ihn über den
+die Merkmalsmitte, kein Nutzermaß. `matching.transformed_features` nimmt ihn über den
 größten Dehnungsfaktor der Operation konservativ mit; Flächengröße allein
 bestimmt keinen Radius. Maße werden nur bei nachgewiesen erhaltener Form
 transformiert. Eine anisotrope Skalierung darf aus einer Ellipse keine
@@ -900,7 +900,7 @@ Name bleibt Verrundung — eine Rundung zwischen einer Ebene und einem
 Zylindermantel ist eine verrundete Kante, auch wenn keine zwei Ebenen unter
 ihr liegen. Eine
 runde Wand sagt dazu, ob sie **tangential** in ihre Nachbarn übergeht
-(`tangent`, `blends_into_its_neighbours`): Radial versetzt schöbe sie deren
+(`tangent`, `tangent_walls`): Radial versetzt schöbe sie deren
 Flanken aus ihrer Ebene, `radial_rounding` sagt dort ab, und beide Zeilen
 tragen `actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS` — auch `_drop_the_fillet`
 und `_reshape_the_fillet` sagen mit diesem Satz ab.
@@ -1516,7 +1516,7 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   Kegel war danach nicht mehr belegt und las sich als Torus — je nach
   Vernetzung des Absatzes: über 17 Lagen je Achse verlor der Stand vor dem
   Umbau den Kegel bei 1,1 rad, der Stand mit dem Werkzeug in der Welt bei 0,73
-  rad, mit der Regel keiner (`sonden/bohren/p12_kippe.py`).
+  rad, mit der Regel keiner (`konzepte/nachweise-release-0.5.1/sonden/bohren/p12_kippe.py`).
   **Gesucht und geprüft wird am Knoten, nicht im Netz** (20.09.2026):
   `_rim_of` zählt Kanten und Randgrade eines Flecks einmal, `_candidates_at`
   liest die Kandidaten über den eigenen Index Ecke → Dreiecke
@@ -1697,8 +1697,8 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   je nach Facettierung 345 bis 354 Grad misst, sondern am Rand: zwei
   gerade Linien längs der Achse, die die ganze Tiefe durchlaufen. Ein
   Querloch durch die Wand hat solche Linien nicht. Der exakte Kern sagt
-  dasselbe Wort aus dem Umfang der Fläche (`FULL_TURN` ist dieselbe Zahl
-  wie `FULL_TURN_SPAN`, 300 Grad; ein von der Naht geteilter Mantel wird
+  dasselbe Wort aus dem Umfang der Fläche (`brep.features._full_turn` liest
+  `FULL_TURN_SPAN`, 300 Grad; ein von der Naht geteilter Mantel wird
   vorher zusammengeführt, `_seam_split_cylinders_joined`). Was der Anschnitt
   bedeutet, sagt `relations._cut_open_neighbours`: Grenzt der Mantel an
   eine andere Höhlung, sind beide **berührt** — keine Kette, kein eigener
@@ -1750,8 +1750,8 @@ genügte ein Skalarprodukt der Achsen ungleich null.
 
 - **Die runden Wände werden zusammen gefragt** (`tangent_walls`): ein Gang
   über `face_adjacency` für alle Verrundungen eines Körpers, nicht einer je
-  Wand (531 am Hemmungsrad); `blends_into_its_neighbours` bleibt der Weg für
-  eine einzelne. `_partial_cones_folded` zählt die Nachbarn seiner Kegelstücke
+  Wand (531 am Hemmungsrad); auch eine einzelne Wand geht diesen Weg.
+  `_partial_cones_folded` zählt die Nachbarn seiner Kegelstücke
   im selben Muster und gibt ein Stück dem Langloch, mit dem es die meisten
   Kanten teilt — **und bei Gleichstand keinem** (Regel 21): Eine Senkung Ø 12
   zwischen zwei Langlöchern Ø 6 bei y = ±4 teilt mit beiden acht Kanten und

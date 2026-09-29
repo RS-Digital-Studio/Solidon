@@ -377,9 +377,33 @@ geben automatisch hinzugewonnenen Platz beim Zuklappen wieder zurück.
 Bewusst größer gezogene Fenster behalten ihre Höhe. Reiter messen nur die
 sichtbare Seite; verschachtelte Rollbereiche werden vermieden.
 
+**Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
+(`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
+zugeklappte Rückseite zählt mit. Eine Beschriftungsspalte je Dialog
+(`panels.align_forms`, gerahmte Reiter über `apart`), gleich breite Felder
+(`panels.even_fields`, `op_dialog.even_value_fields`); eine Zeile aus Feld und
+Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt.
+
+**Klappen:** überall die flache Überschrift (`panels.collapsible`,
+`sectionHeading`). Werte, die sich ein- und ausschalten lassen, sind eine
+Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Gemessen
+wird einen Ereignisumlauf nach dem Klappen, sonst gilt die nachgewachsene Höhe
+als gezogen; die Aufmachhöhe misst `style.fit_height_after_show` nach. Ein
+Ausgang ist `RejectRole` — als `AcceptRole` macht die Knopfleiste ihn beim
+Anzeigen zum Hauptknopf.
+
+**Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert,
+29.09.2026): was eine Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein
+Schalter bei dem, was er schaltet; ein Zustandssatz bei seinem Gegenstand.
+Druckeinstellungen: Slicer, Drucker, Düse, Platte, Filamente, Qualität,
+Profile des Slicers, Grundlage, Werte; *Werte mitgeben* bei der Übergabe
+(`test_the_print_dialog_asks_in_the_order_its_answers_depend_on`). Register:
+`tests/test_dependency_order.py`.
+
 **Slicer vor Drucker:** Einstellungen und Erstlauf verwenden dieselbe
-asynchrone Druckererhebung. Sie bieten vollständige Profile aus dem gewählten
-Slicer an; neue Druckerprofile bleiben bis zum Speichern im Entwurf, auch beim
+asynchrone Druckererhebung; in den Einstellungen steht der Slicer unter
+„Anwendung“ (er gilt jedem Projekt), direkt vor den Druckervorgaben. Beide
+bieten vollständige Profile aus dem gewählten Slicer an; neue Druckerprofile bleiben bis zum Speichern im Entwurf, auch beim
 Sprachwechsel. Die Einstellungen übernehmen dabei auch den Programmpfad erst
 beim Speichern. Der Erstlauf bewahrt seine bisherige Sprachwechsel-Semantik:
 Sprache, Slicerpfad und bereits gespeicherte Drucker gelten sofort; eine neue

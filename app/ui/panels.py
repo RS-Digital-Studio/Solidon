@@ -9048,7 +9048,7 @@ def least_number_width(spin: QDoubleSpinBox) -> int:
     return metrics.horizontalAdvance(spin.text() + "0") + frame
 
 
-def align_forms(dialog: QWidget) -> None:
+def align_forms(dialog: QWidget, *, apart: tuple[QWidget, ...] = ()) -> None:
     """Alle Formularzeilen eines Dialogs auf eine Beschriftungsspalte legen.
 
     Ein ``QFormLayout`` rechnet seine linke Spalte für sich, und ein Dialog
@@ -9070,19 +9070,89 @@ def align_forms(dialog: QWidget) -> None:
     Abschnitt, der später aufgeht, ändert daran nichts: Die Breite ist dann
     schon gesetzt, und Qt vergrößert eine Beschriftung nur, es verkleinert
     sie nicht.
+
+    ``apart`` nennt Bereiche mit eigener Kante — die Reiter der
+    Druckeinstellungen stehen in einem Rahmen, ihre Felder beginnen ohnehin
+    um dessen Innenrand versetzt. Ihre Formulare teilen eine Spalte unter
+    sich; die längste Beschriftung eines verborgenen Reiters („Linienbreite
+    erste Schicht“) zog sonst die Vorderseite auf 170 Punkte, wo 110 reichen.
     """
-    labels: list[QWidget] = []
+
+    def inside(form: QFormLayout, area: QWidget) -> bool:
+        owner = form.parentWidget()
+        return owner is not None and (owner is area or area.isAncestorOf(owner))
+
+    forms = dialog.findChildren(QFormLayout)
+    groups = [[form for form in forms if inside(form, area)] for area in apart]
+    rest = [form for form in forms if not any(inside(form, area) for area in apart)]
+    for group in (rest, *groups):
+        labels: list[QWidget] = []
+        for form in group:
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                widget = item.widget() if item is not None else None
+                if widget is not None:
+                    labels.append(widget)
+        if not labels:
+            continue
+        widest = max(widget.sizeHint().width() for widget in labels)
+        for widget in labels:
+            widget.setMinimumWidth(widest)
+
+
+def even_fields(dialog: QWidget) -> None:
+    """Die gedeckelten Zahl- und Auswahlfelder eines Formulars gleich breit.
+
+    Der Deckel je Feld bleibt der Grund (``print_settings_dialog._editor``):
+    kein Kasten, der breiter ist als sein Wert. Gedeckelt war aber jedes Feld
+    auf seinen **eigenen** Wunsch, und in „Das Wichtigste" standen sieben
+    Felder in fünf Breiten zwischen 70 und 112 Punkten untereinander — eine
+    Kante, die jede Zeile woanders hat, liest der Blick als Unordnung. Hier
+    bekommt jedes Feld eines Formulars den größten Deckel seiner Nachbarn;
+    ungedeckelte Felder (Haken, Farbknopf, Texte) bleiben, wie sie sind.
+    """
+    from PySide6.QtWidgets import QAbstractSpinBox, QComboBox
+
+    unbounded = 16777215
+
+    def editor_of(widget: QWidget | None) -> QWidget | None:
+        # Das Feld selbst oder das erste Feld seiner Zeile — die
+        # Druckeinstellungen tragen Feld, *Zurücksetzen* und Hinweis in einem
+        # Halter.
+        if isinstance(widget, (QAbstractSpinBox, QComboBox)):
+            return widget
+        line = widget.layout() if widget is not None else None
+        first = line.itemAt(0) if line is not None and line.count() else None
+        inner = first.widget() if first is not None else None
+        return inner if isinstance(inner, (QAbstractSpinBox, QComboBox)) else None
+
     for form in dialog.findChildren(QFormLayout):
+        editors: list[QWidget] = []
         for row in range(form.rowCount()):
-            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                labels.append(widget)
-    if not labels:
-        return
-    widest = max(widget.sizeHint().width() for widget in labels)
-    for widget in labels:
-        widget.setMinimumWidth(widest)
+            item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            editor = editor_of(item.widget() if item is not None else None)
+            if editor is not None and editor.maximumWidth() < unbounded:
+                editors.append(editor)
+        if len(editors) < 2:
+            continue
+        # Zahlen unter Zahlen und Auswahlen unter Auswahlen; liegen beide
+        # Breiten nahe beieinander, eine Kante für alle. Eine Auswahl mit
+        # langen Namen zieht die Zahlen daneben aber nicht mit.
+        numbers = [editor for editor in editors if isinstance(editor, QAbstractSpinBox)]
+        choices = [editor for editor in editors if isinstance(editor, QComboBox)]
+        wanted = {
+            id(group): max(editor.sizeHint().width() for editor in group)
+            for group in (numbers, choices)
+            if group
+        }
+        joint = len(wanted) == 2 and max(wanted.values()) <= min(wanted.values()) * 1.3
+        for group in (numbers, choices):
+            if not group:
+                continue
+            common = max(wanted.values()) if joint else wanted[id(group)]
+            for editor in group:
+                editor.setMinimumWidth(common)
+                editor.setMaximumWidth(max(editor.maximumWidth(), common))
 
 
 def describe_selection(result: EvaluationResult | None, object_id: ObjectId | None) -> Any:

@@ -257,7 +257,15 @@ class UsageDialog(QDialog):
         operation_label.setBuddy(self.operation)
         set_level(operation_label, "caption")
         layout.addWidget(operation_label)
-        layout.addWidget(self.operation)
+        # **Neben dem Feld, das er setzt**: „Noch einmal gedruckt“ legt einen
+        # neuen Druckvorgang an und stellt das Feld darauf — er stand unten in
+        # der Leiste neben *Lager neu laden*.
+        self.repeat_button = QPushButton(tr("Noch einmal gedruckt"), self)
+        operation_row = QHBoxLayout()
+        operation_row.setSpacing(NORMAL)
+        operation_row.addWidget(self.operation, 1)
+        operation_row.addWidget(self.repeat_button)
+        layout.addLayout(operation_row)
         self.content = QWidget(self)
         form = QVBoxLayout(self.content)
         form.setContentsMargins(0, 0, NORMAL, 0)
@@ -354,8 +362,6 @@ class UsageDialog(QDialog):
         utilities.addWidget(self.add_button)
         utilities.addWidget(self.reload_button)
         utilities.addStretch()
-        self.repeat_button = QPushButton(tr("Noch einmal gedruckt"), self)
-        utilities.addWidget(self.repeat_button)
         layout.addLayout(utilities)
         buttons = QDialogButtonBox(self)
         self.book_button = buttons.addButton(tr("Abziehen"), QDialogButtonBox.ButtonRole.AcceptRole)

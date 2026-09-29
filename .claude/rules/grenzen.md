@@ -28,7 +28,7 @@ Die Zahlen hält `tests/test_interface_limits.py`, die Breitengrenze
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
 | Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen — auf `Alt+1` bis `Alt+7` |
-| Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
+| Felder auf der Vorderseite eines Operationsdialogs, gezählt, was zugleich dasteht (Felder anderer Varianten stehen nicht da) | ≤ 8 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 

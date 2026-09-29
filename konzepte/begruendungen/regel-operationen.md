@@ -236,7 +236,7 @@ eigenen Eingängen vorbei liest.** `operation_hash` deckt die Hashes der
 Eingänge — drei Lesarten greifen aber auf fremde Körper der Szene zu: das
 Ziel von `align_to_feature` (`kind="feature"`), die `up_to`-Fläche
 (`TARGET_FIELD`) und die `feature:<id>`-Ebene jeder Skizze
-(`face_of_sketch`, dieselbe Funktion wie im Verweisfilter) — auch durch eine
+(`feature_ref_of_sketch`, dieselbe Funktion wie im Verweisfilter) — auch durch eine
 abgeleitete Ebene hindurch (`standing_on_feature`), am Feldschnitt und am
 Dichtweg genauso wie an der Extrusion. **Den Rahmen einer Ebene fragt eine
 Operation mit den Projektparametern** (`sketch.planes.frame_in_scene(plane,
@@ -1490,8 +1490,8 @@ seither für beide gelten — Namen, Träger und Handlung, nicht bloß die Zahl:
   Durchmesser, Achse, Bogenmitte und Richtung, nie Mündung und Weg
   (`slots.native_open_slot_measures`); keine pauschale Hochstufung. Die
   Umfangsschwelle steht
-  einmal (`FULL_TURN_SPAN` = `FULL_TURN`·360, 300 Grad); wer sie ändert,
-  ändert beide, und der Test hält sie zusammen (`tests/test_partial_bores.py`).
+  einmal (`FULL_TURN_SPAN`, 300 Grad); der exakte Kern liest sie von dort
+  (`brep.features._full_turn`).
   Am Netz erkennt den Anschnitt der Rand (zwei Linien längs der Achse über
   die ganze Tiefe), am exakten Körper der Umfang — nach dem Zusammenführen
   der Nahtstücke. Eine gleiche Anzahl oder ein gleiches Volumen beweist

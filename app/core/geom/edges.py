@@ -543,11 +543,6 @@ def _chains(segments: np.ndarray, convex: np.ndarray) -> list[tuple[list[int], b
     return chains
 
 
-def sharp_angle_degrees() -> float:
-    """Die Knickschwelle in Grad — für Texte und Parameterschemata."""
-    return math.degrees(SHARP_EDGE_ANGLE)
-
-
 EdgeChoice = Literal["all", "vertical", "horizontal", "top", "bottom", "named"]
 
 #: Welche Kanten eine Auswahl meint. „Senkrecht" ist, was jemand mit „runde
@@ -3283,24 +3278,14 @@ def _with_station_rays(
 
 
 def _reaches(normals: np.ndarray, size: float, *, rounded: bool) -> np.ndarray:
-    """:func:`_reach` für ein ganzes Feld von Normalenpaaren."""
+    """Wie weit eine Rundung oder Fase auf ihren Flächen von der Kante greift —
+    für ein ganzes Feld von Normalenpaaren."""
     if not rounded:
         return np.full(len(normals), float(size))
     dots = np.clip(np.einsum("ij,ij->i", normals[:, 0], normals[:, 1]), -1.0, 1.0)
     half = (math.pi - np.arccos(dots)) / 2.0
     valid = (half > EPS_GEOM) & (half < math.pi / 2.0 - EPS_GEOM)
     return np.where(valid, size / np.tan(np.where(valid, half, 1.0)), np.inf)
-
-
-def _reach(pair: np.ndarray, size: float, *, rounded: bool) -> float:
-    """Wie weit eine Rundung oder Fase auf ihren Flächen von der Kante greift."""
-    if not rounded:
-        return size
-    one, two = pair
-    half = (math.pi - math.acos(float(np.clip(np.dot(one, two), -1.0, 1.0)))) / 2.0
-    if half <= EPS_GEOM or half >= math.pi / 2.0 - EPS_GEOM:
-        return math.inf
-    return size / math.tan(half)
 
 
 def too_large_for_the_faces(
@@ -4032,15 +4017,12 @@ def radial_rounding(
     unabhängig davon, dass der gesamte Zwischenraum frei veränderbar ist.
     """
     from app.core.deferred import trimesh
-    from app.core.perceive.features import fit_cylinder, radial_cylinder
+    from app.core.perceive.features import radial_cylinder
 
     patch = list(feature.face_indices)
     if not patch:
         return None
-    fit = fit_cylinder(mesh.raw, patch)
-    if fit is None:
-        return None
-    fitted = radial_cylinder(mesh.raw, fit, patch)
+    fitted = radial_cylinder(mesh.raw, patch)
     if fitted is None:
         return None
     indices, reverse = np.unique(np.asarray(mesh.raw.faces)[patch], return_inverse=True)

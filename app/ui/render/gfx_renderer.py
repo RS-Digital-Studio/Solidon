@@ -601,16 +601,6 @@ class GfxItem(Item):
             buffer.update_range(0, self.filled)
         self._changed()
 
-    def set_line_width(self, width: float) -> None:
-        self.restyled = True
-        for obj in self.objects:
-            material = obj.material
-            if hasattr(material, "thickness"):
-                material.thickness = float(width)
-            elif hasattr(material, "wireframe_thickness"):
-                material.wireframe_thickness = float(width)
-        self._changed()
-
     # --- Hilfen -------------------------------------------------------------------
 
     def _coloured(self) -> list[Any]:
@@ -911,9 +901,6 @@ class GfxLabels(GfxItem, LabelsItem):
             float(low[2]),
             float(high[2]),
         )
-
-    def set_line_width(self, width: float) -> None:
-        return
 
     def fit_fields(self, renderer: GfxRenderer) -> None:
         """Die Felder hinter den Texten auf Bildbreite bringen — je Bild neu,

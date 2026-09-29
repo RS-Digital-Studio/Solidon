@@ -5446,3 +5446,54 @@ def test_the_halt_refusal_does_not_repeat_its_sentence(tmp_path: Path) -> None:
     refusal = session.halt_in_the_way()
     assert refusal is not None and refusal.op_id == 1
     assert "kind" not in refusal.values and "op" not in refusal.values, refusal.values
+
+
+def test_a_placement_the_end_state_undid_is_not_reported(profile: Profile) -> None:
+    """Ein Schritt, der über seinen Zwischenstand sagt „steht neben dem Bett", schweigt,
+    wenn der Endstand es widerlegt.
+
+    So gefunden (Robert, 29.09.2026, Minigolf-Satz): *Druckoptimal ausrichten*
+    mit drei Platten ließ einen Rumpf neben der dritten Platte liegen und
+    sagte es, samt „eine mehr würde helfen". Ein späteres *Auf dem Bett
+    anordnen* mit genug Platten legte ihn auf die vierte — und beide
+    Warnungen standen weiter im Bericht, über einem Endstand, auf dem alles
+    auf einem Bett liegt. Die Lage prüft die Auswertung am Endstand ohnehin
+    (``check_placement``); was sie dort nicht findet, stimmt nicht mehr.
+
+    Die Gegenprobe steht davor: Solange der Endstand dasselbe sagt, bleibt der
+    Befund, mit dem Schritt, dessen Zahl man ändern muss.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    # Zwei Klötze von 200 mm auf einem Bett von 256: auf eine Platte passt einer.
+    block = {"width": 200.0, "depth": 200.0, "height": 20.0}
+    history.apply(
+        "Aufbau",
+        [
+            OperationDraft(op="create_box", params=block),
+            OperationDraft(op="create_box", params=block),
+        ],
+    )
+    bodies = ("obj_1", "obj_2")
+    placement = {"arrange.out_of_build_volume", "arrange.off_the_plate"}
+    history.apply(
+        "Anordnen", [OperationDraft(op="arrange_bed", inputs=bodies, params={"plates": 1})]
+    )
+
+    tight = evaluate(project.document, profile, sources=ProjectSources(project))
+    codes = {finding.code for finding in tight.scene.report.findings}
+    assert "arrange.needs_more_plates" in codes, codes
+    assert codes & placement, codes
+
+    history.apply(
+        "Anordnen", [OperationDraft(op="arrange_bed", inputs=bodies, params={"plates": 2})]
+    )
+
+    loose = evaluate(project.document, profile, sources=ProjectSources(project))
+    left = {finding.code for finding in loose.scene.report.findings}
+    assert {entry.plate for entry in loose.scene.objects.values()} == {0, 1}
+    assert not left & (placement | {"arrange.needs_more_plates"}), left

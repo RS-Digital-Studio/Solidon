@@ -90,7 +90,7 @@ Operation mit Absagen und Befunden.
 | Ränder | `boundaries` | Halbkanten zu Ketten zwischen Ecken; geschlossene Ketten mit fester Anfangsecke |
 | Ecken | `_vertex_positions`, `snapped` | Gauß-Newton mit rangaufdeckender Pseudoinversen (`SNAP_RCOND`); nie weiter als `CORNER_REACH` mal die Toleranz, sonst die Ebenen allein, sonst bleibt die Ecke |
 | Kanten | `_plan`, `structural_curve`, `intersection_curve` | zuerst aus der Gestalt der Träger (Kreis, Gerade), dann `GeomAPI_IntSS` (Kegelschnitte exakt), zuletzt B-Spline durch Punkte; zwei Durchgänge, dazwischen die Ecken auf ihre Kurven (`_on_curves`, Gauß-Newton) |
-| Flächen | `_occ_face` | je Bereich eine Fläche mit **eigenen** Kanten (`Inside=False`, `ShapeFix_Face`, `SameParameter`), geprüft gegen Fläche und Probe des Bereichs |
+| Flächen | `_checked_face` | je Bereich eine Fläche mit **eigenen** Kanten (`Inside=False`, `ShapeFix_Face`, `SameParameter`), geprüft gegen Fläche und Probe des Bereichs |
 | Körper | `_shells`, `_assembled`, `_broken_after_sewing` | genäht je Netzkomponente; ist der Körper ungültig, werden die Flächen einzeln geprüft und ihre Bereiche als Dreiecke neu gebaut (`_demoted`) |
 | Messung | `_mesh_to_body`, `body_to_mesh`, `source_deviation` | beidseitig an Stichproben auf den **exakten** Flächen; innere Wände (nicht verschmolzene Nähte) zählen eigens |
 
@@ -394,8 +394,8 @@ ohne Fase. Ein Kegelstück zwischen zwei Langlöchern bleibt, was es ist.
 (`_seam_split_cylinders_joined`): zwei zylindrische Nachbarflächen mit
 derselben Achslinie, demselben Radius und derselben Materialseite werden
 vor dem Langlochpass zusammengeführt, und der gemeinsame Umfang entscheidet
-wie an einer Fläche. `FULL_TURN` ist seither dieselbe Zahl wie
-`perceive.features.FULL_TURN_SPAN` (300 Grad); eine Bohrung unter der
+wie an einer Fläche. Die Umfangsschwelle ist seither die des Netzes,
+`perceive.features.FULL_TURN_SPAN` (300 Grad, gelesen über `_full_turn`); eine Bohrung unter der
 vollen Umdrehung trägt `partial`, und was das bedeutet, entscheidet die
 Nachbarschaft (`perceive.relations`), nicht der Winkel.
 

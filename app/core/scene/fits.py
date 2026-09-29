@@ -492,7 +492,7 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile, cancelled: CancelToken)
         Finding(
             code="fit.violated",
             severity="warning",
-            message=_message_for(fit.kind, actual, wanted),
+            message=_message_for(actual, wanted),
             values={
                 "fit": fit.name,
                 "actual": format_length(actual),
@@ -962,7 +962,7 @@ def _sort_by_kind(first: Feature, second: Feature) -> tuple[Feature, Feature]:
     raise ValueError("fit_inner_role_missing")
 
 
-def _message_for(kind: FitKind, actual: float, wanted: float) -> TranslatableText:
+def _message_for(actual: float, wanted: float) -> TranslatableText:
     """Die Meldung zu einer Passung, die nicht sitzt wie gewollt.
 
     Der Marker steht hier an den Zeichenketten und **nicht** um den Aufruf
@@ -975,16 +975,3 @@ def _message_for(kind: FitKind, actual: float, wanted: float) -> TranslatableTex
     if actual < wanted:
         return _("Die Passung sitzt enger als vorgesehen.")
     return _("Die Passung sitzt loser als vorgesehen.")
-
-
-def add(scene_fits: list[Fit], fit: Fit) -> list[Fit]:
-    """Fügt ein Paar an; ein gleichnamiges wird ersetzt (§25, Agentenwerkzeug
-    ``add_fit``)."""
-    kept = [entry for entry in scene_fits if entry.name != fit.name]
-    kept.append(fit)
-    _log.info("fit %s: %s to %s", fit.name, fit.a, fit.b)
-    return kept
-
-
-def remove(scene_fits: list[Fit], name: str) -> list[Fit]:
-    return [entry for entry in scene_fits if entry.name != name]

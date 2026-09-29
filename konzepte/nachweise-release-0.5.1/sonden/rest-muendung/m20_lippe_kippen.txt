@@ -1,0 +1,25 @@
+== create_brep_box 10°: vollständig True
+   Volumen 160.255 abgetragen, Dreiecke 298, dicht True
+      im Baum: cone_1:cone Ø8.250 teil △61, fillet_1:fillet Ø7.950 △46, magnet_pocket_pocket_1:hole Ø8.250 △87
+      Netz frisch: curve_1:curved_face Ø0.000 △194
+      exakt frisch: cone_1:cone Ø8.250 teil △61, fillet_1:fillet Ø7.950 △46, hole_1:hole Ø8.250 △87
+      Knicke im Hohlraum: 0-1: 62, 1-5: 81, 5-10: 86, 10-15: 2, 15-20: 30, 20-25: 22, 25-30: 0, 30-45: 1, 45-60: 0, 60-90: 41, 90-180: 1
+== create_brep_box 30°: vollständig True
+   Volumen 169.053 abgetragen, Dreiecke 308, dicht True
+      im Baum: cone_1:cone Ø8.250 teil △55, fillet_1:fillet Ø7.950 △52, magnet_pocket_pocket_1:hole Ø8.250 △88
+      Netz frisch: curve_1:curved_face Ø0.000 △195
+      exakt frisch: cone_1:cone Ø8.250 teil △55, fillet_1:fillet Ø7.950 △52, hole_1:hole Ø8.250 △88
+      Knicke im Hohlraum: 0-1: 77, 1-5: 82, 5-10: 77, 10-15: 0, 15-20: 18, 20-25: 30, 25-30: 1, 30-45: 0, 45-60: 0, 60-90: 45, 90-180: 5
+== create_box 10°: vollständig True
+   Volumen 159.799 abgetragen, Dreiecke 1044, dicht True
+      im Baum: cone_1:cone Ø8.250 eng Öffnung 7.950 △0, curve_1:curved_face Ø0.000 △586, magnet_pocket_pocket_1:hole Ø8.250 △0
+      Netz frisch: curve_1:curved_face Ø0.000 △586
+      Knicke im Hohlraum: 0-1: 1077, 1-5: 0, 5-10: 107, 10-15: 0, 15-20: 0, 20-25: 109, 25-30: 0, 30-45: 0, 45-60: 0, 60-90: 75, 90-180: 73
+== create_box 30°: vollständig True
+   Volumen 168.574 abgetragen, Dreiecke 1532, dicht True
+      im Baum: cone_1:cone Ø8.250 eng Öffnung 7.950 △0, curve_1:curved_face Ø0.000 △540, magnet_pocket_pocket_1:hole Ø8.250 △0
+      Netz frisch: curve_1:curved_face Ø0.000 △540
+      Knicke im Hohlraum: 0-1: 1809, 1-5: 0, 5-10: 102, 10-15: 0, 15-20: 0, 20-25: 87, 25-30: 0, 30-45: 0, 45-60: 0, 60-90: 132, 90-180: 41
+== create_brep_box 10° danach: magnet_pocket_pocket_1 Kette None, berührt True ambiguous_cavity_chain
+   Versetzen: vollständig False; Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschli
+== create_box 10° danach: keine Bohrung mit Dreiecken im Baum

@@ -53,7 +53,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1): Kumiko −34 %, Meshy −22 % CPU unter Last; §31 nicht erreicht, nächster Hebel je Modell im Schlussbericht des Pakets |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Mindestbogen nach Roberts Entscheidung gebaut (5 Grad, beide Kerne, `3fa7d719`), die Kippstellen der Verrundungen behoben — lageabhängig 17 statt 27 von 101 Körpern; offen sind Einpassungen an ihrer Kippe (deckungsgleiche Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die dokumentierte Grenze der Zusage ‚drehfest‘ — zwischen beidem entscheidet Robert |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), an der Freiform ohne messbare Wirkung (vergebliche Läufe in zu kleinen Gruppen); offen: anderer Hebel oder neu gefasstes Ziel |
-| [RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Creality Print 7.2 rechnet über die Kommandozeile keine 3MF (jede endet mit „The print is empty“, STL schneidet); die Meldung führt seit `e401ce900` zu *Im Slicer öffnen*. Offen: einmal von Hand prüfen, ob das Fenster die Übergabe samt Sperre, Tempo und Brim lädt, dann entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt wird |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
@@ -85,6 +84,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
+| [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Auf `main` zusammengeführt (`559412ac4`) und in 0.5.1 enthalten: Gliederung, fünfzehn Bildanleitungen, Suche, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter und Film. Weiterarbeit auf `main`; offen bleiben die Feldabnahme (§11 des Konzepts) und die Nummernplatzierung auf Text in zwei Bildern |
@@ -96,10 +96,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Quelle nachgezogen (`84185f4d`: Kopfzeile, Fenster „Auswahl“ mit Handlungen, Alt-Text in allen Sprachen); Erzeugung und Sichtprüfung je Sprache beim Release |
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Nachtragstext für §9 und §30.1 liegt im Bericht skizze der Durchsicht 0.5.0 bereit (neu geschrieben, der Wortlaut W2 lag nicht mehr vor), dazu die Vorschläge aus p66 (Ellipse, drei Bedingungsarten), p6c (drei Schnitte), zeichnenbau und p7verlauf. Robert sagt den Nachtrag an und entscheidet dabei, ob eine neue Bedingungsart die Formatversion hebt (p66 hat sie mit Format 31 gehoben, Satz 5 des Nachtrags sagt nein) |
 | [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
-| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim Release 0.5.0 noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
+| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim nächsten Release noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim nächsten Release: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
-| [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
+| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 74–79 ms bis zum ersten Bild mit Maßen (Median je Runde, der Stand davor 97–104 ms, abwechselnd unter leichter Last), 30 von 32 warmen Klicks unter 100 ms (`0273b8d23`, `c2bff45f1`); offen die Abnahme auf ruhiger Maschine am eingeschalteten zweiten Monitor — gemessen wurde auf dem Ersatzbildschirm in der Fläche des MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
@@ -111,6 +111,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Auftrag Robert: Größen aus den Maschinenvarianten des Slicers, Auswahl mit „Andere …“; vorher mit der Dialog-Sitzung abstimmen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -126,7 +127,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie; bis dahin Intel Default Settings, einmal MemTest86, Release-Pakete in der CI bauen oder doppelt bauen und bitweise vergleichen |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1](#rm-293) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: vier kleine Stellen |
-| [RM-294 — Tragende Dateien des Review-Ordners ins Repository holen](#rm-294) | Tests und Entwicklungswerkzeuge | Vor dem Aufräumen des Review-Ordners (nach dem Release) |
 | [RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1](#rm-295) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: zwei Tests schärfen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Plan bis 01.11. mit Takt und Messpunkten liegt vor (`marketing/reichweite/analyse-und-plan.md`, `36487f9b`); drei Facebook-Beiträge für 24., 26. und 28.09. in der Meta Business Suite eingeplant; YouTube-Änderungen (14) freigegeben, in Studio nicht umgesetzt; Video V3 freigegeben, nicht gedreht. Offen: Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
@@ -151,23 +151,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 ## Filamentlager
 
-Löschen ist im Regal per Rechtsklick und im Spulendetail sowie Filamentpanel
-über einen Mülleimerknopf erreichbar; Wiederherstellen läuft über das Archiv.
-Hinzufügen trägt ein Plus-SVG. „Erste Schritte“ führt über Slicer und passende
-Drucker zum Filamentlager; eigene Drucker lassen sich mit Name, Bauraum und
-Düse direkt anlegen.
+Physische Spulen mit bis zu vier Farben, Regal, bewusster Import, Schnellauswahl
+und rücknehmbare Verbrauchsbuchungen sind angeschlossen; „Erste Schritte“ führt
+über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
+begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
-Physische Spulen, Regal, bewusster Import, Schnellauswahl und rücknehmbare
-Verbrauchsbuchungen sind angeschlossen. [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
-Das anschließende [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
-behandelt Abwahl, Herstellerprofile, Buchungskorrekturen und die weiteren Anschlüsse.
-Eine Spule trägt bis zu vier Farben. Die Durchsicht vom 19.09.2026 (vier
-Fehler, vier Regelverstöße, neun Bedienmängel, sieben Textmängel) ist
-vollständig behoben: Eine Bearbeitung der Angaben zählt nicht mehr als
-Bestandsfeststellung, eine automatische Buchung nach einer Rücknahme bucht
-wirklich, eine abgewiesene Spule kommt in den Dialog zurück, die Übernahme aus
-dem Slicer überschreibt keine Handspule, Rücknahmen sind rücknehmbar, das Lager
-sichert seinen letzten lesbaren Stand selbst, Datumsfelder haben einen Kalender.
+[Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
 
 ## P0 — Skelett
 
@@ -219,7 +208,7 @@ G-Code-Rücklesen, Profilabgleich und Kalibrierung sind umgesetzt. Interne Schä
 
 ## P8 — Erste Veröffentlichung
 
-Windows, Flatpak, AppImage und beide Mac-Architekturen sind als 0.5.0 veröffentlicht.
+Windows, Flatpak, AppImage und beide Mac-Architekturen sind seit 0.5.0 veröffentlicht.
 Signatur-, Notarisierungs- und Releaseaktennachweise sowie der öffentliche Bytevergleich
 gehören zu dieser Auslieferung. Fremdrechnerabnahme und noch fehlende Betriebsnachweise
 bleiben eigene Aufgaben; siehe RM-011 und RM-002.
@@ -246,7 +235,7 @@ Zurückgestellt; kein laufendes Bauvorhaben. Ein gehosteter Generierungsdienst k
 
 ## P12 — B-Rep-Kern
 
-Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung startet nach 0.4.4 als Teil des CAD-Plans (RM-188).
+Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung läuft als Teil des CAD-Plans (RM-188).
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p12--b-rep-kern).
 
@@ -357,6 +346,10 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Abschluss, der den Riss nur verdeckt, gehört ausdrücklich **nicht** dazu — er machte das Tor
   grün, ohne dass jemand etwas gemessen hätte.
 
+  **Dazu aus `.claude/rules/wartezeit.md`:** `weak_slot` je Knopf an einer Knopfgruppe
+  riss `test_widget_lifetime` mit einer Zugriffsverletzung; die Regel verlangt deshalb den
+  gebundenen Empfänger an `QButtonGroup.buttonClicked`. Die Ursache ist nicht zugeordnet.
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-ein-kunde-beim-öffnen-der-beispiele-sieht-23082026).
 
 <a id="rm-050"></a>
@@ -375,7 +368,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   ist seit `9bb1542b` wieder ausdrücklich Laufzeitabhängigkeit. Nach Erneuerung der lokalen
   Projektmetadaten enthält die Windows-Entwicklungsvorschau der Lizenzbeilage 50 Komponenten;
   die Kundenbeilage entsteht weiterhin je Plattform aus deren Endartefakt-SBOM.
-  Nachweis: `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-ci-notices-fix.md` (67 Lizenztests,
+  Nachweis: `konzepte/nachweise-release-0.5.0/reports/codex-ci-notices-fix.md` (67 Lizenztests,
   Generatorprüfung und Umgebungsprüfung jeweils Exit 0). Die Folgen des VTK-Ausbaus (Wandmessung ohne
   räumlichen Index, fehlender Wächter gegen VTK-Importe) standen als RM-214 und sind
   in der Durchsicht v0.5.1 geschlossen ([Archiv](ROADMAP-ARCHIV.md#rm-214): Baum aus
@@ -551,7 +544,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   seinen Abdruck), und die übrigen `math.tan` in Werkzeugmaßen (*Senkung*) sind gemessen,
   nicht ersetzt. Vorschlag des Pakets: `_without_scars` legt nach dem Schließen koplanare
   Dreiecke im ganzen Körper zusammen und nimmt ferne Ecken weg — auf das Umfeld der
-  Änderung begrenzen (`reports/bohren-schluss.md` §6–7).
+  Änderung begrenzen (`konzepte/nachweise-release-0.5.1/reports/bohren-schluss.md` §6–7).
 
   Abnahme: `tests/test_platform_identity.py` grün auf allen drei Runnern, und der Bohrungstest
   ebenfalls.
@@ -597,7 +590,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
     („Plattformgleich gerechnet“) umstellen (`transform.along`, `units.dot3`, `math.hypot`,
     `transform.turned`); Wächter ein Weg `split_seam` in `_WAYS` (schiefe Naht am Z aus
     `test_autosplit`, Spiegelebene, Stiftlagen) — `@` fängt dort nur der Kerntausch-Test.
-    Abnahme: Korpus `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-teilen\korpus.sh` vorher und
+    Abnahme: Korpus `konzepte/nachweise-release-0.5.1/sonden/rest-teilen/korpus.sh` vorher und
     nachher, Unterschiede nur in der letzten Stelle schiefer Nähte, Spiegelebenen und
     Stiftlagen, dort begründet.
   - **Die Drehwege von *Merkmal drehen* rechnen Achse und Mitte über `matrix[:3, :3] @`**
@@ -609,7 +602,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   - **Das Einsetzen eines Bausteins** (die Platzierung über `@` aus der Liste oben): Ein
     Weg `slanted_part` in `_WAYS` fiel bei der Übernahme von rest-schraube unter dem
     Rauschen (Fingerabdruck `368/74a9b93560d2bc38` gegen `368/f86deed651efc05c`,
-    `F:\3D Druck\.claude\.state\release-0.5.1\reports\tor-rest-schraube\weg.txt`) und ist vor dem Commit
+    `konzepte/nachweise-release-0.5.1/reports/tor-rest-schraube/weg.txt`) und ist vor dem Commit
     wieder herausgenommen; laut Übergabe der Durchsicht hängt schon das gerade Einsetzen an
     der Plattform. Weg: die Platzierung über `transform.composed`, danach den Weg einchecken.
 
@@ -798,7 +791,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Leistungstests 13,9 → 13,8 s, Drache 12,8 → 13,3 s, Schiff obj_3 19,4 → 20,9 s (im
   Rauschen) — dort stehen die vergeblichen Läufe in zu kleinen Gruppen für den Stapel. §31
   ist an keinem der fünf Modelle erreicht; den nächsten Hebel je Modell nennt
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\stapel-schluss.md` (Abschnitt „Nicht behoben“).
+  `konzepte/nachweise-release-0.5.1/reports/stapel-schluss.md` (Abschnitt „Nicht behoben“).
 
 <a id="rm-210"></a>
 
@@ -930,7 +923,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   gedrehter Lage an 9 von 30 Korpusmodellen anderes als die übertragene. Ein Projekt aus
   0.5.0, dessen Folgeschritt nach dem Ausrichten auf ein nur so erkanntes Merkmal zeigt,
   hält deshalb mit Befund an diesem Schritt an
-  (`F:\3D Druck\.claude\.state\release-0.5.1\reports\review-kopien.md`).
+  (`konzepte/nachweise-release-0.5.1/reports/review-kopien.md`).
 
 <a id="rm-132"></a>
 
@@ -996,40 +989,9 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Leistungstests 13,9 → 13,8 s, Drache 12,8 → 13,3 s, Schiff obj_3 19,4 → 20,9 s (im
   Rauschen) — dort stehen die vergeblichen Läufe in zu kleinen Gruppen für den Stapel. §31
   ist an keinem der fünf Modelle erreicht; den nächsten Hebel je Modell nennt
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\stapel-schluss.md` (Abschnitt „Nicht behoben“).
+  `konzepte/nachweise-release-0.5.1/reports/stapel-schluss.md` (Abschnitt „Nicht behoben“).
   An der Freiform: 65 von 274 Läufen sind vergeblich, 27 bis 38 davon erkennt der Stapel;
   der Rest der Zeit liegt woanders.
-
-<a id="rm-164"></a>
-
-- [~] **RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF.** Das
-  Programm war installiert und wurde von Solidon gar nicht erkannt — `flavour_of` gab `None`,
-  und damit war es im Druckdialog nicht wählbar. Es ist ab Version 6 ein Orca-Abkömmling:
-  derselbe Profilbaum mit `machine_list`/`sub_path`, dieselben Schlüsselnamen; als `orca`
-  behandelt findet Solidon in Version 7.2 **4234 Profile** (459 Maschinen, 1240 Prozesse,
-  2535 Filamente). Seit dem 12.09.2026 steht es in `FLAVOUR_BY_NAME`, mit Fall in
-  `tests/test_print_settings.py`.
-
-  **Der Konsolenlauf ließ sich nicht abnehmen**: dreimal `0xC0000005` mitten im eigenen Start,
-  vor jeder Modellverarbeitung. Das Programm war auf dieser Maschine allerdings **nie
-  eingerichtet** — es stand im Dialog „Bitte wählen Sie den Softwaremodus" —, und ein Urteil
-  über seine Kommandozeile auf dieser Grundlage wäre voreilig. Ein Absturz wird seither als
-  Absturz gemeldet statt als „keine Druckdatei geschrieben" (`handover.crashed`), mit dem Rat,
-  den Slicer einmal von Hand zu starten.
-
-  Abnahme: Creality Print einrichten (Modus und Drucker wählen), dann drei Platten mit
-  mehreren Spulen übergeben — einmal über *Im Slicer öffnen*, einmal über *Slicen*. Läuft der
-  Konsolenweg auch dann nicht, gehört die Einschränkung benannt, statt sie den Kunden am
-  Absturz erfahren zu lassen.
-
-  **Durchsicht v0.5.1 (26.09.2026, druck, DRUCK-07):** Creality Print 7.2 rechnet über
-  die Kommandozeile keine 3MF — Solidons Übergabe, eine nackte aus trimesh, eine aus
-  PrusaSlicer, Bambu, Elegoo: jede endet mit −100 und „The print is empty“, dasselbe
-  Teil als STL schneidet. Die Meldung sagt das jetzt und führt zu *Im Slicer öffnen*
-  (`e401ce900`). Offen: einmal von Hand *Im Slicer öffnen* mit der Okarina und
-  *Vorschläge übernehmen*, im Fenster slicen und die Stütze in den Kanälen ansehen;
-  danach entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt
-  wird.
 
 <a id="rm-166"></a>
 
@@ -1148,12 +1110,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   - Abläufe: Konturdeckel mit Scharnier/Stift, bündige Schrifteinlage,
     Gegenformeinsatz, Passungsprüfausschnitt, importiertes Gewinde ersetzen,
     Schrift auf Fläche/Bahn sowie drehender und kombinierter Fügeweg.
-
-<a id="rm-186"></a>
-
-RM-186 ist mit dem unbedingten Gewindebolzen-Kerntest im vollständigen grünen
-Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemessen.
-[Befund und Abschluss](ROADMAP-ARCHIV.md#rm-186).
 
 <a id="rm-188"></a>
 
@@ -1360,7 +1316,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Mitten und Langlochachsen der gewählten Oberfläche.
   Entwicklungstor: **12.063 bestanden, 26 übersprungen**, Suite und
   übergeordneter Prozess Exit 0; Ruff, Format und mypy jeweils 0. Der
-  eingefrorene Stand und die Protokolle liegen unter `C:/Users/rober/AppData/Local/Temp/solidon-cad-contours-final-159a498a403749578038656a0b5eb8ba`.
+  eingefrorene Stand und die Protokolle lagen im Temp-Ordner der Entwicklungsmaschine
+  und sind nicht versioniert.
   Rote Vorläufe bleiben als Nachweis erhalten: Der doppelte Langloch-Kreisfit
   und ein um gerade Flanken vergrößerter Mantelfit wurden behoben, ohne
   Konturtoleranzen zu lockern. Neue Fensterfälle sind vorbereitet und bleiben
@@ -1377,8 +1334,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   und den abbrechbaren Exportvorlauf. Getrennte Drucklagen werden in Beispielen
   und Tour als noch ungeprüfte Einbaulage benannt. Entwicklungstor:
   **12.308 bestanden, 26 übersprungen**, Suite und übergeordneter Prozess
-  Exit 0; Ruff, Format und mypy jeweils 0. Protokolle und eingefrorener Stand:
-  `C:/Users/rober/AppData/Local/Temp/solidon-cad-round-final-2a4b7e6982954e0ab0f6f88c56812d6f`.
+  Exit 0; Ruff, Format und mypy jeweils 0. Protokolle und eingefrorener Stand
+  lagen im Temp-Ordner der Entwicklungsmaschine und sind nicht versioniert.
   Der erste Gesamtlauf mit fünf Fehlern bleibt erhalten: echte Kollision der
   historischen Korpusbaugruppe, bisher zu weit gehende Beispielaussagen,
   veraltetes lokales Lizenzmanifest und ein im Nachlauf nicht reproduzierter
@@ -1400,8 +1357,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   getrennten parallelen P2.7-Nachweisordner ebenfalls grün. Der erste
   unbeschränkte Torprozess bleibt wegen vier Ruff-Befunden und eines
   Formatbefunds in dessen fremder Sonde korrekt Exit 1. Eigene
-  Commitprüfung und Originalergebnis sind getrennt festgehalten unter
-  `C:/Users/rober/AppData/Local/Temp/solidon-cad-deviation-final-eff89030f7fd4ec1b1096048184d26e7`.
+  Commitprüfung und Originalergebnis sind getrennt festgehalten (Temp-Ordner der
+  Entwicklungsmaschine, nicht versioniert).
   Die unabhängige Gegenprüfung sichert Quellenverlust, Abbruchübergaben,
   numerischen Überlauf und native Kegelnappen einschließlich echter
   Spitzentopologie ab. Zusätzliche Modellsonden treffen analytische
@@ -1476,7 +1433,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   * **offen** P6.6a — Ellipse, Ellipsenbogen, Splines bearbeiten; P6.6b — zusätzliche Bedingungen
   * **implementiert, Release-Abnahme offen** P6.7 — Merkmalsmuster: `pattern_feature` („Merkmal vervielfachen", Kategorie `holes`, ein Körper hinein, einer heraus — nicht `pattern`, das Körper kopiert). Linear, kreisförmig, gespiegelt; Anzahl, Abstand, Winkel, Richtung, Punkt, ausgelassene Plätze; mehrere Quellen, eine Kette als Ganzes. Jede Instanz ist das Werkzeug der Quelle, bewegt (Netz: `_placing_tool`/`_chain_copy_tool`; exakt: `_exact_cavity_tool`, `_exact_chain_tool_placed`, `edit.transformed` des Flächenkörpers, Ring aus Kennzahlen), Merkmale über `transformed_features`. Überschneidung und fehlendes Material je Platz erklärt (`pattern_feature.overlap`/`.no_target`), erkannte Quellen brauchen belegte Flächen (`not_evidenced`). Die Quelle bleibt maßgebend durch die Bauart (der Schritt liest sie bei jeder Auswertung). In `QUICK_FEATURES` an jeder angenommenen Art. `tests/test_feature_patterns.py` (24) mit exakten Sollvolumina, radialen Achsen, gespiegeltem Sackloch, Langlochrichtung, Kette, Korpus-Senkplatte, Kundenweg §13.9 je Kern (Quelle Ø5→Ø8, Datei, Undo/Redo, Abbruch); 13 Mutationen rot; Fenstertest neu (Release). **Frage an Robert offen:** Eine spätere Maßänderung an einer **eingelesenen** Quelle hängt sich hinter das Muster; heute trägt „Auf alle N gleichartigen anwenden", sauber wäre P7.1 oder eine vorbelegte Gruppe.
   * **implementiert, Release-Abnahme offen** P7.1 — Verlaufsschritt einfügen; P7.2 — umsortieren; P7.3 — unterdrücken und reaktivieren. Kern (`History.plan_*`, `scene/revision.py`: isoliert rechnen, Verweise folgen ihrem Merkmal, fragen oder absagen), Format 32 (`suppressed`, `revision`, `example_v32.p3d`; die 31 gehört P6.6), Kommandozeile (`move`, `suppress`, `reactivate`, `run … --before`), Verlaufsfeld mit Kontextmenü, Ziehen und Tastatur, Einfügemarke, Steckbrief mit „aus“/„ruht“. Belegt am Korpus und an zwei Modellen aus `F:\3D Dateien` (Besenhalter als Netz, Druckschale als STEP). Offen daraus: **(a)** ein Agentenwerkzeug `edit_history` — gezählt 120 Token gebündelt gegen 224 für drei getrennte, bei 38 318 von 40 960 im Fenster und RM-185 über seinem Ziel; Entscheidung Robert. **(b)** Am exakten Körper sagen Verschieben und Einfügen von Bohrungen ab, sobald eine neue links von einer vorhandenen landet: `drill_brep_hole` nummeriert nach Lage, und ein späterer Verweis hält mit `NativeReferenceLost` an — genauso, wenn man in dieser Reihenfolge von Hand baut; es fehlt der Namenserhalt am exakten Körper. **(c)** Am Netz hängt die Erkennung einer Durchbohrung an der Vorgeschichte: am Besenhalter dieselbe Geometrie, aber eine erkannte Bohrung mehr, wenn vor der Bohrung kein anderer Schritt lag (Durchbohrung Ø 4 in y bei x = −25 durch drei Wände, einmal direkt nach dem Import, einmal nach *Bohrung vergrößern* an `hole_3`: Volumen gleich, die Wand bei y = 0 nur im ersten Fall als Bohrung erkannt). Die Fenstertests `test_history_revision_ui.py` laufen erst beim Release.
-  * **implementiert, Release-Abnahme offen** P7.4 — Paket p7step (`reports/p7step.md`): STEP-Baugruppen über XCAF (`brep.step.read_assembly`) — jede Komponenteninstanz ein unabhängiger exakter Körper mit Weltlage, Namen (Instanz → Referenz → Form) und Flächenfarben (Instanz → Referenz → Form, sRGB), gespiegelte Instanzen als Spiegelbild, Flächenmodelle und reine Kantenteile gemeldet; Importauswahl vor dem ersten Schritt (`ui/step_dialog.py`), gespeichert als `load_step.bodies` (Format 31; ältere Schritte bleiben ein Körper), Farben → Filamentslots nach der 3MF-Regel, STEP-Export mit Namen und Farben. Korpus `tests/data/step/` mit Erzeuger, 55 Kerntests und 7 Fenstertests; echte Dateien `build_tray_v3.step` (5 Körper) und `carpet-corner-clip.step` (2 Körper, 2 Farben). Offen: Fensterabnahme der Auswahl beim Release; bei Robert Farbvorrang, Mehrkörper-Export in eine Datei und die Leistung ab etwa 1000 Instanzen (70 s)
+  * **implementiert, Release-Abnahme offen** P7.4 — Paket p7step (`konzepte/nachweise-release-0.5.0/reports/p7step.md`): STEP-Baugruppen über XCAF (`brep.step.read_assembly`) — jede Komponenteninstanz ein unabhängiger exakter Körper mit Weltlage, Namen (Instanz → Referenz → Form) und Flächenfarben (Instanz → Referenz → Form, sRGB), gespiegelte Instanzen als Spiegelbild, Flächenmodelle und reine Kantenteile gemeldet; Importauswahl vor dem ersten Schritt (`ui/step_dialog.py`), gespeichert als `load_step.bodies` (Format 31; ältere Schritte bleiben ein Körper), Farben → Filamentslots nach der 3MF-Regel, STEP-Export mit Namen und Farben. Korpus `tests/data/step/` mit Erzeuger, 55 Kerntests und 7 Fenstertests; echte Dateien `build_tray_v3.step` (5 Körper) und `carpet-corner-clip.step` (2 Körper, 2 Farben). Offen: Fensterabnahme der Auswahl beim Release; bei Robert Farbvorrang, Mehrkörper-Export in eine Datei und die Leistung ab etwa 1000 Instanzen (70 s)
   * **offen** P8.1 — benannte Gruppen, stabile Mitgliedschaft und Regeln für Ersetzen/Teilen/Löschen, Speicherung und Undo
   * **offen** P8.2 — Montage- und Drucklagen derselben Körper speichern; Prüfungen, Cache, Druckplatten und Export auf explizite Lage beziehen
   * **offen** P8.3 — Gruppen-/Lagenbedienung und vorhandene Montageprüfungen; vollständiger Gehäuse-/Deckel-/Schrauben-Kundenweg
@@ -1703,7 +1660,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Leistungstests 13,9 → 13,8 s, Drache 12,8 → 13,3 s, Schiff obj_3 19,4 → 20,9 s (im
   Rauschen) — dort stehen die vergeblichen Läufe in zu kleinen Gruppen für den Stapel. §31
   ist an keinem der fünf Modelle erreicht; den nächsten Hebel je Modell nennt
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\stapel-schluss.md` (Abschnitt „Nicht behoben“).
+  `konzepte/nachweise-release-0.5.1/reports/stapel-schluss.md` (Abschnitt „Nicht behoben“).
   Am Drachen sind 12 von 98 Läufen vergeblich, in Gruppen zu klein für den Stapel.
 
 
@@ -1938,7 +1895,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `boolean.parts_not_united` sagt, dass Teile ineinanderstecken und sich nicht
   vereinigen ließen, weil sich eine Oberfläche selbst kreuzt, mit *Stelle zeigen*
   (`ae178de8c`, Test `test_boolean.py::test_parts_that_cannot_be_united_say_so`).
-  Nachgemessen am neuen Stand (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\bohrung\rm253_focus_out.txt`):
+  Nachgemessen am neuen Stand (`konzepte/nachweise-release-0.5.1/sonden/bohrung/rm253_focus_out.txt`):
   `hole_11`+`cone_51` um 15° gekippt trägt 32,6 mm³ jenseits der oberen alten Kappe
   ab, Verdoppeln bleibt ohne Wirkung (jetzt mit Satz), Versetzen meldet weiter
   `no_longer_through`. Am selben Modell (massbild): 13 von 28 Bohrungen gelten als „In
@@ -2057,11 +2014,11 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Platten kommt auf ihre Platten (`a32a54ba2`). Korpusrest nachgefahren: 225 Läufe, 204
   mit Druckdatei, 17 zu Recht abgelehnt. Vier Abstürze von ElegooSlicer/OrcaSlicer am
   zweifarbigen Besteckeinsatz galten als Fehler des Slicers; die Bisektion
-  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\druck\besteck_bisekt.out`) ging aber von Solidons
+  (`konzepte/nachweise-release-0.5.1/sonden/druck/besteck_bisekt.out`) ging aber von Solidons
   Übergabedatei aus und setzte nur Plattenwerte zurück. **Nachgestellt am 28.09.2026:**
   Das Originalprojekt schneidet in ElegooSlicer 1.5.3.4 auch mit `enable_support = 1`
   und `support_type = normal(auto)` (Rückgabe 0, G-Code;
-  `output/review/rm252-meldung-2026-09-28/`), und mit dem rohen Netz der Datei läuft
+  `konzepte/nachweise-release-0.5.1/review/rm252-meldung-2026-09-28/`), und mit dem rohen Netz der Datei läuft
   Solidons Übergabe mit Gitterstützen durch (`besteck_absturz3.out`: 908 min, 670 m
   Stütze); abgestürzt ist nur Solidons aufbereitetes Netz mit Gitterstützen
   (`besteck_absturz2.out`). OrcaSlicer 2.4.2 liest das Elegoo-Projekt nicht
@@ -2084,7 +2041,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Stütze gleich dem Herstellerlauf) und in Bambu Studio (dieselben drei gegen die
   Herstellerkette: 0 von 429 Schlüsseln verschieden). Ein unabhängiges Review vor dem
   Commit (sieben Fehler, acht Risiken, fünfzehn Hinweise;
-  `output/review/herstellerprofil-2026-09-27/review-a-b.md`) ist eingearbeitet, bis auf
+  `konzepte/nachweise-release-0.5.1/review/herstellerprofil-2026-09-27/review-a-b.md`) ist eingearbeitet, bis auf
   die Punkte unten bei C und L. Dazu `efd4686c2`: Das Tempo der
   ersten Schicht gilt auch für ihre Füllung.
 
@@ -2105,7 +2062,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     mit ihrem Filament) und H15 (eine Spule schreibt nur, was sie ändert).
   - **D steht:** CuraEngine bekommt die Maschine des Druckers (neun Commits im Zweig
     `cura-maschine`, mit A+B zusammengeführt in `c667d7dd5`; Bericht
-    `output/review/cura-paket-2026-09-27/bericht.md`). Die Messung in CuraEngine 5.13 an
+    `konzepte/nachweise-release-0.5.1/review/cura-paket-2026-09-27/bericht.md`). Die Messung in CuraEngine 5.13 an
     Minigolf-Körper und Waschschüssel über acht Drucker ist vor und nach dem Merge gleich.
     Offen daraus: Curas Fenster bekommt die Stützsperre nicht (gehört zu E). Der Startcode
     der Gemeinschaftsdefinition des SV06 setzt `M201 X500 Y500` und `M204 P500`, das
@@ -2117,7 +2074,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     Strength“), P1S (Bambu Studio, dieselben Namen) und MK4S HF0.4 (PrusaSlicer: „0.10mm
     FAST DETAIL“, „0.28mm DRAFT“, „0.20mm STRUCTURAL“): zwölf Läufe mit Schichthöhe und
     Werten des Herstellerprozesses, Umschalten hin und zurück verlustfrei
-    (`output/review/gesamt-2026-09-27/stufe-f/`). Im Dialog stellt die Qualität das
+    (`konzepte/nachweise-release-0.5.1/review/gesamt-2026-09-27/stufe-f/`). Im Dialog stellt die Qualität das
     Prozessfeld und eine Wahl im Prozessfeld die Qualität, sonst „Eigener Prozess“.
     Creality Print nennt jeden Prozess „Standard“; dort liegt die Stufe weiter über dem
     Standardprozess.
@@ -2140,13 +2097,12 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     sie in jeder Familie mit Länge, nur an der Außenwand (Robert: „bei allen Slicern“).
     Abgenommen am Rohr neben einem Klotz: ElegooSlicer, OrcaSlicer, Bambu Studio,
     PrusaSlicer und CuraEngine rampen je 199 von 200 Außenschleifen nur am Rohr, bei
-    2 bis 4 % mehr Druckzeit (`output/review/gesamt-2026-09-27/naht/`); Bambu braucht
+    2 bis 4 % mehr Druckzeit (`konzepte/nachweise-release-0.5.1/review/gesamt-2026-09-27/naht/`); Bambu braucht
     dazu `override_filament_scarf_seam_setting`. Creality Print rechnet 3MF nur im
     Fenster (RM-164), sein Kern kennt dieselben Schlüssel. Der Knick zählt über Arme der
     Düsenbreite wie im Slicer: Am Minigolf-Satz bekommen die vier Schäfte die Schrägnaht,
-    der Rumpf mit seinen engen Rundungen nicht, in Solidon wie in ElegooSlicer; Druckdatei
-    zum Vergleich `output/druckbereit/minigolf-2026-09-27/…-schraegnaht.gcode` (9:49 statt
-    9:18 h).
+    der Rumpf mit seinen engen Rundungen nicht, in Solidon wie in ElegooSlicer; die Druckdatei
+    zum Vergleich braucht 9:49 statt 9:18 h (G-Code der Gesamtprüfung, nicht versioniert).
 
   - **E steht** (`2cf02ad2d`, `074364017`, `6daf7ee39`): `for_part` fragt mit Profil jede
     Regel für die geometrischen Pfade (`advise.PART_PATHS`), `handover.split_for_parts`
@@ -2158,7 +2114,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
     Griff aus TPU auf einem Teil aus PETG verlor seine langsame Außenwand. Curas Fenster
     bekommt Sperre und Werte je Teil als 3MF (RM-257). Abgenommen am Minigolf-Satz mit
     einem Pilz, der ohne Stütze in die Luft druckt (`je_teil_abnahme`,
-    `output/review/gesamt-2026-09-27/stufe-e*`): ElegooSlicer, PrusaSlicer 2.9.6 und
+    `konzepte/nachweise-release-0.5.1/review/gesamt-2026-09-27/stufe-e*`): ElegooSlicer, PrusaSlicer 2.9.6 und
     CuraEngine stützen nur den Pilz, die Ränder der übrigen Teile bleiben geschlossen.
     PrusaSlicer stützte den Pilz zuerst gar nicht: Der Objektwert setzte
     `support_material` ohne `support_material_auto`, und Prusas Grundlage stützt nur an
@@ -2231,7 +2187,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Glied der Kette erkennen (`relations._blended_cavity_faces` soll gerundete Eintritte
   ergänzen und erreicht sie an diesen Netzen nicht); dann ist ihr äußerer Rand die
   Mündung, und Stopfen und Werkzeug kommen aus ebenen oder fortgesetzten Flächen. Sonden:
-  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-bohrung\` (`t1_verify`, `t11_rounded_mouth_*`).
+  `konzepte/nachweise-release-0.5.1/sonden/rest-bohrung/` (`t1_verify`, `t11_rounded_mouth_*`).
   Die erste Abnahme (gs-100 `hole_3` um 1 mm unter 1 mm³) setzte den Sollwert null voraus;
   sie ist unten neu gefasst.
 
@@ -2261,7 +2217,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   äußeren Rand kann die Fläche aus mehreren Grundformen bestehen, und ein Polynom trägt das
   nicht (gegen die Fortsetzung von OpenCASCADE: `mouth_cap` mit Randfehler 0,11 bis
   0,23 mm, RBF +10 bis +15 mm³, Polynom mit Randkorrektur +7 bis +18 mm³); (c) am exakten
-  Kern trägt der Prototyp `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-muendung\m19_exakt_band.py`
+  Kern trägt der Prototyp `konzepte/nachweise-release-0.5.1/sonden/rest-muendung/m19_exakt_band.py`
   (Stopfen `edit.defeatured`, Werkzeug als Säule über dem Randumriss minus Körper; Nachbau
   R 40 und R 20: +0,0014 bis +0,0023 mm³), braucht aber eine Bandkennung über die nativen
   Flächen am Zwilling und scheitert an gs-100 entlang ±z, wo der versetzte Rand des Bands
@@ -2290,7 +2246,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   einem Teil ihres Umfangs direkt an die Außenfläche, die Stufe nie. Erst wenn beide
   Erkennungen das lesen (Korpuslauf, kein neu markierter Kegel außer Lippen), wird das
   Drehen freigegeben; der gebaute Drehweg liegt als
-  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-lippe\prepare_ops_mit_drehen.patch` bereit, die
+  `konzepte/nachweise-release-0.5.1/sonden/rest-lippe/prepare_ops_mit_drehen.patch` bereit, die
   Sonden `r5_nach_dem_kippen.py`, `r6_lippe_messen.py` und `r7_erkennung_gekippt.py`
   daneben. Aus derselben Familie: Nach *Nur Bohrungsdurchmesser* Ø 8,0 setzt die Lippe
   0,33 mm höher an und ist 0,025 mm breit — der exakte Kern liest sie, das Netz nicht
@@ -2301,7 +2257,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   **Durchsicht v0.5.1, dritte Runde (27.09.2026, rest-muendung, REST-MUENDUNG-04): Die
   Absage bleibt.** Der Drehweg aus rest-lippe ist auf den heutigen Stand gebracht und mit
   abgeschalteter Absage an beiden Kernen gekippt worden (Quader 40 × 40 × 10, Magnettasche
-  8x3 mittig, `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-muendung\m20_lippe_kippen.txt`). Exakt
+  8x3 mittig, `konzepte/nachweise-release-0.5.1/sonden/rest-muendung/m20_lippe_kippen.txt`). Exakt
   sind 10° und 30° dicht (160,255 und 169,053 mm³ abgetragen), und die Erkennung liest
   danach `hole` Ø 8,25, einen angeschnittenen `cone` Ø 8,25 **ohne** `narrowing` und den
   Schacht der Öffnung als Zylinderstück (`fillet` Ø 7,95). Ein angeschnittenes Stück grenzt
@@ -2314,10 +2270,10 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Tasche und Lippe getrennt erkennen, am exakten Kern ein angeschnittener Verengungskegel
   samt Schacht als Kette, und `bore_entrance` mit schräger Mündung hinter einer Verengung.
   Der Drehweg liegt auf den heutigen Stand gebracht als
-  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-muendung\prepare_ops_mit_drehen_heute.patch`
+  `konzepte/nachweise-release-0.5.1/sonden/rest-muendung/prepare_ops_mit_drehen_heute.patch`
   (8 Hunks, gegen den Stand mit `2e496575b` und `202d5133a`). Ohne Lippe kippt die Tasche
   seit `2e496575b` an beiden Kernen offen. Die schräg **gesetzte** Tasche aus dem Baustein
-  zeigt dieselbe Lücke von der anderen Seite ([RM-277](#rm-277)). Abnahme unverändert.
+  zeigt dieselbe Lücke von der anderen Seite ([RM-277](ROADMAP-ARCHIV.md#rm-277)). Abnahme unverändert.
 
 <a id="rm-273"></a>
 
@@ -2328,7 +2284,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   38 s). Die Vorschau des Dialogs rechnet in Entwurfsgüte, unter einem anderen
   Cacheschlüssel; nach dem Klick auf *Übernehmen* rechnet die Auswertung die Operation in
   voller Güte neu und danach die Erkennung. *Merkmal verschieben* selbst kostet dort 9 bis
-  10 s (Profil `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-merker\p11_wt.hole_4.ganz.prof`): die
+  10 s (Auszug des Profils `konzepte/nachweise-release-0.5.1/sonden/rest-merker/p11_prof.txt`,
+  das Rohprofil ist nicht versioniert): die
   örtliche Nachmessung `detect_known` rund 5 s (darin `_surface_owners_near` 2 s), die drei
   Booleschen samt Umlegung 2,8 s, `_chain_copy_tool`, `_edge_findings`, `_past_the_mouths`
   und `_shares_in_material` je knapp 1 s. Das sind rund 60 Prozent der Wartezeit beim
@@ -2355,7 +2312,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   bei jedem Radius und auch einzeln — vorbestehend); gs-100 und pb3041 (die Kanten der
   Tessellierung decken sich nicht mit den exakten). Ein halbierendes Neubauen war zu langsam
   (15 bis 37 s je Vorschau) und lieferte an pb3041 einen offenen Körper. Sonden
-  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\kanten\`, Bericht `reports/kanten-schluss.md` §6–7. Weg:
+  `konzepte/nachweise-release-0.5.1/sonden/kanten/`, Bericht `konzepte/nachweise-release-0.5.1/reports/kanten-schluss.md` §6–7. Weg:
   die Kanten, die OpenCASCADE zusammen nicht baut, einzeln oder in kleineren Gruppen bauen,
   oder am exakten Körper dieselbe Auslassung wie am Netz mit Befund. Abnahme: Hohlkasten
   3 mm „alle“ R 2 rundet am exakten Kern, was am Netz gerundet wird, oder nennt die
@@ -2371,7 +2328,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   eine Migration (`format_version`) — Rückfrage. (b) Wird ein Schnitt des Laufs gelöscht
   oder ausgeschaltet, bleibt die gespeicherte Zählung stehen: Leiste 600 mm, drei Stücke,
   letzter Schnitt gelöscht → „Leiste 1 von 3 · Stifte“ neben „Leiste · Löcher“
-  (`prepare_ops.stem_of`, Beleg `F:\3D Druck\.claude\.state\release-0.5.1\laeufe\rev-code-t11.txt`). Weg für
+  (`prepare_ops.stem_of`, Beleg `konzepte/nachweise-release-0.5.1/laeufe/rev-code-t11.txt`). Weg für
   (b): die Zählung beim Löschen und Ausschalten nachführen oder bei Nummer 0 ohne weiteren
   Schnitt auf A/B zurückfallen. Abnahme: nach dem Löschen eines Schnitts stimmen Nummern
   und Zahl der Stücke; zu (a) eine Entscheidung.
@@ -2379,7 +2336,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-289"></a>
 
 - [ ] **RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E.** Aus dem Release 0.5.1 (Review des Gesamtprüfungspakets bis
-  `3018613e6`, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-gesamt-dd95985e5.md`; B1–B4 gehören
+  `3018613e6`, `konzepte/nachweise-release-0.5.1/reports/review-gesamt-dd95985e5.md`; B1–B4 gehören
   zum Paket und werden vor dem Tag behoben). (B6) Nach dem Übernehmen zeigt der Druckdialog
   einen Wert je Teil als Wert der Platte (`print_settings_dialog.py`). (B7) `plate_paths`
   und `for_part` fragen Volumenstromdeckel, die der Dialog für Orca und Prusa verwirft
@@ -2410,7 +2367,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-292"></a>
 
 - [ ] **RM-292 — Laufzeitreste der Durchsicht 0.5.1.** Aus der Durchsicht v0.5.1 (Inventar 1.5, 1.7, 1.8,
-  `F:\3D Druck\.claude\.state\release-0.5.1\RESTE-INVENTAR.md`). (a) `carpet-corner-clip.step` braucht bis
+  `konzepte/nachweise-release-0.5.1/RESTE-INVENTAR.md`). (a) `carpet-corner-clip.step` braucht bis
   „geöffnet“ 201 s (unter Last, nebenbei beobachtet, nicht gegen HEAD gemessen; Vermutung:
   exaktes Volumen im UV-Rückfall wie REST-BOHRUNG-01, `b0d344e5c`). (b) Die
   Eigenkreuzungs- und Überschneidungssuche kostet 7,5 bis 8,3 s (Besenhalter:
@@ -2437,7 +2394,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-297"></a>
 
 - [ ] **RM-297 — Stapel der Erkennung: Reste aus dem Review.** Aus dem Release 0.5.1 (Review des Pakets stapel,
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-stapel.md`). (B5) `refine.solve` hängt bei einem
+  `konzepte/nachweise-release-0.5.1/reports/review-stapel.md`). (B5) `refine.solve` hängt bei einem
   Budget unter eins: `nfev == evaluations` und `nfev < evaluations` sind bei null nie wahr,
   SciPy weist den Wert ab. (B7) Fünf Docstrings in `refine.py` verweisen auf
   `_fit_cone_measured`/`_fit_torus_measured` als Formelquelle; die Formeln stehen seit dem
@@ -2453,7 +2410,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-298"></a>
 
 - [ ] **RM-298 — Hilfsprozess: Reste aus dem Review.** Aus dem Release 0.5.1 (Review des Pakets hilfsprozess,
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-hilfsprozess.md`). (a) Der Deckel
+  `konzepte/nachweise-release-0.5.1/reports/review-hilfsprozess.md`). (a) Der Deckel
   `MOST_HELPERS` hält nicht: nachgestellt liefen 6 statt 3 Hilfsprozesse zugleich. (b) Unter
   Linux und macOS bleibt nach Absturz oder Abbruch gemeinsamer Speicher in `/dev/shm`
   liegen, anders als die Docstrings sagen; ein volles `/dev/shm` meldet `ENOSPC` als
@@ -2471,7 +2428,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-300"></a>
 
 - [ ] **RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu.** Aus dem Release 0.5.1 (Review von
-  `speicher-ohne-prozesswerte`, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-speicher.md`, F2).
+  `speicher-ohne-prozesswerte`, `konzepte/nachweise-release-0.5.1/reports/review-speicher.md`, F2).
   An Roberts Minigolf-Projekt rechnete nach *Im Slicer öffnen* der ganze Verlauf gut zwei
   Minuten neu, weil sich die Prozesswerte geändert hatten. Seit 0.5.1 behalten Laden,
   Kopieren und Bewegen ihr Ergebnis (`reads_process`); fast die ganze Zeit liegt aber in
@@ -2494,7 +2451,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-302"></a>
 
 - [ ] **RM-302 — Merkmale an Kopien: Reste aus dem Review.** Aus dem Release 0.5.1 (Review von `merkmale-an-kopien`,
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-kopien.md`). (a) Der Beleg `moved_twin` läuft
+  `konzepte/nachweise-release-0.5.1/reports/review-kopien.md`). (a) Der Beleg `moved_twin` läuft
   je bewegtem Körper und Auswertung zwei- bis dreimal, rund 32 ms je Aufruf bei 1,3
   Millionen Dreiecken. (b) In `.claude/rules/operationen.md` fehlt seit dem Merge der Satz,
   dass ein einzelner Körper seine Matrix meldet; beim nächsten Verdichten gehört er zurück.
@@ -2503,7 +2460,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-304"></a>
 
 - [ ] **RM-304 — Freie Stelle nach Filament trennen.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-einfuegen.md`, F11;
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F11;
   Text der Gesamtprüfung). *Auf dem Bett anordnen* trennt nach Filament,
   wo mehr Filamente als Düsen liegen (`prepare_ops._filament_groups`); `first_free_spot`
   kennt keine Filamente, deshalb kann eine mehrfarbige 3MF auf eine Platte mit fremdem
@@ -2514,7 +2471,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-305"></a>
 
 - [ ] **RM-305 — Hinter der zwölften Platte eine Regel.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-einfuegen.md`, F13;
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F13;
   Text der Gesamtprüfung). Eine dazukommende 3MF mit Platten rückt hinter
   die letzte belegte, ohne Grenze (`plates_behind`); `first_free_spot` betrachtet nur Platten
   bis `MAX_PLATES`. Liegt etwas auf Platte 13, landet ein weiteres Modell neben Platte 12
@@ -2523,7 +2480,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-307"></a>
 
 - [ ] **RM-307 — Auto Split: Reste aus dem Review der Vorauswahl.** Aus dem Release 0.5.1 (Fix `autosplit-lagen-051`,
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-autosplit-lagen.md`). Seit 0.5.1 hält die
+  `konzepte/nachweise-release-0.5.1/reports/review-autosplit-lagen.md`). Seit 0.5.1 hält die
   Vorauswahl für Auto Split ihren letzten Platz für die billigste stehende Lage frei, wenn
   keine der drei vorderen steht. (a) Steht eine der vorderen, aber teuer, bleibt ihr Preis zu
   hoch (ma-mi-ya mit Stiften an A 1 679 711 statt 63 010 mm³; an 3 von 114 Modellen fielen
@@ -2533,6 +2490,20 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Review-Sonde). (c) Ohne übersetzten Schnittkern (`_chain`) braucht der Leistungstest
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
+
+<a id="rm-311"></a>
+
+- [ ] **RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode.**
+  Aus dem Rauchtest nach der Einrichtung von SuperSlicer 2.5.59.13 (29.09.2026,
+  `.claude/.state/uebergabe-gesamt-2026-09-27/einheit.py`, Wedge-Lock am Prusa MINI und
+  MK4S): Alle Läufe haben eine Druckdatei, aber jeder meldet `slicer.setting_ignored` für
+  `start_gcode` — geschrieben steht `M862.3 P \"[printer_model]\"`, im G-Code
+  `M862.3 P "[printer_model]"`. Der Wert ist derselbe, nur die Anführungszeichen stehen in
+  der Konfigurationszeile einmal maskiert und einmal nicht; die Gegenprobe vergleicht die
+  Schreibweise statt des Werts. Ein Fehlalarm bei jedem Druck nimmt dem echten Befund die
+  Wirkung. Weg: den Vergleich in `verify_settings` über die entmaskierte Fassung beider
+  Seiten führen, PrusaSlicer als Gegenfall. Abnahme: SuperSlicer am MINI ohne
+  `slicer.setting_ignored`, ein wirklich übergangener Wert meldet weiter.
 
 ## Bedienung und Darstellung
 
@@ -2729,7 +2700,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `F:\3D Dateien` nachgestellt — ein STEP mit Senkbohrung liegt dort nicht,
   der exakte Fall bleibt am gebauten Körper geprüft). Jeder neue Test am
   Stand davor rot. Offen: die Abnahme am
-  echten Fenster beim Release 0.5.0 — dazu die Stufe an der Grenze „ganz
+  echten Fenster beim nächsten Release (RM-213) — dazu die Stufe an der Grenze „ganz
   sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite).
   **Zug und Durchmesser sind ein Schritt** (Entscheidung Robert am selben
   Tag: „Ja eine transaktion"): `slot_hole` nimmt die Breite selbst
@@ -2857,8 +2828,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Radzoom zeichnet ein Bild statt zwei (22 → 7,7 ms je Aufbau).
 
   **Was bleibt:** Die Overlaykarten tragen Masken mit runden Ecken — wenige
-  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim Release
-  0.5.0 noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
+  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim nächsten
+  Release (RM-213) noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
   ist (unter D3D12 gab es den Fall nie), ist eine eigene Entscheidung und
   kein Muss mehr.
 
@@ -2884,7 +2855,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Das Review vom 21.09.2026 fand den Rest: Der Block des historischen
   Bohrschritts (`offer_bore_step`) blieb neben der Maßgruppe stehen; er trägt
   sich seither in `_blocks` ein und weicht mit den übrigen. Abnahme, offen
-  beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
+  beim nächsten Release (RM-213): Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
   Koordinaten; endet die Maßgruppe, stehen sie wieder. Escape und Abbrechen
   wählen dabei seit dem 25.09.2026 ab (Entscheidung Robert), rechts steht
   danach nichts mehr.
@@ -2979,7 +2950,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Stellen überarbeiten. Abnahme: vollständige Liste der geprüften Bereiche, konkrete Textänderungen
   ohne Bedeutungsverlust und vollständige Sprachkataloge.
 
-  **Stand 23.09.2026 (Paket „texte", `reports/texte.md`):** Preise, Generatoraussage, README-Version,
+  **Stand 23.09.2026 (Paket „texte", `konzepte/nachweise-release-0.5.0/reports/texte.md`):** Preise, Generatoraussage, README-Version,
   Sicherheitstexte, Agentenquote, Slicer-Begriff es/fr/pt, Du/Lei-Bestand it, portugiesische
   Anführungszeichen und die in `sollliste*.md` benannten Einzelstellen (B13/B12, B11c, B32, B23, B26,
   B27, B34, B16, B3, C2/C9/C10/C12, A16 und Nachbarn) geprüft und korrigiert, alle fünf Kataloge
@@ -2995,6 +2966,13 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Knopfzitaten im Bestand 37 berichtigt, der Rest begründete Ausnahmen (`e8f9f574d`).
   Offen bleibt der Zeile-für-Zeile-Durchgang durch den Bestand vor 0.5.0 in Anwendung und
   Website.
+
+  **Dazu, bisher nur im Register und in den Regeln:** aus der Sollliste der Durchsicht
+  0.5.0 A16 (das Presseversprechen „STL wird exakter Körper, STEP heraus“ gegen den Stand
+  von P4.0 halten), A23 (Leistungszahlen der Presse gegen eigene Messungen) und C12 (Namen
+  der Slicer-Übernahme); dazu *Extrusionsbreite* (Wandstärkenleiter, Handbuch-Glossar)
+  gegen *Bahnbreite* (Druckeinstellungen) vereinheitlichen
+  (`.claude/rules/oberflaeche.md`).
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#rückmeldung-und-freiwillige-unterstützung-gehören-in-die-app-startfläche-31082026).
 
@@ -3053,15 +3031,17 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-213"></a>
 
-- [ ] **RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster.**
+- [ ] **RM-213 — Fensterabnahme und die Kundenwege am echten Fenster.**
   Die Paketnachweise der Durchsicht 0.5.0 stammen überwiegend aus
   Offscreen-Läufen oder Fenstern mit `WA_DontShowOnScreen`. Die späteren
   Website-Aufnahmen und Skizzenlabel-Sonden zeigen echte maximierte Fenster;
   sie belegen ihre Motive und die jeweiligen Reparaturen. Die vollständige
   Welle 2 „kundenwege" mit allen folgenden Abnahmekriterien ist damit noch
   nicht gefahren. Was nur das echte Fenster zeigt (Schrift, Vulkan-Fläche, Fokus,
-  Bildschirmleser, gefühlte Wartezeit): die Punkte RM-174, RM-197 bis RM-200,
-  RM-204 und RM-205 (sie bleiben je eigene Punkte und schließen in diesem Lauf);
+  Bildschirmleser, gefühlte Wartezeit, Navigation mit Drehpunkt nach Änderungen an
+  `_NAVIGATION` oder `camera_step`): die Punkte RM-197 bis RM-200 und RM-204
+  (sie bleiben je eigene Punkte und schließen in diesem Lauf; RM-174 und RM-205
+  sind ohne ihn geschlossen, siehe Archiv);
   dazu ohne eigenen Punkt die Einladungszeile und Rückfragekarte über der
   pygfx-Fläche (foerderung), Marken und Beschriftung der Fase auf hellem und
   dunklem Thema (P6.2), die neuen Bedienelemente der Dialoge mit Maus und
@@ -3104,7 +3084,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Sonde außerhalb von pytest an `0273b8d23` und `c2bff45f1`:
   `test_surface_placement_ui.py::test_the_measures_stay_in_the_view_while_a_pulled_slot_waits`
   — nach dem Zug zum Langloch stehen keine Maße im Bild, erwartet sind zwei Felder und kein
-  runder Umriss (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-auswahl\out\fenster-vor.txt`). Ob das
+  runder Umriss (`konzepte/nachweise-release-0.5.1/sonden/rest-auswahl/out/fenster-vor.txt`). Ob das
   der Testaufbau außerhalb von pytest ist oder ein Produktbefund, sagt erst der
   Release-Lauf.
 
@@ -3246,7 +3226,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Kapazität wie die Maßtinte ging es nicht, weil die Markierung mit jedem Merkmal Ecken-
   und Dreieckszahl wechselt. (2) Den Bewegungsgriff versetzen statt neu bauen brachte nach
   (1) nichts (84,0 gegen 84,7 ms im selben Prozess) und ist nicht behalten; der Stand liegt
-  unter `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-klick\weg2\`. (3) Die Maßgruppe geht ohne
+  unter `konzepte/nachweise-release-0.5.1/sonden/rest-klick/weg2/`. (3) Die Maßgruppe geht ohne
   Elternteil an das Merkmalfenster zurück und kommt je Signatur für die nächste
   gleichartige Handlung wieder, 2 bis 5 ms (`c2bff45f1`). (4) pygfx las für jedes
   Zeigerereignis den Pickpuffer von der Grafikkarte zurück, 1,2 ms im Hauptfaden je
@@ -3285,8 +3265,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Anwendungsfilter `ApplicationEvents`, der für jedes Ereignis in Python läuft. Nebenbei:
   `threemf._outside_meshes` läuft in Python über alles außerhalb der Netze, bei sehr
   großen `texture2dgroup` oder `colorgroup` spürbar. Messung
-  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\3mf\` (Reihen `abt`, `ab4`), Bericht
-  `reports/3mf-schluss.md`. Abnahme: das Fenster bleibt während großer Importe flüssig,
+  `konzepte/nachweise-release-0.5.1/sonden/3mf/` (Reihen `abt`, `ab4` in `out/`), Bericht
+  `konzepte/nachweise-release-0.5.1/reports/3mf-schluss.md`. Abnahme: das Fenster bleibt während großer Importe flüssig,
   längste Lücke im Qt-Takt unter 200 ms, auch beim ersten Bild und bei der Rückfrage.
 
 <a id="rm-278"></a>
@@ -3296,8 +3276,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Wabenhalter, `hole_4` gewählt, Maße im Bild; Druck 1,6 mm neben der Mitte (in der
   Öffnung Ø 4,4), Zug 5,4 mm nach außen: ein Schritt `translate_object`, der ganze Halter
   wandert, die Auswahl ist weg
-  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-auswahl\scenario_langloch.py`,
-  `out\langloch-neu.txt`). Ursache: Der Klick wählt am Wabenhalter Bohrung und Senkung
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-auswahl/scenario_langloch.py`,
+  `out/langloch-neu.txt`). Ursache: Der Klick wählt am Wabenhalter Bohrung und Senkung
   zusammen (`_one_cavity`); die Ansicht hält dann kein einzelnes `_selected_feature`,
   `slot_handle_feature()` gibt nichts, es stehen keine Langlochknöpfe, und
   `_pull_at_the_hole` greift nicht — der Druck fällt an den Navigator, und dort führt
@@ -3314,7 +3294,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 - [ ] **RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild
   wächst.** Aus der Durchsicht v0.5.1 (rest-kunde, Registersatz 2). Am Organizer stehen
   nach *Skalieren* ×2,3 noch 52 % des Körpers im Bild
-  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-kunde\out\teilen-vorher-organizer.txt`, Zeile „vor
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-kunde/out/teilen-vorher-organizer.txt`, Zeile „vor
   dem Teilen“). `Viewport._fit_once_for` rahmt nach dem ersten Bild nur, wenn `outgrown` es
   verlangt (das Fünffache oder kein Überlapp); „jeder weitere Aufbau lässt die Kamera in
   Ruhe“ ist eine ausdrückliche Regel (Robert, 23.08.2026, beim Verschieben). Nach *Modell
@@ -3356,7 +3336,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   (`FeaturePanel`, `configure_feature_field`) und in den Druckeinstellungen
   (`print_settings_dialog`). Zwei Ränder desselben Wegs: Schaltet man *fx* mit einem
   Ausdruck jenseits der Grenze aus, klemmt `op_dialog._switch` den Wert still (`setValue`,
-  `_core` hält den Ausdruckswert; Beleg `F:\3D Druck\.claude\.state\release-0.5.1\laeufe\rev-code-u1.txt`) —
+  `_core` hält den Ausdruckswert; Beleg `konzepte/nachweise-release-0.5.1/laeufe/rev-code-u1.txt`) —
   die Zahl als Text ins Feld setzen, damit `BoundedSpin` ablehnt; und die Kurzhilfe einer
   Grenzänderung im Verlauf zeigt „40,00 mm → 40,00 mm“ (`panels._changed_parameters`
   vergleicht nur den Wert, `edit_parameter` trägt denselben Titel). Abnahme: an allen vier
@@ -3366,8 +3346,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-290"></a>
 
 - [ ] **RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1.** Aus dem Release 0.5.1 (Sprach- und Code-Review der
-  Pakete texte und ui, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-sprache-ui-texte.md`,
-  `review-code-ui-texte.md`). (a) fr und it nennen *Merkmal bearbeiten* (Knopf der
+  Pakete texte und ui, `konzepte/nachweise-release-0.5.1/reports/review-sprache-ui-texte.md`,
+  `konzepte/nachweise-release-0.5.1/reports/review-code-ui-texte.md`). (a) fr und it nennen *Merkmal bearbeiten* (Knopf der
   örtlichen Erkennung) und *Merkmal ändern* (Operation) gleich („Modifier l'élément“,
   „Modifica elemento“); it verletzt dabei „Ändern → Cambia“, was auch alle Operationstitel
   „… ändern“ und deren Handbuchzitate beträfe. (b) en heißt *Trennen* „Cut“ und
@@ -3384,7 +3364,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Punkt nachgezogen, der Wächter mit Gegenprobe.
 
   **Nachtrag 28.09.2026 (Sprachreview des zweiten Changelog-Durchgangs,
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-sprache-changelog2.md`):** (f) Die Kataloge fr und
+  `konzepte/nachweise-release-0.5.1/reports/review-sprache-changelog2.md`):** (f) Die Kataloge fr und
   it mischen typografische und gerade Apostrophe (fr 1 239 gegen 3 477, it 490 gegen
   1 258), gegen die Entscheidung des Textpakets für den geraden; der Changelog setzt den
   geraden, der Katalog etwa bei *Merkmal zeigen* („Montrer l’élément“, „Mostra
@@ -3396,7 +3376,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-291"></a>
 
 - [ ] **RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht.** Aus der Durchsicht v0.5.1 (Inventar 1.4,
-  `reports/fenster.md`, Empfehlung). Heute liegen vier deckende Arme als Widgets über der
+  `konzepte/nachweise-release-0.5.1/reports/fenster.md`, Empfehlung). Heute liegen vier deckende Arme als Widgets über der
   Ansicht (`app/ui/viewport.py`, FENSTER-17, `336c7fdc8`). Weg: die Arme in den Renderer,
   Fokus und Namen weiter über ein kleines Widget. Kein Fehler. Abnahme: das Fadenkreuz
   zeichnet der Renderer, Tastaturweg und Name bleiben.
@@ -3404,7 +3384,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-299"></a>
 
 - [ ] **RM-299 — Handbuch: Reste aus dem Code-Review.** Aus dem Release 0.5.1 (Code-Review des Handbuchumbaus,
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-handbuch.md`). (B5) Welcher Teil des Handbuchs
+  `konzepte/nachweise-release-0.5.1/reports/review-handbuch.md`). (B5) Welcher Teil des Handbuchs
   eine Anleitung trägt, steht zweimal: in `Guide.part` und in `OUTLINE`. (B6) Die
   Spulennamen in `tools/make_guides.py` stehen in einer festen Tabelle für sechs Sprachen
   statt aus dem Katalog. Die Feldabnahme und die Nummernplatzierung auf Text in zwei
@@ -3413,7 +3393,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-303"></a>
 
 - [ ] **RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-einfuegen.md`, F14, N8;
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F14, N8;
   Text der Gesamtprüfung). Der Zweig hat die Fenstertests
   `test_ui.py` (sechs Tests mit `keep_the_files_place`),
   `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
@@ -3430,13 +3410,31 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 <a id="rm-306"></a>
 
 - [ ] **RM-306 — Zweites Modell in der Ecke oder zur Mitte.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `F:\3D Druck\.claude\.state\release-0.5.1\reports\review-einfuegen.md`, F15;
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F15;
   Text der Gesamtprüfung). Das zweite Modell steht hinten links, nach der
   Regel von *Auf dem Bett anordnen* (§29: hinterste, dann linkeste Stelle); zentriert wird
   nur eine ganz neu angeordnete Platte. Robert wollte beim Anordnen „startpunkt mitte“
   (§29, 09.09.2026). Frage: die Kandidaten der freien Stelle nach Abstand zur Plattenmitte
   ordnen? Empfehlung der Release-Sitzung: ja, weil ein einzelnes weiteres Modell nahe der
   Mitte besser zu sehen und zu erreichen ist. Abnahme: Entscheidung Robert, danach Test.
+
+<a id="rm-312"></a>
+
+- [ ] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
+  Auftrag Robert, 29.09.2026: Die Düsen und damit die Düsengröße sollen vom Drucker kommen
+  oder als Auswahlliste wählbar sein. Heute ist `Düse ⌀` ein freies Zahlenfeld (0,1 bis
+  2,0 mm, `print_settings_dialog.nozzle`), vorbelegt mit 0,4 aus `printers.toml`; wer eine
+  andere Düse aufschraubt, tippt sie ein, und die Maschinenvariante im Slicer folgt über
+  `slicer_profiles.machine_with_nozzle`. Plan: im Kern die Düsengrößen, die der gewählte
+  Slicer für dieses Gerät als Maschinenvarianten führt (`printer_model` gleich, je
+  `nozzle`), sonst die üblichen Größen; im Dialog eine Auswahl dieser Größen mit „Andere …“,
+  vorgewählt die Variante, die im Slicer eingestellt ist; ein Zustandssatz zur Düse steht an
+  der Düsenzeile statt in der Zustandszeile. Die Kopfzeile ist ein `QFormLayout` in der
+  Folge der Abhängigkeiten (Wächter
+  `test_the_print_dialog_asks_in_the_order_its_answers_depend_on`); vor dem Bau mit der
+  Sitzung abstimmen, die den Dialog umgebaut hat (`4d955a9e7`). Abnahme: Elegoo CC2 bietet
+  0,2/0,4/0,6/0,8 an, eine Wahl stellt Bahnbreite und Maschinenprofil, eine eigene Größe
+  bleibt möglich.
 
 ## KI und Generatoren
 
@@ -3502,7 +3500,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 Fälle, dafür hängen hinge und stiffen
   an 12 — im Rauschen, keine Verschlechterung. (b) nicht gemessen. magnet_lid endet
   nicht am Bündeln, sondern an `pattern_feature`, das die eigene Magnettasche am exakten
-  Körper ablehnt. Rohdaten: `F:\3D Druck\.claude\.state\release-0.5.1\sonden\ki\rm251\`. Entscheidung
+  Körper ablehnt. Die Rohdaten dieses Suitelaufs sind nicht versioniert. Entscheidung
   Robert: Grenze 12 für den lokalen Weg ja/nein.
 
   **Nachtrag (27.09.2026, bohrung, BOHRUNG-13):** Eine Magnettasche aus dem Baustein lässt
@@ -3703,7 +3701,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   und drei Renderertests. Der vorherige native GEOS-Absturz ist behoben (`fb53de3c`).
   Die unabhängige Ergebnismeldung bei rotem Kern bleibt als eigener Rest offen. Kein Gesamtabschluss
   aus dem grünen Ubuntu-Kern allein. Belege und Grenzen:
-  `F:\3D Druck\Releases\0.5.0\Nachweise\review-050\reports\codex-ci-35952849083-unix-packages.md`.
+  `konzepte/nachweise-release-0.5.0/reports/codex-ci-35952849083-unix-packages.md`.
 
   **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Der Rest ist im Workflow gebaut:
   `window-contracts` ist seit `0a0e4eef0` ein eigener Job ohne `needs`, ein roter
@@ -3743,7 +3741,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   P-Kerne um ein bis zwei Stufen senken; (3) einmal MemTest86 über Nacht, um den
   Arbeitsspeicher auszuschließen; (4) Release-Pakete in der CI bauen oder doppelt bauen
   und bitweise vergleichen, bevor sie hochgeladen werden. Bericht:
-  `F:\3D Druck\.claude\.state\release-0.5.1\reports\ast-flake.md`. Abnahme: nach dem Tausch keine
+  `konzepte/nachweise-release-0.5.1/reports/ast-flake.md`. Abnahme: nach dem Tausch keine
   sporadischen Abrisse dieser Familie mehr, belegt mit einer verschränkten Reihe der
   Sprachprüfung unter Last wie in ast-flake, und MemTest86 ohne Befund.
 
@@ -3759,7 +3757,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   der Stapel ohne Symbole nicht. Das Tor mit `-n 8` traf es nie; ein Nachstellversuch als
   Einzelprozess mit `faulthandler_timeout=300` lief ohne Hänger durch die ganze Suite
   (3:33 h, 17 946 bestanden; die 69 roten sind Erzeugnisvergleiche, ohne Marker gefahren)
-  (`F:\3D Druck\.claude\.state\release-0.5.1\laeufe\repro-gc.txt`). Zu klären ist auch, ob derselbe
+  (Protokoll des Nachstellversuchs nicht versioniert). Zu klären ist auch, ob derselbe
   Sammlerlauf die Anwendung hängen kann (Finalizer eines wgpu-Objekts gegen den Poller) —
   dort läuft der Sammler von selbst. Bis dahin wählen Sitzungen betroffene Tests gezielt
   oder fahren das Tor. Abnahme: der Einzelprozess läuft durch, oder die Ursache ist
@@ -3776,20 +3774,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   auf. (c) Veralteter Kommentar in `app/ui/loading.py` (`ProgressTiming.remaining` nennt
   die Spanne statt des bleibenden Grunds, Pausen ohne Anteil). (d) Der Kommentar an
   `features.WHOLE_BODY_ANSWERS` nennt 75 statt gut 90 MB. Abnahme: je Punkt behoben.
-
-<a id="rm-294"></a>
-
-- [ ] **RM-294 — Tragende Dateien des Review-Ordners ins Repository holen.** Aus der Durchsicht v0.5.1 (Inventar 1.9). Offene
-  Registerpunkte verweisen auf Dateien unter `F:\3D Druck\.claude\.state\release-0.5.1\` (Sonden, Profile,
-  Patches, Berichte); der Ordner liegt nur auf dieser Maschine und soll nach dem Release
-  aufgeräumt werden. Tragend sind vor allem der Drehweg
-  `sonden\rest-muendung\prepare_ops_mit_drehen_heute.patch` ([RM-262](#rm-262)), der
-  exakte Prototyp `sonden\rest-muendung\m19_exakt_band.py` ([RM-259](#rm-259)), die Sonden
-  von RM-273 und RM-278 bis RM-280 und die Belege der Punkte RM-284 bis RM-293. Weg: vor
-  dem Aufräumen die tragenden Dateien nach `konzepte/` holen und die Verweise umschreiben
-  — vorher auf Kundendaten und Namen prüfen, das Repository wird öffentlich; was nur
-  Rohdaten sind, bleibt beim Verweis auf die Messung. Abnahme: kein offener Registerpunkt
-  verweist mehr auf den Review-Ordner.
 
 <a id="rm-295"></a>
 
@@ -3927,10 +3911,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-robert-am-26082026-aufgetragen-hat).
 
-<a id="rm-149"></a>
-
-RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-149-abschluss-050).
+  **Aus dem Lizenzarten-Konzept (§6, P7):** Handbuch und Regeln nennen die Lizenzart
+  (privat oder gewerblich, Platzzahl) noch nicht; die Karte `app/core/activation/CLAUDE.md`
+  und der Über-Dialog tun es. Vor dem Verkaufsstart nachziehen.
 
 <a id="rm-091"></a>
 
@@ -3969,11 +3952,6 @@ RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   bleibt preisfrei, bis das Angebot steht.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
-<a id="rm-182"></a>
-
-RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-182-abschluss-050).
 
 <a id="rm-093"></a>
 
@@ -4038,11 +4016,6 @@ RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
-<a id="rm-096"></a>
-
-RM-096 ist nach gebautem Rotationsweg und erfolgreichem Serverupload abgeschlossen.
-[Abschluss und Servernachweis](ROADMAP-ARCHIV.md#rm-096).
-
 <a id="rm-115"></a>
 
 RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
@@ -4085,11 +4058,6 @@ RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Termin draußen sein muss. Abnahme: 1.x-Build mit gesetztem `TRIAL_FROM`, Frist je Gerät von
   14 Tagen, danach derselbe lesende Zustand wie ohne Testphase (I09), Tests analog
   `test_a_sale_version_carries_no_deadline`, Website, Kauftexte und Changelog nennen sie.
-
-<a id="rm-162"></a>
-
-RM-162 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-162-abschluss-050).
 
 ## Kundenrückmeldungen
 

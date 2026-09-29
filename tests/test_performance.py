@@ -892,7 +892,7 @@ def test_the_layer_analysis_survives_a_knurled_surface() -> None:
 
     Die Rändel-Platte hat 46 000 Dreiecke — ein Bruchteil des §31-Körpers —
     und stand trotzdem bei 37 Sekunden: die Verschachtelungsanalyse in
-    ``_polygon_from`` stellte je Schicht n² einzelne contains-Fragen, bei
+    ``_polygon_with_contours`` stellte je Schicht n² einzelne contains-Fragen, bei
     2 898 Ringen also 8,4 Millionen. Über den räumlichen Index sind es vier
     Sekunden; die Schranke hier fängt die Größenordnung, die 25-%-Schwelle
     des Vergleichslaufs den Rest.

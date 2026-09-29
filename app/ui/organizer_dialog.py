@@ -264,6 +264,43 @@ class OrganizerDialog(QDialog):
         )
         header.setWordWrap(True)
         layout.addWidget(header)
+        # **Erst der Name, dann der Bezug, dann die Maße.** Der Bezug legt fest,
+        # was Breite und Tiefe bedeuten — außen oder licht — und schreibt beim
+        # Wechsel in beide Felder (``_basis_changed``); er stand unter ihnen.
+        # Der Name stand in derselben Zeile wie Bezug und *Neues Raster*, mit
+        # denen er nichts zu tun hat.
+        self.name_field = QLineEdit(str(self._initial.get("name", "")), self)
+        self.name_field.setPlaceholderText(tr("Organizer"))
+        self.name_field.setAccessibleName(tr("Name"))
+        self.name_field.setEnabled(not layout_only)
+        # **Mit sichtbarer Beschriftung.** Das Feld stand wortlos neben „Neues
+        # Raster"; sein einziger Hinweis war der Platzhalter, und der
+        # verschwindet, sobald etwas darin steht.
+        name_label = QLabel(tr("Name"), self)
+        name_label.setBuddy(self.name_field)
+        name_label.setEnabled(not layout_only)
+        # So breit wie ein Name, nicht wie der Dialog: Über 1000 Punkte
+        # gezogen sah das Feld aus wie das Hauptfeld der Seite.
+        self.name_field.setMaximumWidth(self.name_field.fontMetrics().averageCharWidth() * 40)
+        naming = QFormLayout()
+        naming.addRow(name_label, self.name_field)
+        layout.addLayout(naming)
+        self.basis = QComboBox(self)
+        self.basis.addItem(tr("Außenmaße festhalten"), userData="outer")
+        self.basis.addItem(tr("Lichte Fachmaße festhalten"), userData="inner")
+        self.basis.setCurrentIndex(
+            1 if self._spec is not None and self._spec.basis == "inner" else 0
+        )
+        self.basis.setToolTip(
+            tr("Ein Bezugwechsel übernimmt die aktuell sichtbaren lichten Fachmaße.")
+        )
+        # Ohne Namen las der Bildschirmleser nur den gewählten Eintrag.
+        self.basis.setAccessibleName(tr("Welche Maße fest bleiben"))
+        self.basis.currentIndexChanged.connect(self._basis_changed)
+        basis_row = QHBoxLayout()
+        basis_row.addWidget(self.basis)
+        basis_row.addStretch(1)
+        layout.addLayout(basis_row)
         dimensions = QHBoxLayout()
         first, second = QFormLayout(), QFormLayout()
         for index, entry in enumerate(
@@ -289,40 +326,12 @@ class OrganizerDialog(QDialog):
             )
             hint.setWordWrap(True)
             layout.addWidget(hint)
-        controls = QHBoxLayout()
-        self.basis = QComboBox(self)
-        self.basis.addItem(tr("Außenmaße festhalten"), userData="outer")
-        self.basis.addItem(tr("Lichte Fachmaße festhalten"), userData="inner")
-        self.basis.setCurrentIndex(
-            1 if self._spec is not None and self._spec.basis == "inner" else 0
-        )
-        self.basis.setToolTip(
-            tr("Ein Bezugwechsel übernimmt die aktuell sichtbaren lichten Fachmaße.")
-        )
-        # Ohne Namen las der Bildschirmleser nur den gewählten Eintrag.
-        self.basis.setAccessibleName(tr("Welche Maße fest bleiben"))
-        self.basis.currentIndexChanged.connect(self._basis_changed)
-        controls.addWidget(self.basis)
-        self.new_grid = QPushButton(tr("Neues Raster"), self)
-        self.new_grid.clicked.connect(self._new_grid)
-        controls.addWidget(self.new_grid)
-        controls.addStretch()
-        self.name_field = QLineEdit(str(self._initial.get("name", "")), self)
-        self.name_field.setPlaceholderText(tr("Organizer"))
-        self.name_field.setAccessibleName(tr("Name"))
-        self.name_field.setEnabled(not layout_only)
-        # **Mit sichtbarer Beschriftung.** Das Feld stand wortlos neben „Neues
-        # Raster"; sein einziger Hinweis war der Platzhalter, und der
-        # verschwindet, sobald etwas darin steht.
-        name_label = QLabel(tr("Name:"), self)
-        name_label.setBuddy(self.name_field)
-        name_label.setEnabled(not layout_only)
-        controls.addWidget(name_label)
-        controls.addWidget(self.name_field)
-        layout.addLayout(controls)
         self.basis_notice = QLabel(self)
         self.basis_notice.setWordWrap(True)
         self.basis_notice.setTextFormat(Qt.TextFormat.PlainText)
+        # Leer steht er nicht da — sonst trennt eine unsichtbare Zeile die Maße
+        # von der Aufteilung.
+        self.basis_notice.hide()
         layout.addWidget(self.basis_notice)
 
         middle = QSplitter(Qt.Orientation.Horizontal, self)
@@ -334,6 +343,11 @@ class OrganizerDialog(QDialog):
         self.tree.setMinimumWidth(215)
         self.tree.currentItemChanged.connect(self._tree_chosen)
         left_layout.addWidget(self.tree, 1)
+        # *Neues Raster* baut die Aufteilung neu auf, also steht es an ihr und
+        # nicht neben den Außenmaßen.
+        self.new_grid = QPushButton(tr("Neues Raster"), left)
+        self.new_grid.clicked.connect(self._new_grid)
+        left_layout.addWidget(self.new_grid, 0, Qt.AlignmentFlag.AlignLeft)
         self.selection = QLabel(tr("Wählen Sie ein Fach oder eine Wand."), left)
         self.selection.setWordWrap(True)
         left_layout.addWidget(self.selection)
@@ -454,6 +468,10 @@ class OrganizerDialog(QDialog):
         field.changed.connect(lambda: setter(field.value()))
         self.editor_form.addRow(title, field)
         self._edit_fields[name] = field
+        from app.ui.op_dialog import even_value_fields
+
+        # Eine Kante für die Zahlen oben und die der gewählten Teilung.
+        even_value_fields((*self._fields.values(), *self._edit_fields.values()))
 
     def _show_node(self, identifier: str) -> None:
         node = self._nodes.get(identifier)
@@ -723,6 +741,7 @@ class OrganizerDialog(QDialog):
         self.state.setText(tr("Die Vorschau zeigt das Ergebnis."))
         if self._basis_before is not None:
             previous = self._basis_before
+            self.basis_notice.show()
             self.basis_notice.setText(
                 tr(
                     "Maßbezug geändert: vorher {before_width} × {before_depth}, jetzt "

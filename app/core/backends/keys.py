@@ -35,11 +35,6 @@ def _keyring() -> Any | None:
     return keyring
 
 
-def available() -> bool:
-    """Ob überhaupt ein Schlüsselbund erreichbar ist."""
-    return _keyring() is not None
-
-
 def read(account: str) -> str | None:
     """Der Schlüssel eines Backends, aus dem Schlüsselbund oder der Umgebung."""
     import os

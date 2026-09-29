@@ -297,7 +297,7 @@ def _hollow_inward(
     # kein Schutz vor der durchsackenden Decke, sondern ein Loch im Boden.
     if vents > 0 and direction is None:
         body, placed, drilled, said = _drill_vents(
-            mesh, body, cavity, field, vents, vent_diameter, quality, progress, cancelled
+            body, cavity, field, vents, vent_diameter, quality, progress, cancelled
         )
         stages.extend(drilled)
         findings.extend(said)
@@ -388,7 +388,6 @@ def _hollow_outward(
     placed: tuple[Vec3, ...] = ()
     if vents > 0 and direction is None:
         body, placed, drilled, said = _drill_vents(
-            mesh,
             body,
             mesh,
             (inner, origin, pitch),
@@ -673,7 +672,6 @@ def _prism(
 
 
 def _drill_vents(
-    mesh: MeshData,
     body: MeshData,
     cavity: MeshData,
     field: tuple[np.ndarray, Vec3, float] | None,

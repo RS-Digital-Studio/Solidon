@@ -1,0 +1,21 @@
+app: F:\3D Druck.review-051\wt-rest-auswahl\app\__init__.py
+abgeschaltet: nichts
+Dateiempfang: app_events
+Bildschirm: NV-Failsafe 640 480
+Fenster: 640 409 Ansicht: (1, 1)
+geöffnet: large-screwdriver-holder-with-honeycomb-pattern.stl 2.4 s
+Bohrungen: 4 Dreiecke: 7956
+gewählt: hole_3 4.399998060457707 hole_4 4.400001317184424 Abstand 18.0 gefunden: True
+A hole_4 gewählt: gewählt=hole_4 fluss=resize_hole begonnen=False bild=True linien=4 umriss=16 langloch_wartet=False knoepfe=False langlochmerkmal=None schritte=['load']
+   Maße: ['Außenkante links: 12,00 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: -18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: ['press->{}', 'release->{}', 'press->{}', "release->{'_placement_grip': False}"]
+   Ansicht: _selected_feature None Arten ['hole', 'slot'] vorhanden ['cone_1', 'cone_2', 'cone_3', 'cone_4', 'face_1', 'face_10', 'face_11', 'face_1191']
+   Merkmal: None
+   gesperrt: True knöpfe bleiben: True gewollt: False
+B nach dem Zug zum Langloch: gewählt=None fluss=None begonnen=None bild=None linien=None umriss=None langloch_wartet=False knoepfe=False langlochmerkmal=None schritte=['load', 'translate_object']
+   Maße: []
+   Signale: ["press->{'_placement_grip': False}", 'release->{}']
+C nach cameraMoved: gewählt=None fluss=None begonnen=None bild=None linien=None umriss=None langloch_wartet=False knoepfe=False langlochmerkmal=None schritte=['load', 'translate_object']
+   Maße: []
+   Signale: []
+Geschlossene Dialoge: []

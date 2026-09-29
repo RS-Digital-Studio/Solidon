@@ -1,0 +1,5 @@
+R 13, Rundung 0: Kanten [9, 10]
+  mesh ausgeliefert: Kette ['hole_2', 'cone_1', 'hole_1']; versetzen 5 mm +0.696, entfernen +631.502 | ['Rand max 0.0277', 'Rand max 0.0277', 'Rand max 0.0277']
+  mesh ohne Füllung: Kette ['hole_2', 'cone_1', 'hole_1']; versetzen 5 mm +0.696, entfernen +631.502 | ['Rand max 0.0277', 'Rand max 0.0277', 'Rand max 0.0277']
+  brep ausgeliefert: Kette ['hole_2', 'cone_1', 'hole_1']; versetzen 5 mm -0.000, entfernen +632.111 | []
+  brep ohne Füllung: Kette ['hole_2', 'cone_1', 'hole_1']; versetzen 5 mm -0.000, entfernen +632.111 | []

@@ -245,6 +245,14 @@ class FieldCutParams(BaseParams):
         unit="mm",
         doc=_("Abstand zwischen den Mittelpunkten benachbarter Öffnungen."),
     )
+    # **Vor der Tiefe und vorn**: Der Haken schaltet sie aus
+    # (``depends_on``); hinter der Klappe fand ihn nicht, wer durchschneiden
+    # wollte, und tippte eine große Tiefe ein.
+    through: bool = param(
+        title=_("Durchgehend"),
+        default=False,
+        doc=_("Schneidet durch die ganze Höhe des Körpers — die Tiefe zählt dann nicht."),
+    )
     depth: float = param(
         title=_("Tiefe"),
         default=4.0,
@@ -295,12 +303,6 @@ class FieldCutParams(BaseParams):
         placement="advanced",
         depends_on=("shape", ("slot",)),
         doc=_("Gesamtlänge des Langlochs einschließlich seiner runden Enden."),
-    )
-    through: bool = param(
-        title=_("Durchgehend"),
-        default=False,
-        placement="advanced",
-        doc=_("Schneidet durch die ganze Höhe des Körpers — die Tiefe zählt dann nicht."),
     )
     z: float = param(
         title=_("Schnittoberkante"),

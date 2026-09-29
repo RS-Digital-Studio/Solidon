@@ -111,15 +111,10 @@ def fade_in(widget: QWidget, *, duration: int = SHORT_MS) -> None:
     animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
 
-def fade_out(widget: QWidget, *, duration: int = SHORT_MS, hide: bool = True) -> None:
-    """Blendet ein Widget aus und versteckt es danach.
-
-    ``hide=False`` lässt es stehen — für den Fall, dass etwas anderes an seiner
-    Stelle erscheint und die Lücke sonst aufblitzt.
-    """
+def fade_out(widget: QWidget, *, duration: int = SHORT_MS) -> None:
+    """Blendet ein Widget aus und versteckt es danach."""
     if not animations_enabled():
-        if hide:
-            widget.setVisible(False)
+        widget.setVisible(False)
         return
     effect = _opacity(widget)
     animation = QPropertyAnimation(effect, b"opacity", widget)
@@ -129,8 +124,7 @@ def fade_out(widget: QWidget, *, duration: int = SHORT_MS, hide: bool = True) ->
     animation.setEndValue(0.0)
 
     def done() -> None:
-        if hide:
-            widget.setVisible(False)
+        widget.setVisible(False)
         widget.setGraphicsEffect(None)  # type: ignore[arg-type]
 
     animation.finished.connect(done)
@@ -160,40 +154,6 @@ def switch(
         fade_in(target, duration=duration)
 
 
-def reveal(widget: QWidget, visible: bool, *, duration: int = SHORT_MS) -> None:
-    """Zeigt oder verbirgt ein Widget — mit Blende, aber ohne Umbau.
-
-    Bewusst keine Höhenanimation: Ein Widget, das seine Höhe über mehrere Bilder
-    ändert, verschiebt alles darunter mit, und im Viewport daneben bedeutet das
-    ein Neuzeichnen je Bild. Für eine Werkzeugleiste ist die Blende die
-    ruhigere und die billigere Bewegung.
-    """
-    if visible:
-        fade_in(widget, duration=duration)
-    else:
-        fade_out(widget, duration=duration)
-
-
-def flash(widget: QWidget, *, duration: int = MEDIUM_MS) -> None:
-    """Hebt ein Widget kurz hervor, ohne es zu bewegen.
-
-    Für den Fall, dass etwas an einer Stelle erscheint, auf die gerade niemand
-    sieht — ein neuer Befund im Prüfbericht etwa. Die Aufmerksamkeit holt hier
-    die Bewegung; **was** dort steht, sagt weiterhin der Text daneben.
-    """
-    if not animations_enabled():
-        return
-    effect = _opacity(widget)
-    animation = QPropertyAnimation(effect, b"opacity", widget)
-    animation.setDuration(duration)
-    animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-    animation.setKeyValueAt(0.0, 1.0)
-    animation.setKeyValueAt(0.45, 0.35)
-    animation.setKeyValueAt(1.0, 1.0)
-    animation.finished.connect(lambda: widget.setGraphicsEffect(None))  # type: ignore[arg-type]
-    animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
-
-
 def mix(start: Sequence[float], end: Sequence[float], fraction: float) -> tuple[float, ...]:
     """Mischt zwei Farben — ``fraction`` 0 ist ``start``, 1 ist ``end``.
 
@@ -213,7 +173,6 @@ def tween(
     *,
     on_step: Callable[[float], None],
     duration: int = ACCENT_MS,
-    curve: QEasingCurve.Type = CURVE,
     on_done: Callable[[], None] | None = None,
 ) -> QVariantAnimation | None:
     """Läuft von 0 auf 1 und ruft ``on_step`` bei jedem Bild.
@@ -239,7 +198,7 @@ def tween(
         return None
     animation = QVariantAnimation(owner)
     animation.setDuration(duration)
-    animation.setEasingCurve(curve)
+    animation.setEasingCurve(CURVE)
     animation.setStartValue(0.0)
     animation.setEndValue(1.0)
     animation.valueChanged.connect(lambda value: on_step(float(value)))
@@ -263,9 +222,7 @@ __all__ = [
     "animations_enabled",
     "fade_in",
     "fade_out",
-    "flash",
     "mix",
-    "reveal",
     "switch",
     "tween",
 ]

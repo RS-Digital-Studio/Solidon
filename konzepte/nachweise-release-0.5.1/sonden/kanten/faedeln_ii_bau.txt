@@ -1,0 +1,209 @@
+        if fitted is not None:
+            selected_edges, narrow = fitted
+    try:
+        if rounded:
+            solid = edit.fillet(
+                cast(Solid, source.mesh),
+                size,
+                choice,
+                keys,
+                selected_edges=selected_edges,
+                rings_by_plane=rings_by_plane,
+                cancelled=cancelled,
+                law=law,
+            )
+        else:
+            solid = edit.chamfer(
+                cast(Solid, source.mesh),
+                size,
+                choice,
+                keys,
+                selected_edges=selected_edges,
+                rings_by_plane=rings_by_plane,
+                shape=shape,
+                cancelled=cancelled,
+            )
+    except GeometryError as refused:
+        explained = _why_it_does_not_fit(
+            source,
+            size,
+            choice,
+            keys,
+            asked,
+            rounded,
+            narrowest_face(profile),
+            shape,
+            law,
+            rings_by_plane=rings_by_plane,
+        )
+        if explained is None:
+            raise
+        raise explained from refused
+=====
+        if fitted is not None:
+            selected_edges, narrow = fitted
+
+    def build(indices: Sequence[int] | None, *, wall_checked: bool = False) -> Solid:
+        if rounded:
+            return edit.fillet(
+                cast(Solid, source.mesh),
+                size,
+                choice,
+                keys,
+                selected_edges=indices,
+                rings_by_plane=rings_by_plane,
+                cancelled=cancelled,
+                law=law,
+                wall_checked=wall_checked,
+            )
+        return edit.chamfer(
+            cast(Solid, source.mesh),
+            size,
+            choice,
+            keys,
+            selected_edges=indices,
+            rings_by_plane=rings_by_plane,
+            shape=shape,
+            cancelled=cancelled,
+            wall_checked=wall_checked,
+        )
+
+    try:
+        solid = build(selected_edges)
+    except GeometryError as refused:
+        built = None
+        if asked is None and not keys and choice != "named":
+            built = _buildable_part(
+                cast(Solid, source.mesh),
+                size,
+                choice,
+                selected_edges,
+                build,
+                rings_by_plane=rings_by_plane,
+                rounded=rounded,
+                cancelled=cancelled,
+            )
+        if built is None:
+            explained = _why_it_does_not_fit(
+                source,
+                size,
+                choice,
+                keys,
+                asked,
+                rounded,
+                narrowest_face(profile),
+                shape,
+                law,
+                rings_by_plane=rings_by_plane,
+            )
+            if explained is None:
+                raise
+            raise explained from refused
+        solid, dropped = built
+        narrow.append(dropped)
+=====
+def _group_that_fits(
+=====
+#: Wie oft eine Gruppe am exakten Körper nach einer Absage von OpenCASCADE
+#: höchstens neu gebaut wird, um die Kanten zu finden, die sich bauen lassen.
+#: Ein Bau ohne Wandkarte kostet an einem Kundenteil 0,02 bis 0,3 s; länger als
+#: einige Sekunden soll eine Vorschau darauf nicht warten.
+BUILD_ATTEMPTS: Final = 24
+
+
+def _buildable_part(
+    solid: Any,
+    size: float,
+    choice: EdgeChoice,
+    candidates: Sequence[int] | None,
+    build: Callable[..., Any],
+    *,
+    rounded: bool,
+    rings_by_plane: bool,
+    cancelled: CancelToken,
+) -> tuple[Any, Finding] | None:
+    """Was sich von einer Gruppe am exakten Körper bauen lässt, wenn der Bau im Ganzen scheitert.
+
+    **Die Gruppe nimmt, was sich bearbeiten lässt** (RM-279 (ii)), auch dort,
+    wo nicht die Flächen zu schmal sind, sondern OpenCASCADE ablehnt: an einer
+    Kante, deren Trägerwand nicht dicker ist als das Maß (dieselbe Messung wie
+    ``brep.edit._fits_the_wall``, eine Wandkarte für alle,
+    ``brep.edit.edge_walls``), oder wo zwei Rundungen an einer Ecke keine Form
+    finden. Die dünne Wand fällt zuerst heraus; den Rest baut die Funktion
+    halbierend auf — was allein nicht geht, fällt heraus, höchstens
+    :data:`BUILD_ATTEMPTS` Bauten lang. Die ausgelassenen nennt ein Befund.
+    ``None``, wenn nichts übrig bleibt oder nichts ausgelassen wird.
+    """
+    from app.core.brep import edit
+
+    everything = edit.edges_of(solid)
+    by_index = dict(zip(edit.native_edge_indices(solid, everything), everything, strict=True))
+    if candidates is None:
+        candidates = edit.native_edge_indices(
+            solid, edit.choose(solid, choice, rings_by_plane=rings_by_plane)
+        )
+    pending = [index for index in candidates if index in by_index]
+    walls = edit.edge_walls(solid, [by_index[index] for index in pending], cancelled=cancelled)
+    dropped = [index for index, wall in zip(pending, walls, strict=True) if wall <= size]
+    pending = [index for index, wall in zip(pending, walls, strict=True) if wall > size]
+    accepted: list[int] = []
+    result: list[Any] = []
+    attempts = 0
+
+    def grow(part: list[int], *, known_to_fail: bool = False) -> None:
+        nonlocal attempts
+        if not part:
+            return
+        if not known_to_fail:
+            if attempts >= BUILD_ATTEMPTS:
+                dropped.extend(part)
+                return
+            attempts += 1
+            try:
+                result[:] = [build((*accepted, *part), wall_checked=True)]
+            except GeometryError:
+                pass
+            else:
+                accepted.extend(part)
+                return
+        if len(part) == 1:
+            dropped.extend(part)
+            return
+        half = len(part) // 2
+        grow(part[:half])
+        grow(part[half:])
+
+    # Ohne dünne Wand ist genau dieser Satz eben gescheitert.
+    grow(pending, known_to_fail=not dropped)
+    if not accepted or not result or not dropped:
+        return None
+    first = edit.edge_points(by_index[dropped[0]])
+    place = first[len(first) // 2]
+    finding = Finding(
+        code="edges.not_built",
+        severity="warning",
+        message=(
+            _(
+                "Einige Kanten dieser Auswahl sind nicht verrundet: Der exakte Körper lässt "
+                "die Rundung dort nicht zu, meist weil eine Wand daneben zu dünn ist oder "
+                "die Rundung an eine Nachbarkante stößt. Die übrigen Kanten sind verrundet. "
+                "Wählen Sie einen kleineren Radius oder diese Kanten einzeln."
+            )
+            if rounded
+            else _(
+                "Einige Kanten dieser Auswahl sind nicht gefast: Der exakte Körper lässt "
+                "die Fase dort nicht zu, meist weil eine Wand daneben zu dünn ist oder die "
+                "Fase an eine Nachbarkante stößt. Die übrigen Kanten sind gefast. Wählen "
+                "Sie eine kleinere Breite oder diese Kanten einzeln."
+            )
+        ),
+        values={"skipped": len(dropped), "worked": len(accepted), "size_mm": round(size, 3)},
+        location=(float(place[0]), float(place[1]), float(place[2])),
+        # Regel 17: der Ort, und das Maß steht im Schritt.
+        suggestions=(SHOW_LOCATION, CORRECT_INPUT),
+    )
+    return result[0], finding
+
+
+def _group_that_fits(
+=====

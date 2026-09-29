@@ -42,7 +42,6 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 from app.core.errors import CANCEL, SUPPRESS_ALONG, AmbiguityError, UserError
-from app.core.log import get_logger
 from app.core.perceive.matching import (
     AXIS_TOLERANCE,
     MATCH_THRESHOLD,
@@ -78,8 +77,6 @@ from app.core.types import (
     Transaction,
 )
 from app.i18n import TranslatableText, _
-
-_log = get_logger(__name__)
 
 #: Wie oft ein Vorschlag nach einem gefolgten Verweis neu gerechnet wird.
 #:

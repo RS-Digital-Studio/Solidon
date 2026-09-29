@@ -1,0 +1,30 @@
+START 04:14:15 in wt-revcode: python %USERPROFILE%/AppData/Local/Temp/claude/F--3D-Druck/b6630b7a-5be6-4030-a178-b64393e0aba1/scratchpad/probe_bounded.py
+APP F:\3D Druck.review-051\wt-revcode\app\__init__.py
+PROBE-SPIN NumberSpin '150' enter {'focus': True, 'typed_shown': '15', 'after_text': '15,00', 'value': 15.0, 'changed': [15.0], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '150' focus_out {'focus': True, 'typed_shown': '15', 'after_text': '15,00', 'value': 15.0, 'changed': [15.0], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '12,345' enter {'focus': True, 'typed_shown': '12,34', 'after_text': '12,34', 'value': 12.34, 'changed': [12.34], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '12,345' focus_out {'focus': True, 'typed_shown': '12,34', 'after_text': '12,34', 'value': 12.34, 'changed': [12.34], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '0,125' enter {'focus': True, 'typed_shown': '0,12', 'after_text': '0,12', 'value': 0.12, 'changed': [0.12], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '0,125' focus_out {'focus': True, 'typed_shown': '0,12', 'after_text': '0,12', 'value': 0.12, 'changed': [0.12], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '90' enter {'focus': True, 'typed_shown': '90', 'after_text': '90,00', 'value': 90.0, 'changed': [90.0], 'refused': [], 'refusal': ''}
+PROBE-SPIN NumberSpin '90' focus_out {'focus': True, 'typed_shown': '90', 'after_text': '90,00', 'value': 90.0, 'changed': [90.0], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '150' enter {'focus': True, 'typed_shown': '150', 'after_text': '150', 'value': 40.0, 'changed': [], 'refused': [150.0], 'refusal': '150,00 liegt über der Obergrenze 100,00.'}
+PROBE-SPIN BoundedSpin '150' focus_out {'focus': True, 'typed_shown': '150', 'after_text': '40,00', 'value': 40.0, 'changed': [], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '12,345' enter {'focus': True, 'typed_shown': '12,345', 'after_text': '40,00', 'value': 40.0, 'changed': [], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '12,345' focus_out {'focus': True, 'typed_shown': '12,345', 'after_text': '40,00', 'value': 40.0, 'changed': [], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '0,125' enter {'focus': True, 'typed_shown': '0,125', 'after_text': '40,00', 'value': 40.0, 'changed': [], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '0,125' focus_out {'focus': True, 'typed_shown': '0,125', 'after_text': '40,00', 'value': 40.0, 'changed': [], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '90' enter {'focus': True, 'typed_shown': '90', 'after_text': '90,00', 'value': 90.0, 'changed': [90.0], 'refused': [], 'refusal': ''}
+PROBE-SPIN BoundedSpin '90' focus_out {'focus': True, 'typed_shown': '90', 'after_text': '90,00', 'value': 90.0, 'changed': [90.0], 'refused': [], 'refusal': ''}
+PROBE-OPTIONAL-FIELDS [('resize_hole', 'x', -1000.0), ('resize_hole', 'y', -1000.0), ('resize_hole', 'z', -1000.0), ('resize_hole', 'depth', 0.0), ('sketch_sweep_cut', 'z', -1000.0), ('slot_hole', 'x', -1000.0), ('slot_hole', 'y', -1000.0), ('slot_hole', 'z', -1000.0), ('slot_hole', 'diameter', 0.2)]
+PROBE-OPTIONAL resize_hole depth schema-min=0.0 spin-min=-0.01 '-2,00 mm liegt unter der Untergrenze -0,01 mm.' '-2,00 mm liegt unter der Untergrenze -0,01 mm.'
+PROBE-OPTIONAL slot_hole diameter schema-min=0.2 spin-min=0.19 '0,10 mm liegt unter der Untergrenze 0,19 mm.' '0,10 mm liegt unter der Untergrenze 0,19 mm.'
+PROBE-FX-ON '4000 mm liegt über der Obergrenze 1000 mm.' '4000 mm liegt über der Obergrenze 1000 mm.'
+PROBE-FX-OFF schema-max=1000.0 spin=1000.0 value=1000.0 refusal='' hint='4000 mm liegt über der Obergrenze 1000 mm.' visible=False
+PROBE-COUNT-OPS [('duplicate_object', 'count'), ('load_step', 'bodies'), ('pattern', 'count'), ('split_bodies', 'count')]
+PROBE-COUNT duplicate_object CountField max=100
+PROBE-COUNT duplicate_object text='105' valid=True hint='105 liegt über der Obergrenze 100.' button_enabled=True tooltip='' can_accept=False
+PROBE-COUNT load_step StepBodiesField max=None
+PROBE-DONE
+EXIT python=0
+ENDE 04:14:20

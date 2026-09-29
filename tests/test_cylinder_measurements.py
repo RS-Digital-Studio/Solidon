@@ -76,7 +76,7 @@ def test_the_circle_measure_and_the_actual_polygon_band_are_separate(
     assert fit.radial_min == pytest.approx(radius * math.cos(math.pi / sections), abs=1e-9)
     assert fit.radial_max == pytest.approx(radius, abs=1e-9)
     assert fit.residual < 1e-9
-    radial = radial_cylinder(body, fit, patch)
+    radial = radial_cylinder(body, patch)
     assert radial is not None
     assert radial.radius == pytest.approx(radius, abs=1e-9)
     assert radial.fit_error == pytest.approx(fit.fit_error, abs=1e-9)
@@ -105,7 +105,7 @@ def test_rigid_motion_and_uneven_triangulation_preserve_the_measure(
     assert fit.centre == pytest.approx(shift, abs=1e-6)
     assert fit.radial_min == pytest.approx(15.0 * math.cos(math.pi / 24), abs=1e-6)
     assert fit.radial_max == pytest.approx(15.0, abs=1e-6)
-    assert radial_cylinder(body, fit, list(range(len(body.faces)))) is not None
+    assert radial_cylinder(body, list(range(len(body.faces)))) is not None
 
 
 @pytest.mark.parametrize("angle,sections", ((45.0, 6), (90.0, 12), (180.0, 24), (270.0, 36)))
@@ -125,7 +125,7 @@ def test_partial_arcs_use_their_real_facets_and_keep_the_radial_edit_limit(
     half_step = math.radians(angle / sections) / 2.0
     assert fit.radial_min == pytest.approx(7.5 * math.cos(half_step), abs=1e-9)
     assert fit.radial_max == pytest.approx(7.5, abs=1e-9)
-    radial = radial_cylinder(body, fit, patch)
+    radial = radial_cylinder(body, patch)
     assert (radial is not None) is (angle >= 180.0)
 
 
@@ -250,15 +250,13 @@ def test_cylinder_measurement_checks_an_existing_cancellation(entry: str) -> Non
 
     body = cylinder_mantle(3.0, 48)
     patch = list(range(len(body.faces)))
-    fit = fit_cylinder(body, patch)
-    assert fit is not None
     signal = CancelSignal()
     signal.cancel()
     with pytest.raises(OperationCancelled):
         if entry == "fit":
             fit_cylinder(body, patch, check_cancelled=signal.raise_if_cancelled)
         else:
-            radial_cylinder(body, fit, patch, check_cancelled=signal.raise_if_cancelled)
+            radial_cylinder(body, patch, check_cancelled=signal.raise_if_cancelled)
 
 
 @pytest.mark.parametrize(
@@ -457,7 +455,7 @@ def test_a_cylindrical_remainder_with_a_nonplanar_notch_is_not_a_complete_radial
 
     assert fit is not None and fit.good
     assert fit.radius == pytest.approx(12.0, abs=1e-9)
-    assert radial_cylinder(source, fit, patch) is None
+    assert radial_cylinder(source, patch) is None
 
 
 # --- Längs unterteilte Zylindermäntel bleiben als ein Merkmal erkennbar ---------------

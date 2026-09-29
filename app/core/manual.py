@@ -1070,7 +1070,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Geometrie verlangt, schlägt die Analyse mit Begründung vor, etwa Stützen "
             "unter dem gemessenen Überhang oder eine Mindestzeit je Schicht bei einem "
             "spitz zulaufenden Teil.\n\n"
-            "**Welcher Slicer rechnet, steht unter „Profile des Slicers“.** Bei "
+            "**Welcher Slicer rechnet, steht ganz oben, vor dem Drucker.** Bei "
             "PrusaSlicer und der Orca-Familie (OrcaSlicer, Bambu Studio, ElegooSlicer, "
             "Creality Print) kommen Drucker, Prozess und Filament aus dem Slicer, und "
             "Solidon legt nur Ihre Änderungen und übernommene Vorschläge darauf; fehlt "

@@ -561,7 +561,8 @@ class _CapturedError(Exception):
 #: Wie weit der echte Lauf am Wächterfall um das Budget streut, in
 #: Auswertungen. Gemessen: 97 hier, 98 unter Linux und 100 ohne Antwort unter
 #: Windows in der CI, 97 bis 105 mit Luft im Budget unter dem Rauschen aus
-#: ``test_platform_identity`` (``sonden/cifix``, Paket CI-Fehlschläge 0.5.1).
+#: ``test_platform_identity`` (``konzepte/nachweise-release-0.5.1/sonden/cifix/``,
+#: Paket CI-Fehlschläge 0.5.1).
 GUARD_EDGE = 10
 
 #: Wie viele feste Rauschmuster (``platform_noise(pattern)``) neben der
@@ -574,7 +575,8 @@ GUARD_EDGE = 10
 #: der sie gemessen wurde. Jedes Muster verschiebt die plattformabhängigen
 #: Rechnungen um ein ULP, wie eine andere Maschine es täte, und zwar **auf**
 #: der Rechnung der laufenden Maschine: Jede Maschine zieht so ihre eigenen
-#: Lagen um dieselbe Kante. Gemessen an 49 Lagen (``sonden/cifix2``): ohne
+#: Lagen um dieselbe Kante. Gemessen an 49 Lagen
+#: (``konzepte/nachweise-release-0.5.1/sonden/cifix2/``): ohne
 #: Abstände 15 falsche Neins, mit allen dreien keines, jeder Abstand allein
 #: verhindert 11 bis 15 davon.
 GUARD_PATTERNS = 48

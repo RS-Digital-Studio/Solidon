@@ -698,7 +698,8 @@ def test_a_mixed_corner_leaves_every_corner_away_from_its_edges_in_place(
     liegen genau in dessen drei Ebenen). Bis zur Durchsicht 0.5.1 kam der ganze
     Körper von dort gerundet zurück: An diesem L-Profil mit einer Kugel an der
     fernen Ecke standen danach 481 von 511 Ecken abseits der Kanten woanders,
-    gedreht alle (RM-274, ``sonden/bohren/p16_eckrahmen.py``). Jetzt bekommt
+    gedreht alle (RM-274,
+    ``konzepte/nachweise-release-0.5.1/sonden/bohren/p16_eckrahmen.py``). Jetzt bekommt
     jede Ecke, die der Kern unverändert durchreicht, ihren Weltort zurück.
     """
     raw = _notched_block()

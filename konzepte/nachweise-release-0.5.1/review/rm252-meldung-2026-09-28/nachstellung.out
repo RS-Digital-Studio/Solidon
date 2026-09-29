@@ -1,0 +1,8 @@
+Original: {'enable_support': '0', 'support_type': 'tree(auto)', 'printer_model': 'Elegoo Centauri Carbon 2'}
+elegoo  original         Rückgabe 0x00000000, G-Code ['plate_1.gcode'], 12 s, Ende []
+orca    original         Rückgabe 0xFFFFFF9B, G-Code [], 7 s, Ende ['Slic3r::CLI::run found error, exit']
+elegoo  stuetzen_baum    Rückgabe 0x00000000, G-Code ['plate_1.gcode'], 27 s, Ende []
+orca    stuetzen_baum    Rückgabe 0xFFFFFFCE, G-Code [], 1 s, Ende ['Slic3r::CLI::run found error, exit']
+elegoo  stuetzen_normal  Rückgabe 0x00000000, G-Code ['plate_1.gcode'], 20 s, Ende []
+orca    stuetzen_normal  Rückgabe 0xFFFFFF9B, G-Code [], 13 s, Ende ['Slic3r::CLI::run found error, exit']
+PY-EXIT=0

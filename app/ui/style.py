@@ -307,6 +307,32 @@ def fit_dialog_to_screen(dialog: QWidget) -> None:
         dialog.move(x, y)
 
 
+def fit_height_after_show(dialog: QDialog) -> None:
+    """Die Aufmachhöhe einen Ereignisumlauf nach dem ersten Anzeigen nachmessen.
+
+    Vor dem Anzeigen kennt Qt weder Stylesheet noch endgültige Breite, und ein
+    umbrochener Satz meldet dann mehr Zeilen, als er in der echten Breite
+    braucht: Der Unterstützen-Dialog öffnete 618 Punkte hoch für 541 Punkte
+    Inhalt, der Dateiweg der Freischaltung 276 für 244 — die Differenz stand
+    als leere Fläche über den Knöpfen. Nachgemessen wird einmal, danach gehört
+    die Höhe dem Kunden. Aufzurufen aus ``showEvent``.
+    """
+    if dialog.property("heightFitted"):
+        return
+    dialog.setProperty("heightFitted", True)
+
+    def fit() -> None:
+        layout = dialog.layout()
+        if layout is not None:
+            layout.activate()
+        dialog.resize(
+            dialog.width(), max(dialog.minimumSizeHint().height(), dialog.sizeHint().height())
+        )
+        fit_dialog_to_screen(dialog)
+
+    QTimer.singleShot(0, dialog, fit)
+
+
 def make_primary(button: QPushButton) -> QPushButton:
     """Macht einen Knopf zum Hauptknopf — und breit genug für seine eigene
     Beschriftung.
@@ -617,6 +643,82 @@ def arrow_files(theme: Theme) -> dict[str, str] | None:
         return None
 
 
+#: Der Haken in Listen und Bäumen, als Zeichnung ohne Datei im Paket.
+#:
+#: Dieselbe Form wie das Ankreuzfeld eines Dialogs — ein Kästchen von
+#: ``ROOMY`` Punkten in der Feldfläche, das Häkchen in der Textfarbe —, damit
+#: ein Haken in einer Liste nicht anders aussieht als einer daneben.
+_CHECK_BOX: Final = (
+    '<rect x="0.5" y="0.5" width="11" height="11" rx="2" fill="{base}" stroke="{edge}"/>'
+)
+_CHECK_SVG: Final = {
+    "unchecked": _CHECK_BOX,
+    "checked": _CHECK_BOX + '<path d="M2.8 6.3 L5 8.5 L9.3 3.6" fill="none" stroke="{mark}" '
+    'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    "indeterminate": _CHECK_BOX
+    + '<path d="M3 6 H9" stroke="{mark}" stroke-width="1.6" stroke-linecap="round"/>',
+}
+
+
+def check_files(theme: Theme) -> dict[str, str] | None:
+    """Legt die Haken der Listen als Dateien ab und nennt ihre Pfade.
+
+    **Warum überhaupt Bilder.** In einer markierten Zeile setzt die Regel
+    ``::item:selected`` die Schriftfarbe auf ``highlight_text``, und Fusion
+    zeichnet das Häkchen des Listenhakens in genau dieser Farbe — im dunklen
+    Thema dunkel auf das dunkle Kästchen. Ein gesetzter Haken in der
+    gewählten Zeile sah damit aus wie ein leeres schwarzes Kästchen, während
+    darunter „4 von 4 Körpern“ stand; in den übrigen Zeilen war das Häkchen
+    ein um ein Fünftel abgedunkeltes Grau und wirkte gesperrt. Mit eigenem
+    Bild ist der Haken in jeder Zeile derselbe.
+
+    Ablage und Rückfall wie bei :func:`arrow_files`: im Cache, und ohne
+    Schreibrecht ``None`` — dann zeichnet Qt wieder selbst.
+    """
+    from app.core.paths import ensure_dir, user_cache_dir
+
+    colours = THEMES[theme]
+    try:
+        folder = ensure_dir(user_cache_dir() / "style")
+        paths = {}
+        for state, drawing in _CHECK_SVG.items():
+            for locked in (False, True):
+                edge = colours["disabled"] if locked else colours["line"]
+                mark = colours["disabled"] if locked else colours["text"]
+                name = f"{state}-disabled" if locked else state
+                target = folder / f"check-{name}-{theme}.svg"
+                body = drawing.format(base=colours["base"], edge=edge, mark=mark)
+                target.write_text(
+                    f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">{body}</svg>',
+                    encoding="utf-8",
+                )
+                paths[name] = target.as_posix()
+        return paths
+    except OSError as problem:
+        _log.info("Die Haken der Listen ließen sich nicht ablegen: %s", problem)
+        return None
+
+
+def _check_rules(checks: dict[str, str] | None) -> str:
+    """Die Stylesheet-Zeilen, die den Listenhaken ihre Bilder geben."""
+    if not checks:
+        return ""
+    views = ("QTreeView", "QListView", "QTableView")
+
+    def selector(state: str) -> str:
+        return ", ".join(f"{view}::indicator{state}" for view in views)
+
+    return f"""
+{selector("")} {{ width: {ROOMY}px; height: {ROOMY}px; }}
+{selector(":unchecked")} {{ image: url("{checks["unchecked"]}"); }}
+{selector(":checked")} {{ image: url("{checks["checked"]}"); }}
+{selector(":indeterminate")} {{ image: url("{checks["indeterminate"]}"); }}
+{selector(":unchecked:disabled")} {{ image: url("{checks["unchecked-disabled"]}"); }}
+{selector(":checked:disabled")} {{ image: url("{checks["checked-disabled"]}"); }}
+{selector(":indeterminate:disabled")} {{ image: url("{checks["indeterminate-disabled"]}"); }}
+"""
+
+
 def _arrow_rules(arrows: dict[str, str] | None, line: str = "", hover: str = "") -> str:
     """Die Stylesheet-Zeilen, die die Pfeile ins Zahlenfeld und in die
     Combobox setzen.
@@ -667,12 +769,18 @@ QComboBox::down-arrow {{
 """
 
 
-def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None = None) -> str:
+def stylesheet(
+    theme: Theme,
+    base_point_size: int,
+    arrows: dict[str, str] | None = None,
+    checks: dict[str, str] | None = None,
+) -> str:
     """Das Stylesheet der Anwendung, gefüllt aus Thema und Schriftgröße.
 
     ``arrows`` sind die Pfeile des Zahlenfelds, siehe :func:`arrow_files`. Ohne
     sie bleiben die Auf- und Ab-Knöpfe leer — für einen Test, der nur die
-    Farben liest, ist das gleichgültig.
+    Farben liest, ist das gleichgültig. ``checks`` sind die Haken der Listen
+    (:func:`check_files`); ohne sie zeichnet Qt sie selbst.
     """
     colours = THEMES[theme]
     sizes = type_scale(base_point_size)
@@ -1109,6 +1217,7 @@ QListWidget#tileGrid::item:selected {{
     border-radius: {SPACE}px;
 }}
 QListWidget#tileGrid::item:hover {{ background: {hover}; border-radius: {SPACE}px; }}
+{_check_rules(checks)}
 
 /* --- Reiter ------------------------------------------------------------ */
 QTabWidget::pane {{ border: 1px solid {line}; border-radius: {SPACE}px; top: -1px; }}
@@ -1316,4 +1425,6 @@ QProgressBar::chunk:disabled {{ background: {disabled}; }}
 def apply_style(application: QApplication, theme: Theme) -> None:
     """Legt das Stylesheet über die Anwendung. Wirkt sofort und überall."""
     font = application.font()
-    application.setStyleSheet(stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme)))
+    application.setStyleSheet(
+        stylesheet(theme, max(font.pointSize(), 1), arrow_files(theme), check_files(theme))
+    )

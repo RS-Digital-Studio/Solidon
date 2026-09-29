@@ -204,6 +204,59 @@ def test_the_archive_keeps_a_directory_of_what_it_holds() -> None:
     )
 
 
+#: Ein Verweis mit Sprungmarke: ``](#marke)`` oder ``](DATEI.md#marke)``.
+_JUMP = re.compile(r"\]\((?:(ROADMAP(?:-ARCHIV)?\.md))?#([^)\s]+)\)")
+
+
+def _targets(text: str) -> set[str]:
+    """Jede Marke, die ein Verweis in dieser Datei treffen kann.
+
+    Ausdrückliche ``<a id="…">`` und die Marken der Überschriften; eine
+    wiederholte Überschrift bekommt wie im Betrachter ``-1``, ``-2`` angehängt.
+    """
+    found = set(re.findall(r'<a id="([^"]+)"></a>', text))
+    seen: Counter[str] = Counter()
+    for line in text.splitlines():
+        heading = re.match(r"#{1,6}\s+(.*?)\s*$", line)
+        if heading:
+            mark = _anchor(heading.group(1))
+            found.add(mark if not seen[mark] else f"{mark}-{seen[mark]}")
+            seen[mark] += 1
+    return found
+
+
+def test_every_jump_between_roadmap_and_archive_lands() -> None:
+    """Ein Verweis auf einen Punkt springt dorthin, wo der Punkt heute steht.
+
+    Wandert ein Punkt ins Archiv, zeigen die Verweise auf ``ROADMAP.md#rm-…``
+    ins Leere — nicht mit einem Fehler, sondern an den Kopf der Datei, und wer
+    klickt, glaubt den Punkt verschwunden. Am 29.09.2026 waren es 54 solcher
+    Marken, fast alle im Archiv. Geprüft werden beide Dateien in beide
+    Richtungen, dazu Marken in die eigene Datei.
+    """
+    texts = {
+        ROADMAP.name: ROADMAP.read_text(encoding="utf-8"),
+        ARCHIVE.name: ARCHIVE.read_text(encoding="utf-8"),
+    }
+    targets = {name: _targets(text) for name, text in texts.items()}
+    jumps = 0
+    astray: list[str] = []
+    for name, text in texts.items():
+        for number, line in enumerate(text.splitlines(), 1):
+            for match in _JUMP.finditer(line):
+                jumps += 1
+                target, mark = match.group(1) or name, match.group(2)
+                if mark not in targets[target]:
+                    astray.append(f"{name}:{number} → {target}#{mark}")
+
+    assert jumps > 100, f"nur {jumps} Sprungmarken gefunden — der Test prüft dann nichts"
+    assert not astray, (
+        f"{len(astray)} Verweise springen ins Leere; ein archivierter Punkt steht "
+        f"unter {ARCHIVE.name}#…, ein offener unter {ROADMAP.name}#…:\n"
+        + "\n".join(f"  {entry}" for entry in astray[:10])
+    )
+
+
 def test_the_existing_support_mailbox_is_not_listed_as_open_work() -> None:
     """Ein bestätigtes Postfach bleibt nicht als vermeintliche Aufgabe stehen."""
     text = ROADMAP.read_text(encoding="utf-8")

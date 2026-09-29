@@ -2080,7 +2080,7 @@ class History:
             order = _moved_order(operations, chosen, before)
             if [entry.id for entry in order] == [entry.id for entry in operations]:
                 continue
-            targets.append(MoveTarget(before, _order_problem(order, needs, self._registry)))
+            targets.append(MoveTarget(before, _order_problem(order, needs)))
         return tuple(targets)
 
     def plan_move(
@@ -2120,9 +2120,7 @@ class History:
                 constraint="unchanged",
                 suggestions=(CANCEL,),
             )
-        problem = _order_problem(
-            order, dependencies.needs if dependencies is not None else (), self._registry
-        )
+        problem = _order_problem(order, dependencies.needs if dependencies is not None else ())
         if problem is not None:
             raise problem
         self._reseed()
@@ -2970,9 +2968,7 @@ def _moved_order(
     return [*staying[:at], *moving, *staying[at:]]
 
 
-def _order_problem(
-    order: Sequence[Operation], needs: Sequence[StepNeed], registry: Registry
-) -> UserError | None:
+def _order_problem(order: Sequence[Operation], needs: Sequence[StepNeed]) -> UserError | None:
     """Warum diese Folge nicht geht — oder ``None`` (P7.2).
 
     Drei Fälle, keiner wird umgebogen: ein Schritt vor dem, der seinen Körper

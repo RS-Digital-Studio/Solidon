@@ -9,6 +9,7 @@ import sys
 import pytest
 
 from app.core import changes
+from app.core.markup import inline
 from app.i18n.catalog import available_languages
 from tools import make_changelog
 from tools.make_changelog import (
@@ -88,7 +89,8 @@ def test_every_customer_point_reaches_the_page(language: str) -> None:
             if group.title:
                 assert f"<h3>{group.title}</h3>" in text
             for point in group.points:
-                assert f"<li>{point}</li>" in text
+                # Ausgezeichnet wie in der Anwendung: kursiv statt Sternchen.
+                assert f"<li>{html.unescape(inline(point))}</li>" in text
 
 
 def test_the_page_works_as_a_full_history_without_script() -> None:

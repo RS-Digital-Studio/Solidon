@@ -157,7 +157,8 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   deklarierte Plätze neutral, nie erbt einer über Werkzeug null eine Spule;
   `slots_for_object` nimmt nur ohne Liste die alte Körperangabe, die eine volle
   Abwahl mitentfernt. Die Werkzeugnummer steht auch als `extruder`-Metadatum,
-  bemalte Dreiecke tragen `paint_color` und `slic3rpe:mmu_segmentation` (`p1`
+  an jedem Objekt, auch ohne Spule (das des neutralen Platzes; Creality Print
+  lässt ein Objekt ohne sie auf der Konsole ohne Werkzeug), bemalte Dreiecke tragen `paint_color` und `slic3rpe:mmu_segmentation` (`p1`
   allein wählt nichts), alle in einer Folge samt Lücken. Mehrfarbige Spulen:
   `filament_multi_colour`, `filament_colour_type` „1" nur wo nötig, in
   `_RECOMPUTED`.
@@ -181,7 +182,10 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   Reinigungsturmkoordinaten ergänzt der Konsolenweg nach Herstellermodus,
   Bettkontur und Turmbreite (rechteckig, 0 oder 90 Grad); ausdrückliche
   bleiben, Unbekanntes wird nicht geraten; bei mehreren benutzten Werkzeugen
-  prüft die Gegenprobe sie.
+  prüft die Gegenprobe sie. Ab 7.3 rechnet die Konsole nur mit `--cli` und
+  `--need-gcode-file`, ohne `--arrange` (`_creality_cli`); eine Fassung, die
+  `--cli` ablehnt, bekommt den alten Aufruf. Das Fenster fragt nach dem
+  Drucker und nimmt dessen Profile (`window_findings`).
 
 ### Die Prüfung vor dem Export
 

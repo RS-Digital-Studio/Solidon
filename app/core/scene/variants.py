@@ -208,7 +208,6 @@ def build(
             index,
             value,
             offset,
-            gap,
             result.scene.profile if mark else None,
             quality,
         )
@@ -292,7 +291,6 @@ def _place(
     index: int,
     value: float,
     offset: float,
-    gap: float,
     profile: Profile | None = None,
     quality: Quality = "draft",
 ) -> float:

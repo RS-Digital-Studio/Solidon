@@ -2617,7 +2617,16 @@ def arrange_on_bed(
     sagt es :func:`app.core.export.writer.check_adhesion_clearance` mit der
     Zahl, die gebraucht würde.
 
-    Was nicht passt, kommt auf die nächste Platte — bis zu ``plates`` davon.
+    **Jeder Körper kommt auf die erste Platte, auf der er Platz hat**, und
+    erst wenn keine belegte ihn nimmt, wird die nächste angefangen — bis zu
+    ``plates`` davon. Bis zum 29.09.2026 blätterte die Anordnung nur vorwärts:
+    War ein großes Teil auf eine neue Platte gewandert, sah keine Platte davor
+    mehr ein Teil. Robert fand es am Minigolf-Satz („warum werden die nicht
+    auf eine platte was passt ausgerichtet?"): Drehscheibe und vier Stangen
+    lagen neben dem Bett, während auf den ersten beiden Platten Platz war, und
+    mit zwölf erlaubten Platten wurden es sechs statt vier. Dieselbe Regel
+    befolgt :func:`first_free_spot` für ein einzelnes neues Modell.
+
     Mehr Teile als Platten sind kein Fehler zum Verstecken: die letzte Platte
     nimmt den Rest, und der Bericht sagt, dass sie übervoll ist — denn ein
     Teil, das still aus einer Anordnung fällt, ist ein Teil, das nie gedruckt
@@ -2658,10 +2667,10 @@ def arrange_on_bed(
             _Slot(float(low[0]), float(high[1]), float(high[0] - low[0]), float(high[1] - low[1]))
         )
 
-    plate = 0
-    taken: list[_Slot] = list(held.get(0, ()))
+    # Die angefangenen Platten, jede mit dem, was auf ihr liegt.
+    opened: list[list[_Slot]] = [list(held.get(0, ()))]
 
-    def place(mesh: MeshData) -> _Slot | None:
+    def place(mesh: MeshData, taken: list[_Slot]) -> _Slot | None:
         """Die hinterste, dann linkeste Stelle, an die dieser Körper passt."""
         size = mesh.bounds.size
         if size[2] > printable_height(profile.printer) + EPS_GEOM:
@@ -2699,23 +2708,34 @@ def arrange_on_bed(
                 return spot
         return None
 
+    def settle(mesh: MeshData) -> tuple[int, _Slot | None]:
+        """Die erste Platte mit Platz und die Stelle darauf — oder keine Stelle.
+
+        **Eine leere Platte nimmt den Körper, auch wenn er nicht passt.** Ein
+        Körper, der tiefer ist als das Bett, passt auch auf eine leere Platte
+        nicht — und wanderte dann auf die nächste, die genauso wenig hilft.
+        Gemessen an zwei Sockeln von 231 mm Tiefe auf einem 220er Bett und zwei
+        Platten: beide landeten auf Platte 2, aufeinandergestapelt und über den
+        Rand hinaus, während Platte 1 leer blieb. Wo nichts liegt, ist die
+        nächste Platte kein besserer Ort — der Befund aus
+        :func:`check_build_volume` sagt stattdessen, was wirklich hilft:
+        teilen, verkleinern, anderes Profil. Sind alle erlaubten Platten
+        angefangen, bleibt der Körper bei der letzten.
+        """
+        index = 0
+        while index < len(opened) or len(opened) < plates:
+            if index == len(opened):
+                opened.append(list(held.get(index, ())))
+            spot = place(mesh, opened[index])
+            if spot is not None or not opened[index]:
+                return index, spot
+            index += 1
+        return len(opened) - 1, None
+
     for mesh in meshes:
         size = mesh.bounds.size
-        spot = place(mesh)
-        # **Nur weiterblättern, wenn auf dieser Platte schon etwas liegt.**
-        #
-        # Ein Körper, der tiefer ist als das Bett, passt auch auf eine leere
-        # Platte nicht — und wanderte dann auf die nächste, die genauso wenig
-        # hilft. Gemessen an zwei Sockeln von 231 mm Tiefe auf einem 220er Bett
-        # und zwei Platten: beide landeten auf Platte 2, aufeinandergestapelt
-        # und über den Rand hinaus, während Platte 1 leer blieb. Bei drei
-        # Platten blieb sie es auch. Wo nichts liegt, ist die nächste Platte
-        # kein besserer Ort — der Befund aus :func:`check_build_volume` sagt
-        # stattdessen, was wirklich hilft: teilen, verkleinern, anderes Profil.
-        if spot is None and taken and plate + 1 < plates:
-            plate += 1
-            taken = list(held.get(plate, ()))
-            spot = place(mesh)
+        plate, spot = settle(mesh)
+        taken = opened[plate]
         if spot is None:
             spot = _beyond_the_edge(taken, size, corner, spacing)
 
@@ -2741,7 +2761,7 @@ def arrange_on_bed(
         )
 
     findings.extend(check_build_volume(arranged, profile, assigned, object_ids, margin=edge_margin))
-    if plate + 1 >= plates and _overfull(arranged, assigned, profile, edge_margin):
+    if len(opened) >= plates and _overfull(arranged, assigned, profile, edge_margin):
         findings.append(
             Finding(
                 code="arrange.needs_more_plates",
@@ -2832,9 +2852,7 @@ def first_free_spot(
     crowded = (
         bool(standing)
         and not fits_on_bed(placed, profile.printer)
-        and fits_on_bed(
-            arrange_on_bed([moving], profile, spacing, plates=1).meshes[0], profile.printer
-        )
+        and _fits_alone(moving, profile, spacing)
     )
     return shift, plate, crowded
 
@@ -3017,7 +3035,9 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spaci
     """
     last = max(plates, default=0)
     on_last = [mesh for mesh, plate in zip(meshes, plates, strict=True) if plate == last]
-    if sum(_fits_alone(mesh, profile, spacing) for mesh in on_last) < 2:
+    # Ein einzelner Körper ist nie Gedränge — und ohne diese Zeile fragte
+    # :func:`_fits_alone` über seine Probeanordnung wieder hierher.
+    if len(on_last) < 2 or sum(_fits_alone(mesh, profile, spacing) for mesh in on_last) < 2:
         return False
     # Ein schmalerer Rand ist kein Gedränge: Das Teil liegt ganz auf dem Bett.
     return any(
@@ -3027,19 +3047,25 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spaci
 
 
 def _fits_alone(mesh: MeshData, profile: Profile, spacing: float) -> bool:
-    """Passt dieser Körper auf ein leeres Bett — an seinen Maßen gemessen?
+    """Läge dieser Körper allein auf einem leeren Bett ganz auf der Druckfläche?
 
     Nicht an seinem Ort: wo er gerade liegt, entscheidet die Anordnung, und die
     ist genau die Frage. Was hier zählt, ist, ob eine eigene Platte ihm
     überhaupt etwas nützen könnte.
 
-    **Mit dem Abstand, mit dem angeordnet wird.** Ohne ihn hieße „passt allein"
-    etwas anderes als „würde allein passend gelegt": ein Teil in genau
-    Bettgröße passt roh und ragt nach dem Anordnen dennoch über den Rand — der
-    Rat wäre dann wieder einer, der nichts löst. In Z gibt es keinen Abstand;
-    dort steht der Körper auf der Platte.
+    **Gefragt wird die Anordnung selbst**, nicht ein Maß daneben: „passt
+    allein" heißt „würde allein passend gelegt". Bis zum 29.09.2026 stand hier
+    die Fläche mit vollem Rand — richtig, solange ein Teil, das nur ohne ihn
+    passte, in der Packecke über die Kante ragte. Seit RM-229 legt die
+    Anordnung es mittig mit schmalerem Rand, eine eigene Platte hilft ihm also,
+    und der Rat fehlte: Am Minigolf-Satz blieb ein Rumpf von 245 mm Tiefe auf
+    dem 256er Bett neben der dritten Platte liegen, ohne dass der Bericht die
+    vierte nannte. Dieselbe Frage stellt :func:`first_free_spot`, wenn es
+    entscheidet, ob nur die Plattengrenze ein Modell draußen lässt.
     """
-    return placement_offset(mesh, profile.printer, margin=spacing) is not None
+    return fits_on_bed(
+        arrange_on_bed([mesh], profile, spacing, plates=1).meshes[0], profile.printer
+    )
 
 
 def back_onto_bed(

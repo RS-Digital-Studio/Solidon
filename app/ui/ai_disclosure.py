@@ -880,8 +880,10 @@ class LocalPrivacyDialog(QDialog):
         self.setWindowTitle(tr("Solidon-Datenschutz"))
         self.resize(720, 620)
 
+        # „Version" und nicht „Fassung": Nach außen gibt es ein Wort dafür
+        # (``oberflaeche.md``, Texte für Kunden).
         said = tr(
-            "Diese lokale Fassung wird mit Solidon ausgeliefert. Externe Links sind "
+            "Diese lokale Version wird mit Solidon ausgeliefert. Externe Links sind "
             "hier deaktiviert."
         )
         # Die Erklärung gibt es nur auf Deutsch. In jeder anderen Sprache sagt
@@ -906,10 +908,14 @@ class LocalPrivacyDialog(QDialog):
         close.setAccessibleName(close.text())
 
         buttons = QDialogButtonBox(self)
-        buttons.addButton(close, QDialogButtonBox.ButtonRole.AcceptRole)
+        # **Schließen ist der Ausgang, keine Handlung.** Als ``AcceptRole``
+        # machte die Knopfleiste ihn beim Anzeigen selbst zum Hauptknopf —
+        # Bernstein auf dem einzigen Weg hinaus, ``no_primary`` darunter lief
+        # zu früh, um es zu verhindern.
+        buttons.addButton(close, QDialogButtonBox.ButtonRole.RejectRole)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(WIDE, WIDE, WIDE, ROOMY)
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         layout.addWidget(note)
         layout.addWidget(self.text, 1)
         layout.addWidget(buttons)

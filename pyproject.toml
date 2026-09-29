@@ -191,13 +191,20 @@ target-version = "py314"
 #
 # Sie mitzuformatieren wäre schlimmer als sie auszunehmen: Ein Messskript, das
 # umgeschrieben wurde, belegt seine Zahl nicht mehr. mypy trifft es nicht, das
-# läuft ohnehin nur über `files = ["app"]`.
+# läuft ohnehin nur über `files = ["app"]`. Dasselbe gilt für die Sonden der
+# Release-Durchsichten, die unverändert unter `konzepte/nachweise-release-*/`
+# liegen.
 #
 # Und die Druckprojekte werden es auch nicht.
 #
 # „3D Drucker/" enthält physische Druckprojekte in einem eigenen Repository.
 # Der Ordner ist hier ignoriert und gehört nicht in die Solidon-Prüfungen.
-extend-exclude = [".claude/.state/", ".codex-*/", "3D Drucker/"]
+extend-exclude = [
+  ".claude/.state/",
+  ".codex-*/",
+  "3D Drucker/",
+  "konzepte/nachweise-release-*/",
+]
 
 [tool.ruff.per-file-target-version]
 # Der Umgebungsprüfer muss eine ältere Installation noch erklären können,
