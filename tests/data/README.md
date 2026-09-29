@@ -33,9 +33,11 @@ python -c "from app.core.bootstrap import load_operations; load_operations(); fr
 `threads/` erzeugt `make_thread_corpus.py` — aus Konstruktionsmaßen, als
 STEP, ohne Erzeugerauskunft im Körper. Die Sollwerte stehen in
 `test_thread_import.py`; Toleranzen: Teilung 1e-4, Radien 1e-3, Achse 1e-6.
-Die drei Bolzen entstehen seit RM-195 genäht (`profiles.threaded_rod` über
-`helical_thread`: je Umlauf zwei Flanken und ein Fußstreifen, 41 Flächen am
-M6), die zwei Sweep-Körper weiter mit der Fuzzy-Vereinigung des Skripts.
+Die Bolzen entstehen genäht (`profiles.threaded_rod` über `helical_thread`:
+je Umlauf zwei Flanken und ein Fußstreifen, 41 Flächen am M6), ebenso die
+mehrgängigen und der kegelige (`sewn_rod`, `internal_multi_start`); die zwei
+Sweep-Körper `zweigaengig` und `gegen_naht` weiter mit der Fuzzy-Vereinigung
+des Skripts.
 
 | Datei | Inhalt | Erwartung | Test |
 |---|---|---|---|
@@ -44,9 +46,12 @@ M6), die zwei Sweep-Körper weiter mit der Fuzzy-Vereinigung des Skripts.
 | `threads/m8_innen.step` | Block 20 × 20 × 10 minus `threaded_rod(8.2, 1.25, 10)` | innen, p 1,25, Nenn-Ø 8,2 (der Grund-Ø), Tiefe 0,7668, Länge 10 | `test_thread_import.py` |
 | `threads/zweigaengig.step` | Kern Ø 6,92 plus zwei Helix-Gänge, Vorschub 2 | n 2, L 2, p 1, Ø 8, Tiefe 0,54, Länge 12 | `test_thread_import.py` |
 | `threads/gegen_naht.step` | Zylinder Ø 6,02 mit einem 0,02 mm dünnen Gang | kein Gewinde: Gangtiefe außerhalb `GROOVE_RANGE` | `test_thread_import.py` |
+| `threads/dreigaengig.step` | `sewn_rod(10, 1, 12, starts=3)`: drei Gänge in einem Umlauf | n 3, L 3, p 1, Ø 10, Tiefe 0,6134, Länge 12 | `test_thread_import.py` |
+| `threads/innen_zweigaengig.step` | Block minus genähter zweigängiger Bolzen Ø 10 mit 0,2 Spiel (`internal_multi_start(10, 1.25, 2, 12, 0.2)`) | innen, n 2, L 2,5, p 1,25, Nenn-Ø 10,2, Tiefe 0,7668, Länge 12; gespiegelt links | `test_thread_import.py` |
+| `threads/konisch.step` | `sewn_rod(10, 1.5, 12, taper=atan(1/32))`: kegeliges Rohrgewinde 1:16, Kamm Ø 10 auf z = 0 | Kegelwinkel atan(1/32), Maße in der Mitte (z = 6, Kammradius 5 + 6/32), p 1,5; umgedreht negativer Winkel | `test_thread_import.py` |
 
 ```
-.venv\Scripts\python.exe tests/data/make_thread_corpus.py            # alle fünf
+.venv\Scripts\python.exe tests/data/make_thread_corpus.py            # alle
 .venv\Scripts\python.exe tests/data/make_thread_corpus.py m6_rechts  # einen
 .venv\Scripts\python.exe tests/data/make_thread_corpus.py --check    # Datei gegen Erzeuger
 ```
@@ -55,8 +60,24 @@ M6), die zwei Sweep-Körper weiter mit der Fuzzy-Vereinigung des Skripts.
 Oberfläche mit der Datei (auf 1e-6): Am 20.09.2026 lagen Datei und Erzeuger
 an M10 um 0,09 mm³ auseinander, weil der Erzeuger nach dem Korpus noch
 viermal geändert wurde. `test_thread_import.py::test_the_corpus_matches_its_generator`
-fährt den Vergleich je Lauf für die drei Bolzen (je unter zwei Sekunden); die
-zwei Sweep-Körper prüft der Aufruf von Hand vor einem Release.
+fährt den Vergleich je Lauf für jeden genähten Körper (je unter zwei
+Sekunden); die zwei Sweep-Körper prüft der Aufruf von Hand vor einem Release.
+
+## Baugruppen (STEP)
+
+`step/*.step` erzeugt `make_step_assembly_corpus.py` über OCCTs
+XCAF-Schreiber aus Konstruktionsmaßen; die Sollwerte stehen als Konstanten im
+Erzeuger (`PLATE`, `BOLT`, `BRACKET_VOLUME`, `HOUSING` …), `--check`
+vergleicht den XCAF-Baum der Datei mit dem Erzeuger.
+
+| Datei | Inhalt | Erwartung | Test |
+|---|---|---|---|
+| `step/instances.step` | drei Instanzen eines Bolzens mit Namen und Lage (eine gedreht, eine mit eigener Farbe), eine Platte mit Teil- und Flächenfarbe | drei Körper dort, wo die Datei sie hinstellt; Instanzfarbe vor Teilfarbe, Flächenfarbe vor Körperfarbe, im sRGB der Datei | `test_step_assembly.py`, `test_step_assembly_ui.py` |
+| `step/nested.step` | eine Unterbaugruppe zweimal eingesetzt, eine Farbe nur für ein tieferes Vorkommen (SHUO), eine gespiegelte Instanz | die Farbe färbt nur dieses Vorkommen; gleiche Namen unterscheidet das Vorkommen darüber; die Spiegelung ist ein gültiger Körper | `test_step_assembly.py` |
+| `step/multibody.step` | ein Teil mit drei Körpern, zwei benannt und gefärbt, einer ohne beides | jeder Körper trägt seinen eigenen Namen | `test_step_assembly.py` |
+| `step/unnamed.step` | eine Baugruppe ohne einen einzigen Namen und ohne Farbe | die Körper werden nummeriert, ein einzelner nimmt den Dateinamen | `test_step_assembly.py` |
+| `step/inch.step` | ein Teil in Zoll | kommt in Millimetern an und nennt seine Einheit | `test_step_assembly.py` |
+| `step/surfaces.step` | eine geschlossene Schale ohne Körper, eine offene Schale, ein Teil nur aus einer Kante | die geschlossene Schale wird ein Körper, die offene bleibt offen, die Kante bleibt draußen — und die Befunde sagen es | `test_step_assembly.py` |
 
 ## Geometrie
 
@@ -112,6 +133,10 @@ python tests/data/make_corpus.py
 | `meshes/colored.3mf` | zwei Würfel in Slot 1 und 2, mit der eigenen 3MF-Hälfte geschrieben | zwei Materialgruppen „Rot" und „Schwarz", je Dreieck zugeordnet; Rundweg durch `threemf.read` | `test_corpus.py` |
 | `projects/assembly_fit.p3d` | Platte mit 6-mm-Bohrung, Deckel mit 5,95-mm-Stift, dazu ein Passungspaar `auto:petg`; **gespeichert liegen beide Grundkörper auf z = 0 und durchdringen sich** — die Einbaulage auf der Stiftschulter stellt `test_corpus.py` als regulären Schritt her | roh meldet die Datei `fit.collision` (in PLA dazu `fit.mesh_uncertain`); in der Einbaulage hält die Passung mit PETG und meldet sich mit einem anderen Material — die Bohrung folgt dem Druckmaterial, die Toleranz dem, was im Paar steht | `test_corpus.py` |
 | `meshes/oversized.stl` | 400 × 80 × 40 mm: zwei dicke Enden, schlanke Mitte | passt auf keinen Bauraum; der Auto Split findet die Trennebene in der Mitte (Querschnitt 1200 mm², eine Kontur) und macht daraus zwei wasserdichte Teile | `test_autosplit.py` |
+| `meshes/island_tower.stl` | Säule 10 × 10 × 30 mm, daneben ein Block 10 × 10 × 10 auf z 20–30, oben durch einen Steg 30 × 10 × 5 verbunden (`make_corpus.island_tower`) | 4500 mm³; der Block ist eine Insel, die in jeder Lage Stützen braucht; die Suche über 200 Lagen braucht nicht mehr Stützvolumen als die Heuristik; die Zahlen ohne Schichten gleichen der vollen Analyse bitgenau | `test_orientation_search.py`, `test_slice.py`, `test_performance.py`, `test_analysis_ui.py` |
+| `meshes/bridge_two_end_supports.ply` | zwei Stützen 3 × 3 × 10 mm an den Enden, darüber ein Steg 36 × 3 × 2 mm; 396 mm³ | größte Brückenweite 30 mm (die freie Länge), nicht der Inkreis von 3 mm — auch gedreht, verschoben und mit Rückwand; übersetzter Kern und GEOS-Weg gleich | `test_slice.py`, `test_slice_core.py` |
+| `meshes/dovetail_vertex_plane.ply` | Quader 40 × 20 × 20 mm mit angesetztem Keil, dessen Spitze auf z = 9,5 liegt; 16 125 mm³ | der Schnitt auf z = 9,5 ist der Quaderquerschnitt von 800 mm² auf beiden Wegen, keine Scheininsel darüber | `test_slice_core.py` |
+| `meshes/openscad_ascii.stl` | von OpenSCAD 2021.01 geschriebene ASCII-STL, Hüllquader 24 × 16 × 8 mm — ganze Zahlen ohne Dezimalpunkt, `-0` in einer Normale | der ASCII-Zweig liest sie, obwohl die binäre Längenrechnung grob danebenliegt; 144 Dreiecke, verschweißt geschlossen, 2847,26 mm³ | `test_ingest.py` |
 
 `meshes/dense_1m.stl` (1,31 Mio. Dreiecke, Leistungsmessung nach §31) wird
 **nicht eingecheckt** — 60 MB im Repository wären unverhältnismäßig. Der
@@ -120,11 +145,38 @@ Leistungstest erzeugt sie beim ersten Lauf; die Messwerte landen in
 
 Damit ist der Korpus aus §34 vollständig, bis auf `legacy_v1.p3d` — die
 Altformate liegen unter `projects/example_v<N>.p3d`, eine Datei je
-Formatversion von 1 bis zur vorletzten, dazu die Sonderfälle mit eigenem
-Inhalt (`drilled_v6`, `split_v10`, `scad_v12`, `painted_v13`, `circle_v18`,
-`generated_glb_v24`, `matching_answers_v26`, `sketch_v30` — Skizzen aus der
-Zeit vor Ellipse und Kurvenbedingungen —, `further_model_v37` — ein zweites
-Modell an seinen Dateikoordinaten, vor der freien Stelle), und werden von
-`test_project.py` durch die Migrationskette geschickt; eine neue
-Formatversion bringt ihre Beispieldatei mit (AGENTS.md, Checkliste
-Dateiformat).
+Formatversion von 1 bis zur vorletzten (`projects/example_v*.p3d`), dazu die
+Sonderfälle mit eigenem Inhalt (`drilled_v6`, `split_v10`, `scad_v12`,
+`painted_v13`, `circle_v18`, `generated_glb_v24`, `matching_answers_v26`,
+`sketch_v30` — Skizzen aus der Zeit vor Ellipse und Kurvenbedingungen —,
+`further_model_v37` — ein zweites Modell an seinen Dateikoordinaten, vor der
+freien Stelle), und werden von `test_project.py` durch die Migrationskette
+geschickt; eine neue Formatversion bringt ihre Beispieldatei mit (AGENTS.md,
+Checkliste Dateiformat).
+
+Weitere Sonderfälle, je mit eigenem Test:
+
+| Datei | Inhalt | Erwartung | Test |
+|---|---|---|---|
+| `projects/material_fits_v29.p3d` | vier Passungen im Format 29 | nach der Migration `auto:` für `deckel`, `stift_2` und `stift_3`, `auto:pla` für das von Hand gesetzte `von_hand` | `test_project.py` |
+| `projects/step_assembly_v32.p3d` | ein STEP-Ladeschritt ohne `bodies` | bleibt ein Körper `gehaeuse` mit drei Volumenkörpern, Volumen aus `HOUSING` des Baugruppenerzeugers | `test_step_assembly.py` |
+| `projects/recognition_v33.p3d` | ein Projekt vor den gespeicherten Erkennungsantworten | die Migration ändert nur `format_version`; kein Schritt trägt eine `recognition-answer:`-Zuordnung | `test_project.py` |
+| `projects/print_settings_v33.p3d` | Druckeinstellungen, wie 0.5.0 sie schrieb: Fein, Außenwand 30 mm/s, gewählt `shell.wall_count` und `infill.density` | öffnet mit genau diesen Werten, nichts als angenommen markiert | `test_manufacturer.py` |
+| `projects/repair_v34.p3d` | ein Reparaturschritt ohne `self_intersections` | rechnet wie gespeichert (`self_intersections: False`), der Befund bietet das Auflösen an | `test_project.py` |
+| `projects/edge_groups_v36.p3d` | zwei Quader 40 × 30 × 20 mm mit Querbohrung Ø 6, einer als Netz, einer exakt, beide R 1 an „waagerecht“ | die Migration setzt `rings_by_plane: False`, die Mündungen werden wie gespeichert mitgerundet; der exakte Körper rechnet auf die Stelle genau wie beim Schreiben gemessen | `test_project.py` |
+
+## Daneben
+
+| Datei | Inhalt | Test |
+|---|---|---|
+| `LICENSE` | MIT für den ganzen Korpus, weil er mit veröffentlicht wird | — |
+| `make_corpus.py` · `make_recognition_corpus.py` · `make_thread_corpus.py` · `make_step_assembly_corpus.py` | die Erzeuger der Netze, der Erkennungskörper, der Gewinde und der Baugruppen | `test_thread_import.py` und `test_step_assembly.py` vergleichen Datei und Erzeuger |
+| `ci_core_durations.json` · `ci_window_durations.json` | Sekunden je Testdatei der Kernsuite bzw. je Fensterdatei, mit Ersatzwert und Herkunft; erzeugt von `tools/ci_shards.py` aus JUnit-Berichten, verteilen nur | `test_ci_runner.py`, `test_packaging.py` |
+| `check_subject.php` | prüft `encode_subject()` aus `website/api/support.php` gegen RFC 2047 | `test_support.py` |
+| `brep_cylinder_orientation.json` | Block 20 × 20 × 20 mm mit Kreisprofil Ø 2 × 4 in beiden Extrusionsrichtungen, dazu ein Kegel r 2/4 × 4 | Zapfen und Sackloch Ø 2, Tiefe 4, auch als NURBS; die Materialseite des Kegels übersteht die Spiegelung | `test_brep_trimmed_cylinder_centres.py` |
+| `filament_catalogue_v0.json` | Filamentlager im ersten Format: zweimal „Weiß“, PLA, ohne Kennung | die Migration vergibt zwei verschiedene Kennungen und erfindet keine Mengen | `test_filament_inventory.py` |
+| `organizer_layouts.json` | die fünf Besteckkorb-Vorlagen als Aufteilung mit Außenmaßen und Sollmaßen der Fächer | je sechs Fächer und fünf Wände in den Sollmaßen; jede Vorlage baut geschlossen mit exakter Hülle | `test_organizer_layout.py`, `test_organizer_build.py` |
+| `profile_clamp_reference.json` | Zahlenreferenz für vier Profilklemmteile: Ø 16, Spline, Ellipse 47 × 32, Tiefe 40, Wand 4, Spiele | Schale und Einlage montieren frei in Achsrichtung; die Konturen werden an diesen Maßen abgetastet | `test_profile_clamps.py`, `test_profile_sampling.py` |
+| `recipes/historical_box_v1.json` | ein gespeicherter Quader-Baustein aus der ersten Dokumentfassung (Format 1) | migriert, öffnet und exportiert | `test_part_file.py` |
+| `linux/paket-0.2.1-abhaengigkeiten.json` | die Bibliotheksabhängigkeiten je Datei des Linux-Pakets 0.2.1 | das Linux-Paket lässt keine Abhängigkeit offen | `test_packaging.py` |
+| `spacemouse/compact-2026-09-02.jsonl` | eine ausgedünnte Aufzeichnung der SpaceMouse Compact in Phasen zu vier Sekunden, mit Kopfzeile | beide Tasten sind benannt; dieselbe Aufnahme ergibt zweimal dieselbe Kamera | `test_spacemouse.py` |

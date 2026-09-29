@@ -8,8 +8,11 @@ wird, und dass ein Passungspaar bemerkt, wenn sich der Boden unter ihm bewegt.
 
 from __future__ import annotations
 
+import fnmatch
 import math
-from pathlib import Path
+import re
+import subprocess
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -209,3 +212,57 @@ def test_the_pair_points_at_features_that_exist(profile: Profile) -> None:
         for reference in (fit.a, fit.b):
             entry = result.scene.objects[reference.object_id]
             assert reference.feature_id in entry.features, str(reference)
+
+
+# --- jede Datei hat ihre Zeile ---------------------------------------------------
+
+
+def _unlisted(names: list[str], readme: str) -> list[str]:
+    """Die Dateien, die ``README.md`` weder mit Pfad noch Namen noch Stamm nennt.
+
+    Genannt heißt: der Pfad relativ zu ``tests/data`` irgendwo im Text, der
+    Dateiname oder der Stamm in Backticks, oder eine Familie in Backticks
+    (``projects/example_v*.p3d``, auch ``<N>`` statt ``*``).
+    """
+    quoted = set(re.findall(r"`([^`\n]+)`", readme))
+    families = [token.replace("<N>", "*") for token in quoted if "*" in token or "<N>" in token]
+    return [
+        name
+        for name in names
+        if name not in readme
+        and PurePosixPath(name).name not in quoted
+        and PurePosixPath(name).stem not in quoted
+        and not any(fnmatch.fnmatchcase(name, family) for family in families)
+    ]
+
+
+def test_the_search_for_unlisted_files_finds_what_is_missing() -> None:
+    """Der Fall mit bekanntem Ausgang: Pfad, Name, Stamm und Familie gelten, sonst nichts."""
+    readme = "| `meshes/a.stl` | … `b.ply` … `c_v3` … `projects/example_v<N>.p3d` |"
+    names = ["meshes/a.stl", "meshes/b.ply", "projects/c_v3.p3d", "projects/example_v7.p3d"]
+
+    assert _unlisted([*names, "meshes/d.stl", "projects/example.p3d"], readme) == [
+        "meshes/d.stl",
+        "projects/example.p3d",
+    ]
+
+
+def test_every_corpus_file_has_its_line_in_the_readme() -> None:
+    """``tests/data/CLAUDE.md`` verspricht je Datei eine Zeile in ``README.md`` (Inhalt,
+    Kennzahl, Test). Gelesen wird die versionierte Menge aus Git, nicht der Ordner — ein
+    örtliches Erzeugnis wie ``dense_1m.stl`` zählt nicht.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", "."],
+        cwd=DATA,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.split("\0")
+    names = [name for name in listed if name and name not in {"README.md", "CLAUDE.md"}]
+    assert len(names) > 100, f"nur {len(names)} Korpusdateien aus Git — dann prüft das nichts"
+
+    missing = _unlisted(names, (DATA / "README.md").read_text(encoding="utf-8"))
+
+    assert not missing, "ohne Zeile in tests/data/README.md:\n" + "\n".join(missing)
