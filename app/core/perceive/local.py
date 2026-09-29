@@ -27,7 +27,7 @@ from app.core.geom.mesh import (
 from app.core.perceive import features as detection
 from app.core.perceive import recognition_time
 from app.core.perceive.helix import _facet_of_face
-from app.core.perceive.matching import DIAMETER_TOLERANCE, match, transformed_features
+from app.core.perceive.matching import DIAMETER_TOLERANCE, match
 from app.core.perceive.relations import cavity_chains
 from app.core.perceive.surfaces import clipped_patches, reindexed_patches
 from app.core.types import Feature, FeatureId, Transform, Vec3, is_a_cavity
@@ -1133,16 +1133,6 @@ def features_in_region(
             chosen.append(name)
     _check(check_cancelled)
     return tuple(chosen)
-
-
-def transformed_searches(
-    features: Mapping[FeatureId, Feature],
-    transform: Transform,
-    *,
-    check_cancelled: Callable[[], None] | None = None,
-) -> dict[FeatureId, Feature]:
-    """Suchkugeln und Maßkandidaten aus derselben Auskunft wie die globale Zuordnung."""
-    return transformed_features(features, transform, check_cancelled=check_cancelled).candidates
 
 
 def rigid_transform(transform: Transform) -> bool:

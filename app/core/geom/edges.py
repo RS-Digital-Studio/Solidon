@@ -4032,15 +4032,12 @@ def radial_rounding(
     unabhängig davon, dass der gesamte Zwischenraum frei veränderbar ist.
     """
     from app.core.deferred import trimesh
-    from app.core.perceive.features import fit_cylinder, radial_cylinder
+    from app.core.perceive.features import radial_cylinder
 
     patch = list(feature.face_indices)
     if not patch:
         return None
-    fit = fit_cylinder(mesh.raw, patch)
-    if fit is None:
-        return None
-    fitted = radial_cylinder(mesh.raw, fit, patch)
+    fitted = radial_cylinder(mesh.raw, patch)
     if fitted is None:
         return None
     indices, reverse = np.unique(np.asarray(mesh.raw.faces)[patch], return_inverse=True)

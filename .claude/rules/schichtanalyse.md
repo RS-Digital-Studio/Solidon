@@ -460,7 +460,7 @@ als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
   der Zylinderfit ablehnt, nimmt kein weicherer Fit an.
 - **Eine runde Wand heißt runde Wand** (`radial`, über 180 Grad, gehört zu
   keiner Kante; `actions.ROUND_WALL_HAS_NO_PLACE`); geht sie tangential in die
-  Nachbarn über (`features.blends_into_its_neighbours`), ist auch der Radius
+  Nachbarn über (`features.tangent_walls`), ist auch der Radius
   fest — Panel und Operation sagen `actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS`.
 - **Ein Kegel unter vollem Umlauf** geht im Langloch auf, an dessen Mantel er
   grenzt, oder bleibt Senkung der angeschnittenen Bohrung daneben; sonst ist er

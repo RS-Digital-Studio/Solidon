@@ -1170,7 +1170,7 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   Wand", das Panel begründet die grauen Zeilen mit
   `actions.ROUND_WALL_HAS_NO_PLACE` statt mit der Kante. Geht die Wand
   tangential in ihre Nachbarn über (`tangent`,
-  `features.blends_into_its_neighbours`), ist auch der Radius nicht für sich
+  `features.tangent_walls`), ist auch der Radius nicht für sich
   zu ändern — Panel und Operation sagen es mit demselben Satz
   (`actions.WALL_BLENDS_INTO_ITS_NEIGHBOURS`).
 
