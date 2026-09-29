@@ -29,7 +29,8 @@ from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import Project, checksum, embedded_source_path, next_source_id
-from app.core.types import ObjectId, Origin, ProgressFn, Source, SourceId, SourceOrigin
+from app.core.types import Mesh, ObjectId, Origin, ProgressFn, Source, SourceId, SourceOrigin
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -56,6 +57,28 @@ GENERATED_REPAIR: dict[str, bool] = {
 #: aus jede Richtung gleich weit ist: ein Möbel im Puppenhausmaßstab liegt
 #: darunter, ein Gehäuse darüber, und beides ist ein Schritt.
 WORKING_SIZE_MM = 100.0
+
+
+def working_volume(body: Mesh) -> float:
+    """Das Volumen, mit dem ein erzeugter Körper ins Projekt kommt, in mm³.
+
+    Der Generator liefert auf dem Einheitswürfel, und dessen Volumen — ein,
+    zwei Kubikmillimeter — hielte der Kunde für einen Krümel, der zwei
+    Schritte später hundert Millimeter misst. Gerechnet wird wie in
+    ``fit_to_size``: dieselbe Konstante, dasselbe Maß, die längste Kante des
+    achsparallelen Hüllquaders. Das Drehen der glTF-Achsen beim Laden
+    vertauscht nur Achsen und ändert diese Kante nicht; die Reparaturkette
+    danach kann das Volumen noch um ihre Korrekturen verschieben.
+    ``tests/test_way_three.py`` hält beide Rechnungen an derselben Antwort.
+
+    Ohne Ausdehnung gibt es keinen Faktor (``fit_to_size`` sagt dann ab); der
+    Körper behält sein Volumen, wie es ist.
+    """
+    longest = max(body.bounds.size)
+    if longest <= EPS_GEOM:
+        return body.volume
+    factor = WORKING_SIZE_MM / longest
+    return body.volume * factor * factor * factor
 
 
 def _silent(fraction: float, text: str) -> None:

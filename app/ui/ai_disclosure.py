@@ -425,6 +425,12 @@ class AiDisclosureDialog(QDialog):
         content_layout.addWidget(self.heading)
         content_layout.addWidget(self.general_text)
         content_layout.addWidget(self.provider_card)
+        # Der Rest sammelt sich unter dem Hinweis. Ohne diese Stelle verteilte
+        # Qt ihn auf die drei Teile fester Höhe, sobald die Rollfläche höher
+        # war als der Text: Überschrift, rund 300 Punkte nichts, der Satz, der
+        # Datenweg, wieder nichts (Aufnahme des Workshopfilms). Der Hinweis
+        # liest sich zusammenhängend, die Knöpfe bleiben unten.
+        content_layout.addStretch(1)
 
         self.scroll_area = _DisclosureScrollArea(self)
         self.scroll_area.setWidgetResizable(True)

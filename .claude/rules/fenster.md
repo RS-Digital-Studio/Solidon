@@ -341,6 +341,19 @@ das Bild eines Knopfes.
 der Knopf die Handlung („Trennen“, „Jetzt trennen“;
 `tests/test_interface_limits.py`).
 
+## Ein Dialog, der höher ist als sein Inhalt
+
+Von Hand gezogen, von einem langen Satz gewachsen oder von einer Aufnahme
+gesetzt — der Überschuss braucht **eine** Stelle, sonst verteilt Qt ihn als
+Lücken zwischen Widgets fester Höhe (im KI-Hinweis stand die Überschrift
+allein über einer leeren Fläche). Die Stelle ist ein `addStretch` dort, wo Leere nicht stört,
+oder ein Widget, das den Platz nutzt (die Versuchsliste des Erzeugen-Dialogs
+nach dem Lauf). Ein Fenster, das seinem Inhalt nachwächst, gibt zurück, was nur
+ein Satz genommen hat, eine gezogene Höhe nicht
+(`GenerateDialog._grow_to_content`); `style.WrappedNote` misst dafür ohne die
+gepinnte Höhe, denn `QLabel.heightForWidth` meldet nie weniger als die
+Mindesthöhe.
+
 ## `setParent(None)` macht ein Kind zum Fenster
 
 Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster — bis zum Löschen

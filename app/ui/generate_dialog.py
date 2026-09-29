@@ -19,7 +19,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QSize, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
+    QSpacerItem,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -41,6 +43,7 @@ from PySide6.QtWidgets import (
 from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, InternalError, OperationCancelled
+from app.core.generate import working_volume
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
@@ -72,6 +75,26 @@ def image_filter() -> str:
 #: dasselbe Ergebnis, soweit das Modell auf der anderen Seite es zulässt
 #: (§11.3).
 MAX_SEED = 2**31 - 1
+
+#: Wie hoch die Versuchsliste von sich aus sein will, in Bildpunkten. Mehr
+#: bekommt sie nur, wenn das Fenster höher ist als sein Inhalt.
+_ATTEMPTS_HEIGHT: Final = 120
+
+
+class _AttemptList(QListWidget):
+    """Die Versuchsliste: klein von sich aus, aber sie nimmt freien Platz.
+
+    Vorher kappte eine Höchsthöhe sie auf 120 Punkte. Stand das Fenster
+    höher — von Hand gezogen, oder nach einem langen Satz —, blieb der
+    Überschuss als leere Fläche zwischen den Feldern und dem Hinweis stehen;
+    in der Aufnahme des Workshopfilms waren es rund 340 Punkte. Jetzt ist die
+    120 nur noch ihr Wunsch, und der Platz geht in die Liste, wo er weitere
+    Versuche zeigt.
+    """
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt gibt den Namen
+        hint = super().sizeHint()
+        return QSize(hint.width(), min(hint.height(), _ATTEMPTS_HEIGHT))
 
 
 class _Worker(Worker):
@@ -276,6 +299,9 @@ class GenerateDialog(QDialog):
         self._busy = False
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
+        self._fitted_height: int | None = None
+        """Die Höhe, die das Fenster zuletzt selbst genommen hat — woran
+        :meth:`_grow_to_content` erkennt, ob jemand anders sie bestimmt hat."""
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
@@ -387,9 +413,8 @@ class GenerateDialog(QDialog):
         # Die Versuche und der Weg zu einem weiteren — beide unsichtbar, bis
         # der erste da ist: ein leeres Feld über einem leeren Knopf sagt
         # nichts (§2.5).
-        self.attempts = QListWidget(self)
+        self.attempts = _AttemptList(self)
         self.attempts.setVisible(False)
-        self.attempts.setMaximumHeight(120)
         self.again = QPushButton(tr("Noch ein Versuch"), self)
         self.again.setVisible(False)
         self.again.clicked.connect(self._try_again)
@@ -406,11 +431,14 @@ class GenerateDialog(QDialog):
         layout.addWidget(self.advanced)
         # Der Platz sammelt sich hier, nicht zwischen den Feldern: sonst
         # stand der Hinweis, warum „Erzeugen“ gesperrt ist, dreihundert Pixel
-        # von dem Knopf entfernt, den er erklärt.
-        layout.addStretch(1)
+        # von dem Knopf entfernt, den er erklärt. Sobald Versuche dastehen,
+        # gibt er ihn an ihre Liste ab (:meth:`_show_tries`).
+        self._room = QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        layout.addSpacerItem(self._room)
+        layout.setStretch(layout.indexOf(self._room), 1)
         layout.addWidget(self.state)
         layout.addWidget(self.setup)
-        layout.addWidget(self.attempts)
+        layout.addWidget(self.attempts, 1)
         layout.addWidget(self.again)
         layout.addWidget(self.progress)
         layout.addWidget(self.buttons)
@@ -490,8 +518,20 @@ class GenerateDialog(QDialog):
     def _grow_to_content(self) -> None:
         """Das Fenster nimmt die Höhe, die sein Inhalt jetzt braucht.
 
-        Gerufen, sobald der Hinweis eine neue Mindesthöhe gepinnt hat. Nur
-        nach oben: Wer den Dialog von Hand größer gezogen hat, behält das.
+        Gerufen, sobald der Hinweis eine neue Mindesthöhe gepinnt hat.
+
+        **In beide Richtungen, solange die Höhe dem Fenster gehört.** Bis
+        hierher ging es nur nach oben: Ein langer Satz — eine Absage in fünf
+        Zeilen, der Weg zum fehlenden Bildmodell — machte das Fenster hoch,
+        und als danach „Bereit“ dastand, blieb die Höhe, und der Überschuss
+        stand als leere Fläche über dem Hinweis. Was das Fenster selbst
+        genommen hat, gibt es jetzt zurück.
+
+        **Nur nach oben, sobald jemand anders die Höhe bestimmt hat:** Wer den
+        Dialog von Hand größer gezogen hat, behält das. Erkannt wird es daran,
+        dass das Fenster höher steht als zuletzt selbst gesetzt und als seine
+        Mindesthöhe — bis zur Mindesthöhe schiebt Qt ein Fenster von allein,
+        wenn weitere Zeilen erscheinen, und das ist keine Wahl des Nutzers.
         """
         layout = self.layout()
         if layout is None:
@@ -499,13 +539,22 @@ class GenerateDialog(QDialog):
         # Ungültig machen, bevor gemessen wird: Der Satz hat seine Mindesthöhe
         # gerade erst gepinnt, und die Rechnung darunter hielt sonst den alten
         # Stand — gemessen blieb das Feld nach dem Wachsen gequetscht, bis
-        # irgendetwas anderes das Layout anstieß.
+        # irgendetwas anderes das Layout anstieß. Und gleich neu setzen: Die
+        # Mindesthöhe des Fensters übernimmt Qt erst mit ``activate``, und
+        # bis dahin klemmte ``resize`` an der alten — ein Fenster, das einen
+        # langen Satz zurückgeben sollte, blieb auf dessen Höhe stehen.
         layout.invalidate()
+        layout.activate()
         wanted = self.sizeHint().height()
         if layout.hasHeightForWidth():
             wanted = max(wanted, layout.totalHeightForWidth(self.width()))
-        self.resize(self.width(), max(self.height(), wanted))
+        own = self._fitted_height is None or self.height() <= max(
+            self._fitted_height, self.minimumHeight()
+        )
+        self.resize(self.width(), wanted if own else max(self.height(), wanted))
         layout.activate()
+        if own:
+            self._fitted_height = self.height()
 
     def _readiness_done(self, workflow: str, found: object, choices: object) -> None:
         """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""
@@ -883,10 +932,16 @@ class GenerateDialog(QDialog):
     def _show_tries(self) -> None:
         """Die Versuche mit den Zahlen, an denen man sie unterscheidet.
 
-        Dreiecke, Volumen und ob der Körper geschlossen ist — dieselben drei,
-        die auch der Steckbrief nennt. Sie entscheiden, welcher Wurf brauchbar
-        ist, und ein Bild daneben entschiede es nicht besser: ein offenes Netz
-        sieht aus wie ein geschlossenes.
+        Dreiecke, Volumen und ob der Körper geschlossen ist. Sie entscheiden,
+        welcher Wurf brauchbar ist, und ein Bild daneben entschiede es nicht
+        besser: ein offenes Netz sieht aus wie ein geschlossenes. Volumen und
+        „geschlossen“ nennt auch der Steckbrief; das Volumen steht hier schon
+        in der Größe, mit der der Körper ins Projekt kommt
+        (:func:`app.core.generate.working_volume`). Das Netz des Generators
+        liegt auf einem Einheitswürfel, und „2 mm³“ las sich wie ein Krümel,
+        der zwei Schritte später hundert Millimeter maß. Dreiecke und
+        Dichtheit sind die des gelieferten Netzes; die Reparaturkette kann
+        beides noch ändern.
         """
         self.attempts.clear()
         for index, entry in enumerate(self.tries, start=1):
@@ -897,12 +952,23 @@ class GenerateDialog(QDialog):
                 # Dieselbe Quelle wie Steckbrief und Chat (labels.volume):
                 # feste Kubikzentimeter meldeten kleine Körper als „0,0 cm³"
                 # und blieben in Zoll stehen.
-                + volume(mesh.volume)
+                + volume(working_volume(mesh))
                 + f" · {closed}"
             )
             self.attempts.addItem(item)
         self.attempts.setCurrentRow(len(self.tries) - 1)
         self.attempts.setVisible(True)
+        # Der freie Platz geht jetzt in die Liste, nicht zwischen Felder und
+        # Hinweis: Der Hinweis steht über der Liste, von der er spricht, und
+        # „Noch ein Versuch“ direkt darunter.
+        layout = self.layout()
+        if isinstance(layout, QVBoxLayout):
+            layout.setStretch(layout.indexOf(self._room), 0)
+        # Neue Zeilen, neue Höhe. Nachgemessen wurde nur, wenn der Hinweis
+        # seine Höhe änderte; sonst schob Qt das Fenster bloß auf seine
+        # Mindesthöhe, und die Liste stand auf ihrem Minimum statt auf
+        # ihrem Wunsch.
+        self._grow_soon()
         self.again.setVisible(True)
         self.state.setText(
             tr("Der Zufall spielt mit — ein weiterer Versuch kostet nichts als Zeit.")

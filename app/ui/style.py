@@ -181,7 +181,8 @@ class WrappedNote(QLabel):
     """
 
     grown = Signal()
-    """Die Mindesthöhe hat sich geändert; wer den Satz zeigt, wächst mit."""
+    """Die Mindesthöhe hat sich geändert, nach oben oder unten; wer den Satz
+    zeigt, folgt ihr."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -198,14 +199,21 @@ class WrappedNote(QLabel):
         self.claim_height()
 
     def claim_height(self) -> None:
-        """Die Mindesthöhe auf das setzen, was der Satz in dieser Breite braucht."""
+        """Die Mindesthöhe auf das setzen, was der Satz in dieser Breite braucht.
+
+        **Gemessen ohne die gepinnte Höhe.** ``QLabel.heightForWidth`` meldet
+        nie weniger als die eigene Mindesthöhe; auf einen Satz in zehn Zeilen
+        gemessen blieb jeder kürzere danach zehn Zeilen hoch, und das Fenster
+        darum konnte nichts zurückgeben.
+        """
         if self.width() <= 0:
             return
-        wanted = self.heightForWidth(self.width()) if self.text() else 0
-        if wanted == self.minimumHeight():
-            return
-        self.setMinimumHeight(max(wanted, 0))
-        self.grown.emit()
+        pinned = self.minimumHeight()
+        self.setMinimumHeight(0)
+        wanted = max(self.heightForWidth(self.width()), 0) if self.text() else 0
+        self.setMinimumHeight(wanted)
+        if wanted != pinned:
+            self.grown.emit()
 
 
 def make_primary(button: QPushButton) -> QPushButton:

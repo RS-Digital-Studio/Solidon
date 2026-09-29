@@ -528,6 +528,148 @@ def test_a_tiny_body_shows_its_real_volume_beside_closed(qt_app: QApplication) -
         dialog.deleteLater()
 
 
+def _generated(size: tuple[float, float, float]) -> GeneratedMesh:
+    return GeneratedMesh(
+        mesh=FakeMesh(size=size),  # type: ignore[arg-type]
+        payload=b"",
+        suffix=".glb",
+        backend="test",
+    )
+
+
+def _settle(qt_app: QApplication) -> None:
+    """Zwei Zeitgeber mit null Millisekunden hintereinander: erst pinnt der
+    Satz seine Höhe, dann folgt das Fenster — mit Reserve."""
+    for _ in range(6):
+        qt_app.processEvents()
+
+
+def test_a_try_names_the_volume_it_will_have_in_the_project(qt_app: QApplication) -> None:
+    """Die Zeile nannte das Volumen des rohen Generatornetzes.
+
+    „1. 440842 Dreiecke · 2 mm³ · geschlossen“ stand in der Aufnahme des
+    Workshopfilms: Das Netz liegt auf einem Einheitswürfel, und zwei Schritte
+    später hatte der Körper hundert Millimeter Kante. Verglichen wird mit
+    derselben Anzeige (``labels.volume``) über einem Wert aus der
+    Konstruktion — die längste Kante 2 wird 100 mm, Faktor 50.
+    """
+    from app.ui.labels import volume
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.tries = [_generated((1.0, 2.0, 0.5))]
+        dialog._show_tries()
+
+        eintrag = dialog.attempts.item(0)
+        assert eintrag is not None, "der Versuch steht in der Liste"
+        gemessen = eintrag.text().split("·")[1].strip()
+        assert gemessen == volume(50.0 * 100.0 * 25.0), eintrag.text()
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_after_a_run_a_taller_window_gives_its_room_to_the_list(qt_app: QApplication) -> None:
+    """Nach dem Lauf stand eine leere Fläche zwischen den Feldern und dem Satz.
+
+    In der Aufnahme des Workshopfilms rund 340 Punkte: Das Fenster war höher
+    als sein Inhalt, der Platz sammelte sich vor dem Hinweis, und die Liste
+    darunter blieb auf 120 Punkte gekappt. Jetzt nimmt die Liste ihn. Der
+    Abstand zwischen Feldern und Hinweis ist derselbe wie in einem Fenster
+    auf seiner eigenen Höhe, und die gezogene Höhe bleibt.
+    """
+    natural = GenerateDialog(backend=ScriptedMeshBackend())
+    tall = GenerateDialog(backend=ScriptedMeshBackend())
+
+    def gap(dialog: GenerateDialog) -> int:
+        return dialog.state.geometry().top() - dialog.advanced.geometry().bottom()
+
+    try:
+        for dialog in (natural, tall):
+            dialog.show()
+            wait_for_readiness(dialog, qt_app)
+        _settle(qt_app)
+        # Wie von Hand gezogen, oder wie die Aufnahme ihn setzte.
+        tall.resize(tall.width(), natural.height() + 340)
+        _settle(qt_app)
+        drawn = tall.height()
+        assert gap(tall) > gap(natural) + 300, "vor dem Lauf sammelt sich der Platz am Hinweis"
+
+        for dialog in (natural, tall):
+            dialog.tries = [_generated((1.0, 2.0, 0.5))]
+            dialog._show_tries()
+        _settle(qt_app)
+
+        assert tall.height() == drawn, "die gezogene Höhe bleibt"
+        assert gap(tall) == gap(natural), (
+            f"zwischen Feldern und Hinweis stehen {gap(tall)} statt {gap(natural)} Punkte"
+        )
+        assert tall.height() > natural.height() + 100, "das hohe Fenster ist noch höher"
+        assert (
+            tall.attempts.height() - natural.attempts.height() == tall.height() - natural.height()
+        ), "den ganzen Überschuss nimmt die Liste"
+        assert tall.state.geometry().bottom() < tall.attempts.geometry().top(), (
+            "der Hinweis steht über der Liste, von der er spricht"
+        )
+    finally:
+        for dialog in (natural, tall):
+            dialog.wait_for_workers()
+            dialog.close()
+            dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_the_window_gives_back_the_height_a_long_sentence_took(qt_app: QApplication) -> None:
+    """Ein langer Satz macht das Fenster hoch; ein kurzer danach gibt es zurück.
+
+    Bis hierher wuchs der Dialog nur: Nach einer Absage in fünf Zeilen stand
+    danach „Bereit“ über einer leeren Fläche. Was das Fenster selbst genommen
+    hat, gibt es zurück — eine Höhe, die jemand von Hand gezogen hat, nicht.
+    """
+    dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
+    long_text = "Ein langer Satz, der mehrere Zeilen braucht. " * 12
+    short_text = "Bereit."
+    try:
+        dialog.show()
+        wait_for_readiness(dialog, qt_app)
+        _settle(qt_app)
+        before = dialog.height()
+
+        dialog.state.setText(long_text)
+        _settle(qt_app)
+        grown = dialog.height()
+        assert grown > before, "der lange Satz bekommt seine Höhe"
+
+        dialog.state.setText(short_text)
+        _settle(qt_app)
+        back = dialog.height()
+        assert back < grown, f"das Fenster bleibt {grown} hoch statt {back}"
+        assert back <= before
+
+        dialog.state.setText(long_text)
+        _settle(qt_app)
+        dialog.state.setText(short_text)
+        _settle(qt_app)
+        assert dialog.height() == back, "dieselbe Lage, dieselbe Höhe"
+
+        # Von Hand gezogen: Das bleibt, auch nach einem langen Satz.
+        drawn = back + 200
+        dialog.resize(dialog.width(), drawn)
+        _settle(qt_app)
+        dialog.state.setText(long_text)
+        _settle(qt_app)
+        dialog.state.setText(short_text)
+        _settle(qt_app)
+        assert dialog.height() >= drawn, "die gezogene Höhe gehört dem Nutzer"
+    finally:
+        dialog.wait_for_workers()
+        dialog.close()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
 def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:
     """Ein Generator, der Nein sagt, ist kein Absturz — der Satz landet im
     Dialog.

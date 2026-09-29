@@ -290,6 +290,58 @@ def test_a_tiny_generated_body_survives_the_chain(project: Project, profile: Pro
     assert max(body.bounds.size) == pytest.approx(100.0, abs=1e-3), "und steht auf Arbeitsgröße"
 
 
+@pytest.mark.parametrize(
+    ("size", "expected"),
+    [
+        # Würfel mit Kante 2: Faktor 50, also 100 mm Kante und 100³ mm³.
+        ((2.0, 2.0, 2.0), 100.0 * 100.0 * 100.0),
+        # Ungleiche Kanten: Die längste (2) bestimmt den Faktor 50, die
+        # anderen folgen: 50 mal 100 mal 25 mm.
+        ((1.0, 2.0, 0.5), 50.0 * 100.0 * 25.0),
+        # Die längste Kante liegt auf einer anderen Achse: dasselbe Maß.
+        ((0.5, 1.0, 4.0), 12.5 * 25.0 * 100.0),
+    ],
+)
+def test_the_volume_at_working_size_is_that_of_the_body_on_its_largest_edge(
+    size: tuple[float, float, float], expected: float
+) -> None:
+    """Die Versuchszeile des Dialogs nannte das Volumen des rohen Netzes.
+
+    „2 mm³" stand dort, und zwei Schritte später hatte der Körper hundert
+    Millimeter Kante. Gefragt ist das Volumen in der Größe, in der der Körper
+    ins Projekt kommt; der Sollwert folgt aus der Konstruktion.
+    """
+    from app.core.generate import WORKING_SIZE_MM, working_volume
+    from tests.helpers import FakeMesh
+
+    assert WORKING_SIZE_MM == 100.0, "die Sollwerte oben rechnen mit 100 mm"
+    assert working_volume(FakeMesh(size=size)) == pytest.approx(expected, rel=1e-12)  # type: ignore[arg-type]
+
+
+def test_the_volume_at_working_size_is_what_the_stack_makes_of_it(
+    project: Project, profile: Profile
+) -> None:
+    """Zwei Rechnungen, eine Antwort: die Auskunft des Dialogs und der Stapel.
+
+    ``working_volume`` sagt voraus, was ``fit_to_size`` aus dem Netz macht.
+    Misst die Op einmal anders — Diagonale statt längster Kante —, läuft die
+    Vorhersage still davon; hier wird sie rot. Als GLB, denn so liefert
+    TripoSG, und das Laden dreht dabei Y nach oben auf Z.
+    """
+    from app.core.generate import working_volume
+
+    quader = trimesh.creation.box(extents=(1.0, 2.0, 0.5))
+    payload = bytes(trimesh.exchange.export.export_mesh(quader, None, file_type="glb"))
+    generator = ScriptedMeshBackend(fallback=payload, suffix=".glb")
+
+    generation = from_text(project, generator, "ein Quader", seed=7)
+    body = evaluated(project, profile).scene.objects[generation.object_id].mesh
+
+    # 50 mal 100 mal 25 mm aus der Konstruktion: Faktor 100 / 2.
+    assert body.volume == pytest.approx(50.0 * 100.0 * 25.0, rel=1e-6)
+    assert working_volume(generation.result.mesh) == pytest.approx(body.volume, rel=1e-6)
+
+
 def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -> None:
     """§2.2 Weg 3 endet nicht bei „liegt in der Szene", sondern bei
     „damit lässt sich arbeiten".

@@ -233,6 +233,41 @@ def test_comfy_notice_translations_fit_at_large_text(qt_app: QApplication, langu
         set_language("de")
 
 
+def test_a_tall_notice_reads_as_one_piece(qt_app: QApplication) -> None:
+    """In einem hohen Fenster stand der Hinweis in Stücken.
+
+    In der Aufnahme des Workshopfilms: Überschrift, rund 300 Punkte nichts,
+    der Satz, der Datenweg, wieder nichts, dann die Knöpfe. Die drei Teile
+    haben feste Höhen, und ohne Sammelstelle verteilte Qt den Rest zwischen
+    ihnen. Zwischen zwei Teilen steht genau der Abstand der Spalte, über der
+    Überschrift ihr Rand; der Überschuss steht unter dem Hinweis. 960 × 850
+    ist die Größe aus der Aufnahme.
+    """
+    from app.ui.ai_disclosure import target_for_comfy
+
+    dialog = AiDisclosureDialog(target_for_comfy("http://127.0.0.1:8188"))
+    try:
+        dialog.resize(960, 850)
+        _show_until_ready(dialog, qt_app)
+        column = dialog.content.layout()
+        assert column is not None
+        assert dialog.scroll_area.verticalScrollBar().maximum() == 0, "alles passt, nichts rollt"
+
+        heading = dialog.heading.geometry()
+        general = dialog.general_text.geometry()
+        card = dialog.provider_card.geometry()
+        # ``bottom()`` ist die letzte Zeile, die ein Widget belegt: Zwischen
+        # zwei Nachbarn im Abstand ``spacing`` liegen ``spacing + 1``.
+        step = column.spacing() + 1
+        assert (general.top() - heading.bottom(), card.top() - general.bottom()) == (step, step)
+        assert heading.top() == column.contentsMargins().top()
+        assert dialog.content.height() - card.bottom() > dialog.height() // 3, (
+            "der Überschuss steht unter dem Hinweis"
+        )
+    finally:
+        dialog.deleteLater()
+
+
 def test_ollama_targets_are_normalised_classified_and_free_of_secrets() -> None:
     local = target_for_ollama(
         "http://name:secret@127.0.0.1:11434/reverse/api/chat?token=hidden#fragment"
