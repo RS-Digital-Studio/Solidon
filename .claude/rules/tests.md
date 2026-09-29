@@ -63,6 +63,9 @@ Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
   zurück, wie es sie fand** (`tools/list_windowed_tests._collect`): Eine
   `conftest.py` ohne Paket verdrängt dort das Modul `conftest` der Suite, und
   spätere Tests im selben Arbeiter finden das fremde.
+- **Das Torskript entfernt seine temporäre Skriptkopie und sein Protokoll bei
+  jedem Ende**, auch beim Scheitern der Vorbereitung. Beim Laden der Funktionen
+  über `source` bleiben Protokolle des Aufrufers unangetastet.
 - **Die Umgebung wird gegen `constraints.txt` aufgebaut**, sonst wird die Suite
   ohne geänderte Zeile rot.
 - **`filterwarnings = ["error"]`**: Eine Warnung wird behoben, nicht

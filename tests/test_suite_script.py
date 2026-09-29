@@ -184,7 +184,12 @@ def test_native_crash_text_is_not_mistaken_for_failed_test_markers(tmp_path: Pat
 
 
 def fake_suite(
-    tmp_path: Path, *, queue_only: bool = False, release: bool = False, **options: str
+    tmp_path: Path,
+    *,
+    queue_only: bool = False,
+    release: bool = False,
+    arguments: tuple[str, ...] = (),
+    **options: str,
 ) -> subprocess.CompletedProcess[str]:
     """Die echte Torsteuerung mit einem schnellen Interpreter-Doppel ausführen.
 
@@ -205,7 +210,8 @@ case "$*" in
     done
     exit "${FAKE_COLLECT_EXIT:-0}" ;;
 esac
-[ "${1:-}" = "-c" ] && exit 0
+[ "${1:-}" = "-c" ] && [ "${FAKE_IMPORT_TERM:-0}" -eq 1 ] && kill -TERM "$PPID"
+[ "${1:-}" = "-c" ] && exit "${FAKE_IMPORT_EXIT:-0}"
 count=0
 for argument in "$@"; do
   case "$argument" in *::*) count=$((count + 1));; esac
@@ -264,7 +270,7 @@ printf '\n%s passed in 0.01s\n' "$count"
             newline="\n",
         )
     return subprocess.run(
-        [BASH or "bash", str(script), *(["--release"] if release else [])],
+        [BASH or "bash", str(script), *(["--release"] if release else []), *arguments],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -273,6 +279,74 @@ printf '\n%s passed in 0.01s\n' "$count"
         cwd=tmp_path,
         timeout=60,
     )
+
+
+@pytest.mark.parametrize(
+    ("options", "arguments", "copy_fails", "expected_exit"),
+    [
+        ({}, (), False, 0),
+        ({"FAKE_EMPTY_CORE": "1"}, (), False, 1),
+        ({}, ("--unbekannt",), False, 2),
+        ({"SUITE_PYTHON": "does-not-exist/python"}, (), False, 2),
+        ({"FAKE_IMPORT_EXIT": "1"}, (), False, 4),
+        ({"FAKE_IMPORT_TERM": "1"}, (), False, None),
+        ({}, (), True, 1),
+    ],
+    ids=[
+        "erfolg",
+        "kerngruppe-leer",
+        "aufruffehler",
+        "interpreter-fehlt",
+        "importfehler",
+        "import-abgebrochen",
+        "kopierfehler",
+    ],
+)
+def test_the_real_self_copy_and_own_logs_are_removed_on_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    options: dict[str, str],
+    arguments: tuple[str, ...],
+    copy_fails: bool,
+    expected_exit: int | None,
+) -> None:
+    """Auch der Neustart auf der eigenen Skriptkopie muss seine Dateien räumen."""
+    script = tmp_path / ".claude" / "scripts" / "suite-getrennt.sh"
+    script.parent.mkdir(parents=True)
+    shutil.copyfile(SCRIPT, script)
+    monkeypatch.setattr(sys.modules[__name__], "SCRIPT", script)
+    temporary = tmp_path / "temporäre Dateien"
+    temporary.mkdir()
+    unrelated = temporary / "fremdes Protokoll.txt"
+    unrelated.write_text("bewahren", encoding="utf-8")
+    if copy_fails:
+        bash_env = tmp_path / "bash-env.sh"
+        bash_env.write_text("cp() { return 1; }\n", encoding="utf-8", newline="\n")
+        options = {"BASH_ENV": bash_env.as_posix(), **options}
+
+    result = fake_suite(
+        tmp_path,
+        arguments=arguments,
+        SUITE_WURZEL="",
+        TMPDIR=temporary.as_posix(),
+        **options,
+    )
+
+    if expected_exit is None:
+        # Git Bash und POSIX melden Signale mit unterschiedlichen Statuswerten.
+        assert result.returncode != 0, result.stdout + result.stderr
+    else:
+        assert result.returncode == expected_exit, result.stdout + result.stderr
+    assert list(temporary.iterdir()) == [unrelated]
+    assert unrelated.read_text(encoding="utf-8") == "bewahren"
+    assert script.is_file(), "das Original gehört nicht zur temporären Kopie"
+
+
+def test_sourced_helpers_preserve_the_callers_protocol(tmp_path: Path) -> None:
+    """Ein von außen ausgewertetes Protokoll gehört nicht dem Torlauf."""
+    log = "1 passed in 0.01s\n"
+    assert ask('zusammenfassung "$P"', log, tmp_path)
+    assert (tmp_path / "protokoll.txt").read_text(encoding="utf-8") == log
 
 
 def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -> None:

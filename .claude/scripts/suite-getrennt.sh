@@ -43,6 +43,7 @@ set -u
 if [ -z "${SUITE_WURZEL:-}" ]; then
   SUITE_WURZEL=$(cd "$(dirname "$0")/../.." && pwd) || exit 1
   SUITE_KOPIE=$(mktemp) || exit 1
+  trap 'rm -f "$SUITE_KOPIE"' EXIT
   cp "$0" "$SUITE_KOPIE" || exit 1
   export SUITE_WURZEL SUITE_KOPIE
   exec bash "$SUITE_KOPIE" "$@"
@@ -122,15 +123,16 @@ fi
 # Beim reinen Funktionen-Prüfstand laufen weder App-Import noch Sammlung.
 if [ -z "${SUITE_NUR_FUNKTIONEN:-}" ]; then
   import_meldung=$(mktemp)
+  trap 'rm -f "$SUITE_KOPIE" "$import_meldung"' EXIT
   if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_meldung"; then
     echo "Der Baum ist gerade nicht importierbar — mit hoher Wahrscheinlichkeit"
     echo "ist das nicht deine Änderung. Sieh auf den Zeitstempel der genannten"
     echo "Datei, bevor du im eigenen Diff suchst:"
     sed 's/^/    /' "$import_meldung"
-    rm -f "$import_meldung"
     exit 4
   fi
   rm -f "$import_meldung"
+  trap 'rm -f "$SUITE_KOPIE"' EXIT
 fi
 # Pytest löst auch indirekte Fixtures aus ``conftest.py`` auf. Damit hängt die
 # Trennung daran, ob ein Test wirklich ``qt_app`` braucht — nicht daran, ob in
@@ -289,7 +291,7 @@ KERNE=${SUITE_KERNE:-8}
 [ -n "${SUITE_NUR_FUNKTIONEN:-}" ] && return 0
 
 protokoll=$(mktemp)
-trap 'rm -f "$protokoll"' EXIT
+trap 'rm -f "$SUITE_KOPIE" "$protokoll"' EXIT
 
 # Direkt in die Datei schreiben und den Prozessstatus vor jeder Ausgabe sichern.
 # -u hält die Fortschrittszeichen im laufenden Protokoll aktuell.
