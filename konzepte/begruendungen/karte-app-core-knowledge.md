@@ -89,9 +89,9 @@ zurückschreibt; ein Konflikt trägt `RELOAD` als Handlung. Eine geänderte
 deshalb gibt der Spulendialog den gespeicherten Wert unverändert zurück,
 solange niemand den Bestandsblock angefasst hat: Seine Anzeige rundet auf
 eine Nachkommastelle, und die Rundung zählte sonst als Zählung und sperrte
-jede Rücknahme. Archivieren erhält Kennung und Verlauf. Die alten Namenswege
-`remember` und `forget` bearbeiten nur eindeutige Treffer; sie raten bei zwei
-gleichen Etiketten keine physische Spule. `synchronise` (Übernahme aus dem
+jede Rücknahme. Archivieren erhält Kennung und Verlauf. Bearbeitet wird nur
+nach Kennung: Zwei gleiche Etiketten sind zwei Spulen, und der alte Namensweg,
+der dann raten musste, ist entfernt. `synchronise` (Übernahme aus dem
 Slicer) erkennt eine schon übernommene Spule an **Profil und Farbe**, ohne
 Profil an Name, Farbe und Materialart zugleich (`_same_slicer_spools`); alles
 andere wird eine neue Spule mit unbekannter Menge, und eine Mehrdeutigkeit

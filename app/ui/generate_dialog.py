@@ -56,9 +56,9 @@ from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    ContentHeight,
     DialogScrollArea,
     WrappedNote,
-    fit_dialog_to_screen,
     make_primary,
 )
 
@@ -307,8 +307,7 @@ class GenerateDialog(QDialog):
         self._busy = False
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         """Die Höhe, die das Fenster zuletzt selbst genommen hat — woran
         :meth:`_grow_to_content` erkennt, ob jemand anders sie bestimmt hat."""
         self._leash = WorkerLeash(self)
@@ -561,8 +560,7 @@ class GenerateDialog(QDialog):
         layout = self.layout()
         if layout is None or not self.isVisible():
             return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
+        floor = self._height.floor(self)
         # Ungültig machen, bevor gemessen wird: Der Satz hat seine Mindesthöhe
         # gerade erst gepinnt, und die Rechnung darunter hielt sonst den alten
         # Stand — gemessen blieb das Feld nach dem Wachsen gequetscht, bis
@@ -585,10 +583,11 @@ class GenerateDialog(QDialog):
                 + layout.spacing()
                 + self.buttons.sizeHint().height()
             )
-        self.resize(self.width(), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
+        self._height.settle(self, self.width(), max(wanted, floor))
+        # Das Aktivieren danach übernimmt die neue Mindesthöhe und kann die
+        # Höhe noch einmal setzen; gemerkt wird, was dann steht.
         layout.activate()
-        self._fitted_height = self.height()
+        self._height.fitted = self.height()
 
     def _readiness_done(self, workflow: str, found: object, choices: object) -> None:
         """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""

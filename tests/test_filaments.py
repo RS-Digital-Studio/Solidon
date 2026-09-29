@@ -26,14 +26,16 @@ def test_a_fresh_catalogue_is_empty(own_catalogue: Path) -> None:
     assert filaments.catalogue() == ()
 
 
-def test_remember_and_read_back(own_catalogue: Path) -> None:
-    filaments.remember(
-        "PETG Rot",
-        "#d02020",
-        material_type="PETG",
-        slicer_profile="Elegoo PETG PRO @ECC2",
+def test_saved_spools_read_back(own_catalogue: Path) -> None:
+    filaments.save(
+        filaments.CatalogueFilament(
+            "PETG Rot",
+            "#d02020",
+            material_type="PETG",
+            slicer_profile="Elegoo PETG PRO @ECC2",
+        )
     )
-    filaments.remember("PLA Weiß", "#f0f0f0")
+    filaments.save(filaments.CatalogueFilament("PLA Weiß", "#f0f0f0"))
 
     names = [entry.name for entry in filaments.catalogue()]
     assert names == ["PETG Rot", "PLA Weiß"], "sortiert nach Name, nicht nach Anlage"
@@ -57,7 +59,7 @@ def test_an_old_catalogue_without_type_and_profile_still_opens(own_catalogue: Pa
 
 
 def test_synchronising_the_slicer_keeps_the_rest_of_the_rack(own_catalogue: Path) -> None:
-    filaments.remember("ASA Schwarz", "#202020", material_type="ASA")
+    filaments.save(filaments.CatalogueFilament("ASA Schwarz", "#202020", material_type="ASA"))
 
     filaments.synchronise(
         [
@@ -75,25 +77,6 @@ def test_synchronising_the_slicer_keeps_the_rest_of_the_rack(own_catalogue: Path
     assert entries["Elegoo PETG PRO @ECC2"].material_type == "PETG"
 
 
-def test_the_same_name_changes_the_colour_instead_of_doubling(own_catalogue: Path) -> None:
-    """Ein Filament ist sein Name — wer „PETG Rot" neu anlegt, meint dasselbe
-    Filament mit anderer Farbe, nicht ein zweites."""
-    filaments.remember("PETG Rot", "#d02020")
-    filaments.remember("PETG Rot", "#a01010")
-
-    entries = filaments.catalogue()
-    assert len(entries) == 1
-    assert entries[0].colour == "#a01010"
-
-
-def test_forget_removes_and_says_whether_it_did(own_catalogue: Path) -> None:
-    filaments.remember("PETG Rot", "#d02020")
-
-    assert filaments.forget("PETG Rot") is True
-    assert filaments.forget("PETG Rot") is False, "weg heißt weg — kein zweites Mal"
-    assert filaments.catalogue() == ()
-
-
 def test_a_broken_file_never_gets_overwritten(own_catalogue: Path) -> None:
     """Der Start bleibt möglich; kein Schreibweg darf einen beschädigten Bestand löschen."""
     filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
@@ -102,14 +85,14 @@ def test_a_broken_file_never_gets_overwritten(own_catalogue: Path) -> None:
         filaments.catalogue()
 
     with pytest.raises(ValidationError) as raised:
-        filaments.remember("PETG Rot", "#d02020")
+        filaments.save(filaments.CatalogueFilament("PETG Rot", "#d02020"))
     assert raised.value.suggestions
     assert filaments.catalogue_path().read_text(encoding="utf-8") == "{kaputt"
 
 
 def test_an_empty_name_stops_with_advice(own_catalogue: Path) -> None:
     with pytest.raises(ValidationError) as raised:
-        filaments.remember("   ", "#d02020")
+        filaments.save(filaments.CatalogueFilament("   ", "#d02020"))
     assert raised.value.suggestions, "Regel 17: auch diese Ausnahme trägt Handlungen"
 
 
@@ -117,7 +100,7 @@ def test_a_colour_that_is_no_colour_stops_with_advice(own_catalogue: Path) -> No
     """„#RRGGBB" ist der Vertrag — der 3MF-Export und die Ansicht lesen ihn."""
     for wrong in ("rot", "#12345", "#gg0000", ""):
         with pytest.raises(ValidationError):
-            filaments.remember("PETG Rot", wrong)
+            filaments.save(filaments.CatalogueFilament("PETG Rot", wrong))
     assert filaments.catalogue() == (), "abgelehnt heißt: nichts geschrieben"
 
 
@@ -188,7 +171,7 @@ def test_a_filament_may_carry_up_to_four_colours(own_catalogue: Path) -> None:
 def test_a_profile_path_never_enters_the_catalogue(own_catalogue: Path, profile: str) -> None:
     """Ein Profil reist als Name zwischen Rechnern, nie als lokaler Pfad."""
     with pytest.raises(ValidationError) as raised:
-        filaments.remember("PETG Rot", "#d02020", slicer_profile=profile)
+        filaments.save(filaments.CatalogueFilament("PETG Rot", "#d02020", slicer_profile=profile))
 
     assert raised.value.field == "slicer_profile"
     assert raised.value.constraint == "format"
@@ -200,7 +183,9 @@ def test_a_material_separator_in_a_manufacturer_profile_is_preserved(own_catalog
     """Ein Herstellername mit PLA/PETG bleibt ein Name und wird nicht als Pfad geöffnet."""
     name = "Generic Support for PLA/PETG @System"
     assert filaments.profile_name(name) == name
-    entry = filaments.remember("Stützfilament", "#eeeeee", slicer_profile=name)
+    entry = filaments.save(
+        filaments.CatalogueFilament("Stützfilament", "#eeeeee", slicer_profile=name)
+    )
     assert entry.slicer_profile == name
     assert filaments.catalogue()[0].slicer_profile == name
 
@@ -259,7 +244,7 @@ def test_a_slicer_path_drops_the_binding_but_keeps_the_loaded_spool(
 def test_the_catalogue_survives_a_new_reading(own_catalogue: Path) -> None:
     """Persistenz ist der Zweck: Der Katalog ist die Vorwahl über Projekte
     hinweg, nicht ein Sitzungszustand."""
-    filaments.remember("ASA Schwarz", "#202020")
+    filaments.save(filaments.CatalogueFilament("ASA Schwarz", "#202020"))
 
     assert [entry.name for entry in filaments.catalogue()] == ["ASA Schwarz"]
     scratch = list(own_catalogue.glob("*.tmp"))

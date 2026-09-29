@@ -28,7 +28,9 @@ from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import (
     ChatEntry,
     Document,
+    FeatureRef,
     Finding,
+    Fit,
     MetricSource,
     Profile,
     Scene,
@@ -1090,6 +1092,51 @@ def test_a_fit_takes_its_tolerance_from_the_material(project: Project, profile: 
     # Ohne Kennung: Das Werkzeug fragt kein Material ab, also folgt die
     # Passung den Körpern (Durchsicht 0.5.0).
     assert proposal.fits[0].tolerance == "auto:"
+
+
+def _add_fit(name: str | None = None, *, call: str = "1") -> Reply:
+    arguments = {"a": "obj_1:hole_1", "b": "obj_1:hole_2", "kind": "clearance"}
+    if name is not None:
+        arguments["name"] = name
+    return Reply(tool_calls=(ToolCall(id=call, name="add_fit", arguments=arguments),))
+
+
+def test_a_second_fit_under_a_taken_name_is_refused(project: Project, profile: Profile) -> None:
+    """Zwei Passungen mit demselben Namen sind eine: Der Bericht nennt die
+    Passung beim Namen, und die Karte baut ``{name: fit}`` — die zweite fiele
+    still heraus. Der zweite Aufruf ist ungültig und sagt, welche Namen belegt
+    sind; die erste Passung bleibt."""
+    agent = session(
+        project,
+        profile,
+        [_add_fit("stift"), _add_fit("stift", call="2"), Reply(text="Fertig.")],
+    )
+
+    proposal = agent.propose("Leg zwei Passungen an")
+
+    assert [fit.name for fit in proposal.fits] == ["stift"]
+    assert proposal.invalid_calls == 1
+
+
+def test_a_fit_without_a_name_gets_one_nobody_holds(project: Project, profile: Profile) -> None:
+    """Der Vorgabename zählte die vorhandenen Passungen — neben einer, die schon
+    ``fit_2`` heißt, kam ein zweites ``fit_2`` heraus."""
+    project.document.fits.append(
+        Fit(
+            name="fit_2",
+            a=FeatureRef.parse("obj_1:hole_1"),
+            b=FeatureRef.parse("obj_1:hole_2"),
+            kind="clearance",
+            tolerance="auto:",
+        )
+    )
+    agent = session(project, profile, [_add_fit(), Reply(text="Fertig.")])
+
+    proposal = agent.propose("Leg eine Passung an")
+
+    names = [fit.name for fit in (*project.document.fits, *proposal.fits)]
+    assert len(names) == len(set(names)) == 2, names
+    assert proposal.invalid_calls == 0
 
 
 # --- annehmen und zurücknehmen (§26.3, §26.5) ------------------------------------

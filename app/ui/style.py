@@ -33,6 +33,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer,
 from PySide6.QtGui import QFont, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QLabel,
@@ -305,6 +306,69 @@ def fit_dialog_to_screen(dialog: QWidget) -> None:
     y = max(room.top(), min(frame.top(), room.bottom() - frame.height() + 1))
     if x != frame.left() or y != frame.top():
         dialog.move(x, y)
+
+
+class ContentHeight:
+    """Die Höhe eines Dialogs mit Rollbereich: dem Inhalt nach, eine gezogene
+    Höhe als Untergrenze.
+
+    Der Dialog merkt sich, welche Höhe er selbst zuletzt gesetzt hat
+    (``fitted``). Steht er beim nächsten Anpassen anders da, hat der Kunde
+    gezogen, und diese Höhe (``user``) bleibt Untergrenze: Wächst der Inhalt
+    — eine aufgeklappte Klappe, ein nachgereichter Satz —, bekommt er Platz;
+    schrumpft er, gibt das Fenster zurück, was es selbst genommen hat, und nie
+    mehr. Die Regel stand in jedem Dialog mit Rollbereich als eigene Kopie;
+    zwei prüften in anderer Reihenfolge, einer kannte keine Untergrenze.
+    """
+
+    __slots__ = ("fitted", "user")
+
+    def __init__(self) -> None:
+        self.fitted: int | None = None
+        self.user = 0
+
+    def floor(self, dialog: QWidget) -> int:
+        """Die gezogene Höhe, nachdem eine neue Nutzergröße gemerkt ist.
+
+        Vor dem Messen fragen: Das Aktivieren des Layouts kann die Höhe schon
+        ändern, und das wäre dann kein Zug des Kunden.
+        """
+        if dialog.isVisible() and self.fitted is not None and dialog.height() != self.fitted:
+            self.user = dialog.height()
+        return self.user
+
+    def settle(self, dialog: QWidget, width: int, height: int) -> None:
+        """Setzt die gemessene Größe, hält sie auf dem Bildschirm und merkt sie."""
+        dialog.resize(width, height)
+        fit_dialog_to_screen(dialog)
+        self.fitted = dialog.height()
+
+    def fit(self, dialog: QWidget, scroll: QScrollArea, *, grow_width: bool = False) -> None:
+        """Die gewöhnliche Anpassung: Rollbereich und Layout neu messen, dann
+        :meth:`settle` mit der Wunschhöhe des Dialogs.
+
+        Nur an einem sichtbaren Dialog — vorher kennt Qt weder Stylesheet noch
+        Breite (:func:`fit_height_after_show`). ``grow_width`` lässt auch die
+        Breite bis zum Wunsch wachsen, nie schmaler werden.
+        """
+        layout = dialog.layout()
+        if layout is None or not dialog.isVisible():
+            return
+        floor = self.floor(dialog)
+        scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = dialog.sizeHint()
+        width = max(dialog.width(), wanted.width()) if grow_width else dialog.width()
+        self.settle(dialog, width, max(wanted.height(), floor))
+
+
+def select_data(box: QComboBox, identifier: str) -> None:
+    """Wählt den Eintrag eines Kombifelds mit dieser Kennung — und nichts, wenn
+    es ihn nicht gibt; die bisherige Wahl bleibt dann stehen."""
+    index = box.findData(identifier)
+    if index >= 0:
+        box.setCurrentIndex(index)
 
 
 def fit_height_after_show(dialog: QDialog) -> None:

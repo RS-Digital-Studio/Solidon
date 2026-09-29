@@ -455,7 +455,7 @@ _NOT_A_RANGE = frozenset(
         "invalid_mesh_array_size",
         # Lagerbestand und Buchungsidentität: fehlende oder archivierte Spule,
         # konkurrierende Änderung und unbestätigter Bestand sind keine Maßspanne.
-        "ambiguous", "archived", "conflict", "missing", "stock", "stock_conflict",
+        "archived", "conflict", "missing", "stock", "stock_conflict",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "expected_sha256",
         # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):

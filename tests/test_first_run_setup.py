@@ -993,3 +993,65 @@ def test_a_custom_printer_takes_its_layer_height_or_names_the_derived_one(
         assert profiles.printer(other.settings.printer).layer_height == pytest.approx(own)
     finally:
         other.release()
+
+
+# --- Die Druckervorwahl gilt für Erststart und Einstellungen gleich ---------------
+
+
+def test_the_printer_list_keeps_the_standard_and_every_resin_printer() -> None:
+    """Ein FDM-Slicer filtert nur die FDM-Drucker; Standard und Resin bleiben wählbar."""
+    known = {
+        "fdm-a": replace(profiles.printer_profiles()[profiles.DEFAULT_PRINTER], id="fdm-a"),
+        "resin-a": replace(
+            profiles.printer_profiles()[profiles.DEFAULT_PRINTER], id="resin-a", technology="resin"
+        ),
+    }
+
+    assert first_run.allowed_printers(("fdm-b",), known) == {
+        "fdm-b",
+        profiles.DEFAULT_PRINTER,
+        "resin-a",
+    }
+
+
+def test_a_suggestion_outside_the_list_never_replaces_a_fitting_printer() -> None:
+    """Stand die Wahl auf dem letzten Vorschlag und nennt der Slicer einen, den es
+    in der Liste nicht gibt, bleibt der passende Drucker — nicht der Standard."""
+    allowed = {"elegoo", profiles.DEFAULT_PRINTER}
+
+    chosen, remembered = first_run.preferred_printer("elegoo", "unknown", "elegoo", allowed)
+
+    assert chosen == "elegoo"
+    assert remembered == "elegoo"
+
+
+def test_a_choice_on_the_suggestion_follows_the_next_suggestion() -> None:
+    """Wer die Vorwahl stehen ließ, bekommt beim nächsten Slicer dessen Vorschlag —
+    auch wenn die Wahl schon vorher auf dem Vorschlag stand."""
+    allowed = {"elegoo", "bambu", profiles.DEFAULT_PRINTER}
+
+    first, remembered = first_run.preferred_printer("elegoo", "elegoo", "", allowed)
+    second, _ = first_run.preferred_printer(first, "bambu", remembered, allowed)
+
+    assert first == "elegoo"
+    assert remembered == "elegoo", "die Wahl steht auf dem Vorschlag, also gilt er als gemerkt"
+    assert second == "bambu"
+
+
+def test_a_deliberate_choice_survives_a_new_suggestion() -> None:
+    allowed = {"elegoo", "bambu", profiles.DEFAULT_PRINTER}
+
+    chosen, remembered = first_run.preferred_printer("elegoo", "bambu", "prusa", allowed)
+
+    assert (chosen, remembered) == ("elegoo", "prusa")
+
+
+def test_a_choice_that_left_the_list_takes_the_suggestion_or_the_standard() -> None:
+    allowed = {"bambu", profiles.DEFAULT_PRINTER}
+
+    assert first_run.preferred_printer("gone", "bambu", "", allowed) == ("bambu", "bambu")
+    assert first_run.preferred_printer("gone", "", "", allowed) == (profiles.DEFAULT_PRINTER, "")
+    assert first_run.preferred_printer("__custom__", "bambu", "", allowed, keep={"__custom__"}) == (
+        "__custom__",
+        "",
+    )

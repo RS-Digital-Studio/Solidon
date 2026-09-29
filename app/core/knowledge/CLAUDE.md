@@ -61,8 +61,8 @@ und ist kein Testlauf.
   `remaining_grams` ist eine Bestandsfeststellung (`stock_revision` springt) —
   der Spulendialog gibt den gespeicherten Wert unverändert zurück, solange
   niemand den Bestandsblock anfasst, sonst zählte seine Rundung als Zählung.
-  Archivieren erhält Kennung und Verlauf; `remember`/`forget` bearbeiten nur
-  eindeutige Treffer. `valid_date` ist die eine Datumsprüfung.
+  Archivieren erhält Kennung und Verlauf; bearbeitet wird nur nach Kennung,
+  nie nach Namen. `valid_date` ist die eine Datumsprüfung.
 - **`synchronise`** (Übernahme aus dem Slicer) erkennt eine übernommene Spule
   an Profil und Farbe, ohne Profil an Name, Farbe und Materialart zugleich
   (`_same_slicer_spools`); alles andere wird neu mit unbekannter Menge, eine

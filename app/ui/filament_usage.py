@@ -50,8 +50,8 @@ from app.ui.style import (
     TARGET_SIZE,
     TIGHT,
     WIDE,
+    ContentHeight,
     DialogScrollArea,
-    fit_dialog_to_screen,
     make_primary,
     set_level,
 )
@@ -207,8 +207,7 @@ class UsageDialog(QDialog):
 
     def __init__(self, request: UsageRequest, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self.request = request
         self.booking_declined = False
         self._lines = list(request.lines)
@@ -387,19 +386,7 @@ class UsageDialog(QDialog):
 
     def _fit_content(self) -> None:
         """Kurze Spulenlisten vollständig zeigen, gezogene Höhen erhalten."""
-        if not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        layout = self.layout()
-        assert layout is not None
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        wanted = self.sizeHint().height()
-        self.resize(self.width(), max(self._user_height, wanted))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll)
 
     @staticmethod
     def _amount_widget(grams: float | None, parent: QWidget) -> NumberSpin:

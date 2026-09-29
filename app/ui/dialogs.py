@@ -106,6 +106,7 @@ from app.ui.style import (
     ROOMY,
     TIGHT,
     WIDE,
+    ContentHeight,
     DialogScrollArea,
     fit_dialog_to_screen,
     fit_height_after_show,
@@ -1011,8 +1012,7 @@ class KeyDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.account = account
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self.settings = settings if settings is not None else load_settings()
         self.setWindowTitle(tr("Chat einrichten"))
         self.setMinimumWidth(460)
@@ -1101,18 +1101,7 @@ class KeyDialog(QDialog):
 
     def _fit_key_content(self) -> None:
         """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
-        if not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        layout = self.layout()
-        assert layout is not None
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        self.resize(self.width(), max(self._user_height, self.sizeHint().height()))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll)
 
     # --- nachsehen --------------------------------------------------------------
 
@@ -2028,8 +2017,7 @@ class ActivationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Solidon freischalten"))
         self.setMinimumWidth(600)
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
 
         self.state_label = QLabel(self)
         self.state_label.setWordWrap(True)
@@ -2316,18 +2304,7 @@ class ActivationDialog(QDialog):
 
     def _fit_activation_content(self) -> None:
         """Erst die umbrochene Feldhöhe bestimmt die natürliche Fensterhöhe."""
-        layout = self.layout()
-        if layout is None or not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        wanted = self.sizeHint().height()
-        self.resize(self.width(), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll)
 
     def _fit_activation_soon(self) -> None:
         QTimer.singleShot(0, self, self._fit_activation_content)
