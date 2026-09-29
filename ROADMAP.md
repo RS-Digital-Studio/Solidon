@@ -128,6 +128,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
 | [RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1](#rm-293) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: vier kleine Stellen |
 | [RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1](#rm-295) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: zwei Tests schärfen |
+| [RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts](#rm-313) | Tests und Entwicklungswerkzeuge | Einen Lauf gegen die neuesten Versionen schaffen, der ohne öffentliches Repository läuft |
+| [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Lizenz von `en_US-ljspeech-high` und seinem Datensatz belegen (`/legal-review`) |
+| [RM-315 — Testhelfer zusammenführen: der Rest aus dem Aufräumen](#rm-315) | Tests und Entwicklungswerkzeuge | Inline-Wächter des exakten Kerns und private Querimporte auf die gemeinsamen Helfer umstellen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -3811,6 +3814,39 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   reißt unter Last: Wird der lesende Faden verdrängt, liegen bei Beginn seiner Frist schon
   alle Bytes im Puffer, und die Frist reißt nie (Tor über `055924bb4`, einzeln dreimal grün).
   Den Schreiber erst nach dem Lesebeginn starten.
+
+<a id="rm-313"></a>
+
+- [ ] **RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts.** Aus
+  dem Aufräumen vom 29.09.2026 (Bericht Werkzeuge 6.1). Der Montagsjob `latest` in
+  `.github/workflows/build.yml` lief seit dem 07.09.2026 ohne Ergebnis: zweimal mit null
+  Schritten (Abrechnungsablehnung im privaten Repository), einmal abgebrochen. Die Kommentare
+  in `constraints.txt` und `pyproject.toml` nennen ihn seitdem nicht mehr als Wächter. Weg:
+  entweder `tools/check_env.py` löst in einer Wegwerfumgebung frei auf und fährt die
+  Kernsuite, oder `/erzeugen` startet den Job beim Release von Hand, sobald das Repository
+  öffentlich ist. Abnahme: je Release ein Lauf gegen die neuesten Versionen mit Ergebnis.
+
+<a id="rm-314"></a>
+
+- [ ] **RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme.** Aus dem
+  Aufräumen vom 29.09.2026 (Bericht Werkzeuge 5.7). `tools/speak_piper.py` spricht mit der
+  Piper-Stimme `en_US-ljspeech-high`; Piper selbst läuft seitdem als eigenes Programm (GPL nur
+  extern, Regel 15). Für die Stimme und den Datensatz dahinter fehlt der Nachweis in
+  `ASSET-RIGHTS.toml` bzw. `app/core/knowledge/data/licences.toml`. Abnahme: Lizenz und Quelle
+  eingetragen, vorher `/legal-review`.
+
+<a id="rm-315"></a>
+
+- [ ] **RM-315 — Testhelfer zusammenführen: der Rest aus dem Aufräumen.** Aus dem Aufräumen
+  vom 29.09.2026 (Bericht Werkzeuge 2.5 und 2.12); die Dateien waren an dem Tag in fremder
+  Arbeit. (a) Rund 44 Inline-Wächter des exakten Kerns (`importorskip` auf
+  `app.core.brep.kernel`, `OCP` und eigene `app.core.brep`-Module mit vier verschiedenen
+  Skip-Sätzen) auf `tests.helpers.exact_kernel()` umstellen — ein `importorskip` auf ein
+  eigenes Modul überspringt auch dann, wenn es an einem eigenen Importfehler scheitert.
+  (b) Die privaten Querimporte `_until`, `blind_cylinder`, `bore_seed`, `rectangle`, `cube`
+  und `SOURCE` nach `tests/helpers.py` bzw. `tests/ui_helpers.py` ziehen. Abnahme: die Regel
+  aus `tests/CLAUDE.md` („nie `from tests.test_x import _privat`“) ohne Ausnahme erfüllt und
+  von einem Wächter gehalten.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
