@@ -6219,6 +6219,39 @@ def test_a_body_that_falls_apart_after_a_feature_step_says_so(
     assert split[0].object_id == "obj_1"
 
 
+@pytest.mark.parametrize(("parts", "stays"), [(1, False), (2, True), (3, True)])
+def test_the_split_warning_holds_until_the_body_is_one_piece_again(parts: int, stays: bool) -> None:
+    """„Der Körper zerfällt nach diesem Schritt in lose Teile" am Endstand gefragt.
+
+    Ist der Körper am Ende wieder ein Stück, beschreibt der Satz einen
+    Zwischenstand (29.09.2026: ``feature.body_split`` fehlte in
+    ``evaluate.ONE_PIECE_CODES``, wo sein Zwilling ``mesh.components_split``
+    steht). Eine andere Teilezahl widerlegt ihn nicht: Bei einem Baustein mit
+    lösbarem Teil zählt „Nachher" nur die Stücke des Trägers
+    (``test_a_host_that_a_separate_part_cuts_apart_still_says_so``).
+    """
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding
+
+    pieces = []
+    for index in range(parts):
+        piece = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        piece.apply_translation((20.0 * index, 0.0, 0.0))
+        pieces.append(piece)
+    body = MeshData.of(trimesh.util.concatenate(pieces))
+    assert body.component_count == parts, "die Vorbedingung"
+    said = Finding(
+        code="feature.body_split",
+        severity="warning",
+        message="",
+        object_id="obj_1",
+        values={"before": 1, "after": 2, "op": "remove_feature"},
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=body)})
+
+    assert bool(_without_outdated([said], scene)) is stays
+
+
 def _plate_with_a_conical_boss_and_a_bore() -> MeshData:
     """Platte 30 × 30 × 6, darauf ein Kegelstumpf Ø 10 auf Ø 6, 2 mm hoch, und eine
     Bohrung Ø 2 durch beides."""

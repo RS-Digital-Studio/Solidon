@@ -2371,6 +2371,55 @@ def test_the_report_forgets_the_split_once_the_body_is_one_piece_again(
         assert "bore.splits_the_body" in codes, codes
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_the_split_sentence_names_the_parts_the_body_has_at_the_end(
+    profile: Profile, kernel: str
+) -> None:
+    """Eine Teilezahl im Bericht ist die des Endstands, nicht die eines Zwischenschritts.
+
+    Gemessen am 29.09.2026 an ``build_tray_v3.step`` (fünf Körper): quer
+    durchgeschnitten acht Teile, danach überbrückt drei — und im Bericht stand
+    weiter der Zerfall mit „Anzahl 8", an beiden Kernen. Hier kleiner: Der
+    Würfel zerfällt am ersten Langloch in zwei Teile, am zweiten, quer dazu, in
+    vier. Stehen bleibt der Satz mit vier; der mit zwei fällt wie beim
+    Zwilling ``mesh.components_split`` (``evaluate.COUNTED_PARTS``).
+    """
+    from app.core.scene import OperationDraft, evaluate
+
+    project, history, _box = _a_cube_cut_in_two(profile, kernel)
+    history.apply(
+        "Zweites Langloch quer",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": 5.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 20.0,
+                    "axis": "z",
+                    "depth": 0.0,
+                    "anchor": "mouth",
+                    "slotted": True,
+                    "slot_length": 100.0,
+                    "slot_angle": 90.0,
+                },
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, quality="fine")
+
+    assert result.scene.objects["obj_1"].mesh.component_count == 4, "die Vorbedingung"
+    said = [
+        (finding.code, dict(finding.values))
+        for finding in result.scene.report.findings
+        if finding.code in {"bore.splits_the_body", "feature.body_split"}
+    ]
+    assert said == [("bore.splits_the_body", {"count": 4})], said
+
+
 def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     """An beiden Enden wird gefragt — an beiden Kernen.
 

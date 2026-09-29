@@ -1446,8 +1446,12 @@ ONE_PIECE_CODES: Final = frozenset(
 #: Sie fallen auch an einem Körper, der am Endstand aus **anderen** vielen
 #: Teilen besteht: „69 Teile, von denen manche ineinanderstecken" stand über
 #: dem Bohrmaschinenhalter, den *Überschneidungen auflösen* zu vier Teilen
-#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13).
+#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13). Ebenso „Anzahl 8"
+#: über einer Wanne, die ein späterer Schritt zu drei Teilen überbrückt hatte.
+#: **Nicht** ``feature.body_split``: Bei einem Baustein mit lösbarem Teil zählt
+#: sein „Nachher" nur die Stücke des Trägers, der Körper hat eines mehr.
 COUNTED_PARTS: Final[dict[str, str]] = {
+    "bore.splits_the_body": "count",
     "ingest.multiple_components": "components",
     "repair.part_inside": "components",
     "mesh.components_split": "after_components",
