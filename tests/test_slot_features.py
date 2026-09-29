@@ -2269,6 +2269,73 @@ def test_a_slot_that_cuts_the_body_in_two_says_so(profile: Profile) -> None:
     assert "bore.splits_the_body" in [finding.code for finding in findings]
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("bridged", [True, False], ids=["wieder-ein-stueck", "bleibt-zerfallen"])
+def test_the_report_forgets_the_split_once_the_body_is_one_piece_again(
+    profile: Profile, kernel: str, bridged: bool
+) -> None:
+    """„Er zerfällt in mehrere Teile" gilt nur, solange der Körper zerfallen ist.
+
+    Gemessen am 29.09.2026: Würfel 20 mm, Langloch 100 mm quer durch (zwei
+    Teile), danach ein Quader darüber vereinigt — am Endstand ein Stück, an
+    beiden Kernen, und im Bericht standen weiter zwei Sätze vom Zerfall.
+    ``bore.splits_the_body`` und der allgemeine ``feature.body_split`` der
+    Auswertung fehlten in ``evaluate.ONE_PIECE_CODES``, wo ihr Zwilling
+    ``mesh.components_split`` steht (``.claude/rules/operationen.md``,
+    „Befunde statt Protokoll"). Die Gegenrichtung: Bleibt der Körper in zwei
+    Teilen, bleibt auch der Satz.
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    load_operations()
+    box = "create_brep_box" if kernel == "brep" else "create_box"
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Würfel und Langloch",
+        [
+            OperationDraft(op=box, params={"width": 20.0, "depth": 20.0, "height": 20.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": 5.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 20.0,
+                    "axis": "z",
+                    "depth": 0.0,
+                    "anchor": "mouth",
+                    "slotted": True,
+                    "slot_length": 100.0,
+                },
+            ),
+        ],
+    )
+    split = evaluate(project.document, profile, quality="fine")
+    assert split.scene.objects["obj_1"].mesh.component_count == 2, "die Vorbedingung"
+    if bridged:
+        history.apply(
+            "Brücke",
+            [OperationDraft(op=box, params={"width": 20.0, "depth": 20.0, "height": 4.0})],
+        )
+        history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"))])
+
+    result = evaluate(project.document, profile, quality="fine")
+
+    assert result.stopped_at is None
+    parts = result.scene.objects["obj_1"].mesh.component_count
+    assert parts == (1 if bridged else 2), "die Vorbedingung: der Endstand, den der Test meint"
+    codes = [finding.code for finding in result.scene.report.findings]
+    if bridged:
+        assert not {"bore.splits_the_body", "feature.body_split"} & set(codes), codes
+    else:
+        assert "bore.splits_the_body" in codes, codes
+
+
 def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     """An beiden Enden wird gefragt — an beiden Kernen.
 

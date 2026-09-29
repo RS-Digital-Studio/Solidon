@@ -1427,9 +1427,13 @@ CLOSED_STATE_CODES: Final = frozenset(
 
 #: Und die, die „mehr als ein Teil" aussagen — am Endstand gestrichen, wenn
 #: der Körper dort aus einem Stück besteht. Ein Teil im Teil gehört dazu:
-#: Ohne zweite Schale gibt es keines.
+#: Ohne zweite Schale gibt es keines. Ebenso der Zerfall an einem Schritt, den
+#: ein späterer wieder zu einem Stück vereinigt hat — ob die Bohrung ihn meldet
+#: (``bore.splits_the_body``) oder die Auswertung (``feature.body_split``).
 ONE_PIECE_CODES: Final = frozenset(
     {
+        "bore.splits_the_body",
+        "feature.body_split",
         "ingest.multiple_components",
         "ingest.small_components",
         "mesh.components_split",
