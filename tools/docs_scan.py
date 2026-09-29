@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
@@ -66,8 +67,9 @@ FLOOR = 20
 #: liegt beim Kunden in seinem Cura. Eine Karte, die sie nennt, hat recht.
 REFERENCE = re.compile(r"`([A-Za-z0-9_./-]+\.(?:md|py))`")
 
-#: Verweise, die absichtlich ins Nichts zeigen: Beispiele und Platzhalter.
-NOT_A_PATH = re.compile(r"^(?:<|beispiel|example|name|datei|pfad)", re.IGNORECASE)
+#: Beispiele, Platzhalter und der maschinenlokale Erinnerungsindex sind
+#: keine Zusagen über Dateien im Repository.
+NOT_A_PATH = re.compile(r"^(?:<|beispiel|example|name|datei|pfad|MEMORY\.md$)", re.IGNORECASE)
 
 
 def rule_files() -> list[Path]:
@@ -75,15 +77,51 @@ def rule_files() -> list[Path]:
     return sorted((ROOT / ".claude" / "rules").glob("*.md"))
 
 
+def repository_files() -> list[Path]:
+    """Arbeitsdateien ohne ignorierte Kopien; neue Dateien zählen vor dem Commit.
+
+    Git liefert die Menge ohne die Traversierung lokaler Umgebungen. Ohne Git
+    bleibt ein beschnittener Suchlauf für ausgepackte Quellbäume und Testkorpora.
+    Alle Ausschlüsse gelten unterhalb von ROOT, auch in einem Worktree.
+    """
+    skip = {".git", ".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker"}
+    listed = None
+    try:
+        git_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=ROOT,
+            capture_output=True,
+            encoding="utf-8",
+            check=True,
+        ).stdout.rstrip("\r\n")
+        if Path(git_root).resolve() == ROOT.resolve():
+            listed = subprocess.run(
+                ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+                cwd=ROOT,
+                capture_output=True,
+                encoding="utf-8",
+                check=True,
+            ).stdout
+    except OSError, subprocess.CalledProcessError:
+        pass
+    if listed is None:
+        found = []
+        for path, children, files in ROOT.walk():
+            children[:] = [name for name in children if name not in skip]
+            found.extend(path / name for name in files)
+        return sorted(found)
+    return sorted(
+        {
+            ROOT / name
+            for name in listed.split("\0")
+            if name and not skip.intersection(Path(name).parts) and (ROOT / name).is_file()
+        }
+    )
+
+
 def maps() -> list[Path]:
     """Alle Karten des Repositories — die Arbeitsbäume fremder Sitzungen nicht."""
-    found = []
-    for path in ROOT.rglob("CLAUDE.md"):
-        parts = path.relative_to(ROOT).parts
-        if "worktrees" in parts or ".venv" in parts or "node_modules" in parts:
-            continue
-        found.append(path)
-    return sorted(found)
+    return [path for path in repository_files() if path.name == "CLAUDE.md"]
 
 
 def documents() -> list[Path]:
@@ -202,14 +240,23 @@ def report_duplicates(limit: int) -> None:
 def report_dead(limit: int) -> None:
     print("\n## 3 — Verweise auf Dateien, die es nicht gibt\n")
     dead: list[tuple[Path, str]] = []
+    files = set(repository_files())
+    references = {
+        Path(*parts[start:]).as_posix()
+        for path in files
+        if (parts := path.relative_to(ROOT).parts)
+        for start in range(len(parts))
+    }
     for document in documents():
         for line in document.read_text(encoding="utf-8").splitlines():
             for reference in REFERENCE.findall(line):
                 if NOT_A_PATH.match(reference) or reference.startswith("."):
                     continue
-                if (ROOT / reference).exists() or (document.parent / reference).exists():
+                if ROOT / reference in files or document.parent / reference in files:
                     continue
-                if next(ROOT.rglob(Path(reference).name), None) is not None:
+                # Karten kürzen etwa app/core/scene/file.py zu scene/file.py.
+                # Der ganze genannte Teilpfad muss passen, nicht nur der Name.
+                if reference in references:
                     continue
                 dead.append((document, reference))
     if not dead:

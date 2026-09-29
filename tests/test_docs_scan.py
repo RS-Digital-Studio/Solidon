@@ -14,9 +14,78 @@ Verweis auf eine Datei, die zur Laufzeit im Nutzerordner entsteht.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
+import pytest
+
 from tools import docs_scan
+
+
+def test_maps_ignore_local_copies_but_include_new_unicode_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lokale Kopien verfälschen die Kartenmenge nicht; neue Karten zählen sofort."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("/Prüfreste/\n", encoding="utf-8")
+    behalten = [tmp_path / "CLAUDE.md", tmp_path / "neuer Bereich ä" / "CLAUDE.md"]
+    for pfad in [*behalten, tmp_path / "Prüfreste" / "alt" / "CLAUDE.md"]:
+        pfad.parent.mkdir(parents=True, exist_ok=True)
+        pfad.write_text("Karte", encoding="utf-8")
+    monkeypatch.setattr(docs_scan, "ROOT", tmp_path)
+
+    assert docs_scan.maps() == sorted(behalten)
+
+
+def test_an_extracted_tree_does_not_use_its_parent_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch unter einem fremden Git-Baum bleibt ein ausgepackter Quellbaum lesbar."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("/extracted/\n", encoding="utf-8")
+    root = tmp_path / "extracted"
+    root.mkdir()
+    karte = root / "CLAUDE.md"
+    karte.write_text("Karte", encoding="utf-8")
+    monkeypatch.setattr(docs_scan, "ROOT", root)
+
+    assert docs_scan.maps() == [karte]
+
+
+def test_dead_references_are_not_hidden_by_local_copies_or_other_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein alter Sicherungsbaum und ein gleicher Dateiname heilen keinen falschen Pfad."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("/output/\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text("Regeln", encoding="utf-8")
+    (tmp_path / "CLAUDE.md").write_text(
+        "`app/removed.py`, `lost.py`, `app/wrong.py`, `core/current.py`, "
+        "`current.py`, `guide.md` und `MEMORY.md`.",
+        encoding="utf-8",
+    )
+    for name in (
+        "output/removed.py",
+        "output/lost.py",
+        "tools/wrong.py",
+        "app/core/current.py",
+        "guide.md",
+    ):
+        pfad = tmp_path / name
+        pfad.parent.mkdir(parents=True, exist_ok=True)
+        pfad.write_text("", encoding="utf-8")
+    monkeypatch.setattr(docs_scan, "ROOT", tmp_path)
+
+    docs_scan.report_dead(10)
+
+    ausgabe = capsys.readouterr().out
+    for verweis in ("app/removed.py", "lost.py", "app/wrong.py"):
+        assert f"nennt `{verweis}`" in ausgabe
+    assert "nennt `current.py`" not in ausgabe
+    assert "nennt `core/current.py`" not in ausgabe
+    assert "nennt `guide.md`" not in ausgabe
+    assert "nennt `MEMORY.md`" not in ausgabe
+    assert "3 Verweise gehen ins Leere" in ausgabe
 
 
 def test_a_scope_is_read_past_the_comments_that_explain_it(tmp_path: Path) -> None:

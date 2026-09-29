@@ -27,6 +27,8 @@ from pathlib import Path
 
 import pytest
 
+from tools import docs_scan
+
 ROOT = Path(__file__).resolve().parents[1]
 PLAN = ROOT / "3d-agent-bauplan.md"
 MEMORY = ROOT / ".claude" / "memory"
@@ -73,46 +75,8 @@ def documented_folders() -> list[Path]:
 
 
 def maps() -> list[Path]:
-    """Alle Karten des Repositories — die Arbeitsbäume fremder Sitzungen nicht.
-
-    **Gefiltert wird über den Pfad *unterhalb* von** ``ROOT``, nicht über den
-    ganzen. Absolut geprüft übersah der Filter sich selbst: In einem
-    Arbeitsbaum unter ``.claude/worktrees/<name>/`` trägt **jeder** Pfad das
-    Segment ``worktrees``, und der Suchlauf fand null Karten. Der Test war dort
-    nicht grün zu bekommen — ausgerechnet in der Lage, die `/pruefen` für
-    Arbeit neben fremden Sitzungen ausdrücklich empfiehlt (gemeldet von
-    solidon-74, 07.09.2026, behoben am selben Tag). Er blieb dabei nicht still:
-    Die Zusicherung über die Zahl der Karten sprang an.
-    """
-    skip = {".git", ".venv", "build", "dist", "worktrees", "node_modules", "3D Drucker"}
-    ignored = _ignored_folders(ROOT)
-    found: list[Path] = []
-    for path, children, files in ROOT.walk():
-        children[:] = [name for name in children if name not in skip and path / name not in ignored]
-        if "CLAUDE.md" in files:
-            found.append(path / "CLAUDE.md")
-    return sorted(found)
-
-
-def _ignored_folders(root: Path) -> set[Path]:
-    """Was Git in diesem Baum ignoriert — Arbeitsreste, Kopien, Erzeugtes.
-
-    Unter ``marketing/`` und ``ui-audit/`` liegen vollständige Kopien älterer
-    Stände samt ihrer Karten; ohne diese Grenze prüften die Tests hier deren
-    Verweise und Größen mit, nur auf der Maschine, die sie hat. Ohne Git (ein
-    Temp-Baum im Test) bleibt es beim Suchlauf allein.
-    """
-    try:
-        listed = subprocess.run(
-            ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.splitlines()
-    except OSError, subprocess.CalledProcessError:
-        return set()
-    return {root / line.rstrip("/") for line in listed if line.endswith("/")}
+    """Wächter und Doku-Suchwerkzeug prüfen dieselben Karten."""
+    return docs_scan.maps()
 
 
 def test_excluded_map_trees_are_not_entered(
@@ -135,7 +99,7 @@ def test_excluded_map_trees_are_not_entered(
         return scan(path)
 
     monkeypatch.setattr(os, "scandir", checked_scan)
-    monkeypatch.setattr(__name__ + ".ROOT", root)
+    monkeypatch.setattr(docs_scan, "ROOT", root)
     assert maps() == sorted(kept)
 
 
@@ -437,8 +401,6 @@ def test_no_source_file_pulls_more_than_its_budget() -> None:
     zusammen trotzdem zu viel, wenn sich ihre ``paths:`` an einer Datei
     treffen. Gezählt wird wie in ``tools/docs_scan.py``.
     """
-    from tools import docs_scan
-
     rules = {
         rule: set().union(*(docs_scan.matched(pattern) for pattern in docs_scan.scopes(rule)))
         for rule in docs_scan.rule_files()
