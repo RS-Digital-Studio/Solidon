@@ -44,6 +44,10 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
   Auflage eine halbe Linienbreite nach innen (`Candidate.footing`) — eine
   Kante trägt keine Linie. Unter Stehenden entscheidet das Stützvolumen,
   innerhalb fünf Prozent die Auflagefläche.
+- `standing_check` teilt diese Standprüfung zwischen Auto Splits Vorauswahl
+  und der schnellen FDM-Ausrichtung: halbe erste Schichthöhe, Linienbreite,
+  Mindestauflage und Schwerpunkt am Original, mit Abbruch vor und nach der
+  Messung. Sie schneidet nur die Auflage, nicht alle Schichten.
 - **Das Original wird nie kopiert**: `geom.orient.extreme_points` (im
   Netzcache) liefert die Hüllbox jeder Lage (`turned_extents`), `judge` dreht
   nur Schwerpunkt und die Dreiecke an der Aufstandsebene (`_contact`), die
@@ -60,8 +64,11 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 - **Eine ungültige geschlossene Kontur** (eine Ebene durch die auslaufende Ecke
   eines Verbinders) bekommt `polygonize` mit den **ursprünglichen losen
   Segmenten**, nie über einen daraus gebauten `LinearRing` — dem fehlen die
-  Knoten. Korpusfall `tests/data/meshes/dovetail_vertex_plane.ply`;
-  `tests/test_slice_core.py` hält beide Wege gleich.
+  Knoten. Sich kreuzende Segmente werden vor `polygonize` an ihren
+  Kreuzungen geteilt (`shapely.node`); sonst verschwindet ihre Fläche auch
+  neben einem gültigen Nachbarring. Innenlöcher bleiben erhalten. Korpusfälle sind
+  `dovetail_vertex_plane.ply` und `ambiguous_sphere_ribbon.stl` unter
+  `tests/data/meshes/`; Schnitt- und Standtests halten beide Wege gleich.
 - **`slice_body` und `cross_sections` nehmen optional einen `CancelToken`**:
   ohne ihn der native Weg ohne Python-Rückruf, mit ihm prüfen Cython-Kern,
   NumPy-Blöcke, Polygonaufbau, GEOS und Stützvolumen periodisch — bei

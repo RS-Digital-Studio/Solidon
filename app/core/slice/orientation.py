@@ -500,7 +500,7 @@ def best_face_candidate(
         cancelled=cancelled,
         printer=profile.printer,
         overhang_limit=profile.overhang_limit_degrees,
-        standing=_stands_on(mesh, profile, footing),
+        standing=standing_check(mesh, profile, cancelled=cancelled),
     )[: max(1, count)]
     if not coarse:
         raise NoFittingOrientationError()
@@ -523,12 +523,13 @@ def best_face_candidate(
     return best_of(field, profile.smallest_first_layer)
 
 
-def _stands_on(
-    mesh: MeshData, profile: Profile, footing_height: float
+def standing_check(
+    mesh: MeshData, profile: Profile, *, cancelled: CancelToken | None = None
 ) -> Callable[[Orientation], bool]:
     """Ob eine Lage der Vorauswahl steht, wie :func:`stands` nach :func:`judge`
-    in ``footing_height`` urteilen wird — nur die Auflage, ohne Schnitt durch
-    den ganzen Körper.
+    in der halben ersten Schichthöhe urteilen wird — nur die Auflage, ohne
+    Schnitt durch den ganzen Körper. Gemeinsam für Auto Split und die schnelle
+    Druckausrichtung, immer am Originalnetz.
 
     Ohne Vorprüfung an der geschätzten Auflage: Die zählt nur Dreiecke, die
     fast genau nach unten zeigen, und ein halber Ring, der flach auf gut
@@ -536,10 +537,16 @@ def _stands_on(
     """
 
     def check(entry: Orientation) -> bool:
-        contact, centre = _contact(mesh, rotation_to_down(entry.direction), footing_height)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        contact, centre = _contact(
+            mesh, rotation_to_down(entry.direction), profile.printer.layer_height / 2.0
+        )
         stable, footing = _carried(contact, centre, profile.printer.extrusion_width)
         area = 0.0 if contact is None or contact.is_empty else float(contact.area)
         pose = Candidate(entry.direction, entry.support, area, entry.height, stable, footing)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         return stands(pose, profile.smallest_first_layer)
 
     return check

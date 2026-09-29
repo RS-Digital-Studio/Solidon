@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-29 | [Sichere schnelle Druckausrichtung: ein Punkt geschlossen (29.09.2026)](#sichere-schnelle-druckausrichtung-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Schnitt an der Bohrungswand: ein Punkt geschlossen (29.09.2026)](#schnitt-an-der-bohrungswand-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Teilen an der Spiegelnaht einer Figur: ein Punkt geschlossen (29.09.2026)](#teilen-an-der-spiegelnaht-einer-figur-ein-punkt-geschlossen-29092026) |
 | 2026-09-28 | [Stützsperre im Cura-Fenster abgenommen: ein Punkt geschlossen (28.09.2026)](#stützsperre-im-cura-fenster-abgenommen-ein-punkt-geschlossen-28092026) |
@@ -33508,3 +33509,58 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   gebauten Schnittkerns** dort ebenfalls bestanden, Exit 0. Fenster-,
   Erzeugnis- und Leistungsprüfungen gehören gemäß Projektvertrag zum Release und wurden
   hier nicht ausgeführt. Kein offener Rest und kein neuer Roadmappunkt.
+
+## Sichere schnelle Druckausrichtung: ein Punkt geschlossen (29.09.2026)
+
+<a id="rm-308"></a>
+
+- [x] **RM-308 — Die schnelle Lage von orient_for_print prüft das Stehen nicht.**
+  Aus dem Release 0.5.1 (Review `autosplit-lagen-051`): Die schnelle Heuristik
+  stellte 14 von 126 Korpusmodellen bei 45° und 13 bei 60° nicht sicher ab.
+  Abnahme: eine tragfähige Lage wählen oder mit einem hilfreichen Befund absagen.
+
+  **Aktualität zuerst geprüft:** Am Ausgangsstand `6ca0994b1` scheiterten vier
+  neue Gegenproben mit `torus_ring.stl` (45°/60°, Entwurf/Fein): Schwerpunkt
+  außerhalb der Auflagehülle und nur 6,78 beziehungsweise 7,62 mm² tragfähige
+  Auflage bei geforderten 17,64 mm². Eine flache Lage desselben unveränderten
+  Rings trägt dagegen 137,62 mm². Der Fehler bestand somit weiterhin.
+
+  **Behoben:** Die schnelle FDM-Operation prüft alle passenden Kandidaten in
+  ihrer bestehenden Heuristikreihenfolge und nimmt den ersten, der die
+  gemeinsame `standing_check` mit Auto Split besteht. Geprüft werden der
+  Schwerpunkt und die um eine halbe Linienbreite versetzte erste Auflage am
+  Originalnetz. Steht keine geprüfte Lage, nennt `NoStandingOrientationError`
+  die betroffene Objektkennung und führt zu Druckeinstellungen und Stützkarte.
+  Eine Druckraumverletzung behält ihre eigene Diagnose. Resin übernimmt keine
+  Düsen-Standbedingung; exakte Körper bleiben exakt, die Eingabe unverändert,
+  und Abbruch wird vor und nach der Standmessung beachtet. Der Operationseintrag
+  hat Cacheversion 2; der Fehlertext steht in allen fünf Sprachkatalogen.
+
+  **Reviewbefunde im selben Punkt erledigt:** Am `ambiguous_sphere_ribbon.stl`
+  verlor der gemeinsame Schichtschneider eine tatsächlich tragende Kontur
+  (108,75862488 mm² Kontakt, 85,72967206 mm² tragfähige Auflage). Kreuzende
+  Segmente werden jetzt im GEOS-Rückfall vor `polygonize` an ihren Kreuzungen
+  geteilt. Das erhält auch einzelne Komponenten neben gültigen Nachbarringen
+  und deren Innenlöcher; native gültige Ringe behalten ihren bisherigen Weg.
+  Die zentrale Cacheformatversion 34 entwertet auch davon abhängige alte
+  Geometrieergebnisse. Der Größenwächter fand außerdem eine doppelte Ergänzung
+  in der Schichtanalyse-Regel; der Vertrag steht vollständig in den passenden
+  Bereichskarten, die Regeldatei bleibt unverändert. Abschließendes unabhängiges
+  Code- und Testreview ohne offene Befunde.
+
+  **Nachweise:** `tests/test_fast_orientation_standing.py` enthält 23 Fälle,
+  darunter echte Netze, beide Güten, exakte Körper, Ablehnung ohne Bewegung,
+  Resin, Abbruch, Heuristikreihenfolge, Cache und kreuzende Konturen mit Löchern.
+  Die geometrischen Gegenproben waren vor den jeweiligen Korrekturen rot.
+  Nach dem Fix bestanden **54 gezielte Fälle**, einschließlich aller 23 Tests
+  des lokal gebauten Schnittkerns. Sechs zusätzliche Messungen an vorhandenen
+  STL-Dateien (Wedge-Lock, Besenhalter, Baum; jeweils 45°/60°) bestanden am
+  endgültigen Quellstand mit unabhängiger Schnitt- und Schwerpunktberechnung.
+  Eingangsdateien, Eingabearrays, Topologie und Volumen bleiben erhalten.
+  Vollständiges Entwicklungstor des isolierten Änderungssatzes auf `6ca0994b1`:
+  **18 511 bestanden, 36 übersprungen, Exit 0**; Ruff, Format und mypy ebenfalls
+  Exit 0, Quellstand während des Laufs unverändert. Der erste Gesamtlauf hatte
+  allein die danach behobene Dokumentationsgrenze beanstandet; die vollständige
+  Wiederholung ist grün. Fenster-, Erzeugnis- und Leistungsprüfungen gehören
+  gemäß Projektvertrag zum Release und wurden hier nicht ausgeführt.
+  Kein offener Rest und kein neuer Roadmappunkt.

@@ -85,7 +85,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
-| [RM-308 — Die schnelle Lage von orient_for_print prüft das Stehen nicht](#rm-308) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Standprüfung wie in der Auto-Split-Vorauswahl |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Auf `main` zusammengeführt (`559412ac4`) und in 0.5.1 enthalten: Gliederung, fünfzehn Bildanleitungen, Suche, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter und Film. Weiterarbeit auf `main`; offen bleiben die Feldabnahme (§11 des Konzepts) und die Nummernplatzierung auf Text in zwei Bildern |
@@ -2534,14 +2533,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Review-Sonde). (c) Ohne übersetzten Schnittkern (`_chain`) braucht der Leistungstest
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
-
-<a id="rm-308"></a>
-
-- [ ] **RM-308 — Die schnelle Lage von orient_for_print prüft das Stehen nicht.** Aus dem Release 0.5.1 (Review `autosplit-lagen-051`).
-  `orient_for_print` nimmt auf seinem schnellen Weg den ersten Platz der Heuristik ohne
-  Standprüfung; an 14 von 126 Korpusmodellen steht er bei 45°, an 13 bei 60° nicht. Kein
-  Rückschritt aus 0.5.1. Weg: dieselbe Prüfung wie `best_face_candidate(standing=…)`.
-  Abnahme: der erste Platz steht, oder die Lage wird mit Befund verworfen.
 
 ## Bedienung und Darstellung
 

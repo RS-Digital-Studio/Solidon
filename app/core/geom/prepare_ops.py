@@ -51,7 +51,12 @@ from app.core.geom.boolean import (
 from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data, face_components, lifted_caps
 from app.core.geom.ops import as_transform
-from app.core.geom.orient import NoFittingOrientationError, orient_for_print, ranked_orientations
+from app.core.geom.orient import (
+    NoFittingOrientationError,
+    NoStandingOrientationError,
+    orient_for_print,
+    ranked_orientations,
+)
 from app.core.geom.pins import (
     PIN_COUNT,
     PIN_MAX,
@@ -103,7 +108,13 @@ from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, 
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.scene.placement import SIDE_KEYS, side_of
-from app.core.slice.orientation import DEFAULT_CANDIDATES, search, shape_key, turned_like
+from app.core.slice.orientation import (
+    DEFAULT_CANDIDATES,
+    search,
+    shape_key,
+    standing_check,
+    turned_like,
+)
 from app.core.types import (
     BaseParams,
     CancelToken,
@@ -17214,6 +17225,7 @@ class OrientParams(BaseParams):
 
 @register_op(
     name="orient_for_print",
+    cache_version="2",
     title=_("Druckoptimal ausrichten"),
     category="transform",
     params=OrientParams,
@@ -17296,11 +17308,19 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                     printer=ctx.profile.printer,
                     cancelled=ctx.cancelled,
                     overhang_limit=analysis_limits(ctx.profile, entry)[1],
+                    standing=(
+                        None
+                        if ctx.profile.printer.is_resin
+                        else standing_check(mesh, ctx.profile, cancelled=ctx.cancelled)
+                    ),
                 )
                 matrix = result.transform
                 findings.extend(result.findings)
         except NoFittingOrientationError as refusal:
             raise _the_way_out_of(refusal, mesh, entry, ctx) from None
+        except NoStandingOrientationError as refusal:
+            refusal.object_id = entry.id
+            raise
         outputs.append(moved_object(entry, matrix, cancelled=ctx.cancelled))
         matrices.append(matrix)
         last_matrix = matrix

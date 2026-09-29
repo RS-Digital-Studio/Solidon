@@ -2536,14 +2536,14 @@ def test_a_flat_ring_gets_a_price_at_every_seam(profile: Profile, pins_on_b: boo
 
 def test_the_free_place_asks_the_same_question_as_the_judgement(profile: Profile) -> None:
     """Der freie Platz fragt, ob eine Lage steht, ohne den Körper zu schneiden
-    (``_stands_on``). Beide Antworten müssen für jede Lage gleich ausfallen,
+    (``standing_check``). Beide Antworten müssen für jede Lage gleich ausfallen,
     sonst verdrängt der Platz eine Lage, die steht, oder bleibt leer."""
     from app.core.geom.orient import ranked_orientations
-    from app.core.slice.orientation import _stands_on, judge, stands
+    from app.core.slice.orientation import judge, standing_check, stands
 
     half = _half_of_a_stretched_ring()
     footing = profile.printer.layer_height / 2.0
-    ask = _stands_on(half, profile, footing)
+    ask = standing_check(half, profile)
     ranked = ranked_orientations(
         half, printer=profile.printer, overhang_limit=profile.overhang_limit_degrees
     )

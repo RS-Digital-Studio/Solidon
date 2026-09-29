@@ -1308,6 +1308,12 @@ def _polygon_with_contours(
         kept = rounded[usable]
         edges = shapely.linestrings(kept, indices=np.repeat(np.arange(len(kept) // 2), 2))
 
+    # polygonize verbindet Enden, teilt aber keine Kreuzung innerhalb einer
+    # Kante. Dann verschwände etwa die Auflage des Kugelbandes vollständig,
+    # oder neben einer gültigen Kontur nur ihr selbstschneidender Nachbar.
+    network = shapely.multilinestrings(edges)
+    if not shapely.is_simple(network):
+        edges = shapely.get_parts(shapely.node(network))
     built = shapely.polygonize(edges)
     parts = [part for part in getattr(built, "geoms", []) if not part.is_empty]
     if not parts:

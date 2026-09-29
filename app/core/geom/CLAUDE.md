@@ -229,6 +229,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 
 **Anordnen und Ausrichten**:
 
+- Die schnelle FDM-Ausrichtung nimmt die erste passende Lage, die
+  `slice.orientation.standing_check` am Original trägt. Ohne stehende Lage
+  sagt `NoStandingOrientationError` vor jeder Bewegung ab; Resin braucht
+  diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split.
 - **Gepackt wird in der Ecke, gelegt in der Mitte** (`arrange_on_bed`,
   `_into_the_middle` nur auf freier Fläche, `arrange.narrow_margin`;
   `occupied` verhindert das Zentrieren). `orient_for_print` legt mit an

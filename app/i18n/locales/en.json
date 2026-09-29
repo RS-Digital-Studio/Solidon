@@ -932,6 +932,7 @@
   "Das Modell ruft Werkzeuge auf und ist brauchbar. Die Grafikkarte wird genutzt.": "The model calls tools and is usable. The graphics card is being used.",
   "Das Modell ruft Werkzeuge auf. Es ist brauchbar.": "The model calls tools. It is usable.",
   "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft.": "The model writes its calls out as text instead of making them — the chat answers, but nothing is carried out. A different model helps.",
+  "Das Modell steht in keiner geprüften Lage sicher. Prüfen Sie Stützen oder eine größere Plattenhaftung.": "The model is not stable in any of the checked orientations. Check supports or increase build plate adhesion.",
   "Das Modell wird geladen und gefragt — das dauert.": "The model is being loaded and asked — this takes a while.",
   "Das Modell wird noch gerechnet. Wählen Sie die Stelle, sobald es steht.": "The model is still being calculated. Choose the spot once it is ready.",
   "Das Modell wurde auf das Bett gesetzt.": "The model was set onto the bed.",

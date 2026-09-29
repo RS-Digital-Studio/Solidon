@@ -16,6 +16,7 @@ from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
     CHOOSE_PRINTER,
+    OPEN_PRINT_SETTINGS,
     SHOW_SUPPORT_NEED,
     SPLIT_MODEL,
     GeometryError,
@@ -102,6 +103,16 @@ class NoFittingOrientationError(GeometryError):
         "Wählen Sie einen anderen Drucker oder teilen Sie das Modell."
     )
     default_suggestions = (SPLIT_MODEL, CHOOSE_PRINTER, CANCEL)
+
+
+class NoStandingOrientationError(GeometryError):
+    """Die passenden Lagen tragen das Modell nicht sicher."""
+
+    default_title = _(
+        "Das Modell steht in keiner geprüften Lage sicher. "
+        "Prüfen Sie Stützen oder eine größere Plattenhaftung."
+    )
+    default_suggestions = (OPEN_PRINT_SETTINGS, SHOW_SUPPORT_NEED, CANCEL)
 
 
 @dataclass(frozen=True, slots=True)
@@ -746,18 +757,32 @@ def orient_for_print(
     printer: PrinterProfile | None = None,
     margin: float = 0.0,
     overhang_limit: float = OVERHANG_LIMIT_DEGREES,
+    standing: Callable[[Orientation], bool] | None = None,
 ) -> OrientResult:
     """Dreht den Körper in die Lage, die der Heuristik am besten gefällt.
 
     ``overhang_limit`` wie bei :func:`evaluate_directions`: die Grenze, mit der
     die Schichtanalyse danach urteilt.
+    ``standing`` prüft den Stand mit dem Druckprofil. Ohne diese Auskunft
+    bleibt die reine geometrische Heuristik; die FDM-Operation gibt sie immer mit.
     """
     scored = ranked_orientations(
         mesh, cancelled=cancelled, printer=printer, margin=margin, overhang_limit=overhang_limit
     )
     if not scored:
         raise NoFittingOrientationError()
-    best = scored[0]
+    best = None
+    for entry in scored:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        can_stand = standing is None or standing(entry)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if can_stand:
+            best = entry
+            break
+    if best is None:
+        raise NoStandingOrientationError()
     matrix = (
         fitting_transform(mesh, best.direction, printer, margin=margin)
         if printer is not None

@@ -932,6 +932,7 @@
   "Das Modell ruft Werkzeuge auf und ist brauchbar. Die Grafikkarte wird genutzt.": "El modelo llama a herramientas y es utilizable. Se está usando la tarjeta gráfica.",
   "Das Modell ruft Werkzeuge auf. Es ist brauchbar.": "El modelo llama a las herramientas. Es utilizable.",
   "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft.": "El modelo escribe sus llamadas como texto en lugar de ejecutarlas — el chat responde con eso, pero no ejecuta nada. Otro modelo ayuda.",
+  "Das Modell steht in keiner geprüften Lage sicher. Prüfen Sie Stützen oder eine größere Plattenhaftung.": "El modelo no queda estable en ninguna de las orientaciones comprobadas. Revise los soportes o aumente la adhesión a la base.",
   "Das Modell wird geladen und gefragt — das dauert.": "El modelo se está cargando y consultando — esto lleva tiempo.",
   "Das Modell wird noch gerechnet. Wählen Sie die Stelle, sobald es steht.": "El modelo todavía se está calculando. Elija el punto cuando esté listo.",
   "Das Modell wurde auf das Bett gesetzt.": "El modelo se colocó sobre la cama.",

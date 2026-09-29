@@ -136,7 +136,9 @@ DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:   älterer Eintrag hat sie nicht, und ein Treffer ließe den Schritt
 #:   unbeantwortet: Das weitere Modell suchte seine Stelle bei jeder Änderung
 #:   davor neu.
-CACHE_FORMAT_VERSION: Final = 33
+#: - 34 (RM-308): sich kreuzende Schnittsegmente tragen ihre Fläche und
+#:   Innenlöcher; alte Ausrichtungen und daraus erzeugte Körper rechnen neu.
+CACHE_FORMAT_VERSION: Final = 34
 
 
 @dataclass(frozen=True, slots=True)
