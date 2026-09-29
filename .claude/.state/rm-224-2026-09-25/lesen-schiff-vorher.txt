@@ -1,8 +1,0 @@
-gemessen wird C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\wt-alt\app\ui\__init__.py
-Lage 1: sofort eingebettet True, angenommen True, Schritte ['load']
-Lage 2: geworfen im Aufruf — FileNotFoundError: [WinError 2] Das System kann die angegebene Datei nicht finden: 'C:\\Users\\rober\\AppData\\Local\\Temp\\tmpk48d0zr0\\verschoben.stl'
-Lage 3: Leerlauf True, Quellen [], Schritte []
-  Lauf: längste Lücke bis zur Antwort 115 ms
-  Lauf: längste Lücke bis zur Antwort 143 ms
-  Lauf: längste Lücke bis zur Antwort 128 ms
-obj_15_Assembly.stl: Median der längsten Lücke 128 ms

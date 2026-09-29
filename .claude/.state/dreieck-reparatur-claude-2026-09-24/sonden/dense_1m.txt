@@ -1,7 +1,0 @@
-== dense_1m.stl (65536084 Bytes)
-  Import 16.01 s
-  -- nach Import: vollständig=True angehalten=None
-     [warning] ingest.very_large op=1 obj=obj_1
-        Text: Dieses Modell ist fein vernetzt. Die Analysekarten lehnen ab; „Dreiecke verringern“ hilft.
-        Knöpfe: Merkmale an dieser Stelle erkennen, Dreiecke verringern   Werte: {'triangles': 1310720, 'comfortable': 900000}
-

@@ -1,3 +1,0 @@
-..........                                                               [100%]
-10 passed, 97 deselected in 3.12s
-pytest exit 0

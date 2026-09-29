@@ -1,4 +1,0 @@
-copy 0.02 s
-wind_consistently (früher Ausstieg) 0.45 s
-turn_shells_outward 0.83 s, Spitze 378 MB bei 1310720 Dreiecken
-signed_volume allein 0.16 s (523594.3)

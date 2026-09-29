@@ -1,6 +1,0 @@
-gemessen wird C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\eda33e4f-279c-48e3-bf58-acf625bcf116\scratchpad\wt\app\__init__.py
-  Lauf: 5.718 s
-  Lauf: 5.834 s
-obj_15_Assembly.stl: Median 5.776 s über 2 Läufe
-  Befunde: ['ingest.very_large', 'repair.branching_resolved', 'repair.holes_filled']
-  Dreiecke 1223836, dicht True, Wicklung True, Teile 1, Volumen 284140.958464

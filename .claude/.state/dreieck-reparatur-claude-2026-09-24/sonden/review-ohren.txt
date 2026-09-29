@@ -1,6 +1,0 @@
-Stern 12: neu {'ok': 200, 'rev ok': 200} | HEAD {'ok': 200}
-Stern 40: neu {'ok': 200, 'rev ok': 200} | HEAD {'ok': 200}
-Stern 200: neu {'ok': 50, 'rev ok': 50} | HEAD {'ok': 50}
-Kamm 10: neu {'ok': 1, 'rev ok': 1} | HEAD {'ok': 1}
-Kamm 60: neu {'ok': 1, 'rev ok': 1} | HEAD {'ok': 1}
-Rechteck mit kollinearen Punkten: neu {'ok': 1, 'rev ok': 1} | HEAD {'ok': 1}

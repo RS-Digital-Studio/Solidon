@@ -1,9 +1,0 @@
-gemessen wird F:\3D Druck\app\__init__.py
-== obj_11_Cylinder_B.stl
-  eingelesen: Teile 2, Volumen 833.461 mm³, dicht True, Dreiecke 3598
-  steckt ineinander: (360.04059346516925, -134.86986033121747, 4.166666666666667) (0.093 s)
-  Befunde Import: ['ingest.welded', 'ingest.multiple_components']
-  Fläche versetzen +1 an face_2 (19.63 mm²): Stufe direct, Befunde []
-  danach: Teile 1, Volumen 843.475 mm³, dicht True, Dreiecke 5040
-  Bohrung Ø 2 senkrecht durch die Mitte: Stufe direct, Befunde []
-  gebohrt: Teile 2, Volumen 692.493 mm³, dicht True, Dreiecke 3984

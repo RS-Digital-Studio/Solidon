@@ -16,7 +16,7 @@ wiederholt — wo etwas anderswo steht, steht hier der Verweis.
 | `memory/` | Die Erfahrungen dieses Projekts, eine Datei je Fakt, dazu `MEMORY.md` als Index | Quelle, **nur auf der Maschine** (`.gitignore`). Den Index schreibt `tools/memory_index.py`, die Verknüpfung aus dem Nutzerprofil `tools/link_memory.py` |
 | `hooks/` | `solidon3d_hooks.py` — ein Skript für beide Editoren | Quelle. Die Einstiege stehen in `settings.json` und `.codex/hooks.json` |
 | `scripts/` | `suite-getrennt.sh` — das Entwicklungstor: Kernsammlung im Standardlauf, Fensterdateien nur beim Release mit `--release`; der gesamte Prüfweg steht in `/pruefen` | Quelle |
-| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md` | Quelle |
+| `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md`. Nennt ihn nur noch `ROADMAP-ARCHIV.md`, wird er entfernt — der Stand bleibt in der Git-Historie; ein Skript, das eine Regel, ein Werkzeug oder die CI braucht, gehört nach `tools/` | Quelle |
 | `audits/` | Datierte Durchsichten der Unterlagen selbst — nicht des Codes | Quelle |
 | `settings.json` | Rechte, Hooks, Umgebung, Plugins | Quelle |
 | `launch.json` | Startprofil für das Vorschaufenster | Quelle |

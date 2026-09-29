@@ -1,7 +1,0 @@
-gemessen wird F:\3D Druck\app\__init__.py
-obj_15_Assembly.stl: 1223836 Dreiecke, normalise 9.720 s
-  is_watertight: 5 Aufrufe, 1.103 s — netz1(1223836)×1, netz7(1223836)×4
-  _edge_table: 18 Aufrufe, 1.734 s — netz1(1223836)×2, netz3(1223832)×10, netz5(1223836)×3, netz7(1223836)×3
-  unique_edges: 4 Aufrufe, 1.536 s — netz2(0)×1, netz4(0)×1, netz6(0)×1, netz8(0)×1
-  face_components: 5 Aufrufe, 2.157 s — netz5(1223836)×2, netz7(1223836)×3
-  face_adjacency: 10 Aufrufe, 1.159 s — netz5(1223836)×4, netz7(1223836)×6

@@ -1,8 +1,0 @@
-falsch gewickelt: Dreieck 0, Loch: Dreieck 50
-   Import  : ['ingest.normals_flipped', 'repair.holes_filled'] {'tri': 192, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
-   Repar.  : ['repair.holes_filled', 'repair.normals_flipped'] {'tri': 192, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
-falsch gewickelt: Dreieck 77, Loch: Dreieck 50
-   Import  : ['ingest.normals_flipped', 'repair.holes_filled'] {'tri': 192, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
-   Repar.  : ['repair.holes_filled', 'repair.normals_flipped'] {'tri': 192, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
-dicht, Dreieck 0 falsch: Import ['ingest.normals_flipped'] {'tri': 192, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': 8000.0, 'parts': 1}
-STL-Suppe, Dreieck 0 falsch + Loch: Import ['ingest.normals_flipped', 'repair.holes_filled'] {'tri': 192, 'open': 0, 'branch': 0, 'tight': True, 'wound': True, 'vol': -8000.0, 'parts': 1}

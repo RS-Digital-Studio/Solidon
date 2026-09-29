@@ -23,6 +23,12 @@ Schnitt am 22.08.2026 wurden vier solche Punkte gefunden und nach `ROADMAP.md`
 geführt oder eine Grenze aus „Was NICHT gebaut wird". Der einzige Ort, dem man
 für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
+**Ein genannter Zustandsordner kann fehlen.** Abgeschlossene Ordner unter
+`.claude/.state/` werden entfernt, sobald nur noch dieses Archiv sie nennt;
+ihr letzter Stand bleibt in der Git-Historie, und
+`git log --diff-filter=D --oneline -- <pfad>` nennt den Commit, der ihn
+entfernt hat.
+
 | Datum | Abschnitt |
 |---|---|
 | 2026-09-29 | [Sichere schnelle Druckausrichtung: ein Punkt geschlossen (29.09.2026)](#sichere-schnelle-druckausrichtung-ein-punkt-geschlossen-29092026) |
@@ -30307,29 +30313,6 @@ alles andere soll noch vor 0.5.0 fertig sein"). Gebaut auf `rm-207-muster`, am
   und die Gesamtzeiten des Aushöhlens streuten dadurch zwischen 4,5 und 7,7 s
   am selben Körper. Belastbar ist deshalb die Zeit der entfallenen Operation
   selbst, nicht die Differenz zweier Gesamtläufe.
-
-<a id="rm-079"></a>
-
-- [x] **RM-079 — Zeilenlängen der Website über alle Sprachen prüfen.** Die Textbreiten der Website
-  als gemeinsame Regel überprüfen und verbleibende überlange Absätze begrenzen. Abnahme:
-  tatsächliche Zeilenlängen in allen sechs Sprachen bei schmalen und breiten Fenstern; Karten und
-  Spalten dürfen nicht durch eine pauschale Regel unnötig schmal werden.
-
-  **Gemessen und behoben am 14.09.2026.** Drei Sonden in QtWebEngine
-  (`.claude/.state/rm-079-website-320-2026-09-14/`) haben alle 42 Seiten bei 320 Punkt Breite
-  geladen. `body { overflow: clip }` verhinderte das Rollen und verschluckte stumm, was nicht
-  passte: vier deutsche Überschriften mit einem Wort breiter als der Schirm („Allgemeine
-  Geschäftsbedingungen“ 79 Punkt über dem Rahmen, „Datenschutzerklärung“ 59,
-  „Widerrufsbelehrung“ und „Systemvoraussetzungen“ je 23) und die Sprachliste, die bei 320 bis
-  479 Punkt bei −21 begann, weil sie mit `right: 0` am links stehenden Griff hing. Behoben in
-  `website/style.css`: Überschriften trennen nach Sprache (`hyphens: auto`, unter 40rem dazu
-  `overflow-wrap: anywhere`), die Sprachliste öffnet unter 30rem nach rechts. Nachher: keine
-  Überschrift über ihrem Kasten, die Liste bei 320 Punkt zwischen 78 und 230, auf jeder Seite
-  `scrollWidth` gleich `clientWidth`; breite Fenster unverändert (bei 1000 Punkt bliebe `left: 0`
-  acht Punkt vor dem Rand, deshalb gilt die Regel nur unter 30rem). Die übrigen Sprachen haben
-  keine so langen Wörter. `tests/test_website.py` 388 grün nach `tools/stamp_assets.py`.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#die-zeilen-laufen-zu-lang-31082026).
 
 ---
 

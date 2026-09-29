@@ -1,3 +1,0 @@
-gemessen wird F:\3D Druck\app\__init__.py
-970 Vergleiche, 0 Abweichungen
-Exit: 0

@@ -1,3 +1,0 @@
-Schnitte: 12
-self_intersections True -> []
-self_intersections False -> [('repair.self_intersections_detected', 'Teile des Modells überschneiden sich.')]
