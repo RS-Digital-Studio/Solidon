@@ -241,6 +241,39 @@ def placed(body: trimesh.Trimesh, scale: float, angle: float) -> trimesh.Trimesh
     return result
 
 
+# --- Eine gespiegelte Figur, deren Naht neben der Mitte steht -----------------------
+
+#: Wie weit die Ecken der Spiegelnaht neben der Ebene stehen, als Anteil der
+#: Spanne, in der ``trimesh`` eine Ecke zur Schnittebene zählt
+#: (``section._ON_PLANE``): alle darin, beide Vorzeichen, keines null.
+SEAM_NOISE = (0.6, -0.7, 0.9, -0.2, 0.3)
+
+
+def mirror_seam_sphere(level: float) -> MeshData:
+    """Kugel R 20, spiegelsymmetrisch zu ``z = level``; die Ecken ihrer Naht in
+    der Spiegelebene stehen Milliardstel Millimeter daneben.
+
+    So kommt eine gespiegelt modellierte Figur aus einer STL: Die Ecken ihrer
+    Mittelnaht tragen in float32 Reste wie 2⁻³⁴ statt null, und nach *Auf Maß
+    bringen* stehen sie Milliardstel Millimeter neben der Mitte des
+    Hüllquaders — genau dort, wo *Teilen* seine Ebene vorschlägt. An Bob
+    (CC0, 10 688 Dreiecke) liegen dort 69 Ecken genau auf der Ebene und 26
+    bis 1e-8 mm daneben. Die Icosphere hat ihre Naht in ``z = 0`` (die Ecken
+    ``(±1, ±φ, 0)`` und die Teilungspunkte ihrer Kanten) und Dreiecke, die mit
+    einer Ecke darauf von einer Seite zur anderen reichen
+    (``test_section``, ``test_prepare``).
+    """
+    from app.core.geom import section
+
+    sphere = trimesh.creation.icosphere(subdivisions=3, radius=20.0)
+    vertices = np.array(sphere.vertices, dtype=np.float64)
+    seam = np.flatnonzero(np.abs(vertices[:, 2]) <= 1e-12)
+    assert len(seam) == 32, "die Naht der Icosphere liegt in z = 0"
+    vertices[seam, 2] = np.resize(np.asarray(SEAM_NOISE) * section._ON_PLANE, len(seam))
+    vertices[:, 2] += level
+    return MeshData.of(trimesh.Trimesh(vertices, np.asarray(sphere.faces), process=False))
+
+
 # --- Offene Netze nach dem 22.09.2026 -----------------------------------------------
 
 

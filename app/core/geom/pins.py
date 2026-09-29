@@ -780,6 +780,7 @@ def _add_connector_geometry(
         else:
             pair.first, pair.second = raised.mesh, drilled.mesh
             pair.solver = deepest([raised.solver, drilled.solver])
+            pair.findings.extend([*raised.findings, *drilled.findings])
             return
 
     for placed_pin, placed_bore in zip(placed_pins, placed_bores, strict=True):
@@ -795,6 +796,10 @@ def _add_connector_geometry(
         )
         pair.first, pair.second = raised.mesh, drilled.mesh
         pair.solver = deepest([pair.solver, raised.solver, drilled.solver])
+        # **Was die Kette sagt, reist mit** (§17.2): Bis hierher fielen ihre
+        # Befunde weg, und ein Ergebnis aus dem Raster stand ohne ein Wort im
+        # Bericht — an Bobs Mitte fehlten der Stiftseite so 89 % ihres Volumens.
+        pair.findings.extend([*raised.findings, *drilled.findings])
 
 
 def _part(name: str, **values: Any) -> MeshData:

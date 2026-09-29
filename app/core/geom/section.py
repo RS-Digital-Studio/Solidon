@@ -12,6 +12,7 @@ Eine zweite Ebene macht aus dem Schnitt eine Scheibe.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -277,6 +278,10 @@ def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh,
     turn = rotation_between(normal, (0.0, 0.0, 1.0))
     local = body.copy()
     moved(local, turn)
+    vertices = np.asarray(local.vertices, dtype=np.float64)
+    settled = settled_on_plane(vertices, (0.0, 0.0, 1.0), plane.position)
+    if settled is not vertices:
+        local.vertices = settled
     # Im gedrehten Rahmen liegt die Ebene bei z = position, und was darüber
     # liegt, fällt weg: trimesh behält die positive Seite der Normalen, die
     # hier also nach unten zeigt.
@@ -294,6 +299,46 @@ def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh,
 #: Wie nah eine Ecke an der Schnittebene liegen muss, um zum Deckelrand zu
 #: gehören — derselbe Wert wie in ``trimesh.intersections.slice_mesh_plane``.
 _ON_PLANE: Final = 1e-8
+
+
+def settled_on_plane(
+    points: np.ndarray, normal: Sequence[float] | np.ndarray, offset: float
+) -> np.ndarray:
+    """Die Punkte, die ``trimesh`` beim Schneiden an dieser Ebene zu ihr zählt, genau auf ihr.
+
+    ``normal`` hat die Länge eins, ``offset`` ist die Lage der Ebene entlang von
+    ihr. ``trimesh`` gibt einem Punkt bis ``_ON_PLANE`` neben der Ebene das
+    Vorzeichen null und lässt ihn stehen, wo er ist. Ein Dreieck, das mit ihm
+    von einer Seite zur anderen reicht, wird trotzdem geschnitten, und seine
+    Kopie dieser Ecke liegt genau auf der Ebene — dieselbe Ecke steht danach
+    zweimal da, bis zu ``_ON_PLANE`` auseinander. Wer die Schnittkante danach
+    über gerundete Koordinaten zusammenlegt (:func:`_capped`, das Verschweißen
+    der Formschräge in ``faces._draft_tools``), verfehlt das Paar, sobald eine
+    Rundungsgrenze dazwischenliegt: Der Rand zerfällt in offene Ketten, und
+    der Körper bleibt offen. So an einer gespiegelt modellierten Figur, deren
+    Mittelnaht aus einer float32-STL Milliardstel Millimeter neben der Mitte
+    des Hüllquaders steht — dort, wo *Teilen* seine Ebene vorschlägt (Bob, CC0:
+    26 solche Ecken, 21 und 18 offene Ketten an den zwei Hälften, danach
+    scheiterten die Stifte an einem offenen Körper).
+
+    Auf der Ebene liegt der Punkt dort, wo ``trimesh`` ihn ohnehin einordnet,
+    und seine Kopien fallen mit ihm zusammen. Bewegt wird entlang der Normalen,
+    um höchstens ``_ON_PLANE``, ein Hundertstel von ``EPS_GEOM``; verglichen
+    wie in ``trimesh`` (``|Abstand| <= _ON_PLANE``), gerechnet in
+    Grundrechenarten (:func:`transform.along`). Bei einer Achsennormalen
+    bleiben die zwei anderen Koordinaten Bit für Bit, und die dritte ist danach
+    die Lage der Ebene — bis auf Reste unter 1e-24 an einer Ebene, die näher
+    als ``_ON_PLANE`` am Nullpunkt liegt. Liegt kein Punkt in der Spanne, kommt
+    ``points`` selbst zurück, sonst eine Kopie.
+    """
+    raw = np.asarray(points, dtype=np.float64)
+    distances = transform.along(raw, normal) - offset
+    beside = np.abs(distances) <= _ON_PLANE
+    if not beside.any():
+        return raw
+    settled = raw.copy()
+    settled[beside] -= distances[beside, None] * np.asarray(normal, dtype=np.float64)
+    return settled
 
 
 def _capped(sliced: trimesh.Trimesh, position: float) -> trimesh.Trimesh:

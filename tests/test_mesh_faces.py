@@ -203,6 +203,71 @@ def test_the_draft_keeps_the_standing_face_and_narrows_the_top() -> None:
     )
 
 
+def box_with_a_seam(offset: float) -> MeshData:
+    """Quader 40 × 40 × 20; jede Seitenwand trägt eine Ecke in halber Höhe, und
+    zwei ihrer vier Dreiecke reichen durch diese Ecke von unten nach oben.
+
+    Die Ecke steht ``offset`` neben ``z = 10`` (gegenüberliegende Wände mit
+    umgekehrtem Vorzeichen) — wie die Naht einer gespiegelten Figur aus einer
+    float32-STL.
+    """
+    half = 20.0
+    corners = [(x, y, z) for z in (0.0, 20.0) for y in (-half, half) for x in (-half, half)]
+    middles = [
+        (half, 0.0, 10.0 + offset),
+        (-half, 0.0, 10.0 - offset),
+        (0.0, half, 10.0 + offset),
+        (0.0, -half, 10.0 - offset),
+    ]
+    faces = [(0, 2, 1), (1, 2, 3), (4, 5, 6), (5, 7, 6)]
+    for low, next_low, next_high, high, middle in (
+        (1, 3, 7, 5, 8),
+        (2, 0, 4, 6, 9),
+        (3, 2, 6, 7, 10),
+        (0, 1, 5, 4, 11),
+    ):
+        faces += [(low, next_low, middle), (next_low, next_high, middle)]
+        faces += [(next_high, high, middle), (high, low, middle)]
+    body = trimesh.Trimesh(np.array(corners + middles), np.array(faces), process=False)
+    body.fix_normals()
+    return MeshData(body)
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+@pytest.mark.parametrize("share", [0.0, 0.3, 0.6, 0.9])
+def test_the_draft_holds_where_wall_corners_stand_just_beside_the_neutral_plane(
+    share: float, quality: str
+) -> None:
+    """Eine Wand, die die neutrale Ebene durch eine Ecke kreuzt, die ``trimesh``
+    zur Ebene zählt, wird angestellt wie jede andere.
+
+    Derselbe Fehler wie beim Schnitt
+    (``test_section.py::test_a_seam_just_beside_the_plane_is_capped``):
+    ``slice_faces_plane`` lässt eine Ecke bis ``section._ON_PLANE`` neben der
+    Ebene stehen und legt die Kopien der Nachbardreiecke genau auf sie. Das
+    Verschweißen über gerundete Koordinaten verfehlte das Paar, der Keil bekam
+    eine Wand mitten in der Fläche und war kein Körper; die Vorschau sagte
+    „Häufig ist das Modell an einer Stelle offen“ über einem geschlossenen
+    Quader.
+
+    Soll analytisch: Vier Wände, um α um die Höhe 10 angestellt, lassen auf
+    jeder Höhe ein Quadrat der halben Breite 20 − (z − 10)·tan α stehen;
+    ∫₀²⁰ (2·(20 − (z − 10)·tan α))² dz = 32 000 + 8000/3·tan²α.
+    """
+    from app.core.geom.faces import draft_walls
+    from app.core.geom.section import _ON_PLANE
+
+    body = box_with_a_seam(share * _ON_PLANE)
+    assert body.is_watertight
+
+    outcome = draft_walls(body, 5.0, neutral=10.0, quality=quality)
+
+    slope = math.tan(math.radians(5.0))
+    assert outcome.solver.strategy == "direct"
+    assert outcome.mesh.is_watertight
+    assert outcome.mesh.volume == pytest.approx(32000.0 + 8000.0 / 3.0 * slope * slope, rel=1e-9)
+
+
 def test_both_kernels_draft_to_the_same_body() -> None:
     """Dieselbe Handlung, zwei Kerne — und hier ist der Unterschied null.
 

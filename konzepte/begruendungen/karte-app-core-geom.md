@@ -167,6 +167,28 @@ exakten Eingängen `brep.edit.boolean` und erhalten deren Körperart. Sobald
 ein Mesh beteiligt ist, gilt die Netz-Rückfallkette. Beide Wege prüfen leere
 Ergebnisse und wirkungslose Änderungen, bevor sie einen Körper zurückgeben.
 
+**Was `trimesh` zur Schnittebene zählt, legt Solidon vorher auf sie** (RM-309,
+29.09.2026). `slice_mesh_plane` und `slice_faces_plane` geben einer Ecke bis
+1e-8 neben der Ebene das Vorzeichen null und lassen sie stehen; die
+geschnittenen Nachbardreiecke legen ihre Kopie genau auf die Ebene. Der Deckel
+(`section._capped`) und das Verschweißen der Formschräge legten beide über
+gerundete Koordinaten zusammen (acht Nachkommastellen, `round(x·1e8 − 1e-6)`) und
+verfehlten das Paar, sobald eine Rundungsgrenze dazwischenlag. An Bob (CC0,
+10 688 Dreiecke) steht die Mittelnaht nach *Auf Maß bringen* auf float32-Resten:
+69 Ecken genau auf der Mitte des Hüllquaders, 26 bis 1e-8 daneben — und genau
+dort schlägt *Teilen* seine Ebene vor, und dort findet Auto Split die
+Spiegelebene. Beide Hälften kamen offen heraus (21 und 18 offene Ketten), ohne
+Befund, denn `capped` fragt den Eingang; die Stifte scheiterten in der Vorschau
+mit „Häufig ist das Modell an einer Stelle offen“, in voller Qualität endete
+die Kette auf dem Raster mit 6 243 statt 54 243 mm³ auf der Stiftseite — still,
+weil `pins._add_connector_geometry` die Befunde der Kette verwarf. Seither
+dicht: 53 879,024 + 53 879,043 = 107 758,068 mm³, Stufe `direct` in beiden
+Qualitäten. Die Formschräge scheiterte an einer Wand, deren Dreiecke durch eine
+Ecke 3 bis 9·10⁻⁹ mm neben der neutralen Ebene reichen, an derselben Stelle.
+Tests: `test_section.py::test_a_seam_just_beside_the_plane_is_capped`,
+`test_prepare.py::test_pins_at_a_mirror_seam_hold_in_the_preview_and_on_applying`,
+`test_mesh_faces.py::test_the_draft_holds_where_wall_corners_stand_just_beside_the_neutral_plane`.
+
 ## Die Karte
 
 ### Grundlage

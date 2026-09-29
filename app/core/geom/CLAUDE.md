@@ -64,6 +64,11 @@ unter „Boolesches geht durch die Rückfallkette“.
 - **Nur exakte Eingänge** gehen über `brep.edit.boolean`; ist ein Netz
   beteiligt, gilt die Kette. Beide prüfen leere und wirkungslose Ergebnisse;
   `body_split` ist das eine Urteil über einen zerfallenden Körper.
+- **Wer mit `trimesh` an einer Ebene teilt und danach verschweißt**
+  (`section._apply`, `faces._draft_tools`), legt vorher auf die Ebene, was
+  trimesh zu ihr zählt (`section.settled_on_plane`): Ecke und Schnittkopie
+  stünden sonst bis 1e-8 mm auseinander, und das Verschweißen über gerundete
+  Koordinaten verfehlte sie — der Körper bliebe offen.
 - Eine Änderung am gemeinsamen Kern entwertet den Ergebnis-Cache
   (`paths.results_cache_dir()`, §38).
 

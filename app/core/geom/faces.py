@@ -51,6 +51,7 @@ from app.core.geom.repair import (
     remove_doubled_faces,
     remove_hollow_shells,
 )
+from app.core.geom.section import settled_on_plane
 from app.core.types import CancelToken, Feature, FeatureId, Finding, Quality, Vec3
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import _
@@ -1006,6 +1007,11 @@ def _draft_tools(
         elif float(heights.max()) <= tolerance:
             parts = [("fill", below, local, shift[used])]
         else:
+            # **Was die Teilung zur neutralen Ebene zählt, liegt vorher genau
+            # darauf** (``section.settled_on_plane``): Sonst steht eine Ecke
+            # der Ebene zweimal da, das Verschweißen unten verfehlt das Paar,
+            # und der Keil bekommt eine Wand mitten in der Fläche.
+            below = settled_on_plane(below, pull, level)
             moved = {
                 tuple(point): step for point, step in zip(below.tolist(), shift[used], strict=True)
             }

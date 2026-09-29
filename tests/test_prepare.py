@@ -34,7 +34,16 @@ from app.core.perceive.relations import bore_and_widening_at
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
-from app.core.types import Document, OpContext, Profile, Scene, SceneObject, Source, Vec3
+from app.core.types import (
+    Document,
+    OpContext,
+    Profile,
+    Quality,
+    Scene,
+    SceneObject,
+    Source,
+    Vec3,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -1149,6 +1158,70 @@ def test_splitting_runs_as_an_operation(document: Document, profile: Profile) ->
         assert entry.mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_pins_at_a_mirror_seam_hold_in_the_preview_and_on_applying(
+    profile: Profile, quality: Quality
+) -> None:
+    """*Teilen* mit zwei Stiften an der Naht einer gespiegelten Figur.
+
+    Das Fenster schlägt die Mitte des Hüllquaders vor, und an einer gespiegelt
+    modellierten Figur liegt dort ihre Naht, Milliardstel Millimeter daneben
+    (:func:`tests.helpers.mirror_seam_sphere`). Die Hälften kamen offen aus dem
+    Schnitt, und die Stifte scheiterten an Eingängen, die kein Körper waren:
+    In der Vorschau (``draft``, die kurze Kette) stand „Keine Vorschau: Häufig
+    ist das Modell an einer Stelle offen“ über einem geschlossenen Modell; in
+    voller Qualität fiel die Kette auf das Raster und ließ an Bob 5 876 statt
+    rund 54 000 mm³ stehen. Verlangt sind die erste Stufe und zwei
+    geschlossene Hälften mit ihren Verbindern.
+    """
+    from tests.helpers import mirror_seam_sphere
+
+    level = 39.4184852544278
+    body = mirror_seam_sphere(level)
+    entry = SceneObject(id="obj_1", name="Figur", mesh=body)
+
+    result = _run_op(
+        "split_pinned", entry, profile, quality=quality, axis="z", position=level, pins=2
+    )
+
+    pinned, drilled = result.outputs
+    assert result.solver is not None and result.solver.strategy == "direct"
+    assert pinned.mesh.is_watertight and drilled.mesh.is_watertight
+    assert {"pin_1", "pin_2"} <= set(pinned.features)
+    assert {"bore_1", "bore_2"} <= set(drilled.features)
+    assert pinned.mesh.volume > body.volume / 2.0, "die Stifte stehen über die Naht"
+    assert drilled.mesh.volume < body.volume / 2.0, "die Bohrungen nehmen Material"
+
+
+def test_what_the_chain_behind_the_pins_says_reaches_the_split(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Befunde der Rückfallkette hinter den Stiften stehen im Ergebnis von *Teilen*.
+
+    ``pins._add_connector_geometry`` nahm von jeder Booleschen nur Netz und
+    Stufe, ihre Befunde fielen weg. An Bobs Mitte endete der volle Lauf so auf
+    dem Raster, mit 5 876 statt rund 54 000 mm³ auf der Stiftseite, und die
+    Kommandozeile meldete den Schritt als gelungen — Stufe 4 steht im
+    Prüfbericht, nie still (§17.2). Erzwungen wird die zweite Stufe; ihr
+    Befund nimmt denselben Weg wie der des Rasters.
+    """
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom import pins
+
+    real = boolean_module.boolean
+
+    def welded_only(kind, meshes, **options):
+        return real(kind, meshes, **{**options, "stages": ("welded",)})
+
+    monkeypatch.setattr(pins, "boolean", welded_only)
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=cube())
+
+    result = _run_op("split_pinned", entry, profile, axis="z", position=0.0, pins=2)
+
+    assert result.solver is not None and result.solver.strategy == "welded"
+    assert "boolean.welded" in {finding.code for finding in result.findings}
+
+
 def test_a_rounding_goes_with_the_half_its_surface_lies_in(profile: Profile) -> None:
     """Eine Verrundung reist mit der Hälfte, in der ihre Fläche liegt, nicht ihre Achse.
 
@@ -2234,13 +2307,22 @@ def test_fitting_to_a_size_below_the_nozzle_says_so(document: Document, profile:
 # --- Erkannte Merkmale versetzen (Kundenumfrage S-20260903-74133c) ------------------
 
 
-def _run_op(op: str, entry: SceneObject, profile: Profile, *, ask=None, **params: object):
+def _run_op(
+    op: str,
+    entry: SceneObject,
+    profile: Profile,
+    *,
+    ask=None,
+    quality: Quality = "fine",
+    **params: object,
+):
     """Eine Operation fahren, wie der Verlauf sie fährt.
 
     ``ask`` tritt an die Stelle der Vorgabe, die immer die erste Antwort
     nimmt — für die Operationen, die eine Mehrdeutigkeit wirklich fragen
     (Regel 21). Ohne Angabe bleibt es bei der ersten Antwort, damit die
-    bestehenden Aufrufer nichts davon merken.
+    bestehenden Aufrufer nichts davon merken. ``quality="draft"`` ist die
+    Vorschau des Fensters.
     """
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import OpContext, Scene
@@ -2252,7 +2334,7 @@ def _run_op(op: str, entry: SceneObject, profile: Profile, *, ask=None, **params
             inputs=[entry],
             params=spec.params(**params),
             profile=profile,
-            quality="fine",
+            quality=quality,
             seed=7,
             progress=lambda fraction, text: None,
             ask=ask or (lambda question, choices: choices[0]),

@@ -149,6 +149,36 @@ def test_two_bodies_that_touch_stay_two_closed_bodies_after_a_cut(
     assert result.mesh.volume == pytest.approx(volume, rel=1e-9)
 
 
+@pytest.mark.parametrize("level", [12.5, 39.4184852544278])
+@pytest.mark.parametrize("side", ["below", "above"])
+def test_a_seam_just_beside_the_plane_is_capped(level: float, side: str) -> None:
+    """Ecken, die ``trimesh`` zur Ebene zählt, bekommen einen geschlossenen Deckel.
+
+    ``trimesh`` zählt eine Ecke bis ``_ON_PLANE`` neben der Ebene zu ihr und
+    lässt sie stehen, wo sie ist; die geschnittenen Nachbardreiecke legen ihre
+    Kopie genau auf die Ebene. Der Deckel legte beide über gerundete
+    Koordinaten zusammen und verfehlte sie, sobald eine Rundungsgrenze sie
+    trennte: Der Rand zerfiel in offene Ketten, beide Hälften blieben offen,
+    und ``capped`` sagte ja, weil es den Eingang fragt. Aufgefallen an Bob
+    (CC0) an der Mitte seines Hüllquaders, 39,4184852544278 mm, wo danach die
+    Stifte von *Teilen* scheiterten.
+
+    Soll aus der Symmetrie: Jede Hälfte trägt das halbe Volumen der Kugel;
+    das Rauschen der Naht verschiebt es um weniger als ein Milliardstel.
+    """
+    from app.core.geom.repair import open_edge_count
+    from tests.helpers import mirror_seam_sphere
+
+    body = mirror_seam_sphere(level)
+    plane = SectionPlane.along("z", level)
+
+    result = cut(body, plane if side == "below" else plane.flipped())
+
+    assert result.mesh.is_watertight, "die Schnittkante ist in offene Ketten zerfallen"
+    assert open_edge_count(result.mesh) == 0
+    assert result.mesh.volume == pytest.approx(body.volume / 2.0, rel=1e-9)
+
+
 def test_an_open_model_is_cut_but_reported_as_uncapped() -> None:
     """Ein offener Körper lässt sich nicht ehrlich deckeln — also wird es
     nicht vorgetäuscht (§18.2).
