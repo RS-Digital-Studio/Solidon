@@ -2454,6 +2454,9 @@ def test_the_view_stays_upright_while_it_turns() -> None:
 
     assert _horizon_tilt(position, focal, up) == pytest.approx(0.0, abs=1e-6), (
         "der Drehteller lässt die Ansicht aufrecht"
+    )
+
+
 def _trackball_turn(
     position: np.ndarray, up: np.ndarray, azimuth: float, elevation: float
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -2483,9 +2486,6 @@ def _trackball_turn(
     sideways = np.cross(up, normal)
     sideways /= np.linalg.norm(sideways)
     return position, np.cross(normal, sideways)
-
-
-    )
 
 
 def test_the_old_vtk_trackball_tilts_the_horizon() -> None:
@@ -2557,14 +2557,14 @@ def test_the_turn_keeps_its_distance() -> None:
     assert math.dist(position, focal) == pytest.approx(math.dist(start, focal))
 
 
+def test_the_turn_keeps_the_horizontal_speed_of_vtk() -> None:
+    """Ein waagerechter Zug dreht so weit wie ``vtkCamera.Azimuth`` im alten Trackball.
+
     Dessen Winkel: 20 Grad je Fensterbreite mal MotionFactor 10, für 40
     Bildpunkte in 1100 also 40 · 20 / 1100 · 10 Grad, rechtshändig um das Oben
     (0, 0, 1) durch den Blickpunkt. Der Standort (0, -100, 60) landet damit
     bei (100 · sin a, -100 · cos a, 60).
     """
-def test_the_turn_keeps_the_horizontal_speed_of_vtk() -> None:
-    """Ein waagerechter Zug dreht so weit wie ``vtkCamera.Azimuth`` im alten Trackball.
-
     from app.ui.render.navigator import turntable_camera
 
     angle = math.radians(40.0 * 20.0 / 1100 * 10.0)
