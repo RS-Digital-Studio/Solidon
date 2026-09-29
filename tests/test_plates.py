@@ -313,6 +313,80 @@ def test_a_deep_part_does_not_waste_the_strip_beside_it(profile: Profile) -> Non
     )
 
 
+def block(width: float, depth: float, height: float) -> MeshData:
+    """Ein Quader auf dem Bett in den genannten Maßen."""
+    body = trimesh.creation.box(extents=(width, depth, height))
+    body.apply_translation((0.0, 0.0, height / 2.0))
+    return MeshData.of(body)
+
+
+def minigolf_set() -> list[MeshData]:
+    """Die Hüllmaße des Minigolf-Satzes aus Roberts Projekt vom 29.09.2026,
+    abgelesen nach *Druckoptimal ausrichten*, in der Reihenfolge der Szene.
+
+    Zwei Grundplatten, ein Loch, eine große Bahn, eine Drehscheibe, ein Rumpf
+    von 245 mm Tiefe (passt auf das 256er Bett nur mit schmalerem Rand) und
+    vier Fahnenstangen.
+    """
+    return [
+        block(130.0, 130.0, 25.0),
+        block(96.0, 128.0, 10.0),
+        block(94.3, 132.0, 37.0),
+        block(220.0, 220.0, 29.9),
+        block(90.0, 104.8, 7.0),
+        block(150.0, 245.0, 85.0),
+        *(block(9.7, 9.7, 122.0) for _ in range(4)),
+    ]
+
+
+def test_a_part_goes_to_the_first_plate_with_room(profile: Profile) -> None:
+    """Jedes Teil kommt auf die erste Platte, auf der es Platz hat — auch auf
+    eine, die schon hinter der Anordnung liegt.
+
+    So gefunden (Robert, 29.09.2026: „warum werden die nicht auf eine platte
+    was passt ausgerichtet?"): Die Anordnung blätterte nur vorwärts. War die
+    große Bahn auf Platte 3 gewandert, fand keine Platte davor mehr ein Teil,
+    und die Drehscheibe und die vier Stangen lagen neben dem Bett, während auf
+    Platte 1 und 2 Platz genug war. Mit zwölf erlaubten Platten wurden es
+    sechs statt vier.
+    """
+    parts = minigolf_set()
+
+    result = arrange_on_bed(parts, profile, spacing=10.0, plates=12)
+
+    assert result.plate_count == 4, f"four plates hold the set, not {result.plate_count}"
+    assert result.plates[4] == 1, "the turntable goes beside the hole on plate 2"
+    assert result.plates[6:] == [0, 0, 0, 0], "the poles fill the gap on plate 1"
+    codes = {finding.code for finding in result.findings}
+    assert codes <= {"arrange.narrow_margin"}, f"nothing is left beside a bed: {codes}"
+    for plate in range(result.plate_count):
+        on_plate = [
+            mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
+        ]
+        assert not check_collisions(on_plate), f"plate {plate}"
+
+
+def test_too_few_plates_leave_out_only_what_really_has_no_room(profile: Profile) -> None:
+    """Mit drei Platten bleibt nur der Rumpf ohne Platz — und der Bericht sagt,
+    dass eine vierte hülfe.
+
+    Der Rumpf passt nur ohne den vollen Rand auf das Bett; auf einer eigenen
+    Platte läge er mittig mit schmalerem Rand (RM-229). Eine Platte mehr hilft
+    ihm also, und der Rat muss dastehen.
+    """
+    parts = minigolf_set()
+
+    result = arrange_on_bed(parts, profile, spacing=10.0, plates=3)
+
+    beside = {
+        finding.object_id if finding.object_id is not None else finding.values.get("object")
+        for finding in result.findings
+        if finding.code in {"arrange.off_the_plate", "arrange.out_of_build_volume"}
+    }
+    assert beside == {5}, f"only the deep body lacks a place, not {beside}"
+    assert "arrange.needs_more_plates" in {finding.code for finding in result.findings}
+
+
 def test_what_is_packed_ends_up_in_the_middle_of_the_bed(profile: Profile) -> None:
     """Gepackt wird in der Ecke, gelegt wird in der Mitte (Robert, 09.09.2026).
 

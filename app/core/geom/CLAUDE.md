@@ -235,7 +235,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split.
 - **Gepackt wird in der Ecke, gelegt in der Mitte** (`arrange_on_bed`,
   `_into_the_middle` nur auf freier Fläche, `arrange.narrow_margin`;
-  `occupied` verhindert das Zentrieren). `orient_for_print` legt mit an
+  `occupied` verhindert das Zentrieren). Jeder Körper kommt auf die erste
+  angefangene Platte mit Platz, erst dann auf eine neue; eine leere nimmt ihn
+  auch zu groß (`settle`). Ob eine Platte mehr hilft, fragt `_fits_alone` die
+  Anordnung selbst, wie `first_free_spot`. `orient_for_print` legt mit an
   (`arrange`, `True` auch für gespeicherte Aufträge, ohne Migration —
   Entscheidung Robert), Abstand aus `export.writer.clearance_margin`; nach
   Filament getrennt wird, wo mehr Filamente als Düsen liegen (`by_material`,
