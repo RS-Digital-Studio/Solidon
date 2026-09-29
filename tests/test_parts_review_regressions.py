@@ -210,9 +210,7 @@ def test_component_gap_checks_every_pair_in_any_order():
         body.apply_translation((x, 0, 0))
         bodies.append(body)
     for ordered in itertools.permutations(bodies):
-        result = printable_gap(
-            MeshData.of(trimesh.util.concatenate(ordered)), profiles.make_profile()
-        )
+        result = printable_gap(MeshData.of(trimesh.util.concatenate(ordered)))
         assert result == pytest.approx(0.05, abs=1e-8)
 
 

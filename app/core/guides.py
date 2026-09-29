@@ -774,14 +774,6 @@ GUIDES: Final[tuple[Guide, ...]] = (
 )
 
 
-def find(key: str) -> Guide | None:
-    """Eine Anleitung beim Namen."""
-    for guide in GUIDES:
-        if guide.key == key:
-            return guide
-    return None
-
-
 def fingerprint(guide: Guide) -> str:
     """Ein Abdruck dessen, was die Bilder einer Anleitung zeigen sollen.
 

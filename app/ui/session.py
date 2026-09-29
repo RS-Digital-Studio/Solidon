@@ -714,10 +714,6 @@ class ProposalPreview:
     scene: Any = None
     difference: SceneDifference | None = None
 
-    @property
-    def changes_geometry(self) -> bool:
-        return bool(self.proposal.drafts)
-
 
 class _AgentWorker(Worker):
     """Ein Zug des Agenten, abseits des GUI-Threads (§26.5)."""
@@ -3647,7 +3643,7 @@ class Session(QObject):
         refusal = self.halt_in_the_way()
         if refusal is not None:
             raise refusal
-        applied = apply_lid(self.project.document, object_id, params, self.profile, op=op)
+        applied = apply_lid(self.project.document, object_id, params, op=op)
         self._changed()
         return applied
 

@@ -128,12 +128,6 @@ def _all() -> dict[str, dict[str, dict[str, Any]]]:
     return _tables
 
 
-def reload() -> None:
-    """Verwirft den Cache, nachdem der Nutzer eigene Werte geschrieben hat."""
-    global _tables
-    _tables = None
-
-
 #: Die Namen der Qualitätsstufen in der Oberfläche (Regel 20). Die Titel in
 #: ``print_settings.toml`` gingen am Einsammler vorbei und standen in jeder
 #: Sprache deutsch im Druckdialog. Mit Kontext, denn „Standard" und „Fein"

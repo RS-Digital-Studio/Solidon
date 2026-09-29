@@ -357,7 +357,7 @@ def _answering_with(
     return type(f"{base.__name__}WithDeadline", (base,), {"response_class": response})
 
 
-def apply_header_deadline(opener: Any, deadline: float, *, timer: Timer = monotonic) -> None:
+def apply_header_deadline(opener: Any, deadline: float) -> None:
     """Legt die Gesamtfrist auch über Statuszeile und Kopfzeilen dieses Öffners.
 
     `open_public_url` hält diese Frist seit je — es baut seine Verbindung
@@ -376,7 +376,7 @@ def apply_header_deadline(opener: Any, deadline: float, *, timer: Timer = monoto
     Klasse, also trüge ein geteilter Öffner nach dem ersten Aufruf für immer
     dessen Frist.
     """
-    response = deadline_response_class(deadline, timer=timer)
+    response = deadline_response_class(deadline)
     for handler in getattr(opener, "handlers", ()):
         if not isinstance(handler, AbstractHTTPHandler):
             continue
@@ -399,21 +399,20 @@ def open_public_url(
     *,
     deadline: float,
     headers: dict[str, str] | None = None,
-    timer: Timer = monotonic,
 ) -> _PinnedResponse:
     """Öffnet eine öffentliche URL an genau einer zuvor geprüften IP-Adresse."""
-    deadline_response = deadline_response_class(deadline, timer=timer)
+    deadline_response = deadline_response_class(deadline)
 
     checked = validate_http_url(url, allow_http=True, allow_fragment=False)
     parts = urlsplit(checked)
     hostname = parts.hostname
     if hostname is None:
         raise UnsafeUrlError("hostname")
-    addresses = resolve_public_addresses(checked, deadline=deadline, timer=timer)
+    addresses = resolve_public_addresses(checked, deadline=deadline)
     port = parts.port or (443 if parts.scheme.lower() == "https" else 80)
     last_problem: OSError | None = None
     for address in addresses:
-        remaining = deadline - timer()
+        remaining = deadline - monotonic()
         if remaining <= 0:
             raise ResponseDeadlineError("connection deadline exceeded")
         connection: http.client.HTTPConnection
