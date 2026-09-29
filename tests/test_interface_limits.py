@@ -212,17 +212,74 @@ def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
     assert gerufen == ["halb"], "der sichtbare Knopf nennt seine Zeile"
 
 
+def _most_front_fields_shown_at_once(spec: object) -> int:
+    """Wie viele Vorderfelder höchstens **zugleich** dastehen.
+
+    Ein Feld ohne Wirkung steht nicht da (``oberflaeche.md``, „Gestufte
+    Tiefe“): *Anzahl* gilt nur dem Lochkreis, *Spalten* und *Reihen* nur dem
+    Lochraster. Gezählt wird deshalb je Belegung der Umschalter, von denen die
+    Vorderfelder abhängen — nicht die Summe über alle Varianten, die niemand
+    je gleichzeitig sieht.
+    """
+    from itertools import product
+
+    entries = list(spec.params.spec())  # type: ignore[attr-defined]
+    front = [entry for entry in entries if entry.placement == "front"]
+    by_name = {entry.name: entry for entry in entries}
+    switches = sorted({entry.depends_on[0] for entry in front if entry.depends_on})
+    options = [
+        tuple(by_name[name].choices) or (True, False) if name in by_name else (None,)
+        for name in switches
+    ]
+    most = 0
+    for values in product(*options) if switches else [()]:
+        state = dict(zip(switches, values, strict=True))
+        shown = [
+            entry
+            for entry in front
+            if entry.depends_on is None or state.get(entry.depends_on[0]) in entry.depends_on[1]
+        ]
+        most = max(most, len(shown))
+    return most
+
+
 def test_no_operation_floods_the_front_of_its_dialog() -> None:
-    """Tiefe gehört hinter die Klappe, nicht auf die Vorderseite (§2.5)."""
-    over = {
-        spec.name: len([p for p in spec.params.spec() if p.placement == "front"])
-        for spec in REGISTRY.all()
-        if len([p for p in spec.params.spec() if p.placement == "front"]) > MAX_FRONT_PARAMS
-    }
+    """Tiefe gehört hinter die Klappe, nicht auf die Vorderseite (§2.5).
+
+    **Gezählt wird, was zugleich dasteht** (Entscheidung 29.09.2026): Seit ein
+    Feld ohne Wirkung verschwindet, sind die Vorderfelder einer Operation mit
+    Varianten nie alle zu sehen. *Tasche schneiden* führt neun, weil der Haken
+    *Durchgehend* vor die Tiefe gehört, die er ausschaltet — sichtbar sind
+    höchstens sieben (Lochraster).
+    """
+    counted = {spec.name: _most_front_fields_shown_at_once(spec) for spec in REGISTRY.all()}
+    assert len(counted) > 100, "das Register ist leer — erst load_operations()"
+    over = {name: count for name, count in counted.items() if count > MAX_FRONT_PARAMS}
     assert not over, (
-        f"Diese Operationen zeigen mehr als {MAX_FRONT_PARAMS} Felder auf der "
+        f"Diese Operationen zeigen mehr als {MAX_FRONT_PARAMS} Felder zugleich auf der "
         f"Vorderseite: {over}. Setze die selteneren auf placement='advanced'."
     )
+
+
+def test_the_front_count_sees_the_variants_and_not_their_sum() -> None:
+    """Die Zählung selbst: Varianten schließen einander aus, gezählt wird die größte."""
+    from types import SimpleNamespace
+
+    def field(name: str, depends_on: object = None, choices: tuple[str, ...] = ()) -> object:
+        return SimpleNamespace(name=name, placement="front", depends_on=depends_on, choices=choices)
+
+    spec = SimpleNamespace(
+        params=SimpleNamespace(
+            spec=lambda: [
+                field("shape", choices=("a", "b")),
+                field("only_a", ("shape", ("a",))),
+                field("only_b_1", ("shape", ("b",))),
+                field("only_b_2", ("shape", ("b",))),
+                field("always"),
+            ]
+        )
+    )
+    assert _most_front_fields_shown_at_once(spec) == 4, "shape, beide von b, always"
 
 
 def _direct_entries(menu: QMenu) -> int:

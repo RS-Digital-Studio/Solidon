@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, Final
 
@@ -107,6 +108,7 @@ from app.ui.style import (
     WIDE,
     DialogScrollArea,
     fit_dialog_to_screen,
+    fit_height_after_show,
     make_large_target,
     make_primary,
     no_primary,
@@ -307,9 +309,13 @@ class CalibrationDialog(QDialog):
         )
         # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
         # Profils („resin — Startwert" über einem „Standardharz").
+        # **Was kalibriert wird, ist die Überschrift** — es stand als erste
+        # Zeile im Fließtext, so laut wie der Satz darunter.
+        heading = QLabel(f"{current.title} — {state}", self)
+        heading.setWordWrap(True)
+        set_level(heading, "section")
         explanation = QLabel(
-            f"{current.title} — {state}\n\n"
-            + tr(
+            tr(
                 "Gemessene Werte gehören ins Materialprofil, nicht ins Modell. "
                 "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
                 "Gemessen wird an einem gedruckten Prüfkörper: der Toleranz-Testkörper "
@@ -440,6 +446,7 @@ class CalibrationDialog(QDialog):
         content = QWidget(self)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(heading)
         layout.addWidget(explanation)
         layout.addLayout(form)
         layout.addWidget(process_note)
@@ -625,14 +632,29 @@ class ParameterDialog(QDialog):
         expression_layout.addWidget(self.expression_field, 1)
         expression_layout.addWidget(self.parameter_button)
 
+        # **Der Ausdruck unter dem Wert, den er ersetzt.** *fx* in der
+        # Wertzeile blendet ihn ein und sperrt die Zahl; er stand drei Zeilen
+        # tiefer, unter Einheit und Grenzen.
         form = QFormLayout()
         form.addRow(tr("Name"), self.name_field)
         form.addRow(tr("Wert"), value_row)
+        form.addRow(tr("Ausdruck"), self.expression_row)
         form.addRow(tr("Einheit"), self.unit_field)
         form.addRow(tr("Untergrenze"), self.minimum_field)
         form.addRow(tr("Obergrenze"), self.maximum_field)
-        form.addRow(tr("Ausdruck"), self.expression_row)
         self._form = form
+        chain = (
+            self.name_field,
+            self.value_field,
+            self.fx_button,
+            self.expression_field,
+            self.parameter_button,
+            self.unit_field,
+            self.minimum_field,
+            self.maximum_field,
+        )
+        for before, after in pairwise(chain):
+            QWidget.setTabOrder(before, after)
 
         self.fx_button.toggled.connect(
             weak_slot(self, ParameterDialog._set_expression_mode, forward=True)
@@ -1882,6 +1904,10 @@ class OfflineActivationDialog(QDialog):
         outer.setSpacing(NORMAL)
         outer.addWidget(scroll, 1)
         outer.addWidget(buttons)
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        fit_height_after_show(self)
 
     def _save_request(self) -> None:
         name, _chosen = QFileDialog.getSaveFileName(
@@ -3416,6 +3442,12 @@ class DonationDialog(QDialog):
         outer.activate()
         self.resize(self.minimumWidth(), self.sizeHint().height())
 
+    def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        # Der Vorschlag oben ist vor dem Stylesheet gerechnet; nachgemessen
+        # verschwinden rund achtzig Punkte Leere über „Schließen“.
+        fit_height_after_show(self)
+
     @staticmethod
     def _purpose_row(parent: QWidget, symbol: str, point: str, detail: str) -> QHBoxLayout:
         """Eine Zeile „wofür": Symbol, halbfettes Stichwort, ein Satz darunter."""
@@ -3522,13 +3554,18 @@ class AboutDialog(QDialog):
         licensed = QLabel(_licence_line(), self)
         licensed.setWordWrap(True)
 
+        # Zwei Absätze, zwei Labels: Als ein Label mit Leerzeile dazwischen
+        # stand zwischen ihnen doppelt so viel Luft wie zwischen allen übrigen.
         exceptions = QLabel(
             tr(
                 "Bausteinbibliothek und Referenzkorpus stehen unter der MIT-Lizenz, "
                 "weil ihr Inhalt in den Ergebnissen der Nutzer landet."
-            )
-            + "\n\n"
-            + tr(
+            ),
+            self,
+        )
+        exceptions.setWordWrap(True)
+        examples = QLabel(
+            tr(
                 "Die mitgelieferten Beispiele gehören RS Digital. Sie dürfen sie öffnen, "
                 "bearbeiten, drucken und exportieren sowie individuell bearbeitete Ergebnisse "
                 "weitergeben. Für die Weitergabe der unveränderten ursprünglichen P3D- und "
@@ -3537,7 +3574,7 @@ class AboutDialog(QDialog):
             ),
             self,
         )
-        exceptions.setWordWrap(True)
+        examples.setWordWrap(True)
 
         third_party = QTextBrowser(self)
         third_party.setMarkdown(_third_party_text())
@@ -3575,10 +3612,19 @@ class AboutDialog(QDialog):
         layout.addLayout(supporting)
         layout.addWidget(support)
         layout.addWidget(licensed)
+        # Zwischen Abschnitten mehr Luft als zwischen Sätzen, und jeder
+        # Abschnitt mit einer Überschrift derselben Stufe: „Fremde
+        # Bestandteile" stand in Fließtextgröße unter einer halbfetten
+        # Nachbarin.
+        layout.addSpacing(NORMAL)
         layout.addWidget(security_heading)
         layout.addWidget(security)
         layout.addWidget(exceptions)
-        layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
+        layout.addWidget(examples)
+        layout.addSpacing(NORMAL)
+        third_party_heading = QLabel(tr("Fremde Bestandteile"), self)
+        set_level(third_party_heading, "section")
+        layout.addWidget(third_party_heading)
         layout.addWidget(third_party, stretch=1)
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)

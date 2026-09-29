@@ -218,10 +218,12 @@ Operation.
 Offscreen ist `Viewport.renderer` `None`: Die Suite prüft die Regeln gegen
 Attrappen (`RecordingRenderer`, Renderer-Doppel), nie die Kette Qt-Ereignis →
 Widget des Renderers → `PointerEvent` → Renderer. **Einheitstests über eine
-reine Funktion sagen nichts darüber, ob jemand sie ruft.** Die Kette fahren
-`.claude/.state/drehpunkt-2026-09-04/` und `.claude/.state/steuerung-2026-09-03/`
-am echten Fenster — nach jeder Änderung an `_NAVIGATION`, am Navigator oder an
-`camera_step`. Der Steuerungsprüfstand schickt noch VTK-Ereignisse und ist vorher
-umzubauen (Register in `ROADMAP.md`). Seine Fallen: Millimeter sagen nichts (jede
-Bewegung skaliert mit der Entfernung), Bildpunkte dort gar nichts (das
-Renderfenster bleibt 160×160), und `session.apply` blockiert den Hauptthread.
+reine Funktion sagen nichts darüber, ob jemand sie ruft.** Die Kette zeigt nur
+das echte Fenster, und einen lauffähigen Prüfstand dafür gibt es nicht: Die zwei
+alten (Drehpunkt, Steuerung) schickten VTK-Ereignisse an `viewport.plotter` und
+sind entfernt. Nach einer Änderung an `_NAVIGATION`, am Navigator oder an
+`camera_step` gehört die Navigation deshalb in die Fensterabnahme (RM-213). Wer
+einen Prüfstand baut, schickt `QMouseEvent` an `renderer.widget` und kennt die
+Fallen: Millimeter sagen nichts (jede Bewegung skaliert mit der Entfernung),
+Bildpunkte in einem kleinen Renderfenster gar nichts, und `session.apply`
+blockiert den Hauptthread.

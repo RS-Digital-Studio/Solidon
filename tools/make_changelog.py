@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 
 from app.branding import APP_NAME  # noqa: E402
 from app.core import changes  # noqa: E402
+from app.core.markup import inline  # noqa: E402
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, language_name  # noqa: E402
 from app.i18n.catalog import available_languages, read_catalog  # noqa: E402
 from tools.site_nav import BRAND_MARK, nav_menu  # noqa: E402
@@ -256,7 +257,9 @@ def _entry(entry: changes.Entry, selected: str, published: str, copy: Copy) -> s
             if group.title
             else ""
         )
-        points = "".join(f"<li>{html.escape(point)}</li>" for point in group.points)
+        # Dieselbe Auszeichnung wie in der Anwendung (``changes_dialog.groups_html``):
+        # *Druckoptimal ausrichten* kursiv, nicht mit Sternchen.
+        points = "".join(f"<li>{inline(point)}</li>" for point in group.points)
         groups.append(f'<div class="release-group">{title}<ul>{points}</ul></div>')
     summary = _summary(entry, copy)
     badge = (

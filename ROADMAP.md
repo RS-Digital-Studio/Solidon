@@ -53,7 +53,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1): Kumiko −34 %, Meshy −22 % CPU unter Last; §31 nicht erreicht, nächster Hebel je Modell im Schlussbericht des Pakets |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Mindestbogen nach Roberts Entscheidung gebaut (5 Grad, beide Kerne, `3fa7d719`), die Kippstellen der Verrundungen behoben — lageabhängig 17 statt 27 von 101 Körpern; offen sind Einpassungen an ihrer Kippe (deckungsgleiche Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die dokumentierte Grenze der Zusage ‚drehfest‘ — zwischen beidem entscheidet Robert |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), an der Freiform ohne messbare Wirkung (vergebliche Läufe in zu kleinen Gruppen); offen: anderer Hebel oder neu gefasstes Ziel |
-| [RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Creality Print 7.2 rechnet über die Kommandozeile keine 3MF (jede endet mit „The print is empty“, STL schneidet); die Meldung führt seit `e401ce900` zu *Im Slicer öffnen*. Offen: einmal von Hand prüfen, ob das Fenster die Übergabe samt Sperre, Tempo und Brim lädt, dann entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt wird |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
@@ -85,6 +84,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
+| [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Auf `main` zusammengeführt (`559412ac4`) und in 0.5.1 enthalten: Gliederung, fünfzehn Bildanleitungen, Suche, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter und Film. Weiterarbeit auf `main`; offen bleiben die Feldabnahme (§11 des Konzepts) und die Nummernplatzierung auf Text in zwei Bildern |
@@ -96,10 +96,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Quelle nachgezogen (`84185f4d`: Kopfzeile, Fenster „Auswahl“ mit Handlungen, Alt-Text in allen Sprachen); Erzeugung und Sichtprüfung je Sprache beim Release |
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Nachtragstext für §9 und §30.1 liegt im Bericht skizze der Durchsicht 0.5.0 bereit (neu geschrieben, der Wortlaut W2 lag nicht mehr vor), dazu die Vorschläge aus p66 (Ellipse, drei Bedingungsarten), p6c (drei Schnitte), zeichnenbau und p7verlauf. Robert sagt den Nachtrag an und entscheidet dabei, ob eine neue Bedingungsart die Formatversion hebt (p66 hat sie mit Format 31 gehoben, Satz 5 des Nachtrags sagt nein) |
 | [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
-| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim Release 0.5.0 noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
+| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim nächsten Release noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim nächsten Release: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
-| [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
+| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 74–79 ms bis zum ersten Bild mit Maßen (Median je Runde, der Stand davor 97–104 ms, abwechselnd unter leichter Last), 30 von 32 warmen Klicks unter 100 ms (`0273b8d23`, `c2bff45f1`); offen die Abnahme auf ruhiger Maschine am eingeschalteten zweiten Monitor — gemessen wurde auf dem Ersatzbildschirm in der Fläche des MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
@@ -111,6 +111,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Auftrag Robert: Größen aus den Maschinenvarianten des Slicers, Auswahl mit „Andere …“; vorher mit der Dialog-Sitzung abstimmen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -151,23 +152,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 ## Filamentlager
 
-Löschen ist im Regal per Rechtsklick und im Spulendetail sowie Filamentpanel
-über einen Mülleimerknopf erreichbar; Wiederherstellen läuft über das Archiv.
-Hinzufügen trägt ein Plus-SVG. „Erste Schritte“ führt über Slicer und passende
-Drucker zum Filamentlager; eigene Drucker lassen sich mit Name, Bauraum und
-Düse direkt anlegen.
+Physische Spulen mit bis zu vier Farben, Regal, bewusster Import, Schnellauswahl
+und rücknehmbare Verbrauchsbuchungen sind angeschlossen; „Erste Schritte“ führt
+über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
+begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
-Physische Spulen, Regal, bewusster Import, Schnellauswahl und rücknehmbare
-Verbrauchsbuchungen sind angeschlossen. [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
-Das anschließende [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
-behandelt Abwahl, Herstellerprofile, Buchungskorrekturen und die weiteren Anschlüsse.
-Eine Spule trägt bis zu vier Farben. Die Durchsicht vom 19.09.2026 (vier
-Fehler, vier Regelverstöße, neun Bedienmängel, sieben Textmängel) ist
-vollständig behoben: Eine Bearbeitung der Angaben zählt nicht mehr als
-Bestandsfeststellung, eine automatische Buchung nach einer Rücknahme bucht
-wirklich, eine abgewiesene Spule kommt in den Dialog zurück, die Übernahme aus
-dem Slicer überschreibt keine Handspule, Rücknahmen sind rücknehmbar, das Lager
-sichert seinen letzten lesbaren Stand selbst, Datumsfelder haben einen Kalender.
+[Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
 
 ## P0 — Skelett
 
@@ -219,7 +209,7 @@ G-Code-Rücklesen, Profilabgleich und Kalibrierung sind umgesetzt. Interne Schä
 
 ## P8 — Erste Veröffentlichung
 
-Windows, Flatpak, AppImage und beide Mac-Architekturen sind als 0.5.0 veröffentlicht.
+Windows, Flatpak, AppImage und beide Mac-Architekturen sind seit 0.5.0 veröffentlicht.
 Signatur-, Notarisierungs- und Releaseaktennachweise sowie der öffentliche Bytevergleich
 gehören zu dieser Auslieferung. Fremdrechnerabnahme und noch fehlende Betriebsnachweise
 bleiben eigene Aufgaben; siehe RM-011 und RM-002.
@@ -246,7 +236,7 @@ Zurückgestellt; kein laufendes Bauvorhaben. Ein gehosteter Generierungsdienst k
 
 ## P12 — B-Rep-Kern
 
-Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung startet nach 0.4.4 als Teil des CAD-Plans (RM-188).
+Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung läuft als Teil des CAD-Plans (RM-188).
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p12--b-rep-kern).
 
@@ -356,6 +346,10 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Lauf auf einer Linux- und einer Mac-Maschine, um die Plattformbindung zu belegen. Ein
   Abschluss, der den Riss nur verdeckt, gehört ausdrücklich **nicht** dazu — er machte das Tor
   grün, ohne dass jemand etwas gemessen hätte.
+
+  **Dazu aus `.claude/rules/wartezeit.md`:** `weak_slot` je Knopf an einer Knopfgruppe
+  riss `test_widget_lifetime` mit einer Zugriffsverletzung; die Regel verlangt deshalb den
+  gebundenen Empfänger an `QButtonGroup.buttonClicked`. Die Ursache ist nicht zugeordnet.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-ein-kunde-beim-öffnen-der-beispiele-sieht-23082026).
 
@@ -1000,37 +994,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   An der Freiform: 65 von 274 Läufen sind vergeblich, 27 bis 38 davon erkennt der Stapel;
   der Rest der Zeit liegt woanders.
 
-<a id="rm-164"></a>
-
-- [~] **RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF.** Das
-  Programm war installiert und wurde von Solidon gar nicht erkannt — `flavour_of` gab `None`,
-  und damit war es im Druckdialog nicht wählbar. Es ist ab Version 6 ein Orca-Abkömmling:
-  derselbe Profilbaum mit `machine_list`/`sub_path`, dieselben Schlüsselnamen; als `orca`
-  behandelt findet Solidon in Version 7.2 **4234 Profile** (459 Maschinen, 1240 Prozesse,
-  2535 Filamente). Seit dem 12.09.2026 steht es in `FLAVOUR_BY_NAME`, mit Fall in
-  `tests/test_print_settings.py`.
-
-  **Der Konsolenlauf ließ sich nicht abnehmen**: dreimal `0xC0000005` mitten im eigenen Start,
-  vor jeder Modellverarbeitung. Das Programm war auf dieser Maschine allerdings **nie
-  eingerichtet** — es stand im Dialog „Bitte wählen Sie den Softwaremodus" —, und ein Urteil
-  über seine Kommandozeile auf dieser Grundlage wäre voreilig. Ein Absturz wird seither als
-  Absturz gemeldet statt als „keine Druckdatei geschrieben" (`handover.crashed`), mit dem Rat,
-  den Slicer einmal von Hand zu starten.
-
-  Abnahme: Creality Print einrichten (Modus und Drucker wählen), dann drei Platten mit
-  mehreren Spulen übergeben — einmal über *Im Slicer öffnen*, einmal über *Slicen*. Läuft der
-  Konsolenweg auch dann nicht, gehört die Einschränkung benannt, statt sie den Kunden am
-  Absturz erfahren zu lassen.
-
-  **Durchsicht v0.5.1 (26.09.2026, druck, DRUCK-07):** Creality Print 7.2 rechnet über
-  die Kommandozeile keine 3MF — Solidons Übergabe, eine nackte aus trimesh, eine aus
-  PrusaSlicer, Bambu, Elegoo: jede endet mit −100 und „The print is empty“, dasselbe
-  Teil als STL schneidet. Die Meldung sagt das jetzt und führt zu *Im Slicer öffnen*
-  (`e401ce900`). Offen: einmal von Hand *Im Slicer öffnen* mit der Okarina und
-  *Vorschläge übernehmen*, im Fenster slicen und die Stütze in den Kanälen ansehen;
-  danach entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt
-  wird.
-
 <a id="rm-166"></a>
 
 - [~] **RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld.** Gefunden am
@@ -1148,12 +1111,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   - Abläufe: Konturdeckel mit Scharnier/Stift, bündige Schrifteinlage,
     Gegenformeinsatz, Passungsprüfausschnitt, importiertes Gewinde ersetzen,
     Schrift auf Fläche/Bahn sowie drehender und kombinierter Fügeweg.
-
-<a id="rm-186"></a>
-
-RM-186 ist mit dem unbedingten Gewindebolzen-Kerntest im vollständigen grünen
-Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemessen.
-[Befund und Abschluss](ROADMAP-ARCHIV.md#rm-186).
 
 <a id="rm-188"></a>
 
@@ -2317,7 +2274,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-muendung\prepare_ops_mit_drehen_heute.patch`
   (8 Hunks, gegen den Stand mit `2e496575b` und `202d5133a`). Ohne Lippe kippt die Tasche
   seit `2e496575b` an beiden Kernen offen. Die schräg **gesetzte** Tasche aus dem Baustein
-  zeigt dieselbe Lücke von der anderen Seite ([RM-277](#rm-277)). Abnahme unverändert.
+  zeigt dieselbe Lücke von der anderen Seite ([RM-277](ROADMAP-ARCHIV.md#rm-277)). Abnahme unverändert.
 
 <a id="rm-273"></a>
 
@@ -2534,6 +2491,20 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
 
+<a id="rm-311"></a>
+
+- [ ] **RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode.**
+  Aus dem Rauchtest nach der Einrichtung von SuperSlicer 2.5.59.13 (29.09.2026,
+  `.claude/.state/uebergabe-gesamt-2026-09-27/einheit.py`, Wedge-Lock am Prusa MINI und
+  MK4S): Alle Läufe haben eine Druckdatei, aber jeder meldet `slicer.setting_ignored` für
+  `start_gcode` — geschrieben steht `M862.3 P \"[printer_model]\"`, im G-Code
+  `M862.3 P "[printer_model]"`. Der Wert ist derselbe, nur die Anführungszeichen stehen in
+  der Konfigurationszeile einmal maskiert und einmal nicht; die Gegenprobe vergleicht die
+  Schreibweise statt des Werts. Ein Fehlalarm bei jedem Druck nimmt dem echten Befund die
+  Wirkung. Weg: den Vergleich in `verify_settings` über die entmaskierte Fassung beider
+  Seiten führen, PrusaSlicer als Gegenfall. Abnahme: SuperSlicer am MINI ohne
+  `slicer.setting_ignored`, ein wirklich übergangener Wert meldet weiter.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -2729,7 +2700,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `F:\3D Dateien` nachgestellt — ein STEP mit Senkbohrung liegt dort nicht,
   der exakte Fall bleibt am gebauten Körper geprüft). Jeder neue Test am
   Stand davor rot. Offen: die Abnahme am
-  echten Fenster beim Release 0.5.0 — dazu die Stufe an der Grenze „ganz
+  echten Fenster beim nächsten Release (RM-213) — dazu die Stufe an der Grenze „ganz
   sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite).
   **Zug und Durchmesser sind ein Schritt** (Entscheidung Robert am selben
   Tag: „Ja eine transaktion"): `slot_hole` nimmt die Breite selbst
@@ -2857,8 +2828,8 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Radzoom zeichnet ein Bild statt zwei (22 → 7,7 ms je Aufbau).
 
   **Was bleibt:** Die Overlaykarten tragen Masken mit runden Ecken — wenige
-  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim Release
-  0.5.0 noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
+  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim nächsten
+  Release (RM-213) noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
   ist (unter D3D12 gab es den Fall nie), ist eine eigene Entscheidung und
   kein Muss mehr.
 
@@ -2884,7 +2855,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Das Review vom 21.09.2026 fand den Rest: Der Block des historischen
   Bohrschritts (`offer_bore_step`) blieb neben der Maßgruppe stehen; er trägt
   sich seither in `_blocks` ein und weicht mit den übrigen. Abnahme, offen
-  beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
+  beim nächsten Release (RM-213): Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
   Koordinaten; endet die Maßgruppe, stehen sie wieder. Escape und Abbrechen
   wählen dabei seit dem 25.09.2026 ab (Entscheidung Robert), rechts steht
   danach nichts mehr.
@@ -2996,6 +2967,13 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   Offen bleibt der Zeile-für-Zeile-Durchgang durch den Bestand vor 0.5.0 in Anwendung und
   Website.
 
+  **Dazu, bisher nur im Register und in den Regeln:** aus der Sollliste der Durchsicht
+  0.5.0 A16 (das Presseversprechen „STL wird exakter Körper, STEP heraus“ gegen den Stand
+  von P4.0 halten), A23 (Leistungszahlen der Presse gegen eigene Messungen) und C12 (Namen
+  der Slicer-Übernahme); dazu *Extrusionsbreite* (Wandstärkenleiter, Handbuch-Glossar)
+  gegen *Bahnbreite* (Druckeinstellungen) vereinheitlichen
+  (`.claude/rules/oberflaeche.md`).
+
   [Bisheriger Befund](ROADMAP-ARCHIV.md#rückmeldung-und-freiwillige-unterstützung-gehören-in-die-app-startfläche-31082026).
 
 <a id="rm-090"></a>
@@ -3053,15 +3031,17 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
 <a id="rm-213"></a>
 
-- [ ] **RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster.**
+- [ ] **RM-213 — Fensterabnahme und die Kundenwege am echten Fenster.**
   Die Paketnachweise der Durchsicht 0.5.0 stammen überwiegend aus
   Offscreen-Läufen oder Fenstern mit `WA_DontShowOnScreen`. Die späteren
   Website-Aufnahmen und Skizzenlabel-Sonden zeigen echte maximierte Fenster;
   sie belegen ihre Motive und die jeweiligen Reparaturen. Die vollständige
   Welle 2 „kundenwege" mit allen folgenden Abnahmekriterien ist damit noch
   nicht gefahren. Was nur das echte Fenster zeigt (Schrift, Vulkan-Fläche, Fokus,
-  Bildschirmleser, gefühlte Wartezeit): die Punkte RM-174, RM-197 bis RM-200,
-  RM-204 und RM-205 (sie bleiben je eigene Punkte und schließen in diesem Lauf);
+  Bildschirmleser, gefühlte Wartezeit, Navigation mit Drehpunkt nach Änderungen an
+  `_NAVIGATION` oder `camera_step`): die Punkte RM-197 bis RM-200 und RM-204
+  (sie bleiben je eigene Punkte und schließen in diesem Lauf; RM-174 und RM-205
+  sind ohne ihn geschlossen, siehe Archiv);
   dazu ohne eigenen Punkt die Einladungszeile und Rückfragekarte über der
   pygfx-Fläche (foerderung), Marken und Beschriftung der Fase auf hellem und
   dunklem Thema (P6.2), die neuen Bedienelemente der Dialoge mit Maus und
@@ -3437,6 +3417,24 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   (§29, 09.09.2026). Frage: die Kandidaten der freien Stelle nach Abstand zur Plattenmitte
   ordnen? Empfehlung der Release-Sitzung: ja, weil ein einzelnes weiteres Modell nahe der
   Mitte besser zu sehen und zu erreichen ist. Abnahme: Entscheidung Robert, danach Test.
+
+<a id="rm-312"></a>
+
+- [ ] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
+  Auftrag Robert, 29.09.2026: Die Düsen und damit die Düsengröße sollen vom Drucker kommen
+  oder als Auswahlliste wählbar sein. Heute ist `Düse ⌀` ein freies Zahlenfeld (0,1 bis
+  2,0 mm, `print_settings_dialog.nozzle`), vorbelegt mit 0,4 aus `printers.toml`; wer eine
+  andere Düse aufschraubt, tippt sie ein, und die Maschinenvariante im Slicer folgt über
+  `slicer_profiles.machine_with_nozzle`. Plan: im Kern die Düsengrößen, die der gewählte
+  Slicer für dieses Gerät als Maschinenvarianten führt (`printer_model` gleich, je
+  `nozzle`), sonst die üblichen Größen; im Dialog eine Auswahl dieser Größen mit „Andere …“,
+  vorgewählt die Variante, die im Slicer eingestellt ist; ein Zustandssatz zur Düse steht an
+  der Düsenzeile statt in der Zustandszeile. Die Kopfzeile ist ein `QFormLayout` in der
+  Folge der Abhängigkeiten (Wächter
+  `test_the_print_dialog_asks_in_the_order_its_answers_depend_on`); vor dem Bau mit der
+  Sitzung abstimmen, die den Dialog umgebaut hat (`4d955a9e7`). Abnahme: Elegoo CC2 bietet
+  0,2/0,4/0,6/0,8 an, eine Wahl stellt Bahnbreite und Maschinenprofil, eine eigene Größe
+  bleibt möglich.
 
 ## KI und Generatoren
 
@@ -3927,10 +3925,9 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-robert-am-26082026-aufgetragen-hat).
 
-<a id="rm-149"></a>
-
-RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-149-abschluss-050).
+  **Aus dem Lizenzarten-Konzept (§6, P7):** Handbuch und Regeln nennen die Lizenzart
+  (privat oder gewerblich, Platzzahl) noch nicht; die Karte `app/core/activation/CLAUDE.md`
+  und der Über-Dialog tun es. Vor dem Verkaufsstart nachziehen.
 
 <a id="rm-091"></a>
 
@@ -3969,11 +3966,6 @@ RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   bleibt preisfrei, bis das Angebot steht.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
-<a id="rm-182"></a>
-
-RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-182-abschluss-050).
 
 <a id="rm-093"></a>
 
@@ -4038,11 +4030,6 @@ RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
-<a id="rm-096"></a>
-
-RM-096 ist nach gebautem Rotationsweg und erfolgreichem Serverupload abgeschlossen.
-[Abschluss und Servernachweis](ROADMAP-ARCHIV.md#rm-096).
-
 <a id="rm-115"></a>
 
 RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
@@ -4085,11 +4072,6 @@ RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Termin draußen sein muss. Abnahme: 1.x-Build mit gesetztem `TRIAL_FROM`, Frist je Gerät von
   14 Tagen, danach derselbe lesende Zustand wie ohne Testphase (I09), Tests analog
   `test_a_sale_version_carries_no_deadline`, Website, Kauftexte und Changelog nennen sie.
-
-<a id="rm-162"></a>
-
-RM-162 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-162-abschluss-050).
 
 ## Kundenrückmeldungen
 

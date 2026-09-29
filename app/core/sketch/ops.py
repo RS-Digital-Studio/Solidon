@@ -761,6 +761,12 @@ class SketchPocketParams(BaseParams):
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
     )
+    # Vor der Tiefe und vorn: Der Haken schaltet sie aus (``depends_on``).
+    through: bool = param(
+        title=_("Durchgehend"),
+        default=False,
+        doc=_("Schneidet durch die ganze Höhe des Körpers — die Tiefe zählt dann nicht."),
+    )
     depth: float = param(
         title=_("Tiefe"),
         default=5.0,
@@ -802,12 +808,6 @@ class SketchPocketParams(BaseParams):
         maximum=1000.0,
         doc=_HOLE_DIAMETER_DOC,
         depends_on=("shape", ("bolt_circle", "hole_grid")),
-    )
-    through: bool = param(
-        title=_("Durchgehend"),
-        default=False,
-        placement="advanced",
-        doc=_("Schneidet durch die ganze Höhe des Körpers — die Tiefe zählt dann nicht."),
     )
     # **Die drei Zahlen gelten in der Zeichenebene, nicht in der Welt.**
     # ``x`` und ``y`` verschieben den Umriss über ``shifted`` in den
@@ -2178,7 +2178,6 @@ class SketchSweepCutParams(BaseParams):
         title=_("Gezeichnete Bahn"),
         default="",
         kind="sketch",
-        placement="advanced",
         doc=_(
             "Der Verlauf, dem der Querschnitt folgt — offen gezeichnet, auf der "
             "Vorder- oder Seitenansicht und am Anfang senkrecht nach oben oder unten. "
@@ -2313,6 +2312,15 @@ class SketchLoftCutParams(BaseParams):
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
     )
+    # Vor der Tiefe und vorn: Der Haken schaltet sie aus (``depends_on``).
+    through: bool = param(
+        title=_("Durchgehend"),
+        default=False,
+        doc=_(
+            "Reicht von der Oberkante bis zur gegenüberliegenden Seite des Körpers — der "
+            "untere Umriss liegt dann genau dort, die Tiefe zählt nicht."
+        ),
+    )
     depth: float = param(
         title=_("Tiefe"),
         default=10.0,
@@ -2347,21 +2355,11 @@ class SketchLoftCutParams(BaseParams):
         title=_("Untere Zeichnung"),
         default="",
         kind="sketch",
-        placement="advanced",
         doc=_(
             "Der Umriss am Ende des Übergangs, frei gezeichnet — auf derselben Ebene wie der "
             "obere und um die Tiefe darunter aufgespannt."
         ),
         depends_on=("top", ("drawn",)),
-    )
-    through: bool = param(
-        title=_("Durchgehend"),
-        default=False,
-        placement="advanced",
-        doc=_(
-            "Reicht von der Oberkante bis zur gegenüberliegenden Seite des Körpers — der "
-            "untere Umriss liegt dann genau dort, die Tiefe zählt nicht."
-        ),
     )
     x: float = param(
         title=_("X"),

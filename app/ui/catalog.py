@@ -393,8 +393,10 @@ class PartCatalog(QDialog):
         layout.addWidget(self.search)
         layout.addWidget(file_result_row)
         layout.addWidget(split, stretch=1)
-        layout.addWidget(self.insert_hint)
         layout.addWidget(self.management_section)
+        # Der Satz erklärt, warum *Einfügen* gesperrt ist — also steht er über
+        # *Einfügen* und nicht über sechs Verwaltungsknöpfen dazwischen.
+        layout.addWidget(self.insert_hint)
         layout.addWidget(buttons)
         previous: QWidget = self.list
         heading = self.management_section.findChild(QToolButton)

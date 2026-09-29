@@ -279,15 +279,26 @@ class OutlineDialog(QDialog):
         self.detail.setWordWrap(True)
         self.detail.setTextFormat(Qt.TextFormat.PlainText)
         left.addWidget(self.detail)
+        # **Die Maße in der Spalte, deren Auswahl sie hochziehen** — sie
+        # standen unter allen drei Spalten, zwei tausend Punkte breit gezogen,
+        # hinter der Vorschau, die ihnen folgt.
+        self._size_form = QFormLayout()
+        left.addLayout(self._size_form)
         middle.addLayout(left, 1)
         images = QVBoxLayout()
-        images.addWidget(QLabel(tr("Konturvorschau"), self))
+        # Jede Spalte mit einer Überschrift derselben Stufe: „Konturen“ stand
+        # halbfett neben zwei Überschriften in Fließtextgröße.
+        contour_title = QLabel(tr("Konturvorschau"), self)
+        set_level(contour_title, "section")
+        images.addWidget(contour_title)
         self.contour_view = _ProfileView(self)
         self.contour_view.chosen.connect(self._toggle)
         images.addWidget(self.contour_view, 1)
         middle.addLayout(images, 1)
         preview = QVBoxLayout()
-        preview.addWidget(QLabel(tr("So sieht Ihr Teil aus"), self))
+        result_title = QLabel(tr("So sieht Ihr Teil aus"), self)
+        set_level(result_title, "section")
+        preview.addWidget(result_title)
         self.preview = QSvgWidget(self)
         self.preview.setAccessibleName(tr("Ergebnisvorschau"))
         self.preview.setMinimumSize(280, 250)
@@ -297,7 +308,7 @@ class OutlineDialog(QDialog):
         preview.addWidget(self.measurement)
         middle.addLayout(preview, 1)
         layout.addLayout(middle, 1)
-        form = QFormLayout()
+        form = self._size_form
         self._fields: dict[str, LengthSpin] = {}
         for spec in LoadOutlineParams.spec():
             if spec.name not in ("height", "width"):
@@ -318,11 +329,10 @@ class OutlineDialog(QDialog):
             label.setToolTip(str(spec.doc))
             field.valueChangedMm.connect(self._changed)
             self._fields[spec.name] = field
-        layout.addLayout(form)
         if selection_only:
             explanation = QLabel(tr("Höhe und Breite ändern Sie im Operationsdialog."), self)
             explanation.setWordWrap(True)
-            layout.addWidget(explanation)
+            left.addWidget(explanation)
         self.state = ErrorNotice(self)
         self.state.setText(tr("Konturen werden gelesen und geprüft …"))
         layout.addWidget(self.state)

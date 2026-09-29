@@ -15,7 +15,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Final
 
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QTimer, Signal
@@ -352,6 +352,12 @@ class ValueField(QWidget):
         if self.circle_toggle is not None:
             row.addWidget(self.circle_toggle)
         row.addWidget(self.toggle)
+        # **Der Rest der Zeile gehört dem Leerraum hinter den Knöpfen.** Ohne
+        # ihn verteilte Qt ihn zwischen die Teile, sobald das Zahlenfeld an
+        # seiner Höchstbreite stand: Das Feld rückte zur Mitte, *fx* an den
+        # rechten Rand — je Zeile an eine andere Stelle, weil jedes Feld so
+        # breit ist wie sein Wertebereich.
+        row.addStretch(0)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1520,6 +1526,25 @@ def _promoted_fields(spec: OperationSpec, given: Mapping[str, Any]) -> frozenset
     return frozenset(promoted)
 
 
+def even_value_fields(fields: Iterable[ValueField]) -> None:
+    """Zahlenfelder, die untereinander stehen, so breit wie das breiteste.
+
+    Jedes Feld ist so breit wie sein Wertebereich — *Position X* für eine
+    Million, *Richtung X* für eins —, und damit standen die *fx*-Knöpfe
+    daneben in jeder Zeile an einer anderen Stelle. Gleich breit bilden
+    Felder und Knöpfe je eine Kante; breiter als der größte Wert darunter
+    wird dabei keines (``panels.even_fields`` ist dieselbe Abwägung für die
+    Druckeinstellungen). Operationsdialog und Organizer fragen hier.
+    """
+    spins = [field.spin for field in fields]
+    if len(spins) < 2:
+        return
+    common = max(spin.minimumWidth() for spin in spins)
+    for spin in spins:
+        spin.setMinimumWidth(common)
+        spin.setMaximumWidth(common + NUMBER_AIR)
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
@@ -1683,8 +1708,20 @@ class OperationDialog(QDialog):
 
         front = QFormLayout()
         advanced = QFormLayout()
+        # **Eine Beschriftungsspalte, keine Zeile darüber.** Mit
+        # ``WrapLongRows`` entschied jede Zeile selbst, ob ihr Feld neben oder
+        # unter die Beschriftung kommt: Im Bohrdialog standen *Position X* bis
+        # *Z* über ihren Feldern, *Richtung X* bis *Z* daneben — derselbe
+        # Dialog in zwei Formen. Nicht umbrechen, und das Fenster so breit wie
+        # sein breitestes Formular (``_resize_to_content``).
+        #
+        # Die Rückseite ohne eigenen Rand: Qts Vorgabe rückte sie um neun
+        # Punkte ein, und ihre Felder begannen neben denen der Vorderseite
+        # an einer zweiten Kante, obwohl ``align_forms`` die Beschriftungen
+        # gleich breit macht.
         for form in (front, advanced):
-            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        advanced.setContentsMargins(0, 0, 0, 0)
         self._front = front
         self._advanced_form = advanced
         self._rows: dict[str, QFormLayout] = {}
@@ -1937,6 +1974,14 @@ class OperationDialog(QDialog):
             self.advanced.setAutoRaise(True)
             self.advanced.setArrowType(Qt.ArrowType.RightArrow)
             self.advanced.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            # **Dieselbe Klappe wie in jedem anderen Dialog.** Offen trug sie
+            # die Fläche eines aktiven Werkzeugs — ein bernsteinfarbener Knopf
+            # mitten im Formular —, während Einstellungen, Erzeugen und
+            # Rückmeldung eine flache Überschrift mit Linie zeigen
+            # (``panels.collapsible``).
+            self.advanced.setObjectName("sectionHeading")
+            set_level(self.advanced, "section")
+            self.advanced.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
             # **Keine geschachtelte Funktion, die ``self`` fängt.** Sie ist
             # dasselbe wie ein Lambda: ihre Zelle hält den Dialog, der Sender
@@ -2008,6 +2053,7 @@ class OperationDialog(QDialog):
         # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
         # selben Blickfeld (Befund B8).
         align_forms(self)
+        self._even_number_fields()
 
     def _ask_manual(self) -> None:
         """F1: die Stelle im Handbuch zu dieser Operation melden.
@@ -3183,6 +3229,7 @@ class OperationDialog(QDialog):
         self._follow_source_pending()
         self._hide_legacy_feature_field()
         align_forms(self)
+        self._even_number_fields()
         self._resize_to_content()
         self.schemaChanged.emit()
 
@@ -3227,6 +3274,12 @@ class OperationDialog(QDialog):
         self.move(corner.x() - width - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
         if self.isVisible():
             fit_dialog_to_screen(self)
+
+    def _even_number_fields(self) -> None:
+        """Alle Zahlenfelder des Dialogs so breit wie das breiteste."""
+        even_value_fields(
+            editor for editor in self._editors.values() if isinstance(editor, ValueField)
+        )
 
     def _unfold_advanced(self, inner: QWidget, open_now: bool) -> None:
         """„Weitere Einstellungen" auf- und zuklappen.
@@ -3280,6 +3333,10 @@ class OperationDialog(QDialog):
         wanted = max(at_least, self._content_user_height, layout.sizeHint().height())
         margins = layout.contentsMargins()
         content_width = content_layout.minimumSize().width() if content_layout is not None else 0
+        # Auch die zugeklappte Rückseite zählt mit: Sie misst ihre Zeilen, ob
+        # sichtbar oder nicht, und wer „Weitere Einstellungen" öffnet, soll
+        # das Fenster nur wachsen sehen, nicht zur Seite springen.
+        content_width = max(content_width, self._advanced_form.minimumSize().width())
         width = max(self.width(), content_width + margins.left() + margins.right())
         self.resize(width, wanted)
         fit_dialog_to_screen(self)

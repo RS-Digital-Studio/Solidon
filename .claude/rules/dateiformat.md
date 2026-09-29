@@ -418,7 +418,7 @@ Platzhalter, deshalb `handover._filled`:
 Setzt der Startcode selbst eine Temperatur (Platzhalter auf
 `material_bed_temperature…` oder eine Düsentemperatur, Kommentare
 ausgenommen), stehen `material_bed_temp_prepend`/`material_print_temp_prepend`
-auf `false`, wie `StartSliceJob.py` im Fenster — sonst stünde Curas
+auf `false`, wie Curas `StartSliceJob` im Fenster — sonst stünde Curas
 `M190`/`M109` davor. Ohne Definition: `fdmprinter` und der Befund
 `slicer.cura_printer_unknown`, kein stiller Rückfall.
 

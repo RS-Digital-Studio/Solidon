@@ -1281,7 +1281,14 @@ def _evaluate(
     # soll gar nicht erst in den Vergleich — sonst überlebte von zwei
     # geheilten Befunden der letzte die Streichung nicht und der erste doch.
     settled = _without_split_echoes(
-        _without_repeats(_without_outdated(_without_settled(findings), scene)), scene
+        _without_repeats(
+            _without_undone_placements(
+                _without_outdated(_without_settled(findings), scene),
+                scene,
+                placed=stopped_at is None and bool(objects),
+            )
+        ),
+        scene,
     )
     if len(settled) != len(findings):
         scene = dataclasses.replace(scene, report=Report(tuple(settled)))
@@ -1444,6 +1451,19 @@ COUNTED_PARTS: Final[dict[str, str]] = {
 #: Und „an N Kanten zeigen die Außenseiten gegeneinander" — gestrichen, wenn der
 #: Körper am Endstand einheitlich gewickelt ist (Review R19, 24.09.2026).
 WOUND_STATE_CODES: Final = frozenset({"repair.normals_inconsistent"})
+
+#: Befunde über die Lage eines Körpers zum Bett, wie ``check_build_volume`` sie
+#: am Schritt und am Endstand (:func:`check_placement`) ausstellt. Am Schritt
+#: sagen sie etwas über den Zwischenstand; was der Endstand für denselben
+#: Körper nicht mehr sagt, fällt (:func:`_without_undone_placements`).
+PLACEMENT_STATE_CODES: Final = frozenset(
+    {
+        "arrange.out_of_build_volume",
+        "arrange.off_the_plate",
+        "arrange.below_bed",
+        "arrange.above_bed",
+    }
+)
 
 #: Nach welchen Schritten ein Verlust **ohne** Verweis nicht gemeldet wird
 #: („Formdetails sind nach diesem Schritt nicht mehr automatisch
@@ -1632,6 +1652,46 @@ def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
             for other in findings
         ):
             continue
+        kept.append(entry)
+    return kept
+
+
+def _without_undone_placements(
+    findings: Sequence[Finding], scene: Scene, placed: bool
+) -> list[Finding]:
+    """Streicht Lagebefunde eines Schritts, die der Endstand nicht bestätigt.
+
+    **Der Anlass** (Robert, 29.09.2026, Minigolf-Satz): *Druckoptimal
+    ausrichten* mit drei Platten ließ einen Rumpf neben der dritten Platte und
+    sagte es, samt „eine mehr würde helfen". Ein späteres *Auf dem Bett
+    anordnen* legte ihn auf die vierte, und beide Warnungen standen weiter im
+    Bericht — über einem Endstand, auf dem alles auf einem Bett lag.
+
+    Die Lage prüft die Auswertung am Endstand selbst (``placed``: nur wenn
+    diese Prüfung lief, sonst weiß der Endstand nichts). Ein Lagebefund eines
+    Schritts fällt, wenn sie für seinen Körper keinen findet; „eine Platte mehr
+    würde helfen" fällt, wenn am Endstand nichts neben einem Bett liegt. Was
+    sie bestätigt, bleibt mit dem Schritt, dessen Zahl man ändern muss, und
+    ein Körper, den es am Ende nicht mehr gibt, behält seinen Befund.
+    """
+    if not placed:
+        return list(findings)
+    now = {
+        entry.object_id
+        for entry in findings
+        if entry.op_id is None and entry.code in PLACEMENT_STATE_CODES
+    }
+    kept: list[Finding] = []
+    for entry in findings:
+        if entry.op_id is not None:
+            if (
+                entry.code in PLACEMENT_STATE_CODES
+                and entry.object_id in scene.objects
+                and entry.object_id not in now
+            ):
+                continue
+            if entry.code == "arrange.needs_more_plates" and not now:
+                continue
         kept.append(entry)
     return kept
 

@@ -2204,7 +2204,11 @@ Projektparametern ist das ein Aufruf, keine Sonderfunktion.
 **Umfang**: einzelnes Objekt, aktuelle Auswahl oder ganze Szene.
 
 **Plattenbelegung.** Gesucht wird für jeden Körper die hinterste, dann
-linkeste freie Stelle, an die er passt; Reihenfolge und Ergebnis sind
+linkeste freie Stelle, an die er passt, und zwar **auf der ersten Platte, die
+eine hat** — eine neue Platte beginnt erst, wenn keine angefangene ihn nimmt
+(Befund Robert, 29.09.2026: „warum werden die nicht auf eine platte was passt
+ausgerichtet?"; nur vorwärts blätternd lagen kleine Teile neben dem Bett,
+während frühere Platten Platz hatten). Reihenfolge und Ergebnis sind
 deterministisch. **Steht die Belegung, wandert die Platte als Ganzes in die
 Mitte** — der Verband bleibt, wie er gepackt wurde, und liegt mittig statt in
 der hinteren linken Ecke (Entscheidung Robert, 09.09.2026: „startpunkt mitte
@@ -2265,11 +2269,20 @@ gilt nur, solange davor nichts anderes wird. Ordnet ein früherer Schritt nach
 einer Parameteränderung neu an, startet der Körper woanders, und derselbe Weg
 führt neben das Bett. Deshalb holen die drei Operationen des Gizmos einen
 Körper auf die Druckfläche zurück, wenn ihre Bewegung ihn darüber hinaus
-trägt oder in ein anderes Teil schiebt: so wenig wie möglich, bei belegtem
-Platz auf eine freie Stelle derselben Platte, und mit einem Befund, der es
-sagt. Geprüft wird der Eingang
+trägt: so wenig wie möglich, bei belegtem Platz auf eine freie Stelle derselben
+Platte, und mit einem Befund, der es sagt. Zwei Körper, die einander
+durchdringen, bleiben stehen — das ist eine Absicht (Entscheidung Robert,
+18.09.2026), gemeldet wird es trotzdem. Geprüft wird der Eingang
 — wer schon daneben stand, bleibt geparkt —, und bewegt wird nur waagerecht;
 die Höhe hat *Auf das Bett setzen*.
+
+**Wer auf ein anderes Bett zieht, meint dessen Platte** (Entscheidung Robert,
+29.09.2026). Im Bild stehen die Betten nebeneinander, in der Szene
+übereinander; ohne Plattenwechsel wäre der Zug ein Weg von über einer
+Bettbreite auf der eigenen Platte, und die Rückholung ließe den Körper dorthin
+zurückspringen. Der Zug trägt deshalb die Zielplatte (*Verschieben*, Feld *Auf
+Platte*, gezählt wie im Plattenwähler), und gehalten wird um die Körper dieser
+Platte. Von sich aus wechselt keine Rückholung die Platte.
 
 Das ist eine Eigenschaft des **Zuges** und nicht der Operation: Ein getippter
 Wert ist eine Ansage und wird ausgeführt, auch über den Bauraum hinaus, wo der

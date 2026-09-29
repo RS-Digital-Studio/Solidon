@@ -149,7 +149,9 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
-`label_ops.py` (Schriften in `data/fonts/`; Matplotlib gehört zum Extra `geom`)
+`label_ops.py` (Schriften in `data/fonts/`; Matplotlib gehört zum Extra `geom`;
+*Auf beiden Seiten* setzt die Rückseite am ersten Austritt entgegen der
+Richtung, `opposite_side`)
 
 ## Stolperfallen
 
@@ -236,7 +238,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   diese Düsenprüfung nicht. Der Standprüfer ist derselbe wie bei Auto Split.
 - **Gepackt wird in der Ecke, gelegt in der Mitte** (`arrange_on_bed`,
   `_into_the_middle` nur auf freier Fläche, `arrange.narrow_margin`;
-  `occupied` verhindert das Zentrieren). `orient_for_print` legt mit an
+  `occupied` verhindert das Zentrieren). Jeder Körper kommt auf die erste
+  angefangene Platte mit Platz, erst dann auf eine neue; eine leere nimmt ihn
+  auch zu groß (`settle`). Ob eine Platte mehr hilft, fragt `_fits_alone` die
+  Anordnung selbst, wie `first_free_spot`. `orient_for_print` legt mit an
   (`arrange`, `True` auch für gespeicherte Aufträge, ohne Migration —
   Entscheidung Robert), Abstand aus `export.writer.clearance_margin`; nach
   Filament getrennt wird, wo mehr Filamente als Düsen liegen (`by_material`,
@@ -249,7 +254,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `oversize` nur über Maße.
 - `back_onto_bed` (`keep_on_bed`): die Vorgabe ist aus, den Haken setzt der
   Zug (`MainWindow._on_transform_dragged`); geprüft wird der Eingang, bewegt
-  nur in XY, die Matrix trägt beides, kein Plattenwechsel.
+  nur in XY, die Matrix trägt beides, von sich aus kein Plattenwechsel.
+  Die Platte wechselt nur, wenn der Schritt sie nennt (`translate_object`,
+  `plate` ab eins wie im Plattenwähler, null bleibt); gehalten wird dann um
+  die Körper der Zielplatte.
 - `placed_at_free_spot` (`free_spot` an `load`, `load_step` und
   `fit_to_size`, §17.1 Schritt 6): einmal über `first_free_spot` gerechnet —
   ein Quader aus den Grenzen, Platte für Platte über `arrange_on_bed` mit

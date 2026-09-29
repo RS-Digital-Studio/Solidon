@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QRect, Qt
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -1214,13 +1214,22 @@ def test_applying_the_advice_says_what_it_changed(qt_app: QApplication) -> None:
 
 
 def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) -> None:
-    """Auch wenn nichts einzuwenden ist, steht das da — eine leere Liste sähe
-    aus wie ein Fehler."""
-    dialog._refresh_advice()
+    """Auch wenn nichts einzuwenden ist, steht das da — eine leere Stelle sähe
+    aus wie ein Fehler.
 
-    assert dialog.advice_view.topLevelItemCount() >= 1
-    first = dialog.advice_view.topLevelItem(0)
-    assert first is not None and first.text(0)
+    Als Satz und nicht als Tabellenzeile: Die Tabelle mit drei Spaltenköpfen
+    und einem Knopf ohne Arbeit war der größte Block des Dialogs für die
+    kleinste Auskunft.
+    """
+    dialog._refresh_advice()
+    if dialog.advice_view.topLevelItemCount():
+        first = dialog.advice_view.topLevelItem(0)
+        assert first is not None and first.text(0)
+        return
+    assert not dialog.advice_view.isVisibleTo(dialog), "keine leere Tabelle"
+    assert not dialog.apply_button.isVisibleTo(dialog), "kein Knopf ohne Arbeit"
+    assert dialog.advice_state.isVisibleTo(dialog)
+    assert dialog.advice_state.text(), "der Satz steht an ihrer Stelle"
 
 
 # --- Aussehen und gestufte Tiefe ----------------------------------------------------
@@ -4674,12 +4683,85 @@ def test_the_portuguese_header_keeps_every_control_visible_at_manual_width(
     assert dialog.material_link.sizeHint().width() <= dialog.material_link.width()
     assert dialog.share_settings.sizeHint().width() <= dialog.share_settings.width()
     assert dialog.material_state.wordWrap(), "nur die lange Filamentliste darf umbrechen"
-    assert (
-        abs(dialog.quality.geometry().center().y() - dialog.share_settings.geometry().center().y())
-        <= 2
+
+    # Die Folge der Abhängigkeiten: Drucker, Filamente, Qualität, und die
+    # Mitgabe steht bei der Übergabe unten — gemessen im Dialog, denn die
+    # Mitgabe hat einen anderen Elternteil als die Kopfzeile.
+    def top(widget: QWidget) -> int:
+        return widget.mapTo(dialog, QPoint(0, 0)).y()
+
+    assert top(dialog.printer_choice) < top(dialog.material_state) < top(dialog.quality)
+    assert top(dialog.quality) < top(dialog.share_settings)
+
+
+def test_the_print_dialog_asks_in_the_order_its_answers_depend_on(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Was eine andere Angabe bestimmt, steht vor ihr.
+
+    Robert, 29.09.2026: „der Slicer unten und den Drucker oben, obwohl der
+    Drucker vom Slicer abhängig ist, ist nicht gut". Der Slicer liefert die
+    Druckerprofile, der Drucker die Düse, die Platte die Slots der
+    Filamentzeile, Drucker und Stufe den Prozess, der Prozess die Grundlage
+    der Werte — und die Mitgabe gilt der Übergabe, also steht sie bei deren
+    Knöpfen.
+
+    Geprüft an der Bauart (Zeile im Formular, Platz im Rollbereich) und nicht
+    an Bildpunkten: Slicer- und Plattenzeile sind ohne Slicer und mit einer
+    Platte verborgen, ihr Platz in der Folge bleibt.
+    """
+    from PySide6.QtWidgets import QFormLayout
+
+    head = next(
+        form
+        for form in dialog.findChildren(QFormLayout)
+        if form.getWidgetPosition(dialog.printer_choice)[0] >= 0
     )
-    assert dialog.quality.geometry().bottom() < dialog.printer_choice.geometry().top()
-    assert dialog.printer_choice.geometry().bottom() < dialog.material_state.geometry().top()
+
+    def row(widget: QWidget) -> int:
+        number = head.getWidgetPosition(widget)[0]
+        assert number >= 0, f"{widget.objectName() or type(widget).__name__} fehlt in der Kopfzeile"
+        return number
+
+    rows = [
+        row(dialog.slicer_label),
+        row(dialog.printer_choice),
+        row(dialog.adopt_printer.parentWidget()),
+        row(dialog.nozzle_label),
+        row(dialog.plate_label),
+        row(dialog.filament_label),
+        row(dialog.quality_label),
+    ]
+    assert rows == sorted(rows) and len(set(rows)) == len(rows), rows
+
+    content = dialog._scroll.widget().layout()
+    assert content is not None
+
+    def place(target: object) -> int:
+        for index in range(content.count()):
+            item = content.itemAt(index)
+            if item is None:
+                continue
+            if item.layout() is target:
+                return index
+            widget = item.widget()
+            if widget is not None and (
+                widget is target or (isinstance(target, QWidget) and widget.isAncestorOf(target))
+            ):
+                return index
+        raise AssertionError(f"{target} steht nicht im Rollbereich")
+
+    order = [
+        place(head),
+        place(dialog.slicer_box),
+        place(dialog.foundation_note),
+        place(dialog.search_row),
+        place(dialog.front_box),
+        place(dialog.tabs_box),
+        place(dialog.advice_box),
+        place(dialog.share_settings),
+    ]
+    assert order == sorted(order) and len(set(order)) == len(order), order
 
 
 def test_the_header_names_the_material_a_body_really_prints_in(
@@ -5002,9 +5084,12 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
     qt_app.processEvents()
 
     breiten: set[int] = set()
+    reiterbreiten: set[int] = set()
     kanten_je_block: list[set[int]] = []
     for form in dialog.findChildren(QFormLayout):
         block: set[int] = set()
+        besitzer = form.parentWidget()
+        im_reiter = besitzer is not None and dialog.tabs.isAncestorOf(besitzer)
         for row in range(form.rowCount()):
             marke = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
             feld = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
@@ -5013,7 +5098,7 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
             label, widget = marke.widget(), feld.widget()
             if widget is None or label is None or not widget.isVisibleTo(dialog):
                 continue
-            breiten.add(label.width())
+            (reiterbreiten if im_reiter else breiten).add(label.width())
             block.add(widget.mapTo(dialog, widget.rect().topLeft()).x())
         if block:
             kanten_je_block.append(block)
@@ -5025,7 +5110,13 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
     # Innenabstand sind Gliederung, kein Sprung. Was nicht sein darf, ist eine
     # zweite Spaltenbreite: Sie entsteht, sobald ein Formular seine Beschriftung
     # allein ausrechnet, und genau daran begannen die Felder an zehn Stellen.
+    #
+    # **Die Reiter sind dabei ein Kasten für sich** (``align_forms(apart=…)``):
+    # Ihre Seiten teilen eine Spalte, der übrige Dialog eine zweite. Die
+    # längste Beschriftung eines verborgenen Reiters zog sonst die Vorderseite
+    # auf 170 Punkte, wo 110 reichen.
     assert len(breiten) == 1, f"{len(breiten)} Beschriftungsbreiten: {sorted(breiten)}"
+    assert len(reiterbreiten) == 1, f"{len(reiterbreiten)} in den Reitern: {sorted(reiterbreiten)}"
     for block in kanten_je_block:
         assert len(block) == 1, f"in einem Block springen die Kanten: {sorted(block)}"
 

@@ -287,7 +287,7 @@ ausgelieferte.
 | P2 Werkzeuge | **erledigt** | `d526a53` | pytest-forked 1.7.5, setuptools 84.0.0 |
 | P3 ruff | **erledigt** | `d526a53` | 0.16.3, keine neuen Befunde, kein Formatdiff |
 | P4 die drei unter 1.0 | **erledigt** | `d526a53` | ast_serialize 0.8.0, librt 0.15.0, fast_simplification 0.2.0 |
-| P5 Python 3.14 in der CI | offen | — | — |
+| P5 Python 3.14 in der CI | **erledigt 06.09.** | — | `requires-python >=3.14`, die CI fährt 3.14.7 |
 | P6 trimesh 5 | **erledigt** | `d526a53` | 22 636 statt 815 104 Dreiecke bei gleicher Kantenlänge |
 
 **Abweichung vom Konzept, ausdrücklich als solche.** §2 A verlangte die

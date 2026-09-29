@@ -462,15 +462,19 @@ def _settings_xml(
         node = ET.SubElement(config, "object", {"id": str(number)})
         if part.name:
             ET.SubElement(node, "metadata", {"key": "name", "value": part.name})
-        if part.slots or part.mesh.slots:
-            ET.SubElement(
-                node,
-                "metadata",
-                {
-                    "key": "extruder",
-                    "value": str(_part_extruder(part, materials) + 1),
-                },
-            )
+        # **Jedes Objekt nennt sein Werkzeug, auch ohne Spule** — dann das des
+        # neutralen Platzes, den ``tools_in_use`` für die Gegenprobe zählt.
+        # Creality Print 7.2 lässt ein Objekt ohne ``extruder`` auf der Konsole
+        # ohne Werkzeug: Die Werkzeugfolge bleibt leer, und jede solche 3MF
+        # endete mit „The print is empty" (RM-164, 29.09.2026).
+        ET.SubElement(
+            node,
+            "metadata",
+            {
+                "key": "extruder",
+                "value": str(_part_extruder(part, materials) + 1),
+            },
+        )
         for key, value in part.settings.items():
             ET.SubElement(node, "metadata", {"key": key, "value": value})
         if number in helpers:
