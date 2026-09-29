@@ -1715,7 +1715,7 @@ def test_a_deletion_says_which_steps_it_takes() -> None:
     """Zwei Einträge „Schritt löschen" untereinander sagen nichts.
 
     **Der Fall.** Im Verlauf eines Kunden standen genau die zwei, beide ohne
-    Nummer und ohne Namen (Alexanders Bildschirmfoto, gemessen von
+    Nummer und ohne Namen (sein Bildschirmfoto, gemessen von
     3d-druck-4d am 04.09.2026). Er konnte nicht sehen, welchen Strg+Z
     zurückholt — und die Nummer fehlt zwangsläufig: Eine Lösch-Transaktion
     vertritt keine eigene Operation (``ops=()``), und der Verlauf nimmt seine

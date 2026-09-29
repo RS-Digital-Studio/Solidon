@@ -3110,7 +3110,7 @@ def _deletion_title(
     """Was gelöscht wurde, steht im Titel — nicht nur, dass gelöscht wurde.
 
     **Der Fall.** Im Verlauf eines Kunden standen zwei Einträge untereinander,
-    beide „Schritt löschen", beide ohne Nummer und ohne Namen (Alexanders
+    beide „Schritt löschen", beide ohne Nummer und ohne Namen (sein
     Bildschirmfoto, gemessen von 3d-druck-4d am 04.09.2026). Er konnte nicht
     sehen, welchen der beiden Strg+Z zurückholt — und die Nummer fehlt hier
     zwangsläufig, weil eine Lösch-Transaktion keine eigene Operation vertritt

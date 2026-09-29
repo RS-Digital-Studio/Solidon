@@ -161,7 +161,7 @@ def test_no_size_of_thread_invents_a_feature(size: str, length: float) -> None:
 
 
 def test_the_customer_screenshot_has_no_pin() -> None:
-    """Alexanders Fall, mit seinen Zahlen (Kunden-Screenshot 04.09.2026).
+    """Der Fall eines Kunden, mit seinen Zahlen (Kunden-Screenshot 04.09.2026).
 
     Er sah „Zapfen · Ø 5,79 mm" an einem M6-Bolzen und fragte, ob ein
     genaueres Bild helfe. Es half: Höhe 20,99 mm und 14,7 cm³ auf dem Bild,

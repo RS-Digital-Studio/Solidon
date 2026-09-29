@@ -7874,7 +7874,7 @@ class FeaturePanel(QWidget):
             # untereinander — X/Y/Z für *Verschieben*, ein Durchmesser für
             # *Ändern*, Achse und Winkel für *Drehen*, wieder X/Y/Z für
             # *Verdoppeln* —, und der Kunde sieht zweimal dieselben drei Felder
-            # ohne erkennbaren Unterschied (Alexanders Bildschirmfoto, gemessen
+            # ohne erkennbaren Unterschied (Bildschirmfoto eines Kunden, gemessen
             # von 3d-druck-4d am 04.09.2026).
             #
             # Die Überschrift wiederholt den Knopftext, und das ist Absicht: Sie

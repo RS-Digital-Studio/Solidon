@@ -6310,8 +6310,8 @@ def test_a_named_thread_says_how_long_its_helix_is() -> None:
     **Wozu die Angabe da ist.** Die Erkennung sieht eine Wendel als das, was
     sie geometrisch ist: eine Folge von Zylinder-, Kegel- und Kugelflecken. An
     einem gedruckten Gewinde werden daraus Phantommerkmale — ein „Zapfen
-    Ø 5,79" an einem M6-Bolzen, den niemand gesetzt hat (Kundenbild
-    Alexander, gemessen von 3d-druck-4d über sechs Größen: kein Fall ohne
+    Ø 5,79" an einem M6-Bolzen, den niemand gesetzt hat (Kundenbild,
+    gemessen von 3d-druck-4d über sechs Größen: kein Fall ohne
     Phantom). Was innerhalb der Hülle des benannten Gewindes liegt, ist ein
     Artefakt der Wendel; Provenienz schlägt Erkennung (§21.2).
 

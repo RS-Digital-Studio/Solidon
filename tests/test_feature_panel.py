@@ -2229,8 +2229,8 @@ def test_every_field_group_says_what_it_belongs_to(qt_app: QApplication) -> None
     *Verschieben*, ein Durchmesser für *Ändern*, Achse und Winkel für *Drehen*,
     wieder X/Y/Z für *Verdoppeln*. Benannt wurden sie nur vom Knopf **unter**
     ihnen, und das trägt genau einmal — beim ersten Feldpaar liest man die
-    Bedeutung noch von unten nach, beim zweiten nicht mehr (Alexanders
-    Bildschirmfoto, gemessen von 3d-druck-4d am 04.09.2026).
+    Bedeutung noch von unten nach, beim zweiten nicht mehr (Bildschirmfoto
+    eines Kunden, gemessen von 3d-druck-4d am 04.09.2026).
 
     Geprüft wird an der Reihenfolge im Layout: Vor den Feldern muss eine
     Beschriftung mit dem Titel der Handlung stehen, und zwar **über** ihnen und
