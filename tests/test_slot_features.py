@@ -2269,21 +2269,10 @@ def test_a_slot_that_cuts_the_body_in_two_says_so(profile: Profile) -> None:
     assert "bore.splits_the_body" in [finding.code for finding in findings]
 
 
-@pytest.mark.parametrize("kernel", ["mesh", "brep"])
-@pytest.mark.parametrize("bridged", [True, False], ids=["wieder-ein-stueck", "bleibt-zerfallen"])
-def test_the_report_forgets_the_split_once_the_body_is_one_piece_again(
-    profile: Profile, kernel: str, bridged: bool
-) -> None:
-    """„Er zerfällt in mehrere Teile" gilt nur, solange der Körper zerfallen ist.
+def _a_cube_cut_in_two(profile: Profile, kernel: str) -> tuple[object, object, str]:
+    """Würfel 20 mm und ein Langloch Ø 5 auf 100 mm quer durch — zwei Teile, im Stapel.
 
-    Gemessen am 29.09.2026: Würfel 20 mm, Langloch 100 mm quer durch (zwei
-    Teile), danach ein Quader darüber vereinigt — am Endstand ein Stück, an
-    beiden Kernen, und im Bericht standen weiter zwei Sätze vom Zerfall.
-    ``bore.splits_the_body`` und der allgemeine ``feature.body_split`` der
-    Auswertung fehlten in ``evaluate.ONE_PIECE_CODES``, wo ihr Zwilling
-    ``mesh.components_split`` steht (``.claude/rules/operationen.md``,
-    „Befunde statt Protokoll"). Die Gegenrichtung: Bleibt der Körper in zwei
-    Teilen, bleibt auch der Satz.
+    Zurück kommen Projekt, Verlauf und der Name der Quader-Operation des Kerns.
     """
     if kernel == "brep":
         pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
@@ -2317,6 +2306,52 @@ def test_the_report_forgets_the_split_once_the_body_is_one_piece_again(
     )
     split = evaluate(project.document, profile, quality="fine")
     assert split.scene.objects["obj_1"].mesh.component_count == 2, "die Vorbedingung"
+    return project, history, box
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_bore_that_cuts_the_body_in_two_says_so_once(profile: Profile, kernel: str) -> None:
+    """Ein Zerfall, ein Satz — der, der sagt, woran es lag.
+
+    Gemessen am 29.09.2026 im Prüfbericht des Würfels mit dem Langloch quer
+    durch, an beiden Kernen: „Die Bohrung schneidet den Körper ganz durch — er
+    zerfällt in mehrere Teile. Verkürzen Sie die Länge oder versetzen Sie die
+    Bohrung." (``bore.splits_the_body``, mit *Eingabe korrigieren*) und darunter
+    „Der Körper zerfällt nach diesem Schritt in lose Teile." — derselbe Zerfall
+    zweimal, der zweite Satz aus ``evaluate._split_findings``, zwei Tage nach dem
+    ersten entstanden. Wie bei einem gewollt losen Teil urteilt die Auswertung
+    nicht über einen Zerfall, den der Schritt selbst gemeldet hat.
+    """
+    from app.core.scene import evaluate
+
+    project, _history, _box = _a_cube_cut_in_two(profile, kernel)
+
+    result = evaluate(project.document, profile, quality="fine")
+
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert codes.count("bore.splits_the_body") == 1, codes
+    assert "feature.body_split" not in codes, codes
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("bridged", [True, False], ids=["wieder-ein-stueck", "bleibt-zerfallen"])
+def test_the_report_forgets_the_split_once_the_body_is_one_piece_again(
+    profile: Profile, kernel: str, bridged: bool
+) -> None:
+    """„Er zerfällt in mehrere Teile" gilt nur, solange der Körper zerfallen ist.
+
+    Gemessen am 29.09.2026: Würfel 20 mm, Langloch 100 mm quer durch (zwei
+    Teile), danach ein Quader darüber vereinigt — am Endstand ein Stück, an
+    beiden Kernen, und im Bericht standen weiter zwei Sätze vom Zerfall.
+    ``bore.splits_the_body`` und der allgemeine ``feature.body_split`` der
+    Auswertung fehlten in ``evaluate.ONE_PIECE_CODES``, wo ihr Zwilling
+    ``mesh.components_split`` steht (``.claude/rules/operationen.md``,
+    „Befunde statt Protokoll"). Die Gegenrichtung: Bleibt der Körper in zwei
+    Teilen, bleibt auch der Satz.
+    """
+    from app.core.scene import OperationDraft, evaluate
+
+    project, history, box = _a_cube_cut_in_two(profile, kernel)
     if bridged:
         history.apply(
             "Brücke",

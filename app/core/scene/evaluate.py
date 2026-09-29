@@ -1101,6 +1101,7 @@ def _evaluate(
                         prepared_objects[object_id],
                         operation,
                         spec,
+                        result.findings,
                     )
                 )
             prepared_hashes[object_id] = object_hash(
@@ -5219,7 +5220,11 @@ def _missing_inputs(
 
 
 def _split_findings(
-    before: SceneObject | None, after: SceneObject, operation: Operation, spec: OperationSpec
+    before: SceneObject | None,
+    after: SceneObject,
+    operation: Operation,
+    spec: OperationSpec,
+    said: Sequence[Finding] = (),
 ) -> list[Finding]:
     """Ein Körper, der nach einer Merkmalsänderung in Teile zerfällt, sagt es.
 
@@ -5242,8 +5247,17 @@ def _split_findings(
     zurückzunehmen. Welche Operation das tut, sagt ihr Registereintrag
     (``leaves_separate_parts``, aus ``PartSpec.separate_from_host``); über
     ihren Träger urteilt sie selbst, und hier bleibt es still.
+
+    **Und ein Zerfall, den der Schritt selbst gemeldet hat, steht einmal da.**
+    ``said`` sind die Befunde des Schritts. Eine Bohrung, die den Körper ganz
+    durchschneidet, sagt es mit ``bore.splits_the_body`` — mit dem Grund und dem
+    Knopf, der den Schritt öffnet. Darunter stand bis zum 29.09.2026 noch dieser
+    Satz über denselben Zerfall. Still bleibt es bei jeder Aussage über die
+    Teilezahl (:data:`ONE_PIECE_CODES`) zu diesem Körper oder ohne Körper.
     """
     if before is None or spec.leaves_separate_parts:
+        return []
+    if any(entry.code in ONE_PIECE_CODES and entry.object_id in (None, after.id) for entry in said):
         return []
     were = getattr(before.mesh, "component_count", None)
     are = getattr(after.mesh, "component_count", None)
