@@ -113,7 +113,9 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   **nach** dem Schritt zeigt.
 - **Der Endstand**: `check_thin_walls` nimmt die Grenze je Körper aus
   `profiles.analysis_limits`; `check_form_deviation` meldet nur über
-  `MAX_FACET_SAG`, Zahlen erst in der Karte.
+  `MAX_FACET_SAG`, Zahlen erst in der Karte. Lagebefunde eines Schritts fallen,
+  wo `check_placement` sie am Endstand nicht bestätigt
+  (`_without_undone_placements`), der Plattenrat mit ihnen.
 - **Darstellungswechsel** melden sich erst nach vollständig vorbereiteten
   Ausgaben; unveränderte Eingangskennungen belegen Nachfolger (ein neuer Deckel
   ist kein Verlust seines Trägers); ganz vernetzt bekommt jedes verbrauchte
