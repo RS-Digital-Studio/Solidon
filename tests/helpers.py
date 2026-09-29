@@ -25,9 +25,10 @@ hier, dort noch als eigene Kopie.
 from __future__ import annotations
 
 import dataclasses
+import io
 import math
 import struct
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,7 @@ from app.core.types import (
     Profile,
     Quality,
     SceneObject,
+    Sketch,
     Source,
 )
 
@@ -488,3 +490,125 @@ def at_the_start_rule(profile: Profile) -> Profile:
     """
     printer = dataclasses.replace(profile.printer, overhang_limit=None)
     return dataclasses.replace(profile, printer=printer)
+
+
+# --- Abbruch, Teilwrite und angehaltene Läufe ---------------------------------------
+
+
+class CountingToken:
+    """Ein Abbruch nach ``limit`` Prüfungen — und ein Zähler, wie oft gefragt wurde."""
+
+    def __init__(self, limit: int | None) -> None:
+        self.limit = limit
+        self.calls = 0
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.limit is not None and self.calls >= self.limit
+
+    def raise_if_cancelled(self) -> None:
+        from app.core.errors import OperationCancelled
+
+        self.calls += 1
+        if self.limit is not None and self.calls >= self.limit:
+            raise OperationCancelled()
+
+
+def stop_after(count: int) -> tuple[Callable[[], None], list[bool]]:
+    """Ein ``check_cancelled``, der beim ``count``-ten Aufruf abbricht, und die Liste seiner
+    Aufrufe — wer danach weiterrechnet, verlängert sie.
+    """
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    reached: list[bool] = []
+
+    def stop() -> None:
+        reached.append(True)
+        if len(reached) == count:
+            signal.cancel()
+        signal.raise_if_cancelled()
+
+    return stop, reached
+
+
+def break_writes_after_a_first_piece(monkeypatch: pytest.MonkeyPatch, module: Any) -> None:
+    """``module.os.write`` schreibt beim ersten Aufruf ein Viertel und scheitert danach."""
+    original_write = module.os.write
+    calls = 0
+
+    def break_after_first_piece(descriptor: int, payload: bytes | memoryview) -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            piece = bytes(payload[: max(1, len(payload) // 4)])
+            return original_write(descriptor, piece)
+        raise OSError("erzwungener Teilwrite")
+
+    monkeypatch.setattr(module.os, "write", break_after_first_piece)
+
+
+def stop_evaluation(session: Any) -> None:
+    """Den Lauf, den eine Änderung oder Rücknahme anstößt, anhalten und abwarten — ohne
+    Ereignisschleife meldet er nichts zurück, gerechnet wird im Test.
+    """
+    running = session._worker
+    session.cancel_evaluation()
+    if running is not None:
+        assert running.wait(60_000)
+    session.cancel_signal.reset()
+
+
+# --- Kleine Prüfkörper ----------------------------------------------------------------
+
+
+def two_cubes(offset: float) -> MeshData:
+    """Ein Körper aus zwei Würfeln mit 20 mm Kante, der zweite um ``offset`` entlang X."""
+    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    second.apply_translation((offset, 0.0, 0.0))
+    return MeshData.of(trimesh.util.concatenate([first, second]))
+
+
+def brep_bytes(shape: Any) -> bytes:
+    """Die vollständige native Form samt Geometrie und vorhandener Triangulation."""
+    from OCP.BRepTools import BRepTools
+
+    stream = io.BytesIO()
+    BRepTools.Write_s(shape, stream)
+    return stream.getvalue()
+
+
+def assert_sketch_gradients(sketch: Sketch, *, step: float, atol: float) -> None:
+    """Jede analytische Ableitung des Skizzenlösers gegen zentrale Differenzen."""
+    from app.core.sketch import solver
+
+    equations, anchors = solver._build_equations(sketch, {})
+    pts = anchors.copy()
+    total = sum(equation.rows for equation in equations)
+    assert total, "ohne Gleichung prüft dieser Test nichts"
+    analytic = np.zeros((total, pts.shape[0], 2))
+    begin = 0
+    for equation in equations:
+        equation.grad(pts, analytic[begin : begin + equation.rows])
+        begin += equation.rows
+    analytic_flat = analytic.reshape(total, pts.size)
+
+    def stacked(flat: np.ndarray) -> np.ndarray:
+        shaped = flat.reshape(-1, 2)
+        rows: list[float] = []
+        for equation in equations:
+            rows.extend(equation.fn(shaped))
+        return np.asarray(rows)
+
+    flat = pts.reshape(-1).copy()
+    numeric = np.zeros_like(analytic_flat)
+    for column in range(flat.size):
+        forward = flat.copy()
+        backward = flat.copy()
+        forward[column] += step
+        backward[column] -= step
+        numeric[:, column] = (stacked(forward) - stacked(backward)) / (2.0 * step)
+    assert np.allclose(analytic_flat, numeric, atol=atol), (
+        f"größte Abweichung: {float(np.max(np.abs(analytic_flat - numeric))):.2e}"
+    )

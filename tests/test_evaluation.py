@@ -30,7 +30,7 @@ from app.core.types import (
     SceneObject,
 )
 from app.i18n import _
-from tests.helpers import FakeMesh
+from tests.helpers import FakeMesh, stop_evaluation
 
 RUNS: dict[str, int] = {}
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -5369,15 +5369,6 @@ def _broken_stl(folder: Path) -> Path:
     return broken
 
 
-def _settled(session: Any) -> None:
-    """Den Lauf, den eine Rücknahme anstößt, anhalten und abwarten."""
-    running = session._worker
-    session.cancel_evaluation()
-    if running is not None:
-        assert running.wait(60_000)
-    session.cancel_signal.reset()
-
-
 def test_a_file_without_a_model_does_not_become_a_step(tmp_path: Path) -> None:
     """Eine Datei, die erst am Ladeschritt scheitert, wird zurückgenommen (KUNDE-12).
 
@@ -5398,7 +5389,7 @@ def test_a_file_without_a_model_does_not_become_a_step(tmp_path: Path) -> None:
     assert result.stopped_at is not None
 
     session._on_finished(result)
-    _settled(session)
+    stop_evaluation(session)
 
     assert len(rejected) == 1 and not confirmed
     error = rejected[0]
@@ -5437,7 +5428,7 @@ def test_a_broken_file_after_other_work_is_not_withdrawn_blindly(tmp_path: Path)
     rejected: list[Any] = []
     session.importRejected.connect(rejected.append)
     session._on_finished(result)
-    _settled(session)
+    stop_evaluation(session)
     assert not rejected
     assert len(session.project.document.ops) == 2
 

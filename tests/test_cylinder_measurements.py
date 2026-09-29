@@ -11,6 +11,7 @@ import pytest
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect, fit_cylinder, radial_cylinder
+from tests.helpers import stop_after
 
 
 def cylinder_mantle(
@@ -416,19 +417,11 @@ def test_direct_fillet_measurement_carries_cancellation_into_lazy_fitting(
     """Auch der einzelne Verbraucher prüft vor Arbeit und reicht den Abbruch weiter."""
     from app.core.errors import OperationCancelled
     from app.core.perceive.features import detect_fillets
-    from app.core.scene.cancel import CancelSignal
 
     body = trimesh.creation.cylinder(radius=3.0, height=8.0, sections=48)
     mesh = MeshData.of(body)
     before = (np.array(body.vertices), np.array(body.faces))
-    signal = CancelSignal()
-    reached = []
-
-    def stop() -> None:
-        reached.append(True)
-        if len(reached) == stop_at:
-            signal.cancel()
-        signal.raise_if_cancelled()
+    stop, reached = stop_after(stop_at)
 
     with pytest.raises(OperationCancelled):
         detect_fillets(mesh, [] if prepared else None, check_cancelled=stop)

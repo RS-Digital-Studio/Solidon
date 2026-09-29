@@ -24,6 +24,7 @@ from app.core.geom.sculpt import strokes_from_text
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.ui_helpers import with_a_body
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -33,23 +34,6 @@ def window(qt_app: QApplication) -> MainWindow:
     """Ein Fenster ohne Körper — jeder Test entscheidet selbst, ob er einen
     braucht."""
     return MainWindow(Session(), UiSettings())
-
-
-def with_a_body(window: MainWindow) -> str:
-    """Die saubere Figur aus dem Korpus, ausgewählt wie nach einem Klick.
-
-    Nicht irgendein Quader: Sie ist die Vorlage, für die es diese Sitzung
-    gibt, und ihre mittlere Kantenlänge von 2,8 mm macht nebenbei den
-    Auflösungshinweis prüfbar.
-    """
-    window.open_path(MESHES / "clean_figure.stl")
-    window.session.wait_for_idle()
-    item = window.object_tree.tree.topLevelItem(0)
-    assert item is not None
-    item.setSelected(True)
-    object_id = window.object_tree.selected()
-    assert object_id
-    return str(object_id)
 
 
 # --- hinein und heraus ----------------------------------------------------------

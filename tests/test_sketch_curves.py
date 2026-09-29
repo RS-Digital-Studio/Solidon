@@ -28,6 +28,7 @@ from app.core.errors import SketchConflictError, ValidationError
 from app.core.sketch import solver
 from app.core.sketch.solver import solve_sketch
 from app.core.types import Sketch, SketchConstraint, SketchElement
+from tests.helpers import assert_sketch_gradients
 
 
 def _axes(points: tuple[tuple[float, float], ...]) -> tuple[float, float, float]:
@@ -233,40 +234,7 @@ def test_every_implicit_gradient_of_the_new_curves_matches_central_differences()
             ),
         ),
     )
-    _assert_gradients(sketch)
-
-
-def _assert_gradients(sketch: Sketch) -> None:
-    equations, anchors = solver._build_equations(sketch, {})
-    pts = anchors.copy()
-    total = sum(equation.rows for equation in equations)
-    assert total, "ohne Gleichung prüft dieser Test nichts"
-    analytic = np.zeros((total, pts.shape[0], 2))
-    begin = 0
-    for equation in equations:
-        equation.grad(pts, analytic[begin : begin + equation.rows])
-        begin += equation.rows
-    analytic_flat = analytic.reshape(total, pts.size)
-
-    def stacked(flat: np.ndarray) -> np.ndarray:
-        shaped = flat.reshape(-1, 2)
-        rows: list[float] = []
-        for equation in equations:
-            rows.extend(equation.fn(shaped))
-        return np.asarray(rows)
-
-    step = 1e-6
-    flat = pts.reshape(-1).copy()
-    numeric = np.zeros_like(analytic_flat)
-    for column in range(flat.size):
-        forward = flat.copy()
-        backward = flat.copy()
-        forward[column] += step
-        backward[column] -= step
-        numeric[:, column] = (stacked(forward) - stacked(backward)) / (2.0 * step)
-    assert np.allclose(analytic_flat, numeric, atol=1e-6), (
-        f"größte Abweichung: {float(np.max(np.abs(analytic_flat - numeric))):.2e}"
-    )
+    assert_sketch_gradients(sketch, step=1e-6, atol=1e-6)
 
 
 def test_both_lists_of_element_kinds_stay_the_same() -> None:
@@ -1314,7 +1282,7 @@ def test_every_gradient_of_the_new_constraints_matches_central_differences() -> 
         SketchConstraint("curvature", (18, 15, 13, 10)),
         SketchConstraint("curvature", (1, 0, 5, 4)),
     )
-    _assert_gradients(Sketch("plane:xy", elements, constraints))
+    assert_sketch_gradients(Sketch("plane:xy", elements, constraints), step=1e-6, atol=1e-6)
 
 
 def test_the_elliptical_opening_stays_solvable_while_its_axes_vary() -> None:

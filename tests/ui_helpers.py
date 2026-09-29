@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,45 @@ def window(qt_app: QApplication, session: Session) -> MainWindow:
     # Aufgeräumt wird zentral: ``tests/conftest.py`` wartet nach jedem Test
     # auf die Arbeiter jedes offenen Fensters.
     return MainWindow(session, UiSettings())
+
+
+def shown_window(qt_app: QApplication) -> Iterator[MainWindow]:
+    """Ein gezeigtes Fenster ohne Startbildschirm, für eine Fixture mit ``yield from``.
+
+    Gezeigt, weil Qt ein Resize-Ereignis an ein verstecktes Widget erst beim
+    Anzeigen zustellt — und die Geometrie der Zonen entsteht genau dort. Ein
+    Test auf einem nie gezeigten Fenster misst die Vorgabegröße 640 × 480.
+    Offscreen kostet das nichts.
+    """
+    window = MainWindow(Session(), UiSettings())
+    window.show()
+    window.resize(1200, 900)
+    # Und der Startbildschirm muss weg: solange er im Stapel oben liegt, hat
+    # der Träger darunter keine Größe, und alle Zonen lägen auf 100 Pixeln.
+    window._show_start_screen(False)
+    qt_app.processEvents()
+    yield window
+    # Aufräumen ist hier Pflicht und nicht Höflichkeit: ein gezeigtes Fenster,
+    # das stehen bleibt, bekommt weiter Ereignisse — und riss siebzehn Tests
+    # *nach* ``test_overlay.py`` mit ``AttributeError`` aus dem Ereignisfilter.
+    window.close()
+    window.deleteLater()
+    qt_app.processEvents()
+
+
+def with_a_body(window: MainWindow) -> str:
+    """Die saubere Figur aus dem Korpus, ausgewählt wie nach einem Klick — die Vorlage für
+    Form- und Skelettsitzung; ihre mittlere Kantenlänge von 2,8 mm macht nebenbei den
+    Auflösungshinweis prüfbar.
+    """
+    window.open_path(MESHES / "clean_figure.stl")
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+    object_id = window.object_tree.selected()
+    assert object_id
+    return str(object_id)
 
 
 def wait_for_export(window: MainWindow) -> None:

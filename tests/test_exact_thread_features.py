@@ -14,6 +14,7 @@ from app.core.geom.transform import translation
 from app.core.perceive.matching import moved_features
 from app.core.types import SceneObject
 from app.core.units import EPS_GEOM
+from tests.helpers import CountingToken
 from tests.test_sketch_ops import run
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
@@ -136,25 +137,6 @@ def test_a_rod_keeps_its_ridge_at_every_length(
     assert rod.volume > math.pi * root**2 * length * 1.1, "ein Bolzen ohne Gang ist kein Bolzen"
 
 
-class _CountingToken:
-    """Ein Abbruch nach ``limit`` Prüfungen — und ein Zähler, wie oft gefragt wurde."""
-
-    def __init__(self, limit: int | None) -> None:
-        self.limit = limit
-        self.calls = 0
-
-    @property
-    def is_cancelled(self) -> bool:
-        return self.limit is not None and self.calls >= self.limit
-
-    def raise_if_cancelled(self) -> None:
-        from app.core.errors import OperationCancelled
-
-        self.calls += 1
-        if self.limit is not None and self.calls >= self.limit:
-            raise OperationCancelled()
-
-
 def test_the_rod_asks_for_cancellation_while_it_is_built() -> None:
     """Der Bolzen fragt je Helix und um jeden nativen Schritt nach dem Abbruch.
 
@@ -166,12 +148,12 @@ def test_the_rod_asks_for_cancellation_while_it_is_built() -> None:
     from app.core.brep import profiles
     from app.core.errors import OperationCancelled
 
-    counting = _CountingToken(limit=None)
+    counting = CountingToken(limit=None)
     rod = profiles.threaded_rod(6.0, 1.0, 12.0, cancelled=counting)
     turns = math.ceil(12.0 / 1.0) + 2
     assert counting.calls > 3 * turns, counting.calls
     assert rod.is_closed and rod.solid_count == 1
-    early = _CountingToken(limit=10)
+    early = CountingToken(limit=10)
     with pytest.raises(OperationCancelled):
         profiles.threaded_rod(6.0, 1.0, 12.0, cancelled=early)
     assert early.calls == 10

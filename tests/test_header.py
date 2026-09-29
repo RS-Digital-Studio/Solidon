@@ -29,6 +29,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests.helpers import make_object
+from tests.ui_helpers import shown_window
 
 
 def test_the_title_drops_the_suffix_but_keeps_the_star() -> None:
@@ -182,15 +183,7 @@ def test_the_plate_filter_shows_its_complete_state_in_every_language(
 
 @pytest.fixture
 def window(qt_app: QApplication) -> Iterator[MainWindow]:
-    window = MainWindow(Session(), UiSettings())
-    window.show()
-    window.resize(1200, 900)
-    window._show_start_screen(False)
-    qt_app.processEvents()
-    yield window
-    window.close()
-    window.deleteLater()
-    qt_app.processEvents()
+    yield from shown_window(qt_app)
 
 
 def test_the_window_wires_the_header_to_the_session(window: MainWindow) -> None:
