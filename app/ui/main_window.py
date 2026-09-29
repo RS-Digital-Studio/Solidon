@@ -13267,12 +13267,7 @@ class MainWindow(QMainWindow):
                     # holt den Körper dann zurück. Getippte Werte in
                     # ``TransformBar`` bekommen ihn nicht — eine Zahl ist eine
                     # Ansage, und die wird ausgeführt.
-                    params={
-                        "dx": steps.offset[0],
-                        "dy": steps.offset[1],
-                        "dz": steps.offset[2],
-                        "keep_on_bed": True,
-                    },
+                    params=self._drag_params(object_id, steps.offset),
                 )
                 for object_id in self.inputs_for_transform("translate_object")
             )
@@ -13308,6 +13303,28 @@ class MainWindow(QMainWindow):
             # für eine einzige Absicht. Ob wirklich gebündelt wird, entscheidet
             # die ``History``; hier steht nur das Angebot.
             self.session.apply(_("Direkt bewegt"), drafts, bundle=True)
+
+    def _drag_params(self, object_id: ObjectId, offset: Vec3) -> dict[str, Any]:
+        """Die Werte von *Verschieben* für einen Zug im Bild.
+
+        **Endet der Zug auf einem anderen Bett, wandert der Körper auf diese
+        Platte** (Robert, 29.09.2026: „wenn ich sie auf eine andere platte
+        verschieben will springen sie auch"). Der Weg im Bild enthält dann die
+        Strecke zwischen den Betten, die es in der Szene nicht gibt; die
+        Ansicht rechnet sie heraus (``Viewport.dropped_on_plate``), und der
+        Schritt nennt die Platte, gezählt wie im Plattenwähler.
+        """
+        params: dict[str, Any] = {
+            "dx": offset[0],
+            "dy": offset[1],
+            "dz": offset[2],
+            "keep_on_bed": True,
+        }
+        dropped = self.viewport.dropped_on_plate(object_id, offset[0])
+        if dropped is not None:
+            params["dx"], plate = dropped
+            params["plate"] = plate + 1
+        return params
 
     def _on_scale_dragged(self, factor: float) -> None:
         """Ein Zug am Skalierwürfel wird eine Operation (§18.11, Regel 2).

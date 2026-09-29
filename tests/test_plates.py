@@ -736,6 +736,36 @@ def test_a_click_on_the_second_bed_lands_on_the_second_plate(
     assert back == pytest.approx((12.0, 4.0, 3.0))
 
 
+def test_a_drag_onto_the_next_bed_is_a_short_way_on_that_plate() -> None:
+    """Ein Zug hinüber ist ein kurzer Weg auf der anderen Platte (§25).
+
+    Robert, 29.09.2026: „wenn ich sie auf eine andere platte verschieben will
+    springen sie auch". Die Betten stehen im Bild nebeneinander, in der Szene
+    übereinander; der Weg im Bild enthält deshalb die Strecke zwischen den
+    Betten, und genau die fällt heraus. Wo die Mitte landet, entscheidet — ein
+    Zug, der auf dem eigenen Bett bleibt, bleibt, wie er ist.
+    """
+    from app.ui.viewport import PLATE_GAP, across_plates
+
+    width = 256.0
+    pitch = width + PLATE_GAP
+
+    # Von Platte 3 zwei Betten nach links, 30 mm neben die alte Stelle.
+    shift, plate = across_plates(-60.0, -2 * pitch + 30.0, home=2, plates=3, width=width)
+    assert plate == 0
+    assert shift == pytest.approx(30.0)
+
+    # Nach rechts auf das Nachbarbett, dort 10 mm vor der Mitte.
+    shift, plate = across_plates(0.0, pitch - 10.0, home=0, plates=2, width=width)
+    assert (plate, shift) == (1, pytest.approx(-10.0))
+
+    # Auf dem eigenen Bett ändert sich nichts, auch über dessen Rand hinaus.
+    assert across_plates(0.0, 140.0, home=1, plates=3, width=width) == (140.0, 1)
+
+    # Rechts neben dem letzten Bett gibt es keine Platte; der Zug bleibt dort.
+    assert across_plates(0.0, 3 * pitch, home=1, plates=2, width=width) == (3 * pitch, 1)
+
+
 def test_a_single_plate_draws_exactly_what_it_always_did(
     profile: Profile, qt_app: QApplication
 ) -> None:

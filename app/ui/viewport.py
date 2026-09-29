@@ -1877,6 +1877,30 @@ def plate_at(x: float, plates: int, width: float, gap: float = PLATE_GAP) -> int
     return max(0, min(plates - 1, round(x / pitch)))
 
 
+def across_plates(
+    centre_x: float, dx: float, home: int, plates: int, width: float, gap: float = PLATE_GAP
+) -> tuple[float, int]:
+    """Wohin ein Zug in der Ansicht einen Körper bringt: Weg in der Szene und Platte.
+
+    **Der Anlass** (Robert, 29.09.2026: „wenn ich sie auf eine andere platte
+    verschieben will springen sie auch"). Die Betten stehen im Bild
+    nebeneinander, in der Szene übereinander (:func:`plate_shift`). Ein Zug
+    auf das Nachbarbett war damit ein Weg von einer Bettbreite und mehr auf
+    der eigenen Platte, und *Auf dem Bett halten* holte den Körper dorthin
+    zurück — er sprang, wohin er nie gezogen wurde.
+
+    ``centre_x`` ist die Mitte des Körpers, wie das Bild sie zeigt, nur ohne den
+    Plattenversatz (ein Auseinanderziehen zählt mit), ``dx`` der Weg in der
+    Ansicht. Wo die Mitte danach im Bild steht, sagt :func:`plate_at`; wechselt
+    sie das Bett, verliert der Weg die Strecke zwischen den beiden Betten.
+    """
+    seen = centre_x + plate_shift(home, width, gap)[0] + dx
+    target = plate_at(seen, plates, width, gap)
+    if target == home:
+        return dx, home
+    return dx - (plate_shift(target, width, gap)[0] - plate_shift(home, width, gap)[0]), target
+
+
 #: Schalter für Maschinen und Testläufe ohne brauchbaren Grafikkontext.
 HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
 
@@ -8126,6 +8150,28 @@ class Viewport(QWidget):
         if self._plate >= 0 or self._beds_drawn < 2 or self._bed_extent is None:
             return np.zeros(3)
         return np.asarray(plate_shift(getattr(entry, "plate", 0), self._bed_extent[0]), dtype=float)
+
+    def dropped_on_plate(self, object_id: ObjectId, dx: float) -> tuple[float, int] | None:
+        """Auf welchem Bett ein um ``dx`` gezogener Körper landet — oder ``None``,
+        wenn er auf seinem bleibt.
+
+        Zurück kommen der Weg in der Szene und die Platte (§25,
+        :func:`across_plates`). Wer eine einzelne Platte ansieht, hat nur ein
+        Bett im Bild, und dort gibt es kein anderes zu treffen.
+        """
+        if self._result is None or self._plate >= 0 or self._beds_drawn < 2:
+            return None
+        if self._bed_extent is None:
+            return None
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return None
+        home = int(getattr(entry, "plate", 0))
+        # Gemeint ist die Stelle, an der der Nutzer den Körper sieht — auch
+        # auseinandergezogen (§18.8).
+        seen = float(entry.mesh.bounds.centre[0]) + float(self._exploded(entry, self._result)[0])
+        shift, plate = across_plates(seen, dx, home, self._beds_drawn, self._bed_extent[0])
+        return None if plate == home else (shift, plate)
 
     def _shown_offset(self, entry: Any, result: EvaluationResult) -> Any:
         """Den Versatz des sichtbaren Aktors lesen, auch während ein neues Bild rechnet."""

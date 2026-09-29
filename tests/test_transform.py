@@ -823,6 +823,88 @@ def test_the_reported_matrix_lands_the_input_on_the_result(profile: Profile) -> 
     )
 
 
+def _moved_across(profile: Profile, objects: list, **params: object):
+    """*Verschieben* am ersten Körper, mit allen als Szene."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get("translate_object")
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in objects}),
+            inputs=[objects[0]],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def test_a_move_onto_another_plate_puts_the_body_there(profile: Profile) -> None:
+    """Wer einen Körper auf ein anderes Bett zieht, legt ihn auf diese Platte.
+
+    So gefunden (Robert, 29.09.2026: „wenn ich sie auf eine andere platte
+    verschieben will springen sie auch"): Die Betten stehen im Bild
+    nebeneinander, in der Szene übereinander. Ein Zug hinüber war ein Weg von
+    einer Bettbreite und mehr auf der **eigenen** Platte, *Auf dem Bett
+    halten* holte den Körper dorthin zurück, und er sprang. Die Platte gehört
+    in den Schritt, gezählt wie im Plattenwähler; die Verschiebung gilt dort.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.types import SceneObject
+
+    body = as_mesh_data(cube())
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body, plate=2)
+
+    result = _moved_across(profile, [entry], dx=30.0, plate=1, keep_on_bed=True)
+
+    moved = result.outputs[0]
+    assert moved.plate == 0, "Platte 1 im Wähler ist die erste der Szene"
+    assert moved.mesh.bounds.centre[0] == pytest.approx(30.0)
+    codes = {finding.code for finding in result.findings}
+    assert not codes & {"transform.nudged_onto_bed", "transform.rearranged_on_bed"}, codes
+
+    # Nur die Platte gewechselt, ohne Weg: Das ist eine Wirkung, und der Satz
+    # „steht genau dort, wo er stand" wäre falsch.
+    only_plate = _moved_across(profile, [entry], plate=1)
+    assert only_plate.outputs[0].plate == 0
+    assert "transform.without_effect" not in {finding.code for finding in only_plate.findings}
+
+    # Null lässt ihn auf seiner Platte — die Vorgabe, die jeder alte Schritt hat.
+    stays = _moved_across(profile, [entry], dx=30.0)
+    assert stays.outputs[0].plate == 2
+
+
+def test_the_target_plate_decides_where_a_move_is_held(profile: Profile) -> None:
+    """Zurückgeholt wird auf der Zielplatte, um deren Körper herum.
+
+    Ein Nachbar auf der alten Platte steht dem Körper nach dem Wechsel nicht
+    mehr im Weg; einer auf der neuen schon. Der Körper wird über die rechte
+    Kante gezogen, und genau dort steht auf der Zielplatte ein anderer.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.types import SceneObject
+
+    area = printable_area(profile.printer)
+    body = as_mesh_data(cube())
+    at_the_edge = apply(body, translation((area.bounds[2] - 10.0, 0.0, 0.0)))
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=body, plate=1)
+    neighbour = SceneObject(id="obj_2", name="Nachbar", mesh=at_the_edge, plate=0)
+
+    result = _moved_across(profile, [entry, neighbour], dx=300.0, plate=1, keep_on_bed=True)
+
+    moved = result.outputs[0]
+    assert moved.plate == 0
+    assert fits_xy(moved.mesh, area)
+    assert "transform.rearranged_on_bed" in {finding.code for finding in result.findings}, (
+        "der kürzeste Rückweg endet im Nachbarn der Zielplatte"
+    )
+
+
 def test_moving_an_exact_body_maps_faces_to_triangles_once_per_body(monkeypatch) -> None:
     """Die Umkehrabbildung Fläche → Dreiecke entsteht je Körper einmal und liegt in seinem
     Cache; ``Solid.triangles_of_face`` sucht sonst je Merkmal über alle Dreiecke — an

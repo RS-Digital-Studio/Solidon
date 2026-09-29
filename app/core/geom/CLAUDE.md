@@ -251,7 +251,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   `oversize` nur über Maße.
 - `back_onto_bed` (`keep_on_bed`): die Vorgabe ist aus, den Haken setzt der
   Zug (`MainWindow._on_transform_dragged`); geprüft wird der Eingang, bewegt
-  nur in XY, die Matrix trägt beides, kein Plattenwechsel.
+  nur in XY, die Matrix trägt beides, von sich aus kein Plattenwechsel.
+  Die Platte wechselt nur, wenn der Schritt sie nennt (`translate_object`,
+  `plate` ab eins wie im Plattenwähler, null bleibt); gehalten wird dann um
+  die Körper der Zielplatte.
 - `placed_at_free_spot` (`free_spot` an `load`, `load_step` und
   `fit_to_size`, §17.1 Schritt 6): einmal über `first_free_spot` gerechnet —
   ein Quader aus den Grenzen, Platte für Platte über `arrange_on_bed` mit
