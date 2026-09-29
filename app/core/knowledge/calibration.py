@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.core.errors import ValidationError
+from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge import profiles
 from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
@@ -145,7 +147,6 @@ def apply(
             constraint="calibration_process",
         )
     target = (directory or user_profiles_dir()) / USER_MATERIALS
-    ensure_dir(target.parent)
 
     # Die Datei des Nutzers wird für sich gelesen, sie muss also vollständig
     # sein: sie beginnt beim mitgelieferten Profil und nimmt erst dann die
@@ -174,7 +175,22 @@ def apply(
     entry["calibrated"] = True
     table[calibration.material] = entry
 
-    target.write_text(_as_toml(table), encoding="utf-8")
+    scratch: Path | None = None
+    try:
+        ensure_dir(target.parent)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=target.parent, suffix=".tmp", delete=False
+        ) as stream:
+            scratch = Path(stream.name)
+            stream.write(_as_toml(table))
+            stream.flush()
+            os.fsync(stream.fileno())
+        scratch.replace(target)
+    except OSError as problem:
+        raise FileWriteError(detail=str(problem)) from problem
+    finally:
+        if scratch is not None:
+            scratch.unlink(missing_ok=True)
     profiles.reload()
     _log.info("calibrated %s with %d values", calibration.material, len(calibration.measurements))
     return profiles.material(calibration.material)

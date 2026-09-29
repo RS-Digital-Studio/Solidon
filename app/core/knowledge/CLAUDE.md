@@ -44,6 +44,10 @@ und ist kein Testlauf.
   nicht gewählte Messfelder bleiben beim Speichern unverändert. Kalibrierung
   schreibt TOML-Kennungen als zitierte Literale — Leerraum, Punkte und
   Anführungszeichen in Materialkennungen bleiben lesbar.
+- Kalibrierwerte ersetzen die Nutzerdatei erst nach vollständig geschriebenem
+  und synchronisiertem Zwischenstand im selben Verzeichnis. Schreibfehler
+  erhalten den bisherigen Bestand und werden als `FileWriteError` gemeldet;
+  die temporäre Datei wird auch im Fehlerfall entfernt.
 - `analysis_limits` verbindet die Materialien: größte Mindestwand, kleinster
   Überhangwinkel; unbekannte Materialarten übernehmen keine fremde
   Kalibrierung. Wer die Analyse zwischenspeichert, nimmt die wirksamen Grenzen

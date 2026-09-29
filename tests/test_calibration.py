@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.errors import ValidationError
+from app.core.errors import FileWriteError, ValidationError
 from app.core.knowledge import calibration, profiles
 from app.core.knowledge.parts import PARTS
 from app.core.scene import History, OperationDraft, evaluate, variants
@@ -143,6 +143,81 @@ def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None
     assert after.clearance == pytest.approx(0.18)
     assert after.hole_compensation == pytest.approx(0.15)
     assert (own_profiles / "materials.toml").is_file()
+
+
+@pytest.mark.parametrize("stage", ["write", "fsync", "replace"])
+def test_a_failed_calibration_preserves_the_previous_file(
+    own_profiles: Path, monkeypatch: pytest.MonkeyPatch, stage: str
+) -> None:
+    """Teilweises Schreiben und gesperrter Austausch verlieren keine Messwerte."""
+    import io
+    import os
+
+    calibration.apply(calibration.from_measurements("petg", clearance=0.18))
+    target = own_profiles / calibration.USER_MATERIALS
+    before = target.read_bytes()
+    open_file = io.open
+    failures = []
+
+    class PartialWrite:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return self.stream.__exit__(*args)
+
+        def write(self, text):
+            self.stream.write(text[:17])
+            self.stream.flush()
+            failures.append("write")
+            raise OSError("Datenträger voll")
+
+    def partial_open(path, mode="r", *args, **kwargs):
+        stream = open_file(path, mode, *args, **kwargs)
+        return PartialWrite(stream) if "w" in mode else stream
+
+    def failed_sync(_descriptor):
+        failures.append("fsync")
+        raise OSError("Datenträger nicht erreichbar")
+
+    def denied(_path, _target):
+        failures.append("replace")
+        raise PermissionError("Datei belegt")
+
+    if stage == "write":
+        monkeypatch.setattr(io, "open", partial_open)
+    elif stage == "fsync":
+        monkeypatch.setattr(os, "fsync", failed_sync)
+    else:
+        monkeypatch.setattr(Path, "replace", denied)
+
+    with pytest.raises(FileWriteError) as caught:
+        calibration.apply(calibration.from_measurements("petg", clearance=0.3))
+
+    assert failures == [stage], "der echte Schreibweg muss den Fehler auslösen"
+    assert caught.value.suggestions
+    assert target.read_bytes() == before
+    assert not tuple(own_profiles.glob("*.tmp"))
+
+
+def test_an_unavailable_calibration_directory_reports_a_file_error(own_profiles: Path) -> None:
+    """Ein Ziel, dessen Verzeichnis eine Datei ist, nennt den vorhandenen Schreibausweg."""
+    own_profiles.mkdir(parents=True, exist_ok=True)
+    blocked = own_profiles / "blocked"
+    blocked.write_bytes(b"bestehende Datei")
+
+    with pytest.raises(FileWriteError) as caught:
+        calibration.apply(calibration.from_measurements("petg", clearance=0.3), directory=blocked)
+
+    assert caught.value.suggestions
+    assert blocked.read_bytes() == b"bestehende Datei"
+    assert not tuple(own_profiles.glob("*.tmp"))
 
 
 def test_process_measurements_reach_only_the_measured_print_process(own_profiles: Path) -> None:
