@@ -5813,14 +5813,6 @@ TOOL_KEYS: dict[str, str] = {
 #: keine Größe, und durch null teilt die Umrechnung.
 VIEWPORT_CANVAS = 1000
 
-#: Wie hoch die Bedingungsliste in der Leiste höchstens wird, in Bildpunkten.
-#:
-#: In der Leiste unter der Ansicht ist Höhe teuer — sie geht dem Modell ab.
-#: Ganz wegzulassen wäre trotzdem falsch: Die Liste ist die Auskunft darüber,
-#: was die Skizze festhält, und sie ist zusammen mit der Zeile „Bestimmt" das,
-#: was eine Skizze von einem Umriss unterscheidet.
-VIEWPORT_LIST_HEIGHT = 96
-
 #: Wie viele Zeichen das Ebenenfeld zugeklappt breit ist.
 #:
 #: Zwanzig: „Draufsicht (XY) — l…" — der Anfang trägt die Aussage, und der
