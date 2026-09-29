@@ -30,15 +30,12 @@ from shapely.ops import unary_union
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
-from app.core.log import get_logger
 from app.core.types import CancelToken, LayerInfo, Polygon, Ring, SliceResult
 from app.core.units import EPS_GEOM, exact_cos, is_close, ring_area
 from app.i18n import _
 
 if TYPE_CHECKING:
     from concurrent.futures import Executor
-
-_log = get_logger(__name__)
 
 #: Die übersetzte Konturverkettung (§22.1), oder ``None``.
 #:
@@ -725,7 +722,7 @@ def _repeated(source: LayerMetrics, shape: ShapelyPolygon) -> LayerMetrics:
 
     Gegen eine identische Schicht darunter gibt es keinen Überhang, keine
     Insel und keine Brücke — ``shape.difference(shape.buffer(reach))`` ist
-    leer, und genau das rechnete :func:`_measure` aus. Die Strukturbreite und
+    leer, und genau das rechnete :func:`_measure_batch` aus. Die Strukturbreite und
     die Konturzahl hängen nur an der Fläche selbst und sind die der Quelle.
     """
     return LayerMetrics(
@@ -1110,7 +1107,7 @@ def _plane_segments_numpy(
     # aber nicht dasselbe Fließkommamuster, und der Unterschied wächst, je
     # näher die Ebene an einer Ecke liegt. Zwei Enden, die sich um mehr als die
     # sechste Nachkommastelle unterscheiden, führt das Runden in
-    # :func:`_polygon_from` nicht mehr zusammen: der Ring bleibt offen,
+    # :func:`_polygon_with_contours` nicht mehr zusammen: der Ring bleibt offen,
     # ``polygonize`` lässt ihn fallen, und ein Fach verschwindet als Loch aus
     # der Schicht. Gemessen an einem Behälter mit drei Fächern: 31 von 800
     # Schichten meldeten die fünffache Querschnittsfläche und daraus 9 463 mm²
@@ -1247,11 +1244,6 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
     # Stelle unterscheiden. Der übersetzte ist der schnellere, nicht der
     # genauere — und das ist Absicht.
     return np.round(points.reshape(-1, 2), 6)[walk[:written]], ring_of[:written]
-
-
-def _polygon_from(points: Any, nodes: Any) -> ShapelyPolygon | None:
-    """Die GEOS-Fläche eines Schnitts; Kernkonturen braucht dieser Aufrufer nicht."""
-    return _polygon_with_contours(points, nodes, capture_contours=False)[0]
 
 
 def _polygon_with_contours(
@@ -1453,34 +1445,6 @@ def _repaired(shape: ShapelyPolygon) -> ShapelyPolygon:
     es lässt die entartete Naht fallen und behält das Material.
     """
     return shape if shape.is_valid else shape.buffer(0)
-
-
-def _measure(
-    shape: ShapelyPolygon,
-    previous: ShapelyPolygon | None,
-    on_plate: bool = False,
-    layer_height: float = 0.2,
-    detail: Detail = "full",
-    overhang_factor: float = OVERHANG_ANGLE_FACTOR,
-    bridge_from: float = BRIDGE_FROM,
-    taper: bool = True,
-) -> LayerMetrics:
-    """Die Kennzahlen einer Schicht gegen die darunter.
-
-    ``taper`` sagt, ob der Keil (:func:`taper_length`) an dieser Schicht
-    gesucht wird; :func:`_measure_all` fragt nur jede :data:`TAPER_SAMPLE`.
-    und schreibt den Wert dazwischen fort.
-    """
-    return _measure_batch(
-        [shape],
-        [previous],
-        [on_plate],
-        [layer_height],
-        detail,
-        overhang_factor,
-        bridge_from,
-        [taper],
-    )[0]
 
 
 def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyPolygon:
@@ -2368,10 +2332,6 @@ def _bridge_width(
     return float(widest)
 
 
-def _contour_count(shape: ShapelyPolygon) -> int:
-    return len(getattr(shape, "geoms", [shape]))
-
-
 def _to_polygons(shape: ShapelyPolygon) -> tuple[Polygon, ...]:
     """Shapely zum eigenen Konturtyp des Kerns — der Kern behält sein eigenes
     Vokabular.
@@ -2640,8 +2600,10 @@ def _measure_batch(
 ) -> list[LayerMetrics]:
     """Die Kennzahlen vieler Schichten gegen ihre jeweils darunter, gestapelt.
 
-    Dieselben Zahlen wie :func:`_measure` je Schicht — der ist jetzt dieser
-    Aufruf mit einem Element.
+    Je Schicht dieselben Zahlen wie eine Schicht allein; ``taper`` sagt je
+    Schicht, ob der Keil (:func:`taper_length`) dort gesucht wird —
+    :func:`_measure_all` fragt nur jede :data:`TAPER_SAMPLE`. und schreibt den
+    Wert dazwischen fort.
     """
     count = len(shapes)
     body = np.asarray(shapes, dtype=object)
@@ -2829,6 +2791,11 @@ CHANNEL_WIDTH: Final = 30.0
 #: Bei 15 mm Radius liegt das Vieleck um höchstens 0,02 mm innerhalb seines
 #: Kreises; :func:`_in_channels` rechnet die umschriebene Scheibe daraus.
 CHANNEL_QUAD_SEGMENTS: Final = 16
+
+#: Die Höhe einer Scheibe des Kanalraums (:func:`channel_space`), in
+#: Millimetern. Frei ist, was auf jeder Schicht der Scheibe frei ist, und jede
+#: Scheibe reicht eine Scheibenhöhe in die Decke.
+CHANNEL_SLAB: Final = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -3148,11 +3115,7 @@ def _material(layer: LayerInfo) -> ShapelyPolygon:
 
 
 def channel_space(
-    result: SliceResult,
-    model: ModelSupport,
-    *,
-    slab: float = 1.0,
-    channel_width: float = CHANNEL_WIDTH,
+    result: SliceResult, model: ModelSupport
 ) -> list[tuple[float, float, ShapelyPolygon]]:
     """Der freie Raum der Kanäle, in Höhenscheiben: (unten, oben, Fläche) (§22.2).
 
@@ -3161,7 +3124,7 @@ def channel_space(
     seiner eigenen Regel und fand im Wasserkanal der Waschschüssel mehr als
     Solidon — mit einer Sperre nur aus den Deckenstücken blieben 13,5 von
     22,9 m Stütze darin (26.09.2026). Gesperrt wird deshalb der Raum selbst:
-    je Scheibe die freie Fläche im Umkreis ``channel_width / 2`` der
+    je Scheibe die freie Fläche im Umkreis ``CHANNEL_WIDTH / 2`` der
     Kanalsäulen innerhalb der Hülle des Teils, und davon nur, was mit einer
     Säule zusammenhängt — ein freier Raum jenseits der Wand bleibt frei, und
     ebenso die Luft vor einer Mündung.
@@ -3172,12 +3135,12 @@ def channel_space(
     layers = result.layers
     heights = [layer.z for layer in layers]
     # Der Schritt einer gewöhnlichen Schicht; die erste ist dicker.
-    step = heights[-1] - heights[-2] if len(heights) > 1 else slab
-    stride = max(1, round(slab / max(step, EPS_GEOM)))
+    step = heights[-1] - heights[-2] if len(heights) > 1 else CHANNEL_SLAB
+    stride = max(1, round(CHANNEL_SLAB / max(step, EPS_GEOM)))
     footprints = np.asarray(
         [ShapelyPolygon(item.outline, item.holes) for item, _low, _high in columns], dtype=object
     )
-    reaches = shapely.buffer(footprints, channel_width / 2.0, quad_segs=CHANNEL_QUAD_SEGMENTS)
+    reaches = shapely.buffer(footprints, CHANNEL_WIDTH / 2.0, quad_segs=CHANNEL_QUAD_SEGMENTS)
     lows = np.array([low for _outline, low, _high in columns])
     highs = np.array([high for _outline, _low, high in columns])
     bottom = float(lows.min())
@@ -3217,7 +3180,7 @@ def channel_space(
         # 18,4 m); eine Scheibe höher 87,8 → 0,0 und 22,5 → 1,7 m im
         # Sperrkörper. Eine Sperre druckt nicht; dass sie in die Decke ragt,
         # kostet nichts.
-        return (z_low - step / 2.0, z_high + step / 2.0 + slab, unary_union(kept))
+        return (z_low - step / 2.0, z_high + step / 2.0 + CHANNEL_SLAB, unary_union(kept))
 
     # Jede Scheibe fragt nur ihre eigenen Schichten; nebeneinander gerechnet,
     # in der Folge der Höhe zurückgegeben.
