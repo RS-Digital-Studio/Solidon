@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-29 | [Teilen an der Spiegelnaht einer Figur: ein Punkt geschlossen (29.09.2026)](#teilen-an-der-spiegelnaht-einer-figur-ein-punkt-geschlossen-29092026) |
 | 2026-09-28 | [Stützsperre im Cura-Fenster abgenommen: ein Punkt geschlossen (28.09.2026)](#stützsperre-im-cura-fenster-abgenommen-ein-punkt-geschlossen-28092026) |
 | 2026-09-28 | [Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)](#release-sitzung-051-zweite-runde-zwei-punkte-geschlossen-28092026) |
 | 2026-09-28 | [Release-Sitzung 0.5.1: sechs Punkte geschlossen (28.09.2026)](#release-sitzung-051-sechs-punkte-geschlossen-28092026) |
@@ -33413,3 +33414,42 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   vor der Definition, ohne sie das Bett des Druckers), im Fenster belegt am selben
   breiten Auftrag. Bilder 17, 18, 25, 31, 34, 35, 39 und 40 in
   `output/review/b5-cura-2026-09-28/bilder/`.
+
+## Teilen an der Spiegelnaht einer Figur: ein Punkt geschlossen (29.09.2026)
+
+<a id="rm-309"></a>
+
+- [x] **RM-309 — *Teilen* mit Stiften zeigt an einer gespiegelten Figur keine Vorschau.** Aus der
+  Videoproduktion (Werkstattfilm „Bob teilen“, 0.5.1). An Bob (Keenan Crane, CC0, 10 688
+  Dreiecke, auf 100 mm längste Kante gebracht) stand mit den Vorgaben des Fensters (Achse z,
+  39,42 mm angezeigt, zwei runde Stifte) „Keine Vorschau: Häufig ist das Modell an einer Stelle
+  offen …“; ohne Stifte kam die Vorschau, über die Kommandozeile gelang der Schritt bei 39,42
+  und 40 mm.
+
+  **Ursache:** Das Fenster rechnet mit der ungerundeten Mitte des Hüllquaders,
+  39,4184852544278 mm, und das ist Bobs Spiegelebene. Dort liegen 69 Ecken genau und 26 bis
+  1e-8 mm daneben (float32-Reste der Mittelnaht). `trimesh` zählt diese zur Ebene und lässt sie
+  stehen, die geschnittenen Nachbardreiecke legen ihre Kopie genau auf die Ebene, und der
+  Deckel (`section._capped`) legte über gerundete Koordinaten zusammen: 21 und 18 offene
+  Ketten, beide Hälften offen, ohne Befund, weil `capped` den Eingang fragt. Die Stifte
+  scheiterten dann an Eingängen, die kein Körper waren — im Entwurf beide Stufen mit „Not all
+  meshes are positive closed volumes“, voll bis auf das Raster, das 6 243 statt 54 243 mm³
+  auf der Stiftseite stehen ließ, still, weil `pins._add_connector_geometry` die Befunde der
+  Kette verwarf. Die kurze Kette war also nicht die Ursache, und die volle rettete nichts. Die
+  Kommandozeile mit 39,42 mm traf die Naht nicht (keine Ecke näher als 1,5·10⁻³ mm). Auto
+  Split findet an Bob genau diese Ebene als Spiegelebene.
+
+  **Behoben** (`cdd4e6852`): `section.settled_on_plane` legt vor dem Schnitt auf die Ebene,
+  was `trimesh` zu ihr zählt (höchstens 1e-8 mm, bei Achsennormalen genau); die Formschräge am
+  Netz (`faces._draft_tools`) teilte an der neutralen Ebene auf dieselbe Weise und nimmt
+  denselben Helfer; die Befunde der Kette hinter den Stiften reisen mit. An Bob:
+  53 879,024 + 53 879,043 = 107 758,068 mm³ wie der Eingang, Stifte und Bohrungen auf Stufe
+  `direct` in Entwurf und Fein (Stiftseite +364,24, Bohrungsseite −424,20 mm³, wie bei
+  39,42 mm). Die Vorschau braucht keine weitere Stufe. Tests:
+  `test_section.py::test_a_seam_just_beside_the_plane_is_capped`,
+  `test_prepare.py::test_pins_at_a_mirror_seam_hold_in_the_preview_and_on_applying`,
+  `test_prepare.py::test_what_the_chain_behind_the_pins_says_reaches_the_split`,
+  `test_mesh_faces.py::test_the_draft_holds_where_wall_corners_stand_just_beside_the_neutral_plane`.
+  Zufallsschnitte über sieben Netze (2 764 Hälften, davon ein Fünftel durch Eckenhöhen): keine
+  offene Hälfte durch Rundung, eine an einer Bohrungstangente, im Stand davor genauso
+  ([RM-310](ROADMAP.md#rm-310)).
