@@ -683,8 +683,10 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
 4. **`quality` reicht durch.** Jede Op muss beide Stufen beherrschen, notfalls
    indem sie sie gleich behandelt.
 
-Weitere feste Verträge: `PartFn` für Bausteine (§24.1), `MeshBackend` und
-`LLMBackend` für Backends (§27), `Migration` für Formatwechsel (§16.2).
+Weitere feste Verträge: `PartFn` für Bausteine (§24.1), `MeshBackend`
+(`app/core/backends/mesh.py`) und `LLMBackend` (`app/core/backends/llm.py`) für
+Backends (§27), der Migrationsschritt `Step` (`app/core/scene/migrations.py`) für
+Formatwechsel (§16.2). Sie stehen bei ihrem Gebiet, nicht in `types.py`.
 
 ---
 
@@ -2573,8 +2575,7 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
 AppError                     # Basis, trägt Titel, Ursache, Handlungsvorschläge
 ├── UserError                # Eingabe war unzulässig — korrigierbar
 │   ├── ValidationError      # Schema verletzt
-│   ├── AmbiguityError       # mehrdeutig, braucht eine Entscheidung
-│   └── UnitUnknownError     # Einheit nicht bestimmbar
+│   └── AmbiguityError       # mehrdeutig, braucht eine Entscheidung
 ├── GeometryError            # Geometrie ließ es nicht zu — mit Vorschlag
 │   ├── NotManifoldError
 │   ├── BooleanFailedError   # trägt die versuchten Rückfallstufen
@@ -2807,7 +2808,7 @@ die zentrale Konstante ersetzt diese externen Schritte nicht.
   Anwendung und Setup-Datei. Apple benötigt Developer-ID-Signaturen und
   Notarisierung. Vorhandene CI-Schritte belegen weder den verfügbaren Zugang
   noch die erfolgreiche Signierung und Installation des Kundenpakets; diese
-  Abnahmen bleiben [RM-001](ROADMAP.md#rm-001) und
+  Abnahmen bleiben [RM-001](ROADMAP-ARCHIV.md#rm-001-abschluss-050) und
   [RM-011](ROADMAP.md#rm-011).
 
   Die frühere pauschale Sperre für Microsofts Signierdienst ist überholt:
@@ -2935,7 +2936,7 @@ Für die weitere CRA-Vorbereitung gelten diese Liefergegenstände:
    Python- und native Bestandteile, Paketbezug und Belege werden je
    Zielartefakt geprüft. `constraints.txt` allein ist keine Stückliste des
    Kundenpakets; die durchgesetzte Releaseakte bleibt
-   [RM-115](ROADMAP.md#rm-115).
+   [RM-115](ROADMAP-ARCHIV.md#rm-115-abschluss-050).
 2. **Schwachstellenverfahren.** `SECURITY.md` benennt den Meldekanal und die
    zugesagte Antwortzeit, `SECURITY-INCIDENT.md` die Bearbeitung und
    gesetzlichen Meldepfade. Die öffentliche Sicherheitsseite muss damit
@@ -3099,7 +3100,7 @@ und das Kriterium, das für Harz an die Stelle des Überhangwinkels tritt —,
 und jede solche Änderung wird nach dem Verfahren oben gemessen. Noch
 fehlende Verhaltensmessungen stehen in
 [RM-014](ROADMAP.md#rm-014), [RM-016](ROADMAP.md#rm-016) und
-[RM-069](ROADMAP.md#rm-069).
+[RM-069](ROADMAP-ARCHIV.md#rm-069).
 
 ---
 
