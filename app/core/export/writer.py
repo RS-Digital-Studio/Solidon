@@ -1915,6 +1915,10 @@ def write_assembly(
         ),
     )
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
+    if for_window and setup is not None:
+        from app.core.export import handover
+
+        findings += handover.window_findings(setup)
     return target, findings
 
 

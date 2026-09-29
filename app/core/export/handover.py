@@ -2399,6 +2399,7 @@ def project_settings(
     # kam aus der Auswahl des Nutzers — die 3MF sagte drei Wände, gedruckt
     # wurden zwei, und der Unterschied waren 127 Gramm.
     document: dict[str, object] = {}
+    manufacturer_process: dict[str, object] = {}
     foundations: tuple[tuple[slicer_profiles.ProfileKind, str], ...] = (
         ("machine", setup.machine_profile),
         ("process", setup.base_process),
@@ -2406,18 +2407,20 @@ def project_settings(
     for kind, chosen in foundations:
         found = profile_file(chosen, setup, kind)
         if found is not None:
-            document.update(slicer_profiles.resolve_values(found, roots=_profile_roots(setup)))
+            values = slicer_profiles.resolve_values(found, roots=_profile_roots(setup))
+            document.update(values)
+            if kind == "process":
+                manufacturer_process = values
 
-    document.update(
-        _orca_process(
-            split.get("process", {}),
-            settings,
-            setup,
-            deviating=deviating.get("process", {}),
-            plate=plate,
-            suggested=_suggested_speed_keys(settings, setup.flavour),
-        )
+    process = _orca_process(
+        split.get("process", {}),
+        settings,
+        setup,
+        deviating=deviating.get("process", {}),
+        plate=plate,
+        suggested=_suggested_speed_keys(settings, setup.flavour),
     )
+    document.update(process)
     document.update(_machine_keys(profile, setup.flavour))
 
     for key in ("type", "instantiation", "inherits"):
@@ -2520,7 +2523,80 @@ def project_settings(
     ]
     resolved.setdefault("printer_model", profile.printer.title)
     resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
+    if _is_creality_print(setup):
+        # **Creality Print liest aus einer fremden 3MF nur die Abweichung.**
+        # Sein Fenster fragt nach dem Drucker und nimmt dessen Prozess; aus
+        # der Datei übernimmt es allein die Prozesswerte, die in dieser Liste
+        # stehen (``Check3mfVendor::get3mfConfig``, Quelltext Creality Print).
+        # Ohne sie galt dort keine Wahl aus Solidons Druckdialog (RM-164).
+        # Die Liste ist dieselbe Abweichung, die Solidon über das
+        # Herstellerprofil schreibt; ohne Herstellerprozess weicht alles ab.
+        # Aufbau wie bei Bambu Studio: Prozess, je Filament, Drucker. Die
+        # Konsole leert den Prozesseintrag, sobald ``--load-settings`` einen
+        # Prozess lädt (``SliceCommand.cpp``), und rechnet wie bisher.
+        resolved["different_settings_to_system"] = [
+            ";".join(_differing_from(manufacturer_process, process)),
+            *([""] * len(filament_documents)),
+            "",
+        ]
     return resolved
+
+
+def window_findings(setup: SlicerSetup) -> list[Finding]:
+    """Was das Fenster dieses Slicers beim Öffnen der Übergabe fragt und selbst nimmt.
+
+    Creality Print öffnet eine 3MF, die es nicht selbst schrieb, mit der
+    Frage nach dem Drucker, vorgewählt ist der dort eingestellte
+    (``ChoosePresetDlg``, Quelltext Creality Print). Prozess und Filament
+    nimmt es aus dem Bestand dieses Druckers; aus der Datei kommen die Teile
+    mit ihren Objektwerten, die gelisteten Prozessabweichungen
+    (:func:`project_settings`), Farben und Durchmesser. Gemessen am
+    29.09.2026 mit 7.2.2: Fenster und ``full_print_config.json`` nach dem
+    Schneiden (RM-164).
+    """
+    if not _is_creality_print(setup):
+        return []
+    printer = _profile_name(setup.machine_profile) if setup.machine_profile else ""
+    message = (
+        _(
+            "{slicer} fragt beim Öffnen nach dem Drucker. Wählen Sie dort „{printer}“. "
+            "Temperaturen und Kühlung nimmt es aus seinem eigenen Filamentprofil.",
+            slicer=setup.name,
+            printer=printer,
+        )
+        if printer
+        else _(
+            "{slicer} fragt beim Öffnen nach dem Drucker. Wählen Sie dort Ihren Drucker. "
+            "Temperaturen und Kühlung nimmt es aus seinem eigenen Filamentprofil.",
+            slicer=setup.name,
+        )
+    )
+    return [
+        Finding(
+            code="slicer.window_asks_for_the_printer",
+            severity="info",
+            message=message,
+            values={"slicer": setup.name, "printer": printer},
+        )
+    ]
+
+
+def _differing_from(base: Mapping[str, object], process: Mapping[str, object]) -> list[str]:
+    """Die Prozessschlüssel, deren Wert nicht der des Herstellerprozesses ist."""
+
+    def text(value: object) -> str | None:
+        """Ein Wert in der Schreibweise der Datei; eine Liste mit einem Eintrag ist er."""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return str(value[0]) if len(value) == 1 else ",".join(str(item) for item in value)
+        return str(value)
+
+    return sorted(
+        key
+        for key, value in process.items()
+        if key not in slicer_profiles.DESCRIBING_KEYS and text(base.get(key)) != text(value)
+    )
 
 
 def _profile_name(reference: str) -> str:
@@ -4531,27 +4607,6 @@ def slice_model(
                     values={"output": output},
                     suggestions=(SPLIT_MODEL, SCALE_TO_FIT, ARRANGE_ON_BED, SHOW_SLICER_OUTPUT),
                 )
-            if (
-                _is_creality_print(setup)
-                and any(entry.suffix.casefold() == ".3mf" for entry in models)
-                and _says_print_is_empty(output)
-            ):
-                # **Creality Print 7.2 rechnet über die Kommandozeile keine
-                # 3MF**, gleich woher: Solidons Übergabe, eine nackte 3MF aus
-                # trimesh, eine aus PrusaSlicer — jede endet mit -100 und „The
-                # print is empty", dasselbe Teil als STL schneidet es
-                # (26.09.2026, RM-164). Im eigenen Fenster lädt es die Datei;
-                # dorthin führt der Satz, statt den Kunden raten zu lassen.
-                raise ExternalToolError(
-                    tool=setup.name,
-                    title=SLICER_FAILED,
-                    detail=_(
-                        "Creality Print rechnet eine 3MF-Datei nur in seinem Fenster. "
-                        "Öffnen Sie sie dort mit „Im Slicer öffnen“."
-                    ),
-                    values={"output": output},
-                    suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, EXPORT_ONLY),
-                )
             if _says_outside_the_volume(output):
                 raise _outside_the_volume(setup, profile, output, model_height)
             if _says_no_layers(output):
@@ -5088,10 +5143,6 @@ ORCA_OFF_THE_PLATE: Final = -50
 #: hinterließ. ``ExternalToolError`` sagt sonst „hat nicht geantwortet" — der
 #: Slicer hat aber geantwortet, nur mit einem Fehler.
 SLICER_FAILED: Final = _("Der Slicer hat den Auftrag nicht gerechnet.")
-#: Gemessen an Creality Print 7.2 mit jeder 3MF über die Kommandozeile
-#: (RM-164). Andere Programme der Familie sagen es, wenn alle Teile neben der
-#: Platte liegen; gelesen wird es deshalb nur für Creality Print.
-PRINT_IS_EMPTY: Final[tuple[str, ...]] = ("the print is empty",)
 
 
 def _refuses_arrange_flag(output: str) -> bool:
@@ -5145,12 +5196,6 @@ def _says_outside_the_volume(output: str) -> bool:
     """Sagt die Ausgabe des Slicers, dass nichts im Bauraum liegt?"""
     lowered = output.lower()
     return any(phrase in lowered for phrase in OUTSIDE_THE_VOLUME)
-
-
-def _says_print_is_empty(output: str) -> bool:
-    """Sagt die Ausgabe des Slicers, dass auf der Platte nichts zu drucken ist?"""
-    lowered = output.lower()
-    return any(phrase in lowered for phrase in PRINT_IS_EMPTY)
 
 
 def _says_no_layers(output: str) -> bool:

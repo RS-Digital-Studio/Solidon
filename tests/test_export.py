@@ -877,6 +877,43 @@ def test_a_lettering_split_into_letters_keeps_its_one_filament(
     )
 
 
+def test_every_object_names_its_tool_even_without_a_spool() -> None:
+    """Creality Print 7.2 rechnet auf der Konsole kein Objekt ohne Werkzeug.
+
+    RM-164: Ohne ``extruder`` in ``model_settings.config`` blieb die
+    Werkzeugfolge leer, und jede 3MF endete mit −100 und „The print is
+    empty" — Solidons Übergabe genauso wie eine nackte aus trimesh; dieselbe
+    Datei mit ``extruder = 1`` am Objekt schneidet (29.09.2026, Sonde
+    ``output/review/rm164-2026-09-29/varianten.py``). Ein Teil ohne Spule
+    druckt mit dem neutralen Platz, den :func:`threemf.tools_in_use` für die
+    Gegenprobe zählt — also steht genau dieses Werkzeug in der Datei, auch
+    neben bemalten Teilen.
+    """
+    red = MaterialSlot(index=0, name="Rot")
+    white = MaterialSlot(index=1, name="Weiß")
+    box = trimesh.creation.box()
+    faces = len(box.faces)
+
+    def extruders(parts: list[threemf.AssemblyPart]) -> list[int]:
+        archive = zipfile.ZipFile(BytesIO(threemf.write_assembly(parts)))
+        settings = archive.read(threemf.SETTINGS_PATH).decode("utf-8")
+        return [int(value) for value in re.findall(r'key="extruder" value="(\d+)"', settings)]
+
+    plain = threemf.AssemblyPart(mesh=MeshData.of(box), name="Würfel")
+    assert extruders([plain]) == [1], "ein Teil ohne Spule steht an Werkzeug 1"
+
+    painted = threemf.AssemblyPart(
+        mesh=MeshData.of(box, slots=tuple(0 if i < faces // 2 else 1 for i in range(faces))),
+        name="Bemalt",
+        slots=(red, white),
+    )
+    parts = [painted, plain]
+    assert extruders(parts) == [1, 3], "der neutrale Platz ist das dritte Filament"
+    assert threemf.tools_in_use(parts) == (0, 1, 2), (
+        "und genau dieses Werkzeug erwartet die Gegenprobe"
+    )
+
+
 def test_the_exported_plates_of_one_job_agree_on_the_extruders(
     profile: Profile, tmp_path: Path
 ) -> None:

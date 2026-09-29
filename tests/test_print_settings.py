@@ -2554,19 +2554,18 @@ def test_a_plate_outside_the_volume_offers_arranging(
     assert raised.value.values["output"], "die Ausgabe des Slicers bleibt lesbar"
 
 
-@pytest.mark.parametrize(
-    ("program", "points_to_the_window"),
-    [("CrealityPrint.exe", True), ("orca-slicer.exe", False)],
-)
-def test_creality_prints_empty_3mf_files_on_its_console(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str, points_to_the_window: bool
+@pytest.mark.parametrize("program", ["CrealityPrint.exe", "orca-slicer.exe"])
+def test_an_empty_print_from_creality_says_what_the_family_says(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str
 ) -> None:
-    """Creality Print 7.2 rechnet über die Kommandozeile keine 3MF — nicht
-    Solidons Übergabe, nicht eine nackte aus trimesh, nicht eine aus
-    PrusaSlicer: jede endet mit -100 und „The print is empty", dasselbe Teil
-    als STL schneidet es (26.09.2026, RM-164). Der Kunde las „Der Slicer hat
-    keine Druckdatei geschrieben" und riet. Andere Programme der Familie sagen
-    den Satz, wenn alles neben der Platte liegt; für sie bleibt es beim alten."""
+    """Creality Print bekommt für „The print is empty" keine eigene Auskunft mehr.
+
+    Bis 0.5.1 hieß es dort „Creality Print rechnet eine 3MF-Datei nur in
+    seinem Fenster". Das stimmte nicht: Ohne ``extruder`` am Objekt ließ
+    Creality Print 7.2 das Teil auf der Konsole ohne Werkzeug; mit ihm
+    schneidet es Solidons 3MF samt Stützsperre und zwei Farben (RM-164,
+    29.09.2026, ``test_every_object_names_its_tool_even_without_a_spool``).
+    Sagt es den Satz trotzdem, gilt dieselbe Antwort wie für die Familie."""
     profile = profiles.make_profile()
     model = tmp_path / "platte.3mf"
     model.write_bytes(b"keine echte 3MF")
@@ -2582,7 +2581,8 @@ def test_creality_prints_empty_3mf_files_on_its_console(
     with pytest.raises(ExternalToolError) as raised:
         handover.slice_model(model, print_settings.resolve(profile), profile, setup)
 
-    assert ("Im Slicer öffnen" in str(raised.value)) is points_to_the_window, str(raised.value)
+    assert "Im Slicer öffnen" not in str(raised.value), str(raised.value)
+    assert str(raised.value.detail) == "Der Slicer hat keine Druckdatei geschrieben."
     assert raised.value.suggestions, "Regel 17"
 
 
@@ -4147,6 +4147,80 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
     assert werte["bridge_angle"] == "45", "was nur geerbt ist, steht trotzdem in der Datei"
     assert werte["wall_loops"] == "2", "ohne eigene Wahl gilt der Hersteller"
     assert gewaehlt["wall_loops"] == "4", "die eigene Wahl liegt über dem geerbten"
+
+
+@pytest.mark.parametrize("program", ["CrealityPrint.exe", "orca-slicer.exe"])
+def test_creality_print_learns_which_process_values_deviate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, program: str
+) -> None:
+    """Creality Print übernimmt aus einer fremden 3MF nur gelistete Prozesswerte.
+
+    Sein Fenster fragt nach dem Drucker, nimmt dessen Prozess und aus der
+    Datei allein die Schlüssel in ``different_settings_to_system``
+    (``Check3mfVendor::get3mfConfig``). Gemessen am 29.09.2026 mit 7.2.2 an
+    der Okarina: Ohne die Liste stand nach dem Schneiden im Fenster in jedem
+    Prozesswert das Profil des gewählten Druckers (RM-164). Die Liste ist die
+    Abweichung vom Herstellerprozess — eine eigene Wahl steht darin, ein
+    geerbter Wert nicht. Andere Programme der Familie bekommen sie nicht:
+    Dort markierte sie im Fenster jeden gelisteten Wert als geändert.
+    """
+    from app.core.export import slicer_profiles
+
+    geerbt = tmp_path / "basis.json"
+    geerbt.write_text(
+        json.dumps({"name": "basis", "wall_loops": "2", "bridge_angle": "45"}),
+        encoding="utf-8",
+    )
+    entry = slicer_profiles.SlicerProfile(geerbt, "basis", "process")
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [entry])
+    monkeypatch.setattr(
+        slicer_profiles, "resolve_values", lambda _, **__: {"wall_loops": "2", "bridge_angle": "45"}
+    )
+    profile = profiles.make_profile("creality-k1", "pla")
+    settings = print_settings.with_choice(
+        print_settings.resolve(profile, "standard"), "shell.wall_count", 4
+    )
+    setup = handover.SlicerSetup(executable=Path(program), flavour="orca", base_process="basis")
+
+    werte = handover.project_settings(settings, profile, setup, extruders=2)
+
+    if program.startswith("orca"):
+        assert "different_settings_to_system" not in werte
+        return
+    liste = werte["different_settings_to_system"]
+    assert isinstance(liste, list)
+    assert len(liste) == 4, "Prozess, je Filament einer, Drucker — wie Bambu Studio"
+    abweichend = set(str(liste[0]).split(";"))
+    assert "wall_loops" in abweichend, "die eigene Wahl reist mit"
+    assert "bridge_angle" not in abweichend, "der Wert des Herstellers bleibt dessen"
+    assert not abweichend & slicer_profiles.DESCRIBING_KEYS, (
+        "Namen und Bindung gehören nicht in die Abweichung"
+    )
+
+
+def test_the_creality_window_says_which_printer_to_pick() -> None:
+    """Creality Print fragt beim Öffnen einer fremden 3MF nach dem Drucker.
+
+    Vorgewählt ist der, der dort gerade eingestellt ist — am 29.09.2026 ein
+    CR-10 für eine Übergabe an den K1 (RM-164). Der Befund nennt den Drucker
+    der Übergabe, und dass Temperaturen und Kühlung aus Crealitys eigenem
+    Filamentprofil kommen; andere Programme bekommen ihn nicht.
+    """
+    creality = handover.SlicerSetup(
+        executable=Path("CrealityPrint.exe"),
+        flavour="orca",
+        machine_profile="C:/Creality/machine/Creality K1 0.4 nozzle.json",
+    )
+    befunde = handover.window_findings(creality)
+    assert [befund.code for befund in befunde] == ["slicer.window_asks_for_the_printer"]
+    assert "„Creality K1 0.4 nozzle“" in str(befunde[0].message)
+    assert "Filamentprofil" in str(befunde[0].message)
+    assert (
+        handover.window_findings(
+            handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+        )
+        == []
+    )
 
 
 def test_the_project_settings_ids_are_names_not_paths() -> None:

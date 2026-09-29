@@ -157,7 +157,8 @@ ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädik
   deklarierte Plätze neutral, nie erbt einer über Werkzeug null eine Spule;
   `slots_for_object` nimmt nur ohne Liste die alte Körperangabe, die eine volle
   Abwahl mitentfernt. Die Werkzeugnummer steht auch als `extruder`-Metadatum,
-  bemalte Dreiecke tragen `paint_color` und `slic3rpe:mmu_segmentation` (`p1`
+  an jedem Objekt, auch ohne Spule (das des neutralen Platzes; Creality Print
+  lässt ein Objekt ohne sie auf der Konsole ohne Werkzeug), bemalte Dreiecke tragen `paint_color` und `slic3rpe:mmu_segmentation` (`p1`
   allein wählt nichts), alle in einer Folge samt Lücken. Mehrfarbige Spulen:
   `filament_multi_colour`, `filament_colour_type` „1" nur wo nötig, in
   `_RECOMPUTED`.
