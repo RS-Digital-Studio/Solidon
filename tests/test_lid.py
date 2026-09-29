@@ -26,6 +26,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
 from app.core.units import EPS_GEOM, exact_cos_degrees, exact_sin_degrees
+from tests.helpers import exact_kernel
 
 load_operations()
 
@@ -304,13 +305,6 @@ def test_a_small_compartment_still_gets_a_collar(profile: Profile) -> None:
 EXACT_PLAY = 0.3
 
 
-def _kernel():
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    return kernel
-
-
 def exact_box_housing(
     outer: tuple[float, float, float],
     pockets: list[tuple[tuple[float, float, float], tuple[float, float, float]]],
@@ -320,7 +314,7 @@ def exact_box_housing(
     material: str | None = None,
 ) -> SceneObject:
     """Ein exaktes Gehäuse: ein Quader, aus dem Taschen (Maße, Mitte unten) ausgespart sind."""
-    _kernel()
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -369,8 +363,8 @@ def test_an_exact_housing_gets_an_exact_lid(profile: Profile) -> None:
     Sollwerte sind geschlossen: Platte 60 × 40 × 2,4, Kragen um das halbe
     Spiel je Seite eingezogen, 4 tief.
     """
-    kernel = _kernel()
-    from app.core.brep import step
+    exact_kernel()
+    from app.core.brep import kernel, step
     from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
 
     entry = exact_box_housing((60.0, 40.0, 30.0), [((54.0, 34.0, 28.0), (0.0, 0.0, 3.0))])
@@ -401,7 +395,7 @@ def test_the_exact_collar_keeps_the_arcs_of_a_rounded_housing(profile: Profile) 
     eingezogen, also mit r = 3 − Spiel/2 an den Ecken. Ein Vieleck aus der
     Vernetzung träfe die geschlossene Fläche nicht auf 10⁻⁹.
     """
-    _kernel()
+    exact_kernel()
     entry = exact_box_housing(
         (60.0, 40.0, 30.0),
         [((54.0, 34.0, 28.0), (0.0, 0.0, 3.0))],
@@ -420,7 +414,7 @@ def test_the_exact_collar_keeps_the_arcs_of_a_rounded_housing(profile: Profile) 
 
 def test_the_exact_lid_closes_a_side_opening(profile: Profile) -> None:
     """RM-087 am exakten Körper: die Front als Deckel, gebaut nach oben und zurückgedreht."""
-    _kernel()
+    exact_kernel()
     entry = exact_box_housing((40.0, 30.0, 20.0), [((40.0, 26.0, 16.0), (2.0, 0.0, 2.0))])
     front = next(
         name
@@ -444,7 +438,7 @@ def test_the_exact_lid_closes_a_side_opening(profile: Profile) -> None:
 
 def test_two_exact_compartments_get_two_collars(profile: Profile) -> None:
     """Zwei Fächer, zwei Kragen, ein Körper — wie am Netz."""
-    _kernel()
+    exact_kernel()
     entry = exact_box_housing(
         (80.0, 40.0, 20.0),
         [((30.0, 34.0, 18.0), (-20.0, 0.0, 2.0)), ((30.0, 34.0, 18.0), (20.0, 0.0, 2.0))],
@@ -460,7 +454,7 @@ def test_two_exact_compartments_get_two_collars(profile: Profile) -> None:
 
 def test_a_solid_exact_body_has_nothing_to_close(profile: Profile) -> None:
     """Derselbe Satz wie am Netz, wenn der exakte Körper auf der Höhe massiv ist."""
-    _kernel()
+    exact_kernel()
     entry = exact_box_housing((40.0, 40.0, 20.0), [])
 
     with pytest.raises(ValidationError) as problem:
@@ -519,7 +513,7 @@ def test_a_stepped_rim_takes_the_collar_from_below(profile: Profile, kind: str) 
     Tasche 54 × 34, eingezogen um das halbe Spiel.
     """
     if kind == "brep":
-        _kernel()
+        exact_kernel()
         entry = exact_box_housing((60.0, 40.0, 30.0), STEPPED)
     else:
         entry = mesh_box_housing((60.0, 40.0, 30.0), STEPPED)
@@ -549,7 +543,7 @@ def test_a_ledge_in_the_collar_depth_is_refused_with_the_free_depth(
     1,9 mm entsteht der Deckel.
     """
     if kind == "brep":
-        _kernel()
+        exact_kernel()
         entry = exact_box_housing((60.0, 40.0, 30.0), LEDGE)
     else:
         entry = mesh_box_housing((60.0, 40.0, 30.0), LEDGE)
@@ -577,7 +571,7 @@ def test_a_collar_deeper_than_the_tray_is_refused_not_dropped(profile: Profile, 
     """
     tray = [((54.0, 34.0, 4.0), (0.0, 0.0, 7.0))]
     if kind == "brep":
-        _kernel()
+        exact_kernel()
         entry = exact_box_housing((60.0, 40.0, 10.0), tray)
     else:
         entry = mesh_box_housing((60.0, 40.0, 10.0), tray)
@@ -899,7 +893,7 @@ def test_a_turned_opening_of_an_exact_housing_is_measured_across_its_narrow_side
     maß. Ein um 45 Grad gedrehtes quadratisches Fach von 30 mm stünde exakt
     wieder mit 42,4 mm in der Passung. Sollwert: die Seite des Fachs.
     """
-    _kernel()
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
@@ -928,7 +922,7 @@ def test_an_exact_neck_on_a_turned_square_stays_on_its_wall(profile: Profile) ->
     Körper: Das Hüllrechteck der Umrissflächen hätte 70,7 mm gesagt, die
     schmale Seite ist 50 mm.
     """
-    _kernel()
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -956,7 +950,7 @@ def exact_jar(
     centre: tuple[float, float] = (0.0, 0.0),
 ) -> SceneObject:
     """Die Dose von :func:`jar` als exakter Körper — Zylinder minus Zylinder."""
-    _kernel()
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -997,10 +991,10 @@ def test_an_exact_jar_gets_an_exact_screw_lid(
     ist der Zylinder minus Kernbohrung minus Nut. Und sie geht ganz über den
     Hals: gleiche Steigung, gleiche Phase, kein gemeinsames Volumen.
     """
-    kernel = _kernel()
+    exact_kernel()
     from OCP.BRepCheck import BRepCheck_Analyzer
 
-    from app.core.brep import edit, step
+    from app.core.brep import edit, kernel, step
     from app.core.geom.lid import SKIRT_RELIEF
 
     entry = exact_jar()
@@ -1045,7 +1039,7 @@ def test_an_exact_jar_gets_an_exact_screw_lid(
 
 def test_the_exact_neck_follows_the_translated_opening(profile: Profile) -> None:
     """Wie am Netz: Der Hals steht über der verschobenen Öffnung, das Merkmal auch."""
-    _kernel()
+    exact_kernel()
     entry = exact_jar(centre=(50.0, -20.0))
     neck = make_screw_lid(entry, profile, height=8.0, pitch=3.0, clearance=EXACT_PLAY).outputs[0]
 

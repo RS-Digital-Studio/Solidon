@@ -12,9 +12,6 @@ import json
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 import shiboken6
 from PySide6.QtCore import QCoreApplication, QEvent, QPropertyAnimation, Qt
 from PySide6.QtGui import QAccessible, QAccessibleActionInterface, QDesktopServices

@@ -3,8 +3,10 @@
     set QT_TRACE=...\\spur.txt
     .venv\\Scripts\\python.exe -m pytest -p tools.qt_trace tests/...
 
-Der Absturz, der in `ROADMAP.md` unter „Der Absturz beim Aufräumen" steht,
-kommt selten und nie an derselben Stelle: einmal in zwei Läufen über die
+Der Absturz beim Aufräumen (`ROADMAP-ARCHIV.md`, „Der Absturz: eine
+Zeilennummer statt einer Vermutung“; was an der nativen Fensterlebensdauer
+offen ist, führt RM-021 in `ROADMAP.md`) kommt selten und nie an derselben
+Stelle: einmal in zwei Läufen über die
 zweite Hälfte der Suite, und in zwölf Läufen derselben Einzeletappe gar
 nicht. Wer ihn untersuchen will, braucht zwei Auskünfte, und beide gehen
 ohne diese Datei verloren:
@@ -16,7 +18,7 @@ ohne diese Datei verloren:
   Faden, der stürzt. Die Kennung des laufenden Tests steht deshalb vor jedem
   Test in derselben Datei — nach dem Abbruch ist die letzte Zeile die Antwort.
 
-Gefunden hat das den Stapel, der jetzt in der Roadmap steht: Der Nachfolge-
+Gefunden hat das den Stapel, der im Archiv steht: Der Nachfolge-
 Arbeiter entsteht im ``finished``-Slot seines Vorgängers. Ob das die Ursache
 ist, sagt erst ein Werkzeug, das doppelte Freigaben sieht — deshalb steht hier
 ein Fänger und keine Änderung an der Auswertung (Regel 21).

@@ -22,16 +22,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from app.core.bootstrap import load_operations
-from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, palette_entries
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QWidgetAction
 
+from app.core.bootstrap import load_operations
+from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, palette_entries
 from app.ui.main_window import MENU_GROUPS, MainWindow
 from app.ui.selection_operations import OPEN_UP_TO, SelectionOperationsPanel
 from app.ui.session import Session
@@ -1168,7 +1164,6 @@ def test_reopening_an_operation_keeps_its_advanced_section(qt_app: object) -> No
     Geprüft am gebauten Dialog und an einer Operation, die wirklich eine
     Rückseite hat — sonst prüfte der Test nichts.
     """
-    pytest.importorskip("PySide6")
 
     from app.ui.op_dialog import OperationDialog
 
@@ -1215,7 +1210,6 @@ def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
     einer Liste, durch die man tippt, ist *Beenden* ein Klick zu nah am
     Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
     """
-    pytest.importorskip("PySide6")
 
     from app.ui.main_window import MainWindow, _menu_lines
     from app.ui.session import Session

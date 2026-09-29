@@ -402,7 +402,7 @@ def test_text_preview_and_real_body_share_geometry_and_orientation(normal, profi
     auf statt im Fenster.
     """
     from app.core.sketch.planes import frame_of
-    from tests.test_missing_ops import run
+    from tests.helpers import run_operation as run
 
     load_operations()
     spec = REGISTRY.get("create_label")
@@ -833,7 +833,7 @@ def test_existing_feature_tool_matches_free_placement_and_preserves_ids(
     import app.core.geom.prepare_ops as module
     from app.core.geom.boolean import boolean
     from app.core.types import SceneObject
-    from tests.test_missing_ops import run
+    from tests.helpers import run_operation as run
 
     load_operations()
     mesh = boolean(
@@ -892,7 +892,7 @@ def test_surface_placement_carries_the_complete_bore_chain(operation, chosen, pr
     from app.core.perceive.features import detect
     from app.core.perceive.relations import cavity_chains
     from app.core.types import SceneObject
-    from tests.test_missing_ops import run
+    from tests.helpers import run_operation as run
 
     load_operations()
     outline = [
@@ -946,7 +946,7 @@ def test_a_chain_moved_by_hand_leaves_no_scars_in_the_face(profile):
     from app.core.perceive.features import detect
     from app.core.perceive.relations import cavity_chains
     from app.core.types import SceneObject
-    from tests.test_missing_ops import run
+    from tests.helpers import run_operation as run
 
     load_operations()
     outline = [
@@ -1272,7 +1272,7 @@ def test_a_surface_drill_builds_one_connected_three_stage_cavity(depth, profile)
     from app.core.perceive.features import detect
     from app.core.perceive.relations import cavity_chains
     from app.core.types import SceneObject
-    from tests.test_missing_ops import run
+    from tests.helpers import run_operation as run
 
     load_operations()
     raw = trimesh.creation.box((40.0, 30.0, 10.0))
@@ -1319,7 +1319,7 @@ def test_drill_preview_and_actual_operation_use_the_objects_material(profile, mo
     """Die Körperwahl gilt für den sichtbaren Werkzeugkörper und den tatsächlichen Abtrag."""
     import app.core.geom.prepare as module
     from app.core.types import SceneObject
-    from tests.test_missing_ops import run
+    from tests.helpers import run_operation as run
 
     load_operations()
     source = SceneObject(
@@ -1642,13 +1642,13 @@ def test_a_chain_whose_mouth_lies_in_a_curved_face_can_be_placed_by_hand(
     from app.core.geom.mesh import as_mesh_data
     from app.core.geom.prepare_ops import feature_placement_geometry
     from app.core.units import MAX_FACET_SAG
+    from tests.helpers import run_operation as run
     from tests.test_feature_moves_keep_shape import (
         BOTH_ENDS,
         _cavity_under,
         _narrowest_hole,
         _widened,
     )
-    from tests.test_missing_ops import run
 
     load_operations()
     outline = BOTH_ENDS["Zylindersenkung und Fase"]

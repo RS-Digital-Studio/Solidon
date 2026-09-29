@@ -856,9 +856,6 @@ def test_the_dialog_offers_exactly_the_fields_of_the_profile(own_profiles: Path)
     """Was sich messen lässt, ist das, was das Materialprofil hält — sonst
     nichts.
     """
-    import pytest as _pytest
-
-    _pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
 
     if QApplication.instance() is None:
@@ -872,9 +869,6 @@ def test_the_dialog_offers_exactly_the_fields_of_the_profile(own_profiles: Path)
 
 
 def test_the_dialog_starts_from_the_current_values(own_profiles: Path) -> None:
-    import pytest as _pytest
-
-    _pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
 
     if QApplication.instance() is None:
@@ -891,7 +885,6 @@ def test_the_dialog_saves_only_explicitly_selected_process_measurements(
     own_profiles: Path, qt_app: object
 ) -> None:
     """Vorgabewerte werden erst nach ausdrücklicher Auswahl zu einer Messung."""
-    pytest.importorskip("PySide6")
     from app.ui.dialogs import CalibrationDialog
 
     process = profiles.make_profile("centauri-carbon-2", "petg")
@@ -931,7 +924,6 @@ def test_calibration_keeps_unedited_precision_when_saving(
     own_profiles: Path, qt_app: object, edited: str | None, value: float | None
 ) -> None:
     """Anzeigepräzision darf beim Speichern keine anderen Messwerte verändern."""
-    pytest.importorskip("PySide6")
     from app.ui.dialogs import CalibrationDialog
 
     original = {
@@ -967,7 +959,6 @@ def test_calibration_accepts_retyping_the_rounded_percentage(
     own_profiles: Path, qt_app: object
 ) -> None:
     """Das bewusste Eintippen des Anzeigewerts ersetzt den exakteren Altwert."""
-    pytest.importorskip("PySide6")
     from PySide6.QtTest import QTest
 
     from app.ui.dialogs import CalibrationDialog
@@ -1159,7 +1150,6 @@ def test_the_dialog_names_the_material_the_way_the_customer_reads_it(
 ) -> None:
     """Oben stand die Kennung des Profils: „resin — Startwert" über einem
     Dialog, der sonst überall „Standardharz" sagt, „tpu-95a" statt „TPU 95A"."""
-    pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QLabel
 
     from app.ui.dialogs import CalibrationDialog

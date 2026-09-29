@@ -16,10 +16,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import pytest
-
-pytest.importorskip("PySide6")
-
 from app.core.bootstrap import load_operations
 from app.core.registry import REGISTRY
 from app.core.sketch import shapes

@@ -14,9 +14,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QLabel, QWidget
@@ -34,10 +31,9 @@ from app.ui.overlay import (
     card_stylesheet,
     card_width,
 )
-from app.ui.session import Session
-from app.ui.settings import UiSettings
 from app.ui.style import ROOMY
 from app.ui.theme import THEMES
+from tests.ui_helpers import shown_window
 
 
 @pytest.fixture(autouse=True)
@@ -54,27 +50,8 @@ def _without_movement(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def window(qt_app: QApplication) -> Iterator[MainWindow]:
-    """Ein gezeigtes Fenster.
-
-    Gezeigt, weil Qt ein Resize-Ereignis an ein verstecktes Widget erst beim
-    Anzeigen zustellt — und die Geometrie der Zonen entsteht genau dort. Ein
-    Test auf einem nie gezeigten Fenster misst die Vorgabegröße 640 × 480 und
-    nichts von dem, was diese Datei behauptet. Offscreen kostet das nichts.
-    """
-    window = MainWindow(Session(), UiSettings())
-    window.show()
-    window.resize(1200, 900)
-    # Und der Startbildschirm muss weg: solange er im Stapel oben liegt, hat
-    # der Träger darunter keine Größe, und alle Zonen lägen auf 100 Pixeln.
-    window._show_start_screen(False)
-    qt_app.processEvents()
-    yield window
-    # Aufräumen ist hier Pflicht und nicht Höflichkeit: ein gezeigtes Fenster,
-    # das stehen bleibt, bekommt weiter Ereignisse — und riss siebzehn Tests
-    # *nach* dieser Datei mit ``AttributeError`` aus dem Ereignisfilter.
-    window.close()
-    window.deleteLater()
-    qt_app.processEvents()
+    """Ein gezeigtes Fenster — ohne Anzeige misst ein Test hier die Vorgabegröße."""
+    yield from shown_window(qt_app)
 
 
 def test_a_half_torn_down_child_is_stepped_over(qt_app: QApplication) -> None:

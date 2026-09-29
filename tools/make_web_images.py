@@ -57,13 +57,10 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-# Auch der eigene Ordner: ``make_figures`` liegt daneben und ist kein Paket.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-import make_figures as figures
 from PySide6.QtCore import QEventLoop, QPoint, QRect, QTimer
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
@@ -71,6 +68,7 @@ from PySide6.QtWidgets import QApplication
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
 from app.i18n.catalog import read_catalog
+from tools import make_figures as figures
 
 #: Wohin die Aufnahmen gehen.
 TARGET = Path(__file__).resolve().parent.parent / "website" / "bilder"

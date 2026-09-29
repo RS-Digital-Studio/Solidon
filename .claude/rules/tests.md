@@ -71,8 +71,9 @@ Backends). Wer diese Fixtures umgeht, prüft nicht, was er zu prüfen vorgibt.
 - **`filterwarnings = ["error"]`**: Eine Warnung wird behoben, nicht
   unterdrückt. Ausnahmen nur für unbehebbaren Fremdcode, mit Meldungstext
   **und** auslösendem Modul, dem Nachweis, dass eigener Code sie nicht
-  auslöst, und einem Kommentar, wann sie wegfällt (das zeigt der wöchentliche
-  CI-Lauf gegen die neuesten Versionen).
+  auslöst, und einem Kommentar, wann sie wegfällt (das zeigt der Job „Neueste
+  Versionen“ in `build.yml`, der nur läuft, solange das Repository öffentlich
+  ist).
 
 ### Isolation heißt Betriebslage, nicht Nullzustand
 
@@ -115,8 +116,9 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 
 ## Marker
 
-- `slow` für spürbar Langes, `performance` für Messungen gegen das Budget;
-  Messwerte je Lauf festhalten, mehr als ein Viertel schlechter ist ein Fehler.
+- `performance` für Messungen gegen das Budget; Messwerte je Lauf festhalten,
+  mehr als ein Viertel schlechter ist ein Fehler. Ein Marker, den kein Lauf
+  wählt oder abwählt, steuert nichts und wird nicht angelegt.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,

@@ -317,9 +317,6 @@ def test_a_reading_step_does_not_hold_up_the_recognition() -> None:
     Geprüft wird das Panel, nicht die Erkennungsfunktionen — die stimmten die
     ganze Zeit, und die Tests darüber waren grün, während die Oberfläche hing.
     """
-    import pytest
-
-    pytest.importorskip("PySide6")
 
     from app.ui.tour import TourPanel
 
@@ -510,9 +507,6 @@ def test_the_last_step_of_a_tour_leads_to_the_next_example() -> None:
     übrigen sechs Beispiele fand nur, wer den Startbildschirm wiederzufinden
     wusste — und der ist nach „Datei → Neu" nicht mehr zu haben.
     """
-    import pytest
-
-    pytest.importorskip("PySide6")
 
     from app.ui.tour import TourPanel
 

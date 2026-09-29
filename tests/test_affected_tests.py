@@ -16,7 +16,13 @@ from subprocess import CompletedProcess
 
 import pytest
 
-from tools.affected_tests import ImportGraph, affected, changed_files, module_name
+from tools.affected_tests import (
+    ImportGraph,
+    affected,
+    bare_local_imports,
+    changed_files,
+    module_name,
+)
 
 
 def _write(root: Path, relative: str, text: str) -> Path:
@@ -255,6 +261,31 @@ def test_the_real_graph_knows_this_file() -> None:
     assert reasons[graph.root / "tests" / "test_affected_tests.py"] == (
         "importiert eine geänderte Datei"
     )
+
+
+def test_a_bare_import_of_a_local_module_is_found(tree: Path) -> None:
+    """Der Fall mit bekanntem Ausgang: Ein Helfer ohne ``tests.``-Präfix entgeht dem Graphen,
+    und genau diese Stelle meldet die Suche — ``import conftest`` und der Präfixweg nicht.
+    """
+    _write(tree, "tests/fakes.py", "FAKE = 1\n")
+    _write(tree, "tests/test_bare.py", "def f():\n    from fakes import FAKE\n")
+    _write(tree, "tests/test_prefixed.py", "import conftest\nfrom tests.fakes import FAKE\n")
+    graph = ImportGraph(tree)
+
+    files, _ = affected([tree / "tests" / "fakes.py"], graph)
+
+    assert _names(files, tree) == {"tests/test_prefixed.py"}
+    assert bare_local_imports(graph) == ["tests/test_bare.py:2: fakes"]
+
+
+def test_tests_and_tools_import_their_neighbours_with_the_package_prefix() -> None:
+    """Wer einen Nachbarn aus ``tests/`` oder ``tools/`` ohne Präfix importiert, fehlt in jeder
+    Auswahl zu dessen Änderung (``bare_local_imports``). Der Präfix ist die ganze Abhilfe.
+    """
+    graph = ImportGraph()
+    assert sum(name.startswith("tests.test_") for name in graph.modules) > 300
+
+    assert bare_local_imports(graph) == []
 
 
 def test_a_deleted_module_still_counts_as_a_code_change(tree: Path) -> None:
@@ -624,8 +655,36 @@ def test_the_isolated_runner_uses_the_same_release_selection(
 
     assert run_suite_isolated.main(["--release"] if release else []) == 0
     assert [line[-1] for line in calls] == [str(plain), *([str(window)] if release else [])]
-    expected = "not performance" if release else "not performance and not windowed"
+    expected = "not performance" if release else "not performance and not windowed and not rendered"
     assert all(line[4:6] == ["-m", expected] for line in calls)
+
+
+@pytest.mark.parametrize("release", [False, True])
+def test_the_selection_leaves_out_generated_comparisons_like_the_gate(release: bool) -> None:
+    """Ein Test mit ``rendered`` hängt an einem Erzeugerlauf, nicht am Code.
+
+    Das Entwicklungstor wählt ihn ab (``suite-getrennt.sh``), das Release-Tor
+    nimmt ihn mit. Die Auswahl tat bis zum 29.09.2026 beides nicht: Ein
+    veraltetes Handbuchbild erschien in einer Schrittprüfung als roter Test,
+    den kein Codefix grün macht. Geprüft am Plugin, das den Filter setzt, und am
+    Aufruf, der es für das Release anders schaltet.
+    """
+    from types import SimpleNamespace
+
+    from tools import list_windowed_tests
+    from tools.affected_tests import _commands
+
+    options = {"--window-group": "plain", "--with-rendered": release}
+    config = SimpleNamespace(
+        getoption=lambda name, default=None: options.get(name, default),
+        option=SimpleNamespace(markexpr=""),
+    )
+    list_windowed_tests.pytest_configure(config)  # type: ignore[arg-type]
+
+    assert ("not rendered" in config.option.markexpr) is not release
+    assert "not performance" in config.option.markexpr
+    lines = _commands([], [Path("tests/test_plain.py").resolve()], release=release)
+    assert ("--with-rendered" in lines[0]) is release
 
 
 @pytest.mark.parametrize("exit_code", [0, 5, 139])

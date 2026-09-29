@@ -14,14 +14,12 @@ Seite nicht auf — es sieht aus wie Text.
 from __future__ import annotations
 
 import re
-import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
 
 WEBSITE = ROOT / "website"
 
@@ -60,7 +58,7 @@ def test_the_source_of_every_legal_text_is_there(source_name: str) -> None:
 def test_the_generated_page_matches_its_source(source_name: str, page_name: str) -> None:
     """Wer die Quelle ändert und das Werkzeug nicht laufen lässt, hat zwei
     Versionen eines Rechtstexts — und die falsche steht im Netz."""
-    from make_legal import body_html
+    from tools.make_legal import body_html
 
     page = WEBSITE / page_name
     assert page.is_file(), f"{page_name} fehlt — tools/make_legal.py läuft nicht?"
@@ -417,7 +415,7 @@ def test_a_date_at_a_line_break_does_not_become_a_numbered_list() -> None:
     Eine Zahl mit Punkt beginnt eine Liste nur, wenn eine läuft, sie mit 1
     beginnt oder kein Absatz offen ist (so hält es auch CommonMark).
     """
-    from make_legal import body_html
+    from tools.make_legal import body_html
 
     broken = "Die Demo nennt den\n30. Oktober 2026. Danach nicht mehr.\n"
     html = body_html(broken, True)

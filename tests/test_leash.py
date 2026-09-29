@@ -14,9 +14,6 @@ import gc
 import weakref
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QApplication
 

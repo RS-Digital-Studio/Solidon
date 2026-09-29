@@ -219,11 +219,8 @@ def _licence_file() -> Path:
 
 def _sha256(path: Path) -> str:
     """Liefert die Prüfsumme eines Übergabebestandteils."""
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def _handoff_name(path: Path) -> str:

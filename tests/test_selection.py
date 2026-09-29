@@ -25,9 +25,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.mesh import MeshData

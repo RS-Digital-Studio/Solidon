@@ -25,8 +25,9 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts import build, shapes
 from app.core.knowledge.parts.shapes import building
 from app.core.types import Feature, Profile, SceneObject
+from tests.helpers import exact_kernel
+from tests.helpers import run_operation as run
 from tests.test_exact_parts import _thread_volume
-from tests.test_missing_ops import run
 from tests.test_thread_import import BASES
 
 PLATE = (40.0, 40.0, 10.0)
@@ -77,13 +78,6 @@ def _bore(diameter: float, pitch: float) -> float:
     so lesen es beide Kerne); ``build.threaded`` rechnet in der Bohrung.
     """
     return diameter - 2.0 * pitch * shapes.RIDGE_SHARE
-
-
-def _kernel() -> Any:
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    return kernel
 
 
 def _thread_feature(
@@ -194,7 +188,7 @@ def _tolerance(kind: str) -> float:
 @pytest.fixture(params=["brep", "mesh"])
 def kind(request: Any) -> str:
     if request.param == "brep":
-        _kernel()
+        exact_kernel()
     load_operations()
     return str(request.param)
 
@@ -348,7 +342,7 @@ def test_a_recognised_rod_loses_its_thread_down_to_the_root(kind: str, profile: 
     eine Rille von der Tiefe der Leserunsicherheit und am Netz blieben 52
     Splitter (``prepare_ops._remove_thread``).
     """
-    _kernel()
+    exact_kernel()
     source, thread = _recognised(kind, _corpus("m6_rechts"))
     assert thread.provenance == "detected"
     length = float(thread.params["length"])
@@ -391,7 +385,7 @@ def test_a_recognised_rod_loses_its_thread_down_to_the_root(kind: str, profile: 
 
 def test_a_recognised_tapped_block_closes_to_the_plain_block(profile: Profile) -> None:
     """``m8_innen``: Block 20 × 20 × 10 minus Innengewinde — zu ist er wieder der Block."""
-    _kernel()
+    exact_kernel()
     source, thread = _recognised("brep", _corpus("m8_innen"))
     assert thread.params["internal"] is True
     result = run("remove_feature", source, profile, at_feature=thread.id)
@@ -408,7 +402,7 @@ def test_a_recognised_rod_recut_carries_only_the_set_thread(profile: Profile) ->
     frischem Namen anlegen (Review, 21.09.2026); das Volumen ist das ganze
     Bausteingewinde, denn die Hülle nahm die ganze Stange.
     """
-    _kernel()
+    exact_kernel()
     source, thread = _recognised("brep", _corpus("m6_rechts"))
     result = run("resize_feature", source, profile, at_feature=thread.id, diameter=8.0, pitch=1.25)
     output = _stays(result, "brep")
@@ -445,7 +439,7 @@ def test_a_mesh_read_left_hand_thread_is_refused(profile: Profile) -> None:
     Vorher galt am Netz jede Händigkeit als geraten, und *Merkmal ändern*
     schnitt ein Linksgewinde still rechts neu (P2.5).
     """
-    _kernel()
+    exact_kernel()
     from tests.test_thread_import import _mirrored
 
     load_operations()
@@ -459,7 +453,7 @@ def test_a_mesh_read_left_hand_thread_is_refused(profile: Profile) -> None:
 
 def test_a_natively_read_left_hand_thread_is_refused(profile: Profile) -> None:
     """Ein an den Kanten gelesenes Linksgewinde sperrt das Ändern — der Beleg ist nativ."""
-    _kernel()
+    exact_kernel()
     from tests.test_thread_import import _mirrored
 
     source, thread = _recognised("brep", _mirrored(_corpus("m6_rechts")))
@@ -471,7 +465,7 @@ def test_a_natively_read_left_hand_thread_is_refused(profile: Profile) -> None:
 
 def test_a_multi_start_thread_is_refused_instead_of_becoming_single(profile: Profile) -> None:
     """Ein mehrgängiges Gewinde wird nicht still eingängig neu geschnitten."""
-    _kernel()
+    exact_kernel()
     source, thread = _recognised("brep", _corpus("zweigaengig"))
     assert thread.params["starts"] == 2
     with pytest.raises(ValidationError) as caught:
@@ -491,7 +485,7 @@ def test_a_tapered_thread_is_refused_instead_of_cut_with_cylinders(
     stehen. Der Leser kennt den Kegel seit dem 22.09.2026 (P2.5), die
     Handlungen sagen deshalb ab statt still falsch zu schneiden.
     """
-    _kernel()
+    exact_kernel()
     source, thread = _recognised("brep", _corpus("konisch"))
     assert thread.params["taper"] > 0.0
     values = {"diameter": 12.0, "pitch": 1.5} if operation == "resize_feature" else {}
@@ -548,7 +542,7 @@ def test_the_panel_offers_changing_and_removing_a_thread() -> None:
 
 def test_the_exact_thread_survives_a_step_round_trip(profile: Profile) -> None:
     """Das neu geschnittene exakte Gewinde geht durch STEP und kommt mit seinem Volumen zurück."""
-    _kernel()
+    exact_kernel()
     load_operations()
     from app.core.brep import step
 
@@ -567,7 +561,7 @@ def test_the_exact_thread_survives_a_step_round_trip(profile: Profile) -> None:
 
 def test_both_kernels_agree_on_the_recut_thread(profile: Profile) -> None:
     """Netz und exakter Kern schneiden dasselbe Gewinde — bis auf die Facettierung."""
-    _kernel()
+    exact_kernel()
     load_operations()
     exact = run(
         "resize_feature",

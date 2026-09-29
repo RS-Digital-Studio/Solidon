@@ -139,6 +139,15 @@ Regressionsverdacht mit dem Vorgängerstand unter denselben Bedingungen.
 Schwankende Ergebnisse allein beweisen weder Fremdlast noch Fehlerfreiheit;
 zweimal rot beweist noch keine Ursache. Laufzeit, Systemlast und Stand nennen.
 
+## Neue Prozessstarts unter Windows
+
+Wer eine `subprocess`-Stelle neu baut oder ihre Startflaggen ändert, fährt den
+betroffenen Test einmal unter `tools/count_new_windows.py -- <befehl>`. Ein
+Konsolenfenster, das dabei aufgeht, ist ein Nebeneffekt der
+Konsolenzuweisung, den kein Test sieht; Exit 1 heißt, es ging eines auf. Das
+Ergebnis gilt für den Konsolenhost und die Startlage, die der Kopf der Ausgabe
+nennt.
+
 ## Bericht
 
 Pro Lauf: getesteter Stand, Umfang, Befehl, Prozessausgang, bestanden/fehlgeschlagen/

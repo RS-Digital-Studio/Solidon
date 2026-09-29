@@ -31,6 +31,7 @@ from app.core.sketch.profile import Profile as Outline
 from app.core.sketch.profile import ProfileSegment as Segment
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
 from app.core.units import EPS_DISPLAY, EPS_GEOM
+from tests.helpers import CountingToken
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
@@ -3700,25 +3701,6 @@ def test_a_turned_body_carries_its_top_face_along(creator: str, profile: Profile
     )
 
 
-class _CountingToken:
-    """Ein Abbruch nach ``limit`` Prüfungen — und ein Zähler, wie oft gefragt wurde."""
-
-    def __init__(self, limit: int | None) -> None:
-        self.limit = limit
-        self.calls = 0
-
-    @property
-    def is_cancelled(self) -> bool:
-        return self.limit is not None and self.calls >= self.limit
-
-    def raise_if_cancelled(self) -> None:
-        from app.core.errors import OperationCancelled
-
-        self.calls += 1
-        if self.limit is not None and self.calls >= self.limit:
-            raise OperationCancelled()
-
-
 @pytest.mark.parametrize("work", ["fillet", "chamfer"])
 def test_fillet_and_chamfer_ask_for_cancellation_while_they_work(work: str) -> None:
     """Verrunden und Fase fragen den Abbruch — an Wandkarte, Kanten, Bau und Prüfung.
@@ -3733,13 +3715,13 @@ def test_fillet_and_chamfer_ask_for_cancellation_while_they_work(work: str) -> N
     operation = edit.fillet if work == "fillet" else edit.chamfer
     source = block()
     volume = source.volume
-    counting = _CountingToken(limit=None)
+    counting = CountingToken(limit=None)
     done = operation(source, 1.0, "top", cancelled=counting)
     assert done.solid_count == 1 and done.volume < volume
     asked = counting.calls
     assert asked >= 8, asked
     for limit in sorted({1, 2, asked // 2, asked - 1, asked}):
-        early = _CountingToken(limit=limit)
+        early = CountingToken(limit=limit)
         with pytest.raises(OperationCancelled):
             operation(source, 1.0, "top", cancelled=early)
         assert early.calls == limit

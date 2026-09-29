@@ -65,7 +65,7 @@ jobs:
       # ohne den exakten Kern ab. Kein Token in diesem Schritt.
       - name: Prüfumgebung der geänderten Orchestrierung
         if: github.sha != inputs.source_commit
-        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
       - name: Tests der geänderten Orchestrierung
         if: github.sha != inputs.source_commit

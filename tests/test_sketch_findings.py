@@ -37,7 +37,8 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
-from tests.test_sketch_ops import run, solid_of
+from tests.helpers import run_with_parameters as run
+from tests.test_sketch_ops import solid_of
 
 needs_brep = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 

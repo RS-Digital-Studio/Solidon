@@ -2,7 +2,7 @@
 
 Warum es das Werkzeug gibt: `constraints.txt` schreibt fest, *in welcher*
 Version ein Paket installiert wird. Nur half das nichts, solange niemand
-nachsah. Wer `pip install -e ".[dev,geom,ui,agent,brep]"` ohne das `-c` tippt,
+nachsah. Wer `pip install -e ".[dev,geom,ui,brep]"` ohne das `-c` tippt,
 bekommt andere Versionen als die, gegen die die Suite grün ist — am 06.08.2026
 zog ein frischer Klon numpy 2.5, und sechzehn Tests fielen um, ohne dass eine
 Zeile Code sich geändert hatte. Bei mehreren Leuten am selben Repository ist
@@ -40,7 +40,7 @@ CONSTRAINTS: Final = ROOT / "constraints.txt"
 PYPROJECT: Final = ROOT / "pyproject.toml"
 
 #: Die Gruppen, die ein Arbeitsplatz braucht — dieselben wie in CLAUDE.md.
-EXTRAS: Final = "dev,geom,ui,agent,brep"
+EXTRAS: Final = "dev,geom,ui,brep"
 
 # Ausschließlich bedingte Abhängigkeiten des vollständigen Zielbaums. Beim
 # Freeze auf einer anderen Plattform bleiben ihre Pins erhalten; ausgebaute

@@ -15,9 +15,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.ui.main_window import MainWindow

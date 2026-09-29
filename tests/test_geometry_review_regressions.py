@@ -672,7 +672,7 @@ def test_a_freehand_drawing_without_any_measure_is_no_finding(review_run) -> Non
 
 def test_g05_mesh_pocket_on_an_offset_face() -> None:
     """Die gewählte Fläche legt die Tasche in beiden Kernen an dieselbe Stelle."""
-    from tests.test_sketch_ops import run
+    from tests.helpers import run_with_parameters as run
 
     load_operations()
     entry = run("create_brep_box", width=40.0, depth=30.0, height=20.0).outputs[0]
@@ -687,7 +687,7 @@ def test_g05_mesh_pocket_on_an_offset_face() -> None:
 
 def test_g06_all_box_face_normals_point_outwards() -> None:
     """Auch umgekehrt orientierte OCC-Flächen liefern die äußere Normale."""
-    from tests.test_sketch_ops import run
+    from tests.helpers import run_with_parameters as run
 
     load_operations()
     entry = run("create_brep_box", width=40.0, depth=30.0, height=20.0).outputs[0]
@@ -699,7 +699,7 @@ def test_g06_all_box_face_normals_point_outwards() -> None:
 
 def test_g06_dragging_the_left_face_changes_the_left_side() -> None:
     """Die unveränderte UI-Projektion muss tatsächlich die gewählte Seite ziehen."""
-    from tests.test_sketch_ops import run
+    from tests.helpers import run_with_parameters as run
 
     load_operations()
     entry = run("create_brep_box", width=40.0, depth=30.0, height=20.0).outputs[0]
@@ -841,7 +841,7 @@ def test_g03_small_holes_near_the_circular_rim_stay_holes(angle) -> None:
     import math
 
     from app.core.sketch.profile import regions_of
-    from tests.test_sketch_ops import run
+    from tests.helpers import run_with_parameters as run
 
     load_operations()
     centre = (9.5 * math.cos(math.radians(angle)), 9.5 * math.sin(math.radians(angle)))
@@ -912,7 +912,7 @@ def test_g08_the_old_crossing_interpolation_is_a_valid_drawn_outline() -> None:
     from OCP.BRepCheck import BRepCheck_Analyzer
 
     from app.core.sketch.profile import regions_of, signed_area
-    from tests.test_sketch_ops import run
+    from tests.helpers import run_with_parameters as run
 
     points = ((-10.0, -5.0), (0.0, 5.0), (-6.0, 0.0), (-9.0, 0.0))
     sketch = Sketch(

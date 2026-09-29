@@ -27,6 +27,7 @@ from app.core.knowledge.parts.user import travelling_parts
 from app.core.registry.registry import Registry
 from app.core.scene import foreign
 from app.core.types import Document, Operation, Parameter, Profile, Source
+from tests.helpers import break_writes_after_a_first_piece
 
 
 @pytest.fixture(scope="module")
@@ -457,18 +458,7 @@ def test_a_partial_write_never_replaces_the_previous_recipe(
     target = recipe.save(made, tmp_path)
     before = target.read_bytes()
     changed = dataclasses.replace(made, doc="neuer Stand")
-    original_write = recipe.os.write
-    calls = 0
-
-    def break_after_first_piece(descriptor: int, payload: bytes | memoryview) -> int:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            piece = bytes(payload[: max(1, len(payload) // 4)])
-            return original_write(descriptor, piece)
-        raise OSError("erzwungener Teilwrite")
-
-    monkeypatch.setattr(recipe.os, "write", break_after_first_piece)
+    break_writes_after_a_first_piece(monkeypatch, recipe)
 
     with pytest.raises(OSError, match="Teilwrite"):
         recipe.save(changed, tmp_path, overwrite=True)

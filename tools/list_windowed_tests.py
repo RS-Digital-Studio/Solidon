@@ -91,11 +91,23 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     wäre still verloren.
     """
     parser.addoption("--window-group", choices=sorted(WINDOW_GROUPS), default=None)
+    parser.addoption(
+        "--with-rendered",
+        action="store_true",
+        default=False,
+        help="Erzeugnisvergleiche (rendered) mitnehmen wie das Release-Tor",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Als ausdrücklich geladenes Laufplugin Leistung und die andere Gruppe abwählen."""
+    """Als ausdrücklich geladenes Laufplugin Leistung und die andere Gruppe abwählen.
+
+    Erzeugnisvergleiche (``rendered``) wählt es ab wie das Entwicklungstor; erst
+    ``--with-rendered`` nimmt sie mit wie das Release-Tor.
+    """
     terms = ["not performance"]
+    if not config.getoption("--with-rendered", default=False):
+        terms.append("not rendered")
     group = config.getoption("--window-group", default=None)
     if group:
         terms.append(WINDOW_GROUPS[group])

@@ -715,7 +715,6 @@ _WAYS: dict[str, Callable[[], str]] = {
 }
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("way", sorted(_WAYS))
 def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None:
     """Derselbe Weg mit und ohne Plattformrauschen — derselbe Fingerabdruck.
@@ -766,7 +765,6 @@ def _fingerprints() -> dict[str, str]:
     return {way: _WAYS[way]() for way in sorted(_WAYS)}
 
 
-@pytest.mark.slow
 def test_a_way_through_the_kernel_does_not_follow_the_blas_kernel() -> None:
     """Dieselben Wege mit einem anderen BLAS-Kern — dieselben Fingerabdrücke.
 

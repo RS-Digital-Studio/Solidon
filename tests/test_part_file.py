@@ -26,6 +26,7 @@ from app.core.knowledge.parts.registry import PartRegistry
 from app.core.registry.registry import Registry
 from app.core.scene.migrations import FORMAT_VERSION
 from app.core.types import Document, Operation, Parameter, Source, SourceOrigin
+from tests.helpers import break_writes_after_a_first_piece
 
 HISTORICAL_RECIPE = Path(__file__).parent / "data" / "recipes" / "historical_box_v1.json"
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -144,18 +145,7 @@ def test_external_export_never_leaves_a_partial_customer_file(
     target = codec.export_to_file(part, tmp_path / f"mein-baustein{PART_FILE_SUFFIX}")
     before = target.read_bytes()
     changed = dataclasses.replace(part, doc="neuer Stand")
-    original_write = recipe.os.write
-    calls = 0
-
-    def break_after_first_piece(descriptor: int, payload: bytes | memoryview) -> int:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            piece = bytes(payload[: max(1, len(payload) // 4)])
-            return original_write(descriptor, piece)
-        raise OSError("erzwungener Teilwrite")
-
-    monkeypatch.setattr(recipe.os, "write", break_after_first_piece)
+    break_writes_after_a_first_piece(monkeypatch, recipe)
 
     with pytest.raises(FileWriteError) as raised:
         codec.export_to_file(changed, target)

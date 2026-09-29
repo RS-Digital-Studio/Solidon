@@ -7,9 +7,6 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import QApplication, QFileDialog
 

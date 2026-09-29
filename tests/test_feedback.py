@@ -604,7 +604,6 @@ def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent() -> None:
     Geprüft am Stylesheet und nicht am Bild: Welche Farbe gesetzt wird, ist
     die Absicht; wie sie aussieht, hängt am Thema.
     """
-    pytest.importorskip("PySide6")
 
     from PySide6.QtWidgets import QApplication
 

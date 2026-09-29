@@ -31,9 +31,6 @@ from collections.abc import Callable
 from typing import Any, cast
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication, QWidget
 
 #: **Der Weg für die, die beim Aufbau zu arbeiten anfangen.**

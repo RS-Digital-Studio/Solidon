@@ -31,7 +31,7 @@ from tests.helpers import (
     ridged_shaft,
     the_torus,
 )
-from tests.test_missing_ops import run
+from tests.helpers import run_operation as run
 
 
 def _bead(radius: float, ring: float = SHAFT_RADIUS) -> float:
