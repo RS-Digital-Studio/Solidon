@@ -89,7 +89,7 @@ class CounterpartDialog(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(self.places)
         head = QFormLayout()
-        head.addRow(tr("Paar:"), self.pairs)
+        head.addRow(tr("Paar"), self.pairs)
         layout.addLayout(head)
         layout.addWidget(self.note)
         layout.addLayout(self.form)

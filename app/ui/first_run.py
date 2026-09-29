@@ -517,7 +517,6 @@ class FirstRunDialog(QDialog):
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Slicer"), slicer_row)
         form.addRow(tr("Drucker"), self.printer)
-        form.addRow(self.custom_printer)
         form.addRow(self.printer_state)
         # **Der Ausweg für alle, die ihr Gerät nicht finden.** Die Liste nennt
         # die verbreiteten Maschinen; wer einen Artillery oder Qidi hat, stand
@@ -538,6 +537,9 @@ class FirstRunDialog(QDialog):
         printer_hint.setWordWrap(True)
         set_level(printer_hint, "caption")
         form.addRow(printer_hint)
+        # **Das eigene Formular nach Zustand und Hinweis**: Beide sprechen über
+        # die Druckerwahl und standen hinter acht Zeilen eigener Maße.
+        form.addRow(self.custom_printer)
         self.inventory_button = QPushButton(tr("Filamentlager öffnen …"), basics)
         self.inventory_button.setIcon(icon("open", self.inventory_button))
         self.inventory_button.clicked.connect(self._open_inventory)

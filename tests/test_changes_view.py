@@ -104,7 +104,12 @@ def test_the_dialog_shows_every_version(language: str) -> None:
     Der rohe Vergleich hätte damit jeden französischen Punkt mit ``l'…``
     verworfen, und davon gibt es 189. Gefragt ist, ob der Punkt im Fenster
     ankommt, nicht wie er unterwegs geschrieben wird — also entmaskieren.
+
+    Und ausgezeichnet wie im Fenster: *Druckoptimal ausrichten* steht dort
+    kursiv, nicht mit Sternchen (``markup.inline``).
     """
+    from app.core.markup import inline
+
     entries = changes.history(language)
 
     text = html.unescape(history_html(entries))
@@ -112,7 +117,8 @@ def test_the_dialog_shows_every_version(language: str) -> None:
     for entry in entries:
         assert entry.version in text, entry.version
         for point in entry.points:
-            assert point[:30] in text, f"{language}: {point[:30]}"
+            shown = html.unescape(inline(point))
+            assert shown[:30] in text, f"{language}: {shown[:30]}"
 
 
 def test_the_running_version_is_marked() -> None:

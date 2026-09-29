@@ -6436,6 +6436,10 @@ class SketchPanel(QWidget):
         self._snapping_changed()
         plane_row.addWidget(self.snap_toggle)
         plane_row.addWidget(self.snap_step)
+        # Der Rest der Zeile gehört dem Leerraum dahinter: Ohne Anschlag
+        # verteilte Qt ihn zwischen die Teile — die Ebene rückte zur Mitte, die
+        # Rasterweite an den rechten Rand, weit weg von ihrem Haken.
+        plane_row.addStretch(1)
         tools.addStretch(1)
 
         # Die drei Grundebenen stehen immer; die Flächen des Körpers kommen

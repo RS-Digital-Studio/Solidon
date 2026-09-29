@@ -140,9 +140,11 @@ class VariantsDialog(QDialog):
         self.count.setRange(2, MAX_VARIANTS)
         self.count.setValue(4)
 
-        chosen = self.parameter.currentData()
-        if chosen is not None:
-            self.first.setValue(float(document.parameters[chosen].value))
+        # **Der erste Wert folgt dem Parameter.** Er wurde nur beim Aufbau
+        # gesetzt; wer danach einen anderen Parameter wählte, bekam eine Reihe
+        # ab dem Wert des ersten — Varianten eines Maßes, das es so nicht gab.
+        self._take_parameter_value()
+        self.parameter.currentIndexChanged.connect(self._take_parameter_value)
 
         # **Die Zahl gehört ins Teil und nicht nur in den Namen.** Vier
         # Varianten derselben Toleranz sehen einander zum Verwechseln ähnlich;
@@ -228,6 +230,25 @@ class VariantsDialog(QDialog):
             why = tr("Dieses Projekt hat keine Parameter — ohne einen gibt es nichts zu variieren.")
             self.state.setText(why)
             self._lock_build(why)
+            # Und die Felder gehen, solange nichts zu variieren ist: Ein leeres
+            # Auswahlfeld mit Startwert, Schrittweite und Anzahl darunter stand
+            # bedienbar da und bewirkte nichts.
+            hidden: tuple[QWidget, ...] = (
+                self.parameter,
+                self.first,
+                self.step,
+                self.count,
+                self.mark,
+            )
+            for row in hidden:
+                form.setRowVisible(row, False)
+
+    def _take_parameter_value(self, *_index: object) -> None:
+        """Den Startwert auf den heutigen Wert des gewählten Parameters setzen."""
+        chosen = self.parameter.currentData()
+        parameters = self.session.project.document.parameters
+        if chosen is not None and chosen in parameters:
+            self.first.setValue(float(parameters[chosen].value))
 
     def _lock_build(self, why: str) -> None:
         """Den Erzeugen-Knopf sperren und sagen, warum — oder ihn freigeben.

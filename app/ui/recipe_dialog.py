@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable
+from itertools import pairwise
 from typing import Any
 
 from PySide6.QtCore import QTimer, Signal
@@ -520,12 +521,14 @@ class RecipeDialog(QDialog):
         self.author.setPlaceholderText(tr("Ihr Name oder Kürzel"))
         self.author.setAccessibleName(tr("Autor"))
 
+        # Ohne Doppelpunkt, wie jedes andere Formular der Anwendung: Die
+        # Spalte selbst sagt, dass links der Name der Zeile steht.
         head = QFormLayout()
-        head.addRow(tr("Name:"), self.title)
-        head.addRow(tr("Gruppe:"), self.group)
-        head.addRow(tr("Beschreibung:"), self.doc)
-        head.addRow(tr("Lizenz:"), self.licence)
-        head.addRow(tr("Autor:"), self.author)
+        head.addRow(tr("Name"), self.title)
+        head.addRow(tr("Gruppe"), self.group)
+        head.addRow(tr("Beschreibung"), self.doc)
+        head.addRow(tr("Lizenz"), self.licence)
+        head.addRow(tr("Autor"), self.author)
 
         self._params = [_ParamRow(entry, self) for entry in document.parameters.values()]
         self._features = [_FeatureRow(entry, self) for entry in features]
@@ -703,13 +706,19 @@ class RecipeDialog(QDialog):
             line = QWidget(box)
             strip = QFormLayout(line)
             strip.setContentsMargins(0, 0, 0, 0)
-            strip.addRow(tr("Beschriftung:"), row.title)
-            strip.addRow(tr("Einheit:"), row.unit)
-            strip.addRow(tr("Kleinster Wert:"), row.minimum)
-            strip.addRow(tr("Größter Wert:"), row.maximum)
-            strip.addRow(tr("Vorgabe:"), row.default)
-            strip.addRow(tr("Steht:"), row.placement)
-            strip.addRow(tr("Beschreibung:"), row.doc)
+            strip.addRow(tr("Beschriftung"), row.title)
+            strip.addRow(tr("Einheit"), row.unit)
+            # **Die Vorgabe vor ihren Grenzen**: Sie werden aus ihr abgeleitet
+            # (``_ParamRow``, halbe Spanne darunter, eine darüber), und der
+            # Parameterdialog ordnet ebenso — Wert, dann Grenzen.
+            strip.addRow(tr("Vorgabe"), row.default)
+            strip.addRow(tr("Kleinster Wert"), row.minimum)
+            strip.addRow(tr("Größter Wert"), row.maximum)
+            strip.addRow(tr("Steht"), row.placement)
+            strip.addRow(tr("Beschreibung"), row.doc)
+            chain = (row.title, row.unit, row.default, row.minimum, row.maximum, row.placement)
+            for before, after in pairwise((*chain, row.doc)):
+                QWidget.setTabOrder(before, after)
             if row.hint is not None:
                 # **Über der Zeile und außerhalb von ``line``.** Der Satz
                 # erklärt, warum der Haken fehlt — säße er im Block, den der
@@ -797,9 +806,14 @@ class RecipeDialog(QDialog):
             require_range_size(count)
         except AppError as error:
             range_error = str(error.detail)
-        self.range_plan.setText(
-            range_error or tr("Bereichstest: {count} Kombinationen.").format(count=count)
+        # Die Einzahl eigens: „1 Kombinationen" stand da, sobald ein einziges
+        # Maß mit einem einzigen Wert freigegeben war.
+        planned = (
+            tr("Bereichstest: eine Kombination.")
+            if count == 1
+            else tr("Bereichstest: {count} Kombinationen.").format(count=count)
         )
+        self.range_plan.setText(range_error or planned)
         # **Ein vergebener Name ist kein Fehler, sondern der zweite Fall.**
         # „Ändern heißt neu speichern" steht im Handbuch (Kapitel *Eigene
         # Bausteine*), und wer die Breite seines Halters nachträglich ändert,
