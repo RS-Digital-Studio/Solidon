@@ -153,6 +153,9 @@ gleiche Blattpfade, Typen, Dateimodi und Objekt-SHAs außerhalb einer kleinen,
 ausdrücklich benannten Liste von Signierwerkzeugen, Workflow, Tests und
 Dokumentation. Abgeschnittene oder fehlerhafte Antworten sperren den Lauf;
 beliebige Produkt-, Abhängigkeits- oder Installeränderungen sind nicht erlaubt.
+Zwischen Tag und Installerlauf geht deshalb nichts nach `main`, was nicht in
+`INSTALLER_ORCHESTRATION_FILES` (`tools/sign_release.py`) steht — auch keine
+Doku —, sonst hält der Installerlauf am Baumvergleich an.
 Das Versions-Tag und der Quellcommit in der Anwendungssignatur bleiben dabei
 unverändert. Die Installer-Rückgabe nennt ihren eigenen tatsächlichen Commit
 und ihre Laufnummer. Der lokale Signierer prüft beides gegen den erfolgreichen
