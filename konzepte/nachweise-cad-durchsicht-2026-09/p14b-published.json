@@ -1,0 +1,18 @@
+{
+  "gate": "%TEMP%/solidon-cad-competition-final-789c0cf656654dc395e84d2ce8513a4d",
+  "core": {"passed": 12971, "skipped": 26, "seconds": 520.31, "exit": 0},
+  "ruff": 0,
+  "format": 0,
+  "mypy": 0,
+  "roadmap": {"passed": 152, "seconds": 25.33, "exit": 0},
+  "commits": {
+    "manifest": "930ccbbc531156abb7894c531fd1826d1160187a",
+    "product": "fe17cd3bc6e04c8463fb234fe5b89f4f7aa92b24",
+    "roadmap": "859b75e0ee0d081c8339313757666ac674d845b1"
+  },
+  "push_exit": 0,
+  "remote_main_verified": "859b75e0ee0d081c8339313757666ac674d845b1",
+  "window_tests": "nur beim Release",
+  "performance_tests": "nur beim Release",
+  "remaining": "P1.4c und die weiteren CAD-Pakete; Produktionsgrenze weiterhin 1000"
+}

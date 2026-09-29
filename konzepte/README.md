@@ -33,7 +33,7 @@ die findet nur, wer die Wörter schon kennt.
 
 | Thema | Dokumente |
 |---|---|
-| **Konstruieren, Geometrie, Kerne** | `konzept-vollwertiges-cad-2026-09` · `recherche-cad-paritaet-2026-09` · `durchsicht-cad-konzepte-2026-09` · `nachweise-cad-p2-7/` (Sonden zu P2.7) · `nachweise-cad-p2-5/` (Sonden zu P2.5) · `konzept-skizze-im-raum-2026-08` · `konzept-flaechenrueckgewinnung-2026-08` · `konzept-organische-modellierung-2026-08` · `konzept-varianten-zusammenlegen-2026-08` · `konzept-sinnvolles-trennen-2026-08` · `geogram-als-zweiter-kern` · `anfrage-trueform` |
+| **Konstruieren, Geometrie, Kerne** | `konzept-vollwertiges-cad-2026-09` · `recherche-cad-paritaet-2026-09` · `durchsicht-cad-konzepte-2026-09` · `nachweise-cad-durchsicht-2026-09/` (Sonden und Herleitungen der CAD-Durchsicht) · `nachweise-cad-p2-7/` (Sonden zu P2.7) · `nachweise-cad-p2-5/` (Sonden zu P2.5) · `konzept-skizze-im-raum-2026-08` · `konzept-flaechenrueckgewinnung-2026-08` · `konzept-organische-modellierung-2026-08` · `konzept-varianten-zusammenlegen-2026-08` · `konzept-sinnvolles-trennen-2026-08` · `geogram-als-zweiter-kern` · `anfrage-trueform` |
 | **Handbuch und Hilfe** | `konzept-handbuch-2026-09` · `nachweise-handbuch-2026-09/` (Kundenblick, Findbarkeit, Aufnahmetechnik) |
 | **Bedienung und Gestaltung** | `konzept-bedienung` · `konzept-einfache-bedienung-2026-09` · `konzept-erstnutzer-2026-08` · `konzept-merkmalbedienung-2026-09` · `konzept-auswahlpanel-2026-09` · `konzept-platzieren-tiefe-2026-09` · `konzept-befehlsband-2026-08` (abgelehnt) · `konzept-akzentfarben-haushalt-2026-08` · `konzept-3d-maus-2026-08` |
 | **Durchsichten der Oberfläche** | `durchsicht-design-2026-08` · `durchsicht-zeichenmodus-2026-09` · `oberflaechen-durchsicht-2026-08-20` |

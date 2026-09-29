@@ -1,4 +1,0 @@
-tests/test_maps.py
-
-$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_maps.py
---> grün  Exit 0  62 passed in 104.01s (0:01:44)
