@@ -61,9 +61,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python .claude/.state/plattformgleichheit-2026-09-17/netz_sichern.py netz
 
-      - name: Den Aenderungsweg aufzeichnen
-        # Wo genau laeuft das Aendern auseinander? Jede Boolesche Operation mit
-        # Ein- und Ausgabe; der erste Schritt mit verschiedenen Fingerabdruecken
+      - name: Den Änderungsweg aufzeichnen
+        # Wo genau läuft das Ändern auseinander? Jede Boolesche Operation mit
+        # Ein- und Ausgabe; der erste Schritt mit verschiedenen Fingerabdrücken
         # ist die gesuchte Stelle.
         shell: bash
         env:
