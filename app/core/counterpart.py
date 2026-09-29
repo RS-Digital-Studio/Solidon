@@ -39,7 +39,7 @@ from typing import Any, Final
 from app.core.errors import CANCEL, CHANGE_SELECTION, CORRECT_INPUT, ValidationError
 from app.core.knowledge import standards
 from app.core.log import get_logger
-from app.core.scene.fits import active_fits
+from app.core.scene.fits import active_fits, numbered_name
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
     Document,
@@ -320,7 +320,7 @@ def attach_fit(
         return applied
 
     fit = Fit(
-        name=_unused_name(document, pair.key),
+        name=numbered_name(document.fits, pair.key),
         a=FeatureRef(applied.object_ids[0], first),
         b=FeatureRef(applied.object_ids[1], second),
         kind=pair.kind,
@@ -570,7 +570,7 @@ def attach_thread_fit(
         )
         return applied
     fit = Fit(
-        name=_unused_name(document, "thread"),
+        name=numbered_name(document.fits, "thread"),
         a=FeatureRef(first_object, feature.id),
         b=FeatureRef(second_object, made),
         kind="thread",
@@ -634,16 +634,3 @@ def _made_feature(
         if feature.provenance == "generated":
             return name
     return found[0][0] if found else None
-
-
-def _unused_name(document: Document, key: str) -> str:
-    """Ein Passungsname, den es noch nicht gibt.
-
-    Zwei Passungen mit gleichem Namen wären eine, und die zweite Verbindung
-    fiele still aus der Prüfung — wer zwei Stifte setzt, hat zwei Paare.
-    """
-    used = {entry.name for entry in document.fits}
-    number = 1
-    while f"{key}_{number}" in used:
-        number += 1
-    return f"{key}_{number}"

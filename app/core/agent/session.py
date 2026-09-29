@@ -59,6 +59,7 @@ from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
 from app.core.registry import GATHERED_KINDS, REGISTRY, Registry, validate
 from app.core.scene.evaluate import EvaluationResult, evaluate
+from app.core.scene.fits import numbered_name
 from app.core.scene.history import History, OperationDraft
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
@@ -859,7 +860,7 @@ class AgentSession:
 
     def _fit(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
         try:
-            fit = build_fit(arguments, len(working.fits))
+            fit = build_fit(arguments, working.fits)
         except ValueError as error:
             proposal.invalid_calls += 1
             return str(error)
@@ -1101,7 +1102,7 @@ def parse_number(value: Any) -> float:
     return number
 
 
-def build_fit(arguments: dict[str, Any], taken: int) -> Fit:
+def build_fit(arguments: dict[str, Any], existing: Sequence[Fit]) -> Fit:
     """Ein Passungspaar aus Werkzeugargumenten — geprüft, mit Verweis-Toleranz.
 
     Der Enum steht im Werkzeugschema, aber ein Schema ist eine Bitte, keine
@@ -1114,7 +1115,17 @@ def build_fit(arguments: dict[str, Any], taken: int) -> Fit:
     Augenblicks fest, und nach einem Materialwechsel prüfte die Passung gegen
     ein Material, das niemand mehr druckt. Ohne Kennung folgt sie den Körpern,
     die sie verbindet (``scene.fits._wanted``).
+
+    **Ein Name gehört genau einer Passung** (``scene.fits.numbered_name``).
+    Einen belegten Namen lehnt das Werkzeug ab und nennt die belegten — ob
+    das Modell die alte Passung ersetzen oder eine zweite anlegen wollte, weiß
+    nur es (Regel 21). Ohne Namen vergibt es den ersten freien; gezählt wurden
+    früher die vorhandenen, und neben ``fit_2`` entstand ein zweites ``fit_2``.
     """
+    taken = {fit.name for fit in existing}
+    wanted = str(arguments.get("name", "")).strip()
+    if wanted in taken:
+        raise ValueError(f"{tr('Diesen Namen gibt es schon.')} ({', '.join(sorted(taken))})")
     try:
         first = FeatureRef.parse(str(arguments.get("a", "")))
         second = FeatureRef.parse(str(arguments.get("b", "")))
@@ -1125,7 +1136,7 @@ def build_fit(arguments: dict[str, Any], taken: int) -> Fit:
         known = ", ".join(FIT_KINDS)
         raise ValueError(f"{tr('Diese Passungsart gibt es nicht')}: {kind} ({known})")
     return Fit(
-        name=str(arguments.get("name", "")) or f"fit_{taken + 1}",
+        name=wanted or numbered_name(existing, "fit"),
         a=first,
         b=second,
         kind=cast(FitKind, kind),

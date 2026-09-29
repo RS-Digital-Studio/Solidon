@@ -17672,7 +17672,7 @@ class MainWindow(QMainWindow):
         """
         document = self.session.project.document
         try:
-            fit = build_fit(dict(values), len(document.fits))
+            fit = build_fit(dict(values), document.fits)
         except ValueError as error:
             return str(error)
         if not self.session.add_fit(fit, origin=Origin(by="agent", model=REMOTE_ORIGIN)):
