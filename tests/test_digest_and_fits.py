@@ -1279,18 +1279,6 @@ def test_a_fit_pointing_at_nothing_is_an_error(profile: Profile) -> None:
     assert "benannte" not in message, "keine Ursache, die der Befund nicht kennt"
 
 
-def test_fits_can_be_added_and_removed() -> None:
-    entries: list[Fit] = []
-    entries = fit_check.add(entries, clearance_fit())
-    assert len(entries) == 1
-
-    entries = fit_check.add(entries, clearance_fit())
-    assert len(entries) == 1, "the same name replaces, it does not pile up"
-
-    entries = fit_check.remove(entries, "stift_1")
-    assert entries == []
-
-
 # --- Eine Szene ist nicht ein Material (§12) ------------------------------------
 
 

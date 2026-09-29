@@ -236,7 +236,7 @@ eigenen Eingängen vorbei liest.** `operation_hash` deckt die Hashes der
 Eingänge — drei Lesarten greifen aber auf fremde Körper der Szene zu: das
 Ziel von `align_to_feature` (`kind="feature"`), die `up_to`-Fläche
 (`TARGET_FIELD`) und die `feature:<id>`-Ebene jeder Skizze
-(`face_of_sketch`, dieselbe Funktion wie im Verweisfilter) — auch durch eine
+(`feature_ref_of_sketch`, dieselbe Funktion wie im Verweisfilter) — auch durch eine
 abgeleitete Ebene hindurch (`standing_on_feature`), am Feldschnitt und am
 Dichtweg genauso wie an der Extrusion. **Den Rahmen einer Ebene fragt eine
 Operation mit den Projektparametern** (`sketch.planes.frame_in_scene(plane,
