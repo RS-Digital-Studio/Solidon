@@ -59,6 +59,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern? | `test_leash.py` — nur die Verbindung des übergebenen Parameters zählt |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
 | Bleiben Dialoginhalt, Klappen und Aktionsleisten erreichbar und Fenster im Bildschirm? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; die Abläufe der Einstellungen in `test_ui_settings.py` |
+| Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
 | Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |
 | CI: vollständige Partitionen, Sammlung mit und ohne `--ci-shard`, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` |
