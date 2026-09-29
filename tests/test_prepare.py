@@ -5563,6 +5563,128 @@ def test_invalid_detected_bore_geometry_has_a_translated_error(
     assert "neu erkennen" in str(caught.value.detail)
 
 
+@pytest.mark.parametrize("helper", ["resize", "slot", "cut", "fill"])
+@pytest.mark.parametrize(
+    "direction, depth",
+    [
+        ((0.0, 0.0, 0.0), 10.0),
+        ((0.0, 0.0, 1.0), 0.0),
+        ((math.nan, 0.0, 1.0), 10.0),
+        ((0.0, 0.0, 1.0), math.nan),
+    ],
+)
+def test_the_exact_bore_helpers_refuse_unusable_geometry_like_their_twins(
+    helper: str, direction: Vec3, depth: float
+) -> None:
+    """Dieselbe Absage wie am Netz, an den exakten Gegenstücken.
+
+    ``brep.edit`` warf an denselben zwei Stellen ein nacktes ``ValueError``
+    ohne Handlungsvorschlag (Regel 17) — „a detected bore must have a positive
+    depth" und „a bore direction must not be zero", dreimal geschrieben
+    (``_slot_tool``, ``resize_bore``, ``_centred_bore``) hinter ``slot_bore``,
+    ``resize_bore``, ``cut_bore`` und ``fill_bore``. Eine Richtung oder Tiefe
+    mit NaN kam gar nicht an: ``span <= EPS_GEOM`` ist für NaN falsch, und
+    OpenCASCADE bekam sie. Am Netz behoben seit dem 12.09.2026 (Übergabe der
+    Durchsicht vom 11.09.2026).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.brep import edit
+    from app.core.errors import ValidationError
+
+    body = edit.box(40.0, 40.0, 20.0)
+    common = {"position": (0.0, 0.0, 10.0), "direction": direction, "depth": depth}
+    with pytest.raises(ValidationError) as caught:
+        if helper == "resize":
+            edit.resize_bore(body, previous_diameter=6.0, diameter=8.0, **common)
+        elif helper == "slot":
+            edit.slot_bore(body, diameter=6.0, length=20.0, angle_deg=0.0, overlap=0.0, **common)
+        elif helper == "cut":
+            edit.cut_bore(body, diameter=6.0, **common)
+        else:
+            edit.fill_bore(body, diameter=6.0, **common)
+
+    assert caught.value.field == "at_feature"
+    assert caught.value.constraint == "no_geometry"
+    assert "neu erkennen" in str(caught.value.detail)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("kind", ["hole", "slot"])
+@pytest.mark.parametrize(
+    ("operation", "params"),
+    [
+        ("move_feature", {"x": 5.0, "y": 0.0, "z": 5.0}),
+        ("duplicate_feature", {"x": 5.0, "y": 12.0, "z": 5.0}),
+        ("rotate_feature", {"axis": "x", "angle": 20.0}),
+        ("remove_feature", {"sections": "chain"}),
+    ],
+)
+def test_feature_operations_reject_a_zero_axis_before_geometry(
+    kernel: str, kind: str, operation: str, params: dict[str, object], profile: Profile
+) -> None:
+    """Eine Bohrung oder ein Langloch ohne Achse wird abgesagt, bevor gerechnet wird.
+
+    Gemessen am 29.09.2026 an beiden Kernen mit einer Achse (0, 0, 0) im
+    Merkmal: 34 der 36 Fälle sagten ``no_geometry`` — jeder an einer anderen,
+    tiefen Stelle (``_closed_at``, ``_sits_at``, ``_exact_move_cavity`` …).
+    Zwei nicht: *Merkmal drehen* am exakten Langloch rechnete mit der Nullachse
+    bis ``_through_bore_depth`` weiter (``RuntimeWarning``: Division durch null)
+    und sagte dann mit dem Satz einer Skizzenebene ab; *Merkmal verdoppeln* am
+    Netz-Langloch setzte die Kopie still entlang +Z (Regel 21). Gefragt wird
+    jetzt beim Wählen des Merkmals, an allen Merkmalshandlungen gleich.
+    """
+    from app.core.errors import ValidationError
+
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+
+        values = {"position": (0.0, 0.0, 5.0), "direction": (0.0, 0.0, 1.0), "depth": 10.0}
+        solid = (
+            edit.slot_bore(
+                edit.box(80.0, 40.0, 10.0),
+                diameter=6.0,
+                length=20.0,
+                angle_deg=0.0,
+                overlap=0.0,
+                **values,
+            )
+            if kind == "slot"
+            else edit.cut_bore(edit.box(80.0, 40.0, 10.0), diameter=6.0, **values)
+        )
+        mesh: object = solid
+        features = features_of(solid)
+    else:
+        raw = trimesh.creation.box(extents=(80.0, 40.0, 10.0))
+        raw.apply_translation((0.0, 0.0, 5.0))
+        cut = drill(
+            MeshData.of(raw),
+            position=(0.0, 0.0, 10.0),
+            axis="z",
+            diameter=6.0,
+            profile=profile,
+            compensate=False,
+            slot_length=20.0 if kind == "slot" else 0.0,
+        ).mesh
+        mesh = cut
+        features = detect(cut)
+    chosen = next(entry for entry in features.values() if entry.kind == kind)
+    broken = dataclasses.replace(chosen, params={**chosen.params, "axis": (0.0, 0.0, 0.0)})
+    source = SceneObject(
+        id="obj_1",
+        name="Platte",
+        mesh=mesh,  # type: ignore[arg-type]
+        kind=kernel,  # type: ignore[arg-type]
+        features={**features, chosen.id: broken},
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        _run_op(operation, source, profile, at_feature=chosen.id, **params)
+
+    assert caught.value.constraint == "no_geometry", caught.value.detail
+
+
 @pytest.mark.parametrize("operation", ["resize_hole", "slot_hole"])
 def test_bore_operations_reject_a_zero_axis_before_geometry(
     operation: str, profile: Profile
