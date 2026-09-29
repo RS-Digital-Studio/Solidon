@@ -69,7 +69,14 @@ from app.ui.organizer_dialog import OrganizerLayoutField
 from app.ui.outline_dialog import ContourField
 from app.ui.panels import align_forms
 from app.ui.seal_dialog import SealPathField
-from app.ui.style import TIGHT, DialogScrollArea, fit_dialog_to_screen, make_primary, set_level
+from app.ui.style import (
+    TIGHT,
+    ContentHeight,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+    set_level,
+)
 
 if TYPE_CHECKING:
     from app.ui.placement_flow import PlacementFlow
@@ -1612,8 +1619,7 @@ class OperationDialog(QDialog):
         durchreicht."""
         super().__init__(parent)
         self.spec = spec
-        self._content_user_height = 0
-        self._last_content_height: int | None = None
+        self._height = ContentHeight()
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
         # Das F1 des Hauptfensters kommt in einem eigenen Fenster nicht an:
@@ -3295,19 +3301,14 @@ class OperationDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
-        if (
-            self.isVisible()
-            and self._last_content_height is not None
-            and self.height() != self._last_content_height
-        ):
-            self._content_user_height = self.height()
+        floor = self._height.floor(self)
         content = self._scroll.widget()
         content_layout = content.layout() if content is not None else None
         if content_layout is not None:
             content_layout.activate()
         self._scroll.updateGeometry()
         layout.activate()
-        wanted = max(at_least, self._content_user_height, layout.sizeHint().height())
+        wanted = max(at_least, floor, layout.sizeHint().height())
         margins = layout.contentsMargins()
         content_width = content_layout.minimumSize().width() if content_layout is not None else 0
         # Auch die zugeklappte Rückseite zählt mit: Sie misst ihre Zeilen, ob
@@ -3315,9 +3316,7 @@ class OperationDialog(QDialog):
         # das Fenster nur wachsen sehen, nicht zur Seite springen.
         content_width = max(content_width, self._advanced_form.minimumSize().width())
         width = max(self.width(), content_width + margins.left() + margins.right())
-        self.resize(width, wanted)
-        fit_dialog_to_screen(self)
-        self._last_content_height = self.height()
+        self._height.settle(self, width, wanted)
 
     def _fill_filament_fields(
         self,

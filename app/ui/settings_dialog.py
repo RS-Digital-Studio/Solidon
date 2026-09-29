@@ -66,7 +66,7 @@ from app.ui.panels import align_forms, collapsible
 from app.ui.print_settings_dialog import _SlicerWorker
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
-from app.ui.style import NORMAL, ROOMY, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import NORMAL, ROOMY, WIDE, ContentHeight, DialogScrollArea, make_primary
 
 _log = get_logger(__name__)
 
@@ -117,8 +117,7 @@ class SettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.settings = settings
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self._closed = False
         self._leash = WorkerLeash(self)
         self._slicer_worker: _SlicerWorker | None = None
@@ -442,20 +441,9 @@ class SettingsDialog(QDialog):
 
     def _fit_content(self) -> None:
         """Eine Klappe erhält Platz und gibt ihn zurück; gezogene Höhen bleiben."""
-        layout = self.layout()
-        if layout is None or not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        wanted = self.sizeHint().height()
         # So breit wie die breiteste Zeile — sonst rollte der Inhalt waagerecht,
         # seit keine Zeile ihre Beschriftung mehr über das Feld stellt.
-        self.resize(max(self.width(), self.sizeHint().width()), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll, grow_width=True)
 
     def _application_group(self) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)

@@ -57,7 +57,7 @@ from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised, wheel_needs_focus
 from app.ui.leash import Worker, WorkerLeash
-from app.ui.style import NORMAL, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import NORMAL, WIDE, ContentHeight, DialogScrollArea, make_primary
 
 _log = get_logger(__name__)
 
@@ -451,7 +451,7 @@ class RecipeDialog(QDialog):
         origin: Any = None,
     ) -> None:
         super().__init__(parent)
-        self._fitted_height: int | None = None
+        self._height = ContentHeight()
         self.setWindowTitle(
             tr("Baustein bearbeiten")
             if origin is not None
@@ -638,19 +638,9 @@ class RecipeDialog(QDialog):
         QTimer.singleShot(0, self, self._fit_content)
 
     def _fit_content(self) -> None:
-        """Ein zusammenhängendes Formular wächst bis zur verfügbaren Bildschirmhöhe."""
-        layout = self.layout()
-        if layout is None or not self.isVisible():
-            return
-        own = self._fitted_height is None or self.height() == self._fitted_height
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        if own:
-            self.resize(self.width(), self.sizeHint().height())
-        fit_dialog_to_screen(self)
-        if own:
-            self._fitted_height = self.height()
+        """Ein zusammenhängendes Formular wächst bis zur verfügbaren Bildschirmhöhe;
+        eine gezogene Höhe bleibt Untergrenze wie in jedem Dialog mit Rollbereich."""
+        self._height.fit(self, self._scroll)
 
     def _restore_origin(self) -> None:
         """Legt die Angaben des bearbeiteten Bausteins zurück in den Dialog (E6).

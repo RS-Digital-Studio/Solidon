@@ -63,7 +63,7 @@ from app.i18n import tr
 from app.ui.labels import localised, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, ROOMY, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import NORMAL, ROOMY, ContentHeight, DialogScrollArea, make_primary
 from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
 if TYPE_CHECKING:
@@ -339,8 +339,7 @@ class SupportDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._kind = kind
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self._session = session
         self._url = url
         self._sender = sender
@@ -555,18 +554,7 @@ class SupportDialog(QDialog):
 
     def _fit_content(self) -> None:
         """Die Vorschau bekommt Platz, ohne eine bewusst gezogene Höhe zu verwerfen."""
-        layout = self.layout()
-        if layout is None or not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        wanted = self.sizeHint().height()
-        self.resize(self.width(), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll)
 
     # --- Zustand ----------------------------------------------------------------
 

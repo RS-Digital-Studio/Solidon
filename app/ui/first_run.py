@@ -85,8 +85,8 @@ from app.ui.style import (
     ROOMY,
     TIGHT,
     WIDE,
+    ContentHeight,
     DialogScrollArea,
-    fit_dialog_to_screen,
     make_primary,
     set_level,
 )
@@ -290,8 +290,7 @@ class FirstRunDialog(QDialog):
         super().__init__(parent)
         self.settings = settings
         self._discovered_printers = dict(discovered_printers or {})
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         self.setWindowTitle(tr("Erste Schritte"))
         self.setMinimumWidth(680)
 
@@ -718,8 +717,7 @@ class FirstRunDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
+        floor = self._height.floor(self)
         # Die zusätzlichen Maße können auch mehr Breite brauchen, etwa in
         # Französisch und Italienisch. Zuerst die verfügbare natürliche Breite
         # setzen, erst danach die umgebrochenen Absätze in der Höhe messen.
@@ -747,10 +745,7 @@ class FirstRunDialog(QDialog):
         self._scroll.updateGeometry()
         layout.invalidate()
         layout.activate()
-        wanted = self.sizeHint().height()
-        self.resize(self.width(), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.settle(self, self.width(), max(self.sizeHint().height(), floor))
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)

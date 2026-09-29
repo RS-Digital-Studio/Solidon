@@ -107,8 +107,8 @@ from app.ui.style import (
     ROOMY,
     TIGHT,
     WIDE,
+    ContentHeight,
     DialogScrollArea,
-    fit_dialog_to_screen,
     make_primary,
     set_level,
 )
@@ -588,8 +588,7 @@ class NewFilamentDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._entry = entry
-        self._fitted_height: int | None = None
-        self._user_height = 0
+        self._height = ContentHeight()
         if entry is not None:
             name, colour, material_type, slicer_profile = (
                 entry.name,
@@ -896,18 +895,7 @@ class NewFilamentDialog(QDialog):
 
     def _fit_content(self) -> None:
         """Zusatzangaben bekommen Platz, gezogene Nutzerhöhen bleiben erhalten."""
-        layout = self.layout()
-        if layout is None or not self.isVisible():
-            return
-        if self._fitted_height is not None and self.height() != self._fitted_height:
-            self._user_height = self.height()
-        self._scroll.updateGeometry()
-        layout.invalidate()
-        layout.activate()
-        wanted = self.sizeHint().height()
-        self.resize(self.width(), max(wanted, self._user_height))
-        fit_dialog_to_screen(self)
-        self._fitted_height = self.height()
+        self._height.fit(self, self._scroll)
 
     def _name_changed(self, text: str) -> None:
         self._validate()
