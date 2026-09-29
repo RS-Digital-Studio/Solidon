@@ -11,7 +11,6 @@ platform_exceptions = [
   "packaging/solidon3d.icns wird nur unter macOS ausgeliefert.",
 ]
 excluded = [
-  "Feedback/ — interne Fehlerbelege, keine Auslieferung",
   "marketing/ — Arbeits- und Kommunikationsdateien außerhalb der Auslieferung mit Anwendung oder Website; marketing/youtube/ enthält aus make_youtube_art.py erzeugte Kanalbilder für eine gesonderte Veröffentlichung sowie eine interne Vorschau der Sichtbereiche",
   "tools/voice-reference.wav — reproduzierbare interne Synthesereferenz, keine Auslieferung",
   "website/teile/ — Erzeugungsquellen der Website, vom Web-Uploader ausgeschlossen",
