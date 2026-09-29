@@ -40,7 +40,7 @@ from app.core.log import get_logger
 from app.i18n import format_decimal, tr
 from app.ui.dialogs import show_error
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import make_primary, set_role
+from app.ui.style import NORMAL, WIDE, make_primary, set_role
 
 _log = get_logger(__name__)
 
@@ -177,6 +177,8 @@ class ComfySetupDialog(QDialog):
         row.addWidget(self.choose)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(intro)
         layout.addLayout(row)
         layout.addWidget(self.weights)
@@ -184,6 +186,7 @@ class ComfySetupDialog(QDialog):
         layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
+        layout.addStretch(1)
         layout.addWidget(buttons)
 
         if found is None:

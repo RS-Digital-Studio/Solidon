@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
-from app.ui.style import ROOMY, TIGHT, make_primary, set_level
+from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
 
 #: Fassung des Hinweistextes. Ändert sich der Text inhaltlich, steigt sie, und
 #: der Hinweis erscheint erneut — sonst hätte jemand einer Aussage zugestimmt,
@@ -169,6 +169,7 @@ class PrintDisclosureDialog(QDialog):
         self.setModal(True)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(ROOMY)
 
         heading = QLabel(_title_text(), self)
@@ -199,6 +200,7 @@ class PrintDisclosureDialog(QDialog):
             confirm.setText(tr("Verstanden"))
             make_primary(confirm)
         buttons.accepted.connect(self.accept)
+        layout.addStretch(1)
         layout.addWidget(buttons)
 
     def shares_settings(self) -> bool:

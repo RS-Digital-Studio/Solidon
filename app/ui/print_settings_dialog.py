@@ -41,7 +41,6 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -51,7 +50,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QSpinBox,
     QTabWidget,
@@ -117,7 +115,11 @@ from app.ui.dialogs import (
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, slot_colours, swatch
 from app.ui.filament_usage import UsageNotice, slot_title
-from app.ui.first_run import add_printer_choices
+from app.ui.first_run import (
+    PrinterComboBox,
+    add_printer_choices,
+    valid_printer_choice,
+)
 from app.ui.header import filament_names
 from app.ui.labels import (
     LengthSpin,
@@ -130,6 +132,7 @@ from app.ui.labels import (
     length,
     localised,
     plate_title,
+    wheel_needs_focus,
 )
 from app.ui.labels import slicer_title as _slicer_title
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
@@ -137,7 +140,14 @@ from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings, save_settings
-from app.ui.style import ROOMY, TIGHT, make_primary, set_level
+from app.ui.style import (
+    ROOMY,
+    TIGHT,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+    set_level,
+)
 from app.ui.theme import THEMES, current_theme
 
 _log = get_logger(__name__)
@@ -1316,6 +1326,8 @@ def _make_setting_editor(
     # ein ``QFormLayout`` verbindet Beschriftung und Feld nicht
     # (`oberflaeche.md`, „Ein Feld ohne Namen …").
     editor.setAccessibleName(accessible_name(field))
+    if isinstance(editor, (QAbstractSpinBox, QComboBox)):
+        wheel_needs_focus(editor)
     note = str(field.note)
     if note:
         if not editor.toolTip():
@@ -1387,6 +1399,8 @@ class FilamentOverrideDialog(QDialog):
         self.settings = settings
         self.existing = existing
         self._legacy = handover.unbound_override_for(settings, slot) if existing is None else None
+        self._content_user_height = 0
+        self._last_content_height: int | None = None
         self.editors: dict[str, QWidget] = {}
         self.groups: dict[str, QGroupBox] = {}
         self.group_bodies: dict[str, QWidget] = {}
@@ -1441,9 +1455,7 @@ class FilamentOverrideDialog(QDialog):
         self.legacy_values_button.clicked.connect(self._take_legacy_values)
         layout.addWidget(self.legacy_values_button)
 
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll = DialogScrollArea(self)
         contents = QWidget(scroll)
         sections = QVBoxLayout(contents)
         self._scroll = scroll
@@ -1532,13 +1544,20 @@ class FilamentOverrideDialog(QDialog):
 
     def _fit_depth(self, _checked: bool | None = None) -> None:
         """Die Dialoghöhe an geöffnete Gruppen und den Bildschirm anpassen."""
+        if (
+            self.isVisible()
+            and self._last_content_height is not None
+            and self.height() != self._last_content_height
+        ):
+            self._content_user_height = self.height()
         self._sections.activate()
-        self._section_contents.adjustSize()
-        available = self.screen().availableGeometry().height()
-        maximum = max(240, int(available * 0.55))
-        wanted = min(self._section_contents.sizeHint().height(), maximum)
-        self._scroll.setMinimumHeight(wanted)
-        self.adjustSize()
+        self._scroll.updateGeometry()
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+        self.resize(self.width(), max(self._content_user_height, self.sizeHint().height()))
+        fit_dialog_to_screen(self)
+        self._last_content_height = self.height()
 
     def _use_project_values(self) -> None:
         """Alle eigenen Gruppen sichtbar und eindeutig zurücknehmen."""
@@ -2639,7 +2658,7 @@ class PrintSettingsDialog(QDialog):
         """Die Schichtanalyse, wenn das Fenster schon eine hat. Ohne sie bleiben
         die Vorschläge, die aus Material und Maschine folgen (§29)."""
         self.setWindowTitle(tr("Druckeinstellungen"))
-        self.setMinimumSize(560, 640)
+        self.setMinimumWidth(560)
 
         self._editors: dict[str, QWidget] = {}
         self._labels: dict[str, QLabel] = {}
@@ -2752,6 +2771,10 @@ class PrintSettingsDialog(QDialog):
         """Der Standardprozess der gewählten Maschine als Auswahlkennung."""
         self._built = False
         """Erst wenn jede Zeile steht, darf die Grundlage die Felder füllen."""
+        self._content_user_height = 0
+        self._last_content_height: int | None = None
+        self._content_user_width = 0
+        self._last_content_width: int | None = None
         # Woran :meth:`has_changes` misst, ob dieser Dialog etwas bewirkt hat.
         # Bis zum 03.09.2026 schrieb schon das bloße Öffnen die aufgelösten
         # Werte ins Projekt: Wer nur nachsah, welche Temperatur vorgeschlagen
@@ -2767,7 +2790,13 @@ class PrintSettingsDialog(QDialog):
         # :meth:`_slicers_found` antwortet.
         self._slicer_path = self._remembered_slicer()
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        self._scroll = DialogScrollArea(self)
+        contents = QWidget(self._scroll)
+        layout = QVBoxLayout(contents)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._scroll.setWidget(contents)
+        outer.addWidget(self._scroll, 1)
         # **Vor** dem Slicer-Abschnitt: Dessen Filamentzeilen fragen die
         # Plattenwahl bereits beim Aufbau (``_plate_slots``). Erzeugt
         # wird sie deshalb hier, eingehängt wird sie weiter unten in
@@ -2790,7 +2819,7 @@ class PrintSettingsDialog(QDialog):
         self.search_row = self._build_search()
         layout.addLayout(self.search_row)
         self.tabs_box = self._build_tabs()
-        layout.addWidget(self.tabs_box, 1)
+        layout.addWidget(self.tabs_box)
         layout.addWidget(self._build_slicer())
         self.advice_box = self._build_advice()
         layout.addWidget(self.advice_box)
@@ -2798,7 +2827,9 @@ class PrintSettingsDialog(QDialog):
         self.usage_notice = UsageNotice(ui_settings, self)
         self.usage_notice.changed.connect(self._refresh_advice)
         layout.addWidget(self.usage_notice)
-        layout.addWidget(self._build_buttons())
+        layout.addStretch(1)
+        self._buttons = self._build_buttons()
+        outer.addWidget(self._buttons)
 
         self._load_into_editors()
         if session.profile.printer.is_resin:
@@ -2823,6 +2854,14 @@ class PrintSettingsDialog(QDialog):
         self._built = True
         self._mark_origins()
         self._show_foundation()
+        for control in self.findChildren(QWidget):
+            if isinstance(control, (QAbstractSpinBox, QComboBox)):
+                wheel_needs_focus(control)
+        for toggle in (self.front_toggle, self.advice_toggle):
+            if toggle is not None:
+                toggle.toggled.connect(self._refit_sections)
+        self._scroll.contentSizeChanged.connect(self._refit_sections)
+        self._fit_buttons()
 
     def has_changes(self) -> bool:
         """Hat der Kunde in diesem Dialog etwas bewirkt?
@@ -2866,7 +2905,7 @@ class PrintSettingsDialog(QDialog):
         # Drucker und Material standen hier als Beschriftung — und es gab
         # nirgends einen Weg, sie zu ändern. Wer eine fremde Datei öffnete,
         # arbeitete für immer gegen deren Bauraum (§12).
-        self.printer_choice = QComboBox(self)
+        self.printer_choice = PrinterComboBox(self)
         # Nach Verfahren gruppiert wie im Erststart (RM-071): Ein Resin-Drucker
         # stand hier flach zwischen den FDM-Geräten.
         add_printer_choices(self.printer_choice, profiles.printer_profiles())
@@ -3026,8 +3065,9 @@ class PrintSettingsDialog(QDialog):
         self.filament_label.setText(tr("Filamente"))
         self.material_link.setText(tr("Filamente …"))
         make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
-        self.setMinimumSize(560, 640)
+        self.setMinimumWidth(560)
         self._show_slicer_state()
+        self._refit_sections()
 
     def _fdm_only_widgets(self) -> list[QWidget]:
         """Was nur an einem Filamentdrucker etwas bedeutet."""
@@ -3075,7 +3115,7 @@ class PrintSettingsDialog(QDialog):
         # Ohne Konsolenlauf ist Öffnen der einzige Weg — und damit der
         # Hauptknopf, gleich was das Projekt gemerkt hat.
         make_primary(self.open_button)
-        self.setMinimumSize(560, 360)
+        self.setMinimumWidth(560)
 
     def _share_toggled(self, on: bool) -> None:
         """Die Wahl gilt für die Anwendung, nicht für dieses Projekt (§29).
@@ -3264,6 +3304,8 @@ class PrintSettingsDialog(QDialog):
         """Dieselbe Regel wie beim Durchmesser: Die Zahl gehört zum Drucker und
         wird in seinem Profil abgelegt — wer zwei Düsen hat, hat sie auch
         morgen noch. Danach rechnet die Szene neu, denn die Anordnung hängt daran."""
+        if not valid_printer_choice(self.printer_choice):
+            return
         entry = profiles.printer(str(self.printer_choice.currentData()))
         if entry.nozzles == value:
             return
@@ -3286,6 +3328,8 @@ class PrintSettingsDialog(QDialog):
         stehen — ``print_settings.resolve`` deckelt sie ohnehin am
         Düsendurchmesser.
         """
+        if not valid_printer_choice(self.printer_choice):
+            return
         entry = profiles.printer(str(self.printer_choice.currentData()))
         if abs(entry.nozzle_diameter - value) < 1e-9:
             return
@@ -3348,6 +3392,9 @@ class PrintSettingsDialog(QDialog):
         wechseln *heißt*, alles neu vorgeben zu lassen; einen Drucker zu
         wechseln heißt es nicht.
         """
+        if not valid_printer_choice(self.printer_choice):
+            self._show_slicer_state()
+            return
         document = self.session.project.document
         printer_id = str(self.printer_choice.currentData())
         self.session.change_scene_profile(
@@ -3386,7 +3433,7 @@ class PrintSettingsDialog(QDialog):
         ändert die Vorgabe nicht.
         """
         chosen = str(self.printer_choice.currentData() or "")
-        if chosen:
+        if chosen and valid_printer_choice(self.printer_choice):
             self.ui_settings.printer = chosen
 
     def _refill_slicer_profiles(self) -> None:
@@ -3636,15 +3683,15 @@ class PrintSettingsDialog(QDialog):
         label = self._labels.get(path)
         if field is None or editor is None or label is None:
             return
-        if not field.front:
+        if field.front:
+            if self.front_toggle is not None:
+                self.front_toggle.setChecked(True)
+        else:
             if self.tabs_toggle is not None and not self.tabs_toggle.isChecked():
                 self.tabs_toggle.setChecked(True)
             index = GROUPS.index(field.group) if field.group in GROUPS else -1
             if index >= 0:
                 self.tabs.setCurrentIndex(index)
-                area = self.tabs.widget(index)
-                if isinstance(area, QScrollArea):
-                    area.ensureWidgetVisible(editor)
         # **Die Füllfarbe füllt, sie schreibt nicht.** Als Schriftfarbe auf der
         # Dialogfläche brachte ``select`` im hellen Thema 1,70 — die am
         # schlechtesten lesbare Zeile des Dialogs war ausgerechnet die gesuchte.
@@ -3661,6 +3708,13 @@ class PrintSettingsDialog(QDialog):
             " font-weight: 600; border-radius: 3px; padding: 0 4px;"
         )
         editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        QTimer.singleShot(0, self, self._show_search_target)
+
+    def _show_search_target(self) -> None:
+        """Den Suchtreffer erst nach dem Aufklappen in den sichtbaren Bereich rollen."""
+        editor = self._editors.get(self._lifted)
+        if editor is not None:
+            self._scroll.ensureWidgetVisible(editor)
 
     def _build_tabs(self) -> QWidget:
         """Die hinteren sechsundvierzig Felder, hinter einem Dreieck.
@@ -3679,10 +3733,7 @@ class PrintSettingsDialog(QDialog):
             for field in FIELDS:
                 if field.group == group and not field.front:
                     self._add_row(form, field)
-            area = QScrollArea(self.tabs)
-            area.setWidget(page)
-            area.setWidgetResizable(True)
-            self.tabs.addTab(area, group_title(group))
+            self.tabs.addTab(page, group_title(group))
             self.tabs.setTabToolTip(self.tabs.count() - 1, group_title(group))
         # **Acht Gruppen, und zwei davon waren unerreichbar.** Bei der
         # Vorgabebreite endete die Reiterleiste nach „Geschwindigkeit"; die
@@ -3692,14 +3743,13 @@ class PrintSettingsDialog(QDialog):
         # Ausweg: Ein ``image:`` an ihnen greift nicht (auch das gemessen).
         # Wer nichts zum Rollen sieht, hat die achte Gruppe nicht.
         #
-        # Also gar nicht erst rollen: Die Reiter werden gekürzt statt
-        # abgeschnitten (der volle Name steht im Tooltip darüber), und der
-        # Dialog wächst beim Aufklappen in der Breite mit — dieselbe Bewegung,
-        # die er für die Höhe schon macht.
+        # Die Reiter werden gekürzt statt abgeschnitten; der volle Name steht
+        # im Tooltip. Die vom Nutzer gewählte Fensterbreite bleibt erhalten.
         bar = self.tabs.tabBar()
         bar.setUsesScrollButtons(False)
         bar.setElideMode(Qt.TextElideMode.ElideRight)
         bar.setExpanding(False)
+        self.tabs.currentChanged.connect(self._refit_sections)
         box = collapsible(tr("Weitere Einstellungen"), self.tabs, open_now=False)
         self.tabs_toggle = _toggle_of(box)
         if self.tabs_toggle is not None:
@@ -3707,41 +3757,85 @@ class PrintSettingsDialog(QDialog):
         return box
 
     def _unfold_tabs(self, open_now: bool) -> None:
-        """Zugeklappt bekommt die Gruppe auch keinen Platz mehr — und offen
-        bekommt sie echten.
+        """Die Tiefe wächst mit ihrer aktuellen Seite und gibt den Platz wieder frei."""
+        self._refit_sections(open_now)
 
-        Das Register verschwand schon vorher; sein Rahmen behielt aber den
-        Dehnungsfaktor und damit den ganzen freien Raum des Dialogs — ein
-        leerer Kasten, in dem nichts stand.
+    def _refit_sections(self, _state: bool | int = False) -> None:
+        """Erst nach der Sichtbarkeitsänderung die neue Inhaltshöhe messen."""
+        if self._built:
+            QTimer.singleShot(0, self, self._resize_to_content)
 
-        Beim Öffnen wächst der Dialog selbst (Robert, 26.08.2026: „klappt zu
-        klein auf"). `adjustSize` taugt dafür nicht: Es deckelt bei zwei
-        Dritteln der Bildschirmhöhe, und weil die Vorderseite davon schon
-        740 Punkte hält, blieben dem Register 220 von gewünschten 416 —
-        vier Zeilen mit Rollbalken. Gemessen wird stattdessen die **größte**
-        Gruppe: Sie soll ohne Rollen passen, wenn der Bildschirm es hergibt;
-        die Grenze ist die nutzbare Bildschirmhöhe, nicht ein Anteil davon.
-        """
+    def _resize_to_content(self) -> None:
+        """Eine Rollfläche, feste Aktionen und die gewählte Breite beim Klappen."""
+        if (
+            self.isVisible()
+            and self._last_content_height is not None
+            and self.height() != self._last_content_height
+        ):
+            self._content_user_height = self.height()
+        if (
+            self.isVisible()
+            and self._last_content_width is not None
+            and self.width() != self._last_content_width
+        ):
+            self._content_user_width = self.width()
+        if (
+            not self._content_user_width
+            and self.tabs_toggle is not None
+            and self.tabs_toggle.isChecked()
+        ):
+            # Die normale Ansicht zeigt die Reiternamen vollständig.
+            # Nur eine bewusst schmaler gezogene Ansicht kürzt sie ab.
+            self.resize(max(self.width(), self._room_for_tabs()), self.height())
+        page = self.tabs.currentWidget()
+        if page is not None:
+            page_layout = page.layout()
+            if page_layout is not None:
+                page_layout.activate()
+            # Nur die aktuelle Seite bestimmt die Höhe. Eine kurze Gruppe
+            # erbt keinen leeren Kasten von einer längeren Nachbargruppe.
+            self.tabs.setFixedHeight(
+                page.sizeHint().height() + self.tabs.tabBar().sizeHint().height() + 2 * TIGHT
+            )
+        self._fit_buttons()
+        content = self._scroll.widget()
+        content_layout = content.layout() if content is not None else None
+        if content_layout is not None:
+            content_layout.invalidate()
+            content_layout.activate()
+        self._scroll.updateGeometry()
         layout = self.layout()
-        box = self.tabs.parentWidget()
-        if isinstance(layout, QVBoxLayout) and box is not None:
-            layout.setStretch(layout.indexOf(box), 1 if open_now else 0)
-        if not open_now:
-            self.adjustSize()
-            return
-        tallest = 0
-        for index in range(self.tabs.count()):
-            area = self.tabs.widget(index)
-            page = area.widget() if isinstance(area, QScrollArea) else None
-            if page is not None:
-                tallest = max(tallest, page.sizeHint().height())
-        bar = self.tabs.tabBar()
-        frame = bar.sizeHint().height() + 8
-        wanted = self.height() + tallest + frame + 12
+        if layout is not None:
+            layout.invalidate()
+            layout.activate()
+        self.resize(self.width(), max(self._content_user_height, self.sizeHint().height()))
+        fit_dialog_to_screen(self)
+        self._last_content_height = self.height()
+        self._last_content_width = self.width()
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        super().resizeEvent(event)
+        if hasattr(self, "_buttons"):
+            self._fit_buttons()
+
+    def _fit_buttons(self) -> None:
+        """Lange Aktionsnamen stehen bei schmalem Fenster untereinander."""
+        visible = [button for button in self._buttons.buttons() if not button.isHidden()]
+        row = self._buttons.layout()
+        spacing = max(row.spacing(), 0) if row is not None else TIGHT
+        wanted = sum(button.sizeHint().width() for button in visible)
+        wanted += spacing * max(0, len(visible) - 1)
+        available = self.width()
         screen = self.screen()
         if screen is not None:
-            wanted = min(wanted, screen.availableGeometry().height() - SCREEN_MARGIN)
-        self.resize(max(self._room_for_tabs(), self.width()), max(wanted, self.height()))
+            available = min(available, screen.availableGeometry().width() - SCREEN_MARGIN)
+        layout = self.layout()
+        if layout is not None:
+            margins = layout.contentsMargins()
+            available -= margins.left() + margins.right()
+        self._buttons.setOrientation(
+            Qt.Orientation.Horizontal if wanted <= available else Qt.Orientation.Vertical
+        )
 
     def _room_for_tabs(self) -> int:
         """Die Breite, die die Reiterleiste braucht — gedeckelt vom Bildschirm.
@@ -3833,7 +3927,7 @@ class PrintSettingsDialog(QDialog):
         self.slicer_label.setVisible(False)
         outer.addWidget(slicer_row)
 
-        self.machine_choice = QComboBox(self.slicer_inner)
+        self.machine_choice = PrinterComboBox(self.slicer_inner)
         self.machine_choice.setEnabled(False)
         self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
         # **Tippen statt scrollen** („1001 Profile sind bisschen viel", Robert,
@@ -3849,12 +3943,6 @@ class PrintSettingsDialog(QDialog):
         # ``currentData()`` bleibt dabei die einzige Quelle der Wahl; sie ist
         # ``None``, solange nichts Passendes getroffen ist, und der
         # Slicen-Knopf sperrt sich mit seinem Grund (Regel 19).
-        self.machine_choice.setEditable(True)
-        self.machine_choice.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        machine_completer = self.machine_choice.completer()
-        if machine_completer is not None:
-            machine_completer.setFilterMode(Qt.MatchFlag.MatchContains)
-            machine_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         machine_note = tr(
             "Das Druckerprofil des Slicers. Tippen sucht in der ganzen Liste — "
             "auch mitten im Namen."
@@ -4018,49 +4106,8 @@ class PrintSettingsDialog(QDialog):
             self.slicer_toggle.setChecked(True)
 
     def _unfold_slicer(self, open_now: bool) -> None:
-        """Beim Aufklappen wächst der Dialog mit — von selbst tut er es nicht.
-
-        Dieser Abschnitt geht **nachgereicht** auf: Die Profilsuche läuft in
-        einem Arbeiter, und Sekunden nach dem Öffnen des Dialogs stehen vier
-        Zeilen mehr darin. Das Fenster bleibt dabei auf seiner Aufmachgröße,
-        und den Fehlbetrag presst die Layoutrechnung aus den Feldern darüber —
-        gemessen an der Kundenfahrt vom 30.08.2026: Nach dem Aufklappen
-        standen die acht Zahlenfelder der Vorderseite sichtbar gestaucht da.
-        Dieselbe Familie wie ``first_run._grow_to_content`` (Robert,
-        26.08.2026: Auswahlfelder mit 16 von 28 Punkten Höhe).
-
-        Nur wachsen, nie schrumpfen: Wer selbst zuklappt, will Platz sparen —
-        und ein Dialog, der beim Zuklappen springt, ist Bewegung ohne Auftrag.
-        Das Wachsen deckelt die nutzbare Bildschirmhöhe, wie in
-        :meth:`_unfold_tabs`.
-        """
-        if not open_now:
-            return
-        # Über den Zeitgeber wie in ``first_run``: Unmittelbar im Signal meldet
-        # ``sizeHint`` noch den zugeklappten Stand, und ein ``max`` mit einer
-        # veralteten Zahl wächst nicht. ``self`` als Empfänger, damit der Ruf
-        # verfällt, wenn der Dialog vorher weggeräumt wird.
-        QTimer.singleShot(0, self, self._grow_to_content)
-
-    def _grow_to_content(self) -> None:
-        """Auf die Höhe wachsen, die der Inhalt wünscht — bis zum Bildschirm.
-
-        **Erst die Rechnung erzwingen, dann messen.** Ein Ereignisdurchlauf
-        allein genügt hier nicht: Gemessen am aufgeklappten Abschnitt meldete
-        ``sizeHint`` weiterhin 633 Punkte, während die ehrliche Zahl nach
-        ``layout().activate()`` bei 775 lag — ein ``max`` mit der veralteten
-        Zahl wächst nicht, und der Fehlbetrag bleibt in den Feldern darüber.
-        Dieselbe Sorte Lüge wie die umbrochenen Labels in
-        ``first_run._grow_to_content``, nur eine Ebene höher.
-        """
-        layout = self.layout()
-        if layout is not None:
-            layout.activate()
-        wanted = self.sizeHint().height()
-        screen = self.screen()
-        if screen is not None:
-            wanted = min(wanted, screen.availableGeometry().height() - SCREEN_MARGIN)
-        self.resize(self.width(), max(self.height(), wanted))
+        """Auch nachgereichte Profile bekommen Raum, ohne die oberen Felder zu stauchen."""
+        self._refit_sections(open_now)
 
     def _forget_result(self) -> None:
         """Das Ergebnis des vorigen Slicers verwerfen.
@@ -4852,6 +4899,7 @@ class PrintSettingsDialog(QDialog):
         stored = self._profiles_for(slots)
         for index, slot in enumerate(slots):
             box = QComboBox(self.slicer_inner)
+            wheel_needs_focus(box)
             box.setEnabled(bool(self._profiles))
             box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
             caption = str(slot.name or tr("Slot {number}").replace("{number}", str(index + 1)))
@@ -5346,7 +5394,7 @@ class PrintSettingsDialog(QDialog):
         row.addWidget(self.cancel_slice)
         return holder
 
-    def _build_buttons(self) -> QWidget:
+    def _build_buttons(self) -> QDialogButtonBox:
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         # Qt beschriftet seine Standardknöpfe selbst, und zwar in der Sprache
         # des Systems — Regel 20 verlangt, dass auch dieser Text durch tr() geht.
@@ -5484,6 +5532,16 @@ class PrintSettingsDialog(QDialog):
                 if not reason:
                     widget.setProperty(_OWN_TIP, None)
 
+    def _printer_selection_issue(self) -> str:
+        """Tippsuche ist noch keine Wahl, weder am Projekt noch am Slicerprofil."""
+        if not valid_printer_choice(self.printer_choice) or (
+            self.machine_choice.isEnabled()
+            and self.machine_choice.count() > 0
+            and not valid_printer_choice(self.machine_choice)
+        ):
+            return str(tr("Wählen Sie einen Drucker aus der Liste."))
+        return ""
+
     def _show_slicer_state(self) -> None:
         """Ob ein Slicer da ist — und wenn nicht, der Weg zu einem.
 
@@ -5500,6 +5558,11 @@ class PrintSettingsDialog(QDialog):
         Statuszeile, Bildschirmleser).
         """
         self._check_print_result()
+        selection_issue = self._printer_selection_issue()
+        self.nozzle.setEnabled(valid_printer_choice(self.printer_choice))
+        self.nozzle_count.setEnabled(valid_printer_choice(self.printer_choice))
+        if self._gcode and self._result_context == self._print_context():
+            self._release_the_save()
         found = self._slicer_path
         state = activation.state()
         # **Der häufigste Grund stand in keinem der Zweige.** Beide Knöpfe
@@ -5524,6 +5587,8 @@ class PrintSettingsDialog(QDialog):
         reason = ""
         if not state.unlocked:
             reason = licence_lock_line(state)
+        elif selection_issue:
+            reason = selection_issue
         elif searching:
             reason = searching
         elif found is None:
@@ -5564,6 +5629,8 @@ class PrintSettingsDialog(QDialog):
         open_reason = ""
         if not state.unlocked:
             open_reason = licence_lock_line(state)
+        elif selection_issue:
+            open_reason = selection_issue
         elif searching:
             open_reason = searching
         elif found is None:
@@ -5582,7 +5649,10 @@ class PrintSettingsDialog(QDialog):
         # Angebot vor der Antwort — und der Kunde hat vielleicht längst einen.
         self.setup_button.setVisible(found is None and not searching)
         self._mark_fields_this_slicer_ignores()
-        if searching:
+        if selection_issue:
+            self.state.setText(selection_issue)
+            self._state_shows_reason = True
+        elif searching:
             # Der Wartezustand ist ein **Grund** und kein Ergebnis: Er gilt,
             # solange er zutrifft, und wird vom Zweig ganz unten wieder
             # geräumt, sobald die Suche antwortet.
@@ -6928,6 +6998,9 @@ class PrintSettingsDialog(QDialog):
         beide Übergabearten: Der Rechen-Weg und der Öffnen-Weg lesen dieselben
         Felder, und zwei Abschriften davon drifteten auseinander.
         """
+        if problem := self._printer_selection_issue():
+            self.state.setText(problem)
+            return None
         found = self._slicer_path
         if found is None:
             return None
@@ -7339,10 +7412,11 @@ class PrintSettingsDialog(QDialog):
         Umkehrung des Fehlers: Er sagt, etwas fehle, während es da ist.
         """
         self._result_context = self._print_context()
-        self.save_button.setEnabled(True)
-        self.save_button.setToolTip("")
-        self.save_button.setStatusTip("")
-        self.save_button.setAccessibleDescription("")
+        reason = self._printer_selection_issue()
+        self.save_button.setEnabled(not reason)
+        self.save_button.setToolTip(reason)
+        self.save_button.setStatusTip(reason)
+        self.save_button.setAccessibleDescription(reason)
 
     def _save_gcode(self) -> None:
         """Die Druckdateien dorthin, wo der Nutzer sie haben will (§29).
@@ -7356,6 +7430,9 @@ class PrintSettingsDialog(QDialog):
         stehen ohnehin fest, sobald der Auftrag einen hat — sie unterscheiden
         sich nur in der Plattennummer.
         """
+        if problem := self._printer_selection_issue():
+            self.state.setText(problem)
+            return
         self._check_print_result()
         written = [path for path in self._gcode if path.is_file()]
         if not written:

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QSplitter,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -38,7 +40,8 @@ from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying
-from app.ui.style import NORMAL, make_primary
+from app.ui.panels import collapsible
+from app.ui.style import NORMAL, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
 
 #: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
 #: wichtigsten — und das sind die zwei zuerst deklarierten, denn eine
@@ -302,18 +305,14 @@ class PartCatalog(QDialog):
         # Fenster: Ausschnitt des Verlaufs, eingebettete Quellen, Merkmale des
         # gerechneten Körpers. Der Katalog kennt das Dokument nicht und soll es
         # nicht kennen.
-        self.save_part = buttons.addButton(
-            tr("Auswahl als Baustein speichern …"), QDialogButtonBox.ButtonRole.ActionRole
-        )
+        self.save_part = QPushButton(tr("Auswahl als Baustein speichern …"), self)
         self.save_part.clicked.connect(self.saveRequested.emit)
         self.set_can_save(False, "")
 
         # **Neben dem Speichern und nicht in einem Menü**, aus demselben
         # Grund: Wer eine lokale Bausteindatei erzeugen will, denkt an die
         # Bibliothek, in der das Teil liegt.
-        self.share_part = buttons.addButton(
-            tr("Baustein als Datei weitergeben …"), QDialogButtonBox.ButtonRole.ActionRole
-        )
+        self.share_part = QPushButton(tr("Baustein als Datei weitergeben …"), self)
         self.share_part.clicked.connect(self.shareRequested.emit)
         self.set_can_share(False, "")
 
@@ -322,17 +321,13 @@ class PartCatalog(QDialog):
         # geschrieben und nie ausgeführt wird (Regel 11). Der Knopf steht neben
         # der Weitergabe, weil er dieselbe Frage beantwortet: „wie kommt dieses
         # Teil hier heraus".
-        self.export_scad = buttons.addButton(
-            tr("Als OpenSCAD-Datei schreiben …"), QDialogButtonBox.ButtonRole.ActionRole
-        )
+        self.export_scad = QPushButton(tr("Als OpenSCAD-Datei schreiben …"), self)
         self.export_scad.setAccessibleName(tr("Als OpenSCAD-Datei schreiben"))
         self.export_scad.clicked.connect(self._request_scad)
         self.set_can_write_scad(False, "")
 
         # Immer bedienbar: Zum Einlesen braucht es keinen gewählten Baustein.
-        self.adopt_part = buttons.addButton(
-            tr("Baustein aus Datei hinzufügen …"), QDialogButtonBox.ButtonRole.ActionRole
-        )
+        self.adopt_part = QPushButton(tr("Baustein aus Datei hinzufügen …"), self)
         self.adopt_part.clicked.connect(self.adoptRequested.emit)
 
         # **Der Weg zurück in den Verlauf** (E6): Bis hierher hieß „ändern"
@@ -343,9 +338,7 @@ class PartCatalog(QDialog):
         # der dem Kunden gehört. Beide sind deshalb unsichtbar, solange einer
         # der eingebauten gewählt ist — ein grauer Knopf an
         # siebenundzwanzig von dreißig Einträgen wäre kein Angebot.
-        self.edit_part = buttons.addButton(
-            tr("Zum Bearbeiten öffnen …"), QDialogButtonBox.ButtonRole.ActionRole
-        )
+        self.edit_part = QPushButton(tr("Zum Bearbeiten öffnen …"), self)
         self.edit_part.setAccessibleName(tr("Baustein zum Bearbeiten öffnen"))
         # Was der Klick bewirkt, steht am Knopf — er tauscht das offene
         # Projekt, und das ist mehr, als „bearbeiten" vermuten lässt. An allen
@@ -357,9 +350,7 @@ class PartCatalog(QDialog):
         self.edit_part.setVisible(False)
         self.edit_part.clicked.connect(self._request_draft)
 
-        self.remove_part = buttons.addButton(
-            tr("Aus Bibliothek entfernen"), QDialogButtonBox.ButtonRole.ActionRole
-        )
+        self.remove_part = QPushButton(tr("Aus Bibliothek entfernen"), self)
         self.remove_part.setAccessibleName(tr("Aus Bibliothek entfernen"))
         self.remove_part.setVisible(False)
         self.remove_part.clicked.connect(self._request_removal)
@@ -369,18 +360,55 @@ class PartCatalog(QDialog):
 
         split = QSplitter(Qt.Orientation.Horizontal, self)
         split.addWidget(self.list)
-        split.addWidget(self.detail)
+        detail_scroll = DialogScrollArea(self)
+        detail_scroll.setWidget(self.detail)
+        detail_scroll.setMinimumWidth(DETAIL_WIDTH)
+        split.addWidget(detail_scroll)
+        split.setChildrenCollapsible(False)
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 0)
 
+        management = QWidget(self)
+        management_layout = QGridLayout(management)
+        management_layout.setContentsMargins(0, NORMAL, 0, 0)
+        management_layout.setSpacing(NORMAL)
+        actions = (
+            self.save_part,
+            self.adopt_part,
+            self.share_part,
+            self.export_scad,
+            self.edit_part,
+            self.remove_part,
+        )
+        for index, action in enumerate(actions):
+            action.setAutoDefault(False)
+            management_layout.addWidget(action, index // 2, index % 2)
+        management_layout.addWidget(self.save_hint, 3, 0, 1, 2)
+        management_layout.addWidget(self.share_hint, 4, 0, 1, 2)
+        self.management_section = collapsible(tr("Bausteine verwalten"), management, open_now=False)
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.search)
         layout.addWidget(file_result_row)
         layout.addWidget(split, stretch=1)
-        layout.addWidget(self.save_hint)
-        layout.addWidget(self.share_hint)
         layout.addWidget(self.insert_hint)
+        layout.addWidget(self.management_section)
         layout.addWidget(buttons)
+        previous: QWidget = self.list
+        heading = self.management_section.findChild(QToolButton)
+        if heading is not None:
+            QWidget.setTabOrder(previous, heading)
+            previous = heading
+        for action in actions:
+            QWidget.setTabOrder(previous, action)
+            previous = action
+        QWidget.setTabOrder(previous, buttons.button(QDialogButtonBox.StandardButton.Ok))
+        QWidget.setTabOrder(
+            buttons.button(QDialogButtonBox.StandardButton.Ok),
+            buttons.button(QDialogButtonBox.StandardButton.Cancel),
+        )
 
         self._previews: dict[str, QPixmap] = {}
         self._blank: QPixmap | None = None
@@ -650,6 +678,7 @@ class PartCatalog(QDialog):
         holt der Filter unten nach.
         """
         super().showEvent(event)
+        fit_dialog_to_screen(self)
         self._stretch_headings()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen

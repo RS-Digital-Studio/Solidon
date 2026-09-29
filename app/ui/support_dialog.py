@@ -25,8 +25,8 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, Final
 from uuid import uuid4
 
-from PySide6.QtCore import SLOT, QBuffer, QIODevice, QRect, Qt, QUrl, Signal, Slot
-from PySide6.QtGui import QDesktopServices, QImage
+from PySide6.QtCore import SLOT, QBuffer, QIODevice, QRect, Qt, QTimer, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices, QImage, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QTextBrowser,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -59,10 +60,10 @@ from app.core.support import (
     Ticket,
 )
 from app.i18n import tr
-from app.ui.labels import localised
+from app.ui.labels import localised, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
-from app.ui.style import make_primary
+from app.ui.style import NORMAL, ROOMY, DialogScrollArea, fit_dialog_to_screen, make_primary
 from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
 if TYPE_CHECKING:
@@ -342,6 +343,8 @@ class SupportDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._kind = kind
+        self._fitted_height: int | None = None
+        self._user_height = 0
         self._session = session
         self._url = url
         self._sender = sender
@@ -516,7 +519,10 @@ class SupportDialog(QDialog):
         self.by_mail.setVisible(False)
         self.by_mail.clicked.connect(self._open_mail)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.headline)
         layout.addLayout(form)
         layout.addWidget(self.with_shot)
@@ -526,11 +532,45 @@ class SupportDialog(QDialog):
         layout.addWidget(self.state)
         layout.addWidget(self.by_mail)
         layout.addWidget(self.progress)
-        layout.addWidget(self.buttons)
+        layout.addStretch(1)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_soon)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(self._scroll, 1)
+        outer.addWidget(self.buttons)
+        wheel_needs_focus(self.kind)
+        heading = self.previews.findChild(QToolButton)
+        if heading is not None:
+            heading.toggled.connect(self._fit_soon)
 
         self.message.textChanged.connect(self._update_send)
         self.kind.currentIndexChanged.connect(self._refresh)
         self._refresh()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon()
+
+    def _fit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_content)
+
+    def _fit_content(self) -> None:
+        """Die Vorschau bekommt Platz, ohne eine bewusst gezogene Höhe zu verwerfen."""
+        layout = self.layout()
+        if layout is None or not self.isVisible():
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = self.sizeHint().height()
+        self.resize(self.width(), max(wanted, self._user_height))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
 
     # --- Zustand ----------------------------------------------------------------
 

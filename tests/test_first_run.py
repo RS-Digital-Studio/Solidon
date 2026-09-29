@@ -720,7 +720,7 @@ def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
     class LaterDialog:
         DialogCode = dialog_code
 
-        def __init__(self, *_args: object) -> None:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
             self.importRequested = mock.Mock()
             self.inventoryRequested = mock.Mock()
 

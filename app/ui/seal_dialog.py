@@ -300,6 +300,12 @@ class SealPathDialog(QDialog):
         form.addRow(tr("Trägerfläche"), self.support)
         form.addRow(tr("Zeichnung"), self.sketch_button)
         form.addRow(tr("Gegenfläche"), self.counterface)
+        self._form = form
+        for field in (self.mode, self.support, self.counterface):
+            caption = form.labelForField(field)
+            if isinstance(caption, QLabel):
+                caption.setBuddy(field)
+                field.setAccessibleName(caption.text())
         layout.addLayout(form)
         row = QHBoxLayout()
         self.contours = QListWidget(self)
@@ -370,6 +376,8 @@ class SealPathDialog(QDialog):
         opening = self.mode.currentData() == "opening"
         self.support.setEnabled(opening)
         self.sketch_button.setEnabled(not opening)
+        self._form.setRowVisible(self.support, opening)
+        self._form.setRowVisible(self.sketch_button, not opening)
         # Das jeweils andere Feld ruht — und sagt, wie es wieder geht
         # (Regel 18); gefunden vom Wächter über alle Dialoge.
         for widget, resting, why in (

@@ -1045,6 +1045,7 @@ def test_the_palette_lines_its_shortcuts_up(qt_app: QApplication) -> None:
         palette.deleteLater()
 
 
+@pytest.mark.windowed
 def test_the_native_palette_keeps_its_second_line_below_the_title() -> None:
     """Echte Schriftmetriken prüfen die gezeichneten Textspalten einer gesperrten Zeile."""
     import os
@@ -1090,9 +1091,14 @@ try:
     _Rows(view).paint(painter, option, view.model().index(0, 0))
 finally:
     painter.end()
-assert drawn == ["Bohrung setzen\\nWählen Sie zuerst einen Körper."], drawn
-assert len(shortcuts) == 1 and shortcuts[0][1] == "Ctrl+B", shortcuts
-assert shortcuts[0][0].bottom() < option.rect.center().y() + 2, shortcuts
+assert drawn == [""], drawn
+assert [text for _area, text in shortcuts] == [
+    "Bohrung setzen", "Ctrl+B", "Wählen Sie zuerst einen Körper."
+], shortcuts
+title, shortcut, detail = (area for area, _text in shortcuts)
+assert title.right() < shortcut.left(), shortcuts
+assert title.bottom() < detail.top(), shortcuts
+assert shortcut.bottom() < detail.top(), shortcuts
 view.close()
 """
     done = subprocess.run(

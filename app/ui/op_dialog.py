@@ -62,13 +62,14 @@ from app.ui.labels import (
     limit_sentence,
     localised,
     set_circle_measure,
+    wheel_needs_focus,
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.organizer_dialog import OrganizerLayoutField
 from app.ui.outline_dialog import ContourField
 from app.ui.panels import align_forms
 from app.ui.seal_dialog import SealPathField
-from app.ui.style import TIGHT, make_primary, set_level
+from app.ui.style import TIGHT, DialogScrollArea, fit_dialog_to_screen, make_primary, set_level
 
 if TYPE_CHECKING:
     from app.ui.placement_flow import PlacementFlow
@@ -1609,6 +1610,8 @@ class OperationDialog(QDialog):
         durchreicht."""
         super().__init__(parent)
         self.spec = spec
+        self._content_user_height = 0
+        self._last_content_height: int | None = None
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
         # Das F1 des Hauptfensters kommt in einem eigenen Fenster nicht an:
@@ -1680,6 +1683,8 @@ class OperationDialog(QDialog):
 
         front = QFormLayout()
         advanced = QFormLayout()
+        for form in (front, advanced):
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self._front = front
         self._advanced_form = advanced
         self._rows: dict[str, QFormLayout] = {}
@@ -1749,7 +1754,13 @@ class OperationDialog(QDialog):
                     caption.setText(editor.caption())
                     editor.captionChanged.connect(caption.setText)
 
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        self._scroll = DialogScrollArea(self)
+        contents = QWidget(self._scroll)
+        layout = QVBoxLayout(contents)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._scroll.setWidget(contents)
+        outer.addWidget(self._scroll, 1)
         self._caveat: QLabel | None = None
         self._description: QLabel | None = None
         if spec.doc:
@@ -1869,10 +1880,6 @@ class OperationDialog(QDialog):
         self._refusal = ErrorNotice(self)
         self._refusal.hide()
         layout.addWidget(self._refusal)
-        # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
-        # nicht mehr verteilt über alles.
-        layout.addStretch(1)
-
         self._naming: RowCheckBox | None = None
         if offer_naming:
             # **Weg 2 legt Maße an, keine Zahlen** (§13): Ein Quader, dessen
@@ -1943,6 +1950,8 @@ class OperationDialog(QDialog):
             layout.addWidget(self.advanced)
             layout.addWidget(inner)
 
+        # Überschuss erst nach allen Feldern, nicht vor der aufklappbaren Tiefe.
+        layout.addStretch(1)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
@@ -1972,7 +1981,7 @@ class OperationDialog(QDialog):
             filament.pendingChanged.connect(self._follow_source_pending)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        outer.addWidget(buttons)
 
         self._blocked_reason: str | None = None
         """Ein Sperrgrund von außen — siehe :meth:`block_apply`."""
@@ -2706,6 +2715,10 @@ class OperationDialog(QDialog):
         """
         from app.ui.sketch_editor import SketchField
 
+        for control in (editor, *editor.findChildren(QWidget)):
+            if isinstance(control, (QComboBox, QSpinBox, QDoubleSpinBox)):
+                wheel_needs_focus(control)
+
         if isinstance(editor, FeatureSetField | EdgeSetField):
             editor.changed.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
@@ -3021,6 +3034,7 @@ class OperationDialog(QDialog):
         if inner is not None:
             inner.setFocus(Qt.FocusReason.OtherFocusReason)
             inner.selectAll()
+        self._scroll.ensureWidgetVisible(editor)
         return True
 
     def take_point(self, point: tuple[float, float, float]) -> bool:
@@ -3169,8 +3183,12 @@ class OperationDialog(QDialog):
         self._follow_source_pending()
         self._hide_legacy_feature_field()
         align_forms(self)
-        self.adjustSize()
+        self._resize_to_content()
         self.schemaChanged.emit()
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        super().showEvent(event)
+        self._refit.start(0)
 
     def place_beside(self, anchor: QWidget | None) -> None:
         """Setzt den Dialog an den Rand statt in die Bildmitte.
@@ -3207,6 +3225,8 @@ class OperationDialog(QDialog):
             return
         corner = anchor.mapToGlobal(area.topRight())
         self.move(corner.x() - width - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
+        if self.isVisible():
+            fit_dialog_to_screen(self)
 
     def _unfold_advanced(self, inner: QWidget, open_now: bool) -> None:
         """„Weitere Einstellungen" auf- und zuklappen.
@@ -3215,17 +3235,17 @@ class OperationDialog(QDialog):
         ``self``, hing am eigenen Knopf und hielt den Dialog fest. Der Rahmen
         kommt gebunden mit, der Zustand vom Signal.
         """
+        focused = inner.focusWidget()
+        if (
+            not open_now
+            and focused is not None
+            and focused.hasFocus()
+            and inner.isAncestorOf(focused)
+        ):
+            self.advanced.setFocus(Qt.FocusReason.OtherFocusReason)
         inner.setVisible(open_now)
         self.advanced.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
-        if not open_now:
-            self.adjustSize()
-            return
-
-        # ``adjustSize`` deckelt Dialoge bei zwei Dritteln der Bildschirmhöhe.
-        # Bei einem Gewinde blieben deshalb die hinteren Felder unter den
-        # Aktionsknöpfen liegen. Der geöffnete Bereich bekommt seine echte
-        # Inhaltshöhe, bis höchstens an den sichtbaren Bildschirmrand.
-        self._resize_to_content(at_least=self.height())
+        self._refit.start(0)
 
     def _resize_to_content(self, at_least: int = 0) -> None:
         """Die Höhe auf den Inhalt setzen — bis an den sichtbaren Bildschirmrand.
@@ -3245,12 +3265,25 @@ class OperationDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
+        if (
+            self.isVisible()
+            and self._last_content_height is not None
+            and self.height() != self._last_content_height
+        ):
+            self._content_user_height = self.height()
+        content = self._scroll.widget()
+        content_layout = content.layout() if content is not None else None
+        if content_layout is not None:
+            content_layout.activate()
+        self._scroll.updateGeometry()
         layout.activate()
-        wanted = max(at_least, layout.sizeHint().height())
-        screen = self.screen()
-        if screen is not None:
-            wanted = min(wanted, screen.availableGeometry().height() - 48)
-        self.resize(self.width(), wanted)
+        wanted = max(at_least, self._content_user_height, layout.sizeHint().height())
+        margins = layout.contentsMargins()
+        content_width = content_layout.minimumSize().width() if content_layout is not None else 0
+        width = max(self.width(), content_width + margins.left() + margins.right())
+        self.resize(width, wanted)
+        fit_dialog_to_screen(self)
+        self._last_content_height = self.height()
 
     def _fill_filament_fields(
         self,

@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.i18n import TranslatableText, _, tr
-from app.ui.style import no_primary
+from app.ui.style import NORMAL, WIDE, no_primary
 from app.ui.tool_strip import strip_title
 
 #: Die Tasten, die am Fenster hängen und in keinem Menü stehen.
@@ -262,6 +262,7 @@ class ShortcutsWindow(QDialog):
                 headings[group] = heading
             heading.addChild(QTreeWidgetItem([title, shortcut]))
         self.tree.expandAll()
+        self._before_search: list[bool] | None = None
         self.tree.resizeColumnToContents(0)
 
         # Das Kürzel kommt von der Aktion selbst. Hier stand „Strg+G", und das
@@ -287,6 +288,8 @@ class ShortcutsWindow(QDialog):
         buttons.accepted.connect(self.accept)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.search)
         layout.addWidget(self.tree, stretch=1)
         layout.addWidget(self.nothing)
@@ -306,6 +309,12 @@ class ShortcutsWindow(QDialog):
         Zeilen darunter sieht aus wie ein Treffer, der nichts sagt.
         """
         query = self.search.text().strip().casefold()
+        if query and self._before_search is None:
+            self._before_search = [
+                bool(heading is not None and heading.isExpanded())
+                for index in range(self.tree.topLevelItemCount())
+                for heading in (self.tree.topLevelItem(index),)
+            ]
         shown = 0
         for index in range(self.tree.topLevelItemCount()):
             heading = self.tree.topLevelItem(index)
@@ -331,5 +340,11 @@ class ShortcutsWindow(QDialog):
                 child.setHidden(hidden)
                 left += not hidden
             heading.setHidden(not left)
+            if query and left:
+                heading.setExpanded(True)
+            elif not query and self._before_search is not None:
+                heading.setExpanded(self._before_search[index])
             shown += left
+        if not query:
+            self._before_search = None
         self.nothing.setVisible(bool(query) and not shown)

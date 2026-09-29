@@ -36,6 +36,66 @@ def _assigned_body(slots: list[MaterialSlot], used: tuple[int, ...]):
 def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
     """Das Dokument führt Anteile, die Oberfläche zeigt Hexwerte."""
     assert hex_of((1.0, 0.0, 0.0)) == "#ff0000"
+
+
+def test_extra_colours_keep_existing_buttons_and_the_form_tab_order(qt_app, monkeypatch) -> None:
+    """Eine weitere Farbe entfernt weder den bisherigen Fokusanker noch den Weg durchs Formular."""
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QColorDialog
+
+    monkeypatch.setattr(QColorDialog, "getColor", lambda *_args: QColor())
+    dialog = NewFilamentDialog(name="Silk", colour="#ff0000 #00ff00")
+    try:
+        original = tuple(dialog.colour_buttons)
+        dialog.add_colour.click()
+        assert tuple(dialog.colour_buttons[:2]) == original
+        assert len(dialog.colour_buttons) == 3
+        assert dialog.colour_buttons[0].nextInFocusChain() is dialog.colour_buttons[1]
+        assert dialog.colour_buttons[1].nextInFocusChain() is dialog.colour_buttons[2]
+        assert dialog.colour_buttons[2].nextInFocusChain() is dialog.add_colour
+        assert dialog.remove_colour.nextInFocusChain() is dialog.location
+        dialog.remove_colour.click()
+        assert tuple(dialog.colour_buttons) == original
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_spool_details_fit_then_return_their_window_height(qt_app) -> None:
+    """Zusatzangaben vergrößern die Spuleneingabe und geben ihren Platz wieder zurück."""
+    from PySide6.QtWidgets import QToolButton
+
+    from app.ui.filament_picker import NewFilamentDialog
+
+    dialog = NewFilamentDialog()
+
+    def settle():
+        for _ in range(12):
+            qt_app.processEvents()
+
+    try:
+        dialog.show()
+        settle()
+        compact = dialog.height()
+        heading = dialog.more_section.findChild(QToolButton)
+        assert heading is not None
+        heading.click()
+        settle()
+        assert dialog.height() > compact
+        assert not dialog._scroll.isAncestorOf(dialog._ok_button)
+        heading.click()
+        settle()
+        assert dialog.height() == compact
+        dialog.resize(dialog.width(), compact + 60)
+        drawn = dialog.height()
+        heading.click()
+        settle()
+        heading.click()
+        settle()
+        assert dialog.height() == drawn
+    finally:
+        dialog.release()
+        dialog.deleteLater()
     assert hex_of((0.0, 0.5, 1.0)) == "#0080ff"
     assert hex_of(None) == "", "keine Farbe ist keine Farbe, nicht Schwarz"
 

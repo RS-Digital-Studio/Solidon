@@ -6,10 +6,24 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
 from app.core.types import Parameter
 from app.ui.dialogs import ParameterDialog
+
+
+def test_the_parameter_action_uses_weight_as_well_as_colour(qt_app: QApplication) -> None:
+    """Die Eingabetaste übernimmt; Hervorhebung trägt auch die Schrift des Knopfs."""
+    dialog = ParameterDialog({})
+    try:
+        buttons = dialog.findChild(QDialogButtonBox)
+        assert buttons is not None
+        action = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert action is not None
+        assert action.isDefault()
+        assert action.font().weight() > dialog.font().weight()
+    finally:
+        dialog.deleteLater()
 
 
 def test_the_bounds_are_written_the_way_the_window_writes_numbers(qt_app: QApplication) -> None:

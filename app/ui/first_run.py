@@ -30,8 +30,20 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QStandardItemModel
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QPersistentModelIndex,
+    QPoint,
+    QSignalBlocker,
+    QSortFilterProxyModel,
+    Qt,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QFont, QKeyEvent, QShowEvent, QStandardItemModel, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -39,12 +51,15 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QPushButton,
     QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -62,10 +77,19 @@ from app.core.types import PrinterProfile, PrintTechnology
 from app.i18n import format_decimal, language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
-from app.ui.labels import NumberSpin, by_title, deadline_date, slicer_title
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.labels import NumberSpin, deadline_date, slicer_title, wheel_needs_focus
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying
 from app.ui.settings import UiSettings
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    TIGHT,
+    WIDE,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+    set_level,
+)
 
 _log = get_logger(__name__)
 
@@ -163,6 +187,8 @@ class PrinterChoices:
     """Ob Solidon die Profile dieses Programms überhaupt liest. Ein
     Programm ohne Familie (``other``) nennt keine Drucker — nicht, weil dort
     keine wären, sondern weil Solidon seinen Bestand nicht kennt."""
+    profiles: tuple[PrinterProfile, ...] = ()
+    """Gelesene Slicerprofile, die erst mit der gewählten Maschine gespeichert werden."""
 
 
 class _PrinterSurvey(Worker):
@@ -176,23 +202,22 @@ class _PrinterSurvey(Worker):
 
     def work(self) -> None:
         flavour = detect(self.executable).flavour
-        known = profiles.printer_profiles()
-        names = slicer_profiles.known_printers(flavour, self.executable)
+        found = slicer_profiles.discover_printers(self.executable, flavour)
+        known = {profile.id: profile for profile in found}
         identifiers = tuple(
-            sorted(
-                {
-                    identifier
-                    for name in names
-                    if (identifier := slicer_profiles.printer_for(name, known))
-                }
-                | set(profiles.user_printer_profiles())
-            )
+            sorted({profile.id for profile in found} | set(profiles.user_printer_profiles()))
         )
-        suggested = slicer_profiles.printer_for(
-            slicer_profiles.chosen_machine(flavour, self.executable), known
-        )
+        suggested = slicer_profiles.chosen_printer(
+            flavour, self.executable, known
+        ) or slicer_profiles.chosen_printer(flavour, self.executable, profiles.printer_profiles())
         self.done.emit(
-            PrinterChoices(self.executable, identifiers, suggested, translated=flavour != "other")
+            PrinterChoices(
+                self.executable,
+                identifiers,
+                suggested,
+                translated=flavour != "other",
+                profiles=found,
+            )
         )
 
 
@@ -253,9 +278,20 @@ class FirstRunDialog(QDialog):
     importRequested = Signal()
     inventoryRequested = Signal()
 
-    def __init__(self, settings: UiSettings, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        settings: UiSettings,
+        parent: QWidget | None = None,
+        *,
+        discovered_printers: Mapping[str, PrinterProfile] | None = None,
+        printer_selection: str | None = None,
+        printer_query: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self.settings = settings
+        self._discovered_printers = dict(discovered_printers or {})
+        self._fitted_height: int | None = None
+        self._user_height = 0
         self.setWindowTitle(tr("Erste Schritte"))
         self.setMinimumWidth(680)
 
@@ -324,6 +360,10 @@ class FirstRunDialog(QDialog):
         self.language.currentIndexChanged.connect(self._language_changed)
 
         self.slicer = QComboBox(self)
+        self.slicer.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.slicer.setMinimumContentsLength(20)
         self.slicer.addItem(tr("Später auswählen"), "")
         remembered = discover.remembered_path("slicer")
         if remembered:
@@ -346,16 +386,22 @@ class FirstRunDialog(QDialog):
         self._surveyed_slicer = ""
         """Für welchen Slicer die Drucker zuletzt gesucht wurden."""
 
-        self.printer = QComboBox(self)
-        for identifier, printer in by_title(profiles.printer_profiles()):
-            self._insert_printer_choice(str(printer.title), identifier)
-        self._insert_printer_choice(tr("Benutzerdefiniert …"), "__custom__")
-        self._group_printers()
+        self.printer = PrinterComboBox(self)
+        self.printer.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.printer.setMinimumContentsLength(20)
+        add_printer_choices(self.printer, self._known_printers())
+        self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
         # Erst die Slicerwahl startet das Lesen seiner Druckerprofile. Bis
         # dahin bleibt die gespeicherte Vorgabe stehen; fremde Installationen
         # liefern weder einen Drucker noch ein Material für diese Auswahl.
-        self._suggested_printer = settings.printer or profiles.DEFAULT_PRINTER
+        self._suggested_printer = printer_selection or settings.printer or profiles.DEFAULT_PRINTER
         _select(self.printer, self._suggested_printer)
+        if discovered_printers is not None:
+            # Beim Sprachwechsel ist die mitgebrachte Auswahl bereits eine
+            # Nutzerentscheidung, keine ersetzbare Startvorgabe.
+            self._suggested_printer = ""
         self.printer.currentIndexChanged.connect(self._printer_changed)
         self._custom_identifier = "user-" + uuid4().hex
         self.custom_printer = QWidget(self)
@@ -578,23 +624,36 @@ class FirstRunDialog(QDialog):
         # geändert und dann „Überspringen" gedrückt hätte, hätte sie verloren.
         buttons = QDialogButtonBox(self)
         buttons.addButton(self.open_button, QDialogButtonBox.ButtonRole.ActionRole)
-        start = buttons.addButton(
+        self.start = buttons.addButton(
             tr("Speichern und starten"), QDialogButtonBox.ButtonRole.AcceptRole
         )
-        make_primary(start)
+        make_primary(self.start)
         buttons.addButton(tr("Später einstellen"), QDialogButtonBox.ButtonRole.RejectRole)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
+        self._contents = QWidget(self)
+        content_layout = QVBoxLayout(self._contents)
+        content_layout.setContentsMargins(0, 0, NORMAL, 0)
+        content_layout.setSpacing(WIDE)
+        for section in (title, self.greeting, self.terms, basics, optional):
+            content_layout.addWidget(section)
+        content_layout.addStretch(1)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(self._contents)
+        self._scroll.contentSizeChanged.connect(self._grow_soon)
+        for editor in self._contents.findChildren(QComboBox):
+            wheel_needs_focus(editor)
+        for spin in (*self._contents.findChildren(NumberSpin), self.printer_nozzles):
+            wheel_needs_focus(spin)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(WIDE)
-        layout.addWidget(title)
-        layout.addWidget(self.greeting)
-        layout.addWidget(self.terms)
-        layout.addWidget(basics)
-        layout.addWidget(optional)
+        layout.addWidget(self._scroll, 1)
         layout.addWidget(buttons)
+        self._buttons = buttons
+        if printer_query is not None:
+            self.printer.search_field.setText(printer_query)
 
         self._survey: _Survey | None = None
         self._leash = WorkerLeash(self)
@@ -647,38 +706,53 @@ class FirstRunDialog(QDialog):
         self._leash.wait_all(timeout_ms)
 
     def _grow_to_content(self) -> None:
-        """Der Dialog wächst mit den nachgereichten Zeilen — von selbst tut
-        er es nicht.
+        """Geöffnete Felder bekommen Platz, zurückgenommene geben ihn wieder frei.
 
-        Die Erhebung tauscht „Wird nachgesehen …" gegen drei Programmzeilen
-        und die Chat-Auskunft; das Intro-Label darüber bricht um und meldet
-        der Layoutrechnung nur eine Zeile Mindesthöhe. Das Fenster blieb
-        deshalb auf seiner Aufmachgröße stehen, und der Fehlbetrag wurde aus
-        den Auswahlfeldern gepresst: Sprache und Drucker standen mit 16 von
-        28 Punkten Höhe da, die Schrift oben und unten
-        abgeschnitten (Robert, 26.08.2026, mit Bild).
-
-        Gerufen wird über ``QTimer.singleShot(0, self, …)``, nicht direkt:
-        Unmittelbar nach dem Zeilentausch meldet ``sizeHint`` noch den alten
-        Stand (die weggeräumten Zeilen leben bis zum nächsten
-        Ereignisdurchlauf), und ein ``max`` mit einer veralteten Zahl wächst
-        nicht. Mit ``self`` als Empfänger verfällt der Ruf, wenn der Dialog
-        vorher weggeräumt wird — ein Rückruf in ein zerstörtes C++-Objekt
-        ist der Absturz ohne Zeile.
+        Ein Nullzeitgeber wartet die geänderte Zeilenanordnung ab. Er bindet
+        den Dialog als Empfänger, damit beim Schließen kein Rückruf übrig bleibt.
         """
-        # Erst die Lügen festnageln, dann messen: **Jedes** umbrochene Label
-        # meldet der Layoutrechnung nur eine Zeile Mindesthöhe — das Intro,
-        # die drei Programmzeilen, die Chat-Auskunft. Die Reste summieren
-        # sich; offscreen (null Schriftfamilien) fehlten am Ende noch Pixel,
-        # obwohl das Intro schon gepinnt war. ``heightForWidth`` über der
-        # wirklich gelegten Breite ist je Label die ehrliche Zahl (die Bauart
-        # von ``panels.fit_wrapped``, hier über den ganzen Dialog). Der Dialog
-        # wird nicht von Hand verbreitert, die gepinnten Mindesthöhen können
-        # also nicht zu groß zurückbleiben.
-        for label in self.findChildren(QLabel):
-            if label.wordWrap() and label.width() > 0:
+        if not self.isVisible():
+            return
+        layout = self.layout()
+        if layout is None:
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        # Die zusätzlichen Maße können auch mehr Breite brauchen, etwa in
+        # Französisch und Italienisch. Zuerst die verfügbare natürliche Breite
+        # setzen, erst danach die umgebrochenen Absätze in der Höhe messen.
+        wanted_width = max(self.width(), self.sizeHint().width())
+        screen = self.screen()
+        if screen is not None:
+            frame_width = self.frameGeometry().width() - self.width()
+            wanted_width = min(
+                wanted_width, screen.availableGeometry().width() - 2 * NORMAL - frame_width
+            )
+        self.resize(wanted_width, self.height())
+        layout.activate()
+        # Gemessen wird ohne die vorherige Mindesthöhe: Sonst bleibt nach
+        # einer langen Antwort oder einem schmaleren Fenster die alte Höhe.
+        # Ein bewusst verkleinertes Fenster behält den Rollbereich als Reserve.
+        for label in self._contents.findChildren(QLabel):
+            if label.wordWrap() and label.width() > 0 and label.isVisibleTo(self._contents):
+                label.setMinimumHeight(0)
                 label.setMinimumHeight(label.heightForWidth(label.width()))
-        self.resize(self.width(), max(self.height(), self.sizeHint().height()))
+        content_layout = self._contents.layout()
+        if content_layout is None:
+            return
+        content_layout.invalidate()
+        content_layout.activate()
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = self.sizeHint().height()
+        self.resize(self.width(), max(wanted, self._user_height))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._grow_soon()
 
     def _grow_soon(self) -> None:
         QTimer.singleShot(0, self, self._grow_to_content)
@@ -746,12 +820,15 @@ class FirstRunDialog(QDialog):
     # Antwort trifft einen Dialog, dessen Werte schon übernommen sind.
 
     def accept(self) -> None:
-        self._await_printer_survey()
+        if not self._await_printer_survey():
+            return
         if not self._save_custom_printer():
+            return
+        if not self._carry_over(self.settings):
             return
         super().accept()
 
-    def _await_printer_survey(self) -> None:
+    def _await_printer_survey(self) -> bool:
         """Gespeichert wird die Druckerwahl nach der Suche, nicht die davor.
 
         Solange die Drucker des Slicers gesucht werden, zeigt die Auswahl noch
@@ -763,14 +840,16 @@ class FirstRunDialog(QDialog):
         wird nicht gespeichert.
         """
         survey = self._printer_survey
-        if survey is None or not survey.isRunning():
-            return
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            survey.wait(PRINTER_SURVEY_WAIT_MS)
-        finally:
-            QApplication.restoreOverrideCursor()
+        if survey is None:
+            return True
+        if survey.isRunning():
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                survey.wait(PRINTER_SURVEY_WAIT_MS)
+            finally:
+                QApplication.restoreOverrideCursor()
         QCoreApplication.processEvents()
+        return self._printer_survey is None
 
     def _language_changed(self) -> None:
         """Die Sprache wechselt sofort — auch im Dialog selbst.
@@ -799,7 +878,8 @@ class FirstRunDialog(QDialog):
         chosen = str(self.language.currentData())
         if not chosen or chosen == self.settings.language:
             return
-        self._carry_over(self.settings)
+        if not self._carry_over(self.settings):
+            return
         install_language(chosen)
         set_language(chosen)
         application = QApplication.instance()
@@ -813,25 +893,63 @@ class FirstRunDialog(QDialog):
 
     def apply_to(self, settings: UiSettings) -> UiSettings:
         """Übernimmt die Antworten und markiert die angenommene Einrichtung als beendet."""
+        if not self._await_printer_survey():
+            return settings
         if not self._save_custom_printer():
             return settings
-        self._carry_over(settings)
+        if not self._carry_over(settings):
+            return settings
         settings.first_run_done = True
         return settings
 
-    def _carry_over(self, settings: UiSettings) -> None:
+    def _carry_over(self, settings: UiSettings) -> bool:
         """Bewahrt Antworten beim Sprachwechsel, ohne die Einrichtung abzuschließen."""
-        settings.language = str(self.language.currentData())
-        if self.printer.currentData() != "__custom__":
-            settings.printer = str(self.printer.currentData())
         chosen = str(self.slicer.currentData() or "")
-        if chosen:
-            discover.remember_path("slicer", chosen)
+        if chosen and chosen != discover.remembered_path("slicer"):
+            try:
+                discover.remember_path("slicer", chosen)
+            except OSError as problem:
+                _log.warning("first run slicer choice could not be saved: %s", problem)
+                self.printer_state.setText(
+                    tr(
+                        "Die Einstellungen ließen sich nicht speichern — prüfen Sie den freien "
+                        "Speicherplatz und die Schreibrechte."
+                    )
+                )
+                self._grow_soon()
+                return False
+        settings.language = str(self.language.currentData())
+        chosen_printer = self.printer_selection
+        # Die Einstellungen können beim anschließenden Überspringen gespeichert
+        # werden. Eine nur gelesene Profil-ID reist deshalb separat im Entwurf.
+        if chosen_printer is not None and chosen_printer in profiles.printer_profiles():
+            settings.printer = chosen_printer
         # Keine Frage mehr, aber weiterhin ein vollständiger Projektvorgabensatz:
         # Bis ein Filamentprofil seinen Typ liefert, gilt die dokumentierte
         # Kernvorgabe — die des Verfahrens: Ein Resin-Drucker beginnt mit Harz
         # und nicht mit PLA, und wer das Verfahren wechselt, wechselt sie mit.
         settings.material = profiles.material_for(settings.printer, settings.material)
+        return True
+
+    @property
+    def discovered_printers(self) -> Mapping[str, PrinterProfile]:
+        """Noch ungespeicherte Slicerprofile für den Neuaufbau beim Sprachwechsel."""
+        return self._discovered_printers
+
+    @property
+    def printer_selection(self) -> str | None:
+        """Die bestätigte Auswahl im Entwurf, unabhängig von gespeicherten Profilen."""
+        if not valid_printer_choice(self.printer) or self.printer.currentData() == "__custom__":
+            return None
+        return str(self.printer.currentData())
+
+    @property
+    def printer_query(self) -> str | None:
+        """Die getrennte Suche reist beim Sprachwechsel mit der bestätigten Wahl."""
+        return self.printer.search_field.text() or None
+
+    def _known_printers(self) -> dict[str, PrinterProfile]:
+        return dict(profiles.printer_profiles()) | self._discovered_printers
 
     def _fill_tools(self, states: tuple[tools.ToolState, ...]) -> None:
         """Eine Zeile je Programm, neu gebaut statt neu beschriftet.
@@ -875,18 +993,18 @@ class FirstRunDialog(QDialog):
         """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei
         „fertig".
         """
-        if not self._save_custom_printer():
+        self.accept()
+        if self.result() != self.DialogCode.Accepted:
             return
         self.apply_to(self.settings)
         self.importRequested.emit()
-        self.accept()
 
     def _open_inventory(self) -> None:
         """Die Einrichtung übernehmen und danach das Filamentlager öffnen."""
-        if not self._save_custom_printer():
+        self.accept()
+        if self.result() != self.DialogCode.Accepted:
             return
         self.apply_to(self.settings)
-        self.accept()
         self.inventoryRequested.emit()
 
     def _technology_changed(self) -> None:
@@ -936,14 +1054,33 @@ class FirstRunDialog(QDialog):
         """Eigene Druckerdaten stehen direkt unter der entsprechenden Auswahl."""
         custom = self.printer.currentData() == "__custom__"
         self.custom_printer.setVisible(custom)
-        if not custom and self.sender() is self.printer:
+        valid = valid_printer_choice(self.printer)
+        reason = "" if valid else str(tr("Wählen Sie einen Drucker aus der Liste."))
+        for button in (self.start, self.open_button, self.inventory_button):
+            button.setEnabled(valid)
+            button.setToolTip(reason)
+            button.setStatusTip(reason)
+            button.setAccessibleDescription(reason)
+        if not valid:
+            self.printer_state.setText(reason)
+        elif not custom and self.sender() is self.printer:
             self.printer_state.clear()
         self._grow_soon()
 
     def _save_custom_printer(self) -> bool:
         """Eigene Maße werden erst bei ausdrücklicher Übernahme gespeichert."""
+        if not valid_printer_choice(self.printer):
+            self._printer_changed()
+            self.printer.setFocus()
+            return False
         if self.printer.currentData() != "__custom__":
-            return True
+            identifier = str(self.printer.currentData() or "")
+            discovered = self._discovered_printers.get(identifier)
+            return (
+                discovered is None
+                or profiles.printer_profiles().get(identifier) == discovered
+                or self._persist_printer(discovered)
+            )
         name = self.printer_name.text().strip()
         if not name:
             self.printer_state.setText(tr("Geben Sie Ihrem Drucker einen Namen."))
@@ -975,10 +1112,19 @@ class FirstRunDialog(QDialog):
                 layer_height=self._chosen_layer_height(),
                 extrusion_width=nozzle * template.extrusion_width / template.nozzle_diameter,
             )
+        if not self._persist_printer(entry):
+            return False
+        self._insert_printer_choice(name, entry.id)
+        _select(self.printer, entry.id)
+        self._suggested_printer = entry.id
+        return True
+
+    def _persist_printer(self, entry: PrinterProfile) -> bool:
+        """Ein ausgewähltes Profil speichern; ein Schreibfehler hält die Auswahl offen."""
         try:
             profiles.save_printer(entry)
         except (AppError, OSError) as problem:
-            _log.warning("custom printer could not be saved: %s", problem)
+            _log.warning("selected printer could not be saved: %s", problem)
             self.printer_state.setText(
                 tr(
                     "Der Drucker konnte nicht gespeichert werden. Prüfen Sie den "
@@ -986,9 +1132,6 @@ class FirstRunDialog(QDialog):
                 )
             )
             return False
-        self._insert_printer_choice(name, entry.id)
-        _select(self.printer, entry.id)
-        self._suggested_printer = entry.id
         return True
 
     def custom_printer_draft(self) -> CustomPrinterDraft | None:
@@ -1104,6 +1247,7 @@ class FirstRunDialog(QDialog):
         )
         with QSignalBlocker(self.printer):
             self.printer.insertItem(position, title, userData=identifier)
+            self.printer.setItemData(position, title, Qt.ItemDataRole.ToolTipRole)
         self._group_printers()
 
     def _group_printers(self) -> None:
@@ -1113,13 +1257,14 @@ class FirstRunDialog(QDialog):
     def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
         """Nur passende Drucker anbieten und eine weiterhin passende Wahl erhalten."""
         chosen = str(self.printer.currentData() or "")
+        known = self._known_printers()
         # Die Resin-Drucker hängen an keinem FDM-Slicer: Ein Slicer, der
         # seine Drucker nennt, filtert die FDM-Liste — und lässt die andere
         # Gruppe stehen, denn sie kommt aus dem eigenen Bestand.
         allowed = (
             set(identifiers)
             | {profiles.DEFAULT_PRINTER}
-            | {name for name, entry in profiles.printer_profiles().items() if entry.is_resin}
+            | {name for name, entry in known.items() if entry.is_resin}
         )
         preferred = chosen
         if suggested and (
@@ -1130,10 +1275,11 @@ class FirstRunDialog(QDialog):
             preferred = profiles.DEFAULT_PRINTER
         with QSignalBlocker(self.printer):
             self.printer.clear()
-            for identifier, printer in by_title(profiles.printer_profiles()):
-                if identifier in allowed:
-                    self._insert_printer_choice(str(printer.title), identifier)
-            self._insert_printer_choice(tr("Benutzerdefiniert …"), "__custom__")
+            add_printer_choices(
+                self.printer,
+                {identifier: entry for identifier, entry in known.items() if identifier in allowed},
+            )
+            self.printer.addItem(tr("Benutzerdefiniert …"), userData="__custom__")
             _select(self.printer, preferred)
         if preferred == suggested:
             self._suggested_printer = suggested
@@ -1147,8 +1293,12 @@ class FirstRunDialog(QDialog):
         assert isinstance(found, PrinterChoices)
         if str(found.executable) != self.slicer.currentData():
             return
+        self._printer_survey = None
+        self._discovered_printers = {profile.id: profile for profile in found.profiles}
         self._fill_printers(found.identifiers, found.suggested)
-        if found.translated:
+        if not valid_printer_choice(self.printer):
+            self.printer_state.setText(tr("Wählen Sie einen Drucker aus der Liste."))
+        elif found.translated:
             self.printer_state.clear()
         else:
             # Kein Fehler und kein leerer Satz: Das Programm ist da, nur seine
@@ -1167,6 +1317,7 @@ class FirstRunDialog(QDialog):
         if self.sender() is not self._printer_survey:
             return
         _log.warning("first run printer survey crashed: %s", detail)
+        self._printer_survey = None
         self._fill_printers(tuple(profiles.user_printer_profiles()))
         self.printer_state.setText(
             tr(
@@ -1250,7 +1401,238 @@ def add_printer_choices(box: QComboBox, entries: Mapping[str, PrinterProfile]) -
     with QSignalBlocker(box):
         for identifier, printer in sorted(entries.items(), key=rank):
             box.addItem(str(printer.title), identifier)
+            box.setItemData(box.count() - 1, str(printer.title), Qt.ItemDataRole.ToolTipRole)
     group_printer_choices(box)
+
+
+def valid_printer_choice(box: QComboBox) -> bool:
+    """Nur der unveränderte Titel eines wählbaren Eintrags bestätigt seine ID."""
+    index = box.currentIndex()
+    if (
+        index < 0
+        or box.currentText() != box.itemText(index)
+        or not box.currentData()
+        or box.currentData() == _GROUP_HEADER
+    ):
+        return False
+    flags = box.model().flags(box.model().index(index, 0))
+    return bool(flags & Qt.ItemFlag.ItemIsEnabled and flags & Qt.ItemFlag.ItemIsSelectable)
+
+
+class _PrinterFilter(QSortFilterProxyModel):
+    """Filtert Namen und behält nur Gruppenköpfe mit passenden Druckern."""
+
+    def __init__(self, parent: QObject) -> None:
+        super().__init__(parent)
+        self._terms: tuple[str, ...] = ()
+        self._groups: dict[int, int] = {}
+        self.setDynamicSortFilter(False)
+
+    def search(self, text: str) -> None:
+        self._terms = tuple(text.casefold().split())
+
+    def refresh(self) -> None:
+        """Gruppen einmal pro Änderung lesen, nicht bei jedem Sortiervergleich."""
+        model = self.sourceModel()
+        self._groups.clear()
+        group = -1
+        for row in range(model.rowCount()):
+            if model.index(row, 0).data(Qt.ItemDataRole.UserRole) in {_GROUP_HEADER, "__custom__"}:
+                group = row
+            self._groups[row] = group
+        self.invalidate()
+        self.sort(0 if self._terms else -1)
+
+    def lessThan(  # noqa: N802 — Qt-Name
+        self, left: QModelIndex | QPersistentModelIndex, right: QModelIndex | QPersistentModelIndex
+    ) -> bool:
+        def rank(index: QModelIndex | QPersistentModelIndex) -> tuple[int, int, int]:
+            heading = index.data(Qt.ItemDataRole.UserRole) == _GROUP_HEADER
+            exact = tuple(str(index.data() or "").casefold().split()) == self._terms
+            return self._groups.get(index.row(), -1), -1 if heading else int(not exact), index.row()
+
+        return rank(left) < rank(right)
+
+    def filterAcceptsRow(  # noqa: N802 — Qt-Name
+        self, source_row: int, source_parent: QModelIndex | QPersistentModelIndex
+    ) -> bool:
+        model = self.sourceModel()
+        index = model.index(source_row, 0, source_parent)
+        if index.data(Qt.ItemDataRole.UserRole) == _GROUP_HEADER:
+            for row in range(source_row + 1, model.rowCount(source_parent)):
+                member = model.index(row, 0, source_parent)
+                if member.data(Qt.ItemDataRole.UserRole) in {_GROUP_HEADER, "__custom__"}:
+                    break
+                if self.filterAcceptsRow(row, source_parent):
+                    return True
+            return False
+        title = str(index.data() or "").casefold()
+        return all(term in title for term in self._terms)
+
+
+class PrinterComboBox(QComboBox):
+    """Druckerwahl mit fester Suchzeile über der live gefilterten Liste.
+
+    Der Suchtext ist kein Druckerwert. Erst Klick oder Eingabetaste übernimmt
+    den Quellindex; Escape und ein Klick außerhalb erhalten die bisherige Wahl.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._refresh_pending = False
+        self.popup = QFrame(self, Qt.WindowType.Popup)
+        self.popup.setFrameShape(QFrame.Shape.StyledPanel)
+        self.popup.setAutoFillBackground(True)
+        self.search_field = QLineEdit(self.popup)
+        self.search_field.setPlaceholderText(tr("Drucker suchen …"))
+        self.search_field.setAccessibleName(tr("Drucker suchen …"))
+        self.search_field.setClearButtonEnabled(True)
+        self.results = QListView(self.popup)
+        self.results.setAccessibleName(tr("Drucker"))
+        self.results.setFrameShape(QFrame.Shape.NoFrame)
+        self.results.setUniformItemSizes(True)
+        self.results.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.filtered = _PrinterFilter(self)
+        self.filtered.setSourceModel(self.model())
+        self.results.setModel(self.filtered)
+        self.empty = QLabel(tr("Keine Drucker gefunden. Ändern Sie den Suchtext."), self.popup)
+        self.empty.setWordWrap(True)
+        self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._pages = QStackedWidget(self.popup)
+        self._pages.addWidget(self.results)
+        self._pages.addWidget(self.empty)
+        layout = QVBoxLayout(self.popup)
+        layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+        layout.setSpacing(TIGHT)
+        layout.addWidget(self.search_field)
+        layout.addWidget(self._pages, 1)
+        self.search_field.textChanged.connect(self._search)
+        self.results.clicked.connect(self._choose)
+        for signal in (
+            self.model().rowsInserted,
+            self.model().rowsRemoved,
+            self.model().dataChanged,
+            self.model().modelReset,
+            self.model().layoutChanged,
+        ):
+            signal.connect(self._refresh_soon)
+        for watched in (self.popup, self.search_field, self.results):
+            watched.installEventFilter(self)
+
+    def _refresh_soon(self) -> None:
+        if not self._refresh_pending:
+            self._refresh_pending = True
+            QTimer.singleShot(0, self, self._refresh)
+
+    def _refresh(self) -> None:
+        # Ein später eingefügter Treffer macht auch seinen zuvor verborgenen
+        # Gruppenkopf wieder passend; Qt bewertet Geschwister nicht von selbst.
+        self.filtered.refresh()
+        self._refresh_pending = False
+        candidates = [
+            self.filtered.index(row, 0)
+            for row in range(self.filtered.rowCount())
+            if self._selectable(self.filtered.index(row, 0))
+        ]
+        self._pages.setCurrentWidget(self.results if candidates else self.empty)
+        current = self.results.currentIndex()
+        if not self._selectable(current):
+            self.results.setCurrentIndex(candidates[0] if candidates else QModelIndex())
+
+    def _search(self, text: str) -> None:
+        self.filtered.search(text)
+        self.results.setCurrentIndex(QModelIndex())
+        self._refresh()
+
+    @staticmethod
+    def _selectable(index: QModelIndex) -> bool:
+        flags = index.flags()
+        return bool(flags & Qt.ItemFlag.ItemIsEnabled and flags & Qt.ItemFlag.ItemIsSelectable)
+
+    def _choose(self, index: QModelIndex) -> None:
+        if not self._selectable(index):
+            return
+        source = self.filtered.mapToSource(index)
+        self.setCurrentIndex(source.row())
+        self.hidePopup()
+        self.activated.emit(source.row())
+        self.textActivated.emit(self.currentText())
+
+    def showPopup(self) -> None:  # noqa: N802 — Qt-Name
+        if not self.isEnabled():
+            return
+        self._refresh()
+        current = self.filtered.mapFromSource(self.model().index(self.currentIndex(), 0))
+        if self._selectable(current):
+            self.results.setCurrentIndex(current)
+            self.results.scrollTo(current)
+        screen = self.screen().availableGeometry()
+        below = self.mapToGlobal(QPoint(0, self.height()))
+        above = self.mapToGlobal(QPoint(0, 0))
+        metrics = self.fontMetrics()
+        widest = max(
+            (metrics.horizontalAdvance(self.itemText(row)) for row in range(self.count())),
+            default=0,
+        )
+        width = min(screen.width(), max(self.width(), min(widest + 4 * NORMAL, 700)))
+        row_height = max(self.results.sizeHintForRow(0), metrics.height() + NORMAL)
+        height = (
+            self.search_field.sizeHint().height()
+            + 3 * TIGHT
+            + row_height * max(3, min(12, self.filtered.rowCount()))
+        )
+        room_below = screen.bottom() - below.y() + 1
+        room_above = above.y() - screen.top()
+        use_below = height <= room_below or room_below >= room_above
+        height = min(height, max(room_below, room_above))
+        left = min(max(below.x(), screen.left()), screen.right() - width + 1)
+        top = below.y() if use_below else above.y() - height
+        self.popup.setGeometry(left, top, width, height)
+        self.popup.show()
+        self.search_field.setFocus(Qt.FocusReason.PopupFocusReason)
+        self.search_field.selectAll()
+
+    def hidePopup(self) -> None:  # noqa: N802 — Qt-Name
+        self.popup.hide()
+        super().hidePopup()
+        self.setFocus(Qt.FocusReason.PopupFocusReason)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
+            key = event.key()
+            if key == Qt.Key.Key_Escape:
+                self.hidePopup()
+                return True
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self._choose(self.results.currentIndex())
+                return True
+            if watched is self.search_field and key in (Qt.Key.Key_Down, Qt.Key.Key_Up):
+                QApplication.sendEvent(self.results, event)
+                return True
+            if watched is self.results and event.text() and event.text().isprintable():
+                self.search_field.setFocus()
+                QApplication.sendEvent(self.search_field, event)
+                return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
+        if (
+            event.text()
+            and event.text().isprintable()
+            and event.key() != Qt.Key.Key_Space
+            and not event.modifiers()
+            & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
+        ):
+            self.showPopup()
+            self.search_field.setText(event.text())
+            return
+        super().keyPressEvent(event)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802 — Qt-Name
+        # Auch mit Fokus ändert Scrollen im Formular niemals die Druckerwahl.
+        event.ignore()
 
 
 def _technology_of(identifier: str) -> PrintTechnology:

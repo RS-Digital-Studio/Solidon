@@ -31,7 +31,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QTextBrowser,
     QVBoxLayout,
@@ -42,7 +41,16 @@ from app.core.backends import llm, mesh
 from app.core.log import get_logger
 from app.i18n import get_language, tr
 from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
-from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
+from app.ui.style import (
+    ROOMY,
+    TIGHT,
+    WIDE,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+    no_primary,
+    set_level,
+)
 
 AI_DISCLOSURE_VERSION = "1.4"
 GENERATION_DISCLOSURE_VERSION = "1.0"
@@ -352,6 +360,8 @@ class AiDisclosureDialog(QDialog):
         self._content_was_shown = False
         self._reading_position: int | None = None
         self._required_heights: dict[QWidget, int] = {}
+        self._fitted_height: int | None = None
+        self._fitting = False
         self.setWindowTitle(_title_text())
         self.setAccessibleName(_title_text())
         self.setAccessibleDescription(_general_text(target))
@@ -466,6 +476,7 @@ class AiDisclosureDialog(QDialog):
         )
 
         self.buttons = QDialogButtonBox(self)
+        self.buttons.setContentsMargins(WIDE, 0, WIDE, 0)
         self.buttons.addButton(self.back_button, QDialogButtonBox.ButtonRole.RejectRole)
         self.buttons.addButton(self.continue_button, QDialogButtonBox.ButtonRole.AcceptRole)
         self.back_button.clicked.connect(self.reject)
@@ -508,14 +519,20 @@ class AiDisclosureDialog(QDialog):
         QTimer.singleShot(0, self, self._unlock_after_show)
 
     def _unlock_after_show(self, _value: int | None = None) -> None:
+        if self._fitting:
+            return
+        self._fitting = True
         bar = self.scroll_area.verticalScrollBar()
         reading_position = bar.value() if self._reading_position is None else self._reading_position
         try:
             self._fit_wrapped_paragraphs()
+            self._fit_content_height()
             bar.setValue(max(bar.minimum(), min(reading_position, bar.maximum())))
             ready = self._accessible_content_is_reachable()
         except RuntimeError, ValueError:
             ready = False
+        finally:
+            self._fitting = False
         self._reading_position = None
         if not ready:
             self._content_was_shown = False
@@ -524,6 +541,26 @@ class AiDisclosureDialog(QDialog):
         except RuntimeError:
             ready = False
         self._content_was_shown = ready
+
+    def _fit_content_height(self) -> None:
+        """Der vollständige Hinweis öffnet sich hoch genug; gezogene Höhen bleiben."""
+        layout = self.layout()
+        if layout is None or not self.isVisible():
+            return
+        own = self._fitted_height is None or self.height() == self._fitted_height
+        if own:
+            margins = layout.contentsMargins()
+            wanted = (
+                self.content.minimumHeight()
+                + margins.top()
+                + margins.bottom()
+                + layout.spacing()
+                + self.buttons.sizeHint().height()
+            )
+            self.resize(self.width(), wanted)
+        fit_dialog_to_screen(self)
+        if own:
+            self._fitted_height = self.height()
 
     def _scroll_range_changed(self, _minimum: int, _maximum: int) -> None:
         self._unlock_after_show()
@@ -570,6 +607,9 @@ class AiDisclosureDialog(QDialog):
             *((label, provider_width) for label in self.link_widgets),
         )
         for label, width in wrapped:
+            # Die vorige schmale Breite darf beim Verbreitern nicht als
+            # Mindesthöhe zurückkommen (QLabel begrenzt heightForWidth daran).
+            label.setMinimumHeight(0)
             height = (
                 label.fit_text_for_width(width)
                 if isinstance(label, _NoticeLink)
@@ -703,7 +743,7 @@ def _paragraph(text: str, parent: QWidget) -> QLabel:
     return label
 
 
-class _DisclosureScrollArea(QScrollArea):
+class _DisclosureScrollArea(DialogScrollArea):
     """Scrollfläche, deren angekündigte Tastaturwege wirklich blättern."""
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt gibt den Namen
@@ -804,6 +844,8 @@ class _NoticeLink(QCommandLinkButton):
             return 1, 1
         margins = layout.contentsMargins()
         content_width = max(width - margins.left() - margins.right(), 1)
+        self.title_label.setMinimumHeight(0)
+        self.description_label.setMinimumHeight(0)
         return (
             max(self.title_label.heightForWidth(content_width), 1),
             max(self.description_label.heightForWidth(content_width), 1),
@@ -871,3 +913,4 @@ class LocalPrivacyDialog(QDialog):
         layout.addWidget(note)
         layout.addWidget(self.text, 1)
         layout.addWidget(buttons)
+        no_primary(self)

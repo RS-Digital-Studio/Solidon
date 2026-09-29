@@ -82,7 +82,7 @@ Karte, dort das Gesetz.
 | `qt_platform.py` | welche Qt-Plattform die 3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import |
 | `main_window.py` | das Hauptfenster (§2.5): Menüs samt Sperrgrund (`_reason_locked`), Auswahl, Vorschaufreigabe, Export, Quittungen (`announce`), die Verdrahtung aller Panels und Flüsse |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
-| `first_run.py` | der erste Start (§38): Sprache, Slicer vor Drucker (`_PrinterSurvey` im Arbeiter), eigener Drucker; `add_printer_choices` und `group_printer_choices` bauen die Druckerliste auch für Einstellungen und Druckvorbereitung |
+| `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
 | `header.py` | Kopfzeile: Projektname, Druckerwechsel, die tatsächlich belegten Filamente (`mesh.slot_indices`) |
 
@@ -161,17 +161,13 @@ Karte, dort das Gesetz.
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); am Resin-Drucker nur, was gilt (`_reduce_for_resin`) |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
-**Die Felder zeigen, was gedruckt wird.** `_rebase` legt nach jeder
-Profilwahl das Herstellerprofil (`manufacturer.base_settings`) unter die
-eigene Wahl, `_foundation_key` spart die gleiche Rechnung. `_editor_changed(path)`
-macht nur das berührte Feld zur eigenen Wahl — fette Beschriftung und
-*Zurücksetzen* (`_resets`, `_mark_origins`); ein Durchgang über alle Felder
-machte gerundete Grundlagewerte zur Wahl. Was Solidon nicht übersetzt, steht
-am Feld (`_foreign_notes`), die Grundlage unter der Kopfzeile
-(`foundation_note`, `bed_plate_choice`). `has_changes` misst an
-`print_settings.own_part`: Eine neue Grundlage ist kein Tun des Kunden. Sie
-entsteht im `_FoundationWorker` des Hauptfensters; die Sitzung liest sie über
-`follow_print_settings`.
+**Druckfelder:** `_rebase` unterlegt die Wahl mit `manufacturer.base_settings`;
+`_foundation_key` vermeidet Wiederholungen. `_editor_changed(path)` übernimmt
+nur das berührte Feld, nie gerundete Grundlagewerte anderer Felder.
+`_resets`/`_mark_origins` zeigen eigene Werte fett mit *Zurücksetzen*,
+`_foreign_notes` unübersetzte Werte, `foundation_note`/`bed_plate_choice` die
+Grundlage. `has_changes` misst nur `print_settings.own_part`. Die Grundlage
+entsteht im `_FoundationWorker`; `follow_print_settings` übernimmt sie.
 
 ### Filamente und Lager
 
@@ -214,7 +210,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `style.py` | Stylesheet, Typografie-Skala, Abstandsraster (§19.3); `make_primary`, `rule` |
+| `style.py` | Stylesheet, Typografie, Abstände (§19.3); `make_primary`, `rule`; `DialogScrollArea`, `fit_dialog_to_screen` für natürliche, monitorbegrenzte Dialoggrößen (`fenster.md`) |
 | `theme.py` | hell und dunkel (§19.3) |
 | `window_chrome.py` | die Titelleiste in den Farben der Anwendung (Windows malt sie und bekommt nur die Farbe gesagt); ein idempotent angemeldeter Wächter am Ereignisstrom |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
@@ -238,7 +234,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 | Datei | Zweck |
 |---|---|
 | `settings.py` | Oberflächen-Einstellungen (`UiSettings`) in einer schlichten Datei (§38) |
-| `settings_dialog.py` | die Einstellungen an einem Ort (§19.3, §38); ungespeicherte Antworten stehen in einem Entwurf |
+| `settings_dialog.py` | Einstellungen als Entwurf (§19.3, §38); Slicer vor Drucker, gemeinsame Erhebung aus `first_run` |
 | `support_dialog.py` | Rückmeldung senden (§37.2): Anhänge als ein Schnappschuss (`report.diagnostic_attachments()`), vor dem Senden sichtbar; ein Absturz sendet nichts |
 | `survey.py` | Bogen, Nutzungsuhr und die zwei Einladungen über der Ansicht (`SurveyNotice`, `SupportNotice` auf `ViewNotice`) |
 

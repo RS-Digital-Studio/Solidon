@@ -5125,6 +5125,7 @@ class ExpressionDialog(QDialog):
         hint = QLabel(tr("Eine Zahl oder ein Ausdruck — Projektparameter mit @name."), self)
         hint.setWordWrap(True)
         self.field = QLineEdit(start, self)
+        self.field.setAccessibleName(tr("Maß"))
         self.problem = QLabel("", self)
         self.problem.setWordWrap(True)
         self.problem.setVisible(False)
@@ -5136,13 +5137,17 @@ class ExpressionDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Maß setzen"))
+            style.make_primary(ok)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(style.WIDE, style.WIDE, style.WIDE, style.WIDE)
+        layout.setSpacing(style.NORMAL)
         layout.addWidget(hint)
         layout.addWidget(self.field)
         layout.addWidget(self.problem)
+        layout.addStretch(1)
         layout.addWidget(buttons)
 
     def _accept(self) -> None:
@@ -5234,6 +5239,11 @@ class PointDialog(QDialog):
         form = QFormLayout()
         form.addRow(first or tr("Waagerecht"), self._across)
         form.addRow(second or tr("Senkrecht"), self._up)
+        for field in (self._across, self._up):
+            caption = form.labelForField(field)
+            if isinstance(caption, QLabel):
+                caption.setBuddy(field)
+                field.setAccessibleName(caption.text())
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -5242,11 +5252,15 @@ class PointDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Punkt setzen"))
+            style.make_primary(ok)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(style.WIDE, style.WIDE, style.WIDE, style.WIDE)
+        layout.setSpacing(style.NORMAL)
         layout.addLayout(form)
+        layout.addStretch(1)
         layout.addWidget(buttons)
 
     def _note_touched(self, box: LengthSpin) -> None:

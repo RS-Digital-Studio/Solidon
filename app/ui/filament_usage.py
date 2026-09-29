@@ -10,18 +10,16 @@ from typing import cast, override
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -46,7 +44,17 @@ from app.ui.filament_picker import (
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import RELEASE_RETRY_MS, Worker, WorkerLeash, weak_slot
 from app.ui.settings import UiSettings
-from app.ui.style import NORMAL, ROOMY, TARGET_SIZE, TIGHT, WIDE, make_primary, set_level
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    TARGET_SIZE,
+    TIGHT,
+    WIDE,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+    set_level,
+)
 
 
 def _line_key(line: UsageLine) -> str:
@@ -199,6 +207,8 @@ class UsageDialog(QDialog):
 
     def __init__(self, request: UsageRequest, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._fitted_height: int | None = None
+        self._user_height = 0
         self.request = request
         self.booking_declined = False
         self._lines = list(request.lines)
@@ -324,12 +334,11 @@ class UsageDialog(QDialog):
             amount.valueChanged.connect(lambda _value, row=index: self._amount_changed(row))
             choice.currentIndexChanged.connect(lambda _value, row=index: self._choice_changed(row))
             split.toggled.connect(lambda checked, row=index: self._toggle_split(row, checked))
-        scroll = QScrollArea(self)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidgetResizable(True)
+        self._scroll = DialogScrollArea(self)
         form.addStretch()
-        scroll.setWidget(self.content)
-        layout.addWidget(scroll, 1)
+        self._scroll.setWidget(self.content)
+        self._scroll.contentSizeChanged.connect(self._fit_soon)
+        layout.addWidget(self._scroll, 1)
         self.add_button = QPushButton(tr("Spule anlegen …"), self)
         self.add_button.clicked.connect(self._create_spool)
         self.allow_unverified = QCheckBox(
@@ -362,6 +371,29 @@ class UsageDialog(QDialog):
         layout.addWidget(buttons)
         self.operation.currentIndexChanged.connect(self._operation_changed)
         self._load()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon()
+
+    def _fit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_content)
+
+    def _fit_content(self) -> None:
+        """Kurze Spulenlisten vollständig zeigen, gezogene Höhen erhalten."""
+        if not self.isVisible():
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        layout = self.layout()
+        assert layout is not None
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = self.sizeHint().height()
+        self.resize(self.width(), max(self._user_height, wanted))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
 
     @staticmethod
     def _amount_widget(grams: float | None, parent: QWidget) -> NumberSpin:

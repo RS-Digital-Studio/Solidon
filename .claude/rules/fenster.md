@@ -365,6 +365,30 @@ ein Satz genommen hat, eine gezogene Höhe nicht
 gepinnte Höhe, denn `QLabel.heightForWidth` meldet nie weniger als die
 Mindesthöhe.
 
+**Normale Formulare öffnen vollständig:** `style.DialogScrollArea` meldet
+die natürliche Inhaltshöhe; gescrollt wird erst bei Platzmangel oder bewusst
+kleineren Fenstern. Aktionsknöpfe stehen außerhalb und bleiben erreichbar.
+`contentSizeChanged` meldet auch verzögerte Änderungen der Inhaltshöhe;
+ein unveränderter Größenwunsch löst keine neue Anpassung aus. Nach dem
+Anzeigen und einer inhaltlichen Größenänderung hält
+`fit_dialog_to_screen` auch den Rahmen innerhalb des aktuellen Monitors.
+Klappen verändern die erforderliche Höhe, behalten eine ausreichende Breite und
+geben automatisch hinzugewonnenen Platz beim Zuklappen wieder zurück.
+Bewusst größer gezogene Fenster behalten ihre Höhe. Reiter messen nur die
+sichtbare Seite; verschachtelte Rollbereiche werden vermieden.
+
+**Slicer vor Drucker:** Einstellungen und Erstlauf verwenden dieselbe
+asynchrone Druckererhebung. Sie bieten vollständige Profile aus dem gewählten
+Slicer an; neue Druckerprofile bleiben bis zum Speichern im Entwurf, auch beim
+Sprachwechsel. Die Einstellungen übernehmen dabei auch den Programmpfad erst
+beim Speichern. Der Erstlauf bewahrt seine bisherige Sprachwechsel-Semantik:
+Sprache, Slicerpfad und bereits gespeicherte Drucker gelten sofort; eine neue
+Profil-ID reist getrennt im Entwurf. Verspätete Antworten einer früheren
+Auswahl ändern weder den aktuellen Dialog noch gespeicherte Einstellungen.
+Die Druckerliste hat eine feste Suchzeile oberhalb der Treffer. Sie filtert
+live; erst eine ausdrückliche Auswahl übernimmt einen Drucker, Escape schließt
+nur die Liste.
+
 ## `setParent(None)` macht ein Kind zum Fenster
 
 Ein Widget ohne Elternteil **ist** ein Top-Level-Fenster — bis zum Löschen

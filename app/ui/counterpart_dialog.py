@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from app.core.counterpart import PAIRS, Pair
 from app.i18n import tr
 from app.ui.labels import LengthSpin, NumberSpin, choice_label
-from app.ui.style import TIGHT, make_primary, set_level
+from app.ui.style import NORMAL, WIDE, make_primary, set_level
 
 
 class CounterpartDialog(QDialog):
@@ -78,19 +78,22 @@ class CounterpartDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
         accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._accept = accept
         accept.setText(tr("Gegenstücke setzen"))
         make_primary(accept)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(TIGHT)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.places)
         head = QFormLayout()
         head.addRow(tr("Paar:"), self.pairs)
         layout.addLayout(head)
         layout.addWidget(self.note)
         layout.addLayout(self.form)
+        layout.addStretch(1)
         layout.addWidget(buttons)
 
         self._rebuild()
@@ -121,6 +124,7 @@ class CounterpartDialog(QDialog):
         self.note.setText(str(pair.doc))
         spec = PARTS.get(pair.part_a)
         declared = {entry.name: entry for entry in spec.params.spec()}
+        previous: QWidget = self.pairs
         for name in pair.shared:
             entry = declared.get(name)
             if entry is None:
@@ -128,6 +132,12 @@ class CounterpartDialog(QDialog):
             field = self._field_for(entry)
             self._fields[name] = field
             self.form.addRow(f"{entry.title}:", field)
+            caption = self.form.labelForField(field)
+            if isinstance(caption, QLabel):
+                caption.setBuddy(field)
+                caption.setToolTip(str(entry.doc))
+            QWidget.setTabOrder(previous, field)
+            previous = field
             # Jedes Feld meldet sich am selben Signal — der Empfänger entprellt
             # und liest die Werte über :meth:`shared`. ``valueChanged`` trägt
             # hier nur „etwas hat sich bewegt"; die Zahl in Millimetern holt
@@ -136,6 +146,7 @@ class CounterpartDialog(QDialog):
                 field.currentIndexChanged.connect(self.valuesChanged)
             else:
                 field.valueChanged.connect(self.valuesChanged)
+        QWidget.setTabOrder(previous, self._accept)
         self.valuesChanged.emit()
 
     def _field_for(self, entry: Any) -> NumberSpin | QComboBox:
@@ -147,6 +158,8 @@ class CounterpartDialog(QDialog):
             box.setCurrentIndex(max(0, box.findData(entry.default)))
             box.setAccessibleName(str(entry.title))
             box.setToolTip(str(entry.doc))
+            box.setStatusTip(str(entry.doc))
+            box.setAccessibleDescription(str(entry.doc))
             return box
         spin = LengthSpin(self) if entry.unit == "mm" else NumberSpin(self)
         minimum = float(entry.minimum if entry.minimum is not None else -1_000_000.0)
@@ -160,6 +173,8 @@ class CounterpartDialog(QDialog):
             spin.setValue(float(entry.default))
         spin.setAccessibleName(str(entry.title))
         spin.setToolTip(str(entry.doc))
+        spin.setStatusTip(str(entry.doc))
+        spin.setAccessibleDescription(str(entry.doc))
         return spin
 
     # --- Ergebnis -------------------------------------------------------------

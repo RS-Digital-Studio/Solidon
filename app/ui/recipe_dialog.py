@@ -29,7 +29,8 @@ import unicodedata
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -42,7 +43,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -54,9 +54,9 @@ from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
 from app.i18n import tr
 from app.ui.dialogs import problem_text
-from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised
+from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised, wheel_needs_focus
 from app.ui.leash import Worker, WorkerLeash
-from app.ui.style import TIGHT, make_primary
+from app.ui.style import NORMAL, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
 
 _log = get_logger(__name__)
 
@@ -68,12 +68,6 @@ _log = get_logger(__name__)
 #: Wo ein eigener Baustein landet, solange der Kunde nichts anderes wählt —
 #: dieselbe Vorgabe, die ``recipe.from_data`` für ein Rezept ohne Gruppe nimmt.
 DEFAULT_GROUP = "structure"
-
-#: Wie hoch eine Rollfläche höchstens von sich aus werden darf, in
-#: Bildpunkten. Rund zwei Parameterzeilen — genug, damit sichtbar ist, dass
-#: es je Parameter einen Block gibt, und wenig genug, dass zwölf davon den
-#: Dialog nicht über den Schirm schieben.
-MOST_ROOM = 520
 
 # Die zwei Plätze, die ein freigegebener Wert im späteren Dialog haben kann
 # (§2.5, gestufte Tiefe). Schlüssel des Rezeptformats und keine Beschriftungen —
@@ -456,6 +450,7 @@ class RecipeDialog(QDialog):
         origin: Any = None,
     ) -> None:
         super().__init__(parent)
+        self._fitted_height: int | None = None
         self.setWindowTitle(
             tr("Baustein bearbeiten")
             if origin is not None
@@ -562,8 +557,10 @@ class RecipeDialog(QDialog):
             )
             self.provenance.setVisible(True)
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(TIGHT)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.scope)
         layout.addWidget(self.provenance)
         layout.addLayout(head)
@@ -610,7 +607,17 @@ class RecipeDialog(QDialog):
         make_primary(self._save)
         buttons.accepted.connect(self._store)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        layout.addStretch(1)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_soon)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(self._scroll, 1)
+        outer.addWidget(buttons)
+        for editor in (*content.findChildren(NumberSpin), *content.findChildren(QComboBox)):
+            wheel_needs_focus(editor)
 
         # **Erst jetzt**, denn die Vorbelegung schreibt in Felder, die es
         # vorher nicht gibt — und sie muss vor ``_update_enabled`` stehen, weil
@@ -619,6 +626,28 @@ class RecipeDialog(QDialog):
         self._update_enabled()
 
     # --- Aufbau ---------------------------------------------------------------
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon()
+
+    def _fit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_content)
+
+    def _fit_content(self) -> None:
+        """Ein zusammenhängendes Formular wächst bis zur verfügbaren Bildschirmhöhe."""
+        layout = self.layout()
+        if layout is None or not self.isVisible():
+            return
+        own = self._fitted_height is None or self.height() == self._fitted_height
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        if own:
+            self.resize(self.width(), self.sizeHint().height())
+        fit_dialog_to_screen(self)
+        if own:
+            self._fitted_height = self.height()
 
     def _restore_origin(self) -> None:
         """Legt die Angaben des bearbeiteten Bausteins zurück in den Dialog (E6).
@@ -659,17 +688,17 @@ class RecipeDialog(QDialog):
             # §2.7: Ein leerer Kasten sagt nicht, was fehlt. Dieser hier schon,
             # denn ohne Projektparameter ist der Baustein starr — er ließe sich
             # anlegen und danach an keiner Stelle anpassen.
-            form.addRow(
-                QLabel(
-                    tr(
-                        "Dieser Ausschnitt hat keine Projektparameter. Der Baustein "
-                        "wäre damit unveränderlich. Legen Sie zuerst Parameter an "
-                        "und binden Sie die Maße daran, die einstellbar sein sollen."
-                    ),
-                    box,
-                )
+            empty = QLabel(
+                tr(
+                    "Dieser Ausschnitt hat keine Projektparameter. Der Baustein "
+                    "wäre damit unveränderlich. Legen Sie zuerst Parameter an "
+                    "und binden Sie die Maße daran, die einstellbar sein sollen."
+                ),
+                box,
             )
-            return _scrolled(box, self)
+            empty.setWordWrap(True)
+            form.addRow(empty)
+            return box
         for row in self._params:
             line = QWidget(box)
             strip = QFormLayout(line)
@@ -701,23 +730,23 @@ class RecipeDialog(QDialog):
             # Stand von vorhin.
             for field in (row.minimum, row.default, row.maximum):
                 field.valueChanged.connect(self._update_enabled)
-        return _scrolled(box, self)
+        return box
 
     def _feature_box(self) -> QWidget:
         box = QGroupBox(tr("Welche Stellen soll man später anklicken können?"), self)
         form = QFormLayout(box)
         if not self._features:
-            form.addRow(
-                QLabel(
-                    tr(
-                        "An diesem Körper wurde kein Merkmal erkannt. Ohne benannte "
-                        "Stelle lässt sich später nichts daran ausrichten — der "
-                        "Baustein bleibt trotzdem benutzbar."
-                    ),
-                    box,
-                )
+            empty = QLabel(
+                tr(
+                    "An diesem Körper wurde kein Merkmal erkannt. Ohne benannte "
+                    "Stelle lässt sich später nichts daran ausrichten — der "
+                    "Baustein bleibt trotzdem benutzbar."
+                ),
+                box,
             )
-            return _scrolled(box, self)
+            empty.setWordWrap(True)
+            form.addRow(empty)
+            return box
         # Eine Kopfzeile über den zwei Spalten. Ohne sie steht neben „Bohrung 1
         # · Ø5,20 mm" ein Feld mit „hole_1" darin, und niemand weiß, ob er das
         # ändern darf oder soll — der Kastentitel erklärt den Haken, nicht das
@@ -735,7 +764,7 @@ class RecipeDialog(QDialog):
             row.take.toggled.connect(row.name.setEnabled)
             row.take.toggled.connect(self._update_enabled)
             row.name.textChanged.connect(self._update_enabled)
-        return _scrolled(box, self)
+        return box
 
     # --- Zustand --------------------------------------------------------------
 
@@ -1067,27 +1096,6 @@ class RecipeDialog(QDialog):
     def release(self) -> None:
         """Wartet auf den Bereichstest — ein Fenster geht nicht vor seinem Arbeiter."""
         self._leash.wait_all()
-
-
-def _scrolled(inner: QWidget, parent: QWidget) -> QScrollArea:
-    """Ein Kasten, der rollt statt zu wachsen.
-
-    Zwölf Parameter sind selten und möglich; ohne das wächst der Dialog über
-    den Bildschirm hinaus, und der Knopf steht unten außerhalb.
-    """
-    area = QScrollArea(parent)
-    area.setWidget(inner)
-    area.setWidgetResizable(True)
-    area.setFrameShape(QScrollArea.Shape.NoFrame)
-    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-    # **Und sie sagt, wie viel sie zeigen möchte.** Eine QScrollArea meldet von
-    # sich aus eine Wunschhöhe, die mit ihrem Inhalt nichts zu tun hat: Der
-    # Dialog ging damit so klein auf, dass schon der zweite Parameter
-    # angeschnitten war, und wer drei anlegt, sieht beim Öffnen nur den
-    # ersten. Gedeckelt bleibt es trotzdem — zwölf Parameter sollen den
-    # Dialog nicht über den Bildschirm hinaus wachsen lassen.
-    area.setMinimumHeight(min(inner.sizeHint().height(), MOST_ROOM))
-    return area
 
 
 def taken_name(name: str) -> bool:

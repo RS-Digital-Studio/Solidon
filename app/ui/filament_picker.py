@@ -63,7 +63,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -73,8 +73,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSlider,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -90,7 +90,7 @@ from app.core.types import CancelToken, MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
 from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.icons import icon
-from app.ui.labels import DateField, NumberSpin, localised
+from app.ui.labels import DateField, NumberSpin, localised, wheel_needs_focus
 from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.overlay import rows_height
 from app.ui.panels import (
@@ -101,7 +101,16 @@ from app.ui.panels import (
     row_height_of,
     view_chrome,
 )
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    TIGHT,
+    WIDE,
+    DialogScrollArea,
+    fit_dialog_to_screen,
+    make_primary,
+    set_level,
+)
 from app.ui.theme import current_theme, slot_colour, viewport_colours
 
 _log = logging.getLogger(__name__)
@@ -346,7 +355,8 @@ class SlicerFilamentDialog(QDialog):
         self._known = known_material_types()
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(TIGHT)
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
 
         form = QFormLayout()
         self.search = QLineEdit(self)
@@ -377,6 +387,7 @@ class SlicerFilamentDialog(QDialog):
         layout.addWidget(self.list, 1)
 
         self.count = QLabel(self)
+        self.count.setWordWrap(True)
         set_level(self.count, "caption")
         layout.addWidget(self.count)
 
@@ -556,6 +567,8 @@ class NewFilamentDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._entry = entry
+        self._fitted_height: int | None = None
+        self._user_height = 0
         if entry is not None:
             name, colour, material_type, slicer_profile = (
                 entry.name,
@@ -579,17 +592,17 @@ class NewFilamentDialog(QDialog):
         hint.setWordWrap(True)
         set_level(hint, "caption")
         outer.addWidget(hint)
-        scroll = QScrollArea(self)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidgetResizable(True)
-        content = QWidget(scroll)
+        self._scroll = DialogScrollArea(self)
+        content = QWidget(self._scroll)
         layout = QFormLayout(content)
         layout.setContentsMargins(0, ROOMY, NORMAL, NORMAL)
         layout.setVerticalSpacing(NORMAL)
+        layout.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        scroll.setWidget(content)
-        outer.addWidget(scroll)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_soon)
+        outer.addWidget(self._scroll)
 
         self.name = QLineEdit(self)
         self.name.setPlaceholderText(tr("etwa „PETG Rot“"))
@@ -633,7 +646,7 @@ class NewFilamentDialog(QDialog):
         # nicht (Regel 19); der Entfernen-Knopf nimmt immer die letzte.
         self._colours: list[str] = (colour or "#808080").split() or ["#808080"]
         colour_row = QWidget(self)
-        self._colour_row = QHBoxLayout(colour_row)
+        self._colour_row = QGridLayout(colour_row)
         self._colour_row.setContentsMargins(0, 0, 0, 0)
         self._colour_row.setSpacing(TIGHT)
         self.colour_buttons: list[QPushButton] = []
@@ -647,9 +660,10 @@ class NewFilamentDialog(QDialog):
         self.remove_colour.setToolTip(tr("Letzte Farbe entfernen."))
         self.remove_colour.setAccessibleName(tr("Letzte Farbe entfernen"))
         self.remove_colour.clicked.connect(self._remove_colour)
-        self._colour_row.addStretch(1)
-        self._colour_row.addWidget(self.add_colour)
-        self._colour_row.addWidget(self.remove_colour)
+        self._colour_row.setColumnStretch(0, 1)
+        self._colour_row.setColumnStretch(1, 1)
+        self._colour_row.addWidget(self.add_colour, 0, 2)
+        self._colour_row.addWidget(self.remove_colour, 0, 3)
         self._show_colours()
         layout.addRow(tr("Farbe"), colour_row)
 
@@ -770,6 +784,9 @@ class NewFilamentDialog(QDialog):
         details.addRow(self.profile_search)
         self.more_section = collapsible(tr("Weitere Angaben"), self.more, open_now=False)
         layout.addRow(self.more_section)
+        heading = self.more_section.findChild(QToolButton)
+        assert heading is not None
+        heading.toggled.connect(self._fit_soon)
         self.validation = QLabel(self)
         self.validation.setWordWrap(True)
         outer.addWidget(self.validation)
@@ -844,6 +861,32 @@ class NewFilamentDialog(QDialog):
                 label.setStatusTip(help_text)
                 label.setAccessibleDescription(help_text)
         self.name.setFocus()
+        for choice in self.findChildren(QComboBox) + self.findChildren(NumberSpin):
+            wheel_needs_focus(choice)
+        wheel_needs_focus(self.stock_slider)
+        self._colour_tab_order()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon()
+
+    def _fit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_content)
+
+    def _fit_content(self) -> None:
+        """Zusatzangaben bekommen Platz, gezogene Nutzerhöhen bleiben erhalten."""
+        layout = self.layout()
+        if layout is None or not self.isVisible():
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = self.sizeHint().height()
+        self.resize(self.width(), max(wanted, self._user_height))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
 
     def _name_changed(self, text: str) -> None:
         self._validate()
@@ -1080,12 +1123,18 @@ class NewFilamentDialog(QDialog):
 
     def _show_colours(self) -> None:
         """Je Farbe ein Knopf, in Spulenreihenfolge; danach die zwei Wege."""
-        for button in self.colour_buttons:
+        while len(self.colour_buttons) > len(self._colours):
+            button = self.colour_buttons.pop()
             self._colour_row.removeWidget(button)
+            button.hide()
             button.deleteLater()
-        self.colour_buttons = []
         for number, one in enumerate(self._colours):
-            button = QPushButton(self)
+            if number == len(self.colour_buttons):
+                button = QPushButton(self)
+                button.clicked.connect(partial(self._pick_colour, number))
+                self._colour_row.addWidget(button, number // 2, number % 2)
+                self.colour_buttons.append(button)
+            button = self.colour_buttons[number]
             button.setIcon(swatch(one))
             button.setText(one)
             button.setAccessibleName(
@@ -1093,11 +1142,18 @@ class NewFilamentDialog(QDialog):
                 if len(self._colours) > 1
                 else tr("Farbe")
             )
-            button.clicked.connect(partial(self._pick_colour, number))
-            self._colour_row.insertWidget(number, button)
-            self.colour_buttons.append(button)
         self.add_colour.setVisible(len(self._colours) < filaments.MAX_COLOURS)
         self.remove_colour.setVisible(len(self._colours) > 1)
+        self._colour_tab_order()
+
+    def _colour_tab_order(self) -> None:
+        """Neue Farbknöpfe bleiben zwischen Materialtyp und Lagerort erreichbar."""
+        previous: QWidget = self.material_type
+        for button in (*self.colour_buttons, self.add_colour, self.remove_colour):
+            QWidget.setTabOrder(previous, button)
+            previous = button
+        if hasattr(self, "location"):
+            QWidget.setTabOrder(previous, self.location)
 
     def _pick_colour(self, number: int = 0) -> None:
         chosen = QColorDialog.getColor(

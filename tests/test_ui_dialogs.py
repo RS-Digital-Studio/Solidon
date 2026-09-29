@@ -258,7 +258,8 @@ def test_the_dialog_keeps_out_of_the_middle_of_the_view(
     from PySide6.QtWidgets import QWidget
 
     anchor = QWidget()
-    anchor.resize(1200, 800)
+    room = qt_app.primaryScreen().availableGeometry().adjusted(16, 32, -16, -32)
+    anchor.setGeometry(room)
     anchor.show()
     dialog = OperationDialog(REGISTRY.get("load"), ["obj_1"])
     try:
@@ -271,7 +272,8 @@ def test_the_dialog_keeps_out_of_the_middle_of_the_view(
         dialog.place_beside(anchor)
         middle = anchor.mapToGlobal(anchor.rect().center()).x()
 
-        assert dialog.x() > middle, "der Dialog lässt bei genügend Platz die Mitte frei"
+        if expected + 24 < anchor.width() / 2:
+            assert dialog.x() > middle, "der Dialog lässt bei genügend Platz die Mitte frei"
         assert dialog.y() >= anchor.mapToGlobal(anchor.rect().topLeft()).y()
         right_edge = anchor.mapToGlobal(anchor.rect().topRight()).x()
         assert dialog.x() + expected <= right_edge, "auch die Mindestbreite bleibt im Anker"
@@ -344,7 +346,11 @@ def test_an_open_advanced_section_never_overlaps_the_action_buttons(
             == "advanced"
         ]
         assert advanced and all(editor.isVisibleTo(dialog) for editor in advanced)
-        assert max(editor.geometry().bottom() for editor in advanced) < box.geometry().top()
+        viewport = dialog._scroll.viewport()
+        viewport_bottom = viewport.mapToGlobal(viewport.rect().bottomLeft()).y()
+        footer_top = box.mapToGlobal(box.rect().topLeft()).y()
+        assert viewport_bottom < footer_top, "auch scrollende Felder bleiben oberhalb der Knöpfe"
+        assert dialog.rect().contains(box.mapTo(dialog, box.rect().bottomRight()))
     finally:
         dialog.close()
 

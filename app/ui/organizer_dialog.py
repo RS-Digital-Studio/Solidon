@@ -341,6 +341,7 @@ class OrganizerDialog(QDialog):
         scroll.setWidgetResizable(True)
         self.editor = QWidget(scroll)
         self.editor_form = QFormLayout(self.editor)
+        self.editor_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         scroll.setWidget(self.editor)
         left_layout.addWidget(scroll, 1)
         middle.addWidget(left)

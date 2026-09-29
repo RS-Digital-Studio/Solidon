@@ -29,13 +29,17 @@ from __future__ import annotations
 
 from typing import Final
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QResizeEvent
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QFrame,
     QLabel,
     QMenu,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QWidget,
     QWidgetAction,
 )
@@ -215,6 +219,92 @@ class WrappedNote(QLabel):
         self.setMinimumHeight(wanted)
         if wanted != pinned:
             self.grown.emit()
+
+
+class DialogScrollArea(QScrollArea):
+    """Dialoginhalt in natürlicher Größe, bei Platzmangel scrollbar.
+
+    Die Aktionsknöpfe bleiben außerhalb. Anders als der gewöhnliche Rollbereich
+    deckelt dieser den Größenwunsch nicht auf wenige Textzeilen; kurze Formulare
+    öffnen sich vollständig. Die Mindestgröße lässt lange Formulare dennoch
+    kleiner werden, ohne deren Felder zusammenzudrücken.
+    """
+
+    contentSizeChanged = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._content_hint: QSize | None = None
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt gibt den Namen
+        content = self.widget()
+        if content is None:
+            return super().sizeHint()
+        wanted = content.sizeHint().expandedTo(content.minimumSizeHint())
+        layout = content.layout()
+        if layout is not None and layout.hasHeightForWidth():
+            width = self.viewport().width() if self.isVisible() else wanted.width()
+            wanted.setHeight(
+                max(content.minimumSizeHint().height(), layout.totalHeightForWidth(width))
+            )
+        frame = self.frameWidth() * 2
+        return wanted + QSize(frame, frame)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt gibt den Namen
+        return QSize(TARGET_SIZE * 2, TARGET_SIZE * 2)
+
+    def setWidget(self, widget: QWidget) -> None:  # noqa: N802 — Qt gibt den Namen
+        super().setWidget(widget)
+        widget.installEventFilter(self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        from app.ui.leash import stop_watching_the_dying
+
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            self.updateGeometry()
+            wanted = self.sizeHint()
+            if wanted != self._content_hint:
+                self._content_hint = wanted
+                self.contentSizeChanged.emit()
+        return super().eventFilter(watched, event)
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt gibt den Namen
+        super().showEvent(event)
+        QTimer.singleShot(0, self, self._fit_window)
+
+    def _fit_window(self) -> None:
+        window = self.window()
+        if isinstance(window, QDialog):
+            fit_dialog_to_screen(window)
+
+
+def fit_dialog_to_screen(dialog: QWidget) -> None:
+    """Größe und Lage samt Rahmen innerhalb des aktuellen Monitors halten.
+
+    Erst nach dem Anzeigen aufrufen, wenn Qt den Fensterrahmen kennt, sowie
+    nach einer inhaltlichen Größenänderung. Normale Nutzergrößen und maximierte
+    Fenster bleiben erhalten; überlange Inhalte gehören in einen Rollbereich.
+    """
+    screen = dialog.screen()
+    if screen is None or dialog.isMaximized() or dialog.isFullScreen():
+        return
+    room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
+    frame = dialog.frameGeometry()
+    border = frame.size() - dialog.size()
+    dialog.resize(
+        min(dialog.width(), max(1, room.width() - border.width())),
+        min(dialog.height(), max(1, room.height() - border.height())),
+    )
+    frame = dialog.frameGeometry()
+    x = max(room.left(), min(frame.left(), room.right() - frame.width() + 1))
+    y = max(room.top(), min(frame.top(), room.bottom() - frame.height() + 1))
+    if x != frame.left() or y != frame.top():
+        dialog.move(x, y)
 
 
 def make_primary(button: QPushButton) -> QPushButton:

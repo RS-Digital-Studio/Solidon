@@ -45,6 +45,7 @@ from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin, localised_value
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.session import Session
+from app.ui.style import NORMAL, WIDE, make_primary
 
 _log = get_logger(__name__)
 
@@ -168,6 +169,11 @@ class VariantsDialog(QDialog):
         form.addRow(tr("Schrittweite"), self.step)
         form.addRow(tr("Anzahl"), self.count)
         form.addRow("", self.mark)
+        for field in (self.parameter, self.first, self.step, self.count):
+            caption = form.labelForField(field)
+            if isinstance(caption, QLabel):
+                caption.setBuddy(field)
+                field.setAccessibleName(caption.text())
 
         self.state = QLabel(
             tr("Die Varianten stehen nebeneinander auf einer Platte und werden exportiert."),
@@ -191,13 +197,17 @@ class VariantsDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
+        make_primary(self.buttons.button(QDialogButtonBox.StandardButton.Ok))
         self.buttons.accepted.connect(self._build)
         self.buttons.rejected.connect(self._stop_or_close)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addLayout(form)
         layout.addWidget(self.state)
         layout.addWidget(self.progress)
+        layout.addStretch(1)
         layout.addWidget(self.buttons)
 
         self._worker: _VariantWorker | None = None

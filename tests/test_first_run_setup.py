@@ -10,11 +10,12 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import QApplication, QFileDialog
 
 from app.core import discover
 from app.core.knowledge import profiles
+from app.core.types import PrinterProfile
 from app.ui import first_run
 from app.ui.first_run import FirstRunDialog
 from app.ui.settings import UiSettings
@@ -37,6 +38,127 @@ def _grouped_titles(dialog: FirstRunDialog) -> list[list[str]]:
             continue
         groups[-1].append(dialog.printer.itemText(row))
     return [group for group in groups if group]
+
+
+@pytest.mark.parametrize("commit", ["keyboard", "mouse"])
+def test_printer_popup_filters_groups_and_commits_the_source_row(qt_app, commit: str) -> None:
+    """Suchzeile und Listenindex bleiben auch mit ausgefilterten Gruppen getrennt."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+    dialog = QDialog()
+    box = first_run.PrinterComboBox(dialog)
+    layout = QVBoxLayout(dialog)
+    layout.addWidget(box)
+    for title, identifier in (
+        ("FDM", first_run._GROUP_HEADER),
+        ("Hersteller Alpha", "alpha"),
+        ("Resin", first_run._GROUP_HEADER),
+        ("Hersteller Beta", "beta"),
+    ):
+        box.addItem(title, identifier)
+        if identifier == first_run._GROUP_HEADER:
+            box.model().item(box.count() - 1).setFlags(Qt.ItemFlag.NoItemFlags)
+    box.setCurrentIndex(1)
+    try:
+        dialog.show()
+        box.showPopup()
+        box.search_field.setText("bEtA")
+        qt_app.processEvents()
+        assert box.currentData() == "alpha"
+        assert box.filtered.rowCount() == 2
+        assert box.filtered.index(0, 0).data() == "Resin"
+        assert box.popup.layout().itemAt(0).widget() is box.search_field
+        assert box.results.currentIndex().data(Qt.ItemDataRole.UserRole) == "beta"
+        if commit == "keyboard":
+            QTest.keyClick(box.search_field, Qt.Key.Key_Return)
+        else:
+            point = box.results.visualRect(box.filtered.index(1, 0)).center()
+            QTest.mouseClick(box.results.viewport(), Qt.MouseButton.LeftButton, pos=point)
+        assert box.currentData() == "beta"
+        assert box.currentIndex() == 3
+        assert not box.popup.isVisible()
+        assert dialog.isVisible()
+        box.showPopup()
+        box.search_field.setText("Später gefunden")
+        assert box.filtered.rowCount() == 0
+        box.addItem("Später gefunden", "late")
+        qt_app.processEvents()
+        assert box.filtered.rowCount() == 2
+        assert box.filtered.index(0, 0).data() == "Resin"
+        assert box.results.currentIndex().data(Qt.ItemDataRole.UserRole) == "late"
+        assert box.currentData() == "beta"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_printer_popup_keeps_search_fixed_and_escape_preserves_the_dialog(qt_app) -> None:
+    """Scrollen, keine Treffer und nachgelieferte Profile verändern die Auswahl nicht."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+    dialog = QDialog()
+    box = first_run.PrinterComboBox(dialog)
+    layout = QVBoxLayout(dialog)
+    layout.addWidget(box)
+    for row in range(40):
+        box.addItem(f"Drucker {row:02d}", str(row))
+    box.setCurrentIndex(7)
+    try:
+        dialog.show()
+        box.showPopup()
+        qt_app.processEvents()
+        position = box.search_field.pos()
+        box.results.verticalScrollBar().setValue(box.results.verticalScrollBar().maximum())
+        assert box.search_field.pos() == position
+        box.search_field.setText("Später gefunden")
+        qt_app.processEvents()
+        assert box.empty.isVisible()
+        QTest.keyClick(box.search_field, Qt.Key.Key_Return)
+        assert box.popup.isVisible()
+        assert box.currentData() == "7"
+        box.addItem("Später gefunden", "late")
+        qt_app.processEvents()
+        assert box.filtered.rowCount() == 1
+        assert box.results.currentIndex().data(Qt.ItemDataRole.UserRole) == "late"
+        assert box.currentData() == "7"
+        QTest.keyClick(box.search_field, Qt.Key.Key_Escape)
+        assert not box.popup.isVisible()
+        assert dialog.isVisible()
+        assert box.currentData() == "7"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_exact_printer_name_precedes_a_partial_model_number_match(qt_app) -> None:
+    """Modellnummer 2 und Düse 0.2 dürfen bei Enter keine falsche Maschine wählen."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+    dialog = QDialog()
+    box = first_run.PrinterComboBox(dialog)
+    layout = QVBoxLayout(dialog)
+    layout.addWidget(box)
+    box.addItem("FDM", first_run._GROUP_HEADER)
+    box.model().item(0).setFlags(Qt.ItemFlag.NoItemFlags)
+    box.addItem("Elegoo Centauri Carbon 0.2 nozzle", "cc1")
+    box.addItem("Elegoo Centauri Carbon 2 0.2 nozzle", "cc2")
+    box.setCurrentIndex(1)
+    try:
+        dialog.show()
+        box.showPopup()
+        box.search_field.setText("Elegoo Centauri Carbon 2 0.2 nozzle")
+        assert box.filtered.rowCount() == 3
+        assert box.filtered.index(0, 0).data() == "FDM"
+        assert box.filtered.index(1, 0).data(Qt.ItemDataRole.UserRole) == "cc2"
+        assert box.currentData() == "cc1"
+        QTest.keyClick(box.search_field, Qt.Key.Key_Return)
+        assert box.currentData() == "cc2"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def _assert_grouped_and_sorted(dialog: FirstRunDialog) -> None:
@@ -81,11 +203,13 @@ def test_selected_slicer_filters_printers_and_keeps_custom_choice(
     first = "prusa-mk4s"
     second = "centauri-carbon-2"
     machine_names = {
-        "PrusaSlicer.exe": (known[first].title,),
-        "elegoo-slicer.exe": (known[second].title,),
+        "PrusaSlicer.exe": (known[first],),
+        "elegoo-slicer.exe": (known[second],),
     }
     monkeypatch.setattr(
-        first_run.slicer_profiles, "known_printers", lambda _flavour, path: machine_names[path.name]
+        first_run.slicer_profiles,
+        "discover_printers",
+        lambda path, _flavour: machine_names[path.name],
     )
     monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
     setup_dialog._fill_slicers(tuple(Path(name) for name in machine_names))
@@ -100,6 +224,26 @@ def test_selected_slicer_filters_printers_and_keeps_custom_choice(
         # Die Resin-Geräte hängen an keinem FDM-Slicer und bleiben stehen.
         assert setup_dialog.printer.findData("generic-resin-130") >= 0
         _assert_grouped_and_sorted(setup_dialog)
+
+
+def test_slicer_survey_prefers_the_current_source_over_a_saved_namesake(
+    setup_dialog: FirstRunDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gleich benanntes gespeichertes Profil verdrängt nicht die aktuelle Slicer-ID."""
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    discovered = replace(template, id="slicer-current-source")
+    monkeypatch.setattr(
+        first_run.slicer_profiles, "discover_printers", lambda *_args: (discovered,)
+    )
+    monkeypatch.setattr(
+        first_run.slicer_profiles, "chosen_machine", lambda *_args: discovered.title
+    )
+    survey = first_run._PrinterSurvey(Path("OrcaSlicer.exe"))
+    found: list[first_run.PrinterChoices] = []
+    survey.done.connect(found.append)
+    survey.work()
+    assert len(found) == 1
+    assert found[0].suggested == discovered.id
 
 
 def test_failed_slicer_worker_keeps_saved_custom_printers_and_current_choice(
@@ -136,11 +280,11 @@ def test_slicer_profile_search_stays_outside_the_gui_thread(
 
     thread_ids: list[int] = []
 
-    def known(_flavour: str, _path: Path) -> tuple[str, ...]:
+    def known(_path: Path, _flavour: str) -> tuple[PrinterProfile, ...]:
         thread_ids.append(threading.get_ident())
         return ()
 
-    monkeypatch.setattr(first_run.slicer_profiles, "known_printers", known)
+    monkeypatch.setattr(first_run.slicer_profiles, "discover_printers", known)
     monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
     setup_dialog._fill_slicers((Path("OrcaSlicer.exe"),))
     setup_dialog.slicer.setCurrentIndex(1)
@@ -175,7 +319,11 @@ def test_selected_slicer_can_suggest_its_own_active_printer(
 ) -> None:
     """Erst die ausdrückliche Slicerwahl erlaubt dessen belegte Druckervorgabe."""
     name = profiles.printer("prusa-mk4s").title
-    monkeypatch.setattr(first_run.slicer_profiles, "known_printers", lambda *_args: (name,))
+    monkeypatch.setattr(
+        first_run.slicer_profiles,
+        "discover_printers",
+        lambda *_args: (profiles.printer("prusa-mk4s"),),
+    )
     monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: name)
     setup_dialog._fill_slicers((Path("PrusaSlicer.exe"),))
     setup_dialog.slicer.setCurrentIndex(1)
@@ -207,7 +355,11 @@ def test_the_remembered_slicer_suggests_its_printer_and_done_waits_for_it(
         return name
 
     monkeypatch.setattr(FirstRunDialog, "look", lambda _self: None)
-    monkeypatch.setattr(first_run.slicer_profiles, "known_printers", lambda *_args: (name,))
+    monkeypatch.setattr(
+        first_run.slicer_profiles,
+        "discover_printers",
+        lambda *_args: (profiles.printer("centauri-carbon-2"),),
+    )
     monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", slow_machine)
     settings = UiSettings(printer=profiles.DEFAULT_PRINTER)
 
@@ -231,7 +383,11 @@ def test_late_general_survey_keeps_the_selected_slicer_printer_and_material(
         "elegoo-slicer.exe": known["centauri-carbon-2"].title,
     }
     monkeypatch.setattr(
-        first_run.slicer_profiles, "known_printers", lambda _flavour, path: (names[path.name],)
+        first_run.slicer_profiles,
+        "discover_printers",
+        lambda path, _flavour: tuple(
+            entry for entry in known.values() if entry.title == names[path.name]
+        ),
     )
     monkeypatch.setattr(
         first_run.slicer_profiles, "chosen_machine", lambda _flavour, path: names[path.name]
@@ -264,14 +420,14 @@ def test_late_printer_result_cannot_replace_the_newer_slicer_selection(
     release = Event()
     known = profiles.printer_profiles()
 
-    def names(_flavour: str, path: Path) -> tuple[str, ...]:
+    def names(path: Path, _flavour: str) -> tuple[PrinterProfile, ...]:
         if path.name == "PrusaSlicer.exe":
             entered.set()
             assert release.wait(5)
-            return (known["prusa-mk4s"].title,)
-        return (known["centauri-carbon-2"].title,)
+            return (known["prusa-mk4s"],)
+        return (known["centauri-carbon-2"],)
 
-    monkeypatch.setattr(first_run.slicer_profiles, "known_printers", names)
+    monkeypatch.setattr(first_run.slicer_profiles, "discover_printers", names)
     monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
     setup_dialog._fill_slicers((Path("PrusaSlicer.exe"), Path("elegoo-slicer.exe")))
     setup_dialog.slicer.setCurrentIndex(1)
@@ -294,7 +450,7 @@ def test_custom_slicer_path_is_selected_and_only_remembered_when_applied(
     """Ein portabler Slicer braucht keine typische Installationsposition."""
     path = tmp_path / "portable" / "OrcaSlicer.exe"
     monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *_args: (str(path), ""))
-    monkeypatch.setattr(first_run.slicer_profiles, "known_printers", lambda *_args: ())
+    monkeypatch.setattr(first_run.slicer_profiles, "discover_printers", lambda *_args: ())
     monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: "")
     setup_dialog._choose_slicer_file()
     assert setup_dialog.wait_for_survey()
@@ -326,6 +482,256 @@ def test_custom_printer_is_saved_with_entered_dimensions_before_inventory_opens(
     assert entry.nozzle_diameter == pytest.approx(0.6)
     assert chosen[0] in profiles.user_printer_profiles()
     _assert_grouped_and_sorted(setup_dialog)
+
+
+def test_discovered_printer_stays_a_draft_across_language_rebuild_until_accepted(
+    setup_dialog: FirstRunDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lesen und Sprachwechsel schreiben keine Profile; übernommen wird nur die Auswahl."""
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    first = replace(template, id="slicer-orca-first", title="Werkstatt mit 0,4-mm-Düse")
+    second = replace(
+        template,
+        id="slicer-orca-second",
+        title="Werkstatt mit 0,6-mm-Düse",
+        nozzle_diameter=0.6,
+        extrusion_width=0.63,
+        build_volume=(315.0, 270.0, 420.0),
+    )
+    monkeypatch.setattr(
+        first_run.slicer_profiles, "discover_printers", lambda *_args: (first, second)
+    )
+    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: first.title)
+    setup_dialog._fill_slicers((Path("OrcaSlicer.exe"),))
+    setup_dialog.slicer.setCurrentIndex(1)
+    assert setup_dialog.wait_for_survey()
+    assert setup_dialog.printer.findData(second.id) >= 0
+    assert not {first.id, second.id} & profiles.user_printer_profiles().keys()
+    setup_dialog.printer.setCurrentIndex(setup_dialog.printer.findData(second.id))
+    persisted = setup_dialog.settings.printer
+    setup_dialog._carry_over(setup_dialog.settings)
+    assert setup_dialog.settings.printer == persisted
+    rebuilt = FirstRunDialog(
+        setup_dialog.settings,
+        discovered_printers=setup_dialog.discovered_printers,
+        printer_selection=setup_dialog.printer_selection,
+    )
+    try:
+        assert rebuilt.wait_for_survey()
+        assert rebuilt.printer.currentData() == second.id
+        assert not {first.id, second.id} & profiles.user_printer_profiles().keys()
+        rebuilt.accept()
+        rebuilt.apply_to(rebuilt.settings)
+        assert rebuilt.settings.printer == second.id
+        assert profiles.printer(second.id).build_volume == pytest.approx(second.build_volume)
+        assert profiles.printer(second.id).nozzle_diameter == pytest.approx(0.6)
+        assert first.id not in profiles.user_printer_profiles()
+    finally:
+        rebuilt.release()
+
+
+@pytest.mark.parametrize("close_window", [False, True])
+def test_language_switch_then_skip_does_not_store_an_unsaved_printer(
+    setup_dialog: FirstRunDialog,
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    close_window: bool,
+) -> None:
+    """Sprachwechsel trägt die Auswahl weiter; Später und Fensterkreuz speichern keine fremde ID."""
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+    from app.ui import main_window
+    from app.ui.session import Session
+
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    discovered = replace(template, id="slicer-orca-language-draft", title="Ungespeicherte Maschine")
+    spoken = get_language()
+    other_language = "en" if spoken != "en" else "de"
+    rounds: list[str] = []
+    saved: list[str] = []
+
+    class LanguageDialog(FirstRunDialog):
+        def exec(self) -> int:
+            if not rounds:
+                self._discovered_printers = {discovered.id: discovered}
+                self._fill_printers((discovered.id,))
+                self.printer.setCurrentIndex(self.printer.findData(discovered.id))
+                rounds.append(discovered.id)
+                self.language.setCurrentIndex(self.language.findData(other_language))
+                assert self.result() == first_run.LANGUAGE_CHANGED
+            else:
+                assert self.printer.currentData() == discovered.id
+                rounds.append(str(self.printer.currentData()))
+                if close_window:
+                    self.close()
+                else:
+                    self.reject()
+            return self.result()
+
+    monkeypatch.setattr(first_run, "FirstRunDialog", LanguageDialog)
+    monkeypatch.setattr(
+        main_window, "save_settings", lambda settings: saved.append(settings.printer)
+    )
+    monkeypatch.setattr(Session, "set_agent_backend", lambda *_args: None)
+    settings = UiSettings(language=spoken, printer=profiles.DEFAULT_PRINTER)
+    window = main_window.MainWindow(Session(), settings)
+    monkeypatch.setattr(window, "_refresh_chat_availability", lambda **_kwargs: None)
+    try:
+        window.action_first_run()
+        assert rounds == [discovered.id, discovered.id]
+        assert settings.language == other_language
+        assert settings.first_run_done
+        assert settings.printer == profiles.DEFAULT_PRINTER
+        assert saved and set(saved) == {profiles.DEFAULT_PRINTER}
+        assert discovered.id not in profiles.user_printer_profiles()
+    finally:
+        window.wait_for_workers()
+        window.close()
+        install_language(spoken)
+        set_language(spoken)
+
+
+@pytest.mark.parametrize("route", ["accept", "open", "inventory", "language", "apply"])
+def test_failed_slicer_path_save_keeps_first_run_open_and_can_be_retried(
+    setup_dialog: FirstRunDialog,
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+) -> None:
+    """Ein Schreibfehler übernimmt keine Antworten und startet keinen nachgelagerten Weg."""
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    dialog = setup_dialog
+    spoken = get_language()
+    before = replace(dialog.settings)
+    destination = "en" if before.language != "en" else "de"
+    opened: list[str] = []
+    dialog.importRequested.connect(lambda: opened.append("import"))
+    dialog.inventoryRequested.connect(lambda: opened.append("inventory"))
+    with QSignalBlocker(dialog.slicer), QSignalBlocker(dialog.language):
+        dialog.slicer.addItem("OrcaSlicer", userData="OrcaSlicer.exe")
+        dialog.slicer.setCurrentIndex(dialog.slicer.count() - 1)
+        dialog.language.setCurrentIndex(dialog.language.findData(destination))
+    save_path = discover.remember_path
+    failed_save = mock.Mock(side_effect=OSError("Datenträger nicht beschreibbar"))
+    monkeypatch.setattr(discover, "remember_path", failed_save)
+
+    def follow_route() -> None:
+        if route == "accept":
+            dialog.accept()
+        elif route == "open":
+            dialog._open()
+        elif route == "inventory":
+            dialog._open_inventory()
+        elif route == "language":
+            dialog._language_changed()
+        else:
+            dialog.apply_to(dialog.settings)
+
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        follow_route()
+        assert failed_save.call_count == 1
+        assert dialog.isVisible()
+        assert dialog.result() == FirstRunDialog.DialogCode.Rejected
+        assert dialog.settings == before
+        assert not opened
+        assert "Schreibrechte" in dialog.printer_state.text()
+
+        monkeypatch.setattr(discover, "remember_path", save_path)
+        follow_route()
+        assert discover.remembered_path("slicer") == "OrcaSlicer.exe"
+        assert dialog.settings.language == destination
+        expected = {"open": ["import"], "inventory": ["inventory"]}.get(route, [])
+        assert opened == expected
+        if route == "language":
+            assert dialog.result() == first_run.LANGUAGE_CHANGED
+        elif route == "apply":
+            assert dialog.settings.first_run_done
+        else:
+            assert dialog.result() == FirstRunDialog.DialogCode.Accepted
+    finally:
+        dialog.close()
+        install_language(spoken)
+        set_language(spoken)
+
+
+@pytest.mark.parametrize("language", ["fr", "it"])
+def test_custom_printer_natural_width_and_manual_height_survive_toggling(
+    setup_dialog: FirstRunDialog, qt_app: QApplication, language: str
+) -> None:
+    """Die langen Maßzeilen bekommen Platz; eine bewusst gewählte Höhe bleibt erhalten."""
+    from PySide6.QtTest import QTest
+
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    spoken = get_language()
+    install_language(language)
+    set_language(language)
+    dialog = FirstRunDialog(UiSettings(language=language))
+    try:
+        dialog.show()
+        QTest.qWait(100)
+        initial_height = dialog.height()
+        default = dialog.printer.currentData()
+        dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
+        QTest.qWait(100)
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+        assert dialog.height() >= initial_height
+        expanded_height = dialog.height()
+        dialog.printer.setCurrentIndex(dialog.printer.findData(default))
+        QTest.qWait(100)
+        assert dialog.height() < expanded_height
+
+        manual_height = dialog.height() + 70
+        dialog.resize(dialog.width(), manual_height)
+        QTest.qWait(100)
+        dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
+        QTest.qWait(100)
+        assert dialog.height() >= max(manual_height, expanded_height)
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+        dialog.printer.setCurrentIndex(dialog.printer.findData(default))
+        QTest.qWait(100)
+        assert dialog.height() == manual_height
+    finally:
+        dialog.release()
+        dialog.close()
+        install_language(spoken)
+        set_language(spoken)
+
+
+def test_printer_search_preserves_the_confirmed_choice_across_language_changes(
+    setup_dialog: FirstRunDialog,
+) -> None:
+    """Freier Suchtext ändert die bestätigte Druckerwahl auch beim Sprachwechsel nicht."""
+    previous = str(setup_dialog.printer.currentData())
+    query = "Dieser Drucker ist noch kein Treffer"
+    setup_dialog.printer.search_field.setText(query)
+    assert setup_dialog.printer.currentData() == previous
+    assert setup_dialog.start.isEnabled()
+    assert setup_dialog.open_button.isEnabled()
+    assert setup_dialog.inventory_button.isEnabled()
+    setup_dialog._carry_over(setup_dialog.settings)
+    rebuilt = FirstRunDialog(
+        setup_dialog.settings,
+        discovered_printers=setup_dialog.discovered_printers,
+        printer_query=setup_dialog.printer_query,
+    )
+    try:
+        assert rebuilt.printer.search_field.text() == query
+        assert rebuilt.printer.currentData() == previous
+        assert rebuilt.start.isEnabled()
+        rebuilt.apply_to(rebuilt.settings)
+        assert rebuilt.settings.first_run_done
+        assert rebuilt.settings.printer == previous
+    finally:
+        rebuilt.release()
 
 
 def test_a_custom_resin_printer_is_saved_with_pixel_and_wall_and_starts_with_resin(

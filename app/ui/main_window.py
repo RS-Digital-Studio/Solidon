@@ -9278,21 +9278,43 @@ class MainWindow(QMainWindow):
         draft.circle_measure = circle_measure()
         spoken = self.settings.language
         reset_disclosure = False
+        slicer_choice: str | None = None
+        slicer_printers = None
+        printer_query = None
         accepted = False
         try:
             while True:
-                dialog = SettingsDialog(draft, self)
+                dialog = SettingsDialog(
+                    draft,
+                    self,
+                    slicer_path=slicer_choice,
+                    discovered_printers=slicer_printers,
+                    printer_query=printer_query,
+                )
                 try:
                     if reset_disclosure:
                         dialog._reset_disclosure()
                     answer = dialog.exec()
                     if answer == first_run.LANGUAGE_CHANGED:
                         reset_disclosure = reset_disclosure or dialog._reset_ai_disclosure
+                        slicer_choice = dialog.slicer_path
+                        slicer_printers = dialog.discovered_printers
+                        printer_query = dialog.printer_query
                         dialog.apply_to(draft)
                         switch_language(draft.language)
                         continue
                     if answer != SettingsDialog.DialogCode.Accepted:
                         return
+                    try:
+                        dialog.save_external_choices()
+                    except AppError as error:
+                        reset_disclosure = reset_disclosure or dialog._reset_ai_disclosure
+                        dialog.apply_to(draft)
+                        slicer_choice = dialog.slicer_path
+                        slicer_printers = dialog.discovered_printers
+                        printer_query = dialog.printer_query
+                        show_error(error, self)
+                        continue
                     dialog.apply_to(self.settings)
                     self.settings.circle_measure = draft.circle_measure
                     accepted = True
@@ -21918,6 +21940,9 @@ class MainWindow(QMainWindow):
         """
         spoken = self.settings.language
         printer_draft = None
+        discovered_printers = None
+        printer_selection = None
+        printer_query = None
         inventory_requested: list[bool] = []
         # **Der Import wartet, bis der Dialog zu ist und das Projekt steht.**
         # Er lief direkt aus dem Knopf, also noch im offenen Dialog — und
@@ -21927,7 +21952,13 @@ class MainWindow(QMainWindow):
         # verschwand ohne Wort. Dieselbe Bauart wie beim Filamentlager.
         import_requested: list[bool] = []
         while True:
-            dialog = first_run.FirstRunDialog(self.settings, self)
+            dialog = first_run.FirstRunDialog(
+                self.settings,
+                self,
+                discovered_printers=discovered_printers,
+                printer_selection=printer_selection,
+                printer_query=printer_query,
+            )
             if printer_draft is not None:
                 dialog.restore_custom_printer_draft(printer_draft)
             dialog.importRequested.connect(lambda: import_requested.append(True))
@@ -21936,6 +21967,9 @@ class MainWindow(QMainWindow):
             if answer != first_run.LANGUAGE_CHANGED:
                 break
             printer_draft = dialog.custom_printer_draft()
+            discovered_printers = dialog.discovered_printers
+            printer_selection = dialog.printer_selection
+            printer_query = dialog.printer_query
             # Weggeräumt, nicht abgewartet: ``release`` wartete auf die
             # Programmsuche des alten Dialogs, und der Sprachwechsel stand
             # so lange still. Den Arbeiter hält die Halteleine.

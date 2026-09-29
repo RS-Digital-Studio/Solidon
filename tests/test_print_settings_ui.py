@@ -59,6 +59,114 @@ def session(qt_app: QApplication) -> Session:
     return Session()
 
 
+@pytest.mark.parametrize("which", ["printer_choice", "machine_choice"])
+def test_typing_an_unknown_printer_preserves_the_choice_and_output_state(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    tmp_path: Path,
+    which: str,
+) -> None:
+    """Die getrennte Suche ändert weder die bestätigte Wahl noch das Druckergebnis."""
+    box = getattr(dialog, which)
+    if which == "machine_choice":
+        box.addItem("Herstellerdrucker", "machine-profile")
+        box.setEnabled(True)
+        box.setCurrentIndex(0)
+    original = dialog.session.profile
+    gcode_file = tmp_path / "plate.gcode"
+    gcode_file.write_text("; gespeichertes Ergebnis", encoding="utf-8")
+    dialog._gcode = [gcode_file]
+    dialog._release_the_save()
+    before = (
+        box.currentData(),
+        dialog.slice_button.isEnabled(),
+        dialog.open_button.isEnabled(),
+        dialog.save_button.isEnabled(),
+        dialog.state.text(),
+    )
+    box.search_field.setText("Unbekannter Drucker-Suchtext")
+    qt_app.processEvents()
+    assert box.currentData() == before[0]
+    assert dialog.session.profile == original
+    assert dialog.slice_button.isEnabled() == before[1]
+    assert dialog.open_button.isEnabled() == before[2]
+    assert dialog.save_button.isEnabled() == before[3]
+    assert dialog.state.text() == before[4]
+
+
+@pytest.mark.parametrize("path", ["layers.layer_height", "retraction.length"])
+def test_search_opens_the_matching_section_and_scrolls_to_its_field(
+    qt_app: QApplication, session: Session, path: str
+) -> None:
+    """Auch auf zugeklappter Vorderseite führt ein Treffer zu einem sichtbaren Eingabefeld."""
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.show()
+    try:
+        dialog.front_toggle.setChecked(False)
+        dialog.tabs_toggle.setChecked(False)
+        dialog.resize(620, 400)
+        dialog._lift(path)
+        for _ in range(4):
+            qt_app.processEvents()
+        field = next(entry for entry in FIELDS if entry.path == path)
+        toggle = dialog.front_toggle if field.front else dialog.tabs_toggle
+        assert toggle.isChecked()
+        editor = dialog._editors[path]
+        assert editor.isVisibleTo(dialog)
+        visible = dialog._scroll.viewport()
+        position = editor.mapTo(visible, editor.rect().center())
+        assert visible.rect().contains(position), "die Hervorhebung liegt im sichtbaren Ausschnitt"
+    finally:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+
+
+def test_print_dialog_depth_keeps_width_and_uses_one_scroll_area(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Der Dialog rollt als Ganzes; kurze Reiter erben keine Höhe einer längeren Nachbarseite."""
+    from PySide6.QtWidgets import QScrollArea
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.resize(660, 450)
+    dialog.show()
+    try:
+        for _ in range(3):
+            qt_app.processEvents()
+        width = dialog.width()
+        assert dialog.findChildren(QScrollArea) == [dialog._scroll]
+        assert not dialog._scroll.isAncestorOf(dialog._buttons)
+        for opened in (True, False, True, False):
+            dialog.tabs_toggle.setChecked(opened)
+            for _ in range(3):
+                qt_app.processEvents()
+            assert dialog.width() == width
+            assert dialog._buttons.isVisibleTo(dialog)
+    finally:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+
+
+def test_print_actions_wrap_when_their_translated_names_exceed_the_window(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Lange Aktionsnamen dürfen das Fenster nicht über den Bildschirm verbreitern."""
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.resize(620, 450)
+    try:
+        for button in dialog._buttons.buttons():
+            button.setText(button.text() * 4)
+        dialog._fit_buttons()
+        assert dialog._buttons.orientation() == Qt.Orientation.Vertical
+        assert dialog.width() == 620
+    finally:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+
+
 @pytest.mark.parametrize(
     ("material", "general"),
     [
@@ -5802,21 +5910,8 @@ def test_the_printer_list_can_be_searched_by_typing(dialog: PrintSettingsDialog)
     Ein getippter Name, den es nicht gibt, darf keine Wahl werden — sonst
     stünde im Feld ein Drucker, den der Slicer nicht kennt.
     """
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QComboBox
-
     box = dialog.machine_choice
-    assert box.isEditable(), "ohne Eingabefeld gibt es nichts zu tippen"
-    assert box.insertPolicy() == QComboBox.InsertPolicy.NoInsert, (
-        "ein erfundener Drucker darf nicht in die Liste rutschen"
-    )
-
-    completer = box.completer()
-    assert completer is not None, "ohne Vervollständiger sucht das Tippen nichts"
-    assert completer.filterMode() == Qt.MatchFlag.MatchContains, (
-        "am Anfang zu suchen hilft nicht, wenn der Hersteller davorsteht"
-    )
-    assert completer.caseSensitivity() == Qt.CaseSensitivity.CaseInsensitive
+    assert not box.isEditable(), "Suchtext und bestätigte Druckerwahl bleiben getrennt"
 
     dialog._profiles_found(
         [
@@ -5828,10 +5923,9 @@ def test_the_printer_list_can_be_searched_by_typing(dialog: PrintSettingsDialog)
             )
         ]
     )
-    completer.setCompletionPrefix("ender")
-    assert completer.completionCount() == 1, "mitten im Namen wird nicht gesucht"
-    completer.setCurrentRow(0)
-    assert "Ender-3" in completer.currentCompletion()
+    box.search_field.setText("ender")
+    assert box.filtered.rowCount() == 1, "mitten im Namen wird nicht gesucht"
+    assert "Ender-3" in box.filtered.index(0, 0).data()
 
 
 def _wait_for_print_advice(dialog: PrintSettingsDialog, application: QApplication) -> None:
@@ -6764,6 +6858,32 @@ def test_a_printer_that_cannot_be_saved_says_so_and_shows_what_holds(
         assert dialog.nozzle_count.value() == before.nozzles
     assert "Drucker" in dialog.state.text() and "speichern" in dialog.state.text()
     assert profiles.printer(before.id) == before
+
+
+def test_switching_print_tabs_fits_the_current_page_without_a_second_click(
+    dialog: PrintSettingsDialog, qt_app: QApplication
+) -> None:
+    """Die Höhe gehört zum neuen Reiter, nicht zum zuvor sichtbaren."""
+    dialog.show()
+    assert dialog.tabs_toggle is not None
+    dialog.tabs_toggle.setChecked(True)
+    for index in range(dialog.tabs.count()):
+        dialog.tabs.setCurrentIndex(index)
+        for _ in range(16):
+            qt_app.processEvents()
+        expected = max(dialog._content_user_height, dialog.sizeHint().height())
+        room = dialog.screen().availableGeometry()
+        border = dialog.frameGeometry().height() - dialog.height()
+        if expected + border + 32 < room.height():
+            assert dialog.height() >= expected
+            assert dialog._scroll.verticalScrollBar().maximum() == 0
+    assert dialog.width() >= dialog._room_for_tabs()
+    chosen_width = max(dialog.minimumWidth(), 620)
+    dialog.resize(chosen_width, dialog.height())
+    dialog.tabs.setCurrentIndex(0)
+    for _ in range(16):
+        qt_app.processEvents()
+    assert dialog.width() == chosen_width
 
 
 def test_every_setting_field_carries_its_name_and_its_unit_once(

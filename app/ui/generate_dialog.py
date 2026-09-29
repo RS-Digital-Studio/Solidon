@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -48,11 +49,18 @@ from app.core.log import get_logger
 from app.i18n import format_decimal, tr
 from app.ui.ai_disclosure import DisclosureResult, ensure_ai_disclosure
 from app.ui.dialogs import show_error, spoken_values
-from app.ui.labels import UNEXPECTED_CRASH, volume
+from app.ui.labels import UNEXPECTED_CRASH, volume, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.settings import UiSettings, load_settings
-from app.ui.style import WrappedNote, make_primary
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    DialogScrollArea,
+    WrappedNote,
+    fit_dialog_to_screen,
+    make_primary,
+)
 
 _log = get_logger(__name__)
 
@@ -300,6 +308,7 @@ class GenerateDialog(QDialog):
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
         self._fitted_height: int | None = None
+        self._user_height = 0
         """Die Höhe, die das Fenster zuletzt selbst genommen hat — woran
         :meth:`_grow_to_content` erkennt, ob jemand anders sie bestimmt hat."""
         self._leash = WorkerLeash(self)
@@ -333,6 +342,7 @@ class GenerateDialog(QDialog):
         self.picture = QPushButton(tr("Bild wählen …"), self)
         self.picture.clicked.connect(self._choose_image)
         self.picture_label = QLabel(tr("Kein Bild gewählt"), self)
+        self.picture_label.setWordWrap(True)
         # **Der Weg zurück zum Text.** Mit Bild fährt der Dialog den Bildweg,
         # und die Beschreibung ging dabei still verloren; zurück führte nur ein
         # neuer Dialog. Sichtbar nur, solange ein Bild gilt.
@@ -346,6 +356,7 @@ class GenerateDialog(QDialog):
         picture_line.addWidget(self.drop_picture)
 
         form = QFormLayout()
+        form.setVerticalSpacing(NORMAL)
         form.addRow(tr("Beschreibung"), self.prompt)
         form.addRow(tr("Bild"), self.picture)
         form.addRow("", picture_row)
@@ -356,6 +367,7 @@ class GenerateDialog(QDialog):
         # will, und genau dafür ist er da.
         advanced = QWidget(self)
         advanced_form = QFormLayout(advanced)
+        advanced_form.setVerticalSpacing(NORMAL)
         advanced_form.setContentsMargins(0, 0, 0, 0)
         advanced_form.addRow(tr("Startwert"), self.seed)
 
@@ -426,7 +438,11 @@ class GenerateDialog(QDialog):
         self.setup.setVisible(False)
         self.setup.clicked.connect(self._ask_for_setup)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(NORMAL)
+        self._content_layout = layout
         layout.addLayout(form)
         layout.addWidget(self.advanced)
         # Der Platz sammelt sich hier, nicht zwischen den Feldern: sonst
@@ -441,7 +457,18 @@ class GenerateDialog(QDialog):
         layout.addWidget(self.attempts, 1)
         layout.addWidget(self.again)
         layout.addWidget(self.progress)
-        layout.addWidget(self.buttons)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._grow_soon)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(self._scroll, 1)
+        outer.addWidget(self.buttons)
+        heading = self.advanced.findChild(QToolButton)
+        if heading is not None:
+            heading.toggled.connect(self._grow_soon)
+        wheel_needs_focus(self.seed)
 
         self.prompt.textChanged.connect(self._update_state)
         self._update_state()
@@ -527,15 +554,15 @@ class GenerateDialog(QDialog):
         stand als leere Fläche über dem Hinweis. Was das Fenster selbst
         genommen hat, gibt es jetzt zurück.
 
-        **Nur nach oben, sobald jemand anders die Höhe bestimmt hat:** Wer den
-        Dialog von Hand größer gezogen hat, behält das. Erkannt wird es daran,
-        dass das Fenster höher steht als zuletzt selbst gesetzt und als seine
-        Mindesthöhe — bis zur Mindesthöhe schiebt Qt ein Fenster von allein,
-        wenn weitere Zeilen erscheinen, und das ist keine Wahl des Nutzers.
+        Eine gezogene Nutzerhöhe bleibt als Untergrenze erhalten. Braucht ein
+        Abschnitt zwischenzeitlich mehr Platz, gibt er genau diesen Zusatz
+        wieder zurück, wenn er sich schließt.
         """
         layout = self.layout()
-        if layout is None:
+        if layout is None or not self.isVisible():
             return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
         # Ungültig machen, bevor gemessen wird: Der Satz hat seine Mindesthöhe
         # gerade erst gepinnt, und die Rechnung darunter hielt sonst den alten
         # Stand — gemessen blieb das Feld nach dem Wachsen gequetscht, bis
@@ -543,18 +570,25 @@ class GenerateDialog(QDialog):
         # Mindesthöhe des Fensters übernimmt Qt erst mit ``activate``, und
         # bis dahin klemmte ``resize`` an der alten — ein Fenster, das einen
         # langen Satz zurückgeben sollte, blieb auf dessen Höhe stehen.
+        self._content_layout.invalidate()
+        self._content_layout.activate()
+        self._scroll.updateGeometry()
         layout.invalidate()
         layout.activate()
         wanted = self.sizeHint().height()
-        if layout.hasHeightForWidth():
-            wanted = max(wanted, layout.totalHeightForWidth(self.width()))
-        own = self._fitted_height is None or self.height() <= max(
-            self._fitted_height, self.minimumHeight()
-        )
-        self.resize(self.width(), wanted if own else max(self.height(), wanted))
+        if self._content_layout.hasHeightForWidth():
+            margins = layout.contentsMargins()
+            wanted = (
+                self._content_layout.totalHeightForWidth(self._scroll.viewport().width())
+                + margins.top()
+                + margins.bottom()
+                + layout.spacing()
+                + self.buttons.sizeHint().height()
+            )
+        self.resize(self.width(), max(wanted, self._user_height))
+        fit_dialog_to_screen(self)
         layout.activate()
-        if own:
-            self._fitted_height = self.height()
+        self._fitted_height = self.height()
 
     def _readiness_done(self, workflow: str, found: object, choices: object) -> None:
         """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""
@@ -588,6 +622,12 @@ class GenerateDialog(QDialog):
             if spec is None or not str(spec.title) or len(files) < 2:
                 continue
             box = QComboBox(self)
+            box.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            box.setMinimumContentsLength(20)
+            box.setAccessibleName(str(spec.title))
+            wheel_needs_focus(box)
             # Die Vorgabe zuerst und ohne Dateinamen: Sie ist das, was ohne
             # Zutun passiert, und der Name dahinter wechselt mit dem Bestand.
             box.addItem(tr("Automatisch"), mesh.AUTOMATIC)
@@ -605,6 +645,7 @@ class GenerateDialog(QDialog):
         # Die Überschrift verschwindet mit den Feldern: ein leerer Abschnitt in
         # „Weitere Einstellungen“ wäre ein Versprechen ohne Inhalt.
         self._models.setVisible(bool(self._model_fields))
+        self._grow_soon()
 
     def _remember_models(self) -> None:
         """Die getroffene Wahl behalten (§38) — vor dem Wurf, nicht danach.
@@ -961,9 +1002,7 @@ class GenerateDialog(QDialog):
         # Der freie Platz geht jetzt in die Liste, nicht zwischen Felder und
         # Hinweis: Der Hinweis steht über der Liste, von der er spricht, und
         # „Noch ein Versuch“ direkt darunter.
-        layout = self.layout()
-        if isinstance(layout, QVBoxLayout):
-            layout.setStretch(layout.indexOf(self._room), 0)
+        self._content_layout.setStretch(self._content_layout.indexOf(self._room), 0)
         # Neue Zeilen, neue Höhe. Nachgemessen wurde nur, wenn der Hinweis
         # seine Höhe änderte; sonst schob Qt das Fenster bloß auf seine
         # Mindesthöhe, und die Liste stand auf ihrem Minimum statt auf

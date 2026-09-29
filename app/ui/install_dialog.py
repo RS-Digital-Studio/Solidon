@@ -51,7 +51,7 @@ from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import TIGHT, make_primary
+from app.ui.style import NORMAL, TIGHT, WIDE, DialogScrollArea, make_primary
 
 if TYPE_CHECKING:
     from app.ui.settings import UiSettings
@@ -615,10 +615,20 @@ class InstallDialog(QDialog):
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(intro)
+        content = QWidget(self)
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(NORMAL)
+        content_layout.addWidget(intro)
         for row in self.rows:
-            layout.addWidget(row)
+            content_layout.addWidget(row)
+        content_layout.addStretch(1)
+        scroll = DialogScrollArea(self)
+        scroll.setWidget(content)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
+        layout.addWidget(scroll, 1)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
         layout.addWidget(self._closing_hint)

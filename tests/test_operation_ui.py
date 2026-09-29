@@ -44,6 +44,70 @@ from app.ui.settings import UiSettings
 from tests import ui_helpers
 from tests.ui_helpers import session as session
 
+
+@pytest.mark.parametrize("name", ["drill_hole", "insert_printed_thread", "create_box"])
+def test_operation_depth_scrolls_above_visible_actions_and_keeps_the_chosen_width(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Lange Rückseiten bleiben auf kleinen Bildschirmen bedienbar; Klappen ändert keine Breite."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    bootstrap.load_operations()
+    dialog = OperationDialog(REGISTRY.get(name), {})
+    room = QRect(0, 0, 760, 480)
+    monkeypatch.setattr(dialog, "screen", lambda: SimpleNamespace(availableGeometry=lambda: room))
+    dialog.resize(660, 400)
+    dialog.move(700, 440)
+    dialog.show()
+    try:
+        for _ in range(3):
+            qt_app.processEvents()
+        width = dialog.width()
+        footer = dialog.findChild(QDialogButtonBox)
+        assert footer is not None and not dialog._scroll.isAncestorOf(footer)
+        for opened in (True, False, True, False):
+            dialog.advanced.setChecked(opened)
+            for _ in range(3):
+                qt_app.processEvents()
+            assert dialog.width() == width, "Auf- und Zuklappen verwirft keine Nutzerbreite"
+            assert room.contains(dialog.frameGeometry()), "Titel und Aktionen bleiben erreichbar"
+            assert footer.isVisibleTo(dialog)
+            assert dialog.rect().contains(footer.geometry())
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_operation_fields_need_focus_before_the_wheel_changes_a_value(
+    qt_app: QApplication,
+) -> None:
+    """Beim Rollen über eine Zahl bleibt das Modell unverändert, bis das Feld gewählt wird."""
+    from PySide6.QtCore import QPoint, QPointF
+    from PySide6.QtGui import QWheelEvent
+
+    bootstrap.load_operations()
+    dialog = OperationDialog(REGISTRY.get("drill_hole"), {})
+    field = dialog._editors["diameter"]
+    assert isinstance(field, ValueField)
+    before = field.value()
+    event = QWheelEvent(
+        QPointF(4, 4),
+        QPointF(4, 4),
+        QPoint(),
+        QPoint(0, 120),
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    QApplication.sendEvent(field.spin, event)
+    assert field.value() == before
+    dialog.deleteLater()
+
+
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 # Reine Dialoganzeige braucht einen Elternbaum, aber keinen STL-Import.

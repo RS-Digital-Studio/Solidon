@@ -15,8 +15,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
-from PySide6.QtGui import QDesktopServices, QKeyEvent
+from PySide6.QtCore import QEvent, QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
+from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -90,14 +90,23 @@ from app.ui.labels import (
     localised_value,
     trial_days,
     value_line,
+    wheel_needs_focus,
 )
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
+from app.ui.leash import (
+    WAIT_TIMEOUT_MS,
+    Worker,
+    WorkerLeash,
+    stop_watching_the_dying,
+    weak_slot,
+)
 from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
     TIGHT,
     WIDE,
+    DialogScrollArea,
+    fit_dialog_to_screen,
     make_large_target,
     make_primary,
     no_primary,
@@ -208,9 +217,13 @@ class AskDialog(QDialog):
             self._name_the_choice()
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
         layout.addWidget(prompt)
         layout.addWidget(self._preparing)
-        layout.addWidget(self.list)
+        layout.addWidget(self.list, 1)
+        if as_buttons:
+            layout.addStretch(1)
         layout.addWidget(buttons)
 
     def _name_the_choice(self) -> None:
@@ -312,6 +325,7 @@ class CalibrationDialog(QDialog):
         self._original_values: dict[str, float] = {}
         self._edited_fields: set[str] = set()
         form = QFormLayout()
+        form.setVerticalSpacing(NORMAL)
         for name, title in (
             ("clearance", tr("Spiel für Schiebesitz")),
             ("press", tr("Übermaß für Presssitz")),
@@ -423,11 +437,23 @@ class CalibrationDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(explanation)
         layout.addLayout(form)
         layout.addWidget(process_note)
-        layout.addWidget(buttons)
+        layout.setSpacing(NORMAL)
+        layout.addStretch(1)
+        scroll = DialogScrollArea(self)
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(buttons)
+        for measurement in self.editors.values():
+            wheel_needs_focus(measurement)
 
     def measured(self) -> calibration.Calibration:
         """Was eingetragen wurde, als anwendungsfertige Kalibrierung.
@@ -649,13 +675,17 @@ class ParameterDialog(QDialog):
         if ok is not None:
             # Der Knopf sagt, was er tut — wie in jedem Operationsdialog.
             ok.setText(tr("Übernehmen") if self._editing else tr("Anlegen"))
+            make_primary(ok)
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
         layout.addWidget(explanation)
         layout.addLayout(form)
         layout.addWidget(self.problem)
+        layout.addStretch(1)
         layout.addWidget(buttons)
 
     def validation_problem(self) -> str | None:
@@ -959,6 +989,8 @@ class KeyDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.account = account
+        self._fitted_height: int | None = None
+        self._user_height = 0
         self.settings = settings if settings is not None else load_settings()
         self.setWindowTitle(tr("Chat einrichten"))
         self.setMinimumWidth(460)
@@ -1017,14 +1049,48 @@ class KeyDialog(QDialog):
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(WIDE)
         layout.addWidget(self.explanation)
         layout.addWidget(self._cloud_model_section())
         layout.addWidget(self._local_model_section())
-        layout.addWidget(buttons)
+        layout.addStretch(1)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_key_content_soon)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(self._scroll, 1)
+        outer.addWidget(buttons)
+        wheel_needs_focus(self.model_field)
 
         self._look: _Look | None = None
         self.look()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_key_content_soon()
+
+    def _fit_key_content_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_key_content)
+
+    def _fit_key_content(self) -> None:
+        """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
+        if not self.isVisible():
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        layout = self.layout()
+        assert layout is not None
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        self.resize(self.width(), max(self._user_height, self.sizeHint().height()))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
 
     # --- nachsehen --------------------------------------------------------------
 
@@ -1165,6 +1231,8 @@ class KeyDialog(QDialog):
         note.setMaximumWidth(600)
 
         form = QFormLayout(section)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        form.setVerticalSpacing(NORMAL)
         form.addRow(tr("Anbieter"), provider)
         form.addRow(tr("API-Schlüssel"), self.field)
         form.addRow(note)
@@ -1236,7 +1304,9 @@ class KeyDialog(QDialog):
         row.addWidget(self.probe_button)
 
         inner = QVBoxLayout(section)
-        inner.setContentsMargins(0, 12, 0, 0)
+        inner.setContentsMargins(0, ROOMY, 0, 0)
+        inner.setSpacing(NORMAL)
+        inner.setAlignment(Qt.AlignmentFlag.AlignTop)
         inner.addWidget(note)
         inner.addLayout(service_row)
         inner.addLayout(row)
@@ -1604,36 +1674,13 @@ class KeyDialog(QDialog):
         QTimer.singleShot(0, self, self._fit_probe_result)
 
     def _fit_probe_result(self) -> None:
-        """Nach dem Breiten-Clamp mit Qts echtem Textumbruch in die Höhe gehen."""
-        layout = self.layout()
-        if layout is not None:
-            layout.activate()
-        self.adjustSize()
-        hint = self.sizeHint()
-        screen = self.screen()
-        available = screen.availableGeometry().size() if screen is not None else hint
-        width = min(max(self.width(), hint.width()), available.width())
-        # ``sizeHint`` gehört noch zur breiteren Fassung. Wird der Dialog auf
-        # einen schmalen Bildschirm begrenzt, gewinnt der Ergebnistext Zeilen;
-        # erst ``heightForWidth`` kennt deren tatsächliche Höhe.
-        wrapped_height = layout.heightForWidth(width) if layout is not None else -1
-        height = max(self.height(), hint.height(), wrapped_height)
-        self.resize(
-            width,
-            min(height, available.height()),
-        )
-        if layout is not None:
-            layout.activate()
+        """Das Prüfergebnis wächst im Rollbereich; die Fußleiste bleibt erreichbar."""
+        self.probe_result.setMinimumHeight(0)
         result_height = self.probe_result.heightForWidth(self.probe_result.width())
         self.probe_result.setMinimumHeight(max(0, result_height))
-        if layout is not None:
-            layout.invalidate()
-            layout.activate()
-            wrapped_height = layout.heightForWidth(width)
-        final_height = max(self.height(), self.sizeHint().height(), wrapped_height)
-        self.resize(width, min(final_height, available.height()))
-        if layout is not None:
-            layout.activate()
+        self._scroll.updateGeometry()
+        fit_dialog_to_screen(self)
+        self._scroll.ensureWidgetVisible(self.probe_result)
 
     @staticmethod
     def _speed_text(speed: object) -> str:
@@ -1815,7 +1862,9 @@ class OfflineActivationDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(explanation)
         layout.addWidget(save)
         page_actions = QHBoxLayout()
@@ -1824,7 +1873,15 @@ class OfflineActivationDialog(QDialog):
         layout.addLayout(page_actions)
         layout.addWidget(self.page_address)
         layout.addWidget(import_answer)
-        layout.addWidget(buttons)
+        layout.setSpacing(NORMAL)
+        layout.addStretch(1)
+        scroll = DialogScrollArea(self)
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(buttons)
 
     def _save_request(self) -> None:
         name, _chosen = QFileDialog.getSaveFileName(
@@ -1945,6 +2002,8 @@ class ActivationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(tr("Solidon freischalten"))
         self.setMinimumWidth(600)
+        self._fitted_height: int | None = None
+        self._user_height = 0
 
         self.state_label = QLabel(self)
         self.state_label.setWordWrap(True)
@@ -1974,6 +2033,7 @@ class ActivationDialog(QDialog):
         # Feld wäre die schlechtere Antwort gewesen: Es zeigt 45 von 242
         # Zeichen.
         self.field.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.field.viewport().installEventFilter(self)
         self.field.textChanged.connect(self._fit_key_field)
         self.field.setAccessibleName(tr("Lizenzschlüssel"))
         # Sonst ist der Dialog eine Tastenfalle: Ein mehrzeiliges Feld nimmt den
@@ -2010,6 +2070,8 @@ class ActivationDialog(QDialog):
 
         key_group = QGroupBox(tr("1 · Lizenzschlüssel einfügen"), self)
         key_layout = QVBoxLayout(key_group)
+        key_layout.setSpacing(NORMAL)
+        key_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         key_explanation = QLabel(
             tr("Den Schlüssel aus der Bestellmail vollständig hier einfügen."),
             key_group,
@@ -2025,6 +2087,8 @@ class ActivationDialog(QDialog):
 
         device_group = QGroupBox(tr("2 · Diesen Rechner aktivieren"), self)
         device_layout = QVBoxLayout(device_group)
+        device_layout.setSpacing(NORMAL)
+        device_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         device_explanation = QLabel(
             tr(
                 "Der Name hilft später beim Rechnerwechsel. Online ist der kurze Weg; "
@@ -2054,12 +2118,23 @@ class ActivationDialog(QDialog):
         buttons.addButton(self.forget_button, QDialogButtonBox.ButtonRole.DestructiveRole)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.state_label)
         layout.addWidget(introduction)
         layout.addWidget(key_group)
         layout.addWidget(device_group)
-        layout.addWidget(buttons)
+        layout.setSpacing(NORMAL)
+        layout.addStretch(1)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_activation_soon)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(self._scroll, 1)
+        outer.addWidget(buttons)
         self._worker: Worker | None = None
         self._leash = WorkerLeash(self)
         self._show_state()
@@ -2173,6 +2248,7 @@ class ActivationDialog(QDialog):
                 "warning",
                 f"{self.state_label.text()}\n\n{problem.detail or problem.title}",
             )
+        QTimer.singleShot(0, self, self._fit_activation_content)
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         """Die Feldhöhe steht erst, wenn die Breite steht.
@@ -2209,6 +2285,34 @@ class ActivationDialog(QDialog):
         room = self.field.contentsMargins()
         chrome = 2 * self.field.frameWidth() + room.top() + room.bottom() + NORMAL
         self.field.setFixedHeight(lines * self.field.fontMetrics().lineSpacing() + chrome)
+        if self.isVisible():
+            QTimer.singleShot(0, self, self._fit_activation_content)
+
+    def _fit_activation_content(self) -> None:
+        """Erst die umbrochene Feldhöhe bestimmt die natürliche Fensterhöhe."""
+        layout = self.layout()
+        if layout is None or not self.isVisible():
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = self.sizeHint().height()
+        self.resize(self.width(), max(wanted, self._user_height))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
+
+    def _fit_activation_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_activation_content)
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
+        """Nach einer Breitenänderung gilt der neue Umbruch auch für die Feldhöhe."""
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if watched is self.field.viewport() and event.type() == QEvent.Type.Resize:
+            QTimer.singleShot(0, self, self._fit_key_field)
+        return super().eventFilter(watched, event)
 
     def _follow_field(self) -> None:
         """„Eintragen" kann nur, wenn etwas im Feld steht — und wenn es hilft.
@@ -3280,8 +3384,9 @@ class DonationDialog(QDialog):
         self.close_button.setAutoDefault(False)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(NORMAL)
         layout.addWidget(heading)
         layout.addWidget(self.personal)
@@ -3296,14 +3401,20 @@ class DonationDialog(QDialog):
         layout.addWidget(without_heading)
         layout.addWidget(without)
         layout.addLayout(helping)
-        layout.addSpacing(NORMAL)
-        layout.addWidget(buttons)
+        layout.addStretch(1)
+        scroll = DialogScrollArea(self)
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(buttons)
         no_primary(self)
         # Qt berechnet den ersten Höhenvorschlag vor der Mindestbreite und
         # verteilt den vermeintlich nötigen Platz danach als große Leerflächen.
         # Die echte Breite entscheidet, wie viele Zeilen die Texte brauchen.
-        layout.activate()
-        self.resize(self.minimumWidth(), layout.heightForWidth(self.minimumWidth()))
+        outer.activate()
+        self.resize(self.minimumWidth(), self.sizeHint().height())
 
     @staticmethod
     def _purpose_row(parent: QWidget, symbol: str, point: str, detail: str) -> QHBoxLayout:
@@ -3451,9 +3562,12 @@ class AboutDialog(QDialog):
         self.support_button.clicked.connect(self._want_support)
         self.support_button.setAutoDefault(False)
 
-        layout = QVBoxLayout(self)
+        content = QWidget(self)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(heading)
         layout.addWidget(rights)
+        layout.setSpacing(NORMAL)
         layout.addWidget(made_by)
         supporting = QHBoxLayout()
         supporting.addWidget(self.support_button)
@@ -3466,7 +3580,13 @@ class AboutDialog(QDialog):
         layout.addWidget(exceptions)
         layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
         layout.addWidget(third_party, stretch=1)
-        layout.addWidget(buttons)
+        scroll = DialogScrollArea(self)
+        scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(NORMAL)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(buttons)
         # **„Schließen" ist nie ein Hauptknopf.** Qt hatte ihn beim ersten
         # ``show()`` dazu gemacht — er ist der einzige Knopf mit autoDefault,
         # und dann trifft es ihn. Der Akzent ist eine Empfehlung, und hier

@@ -10,8 +10,8 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Final, cast
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, Qt
-from PySide6.QtGui import QKeyEvent, QKeySequence, QPainter
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, QSize, Qt
+from PySide6.QtGui import QKeyEvent, QKeySequence, QPainter, QPalette
 from PySide6.QtWidgets import (
     QDialog,
     QLineEdit,
@@ -39,6 +39,7 @@ from app.core.registry.search import (
 # ``registry.search``, und das Hauptfenster liest sie noch von hier.
 from app.core.registry.search import fold as fold
 from app.i18n import tr
+from app.ui.style import NORMAL, TIGHT, WIDE
 
 
 def native_key(shortcut: str) -> str:
@@ -264,10 +265,25 @@ class _Rows(QStyledItemDelegate):
     denen die Augen springen, obwohl beide dasselbe sagen. Wer die Kürzel
     nebenbei lernen soll (§19.2), muss sie untereinander finden.
 
-    Der zweizeilige Fall bleibt, wie er war: Ein gesperrter Eintrag trägt
-    seinen Grund als zweite Zeile, und der gehört unter den Titel, nicht in
-    die Tastenspalte.
+    Titel und Erklärung bekommen eigene Zeichenbereiche. Der native Stil
+    zeichnet Zeilenumbrüche sonst je nach Plattform als einzeiligen Text.
+    Die vollständige Erklärung bleibt bei gekürzter Anzeige im Tooltip.
     """
+
+    def __init__(self, parent: QWidget, *, shortcuts: tuple[str, ...] = ()) -> None:
+        super().__init__(parent)
+        self._shortcuts = shortcuts
+
+    def sizeHint(  # noqa: N802 — Qt-Name
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> QSize:
+        plain = QStyleOptionViewItem(option)
+        self.initStyleOption(plain, index)
+        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        lines = 2 if "\n" in text else 1
+        height = lines * plain.fontMetrics.height() + (lines - 1) * TIGHT + 2 * TIGHT
+        # Die Liste gibt die Breite vor, der Text darf sie nicht aufziehen.
+        return QSize(0, height)
 
     def paint(
         self,
@@ -275,38 +291,71 @@ class _Rows(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
-        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
-        if "	" not in text:
-            super().paint(painter, option, index)
-            return
-
-        first_line, separator, detail = text.partition("\n")
-        title, shortcut = first_line.split("	", 1)
         plain = QStyleOptionViewItem(option)
         self.initStyleOption(plain, index)
-        plain.text = f"{title}{separator}{detail}"
-        style = option.widget.style() if option.widget else None
-        if style is not None:
-            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, plain, painter, option.widget)
-        else:  # pragma: no cover - ohne Stil zeichnet Qt selbst
-            super().paint(painter, option, index)
+        # Qts Stiloption ersetzt Zeilenumbrüche durch Unicode-Zeilentrenner.
+        # Die Felder kommen deshalb aus dem unveränderten Modelltext.
+        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        first_line, separator, detail = text.partition("\n")
+        title, _tab, shortcut = first_line.partition("\t")
+        plain.text = ""
+        widget = option.widget or cast(QWidget, self.parent())
+        widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem, plain, painter, widget)
 
         painter.save()
-        painter.setPen(
-            plain.palette.color(plain.palette.currentColorGroup(), plain.palette.ColorRole.Text)
+        painter.setClipRect(option.rect)
+        painter.setFont(plain.font)
+        group = (
+            QPalette.ColorGroup.Disabled
+            if not plain.state & QStyle.StateFlag.State_Enabled
+            else plain.palette.currentColorGroup()
         )
-        area = QRect(option.rect)
-        area.setRight(area.right() - SHORTCUT_MARGIN)
-        if separator:
-            line_height = plain.fontMetrics.height()
-            text_height = line_height + plain.text.count("\n") * plain.fontMetrics.lineSpacing()
-            area.setTop(area.top() + max(0, (area.height() - text_height) // 2))
-            area.setHeight(line_height)
+        role = (
+            QPalette.ColorRole.HighlightedText
+            if plain.state & QStyle.StateFlag.State_Selected
+            else QPalette.ColorRole.Text
+        )
+        painter.setPen(plain.palette.color(group, role))
+        area = option.rect.adjusted(NORMAL, TIGHT, -SHORTCUT_MARGIN, -TIGHT)
+        metrics = plain.fontMetrics
+        line_height = metrics.height()
+        text_height = 2 * line_height + TIGHT if separator else line_height
+        area.setTop(area.top() + max(0, (area.height() - text_height) // 2))
+        title_area = QRect(area.left(), area.top(), area.width(), line_height)
+        shortcut_width = min(
+            max(
+                (metrics.horizontalAdvance(key) for key in (*self._shortcuts, shortcut)), default=0
+            ),
+            max(0, area.width() // 2),
+        )
+        if shortcut_width:
+            title_area.setWidth(max(0, title_area.width() - shortcut_width - NORMAL))
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         painter.drawText(
-            area,
-            int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
-            shortcut,
+            title_area,
+            flags,
+            metrics.elidedText(title, Qt.TextElideMode.ElideRight, title_area.width()),
         )
+        if shortcut:
+            shortcut_area = QRect(
+                area.right() - shortcut_width + 1, area.top(), shortcut_width, line_height
+            )
+            painter.drawText(
+                shortcut_area,
+                int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
+                metrics.elidedText(shortcut, Qt.TextElideMode.ElideRight, shortcut_width),
+            )
+        if separator:
+            detail_area = QRect(
+                area.left(), area.top() + line_height + TIGHT, area.width(), line_height
+            )
+            painter.drawText(
+                detail_area,
+                flags,
+                metrics.elidedText(
+                    " ".join(detail.splitlines()), Qt.TextElideMode.ElideRight, detail_area.width()
+                ),
+            )
         painter.restore()
 
 
@@ -339,10 +388,20 @@ class CommandPalette(QDialog):
 
         self.list = QListWidget(self)
         # Die Tastenspalte flieht rechts, statt dem Titel zu folgen (:class:`_Rows`).
-        self.list.setItemDelegate(_Rows(self.list))
+        self.list.setItemDelegate(
+            _Rows(
+                self.list,
+                shortcuts=tuple(
+                    native_key(entry.shortcut) for entry in self._entries if entry.shortcut
+                ),
+            )
+        )
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.itemActivated.connect(self.accept)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.search)
         layout.addWidget(self.list)
         self._refilter("")
@@ -421,6 +480,7 @@ class CommandPalette(QDialog):
                 tr("Kein Befehl passt auf alle Wörter — das Folgende passt auf einzelne.")
             )
             heading.setFlags(Qt.ItemFlag.NoItemFlags)
+            heading.setToolTip(heading.text())
             self.list.addItem(heading)
             offset = 1
         for entry in found:
@@ -436,7 +496,17 @@ class CommandPalette(QDialog):
                 label = f"{label}\n{first_sentence(str(entry.doc))}"
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, entry.name)
-            item.setToolTip(str(entry.doc))
+            item.setToolTip(
+                "\n".join(
+                    text
+                    for text in (
+                        str(entry.title),
+                        str(entry.reason) if not entry.available else "",
+                        str(entry.doc),
+                    )
+                    if text
+                )
+            )
             if not entry.available:
                 # Sichtbar, aber nicht wählbar — dieselbe Antwort wie im
                 # Menü. Die Palette bleibt eine Reihenfolge, keine Auswahl:
@@ -478,6 +548,7 @@ class CommandPalette(QDialog):
                 ).format(term=query.strip())
             )
             nothing.setFlags(Qt.ItemFlag.NoItemFlags)
+            nothing.setToolTip(nothing.text())
             self.list.addItem(nothing)
 
     def chosen(self) -> str | None:

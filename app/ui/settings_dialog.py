@@ -17,35 +17,58 @@ und gehört in den Verlauf (§15.5).
 from __future__ import annotations
 
 from collections.abc import Mapping
+from itertools import pairwise
+from pathlib import Path
 
-from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtCore import QCoreApplication, QSignalBlocker, Qt, QTimer
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QSlider,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core import discover
+from app.core.errors import CANCEL, RETRY, FileWriteError
 from app.core.knowledge import profiles
+from app.core.log import get_logger
+from app.core.types import PrinterProfile
 from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.ai_disclosure import clear_disclosure
-from app.ui.first_run import LANGUAGE_CHANGED, add_printer_choices
-from app.ui.labels import TrackSlider, by_title
+from app.ui.first_run import (
+    LANGUAGE_CHANGED,
+    PrinterChoices,
+    PrinterComboBox,
+    _PrinterSurvey,
+    add_printer_choices,
+    valid_printer_choice,
+)
+from app.ui.icons import icon
+from app.ui.labels import TrackSlider, by_title, slicer_title, wheel_needs_focus
+from app.ui.leash import WAIT_TIMEOUT_MS, WorkerLeash
 from app.ui.palette import DIFF_PALETTES
-from app.ui.panels import align_forms
+from app.ui.panels import align_forms, collapsible
+from app.ui.print_settings_dialog import _SlicerWorker
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
-from app.ui.style import make_primary
+from app.ui.style import NORMAL, ROOMY, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
+
+_log = get_logger(__name__)
 
 # **Diese drei Listen standen mit ``tr()`` da, und das übersetzt sofort.**
 # Auf Modulebene heißt „sofort": beim Import, in der Sprache, die dann gerade
@@ -83,9 +106,25 @@ DIFF_LABELS = {
 class SettingsDialog(QDialog):
     """Was die Anwendung sich merkt, an einer Stelle."""
 
-    def __init__(self, settings: UiSettings, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        settings: UiSettings,
+        parent: QWidget | None = None,
+        *,
+        slicer_path: str | None = None,
+        discovered_printers: Mapping[str, PrinterProfile] | None = None,
+        printer_query: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self.settings = settings
+        self._fitted_height: int | None = None
+        self._user_height = 0
+        self._closed = False
+        self._leash = WorkerLeash(self)
+        self._slicer_worker: _SlicerWorker | None = None
+        self._printer_survey: _PrinterSurvey | None = None
+        self._suggested_printer = profiles.DEFAULT_PRINTER
+        self._discovered_printers = dict(discovered_printers or {})
         self.setWindowTitle(tr("Einstellungen"))
         self.setMinimumWidth(460)
 
@@ -100,7 +139,10 @@ class SettingsDialog(QDialog):
         _select(self.theme, settings.theme)
 
         self.navigation = _choices(self, NAVIGATION)
+        self.navigation.setMinimumContentsLength(36)
         _select(self.navigation, settings.navigation)
+        self.navigation.setToolTip(self.navigation.currentText())
+        self.navigation.currentTextChanged.connect(self.navigation.setToolTip)
 
         self.diff_palette = _choices(
             self, {key: str(DIFF_LABELS.get(key, key)) for key in DIFF_PALETTES}
@@ -257,11 +299,51 @@ class SettingsDialog(QDialog):
         self.spacemouse.toggled.connect(self.spacemouse_speed.setEnabled)
         self.spacemouse.toggled.connect(self.spacemouse_invert.setEnabled)
 
+        self.slicer = QComboBox(self)
+        self.slicer.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.slicer.setMinimumContentsLength(20)
+        self.slicer.addItem(tr("Später auswählen"), "")
+        self._stored_slicer_path = discover.remembered_path("slicer")
+        selected_slicer = self._stored_slicer_path if slicer_path is None else slicer_path
+        if selected_slicer:
+            self.slicer.addItem(slicer_title(Path(selected_slicer)), selected_slicer)
+            self.slicer.setItemData(1, selected_slicer, Qt.ItemDataRole.ToolTipRole)
+            self.slicer.setCurrentIndex(1)
+        self.slicer.setAccessibleName(tr("Slicer"))
+        self.slicer.currentIndexChanged.connect(self._slicer_changed)
+        self.slicer_file = QPushButton(tr("Benutzerdefiniert …"), self)
+        self.slicer_file.setIcon(icon("open", self.slicer_file))
+        self.slicer_file.setToolTip(tr("Slicer-Programm auswählen"))
+        self.slicer_file.clicked.connect(self._choose_slicer_file)
+        self.search_again = QPushButton(tr("Erneut prüfen"), self)
+        self.search_again.setIcon(icon("refresh", self.search_again))
+        self.search_again.clicked.connect(self._slicer_changed)
+        self.search_again.hide()
+        self.slicer_state = QLabel(tr("Die Slicer werden gesucht …"), self)
+        self.slicer_state.setWordWrap(True)
+        self.printer_state = QLabel(self)
+        self.printer_state.setWordWrap(True)
+        self.printer_choice_state = QLabel(self)
+        self.printer_choice_state.setWordWrap(True)
+        self.search_progress = QProgressBar(self)
+        self.search_progress.setRange(0, 0)
+        self.search_progress.setTextVisible(False)
+
         # Nach Verfahren gruppiert wie im Erststart — dieselben Drucker, dieselbe
         # Ordnung (RM-071).
-        self.printer = QComboBox(self)
-        add_printer_choices(self.printer, profiles.printer_profiles())
+        self.printer = PrinterComboBox(self)
+        if printer_query is not None:
+            self.printer.search_field.setText(printer_query)
+        self.printer.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.printer.setMinimumContentsLength(20)
+        add_printer_choices(self.printer, self._known_printers())
         _select(self.printer, settings.printer or profiles.DEFAULT_PRINTER)
+        self.printer.setToolTip(self.printer.currentText())
+        self.printer.currentTextChanged.connect(self.printer.setToolTip)
         # Die Materialliste folgt dem Verfahren des Druckers: Ein Harzdrucker
         # bietet Harze an, ein Filamentdrucker Filamente — PLA in einem
         # Harzbad wäre eine Vorgabe, die kein Projekt je drucken kann (RM-071).
@@ -278,45 +360,131 @@ class SettingsDialog(QDialog):
         # Akzent — ausdrücklich. Qt gab ihn beim ersten ``show()`` ohnehin an
         # denselben Knopf, aber ohne die halbfette Schrift daneben, und Farbe
         # allein ist keine zweite Kodierung (Regel 18).
-        save = buttons.button(QDialogButtonBox.StandardButton.Save)
-        if save is not None:
-            make_primary(save)
+        self.save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        assert self.save is not None
+        make_primary(self.save)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
+        content = QWidget(self)
+        form_layout = QVBoxLayout(content)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setSpacing(WIDE)
+        form_layout.addWidget(self._application_group())
+        form_layout.addWidget(self._project_group())
+        form_layout.addStretch(1)
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_soon)
         layout = QVBoxLayout(self)
-        layout.addWidget(self._application_group())
-        layout.addWidget(self._project_group())
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
+        layout.addWidget(self._scroll, 1)
         layout.addWidget(buttons)
+        for choice in self.findChildren(QComboBox) + self.findChildren(QSpinBox):
+            wheel_needs_focus(choice)
         # Zwei Gruppen, zwei Formulare — und jedes rechnete seine
         # Beschriftungsspalte für sich: Die Felder begannen oben bei 148 und
         # unten bei 70 Punkten, gemessen am gebauten Dialog (Befund B11).
         align_forms(self)
+        heading = self.advanced.findChild(QToolButton)
+        assert heading is not None
+        heading.toggled.connect(self._fit_soon)
+        tab_order = (
+            self.language,
+            self.unit,
+            self.theme,
+            self.updates,
+            heading,
+            self.navigation,
+            self.diff_palette,
+            self.shortcuts,
+            self.auto_accept,
+            self.ai_disclosure_reset,
+            self.remote,
+            self.remote_port,
+            self.spacemouse,
+            self.spacemouse_speed,
+            self.spacemouse_invert,
+            self.slicer,
+            self.slicer_file,
+            self.printer,
+            self.search_again,
+            self.material,
+        )
+        for before, after in pairwise(tab_order):
+            QWidget.setTabOrder(before, after)
+        for form in self.findChildren(QFormLayout):
+            for row in range(form.rowCount()):
+                field_item = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+                label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                editor = field_item.widget() if field_item is not None else None
+                label = label_item.widget() if label_item is not None else None
+                if editor is not None and isinstance(label, QLabel) and label.text():
+                    label.setBuddy(editor)
+                    if not editor.accessibleName():
+                        editor.setAccessibleName(label.text())
+        self.printer.currentIndexChanged.connect(self._printer_choice_changed)
+        self._slicer_changed()
+        self._find_slicers()
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon()
+
+    def _fit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_content)
+
+    def _fit_content(self) -> None:
+        """Eine Klappe erhält Platz und gibt ihn zurück; gezogene Höhen bleiben."""
+        layout = self.layout()
+        if layout is None or not self.isVisible():
+            return
+        if self._fitted_height is not None and self.height() != self._fitted_height:
+            self._user_height = self.height()
+        self._scroll.updateGeometry()
+        layout.invalidate()
+        layout.activate()
+        wanted = self.sizeHint().height()
+        self.resize(self.width(), max(wanted, self._user_height))
+        fit_dialog_to_screen(self)
+        self._fitted_height = self.height()
 
     def _application_group(self) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)
         form = QFormLayout(box)
+        form.setVerticalSpacing(NORMAL)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Anzeigeeinheit"), self.unit)
         form.addRow(tr("Thema"), self.theme)
-        form.addRow(tr("Navigation"), self.navigation)
-        form.addRow(tr("Differenzansicht"), self.diff_palette)
-        form.addRow(tr("Tastenbelegung"), self.shortcuts)
         form.addRow("", self.updates)
-        form.addRow("", self.auto_accept)
-        form.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
-        form.addRow("", self.remote)
-        form.addRow(tr("Port der Fernsteuerung"), self.remote_port)
-        form.addRow("", self.spacemouse)
-        form.addRow(tr("Geschwindigkeit der 3D-Maus"), self.spacemouse_speed)
-        form.addRow("", self.spacemouse_invert)
+        more = QWidget(box)
+        details = QFormLayout(more)
+        details.setContentsMargins(0, 0, 0, 0)
+        details.setVerticalSpacing(NORMAL)
+        details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        details.addRow(tr("Navigation"), self.navigation)
+        details.addRow(tr("Differenzansicht"), self.diff_palette)
+        details.addRow(tr("Tastenbelegung"), self.shortcuts)
+        details.addRow("", self.auto_accept)
+        details.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
+        details.addRow("", self.remote)
+        details.addRow(tr("Port der Fernsteuerung"), self.remote_port)
+        details.addRow("", self.spacemouse)
+        details.addRow(tr("Geschwindigkeit der 3D-Maus"), self.spacemouse_speed)
+        details.addRow("", self.spacemouse_invert)
         for row in (self.spacemouse, self.spacemouse_speed, self.spacemouse_invert):
-            form.setRowVisible(row, self.settings.spacemouse_seen)
+            details.setRowVisible(row, self.settings.spacemouse_seen)
+        self.advanced = collapsible(tr("Weitere Einstellungen"), more, open_now=False)
+        form.addRow(self.advanced)
         return box
 
     def _project_group(self) -> QWidget:
         box = QGroupBox(tr("Vorgaben für neue Projekte"), self)
         form = QFormLayout(box)
+        form.setVerticalSpacing(NORMAL)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         note = QLabel(
             tr(
                 "Diese Werte gelten für das nächste neue Projekt. Drucker und Material "
@@ -326,9 +494,222 @@ class SettingsDialog(QDialog):
         )
         note.setWordWrap(True)
         form.addRow(note)
+        slicer_row = QWidget(box)
+        slicer_layout = QHBoxLayout(slicer_row)
+        slicer_layout.setContentsMargins(0, 0, 0, 0)
+        slicer_layout.addWidget(self.slicer, 1)
+        slicer_layout.addWidget(self.slicer_file)
+        form.addRow(tr("Slicer"), slicer_row)
+        form.addRow(self.slicer_state)
         form.addRow(tr("Drucker"), self.printer)
+        form.addRow(self.printer_choice_state)
+        form.addRow(self.printer_state)
+        form.addRow(self.search_again)
+        form.addRow(self.search_progress)
         form.addRow(tr("Material"), self.material)
         return box
+
+    @property
+    def slicer_path(self) -> str:
+        """Noch ungespeicherte Wahl; auch beim Sprachwechsel bleibt sie im Entwurf."""
+        return str(self.slicer.currentData() or "")
+
+    @property
+    def discovered_printers(self) -> Mapping[str, PrinterProfile]:
+        """Ungespeicherte Slicerprofile für den nächsten Sprach-Entwurf."""
+        return self._discovered_printers
+
+    @property
+    def printer_query(self) -> str | None:
+        """Die getrennte Suche reist beim Sprachwechsel mit der bestätigten Wahl."""
+        return self.printer.search_field.text() or None
+
+    def _known_printers(self) -> dict[str, PrinterProfile]:
+        return dict(profiles.printer_profiles()) | self._discovered_printers
+
+    def save_external_choices(self) -> None:
+        """Nur Speichern übernimmt das gewählte fremde Profil und den Programmpfad."""
+        chosen = str(self.printer.currentData() or "")
+        profile = self._discovered_printers.get(chosen)
+        try:
+            if profile is not None and profiles.printer_profiles().get(chosen) != profile:
+                profiles.save_printer(profile)
+            if discover.remembered_path("slicer") != self.slicer_path:
+                discover.remember_path("slicer", self.slicer_path)
+        except OSError as problem:
+            raise FileWriteError(detail=str(problem), suggestions=(RETRY, CANCEL)) from problem
+
+    def _find_slicers(self) -> None:
+        worker = _SlicerWorker()
+        worker.done.connect(self._slicers_found)
+        worker.crashed.connect(self._slicers_failed)
+        self._slicer_worker = worker
+        self._leash.start(worker)
+        self._search_state()
+
+    def _slicers_found(self, found: object) -> None:
+        if self._closed or self.sender() is not self._slicer_worker:
+            return
+        self._slicer_worker = None
+        chosen = self.slicer_path
+        discovered = tuple(found) if isinstance(found, tuple | list) else ()
+        paths = dict.fromkeys((*discovered, *((Path(chosen),) if chosen else ())))
+        with QSignalBlocker(self.slicer):
+            self.slicer.clear()
+            self.slicer.addItem(tr("Später auswählen"), "")
+            for path in paths:
+                self.slicer.addItem(slicer_title(Path(path)), str(path))
+                self.slicer.setItemData(
+                    self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
+                )
+            _select(self.slicer, chosen)
+        self.slicer_state.setText(
+            ""
+            if paths
+            else tr(
+                "Kein Slicer gefunden. Wählen Sie über „Benutzerdefiniert …“ "
+                "das installierte Programm aus."
+            )
+        )
+        self._search_state()
+        self._fit_soon()
+
+    def _slicers_failed(self, detail: str) -> None:
+        if self._closed or self.sender() is not self._slicer_worker:
+            return
+        _log.warning("settings slicer search crashed: %s", detail)
+        self._slicers_found(())
+
+    def _choose_slicer_file(self) -> None:
+        filename, _ = QFileDialog.getOpenFileName(self, tr("Slicer-Programm auswählen"))
+        if not filename:
+            return
+        if self.slicer.findData(filename) < 0:
+            self.slicer.addItem(slicer_title(Path(filename)), filename)
+            self.slicer.setItemData(self.slicer.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
+        _select(self.slicer, filename)
+
+    def _slicer_changed(self) -> None:
+        self._printer_survey = None
+        self.search_again.hide()
+        if not self.slicer_path:
+            self._fill_printers(tuple(profiles.printer_profiles()))
+            self.printer_state.clear()
+        else:
+            self.printer.setEnabled(False)
+            self.material.setEnabled(False)
+            self.printer_state.setText(tr("Drucker des gewählten Slicers werden gesucht …"))
+            worker = _PrinterSurvey(Path(self.slicer_path))
+            worker.done.connect(self._printers_found)
+            worker.crashed.connect(self._printers_failed)
+            self._printer_survey = worker
+            self._leash.start(worker)
+        self._search_state()
+        self._fit_soon()
+
+    def _search_state(self) -> None:
+        pending = self._printer_survey is not None
+        valid = valid_printer_choice(self.printer)
+        choice_reason = tr("Wählen Sie einen Drucker aus der Liste.") if not valid else ""
+        self.printer_choice_state.setText(choice_reason)
+        self.printer_choice_state.setVisible(not pending and bool(choice_reason))
+        reason = self.printer_state.text() if pending else choice_reason
+        self.save.setEnabled(not pending and valid)
+        self.save.setToolTip(reason)
+        self.save.setStatusTip(reason)
+        self.save.setAccessibleDescription(reason)
+        self.search_progress.setVisible(pending or self._slicer_worker is not None)
+        self.search_progress.setAccessibleName(reason or self.slicer_state.text())
+        self.slicer_state.setVisible(bool(self.slicer_state.text()))
+        self.printer_state.setVisible(bool(self.printer_state.text()))
+
+    def _printer_choice_changed(self) -> None:
+        if self._closed:
+            return
+        self._fill_materials(str(self.material.currentData() or ""))
+        self._search_state()
+        self._fit_soon()
+
+    def _fill_printers(self, identifiers: tuple[str, ...], suggested: str = "") -> None:
+        chosen = str(self.printer.currentData() or "")
+        known = self._known_printers()
+        allowed = (
+            set(identifiers)
+            | {profiles.DEFAULT_PRINTER}
+            | {name for name, entry in known.items() if entry.is_resin}
+        )
+        preferred = chosen
+        if suggested in allowed and (chosen == self._suggested_printer or chosen not in allowed):
+            preferred = suggested
+            self._suggested_printer = suggested
+        if preferred not in allowed:
+            preferred = profiles.DEFAULT_PRINTER
+        with QSignalBlocker(self.printer):
+            self.printer.clear()
+            add_printer_choices(
+                self.printer, {name: entry for name, entry in known.items() if name in allowed}
+            )
+            _select(self.printer, preferred)
+        self.printer.setEnabled(True)
+        self.printer.setToolTip(self.printer.currentText())
+        self.material.setEnabled(True)
+        self._fill_materials(str(self.material.currentData() or ""))
+
+    def _printers_found(self, found: object) -> None:
+        if self._closed or self.sender() is not self._printer_survey:
+            return
+        assert isinstance(found, PrinterChoices)
+        if str(found.executable) != self.slicer_path:
+            return
+        self._printer_survey = None
+        self._discovered_printers = {profile.id: profile for profile in found.profiles}
+        self._fill_printers(found.identifiers, found.suggested)
+        self.printer_state.setText(
+            ""
+            if found.translated and found.profiles
+            else tr(
+                "Keine passenden Druckerprofile gefunden. Prüfen Sie die Drucker im Slicer "
+                "oder wählen Sie einen anderen Slicer."
+            )
+        )
+        self._search_state()
+        self.search_again.setVisible(not found.profiles)
+        self._fit_soon()
+
+    def _printers_failed(self, detail: str) -> None:
+        if self._closed or self.sender() is not self._printer_survey:
+            return
+        _log.warning("settings printer survey crashed: %s", detail)
+        self._printer_survey = None
+        self._fill_printers(tuple(profiles.user_printer_profiles()))
+        self.printer_state.setText(
+            tr(
+                "Drucker konnten nicht gelesen werden. Wählen Sie einen anderen Slicer "
+                "oder versuchen Sie es erneut."
+            )
+        )
+        self._search_state()
+        self.search_again.show()
+        self._fit_soon()
+
+    def accept(self) -> None:
+        """Speichern übernimmt erst die sichtbare, fertig gelesene Druckerwahl."""
+        if self._printer_survey is None and valid_printer_choice(self.printer):
+            super().accept()
+
+    def done(self, result: int) -> None:
+        self._closed = True
+        super().done(result)
+
+    def wait_for_survey(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> bool:
+        """Die Erhebung zustellen, ohne beim normalen Schließen darauf zu warten."""
+        self._leash.wait_all(timeout_ms)
+        QCoreApplication.processEvents()
+        return self._slicer_worker is None and self._printer_survey is None
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        self._closed = True
+        self._leash.wait_all(timeout_ms)
 
     def _language_changed(self) -> None:
         """Fordert den Neuaufbau mit den ungespeicherten Antworten in der neuen Sprache an."""
@@ -344,6 +725,17 @@ class SettingsDialog(QDialog):
         settings.navigation = str(self.navigation.currentData())
         settings.diff_palette = str(self.diff_palette.currentData())
         settings.shortcut_scheme = str(self.shortcuts.currentData())
+        chosen_slicer = self.slicer_path
+        if self._stored_slicer_path != chosen_slicer or (
+            settings.slicer_profile_slicer and settings.slicer_profile_slicer != chosen_slicer
+        ):
+            settings.slicer_machine_profile = ""
+            settings.slicer_base_process = ""
+            settings.slicer_base_filament = ""
+            settings.slicer_bed_plate = ""
+            settings.slicer_profile_printer = ""
+            settings.slicer_filament_per_material.clear()
+            settings.slicer_profile_slicer = chosen_slicer
         settings.check_for_updates = self.updates.isChecked()
         settings.auto_accept_reversible = self.auto_accept.isChecked()
         if self._reset_ai_disclosure:
@@ -353,23 +745,35 @@ class SettingsDialog(QDialog):
         settings.spacemouse_enabled = self.spacemouse.isChecked()
         settings.spacemouse_speed = int(self.spacemouse_speed.value())
         settings.spacemouse_invert = self.spacemouse_invert.isChecked()
-        settings.printer = str(self.printer.currentData())
-        settings.material = profiles.material_for(
-            settings.printer, str(self.material.currentData())
+        settings.printer = (
+            str(self.printer.currentData()) if valid_printer_choice(self.printer) else ""
         )
+        if settings.printer:
+            settings.material = profiles.material_for(
+                settings.printer, str(self.material.currentData())
+            )
         return settings
 
     def _fill_materials(self, wanted: str) -> None:
         """Nur die Materialien des gewählten Verfahrens, das bisherige gewählt,
         wo es passt — sonst die Vorgabe des Verfahrens."""
+        if not valid_printer_choice(self.printer):
+            self.material.setEnabled(False)
+            return
+        self.material.setEnabled(self._printer_survey is None)
         printer_id = str(self.printer.currentData() or "")
-        printer = profiles.printer_profiles().get(printer_id)
+        printer = self._known_printers().get(printer_id)
         with QSignalBlocker(self.material):
             self.material.clear()
             for key, entry in by_title(profiles.material_profiles()):
                 if printer is None or entry.fits(printer):
                     self.material.addItem(str(entry.title), key)
-            _select(self.material, profiles.material_for(printer_id, wanted))
+            material_printer = (
+                profiles.DEFAULT_RESIN_PRINTER
+                if printer is not None and printer.is_resin
+                else profiles.DEFAULT_PRINTER
+            )
+            _select(self.material, profiles.material_for(material_printer, wanted))
 
     def _reset_disclosure(self) -> None:
         """Merkt die Wahl bis zum Speichern; Abbrechen verändert noch nichts."""
@@ -388,6 +792,8 @@ def _choices(parent: QWidget, entries: Mapping[str, str | TranslatableText]) -> 
     weil sie beim Import noch keine Sprache haben (siehe dort).
     """
     box = QComboBox(parent)
+    box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    box.setMinimumContentsLength(20)
     for key, label in entries.items():
         box.addItem(str(label), key)
     return box
