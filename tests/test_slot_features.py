@@ -2293,6 +2293,66 @@ def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     assert "bore.over_the_edge" in codes["brep"], codes
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("at", "length", "said"),
+    [(36.0, 20.0, 1), (-36.0, 20.0, 1), (30.0, 20.0, 0), (0.0, 96.0, 1)],
+    ids=["rechtes-ende", "linkes-ende", "innen", "beide-enden"],
+)
+def test_setting_a_slot_asks_at_both_ends_on_both_kernels(
+    profile: Profile, kernel: str, at: float, length: float, said: int
+) -> None:
+    """*Bohrung setzen* mit dem Haken *Langloch* fragt an beiden Bogenmitten nach
+    der Kante — an beiden Kernen, und über beide Enden mit einem Satz.
+
+    Der exakte Zweig (``drill_brep_hole``) fragt so seit dem 12.09.2026, aber kein
+    Test hielt es: Mit ``slot_ends`` auf die Mitte verkürzt blieben alle 559
+    Langloch-, Bohr- und Vorschaufälle grün (Gegenprobe 29.09.2026). Der einzige
+    Fall über das Register lag mitten in der Platte (Übergabe der Durchsicht vom
+    11.09.2026).
+
+    Soll von außen: Platte 90 mm breit, Kante bei 45; Langloch Ø 6 auf ``length``,
+    Mitte bei ``at``. Das Stadion reicht bis ``|at| + (length - 6) / 2 + 3``, die
+    runde Bohrung an derselben Mitte bis ``|at| + 3``: bei 36 also 46 gegen 39 mm
+    — ein Ende steht über, die Mitte nicht. Bei 30 bleiben es 40 mm.
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        entry = SceneObject(id="obj_1", name="Platte", mesh=edit.box(90.0, 60.0, 10.0), kind="brep")
+        top = 10.0
+    else:
+        entry = SceneObject(
+            id="obj_1",
+            name="Platte",
+            mesh=MeshData.of(trimesh.creation.box(extents=(90.0, 60.0, 10.0))),
+        )
+        top = 5.0
+    reach = abs(at) + (length - 6.0) / 2.0 + 3.0
+    assert (reach > 45.0) is (said == 1), "die Vorbedingung: das Soll kommt aus dem Umriss"
+    assert abs(at) + 3.0 < 45.0, "die Vorbedingung: die Mitte allein bleibt im Material"
+
+    _output, findings = run_op_with_findings(
+        "drill_hole",
+        entry,
+        profile,
+        x=at,
+        y=0.0,
+        z=top,
+        axis="z",
+        diameter=6.0,
+        depth=0.0,
+        anchor="mouth",
+        compensate=False,
+        slotted=True,
+        slot_length=length,
+    )
+
+    over = [finding for finding in findings if finding.code == "bore.over_the_edge"]
+    assert len(over) == said, [finding.code for finding in findings]
+
+
 def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
     """Die Zugabe gilt dem ersten Zug — danach bleibt die Breite.
 
