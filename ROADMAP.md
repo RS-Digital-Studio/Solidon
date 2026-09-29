@@ -53,7 +53,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1): Kumiko −34 %, Meshy −22 % CPU unter Last; §31 nicht erreicht, nächster Hebel je Modell im Schlussbericht des Pakets |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Mindestbogen nach Roberts Entscheidung gebaut (5 Grad, beide Kerne, `3fa7d719`), die Kippstellen der Verrundungen behoben — lageabhängig 17 statt 27 von 101 Körpern; offen sind Einpassungen an ihrer Kippe (deckungsgleiche Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die dokumentierte Grenze der Zusage ‚drehfest‘ — zwischen beidem entscheidet Robert |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), an der Freiform ohne messbare Wirkung (vergebliche Läufe in zu kleinen Gruppen); offen: anderer Hebel oder neu gefasstes Ziel |
-| [RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Creality Print 7.2 rechnet über die Kommandozeile keine 3MF (jede endet mit „The print is empty“, STL schneidet); die Meldung führt seit `e401ce900` zu *Im Slicer öffnen*. Offen: einmal von Hand prüfen, ob das Fenster die Übergabe samt Sperre, Tempo und Brim lädt, dann entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt wird |
+| [RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Behoben an der Ursache: Jedes Objekt nennt sein Werkzeug, *Slicen* läuft mit Creality Print samt Sperre und Mehrfarbe; für das Fenster schreibt Solidon die Abweichungsliste, die 7.2.2 noch übergeht (Creality-Fehler 18082). Offen: Fensterweg mit 7.3.0.6149 abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
@@ -96,10 +96,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Quelle nachgezogen (`84185f4d`: Kopfzeile, Fenster „Auswahl“ mit Handlungen, Alt-Text in allen Sprachen); Erzeugung und Sichtprüfung je Sprache beim Release |
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Nachtragstext für §9 und §30.1 liegt im Bericht skizze der Durchsicht 0.5.0 bereit (neu geschrieben, der Wortlaut W2 lag nicht mehr vor), dazu die Vorschläge aus p66 (Ellipse, drei Bedingungsarten), p6c (drei Schnitte), zeichnenbau und p7verlauf. Robert sagt den Nachtrag an und entscheidet dabei, ob eine neue Bedingungsart die Formatversion hebt (p66 hat sie mit Format 31 gehoben, Satz 5 des Nachtrags sagt nein) |
 | [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
-| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim Release 0.5.0 noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
+| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim nächsten Release noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim nächsten Release: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
-| [RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
+| [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 74–79 ms bis zum ersten Bild mit Maßen (Median je Runde, der Stand davor 97–104 ms, abwechselnd unter leichter Last), 30 von 32 warmen Klicks unter 100 ms (`0273b8d23`, `c2bff45f1`); offen die Abnahme auf ruhiger Maschine am eingeschalteten zweiten Monitor — gemessen wurde auf dem Ersatzbildschirm in der Fläche des MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
@@ -219,7 +219,7 @@ G-Code-Rücklesen, Profilabgleich und Kalibrierung sind umgesetzt. Interne Schä
 
 ## P8 — Erste Veröffentlichung
 
-Windows, Flatpak, AppImage und beide Mac-Architekturen sind als 0.5.0 veröffentlicht.
+Windows, Flatpak, AppImage und beide Mac-Architekturen sind seit 0.5.0 veröffentlicht.
 Signatur-, Notarisierungs- und Releaseaktennachweise sowie der öffentliche Bytevergleich
 gehören zu dieser Auslieferung. Fremdrechnerabnahme und noch fehlende Betriebsnachweise
 bleiben eigene Aufgaben; siehe RM-011 und RM-002.
@@ -246,7 +246,7 @@ Zurückgestellt; kein laufendes Bauvorhaben. Ein gehosteter Generierungsdienst k
 
 ## P12 — B-Rep-Kern
 
-Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung startet nach 0.4.4 als Teil des CAD-Plans (RM-188).
+Der optionale exakte Kern und STEP-Austausch sind umgesetzt. Das ist keine allgemeine Rückgewinnung exakter CAD-Flächen aus beliebigen Netzen. Der Nachbau als Operationsfolge ist seit dem 17.09.2026 beschlossen; Umfang und Abnahme stehen in RM-022, die Umsetzung läuft als Teil des CAD-Plans (RM-188).
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p12--b-rep-kern).
 
@@ -1030,6 +1030,33 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   *Vorschläge übernehmen*, im Fenster slicen und die Stütze in den Kanälen ansehen;
   danach entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt
   wird.
+
+  **Ursache gefunden und behoben (29.09.2026):** Die Konsole bricht am Schritt des
+  Reinigungsturms ab, weil das Objekt kein Werkzeug hat — Solidon schrieb `extruder` in
+  `model_settings.config` nur für Teile mit Spule. Am Würfel (Sonde
+  `output/review/rm164-2026-09-29/varianten.py`): unverändert −100, mit `extruder = 1` am
+  Objekt Exit 0; ohne Farbgruppe, ohne Beilagen oder nur mit dem Modell weiter −100.
+  Jetzt nennt jedes Objekt sein Werkzeug (`threemf._settings_xml`, auch ohne Spule das des
+  neutralen Platzes, das `tools_in_use` zählt), und der Satz „nur in seinem Fenster“ ist
+  gestrichen. *Slicen* mit Creality Print 7.2.2 am K1 über `slice_model`: Würfel,
+  PrusaSlicer-3MF, Wedge-Lock, Okarina, Blessed Family (zwei Platten), pista+biglie (zehn
+  Platten) schneiden mit Standard und Vorschlägen; Okarina mit Stützen überall 0 m Stütze
+  mit Sperre, 15,57 m ohne, Modellbahn beide Male 150,77 m; zweifarbiger Körper mit Spulen
+  wie im Druckdialog druckt beide Werkzeuge ohne Befund. Der Besteckeinsatz (231 mm) passt
+  nicht auf das 220er Bett und wird zu Recht abgelehnt.
+
+  **Fensterweg:** Die Okarina samt Sperre lädt; Creality fragt bei jeder fremden 3MF nach
+  dem Drucker (vorgewählt ist der dort eingestellte, hier ein CR-10) und nimmt Prozess und
+  Filament aus dessen Bestand. Aus der Datei übernimmt es nur Prozesswerte, die in
+  `different_settings_to_system` stehen (`Check3mfVendor::get3mfConfig` im Quelltext); ohne
+  die Liste galt keine Wahl aus Solidons Druckdialog (`full_print_config.json` nach dem
+  Schneiden im Fenster: Prozess ganz der des CR-10). Solidon schreibt die Liste jetzt für
+  Creality Print — die Abweichung vom Herstellerprozess (`handover._differing_from`) —, und
+  `slicer.window_asks_for_the_printer` sagt vor dem Öffnen, welcher Drucker zu wählen ist
+  und dass Temperaturen und Kühlung aus Crealitys Filamentprofil kommen. Version 7.2.2
+  übergeht die Liste noch (vier Wände und 37 % Füllung kamen nicht an); Creality führt das
+  als Fehler 18082, behoben in 7.3.0. Offen: der Fensterweg mit Creality Print 7.3.0.6149
+  (Liste wirkt, Wände und Füllung kommen an).
 
 <a id="rm-166"></a>
 
@@ -2723,7 +2750,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   `F:\3D Dateien` nachgestellt — ein STEP mit Senkbohrung liegt dort nicht,
   der exakte Fall bleibt am gebauten Körper geprüft). Jeder neue Test am
   Stand davor rot. Offen: die Abnahme am
-  echten Fenster beim Release 0.5.0 — dazu die Stufe an der Grenze „ganz
+  echten Fenster beim nächsten Release (RM-213) — dazu die Stufe an der Grenze „ganz
   sichtbar" (ein Punkt über den Maßraum, und die Felder wechseln die Seite).
   **Zug und Durchmesser sind ein Schritt** (Entscheidung Robert am selben
   Tag: „Ja eine transaktion"): `slot_hole` nimmt die Breite selbst
@@ -2851,8 +2878,8 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Radzoom zeichnet ein Bild statt zwei (22 → 7,7 ms je Aufbau).
 
   **Was bleibt:** Die Overlaykarten tragen Masken mit runden Ecken — wenige
-  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim Release
-  0.5.0 noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
+  Rechtecke, nicht betroffen. Die Probe über den echten Startweg beim nächsten
+  Release (RM-213) noch einmal fahren. Ob Windows D3D12 als Backend bekommt, wo es da
   ist (unter D3D12 gab es den Fall nie), ist eine eigene Entscheidung und
   kein Muss mehr.
 
@@ -2878,7 +2905,7 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Das Review vom 21.09.2026 fand den Rest: Der Block des historischen
   Bohrschritts (`offer_bore_step`) blieb neben der Maßgruppe stehen; er trägt
   sich seither in `_blocks` ein und weicht mit den übrigen. Abnahme, offen
-  beim Release 0.5.0: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
+  beim nächsten Release (RM-213): Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine
   Koordinaten; endet die Maßgruppe, stehen sie wieder. Escape und Abbrechen
   wählen dabei seit dem 25.09.2026 ab (Entscheidung Robert), rechts steht
   danach nichts mehr.
@@ -3047,15 +3074,16 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
 <a id="rm-213"></a>
 
-- [ ] **RM-213 — Fensterabnahme 0.5.0 und die Kundenwege am echten Fenster.**
+- [ ] **RM-213 — Fensterabnahme und die Kundenwege am echten Fenster.**
   Die Paketnachweise der Durchsicht 0.5.0 stammen überwiegend aus
   Offscreen-Läufen oder Fenstern mit `WA_DontShowOnScreen`. Die späteren
   Website-Aufnahmen und Skizzenlabel-Sonden zeigen echte maximierte Fenster;
   sie belegen ihre Motive und die jeweiligen Reparaturen. Die vollständige
   Welle 2 „kundenwege" mit allen folgenden Abnahmekriterien ist damit noch
   nicht gefahren. Was nur das echte Fenster zeigt (Schrift, Vulkan-Fläche, Fokus,
-  Bildschirmleser, gefühlte Wartezeit): die Punkte RM-174, RM-197 bis RM-200,
-  RM-204 und RM-205 (sie bleiben je eigene Punkte und schließen in diesem Lauf);
+  Bildschirmleser, gefühlte Wartezeit): die Punkte RM-197 bis RM-200 und RM-204
+  (sie bleiben je eigene Punkte und schließen in diesem Lauf; RM-174 und RM-205
+  sind ohne ihn geschlossen, siehe Archiv);
   dazu ohne eigenen Punkt die Einladungszeile und Rückfragekarte über der
   pygfx-Fläche (foerderung), Marken und Beschriftung der Fase auf hellem und
   dunklem Thema (P6.2), die neuen Bedienelemente der Dialoge mit Maus und
@@ -3920,6 +3948,10 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   aktivierbarer Weg zum bestätigten Start; andernfalls dokumentierter Verschiebungsablauf.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-robert-am-26082026-aufgetragen-hat).
+
+  **Aus dem Lizenzarten-Konzept (§6, P7):** Handbuch und Regeln nennen die Lizenzart
+  (privat oder gewerblich, Platzzahl) noch nicht; die Karte `app/core/activation/CLAUDE.md`
+  und der Über-Dialog tun es. Vor dem Verkaufsstart nachziehen.
 
 <a id="rm-091"></a>
 

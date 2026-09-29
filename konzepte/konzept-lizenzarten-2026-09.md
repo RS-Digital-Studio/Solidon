@@ -373,9 +373,9 @@ Jedes Paket endet mit grünem Tor und einem Commit.
 | P4 | Oberfläche: Art im Über-Dialog („Lizenziert für … — gewerbliche Lizenz“), Handbuchabschnitt zur Platzzahl, `device_limit`-Meldung ohne feste Zahl — alles in fünf Katalogen | M | **erledigt 15.09.** |
 | P5 | Rechtstexte: `EULA.md` 1, 2, 3, 5, 6 und der neue Abschnitt 11a (Support), `AGB.md` §2, §4, §7, beide Fassungsnummern, `make_legal.py` gelaufen — **Entwurf zur Prüfung, nicht zur Veröffentlichung** | L | **erledigt 15.09.** — 32 Tests grün |
 | P6 | Website: Preiskasten mit zwei Spalten und Staffeldatum, FAQ „privat oder gewerblich?“ | M | **zurückgenommen** (Robert, 15.09.) — gebaut, im Browser geprüft und wieder auf HEAD gesetzt; die Seite bleibt preisfrei, bis der Verkauf näher ist |
-| P7 | Doku: `app/core/activation/CLAUDE.md`, Handbuchabschnitt zur Freischaltung, Regeldatei nachziehen | S | offen |
+| P7 | Doku: `app/core/activation/CLAUDE.md`, Handbuchabschnitt zur Freischaltung, Regeldatei nachziehen | S | **teilweise** — die Karte trägt „Zwei Formate, zwei Lizenzarten“; Handbuch und Regeln nennen die Lizenzart nicht, der Rest steht bei RM-061 |
 | P8 | Die Art im Aktivierungsdatensatz ablegen | S | offen — der Dienst arbeitet durchweg mit dem Digest; der Nutzen ist Support-Komfort, der Eingriff eine Tabellenänderung |
-| P9 | **Den laufenden Dienst migrieren:** `DROP INDEX one_active_device` einspielen, **bevor** der erste gewerbliche Schlüssel ausgegeben wird | S | offen — Betrieb, nicht Code |
+| P9 | **Den laufenden Dienst migrieren:** `DROP INDEX one_active_device` einspielen, **bevor** der erste gewerbliche Schlüssel ausgegeben wird | S | **erledigt 24.09.** — Serverupload mit Indexmigration (`activation_common.php`, Abschluss RM-182 im Archiv) |
 
 > **Abweichung von der ersten Fassung, 15.09.2026:** P2 und das frühere P3
 > (Server) sind **ein** Paket. Die Paketliste widersprach der eigenen
