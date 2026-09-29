@@ -192,9 +192,9 @@ xxhash = { licence = "BSD-2-Clause", note = "schneller Array-Hash für trimeshs 
 # Pakete der pygfx-Familie nennen ihre Lizenz nur in der Datei, nicht in den
 # Metadaten; die Beilage übernimmt die Lizenzdateien der Wheels.
 pygfx = { licence = "BSD-2-Clause", note = "Renderer über wgpu (§18); Lizenzdatei im Wheel, Metadaten leer" }
-wgpu = { licence = "BSD-2-Clause", note = "WebGPU-Anbindung unter pygfx; bringt wgpu-native (Apache-2.0 OR MIT) als Binärdatei mit" }
+wgpu = { licence = "BSD-2-Clause", note = "WebGPU-Anbindung unter pygfx, direkt in ui/render gefragt; bringt wgpu-native (Apache-2.0 OR MIT) als Binärdatei mit" }
 rubicon-objc = { licence = "BSD-3-Clause", note = "Objective-C-Anbindung von wgpu unter macOS; PyPI 0.5.6 nennt BSD-3-Clause" }
-rendercanvas = { licence = "BSD-2-Clause", note = "die Leinwand für pygfx — Qt-Widget und Puffer ohne Fenster" }
+rendercanvas = { licence = "BSD-2-Clause", note = "die Leinwand für pygfx — Qt-Widget und Puffer ohne Fenster, direkt in ui/render gebaut" }
 pylinalg = { licence = "BSD-2-Clause", note = "lineare Algebra für pygfx" }
 freetype-py = { licence = "BSD-3-Clause", note = "Schrift für pygfx-Beschriftungen; bringt FreeType (FTL) mit — die Metadaten sagen nur „BSD License“" }
 uharfbuzz = { licence = "Apache-2.0", note = "Textsatz für pygfx; bringt HarfBuzz (MIT-artig) mit — die Metadaten sagen nur „Apache License 2.0“" }
@@ -206,7 +206,7 @@ hsluv = { licence = "MIT", note = "Farbraum für pygfx; die Metadaten sagen nur 
 cadquery-ocp-novtk = { licence = "Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)", note = "OCP-Anbindung und mitgereichtes OpenCASCADE unter LGPL-2.1 mit Linking-Ausnahme" }
 cadquery-ocp-proxy = { licence = "Apache-2.0", note = "wählt die OCP-Version, die zum installierten VTK passt" }
 lazy_loader = { licence = "BSD-3-Clause", note = "kommt mit scikit-image" }
-imageio = { licence = "BSD-2-Clause", note = "kommt mit scikit-image" }
+imageio = { licence = "BSD-2-Clause", note = "direkt: liest das Höhenbild der Reliefoperation (geom/displace.py)" }
 tifffile = { licence = "BSD-3-Clause", note = "kommt mit scikit-image" }
 PySide6 = { licence = "LGPL-3.0-only", note = "dynamisch gebunden, §36" }
 PySide6-Essentials = { licence = "LGPL-3.0-only" }
