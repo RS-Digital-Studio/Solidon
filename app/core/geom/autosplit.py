@@ -36,11 +36,11 @@ import numpy as np
 from app.core import units
 from app.core.build_area import placement_offset, printable_area, printable_height
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS, BooleanFailedError
+from app.core.errors import PROGRAMMING_ERRORS, SPLIT_ALONG_LINE, BooleanFailedError
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import NoFittingOrientationError
-from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
+from app.core.geom.section import AXIS_NORMALS, Axis, CutContactError, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
 from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate, stands
@@ -552,14 +552,15 @@ def split_to_fit(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if first is None or second is None:
-            outcome.findings.append(
-                Finding(
-                    code="split.cut_failed",
-                    severity="warning",
-                    message=_("Der Schnitt hat kein zweites Teil ergeben."),
-                    values={"axis": candidate.axis, "position": round(candidate.position, 2)},
+            if not any(finding.code == "split.surface_contact" for finding in cut_findings):
+                outcome.findings.append(
+                    Finding(
+                        code="split.cut_failed",
+                        severity="warning",
+                        message=_("Der Schnitt hat kein zweites Teil ergeben."),
+                        values={"axis": candidate.axis, "position": round(candidate.position, 2)},
+                    )
                 )
-            )
             return finish()
 
         connector_shape = "round"
@@ -1763,14 +1764,10 @@ def _best_by_support(
     # es kauft keine zweite Klebestelle. Seit dem Normalenfächer (T3) stehen
     # Nähte verschiedener Konturzahl in derselben Liste: Am Z aus zwei Stäben
     # schlug eine schiefe Naht durch zwei Stäbe die durch die Strebe allein.
-    fewest = min(candidate.contours for candidate in candidates)
-    good = sorted(
-        (candidate for candidate in candidates if candidate.contours == fewest),
-        key=_candidate_order,
-    )
+    ordered: list[Candidate] = []
     # **Die Spiegelebene steht vorn, wenn sie nichts verschlechtert** (T6).
-    # Die Konturzahl hält schon die Zeile darüber: Nur eine Spiegelebene mit
-    # so wenigen Konturen wie die beste Naht ist hier. Die Einschnürung hält
+    # Die Konturzahl hält die Gruppierung: Nur eine Spiegelebene mit
+    # so wenigen Konturen wie die beste verwendbare Naht gewinnt. Die Einschnürung hält
     # diese Zeile: Eine Hantel ist spiegelgleich, und ihre Mitte ist genau die
     # dünnste Stelle, die T1 meidet. Das Stützvolumen hält die Schleife
     # darunter — eine andere Naht gewinnt nur mit derselben
@@ -1781,12 +1778,18 @@ def _best_by_support(
     # ausfallen. In der Spiegelebene sind sie gleich — dieselbe Fläche von
     # beiden Seiten —, auch wenn ein halber Millimeter daneben eine Rippe
     # oder eine Zierrille beginnt.
-    mirror = next(
-        (candidate for candidate in good if candidate.symmetric and candidate.notch <= 0.0), None
-    )
-    if mirror is not None:
-        good = [mirror, *(candidate for candidate in good if candidate is not mirror)]
-    shortlist = good[: max(1, plane_candidates)]
+    for contours in sorted({candidate.contours for candidate in candidates}):
+        good = sorted(
+            (candidate for candidate in candidates if candidate.contours == contours),
+            key=_candidate_order,
+        )
+        mirror = next(
+            (candidate for candidate in good if candidate.symmetric and candidate.notch <= 0.0),
+            None,
+        )
+        if mirror is not None:
+            good = [mirror, *(candidate for candidate in good if candidate is not mirror)]
+        ordered.extend(good)
 
     def judged(candidate: Candidate) -> tuple[Candidate, float]:
         """Die bessere Zuordnung der Stifte an dieser Naht, und ihr Stützvolumen."""
@@ -1828,20 +1831,39 @@ def _best_by_support(
             return replace(candidate, pins_on_b=True), on_b
         return candidate, on_a
 
-    best, best_support = judged(shortlist[0])
-    if progress is not None:
-        progress(0.25 + 0.75 / len(shortlist), str(_("Ausrichtung suchen")))
-    for index, raw in enumerate(shortlist[1:], start=2):
+    best: Candidate | None = None
+    best_support = float("inf")
+    accepted = 0
+    for raw in ordered:
+        if best is not None and (
+            raw.contours != best.contours or accepted >= max(1, plane_candidates)
+        ):
+            break
         candidate, support = judged(raw)
-        if not np.isfinite(best_support) and np.isfinite(support):
+        if not np.isfinite(support):
+            # Nur eine belegte Berührlinie fällt ganz aus der Nahtauswahl.
+            # Sonst behält eine nicht bewertbare Lage ihren bisherigen Rang.
+            # Das Nachfragen kostet nur am erfolglosen Kandidaten einen Schnitt;
+            # eine gewöhnliche Naht wird nicht doppelt auf Kontakt geprüft.
+            _first, _second, findings = _cut_in_two(mesh, candidate)
+            if any(finding.code == "split.surface_contact" for finding in findings):
+                continue
+        accepted += 1
+        if best is None or (not np.isfinite(best_support) and np.isfinite(support)):
             best, best_support = candidate, support
         elif np.isfinite(support):
             reference = max(best_support, support, EPS_GEOM)
             if support < best_support - reference * SUPPORT_TIE:
                 best, best_support = candidate, support
         if progress is not None:
-            progress(0.25 + 0.75 * index / len(shortlist), str(_("Ausrichtung suchen")))
-    return best
+            progress(
+                0.25 + 0.75 * accepted / max(1, plane_candidates), str(_("Ausrichtung suchen"))
+            )
+    if progress is not None:
+        progress(1.0, str(_("Ausrichtung suchen")))
+    # Sind alle Lagen Berührlinien, reicht diese erste den konkreten Grund
+    # an den abschließenden Schnitt weiter. Ein ungeeignetes Netz wird nie gebaut.
+    return best if best is not None else ordered[0]
 
 
 def _support_after_cut(
@@ -2348,7 +2370,25 @@ def _cut_in_two(
     """
     from app.core.geom.prepare import split_at_plane
 
-    first, second, findings = split_at_plane(mesh, candidate.plane)
+    try:
+        first, second, findings = split_at_plane(mesh, candidate.plane)
+    except CutContactError as problem:
+        # Eine tangierende Ebene taugt weder zur Bewertung noch zum Bauen.
+        # Die Suche nimmt den nächsten Kandidaten; bleibt nur dieser übrig,
+        # nennt das Ergebnis den Grund und den Weg zur eigenen Trennlinie.
+        return (
+            None,
+            None,
+            [
+                Finding(
+                    code="split.surface_contact",
+                    severity="warning",
+                    message=problem.detail or problem.title,
+                    values=problem.values,
+                    suggestions=(SPLIT_ALONG_LINE,),
+                )
+            ],
+        )
     return (
         first if first.triangle_count else None,
         second if second.triangle_count else None,

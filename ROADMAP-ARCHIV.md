@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-29 | [Schnitt an der Bohrungswand: ein Punkt geschlossen (29.09.2026)](#schnitt-an-der-bohrungswand-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Teilen an der Spiegelnaht einer Figur: ein Punkt geschlossen (29.09.2026)](#teilen-an-der-spiegelnaht-einer-figur-ein-punkt-geschlossen-29092026) |
 | 2026-09-28 | [Stützsperre im Cura-Fenster abgenommen: ein Punkt geschlossen (28.09.2026)](#stützsperre-im-cura-fenster-abgenommen-ein-punkt-geschlossen-28092026) |
 | 2026-09-28 | [Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)](#release-sitzung-051-zweite-runde-zwei-punkte-geschlossen-28092026) |
@@ -33452,4 +33453,58 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   `test_mesh_faces.py::test_the_draft_holds_where_wall_corners_stand_just_beside_the_neutral_plane`.
   Zufallsschnitte über sieben Netze (2 764 Hälften, davon ein Fünftel durch Eckenhöhen): keine
   offene Hälfte durch Rundung, eine an einer Bohrungstangente, im Stand davor genauso
-  ([RM-310](ROADMAP.md#rm-310)).
+  ([RM-310](#rm-310)).
+
+## Schnitt an der Bohrungswand: ein Punkt geschlossen (29.09.2026)
+
+<a id="rm-310"></a>
+
+- [x] **RM-310 — Ein Schnitt genau an der Wand einer Bohrung lässt die Stifte an einer Berührlinie scheitern.** Gefunden bei
+  [RM-309](#rm-309): Zufallsschnitte über sieben Netze, eine von 2 764 Hälften betroffen,
+  im Stand davor genauso. An `plate_holes.stl` berührt eine Bohrung die Schnittfläche
+  längs einer Linie; die Hälfte trägt zwei verzweigte Kanten. *Teilen* mit zwei Stiften
+  vermutete im Entwurf fälschlich ein offenes Eingangsmodell, Fein fiel auf das Raster.
+  Abnahme war eine Absage vor den Stiften mit dem tatsächlichen Grund und dem Handgriff
+  „Ebene verschieben“, oder das Auflösen der Berührlinie im Deckel.
+
+  **Aktualität zuerst geprüft:** Am Ausgangsstand `2385fa72a` ist die Eingabe geschlossen
+  (796 Dreiecke, null offene oder verzweigte Kanten). Die exakte float32-Tangente liegt
+  bei y = **12,399999618530273 mm**, Bohrungen bei x = ±25 mm. Die bisherige gerundete
+  Angabe 12,3999996 mm liegt schon daneben und funktioniert. An der tatsächlichen
+  Tangente entstehen die zwei verzweigten Kanten. Der Raster-Rückfall veränderte das
+  Volumen der oberen Hälfte trotz Bohrungen von 7 725,175 auf 8 118,130 mm³; die Eingabe
+  blieb unverändert.
+
+  **Behoben:** `section.check_cut_contact` erkennt einen erst durch den Schnitt
+  entstandenen verzweigten Kantenkontakt. `CutContactError` nennt Modellwand, Berührlinie
+  und das Verschieben der Ebene; *Eingabe korrigieren* führt zum Lagefeld. Der gemeinsame
+  `split_at_plane` prüft beide Hälften vor den Stiften, also *Teilen*, *An Linie teilen*
+  und Auto Split. *Abschneiden* prüft nur die behaltene Seite: Die gesunde untere Hälfte
+  bleibt nutzbar. Vorher offene Eingaben behalten ihre Reparaturdiagnose, getrennte
+  geschlossene Schalen bleiben getrennt, die reine Schnittansicht bleibt darstellbar.
+  Auto Split überspringt Kontaktlagen auch außerhalb der ersten Vorauswahl und bei
+  einer anderen Konturzahl; der Folgeplaner nimmt ebenfalls einen gültigen Nachrücker.
+  Bleibt keine gültige Lage, nennt der Bericht den Grund mit dem Weg zur eigenen
+  Trennlinie. Kein Raster repariert dabei still die Maße. Cacheversionen und sämtliche
+  fünf Übersetzungen sind nachgezogen, der Schnittvertrag steht in der Geometriekarte.
+
+  **Nachweis und Review:** `tests/test_tangent_cuts.py` enthält 38 Fälle: beide Güten,
+  beide Teilungswege, null/zwei Stifte, umgekehrte Normale, behaltene Seite, vorab offene
+  oder verzweigte Eingaben, berührende geschlossene Schalen, unveränderte Ansicht und
+  Auto-Split-Nachrücker. Schnitte bei 12,39, 12,3999996 und 12,41 mm liefern geschlossene
+  Hälften mit Stiften und Bohrungen auf Stufe `direct`. Die Gegenprobe vor dem Fix war
+  rot. Das unabhängige Review fand die zunächst zu kurze Auto-Split-Vorauswahl; auch
+  diese Gegenprobe wurde erst rot und nach der Korrektur grün. Im breiteren Lauf
+  gefundene Fehlervertrag- und Dokumentationsanschlüsse sind ebenfalls im selben Punkt
+  behoben: Nachprüfung **392 bestanden, Exit 0**. Abschließendes Code- und Sprachreview
+  ohne offene Befunde. Zusätzlich drei vorhandene STL-Modelle (Schreibtisch-Organizer,
+  Siebhalter, Gewürzregal-Wandhalterung), je X/Y/Z: **18 geschlossene Hälften**, keine
+  offenen oder verzweigten Kanten, Volumenbilanz innerhalb `rel=1e-8 / abs=1e-7`,
+  Eingangsarrays und Originaldateien unverändert. Vollständiges Entwicklungstor des
+  isolierten Änderungssatzes auf `cb8e14343`: **18 453 bestanden, 59 übersprungen,
+  Exit 0**; Ruff, Format und mypy jeweils Exit 0, Quellstand während des Laufs unverändert.
+  Im aktuellen gemeinsamen Hauptbaum zusätzlich **378 bestanden, Exit 0** für den
+  allgemeinen Fehlervertrag und sämtliche Tangentenfälle; die **23 Tests des lokal
+  gebauten Schnittkerns** dort ebenfalls bestanden, Exit 0. Fenster-,
+  Erzeugnis- und Leistungsprüfungen gehören gemäß Projektvertrag zum Release und wurden
+  hier nicht ausgeführt. Kein offener Rest und kein neuer Roadmappunkt.

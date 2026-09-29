@@ -19,12 +19,14 @@ from typing import Final, Literal
 import numpy as np
 
 from app.core.deferred import trimesh
+from app.core.errors import ValidationError
 from app.core.geom import enclosure, transform
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, edge_table
 from app.core.geom.transform import moved, rotation_between
 from app.core.log import get_logger
 from app.core.types import Vec3
 from app.core.units import EPS_GEOM, is_zero
+from app.i18n import _
 
 _log = get_logger(__name__)
 
@@ -172,6 +174,42 @@ class SectionResult:
     mesh: MeshData
     capped: bool
     """Falsch, wenn der Körper von vornherein offen war — dann gibt es keinen Deckel."""
+
+
+class CutContactError(ValidationError):
+    """Eine Schnittlage erzeugt eine Berührlinie statt eines Volumenkörpers."""
+
+    def __init__(self, position: float | None = None) -> None:
+        super().__init__(
+            field="position",
+            title=_("Diese Schnittebene berührt eine Modellwand."),
+            detail=_(
+                "Die Schnittfläche und die Modellwand treffen hier nur entlang einer Linie "
+                "aufeinander. Verschieben Sie die Ebene etwas, sodass sie die Wand schneidet "
+                "oder Abstand zu ihr hat."
+            ),
+            value=position,
+            constraint="cut_surface_contact",
+        )
+
+
+def check_cut_contact(result: SectionResult, position: float) -> None:
+    """Eine neu entstandene Berührlinie vor Folgerechnungen absagen.
+
+    ``capped`` beschreibt den Eingang, nicht die Dichtheit des Ergebnisses.
+    War der Eingang geschlossen und trägt die Hälfte jetzt eine Kante mit
+    mehr als zwei Dreiecken, treffen Schnittdeckel und Modellwand dort nur
+    längs einer Linie aufeinander. Die Stifte könnten daraus nur über das
+    maßändernde Raster wieder einen Körper machen. Ein von vornherein
+    offenes Netz behält dagegen seine eigene Diagnose; seine alten Kanten
+    belegen keine tangierende Schnittlage.
+
+    Die Operationswege fragen hier, die reine Schnittansicht zeigt weiter
+    die unveränderte Lage. ``position`` ist der eingetragene Wert, auch wenn
+    die behaltene Seite mit umgedrehter Ebenennormaler geschnitten wurde.
+    """
+    if result.capped and bool((edge_table(result.mesh.raw).counts > 2).any()):
+        raise CutContactError(position)
 
 
 def cut(mesh: MeshData, plane: SectionPlane, second: SectionPlane | None = None) -> SectionResult:

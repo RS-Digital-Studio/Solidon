@@ -98,7 +98,7 @@ from app.core.geom.prepare import (
     split_findings,
     surface_index_of,
 )
-from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
+from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, composed, moved_object, place_on_bed, translation
 from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
@@ -16455,9 +16455,9 @@ def split_bodies(ctx: OpContext) -> OpResult:
     params=SplitPinnedParams,
     consumes=1,
     produces=2,
-    # Die Namen der Stücke sagen seit RM-229, was sie tragen, und zählen einen
-    # Lauf ab drei Stücken; ein Cache-Eintrag von vorher trüge die alten.
-    cache_version="1",
+    # Eine Berührlinie an der Schnittfläche wird vor den Stiften abgesagt;
+    # ein altes Ergebnis könnte die ungeeignete Hälfte oder ein Raster tragen.
+    cache_version="2",
     doc=_(
         "Teilt ein Objekt an einer Ebene, auf Wunsch mit Passstiften in der "
         "Schnittfläche. Das Spiel kommt aus dem Materialprofil; null Stifte heißt: "
@@ -16781,9 +16781,8 @@ class CutAwayParams(BaseParams):
 @register_op(
     name="cut_away",
     result_kind="mesh",
-    # 2 seit dem 22.09.2026: Eine offene Schnittfläche wird gemeldet
-    # (``cut_away.uncapped``) — ein Ergebnis aus dem Cache trüge den Befund nicht.
-    cache_version="2",
+    # Eine neu entstandene Berührlinie wird nicht als Modell übernommen.
+    cache_version="3",
     title=_("Abschneiden"),
     category="prepare",
     params=CutAwayParams,
@@ -16816,6 +16815,7 @@ def cut_away(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
     kept = cut(mesh, plane)
+    check_cut_contact(kept, params.position)
     if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:
         # Nichts übrig oder nichts weggenommen: beides ist eine Ebene, die das
         # Objekt nicht trifft — dieselbe Absage wie beim Teilen, mit dem Feld.
@@ -16992,8 +16992,8 @@ class SplitLineParams(BaseParams):
     params=SplitLineParams,
     consumes=1,
     produces=2,
-    # Wie bei *Teilen*: Die Namen sagen seit RM-229, was die Stücke tragen.
-    cache_version="1",
+    # Dieselbe Absage an einer Berührlinie wie bei *Teilen*.
+    cache_version="2",
     icon="split",
     doc=_(
         "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf "

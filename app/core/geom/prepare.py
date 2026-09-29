@@ -53,7 +53,7 @@ from app.core.geom.boolean import (
 )
 from app.core.geom.measure import surface_gap
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated, ray_hit_distances
-from app.core.geom.section import AXIS_NORMALS, SectionPlane, cut
+from app.core.geom.section import AXIS_NORMALS, SectionPlane, check_cut_contact, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
 from app.core.registry import param
@@ -2278,9 +2278,15 @@ def split_at_plane(mesh: MeshData, plane: SectionPlane) -> tuple[MeshData, MeshD
     Modell schon vorher offen. Ein offenes Netz lässt sich nicht ehrlich
     deckeln; der Schnitt zeigt es trotzdem und sagt jetzt, woran es liegt und
     was zu tun ist (Regel 17).
+
+    Eine erst durch den Schnitt entstandene Berührlinie ist eine andere
+    Ursache: :func:`section.check_cut_contact` sagt diese Lage vor jeder
+    Folgerechnung ab, ohne den Eingang als offen auszugeben.
     """
     first = cut(mesh, plane)
     second = cut(mesh, plane.flipped())
+    check_cut_contact(first, plane.position)
+    check_cut_contact(second, plane.position)
     findings: list[Finding] = []
     if not (first.capped and second.capped):
         findings.append(

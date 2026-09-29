@@ -19,6 +19,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
 | Jede Rückfallstufe einmal erzwungen? | `test_boolean.py` |
+| Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
 | Trägt jede Ausnahme einen Vorschlag? | `test_errors.py` |

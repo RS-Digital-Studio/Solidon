@@ -143,7 +143,8 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 `pushed_features`)
 
 **Messen, Schneiden, Netz, Text** — `measure.py` (§18.3; Fang, `surface_gap`,
-`body_overlap`) · `section.py` (§18.2) · `difference.py` (§18.7; eine
+`body_overlap`) · `section.py` (§18.2; Schnittkontakte siehe Stolperfallen) ·
+`difference.py` (§18.7; eine
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
@@ -193,6 +194,15 @@ ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
   `ray_hit_distances`. Ein Langlochumriss (`prepare.slot_profile`)
   normalisiert seinen Winkel auf eine halbe Umdrehung; zerlegte Teile
   nummeriert `_loose_parts` nach gerundetem Volumenverhältnis, dann nach Lage.
+
+**Schnitte** (`section.py`): Eine Ebene, die erst im Schnitt verzweigte Kanten
+erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche
+und Modellwand treffen sich längs einer Linie. `CutContactError` zeigt zum
+Verschieben auf das Lagefeld. `split_at_plane` prüft beide Hälften, `cut_away`
+nur die behaltene. War der Eingang schon offen, bleibt seine eigene
+Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten bei Konturzahl
+und Vorauswahl aus und nennt den Grund, falls keine verwendbare Lage bleibt.
+Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 
 **Reparatur** (`repair.py`):
 

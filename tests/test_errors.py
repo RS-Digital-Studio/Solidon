@@ -369,6 +369,8 @@ _NOT_A_RANGE = frozenset(
     {
         "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme",
         "checksum", "choices",
+        # Eine Berührlinie hängt von der Modellform ab, nicht von einer Zahlenspanne.
+        "cut_surface_contact",
         # Die Zeichenfläche als Ziel von „Bis zur Fläche" (sketch/ops.py): eine
         # Fläche, keine Zahl.
         "drawing_face",
