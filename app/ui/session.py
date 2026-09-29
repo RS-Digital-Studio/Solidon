@@ -4146,10 +4146,6 @@ class Session(QObject):
         """Vor welchen Schritt neue Schritte gerade kommen — ``None`` heißt: ans Ende."""
         return self._insert_before
 
-    @property
-    def revision_running(self) -> bool:
-        return self._revision is not None
-
     def displayed_document(self) -> Any:
         """Das Dokument, das die Oberfläche zeigt — bei einer Einfügemarke der Stand davor.
 
@@ -4763,34 +4759,20 @@ class Session(QObject):
         *,
         origin: Origin | None = None,
         ask: Any = None,
-        change_op: int | None = None,
-        change_values: dict[str, Any] | None = None,
-        change_name: str | None = None,
         changes: DocumentChange | None = None,
-        cancelled: Any = None,
         snapshot: _Snapshot | None = None,
     ) -> tuple[Any, SceneDifference | None]:
-        """Wonach die Szene aussähe — die eine Vorschau für Agent und Dialog.
+        """Wonach die Szene aussähe — die Vorschau eines Agentenvorschlags.
 
         Auf einer Kopie des Dokuments, in Entwurfsqualität; der Cache trägt
-        alle Schritte, die schon gerechnet sind. ``change_op`` mit
-        ``change_values`` zeigt statt neuer Schritte eine geänderte Operation
-        des Stapels (§15.4). ``change_name`` verwendet dabei dieselbe
-        Zwillingsumschaltung wie die spätere Übernahme. Ohne ``ask`` hält eine
-        Rückfrage die Vorschau an,
-        statt mitten ins Tippen ein Fenster zu stellen — was eine Frage
-        braucht, hat keine stille Vorschau.
+        alle Schritte, die schon gerechnet sind. Ohne ``ask`` hält eine
+        Rückfrage die Vorschau an, statt mitten ins Tippen ein Fenster zu
+        stellen — was eine Frage braucht, hat keine stille Vorschau. Der
+        Dialog geht mit seiner geänderten Operation direkt über
+        :meth:`_preview_outcome`.
         """
         scene, difference, _reason = self._preview_outcome(
-            drafts,
-            origin=origin,
-            ask=ask,
-            change_op=change_op,
-            change_values=change_values,
-            change_name=change_name,
-            changes=changes,
-            cancelled=cancelled,
-            snapshot=snapshot,
+            drafts, origin=origin, ask=ask, changes=changes, snapshot=snapshot
         )
         return scene, difference
 
@@ -4814,6 +4796,10 @@ class Session(QObject):
         counted: Any = None,
     ) -> tuple[Any, SceneDifference | None, str]:
         """:meth:`preview_scene`, dazu der Grund, wenn es keine Vorschau gibt.
+
+        ``change_op`` mit ``change_values`` zeigt statt neuer Schritte eine
+        geänderte Operation des Stapels (§15.4). ``change_name`` verwendet
+        dabei dieselbe Zwillingsumschaltung wie die spätere Übernahme.
 
         ``snapshot`` ist der im Hauptfaden gezogene Stand (:class:`_Snapshot`);
         im Arbeiter wird nur er gelesen und kopiert, nie das lebende Dokument.

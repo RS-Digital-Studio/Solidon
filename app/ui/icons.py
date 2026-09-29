@@ -600,7 +600,7 @@ class ThemedIcon(QIconEngine):
         source = svg_source(self._name, self._tone(mode).name())
         if not source:
             return QPixmap()
-        return _pixmap(source, max(size.width(), size.height()), self._tone(mode))
+        return _pixmap(source, max(size.width(), size.height()))
 
     def clone(self) -> QIconEngine:
         return ThemedIcon(self._name)
@@ -625,10 +625,10 @@ def icon(name: str, widget: QWidget, *, scale: float = 1.35, colour: QColor | No
     if not source:
         return QIcon()
     size = max(int(widget.fontMetrics().height() * scale), 12)
-    return QIcon(_pixmap(source, size, colour))
+    return QIcon(_pixmap(source, size))
 
 
-def _pixmap(source: str, size: int, colour: QColor) -> QPixmap:
+def _pixmap(source: str, size: int) -> QPixmap:
     renderer = QSvgRenderer(QByteArray(source.encode("utf-8")))
     if not renderer.isValid():
         return QPixmap()

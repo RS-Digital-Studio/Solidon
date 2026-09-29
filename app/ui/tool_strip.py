@@ -442,7 +442,7 @@ class ToolStrip(QWidget):
         self.activate(None)
 
     def tool_titles(self) -> dict[str, str]:
-        """Schlüssel und Beschriftung — die Befehlspalette liest das."""
+        """Schlüssel und Beschriftung — die Tests über Werkzeugzeile und Grenzen lesen das."""
         return {key: str(tool.title) for key, tool in self._tools.items()}
 
     def tools(self) -> dict[str, Tool]:

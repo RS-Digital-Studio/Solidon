@@ -287,9 +287,6 @@ class Item(ABC):
         des Anlegens sein.
         """
 
-    @abstractmethod
-    def set_line_width(self, width: float) -> None: ...
-
 
 class LabelsItem(Item):
     """Beschriftungen, deren Anker und Texte sich gemeinsam austauschen lassen."""
