@@ -27,6 +27,20 @@
       "Bash(git pull:*)",
       "Bash(git rev-parse:*)",
       "Bash(git read-tree:*)"
+    ],
+    "ask": [
+      "Bash(.venv/Scripts/python.exe tools/run_agent_suite.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/upload_website.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/deploy_activation_server.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/check_support.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/sign_release.py:*)",
+      "Bash(.venv/Scripts/python.exe tools/make_licence_keys.py:*)",
+      "PowerShell(.venv\\Scripts\\python.exe tools/run_agent_suite.py:*)",
+      "PowerShell(.venv\\Scripts\\python.exe tools/upload_website.py:*)",
+      "PowerShell(.venv\\Scripts\\python.exe tools/deploy_activation_server.py:*)",
+      "PowerShell(.venv\\Scripts\\python.exe tools/check_support.py:*)",
+      "PowerShell(.venv\\Scripts\\python.exe tools/sign_release.py:*)",
+      "PowerShell(.venv\\Scripts\\python.exe tools/make_licence_keys.py:*)"
     ]
   },
   "hooks": {
