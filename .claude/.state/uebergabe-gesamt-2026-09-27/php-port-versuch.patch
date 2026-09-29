@@ -1,0 +1,381 @@
+diff --git a/tests/php_probe.py b/tests/php_probe.py
+index 839491f8a..a0f740fd1 100644
+--- a/tests/php_probe.py
++++ b/tests/php_probe.py
+@@ -13,11 +13,16 @@ Windows und macOS richten dort keines ein und überspringen weiter.
+ from __future__ import annotations
+ 
+ import functools
++import hashlib
+ import os
++import re
+ import shutil
+ import socket
+ import subprocess
+ import sys
++import tempfile
++import time
++from collections.abc import Callable, Mapping
+ from pathlib import Path
+ from typing import NoReturn
+ 
+@@ -86,11 +91,14 @@ def _php_command(extensions: tuple[str, ...]) -> tuple[str, ...]:
+     return command
+ 
+ 
+-#: Wie viele Ports jeder Testprozess für seine PHP-Server bekommt, und wo die
+-#: Bereiche beginnen — unterhalb der dynamischen Ports (Windows ab 49152), die
+-#: das Betriebssystem nebenbei vergibt.
+-_PORTS_PER_WORKER = 400
++#: Wie viele Ports jeder Testprozess für seine PHP-Server bekommt, für wie
++#: viele Arbeiter ein Lauf Platz hat, und wo die Bereiche liegen — unterhalb
++#: der dynamischen Ports (Windows ab 49152), die das Betriebssystem nebenbei
++#: vergibt.
++_PORTS_PER_WORKER = 100
++_WORKERS_PER_RUN = 32
+ _FIRST_PORT = 20000
++_LAST_PORT = 49151
+ _next_port: int | None = None
+ 
+ 
+@@ -104,14 +112,27 @@ def free_port() -> int:
+     zweimal im Tor, einzeln dreißigmal grün (27.09.2026). Jeder Arbeiter sucht
+     deshalb in seinem eigenen Bereich, und fortlaufend: Auch ein eben
+     beendeter Server reicht seinen Port nicht an den nächsten Test weiter.
++
++    **Und jeder Lauf in seinem eigenen.** Am selben Abend fuhren zwei
++    Sitzungen die Suite zugleich, und derselbe Test traf den Server des
++    anderen Laufs. Der Bereich eines Laufs hängt deshalb an seiner Kennung
++    (``PYTEST_XDIST_TESTRUNUID``, ohne xdist an der Prozessnummer), und ein
++    Port, an dem schon ein Server annimmt, gilt nicht als frei — ``bind``
++    allein sagt das unter Windows nicht immer.
+     """
+     global _next_port
+     worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+-    index = int(worker[2:]) if worker.startswith("gw") and worker[2:].isdigit() else 0
+-    first = _FIRST_PORT + index * _PORTS_PER_WORKER
++    number = worker[2:]
++    index = int(number) % _WORKERS_PER_RUN if worker.startswith("gw") and number.isdigit() else 0
++    run = os.environ.get("PYTEST_XDIST_TESTRUNUID") or str(os.getpid())
++    slots = (_LAST_PORT - _FIRST_PORT + 1) // (_WORKERS_PER_RUN * _PORTS_PER_WORKER)
++    slot = int(hashlib.sha256(run.encode("utf-8")).hexdigest(), 16) % slots
++    first = _FIRST_PORT + (slot * _WORKERS_PER_RUN + index) * _PORTS_PER_WORKER
+     start = _next_port if _next_port is not None else first
+     for offset in range(_PORTS_PER_WORKER):
+         port = first + (start - first + offset) % _PORTS_PER_WORKER
++        if _answers(port):
++            continue
+         with socket.socket() as probe:
+             try:
+                 probe.bind(("127.0.0.1", port))
+@@ -120,3 +141,68 @@ def free_port() -> int:
+         _next_port = first + (port - first + 1) % _PORTS_PER_WORKER
+         return port
+     pytest.fail(f"kein freier Port im Bereich von {worker or 'diesem Prozess'}")
++
++
++def _answers(port: int) -> bool:
++    """Ob an diesem Port schon ein Server annimmt, auch einer aus einem anderen
++    Testlauf."""
++    with socket.socket() as probe:
++        probe.settimeout(0.2)
++        return probe.connect_ex(("127.0.0.1", port)) == 0
++
++
++#: Die Startzeile von PHPs eingebautem Server, mit dem Port, auf dem er lauscht.
++_STARTED = re.compile(rb"Development Server \(http://127\.0\.0\.1:(\d+)\) started")
++
++#: So lange darf ein Server brauchen, bis er seinen Port nennt, in Sekunden.
++_START_SECONDS = 15.0
++
++
++def serve(
++    command: Callable[[int], list[str]],
++    *,
++    cwd: Path | None = None,
++    env: Mapping[str, str] | None = None,
++) -> tuple[subprocess.Popen[bytes], int]:
++    """Startet PHPs eingebauten Server auf einem Port, den das System vergibt.
++
++    ``command`` baut den Aufruf zu einem Port. Gefragt wird Port 0, und PHP
++    nennt in seiner Startzeile, welchen es bekommen hat — gemessen an PHP
++    8.5.8. So wählt kein Test mehr einen Port, den ein anderer Lauf im selben
++    Augenblick ebenfalls für frei hält: Zwei Sitzungen, die die Suite zugleich
++    fuhren, teilten sich am 27.09.2026 trotz eigener Bereiche Ports, und vier
++    Tests je Lauf sprachen mit dem Server des anderen, bis der endete. Nennt
++    ein PHP seinen Port nicht, startet der Server auf :func:`free_port`.
++
++    Die Fehlerausgabe geht in eine Datei, aus der die Startzeile gelesen wird.
++    """
++    with tempfile.NamedTemporaryFile(prefix="php-server-", suffix=".log", delete=False) as log:
++        journal = Path(log.name)
++        process = subprocess.Popen(
++            command(0),
++            cwd=cwd,
++            env=None if env is None else dict(env),
++            stdout=subprocess.DEVNULL,
++            stderr=log,
++        )
++    port = 0
++    deadline = time.monotonic() + _START_SECONDS
++    while time.monotonic() < deadline and process.poll() is None:
++        found = _STARTED.search(journal.read_bytes())
++        if found:
++            port = int(found.group(1))
++            break
++        time.sleep(0.02)
++    if port > 0:
++        return process, port
++    process.terminate()
++    process.wait(timeout=5)
++    port = free_port()
++    fallback = subprocess.Popen(
++        command(port),
++        cwd=cwd,
++        env=None if env is None else dict(env),
++        stdout=subprocess.DEVNULL,
++        stderr=subprocess.DEVNULL,
++    )
++    return fallback, port
+diff --git a/tests/test_activation_server.py b/tests/test_activation_server.py
+index aed64678e..5afac189f 100644
+--- a/tests/test_activation_server.py
++++ b/tests/test_activation_server.py
+@@ -6,7 +6,6 @@ import contextlib
+ import json
+ import os
+ import sqlite3
+-import subprocess
+ import time
+ from datetime import date
+ from pathlib import Path
+@@ -16,7 +15,7 @@ from urllib.request import Request, urlopen
+ import pytest
+ 
+ from app.core.activation import certificate, device, ed25519, key
+-from tests.php_probe import free_port, php_command
++from tests.php_probe import php_command, serve
+ from tools.make_licence_keys import make_key
+ from tools.setup_activation_server import main as setup_activation_server
+ 
+@@ -163,7 +162,6 @@ def test_php_issues_one_idempotent_device_certificate(
+     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+     seed_file.chmod(0o600)
+     database = tmp_path / "activation.sqlite"
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -174,13 +172,7 @@ def test_php_issues_one_idempotent_device_certificate(
+             "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+         }
+     )
+-    process = subprocess.Popen(
+-        _php_command(port),
+-        cwd=Path(__file__).parent.parent,
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+-    )
++    process, port = serve(_php_command, cwd=Path(__file__).parent.parent, env=environment)
+     url = f"http://127.0.0.1:{port}/api/activation.php"
+     try:
+         for _attempt in range(50):
+@@ -378,7 +370,6 @@ def test_health_check_never_creates_a_missing_database(tmp_path: Path) -> None:
+     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+     seed_file.chmod(0o600)
+     database = tmp_path / "missing.sqlite"
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -387,13 +378,7 @@ def test_health_check_never_creates_a_missing_database(tmp_path: Path) -> None:
+             "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": ed25519.public_key(ACTIVATION_SEED).hex(),
+         }
+     )
+-    process = subprocess.Popen(
+-        _php_command(port),
+-        cwd=Path(__file__).parent.parent,
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+-    )
++    process, port = serve(_php_command, cwd=Path(__file__).parent.parent, env=environment)
+     try:
+         url = f"http://127.0.0.1:{port}/api/activation-health.php"
+         for _attempt in range(50):
+@@ -441,7 +426,6 @@ def test_private_operator_path_manages_one_licence_and_records_every_change(
+     token = "ab" * 32
+     token_file.write_text(token + "\n", encoding="ascii")
+     token_file.chmod(0o600)
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -453,13 +437,7 @@ def test_private_operator_path_manages_one_licence_and_records_every_change(
+             "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+         }
+     )
+-    process = subprocess.Popen(
+-        _php_command(port),
+-        cwd=Path(__file__).parent.parent,
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+-    )
++    process, port = serve(_php_command, cwd=Path(__file__).parent.parent, env=environment)
+     activation_url = f"http://127.0.0.1:{port}/api/activation.php"
+     operator_url = f"http://127.0.0.1:{port}/api/operator.php"
+     try:
+@@ -671,7 +649,6 @@ def test_php_reads_both_key_formats_to_the_same_digest(
+     seed_file = tmp_path / "activation.seed"
+     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+     seed_file.chmod(0o600)
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -682,13 +659,7 @@ def test_php_reads_both_key_formats_to_the_same_digest(
+             "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+         }
+     )
+-    process = subprocess.Popen(
+-        _php_command(port),
+-        cwd=Path(__file__).parent.parent,
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+-    )
++    process, port = serve(_php_command, cwd=Path(__file__).parent.parent, env=environment)
+     url = f"http://127.0.0.1:{port}/api/activation.php"
+     try:
+         for licence in (legacy, commercial):
+@@ -742,7 +713,6 @@ def test_php_gives_the_commercial_licence_a_second_device_and_no_third(
+     seed_file = tmp_path / "activation.seed"
+     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+     seed_file.chmod(0o600)
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -753,13 +723,7 @@ def test_php_gives_the_commercial_licence_a_second_device_and_no_third(
+             "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+         }
+     )
+-    process = subprocess.Popen(
+-        _php_command(port),
+-        cwd=Path(__file__).parent.parent,
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+-    )
++    process, port = serve(_php_command, cwd=Path(__file__).parent.parent, env=environment)
+     url = f"http://127.0.0.1:{port}/api/activation.php"
+ 
+     def activate(licence: key.Licence, device_name: str) -> tuple[int, str]:
+@@ -849,7 +813,6 @@ def test_the_server_record_learns_the_licence_kind_and_an_old_database_migrates(
+     token = "cd" * 32
+     token_file.write_text(token + "\n", encoding="ascii")
+     token_file.chmod(0o600)
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -861,13 +824,7 @@ def test_the_server_record_learns_the_licence_kind_and_an_old_database_migrates(
+             "SOLIDON_ACTIVATION_MAJOR": str(key.current_major()),
+         }
+     )
+-    process = subprocess.Popen(
+-        _php_command(port),
+-        cwd=Path(__file__).parent.parent,
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+-    )
++    process, port = serve(_php_command, cwd=Path(__file__).parent.parent, env=environment)
+     url = f"http://127.0.0.1:{port}/api/activation.php"
+     try:
+         for number in range(2):
+diff --git a/tests/test_public_php_security.py b/tests/test_public_php_security.py
+index c98738aea..08cfd3532 100644
+--- a/tests/test_public_php_security.py
++++ b/tests/test_public_php_security.py
+@@ -20,7 +20,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+ 
+ import pytest
+ 
+-from tests.php_probe import free_port, php_command, php_executable
++from tests.php_probe import php_command, php_executable, serve
+ 
+ ROOT = Path(__file__).parent.parent
+ API = ROOT / "website" / "api"
+@@ -104,22 +104,18 @@ def _php_server(
+     extensions: tuple[str, ...] = (),
+ ) -> Iterator[str]:
+     php = php_command(*extensions)
+-    port = free_port()
+     environment = os.environ.copy()
+     environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
+     environment["SOLIDON_ACTIVATION_RATE_FILE"] = str(tmp_path / "activation-rate.json")
+     environment["SOLIDON_SUPPORT_RATE_FILE"] = str(tmp_path / "support-rate.json")
+     if extra_environment:
+         environment.update(extra_environment)
+-    command = _php_command(
+-        php, port, prepend=prepend, error_log=error_log, ini=ini, docroot=docroot
+-    )
+-    process = subprocess.Popen(
+-        command,
++    process, port = serve(
++        lambda port: _php_command(
++            php, port, prepend=prepend, error_log=error_log, ini=ini, docroot=docroot
++        ),
+         cwd=ROOT,
+         env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
+     )
+     base = f"http://127.0.0.1:{port}/api"
+     try:
+diff --git a/tests/test_shared_hosting_removed.py b/tests/test_shared_hosting_removed.py
+index 77cba7dfb..734e75243 100644
+--- a/tests/test_shared_hosting_removed.py
++++ b/tests/test_shared_hosting_removed.py
+@@ -4,7 +4,6 @@ from __future__ import annotations
+ 
+ import json
+ import os
+-import subprocess
+ import time
+ from pathlib import Path
+ from urllib.error import HTTPError, URLError
+@@ -12,7 +11,7 @@ from urllib.request import Request, urlopen
+ 
+ import pytest
+ 
+-from tests.php_probe import free_port, php_executable
++from tests.php_probe import php_executable, serve
+ 
+ ROOT = Path(__file__).parent.parent
+ WEBSITE = ROOT / "website"
+@@ -273,7 +272,6 @@ def test_retired_endpoint_is_404_without_state_or_mail(tmp_path: Path, method: s
+     """Der frühere Endpunkt ist unerreichbar und erzeugt keinerlei Serverzustand."""
+ 
+     php = php_executable()
+-    port = free_port()
+     environment = os.environ.copy()
+     environment.update(
+         {
+@@ -282,11 +280,8 @@ def test_retired_endpoint_is_404_without_state_or_mail(tmp_path: Path, method: s
+             "SOLIDON_TEST_SMTP_PORT": "1",
+         }
+     )
+-    process = subprocess.Popen(
+-        [php, "-S", f"127.0.0.1:{port}", "-t", str(WEBSITE)],
+-        env=environment,
+-        stdout=subprocess.DEVNULL,
+-        stderr=subprocess.DEVNULL,
++    process, port = serve(
++        lambda port: [php, "-S", f"127.0.0.1:{port}", "-t", str(WEBSITE)], env=environment
+     )
+     try:
+         url = f"http://127.0.0.1:{port}/api/shared.php?do=upload"

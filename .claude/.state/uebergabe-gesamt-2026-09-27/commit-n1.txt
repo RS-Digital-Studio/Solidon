@@ -1,0 +1,14 @@
+Beim Slicen mehrerer Platten stützt ein Vorschlag für ein Teil nicht mehr jedes Teil der übrigen Platten
+
+*Slicen* schreibt je Platte eine Datei, und `_unserved` sah nur die eigene:
+Lag der Pilz, der Stützen verlangt, auf Platte 1, bekam auf Platte 2 jeder
+Klotz Stützen — der Ausgangsfehler von Entscheidung G, auf den übrigen
+Platten zurück (N1 der Durchsicht 0.5.1).
+
+`write_assembly` nimmt dazu den ganzen Auftrag (`job`), und
+`_served_elsewhere` fragt für die Teile der anderen Platten dieselbe Beratung
+je Teil wie beim Schreiben, solange ein Pfad noch offen ist. Der Druckdialog
+reicht die Teile aller gewählten Platten durch. Geprüft für Orca, Prusa und
+Cura; die Gegenprobe am alten Stand ist in allen drei rot.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

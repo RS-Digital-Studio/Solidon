@@ -1,0 +1,4 @@
+/f/3D Druck.gesamtfix
+tests/test_export.py
+-k
+second_spool or scarf_seam_goes or supports_go_only or accepted_brim or cura_takes_supports or plate_wide_reason or cura_says_when

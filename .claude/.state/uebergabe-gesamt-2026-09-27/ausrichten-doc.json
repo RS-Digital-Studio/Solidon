@@ -1,0 +1,17 @@
+{
+  "en": {
+    "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Finds the orientation with the least support for every body in the scene, then rearranges the bed. Each one gets its own, and whatever already stands without supports stays standing."
+  },
+  "es": {
+    "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Busca para cada cuerpo de la escena la posición con menos soporte y después reordena la cama. Cada uno recibe la suya, y lo que ya se sostiene sin soportes se queda de pie."
+  },
+  "fr": {
+    "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Cherche pour chaque corps de la scène la position au moindre support, puis réorganise le plateau. Chacun reçoit la sienne, et ce qui tient déjà debout sans supports reste debout."
+  },
+  "it": {
+    "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Cerca per ogni corpo della scena la posizione con il minor sostegno e poi riordina il piano. Ognuno riceve la propria, e ciò che sta già in piedi senza supporti resta in piedi."
+  },
+  "pt": {
+    "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage, und was schon ohne Stützen steht, bleibt stehen.": "Procura para cada corpo da cena a posição com menos suportes e depois reorganiza a mesa. Cada um recebe a sua, e o que já fica de pé sem suportes continua de pé."
+  }
+}

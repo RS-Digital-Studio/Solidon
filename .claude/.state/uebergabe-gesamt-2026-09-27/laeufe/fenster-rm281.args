@@ -1,0 +1,10 @@
+F:/3D Druck.gesamtfix
+tests/test_filament_workflow.py::test_first_inventory_binding_keeps_the_selected_print_quality
+tests/test_filament_workflow.py::test_quick_assignment_is_one_transaction_and_keeps_the_spool
+tests/test_ui.py::test_the_arrangement_spacing_knows_the_plate_adhesion
+tests/test_ui.py::test_without_plate_adhesion_the_spacing_stays_the_default
+tests/test_analysis_ui.py::test_deviation_report_click_waits_for_its_real_witness_and_reuses_the_cache
+tests/test_analysis_ui.py::test_deviation_cancel_and_unit_change_do_not_restart_the_measurement
+tests/test_print_settings_ui.py
+-m
+windowed and not performance

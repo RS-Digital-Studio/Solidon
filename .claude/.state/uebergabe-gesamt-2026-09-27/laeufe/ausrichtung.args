@@ -1,0 +1,22 @@
+/f/3D Druck.gesamtfix
+tests/test_orient.py
+tests/test_orientation_search.py
+tests/test_print_findings.py
+tests/test_transform.py
+tests/test_build_area.py
+tests/test_exact_body_parity.py
+tests/test_geometry_review.py
+tests/test_geometry_review_regressions.py
+tests/test_cache.py
+tests/test_calibration.py
+tests/test_autosplit.py
+tests/test_part_file.py
+tests/test_platform_identity.py
+tests/test_resin.py
+tests/test_advise.py
+tests/test_print_settings.py
+tests/test_brep.py
+-m
+not windowed and not performance
+-n
+8

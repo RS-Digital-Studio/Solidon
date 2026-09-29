@@ -1,0 +1,6 @@
+/f/3D Druck.gesamtfix
+tests/test_value_labels.py
+tests/test_maps.py::test_a_body_on_the_plate_needs_nothing
+tests/test_export.py
+-k
+labels or plate_needs_nothing or support_goes_only or supports_go_only

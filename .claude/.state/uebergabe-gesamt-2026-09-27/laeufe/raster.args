@@ -1,0 +1,9 @@
+/f/3D Druck.gesamtfix
+tests/test_manufacturer.py
+tests/test_zz_sonde_linienbreite.py
+tests/test_print_settings_ui.py::test_print_advice_cannot_disable_support_needed_by_another_body
+tests/test_print_settings_ui.py::test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa
+tests/test_print_settings_ui.py::test_print_advice_reanalyses_when_line_width_invalidates_the_overhang_calibration
+-s
+-p
+no:randomly

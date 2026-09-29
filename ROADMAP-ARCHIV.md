@@ -32138,7 +32138,7 @@ Dazu aus dem Bericht, je mit Test:
 
 Die Durchsicht seit 0.5.0 (Roberts Auftrag: Leistung, Funktion über die Oberfläche,
 einfache Oberfläche, Verständnis für Kunden ohne CAD-Kenntnisse) lief in zehn Paketen;
-Berichte, Sonden und Patches liegen unter `F:\3D Druck.review-051\`. Übernommen wurden
+Berichte, Sonden und Patches liegen unter `F:\3D Druck\.claude\.state\release-0.5.1\`. Übernommen wurden
 werkzeuge, massbild, ki, reparatur, erkennung, fenster, druck und texte; jedes Paket gelesen,
 im Prüfbaum gegen den aktuellen Stand zusammengeführt, mit grünem Entwicklungstor
 committet. Diese Punkte sind damit geschlossen.
@@ -32386,7 +32386,7 @@ Runde der Durchsicht übernommen — rest-leistung, rest-verlauf, rest-erkennung
 rest-vorschau, rest-bohrung und rest-lippe —, je Paket gelesen, im Prüfbaum gegen den
 aktuellen Stand zusammengeführt und mit grünem Entwicklungstor committet (`ae178de8c`
 bis `1e9f21d50`); dazu der Befund ast-flake ohne Codeänderung. Berichte, Sonden und
-Patches liegen unter `F:\3D Druck.review-051\`. Zwei Punkte sind damit geschlossen, drei
+Patches liegen unter `F:\3D Druck\.claude\.state\release-0.5.1\`. Zwei Punkte sind damit geschlossen, drei
 früher geschlossene hat die Durchsicht an ihren Rändern nachgezogen.
 
 <a id="rm-227"></a>
@@ -32405,7 +32405,7 @@ früher geschlossene hat die Durchsicht an ihren Rändern nachgezogen.
   **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket bohrung):** Am heutigen Code nicht
   mehr nachzustellen — die Taschen Ø 11 am Clip sind gültig und dicht, eine zu flache
   ohne Wirkung sagt `boolean.without_effect`
-  (`F:\3D Druck.review-051\sonden\bohrung\rm227_out.txt`). Die Absicherung ist trotzdem
+  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\bohrung\rm227_out.txt`). Die Absicherung ist trotzdem
   gebaut: *Tasche schneiden* gibt einen ungültigen exakten Körper nicht mehr aus, sondern
   schneidet am Netz weiter und sagt `sketch.exact_cut_unsound` — derselbe Weg wie die
   Schnitte mit Werkzeug (`sketch/ops.cut_regions`, Test
@@ -32504,7 +32504,7 @@ rest-schraube, rest-kern und rest-merker, dazu rest-erkennung2 aus der zweiten R
 je Paket gelesen, im Prüfbaum gegen den aktuellen Stand zusammengeführt und mit grünem
 Entwicklungstor committet (`c3271ecd8` bis `e1b897ca2`); RM-270 hat die Hauptsitzung
 danach selbst gebaut (`bd33620c5`). Berichte, Sonden und Patches liegen unter
-`F:\3D Druck.review-051\`. Elf Punkte sind damit geschlossen. RM-259 ist
+`F:\3D Druck\.claude\.state\release-0.5.1\`. Elf Punkte sind damit geschlossen. RM-259 ist
 für die ebene Fläche gebaut und für die gekrümmte mit neuem Sollwert fortgeschrieben,
 RM-232 steht bei 74 bis 79 ms und wartet auf die Abnahme am echten Monitor, RM-262 behält
 seine Absage mit neuer Begründung, RM-187 führt drei neue Wege; die neuen Registersätze
@@ -32529,7 +32529,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
 
   **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kunde):** Nachgestellt mit einer
   Ausnahme aus einem Modul unter `%LOCALAPPDATA%\Programs\Solidon\…` und einem Kundenpfad
-  im Text (`F:\3D Druck.review-051\sonden\rest-kunde\s231_bericht.py`): Der Bericht trug
+  im Text (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-kunde\s231_bericht.py`): Der Bericht trug
   Quellzeilen samt Unterstreichung und `C:\Users\…` mit dem Benutzernamen im Stapel und im
   Ausnahmetext. Auch `log.exception_text`, der Weg des Absturzschutzes, schwärzte keinen
   Nutzerordner. Weil die Installation mit `PrivilegesRequired=lowest` unter dem
@@ -32648,7 +32648,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   kippt, vom tiefsten Punkt des Bodens bis zur Deckfläche — dort trägt der exakte Kern
   mehr Material. Nicht neu in 0.5.1, der Drehweg einer einzelnen Bohrung ist unverändert.
   Sonden `r10_ohne_lippe_kippen.py`, `r10b_boden.py`, `r10c_unterschied.py` unter
-  `F:\3D Druck.review-051\sonden\rest-lippe\`. Weg: den Keil an der Mündungsseite an
+  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-lippe\`. Weg: den Keil an der Mündungsseite an
   beiden Kernen gegen das gekippte Profil rechnen und klären, welcher Kern die alte
   Mündung falsch schließt. Abnahme: beide Kerne gleich bis auf den Faktor des Vielecks.
 
@@ -32710,7 +32710,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   `local_budget` absagt („Dieser Bereich enthält zu viele Dreiecke …“; unter Last). Die
   Absage hängt an der Dreieckszahl des Bereichs und könnte vor der Einpassung stehen.
   Weg: messen, wo die 15 bis 19 s liegen, und die Budgetfrage vor die teure Rechnung
-  ziehen (Sonde `F:\3D Druck.review-051\sonden\fenster\p07_stelle.py`). Abnahme: dieselbe
+  ziehen (Sonde `F:\3D Druck\.claude\.state\release-0.5.1\sonden\fenster\p07_stelle.py`). Abnahme: dieselbe
   Absage an derselben Stelle, ohne dass vorher gerechnet wird, was sie verwirft.
 
   **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kern, REST-KERN-03):** Gemessen am
@@ -32739,7 +32739,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   Nahtsuche.** Aus der Durchsicht v0.5.1 (reparatur, REPARATUR-07, „Für Nachbarn“).
   Seit `f58ef38ca` gelingt das Teilen am `parametric-laptop-riser.stl` und braucht 56 s
   statt 93 bis 131 s (unter Last). Im Profil
-  (`F:\3D Druck.review-051\sonden\reparatur\laeufe\k10c-riser-prof.txt`, vor der
+  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\reparatur\laeufe\k10c-riser-prof.txt`, vor der
   Behebung genommen, dieser Anteil ist davon unberührt) stecken 51 s in acht Aufrufen von
   `orientation.best_face_candidate` — 24 × `judge` → `slice_body`, Shapely-Differenzen
   für die Stützvolumen der probeweise geteilten Hälften. Weg: die Stützschätzung der
@@ -32794,7 +32794,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
 
   **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kern, REST-KERN-04):**
   Nachgestellt an der Gabel aus `test_autosplit` mit einer Zuordnung, die jeden erkannten
-  Stift umkämpft lässt (`F:\3D Druck.review-051\sonden\rest-kern\r267_nachstellen.py`):
+  Stift umkämpft lässt (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-kern\r267_nachstellen.py`):
   fünf Schnitte, sechs Stücke; am Stück `obj_4` heißt der erkannte Mantel eines Verbinders
   frisch `pin_3`, der Schritt nummeriert seine Stifte ab 4, zwei `fit.missing_feature`,
   und `stift_3` zeigt auf den fremden Stift. An echten Modellen trat es am heutigen Stand
@@ -32820,7 +32820,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   gehen.** Aus der Durchsicht v0.5.1 (reparatur, „Für Nachbarn“). Nach *Modell teilen* am
   Laptop-Ständer stand „Das Modell besteht aus 21 Teilen …“ am Körper `obj_1`, den es
   nicht mehr gibt, mit *Überschneidungen auflösen* und *In Einzelteile zerlegen*
-  (`F:\3D Druck.review-051\sonden\reparatur\laeufe\k10d-riser.txt`); ein Klick legt eine
+  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\reparatur\laeufe\k10d-riser.txt`); ein Klick legt eine
   Reparatur an einem Körper an, der nicht mehr da ist. Am Code bestätigt:
   `panels.actions_for_document` nimmt bei einem verbrauchten Körper nur *Stelle zeigen*
   und *Dreiecke verringern* heraus. Seit `5948a79a5` stehen nach dem Teilen zwei statt 22
@@ -32866,7 +32866,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
 
   **Abschluss 27.09.2026 (Durchsicht v0.5.1, Paket rest-kunde):** Alle vier behoben und die
   Frage entschieden, gemessen am gebauten Fenster
-  (`F:\3D Druck.review-051\sonden\rest-kunde\probe.py`) gegen den Stand davor. (1)
+  (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-kunde\probe.py`) gegen den Stand davor. (1)
   *Zuletzt geöffnet* hängt zusätzlich an `itemClicked`; ein Doppelklick öffnet den Eintrag
   einmal, die Eingabetaste bleibt. Vorher öffnete ein Einfachklick nichts, nachher öffnet
   er (`3eef03427`). (2) Der Leersatz erscheint nur, wenn im Merkmalfenster nichts steht,
@@ -33041,7 +33041,7 @@ laufenden Pakete als eigene Zweige bauen lassen, jedes unabhängig geprüft — 
 Texte in allen sechs Sprachen — und über einen Prüfbaum mit grünem Entwicklungstor nach
 main gebracht: Kantengruppen (`9f19b44d6`, `cbef27715`), Schraube, Musterbezug und Bohren
 (`cbef27715`), Textpaket samt Nachtrag (`f74ce7f81`). Berichte, Sonden und Läufe liegen
-unter `F:\3D Druck.review-051\` (`reports/`, `sonden/`, `laeufe/`). Sechs Punkte sind damit
+unter `F:\3D Druck\.claude\.state\release-0.5.1\` (`reports/`, `sonden/`, `laeufe/`). Sechs Punkte sind damit
 geschlossen. RM-271 wartet auf die Handbuchseite, RM-258 und RM-187 sind fortgeschrieben,
 die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
 
@@ -33092,7 +33092,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   Bohrung (`transform.moved(local_body, world_to_local)`), schneidet dort und legt ihn mit
   `to_world` zurück. Die Rundung der Hin- und Rückrechnung versetzt Ecken, die der Schnitt
   nicht berührt: Am Gartenschlauchhalter (Ø 3 × 2 mm in die größte Fläche, Normale +y,
-  Sonde `F:\3D Druck.review-051\sonden\rest-merker\p13_bohren.py`) stehen danach 17 572
+  Sonde `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-merker\p13_bohren.py`) stehen danach 17 572
   von 196 326 Ecken nicht mehr an ihrem Ort, 39 840 Dreiecke sind nicht mehr bitgleich;
   achsparallel gebohrt sind es 97 Ecken und 374 Dreiecke. Folgen: Der Merker über die
   Körpergrenze rechnet dort 1 078 statt 79 Fragen neu (Erkennung danach 13,7 statt 10,7 s
@@ -33126,7 +33126,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
 
 - [x] **RM-275 — Der Bezug eines Musters auf einem runden Träger kippt zwischen gleichen
   Zellen.** Aus der Durchsicht v0.5.1 (rest-merker, Korpusfolge
-  `F:\3D Druck.review-051\sonden\rest-merker\k51_vergleich.txt`). Auf einem runden Träger,
+  `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-merker\k51_vergleich.txt`). Auf einem runden Träger,
   dem Rändel am Gewürzdeckel (derselbe Deckel wie [RM-225](#rm-225)), sind alle Zellen
   gleich, und welche davon Mitte und Richtung des Musters stellt, entscheidet in
   `perceive/patterns.py` ein Knick, der an der Darstellung des Netzes hängt: Vor
@@ -33160,7 +33160,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
 - [x] **RM-276 — Eine gedruckte Schraube liegt ohne Spiel an ihrem Sitz.** Aus der
   Durchsicht v0.5.1 (rest-schraube, Registersatz 1). Der Senkkopf liegt bündig in seiner
   Senkung — dieselbe 90°-Flanke, derselbe Außendurchmesser, 42 deckungsgleiche Ecken am
-  oberen Rand (`F:\3D Druck.review-051\sonden\rest-schraube\s4_head.txt`) —, der
+  oberen Rand (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-schraube\s4_head.txt`) —, der
   Sechskantkopf steht ohne Abstand auf der Fläche; Spiel hat nur das Gewinde. Als
   Baugruppe ist das richtig, an Ort und Stelle in einem Stück gedruckt verschweißt der Kopf
   aber mit dem Träger. Der Hinweis im Baustein („zusammen mit der Mutter aus demselben
@@ -33229,7 +33229,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   Beschriftung fragt seit `6bcffec39` `edges.edge_lie_of` (ein Ring nach der Ebene, in der
   er liegt, [RM-269](ROADMAP-ARCHIV.md#rm-269)); die Auswahl nach Lage (`edges.choose`,
   `"horizontal"` und der Höhenvergleich von `"top"`/`"bottom"`) fragt weiter `flat`.
-  Gemessen (`F:\3D Druck.review-051\sonden\rest-kunde\s269_auswahl.txt`): Ein Quader
+  Gemessen (`F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-kunde\s269_auswahl.txt`): Ein Quader
   40 × 30 × 20 mit Querbohrung Ø 6 → *alle waagerechten Kanten* wählt 10 Kanten, darunter
   beide stehenden Bohrungsränder; *Verrunden* an „waagerecht“ rundet dort die Mündungen
   mit. Nicht in der Durchsicht gebaut, weil eine andere Antwort gespeicherte Projekte beim
@@ -33328,7 +33328,7 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   (Spielwürfel 0,05 mm, 5,8 Mio. Dreiecke) bzw. 5,7 s (Spielbrett), weil `manifold3d`
   den GIL auch in `refine_to_length` hält — derselbe Posten wie beim ersten
   Verkleinern, derselbe Weg (Hilfsprozess, Entscheidung Robert). Bericht
-  `F:\3D Druck.review-051\reports\rest-vorschau.md`.
+  `F:\3D Druck\.claude\.state\release-0.5.1\reports\rest-vorschau.md`.
 
   **Abschluss 28.09.2026 (Release 0.5.1, Paket hilfsprozess):** Entschieden von
   Robert (27.09.2026): Große Aufrufe des Netzkerns laufen ab `OFFLOAD_ABOVE` Dreiecken in

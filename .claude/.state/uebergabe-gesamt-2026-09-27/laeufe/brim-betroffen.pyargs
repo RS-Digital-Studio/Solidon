@@ -1,0 +1,8 @@
+/f/3D Druck/output/review/gesamt-2026-09-27/brim-betroffen.out
+F:/3D Druck.gesamtfix/tools/affected_tests.py
+app/core/slice/advise.py
+app/core/export/writer.py
+app/core/export/handover.py
+app/core/export/slicer_keys.py
+app/ui/print_settings_dialog.py
+--run

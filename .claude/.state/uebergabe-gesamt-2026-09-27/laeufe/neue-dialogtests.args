@@ -1,0 +1,4 @@
+/f/3D Druck.gesamtfix
+tests/test_print_settings_ui.py::test_the_printer_the_slicer_is_set_to_can_be_adopted
+tests/test_print_settings_ui.py::test_only_a_picked_printer_becomes_the_next_projects_printer
+tests/test_print_settings_ui.py::test_a_remembered_machine_belongs_to_its_printer_and_slicer

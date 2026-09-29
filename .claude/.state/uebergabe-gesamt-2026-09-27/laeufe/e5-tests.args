@@ -1,0 +1,6 @@
+/f/3D Druck.gesamtfix
+tests/test_export.py
+tests/test_print_settings.py
+tests/test_threemf_native_materials.py
+-k
+cura or blocker or window or assembly or names_the_part or long_list or second_spool or profile_beside

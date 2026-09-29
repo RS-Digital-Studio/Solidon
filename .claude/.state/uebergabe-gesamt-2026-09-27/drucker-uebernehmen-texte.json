@@ -1,0 +1,22 @@
+{
+  "en": {
+    "{printer} übernehmen": "Use {printer}",
+    "{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.": "{slicer} is set to {printer}. With this printer, the profiles fit."
+  },
+  "es": {
+    "{printer} übernehmen": "Usar {printer}",
+    "{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.": "{slicer} está configurado para {printer}. Con esta impresora, los perfiles encajan."
+  },
+  "fr": {
+    "{printer} übernehmen": "Utiliser {printer}",
+    "{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.": "{slicer} est réglé sur {printer}. Avec cette imprimante, les profils correspondent."
+  },
+  "it": {
+    "{printer} übernehmen": "Usa {printer}",
+    "{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.": "{slicer} è impostato su {printer}. Con questa stampante i profili corrispondono."
+  },
+  "pt": {
+    "{printer} übernehmen": "Usar {printer}",
+    "{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.": "O {slicer} está configurado para {printer}. Com esta impressora, os perfis correspondem."
+  }
+}

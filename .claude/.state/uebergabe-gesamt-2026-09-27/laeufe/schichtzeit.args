@@ -1,0 +1,10 @@
+/f/3D Druck.gesamtfix
+tests/test_advise.py
+tests/test_print_settings.py
+tests/test_print_settings_ui.py
+tests/test_export.py
+tests/test_directory_docs.py
+-m
+not performance
+-n
+8

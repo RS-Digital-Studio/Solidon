@@ -1,0 +1,12 @@
+F:/3D Druck.gesamtfix
+tests/test_value_labels.py
+tests/test_export.py
+tests/test_finding_ways.py
+tests/test_translations.py
+tests/test_errors.py
+tests/test_language_rules.py
+tests/test_cli.py
+-m
+not windowed and not performance
+-n
+8

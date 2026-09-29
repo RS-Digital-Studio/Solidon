@@ -1,0 +1,9 @@
+RM-257 ist im Cura-Fenster abgenommen und steht im Archiv
+
+Cura 5.13 zeigt die Werte je Teil als Einstellungen je Objekt und die Sperre
+als Stützblocker („Don't support overlaps“); geschnitten stützt es den
+Kragarm und lässt den Kanal frei, ohne Sperre füllt es ihn. Die Bettlage an
+einer anderen Maschine als dem Drucker in Solidon ist mit d1c3d0462 behoben.
+Bilder unter output/review/b5-cura-2026-09-28/bilder/.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

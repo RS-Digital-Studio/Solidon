@@ -1,0 +1,13 @@
+[
+  {
+    "alt": "Was zusätzlich auf das Bett kommt, damit das Teil hält. Automatisch entscheidet der Slicer nach Teil und Material. Brim legt einen Rand an, Raft eine ganze Unterlage; Skirt berührt das Teil nicht und hält nur die Düse im Fluss.",
+    "neu": "Was zusätzlich aufs Bett kommt, damit das Teil hält. Automatisch entscheidet der Slicer nach Teil und Material. Brim legt einen Rand an, Raft eine Unterlage; Skirt berührt das Teil nicht und hält nur die Düse im Fluss.",
+    "je_sprache": {
+      "en": "What goes onto the bed in addition, so the part holds. With automatic, the slicer decides by part and material. Brim lays down a rim, raft a base; skirt does not touch the part and only keeps the nozzle flowing.",
+      "es": "Lo que se añade sobre la cama para que la pieza aguante. Con automático decide el slicer según la pieza y el material. El brim pone un borde; el raft, una base; el skirt no toca la pieza y solo mantiene el flujo de la boquilla.",
+      "fr": "Ce qui s'ajoute sur le plateau pour que la pièce tienne. En automatique, le slicer décide selon la pièce et le matériau. Le brim pose une bordure, le raft un socle ; le skirt ne touche pas la pièce et ne fait qu'amorcer la buse.",
+      "it": "Ciò che si aggiunge sul piano perché il pezzo tenga. Con automatico decide lo slicer in base a pezzo e materiale. Il brim aggiunge un bordo, il raft una base; lo skirt non tocca il pezzo e mantiene solo il flusso dell'ugello.",
+      "pt": "O que se acrescenta na mesa para a peça aguentar. Em automático, o slicer decide conforme a peça e o material. O brim cria uma borda, o raft uma base; o skirt não toca na peça e só mantém o fluxo do bico."
+    }
+  }
+]

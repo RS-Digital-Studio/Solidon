@@ -1,0 +1,4 @@
+F:/3D Druck.einf-alt
+tests/test_free_spot_kept.py::test_deleting_the_model_before_leaves_the_next_and_its_bore
+tests/test_free_spot_kept.py::test_changing_a_measure_before_leaves_the_next_and_its_bore
+tests/test_free_spot_kept.py::test_another_printer_leaves_the_next_model_and_its_bore

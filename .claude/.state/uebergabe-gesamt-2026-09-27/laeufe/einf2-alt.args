@@ -1,0 +1,5 @@
+F:/3D Druck.einf-alt
+tests/test_free_spot_kept.py::test_an_undo_before_the_result_still_keeps_the_spot
+tests/test_free_spot_kept.py::test_a_second_project_with_the_same_files_keeps_the_spot
+tests/test_free_spot_kept.py::test_a_restart_keeps_the_spot_and_the_unit
+tests/test_free_spot_kept.py::test_a_file_standing_on_its_second_plate_lands_where_its_spot_was_found

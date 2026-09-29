@@ -98,7 +98,7 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   davon sollen noch in 0.5.1“): HB-5, HB-7, der Rest von HB-8, HB-9, der
   Rest von HB-10, HB-11 und HB-12. **Der Tag v0.5.1 wartet auf die Meldung
   „Handbuch fertig“** an die Release-Sitzung; so steht es auch in ihrer
-  Übergabe (`F:\3D Druck.review-051\UEBERGABE.md`, „JETZT“).
+  Übergabe (`F:\3D Druck\.claude\.state\release-0.5.1\UEBERGABE.md`, „JETZT“).
 - **Grundlage dafür gebaut:** Verweise zwischen Seiten,
   `[Text](manual:schlüssel)` (`markup.MANUAL_LINK`). Das Fenster schlägt die
   Seite auf, Website und PDF springen zum Anker, Text und Suche behalten nur
@@ -142,7 +142,7 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   (`/erzeugen`); die Filme liegen unter `marketing/` und werden von Hand
   hochgeladen.
 - **B und C zusammengeführt,** beide nach der Durchsicht der
-  Release-Sitzung (`F:\3D Druck.review-051\reports\strang-b-uebersetzung.md`
+  Release-Sitzung (`F:\3D Druck\.claude\.state\release-0.5.1\reports\strang-b-uebersetzung.md`
   mit 42 Befunden, vor dem Merge behoben), die Kataloge schlüsselweise. Ohne
   Kopf- und Fußzeile bleibt im PDF jede Seite vor dem ersten Kapitelziel,
   nicht eine feste Zahl von Seiten: Das Verzeichnis wächst mit den
@@ -166,7 +166,7 @@ am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
   Beim Release: `make_guides.py` in allen Sprachen nach dem Versionssprung,
   dann `make_manual.py`, dann `make_guide_video.py` (`/erzeugen`).
 - **Code-Review der Release-Sitzung**
-  (`F:\3D Druck.review-051\reports\review-handbuch.md`): B1, B3 und B4 vor
+  (`F:\3D Druck\.claude\.state\release-0.5.1\reports\review-handbuch.md`): B1, B3 und B4 vor
   dem Tag behoben. F1 fand bei 53 Operationen die Erklärseite statt des
   Eintrags, stellte eine offene Anleitung auf ihren Anfang und führte bei
   vier Operationen in eine Anleitung, die sie nicht zeigt. B2 (mehr als 120

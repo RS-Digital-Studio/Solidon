@@ -1,0 +1,27 @@
+Ob ein Teil in seiner Lage bleibt, entscheidet der Schnitt am Original, und nur gegen einen Gewinner, der selbst Stütze braucht
+
+Die Prüfung `stays` aus 2611950c2 lief vor der Suche und am Ersatznetz der
+Suche. Am Ersatznetz urteilte sie an vier von dreißig Körpern des
+Minigolf-Satzes anders als das Original (Rundschaft v17: eine erfundene
+Insel, 289 statt 12 mm² Überhang), und vor der Suche kostete sie jeden
+stehenden Körper einen vollen Schnitt im Druckraster (v17: 18,3 statt
+1,3 s). Eine Platte auf ihrer Kante blieb stehen, obwohl sie flach genauso
+stützenfrei und zehnmal breiter liegt (N2 der Durchsicht 0.5.1).
+
+Jetzt fragt `search` erst nach der Wertung, und nur, wenn der Gewinner eine
+andere Lage ist und selbst Stütze braucht; geurteilt wird am Original, und
+das Urteil merkt sich das Netz. Eine andere Lage ist, was eine Stelle des
+Körpers um eine Schicht verschiebt (`same_pose`): An obj_30 gewann eine
+Bodenfläche 0,0114 Grad neben der Ausgangslage über den Gleichstand im
+Stützraum, und die Frage kostete 2,2 s für ein Nein.
+
+Bleibt die Lage so, sagt der Prüfbericht jetzt warum: „Die Lage bleibt: Das
+Teil steht und braucht keine Stütze.“ (`orient.kept`, in allen sechs
+Sprachen) statt „Ausrichtung über die Schichtanalyse gesucht.“, und ohne die
+groben Stützzahlen der Suche, die dem Satz widersprächen (N5).
+
+Minigolf-Satz, 30 STL, alt gegen neu im Wechsel: Mehr kosten nur die
+beiden Schäfte, die jetzt richtig stehen bleiben (+3,7 und +2,6 s CPU); die
+übrigen 28 Körper rechnen gleich lang.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -1,0 +1,8 @@
+/f/3D Druck.gesamtfix
+tests/test_print_settings_ui.py
+tests/test_print_settings.py
+tests/test_first_run_setup.py
+-m
+windowed and not performance
+-n
+8

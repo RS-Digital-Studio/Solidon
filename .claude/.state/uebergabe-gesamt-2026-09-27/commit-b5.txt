@@ -1,0 +1,16 @@
+Curas Fenster öffnet den Auftrag mittig auf dem Bett seiner aktiven Maschine
+
+Curas 3MF-Leser zieht die halbe Bettgröße der Maschine ab, die in Cura aktiv
+ist, und ordnet eine 3MF beim Laden nicht an. Die Datei für das Fenster war
+auf das Bett des Druckers in Solidon gerechnet: Ein Auftrag für den Centauri
+Carbon 2 (256 mm) lag in Curas Ender-3 V3 SE (220 mm) 18 mm aus der Mitte,
+einer von 210 mm Breite ragte über den Rand und blieb ungeschnitten (B5 der
+Durchsicht 0.5.1, im Fenster gesehen).
+
+`CuraActiveMachine` trägt jetzt das Bett: die Maschineneinstellungen des
+Nutzers (Stapelplatz 6) vor der Erbkette der Definition. `_cura_window` legt
+den Auftrag darauf; ist keine Maschine bekannt, bleibt es beim Bett des
+Druckers. Im Fenster belegt: Derselbe breite Auftrag liegt mittig und ganz
+auf dem Bett.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

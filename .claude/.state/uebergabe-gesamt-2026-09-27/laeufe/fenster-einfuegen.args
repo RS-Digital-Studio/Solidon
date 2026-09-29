@@ -1,0 +1,11 @@
+F:/3D Druck/.claude/worktrees/agent-a405d443dfd109de6
+tests/test_ui.py::test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks
+tests/test_ui.py::test_a_chosen_finding_survives_a_second_report
+tests/test_ui.py::test_the_report_shows_what_helps_without_a_right_click
+tests/test_ui.py::test_import_bed_action_keeps_the_import_group_and_ignores_selection
+tests/test_ui.py::test_grounded_import_keeps_the_single_bed_action_for_its_floating_body
+tests/test_ui.py::test_the_finding_below_the_bed_is_one_click_from_being_fixed
+tests/test_ingest.py::test_a_second_model_is_not_dragged_into_the_first
+tests/test_generate_ui.py
+-m
+windowed and not performance

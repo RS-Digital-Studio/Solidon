@@ -1,0 +1,17 @@
+Kopien derselben Form teilen sich beim druckoptimalen Ausrichten eine Suche
+
+*Druckoptimal ausrichten* suchte für jede Kopie neu, an Roberts
+Minigolf-Projekt zwanzigmal (Frage 1 aus dem Bericht zu
+merkmale-an-kopien). `orient_for_print_op` merkt sich die Suche je Form und
+Winkel (`shape_key`: Ecken relativ zur kleinsten Ecke, auf einen
+Mikrometer gerundet, und die Dreiecke). Eine verschobene Kopie übernimmt die
+Richtung, und wohin sie damit aufs Bett kommt, rechnet `turned_like` für
+sie selbst. Eine gekippte Kopie trifft einen anderen Schlüssel und wird
+gesucht.
+
+Roberts Projekt ohne Merkmalserkennung, zusammen mit dem Commit davor, alt
+gegen neu im Wechsel: 4 statt 20 Suchen, 16,0 und 16,6 statt 56,3 und
+56,0 s CPU, und alles auf einer Platte statt auf vier, weil die Schäfte
+stehen bleiben.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

@@ -1,0 +1,6 @@
+/f/3D Druck.gesamtfix
+tests/test_cura_machine.py
+tests/test_print_findings.py
+tests/test_print_settings.py
+-k
+countercheck or calibration_note or orca_auto_brim or known_slicer or uncalibrated or brim

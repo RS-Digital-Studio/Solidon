@@ -103,8 +103,8 @@ dev = [
   # gilt dasselbe. MIT, reine Testabhängigkeit.
   "pytest-forked>=1.6",
   # Verteilt den Rest der Suite auf mehrere Prozesse (`-n`). Gebraucht von
-  # `.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, das
-  # alles ohne Qt in einem Zug fährt — seriell 175 s, mit acht Prozessen 66 s.
+  # `.claude/scripts/suite-getrennt.sh`, das alles ohne Qt in einem Zug
+  # fährt — seriell 175 s, mit acht Prozessen 66 s.
   # Die Fenstergruppe bekommt es ausdrücklich nicht: dort stirbt ein Worker und
   # reißt den ganzen Lauf mit einem `INTERNALERROR` ab.
   #

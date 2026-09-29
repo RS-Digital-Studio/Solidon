@@ -1,0 +1,6 @@
+/f/3D Druck.probe
+tests/test_print_settings_ui.py
+-m
+windowed and not performance
+-n
+8

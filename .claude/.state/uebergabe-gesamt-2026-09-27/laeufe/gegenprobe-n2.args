@@ -1,0 +1,8 @@
+F:/3D Druck/.claude/worktrees/gegenprobe-n2
+tests/test_orientation_search.py::test_a_shaft_that_stands_without_support_keeps_standing
+tests/test_orientation_search.py::test_a_part_that_needs_support_standing_is_still_turned
+tests/test_orientation_search.py::test_a_plate_on_its_edge_is_laid_flat_although_it_stands
+tests/test_orientation_search.py::test_the_kept_pose_is_judged_on_the_original_mesh
+tests/test_orientation_search.py::test_a_pose_the_coarse_slice_settles_costs_no_fine_slice
+-m
+not windowed
