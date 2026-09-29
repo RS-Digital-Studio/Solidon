@@ -568,9 +568,7 @@ def test_cancellation_after_the_final_cut_starts_no_pin_plan(
         autosplit.split_to_fit(bar(), profile, cancelled=signal)
 
 
-def test_cancelled_pin_allowance_starts_no_pin_plan(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cancelled_pin_allowance_starts_no_pin_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     signal = CancelSignal()
     signal.cancel()
     monkeypatch.setattr(
@@ -580,12 +578,10 @@ def test_cancelled_pin_allowance_starts_no_pin_plan(
     )
 
     with pytest.raises(OperationCancelled):
-        autosplit._pin_allowance(bar(), "x", profile, pins.PIN_COUNT, cancelled=signal)
+        autosplit._pin_allowance(bar(), "x", pins.PIN_COUNT, cancelled=signal)
 
 
-def test_pin_allowance_stops_after_pin_planning(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_pin_allowance_stops_after_pin_planning(monkeypatch: pytest.MonkeyPatch) -> None:
     signal = CancelSignal()
     original = pins.plan_pins
 
@@ -597,7 +593,7 @@ def test_pin_allowance_stops_after_pin_planning(
     monkeypatch.setattr(pins, "plan_pins", plan_and_cancel)
 
     with pytest.raises(OperationCancelled):
-        autosplit._pin_allowance(bar(), "x", profile, pins.PIN_COUNT, cancelled=signal)
+        autosplit._pin_allowance(bar(), "x", pins.PIN_COUNT, cancelled=signal)
 
 
 def test_split_stops_after_final_connector_planning(

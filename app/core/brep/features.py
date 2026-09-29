@@ -1862,7 +1862,7 @@ def _axis_covered(
     (Ø 9 über Ø 5) hat über ihrer Achse nichts, und doch endet sie am
     Übergangskegel — der liegt über den Ringen. Am exakten Körper hieß sie
     bis zum 22.09.2026 ``through``, am Netz nicht (Kreuzbefund Paket C), und
-    ``prepare_ops._exact_cavity_cut`` hätte mit dem Flag die ganze Zielhülle
+    ``prepare_ops._exact_cavity_tool`` hätte mit dem Flag die ganze Zielhülle
     als Tiefe genommen. Die Ringe liegen innerhalb des Mantels, damit die
     eigene Wand nie zählt; die Achse bleibt die erste und billigste Probe.
 

@@ -254,7 +254,7 @@ def test_the_widening_of_a_through_bore_is_not_through_in_either_kernel(profile:
     Aufweitung Ø 9 liegt nichts: Sie hieß durchgehend, während das Netz die
     Ringe in der Mündung fragt (``THROUGH_RINGS``) und den Übergangskegel
     findet (Kreuzbefund Paket C, 22.09.2026). Mit dem Flag hätte
-    ``prepare_ops._exact_cavity_cut`` an einer allein stehenden Aufweitung die
+    ``prepare_ops._exact_cavity_tool`` an einer allein stehenden Aufweitung die
     ganze Zielhülle als Tiefe genommen. Dieselben Ringe an beiden Kernen: Bei
     Ø 5 in Ø 9 liegt der äußere Ring (0,6) auf dem Kegel; die Bohrung selbst
     bleibt durchgehend.

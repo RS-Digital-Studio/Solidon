@@ -455,7 +455,7 @@ def split_to_fit(
         # Mitte gemessen, weil dort der Querschnitt für ein prismatisches Stück
         # steht. Die Zahl geht in das Suchfenster (damit der Schnitt Raum für den
         # Stift lässt) und in die Reserve der Hälfte, die ihn trägt.
-        allowance = _pin_allowance(part, axis, profile, pins, cancelled=cancelled)
+        allowance = _pin_allowance(part, axis, pins, cancelled=cancelled)
         step_progress = (
             (
                 lambda fraction, text: progress(
@@ -930,7 +930,6 @@ class _Budget:
 def _pin_allowance(
     mesh: MeshData,
     axis: Axis,
-    profile: Profile,
     pins: int,
     *,
     cancelled: CancelToken | None = None,
@@ -2286,11 +2285,6 @@ def _judge(
             )
         )
     return judged
-
-
-def upright(axis: Axis) -> np.ndarray:
-    """Die Drehung, die ``axis`` auf +Z legt. Für Z selbst die Identität."""
-    return upright_normal(AXIS_NORMALS[axis])
 
 
 def upright_normal(normal: Vec3) -> np.ndarray:
