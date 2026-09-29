@@ -27,6 +27,7 @@ import pytest
 
 ROADMAP = Path(__file__).resolve().parents[1] / "ROADMAP.md"
 ARCHIVE = Path(__file__).resolve().parents[1] / "ROADMAP-ARCHIV.md"
+PLAN = Path(__file__).resolve().parents[1] / "3d-agent-bauplan.md"
 
 #: Die Überschrift, unter der das Register steht.
 REGISTER = "## Was offen ist"
@@ -232,20 +233,25 @@ def test_every_jump_between_roadmap_and_archive_lands() -> None:
     ins Leere — nicht mit einem Fehler, sondern an den Kopf der Datei, und wer
     klickt, glaubt den Punkt verschwunden. Am 29.09.2026 waren es 54 solcher
     Marken, fast alle im Archiv. Geprüft werden beide Dateien in beide
-    Richtungen, dazu Marken in die eigene Datei.
+    Richtungen, dazu Marken in die eigene Datei und die Sprünge des Bauplans.
     """
     texts = {
         ROADMAP.name: ROADMAP.read_text(encoding="utf-8"),
         ARCHIVE.name: ARCHIVE.read_text(encoding="utf-8"),
     }
     targets = {name: _targets(text) for name, text in texts.items()}
+    # Der Bauplan zeigt auf Punkte beider Dateien; seine eigenen Marken prüft
+    # dieser Test nicht, nur die Sprünge hinüber.
+    sources = {**texts, PLAN.name: PLAN.read_text(encoding="utf-8")}
     jumps = 0
     astray: list[str] = []
-    for name, text in texts.items():
+    for name, text in sources.items():
         for number, line in enumerate(text.splitlines(), 1):
             for match in _JUMP.finditer(line):
                 jumps += 1
                 target, mark = match.group(1) or name, match.group(2)
+                if target not in targets:
+                    continue
                 if mark not in targets[target]:
                     astray.append(f"{name}:{number} → {target}#{mark}")
 
