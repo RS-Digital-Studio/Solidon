@@ -1,0 +1,19 @@
+START 00:25:48 in wt-kanten: python ../sonden/kanten/wand.py
+Wand exakt fillet_edges 2.0 all: gelungen, Höhe 20.0000, Volumen 2389.699, {'edges.too_narrow': {'skipped': 8, 'worked': 4, 'size_mm': 2.0, 'largest_mm': 1.5}}
+Wand exakt chamfer_edges 2.9 all: gelungen, Höhe 20.0000, Volumen 2349.540, {'edges.too_narrow': {'skipped': 8, 'worked': 4, 'size_mm': 2.9, 'largest_mm': 1.5}}
+Wand exakt fillet_edges 2.0 top: gelungen, Höhe 20.0000, Volumen 2394.850, {'edges.too_narrow': {'skipped': 2, 'worked': 2, 'size_mm': 2.0, 'largest_mm': 1.5}}
+Wand exakt fillet_edges 1.4 all: gelungen, Höhe 20.0000, Volumen 2297.679, {}
+Wand Netz fillet_edges 2.0 all: gelungen, Höhe 20.0000, Volumen 2389.270, {'edges.too_narrow': {'skipped': 8, 'worked': 4, 'size_mm': 2.0, 'largest_mm': 1.5}}
+Wand Netz chamfer_edges 2.9 all: gelungen, Höhe 20.0000, Volumen 2349.540, {'edges.too_narrow': {'skipped': 8, 'worked': 4, 'size_mm': 2.9, 'largest_mm': 1.5}}
+Wand Netz fillet_edges 2.0 top: gelungen, Höhe 20.0000, Volumen 2394.635, {'edges.too_narrow': {'skipped': 2, 'worked': 2, 'size_mm': 2.0, 'largest_mm': 1.5}}
+Wand Netz fillet_edges 1.4 all: gelungen, Höhe 20.0000, Volumen 2293.732, {}
+Hohlkasten exakt fillet_edges 2.0 all: abgelehnt {'size_mm': 2.0, 'largest_mm': 1.4999999999999998}
+Hohlkasten exakt chamfer_edges 2.9 all: abgelehnt {'size_mm': 2.9, 'largest_mm': 1.5}
+Hohlkasten exakt fillet_edges 2.0 top: gelungen, Höhe 20.0000, Volumen 10010.891, {}
+Hohlkasten exakt fillet_edges 1.4 all: gelungen, Höhe 20.0000, Volumen 9980.850, {}
+Hohlkasten Netz fillet_edges 2.0 all: gelungen, Höhe 20.0000, Volumen 9930.486, {'edges.too_narrow': {'skipped': 4, 'worked': 17, 'size_mm': 2.0, 'largest_mm': 1.5}}
+Hohlkasten Netz chamfer_edges 2.9 all: gelungen, Höhe 20.0000, Volumen 9258.041, {'edges.too_narrow': {'skipped': 4, 'worked': 17, 'size_mm': 2.9, 'largest_mm': 1.5}}
+Hohlkasten Netz fillet_edges 2.0 top: gelungen, Höhe 20.0000, Volumen 10006.894, {}
+Hohlkasten Netz fillet_edges 1.4 all: gelungen, Höhe 20.0000, Volumen 9975.099, {}
+EXIT python=0
+ENDE 00:25:56

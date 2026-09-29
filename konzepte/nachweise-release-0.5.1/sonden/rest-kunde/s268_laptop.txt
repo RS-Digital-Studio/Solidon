@@ -1,0 +1,10 @@
+app: F:\3D Druck.review-051/wt-rest-kunde\app\__init__.py
+nach Laden: ['obj_1'] ['repair.branching_resolved', 'repair.holes_filled', 'ingest.multiple_components', 'arrange.out_of_build_volume', 'perceive.thin_wall']
+nach split_pinned : ['obj_2', 'obj_3'] vollständig: True
+VERBRAUCHT repair.branching_resolved @ obj_1 op 1: []
+VERBRAUCHT repair.holes_filled @ obj_1 op 1: []
+VERBRAUCHT ingest.multiple_components @ obj_1 op 1: ['resolve_intersections', 'split_bodies']
+VERBRAUCHT prepare.halves_in_place @ obj_1 op 2: ['arrange_on_bed']
+arrange.below_bed @ obj_3 op None: ['place_on_bed']
+perceive.thin_wall @ obj_3 op None: ['show_history', 'show_details']
+Befunde an verbrauchten Körpern: 4

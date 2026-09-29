@@ -1,0 +1,12 @@
+app: F:\3D Druck.review-051\sonden\rest-auswahl\wt-vor\app\__init__.py
+ROT Maße bleiben beim Langlochzug (zuerst)
+Traceback (most recent call last):
+  File "F:\3D Druck.review-051\sonden\rest-auswahl\fenstertests.py", line 83, in <module>
+    test(qt_app, **kwargs)
+    ~~~~^^^^^^^^^^^^^^^^^^
+  File "F:\3D Druck.review-051\sonden\rest-auswahl\wt-vor\tests\test_surface_placement_ui.py", line 4016, in test_the_measures_stay_in_the_view_while_a_pulled_slot_waits
+    assert lage() == (True, len(shown_fields), lines_before, 0), (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: nach dem Zug: Linien und Felder stehen, der runde Umriss ist weg
+   lage: (False, 0, 4, 23) erwartet Felder 2 Linien 4
+ERGEBNIS 1 rot von 1

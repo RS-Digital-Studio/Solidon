@@ -1,0 +1,9 @@
+START 04:35:28 in wt-revcode2: pytest tests/test_zz_review_probe3.py -s -q -p no:cacheprovider
+
+PROBE run: ['Leiste 1 von 3 · Stifte', 'Leiste 2 von 3 · Stifte und Löcher', 'Leiste 3 von 3 · Löcher']
+PROBE cuts: [(2, 3, 1, 0), (3, 3, 2, 3)]
+PROBE after removing the last cut: ['Leiste 1 von 3 · Stifte', 'Leiste · Löcher']
+.
+1 passed in 3.83s
+EXIT pytest=0
+ENDE 04:35:34

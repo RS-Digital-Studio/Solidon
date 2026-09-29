@@ -1,0 +1,37 @@
+START 00:17:31 in wt-kanten: python ../sonden/kanten/zeit.py
+Hohlkasten 17 Kanten False 0.57 s
+         38858 function calls (38739 primitive calls) in 0.567 seconds
+
+   Ordered by: cumulative time
+   List reduced from 713 to 8 due to restriction <8>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.567    0.567 F:\3D Druck.review-051\wt-kanten\app\core\brep\edit.py:745(fillet)
+        1    0.000    0.000    0.547    0.547 F:\3D Druck.review-051\wt-kanten\app\core\brep\edit.py:1237(_fits_the_wall)
+        1    0.000    0.000    0.547    0.547 F:\3D Druck.review-051\wt-kanten\app\core\brep\edit.py:1174(_thinnest_wall)
+        1    0.000    0.000    0.477    0.477 F:\3D Druck.review-051\wt-kanten\app\core\perceive\maps.py:715(wall_thickness_map)
+        1    0.059    0.059    0.470    0.470 F:\3D Druck.review-051\wt-kanten\app\core\perceive\maps.py:651(solid_field)
+      672    0.004    0.000    0.395    0.001 F:\3D Druck\.venv\Lib\site-packages\shapely\decorators.py:73(wrapped)
+      112    0.382    0.003    0.382    0.003 F:\3D Druck\.venv\Lib\site-packages\shapely\predicates.py:1249(contains_xy)
+     13/2    0.000    0.000    0.064    0.032 <frozen importlib._bootstrap>:1360(_find_and_load)
+
+
+pegboard-goot-ceramic-screwdrivers-v3 8 Kanten False 1.02 s
+         75859 function calls (75849 primitive calls) in 1.014 seconds
+
+   Ordered by: cumulative time
+   List reduced from 382 to 8 due to restriction <8>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.001    0.001    1.014    1.014 F:\3D Druck.review-051\wt-kanten\app\core\brep\edit.py:745(fillet)
+        1    0.000    0.000    0.740    0.740 F:\3D Druck.review-051\wt-kanten\app\core\brep\edit.py:1237(_fits_the_wall)
+        1    0.000    0.000    0.740    0.740 F:\3D Druck.review-051\wt-kanten\app\core\brep\edit.py:1174(_thinnest_wall)
+        1    0.001    0.001    0.661    0.661 F:\3D Druck.review-051\wt-kanten\app\core\perceive\maps.py:715(wall_thickness_map)
+        1    0.023    0.023    0.633    0.633 F:\3D Druck.review-051\wt-kanten\app\core\perceive\maps.py:651(solid_field)
+     1857    0.008    0.000    0.392    0.000 F:\3D Druck\.venv\Lib\site-packages\shapely\decorators.py:73(wrapped)
+      146    0.340    0.002    0.340    0.002 F:\3D Druck\.venv\Lib\site-packages\shapely\predicates.py:1249(contains_xy)
+        1    0.000    0.000    0.263    0.263 F:\3D Druck.review-051\wt-kanten\app\core\slice\analysis.py:909(cross_sections)
+
+
+EXIT python=0
+ENDE 00:17:37

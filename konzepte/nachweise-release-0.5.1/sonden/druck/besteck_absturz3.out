@@ -1,0 +1,7 @@
+app: F:\3D Druck.review-051/wt-druck\app\__init__.py
+Körper Parametric_Model_Maker_1 [231.2, 231.2, 160.0]
+slicer ignored 20 setting(s): nozzle_temperature: 210 → 210,210; nozzle_temperature_initial_layer: 215 → 215,215; hot_plate_temp: 60 → 60,60; hot_plate_temp_initial_layer: 60 → 60,60; chamber_temperature: 0 → 0,0
+Original ohne Solidons Reparatur: 59744 Dreiecke, dicht True
+elegoo standard: ok=True 705.7 min Stütze 0 m 49.7 s  
+slicer ignored 20 setting(s): nozzle_temperature: 210 → 210,210; nozzle_temperature_initial_layer: 215 → 215,215; hot_plate_temp: 60 → 60,60; hot_plate_temp_initial_layer: 60 → 60,60; chamber_temperature: 0 → 0,0
+elegoo gitter_nur_an: ok=True 908.1 min Stütze 670.7 m 63.0 s  

@@ -1,0 +1,14 @@
+START 00:13:14 in wt-kanten: python ../sonden/kanten/gruppe_brep2.py
+Hohlkasten R 2.0: Netz 21 (zu eng 4), exakt 21 → behalten 17  OCC abgelehnt {'size_mm': 2.0, 'edges': 17}
+Hohlkasten R 5.0: Netz 21 (zu eng 12), exakt 21 → behalten 9  OCC abgelehnt {'size_mm': 5.0, 'edges': 9, 'wall_mm': 2.87}
+pegboard-goot-ceramic-screwdrivers-v3 R 0.3: Netz 28 (zu eng 0), exakt 52 → behalten 28  OCC gelungen, weg 0.514
+pegboard-goot-ceramic-screwdrivers-v3 R 1.0: Netz 28 (zu eng 20), exakt 52 → behalten 8  OCC gelungen, weg 7.590
+pegboard-goot-ceramic-screwdrivers-v3 R 2.0: Netz 28 (zu eng 20), exakt 52 → behalten 8  OCC abgelehnt {'size_mm': 2.0, 'edges': 8}
+pegboard-gs-100-v2 R 0.3: Netz 10 (zu eng 0), exakt 18 → behalten 4  OCC gelungen, weg 0.299
+pegboard-gs-100-v2 R 1.0: Netz 10 (zu eng 4), exakt 18 → behalten 0
+pegboard-gs-100-v2 R 2.0: Netz 10 (zu eng 4), exakt 18 → behalten 0
+pegboard-pb3041-v4 R 0.3: Netz 2 (zu eng 2), exakt 24 → behalten 0
+pegboard-pb3041-v4 R 1.0: Netz 2 (zu eng 2), exakt 24 → behalten 0
+pegboard-pb3041-v4 R 2.0: Netz 2 (zu eng 2), exakt 24 → behalten 0
+EXIT python=0
+ENDE 00:13:33

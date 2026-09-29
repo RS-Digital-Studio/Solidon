@@ -1,0 +1,1082 @@
+diff --git a/app/core/geom/prepare_ops.py b/app/core/geom/prepare_ops.py
+index e26a04405..13dae2df2 100644
+--- a/app/core/geom/prepare_ops.py
++++ b/app/core/geom/prepare_ops.py
+@@ -5305,8 +5305,12 @@ def _rotate_cavity_chain(
+ 
+     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+     filled = _cavity_plug(body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+-    tool = _chain_tool(body, chain, pivot=pivot, tilt=tilt)
+-    if filled is None or tool is None:
++    placed_tool = (
++        _turned_entrance_tool(ctx, body, source, chain, matrix, pivot, tilt)
++        if _narrows_outward(chain)
++        else _chain_tool(body, chain, pivot=pivot, tilt=tilt)
++    )
++    if filled is None or placed_tool is None:
+         raise ValidationError(
+             field="at_feature",
+             detail=NO_OWN_BODY,
+@@ -5322,10 +5326,13 @@ def _rotate_cavity_chain(
+             cancelled=ctx.cancelled,
+         )
+     )
+-    turned = tool.raw.copy()
+-    transform.moved(turned, matrix)
++    if not _narrows_outward(chain):
++        # Aus Kennzahlen in der alten Lage gebaut; gedreht wird es hier.
++        turned = placed_tool.raw.copy()
++        transform.moved(turned, matrix)
++        placed_tool = MeshData.of(turned)
+     turned_tool = _within_the_old_rims(
+-        MeshData.of(turned),
++        placed_tool,
+         _old_rim_caps(body, chain[0], source.features, chain),
+         cancelled=ctx.cancelled,
+     )
+@@ -5393,6 +5400,45 @@ def _rotate_cavity_chain(
+     )
+ 
+ 
++def _turned_entrance_tool(
++    ctx: OpContext,
++    body: MeshData,
++    source: SceneObject,
++    chain: Sequence[Feature],
++    matrix: NDArray[np.float64],
++    pivot: NDArray[np.float64],
++    tilt: float,
++) -> MeshData | None:
++    """Das Werkzeug einer gekippten Kette mit Verengung am Netz — aus ihrem
++    Einlaufprofil, gekippt wie am exakten Kern (:func:`_turned_chain_planes`);
++    ``None``, wo sich die Kette nicht als Einlauf lesen lässt.
++
++    **Aus Kennzahlen kennt der Kegel nur die Senkung** (:func:`_chain_tool`):
++    An der Haltelippe einer Magnettasche gab er keinen Körper her, und *Merkmal
++    drehen* sagte an Tasche und Lippe mit dem Satz über eine Senkung ab, die in
++    ihre Bohrung übergeht — am exakten Körper mit dem, dass sich der Hohlraum
++    nicht als Bohrung lesen lasse (Durchsicht 0.5.1, rest-lippe).
++    """
++    try:
++        entrance = bore_entrance(
++            body, chain[0], source.features, cavity=tuple(chain), touches_other=False
++        )
++        if entrance is None:
++            return None
++        reach = float(body.bounds.diagonal)
++        frame, planes_of = _turned_chain_planes(entrance, matrix, pivot, tilt, reach)
++        return _entrance_mesh_tool(
++            entrance,
++            entrance.sections[0].inner_radius * 2.0,
++            reach,
++            ctx,
++            frame=frame,
++            planes_of=planes_of,
++        ).mesh
++    except ValidationError:
++        return None
++
++
+ def _old_rim_caps(
+     body: MeshData,
+     feature: Feature,
+@@ -5657,11 +5703,18 @@ def _sinks_must_close(chain: Sequence[Feature], tilt: float, angle: float) -> No
+     Eine Bohrung, die sich an beiden Enden weitet, hat zwei Mündungen
+     (``relations.cavity_sides``, RM-245); jede Senkung darunter muss sich auf
+     ihrer Fläche schließen. Gefragt wird die mit dem größeren Öffnungswinkel
+-    zuerst: Sie erlaubt die kleinere Neigung, und der Satz nennt diese.
++    zuerst: Sie erlaubt die kleinere Neigung, und der Satz nennt diese. Eine
++    Verengung ist keine Senkung: Über ihre Mündung läuft sie als Zylinder
++    ihrer Öffnung weiter (:func:`_turned_chain_planes`).
+     """
++    from app.core.perceive.actions import narrows_the_mouth
+     from app.core.perceive.relations import cavity_sides
+ 
+-    outer = [side[-1] for side in cavity_sides(chain) if side[-1].kind == "cone"]
++    outer = [
++        side[-1]
++        for side in cavity_sides(chain)
++        if side[-1].kind == "cone" and not narrows_the_mouth(side[-1])
++    ]
+     for cone in sorted(outer, key=lambda sink: -float(sink.params.get("angle", 0.0))):
+         _sink_must_close(cone, tilt, angle)
+ 
+@@ -6126,7 +6179,9 @@ class ResizeFeatureParams(BaseParams):
+     # um einen Zylinder füllt die Tasche bis zum Boden, und zwei Zweige haben
+     # am selben Tag unabhängig auf 6 erhöht. 8: Der Stopfen wird an den
+     # Facettengrenzen konform geteilt und endet an den Stirnflächen des Stifts.
+-    cache_version="8",
++    # 9: Eine Senkung auf ihrer Bohrung wird aus den Einlaufprofilen neu
++    # geschnitten, statt um ihre Mündung gestreckt (Durchsicht 0.5.1, rest-lippe).
++    cache_version="9",
+     title=_("Merkmal ändern"),
+     category="holes",
+     params=ResizeFeatureParams,
+@@ -6199,6 +6254,10 @@ def resize_feature(ctx: OpContext) -> OpResult:
+ 
+     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
+     cavity = is_a_cavity(feature)
++    if cavity and feature.kind == "cone":
++        chain = _cavity_chain_of(as_mesh_data(source.mesh), feature, source.features)
++        if chain is not None:
++            return _resize_chain_countersink(ctx, source, feature, chain, params.diameter)
+     if source.kind == "brep" and feature.kind in ("pin", "cone", "sphere"):
+         return _exact_resize_by_faces(ctx, source, feature, centre, params.diameter, scale)
+     stands_alone = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
+@@ -6261,6 +6320,209 @@ def resize_feature(ctx: OpContext) -> OpResult:
+     )
+ 
+ 
++#: Warum *Merkmal ändern* an einem Kegel einer Bohrungskette absagt, der keine
++#: Senkung an ihrer Mündung ist — der schräge Absatz zwischen zwei Stufen etwa:
++#: Sein Maß hängt an den Stufen, und die ändert *Bohrung ändern*.
++NOT_AT_THE_MOUTH: Final = _(
++    "Diese Senkung sitzt zwischen zwei Stufen der Bohrung und hat kein eigenes Maß. Ändern "
++    "Sie sie mit der Bohrung über „Bohrung ändern“."
++)
++
++
++def countersink_resize_refusal(
++    mesh: Mesh, feature: Feature, features: Mapping[FeatureId, Feature], chain: Sequence[Feature]
++) -> TranslatableText | None:
++    """Warum *Merkmal ändern* an diesem Kegel einer Bohrungskette absagt — oder
++    ``None``, wo es seine Senkung neu schneidet (:func:`_resize_chain_countersink`).
++
++    Dieselbe Frage für die Operation und die Zeile im Merkmalfenster
++    (``perceive.actions.actions_for``). Bis zur Durchsicht 0.5.1 bot das Fenster
++    *Merkmal ändern* an jeder Senkung an, und am Netz sagte die Operation dann
++    mit dem Satz über eine Senkung ab, die in ihre Bohrung übergeht.
++    """
++    side = _countersink_side(mesh, feature, features, chain)
++    return None if isinstance(side, tuple) else side
++
++
++def _countersink_side(
++    mesh: Mesh, feature: Feature, features: Mapping[FeatureId, Feature], chain: Sequence[Feature]
++) -> tuple[_BoreEntrance, Vec3, tuple[_EntranceSection, ...]] | TranslatableText:
++    """Der Einlauf der Kette, in dem diese Senkung der äußere Abschnitt ihrer
++    Seite ist — samt Richtung und Abschnitten dieser Seite —, sonst der Satz,
++    mit dem *Merkmal ändern* absagt (:func:`countersink_resize_refusal`)."""
++    try:
++        entrance = bore_entrance(mesh, chain[0], features, cavity=tuple(chain), touches_other=False)
++    except ValidationError:
++        return CHAIN_NOT_READABLE
++    if entrance is None:
++        return CHAIN_NOT_READABLE
++    for way, sections, _open in entrance.sides():
++        last = sections[-1]
++        if last.feature.id == feature.id and last.feature.kind == "cone" and not last.narrowing:
++            return entrance, way, sections
++    return NOT_AT_THE_MOUTH
++
++
++def _resize_chain_countersink(
++    ctx: OpContext, source: SceneObject, feature: Feature, chain: Sequence[Feature], diameter: float
++) -> OpResult:
++    """*Merkmal ändern* an einer Senkung auf ihrer Bohrung: der neue Durchmesser
++    in der Mündung, derselbe Winkel, die Bohrung bleibt — an beiden Kernen aus
++    denselben Einlaufprofilen (``mouths``, :func:`_side_tools`), nach dem
++    Muster von *Bohrung ändern* mit Einlauf: ganzer Hohlraum zu, frisch
++    geschnitten (Durchsicht 0.5.1, rest-lippe).
++
++    **Vorher rechneten die Kerne dieselbe Handlung verschieden.** Das
++    Merkmalfenster bot *Merkmal ändern* an jeder Senkung an; am Netz sagte die
++    Operation an einer Senkbohrung ab („geht in einen anderen Hohlraum über"),
++    am exakten Körper streckte sie den Kegelstumpf aus seinen Flächen um die
++    Mündung. Enger ließ das unter der Senkung eine Haut quer über der Bohrung
++    stehen — an einer Senkbohrung Ø 5,4 mit Senkung Ø 10 auf Ø 9 war die Achse
++    bei z 7,75 bis 7,85 zu, 5,9 mm³ zu viel und kein Befund —, weiter einen
++    Absatz, auf dem der Schraubenkopf 0,27 mm zu hoch aufsaß. Wie weit die
++    Senkung an einer schrägen Mündung reicht, rechnet derselbe Kegel wie in
++    :func:`_resize_bore_entrance`: Ihr Durchmesser ist der weiteste Rand.
++    """
++    side = _countersink_side(source.mesh, feature, source.features, chain)
++    if not isinstance(side, tuple):
++        raise ValidationError(
++            field="at_feature",
++            detail=side,
++            values={"feature": feature.id},
++            constraint="not_movable",
++            suggestions=(CHANGE_SELECTION, CANCEL),
++        )
++    entrance, way, sections = side
++    section = sections[-1]
++    axis = np.asarray(way, dtype=float)
++    normal = np.asarray(section.upper.normal, dtype=float)
++    along = float(normal @ axis)
++    tilt = float(np.linalg.norm(np.cross(normal, axis)))
++    slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
++    if along <= EPS_GEOM or along - tilt * slope <= EPS_GEOM:
++        raise _chain_not_readable(chain)
++    # Der genannte Durchmesser ist der weiteste Rand; das Profil braucht den
++    # Radius, wo die Mündungsebene die Achse schneidet.
++    mouth = diameter / 2.0 * (along - tilt * slope) / along
++    below = sections[-2].outer_radius
++    if mouth <= below + EPS_GEOM:
++        raise ValidationError(
++            field="diameter",
++            detail=_(
++                "Eine Senkung ist weiter als ihre Bohrung ({bore:.2f} mm). Wählen Sie einen "
++                "größeren Durchmesser, oder nehmen Sie die Senkung mit „Merkmal entfernen“ weg.",
++                bore=2.0 * below,
++            ),
++            value=diameter,
++            constraint="minimum",
++            values={"minimum": 2.0 * below},
++            suggestions=(CORRECT_INPUT, CANCEL),
++        )
++    mouths = {feature.id: mouth}
++    origin = np.asarray(entrance.origin, dtype=float)
++    expected: list[Feature] = []
++    for member in chain:
++        params = dict(member.params)
++        if member.id == feature.id:
++            height = section.end + tilt * mouth / (along - tilt * slope)
++            params.update(
++                diameter=diameter,
++                centre=tuple(float(v) for v in origin + height * axis),
++                axis=way,
++            )
++        elif member.id == sections[-2].feature.id and not section.shoulder:
++            # Die Senkung trifft ihre Bohrung jetzt höher oder tiefer: Die Wand
++            # darunter endet dort (dieselbe Seite, entlang ``way`` gemessen).
++            meets = section.end - (mouth - below) / slope
++            start = sections[-2].start
++            params.update(
++                centre=tuple(float(v) for v in origin + (start + meets) / 2.0 * axis),
++                depth=meets - start,
++            )
++        expected.append(dataclasses.replace(member, params=params, provenance="generated"))
++    changed = next(member for member in expected if member.id == feature.id)
++    reach = float(as_mesh_data(source.mesh).bounds.diagonal)
++    ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
++    if source.kind == "brep":
++        from app.core.sketch.planes import frame_of
++
++        filled = _exact_chain_filled(source, entrance)
++        frame = frame_of(entrance.axis, entrance.origin)
++        ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
++        placed, tool = _exact_chain_cut_holding(
++            filled,
++            lambda overlap: _exact_chain_solid(
++                entrance,
++                reach,
++                filling=False,
++                frame=frame,
++                planes_of=lambda _index, lower, upper: (lower, upper),
++                overlap=overlap,
++                mouths=mouths,
++            ),
++        )
++        findings = _edge_findings(as_mesh_data(filled), [changed])
++        findings += _without_opened_twice(
++            _neighbour_bore_findings(source, chain[0], as_mesh_data(tool), ctx), findings
++        )
++        return _exact_cavity_result(
++            ctx,
++            source,
++            placed,
++            op="resize_feature",
++            expected=expected,
++            findings=findings,
++            mouths=_chain_mouths(chain),
++        )
++    body = as_mesh_data(source.mesh)
++    plug = _cavity_plug(body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
++    if plug is None:
++        raise ValidationError(
++            field="at_feature",
++            detail=NO_OWN_BODY,
++            values={"feature": feature.id, "bore": chain[0].id},
++            constraint="not_movable",
++        )
++    closed = _without_scars(
++        boolean("union", [body, plug], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
++    )
++    ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
++    cutting = _entrance_mesh_tool(
++        entrance, 2.0 * entrance.sections[0].inner_radius, reach, ctx, mouths=mouths
++    )
++    # Ohne Narben wie der Einlauf an einer Verengung (``_resize_bore_entrance``):
++    # Die Kappe des Werkzeugs setzte eine Ecke in die Mitte jeder Wandkante.
++    placed = _without_scars(
++        boolean(
++            "difference",
++            [closed.mesh, cutting.mesh],
++            quality=ctx.quality,
++            seed=ctx.seed,
++            cancelled=ctx.cancelled,
++        )
++    )
++    features = _without_old_triangles(source.features)
++    for member in expected:
++        features[member.id] = dataclasses.replace(member, face_indices=(), surface_patches=())
++    measured = _measured_on(placed.mesh, expected, check_cancelled=ctx.cancelled.raise_if_cancelled)
++    features.update(measured)
++    findings = [*closed.findings, *cutting.findings, *placed.findings]
++    findings += [
++        _cavity_lost_finding("resize_feature", member)
++        for member in expected
++        if member.id not in measured
++    ]
++    findings += _edge_findings(closed.mesh, [changed])
++    findings += _without_opened_twice(
++        _neighbour_bore_findings(source, chain[0], cutting.mesh, ctx), findings
++    )
++    return OpResult(
++        outputs=[dataclasses.replace(source, mesh=placed.mesh, features=features)],
++        findings=findings,
++        solver=deepest((closed.solver, cutting.solver, placed.solver)),
++    )
++
++
+ @op_params
+ class ResizeHoleParams(BaseParams):
+     diameter: float = param(
+@@ -6742,7 +7004,9 @@ OPEN_BODY_DETAIL: Final = _(
+     # trägt die Befunde des neuen Orts (22.09.2026).
+     # 8: eine schräge Bohrung schließt beim Versetzen an ihren Randebenen.
+     # 9: die Tiefe ist ein Wert (``depth``, ``open_side``, 23.09.2026).
+-    cache_version="9",
++    # 10: an einer Haltelippe schneiden beide Umfänge über ihr eigenes Profil
++    # (Durchsicht 0.5.1, rest-lippe).
++    cache_version="10",
+     title=_("Bohrung ändern"),
+     category="holes",
+     params=ResizeHoleParams,
+@@ -6812,6 +7076,15 @@ def resize_hole(ctx: OpContext) -> OpResult:
+             if wish is None:
+                 return resized
+             return _deepened_after_resizing(ctx, resized, feature)
++    if params.entrance_mode == "keep" and not same_diameter and not moved_hole and wish is None:
++        # **Nur die Tasche, die Haltelippe bleibt** (Durchsicht 0.5.1,
++        # rest-lippe): Die Kerne rechneten hier verschieden — das Netz schnitt
++        # die Bohrung bis zur Mündung durch die Lippe, der exakte Kern bis zur
++        # erklärten Tiefe, die die Lippe mit einschließt. Beide gehen an einer
++        # Verengung über dieselben Profile wie der Einlauf (``keep``).
++        lip = _entrance_with_a_narrowing(source, feature)
++        if lip is not None:
++            return _resize_bore_entrance(ctx, feature, lip, cut, keep=True)
+     # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
+     # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
+     # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
+@@ -8084,7 +8357,7 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
+         return []
+     outer = float(widening.params.get("diameter") or 0.0)
+     if widening.params.get("narrowing"):
+-        return [_narrowing_after_resize(feature, widening, diameter, outer)]
++        return [_narrowing_after_resize(feature, widening, diameter)]
+     values: dict[str, float | str | TranslatableText] = {
+         "widening": widening.id,
+         "outer": outer,
+@@ -8129,31 +8402,34 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
+     ]
+ 
+ 
+-def _narrowing_after_resize(
+-    feature: Feature, narrowing: Feature, diameter: float, outer: float
+-) -> Finding:
++def _narrowing_after_resize(feature: Feature, narrowing: Feature, diameter: float) -> Finding:
+     """Sagt es, wenn an der Mündung der geänderten Bohrung eine Verengung sitzt (R3).
+ 
+     Die Haltelippe einer Magnettasche hieß hier „Senkung“, und *Senkung
+     mitziehen* führte zu *Merkmal ändern* an der Lippe — das dort absagt
+-    (``perceive.actions.NARROWING_HAS_NO_SIZE``). Eine Verengung folgt der
+-    Bohrung nicht; so weit wie ihr weites Ende oder weiter verschwindet sie.
+-    Wie viel von ihr bei einem engeren Maß bleibt, rechnen die Kerne heute
+-    verschieden — der Satz sagt deshalb nur, dass sie nicht mitging, und
+-    *Merkmal zeigen* führt zu ihr.
++    (``perceive.actions.NARROWING_HAS_NO_SIZE``). Mit *Nur Bohrungsdurchmesser*
++    folgt eine Verengung der Bohrung nicht (``_side_tools`` mit ``keep``, an
++    beiden Kernen gleich): Sie bleibt, wo sie die neue Bohrung verengt, ihre
++    Öffnung also, wie sie war — *Merkmal zeigen* führt zu ihr. Ist die Bohrung
++    nicht mehr weiter als diese Öffnung, verengt sie nichts mehr und
++    verschwindet; der Satz nennt die Öffnung als das Maß, über dem sie bleibt.
+     """
++    opening = float(narrowing.params.get("opening") or 0.0)
+     values: dict[str, float | str | TranslatableText] = {
+         "narrowing": narrowing.id,
+         "diameter": diameter,
++        "opening": opening,
+         "previous": float(feature.params.get("diameter") or 0.0),
+     }
+-    if diameter >= outer - EPS_GEOM:
++    if diameter <= opening + EPS_GEOM:
+         return Finding(
+             code="resize.narrowing_swallowed",
+             severity="warning",
+             message=_(
+-                "An der Mündung dieser Bohrung sitzt eine Verengung. Bei diesem Durchmesser "
+-                "verschwindet sie — soll sie bleiben, wählen Sie einen kleineren."
++                "An der Mündung dieser Bohrung sitzt eine Verengung mit {opening:.2f} mm "
++                "Öffnung. Bei diesem Durchmesser verschwindet sie — soll sie bleiben, wählen "
++                "Sie einen größeren Durchmesser oder „Senkung und Stufen mitnehmen“.",
++                opening=opening,
+             ),
+             feature_ids=(narrowing.id, feature.id),
+             values=values,
+@@ -8374,6 +8650,12 @@ class _EntranceSection:
+     Fläche liegt (:func:`_curved_mouth_planes`): ``upper`` ist dann die Ebene
+     quer zur Achse durch ihren weitesten Punkt, und gefüllt wird die Kette aus
+     ihren Flächen (:func:`_exact_chain_plug`).
++
++    ``narrowing`` sagt, dass der Abschnitt eine **Verengung** ist, die
++    Haltelippe einer Magnettasche (R3): ein Kegel, der zur Mündung hin enger
++    wird. ``inner_radius`` ist dann sein weites Ende auf der Bohrung,
++    ``outer_radius`` die Öffnung in der Mündung; er ist immer der letzte
++    Abschnitt seiner Seite (:func:`_side_tools`).
+     """
+ 
+     feature: Feature
+@@ -8385,11 +8667,13 @@ class _EntranceSection:
+     outer_radius: float
+     shoulder: bool = False
+     curved: bool = False
++    narrowing: bool = False
+ 
+ 
+ @dataclasses.dataclass(frozen=True, slots=True)
+ class _BoreEntrance:
+-    """Eine eindeutige, nach außen weiter werdende Bohrungsfolge.
++    """Eine eindeutige Bohrungsfolge, die nach außen weiter wird — bis auf eine
++    Verengung an ihrer Mündung (``_EntranceSection.narrowing``).
+ 
+     ``open`` sagt, ob das äußere Ende eine Mündung ist. Eine Senkung, deren
+     Mündung unter der Oberfläche liegt, ist ein vergrabener Hohlraum mit einem
+@@ -8506,6 +8790,7 @@ def _entrance_side(
+     for entry in side:
+         shoulder = False
+         curved = False
++        narrowing = False
+         if exact_axes or entry.kind == "hole":
+             entry_axis = np.asarray(_feature_direction(entry), dtype=float)
+             centre_offset = np.asarray(entry.params["centre"], dtype=float) - origin
+@@ -8550,14 +8835,6 @@ def _entrance_side(
+             if sections and inner < sections[-1].outer_radius - MAX_FACET_SAG:
+                 raise _entrance_error()
+         elif entry.kind == "cone" and sections and sections[-1].feature.kind == "hole":
+-            if entry.params.get("narrowing"):
+-                # **Eine Verengung wird nach außen enger** (R3), und die Profile
+-                # hier kennen nur den Kegel, der sich zur Mündung weitet: Die
+-                # Haltelippe einer Magnettasche kam nach *Bohrung ändern* mit
+-                # Einlauf an beiden Kernen als Senkung zurück (Mündung Ø 8,75
+-                # über der Tasche Ø 8,49), nach *Merkmal verschieben* am exakten
+-                # Körper ebenso — der Magnet hielt nicht mehr.
+-                raise _entrance_error()
+             angle = float(entry.params.get("angle", 0.0))
+             if not EPS_GEOM < angle < 180.0 - EPS_GEOM:
+                 raise _entrance_error()
+@@ -8566,7 +8843,22 @@ def _entrance_side(
+             previous_indices = welded.faces[sections[-1].feature.face_indices, :]
+             indices = welded.faces[entry.face_indices, :]
+             shoulder = not bool(np.intersect1d(previous_indices, indices).size)
+-            if shoulder:
++            if entry.params.get("narrowing"):
++                # **Eine Verengung wird nach außen enger** (R3): Die Haltelippe
++                # einer Magnettasche sitzt mit ihrem weiten Ende auf der Tasche
++                # und läuft auf die Öffnung in der Mündung — derselbe Kegel mit
++                # der Steigung andersherum (:func:`_side_tools`). Bis zur
++                # Durchsicht 0.5.1 kannten die Profile nur den, der sich weitet;
++                # die Lippe kam nach *Bohrung ändern* mit Einlauf als Senkung
++                # zurück (Mündung Ø 8,75 über der Tasche Ø 8,49), danach sagte
++                # der Einlauf an ihr ab. Mit einer Ringstufe unter ihr oder
++                # einem weiteren Abschnitt über ihr ist sie keine Lippe dieser
++                # Tasche.
++                if shoulder or entry.id != side[-1].id:
++                    raise _entrance_error()
++                narrowing = True
++                slope = -slope
++            elif shoulder:
+                 # Eine vollständige Ringschulter ist eine echte radiale Stufe.
+                 # Ihre Kegelkante liegt nicht auf dem Radius des inneren Schafts.
+                 points = np.asarray(welded.vertices[np.unique(indices)]) - origin
+@@ -8576,10 +8868,14 @@ def _entrance_side(
+                 if inner < sections[-1].outer_radius - MAX_FACET_SAG:
+                     raise _entrance_error()
+             outer = inner + (end - start) * slope
++            if outer <= EPS_GEOM:
++                raise _entrance_error()
+         else:
+             raise _entrance_error()
+         sections.append(
+-            _EntranceSection(entry, lower, upper, start, end, inner, outer, shoulder, curved)
++            _EntranceSection(
++                entry, lower, upper, start, end, inner, outer, shoulder, curved, narrowing
++            )
+         )
+     return tuple(sections)
+ 
+@@ -8676,6 +8972,8 @@ def _entrance_tools(
+     *,
+     filling: bool = False,
+     overlap: float = FEATURE_OVERLAP,
++    keep: bool = False,
++    mouths: Mapping[FeatureId, float] | None = None,
+ ) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
+     """Beide Kerne erhalten dieselben Radien, Profile und Randebenen.
+ 
+@@ -8685,7 +8983,9 @@ def _entrance_tools(
+     Umrisse entstehen entlang ihrer eigenen Richtung und werden in die
+     Halbebene der ersten gespiegelt — ein Drehkörper um dieselbe Achse; die
+     Randebenen stehen ohnehin im Raum. ``overlap`` ist die Zugabe über offene
+-    Mündungen (§39, :func:`_exact_chain_cut_holding`).
++    Mündungen (§39, :func:`_exact_chain_cut_holding`). ``keep`` ändert nur den
++    Schaft (*Nur Bohrungsdurchmesser*, :func:`_side_tools`); ``mouths`` gibt
++    einer Senkung einen neuen Radius in ihrer Mündung (*Merkmal ändern*).
+     """
+     delta = diameter / 2.0 - entrance.sections[0].inner_radius
+     tools = _side_tools(
+@@ -8697,10 +8997,19 @@ def _entrance_tools(
+         back=entrance.back,
+         back_open=entrance.back_open,
+         overlap=overlap,
++        keep=keep,
++        mouths=mouths,
+     )
+     if entrance.back:
+         for outline, planes in _side_tools(
+-            entrance.back, entrance.back_open, delta, reach, filling=filling, overlap=overlap
++            entrance.back,
++            entrance.back_open,
++            delta,
++            reach,
++            filling=filling,
++            overlap=overlap,
++            keep=keep,
++            mouths=mouths,
+         )[1:]:
+             tools.append(([(radius, -along) for radius, along in reversed(outline)], planes))
+     return tools
+@@ -8716,28 +9025,73 @@ def _side_tools(
+     back: Sequence[_EntranceSection] = (),
+     back_open: bool = True,
+     overlap: float = FEATURE_OVERLAP,
++    keep: bool = False,
++    mouths: Mapping[FeatureId, float] | None = None,
+ ) -> list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]]:
+     """Die Werkzeuge einer Seite in ihrer eigenen Halbebene: der Schaft zuerst,
+-    dann jede Erweiterung. Mit ``back`` reicht der Schaft bis an deren Mündung."""
++    dann jede Erweiterung. Mit ``back`` reicht der Schaft bis an deren Mündung.
++
++    **Eine Senkung mit neuem Maß** (``mouths``, *Merkmal ändern*): Ihr Radius
++    in der Mündung ist der genannte, ihr Winkel bleibt, und ihre Spitze wandert
++    entlang der Achse — sie wird tiefer oder flacher und trifft die Bohrung
++    dort, wo sie so weit ist wie sie.
++
++    **Endet eine Seite in einer Verengung** (``_EntranceSection.narrowing``,
++    R3), endet der Schaft an ihrem Fuß, in derselben Ebene, in der ihr
++    Werkzeug beginnt (:func:`_narrowing_foot`): Reichte er bis zur Mündung,
++    schnitte er die Lippe weg. Mit ``delta`` behält sie Breite, Winkel und
++    Höhe. ``keep`` ändert nur den Schaft (*Nur Bohrungsdurchmesser*): Die
++    übrigen Abschnitte bleiben, wie sie sind, und eine Verengung behält ihre
++    Öffnung und setzt an der neuen Tasche an (:func:`_narrowing_radii`). Ist
++    die Tasche nicht mehr weiter als die Öffnung, verengt sie nichts: Dann
++    fehlt ihr Werkzeug, und der Schaft geht bis zur Mündung — fehlen kann es
++    nur mit ``keep``, und dieser Weg liest die Werkzeuge nicht nach ihrer
++    Stelle.
++    """
+     first, last = sections[0], sections[-1]
++    narrowed = _narrowing_stays(sections, delta, keep=keep)
++    back_narrowed = bool(back) and _narrowing_stays(back, delta, keep=keep)
+     # Der Schaft öffnet auch den Hals unter einer schräg beschnittenen Senkung.
+     shaft = dataclasses.replace(first, upper=last.upper, end=last.end)
++    if narrowed:
++        foot, at = _narrowing_foot(sections, delta, keep=keep)
++        shaft = dataclasses.replace(first, upper=foot, end=at)
+     if back:
+         # **Und an beiden Enden** (RM-245): Seine untere Grenze ist die Mündung
+-        # der zweiten Seite, deren Ebene schon nach außen zeigt.
+-        shaft = dataclasses.replace(shaft, lower=back[-1].upper, start=-back[-1].end)
+-    members = [shaft, *sections[1:]]
++        # der zweiten Seite, deren Ebene schon nach außen zeigt — oder der Fuß
++        # ihrer Verengung.
++        far = back[-1]
++        if back_narrowed:
++            back_foot, back_at = _narrowing_foot(back, delta, keep=keep)
++            shaft = dataclasses.replace(shaft, lower=back_foot, start=-back_at)
++        else:
++            shaft = dataclasses.replace(shaft, lower=far.upper, start=-far.end)
++    members = [shaft, *(section for section in sections[1:] if not section.narrowing or narrowed)]
+     tools: list[tuple[list[tuple[float, float]], tuple[SectionPlane, ...]]] = []
+     for index, section in enumerate(members):
+-        radius = section.inner_radius + delta
++        change = delta if index == 0 or not keep else 0.0
++        radius = section.inner_radius + change
+         lower = section.lower
+         upper = section.upper
+-        if not filling and open_end and (index == 0 or index == len(members) - 1):
++        mouth = index == len(members) - 1 or (index == 0 and not narrowed)
++        if not filling and open_end and mouth:
+             upper = dataclasses.replace(upper, position=upper.position + overlap)
+-        if not filling and back and back_open and index == 0:
++        if not filling and back and back_open and index == 0 and not back_narrowed:
+             lower = dataclasses.replace(lower, position=lower.position + overlap)
+-        if section.feature.kind == "cone":
++        if section.narrowing:
++            wide, opening, rise = _narrowing_radii(sections, index, delta, keep=keep)
++            outline = _narrowing_outline(section, wide, opening, rise, reach)
++            # Wie der Kegel einer Senkung: Er beginnt im Abschnitt vor ihm, und
++            # dessen Grenze begrenzt ihn — die Werkzeuge überdecken sich, statt
++            # am Fuß nur aneinanderzustoßen (:func:`_narrowing_outline`).
++            lower = sections[index - 1].lower
++            radius = opening
++        elif section.feature.kind == "cone":
+             slope = (section.outer_radius - section.inner_radius) / (section.end - section.start)
++            if mouths is not None and section.feature.id in mouths:
++                # Der Radius am Fuß darf null oder negativ werden: Dann liegt die
++                # Spitze über dem alten Fuß, und der Schaft reicht bis dorthin.
++                radius = mouths[section.feature.id] - (section.end - section.start) * slope
+             start = section.start - radius / slope
+             end = section.end + reach
+             outer = radius + (end - section.start) * slope
+@@ -8746,6 +9100,8 @@ def _side_tools(
+             # ihn, während der gemeinsame kreisrunde Hals ohne Ringstufe bleibt.
+             if not section.shoulder:
+                 lower = sections[index - 1].lower
++            if mouths is not None and section.feature.id in mouths:
++                radius = mouths[section.feature.id]
+         else:
+             start, end = section.start - reach, section.end + reach
+             outline = [(0.0, start), (radius, start), (radius, end), (0.0, end), (0.0, start)]
+@@ -8755,26 +9111,128 @@ def _side_tools(
+     return tools
+ 
+ 
++def _narrowing_radii(
++    sections: Sequence[_EntranceSection], index: int, delta: float, *, keep: bool
++) -> tuple[float, float, float]:
++    """Weites Ende, Öffnung und Anhebung des Fußes der Verengung
++    ``sections[index]`` nach einem Neuschnitt, der den Schaft um ``delta``
++    weitet (radial).
++
++    **Ihr weites Ende liegt immer am Abschnitt vor ihr**, so wie er danach
++    steht — sonst stünde unter ihr eine Ringstufe oder eine Hinterschneidung.
++    Mitgenommen wächst ihre Öffnung um ``delta``: Breite, Winkel und Höhe
++    bleiben. Mit ``keep`` (*Nur Bohrungsdurchmesser*) bleibt die Öffnung, wie
++    sie war — sie ist das Maß, das den Magneten hält. Wird die Tasche weiter,
++    setzt die Lippe an ihrem alten Fuß an und wird steiler; ihre Höhe ist die,
++    über die sich der Magnet hineindrücken lässt (``MAGNET_LIP_HEIGHT``). Wird
++    sie enger, behält die Lippe ihren Winkel und beginnt dort, wo sie so eng ist
++    wie die Tasche — ``rise`` über dem alten Fuß; ist die Tasche nicht weiter
++    als die Öffnung, verengt sie nichts mehr (:func:`_narrowing_stays`). Eine
++    Stelle für das Werkzeug (:func:`_narrowing_outline`) und das erwartete
++    Merkmal (:func:`_narrowing_target`).
++    """
++    section = sections[index]
++    wide = section.inner_radius + (0.0 if keep else delta)
++    opening = section.outer_radius + (0.0 if keep else delta)
++    before = sections[index - 1].outer_radius + (delta if index == 1 or not keep else 0.0)
++    if before >= wide:
++        return before, opening, 0.0
++    height = section.end - section.start
++    return before, opening, min(height, (wide - before) * height / (wide - opening))
++
++
++def _narrowing_stays(sections: Sequence[_EntranceSection], delta: float, *, keep: bool) -> bool:
++    """Ob die Seite in einer Verengung endet, die nach dem Neuschnitt noch
++    verengt — nicht mehr, wo die Tasche nicht weiter ist als ihre Öffnung."""
++    if not sections or not sections[-1].narrowing:
++        return False
++    wide, opening, _rise = _narrowing_radii(sections, len(sections) - 1, delta, keep=keep)
++    return wide > opening + EPS_GEOM
++
++
++def _narrowing_foot(
++    sections: Sequence[_EntranceSection], delta: float, *, keep: bool
++) -> tuple[SectionPlane, float]:
++    """Die Ebene, in der der Schaft endet und die Verengung am Ende dieser Seite
++    beginnt — nach außen gerichtet —, und ihre Lage entlang der Achse.
++
++    Der Ring, an dem Bohrung und Verengung sich treffen, steht quer zur Achse;
++    ``rise`` (:func:`_narrowing_radii`) hebt ihn entlang seiner Normalen. Beide
++    Werkzeuge enden in genau dieser Ebene und stoßen dort aneinander, ohne
++    Naht in einer geraden Wand.
++    """
++    last = sections[-1]
++    _wide, _opening, rise = _narrowing_radii(sections, len(sections) - 1, delta, keep=keep)
++    foot = last.lower.flipped()
++    return dataclasses.replace(foot, position=foot.position + rise), last.start + rise
++
++
++def _narrowing_outline(
++    section: _EntranceSection, wide: float, opening: float, rise: float, reach: float
++) -> list[tuple[float, float]]:
++    """Der Umriss einer Verengung (R3): von ihrem Fuß, ``rise`` über dem alten,
++    auf die Öffnung, dahinter ein Zylinder der Öffnung über die Mündung hinaus
++    (:func:`_narrowing_radii`).
++
++    **Unter ihrem Fuß läuft er als Zylinder ihres weiten Endes weiter**, in den
++    Abschnitt vor ihr hinein, und dessen Grenze begrenzt ihn (:func:`_side_tools`).
++    Stießen die beiden Werkzeuge in der Fußebene nur aneinander, blieben am Netz
++    beide Deckel in der Vereinigung stehen — eine Haut ohne Dicke quer durch
++    die Magnettasche, gemessen bei *Nur Bohrungsdurchmesser* auf Ø 8,1 mit
++    472 Dreiecken in dieser Ebene.
++    """
++    foot = section.start + rise
++    top = section.end + reach
++    return [
++        (0.0, section.start - reach),
++        (wide, section.start - reach),
++        (wide, foot),
++        (opening, section.end),
++        (opening, top),
++        (0.0, top),
++        (0.0, section.start - reach),
++    ]
++
++
+ def _entrance_mesh_tool(
+-    entrance: _BoreEntrance, diameter: float, reach: float, ctx: OpContext
++    entrance: _BoreEntrance,
++    diameter: float,
++    reach: float,
++    ctx: OpContext,
++    *,
++    keep: bool = False,
++    mouths: Mapping[FeatureId, float] | None = None,
++    frame: PlaneFrame | None = None,
++    planes_of: Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]] | None = None,
+ ) -> BooleanOutcome:
+-    """Die gemeinsame Profilfolge mit der vorhandenen Netz-Rückfallkette schneiden."""
++    """Die gemeinsame Profilfolge mit der vorhandenen Netz-Rückfallkette schneiden.
++
++    ``frame`` und ``planes_of`` setzen die Profile an eine andere Lage — gekippt
++    wie am exakten Kern (:func:`_turned_chain_planes`); ohne sie stehen sie, wo
++    die Kette steht. ``keep`` und ``mouths`` wie in :func:`_entrance_tools`.
++    """
+     from app.core.geom.section import cut
+     from app.core.sketch.planes import frame_of
+ 
+-    frame = frame_of(entrance.axis, entrance.origin)
++    frame = frame if frame is not None else frame_of(entrance.axis, entrance.origin)
+     rotation = np.asarray([frame.x_axis, frame.y_axis, frame.normal]).T
+     tools = []
+-    for outline, planes in _entrance_tools(entrance, diameter, reach):
++    for index, (outline, (lower, upper)) in enumerate(
++        _entrance_tools(entrance, diameter, reach, keep=keep, mouths=mouths)
++    ):
+         ctx.cancelled.raise_if_cancelled()
+         raw = lathe.revolve(outline, sections=BORE_SECTIONS)
+-        raw.vertices = np.asarray(raw.vertices) @ rotation.T + entrance.origin
++        raw.vertices = np.asarray(raw.vertices) @ rotation.T + np.asarray(frame.origin)
+         tool = MeshData.of(raw)
+-        for plane in planes:
++        for plane in planes_of(index, lower, upper) if planes_of is not None else (lower, upper):
+             tool = cut(tool, plane).mesh
+         if not tool.is_watertight or tool.volume <= EPS_GEOM:
+             raise _entrance_error()
+         tools.append(tool)
++    if len(tools) == 1:
++        # Eine gerade Bohrung bis zur Mündung — die Verengung verschwand mit
++        # *Nur Bohrungsdurchmesser* (:func:`_side_tools`); zu vereinigen ist nichts.
++        return BooleanOutcome(mesh=tools[0], solver=SolverInfo("direct", ("direct",)))
+     return boolean("union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+ 
+ 
+@@ -8938,9 +9396,20 @@ def _continued_through(
+ 
+ 
+ def _resize_bore_entrance(
+-    ctx: OpContext, feature: Feature, entrance: _BoreEntrance, diameter: float
++    ctx: OpContext,
++    feature: Feature,
++    entrance: _BoreEntrance,
++    diameter: float,
++    *,
++    keep: bool = False,
+ ) -> OpResult:
+-    """Schaft und nach außen eindeutigen Einlauf als eine Änderung neu schneiden."""
++    """Schaft und nach außen eindeutigen Einlauf als eine Änderung neu schneiden.
++
++    ``keep`` ändert nur den Schaft (*Nur Bohrungsdurchmesser*) — der Weg für
++    eine Kette mit Verengung (:func:`_side_tools`), an beiden Kernen mit
++    denselben Profilen; der Befund sagt, was aus ihr wurde
++    (:func:`_narrowing_after_resize`).
++    """
+     source = ctx.inputs[0]
+     original = as_mesh_data(source.mesh)
+     reach = original.bounds.diagonal
+@@ -8953,10 +9422,17 @@ def _resize_bore_entrance(
+     # Je Seite entlang ihrer eigenen Richtung (RM-245); die Bohrung steht in
+     # jeder vorn und wird einmal gezählt.
+     for number, (way, sections, _open) in enumerate(entrance.sides()):
+-        for section in sections[1:] if number else sections:
++        for index, section in enumerate(sections):
++            if number and not index:
++                continue
+             old = section.feature
++            if section.narrowing:
++                lip = _narrowing_target(entrance, way, sections, index, delta / 2.0, keep)
++                if lip is not None:
++                    targets[old.id] = lip
++                continue
+             height = (section.start + section.end) / 2.0 if old.kind == "hole" else section.end
+-            outer_radius = section.outer_radius + delta / 2.0
++            outer_radius = section.outer_radius + (delta / 2.0 if not index or not keep else 0.0)
+             if old.kind == "cone":
+                 # Der Erkenner beschreibt einen schräg begrenzten Kegel am
+                 # weitesten Rand, nicht am Achsenschnitt seiner Mündungsebene.
+@@ -8992,9 +9468,9 @@ def _resize_bore_entrance(
+         frame = frame_of(entrance.axis, entrance.origin)
+         exact_tools = [
+             edit.clipped_bore_tool(edit.revolved_bore_tool(outline, frame), planes)
+-            for outline, planes in _entrance_tools(entrance, diameter, reach)
++            for outline, planes in _entrance_tools(entrance, diameter, reach, keep=keep)
+         ]
+-        tool_solid = edit.boolean("union", exact_tools)
++        tool_solid = edit.boolean("union", exact_tools) if len(exact_tools) > 1 else exact_tools[0]
+         filled_body = _exact_chain_filled(source, entrance)
+         exact_changed = edit.boolean("difference", [filled_body, tool_solid])
+         if not exact_changed.is_closed:
+@@ -9004,7 +9480,7 @@ def _resize_bore_entrance(
+         tool = as_mesh_data(tool_solid)
+         before_cut = as_mesh_data(filled_body)
+     else:
+-        tool_outcome = _entrance_mesh_tool(entrance, diameter, reach, ctx)
++        tool_outcome = _entrance_mesh_tool(entrance, diameter, reach, ctx, keep=keep)
+         tool = tool_outcome.mesh
+         # Ein kurzer Senkungsabschnitt allein enthält nicht den Abschluss
+         # seines langen Schafts. Das bereits vollständig konstruierte und
+@@ -9043,6 +9519,17 @@ def _resize_bore_entrance(
+             seed=ctx.seed,
+             cancelled=ctx.cancelled,
+         )
++        if any(section.narrowing for _way, side, _open in entrance.sides() for section in side):
++            # **Ohne Narben, nach dem Neuschnitt** (Durchsicht 0.5.1, rest-lippe),
++            # wie beim Entfernen eines Abschnitts: Der Rand der alten, weiteren
++            # Mündung blieb als Ring von Ecken in der Deckfläche, und die Kappe
++            # des Werkzeugs setzte eine Ecke in die Mitte jeder Wandkante am
++            # Boden. Die Erkennung liest eine Verengung nur mit offener Mündung,
++            # an einer Wand aus ganzen Facetten: Nach *Bohrung ändern* auf Ø 8
++            # hieß die Lippe der Magnettasche am Netz wieder „Senkung“, auf
++            # Ø 7,8 mit *Nur Bohrungsdurchmesser* war die Tasche eine gerundete
++            # Seite. Das Volumen bleibt (:func:`_without_scars`).
++            cut_mesh = _without_scars(cut_mesh)
+         changed = cut_mesh.mesh
+         before_cut = filled_mesh.mesh
+         stages.extend((tool_outcome.solver, filled_mesh.solver, cut_mesh.solver))
+@@ -9091,6 +9578,8 @@ def _resize_bore_entrance(
+     findings.extend(split_findings(original, as_mesh_data(changed)))
+     params = cast(ResizeHoleParams, ctx.params)
+     findings.extend(compensation_findings(params.diameter, diameter, params.compensate))
++    if keep:
++        findings.extend(_widening_findings(source, feature, diameter))
+     if source.kind == "brep":
+         preserved = _exact_rest_carried(
+             source.features, found, preserved, changed_ids, as_mesh_data(changed)
+@@ -9117,6 +9606,68 @@ def _resize_bore_entrance(
+     )
+ 
+ 
++def _narrowing_target(
++    entrance: _BoreEntrance,
++    way: Vec3,
++    sections: Sequence[_EntranceSection],
++    index: int,
++    delta: float,
++    keep: bool,
++) -> Feature | None:
++    """Die Verengung ``sections[index]`` nach dem Neuschnitt, so wie
++    :func:`_side_tools` sie baut — oder ``None``, wo sie nichts mehr verengt.
++
++    Ihr Merkmal beschreibt das weite Ende (``centre``, ``diameter``), seine
++    Achse zeigt von der Spitze jenseits der Mündung zu ihm hin, und
++    ``opening`` ist die Weite in der Mündung — wie die Erkennung sie liest
++    (``features.narrowings_marked``). Mit ``keep`` an einer weiteren Tasche
++    wird sie steiler, und ihr Winkel ist ein anderer.
++    """
++    section = sections[index]
++    wide, opening, rise = _narrowing_radii(sections, index, delta, keep=keep)
++    if wide <= opening + EPS_GEOM:
++        return None
++    foot = section.start + rise
++    angle = float(section.feature.params.get("angle", 0.0))
++    if keep:
++        angle = 2.0 * math.degrees(math.atan((wide - opening) / (section.end - foot)))
++    centre = np.asarray(entrance.origin) + foot * np.asarray(way)
++    return dataclasses.replace(
++        section.feature,
++        params={
++            **section.feature.params,
++            "axis": (-float(way[0]), -float(way[1]), -float(way[2])),
++            "centre": tuple(float(v) for v in centre),
++            "diameter": 2.0 * wide,
++            "opening": 2.0 * opening,
++            "angle": angle,
++        },
++    )
++
++
++def _entrance_with_a_narrowing(source: SceneObject, feature: Feature) -> _BoreEntrance | None:
++    """Der Einlauf dieser Bohrung, wenn an ihrer Mündung eine Verengung sitzt
++    und er sich lesen lässt — sonst ``None``, und *Nur Bohrungsdurchmesser*
++    geht seinen bisherigen Weg.
++
++    Zuerst die billige Frage, ob der Körper überhaupt eine Verengung trägt:
++    Die meisten tun es nicht, und für sie wird keine Kette gelesen.
++    """
++    from app.core.perceive.actions import narrows_the_mouth
++
++    if feature.kind != "hole" or not any(map(narrows_the_mouth, source.features.values())):
++        return None
++    try:
++        entrance = bore_entrance(source.mesh, feature, source.features)
++    except ValidationError:
++        return None
++    if entrance is None or not any(
++        sections[-1].narrowing for _way, sections, _open in entrance.sides()
++    ):
++        return None
++    return entrance
++
++
+ def _exact_rest_carried(
+     previous: Mapping[FeatureId, Feature],
+     detected: Mapping[FeatureId, Feature],
+@@ -10709,6 +11260,7 @@ def _exact_chain_solid(
+     frame: PlaneFrame,
+     planes_of: Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]],
+     overlap: float = FEATURE_OVERLAP,
++    mouths: Mapping[FeatureId, float] | None = None,
+ ) -> Any:
+     """Der Hohlraum einer Kette als exakter Körper — Stopfen oder Werkzeug.
+ 
+@@ -10716,13 +11268,14 @@ def _exact_chain_solid(
+     als Rotationskörper um ``frame`` und an den Ebenen begrenzt, die
+     ``planes_of`` je Abschnitt nennt: unverschoben für den Stopfen an der
+     alten Stelle, verschoben oder gedreht für das Werkzeug an der neuen.
++    ``mouths`` wie in :func:`_entrance_tools`.
+     """
+     from app.core.brep import edit
+ 
+     diameter = entrance.sections[0].inner_radius * 2.0
+     parts = []
+     for index, (outline, (lower, upper)) in enumerate(
+-        _entrance_tools(entrance, diameter, reach, filling=filling, overlap=overlap)
++        _entrance_tools(entrance, diameter, reach, filling=filling, overlap=overlap, mouths=mouths)
+     ):
+         tool = edit.revolved_bore_tool(outline, frame)
+         parts.append(edit.clipped_bore_tool(tool, planes_of(index, lower, upper)))
+@@ -10966,9 +11519,33 @@ def _exact_chain_tool_turned(
+     Richtung nach außen, und der Schaft dazwischen hat keine eigene.
+     """
+     from app.core.brep import edit
+-    from app.core.sketch.planes import frame_of
+ 
+     at_most = float(solid.bounds.diagonal)
++    frame, planes_of = _turned_chain_planes(entrance, matrix, pivot, tilt, at_most)
++    tool = _exact_chain_solid(
++        entrance, at_most, filling=False, frame=frame, planes_of=planes_of, overlap=overlap
++    )
++    return edit.clipped_bore_tool(tool, caps) if caps else tool
++
++
++def _turned_chain_planes(
++    entrance: _BoreEntrance,
++    matrix: NDArray[np.float64],
++    pivot: NDArray[np.float64],
++    tilt: float,
++    at_most: float,
++) -> tuple[PlaneFrame, Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]]]:
++    """Wo die Profile einer gekippten Kette stehen und wo ihre Abschnitte enden —
++    für beide Kerne dieselben Zahlen (:func:`_exact_chain_tool_turned`, am Netz
++    :func:`_rotate_cavity_chain` an einer Verengung).
++
++    **Eine Verengung läuft über ihre Mündung als Zylinder ihrer Öffnung weiter**
++    (:func:`_narrowing_outline`), nicht als größerer Kegel: Ihre Mündung rückt
++    so weit hinaus, wie ein Zylinder mit dem Radius der Öffnung braucht, um die
++    gekippte Fläche zu durchstoßen (Durchsicht 0.5.1, rest-lippe).
++    """
++    from app.core.sketch.planes import frame_of
++
+     axis = np.asarray(entrance.axis, dtype=float)
+     turned_axis = matrix[:3, :3] @ axis
+     origin = np.asarray(entrance.origin, dtype=float)
+@@ -10981,11 +11558,9 @@ def _exact_chain_tool_turned(
+     front_mouth = len(entrance.sections) - 1
+     back_mouth = front_mouth + len(entrance.back) - 1 if entrance.back else -1
+ 
+-    def outward(
+-        section: _EntranceSection, at: float, *, cone: bool, way: NDArray[np.float64]
+-    ) -> float:
++    def outward(section: _EntranceSection, at: float, *, way: NDArray[np.float64]) -> float:
+         distance = abs(at - float((pivot - origin) @ way))
+-        if cone:
++        if section.feature.kind == "cone" and not section.narrowing:
+             half_angle = float(section.feature.params.get("angle", 0.0)) / 2.0
+             return _cone_past_a_tilted_face(
+                 distance, section.outer_radius, half_angle, tilt, at_most=at_most
+@@ -10996,32 +11571,23 @@ def _exact_chain_tool_turned(
+         )
+ 
+     def planes_of(index: int, lower: SectionPlane, upper: SectionPlane) -> tuple[SectionPlane, ...]:
+-        low_shift = (
+-            outward(first, first.start, cone=False, way=axis) if index == 0 and through else 0.0
+-        )
++        low_shift = outward(first, first.start, way=axis) if index == 0 and through else 0.0
+         high_shift = 0.0
+         if index == front_mouth:
+-            high_shift = outward(last, last.end, cone=last.feature.kind == "cone", way=axis)
++            high_shift = outward(last, last.end, way=axis)
+         elif index == back_mouth:
+             far = entrance.back[-1]
+-            high_shift = outward(far, far.end, cone=far.feature.kind == "cone", way=-axis)
++            high_shift = outward(far, far.end, way=-axis)
+         return (
+             _plane_turned(lower, matrix, pivot, low_shift),
+             _plane_turned(upper, matrix, pivot, high_shift),
+         )
+ 
+-    tool = _exact_chain_solid(
+-        entrance,
+-        at_most,
+-        filling=False,
+-        frame=frame_of(
+-            (float(turned_axis[0]), float(turned_axis[1]), float(turned_axis[2])),
+-            (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
+-        ),
+-        planes_of=planes_of,
+-        overlap=overlap,
++    frame = frame_of(
++        (float(turned_axis[0]), float(turned_axis[1]), float(turned_axis[2])),
++        (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
+     )
+-    return edit.clipped_bore_tool(tool, caps) if caps else tool
++    return frame, planes_of
+ 
+ 
+ def _exact_move_chain(
+@@ -11418,8 +11984,8 @@ def _narrows_outward(chain: Sequence[Feature]) -> bool:
+     """Ob eine Kette nach außen enger wird — eine Haltelippe statt einer Senkung.
+ 
+     **Die Erkennung sagt es** (``perceive.actions.narrows_the_mouth``, das
+-    Flag ``narrowing`` am Kegel): dieselbe Frage, die der Einlauf an einer
+-    Verengung absagen lässt (:func:`_entrance_side`) und die das
++    Flag ``narrowing`` am Kegel): dieselbe Frage, an der der Einlauf der
++    Verengung ihr eigenes Profil gibt (:func:`_entrance_side`) und die das
+     Merkmalfenster „Verengung" nennt. Ein Kriterium für alle drei — hier stand
+     bis zur Übernahme von rest-erkennung ein eigener Durchmesservergleich.
+     """
+@@ -11432,13 +11998,15 @@ def _exact_chain_own_cavity(source: SceneObject, chain: Sequence[Feature]) -> _O
+     """Eine Kette, die nach außen enger wird (:func:`_narrows_outward`), als
+     Hohlraum aus ihren nativen Flächen — ``None`` für jede andere.
+ 
+-    **Die Profile einer Kette weiten sich nach außen** (``_entrance_tools``):
+-    Der Schaft reicht mit dem Radius der Bohrung bis zur Mündung. An der
+-    Magnettasche aus dem Baustein, die die Erkennung seit der Zusammenführung
+-    als Bohrung mit Lippenkegel führt, schnitt er die Lippe weg — jede Kopie
+-    und jede versetzte Tasche 1,55 mm³ zu weit, und kein Magnet hielt darin
+-    (Durchsicht 0.5.1, BOHRUNG-13 Nachtrag). Aus den Flächen reist die Tasche,
+-    wie sie ist; das Netz tut es ohnehin (``_paired_cavity_body``).
++    **Die Profile kannten damals nur Ketten, die sich nach außen weiten**
++    (``_entrance_tools``): Der Schaft reichte mit dem Radius der Bohrung bis
++    zur Mündung. An der Magnettasche aus dem Baustein, die die Erkennung seit
++    der Zusammenführung als Bohrung mit Lippenkegel führt, schnitt er die Lippe
++    weg — jede Kopie und jede versetzte Tasche 1,55 mm³ zu weit, und kein
++    Magnet hielt darin (Durchsicht 0.5.1, BOHRUNG-13 Nachtrag). Seit
++    rest-lippe tragen die Profile die Verengung (:func:`_narrowing_outline`);
++    beim Versetzen bleibt es trotzdem bei den Flächen: Sie reisen, wie sie
++    sind, und das Netz tut es ohnehin (``_paired_cavity_body``).
+     """
+     from app.core.brep import edit
+     from app.core.perceive.relations import cavity_surface_indices

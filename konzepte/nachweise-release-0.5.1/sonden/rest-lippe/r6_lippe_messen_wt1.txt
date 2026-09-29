@@ -1,0 +1,40 @@
+app aus: F:\3D Druck.review-051\wt-rest-lippe\app\__init__.py
+##### Netz
+   gerade: V 15840.855 dicht True
+         Tasche: Lippe 72 Richtungen: min 4.045 Median 4.045 max 4.055 | Tasche 72 Richtungen: min 4.120 Median 4.120 max 4.130
+   gekippt 10°: V 15840.201 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.050 | Tasche 72 Richtungen: min 4.120 Median 4.120 max 4.130
+   gekippt 20° direkt: V 15837.349 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.055 | Tasche 63 Richtungen: min 4.120 Median 4.120 max 4.130
+   10° + 10°: V 15847.578 dicht True
+         Tasche: Lippe 39 Richtungen: min 3.800 Median 4.045 max 4.050 | Tasche 63 Richtungen: min 4.120 Median 4.120 max 4.130
+   gekippt, versetzt 3 mm X: V 15840.708 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.050 | Tasche 72 Richtungen: min 4.120 Median 4.120 max 4.130
+   gekippt, verdoppelt 10 mm X: V 15688.339 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.050 | Tasche 72 Richtungen: min 4.120 Median 4.120 max 4.130
+         Kopie: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.050 | Tasche 72 Richtungen: min 4.120 Median 4.120 max 4.130
+   gekippt, Bohrung ändern Einlauf 8,5: V 15830.658 dicht True
+         Tasche: Lippe 39 Richtungen: min 3.800 Median 4.245 max 4.255 | Tasche 72 Richtungen: min 4.245 Median 4.245 max 4.255
+   gekippt, Bohrung ändern nur 8,5: V 15830.658 dicht True
+         Tasche: Lippe 39 Richtungen: min 3.800 Median 4.245 max 4.255 | Tasche 72 Richtungen: min 4.245 Median 4.245 max 4.255
+   gekippt, Bohrung ändern nur 7,8: V 15856.841 dicht True
+         Tasche: Lippe 39 Richtungen: min 3.895 Median 3.895 max 3.905 | Tasche 72 Richtungen: min 3.895 Median 3.895 max 3.905
+##### exakt
+   gerade: V 15840.994 dicht True
+         Tasche: Lippe 72 Richtungen: min 4.040 Median 4.045 max 4.055 | Tasche 72 Richtungen: min 4.115 Median 4.120 max 4.130
+   gekippt 10°: V 15840.222 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.050 | Tasche 72 Richtungen: min 4.115 Median 4.120 max 4.130
+   gekippt 20° direkt: V 15837.351 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.040 Median 4.045 max 4.050 | Tasche 63 Richtungen: min 4.115 Median 4.120 max 4.130
+evaluation stopped at op 4: op.rotate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   10° + 10°: vollständig False; Halt ['op.rotate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']
+evaluation stopped at op 4: op.move_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   gekippt, versetzt 3 mm X: vollständig False; Halt ['op.move_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']
+evaluation stopped at op 4: op.duplicate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   gekippt, verdoppelt 10 mm X: vollständig False; Halt ['op.duplicate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']
+evaluation stopped at op 4: op.resize_hole.ValidationError: Dieser Einlauf lässt sich nicht eindeutig gemeinsam ändern. Wählen Sie „Nur Bohrungsdurchmesser“ und bearbeiten Sie weitere Abschnitte einzeln.
+   gekippt, Bohrung ändern Einlauf 8,5: vollständig False; Halt ['op.resize_hole.ValidationError: Dieser Einlauf lässt sich nicht eindeutig gemeinsam ändern. Wählen Sie „Nur Bohrungsdurchmesser“ und bearbeite']
+   gekippt, Bohrung ändern nur 8,5: V 15831.882 dicht True
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.045 max 4.050 | Tasche 72 Richtungen: min 4.240 Median 4.245 max 4.255
+   gekippt, Bohrung ändern nur 7,8: V 15733.018 dicht False
+         Tasche: Lippe 39 Richtungen: min 4.045 Median 4.050 max 4.050 | Tasche 72 Richtungen: min 3.890 Median 3.895 max 3.905

@@ -1,0 +1,29 @@
+app aus F:\3D Druck.review-050\wt-vorschau\app\__init__.py
+plate_holes_x4.stl: 1 Körper, 203776 Dreiecke (größter 203776), geöffnet in 4.7 s
+  grob Ø5                     0.23 s  grob=True  abgetragen=166.2  Verkleinerung=[decimate_for_display 0.15 s]  
+  grob Ø6                     0.05 s  grob=True  abgetragen=237.0  Verkleinerung=[]  
+  grob Ø7                     0.04 s  grob=True  abgetragen=320.3  Verkleinerung=[]  
+boolean stage direct failed: Not all meshes are positive closed volumes
+boolean stage direct failed: Not all meshes are positive closed volumes
+  genau Ø5                    1.77 s  grob=False  abgetragen=166.2  Verkleinerung=[]  
+boolean stage direct failed: Not all meshes are positive closed volumes
+boolean stage direct failed: Not all meshes are positive closed volumes
+  genau Ø6                    1.84 s  grob=False  abgetragen=237.0  Verkleinerung=[]  
+boolean stage direct failed: Not all meshes are positive closed volumes
+  ändern grob Ø6              0.15 s  grob=True  abgetragen=70.8  Verkleinerung=[]  
+  ändern grob Ø7              0.06 s  grob=True  abgetragen=154.1  Verkleinerung=[]  
+  ändern grob Ø8              0.07 s  grob=True  abgetragen=250.0  Verkleinerung=[]  
+plate_holes_x5.stl: 1 Körper, 815104 Dreiecke (größter 815104), geöffnet in 14.8 s
+  grob Ø5                     0.96 s  grob=True  abgetragen=166.2  Verkleinerung=[decimate_for_display 0.60 s]  
+  grob Ø6                     0.17 s  grob=True  abgetragen=237.0  Verkleinerung=[]  
+  grob Ø7                     0.21 s  grob=True  abgetragen=320.3  Verkleinerung=[]  
+boolean stage direct failed: Not all meshes are positive closed volumes
+boolean stage direct failed: Not all meshes are positive closed volumes
+  genau Ø5                    9.08 s  grob=False  abgetragen=166.2  Verkleinerung=[]  
+boolean stage direct failed: Not all meshes are positive closed volumes
+boolean stage direct failed: Not all meshes are positive closed volumes
+  genau Ø6                    7.06 s  grob=False  abgetragen=237.0  Verkleinerung=[]  
+boolean stage direct failed: Not all meshes are positive closed volumes
+  ändern grob Ø6              0.34 s  grob=True  abgetragen=70.8  Verkleinerung=[]  
+  ändern grob Ø7              0.14 s  grob=True  abgetragen=154.1  Verkleinerung=[]  
+  ändern grob Ø8              0.15 s  grob=True  abgetragen=250.0  Verkleinerung=[]  

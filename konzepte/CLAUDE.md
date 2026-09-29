@@ -6,7 +6,7 @@ Konzepte, Durchsichten, Nachweise und Entscheidungen. **Der Index ist
 | Ort | Inhalt |
 |---|---|
 | `konzept-*.md` und die übrigen Dokumente | Warum etwas so gebaut wurde — kein Auftrag und keine Arbeitsliste |
-| `nachweise-*/` | Messprotokolle und Belege zu einem Konzept |
+| `nachweise-*/` | Messprotokolle und Belege zu einem Konzept; `nachweise-release-*/` die einer Release-Durchsicht, auf die offene Punkte verweisen — unverändert abgelegt, von ruff ausgenommen |
 | `begruendungen/` | Das Warum, das aus Regeln und Karten verschoben wurde, als sie auf das Einzuhaltende verdichtet wurden — je Quelle eine Datei (`regel-<name>.md`, `karte-<pfad>.md`), gegliedert nach deren Überschriften |
 
 **Offene Arbeit steht im Register von `ROADMAP.md` und nirgends sonst.** Die

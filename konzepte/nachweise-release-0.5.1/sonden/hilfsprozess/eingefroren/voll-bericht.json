@@ -1,0 +1,37 @@
+{
+ "exe": "F:\\3D Druck.review-051\\sonden\\hilfsprozess\\eingefroren\\voll\\dist\\Solidon3D\\Solidon3D.exe",
+ "exists": true,
+ "app": "F:\\3D Druck.review-051\\wt-hilfsprozess\\app\\__init__.py",
+ "warm_up": true,
+ "warm_up_seconds": 0.428,
+ "helper_pids": [
+  15604
+ ],
+ "helper_images": [
+  "Solidon3D.exe"
+ ],
+ "same_bytes": {
+  "display_simplify": true,
+  "boolean": true,
+  "refine_conforming": true
+ },
+ "statistics": {
+  "in_process": 0,
+  "helper": 3,
+  "started": 1,
+  "stopped": 0,
+  "cancelled": 0,
+  "lost": 0,
+  "fallback": 0,
+  "helper:display_simplify": 1,
+  "helper:boolean": 1,
+  "helper:refine_conforming": 1
+ },
+ "helper_pids_after": [
+  15604
+ ],
+ "stopped": 1,
+ "helpers_alive_after_shutdown": [
+  false
+ ]
+}
