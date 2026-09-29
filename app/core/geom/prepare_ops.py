@@ -17272,7 +17272,6 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                     found = search(
                         mesh,
                         count=params.candidates,
-                        seed=ctx.seed,
                         profile=ctx.profile,
                         overhang_angle=angle,
                         # Der Fortschritt gehört dem ganzen Auftrag, nicht dem

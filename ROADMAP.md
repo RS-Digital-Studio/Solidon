@@ -45,17 +45,17 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
-| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Der Änderungsweg ist an der Wurzel plattformgleich (`a559e947`: `units.plane_fit`, `units.dot3`, neun Wege bitgleich unter ULP-Rauschen, in der Durchsicht 0.5.1 drei weitere: Ecke mit Verrundung und Fase, Deckel einer gekrümmten Mündung; das Stützvolumen der Nahtsuche hängt nicht mehr an der Zahl der Arbeiter, `1d8dd68aa`); offen sind die Fingerabdrücke auf den drei Runnern, die Einpassungen in `perceive`, `shapes.thread_body` und aus der dritten Runde der Teilungsweg (Naht- und Stiftlagen über BLAS), die Drehwege von *Merkmal drehen* (`matrix[:3, :3] @`) und das Einsetzen eines Bausteins (Liste am Punkt) |
+| [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | 0.5.0 trägt nach Roberts Entscheidung vom 23.09. P3.2–P3.5, P4.0, P6.1–P6.7, P7.1–P7.4 und Zeichnen Z0/Z1 — implementiert, die Fensterabnahme gehört zum Release (RM-213); Paketstände in der Tabelle am Punkt. In 0.5.x danach: P4.1–P4.3 (RM-022), P8.1–P8.5, P9.1–P9.4, P0.8, P5.1–P5.3, Zeichnen Z2–Z6 und die exakten Erzeuger ohne Eingang (P2.8, Mechanismus bei Robert). Abschluss erst nach P5.3 |
 | [RM-191 — PrusaSlicer verbraucht für dieselbe Übergabe ein Drittel mehr Material](#rm-191) | Geometrie, Erkennung und Druckvorbereitung | Nachgemessen am Gewürzregal (`56f70000`): Material innerhalb von 3 %, Zeit Prusa 1,93× Orca — behoben bis 1,19× (volle Füllung und Lückenfüllung für Prusa und Orca, Bahnbreite je Orca-Rolle, `machine_limits_usage = ignore`); der Rest ist die Bauweise des Slicers (Füllanker, Zusatzwände) — ob Solidon dort Vorgaben setzt, entscheidet Robert |
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1): Kumiko −34 %, Meshy −22 % CPU unter Last; §31 nicht erreicht, nächster Hebel je Modell im Schlussbericht des Pakets |
-| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Mindestbogen nach Roberts Entscheidung gebaut (5 Grad, beide Kerne, `3fa7d719`), die Kippstellen der Verrundungen behoben — lageabhängig 17 statt 27 von 101 Körpern; offen sind Einpassungen an ihrer Kippe (deckungsgleiche Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die dokumentierte Grenze der Zusage ‚drehfest‘ — zwischen beidem entscheidet Robert |
+| [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Einpassungen an ihrer Kippe bauen (Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die Grenze der Zusage ‚drehfest‘ dokumentieren — zwischen beidem entscheidet Robert |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), an der Freiform ohne messbare Wirkung (vergebliche Läufe in zu kleinen Gruppen); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
-| [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
+| [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Native Breitensuche als eigener Bauauftrag (C++ freigegeben 23.09.); womit — eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython —, entscheidet Robert |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Drei der vier Beobachtungen behoben (Durchsicht 0.5.1: `remove_feature.gone` einmal, nach *Teilen* kein Verlust für geteilte Flächen, Feldschnitt unter der Deckfläche ohne Frage — `1afc1852d`, `5948a79a5`); offen: die Zuordnungsfrage markiert das alte Merkmal nicht im Bild (`question_context` trägt es noch nicht zur Ansicht) |
 | [RM-218 — Am exakten Körper heißen Bohrungen nach ihrer Lage, und der Verlauf lässt sich dort nicht umbauen](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | drill_brep_hole nummeriert nach Lage; Verschieben und Einfügen sagen an build_tray_v3.step ab — eindeutige geometrische Zuordnung behält den Namen wie am Netz |
 | [RM-225 — Das Muster eines echten Schraubdeckels lässt sich nicht sauber ändern oder entfernen](#rm-225) | Geometrie, Erkennung und Druckvorbereitung | Gewürzdeckel: nach Teilung ändern 124 Flächen und kein Muster, nach Entfernen 31 Zusatzflächen und 1,7 mm³ Überlappung — Feld begrenzen, Stirnkappen verschmelzen |
@@ -86,19 +86,19 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
-| [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Auf `main` zusammengeführt (`559412ac4`) und in 0.5.1 enthalten: Gliederung, fünfzehn Bildanleitungen, Suche, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter und Film. Weiterarbeit auf `main`; offen bleiben die Feldabnahme (§11 des Konzepts) und die Nummernplatzierung auf Text in zwei Bildern |
-| [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster gefahren (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge, Bildschirmleser und Trennstriche im dunklen Thema (2,30:1) gemessen; offen allein die Rampe der 3D-Maus am echten Gerät — ob dieser Rest in RM-070 aufgeht (dasselbe Gerät) und der Punkt damit schließt, entscheidet Robert |
-| [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Welle 2 (`9145aedc`) und die Gebietsdurchsichten haben die in der Sollliste benannten Stellen, Preise, Generatoraussage, Sicherheit, Agentenquote und Sprachkonsistenz nachgezogen; die Durchsicht 0.5.1 hat jeden Text seit 0.5.0 gelesen und Wächter gegen Konstrukteurswörter und falsch zitierte Knöpfe eingecheckt (`e8f9f574d`); offen ist der erschöpfende Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website, dazu Presse A16/A23 und die C12-Namen |
+| [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
+| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
+| [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Rampe der 3D-Maus am echten Gerät; ob dieser Rest in RM-070 aufgeht und der Punkt damit schließt, entscheidet Robert |
+| [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Erschöpfender Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website; Sollliste A16, A23, C12 und *Extrusionsbreite*/*Bahnbreite* (am Punkt) |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; mehrere gezogene Dateien werden seit 0.5.0 angesagt statt still verworfen (`84185f4d`), geöffnet wird weiter nur die erste |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Quelle nachgezogen (`84185f4d`: Kopfzeile, Fenster „Auswahl“ mit Handlungen, Alt-Text in allen Sprachen); Erzeugung und Sichtprüfung je Sprache beim Release |
-| [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Nachtragstext für §9 und §30.1 liegt im Bericht skizze der Durchsicht 0.5.0 bereit (neu geschrieben, der Wortlaut W2 lag nicht mehr vor), dazu die Vorschläge aus p66 (Ellipse, drei Bedingungsarten), p6c (drei Schnitte), zeichnenbau und p7verlauf. Robert sagt den Nachtrag an und entscheidet dabei, ob eine neue Bedingungsart die Formatversion hebt (p66 hat sie mit Format 31 gehoben, Satz 5 des Nachtrags sagt nein) |
+| [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Robert sagt den Nachtrag für §9 und §30.1 an und entscheidet, ob eine neue Bedingungsart die Formatversion hebt |
 | [RM-197 — Maßeditor im Bild: kein Bezugswechsel am Etikett, Beschriftungen mit Abstand zum Modell](#rm-197) | Bedienung und Darstellung | Umgesetzt und im Review vom 21./22.09.2026 nachgezogen (Griff überlebt ein Bild mitten im Zug, Radraste über einem Maßfeld zoomt, erstes Escape nimmt nur die Bezugswahl zurück); die Fensterdateien der Ansicht liefen dabei grün (456 Fälle). Offen bleibt allein die Abnahme am echten Fenster beim Release 0.5.0 |
-| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Behoben an der Wurzel: Die Maßtinte liegt seit `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den echten Startweg beim nächsten Release noch einmal fahren, und ob Windows D3D12 als Backend bekommt, bleibt eine eigene Entscheidung |
-| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Eingelöst in `b25167fd`, und im Review ganz: Auch der Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step` trägt `_blocks`). Abnahme beim nächsten Release: Bohrung an Weg 1 wählen, rechts kein Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem 25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`) |
-| [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Roberts Geste nachgestellt und verlegt (`7ff34c67`: je Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s → 1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster flüssig anfühlt (Release, RM-213) |
+| [RM-198 — Eine feine Fenstermaske über der Vulkan-Fläche verliert das Gerät](#rm-198) | Bedienung und Darstellung | Probe über den echten Startweg beim nächsten Release (RM-213); D3D12 als Backend ist eine eigene Entscheidung |
+| [RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im Auswahlfenster](#rm-199) | Bedienung und Darstellung | Abnahme beim nächsten Release (RM-213): Bohrung an Weg 1 wählen — rechts kein Durchmesser, keine Koordinaten; nach der Maßgruppe stehen sie wieder |
+| [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 74–79 ms bis zum ersten Bild mit Maßen (Median je Runde, der Stand davor 97–104 ms, abwechselnd unter leichter Last), 30 von 32 warmen Klicks unter 100 ms (`0273b8d23`, `c2bff45f1`); offen die Abnahme auf ruhiger Maschine am eingeschalteten zweiten Monitor — gemessen wurde auf dem Ersatzbildschirm in der Fläche des MSI |
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
@@ -112,7 +112,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Auftrag Robert: Größen aus den Maschinenvarianten des Slicers, Auswahl mit „Andere …“; vorher mit der Dialog-Sitzung abstimmen |
-| [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
+| [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
@@ -129,7 +129,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1](#rm-293) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: vier kleine Stellen |
 | [RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1](#rm-295) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: zwei Tests schärfen |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
-| [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Plan bis 01.11. mit Takt und Messpunkten liegt vor (`marketing/reichweite/analyse-und-plan.md`, `36487f9b`); drei Facebook-Beiträge für 24., 26. und 28.09. in der Meta Business Suite eingeplant; YouTube-Änderungen (14) freigegeben, in Studio nicht umgesetzt; Video V3 freigegeben, nicht gedreht. Offen: Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
+| [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
 | [RM-030 — Impressum nach Vergabe einer USt-IdNr. oder W-IdNr. ergänzen](#rm-030) | Veröffentlichung, Betrieb und Vertrieb | Bereits vergebene USt-IdNr./W-IdNr. klären; gegebenenfalls Impressum ergänzen |
 | [RM-034 — Versicherungsschutz für Software und Produktschäden klären](#rm-034) | Veröffentlichung, Betrieb und Vertrieb | Versicherungsangebote gegen die tatsächlichen Risiken prüfen lassen |
@@ -137,7 +137,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-036 — Vertrag und Freistellungen des Zahlungsdienstleisters prüfen](#rm-036) | Veröffentlichung, Betrieb und Vertrieb | Konkreten Anbietervertrag und Haftungsübernahme entscheiden |
 | [RM-061 — Verkaufsbereitschaft und Ende der Demo vorbereiten](#rm-061) | Veröffentlichung, Betrieb und Vertrieb | Kandidat bis 25.10.; letzte Optimierungen 31.10.; Start 01.11.2026 um 10:00 Uhr deutscher Zeit — gebaut in 0.5.0: Abschied mit Pause und Start, ‚heute letzter Tag‘, Hinweis ab 24.10. (`29dcefa4`); offen täglicher Ablaufwächter und Bestell-Webhook |
 | [RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen](#rm-091) | Veröffentlichung, Betrieb und Vertrieb | Meldeweg entschieden (Robert, 23.09.2026: über die Support-Adresse, Antwortfrist zwei Arbeitstage, keine Belohnung, kein PGP; `SECURITY.md`, `SECURITY-INCIDENT.md` und `security.html` sind konform); offen EU-Login, Vertretung, Alarmierung und Probelauf — Roberts Konten |
-| [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Preis bestätigt am 23.09.: zwei Lizenzarten, privat 69 € bis Ende Januar, ab Februar 99 €, gewerblich 199 €, ab Februar 249 €; ‚drei Stufen‘ ist aus Presse und Texten gestrichen (`9145aedc`). Offen: Anbieter, Bestellstrecke, Lieferung, Widerruf und Signierung bis 15.10. |
+| [RM-092 — Verkaufskonzept für den geplanten Start abschließen](#rm-092) | Veröffentlichung, Betrieb und Vertrieb | Anbieter, Bestellstrecke, Lieferung, Widerruf und Signierung bis 15.10. |
 | [RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären](#rm-093) | Veröffentlichung, Betrieb und Vertrieb | Fehlende Anbieter-/Rechtsentscheidungen und Sprachfassungen fachlich prüfen |
 | [RM-095 — Automatischen Löschlauf auf dem Server belegen](#rm-095) | Veröffentlichung, Betrieb und Vertrieb | Server-Löschlauf, Sicherungen und Ausfallalarm tatsächlich nachweisen |
 | [RM-116 — Historische Statistikreste auf dem Server behandeln](#rm-116) | Veröffentlichung, Betrieb und Vertrieb | Öffentlichen Altbestand prüfen und Umgang mit alten Statistikzeilen entscheiden |
@@ -270,11 +270,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p16--organische-modellierung).
 
 ## Plattformen, Pakete und Grafik
-
-<a id="rm-001"></a>
-
-RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-001-abschluss-050).
 
 <a id="rm-011"></a>
 
@@ -1687,6 +1682,13 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   die genaue Nachfrage der Breite so viel wie vorher (12,7 → 11,1 s), aber mit
   richtigen Zahlen. Die Marke `slice_medium_hollow` bleibt Regressionswächter.
 
+  **Stand laut Register bis 29.09.2026:** `slice_body` an der Hohlkugel 40 % schneller
+  (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet
+  rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit
+  sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener
+  Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython),
+  entscheidet Robert
+
 <a id="rm-217"></a>
 
 - [ ] **RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild.**
@@ -2511,40 +2513,17 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
 - [~] **RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht.** Ein
   Interessent schrieb am 27.09.2026, aus dem Handbuch sei alles schwer zu
-  lernen und Ausprobieren führe nicht zum Ziel. Robert am selben Tag: „anscheinend ist
-  das Handbuch zu umständlich/unübersichtlich nicht verständlich, suche
-  optimierungen arbeite ein konzept aus und leg los", dazu „am besten auch an
-  bildern live von der oberfläche erklären als durch wörter mit
-  kommentaren/pfeilen usw", aktuell zu jeder neuen Version und nur dann, und
-  so, dass jede Sitzung übernehmen kann. Konzept, Befund und Pakete HB-0 bis
-  HB-12: [`konzepte/konzept-handbuch-2026-09.md`](konzepte/konzept-handbuch-2026-09.md),
-  §0 sagt, wie man weitermacht. Befund: 50 Seiten, 44 420 Wörter, zwei Drittel davon
-  erzeugt, eine flache Liste, kein Bild mit Markierung, 15 der 30
-  geschriebenen Seiten ohne Bild, 18 Klickwege in Worten; die Suche bringt
-  die richtige Seite nur bei der Hälfte von 38 Kundensuchen unter die ersten
-  drei, und F1 führt nie in das passende Kapitel. **Aktueller Arbeitsort ist `main`:**
-  Der Handbuchumbau bis `559412ac4` ist im Tag `v0.5.1` enthalten; die früheren
-  Handbuchzweige und Arbeitsbäume sind entfernt. Die folgenden Paketstände
-  beschreiben den Weg zum Release. **Erster Stand:** HB-1 bis HB-4, HB-6 und HB-13 fertig — fünfteilige
-  Gliederung, fünf Bildanleitungen (Fenster, Modell prüfen und drucken, Loch
-  bohren, erstes eigenes Teil, Gehäuse mit Deckel) aus der echten Oberfläche,
-  Suche mit Rangfolge und Fundstelle (38 von 38 Kundensuchen unter den ersten
-  drei, vorher 25), Ort je Operation in der Referenz; `/erzeugen` nimmt die
-  Anleitungen bei jedem Release auf. **Auftrag für 0.5.1** (Robert, 27.09.2026:
-  „handbuch kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Teil
-  1 ist auf `main` (Merge `6a952cf81`), samt den Punkten im Changelog 0.5.1;
-  beim Release läuft `make_guides.py` in allen Sprachen vor `make_manual.py`.
-  **Auch der weitere Ausbau war für 0.5.1 beauftragt** (Robert, 27.09.2026 abends: „alle
-  punkte davon sollen noch in 0.5.1“), und der Tag wartete auf die Meldung
-  „Handbuch fertig“: HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
-  HB-7 (F1 im Zusammenhang), der Rest von HB-8, HB-9 bis HB-12. Die
-  Aufteilung in drei Stränge mit ihren Aufträgen steht in §12 des Konzepts.
-  **Stand vor dem Tag:** Für 0.5.1 fertig und an die Release-Sitzung gemeldet: HB-5 bis
-  HB-13 auf `handbuch-umbau`, B und C zusammengeführt, `main` mit texte-051
-  und dem Oberflächenpaket hereingeholt und die Namen nachgezogen; alle
-  fünfzehn Anleitungen in sechs Sprachen probeweise aufgenommen, das Handbuch
-  im Wegwerfbaum vollständig erzeugt (§0 des Konzepts). Beim Release laufen
-  `make_guides.py`, `make_manual.py` und `make_guide_video.py` (`/erzeugen`).
+  lernen und Ausprobieren führe nicht zum Ziel; Robert beauftragte ein Handbuch,
+  das an Bildern der echten Oberfläche erklärt, zu jeder Version aktuell ist und
+  nur dann erzeugt wird. Konzept, Befund und Pakete HB-0 bis HB-13:
+  [`konzepte/konzept-handbuch-2026-09.md`](konzepte/konzept-handbuch-2026-09.md),
+  §0 sagt, wie man weitermacht. **Mit 0.5.1 veröffentlicht:** fünfteilige
+  Gliederung mit „Wo fange ich an?“, fünfzehn Bildanleitungen in sechs Sprachen,
+  Suche mit Rangfolge (38 von 38 Kundensuchen unter den ersten drei, vorher 25),
+  F1 im Zusammenhang, der Ort je Operation in der Referenz und zwei
+  Anleitungsfilme je Sprache. Beim Release laufen `make_guides.py`,
+  `make_manual.py` und `make_guide_video.py` (`/erzeugen`). Der Weg dorthin steht
+  im [Archiv](ROADMAP-ARCHIV.md#handbuch-bis-051-der-weg-von-rm-283-29092026).
   **Offen nach 0.5.1:** die Feldabnahme aus §11 (ein Kunde ohne CAD geht
   *Das erste eigene Teil* ohne Hilfe durch) und die Nummernplatzierung der
   Bildanleitungen, die in *Ein Gehäuse mit Deckel* 3 und *Ein Teil
@@ -2833,6 +2812,12 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   ist (unter D3D12 gab es den Fall nie), ist eine eigene Entscheidung und
   kein Muss mehr.
 
+  **Stand laut Register bis 29.09.2026:** Behoben an der Wurzel: Die Maßtinte liegt seit
+  `ad3deadd` im Renderer, seit dem Review mit fester Kapazität (sieben Elemente, nur die Punkte
+  wechseln) und unter `draw_order` vor dem Material; die Maske ist weg. Offen: die Probe über den
+  echten Startweg beim nächsten Release noch einmal fahren, und ob Windows D3D12 als Backend
+  bekommt, bleibt eine eigene Entscheidung
+
 <a id="rm-199"></a>
 
 - [~] **RM-199 — Der Durchmesser steht doppelt: im Bild und rechts im
@@ -2860,6 +2845,12 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   wählen dabei seit dem 25.09.2026 ab (Entscheidung Robert), rechts steht
   danach nichts mehr.
 
+  **Stand laut Register bis 29.09.2026:** Eingelöst in `b25167fd`, und im Review ganz: Auch der
+  Block des historischen Bohrschritts weicht, solange die Maße im Bild stehen (`offer_bore_step`
+  trägt `_blocks`). Abnahme beim nächsten Release: Bohrung an Weg 1 wählen, rechts kein
+  Durchmesser, keine Koordinaten; endet die Maßgruppe, stehen sie wieder (Escape wählt seit dem
+  25.09.2026 ab); auch für die nächste Bohrung und Escape offscreen belegt (`85dec7cb`)
+
 <a id="rm-200"></a>
 
 - [ ] **RM-200 — Ein Zug am Griff soll flüssig sein.** Robert, 21.09.2026:
@@ -2883,6 +2874,11 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Loslassen hängt — der Werkzeugkörper wird danach im Arbeiter neu gebaut) und
   die Verdeckung im Zug aussetzen, gemessen am echten Renderer.
 
+  **Stand laut Register bis 29.09.2026:** Roberts Geste nachgestellt und verlegt (`7ff34c67`: je
+  Bewegung 13,6 → 8,8 ms, das Loslassen 89–134 → 25–57 ms, Griff und Maße nach dem Klick 9–21 s →
+  1–2,4 s, leichte Verdeckung im Zug 4 × 2); offen ist allein, ob es sich am echten Fenster
+  flüssig anfühlt (Release, RM-213)
+
 <a id="rm-204"></a>
 
 - [ ] **RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu.**
@@ -2899,6 +2895,11 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   nicht, Gruppengröße über eins), Werte über `refresh_feature_fields`.
   Abnahme: ein Merkmalklick unter 20 ms im Fenster, `test_feature_panel.py`
   und `test_ui.py` unverändert grün.
+
+  **Stand laut Register bis 29.09.2026:** Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet
+  (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt;
+  `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen:
+  Abnahme am echten Fenster beim Release (RM-213)
 
 <a id="rm-070"></a>
 
@@ -2943,6 +2944,12 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Tag das Rollen im Merkmalfenster und die Rampe der 3D-Maus. Abnahme: je Fall ein gebauter
   Körper oder ein Satz von Robert, was hakt.
 
+  **Stand laut Register bis 29.09.2026:** Führen mit gezeichneter Bahn und Überblenden mit
+  gezeichnetem Umriss am Fenster gefahren (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge,
+  Bildschirmleser und Trennstriche im dunklen Thema (2,30:1) gemessen; offen allein die Rampe der
+  3D-Maus am echten Gerät — ob dieser Rest in RM-070 aufgeht (dasselbe Gerät) und der Punkt damit
+  schließt, entscheidet Robert
+
 <a id="rm-084"></a>
 
 - [ ] **RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen.** Website, Handbuch und sichtbare
@@ -2975,6 +2982,13 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   (`.claude/rules/oberflaeche.md`).
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#rückmeldung-und-freiwillige-unterstützung-gehören-in-die-app-startfläche-31082026).
+
+  **Stand laut Register bis 29.09.2026:** Welle 2 (`9145aedc`) und die Gebietsdurchsichten haben
+  die in der Sollliste benannten Stellen, Preise, Generatoraussage, Sicherheit, Agentenquote und
+  Sprachkonsistenz nachgezogen; die Durchsicht 0.5.1 hat jeden Text seit 0.5.0 gelesen und
+  Wächter gegen Konstrukteurswörter und falsch zitierte Knöpfe eingecheckt (`e8f9f574d`); offen
+  ist der erschöpfende Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website, dazu
+  Presse A16/A23 und die C12-Namen
 
 <a id="rm-090"></a>
 
@@ -3452,6 +3466,11 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p9--säule-b-und-farbe).
 
+  **Stand laut Register bis 29.09.2026:** Lizenzkette der eingesetzten Modellrevisionen klären;
+  die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch
+  einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext
+  wie Gewichte‘ (Robert, 23.09.2026)
+
 <a id="rm-004"></a>
 
 - [ ] **RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen.** Den
@@ -3839,6 +3858,12 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#gegen-das-wettbewerbsfeld-gehalten-11082026).
 
+  **Stand laut Register bis 29.09.2026:** Plan bis 01.11. mit Takt und Messpunkten liegt vor
+  (`marketing/reichweite/analyse-und-plan.md`, `36487f9b`); drei Facebook-Beiträge für 24., 26.
+  und 28.09. in der Meta Business Suite eingeplant; YouTube-Änderungen (14) freigegeben, in
+  Studio nicht umgesetzt; Video V3 freigegeben, nicht gedreht. Offen: Roberts Fragen im Bericht
+  Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt
+
 <a id="rm-008"></a>
 
 - [ ] **RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten.** Am 08.09.2026
@@ -3953,6 +3978,11 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
+  **Stand laut Register bis 29.09.2026:** Preis bestätigt am 23.09.: zwei Lizenzarten, privat 69
+  € bis Ende Januar, ab Februar 99 €, gewerblich 199 €, ab Februar 249 €; ‚drei Stufen‘ ist aus
+  Presse und Texten gestrichen (`9145aedc`). Offen: Anbieter, Bestellstrecke, Lieferung, Widerruf
+  und Signierung bis 15.10.
+
 <a id="rm-093"></a>
 
 - [ ] **RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären.** Die offenen Rechts-
@@ -4015,11 +4045,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Codefrist allein ist kein Betriebsnachweis.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
-<a id="rm-115"></a>
-
-RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-115-abschluss-050).
 
 <a id="rm-116"></a>
 

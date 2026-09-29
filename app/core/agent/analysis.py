@@ -53,10 +53,6 @@ TRIANGLE_LIMIT: Final = 500_000
 #: deutlich bessere Lage existiert.
 ORIENTATION_CANDIDATES: Final = 24
 
-#: Startwert der Orientierungssuche im Zug: fest, damit zweimal fragen
-#: zweimal dasselbe ergibt (Regel 9 — die Suche ist randomisiert, der Zug
-#: hat keinen ``ctx.seed``, also steht der Wert hier mit Namen).
-ORIENTATION_SEED: Final = 7
 
 #: Ab so viel eingespartem Stützvolumen (Anteil) gilt eine Lage als besser.
 #: Unter fünf Prozent ist der Unterschied Rauschen der groben Kurzsuche —
@@ -246,7 +242,6 @@ def _orientation(
         found = search(
             as_mesh_data(entry.mesh),
             count=ORIENTATION_CANDIDATES,
-            seed=ORIENTATION_SEED,
             profile=profile,
             overhang_angle=profiles.analysis_limits(profile, entry)[1],
             cancelled=cancelled,

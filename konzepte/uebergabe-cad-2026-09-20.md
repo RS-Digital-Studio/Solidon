@@ -447,12 +447,12 @@ ein Fehllauf. Vollständige bereits grüne Nachweise nur bei unverändertem
 relevantem Stand wiederverwenden; reine Abschlussdoku benötigt kein zweites
 komplettes Geometrietor.
 
-Die bisherige Werkbank liegt lokal, überwiegend **untracked**, unter
-`.claude/.state/cad-durchsicht-2026-09-19/`. Sie wurde absichtlich nicht pauschal
-eingecheckt. Diese Übergabe enthält die tragenden Entscheidungen auch ohne sie.
+Die bisherige Werkbank lag unter `.claude/.state/cad-durchsicht-2026-09-19/`; die
+Berichte dieser Tabelle stehen seit dem 29.09.2026 unter
+`konzepte/nachweise-cad-durchsicht-2026-09/`, der Rest nur in der Git-Historie. Diese Übergabe enthält die tragenden Entscheidungen auch ohne sie.
 Zusätzliche Detailquellen für dieselbe Maschine:
 
-| Lokale Datei | Nutzen und Grenze |
+| Datei | Nutzen und Grenze |
 |---|---|
 | `p14b-published.json`, `p14b-root-integration.md` | Nachweise und Commit-/Push-Stand von P1.4b. |
 | `p14b-contract-review.md`, `p14b-answer-contract.md` | Historische Herleitung der Konkurrenz und des Antwortformats; damalige Zeilennummern/Formatstände nicht als aktuell übernehmen. |

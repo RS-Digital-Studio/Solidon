@@ -1674,7 +1674,6 @@
   "Die Eingabe dieses Schritts prüfen und erneut platzieren.": "Check this step’s input and place again.",
   "Die Eingabe war so nicht verwendbar.": "The input could not be used as given.",
   "Die Eingangsgeometrie wurde minimal gestört, um die Operation zu lösen.": "The input geometry was disturbed minimally to make the operation work.",
-  "Die Einheit der Datei ließ sich nicht bestimmen.": "The unit of the file could not be determined.",
   "Die Einheit einer Rezeptquelle ist ungültig.": "The unit of a recipe source is invalid.",
   "Die Einheit eines Parameters ist ungültig.": "The unit of a parameter is invalid.",
   "Die Einheit eines freigegebenen Maßes ist ungültig.": "The unit of an exposed dimension is invalid.",

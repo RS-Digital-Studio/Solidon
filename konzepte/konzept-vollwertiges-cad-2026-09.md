@@ -277,7 +277,7 @@ keinen sicheren Nennwert aus einer beliebigen STL-Datei.
 Historische Stichprobe über `kind_of(produced.mesh)`, entsprechend dem
 Ausgabevergleich in `scene.evaluate`. Die Gruppen 20 + 3 + 56 decken nicht
 alle 132 Operationen ab. **Die vollständige Matrix für den B-Rep-Eingang
-liegt seit dem 19.09. vor** (`.claude/.state/cad-durchsicht-2026-09-19/s8_matrix.py`,
+liegt seit dem 19.09. vor** (`konzepte/nachweise-cad-durchsicht-2026-09/s8_matrix.py`,
 Durchsicht §2): je Operation ein frisches Dokument mit exaktem Quader und
 exakter Bohrung, dann die Operation mit ihren Vorgaben.
 
@@ -995,7 +995,7 @@ betroffene Doku.
 
 | Paket / Status | Umfang | Ergebnis und verpflichtende Abnahme |
 |---|---|---|
-| P0.0 / umgesetzt, `cfc5e303` | S | **Vorgezogene Korrekturen:** Spiegelung führt die Merkmale nach; nach nicht starrer Transformation stehen keine alten Merkmale neben den frisch erkannten. Gemeinsame Nachführung von Lage, Normalen, Maßen und belegter Gewindehändigkeit für Netz und B-Rep; Muster, Passungen, Undo, Cache und Wiederöffnung sind durch Regressionen gedeckt. Ausgangsbefunde waren sechs verlorene Spiegelmerkmale und 12 statt 6 Flächen nach Skalierung. Die Sonden `s2_mirror_scale.py` und `s8_matrix.py` aus `.claude/.state/cad-durchsicht-2026-09-19/` sind in Regressionstests überführt. Die exakte Skalierung selbst bleibt P2.1; laufender Abnahmestand in RM-188. |
+| P0.0 / umgesetzt, `cfc5e303` | S | **Vorgezogene Korrekturen:** Spiegelung führt die Merkmale nach; nach nicht starrer Transformation stehen keine alten Merkmale neben den frisch erkannten. Gemeinsame Nachführung von Lage, Normalen, Maßen und belegter Gewindehändigkeit für Netz und B-Rep; Muster, Passungen, Undo, Cache und Wiederöffnung sind durch Regressionen gedeckt. Ausgangsbefunde waren sechs verlorene Spiegelmerkmale und 12 statt 6 Flächen nach Skalierung. Die Sonden `s2_mirror_scale.py` und `s8_matrix.py` aus `konzepte/nachweise-cad-durchsicht-2026-09/` sind in Regressionstests überführt. Die exakte Skalierung selbst bleibt P2.1; laufender Abnahmestand in RM-188. |
 | P0.1 / implementiert, Release-Abnahme offen | S | `064e3095`: Positions-Dreier bleibt zusammen; Einzahltexte in Quelle und allen Katalogen; gesperrte Knöpfe erklären ihren Grund; leere Skizze antwortet. Entwicklungstor grün; vier Fälle aus §9.6 am tatsächlichen Bedienort beim Release prüfen |
 | P0.2 / implementiert, Release-Abnahme offen | L | `77223ccb`/`064e3095`: Konvertierung im Vorschauband vor Übernahme, Operation und Rückweg im Befund; gleichwertige Baumtexte. Gemeinsame Freigabe des tatsächlich gezeichneten aktuellen Auftrags für sämtliche Eingabewege, kein neuer Bestätigungsdialog. Entwicklungstor grün; Fensterregressionen und Kundenabnahme beim Release |
 | P0.3 / geplant | L | Gemeinsamen Maßeditor nach §10.2 additiv aufbauen: ein Entwurf, ✓/×, Enter/Escape, Vorschau und Zielumfang. Vorhandene Platzierungs-/Zugfelder nutzen; Fokusverlust schreibt nicht, Enter schreibt nur einmal. Noch kein paralleles zweites Eingabesystem |

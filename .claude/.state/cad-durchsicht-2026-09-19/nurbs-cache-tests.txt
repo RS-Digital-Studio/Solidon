@@ -1,4 +1,0 @@
-tests/test_cache.py
-
-$ -q -m not performance -p no:cacheprovider tests/test_cache.py
---> grün  Exit 0  62 passed in 1.60s

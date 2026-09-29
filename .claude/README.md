@@ -17,7 +17,7 @@ wiederholt — wo etwas anderswo steht, steht hier der Verweis.
 | `hooks/` | `solidon3d_hooks.py` — ein Skript für beide Editoren | Quelle. Die Einstiege stehen in `settings.json` und `.codex/hooks.json` |
 | `scripts/` | `suite-getrennt.sh` — das Entwicklungstor: Kernsammlung im Standardlauf, Fensterdateien nur beim Release mit `--release`; der gesamte Prüfweg steht in `/pruefen` | Quelle |
 | `.state/` | Ein Ordner je Durchsicht: Messskripte, Rohfunde, Auftragstexte, meist ein `README.md`. Nennt ihn nur noch `ROADMAP-ARCHIV.md`, wird er entfernt — der Stand bleibt in der Git-Historie; ein Skript, das eine Regel, ein Werkzeug oder die CI braucht, gehört nach `tools/` | Quelle |
-| `settings.json` | Rechte, Hooks, Umgebung, Plugins | Quelle |
+| `settings.json` | Rechte, Hooks, Umgebung, Plugins. Werkzeuge, die Geld kosten oder etwas veröffentlichen (`run_agent_suite`, `upload_website`, `deploy_activation_server`, `check_support`, `sign_release`, `make_licence_keys`), stehen unter `ask`: Eine ausdrückliche Rückfrage gilt auch unter `bypassPermissions` | Quelle |
 | `launch.json` | Startprofil für das Vorschaufenster | Quelle |
 | `bedienkonzept-ueberblick.md`, `bedienkonzept-funktionen.md` | Wie die Sitzung selbst bedienbar sein soll. **Entwurf** — umgesetzt ist davon nichts; den Stand nennt je eine eigene Tabelle, nicht die letzte der Datei | Quelle |
 

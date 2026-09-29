@@ -1,4 +1,0 @@
-tests/test_matching_lifecycle.py
-
-$ -q -p tools.list_windowed_tests -p no:cacheprovider tests/test_matching_lifecycle.py
---> grün  Exit 0  2 passed in 7.79s
