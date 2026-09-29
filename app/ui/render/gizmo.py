@@ -61,6 +61,22 @@ def _unit(vector: Sequence[float]) -> np.ndarray:
     return array / length if length > EPS_GEOM else array
 
 
+def display_ray(renderer: Renderer, x: float, y: float) -> tuple[Vec3, Vec3] | None:
+    """Sichtstrahl durch einen Bildpunkt, mit unnormierter Richtung.
+
+    Ohne beide Kameraebenen oder bei einem Strahl bis zur geometrischen
+    Auflösung gibt es weder einen Griffzug noch ein Auswahlziel.
+    """
+    near = renderer.display_to_world(x, y, 0.0)
+    far = renderer.display_to_world(x, y, 1.0)
+    if near is None or far is None:
+        return None
+    direction = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
+    if math.sqrt(sum(value * value for value in direction)) <= EPS_GEOM:
+        return None
+    return near, direction
+
+
 def closest_axis_parameter(
     ray_start: Vec3, ray_direction: Vec3, origin: Vec3, axis: Vec3
 ) -> float | None:
@@ -369,20 +385,10 @@ class Gizmo:
             kind, index = wanted
             (self._arrows if kind == "arrow" else self._rings)[index].set_colour(HIGHLIGHT)
 
-    def _ray(self, event: PointerEvent) -> tuple[Vec3, Vec3] | None:
-        near = self._renderer.display_to_world(event.x, event.y, 0.0)
-        far = self._renderer.display_to_world(event.x, event.y, 1.0)
-        if near is None or far is None:
-            return None
-        direction = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
-        if math.sqrt(sum(value * value for value in direction)) <= EPS_GEOM:
-            return None
-        return near, direction
-
     def _begin(self, event: PointerEvent) -> None:
         assert self._selected is not None
         kind, index = self._selected
-        ray = self._ray(event)
+        ray = display_ray(self._renderer, event.x, event.y)
         self._init_parameter = None
         self._init_vector = None
         if ray is None:
@@ -405,7 +411,7 @@ class Gizmo:
     def _drag(self, event: PointerEvent) -> None:
         assert self._selected is not None
         kind, index = self._selected
-        ray = self._ray(event)
+        ray = display_ray(self._renderer, event.x, event.y)
         if ray is None:
             return
         matrix: np.ndarray | None = None

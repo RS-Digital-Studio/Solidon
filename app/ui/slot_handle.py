@@ -37,7 +37,7 @@ from app.core.geom.prepare import is_round_length, shortest_slot
 from app.core.units import EPS_GEOM, is_close
 from app.ui.render import shapes
 from app.ui.render.api import Colour, Item, PointerEvent, Renderer, SurfaceStyle, Vec3
-from app.ui.render.gizmo import HIGHLIGHT, ray_plane_hit
+from app.ui.render.gizmo import HIGHLIGHT, display_ray, ray_plane_hit
 from app.ui.render.navigator import CLICK_SLACK
 
 # **Wie kurz ein Zug das Loch machen darf, steht im Kern.**
@@ -542,7 +542,7 @@ class SlotHandle:
 
     def _grab_at(self, event: PointerEvent, index: int | None) -> np.ndarray:
         """Knopf minus Druckpunkt auf der Mündungsebene — null ohne Schnittpunkt."""
-        ray = None if index is None else self._ray(event)
+        ray = None if index is None else display_ray(self._renderer, event.x, event.y)
         hit = (
             None
             if ray is None
@@ -590,16 +590,6 @@ class SlotHandle:
         if wanted is not None:
             self._knobs[wanted].set_colour(HOVER_COLOUR)
 
-    def _ray(self, event: PointerEvent) -> tuple[Vec3, Vec3] | None:
-        near = self._renderer.display_to_world(event.x, event.y, 0.0)
-        far = self._renderer.display_to_world(event.x, event.y, 1.0)
-        if near is None or far is None:
-            return None
-        direction = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
-        if math.sqrt(sum(value * value for value in direction)) <= EPS_GEOM:
-            return None
-        return near, direction
-
     def _drag(self, event: PointerEvent) -> None:
         """Der Zeiger auf der Mündungsebene wird Länge und Winkel.
 
@@ -614,7 +604,7 @@ class SlotHandle:
             <= CLICK_SLACK * self._renderer.device_ratio()
         ):
             return
-        ray = self._ray(event)
+        ray = display_ray(self._renderer, event.x, event.y)
         if ray is None:
             return
         hit = ray_plane_hit(ray[0], ray[1], tuple(self._centre), tuple(self._axis))

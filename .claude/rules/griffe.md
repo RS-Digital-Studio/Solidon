@@ -46,6 +46,9 @@ sichtbar und tot.
 * **Er pickt über den Vertrag, nie mit eigenem Picker** (`pick_item`: erst
   `keep_in_front`, dann der Rest, Toleranz `PICK_SLACK_PIXELS`) — ein eigener
   Picker trifft auf der einen Maschine und auf der anderen nicht.
+* **Bewegungsgriff, Langlochgriff und Auswahl teilen ihren Sichtstrahl**
+  (`render.gizmo.display_ray`): nahe und ferne Kameraebene, Richtung ohne
+  Normierung, kein Strahl bei fehlender Projektion oder Länge bis `EPS_GEOM`.
 * **Beim Ziehen ist alles Vorschau** (Regel 2): `set_matrix` am Element, beim
   Loslassen Operationen (`_on_gizmo_released`) oder nichts unter der
   Fangschwelle.

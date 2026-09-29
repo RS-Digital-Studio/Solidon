@@ -154,7 +154,7 @@ from app.ui.render.api import (
     hex_of,
 )
 from app.ui.render.edges import feature_edges, outline_edges
-from app.ui.render.gizmo import ARROW_SHARE, Gizmo, normal_frame, ray_plane_hit
+from app.ui.render.gizmo import ARROW_SHARE, Gizmo, display_ray, normal_frame, ray_plane_hit
 from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_handle import SlotHandle, settled_length, shown_length
@@ -12234,14 +12234,7 @@ class Viewport(QWidget):
         """
         if self.renderer is None:
             return None
-        near = self.renderer.display_to_world(x, y, 0.0)
-        far = self.renderer.display_to_world(x, y, 1.0)
-        if near is None or far is None:
-            return None
-        step = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
-        if math.sqrt(sum(value * value for value in step)) <= EPS_GEOM:
-            return None
-        return near, step
+        return display_ray(self.renderer, x, y)
 
     def _aim_at(self, x: int, y: int) -> Vec3 | None:
         """Die Stelle, die ein Klick hier meint — durch eine Bohrung hindurch
