@@ -658,6 +658,72 @@ def test_no_window_wears_an_accent_it_never_asked_for(qt_app: object) -> None:
     assert not beanstandet, "\n".join(beanstandet)
 
 
+def test_no_button_takes_the_accent_when_it_gets_the_focus(qt_app: object) -> None:
+    """Ein Nebenknopf mit Fokus wurde zum Hauptknopf — samt Akzent und Enter.
+
+    ``QPushButton`` mit ``autoDefault`` (in einem ``QDialog`` die Vorgabe)
+    macht sich beim Fokus selbst zum Default. In der Aufnahme des
+    Workshopfilms stand „Bild wählen …“ nach dem Dateidialog orange neben
+    „Erzeugen“; während der Erzeugung wanderte der Fokus vom gesperrten
+    „Erzeugen“ auf „Abbrechen“, und nach dem Lauf stand „Übernehmen“ grau,
+    „Abbrechen“ orange — Enter hätte das Ergebnis verworfen. Der Wächter
+    darüber sah das nicht: Er misst direkt nach ``show()``, ohne Fokus.
+
+    Das Fokusereignis wird zugestellt, nicht über ``setFocus`` erbeten: Mit
+    ``WA_DontShowOnScreen`` wird das Fenster nie aktiv, und ``setFocus``
+    merkt sich den Fokus dann nur. Die Behandlung in
+    ``QPushButton.focusInEvent`` läuft beim Zustellen genauso.
+    """
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QFocusEvent
+    from PySide6.QtWidgets import QApplication, QPushButton
+
+    dialoge = _the_dialogues_of_the_surface()
+    assert len(dialoge) >= 12, f"nur {len(dialoge)} Dialoge — die Liste ist geschrumpft"
+
+    fokussiert = 0
+    beanstandet: list[str] = []
+
+    for name, bauen in dialoge:
+        fenster = bauen()
+        try:
+            fenster.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+            fenster.show()
+            qt_app.processEvents()  # type: ignore[attr-defined]
+
+            knoepfe = fenster.findChildren(QPushButton)
+            vorher = [knopf for knopf in knoepfe if knopf.isDefault()]
+            for knopf in knoepfe:
+                if not (knopf.isVisibleTo(fenster) and knopf.isEnabled()):
+                    continue
+                if knopf.focusPolicy() == Qt.FocusPolicy.NoFocus:
+                    continue
+                fokussiert += 1
+                QApplication.sendEvent(
+                    knopf, QFocusEvent(QEvent.Type.FocusIn, Qt.FocusReason.TabFocusReason)
+                )
+                nachher = [kandidat for kandidat in knoepfe if kandidat.isDefault()]
+                QApplication.sendEvent(
+                    knopf, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason)
+                )
+                if nachher != vorher:
+                    beanstandet.append(
+                        f"{name}: Fokus auf „{knopf.text()}“ macht "
+                        f"{[kandidat.text() for kandidat in nachher]} zum Hauptknopf statt "
+                        f"{[kandidat.text() for kandidat in vorher]} — autoDefault nehmen"
+                    )
+        finally:
+            fenster.hide()
+            loslassen = getattr(type(fenster), "release", None)
+            if loslassen is not None:
+                loslassen(fenster)
+
+    # Gezählt, damit eine leere Menge nicht grün besteht: Jeder der Dialoge
+    # hat mindestens einen Knopf, der Fokus nimmt.
+    assert fokussiert >= len(dialoge), f"nur {fokussiert} Knöpfe fokussiert"
+    assert not beanstandet, "\n".join(beanstandet)
+
+
 def test_no_multiline_field_swallows_the_tab_key() -> None:
     """Ein mehrzeiliges Feld nimmt den Tabulator als Zeichen — und wird damit
     zur Tastenfalle.

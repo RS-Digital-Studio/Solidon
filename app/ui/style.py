@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.log import get_logger
+from app.ui import app_events
 from app.ui.theme import THEMES, Theme
 
 _log = get_logger(__name__)
@@ -237,7 +238,45 @@ def make_primary(button: QPushButton) -> QPushButton:
     font = button.font()
     font.setWeight(QFont.Weight.DemiBold)
     button.setFont(font)
+    _keep_the_primary()
     return button
+
+
+class _FocusTakesNoAccent(QObject):
+    """Kein Knopf wird Hauptknopf, weil er den Fokus bekommt.
+
+    ``QPushButton`` mit ``autoDefault`` — in einem ``QDialog`` die Vorgabe —
+    macht sich in ``focusInEvent`` selbst zum Default: Akzentfarbe ohne
+    halbfette Schrift, und Enter löst ihn aus. In der Aufnahme des
+    Workshopfilms stand „Bild wählen …“ nach dem Dateidialog orange neben
+    „Erzeugen“; während der Erzeugung ging der Fokus vom gesperrten
+    „Erzeugen“ auf „Abbrechen“, und nach dem Lauf stand „Übernehmen“ grau,
+    „Abbrechen“ orange — Enter hätte das Ergebnis verworfen. Alle zwölf
+    Dialoge mit Hauptknopf taten es (``tests/test_style.py``).
+
+    Hier und nicht je Dialog, weil es jeden Knopf betrifft, auch die, die
+    ein Dialog erst später baut. Der Zuhörer sieht das Fokusereignis vor dem
+    Knopf und nimmt ihm ``autoDefault``, solange er nicht der Hauptknopf ist;
+    Leertaste und Klick lösen ihn weiter aus, Enter bleibt beim Hauptknopf.
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt gibt den Namen
+        if (
+            event.type() == QEvent.Type.FocusIn
+            and isinstance(watched, QPushButton)
+            and watched.autoDefault()
+            and not watched.isDefault()
+        ):
+            watched.setAutoDefault(False)
+        return False
+
+
+def _keep_the_primary() -> None:
+    """Den Zuhörer einmal je Anwendung anmelden — am einen Filter der Anwendung."""
+    application = QCoreApplication.instance()
+    if application is None or application.findChildren(_FocusTakesNoAccent):
+        return
+    app_events.listen(_FocusTakesNoAccent(application), (QEvent.Type.FocusIn,))
 
 
 def make_danger(button: QPushButton) -> QPushButton:

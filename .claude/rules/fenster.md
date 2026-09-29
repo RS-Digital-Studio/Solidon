@@ -327,6 +327,17 @@ das angezeigte Fenster: `tests/test_style.py` hält beide Richtungen
 `test_no_window_wears_an_accent_it_never_asked_for`), misst gegen die
 gezeichnete Schrift und verbietet `setDefault(True)` außerhalb von `style.py`.
 
+**Der Fokus macht keinen Hauptknopf:** Ein `QPushButton` mit `autoDefault`
+(in einem `QDialog` die Vorgabe) macht sich beim Fokus selbst zum Default —
+Akzent ohne halbfette Schrift, und Enter löst ihn aus; wandert der Fokus vom
+gesperrten Hauptknopf auf *Abbrechen*, verwirft Enter danach das Ergebnis.
+`make_primary` meldet deshalb einmal je Anwendung einen Zuhörer am
+Anwendungsfilter an (`style._FocusTakesNoAccent`), der jedem Nebenknopf beim
+Fokus `autoDefault` nimmt, auch Knöpfen, die ein Dialog später baut;
+`test_no_button_takes_the_accent_when_it_gets_the_focus` stellt den Fokus je
+Knopf zu (mit `WA_DontShowOnScreen` wird ein Fenster nie aktiv, `setFocus`
+wirkt dort nicht).
+
 **Ein typloses Stylesheet am Vorfahren nimmt dem Hauptknopf seine Farben:** Eine
 Regel ohne Selektor gilt für jeden Nachkommen (auch aus dem Stylesheet der
 Großeltern) und **ersetzt** dort das Anwendungs-Stylesheet — für die

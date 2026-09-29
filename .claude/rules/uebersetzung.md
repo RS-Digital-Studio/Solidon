@@ -42,6 +42,15 @@ Wie ein Text für den Kunden klingt (kurz, nicht nach einem Sprachmodell,
   Taste so beschriften. Die Eingabetaste heißt, wie der Bestand sie nennt:
   en/pt Enter, es Intro, fr Entrée, it Invio.
 
+## Ein Schlüssel, eine Bedeutung, eine Schreibweise
+
+Heißt dasselbe deutsche Wort zwei Dinge („Startwert“: Seed der Erzeugung und
+Kalibrierstand eines Materials) oder steht es einmal als Beschriftung und
+einmal als Wort im Satz („Dreiecke“: Feld *Triangles*, Anzahl *440842
+triangles*), trennt ein `context` die Schlüssel (`tr("Startwert",
+context="Kalibrierstand")`, `context="Anzahl"`). Eine Übersetzung für beide
+passt an keiner Stelle: „starting point“ stand klein als Feldbeschriftung.
+
 ## Glossare je Sprache — verbindlich
 
 Wer einen neuen Schlüssel nachträgt, nimmt diese Wörter. Sie sind über den

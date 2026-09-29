@@ -339,7 +339,12 @@ def _scene_line(scene: Scene) -> str:
     material = profile.material.id if profile else "-"
     state = ""
     if profile is not None:
-        state = f" ({tr('kalibriert') if profile.material.calibrated else tr('Startwert')})"
+        calibration = (
+            tr("kalibriert")
+            if profile.material.calibrated
+            else tr("Startwert", context="Kalibrierstand")
+        )
+        state = f" ({calibration})"
     plates = _plate_count(scene)
     spread = f", {plates} {tr('Platten')}" if plates > 1 else ""
     return (

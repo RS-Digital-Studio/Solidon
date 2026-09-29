@@ -289,7 +289,9 @@ class CalibrationDialog(QDialog):
         self.setMinimumWidth(420)
 
         current = profiles.material(material)
-        state = tr("kalibriert") if current.calibrated else tr("Startwert")
+        state = (
+            tr("kalibriert") if current.calibrated else tr("Startwert", context="Kalibrierstand")
+        )
         # Der Titel, den der Kunde überall sonst liest — nicht die Kennung des
         # Profils („resin — Startwert" über einem „Standardharz").
         explanation = QLabel(

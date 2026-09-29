@@ -948,7 +948,7 @@ class GenerateDialog(QDialog):
             mesh = entry.mesh
             closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
             item = QListWidgetItem(
-                f"{index}. {mesh.triangle_count} {tr('Dreiecke')} · "
+                f"{index}. {mesh.triangle_count} {tr('Dreiecke', context='Anzahl')} · "
                 # Dieselbe Quelle wie Steckbrief und Chat (labels.volume):
                 # feste Kubikzentimeter meldeten kleine Körper als „0,0 cm³"
                 # und blieben in Zoll stehen.

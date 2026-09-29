@@ -2049,7 +2049,8 @@ class ObjectTree(QWidget):
                 if entry.kind == "brep"
                 else tr("Flächen und Kanten bearbeitbar; Rundungen aus geraden Teilstücken")
             )
-            tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
+            triangles = tr("Dreiecke", context="Anzahl")
+            tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {triangles} · {state}"
             if entry.material:
                 tip += f" · {entry.material}"
             # §18.8: woher der Körper kommt. Ohne das ist ein Baum mit sieben

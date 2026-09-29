@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication, QDialogButtonBox
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QPushButton
 
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import OperationCancelled
@@ -618,6 +618,69 @@ def test_after_a_run_a_taller_window_gives_its_room_to_the_list(qt_app: QApplica
             dialog.wait_for_workers()
             dialog.close()
             dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_the_main_button_stays_the_default_through_the_run(qt_app: QApplication) -> None:
+    """Während des Laufs und danach bleibt „Erzeugen“/„Übernehmen“ der Hauptknopf.
+
+    In der englischen Aufnahme ging der Fokus vom gesperrten „Erzeugen“ auf
+    „Abbrechen“, das sich über ``autoDefault`` zum Default machte; nach dem
+    Lauf stand „Übernehmen“ grau und „Abbrechen“ orange, und Enter hätte das
+    Ergebnis verworfen. Hier geht der Fokus den Weg, den Qt ihn schickt:
+    vom gesperrten Knopf zum nächsten.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
+    cancel = dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+    try:
+        dialog.show()
+        dialog.activateWindow()
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("eine Eule")
+        qt_app.processEvents()
+        assert dialog.isActiveWindow(), "ohne aktives Fenster kommt kein Fokus an"
+
+        for secondary in (dialog.picture, cancel):
+            secondary.setFocus(Qt.FocusReason.TabFocusReason)
+            qt_app.processEvents()
+            assert qt_app.focusWidget() is secondary
+            assert not secondary.isDefault(), f"„{secondary.text()}“ wird mit dem Fokus Default"
+            assert ok(dialog).isDefault()
+
+        ok(dialog).setFocus(Qt.FocusReason.TabFocusReason)
+        qt_app.processEvents()
+        dialog._running(True)
+        qt_app.processEvents()
+        assert not ok(dialog).isEnabled()
+        assert qt_app.focusWidget() is not ok(dialog), (
+            "der Fokus hat den gesperrten Knopf verlassen"
+        )
+        defaults = [
+            button.text() for button in dialog.findChildren(QPushButton) if button.isDefault()
+        ]
+        assert defaults == [ok(dialog).text()], f"während des Laufs trägt {defaults} den Akzent"
+
+        dialog._running(False)
+        dialog.tries = [_generated((1.0, 2.0, 0.5))]
+        dialog._show_tries()
+        _settle(qt_app)
+        take = ok(dialog)
+        assert take.text() == "Übernehmen"
+        assert take.isEnabled() and take.isDefault(), (
+            "nach dem Lauf ist „Übernehmen“ der Hauptknopf"
+        )
+        assert take.font().weight() >= QFont.Weight.DemiBold, "mit dem Aussehen von make_primary"
+        defaults = [
+            button.text() for button in dialog.findChildren(QPushButton) if button.isDefault()
+        ]
+        assert defaults == [take.text()], f"nach dem Lauf tragen {defaults} den Akzent"
+    finally:
+        dialog.wait_for_workers()
+        dialog.close()
+        dialog.deleteLater()
     qt_app.processEvents()
 
 

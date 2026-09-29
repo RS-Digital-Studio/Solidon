@@ -268,7 +268,9 @@ def command_profiles(args: argparse.Namespace) -> int:
         print(f"  {identifier:<24} {printer.title:<28} {width:.0f} x {depth:.0f} x {height:.0f} mm")
     print(tr("Material"))
     for identifier, material in sorted(profiles.material_profiles().items()):
-        state = tr("kalibriert") if material.calibrated else tr("Startwert")
+        state = (
+            tr("kalibriert") if material.calibrated else tr("Startwert", context="Kalibrierstand")
+        )
         print(f"  {identifier:<24} {material.title:<28} {state}")
     return 0
 
@@ -405,7 +407,7 @@ def command_info(args: argparse.Namespace) -> int:
             # keine Formatbreite.
             f"  {object_id:<8} {entry.name!s:<24} "
             f"{size[0]:.1f} x {size[1]:.1f} x {size[2]:.1f} mm   "
-            f"{entry.mesh.triangle_count} {tr('Dreiecke')}, {watertight}"
+            f"{entry.mesh.triangle_count} {tr('Dreiecke', context='Anzahl')}, {watertight}"
         )
     print(tr("Verlauf"))
     for transaction in document.transactions:

@@ -92,7 +92,7 @@ def test_the_first_run_speaks_the_language_from_the_installer(
         assert printed.splitlines()[0] == "Impresora", (
             f"deutsche Ausgabe trotz Installer-Wahl: {printed[:80]!r}"
         )
-        assert "Valor de partida" in printed or "calibrado" in printed
+        assert "valores de partida" in printed or "calibrado" in printed
     finally:
         install_language(SOURCE_LANGUAGE)
         set_language(SOURCE_LANGUAGE)
