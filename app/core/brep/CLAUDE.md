@@ -115,8 +115,8 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   einmal; `void.centre`/`size` sind Welt-AABB. Keine Handles oder Builder im
   Merkmal; `voids_instead_of_phantom_bores` verdrängt Phantome.
 - **Langloch** (Regel in `operationen.md`): Ein von der Naht geteilter Mantel
-  wird vorher zusammengeführt (`_seam_split_cylinders_joined`; `FULL_TURN` ist
-  `FULL_TURN_SPAN`). Die Mündungsfase gehört dazu (`_mouth_chamfers_folded`,
+  wird vorher zusammengeführt (`_seam_split_cylinders_joined`; der Umfang einer
+  Bohrung ist `perceive.features.FULL_TURN_SPAN`, gelesen über `_full_turn`). Die Mündungsfase gehört dazu (`_mouth_chamfers_folded`,
   Nennmaße ohne Fase); auf schräger Fläche macht OpenCASCADE ihre Bögen zu
   BSplines — was `partial_cone_patch` als Kegelstück liest, trägt die Fase.
   `MIN_ROUND_ARC` fragt `_describe` am nativen Umfang, einen Zylinder erst nach

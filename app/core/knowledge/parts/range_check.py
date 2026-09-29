@@ -250,9 +250,7 @@ def has_self_intersections(mesh: Any, cancelled: CancelToken | None = None) -> b
         return False
 
 
-def printable_gap(
-    mesh: Any, profile: Profile, *, cancelled: CancelToken | None = None
-) -> float | None:
+def printable_gap(mesh: Any, *, cancelled: CancelToken | None = None) -> float | None:
     """Kleinster Flächenabstand aller Komponenten, unabhängig von ihrer Reihenfolge."""
     from app.core.geom.measure import surface_gap
     from app.core.geom.mesh import MeshData
@@ -424,7 +422,7 @@ def check(
                 break
             announce(index, 3)
 
-            gap = printable_gap(mesh, profile, cancelled=token) if bodies > 1 else None
+            gap = printable_gap(mesh, cancelled=token) if bodies > 1 else None
             if _is_cancelled(token):
                 break
             if bodies > 1 and gap is None and mesh.component_count > 1:

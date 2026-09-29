@@ -119,9 +119,6 @@ class RecordingItem(Item):
         self.points = fresh
         self.updates += 1
 
-    def set_line_width(self, width: float) -> None:
-        self.line_width = float(width)
-
 
 class RecordingLabels(RecordingItem, LabelsItem):
     """Beschriftungen — Anker und Texte, sonst nichts."""

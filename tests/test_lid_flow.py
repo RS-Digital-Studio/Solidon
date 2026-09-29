@@ -89,7 +89,7 @@ def test_the_lid_and_its_box_become_a_fit(profile: Profile) -> None:
     document = project.document
     box = _box_with_cavity(document, profile)
 
-    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0})
 
     assert applied.fit is not None, "ohne Passung greift keine der Regeln aus advise.py"
     assert len(document.fits) == 1
@@ -114,7 +114,7 @@ def test_the_tolerance_stays_a_reference(profile: Profile) -> None:
     document = project.document
     box = _box_with_cavity(document, profile)
 
-    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0})
 
     assert str(document.fits[0].tolerance) == "auto:"
 
@@ -128,7 +128,7 @@ def test_both_features_exist_after_evaluation(profile: Profile) -> None:
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
     box = _box_with_cavity(document, profile)
-    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0})
 
     result = evaluate(document, profile, sources=ProjectSources(project))
 
@@ -150,7 +150,6 @@ def test_the_screw_lid_flow_pairs_the_outer_and_inner_threads(profile: Profile) 
         project.document,
         container,
         {"height": 8.0, "pitch": 3.0, "wall": 2.4, "thickness": 2.4},
-        profile,
         op="screw_lid",
     )
     result = evaluate(project.document, profile, sources=ProjectSources(project))
@@ -184,7 +183,7 @@ def test_the_fit_is_actually_measurable(profile: Profile) -> None:
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
     box = _box_with_cavity(document, profile)
-    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0})
 
     result = evaluate(document, profile, sources=ProjectSources(project))
     findings = check_fits(result.scene, profile, document=document)
@@ -203,7 +202,7 @@ def test_undo_takes_the_fit_with_it(profile: Profile) -> None:
     project = new_project("centauri-carbon-2", "petg")
     document = project.document
     box = _box_with_cavity(document, profile)
-    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+    apply_lid(document, box, {"thickness": 3.0, "collar": 4.0})
     assert len(document.fits) == 1
 
     History(document).undo()
@@ -226,7 +225,7 @@ def test_the_flow_says_what_it_did(profile: Profile) -> None:
     document = project.document
     box = _box_with_cavity(document, profile)
 
-    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0})
 
     assert [entry.code for entry in applied.findings] == ["parts.lid_fit"]
 
@@ -242,7 +241,7 @@ def test_a_flat_lid_gets_no_fit_onto_a_missing_collar(profile: Profile) -> None:
     document = project.document
     box = _box_with_cavity(document, profile)
 
-    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 0.0}, profile)
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 0.0})
 
     assert applied.fit is None, "ein flacher Deckel hat keinen Kragen zu paaren"
     from app.core.scene.fits import active_fits
@@ -256,7 +255,7 @@ def test_a_flat_lid_gets_no_fit_onto_a_missing_collar(profile: Profile) -> None:
 
     project2 = new_project("centauri-carbon-2", "petg")
     box2 = _box_with_cavity(project2.document, profile)
-    without = apply_lid(project2.document, box2, {"thickness": 3.0}, profile)
+    without = apply_lid(project2.document, box2, {"thickness": 3.0})
     assert without.fit is not None, "die Schemavorgabe trägt einen Kragen"
 
 
@@ -280,7 +279,7 @@ def test_a_collar_written_as_an_expression_counts_as_a_number(profile: Profile) 
     document.parameters["collar"] = Parameter(name="collar", value=0.0)
     box = _box_with_cavity(document, profile)
 
-    applied = apply_lid(document, box, {"thickness": 3.0, "collar": "@collar"}, profile)
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": "@collar"})
 
     assert applied.fit is None, "ein Kragen von null bleibt null, auch als Ausdruck geschrieben"
     from app.core.scene.fits import active_fits
@@ -292,7 +291,7 @@ def test_a_collar_written_as_an_expression_counts_as_a_number(profile: Profile) 
     other = new_project("centauri-carbon-2", "petg")
     other.document.parameters["collar"] = Parameter(name="collar", value=4.0)
     box2 = _box_with_cavity(other.document, profile)
-    thick = apply_lid(other.document, box2, {"thickness": 3.0, "collar": "@collar"}, profile)
+    thick = apply_lid(other.document, box2, {"thickness": 3.0, "collar": "@collar"})
 
     assert thick.fit is not None, "ein Ausdruck über vier Millimeter trägt seine Passung"
 
@@ -310,7 +309,7 @@ def test_lid_fit_follows_later_collar_changes(
     document = project.document
     document.parameters["collar"] = Parameter(name="collar", value=initial)
     box = _box_with_cavity(document, profile)
-    apply_lid(document, box, {"collar": "@collar" if parameter else initial}, profile)
+    apply_lid(document, box, {"collar": "@collar" if parameter else initial})
     operation = document.ops[-1]
     assert len(document.fits) == 1
     if parameter:
@@ -332,7 +331,7 @@ def test_invalid_fit_condition_is_visible_instead_of_disabling_the_fit(profile, 
 
     project = new_project("centauri-carbon-2", "petg")
     box = _box_with_cavity(project.document, profile)
-    apply_lid(project.document, box, {"collar": 4}, profile)
+    apply_lid(project.document, box, {"collar": 4})
     fit = project.document.fits[0]
     import dataclasses
 
@@ -349,7 +348,7 @@ def test_positive_collar_still_reports_a_lost_feature(profile):
 
     project = new_project("centauri-carbon-2", "petg")
     box = _box_with_cavity(project.document, profile)
-    apply_lid(project.document, box, {"collar": 4}, profile)
+    apply_lid(project.document, box, {"collar": 4})
     findings = check(Scene(fits=project.document.fits), profile, document=project.document)
     assert {finding.code for finding in findings} == {"fit.missing_feature"}
 
@@ -361,7 +360,7 @@ def test_replanning_a_lid_rebinds_its_condition_and_roundtrips_undo(profile, tmp
 
     project = new_project("centauri-carbon-2", "petg")
     box = _box_with_cavity(project.document, profile)
-    apply_lid(project.document, box, {"collar": collar}, profile)
+    apply_lid(project.document, box, {"collar": collar})
     original = project.document.fits[0]
     history = History(project.document)
     original_id = project.document.ops[-1].id
@@ -392,7 +391,7 @@ def test_removing_a_fit_condition_step_takes_its_fit_and_undo_restores_both(prof
     project = new_project("centauri-carbon-2", "petg")
     box = _box_with_cavity(project.document, profile)
     hollow_id = project.document.ops[-1].id
-    apply_lid(project.document, box, {"collar": 4.0}, profile)
+    apply_lid(project.document, box, {"collar": 4.0})
     project.document.fits[0] = dataclasses.replace(
         project.document.fits[0], when_positive=(hollow_id, "wall")
     )
@@ -474,7 +473,7 @@ def test_v19_fit_migration_preserves_explicit_removal_and_old_replan_states(
 
     project = new_project("centauri-carbon-2", "petg")
     box = _box_with_cavity(project.document, profile)
-    apply_lid(project.document, box, {"collar": 0.0 if flat else 4.0}, profile)
+    apply_lid(project.document, box, {"collar": 0.0 if flat else 4.0})
     history = History(project.document)
     first_id = project.document.ops[-1].id
     if removed:

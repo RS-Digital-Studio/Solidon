@@ -248,24 +248,15 @@ def _sketch_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
     )
 
 
-def face_of_sketch(text: str) -> str | None:
-    """Die Fläche, auf der diese Skizze liegt — oder nichts.
-
-    Ein unlesbarer Skizzentext ist der Fehler der Operation, nicht dieser
-    Prüfung: Sie zählt Verweise auf und übergeht, was sie nicht lesen kann.
-    Öffentlich, weil der Cache-Schlüssel dieselbe Frage stellt
-    (``evaluate._with_nested_context``): Wer die Ebene liest, hängt vom
-    Träger ab, und zwei Fassungen derselben Auskunft liefen auseinander.
-    """
-    reference = feature_ref_of_sketch(text)
-    return reference.feature_id if reference is not None else None
-
-
 def feature_ref_of_sketch(text: str) -> FeatureRef | None:
     """Die eindeutige Flächenreferenz einer Skizze lesen — oder nichts.
 
-    Für die alte Schreibweise bleibt ``object_id`` leer. Aufrufer, die nur
-    die Merkmalskennung brauchen, verwenden :func:`face_of_sketch`.
+    Für die alte Schreibweise bleibt ``object_id`` leer. Ein unlesbarer
+    Skizzentext ist der Fehler der Operation, nicht dieser Prüfung: Sie zählt
+    Verweise auf und übergeht, was sie nicht lesen kann. Öffentlich, weil der
+    Cache-Schlüssel dieselbe Frage stellt (``evaluate._with_nested_context``):
+    Wer die Ebene liest, hängt vom Träger ab, und zwei Fassungen derselben
+    Auskunft liefen auseinander.
     """
     if not text:
         return None

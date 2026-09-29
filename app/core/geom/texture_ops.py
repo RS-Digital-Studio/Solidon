@@ -1030,10 +1030,6 @@ def tool_in_outline(
     depth: float,
     mode: str,
     seed: int = 0,
-    cell: float | None = None,
-    wall: float = 0.0,
-    whole_cells: bool = False,
-    anchor: tuple[float, float] | None = None,
 ) -> MeshData:
     """Der Werkzeugkörper eines Musters, am Umriss abgeschnitten, in Weltkoordinaten.
 
@@ -1046,18 +1042,7 @@ def tool_in_outline(
     """
     from app.core.geom.transform import apply
 
-    body = flat_tool(
-        outline,
-        pattern=pattern,
-        pitch=pitch,
-        depth=depth,
-        mode=mode,
-        seed=seed,
-        cell=cell,
-        wall=wall,
-        whole_cells=whole_cells,
-        anchor=anchor,
-    )
+    body = flat_tool(outline, pattern=pattern, pitch=pitch, depth=depth, mode=mode, seed=seed)
     matrix = np.eye(4)
     matrix[:3, :3] = basis
     matrix[:3, 3] = np.asarray(origin, dtype=float)

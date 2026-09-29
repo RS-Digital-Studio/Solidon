@@ -40,7 +40,6 @@ from app.core.types import (
     ObjectId,
     Operation,
     Origin,
-    Profile,
     TransactionId,
 )
 from app.i18n import _
@@ -104,7 +103,6 @@ def apply_lid(
     document: Document,
     object_id: ObjectId,
     params: dict[str, object],
-    profile: Profile,
     *,
     op: str = "create_lid",
     origin: Origin | None = None,
@@ -166,10 +164,4 @@ def apply_lid(
     )
 
 
-def features_of_lid() -> tuple[str, str]:
-    """Die zwei Merkmalsnamen, auf die die Passung zeigt — für Tests und
-    Oberfläche."""
-    return CAVITY_FEATURE, COLLAR_FEATURE
-
-
-__all__ = ["FIT_NAME", "LidApplied", "apply_lid", "features_of_lid", "fit_for_lid", "unique_name"]
+__all__ = ["FIT_NAME", "LidApplied", "apply_lid", "fit_for_lid", "unique_name"]

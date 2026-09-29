@@ -93,7 +93,7 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
   kanonische Ecken); gleiche erben die Zahlen (`_repeated`).
 - **Gestapelt statt je Schicht**: Arbeiter bekommen Blöcke von höchstens
   `BATCH_LAYERS`, `_measure_batch` stellt jede Frage als **einen**
-  vektorisierten GEOS-Aufruf; die Einzelfunktionen (`_measure`, `_islands`,
+  vektorisierten GEOS-Aufruf; die Einzelfunktionen (`_islands`,
   `minimum_width`, `_opening_loss`, `_survives_opening`) sind Blöcke aus einem
   Element. `_islands_many` baut den GEOS-Index der Vorgänger einmal.
   `FULL_WORKERS` steht bei sechs, die Messreihe an der Konstante.

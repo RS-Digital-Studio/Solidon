@@ -23,12 +23,9 @@ from app.core.errors import ValidationError
 from app.core.geom import enclosure, transform
 from app.core.geom.mesh import MeshData, edge_table
 from app.core.geom.transform import moved, rotation_between
-from app.core.log import get_logger
 from app.core.types import Vec3
 from app.core.units import EPS_GEOM, is_zero
 from app.i18n import _
-
-_log = get_logger(__name__)
 
 Axis = Literal["x", "y", "z"]
 

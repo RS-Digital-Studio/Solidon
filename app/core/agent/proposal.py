@@ -92,10 +92,6 @@ class Proposal:
     dem, was jetzt hilft — eine Kennung allein erklärt niemandem etwas."""
 
     @property
-    def changes_geometry(self) -> bool:
-        return bool(self.drafts)
-
-    @property
     def creates_something(self) -> bool:
         """Ob der Vorschlag etwas anlegt oder ändert — die eine Bedingung für
         die Misch-Schranke aus Regel 16 (§15.4).

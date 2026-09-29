@@ -810,7 +810,6 @@ def box_with_lid() -> Project:
         document,
         "obj_1",
         {"thickness": 3.0, "collar": 5.0},
-        profiles.make_profile(),
     )
     # ``create_lid`` verbraucht seine Eingabe und legt zwei Ausgänge an: die
     # Dose kommt als erste zurück, der Deckel als zweite. Ab hier heißt die
@@ -897,7 +896,6 @@ def fit_after_material_change() -> Project:
         document,
         "obj_1",
         {"thickness": 2.5, "collar": 4.0},
-        profiles.make_profile(),
     )
     box, lid = applied.object_ids[0], applied.object_ids[1]
 

@@ -19,7 +19,6 @@ import pytest
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData
 from app.core.geom.prepare_ops import NO_OWN_BODY
-from app.core.perceive import features as mesh_features
 from app.core.perceive.actions import actions_for
 from app.core.perceive.features import detect, span_about
 from app.core.perceive.relations import CavityState, cavity_chain_state_at
@@ -56,13 +55,6 @@ def _holes(found: dict[FeatureId, Feature]) -> list[Feature]:
         (entry for entry in found.values() if entry.kind == "hole"),
         key=lambda entry: float(entry.params["centre"][0]),
     )
-
-
-def test_the_two_thresholds_are_one_number() -> None:
-    """Die Umfangsschwelle steht einmal — am Netz in Grad, am exakten Körper als Anteil."""
-    from app.core.brep import features as exact_features
-
-    assert pytest.approx(mesh_features.FULL_TURN_SPAN) == exact_features.FULL_TURN * 360.0
 
 
 @pytest.mark.parametrize("reading", ["nativ", "netz"])

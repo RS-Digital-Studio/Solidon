@@ -78,10 +78,6 @@ _log = get_logger(__name__)
 #: auch die halbe Breite — die Sendung soll durch jeden Posteingang passen.
 MAX_SHOT_WIDTH: Final = 1600
 
-#: Wie viel Protokoll mitreist. Dieselbe Zahl wie im abgelegten Bericht: es
-#: sind dieselben Zeilen, nur auf einem anderen Weg.
-LOG_LINES: Final = reports.LOG_LINES
-
 #: Die Portaladresse und der Ergebnisvertrag gelten für jeden Mailentwurf.
 MAIL_PORTAL_SERVICE: Final = "org.freedesktop.portal.Desktop"
 MAIL_PORTAL_REQUEST: Final = "org.freedesktop.portal.Request"

@@ -573,17 +573,6 @@ def bore_and_widening_at(
     return candidates[0], feature
 
 
-def _coaxial(first: Feature, second: Feature) -> bool:
-    """Dieselbe Achslinie mit den bereits geltenden Einpassungsschranken."""
-    axis, other_axis = axis_of(first), axis_of(second)
-    return (
-        axis is not None
-        and other_axis is not None
-        and abs(float(axis @ other_axis)) >= units.exact_cos_degrees(SINK_AXIS_LIMIT)
-        and _axis_lines_agree(first, second)
-    )
-
-
 def _axis_lines_agree(first: Feature, second: Feature) -> bool:
     """Die gemessenen Lagen passen beiderseits zum selben Hohlraum.
 

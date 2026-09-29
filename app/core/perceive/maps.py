@@ -31,7 +31,6 @@ from app.core.errors import CANCEL, DECIMATE_MESH, UserError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.profiles import analysis_limits
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
-from app.core.log import get_logger
 from app.core.perceive.features import CURVATURE_LIMIT, pair_radii
 from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import (
@@ -56,8 +55,6 @@ from app.i18n import TranslatableText, _, format_decimal
 
 if TYPE_CHECKING:
     from app.core.geom.deviation import SampledDeviation
-
-_log = get_logger(__name__)
 
 MapKind = Literal[
     "wall", "overhang", "defects", "curvature", "deviation", "features", "fits", "support"

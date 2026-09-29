@@ -1542,14 +1542,6 @@ class Frame:
         theta = float(flat[0]) / self.radius
         return self.x_axis * math.cos(theta) + self.y_axis * math.sin(theta)
 
-    def normals_at(self, flat: np.ndarray) -> np.ndarray:
-        """Die Normalen des Trägers an vielen Stellen der Abwicklung: ``(n, 3)``."""
-        flat = np.atleast_2d(np.asarray(flat, dtype=float))
-        if self.kind == "plane":
-            return np.broadcast_to(self.normal, (len(flat), 3))
-        theta = flat[:, 0] / self.radius
-        return np.outer(np.cos(theta), self.x_axis) + np.outer(np.sin(theta), self.y_axis)
-
     def tangent(self, flat: np.ndarray, direction: np.ndarray) -> np.ndarray:
         """Eine Richtung der Abwicklung als Richtung in der Welt, an dieser Stelle."""
         if self.kind == "plane":

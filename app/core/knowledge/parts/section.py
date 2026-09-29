@@ -19,7 +19,7 @@ muss.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -73,20 +73,6 @@ class Section:
             profile_section(profile, max_sag=CONTOUR_SAG, check_cancelled=check_cancelled),
             _faces().face_of(profile) if building_exact() else None,
         )
-
-    @classmethod
-    def from_points(cls, points: Sequence[Sequence[float]]) -> Section:
-        """Aus einem Vieleck — so, wie eine Bindung ihre Konturen aufbewahrt."""
-        from app.core.sketch.profile import Profile, ProfileSegment
-
-        corners = [(float(point[0]), float(point[1])) for point in points]
-        profile = Profile(
-            segments=tuple(
-                ProfileSegment("line", corner, corners[(index + 1) % len(corners)])
-                for index, corner in enumerate(corners)
-            )
-        )
-        return cls.of(profile)
 
     @classmethod
     def rectangle(cls, x0: float, x1: float, y0: float, y1: float) -> Section:

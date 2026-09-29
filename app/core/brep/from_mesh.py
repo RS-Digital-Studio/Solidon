@@ -1898,28 +1898,19 @@ def _follows(curve: Any, first: float, last: float, points: np.ndarray, spread: 
     return length <= 1.25 * (chords + 2.0 * spread * max(1, len(points) - 1))
 
 
-def chain_curve(
-    points: np.ndarray, carriers: Sequence[Carrier], tolerance: float, *, closed: bool
-) -> Curve:
-    """Die Gestalt der Schnittkurve zweier Träger durch die gezogenen Kettenpunkte.
-
-    Zuerst aus der Gestalt der Träger (:func:`structural_curve`). Sonst aus
-    den Punkten: Strecke, wo alle auf einer Geraden liegen und die Gerade auf
-    beiden Trägern; Kreis, wo sie auf einem Kreis liegen und der Kreis auf
-    beiden; sonst eine B-Spline durch die Punkte. „Auf" heißt: innerhalb von
-    ``CURVE_SHARE`` der Toleranz, gemessen auch **zwischen** den Punkten —
-    eine Sehne zwischen zwei Punkten eines Kreises liegt auf keinem Träger.
-    """
-    structural = structural_curve(points, carriers, tolerance, closed=closed)
-    if structural is not None:
-        return structural
-    return fitted_curve(points, carriers, tolerance, closed=closed)
-
-
 def fitted_curve(
     points: np.ndarray, carriers: Sequence[Carrier], tolerance: float, *, closed: bool
 ) -> Curve:
-    """Strecke, Kreis oder B-Spline aus Punkten, die auf beiden Trägern liegen."""
+    """Strecke, Kreis oder B-Spline aus Punkten, die auf beiden Trägern liegen.
+
+    Für die Kanten, deren Gestalt die Träger nicht schon sagen
+    (:func:`structural_curve` fragt der Plan zuerst): Strecke, wo alle Punkte
+    auf einer Geraden liegen und die Gerade auf beiden Trägern; Kreis, wo sie
+    auf einem Kreis liegen und der Kreis auf beiden; sonst eine B-Spline durch
+    die Punkte. „Auf" heißt: innerhalb von ``CURVE_SHARE`` der Toleranz,
+    gemessen auch **zwischen** den Punkten — eine Sehne zwischen zwei Punkten
+    eines Kreises liegt auf keinem Träger.
+    """
     limit = max(EPS_GEOM, CURVE_SHARE * tolerance)
     if not closed and len(points) >= 2:
         centre, direction, spread = _fit_line(points)
@@ -2581,18 +2572,6 @@ def _occ_edges(
     spline = interpolation.Curve()
     first, last = spline.FirstParameter(), spline.LastParameter()
     return [made(BRepBuilderAPI_MakeEdge(spline, vertex(ends[0]), vertex(ends[-1]), first, last))]
-
-
-def _occ_face(
-    carrier: Carrier,
-    shape: _RegionShape,
-    loops: Sequence[Sequence[tuple[int, bool]]],
-    edges_of: Callable[[int], Sequence[Any]],
-    facet: bool,
-) -> Any:
-    """Eine Fläche auf dem Träger, von den Rändern des Bereichs begrenzt (siehe
-    :func:`_checked_face`)."""
-    return _checked_face(carrier, shape, loops, edges_of, facet)[0]
 
 
 def _checked_face(

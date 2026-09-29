@@ -41,7 +41,6 @@ from app.core.errors import (
     InternalError,
     OperationCancelled,
 )
-from app.core.geom.edges import EDGE_CHOICES as SHARED_EDGE_CHOICES
 from app.core.geom.edges import (
     LOOP_START,
     ChamferShape,
@@ -69,11 +68,9 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Welche Kanten eine Auswahl meint — **die Tabelle steht in ``geom.edges``**
-#: und gilt für beide Kerne. Hier bleibt der Name, unter dem das Register und
-#: die Operationen sie ansprechen; zwei Aufzählungen hießen, dass ein Kern
-#: eines Tages eine sechste Art kennt und der andere nicht.
+#: (``EDGE_CHOICES``) und gilt für beide Kerne; zwei Aufzählungen hießen, dass
+#: ein Kern eines Tages eine sechste Art kennt und der andere nicht.
 EdgeChoice = SharedEdgeChoice
-EDGE_CHOICES: tuple[EdgeChoice, ...] = SHARED_EDGE_CHOICES
 
 
 @dataclass(frozen=True, slots=True)
@@ -2158,9 +2155,7 @@ def solid_from_faces(
     # **Erst die Fläche um den Rand, fortgesetzt; sonst der Fächer** (RM-248).
     # Hält die fortgesetzte Fläche beim Nähen nicht — eine Füllung trifft ihre
     # Randkanten nur auf ihre Genauigkeit —, gilt der Fächer wie bisher.
-    continued = [
-        _continued_cap(solid, wire, wanted, faces, numbered, neighbours) for wire in curved
-    ]
+    continued = [_continued_cap(wire, wanted, faces, numbered, neighbours) for wire in curved]
     attempts = [continued] if any(entry is not None for entry in continued) else []
     attempts.append([None] * len(curved))
     for caps in attempts:
@@ -2219,7 +2214,7 @@ def _sewn_body(copies: list[Any], caps: list[Any]) -> Solid | None:
 
 
 def _continued_cap(
-    solid: Solid, wire: Any, chosen: set[int], faces: list[Any], numbered: Any, neighbours: Any
+    wire: Any, chosen: set[int], faces: list[Any], numbered: Any, neighbours: Any
 ) -> list[Any] | None:
     """Der Deckel eines gekrümmten Rands als Fortsetzung der Fläche um ihn — oder ``None``.
 

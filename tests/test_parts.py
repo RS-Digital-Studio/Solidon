@@ -5977,7 +5977,6 @@ def test_a_printed_joint_needs_a_gap_the_printer_can_hold(profile: Profile) -> N
 )
 def test_the_barrel_hinge_keeps_wall_bodies_and_gap_at_critical_boundaries(
     values: dict[str, float],
-    profile: Profile,
 ) -> None:
     """Die drei vormals brechenden §24.3-Grenzen als Geometrievertrag."""
     from app.core.geom.mesh import as_mesh_data
@@ -5988,7 +5987,7 @@ def test_the_barrel_hinge_keeps_wall_bodies_and_gap_at_critical_boundaries(
     mesh = as_mesh_data(hinge.fn(hinge.params(**values)).mesh)
     pieces = mesh.raw.split(only_watertight=False)
     measured_wall = local_wall_thickness(mesh)
-    measured_gap = printable_gap(mesh, profile)
+    measured_gap = printable_gap(mesh)
 
     assert len(pieces) == hinge.bodies
     assert all(piece.is_watertight and piece.volume > 0.0 for piece in pieces)
