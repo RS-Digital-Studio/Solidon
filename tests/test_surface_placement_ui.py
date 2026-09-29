@@ -1938,11 +1938,10 @@ def _window_with_a_renderer():
     der Suite unerreichbar (Fund des Reviews, 11.09.2026). Die Attrappe stellt
     die Betriebslage her, statt sie wegzuräumen (`.claude/rules/tests.md`).
     """
-    from render_fakes import RecordingRenderer
-
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tests.render_fakes import RecordingRenderer
 
     window = MainWindow(Session(), UiSettings())
     window.viewport.renderer = RecordingRenderer(size=(900, 600))

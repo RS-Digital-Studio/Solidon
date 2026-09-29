@@ -199,7 +199,7 @@ def test_workflow_code_is_bound_to_the_actual_main_checkout(
 @pytest.fixture
 def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Verwendet den vorhandenen echten Übergabeerzeuger mit kleinen Produktdateien."""
-    from test_sign_release import _pack, _product_tree
+    from tests.test_sign_release import _pack, _product_tree
 
     monkeypatch.setenv("GITHUB_SHA", COMMIT)
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")

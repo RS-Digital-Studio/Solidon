@@ -16,7 +16,13 @@ from subprocess import CompletedProcess
 
 import pytest
 
-from tools.affected_tests import ImportGraph, affected, changed_files, module_name
+from tools.affected_tests import (
+    ImportGraph,
+    affected,
+    bare_local_imports,
+    changed_files,
+    module_name,
+)
 
 
 def _write(root: Path, relative: str, text: str) -> Path:
@@ -255,6 +261,31 @@ def test_the_real_graph_knows_this_file() -> None:
     assert reasons[graph.root / "tests" / "test_affected_tests.py"] == (
         "importiert eine geänderte Datei"
     )
+
+
+def test_a_bare_import_of_a_local_module_is_found(tree: Path) -> None:
+    """Der Fall mit bekanntem Ausgang: Ein Helfer ohne ``tests.``-Präfix entgeht dem Graphen,
+    und genau diese Stelle meldet die Suche — ``import conftest`` und der Präfixweg nicht.
+    """
+    _write(tree, "tests/fakes.py", "FAKE = 1\n")
+    _write(tree, "tests/test_bare.py", "def f():\n    from fakes import FAKE\n")
+    _write(tree, "tests/test_prefixed.py", "import conftest\nfrom tests.fakes import FAKE\n")
+    graph = ImportGraph(tree)
+
+    files, _ = affected([tree / "tests" / "fakes.py"], graph)
+
+    assert _names(files, tree) == {"tests/test_prefixed.py"}
+    assert bare_local_imports(graph) == ["tests/test_bare.py:2: fakes"]
+
+
+def test_tests_and_tools_import_their_neighbours_with_the_package_prefix() -> None:
+    """Wer einen Nachbarn aus ``tests/`` oder ``tools/`` ohne Präfix importiert, fehlt in jeder
+    Auswahl zu dessen Änderung (``bare_local_imports``). Der Präfix ist die ganze Abhilfe.
+    """
+    graph = ImportGraph()
+    assert sum(name.startswith("tests.test_") for name in graph.modules) > 300
+
+    assert bare_local_imports(graph) == []
 
 
 def test_a_deleted_module_still_counts_as_a_code_change(tree: Path) -> None:

@@ -159,6 +159,49 @@ class ImportGraph:
         return seen
 
 
+#: ``tests/conftest.py`` lädt pytest als Plugin unter seinem bloßen Namen;
+#: ``import conftest`` erreicht genau dieses Modul, ``tests.conftest`` führte
+#: es ein zweites Mal aus. Eine Änderung daran betrifft ohnehin jeden Test.
+_BARE_BY_DESIGN = frozenset({"conftest"})
+
+
+def bare_local_imports(graph: ImportGraph) -> list[str]:
+    """Importe eines Moduls aus ``tests/`` oder ``tools/`` ohne Paketpräfix, je ``Datei:Zeile``.
+
+    ``resolve`` kennt nur ``app.…``, ``tools.…`` und ``tests.…``. Ein
+    ``from render_fakes import …`` läuft trotzdem, weil pytest und ein
+    Skriptstart den eigenen Ordner in den Suchpfad legen — und lädt dieselbe
+    Datei als zweites Modul, dessen Kante der Graph nicht sieht: Wer
+    ``render_fakes.py`` ändert, bekäme ``test_ui.py`` nicht ausgewählt.
+    """
+    local = {
+        path.stem
+        for name, path in graph.modules.items()
+        if name.count(".") == 1 and name.split(".")[0] in ("tests", "tools")
+    } - _BARE_BY_DESIGN
+    found: list[str] = []
+    for name, path in graph.modules.items():
+        if name.split(".")[0] not in ("tests", "tools"):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                targets = [node.module]
+            else:
+                continue
+            found.extend(
+                f"{path.relative_to(graph.root).as_posix()}:{node.lineno}: {target}"
+                for target in targets
+                if target.split(".")[0] in local
+            )
+    return sorted(found)
+
+
 def changed_files(root: Path = ROOT) -> list[Path]:
     """Was gegenüber HEAD anders ist — geändert, gestaged oder neu."""
     files: set[str] = set()
