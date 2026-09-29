@@ -556,7 +556,6 @@ def search(
     mesh: MeshData,
     *,
     count: int = DEFAULT_CANDIDATES,
-    seed: int | None = None,
     layer_height: float = SEARCH_LAYER_HEIGHT,
     profile: Profile | None = None,
     overhang_angle: float | None = None,
@@ -567,8 +566,8 @@ def search(
     """Wählt unter zulässigen Geometrielagen nach echtem Stützvolumen.
 
     ``count`` begrenzt die Hüllnormalen, ergänzt durch Achsen und große
-    Körperflächen. ``seed`` bleibt für gespeicherte Aufrufer kompatibel; die
-    Geometrieauswahl ist ohne Zufallsrichtungen vollständig deterministisch.
+    Körperflächen. Die Geometrieauswahl ist ohne Zufallsrichtungen
+    vollständig deterministisch.
     Unmögliche Lagen werden vor jeder Schichtanalyse ausgeschieden. Ein
     fehlender Ausgangswert heißt ``baseline=None``, nicht null Stützbedarf.
     """
