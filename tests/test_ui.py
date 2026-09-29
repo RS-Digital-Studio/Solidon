@@ -8030,8 +8030,7 @@ def test_the_chamfer_marks_follow_the_panel_and_a_click_on_one_swaps_the_sides(
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
-    if not REGISTRY.has("chamfer_edges"):
-        pytest.skip("ohne Fase im Register gibt es keine Marken")
+    assert REGISTRY.has("chamfer_edges"), "ohne Fase im Register gibt es keine Marken"
     object_id, body = next(iter(result.scene.objects.items()))
     before = len(window.session.project.document.ops)
     kanten = mesh_edges.edges_of(as_mesh_data(body.mesh))

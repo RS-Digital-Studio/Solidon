@@ -2454,26 +2454,57 @@ def test_the_view_stays_upright_while_it_turns() -> None:
 
     assert _horizon_tilt(position, focal, up) == pytest.approx(0.0, abs=1e-6), (
         "der Drehteller lässt die Ansicht aufrecht"
+def _trackball_turn(
+    position: np.ndarray, up: np.ndarray, azimuth: float, elevation: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Ein Zug des alten VTK-Trackballs um den Ursprung, als Formel.
+
+    ``vtkCamera.Azimuth`` dreht den Standort um das **Oben der Kamera**,
+    ``Elevation`` Standort und Oben um ihre negierte Bildwaagerechte
+    (``Cross(ViewUp, Standort - Blickpunkt)``), und ``OrthogonalizeViewUp``
+    stellt das Oben danach senkrecht zur Blickrichtung — nicht zurück auf die
+    Welt-Hochachse. Winkel in Grad, rechtshändig (``RotateWXYZ``).
+    """
+
+    def turned(vector: np.ndarray, axis: np.ndarray, degrees: float) -> np.ndarray:
+        axis = axis / np.linalg.norm(axis)
+        angle = math.radians(degrees)
+        return (
+            vector * math.cos(angle)
+            + np.cross(axis, vector) * math.sin(angle)
+            + axis * float(np.dot(axis, vector)) * (1.0 - math.cos(angle))
+        )
+
+    position = turned(position, up, azimuth)
+    sideways = np.cross(up, position / np.linalg.norm(position))
+    position = turned(position, -sideways, elevation)
+    up = turned(up, -sideways, elevation)
+    normal = position / np.linalg.norm(position)
+    sideways = np.cross(up, normal)
+    sideways /= np.linalg.norm(sideways)
+    return position, np.cross(normal, sideways)
+
+
     )
 
 
 def test_the_old_vtk_trackball_tilts_the_horizon() -> None:
-    """Die historische Trackball-Gegenprobe braucht die echte vtkCamera."""
-    pytest.importorskip("vtkmodules.vtkRenderingCore", reason="optionale VTK-Gegenprobe")
-    from vtkmodules.vtkRenderingCore import vtkCamera
+    """Die Gegenprobe zu ``test_the_view_stays_upright_while_it_turns``: Dieselben zwölf Züge am
+    alten Trackball kippen den Horizont, und ``_horizon_tilt`` sieht es.
 
-    focal = (0.0, 0.0, 0.0)
-    camera = vtkCamera()
-    camera.SetPosition(0.0, -100.0, 60.0)
-    camera.SetFocalPoint(*focal)
-    camera.SetViewUp(0.0, 0.0, 1.0)
-    # Dieselbe Formel wie die Basisklasse: 20 Grad je Fensterhälfte, mal ihr
-    # MotionFactor von 10 — für den Zug (-40, -30) also diese zwei Winkel.
+    VTK ist ausgebaut; der Trackball steht deshalb als Formel in
+    :func:`_trackball_turn`. Sie ergibt knapp 68 Grad, an der echten
+    ``vtkCamera`` gemessen waren es 62,7 (Docstring von ``turntable_camera``) —
+    beides ein Modell, das sichtbar zur Seite liegt.
+    """
+    # Die Winkel der Basisklasse: 20 Grad je Fensterbreite bzw. -höhe, mal
+    # ihr MotionFactor von 10 — für den Zug (-40, -30) in einem Fenster von 1100 auf 650.
+    position, up = np.array((0.0, -100.0, 60.0)), np.array((0.0, 0.0, 1.0))
     for _ in range(12):
-        camera.Azimuth(40.0 * 20.0 / 1100 * 10.0)
-        camera.Elevation(30.0 * 20.0 / 650 * 10.0)
-        camera.OrthogonalizeViewUp()
-    alt = _horizon_tilt(camera.GetPosition(), focal, camera.GetViewUp())
+        position, up = _trackball_turn(
+            position, up, 40.0 * 20.0 / 1100 * 10.0, 30.0 * 20.0 / 650 * 10.0
+        )
+    alt = _horizon_tilt(tuple(position), (0.0, 0.0, 0.0), tuple(up))
 
     assert alt > 60.0, f"die alte Rechnung muss kippen, sonst prüft der Test nichts — {alt:.1f}°"
 
@@ -2526,24 +2557,24 @@ def test_the_turn_keeps_its_distance() -> None:
     assert math.dist(position, focal) == pytest.approx(math.dist(start, focal))
 
 
+    Dessen Winkel: 20 Grad je Fensterbreite mal MotionFactor 10, für 40
+    Bildpunkte in 1100 also 40 · 20 / 1100 · 10 Grad, rechtshändig um das Oben
+    (0, 0, 1) durch den Blickpunkt. Der Standort (0, -100, 60) landet damit
+    bei (100 · sin a, -100 · cos a, 60).
+    """
 def test_the_turn_keeps_the_horizontal_speed_of_vtk() -> None:
-    """Die optionale Gegenprobe vergleicht die Empfindlichkeit mit vtkCamera.Azimuth."""
-    pytest.importorskip("vtkmodules.vtkRenderingCore", reason="optionale VTK-Gegenprobe")
-    from vtkmodules.vtkRenderingCore import vtkCamera
+    """Ein waagerechter Zug dreht so weit wie ``vtkCamera.Azimuth`` im alten Trackball.
 
     from app.ui.render.navigator import turntable_camera
 
-    focal = (0.0, 0.0, 0.0)
-    size = (1100, 650)
-    start = (0.0, -100.0, 60.0)
-    camera = vtkCamera()
-    camera.SetPosition(*start)
-    camera.SetFocalPoint(*focal)
-    camera.SetViewUp(0.0, 0.0, 1.0)
-    camera.Azimuth(40.0 * 20.0 / 1100 * 10.0)
-    turned, _ = turntable_camera(start, focal, (0.0, 0.0, 1.0), -40, 0, size)
+    angle = math.radians(40.0 * 20.0 / 1100 * 10.0)
+    turned, _ = turntable_camera(
+        (0.0, -100.0, 60.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), -40, 0, (1100, 650)
+    )
 
-    assert turned == pytest.approx(tuple(camera.GetPosition())), "dieselbe Empfindlichkeit"
+    assert turned == pytest.approx((100.0 * math.sin(angle), -100.0 * math.cos(angle), 60.0)), (
+        "dieselbe Empfindlichkeit"
+    )
 
 
 def test_a_body_is_split_once_while_its_mesh_stays(

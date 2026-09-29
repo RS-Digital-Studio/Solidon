@@ -683,8 +683,9 @@ def test_the_upload_tool_accepts_the_version_file_we_publish() -> None:
     """
     published = Path(upload_website.__file__).resolve().parent.parent / "website" / "version.json"
     payload = json.loads(published.read_text(encoding="utf-8"))
-    if not payload.get("packages"):
-        pytest.skip("version.json führt noch keine Pakete — vor dem ersten Release ist das richtig")
+    assert payload.get("packages"), (
+        "die veröffentlichte version.json führt kein Paket — make_download.py hat sie geleert?"
+    )
 
     upload_website._validate_remote_version(payload)
 
