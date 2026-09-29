@@ -1341,11 +1341,8 @@ def appimage_runtime_sha256(appimage: Path) -> str:
 
 
 def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def with_appimage_runtime(bom: Mapping[str, Any], runtime_file: Path) -> dict[str, Any]:
