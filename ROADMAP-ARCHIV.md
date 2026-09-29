@@ -26994,6 +26994,18 @@ Die Filamentänderungen wurden über gesicherte Inhalte abgegrenzt; gemeinsame T
 werden nur mit ihren eigenen Änderungen committet. Der zusätzliche Anschlusslauf für Lager,
 Verbrauch, Projekte und Materialprofile bestand mit **247 Tests, 1 übersprungen**.
 
+**Nachtrag, bis zum 29.09.2026 in der Roadmap:** Löschen ist im Regal per
+Rechtsklick und im Spulendetail sowie Filamentpanel über einen Mülleimerknopf
+erreichbar; Wiederherstellen läuft über das Archiv. Hinzufügen trägt ein
+Plus-SVG; eigene Drucker lassen sich mit Name, Bauraum und Düse direkt anlegen.
+Die Durchsicht vom 19.09.2026 (vier Fehler, vier Regelverstöße, neun
+Bedienmängel, sieben Textmängel) ist vollständig behoben: Eine Bearbeitung der
+Angaben zählt nicht mehr als Bestandsfeststellung, eine automatische Buchung
+nach einer Rücknahme bucht wirklich, eine abgewiesene Spule kommt in den Dialog
+zurück, die Übernahme aus dem Slicer überschreibt keine Handspule, Rücknahmen
+sind rücknehmbar, das Lager sichert seinen letzten lesbaren Stand selbst,
+Datumsfelder haben einen Kalender.
+
 ## RM-027 entfällt mit dem privaten Index (09.09.2026)
 
 **RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern**

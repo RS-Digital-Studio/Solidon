@@ -151,23 +151,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 ## Filamentlager
 
-Löschen ist im Regal per Rechtsklick und im Spulendetail sowie Filamentpanel
-über einen Mülleimerknopf erreichbar; Wiederherstellen läuft über das Archiv.
-Hinzufügen trägt ein Plus-SVG. „Erste Schritte“ führt über Slicer und passende
-Drucker zum Filamentlager; eigene Drucker lassen sich mit Name, Bauraum und
-Düse direkt anlegen.
+Physische Spulen mit bis zu vier Farben, Regal, bewusster Import, Schnellauswahl
+und rücknehmbare Verbrauchsbuchungen sind angeschlossen; „Erste Schritte“ führt
+über Slicer und Drucker zum Lager. Das [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
+begründet Abwahl, Herstellerprofile und Buchungskorrekturen.
 
-Physische Spulen, Regal, bewusster Import, Schnellauswahl und rücknehmbare
-Verbrauchsbuchungen sind angeschlossen. [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
-Das anschließende [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
-behandelt Abwahl, Herstellerprofile, Buchungskorrekturen und die weiteren Anschlüsse.
-Eine Spule trägt bis zu vier Farben. Die Durchsicht vom 19.09.2026 (vier
-Fehler, vier Regelverstöße, neun Bedienmängel, sieben Textmängel) ist
-vollständig behoben: Eine Bearbeitung der Angaben zählt nicht mehr als
-Bestandsfeststellung, eine automatische Buchung nach einer Rücknahme bucht
-wirklich, eine abgewiesene Spule kommt in den Dialog zurück, die Übernahme aus
-dem Slicer überschreibt keine Handspule, Rücknahmen sind rücknehmbar, das Lager
-sichert seinen letzten lesbaren Stand selbst, Datumsfelder haben einen Kalender.
+[Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
 
 ## P0 — Skelett
 
