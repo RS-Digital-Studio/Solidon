@@ -179,7 +179,10 @@ raten — das steht in `AGENTS.md`. Dazu:
   wenn Robert ausdrücklich „nicht pushen" sagt.
 - **`.githooks/pre-commit`** fährt bei Änderungen an `app/` oder `tools/` die
   Bezeichnerprüfung und `tools/check_new_texts.py`; Befunde an Dateien dieses
-  Commits halten ihn an. `SOLIDON_KEIN_TOR=1` schaltet ihn für einen Lauf ab.
+  Commits halten ihn an. Die Zuordnung vergleicht vollständige Repositorypfade;
+  nur eindeutig fremde Testbefunde dürfen passieren. Ein ausgefallener oder
+  nicht auswertbarer Prüflauf hält den Commit an.
+  `SOLIDON_KEIN_TOR=1` schaltet ihn für einen Lauf ab.
   Beide Hooks laufen nur mit `core.hooksPath = .githooks` (`check_env`
   meldet es) und suchen ihren Interpreter am Hauptklon, auch aus einem Worktree.
 - **Nach einer Muster- oder Entscheidungsänderung** die Regel in

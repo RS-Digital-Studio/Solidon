@@ -500,6 +500,10 @@ def _commit_hook_with(
     language_exit: int = 0,
     language_output: str = "1 passed",
     catalog_exit: int = 0,
+    staged_paths: tuple[str, ...] = ("app/ui/owned.py",),
+    source_paths: tuple[str, ...] = ("app/ui/foreign.py",),
+    git_exit: int = 0,
+    have_interpreter: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
     """Den echten Hook mit Git- und Interpreter-Doubles durch Bash ausführen.
 
@@ -512,6 +516,14 @@ def _commit_hook_with(
     bash = _bash_executable()
     if bash is None:
         pytest.skip("ohne Bash lässt sich der echte Commit-Hook nicht ausführen")
+    for relative in {*staged_paths, *source_paths}:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / "staged.bin").write_bytes(
+        b"".join(path.encode("utf-8") + b"\0" for path in staged_paths)
+    )
+    (tmp_path / "staged.txt").write_text("\n".join(staged_paths), encoding="utf-8")
     interpreter = tmp_path / ".venv" / "bin" / "python"
     interpreter.parent.mkdir(parents=True)
     interpreter.write_text(
@@ -533,11 +545,18 @@ esac
         newline="\n",
     )
     interpreter.chmod(0o755)
+    if not have_interpreter:
+        interpreter.unlink()
     runner = tmp_path / "run-hook.sh"
     runner.write_text(
         """git() {
   case "$1" in
-    diff) printf '%s\\n' 'app/ui/owned.py' ;;
+    diff)
+      [ "$HOOK_GIT_EXIT" -eq 0 ] || return "$HOOK_GIT_EXIT"
+      case " $* " in
+        *' -z '*) cat "$HOOK_ROOT/staged.bin" ;;
+        *) cat "$HOOK_ROOT/staged.txt" ;;
+      esac ;;
     rev-parse) printf '%s/.git\\n' "$HOOK_ROOT" ;;
     *) printf '%s\\n' 'Unerwarteter Git-Auftrag' >&2; return 92 ;;
   esac
@@ -555,6 +574,7 @@ source "$HOOK_FILE"
         HOOK_LANGUAGE_EXIT=str(language_exit),
         HOOK_LANGUAGE_OUTPUT=language_output,
         HOOK_CATALOG_EXIT=str(catalog_exit),
+        HOOK_GIT_EXIT=str(git_exit),
     )
     result = subprocess.run(
         [str(bash), str(runner)],
@@ -566,7 +586,8 @@ source "$HOOK_FILE"
         cwd=tmp_path,
         timeout=20,
     )
-    calls = (tmp_path / "calls.txt").read_text(encoding="utf-8").splitlines()
+    call_log = tmp_path / "calls.txt"
+    calls = call_log.read_text(encoding="utf-8").splitlines() if call_log.exists() else []
     return result, [call.split() for call in calls]
 
 
@@ -592,7 +613,7 @@ def test_the_commit_hook_stops_for_its_own_new_catalog_gap(
         tmp_path,
         language_exit=int(foreign_language_failure),
         language_output=(
-            "FAILED tests/test_language_rules.py::test_identifiers[foreign.py]"
+            "FAILED tests/test_language_rules.py::test_identifiers_are_english[app/ui/foreign.py]"
             if foreign_language_failure
             else "1 passed"
         ),
@@ -604,7 +625,9 @@ def test_the_commit_hook_stops_for_its_own_new_catalog_gap(
     assert "Eigener neuer Text" in result.stderr
 
 
-@pytest.mark.parametrize("failed_file, expected_exit", [("owned.py", 1), ("foreign.py", 0)])
+@pytest.mark.parametrize(
+    "failed_file, expected_exit", [("app/ui/owned.py", 1), ("app/ui/foreign.py", 0)]
+)
 def test_the_commit_hook_attributes_only_failed_language_files(
     tmp_path: Path, failed_file: str, expected_exit: int
 ) -> None:
@@ -613,13 +636,108 @@ def test_the_commit_hook_attributes_only_failed_language_files(
         tmp_path,
         language_exit=1,
         language_output=(
-            "tests/test_language_rules.py::test_identifiers[owned.py] PASSED\n"
-            f"FAILED tests/test_language_rules.py::test_identifiers[{failed_file}]"
+            "tests/test_language_rules.py::test_identifiers_are_english[app/ui/owned.py] PASSED\n"
+            f"FAILED tests/test_language_rules.py::test_identifiers_are_english[{failed_file}]"
         ),
     )
 
     assert result.returncode == expected_exit, result.stderr
     assert calls[-1] == ["tools/check_new_texts.py"]
+
+
+@pytest.mark.parametrize("language_exit", [2, 3, 4, 5, 127, 139])
+def test_the_commit_hook_stops_when_the_language_runner_fails(
+    tmp_path: Path, language_exit: int
+) -> None:
+    """Unterbrechung, Sammelfehler, Konfiguration und Prozessabsturz sind keine fremden Befunde."""
+    result, _calls = _commit_hook_with(
+        tmp_path, language_exit=language_exit, language_output="ERROR: pytest konnte nicht prüfen"
+    )
+
+    assert result.returncode == 1, result.stderr
+    assert "ERROR: pytest konnte nicht prüfen" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "language_output",
+    [
+        "",
+        "E ValueError: keine verwertbare Zusammenfassung",
+        "FAILED tests/test_language_rules.py::test_module_names_are_english",
+        "FAILED tests/test_language_rules.py::test_identifiers_are_english[foreign.py]",
+        "FAILED tests/test_language_rules.py::test_identifiers_are_english[app/ui/missing.py]",
+        "FAILED tests/test_language_rules.py::test_identifiers_are_english[app/ui/foreign.py]\n"
+        "ERROR tests/test_language_rules.py::test_module_names_are_english - setup failed",
+        "FAILED tests/test_language_rules.py::test_identifiers_are_english[app/ui/foreign.py]\n"
+        "FAILED tests/test_language_rules.py::test_module_names_are_english",
+    ],
+)
+def test_the_commit_hook_stops_for_unattributable_language_results(
+    tmp_path: Path, language_output: str
+) -> None:
+    """Nur ausschließlich zuordenbare fremde Fehler dürfen einen roten Lauf passieren lassen."""
+    result, _calls = _commit_hook_with(tmp_path, language_exit=1, language_output=language_output)
+
+    assert result.returncode == 1, result.stderr
+
+
+@pytest.mark.parametrize(
+    "staged_path, failed_path",
+    [
+        ("app/ui/owned.py", "app/ui/not_owned.py"),
+        ("app/ui/owned.py", "app/core/owned.py"),
+        ("tools/owned.py", "app/ui/owned.py"),
+        ("app/ui/with space.py", "app/core/with space.py"),
+    ],
+)
+def test_the_commit_hook_compares_the_entire_failed_path(
+    tmp_path: Path, staged_path: str, failed_path: str
+) -> None:
+    """Weder derselbe Dateiname noch ein Namenssuffix gehört automatisch zum Commit."""
+    result, calls = _commit_hook_with(
+        tmp_path,
+        staged_paths=(staged_path,),
+        source_paths=(failed_path,),
+        language_exit=1,
+        language_output=(
+            f"FAILED tests/test_language_rules.py::test_identifiers_are_english[{failed_path}]"
+            " - AssertionError: Bezeichner"
+        ),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert calls[-1] == ["tools/check_new_texts.py"]
+
+
+@pytest.mark.parametrize("staged_path", ["app/ui/with space.py", "app/ui/ö.py"])
+def test_the_commit_hook_keeps_non_ascii_and_space_paths_as_one_name(
+    tmp_path: Path, staged_path: str
+) -> None:
+    """Git liefert unveränderte NUL-Pfade; pytest kann Umlaute in Parameter-IDs maskieren."""
+    pytest_path = staged_path.encode("unicode_escape").decode("ascii")
+    result, _calls = _commit_hook_with(
+        tmp_path,
+        staged_paths=("README.md", staged_path),
+        language_exit=1,
+        language_output=(
+            f"FAILED tests/test_language_rules.py::test_identifiers_are_english[{pytest_path}]"
+        ),
+    )
+
+    assert result.returncode == 1, result.stderr
+
+
+@pytest.mark.parametrize("git_exit, have_interpreter", [(128, True), (0, False)])
+def test_the_commit_hook_stops_if_its_prerequisites_are_unavailable(
+    tmp_path: Path, git_exit: int, have_interpreter: bool
+) -> None:
+    """Ohne Index oder Projektinterpreter kann kein sauberer Commit nachgewiesen werden."""
+    result, calls = _commit_hook_with(
+        tmp_path, git_exit=git_exit, have_interpreter=have_interpreter
+    )
+
+    assert result.returncode == 1, result.stderr
+    assert not calls
 
 
 def _guard_with(monkeypatch: pytest.MonkeyPatch, *, before: str, after: str) -> list[str]:

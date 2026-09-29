@@ -298,7 +298,9 @@ def offences_in(name: str) -> list[str]:
     return hits
 
 
-@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
+@pytest.mark.parametrize(
+    "path", source_files(), ids=lambda path: path.relative_to(PACKAGE_DIR.parent).as_posix()
+)
 def test_identifiers_are_english(path: Path) -> None:
     """Bezeichner und Feld-Doku prüfen denselben, einmal gelesenen Quelltext.
 

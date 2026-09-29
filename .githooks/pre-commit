@@ -21,7 +21,9 @@
 # gerade ungestaged liegen haben. Ein Hook, der darauf blockiert, hielte jemanden von
 # seinem eigenen, sauberen Commit ab — und wäre nach dem zweiten Mal
 # dauerhaft abgeschaltet. Er prüft deshalb bei jedem Befund, ob die
-# betroffene Datei **in diesem Commit** steht, und bricht nur dann ab.
+# betroffene Datei **in diesem Commit** steht. Nur eindeutig fremde normale
+# Testfehler dürfen weiterlaufen; eine kaputte oder nicht auswertbare Prüfung
+# hält den Commit an.
 
 set -u
 
@@ -33,13 +35,28 @@ fi
 # Was dieser Commit mitnimmt. `--cached` und nicht der Arbeitsbaum: Im
 # geteilten Baum ist genau das der Unterschied zwischen meiner Arbeit und der
 # aller anderen.
-gestaged=$(git diff --cached --name-only --diff-filter=ACMR)
-[ -n "$gestaged" ] || exit 0
+protokoll=$(mktemp) || {
+  echo "pre-commit: ABGEBROCHEN — kein temporäres Prüfprotokoll möglich." >&2
+  exit 1
+}
+trap 'rm -f -- "$protokoll"' EXIT
+if ! git diff --cached --name-only -z --diff-filter=ACMR > "$protokoll"; then
+  echo "pre-commit: ABGEBROCHEN — gestagte Dateien konnten nicht gelesen werden." >&2
+  exit 1
+fi
+gestaged=()
+code_betroffen=0
+while IFS= read -r -d '' pfad; do
+  gestaged+=("$pfad")
+  case "$pfad" in
+    app/*.py|tools/*.py) code_betroffen=1 ;;
+  esac
+done < "$protokoll"
 
 # Nur wenn ausgelieferter Code betroffen ist. Ein Commit an ROADMAP.md,
 # konzepte/ oder tests/ kann keinen deutschen Bezeichner in app/ einführen und
 # keinen Katalogtext schuldig bleiben.
-if ! printf '%s\n' "$gestaged" | grep -qE '^(app|tools)/.*\.py$'; then
+if [ "$code_betroffen" -eq 0 ]; then
   exit 0
 fi
 
@@ -52,48 +69,68 @@ fi
 # nebeneinander committen (gemessen am 13.09.2026 in
 # `.claude/worktrees/agent-…`: `ls .venv` → nicht vorhanden,
 # `core.hooksPath` → `F:\3D Druck\.githooks`).
-wurzel=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+gitverzeichnis=$(git rev-parse --path-format=absolute --git-common-dir) || {
+  echo "pre-commit: ABGEBROCHEN — Hauptklon konnte nicht ermittelt werden." >&2
+  exit 1
+}
+wurzel=$(dirname "$gitverzeichnis")
 python="$wurzel/.venv/Scripts/python.exe"
 [ -x "$python" ] || python="$wurzel/.venv/bin/python"
 [ -x "$python" ] || {
-  echo "pre-commit: keine .venv unter $wurzel gefunden, keine Sprachprüfung." >&2
-  exit 0
+  echo "pre-commit: ABGEBROCHEN — keine .venv unter $wurzel gefunden." >&2
+  exit 1
 }
-
-protokoll=$(mktemp)
-trap 'rm -f "$protokoll"' EXIT
 
 echo "pre-commit: Sprachprüfungen …" >&2
 "$python" -m pytest tests/test_language_rules.py \
-  -q --no-header -p no:randomly > "$protokoll" 2>&1
+  -q --no-header -p no:randomly -r fE --color=no --maxfail=0 > "$protokoll" 2>&1
 code=$?
 
 meine=""
+prueffehler=""
 if [ "$code" -ne 0 ]; then
-  # Gesucht wird nach Dateinamen in der Ausgabe — `test_language_rules`
-  # nennt sie im Parameter (`[main_window.py]`) und in der Meldung selbst.
   echo "" >&2
-  echo "pre-commit: die Bezeichnerprüfung ist rot. Ausgabe:" >&2
-  grep -E "^(E |FAILED)" "$protokoll" | head -20 >&2
+  echo "pre-commit: die Bezeichnerprüfung ist rot (Exit $code). Ausgabe:" >&2
+  tail -n 40 "$protokoll" >&2
   echo "" >&2
 
-# **Gesucht wird nur in den Fehlerzeilen, nicht im ganzen Protokoll.** Der
-# erste Anlauf tat Letzteres und brach bei einem sauberen Commit ab: pytest
-# listet jede parametrisierte Datei, auch die grünen, und `loading.py` stand
-# dort als bestandener Test. Der Hook meldete sie als Verursacherin, während
-# der echte Fehler in einer fremden, ungestagten Datei lag — genau der Fall,
-# für den die Unterscheidung überhaupt gebaut ist.
-#
-# `grep -a`, weil pytest Steuerzeichen ausgibt: Ohne das meldet grep „Binary
-# file matches" und beantwortet eine andere Frage als die gestellte.
-  schuld=$(grep -a -E "^(E |FAILED)" "$protokoll" || true)
-
-  for pfad in $gestaged; do
-    name=$(basename "$pfad")
-    if printf '%s' "$schuld" | grep -aqF "$name"; then
-      meine="$meine $name"
+  if [ "$code" -ne 1 ]; then
+    prueffehler="Die Bezeichnerprüfung konnte nicht regulär abgeschlossen werden (Exit $code)."
+  else
+    # Nur vollständige FAILED-Parameter-IDs sind Dateibelege. Meldungstexte,
+    # bestandene Tests, gleiche Basenames und Namenssuffixe zählen nicht.
+    # Unbekannte Tests, fehlende Dateien und maskierte/mehrdeutige IDs halten
+    # an, statt aus einer fehlenden Zuordnung fremde Arbeit zu folgern.
+    fehlermuster='^FAILED tests/test_language_rules\.py::test_identifiers_are_english\[([^][]+)\]( - .*)?$'
+    befunde=0
+    while IFS= read -r zeile || [ -n "$zeile" ]; do
+      zeile=${zeile%$'\r'}
+      case "$zeile" in
+        FAILED*)
+          if [[ ! "$zeile" =~ $fehlermuster ]]; then
+            prueffehler="Ein fehlgeschlagener Test lässt sich keiner Quelldatei zuordnen."
+            continue
+          fi
+          pfad=${BASH_REMATCH[1]}
+          if [[ "$pfad" != app/*.py && "$pfad" != tools/*.py ]] \
+            || [[ "$pfad" == *'\'* ]] || [ ! -f "$pfad" ]; then
+            prueffehler="Ein fehlgeschlagener Test trägt keinen eindeutigen vorhandenen Quellpfad."
+            continue
+          fi
+          befunde=$((befunde + 1))
+          for eigene_datei in "${gestaged[@]}"; do
+            if [ "$pfad" = "$eigene_datei" ]; then
+              meine="$meine $pfad"
+            fi
+          done
+          ;;
+        ERROR*) prueffehler="Die Bezeichnerprüfung meldet einen Ausführungsfehler." ;;
+      esac
+    done < "$protokoll"
+    if [ "$befunde" -eq 0 ]; then
+      prueffehler="Die rote Bezeichnerprüfung enthält keine zuordenbaren Dateibefunde."
     fi
-  done
+  fi
 fi
 
 # Neue Texte werden immer geprüft, auch bei grünen Bezeichnern. Der Wächter
@@ -104,6 +141,11 @@ neu_und_offen=$("$python" tools/check_new_texts.py 2>&1) || {
   meine="$meine [neue Texte ohne Übersetzung]"
   echo "$neu_und_offen" >&2
 }
+
+if [ -n "$prueffehler" ]; then
+  echo "pre-commit: ABGEBROCHEN — $prueffehler" >&2
+  exit 1
+fi
 
 if [ -n "$meine" ]; then
   echo "pre-commit: ABGEBROCHEN — betroffen sind Dateien aus diesem Commit:" >&2
@@ -117,10 +159,6 @@ if [ "$code" -eq 0 ]; then
   exit 0
 fi
 
-# Kein gestagter Dateiname taucht in der Ausgabe auf. Das ist der häufige Fall
-# im geteilten Baum: Eine andere Sitzung hat etwas liegen. Durchlassen — aber
-# nicht schweigend, denn wer es liest, kann es weitergeben.
-echo "pre-commit: keine Datei dieses Commits ist darin genannt — das sieht" >&2
-echo "pre-commit: nach fremder Arbeit im geteilten Baum aus. Der Commit läuft" >&2
-echo "pre-commit: durch; sag der Sitzung Bescheid, der es gehört." >&2
+echo "pre-commit: Alle fehlgeschlagenen Bezeichnertests betreffen Dateien" >&2
+echo "pre-commit: außerhalb dieses Commits. Der Commit läuft weiter." >&2
 exit 0
