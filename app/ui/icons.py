@@ -600,7 +600,7 @@ class ThemedIcon(QIconEngine):
         source = svg_source(self._name, self._tone(mode).name())
         if not source:
             return QPixmap()
-        return _pixmap(source, max(size.width(), size.height()))
+        return svg_pixmap(source, max(size.width(), size.height()))
 
     def clone(self) -> QIconEngine:
         return ThemedIcon(self._name)
@@ -625,10 +625,17 @@ def icon(name: str, widget: QWidget, *, scale: float = 1.35, colour: QColor | No
     if not source:
         return QIcon()
     size = max(int(widget.fontMetrics().height() * scale), 12)
-    return QIcon(_pixmap(source, size))
+    return QIcon(svg_pixmap(source, size))
 
 
-def _pixmap(source: str, size: int) -> QPixmap:
+def svg_pixmap(source: str, size: int) -> QPixmap:
+    """Ein SVG als Bild, scharf auf HiDPI — leer, wenn es sich nicht lesen lässt.
+
+    Überzählig gerastert (:data:`OVERSAMPLING`) und dann auf die Anzeigegröße
+    gesetzt: Ein Bild in genau der Punktgröße franst auf einem skalierten
+    Bildschirm aus. Symbole und die Vorschaubilder im Objektbaum rastern
+    hierüber.
+    """
     renderer = QSvgRenderer(QByteArray(source.encode("utf-8")))
     if not renderer.isValid():
         return QPixmap()

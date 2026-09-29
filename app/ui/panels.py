@@ -17,7 +17,6 @@ from itertools import pairwise
 from typing import Any, Final, NamedTuple, cast
 
 from PySide6.QtCore import (
-    QByteArray,
     QEvent,
     QItemSelectionModel,
     QModelIndex,
@@ -39,7 +38,6 @@ from PySide6.QtGui import (
     QDropEvent,
     QFont,
     QIcon,
-    QImage,
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
@@ -146,7 +144,7 @@ from app.core.types import (
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import NEEDS_OP, handlers_of, unhandled_advice
-from app.ui.icons import OVERSAMPLING, icon, icon_name_for
+from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
     BoundedSpin,
     LengthSpin,
@@ -1932,7 +1930,7 @@ class ObjectTree(QWidget):
 
     def _preview_drawn(self, stamp: str, image: str) -> None:
         """Ein fertiges SVG wird zum Symbol — das Einzige, wofür es Qt braucht."""
-        found = _svg_icon(image, _preview_pixels(self.tree))
+        found = QIcon(svg_pixmap(image, _preview_pixels(self.tree)))
         self._previews[stamp] = found
         for item in self._rows_for.get(stamp, ()):
             # Die Zeile kann inzwischen weg sein — eine neue Auswertung räumt
@@ -9198,25 +9196,3 @@ def _preview_pixels(widget: QWidget) -> int:
     Grenze, ab der die gemessene Reserve knapp wird.
     """
     return min(max(int(widget.fontMetrics().height() * 2.5), 40), 56)
-
-
-def _svg_icon(svg: str, size: int) -> QIcon:
-    """Ein SVG als Symbol, scharf auf HiDPI.
-
-    Überzählig gerastert und dann auf die Anzeigegröße gesetzt: Ein Bild in
-    genau der Punktgröße franst auf einem skalierten Bildschirm aus. Der Faktor
-    ist :data:`app.ui.icons.OVERSAMPLING` — hier stand er als nackte 2 und
-    wäre bei der nächsten Anpassung dort allein geblieben.
-    """
-    from PySide6.QtSvg import QSvgRenderer
-
-    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
-    if not renderer.isValid():
-        return QIcon()
-    image = QImage(QSize(size, size) * OVERSAMPLING, QImage.Format.Format_ARGB32_Premultiplied)
-    image.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(image)
-    renderer.render(painter)
-    painter.end()
-    image.setDevicePixelRatio(float(OVERSAMPLING))
-    return QIcon(QPixmap.fromImage(image))
