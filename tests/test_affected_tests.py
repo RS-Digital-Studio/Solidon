@@ -10,12 +10,13 @@ den, der mit alledem nichts zu tun hat.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from subprocess import CompletedProcess
 
 import pytest
 
-from tools.affected_tests import ImportGraph, affected, module_name
+from tools.affected_tests import ImportGraph, affected, changed_files, module_name
 
 
 def _write(root: Path, relative: str, text: str) -> Path:
@@ -92,6 +93,76 @@ def test_a_changed_test_file_selects_itself(tree: Path) -> None:
 
     assert _names(files, tree) == {"tests/test_unrelated.py"}
     assert reasons[tree / "tests" / "test_unrelated.py"] == "selbst geändert"
+
+
+@pytest.mark.parametrize("deleted", [False, True])
+@pytest.mark.parametrize("package", ["app", "app/nested", "app/nested/deeper"])
+def test_package_initializers_select_submodule_importers(
+    tree: Path, package: str, deleted: bool
+) -> None:
+    """Jeder Import führt zuerst die Elternpakete aus, auch ohne ausdrücklichen Paketimport.
+
+    Nach dem Entfernen eines Initialisierers bleiben dessen bisherige Nutzer
+    betroffen; ein Namensraum-Paket darf die Auswahl nicht leeren.
+    """
+    initializer = _write(tree, f"{package}/__init__.py", "VALUE = 1\n")
+    _write(tree, "app/nested/deeper/leaf.py", "VALUE = 2\n")
+    _write(tree, "tools/wrapper.py", "from app.nested.deeper.leaf import VALUE\n")
+    _write(tree, "tests/test_nested.py", "import app.nested.deeper.leaf\n")
+    _write(tree, "tests/test_wrapped.py", "from tools.wrapper import VALUE\n")
+    if deleted:
+        initializer.unlink()
+
+    files, _ = affected([initializer], ImportGraph(tree))
+
+    assert {"tests/test_nested.py", "tests/test_wrapped.py"} <= _names(files, tree)
+    if package != "app":
+        assert "tests/test_unrelated.py" not in _names(files, tree)
+
+
+def test_a_deleted_test_helper_selects_its_importers(tree: Path) -> None:
+    """Ein gelöschter Helfer unter tests/ betrifft seine Nutzer genauso wie Anwendungscode."""
+    helper = _write(tree, "tests/probe.py", "VALUE = 1\n")
+    _write(tree, "tests/test_probe.py", "from tests.probe import VALUE\n")
+    helper.unlink()
+
+    files, _ = affected([helper], ImportGraph(tree))
+
+    assert _names(files, tree) == {"tests/test_probe.py"}
+
+
+def test_git_paths_keep_unicode_spaces_and_both_sides_of_a_rename(tmp_path: Path) -> None:
+    """Echtes Git: Pfade bleiben bytegetreu, eine Umbenennung enthält auch die gelöschte Quelle.
+
+    core.quotePath erzwingt den üblichen Git-Standard auch auf Maschinen, die
+    ihn abgeschaltet haben; sonst verdeckte die lokale Einstellung den Fehler.
+    """
+
+    def git(*arguments: str) -> None:
+        subprocess.run(
+            ["git", "-c", "core.hooksPath=unused-hooks", *arguments],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
+    git("init", "-q")
+    git("config", "core.quotePath", "true")
+    git("config", "user.name", "Test")
+    git("config", "user.email", "test@example.invalid")
+    modified = _write(tmp_path, "daten/Änderung.txt", "vorher\n")
+    staged = _write(tmp_path, "daten/Übernahme.txt", "vorher\n")
+    before = _write(tmp_path, "tools/old.py", "VALUE = 1\n")
+    git("add", ".")
+    git("-c", "commit.gpgsign=false", "commit", "-qm", "Ausgangsstand")
+    modified.write_text("nachher\n", encoding="utf-8")
+    staged.write_text("nachher\n", encoding="utf-8")
+    git("add", "daten/Übernahme.txt")
+    after = tmp_path / "tools/new.py"
+    git("mv", "tools/old.py", "tools/new.py")
+    new = _write(tmp_path, " Neuer Eintrag mit Umlaut ö.txt", "neu\n")
+
+    assert set(changed_files(tmp_path)) == {modified, staged, before, after, new}
 
 
 def test_conftest_selects_every_test(tree: Path) -> None:

@@ -121,6 +121,12 @@ class ImportGraph:
                 self.modules[module_name(path, root)] = path
         self.importers: dict[str, set[str]] = defaultdict(set)
         for name, path in self.modules.items():
+            # Auch ein direkter Untermodulimport führt die Initialisierer aller
+            # Elternpakete aus. Fehlende Eltern bleiben für gelöschte
+            # __init__.py als Knoten erhalten, ebenso Namensraum-Pakete.
+            parts = name.split(".")
+            for depth in range(1, len(parts)):
+                self.importers[".".join(parts[:depth])].add(name)
             for target in imports_of(path, name):
                 # Auch fehlende Ziele bleiben Knoten: Nach dem Löschen
                 # müssen relative und mittelbare Importe noch auffindbar sein.
@@ -157,13 +163,15 @@ def changed_files(root: Path = ROOT) -> list[Path]:
     """Was gegenüber HEAD anders ist — geändert, gestaged oder neu."""
     files: set[str] = set()
     for arguments in (
-        ["git", "diff", "--name-only", "HEAD"],
-        ["git", "ls-files", "--others", "--exclude-standard"],
+        ["git", "diff", "--name-only", "--no-renames", "-z", "HEAD"],
+        ["git", "ls-files", "--others", "--exclude-standard", "-z"],
     ):
         finished = subprocess.run(
             arguments, capture_output=True, text=True, check=True, cwd=root, encoding="utf-8"
         )
-        files.update(line.strip() for line in finished.stdout.splitlines() if line.strip())
+        # -z liefert echte Pfade ohne Git-Quoting; Leerraum gehört zum Namen.
+        # Ohne Umbenennungserkennung bleiben auch die alten Modulnamen dabei.
+        files.update(name for name in finished.stdout.split("\0") if name)
     return sorted(root / name for name in files)
 
 
@@ -269,14 +277,10 @@ def affected(
                     reasons.setdefault(graph.modules[name], "selbst geändert")
                 if name.startswith(("app.", "tools.")) or name in ("app", "tools"):
                     touches_code = True
-            elif name.startswith(("app.", "tools.")):
-                # Gelöscht: Das Modul steht in keinem Graphen mehr, also kennt
-                # der Graph auch seine Importeure nicht — und die Auswahl war
-                # leer, obwohl der fachliche Test schon beim Import scheitern
-                # würde (Gesamtreview 05.09.2026, B-14). Eine entfernte Datei
-                # unter app/ oder tools/ ist eine Codeänderung, und wer sie
-                # beim Namen nennt, ist betroffen.
-                touches_code = True
+            elif name.split(".", 1)[0] in PACKAGES:
+                # Gelöschte Module und Paketinitialisierer bleiben über ihre
+                # Importkanten erreichbar, auch Helfer unter tests/.
+                touches_code |= name.split(".", 1)[0] in {"app", "tools"}
                 changed_modules.add(name)
                 deleted_modules.add(name)
                 for test_name, test_path in graph.modules.items():

@@ -31,6 +31,10 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   Markerwahl, eine Laufzeittabelle verteilt nur die gesammelte Menge, neue
   Dateien kommen von selbst dazu; Tabellen erzeugt `tools/ci_shards.py` aus
   JUnit-Berichten mit Herkunftsvermerk — keine Zahl von Hand.
+- **Betroffene Tests folgen auch impliziten Paketimporten.** Eine Änderung an
+  `__init__.py` betrifft die Importeure seiner Untermodule; gelöschte Module
+  und Testhelfer behalten ihre Nutzer. Die Git-Auswahl liest NUL-getrennte
+  Pfade und beide Seiten einer Umbenennung (`tools/affected_tests.py`).
 - **Beim Verschieben und Zusammenlegen von Tests** bleiben Fallnamen,
   Parameter, Marker und aufgelöste Fixtures erhalten, Parameterwerte und
   Zusicherungen nachvollziehbar — Fallzahlen sind kein Deckungsnachweis.
