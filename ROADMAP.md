@@ -84,6 +84,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
+| [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Auf `main` zusammengeführt (`559412ac4`) und in 0.5.1 enthalten: Gliederung, fünfzehn Bildanleitungen, Suche, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter und Film. Weiterarbeit auf `main`; offen bleiben die Feldabnahme (§11 des Konzepts) und die Nummernplatzierung auf Text in zwei Bildern |
@@ -110,6 +111,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Auftrag Robert: Größen aus den Maschinenvarianten des Slicers, Auswahl mit „Andere …“; vorher mit der Dialog-Sitzung abstimmen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären; die Startseite sagt seit `9145aedc` wie die KI-Seite, dass Solidon TripoSG und SDXL auf Wunsch einrichtet und die Kette geprüft wird, die README ‚wird derzeit geprüft‘ statt ‚MIT, Quelltext wie Gewichte‘ (Robert, 23.09.2026) |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -2489,6 +2491,20 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
 
+<a id="rm-311"></a>
+
+- [ ] **RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode.**
+  Aus dem Rauchtest nach der Einrichtung von SuperSlicer 2.5.59.13 (29.09.2026,
+  `.claude/.state/uebergabe-gesamt-2026-09-27/einheit.py`, Wedge-Lock am Prusa MINI und
+  MK4S): Alle Läufe haben eine Druckdatei, aber jeder meldet `slicer.setting_ignored` für
+  `start_gcode` — geschrieben steht `M862.3 P \"[printer_model]\"`, im G-Code
+  `M862.3 P "[printer_model]"`. Der Wert ist derselbe, nur die Anführungszeichen stehen in
+  der Konfigurationszeile einmal maskiert und einmal nicht; die Gegenprobe vergleicht die
+  Schreibweise statt des Werts. Ein Fehlalarm bei jedem Druck nimmt dem echten Befund die
+  Wirkung. Weg: den Vergleich in `verify_settings` über die entmaskierte Fassung beider
+  Seiten führen, PrusaSlicer als Gegenfall. Abnahme: SuperSlicer am MINI ohne
+  `slicer.setting_ignored`, ein wirklich übergangener Wert meldet weiter.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -3401,6 +3417,24 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   (§29, 09.09.2026). Frage: die Kandidaten der freien Stelle nach Abstand zur Plattenmitte
   ordnen? Empfehlung der Release-Sitzung: ja, weil ein einzelnes weiteres Modell nahe der
   Mitte besser zu sehen und zu erreichen ist. Abnahme: Entscheidung Robert, danach Test.
+
+<a id="rm-312"></a>
+
+- [ ] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
+  Auftrag Robert, 29.09.2026: Die Düsen und damit die Düsengröße sollen vom Drucker kommen
+  oder als Auswahlliste wählbar sein. Heute ist `Düse ⌀` ein freies Zahlenfeld (0,1 bis
+  2,0 mm, `print_settings_dialog.nozzle`), vorbelegt mit 0,4 aus `printers.toml`; wer eine
+  andere Düse aufschraubt, tippt sie ein, und die Maschinenvariante im Slicer folgt über
+  `slicer_profiles.machine_with_nozzle`. Plan: im Kern die Düsengrößen, die der gewählte
+  Slicer für dieses Gerät als Maschinenvarianten führt (`printer_model` gleich, je
+  `nozzle`), sonst die üblichen Größen; im Dialog eine Auswahl dieser Größen mit „Andere …“,
+  vorgewählt die Variante, die im Slicer eingestellt ist; ein Zustandssatz zur Düse steht an
+  der Düsenzeile statt in der Zustandszeile. Die Kopfzeile ist ein `QFormLayout` in der
+  Folge der Abhängigkeiten (Wächter
+  `test_the_print_dialog_asks_in_the_order_its_answers_depend_on`); vor dem Bau mit der
+  Sitzung abstimmen, die den Dialog umgebaut hat (`4d955a9e7`). Abnahme: Elegoo CC2 bietet
+  0,2/0,4/0,6/0,8 an, eine Wahl stellt Bahnbreite und Maschinenprofil, eine eigene Größe
+  bleibt möglich.
 
 ## KI und Generatoren
 
