@@ -462,7 +462,7 @@ Interessent hat.
 **4.7 `FirstRunDialog` trägt einen englischen Docstring** („One page, four
 questions, everything skippable.", `first_run.py:96`) in einer Datei, deren
 übrige Kommentare deutsch sind. Es ist nicht der einzige — die vollständige
-Zählung steht in [Teil 6](#teil-6--was-die-zweite-runde-fand).
+Zählung steht in [Teil 6](#teil-6--was-die-zweite-runde-entlastet-hat).
 
 ---
 

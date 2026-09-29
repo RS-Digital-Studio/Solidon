@@ -1149,12 +1149,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
     Gegenformeinsatz, Passungsprüfausschnitt, importiertes Gewinde ersetzen,
     Schrift auf Fläche/Bahn sowie drehender und kombinierter Fügeweg.
 
-<a id="rm-186"></a>
-
-RM-186 ist mit dem unbedingten Gewindebolzen-Kerntest im vollständigen grünen
-Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemessen.
-[Befund und Abschluss](ROADMAP-ARCHIV.md#rm-186).
-
 <a id="rm-188"></a>
 
 - [ ] **RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x.** Beschlossener
@@ -2317,7 +2311,7 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-muendung\prepare_ops_mit_drehen_heute.patch`
   (8 Hunks, gegen den Stand mit `2e496575b` und `202d5133a`). Ohne Lippe kippt die Tasche
   seit `2e496575b` an beiden Kernen offen. Die schräg **gesetzte** Tasche aus dem Baustein
-  zeigt dieselbe Lücke von der anderen Seite ([RM-277](#rm-277)). Abnahme unverändert.
+  zeigt dieselbe Lücke von der anderen Seite ([RM-277](ROADMAP-ARCHIV.md#rm-277)). Abnahme unverändert.
 
 <a id="rm-273"></a>
 
@@ -3927,11 +3921,6 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-robert-am-26082026-aufgetragen-hat).
 
-<a id="rm-149"></a>
-
-RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-149-abschluss-050).
-
 <a id="rm-091"></a>
 
 - [ ] **RM-091 — CRA-Meldebereitschaft herstellen, die Frist ist abgelaufen.** Die in
@@ -3969,11 +3958,6 @@ RM-149 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   bleibt preisfrei, bis das Angebot steht.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
-<a id="rm-182"></a>
-
-RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-182-abschluss-050).
 
 <a id="rm-093"></a>
 
@@ -4038,11 +4022,6 @@ RM-182 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
 
-<a id="rm-096"></a>
-
-RM-096 ist nach gebautem Rotationsweg und erfolgreichem Serverupload abgeschlossen.
-[Abschluss und Servernachweis](ROADMAP-ARCHIV.md#rm-096).
-
 <a id="rm-115"></a>
 
 RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
@@ -4085,11 +4064,6 @@ RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Termin draußen sein muss. Abnahme: 1.x-Build mit gesetztem `TRIAL_FROM`, Frist je Gerät von
   14 Tagen, danach derselbe lesende Zustand wie ohne Testphase (I09), Tests analog
   `test_a_sale_version_carries_no_deadline`, Website, Kauftexte und Changelog nennen sie.
-
-<a id="rm-162"></a>
-
-RM-162 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-162-abschluss-050).
 
 ## Kundenrückmeldungen
 
