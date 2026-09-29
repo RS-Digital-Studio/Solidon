@@ -33,6 +33,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer,
 from PySide6.QtGui import QFont, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFrame,
     QLabel,
@@ -360,6 +361,14 @@ class ContentHeight:
         wanted = dialog.sizeHint()
         width = max(dialog.width(), wanted.width()) if grow_width else dialog.width()
         self.settle(dialog, width, max(wanted.height(), floor))
+
+
+def select_data(box: QComboBox, identifier: str) -> None:
+    """Wählt den Eintrag eines Kombifelds mit dieser Kennung — und nichts, wenn
+    es ihn nicht gibt; die bisherige Wahl bleibt dann stehen."""
+    index = box.findData(identifier)
+    if index >= 0:
+        box.setCurrentIndex(index)
 
 
 def fit_height_after_show(dialog: QDialog) -> None:
