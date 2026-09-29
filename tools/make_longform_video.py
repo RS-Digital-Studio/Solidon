@@ -32,7 +32,7 @@ import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -136,6 +136,8 @@ class Recorder:
         self.window = window
         self.folder = folder
         self.chapter = chapter
+        self.activate_windows = True
+        self.frame_size = FRAME_SIZE
         self.slides: list[Slide] = []
         self.events: list[dict[str, Any]] = []
         self._pointer: QPoint | None = None
@@ -219,14 +221,20 @@ class Recorder:
         if dialog is not None:
             _place_dialog(self.window, dialog)
             dialog.raise_()
-            dialog.activateWindow()
-        elif not overlays:
+            if self.activate_windows:
+                dialog.activateWindow()
+        elif not overlays and self.activate_windows:
             self.window.raise_()
             self.window.activateWindow()
         if settle_frames:
             video_base.settle(self.app, settle_frames)
 
-        screen = self.app.primaryScreen()
+        renderer = self.window.viewport.renderer
+        if renderer is not None:
+            renderer.render_now()
+            self.app.processEvents()
+
+        screen = self.window.screen()
         if screen is None:
             raise SystemExit("Kein Bildschirm verfügbar — kein Video erzeugt.")
         captured = screen.grabWindow(self.window.winId()).toImage()
@@ -234,7 +242,7 @@ class Recorder:
             raise SystemExit("Das sichtbare Solidon-Fenster ließ sich nicht aufnehmen.")
         captured.setDevicePixelRatio(1.0)
         frame = captured.scaled(
-            *FRAME_SIZE,
+            *self.frame_size,
             Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
@@ -256,7 +264,7 @@ class Recorder:
     def _store(self, frame: QImage, seconds: float) -> None:
         """Ein Einzelbild unter einer eindeutigen Nummer in die Zeitleiste schreiben."""
         path = self.folder / f"{self._image_index:05d}.png"
-        if not frame.save(str(path), "PNG"):
+        if not frame.save(str(path)):
             raise SystemExit(f"Bild ließ sich nicht schreiben: {path}")
         self.slides.append(Slide(path, seconds))
         self._image_index += 1
@@ -276,8 +284,9 @@ class Recorder:
         if renderer is None:
             self.add(title, detail, seconds, target=viewport)
             return
-        self.window.raise_()
-        self.window.activateWindow()
+        if self.activate_windows:
+            self.window.raise_()
+            self.window.activateWindow()
         self.events.append(
             {
                 "start": self.seconds,
@@ -391,8 +400,8 @@ class Recorder:
         )
         local = global_point - self.window.mapToGlobal(QPoint(0, 0))
         return QPoint(
-            round(local.x() * FRAME_SIZE[0] / max(1, self.window.width())),
-            round(local.y() * FRAME_SIZE[1] / max(1, self.window.height())),
+            round(local.x() * self.frame_size[0] / max(1, self.window.width())),
+            round(local.y() * self.frame_size[1] / max(1, self.window.height())),
         )
 
     def _paint_caption(
@@ -456,15 +465,18 @@ class Recorder:
 
 def _place_dialog(window: MainWindow, dialog: QDialog) -> None:
     """Den einzigen Dialog unterhalb der Einblendung im Fenster halten."""
-    dialog.setModal(False)
-    dialog.adjustSize()
-    dialog.show()
-    video_base.settle(QApplication.instance(), 8)  # type: ignore[arg-type]
+    # Ein bereits über exec() laufender Kundendialog behält Modalität und Größe.
+    # Ein erneutes show()/setModal() kann sein natives Fenster neu anlegen.
+    if not dialog.isVisible():
+        dialog.adjustSize()
+        dialog.show()
+        video_base.settle(QApplication.instance(), 8)  # type: ignore[arg-type]
     origin = window.mapToGlobal(QPoint(0, 0))
     x = origin.x() + max(20, (window.width() - dialog.width()) // 2)
     y = origin.y() + 175
     maximum_y = origin.y() + window.height() - dialog.height() - 25
-    dialog.move(x, max(origin.y() + 165, min(y, maximum_y)))
+    minimum_y = origin.y() + (20 if dialog.height() > window.height() - 190 else 165)
+    dialog.move(x, max(minimum_y, min(y, maximum_y)))
 
 
 def _button(dialog: QDialog) -> QWidget:
@@ -472,7 +484,7 @@ def _button(dialog: QDialog) -> QWidget:
     box = dialog.findChild(QDialogButtonBox)
     if box is None:
         raise SystemExit(f"{dialog.windowTitle()}: keine Knopfleiste gefunden.")
-    button = box.button(QDialogButtonBox.StandardButton.Ok)
+    button = cast(QWidget | None, box.button(QDialogButtonBox.StandardButton.Ok))
     if button is None:
         for role in (
             QDialogButtonBox.StandardButton.Save,
@@ -970,20 +982,46 @@ def _begin_video(
     app: QApplication,
     chapter: str,
     folder: Path,
+    *,
+    screen: Any = None,
+    native_resolution: bool = False,
 ) -> tuple[Session, MainWindow, Recorder]:
     """Ein leeres sichtbares Projekt für genau einen Film öffnen."""
     session = Session()
     window = MainWindow(session, UiSettings(language=get_language()))
+    if screen is not None:
+        window.setScreen(screen)
     window.resize(*FRAME_SIZE)
-    window.move(0, 0)
-    window.show()
+    if screen is None:
+        window.move(0, 0)
+    else:
+        area = screen.availableGeometry()
+        window.move(
+            area.x() + max(0, (area.width() - window.width()) // 2),
+            area.y() + max(0, (area.height() - window.height()) // 2),
+        )
+    if native_resolution:
+        # Windows bindet den Vollbildschirm erst am sichtbaren nativen Fenster.
+        window.show()
+        video_base.settle(app, 6)
+        if screen is not None:
+            window.windowHandle().setScreen(screen)
+            window.setGeometry(screen.geometry())
+            video_base.settle(app, 6)
+        window.showFullScreen()
+    else:
+        window.show()
     session.start_new()
     window._show_start_screen(False)
     _verify(session, "Leeres Projekt")
     window.raise_()
     window.activateWindow()
     video_base.settle(app, 40)
-    return session, window, Recorder(app, window, folder, chapter)
+    recorder = Recorder(app, window, folder, chapter)
+    if native_resolution:
+        ratio = window.devicePixelRatioF()
+        recorder.frame_size = (round(window.width() * ratio), round(window.height() * ratio))
+    return session, window, recorder
 
 
 def _finish_video(session: Session, window: MainWindow) -> None:
@@ -1962,15 +2000,89 @@ def _write_longform_music(target: Path, seconds: float, chapter: str) -> Path:
             0.22,
             947,
         ),
+        "Pool groove": (
+            108.0,
+            ((40, 47, 52, 55), (43, 50, 55, 59), (38, 45, 50, 54), (45, 52, 57, 60)),
+            (0, 3, 1, 2, 0, 2, 3, 1),
+            0.31,
+            1409,
+        ),
+        "Filter flow": (
+            84.0,
+            ((41, 48, 53, 57), (45, 52, 57, 60), (43, 50, 55, 59), (48, 55, 60, 64)),
+            (0, 2, 1, 3, 2, 3, 1, 0),
+            0.12,
+            1427,
+        ),
+        "Spice mechanisms": (
+            122.0,
+            ((48, 55, 60, 64), (45, 52, 57, 60), (50, 57, 62, 65), (43, 50, 55, 59)),
+            (2, 0, 3, 1, 0, 2, 1, 3),
+            0.38,
+            1451,
+        ),
+        "Garden workshop": (
+            96.0,
+            ((43, 50, 55, 59), (40, 47, 52, 55), (48, 55, 60, 64), (38, 45, 50, 54)),
+            (0, 1, 3, 2, 1, 0, 2, 3),
+            0.19,
+            1481,
+        ),
+        "Blub bubbles": (
+            114.0,
+            ((50, 57, 62, 66), (47, 54, 59, 62), (43, 50, 55, 59), (45, 52, 57, 61)),
+            (3, 1, 2, 0, 2, 3, 0, 1),
+            0.24,
+            1489,
+        ),
+        "Ogre reveal": (
+            100.0,
+            ((38, 45, 50, 53), (41, 48, 53, 56), (43, 50, 55, 58), (45, 52, 57, 61)),
+            (0, 2, 0, 3, 1, 2, 3, 1),
+            0.43,
+            1499,
+        ),
+        "Inventory keys": (
+            88.0,
+            ((45, 52, 59, 64), (50, 57, 60, 64), (43, 50, 57, 62), (48, 55, 59, 64)),
+            (1, 3, 2, 0, 3, 1, 0, 2),
+            0.16,
+            1531,
+        ),
+        "Local dialogue": (
+            116.0,
+            ((47, 54, 59, 62), (43, 50, 57, 62), (45, 52, 59, 64), (42, 49, 54, 61)),
+            (2, 1, 0, 2, 3, 0, 1, 3),
+            0.34,
+            1553,
+        ),
+        "Shape discovery": (
+            76.0,
+            ((36, 43, 50, 55), (41, 48, 55, 60), (45, 52, 55, 62), (43, 50, 57, 62)),
+            (0, 1, 2, 1, 3, 2, 0, 3),
+            0.09,
+            1571,
+        ),
     }
     bpm, chords, arpeggio, colour, seed = styles[chapter]
+    instrument = {
+        "Pool groove": "pluck",
+        "Filter flow": "soft",
+        "Spice mechanisms": "mallet",
+        "Garden workshop": "keys",
+        "Blub bubbles": "bells",
+        "Ogre reveal": "pulse",
+        "Inventory keys": "keys",
+        "Local dialogue": "pluck",
+        "Shape discovery": "soft",
+    }.get(chapter, "original")
     rate = 48_000
     count = max(1, round(seconds * rate))
     stereo = np.zeros((count, 2), dtype=np.float64)
     rng = np.random.default_rng(seed)
 
     def frequency(note: int) -> float:
-        return 440.0 * 2.0 ** ((note - 69) / 12.0)
+        return float(440.0 * 2.0 ** ((note - 69) / 12.0))
 
     def add_tone(
         start: float,
@@ -1995,6 +2107,18 @@ def _write_longform_music(target: Path, seconds: float, chapter: str) -> Path:
         tone = np.sin(2.0 * math.pi * hz * local + phase)
         tone += colour * np.sin(4.0 * math.pi * hz * local + phase * 0.7)
         tone += colour * 0.18 * np.sin(6.0 * math.pi * hz * local + phase * 1.3)
+        if instrument == "pluck":
+            tone *= np.exp(-local * (3.0 if attack < 0.1 else 0.3))
+        elif instrument == "mallet":
+            tone = (tone + 0.24 * np.sin(2 * math.pi * hz * 2.76 * local)) * np.exp(-local * 2.2)
+        elif instrument == "bells":
+            tone = (tone + 0.32 * np.sin(2 * math.pi * hz * 3.51 * local)) * np.exp(-local * 1.1)
+        elif instrument == "keys":
+            tone += 0.13 * np.sin(8.0 * math.pi * hz * local) * np.exp(-local * 4)
+        elif instrument == "pulse":
+            tone += 0.19 * np.sin(10.0 * math.pi * hz * local + phase)
+        elif instrument == "soft":
+            tone = np.sin(2.0 * math.pi * hz * local + phase)
         left = math.sqrt((1.0 - pan) / 2.0)
         right = math.sqrt((1.0 + pan) / 2.0)
         stereo[begin:end, 0] += amplitude * left * envelope * tone
@@ -2037,6 +2161,8 @@ def _write_longform_music(target: Path, seconds: float, chapter: str) -> Path:
     position = 0
     while position * step < seconds:
         start = position * step
+        if instrument in {"pluck", "keys"} and position % 2:
+            start += step * 0.14
         chord_index = int(start / chord_seconds)
         chord = chords[chord_index % len(chords)]
         pattern_index = arpeggio[position % len(arpeggio)]
@@ -2062,7 +2188,10 @@ def _write_longform_music(target: Path, seconds: float, chapter: str) -> Path:
     for beat_index, start in enumerate(np.arange(0.0, seconds, beat)):
         begin = round(start * rate)
         end = min(count, begin + round(0.24 * rate))
-        if end > begin and beat_index % 4 in {0, 2}:
+        kick_pattern = (
+            {0} if instrument == "soft" else {0, 1, 2, 3} if instrument == "pulse" else {0, 2}
+        )
+        if end > begin and beat_index % 4 in kick_pattern:
             local = np.arange(end - begin, dtype=np.float64) / rate
             kick = np.sin(2.0 * math.pi * (72.0 * local - 22.0 * local**2))
             kick *= np.exp(-local * 15.0) * (0.060 if beat_index % 4 == 0 else 0.040)

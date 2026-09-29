@@ -18,6 +18,8 @@ sollte.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -79,13 +81,18 @@ SENTENCE_GAP = 0.35
 
 
 def main() -> int:
-    if len(sys.argv) < 4:
+    if len(sys.argv) == 3 and sys.argv[1] == "--manifest":
+        manifest = Path(sys.argv[2]).resolve()
+        jobs = json.loads(manifest.read_text("utf-8"))["jobs"]
+        for job in jobs:
+            job["target"] = str((manifest.parent / job["target"]).resolve())
+        reference = REFERENCE_VOICE
+    elif len(sys.argv) >= 4:
+        jobs = [{"target": sys.argv[1], "language": sys.argv[2], "text": sys.argv[3]}]
+        reference = Path(sys.argv[4]) if len(sys.argv) > 4 else REFERENCE_VOICE
+    else:
         print(__doc__)
         return 2
-    target = Path(sys.argv[1])
-    language = sys.argv[2]
-    text = sys.argv[3]
-    reference = Path(sys.argv[4]) if len(sys.argv) > 4 else REFERENCE_VOICE
     if not reference.is_file():
         raise SystemExit(
             f"Die Referenzstimme fehlt: {reference}\n"
@@ -94,11 +101,46 @@ def main() -> int:
             f"Stimmauswahl; einfacher ist es, sie aus der Versionsgeschichte zu holen."
         )
 
+    signature = hashlib.sha256(reference.read_bytes() + Path(__file__).read_bytes()).hexdigest()
+    pending = []
+    for job in jobs:
+        target = Path(job["target"])
+        stamp = target.with_suffix(".speech.json")
+        expected = {"text": job["text"], "language": job["language"], "voice": signature}
+        cached = json.loads(stamp.read_text("utf-8")) if stamp.exists() else {}
+        if target.exists() and all(cached.get(key) == value for key, value in expected.items()):
+            print(f"Unverändert: {target.name}", flush=True)
+        else:
+            pending.append((target, expected))
+    if not pending:
+        return 0
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = ChatterboxMultilingualTTS.from_pretrained(device=device)
-    extra = {"audio_prompt_path": str(reference)}
+    for target, expected in pending:
+        result = render_speech(model, expected["text"], expected["language"], reference)
+        joined, timings = result
+        target.parent.mkdir(parents=True, exist_ok=True)
+        torchaudio.save(str(target), joined, model.sr)
+        proof = dict(
+            expected,
+            sentences=timings,
+            sample_rate=model.sr,
+            seconds=joined.shape[-1] / model.sr,
+            engine="ChatterboxMultilingualTTS",
+        )
+        target.with_suffix(".speech.json").write_text(
+            json.dumps(proof, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"{target.name}: {proof['seconds']:.2f} s · {model.sr} Hz · {device}", flush=True)
+    return 0
 
+
+def render_speech(model, text: str, language: str, reference: Path):
+    """Ein Modell für mehrere Szenen halten und echte Satzzeiten für Untertitel belegen."""
+    extra = {"audio_prompt_path": str(reference)}
     pieces = []
+    timings = []
+    seconds = 0.0
     gap = torch.zeros(1, int(model.sr * SENTENCE_GAP))
     for index, sentence in enumerate(split(text)):
         # **Vor jedem Satz**, nicht einmal beim Start: das Modell zieht bei
@@ -116,13 +158,13 @@ def main() -> int:
         )
         if index:
             pieces.append(gap)
+            seconds += SENTENCE_GAP
         pieces.append(wav)
-
+        duration = wav.shape[-1] / model.sr
+        timings.append({"start": seconds, "end": seconds + duration, "text": sentence})
+        seconds += duration
     joined = torch.cat(pieces, dim=-1)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    torchaudio.save(str(target), joined, model.sr)
-    print(f"{joined.shape[-1] / model.sr:.2f} s · {model.sr} Hz · {device}")
-    return 0
+    return joined, timings
 
 
 def split(text: str) -> list[str]:

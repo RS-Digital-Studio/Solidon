@@ -67,7 +67,12 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `make_showpiece.py` · `make_gallery.py` | Das Schaustück, über die Operations-API gebaut wie von einem Nutzer · Galeriebilder im Viewport mit Licht und Schatten, nie über die flache Projektion der Katalogvorschau |
 | `make_video.py` · `speak_chatterbox.py` | Videos aus der laufenden Anwendung · Sprachsynthese mit `voice-reference.wav` (intern) |
 | `make_longform_video.py` | Lange Tutorials, höchstens ein Dialog zugleich; `--language en` nimmt `longform_video_en.json`; `.timeline.json` neben dem MP4 trägt die Zeiten der YouTube-Kapitel |
-| `make_workshop_videos.py` · `make_workshop_shorts.py` | STL-Tutorials über echte Dialoge, ein Prozess je Thema und Sprache (`--capture-only`, `--encode-only`) · Hochformat samt Titelbild aus `short_shots.json` neben dem Film |
+| `make_workshop_videos.py` · `make_workshop_shorts.py` | STL-Tutorials über echte Dialoge, ein Prozess je Thema und Sprache (`--capture-only`, `--encode-only`) · `--recipe` bindet externe Modellquellen und Rechte an native Schritte, Projekt, Ergebnisnetze und `editorial.json`; das ältere Hochformat liest `short_shots.json` |
+| `workshop_edit.py` · `speak_piper.py` | Gesprochener Schnitt aus `editorial.json`: `prepare` schreibt den Sprachauftrag, Piper spricht ihn in der separaten Medienumgebung, `render` erzeugt Film, Satzuntertitel, Zeitleiste und Hashnachweis. `--only tutorial` oder `short` hält bereits freigegebene andere Fassungen unverändert |
+| `workshop_short_capture.py` · `workshop_guided_edit.py` | Geführte native Maus- und Tastaturhandlungen: `interaction.json` trennt Ansage, wirkliche Handlung und Ergebnis; der Schnitt hält die gesamte Aktionsdauer und vergrößert echte Bildausschnitte. Telefonbilder in 360 × 640 gehören zum Sichtnachweis |
+| `workshop_sequence_edit.py` | Derselbe Ansage-/Handlungs-/Ergebnisvertrag für vollständige Tutorials und weitere Shorts aus `editorial.json`. `action_first_slide`/`action_last_slide` behalten die Rohdauer, `voice_before`/`voice_after` binden Aussagen an den richtigen Zustand; eine Bildvorlage trägt ihren Quellenhash |
+| `speak_qwen.py` | Sprachsynthese in der separaten `.venv-qwen-tts`; offizielle lokale Gewichte sind an ihren Quellenhash gebunden. VoiceDesign erzeugt eine eigene synthetische Referenz; alternativ darf Base eine ausdrücklich freigegebene CC0-Stimme mit gehashtem Rechte- und Einwilligungsbeleg verwenden. Base hält die Stimme über Sprachen und Szenen. `continuous: true` spricht einen zusammenhängenden Abschnitt ohne Neustart je Satz. Der Cache prüft Manifest, Modell-/Quellbindung und SHA der Audiodatei. WAV-Dateien und wirkliche Satzzeiten bestimmen den Schnitt; Rendern und ASR ersetzen keine Hörprüfung |
+| `workshop_ai_capture.py` · `workshop_inventory_capture.py` · `workshop_part_capture.py` | Rezeptaktionen für echte lokale KI-Läufe, isoliertes Filamentlager und den Bausteinkatalog; keine erfundenen Antworten, Geometrien oder Lagerdaten |
 | `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` | Symbol · Changelog-Seiten · SEO-Dateien · Rechtstexte und `packaging/eula.txt` · Beispielprojekte |
 | `stamp_assets.py` | Inhaltsstempel — läuft als Letztes |
 
@@ -90,6 +95,60 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 | `setup_comfyui.py` · `start-solidon3d.cmd` | ComfyUI für Solidon einrichten · Start per Doppelklick aus dem Arbeitsbaum |
 
 ## Fallen, die man einmal falsch macht
+
+- **Rohaufnahme und Schnitt sind getrennt.** Ein vollständiger `capture.json`
+  ist Voraussetzung für Sprache und Export. Szenen verweisen auf echte
+  Bildbereiche und Bildindizes; kurze Fassungen dürfen eigene Ausschnitte
+  verwenden. `minimum_seconds` schützt die Lesedauer von Dialogen auch bei
+  kurzem Sprechertext. Dateiauswahl, Einheitenfrage und Hinweise bekommen
+  eigene Abschnitte. Das Setup speichert die Druckerkennung als `printer_id`,
+  getrennt von der gleichnamigen Szene `printer`.
+- **Die Aufnahme greift nur das eigene Fenster ab.** Nach Kamerabewegungen
+  wird der Renderer vor dem Bild ausgerechnet; ein offener Dialog wird über
+  sein eigenes Widget ergänzt. Die Rohaufnahme aktiviert das Hauptfenster
+  nicht zwischen modalen Schritten. Lokale Dateipfade werden beim Schnitt
+  verdeckt, der gewählte Dateiname und die Handlung bleiben sichtbar.
+  `--screen-model` und `--screen-serial` wählen den Bildschirm anhand seiner
+  Identität. `--native-resolution` nimmt dessen volle Pixelgröße im eigenen
+  Vollbildfenster auf; `screen-evidence.json` belegt Bildschirm, Fenster und
+  Rohbildgröße. Der Recorder verwendet den Bildschirm des Fensters, nie
+  stillschweigend den Hauptbildschirm. Bereits sichtbare Kundendialoge werden
+  nur positioniert; ihre Modalität, Fensterflags und Größe bleiben erhalten.
+- **Eine Bedienhandlung ist kein Ergebnisstandbild.** `interaction.json`
+  hält echte Mauswege, Auswahl, Tasteneingabe und Übernehmen in getrennten
+  Bildbereichen fest. Der geführte Schnitt erklärt vor der Handlung und
+  spricht das neue Maß erst auf dem passenden Zustand. Die Gesten werden
+  nicht an kurze Sprachdateien angepasst. Vorher/Nachher verwendet dieselbe
+  native Kamera und Schattierung und trägt eindeutige Beschriftungen.
+  Der gemeinsame Szenenschnitt hält Ansage, Handlung und Ergebnis getrennt;
+  deren echte Ausschnitte dürfen sich pro Phase unterscheiden. Ein geöffnetes
+  Dropdown gehört vollständig in den Aktionsausschnitt. Tutorials entstehen
+  direkt in 2560 × 1440, Shorts in 1080 × 1920; der Exportbeleg nennt Quell-
+  und Ausgabegröße getrennt.
+  `hold_frames` kürzt nur ausdrücklich belegte Einzelbildhaltungen mit
+  Begründung; die umgebenden Maus- und Tastaturbilder behalten ihre Rohdauer.
+  Lange native Hinweiszeilen dürfen mit `wide_focus` mehr Bildbreite erhalten,
+  während die vollständige Karte daneben als Kontext sichtbar bleibt.
+- **Sprache und Musik bleiben nachprüfbar.** Satzzeiten stammen aus den
+  tatsächlich erzeugten WAV-Dateien. Shorts erhalten dieselben Zeiten als
+  eingebrannte Untertitel; Tutorials zusätzlich als SRT. Jede Themenmusik
+  hat ein eigenes prozedurales Arrangement. Der Mix senkt Musik unter Sprache
+  ab und prüft den fertigen H.264/AAC-Film vollständig. Eine technische
+  Prüfung ersetzt keine Sicht- oder Hörprüfung.
+  Externe Musik wird nur mit Dateihash, Quelle und Lizenznachweis gemischt;
+  die Sprachclips werden einzeln angeglichen, die Musik wird unter Sprache
+  abgesenkt. Tempo und Tonhöhe der Stimmen bleiben erhalten.
+  Zusammenhängende Sprecherabschnitte bleiben eine WAV-Datei. Eine separate
+  akustische Satzzuordnung kann die Untertitel verfeinern; ihr Dateihash, der
+  WAV-Hash, der unveränderte Text und die Zeitgrenzen werden vor Nutzung geprüft.
+  Nach allen Audiofiltern wird jeder Abschnitt auf seine genaue Zahl von
+  48-kHz-Samples gebracht. Die absolute Platzierung und Dateihashes stehen in
+  `narration-placement.json`; Lautheitsfilter dürfen keine Zeitdrift ansammeln.
+- **Lageraufnahmen schreiben ausschließlich in ein eigenes Profil.** Der
+  Inventarhelfer prüft den tatsächlich verwendeten Katalogpfad vor dem ersten
+  Zugriff. KI-Aufnahmen binden echte Anfrage, Backend, Antwort und gespeichertes
+  Ergebnis über `run_id` und Dateihashes; Zeitraffung von Wartezeiten bleibt
+  sichtbar. Freigegebene Fassungen werden bei einer Revision nicht überschrieben.
 
 - **`stamp_assets.py` läuft als Letztes** vor dem Upload, sonst wird
   `test_every_reference_carries_the_stamp_of_the_file_it_points_at` beim

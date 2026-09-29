@@ -47,7 +47,7 @@ def _text(
     font = QFont("Segoe UI")
     font.setWeight(QFont.Weight.Bold if bold else QFont.Weight.Normal)
     flags = Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignLeft
-    for pixels in range(size, max(21, size - 14), -1):
+    for pixels in range(size, max(min(21, size), size - 14) - 1, -1):
         font.setPixelSize(pixels)
         bounds = QFontMetrics(font).boundingRect(rectangle.toRect(), int(flags), value)
         if bounds.height() <= rectangle.height() and bounds.width() <= rectangle.width():

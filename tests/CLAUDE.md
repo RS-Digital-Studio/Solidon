@@ -26,6 +26,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Felder? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
+| Bleiben Tutorialreihenfolge, echte Gestendauer, native Ausschnitte, Dialogzustand und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Folgen Eigenschaften, Befunde, Material und Übergabe dem Verfahren eines Resin-Druckers? | `test_resin.py` — die acht Abnahmepunkte aus Konzept §9, Stufe 1 |

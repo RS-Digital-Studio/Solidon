@@ -49,6 +49,18 @@
 #   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
 #   TripoSG           MIT       Quelltext und Gewichte, in ComfyUI geladen
 #   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet)
+#   Qwen3-TTS         Apache-2.0, Quelltext und 1.7B-VoiceDesign-/Base-Gewichte
+#                               (github.com/QwenLM/Qwen3-TTS und
+#                               huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base).
+#                               Ausschließlich externe Medienproduktion in
+#                               .venv-qwen-tts; keine App-Abhängigkeit, keine
+#                               Auslieferung. Referenzen müssen selbst erzeugt
+#                               oder mit ausdrücklicher Einwilligung freigegeben sein.
+#   Thorsten-Voice    CC0-1.0, vom Sprecher selbst für freie Sprachsynthese
+#                               einschließlich kommerzieller Nutzung freigegeben
+#                               (thorsten-voice.de, github.com/thorstenMueller/Thorsten-Voice).
+#                               Nur externe Medienproduktion; Quelle, Aufnahmehash
+#                               und Einwilligungsbeleg liegen bei der Referenz.
 #   SDXL Base 1.0     CreativeML Open RAIL++-M
 #                               Bildmodell für den Textweg zu Weg 3
 #                               (``comfy_setup.fetch_image_model``,

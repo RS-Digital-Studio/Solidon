@@ -27,8 +27,10 @@ import argparse
 import json
 import math
 import os
+import shutil
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -200,16 +202,40 @@ def make_inputs(folder: Path, story: str) -> list[Path]:
 class Tutorial:
     """Fachlicher Ablauf auf dem vorhandenen Recorder und den echten Widgets."""
 
-    def __init__(self, app: Any, folder: Path, story: str) -> None:
+    def __init__(
+        self,
+        app: Any,
+        folder: Path,
+        story: str,
+        *,
+        raw: bool = False,
+        screen: Any = None,
+        native_resolution: bool = False,
+    ) -> None:
         self.folder, self.story = folder, story
+        self.raw = raw
         self.title = words(*STORIES[story])
         self.session, self.window, self.recorder = lf._begin_video(
-            app, self.title, folder / "frames"
+            app,
+            self.title,
+            folder / "frames",
+            screen=screen,
+            native_resolution=native_resolution,
         )
         self.shots: list[dict[str, Any]] = []
         self.checks: list[dict[str, Any]] = []
+        self.import_scenes: list[dict[str, Any]] = []
+        self.finish_scenes: list[dict[str, Any]] = []
+        self.redactions: list[dict[str, Any]] = []
+        self._file_capture: dict[str, Any] = {}
+        self._menu_capture: dict[str, Any] = {}
         self._pending_detail: str | None = None
         self.folder.joinpath("shots").mkdir(parents=True, exist_ok=True)
+        if raw:
+            # Der Schnitt bekommt unverdeckte App-Pixel. Text und Untertitel
+            # entstehen später zusammen mit der gemessenen Sprecherlänge.
+            self.recorder._paint_caption = lambda *args, **kwargs: None
+            self.recorder.activate_windows = False
 
     # --- Aufnahme -------------------------------------------------------------
 
@@ -276,7 +302,7 @@ class Tutorial:
         scale = distance * 0.3 if renderer.parallel_projection() else None
         viewport.set_camera_pose(position, point, (0.0, 0.0, 1.0), parallel_scale=scale)
         viewport.settle_camera()
-        renderer.render()
+        renderer.render_now()
         self.settle(18)
         self.add(title_de, title_en, detail_de, detail_en, seconds)
 
@@ -288,13 +314,15 @@ class Tutorial:
         detail_en: str,
         seconds: float,
         degrees: float,
+        start_degrees: float = 0.0,
     ) -> None:
         """Eine ruhige Kamerafahrt um den aktuellen Blickpunkt — ohne neu einzupassen."""
         recorder = self.recorder
         viewport = self.window.viewport
         renderer = viewport.renderer
-        self.window.raise_()
-        self.window.activateWindow()
+        if not self.raw:
+            self.window.raise_()
+            self.window.activateWindow()
         title, detail = words(title_de, title_en), words(detail_de, detail_en)
         print(f"{recorder.seconds:6.1f}s · {title} (Kamerafahrt {degrees:g}°)", flush=True)
         recorder.events.append(
@@ -304,7 +332,7 @@ class Tutorial:
         focal, position = pose.focal_point, pose.position
         offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
         radius = math.hypot(offset_x, offset_y)
-        start = math.atan2(offset_y, offset_x)
+        start = math.atan2(offset_y, offset_x) + math.radians(start_degrees)
         count = max(2, round(seconds * 20.0))
         for index in range(1, count + 1):
             phase = index / count
@@ -324,7 +352,7 @@ class Tutorial:
             redraw = getattr(viewport, "_redraw_shadows", None)
             if callable(redraw):
                 redraw()
-            renderer.render()
+            renderer.render_now()
             recorder.app.processEvents()
             recorder._store(
                 recorder._capture_frame(title, detail, settle_frames=0), seconds / count
@@ -339,25 +367,36 @@ class Tutorial:
         detail_en: str,
         seconds: float = 5.0,
         degrees: float = 40.0,
+        start_degrees: float = 0.0,
     ) -> None:
         """Das ganze Teil einpassen und einmal kurz drehen."""
         lf._fit(self.window, self.recorder.app)
-        self.turn(title_de, title_en, detail_de, detail_en, seconds, degrees)
+        self.turn(title_de, title_en, detail_de, detail_en, seconds, degrees, start_degrees)
 
     # --- Dialoge --------------------------------------------------------------
 
-    def modal(self, action: Any, fill: Any) -> None:
+    def modal(self, action: Any, fill: Any, *, prelude: Any = None) -> None:
         """Einen wirklichen modalen Dialog innerhalb seiner Ereignisschleife bedienen."""
+        from time import monotonic
+
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QApplication, QDialog
 
         failures: list[BaseException] = []
+        deadline = monotonic() + 60
 
         def visit() -> None:
             dialog = QApplication.activeModalWidget()
+            if dialog is None and monotonic() < deadline:
+                QTimer.singleShot(100, visit)
+                return
             try:
                 if dialog is None:
                     raise RuntimeError("Die echte Aktion hat keinen modalen Dialog geöffnet.")
+                print(f"Dialog bereit: {dialog.windowTitle()}", flush=True)
+                if prelude is not None and prelude(dialog):
+                    QTimer.singleShot(150, visit)
+                    return
                 fill(dialog)
             except BaseException as error:
                 failures.append(error)
@@ -369,9 +408,74 @@ class Tutorial:
         if failures:
             raise failures[0]
 
+    def menu_action(self, action: Any) -> None:
+        """Einen Menüweg mit wirklichen Mausereignissen öffnen und den Eintrag anklicken."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        path = lf._menu_path(self.window, action)
+        if not path or not action.isEnabled():
+            raise RuntimeError("Die gewünschte Menühandlung ist nicht erreichbar.")
+        bar = self.window.menuBar()
+        root = path[0][0].menuAction()
+        point = bar.actionGeometry(root).center()
+        first = len(self.recorder.slides)
+        self.recorder.add("", "", 1.0, target=bar.mapToGlobal(point))
+        action_first = len(self.recorder.slides)
+        QTest.mouseMove(bar, point, 100)
+        self.recorder.click("", "", target=bar.mapToGlobal(point))
+        QTest.mouseClick(bar, Qt.MouseButton.LeftButton, pos=point, delay=100)
+        self.settle(8)
+        visible = []
+        for index, (menu, chosen) in enumerate(path):
+            if not menu.isVisible():
+                raise RuntimeError("Das tatsächliche Menü ist nicht aufgeklappt.")
+            visible.append(menu)
+            point = menu.actionGeometry(chosen).center()
+            QTest.mouseMove(menu, point, 100)
+            QTest.qWait(400)
+            self.recorder.add("", "", 3.0, target=menu.mapToGlobal(point), overlays=tuple(visible))
+            if index == len(path) - 1:
+                self.recorder.add(
+                    "",
+                    "",
+                    0.35,
+                    target=menu.mapToGlobal(point),
+                    click=True,
+                    overlays=tuple(visible),
+                )
+                self._menu_capture = {
+                    "first_slide": first,
+                    "last_slide": len(self.recorder.slides),
+                    "action_first_slide": action_first,
+                    "action_last_slide": len(self.recorder.slides),
+                }
+                QTest.mouseClick(menu, Qt.MouseButton.LeftButton, pos=point, delay=100)
+            else:
+                QTest.qWait(300)
+
     def file_dialog(self, action: Any, path: Path, *, save: bool = False) -> None:
         """Den durch die App geöffneten Dateidialog auswählen und bestätigen."""
-        from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QLineEdit
+        from PySide6.QtCore import QPoint
+        from PySide6.QtWidgets import (
+            QComboBox,
+            QDialogButtonBox,
+            QFileDialog,
+            QLineEdit,
+            QListView,
+        )
+
+        from tools.workshop_inventory_capture import _click, _frame, _type
+
+        def bounds(widget: Any) -> list[int]:
+            origin = widget.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            width, height = self.recorder.frame_size
+            return [
+                round(origin.x() * width / self.window.width()),
+                round(origin.y() * height / self.window.height()),
+                round(widget.width() * width / self.window.width()),
+                round(widget.height() * height / self.window.height()),
+            ]
 
         def fill(dialog: Any) -> None:
             if not isinstance(dialog, QFileDialog):
@@ -381,9 +485,10 @@ class Tutorial:
             filename = dialog.findChild(QLineEdit, "fileNameEdit")
             if filename is None:
                 raise RuntimeError("Das Dateinamensfeld des geöffneten Dialogs fehlt.")
-            filename.setFocus()
-            filename.setText(str(path.resolve()))
-            self.settle(12)
+            first_slide = len(self.recorder.slides)
+            _frame(self, dialog=dialog, seconds=3.0)
+            action_first = len(self.recorder.slides)
+            _type(self, filename, path.name, dialog=dialog)
             box = dialog.findChild(QDialogButtonBox)
             button = (
                 box.button(
@@ -400,50 +505,998 @@ class Tutorial:
                     f"Auswahl {dialog.selectedFiles()}, Knopf {button}."
                 )
             project_file = path.suffix.lower() == ".p3d"
+            image_file = path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
             self.add(
                 "Datei speichern"
                 if save
                 else "Projektdatei auswählen"
                 if project_file
+                else "Die Bildvorlage auswählen"
+                if image_file
                 else "Die STL-Datei auswählen",
                 "Save the file"
                 if save
                 else "Select the project file"
                 if project_file
+                else "Select the reference image"
+                if image_file
                 else "Select the STL file",
                 "Das Projekt bewahrt alle Bearbeitungsschritte."
                 if save or project_file
+                else "Die Bildvorlage bleibt unverändert."
+                if image_file
                 else "Die STL enthält nur die Form — keine Maße, keine Schritte. "
                 "Die kommen jetzt dazu.",
                 "The project keeps every editing step."
                 if save or project_file
+                else "The reference image remains unchanged."
+                if image_file
                 else "The STL contains only the shape — no dimensions, no steps. Those come next.",
                 8.0,
                 dialog=dialog,
                 target=button,
             )
-            button.click()
+            _click(self, button, dialog=dialog)
+            action_last = len(self.recorder.slides)
+            _frame(self, seconds=2.0)
+            self._file_capture = {
+                "first_slide": first_slide,
+                "last_slide": len(self.recorder.slides),
+                "action_first_slide": action_first,
+                "action_last_slide": action_last,
+                "model_crop": bounds(dialog),
+                "after_model_crop": [0, 0, *self.recorder.frame_size],
+            }
+            boxes = [
+                bounds(widget)
+                for widget in (
+                    dialog.findChild(QComboBox, "lookInCombo"),
+                    dialog.findChild(QListView, "sidebar"),
+                )
+                if widget is not None
+            ]
+            self.redactions.append(
+                {
+                    **self._file_capture,
+                    "last_slide": action_last,
+                    "boxes": boxes,
+                    "reason": "Lokalen Ordner und Benutzerbereich ausblenden; "
+                    "Datei und Öffnen bleiben sichtbar.",
+                }
+            )
 
         self.modal(action, fill)
 
-    def import_file(self, path: Path) -> str:
+    def import_file(self, path: Path, *, unit: str | None = None) -> str:
         """Der Film benutzt den echten Dateimenüeintrag, einschließlich Dateiöffnung."""
-        before = set(self.session.last_result.scene.objects)
-        lf._show_action_path(
-            self.recorder,
-            self.window.import_action,
-            words(
-                "Datei → Modell einfügen öffnet die Dateiauswahl.",
-                "File → Insert model opens the file chooser.",
-            ),
+        from time import monotonic
+
+        from PySide6.QtCore import Qt, QTimer
+        from PySide6.QtWidgets import QApplication
+
+        from app.ui.dialogs import AskDialog
+
+        before = (
+            set(self.session.last_result.scene.objects)
+            if self.session.last_result is not None
+            else set()
         )
-        self.file_dialog(self.window.import_action.trigger, path)
+        timer = QTimer()
+        unit_scenes: list[dict[str, Any]] = []
+        prefix = f"import-{len(self.import_scenes) + 1}"
+
+        def scene(key: str, **values: Any) -> dict[str, Any]:
+            return {
+                "key": f"{prefix}-{key}",
+                "action": "import",
+                "short": False,
+                "short_voice": "",
+                "focus": None,
+                **values,
+            }
+
+        def answer_units() -> None:
+            dialog = QApplication.activeModalWidget()
+            if not isinstance(dialog, AskDialog):
+                return
+            choices = [
+                dialog.list.item(index).data(Qt.ItemDataRole.UserRole)
+                for index in range(dialog.list.count())
+            ]
+            if unit not in choices or set(choices) != {"mm", "cm", "in"}:
+                return
+            timer.stop()
+            index = choices.index(unit)
+            from tools.workshop_inventory_capture import _click
+
+            button = dialog._answers[index] if dialog._answers else dialog._accept
+            if not dialog._answers:
+                dialog.list.setCurrentRow(index)
+            unit_scenes.append(
+                self.control_scene(
+                    f"{prefix}-units",
+                    (
+                        "Die Einheit bewusst wählen",
+                        "Die Quelle nennt keine feste Einheit. "
+                        "Hier stehen die drei möglichen Größen. "
+                        "Ich wähle Millimeter als Ausgangspunkt.",
+                        "Die gewünschte Zielhöhe lege ich im nächsten Schritt selbst fest.",
+                    ),
+                    (
+                        "Choose the unit explicitly",
+                        "The source does not specify a physical unit. "
+                        "These are the three possible sizes. "
+                        "I choose millimetres as the starting point.",
+                        "I will set the intended height myself in the next step.",
+                    ),
+                    action=lambda: _click(self, button, dialog=dialog),
+                    dialog=dialog,
+                    minimum_seconds=10,
+                )
+            )
+
+        if unit is not None:
+            timer.timeout.connect(answer_units)
+            timer.start(150)
+        try:
+            self.file_dialog(lambda: self.menu_action(self.window.import_action), path)
+            deadline = monotonic() + 180
+            while (
+                self.session.last_result is None
+                or set(self.session.last_result.scene.objects) == before
+                or self.session.busy
+            ):
+                if monotonic() > deadline:
+                    raise RuntimeError(
+                        "Das Modell ist noch nicht geladen; sichtbare Rückfrage prüfen."
+                    )
+                self.settle(5)
+        finally:
+            timer.stop()
         self.checked("STL-Import")
         lf._fit(self.window, self.recorder.app)
+        self.import_scenes.extend(
+            [
+                scene(
+                    "menu",
+                    **self._menu_capture,
+                    title=words("Das Modell einfügen", "Insert the model"),
+                    detail=words("Datei → Modell einfügen", "File → Insert model"),
+                    voice=words(
+                        "Über Datei und Modell einfügen öffne ich die Dateiauswahl.",
+                        "I open the file chooser using File and Insert model.",
+                    ),
+                    minimum_seconds=6,
+                    model_crop=[0, 0, 900, 900],
+                ),
+                scene(
+                    "file",
+                    **self._file_capture,
+                    title=words("Die vorhandene Datei wählen", "Select the existing file"),
+                    detail=words(
+                        "Dateinamen prüfen, dann Öffnen.", "Check the file name, then Open."
+                    ),
+                    voice=words(
+                        "Ich wähle meine Modelldatei. Ich prüfe den Dateinamen "
+                        "und klicke auf Öffnen.",
+                        "I select my model file. I check the file name and click Open.",
+                    ),
+                    minimum_seconds=8,
+                ),
+                *unit_scenes,
+            ]
+        )
         added = set(self.session.last_result.scene.objects) - before
         if len(added) != 1:
             raise RuntimeError(f"Import sollte genau einen Körper hinzufügen: {added}")
         return str(added.pop())
+
+    def control_scene(
+        self,
+        key: str,
+        de: tuple[str, str, str],
+        en: tuple[str, str, str],
+        *,
+        action: Any = None,
+        dialog: Any = None,
+        target: Any = None,
+        minimum_seconds: float = 0,
+        short: bool = False,
+    ) -> dict[str, Any]:
+        """Ansage, wirkliche Bedienhandlung und Ergebnis mit ihren Rohbildgrenzen erfassen."""
+        from PySide6.QtCore import QPoint
+        from shiboken6 import isValid
+
+        first = len(self.recorder.slides)
+        self.recorder.add(
+            "", "", 2.0 if action else max(2.0, minimum_seconds), dialog=dialog, target=target
+        )
+        crop = [0, 0, *self.recorder.frame_size]
+        target_bounds = None
+        if target is not None and hasattr(target, "rect"):
+            point = target.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            target_bounds = [point.x(), point.y(), target.width(), target.height()]
+        if dialog is not None:
+            point = dialog.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            crop = [point.x(), point.y(), dialog.width(), dialog.height()]
+        action_first = len(self.recorder.slides)
+        if action is not None:
+            action()
+        action_last = len(self.recorder.slides)
+        visible = dialog is not None and isValid(dialog) and dialog.isVisible()
+        if action is not None:
+            self.recorder.add("", "", 3.0, dialog=dialog if visible else None)
+        after_crop = [0, 0, *self.recorder.frame_size]
+        after_target_bounds = None
+        if visible:
+            point = dialog.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            after_crop = [point.x(), point.y(), dialog.width(), dialog.height()]
+        if target is not None and isValid(target) and hasattr(target, "rect"):
+            point = target.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            after_target_bounds = [point.x(), point.y(), target.width(), target.height()]
+        title, before, after = en if LANGUAGE == "en" else de
+        return {
+            "key": key,
+            "title": title,
+            "voice": " ".join(value for value in (before, after) if value),
+            "voice_before": before,
+            "voice_after": after,
+            "short_voice_before": before if short else "",
+            "short_voice_after": after if short else "",
+            "short": short,
+            "first_slide": first,
+            "last_slide": len(self.recorder.slides),
+            "action_first_slide": action_first,
+            "action_last_slide": action_last,
+            "model_crop": crop,
+            "after_model_crop": after_crop,
+            "focus": None,
+            "target_bounds": target_bounds,
+            "after_target_bounds": after_target_bounds,
+            "minimum_seconds": minimum_seconds,
+            "minimum_after_action_seconds": 2.0,
+        }
+
+    def print_settings(self, step: dict[str, Any]) -> list[dict[str, Any]]:
+        """Den Druckdialog über den echten Einstieg bedienen und seine Vorschläge belegen."""
+        from dataclasses import asdict
+        from time import monotonic
+
+        from PySide6.QtWidgets import QDialogButtonBox
+
+        from app.ui.print_disclosure import PrintDisclosureDialog
+        from app.ui.print_settings_dialog import PrintSettingsDialog
+        from tools.workshop_inventory_capture import _choose, _click, _frame, _type
+
+        titles = (step["de"]["title"], step["en"]["title"])
+        scenes: list[dict[str, Any]] = []
+        snapshots: list[dict[str, Any]] = []
+        entry_end: int | None = None
+
+        def note(
+            key: str, de: tuple[str, str, str], en: tuple[str, str, str], **kwargs: Any
+        ) -> None:
+            scenes.append(self.control_scene(f"{step['key']}-{key}", de, en, **kwargs))
+
+        def opened(dialog: Any) -> None:
+            nonlocal entry_end
+            if entry_end is None:
+                _frame(self, dialog=dialog, seconds=1.5)
+                entry_end = len(self.recorder.slides)
+
+        def ready(dialog: Any) -> None:
+            deadline = monotonic() + 120
+            while (
+                self.session.busy
+                or dialog._advice_pending
+                or dialog._profiles_pending
+                or dialog._slicers_pending
+            ):
+                if monotonic() > deadline:
+                    raise RuntimeError("Druckvorschläge werden nicht fertig; Aufnahme anhalten.")
+                self.settle(5)
+
+        def snapshot(dialog: Any, stage: str) -> None:
+            snapshots.append(
+                {
+                    "stage": stage,
+                    "slide": len(self.recorder.slides) - 1,
+                    "printer": self.session.profile.printer.id,
+                    "slicer": str(dialog._slicer_path),
+                    "machine": dialog.machine_choice.currentText(),
+                    "process": dialog.process_choice.currentText(),
+                    "foundation": dialog.foundation_note.text(),
+                    "state": dialog.state.text(),
+                    "advice": [asdict(entry) for entry in dialog._advice_entries],
+                    "settings": asdict(dialog.settings),
+                }
+            )
+
+        def fill(dialog: Any) -> None:
+            if not isinstance(dialog, PrintSettingsDialog):
+                raise RuntimeError("Der Druckdialog ist nicht offen; vorherige Meldung prüfen.")
+            dialog.setMinimumWidth(1000)
+            opened(dialog)
+            note(
+                "overview",
+                (
+                    "Die Druckeinstellungen",
+                    "Hier stehen das gewählte Druckerprofil und die Druckwerte.",
+                    "",
+                ),
+                (
+                    "Print settings",
+                    "This is where I check the selected printer profile and print settings.",
+                    "",
+                ),
+                dialog=dialog,
+                minimum_seconds=10,
+            )
+            if step.get("printer"):
+                choice = dialog.printer_choice
+                index = choice.findData(step["printer"])
+                if index < 0:
+                    raise RuntimeError(f"Druckerprofil fehlt: {step['printer']}")
+                note(
+                    "printer",
+                    (
+                        titles[0],
+                        step["de"].get("voice_before", step["de"]["voice"]),
+                        "Die gewählte Druckerkennung steht jetzt im Projekt.",
+                    ),
+                    (
+                        titles[1],
+                        step["en"].get("voice_before", step["en"]["voice"]),
+                        "The selected printer is now stored in the project.",
+                    ),
+                    dialog=dialog,
+                    target=choice,
+                    action=lambda: _choose(self, choice, step["printer"], dialog=dialog),
+                    short=bool(step.get("short")),
+                )
+                if choice.currentData() != step["printer"]:
+                    raise RuntimeError("Die sichtbare Druckerwahl hat das Profil nicht übernommen.")
+            ready(dialog)
+            if step.get("slicer_match"):
+                picker = dialog.slicer_choice
+                needle = str(step["slicer_match"]).casefold()
+                matches = [
+                    index
+                    for index in range(picker.count())
+                    if needle in picker.itemText(index).casefold()
+                ]
+                if len(matches) != 1 or not picker.isVisible():
+                    raise RuntimeError("Die gewünschte Slicerauswahl ist nicht eindeutig sichtbar.")
+                chosen_slicer = picker.itemData(matches[0])
+                note(
+                    "slicer",
+                    (
+                        "Den Slicer wählen",
+                        "Im Feld Slicer wähle ich ElegooSlicer.",
+                        "",
+                    ),
+                    ("Choose the slicer", "In the Slicer field, select ElegooSlicer.", ""),
+                    dialog=dialog,
+                    target=picker,
+                    action=lambda: _choose(self, picker, chosen_slicer, dialog=dialog),
+                )
+                ready(dialog)
+            if step.get("manufacturer_machine_match"):
+                if dialog.slicer_toggle is None:
+                    raise RuntimeError("Der Abschnitt für Slicerprofile fehlt.")
+                note(
+                    "profiles-open",
+                    ("Die Slicerprofile öffnen", "Ich öffne Profile des Slicers.", ""),
+                    ("Open the slicer profiles", "Open Slicer profiles.", ""),
+                    dialog=dialog,
+                    target=dialog.slicer_toggle,
+                    action=lambda: (
+                        _click(self, dialog.slicer_toggle, dialog=dialog)
+                        if not dialog.slicer_toggle.isChecked()
+                        else None
+                    ),
+                )
+                ready(dialog)
+                needle = str(step["manufacturer_machine_match"]).casefold()
+                picker = dialog.machine_choice
+                matches = [
+                    index
+                    for index in range(picker.count())
+                    if needle in picker.itemText(index).casefold()
+                ]
+                if len(matches) != 1:
+                    raise RuntimeError(
+                        f"Das Herstellerprofil ist nicht eindeutig vorhanden: "
+                        f"{[picker.itemText(index) for index in range(picker.count())]}"
+                    )
+                chosen = picker.itemData(matches[0])
+                note(
+                    "manufacturer",
+                    (
+                        "Das Herstellerprofil wählen",
+                        "Unter Profile des Slicers wähle ich meinen Drucker.",
+                        "",
+                    ),
+                    (
+                        "Choose the manufacturer profile",
+                        "Under Slicer profiles, select the printer model.",
+                        "",
+                    ),
+                    dialog=dialog,
+                    target=picker,
+                    action=lambda: _choose(self, picker, chosen, dialog=dialog),
+                )
+                ready(dialog)
+                note(
+                    "profile-baseline",
+                    (
+                        "Die tatsächliche Grundlage",
+                        "Darunter stehen das zugehörige Grundprofil und die Filamentvorgabe.",
+                        "",
+                    ),
+                    (
+                        "The actual baseline",
+                        "The process profile and filament default appear underneath.",
+                        "",
+                    ),
+                    dialog=dialog,
+                    target=dialog.slicer_inner,
+                    minimum_seconds=8,
+                )
+                note(
+                    "profiles-close",
+                    ("Zurück zu den Druckwerten", "Ich klappe den Profilabschnitt wieder zu.", ""),
+                    ("Return to the print values", "I collapse the profile section again.", ""),
+                    dialog=dialog,
+                    target=dialog.slicer_toggle,
+                    action=lambda: _click(self, dialog.slicer_toggle, dialog=dialog),
+                )
+            snapshot(dialog, "baseline")
+            for path, value in step.get("values", {}).items():
+                editor = dialog._editors[path]
+                spin = getattr(editor, "spin", editor)
+                if not spin.isVisible():
+                    raise RuntimeError(f"Das Druckfeld ist nicht sichtbar: {path}")
+                note(
+                    "value-" + path.replace(".", "-"),
+                    (titles[0], step["de"]["voice"], "Der eigene Wert ist markiert."),
+                    (titles[1], step["en"]["voice"], "The custom value is marked."),
+                    dialog=dialog,
+                    target=spin,
+                    action=lambda spin=spin, value=value: _type(
+                        self, spin, typed(float(value)), dialog=dialog
+                    ),
+                )
+                snapshot(dialog, "custom-" + path)
+            if step.get("reset"):
+                reset = dialog._resets[step["reset"]]
+                if not reset.isVisible() or not reset.isEnabled():
+                    raise RuntimeError("Der eigene Druckwert lässt sich nicht zurücksetzen.")
+                note(
+                    "reset",
+                    (
+                        "Zur Profilvorgabe zurück",
+                        "Ich setze den eigenen Wert auf die Vorgabe zurück.",
+                        "",
+                    ),
+                    (
+                        "Return to the profile value",
+                        "I reset the custom value to the profile default.",
+                        "",
+                    ),
+                    dialog=dialog,
+                    target=reset,
+                    action=lambda: _click(self, reset, dialog=dialog),
+                )
+                snapshot(dialog, "reset-" + step["reset"])
+            if step.get("advice") or step.get("apply_advice"):
+                if dialog.advice_toggle is None:
+                    raise RuntimeError("Die Druckvorschläge sind in diesem Dialog nicht verfügbar.")
+                note(
+                    "advice-open",
+                    (
+                        "Druckvorschläge einblenden",
+                        "Ich öffne die Vorschläge für dieses Modell.",
+                        "",
+                    ),
+                    ("Show print suggestions", "I open the suggestions for this model.", ""),
+                    dialog=dialog,
+                    target=dialog.advice_toggle,
+                    action=lambda: (
+                        _click(self, dialog.advice_toggle, dialog=dialog)
+                        if not dialog.advice_toggle.isChecked()
+                        else None
+                    ),
+                )
+                ready(dialog)
+                snapshot(dialog, "before-advice")
+                note(
+                    "advice-results",
+                    (
+                        "Vorschlag und Grund zusammen lesen",
+                        "Ich lese den vorgeschlagenen Wert und den Grund daneben. "
+                        "Die Vorschläge gehören zu genau diesem Modell.",
+                        "",
+                    ),
+                    (
+                        "Read each suggestion with its reason",
+                        "Read the suggested value and the reason beside it. "
+                        "These suggestions are for this specific model.",
+                        "",
+                    ),
+                    dialog=dialog,
+                    target=dialog.advice_view,
+                    minimum_seconds=12,
+                )
+                from PySide6.QtCore import QPoint, Qt
+
+                for explanation in step.get("advice_explanations", []):
+                    view = dialog.advice_view
+                    matching_rows = [
+                        item
+                        for index in range(view.topLevelItemCount())
+                        if (item := view.topLevelItem(index)) is not None
+                        and item.data(0, Qt.ItemDataRole.UserRole) == explanation["path"]
+                    ]
+                    if len(matching_rows) != 1:
+                        raise RuntimeError(
+                            "Der erklärte Druckvorschlag ist nicht sichtbar vorhanden."
+                        )
+                    row = view.visualItemRect(matching_rows[0])
+                    origin = view.viewport().mapToGlobal(row.topLeft())
+                    origin -= self.window.mapToGlobal(QPoint(0, 0))
+                    note(
+                        "reason-" + explanation["path"].replace(".", "-"),
+                        (explanation["de"]["title"], explanation["de"]["voice"], ""),
+                        (explanation["en"]["title"], explanation["en"]["voice"], ""),
+                        dialog=dialog,
+                        minimum_seconds=6,
+                    )
+                    scenes[-1]["row_bounds"] = [origin.x(), origin.y(), row.width(), row.height()]
+            self.settle(15)
+            note(
+                "review",
+                (
+                    "Die tatsächlichen Werte prüfen",
+                    "Ich prüfe die angezeigten Werte vor dem nächsten Schritt.",
+                    "",
+                ),
+                ("Check the actual values", "I check the displayed values before continuing.", ""),
+                dialog=dialog,
+                minimum_seconds=12,
+            )
+            if step.get("apply_advice"):
+                if not dialog._advice_entries or not dialog.apply_button.isEnabled():
+                    raise RuntimeError("Keine anwendbaren Druckvorschläge; Geschichte anpassen.")
+                note(
+                    "apply-advice",
+                    (
+                        "Vorschläge bewusst übernehmen",
+                        "Mit Vorschläge übernehmen wende ich die gezeigten Änderungen an.",
+                        "",
+                    ),
+                    (
+                        "Apply the suggestions deliberately",
+                        "I click Apply suggestions to use the displayed changes.",
+                        "",
+                    ),
+                    dialog=dialog,
+                    target=dialog.apply_button,
+                    action=lambda: _click(self, dialog.apply_button, dialog=dialog),
+                    short=True,
+                )
+                ready(dialog)
+                snapshot(dialog, "after-advice")
+                note(
+                    "applied-results",
+                    (
+                        "Die übernommenen Vorschläge kontrollieren",
+                        "Die Werte sind übernommen. Die erneute Prüfung zeigt, "
+                        "ob noch Vorschläge offen sind.",
+                        "",
+                    ),
+                    (
+                        "Check the applied suggestions",
+                        "The values are applied. The new check shows "
+                        "whether any suggestions remain.",
+                        "",
+                    ),
+                    dialog=dialog,
+                    target=dialog.advice_view,
+                    minimum_seconds=6,
+                )
+            proof = {
+                "printer": self.session.profile.printer.id,
+                "foundation": dialog.foundation_note.text(),
+                "state": dialog.state.text(),
+                "advice": [asdict(entry) for entry in dialog._advice_entries],
+                "settings": asdict(dialog.settings),
+                "snapshots": snapshots,
+            }
+            (self.folder / f"print-{step['key']}.json").write_text(
+                json.dumps(proof, ensure_ascii=False, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
+            box = dialog.findChild(QDialogButtonBox)
+            close = box.button(QDialogButtonBox.StandardButton.Close) if box else None
+            if close is None:
+                raise RuntimeError("Schließen fehlt im Druckdialog.")
+            note(
+                "close",
+                (
+                    "Zum Modell zurückkehren",
+                    "Ich schließe die Druckeinstellungen und kontrolliere das Modell.",
+                    "",
+                ),
+                ("Return to the model", "I close the print settings and check the model.", ""),
+                dialog=dialog,
+                target=close,
+                action=lambda: _click(self, close, dialog=dialog),
+            )
+
+        def prelude(dialog: Any) -> bool:
+            if not isinstance(dialog, PrintDisclosureDialog):
+                return False
+            from PySide6.QtWidgets import QLabel
+
+            dialog.setMinimumWidth(900)
+            self.settle(12)
+            opened(dialog)
+            reading_seconds = max(
+                12, sum(len(label.text().split()) for label in dialog.findChildren(QLabel)) / 3
+            )
+            note(
+                "notice",
+                (
+                    "Druckeinstellungen und Verantwortung",
+                    "Dieser Hinweis erklärt, wie die Druckwerte entstehen und wann sie in "
+                    "Dateien mitgegeben werden. Ich lese ihn, bevor ich weitergehe.",
+                    "",
+                ),
+                (
+                    "Print settings and responsibility",
+                    "This notice explains how the print settings are calculated and when "
+                    "they are included in files. I read it before continuing.",
+                    "",
+                ),
+                dialog=dialog,
+                minimum_seconds=reading_seconds,
+            )
+            share = bool(step.get("share", False))
+            change_share = dialog.share.isChecked() != share
+            if change_share:
+                choice_de = (
+                    "Ich setze den Haken, damit die Werte beim Speichern und Übergeben mitreisen."
+                    if share
+                    else (
+                        "Die Werte sollen hier nicht mitgegeben werden. Ich nehme den Haken heraus."
+                    )
+                )
+                choice_en = (
+                    "I check this to include the values when saving or handing over the project."
+                    if share
+                    else "I do not include the values here, so I clear the checkbox."
+                )
+            else:
+                choice_de = (
+                    "Ich lasse den Haken gesetzt. Die Werte werden beim Speichern mitgegeben."
+                    if share
+                    else "Ich lasse die Übergabe der Werte hier ausgeschaltet."
+                )
+                choice_en = (
+                    "I leave this checked. The values are included when saving."
+                    if share
+                    else "I leave the option to include these values switched off."
+                )
+            note(
+                "share",
+                (
+                    "Werte mitgeben bewusst wählen",
+                    choice_de,
+                    "Die Einstellung kann ich später im Druckdialog wieder ändern.",
+                ),
+                (
+                    "Choose whether to include settings",
+                    choice_en,
+                    "I can change this later in the print settings.",
+                ),
+                dialog=dialog,
+                target=dialog.share,
+                action=(lambda: _click(self, dialog.share, dialog=dialog))
+                if change_share
+                else None,
+            )
+            if dialog.share.isChecked() != share:
+                raise RuntimeError("Die gezeigte Übergabeoption stimmt nicht mit der Wahl überein.")
+            box = dialog.findChild(QDialogButtonBox)
+            if box is None:
+                raise RuntimeError("Der Druckhinweis hat keine Schaltflächen.")
+            accept = box.button(QDialogButtonBox.StandardButton.Ok)
+            if accept is None:
+                raise RuntimeError("Verstanden fehlt im Druckhinweis.")
+            note(
+                "notice-accept",
+                ("Den Hinweis bestätigen", "Mit Verstanden öffne ich die Druckeinstellungen.", ""),
+                (
+                    "Acknowledge the notice",
+                    "I acknowledge the notice to open the print settings.",
+                    "",
+                ),
+                dialog=dialog,
+                target=accept,
+                action=lambda: _click(self, accept, dialog=dialog),
+            )
+            return True
+
+        if self.window.settings.right_panel_visible:
+            self.window.action_toggle_right()
+        first = len(self.recorder.slides)
+        self.recorder.add("", "", 3.0, target=self.window.header.printer_button)
+        action_first = len(self.recorder.slides)
+        self.modal(lambda: _click(self, self.window.header.printer_button), fill, prelude=prelude)
+        if entry_end is None:
+            raise RuntimeError("Der Druckdialog wurde nicht sichtbar aufgenommen.")
+        scenes.insert(
+            0,
+            {
+                "key": f"{step['key']}-entry",
+                "title": words("Druckeinstellungen öffnen", "Open print settings"),
+                "voice_before": words(
+                    "Oben rechts öffne ich Drucker.", "I open Printer at the top right."
+                ),
+                "voice_after": "",
+                "first_slide": first,
+                "last_slide": entry_end,
+                "action_first_slide": action_first,
+                "action_last_slide": entry_end - 1,
+                "model_crop": [1600, 0, 960, 600],
+                "after_model_crop": [0, 0, *self.recorder.frame_size],
+                "focus": None,
+                "short": False,
+            },
+        )
+        self.checked(titles[0])
+        return scenes
+
+    def first_steps(self, setup: dict[str, Any]) -> list[dict[str, Any]]:
+        """Die wirkliche Ersteinrichtung mit fertiger Programmsuche und bewusster Wahl zeigen."""
+        from time import monotonic
+
+        from PySide6.QtCore import QPoint
+        from PySide6.QtWidgets import QDialogButtonBox
+
+        from app.i18n import tr
+        from app.ui.first_run import FirstRunDialog
+        from tools.workshop_inventory_capture import _choose, _click, _frame
+
+        scenes: list[dict[str, Any]] = []
+
+        def record(
+            dialog: Any,
+            key: str,
+            *,
+            target: Any = None,
+            action: Any = None,
+            first_slide: int | None = None,
+        ) -> None:
+            stage = setup[key]
+            start = len(self.recorder.slides) if first_slide is None else first_slide
+            event_start = len(self.recorder.events)
+            self.add(
+                stage["de"]["title"],
+                stage["en"]["title"],
+                stage["de"]["detail"],
+                stage["en"]["detail"],
+                4.0 if action else float(stage.get("minimum_seconds", 12)),
+                dialog=dialog,
+                target=target,
+            )
+            action_first = len(self.recorder.slides)
+            if action is not None:
+                action()
+            action_last = len(self.recorder.slides)
+            if action is not None:
+                self.recorder.add("", "", 6.0, dialog=dialog if dialog.isVisible() else None)
+            region = dialog
+            if stage.get("view") == "basics":
+                region = dialog.printer.parentWidget()
+            elif stage.get("view") == "footer":
+                region = target.parentWidget()
+            elif stage.get("view") == "extensions":
+                region = dialog.tools.parentWidget()
+            origin = region.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            scale_x = self.recorder.frame_size[0] / self.window.width()
+            scale_y = self.recorder.frame_size[1] / self.window.height()
+            crop = [
+                max(0, round(origin.x() * scale_x)),
+                max(0, round(origin.y() * scale_y)),
+                round(region.width() * scale_x),
+                round(region.height() * scale_y),
+            ]
+            scenes.append(
+                {
+                    "key": "setup-" + key,
+                    **stage[LANGUAGE],
+                    "action": "first_steps",
+                    "first_slide": start,
+                    "last_slide": len(self.recorder.slides),
+                    "action_first_slide": action_first,
+                    "action_last_slide": action_last,
+                    "events": self.recorder.events[event_start:],
+                    "short": False,
+                    "minimum_seconds": stage.get("minimum_seconds", 12),
+                    "model_crop": crop,
+                    "after_model_crop": crop
+                    if dialog.isVisible()
+                    else [0, 0, *self.recorder.frame_size],
+                    "focus": None,
+                }
+            )
+
+        def wait(dialog: Any, *, record_wait: bool = False) -> None:
+            deadline = monotonic() + 120
+            while any(
+                worker is not None and worker.isRunning()
+                for worker in (dialog._survey, dialog._printer_survey)
+            ):
+                if monotonic() > deadline:
+                    raise RuntimeError(
+                        "Die Ersteinrichtung wartet noch auf Programme; Aufnahme anhalten."
+                    )
+                self.settle(5)
+                if record_wait:
+                    _frame(self, dialog=dialog, seconds=0.25)
+            self.settle(15)
+            dialog._grow_to_content()
+            self.settle(8)
+
+        def fill(dialog: Any) -> None:
+            if not isinstance(dialog, FirstRunDialog):
+                raise RuntimeError("Die echte Ersteinrichtung ist nicht geöffnet.")
+            dialog.setMinimumWidth(960)
+            overview_first = len(self.recorder.slides)
+            _frame(self, dialog=dialog, seconds=1.0)
+            wait(dialog, record_wait=True)
+            if len(self.recorder.slides):
+                scenes.append(
+                    {
+                        "key": "setup-menu",
+                        "action": "first_steps",
+                        "short": False,
+                        "title": words("Erste Schritte öffnen", "Open First steps"),
+                        "detail": words("Hilfe → Erste Schritte", "Help → First steps"),
+                        "voice": words(
+                            "Unter Hilfe öffne ich Erste Schritte.",
+                            "I open First steps from the Help menu.",
+                        ),
+                        **self._menu_capture,
+                        "minimum_seconds": 6,
+                        "focus": None,
+                        "model_crop": [0, 0, 900, 900],
+                    }
+                )
+            record(dialog, "overview", first_slide=overview_first)
+            wanted = str(setup["slicer_contains"]).casefold()
+            index = next(
+                (
+                    i
+                    for i in range(dialog.slicer.count())
+                    if wanted in str(dialog.slicer.itemData(i)).casefold()
+                ),
+                -1,
+            )
+            if index < 0:
+                raise RuntimeError(
+                    "Der benannte installierte Slicer fehlt; Ersteinrichtung prüfen."
+                )
+            wanted_slicer = dialog.slicer.itemData(index)
+
+            def choose_slicer() -> None:
+                _choose(self, dialog.slicer, wanted_slicer, dialog=dialog)
+                wait(dialog)
+
+            record(dialog, "slicer", target=dialog.slicer, action=choose_slicer)
+            index = dialog.printer.findData(setup["printer_id"])
+            if index < 0:
+                write_json(
+                    self.folder / "first-steps-missing-printer.json",
+                    {
+                        "slicer": dialog.slicer.currentData(),
+                        "printers": [
+                            (dialog.printer.itemText(i), dialog.printer.itemData(i))
+                            for i in range(dialog.printer.count())
+                        ],
+                        "state": dialog.printer_state.text(),
+                    },
+                )
+                raise RuntimeError("Das gewünschte Druckerprofil fehlt in der Ersteinrichtung.")
+
+            def choose_printer() -> None:
+                _choose(self, dialog.printer, setup["printer_id"], dialog=dialog)
+                wait(dialog)
+
+            record(dialog, "printer", target=dialog.printer, action=choose_printer)
+            if "extensions" in setup:
+                record(dialog, "extensions", target=dialog.chat_button)
+            box = dialog.findChild(QDialogButtonBox)
+            if box is None:
+                raise RuntimeError("Der Einrichtungsdialog hat keine Schaltflächen.")
+            button = next(
+                (
+                    button
+                    for button in box.buttons()
+                    if box.buttonRole(button) == QDialogButtonBox.ButtonRole.AcceptRole
+                ),
+                None,
+            )
+            if button is None:
+                raise RuntimeError("Speichern und starten fehlt in der Ersteinrichtung.")
+            write_json(
+                self.folder / "first-steps-evidence.json",
+                {
+                    "language": dialog.language.currentData(),
+                    "slicer": dialog.slicer.currentData(),
+                    "printer": dialog.printer.currentData(),
+                    "program_survey_complete": True,
+                },
+            )
+            record(
+                dialog, "save", target=button, action=lambda: _click(self, button, dialog=dialog)
+            )
+
+        action = next(
+            (
+                action
+                for menu in self.window._menus
+                for action in menu.actions()
+                if action.text().replace("&", "") == tr("Erste Schritte …")
+            ),
+            None,
+        )
+        if action is None:
+            raise RuntimeError("Der echte Menüeintrag Erste Schritte fehlt.")
+        self.modal(lambda: self.menu_action(action), fill)
+        if self.session.profile.printer.id != setup["printer_id"]:
+            raise RuntimeError(
+                "Der Projekt-Drucker entspricht nicht der gezeigten Ersteinrichtung."
+            )
+        return scenes
+
+    def toggle_step(
+        self, op_id: int, titles: tuple[str, str], details: tuple[str, str]
+    ) -> dict[str, int]:
+        """Den gewählten Verlaufsschritt mit dem angebotenen Tastaturweg schalten."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from tools.workshop_inventory_capture import _frame
+
+        history = self.window.history_panel
+        item = next(
+            (
+                history.list.item(row)
+                for row in range(history.list.count())
+                if history.list.item(row).data(Qt.ItemDataRole.UserRole) == op_id
+            ),
+            None,
+        )
+        if item is None:
+            raise RuntimeError("Der zu schaltende Verlaufsschritt fehlt.")
+        history.list.scrollToItem(item)
+        self.settle(10)
+        self.add(*titles, *details, 2.0, target=history.list)
+        action_first = len(self.recorder.slides)
+        point = history.list.visualItemRect(item).center()
+        self.recorder.click("", "", target=history.list.viewport().mapToGlobal(point))
+        QTest.mouseClick(history.list.viewport(), Qt.MouseButton.LeftButton, pos=point, delay=100)
+        self.settle(8)
+        _frame(self, seconds=0.8)
+        QTest.keyClick(history.list, Qt.Key.Key_Space)
+        self.checked(titles[0])
+        _frame(self, seconds=1.0)
+        action_last = len(self.recorder.slides)
+        self.add(*titles, *details, 3.0, target=history.list)
+        return {"action_first_slide": action_first, "action_last_slide": action_last}
 
     def parameter(
         self,
@@ -502,12 +1555,57 @@ class Tutorial:
         self.checked(f"Variante {name}={value}")
         self.detail_shot(self.window.parameters, "parameter")
 
-    def select_feature(self, body: str, feature: str, title_de: str, title_en: str) -> None:
-        """Die echte Merkmalszeile sichtbar auswählen, wie ein Klick im Objektbaum."""
+    def select_feature(
+        self, body: str, feature: str, title_de: str, title_en: str
+    ) -> dict[str, int]:
+        """Den Baum wirklich aufklappen und die sichtbare Merkmalszeile anklicken."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from app.ui.panels import _feature_item
+        from tools.workshop_inventory_capture import _frame
+
         # Nach einer Nahaufnahme erst wieder das ganze Teil zeigen — der Klick gilt dem Überblick.
         lf._fit(self.window, self.recorder.app)
-        self.window.object_tree.select_feature(body, feature)
-        self.settle(12)
+        tree = self.window.object_tree.tree
+        parent = next(
+            (
+                tree.topLevelItem(index)
+                for index in range(tree.topLevelItemCount())
+                if tree.topLevelItem(index).data(0, Qt.ItemDataRole.UserRole) == body
+            ),
+            None,
+        )
+        item = _feature_item(parent, feature) if parent is not None else None
+        if item is None:
+            raise RuntimeError("Das Merkmal fehlt im Objektbaum; Aufnahme anhalten.")
+        self.recorder.add("", "", 2.0)
+        first = len(self.recorder.slides)
+
+        def click_item(target: Any) -> None:
+            tree.scrollToItem(target)
+            self.settle(8)
+            point = tree.visualItemRect(target).center()
+            self.recorder.click("", "", target=tree.viewport().mapToGlobal(point))
+            QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, pos=point, delay=100)
+            self.settle(8)
+            _frame(self, seconds=0.8)
+
+        ancestors = []
+        ancestor = item.parent()
+        while ancestor is not None:
+            ancestors.append(ancestor)
+            ancestor = ancestor.parent()
+        for ancestor in reversed(ancestors):
+            if not ancestor.isExpanded():
+                click_item(ancestor)
+                QTest.keyClick(tree, Qt.Key.Key_Right)
+                self.settle(8)
+                _frame(self, seconds=0.8)
+        click_item(item)
+        last = len(self.recorder.slides)
+        if self.window.object_tree.selected_features() != ((body, feature),):
+            raise RuntimeError("Der echte Baumklick hat nicht das geplante Merkmal gewählt.")
         self.add(
             title_de,
             title_en,
@@ -517,8 +1615,217 @@ class Tutorial:
             8.0,
             target=self.window.feature_panel,
         )
+        return {"action_first_slide": first, "action_last_slide": last}
 
     # --- Die Kundenwege -----------------------------------------------------------
+
+    def drag_slot(self, step: dict[str, Any], body: str) -> list[dict[str, Any]]:
+        """Den sichtbaren L-Griff mit echten Qt-Mausereignissen ziehen und übernehmen."""
+        from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+        from PySide6.QtGui import QMouseEvent
+        from PySide6.QtWidgets import QApplication, QToolTip
+
+        from tools.workshop_inventory_capture import _click, _type
+
+        titles = (step["de"]["title"], step["en"]["title"])
+        details = (step["de"]["detail"], step["en"]["detail"])
+        if self.window.object_tree.selected_features() != ((body, step["feature"]),):
+            self.select_feature(body, step["feature"], *titles)
+        if self.window.settings.right_panel_visible:
+            self.window.action_toggle_right()
+        if self.window.settings.bed_visible:
+            self.window.action_toggle_bed()
+        self.window.action_shading("flat")
+        scenes: list[dict[str, Any]] = []
+        viewport = self.window.viewport
+        renderer = viewport.renderer
+        feature = self.session.last_result.scene.objects[body].features[step["feature"]]
+        centre = tuple(float(value) for value in feature.params["centre"])
+        if step.get("camera"):
+            camera = step["camera"]
+            viewport.set_camera_pose(
+                tuple(camera["position"]),
+                tuple(camera["focal"]),
+                tuple(camera["up"]),
+                parallel_scale=camera.get("scale"),
+            )
+            viewport.settle_camera()
+        self.settle(20)
+        renderer.render_now()
+        QToolTip.hideText()
+        handle = viewport._slot_handle
+        if handle is None:
+            raise RuntimeError("Der Langlochgriff fehlt; die sichtbare Auswahl prüfen.")
+        index = int(step.get("knob", 0))
+        seat = handle.knob_seats[index]
+        start = renderer.world_to_display(seat)
+        # Die eigene Darstellung wird wirklich getroffen; keine Attrappe für die Auswahl.
+        if renderer.pick_item(round(start[0]), round(start[1])) is not handle.knobs[index]:
+            raise RuntimeError("Der sichtbare Langlochgriff ist verdeckt; Kamera korrigieren.")
+        length = float(step["length"])
+        mouth, _ = handle.clearance
+        target = tuple(
+            mouth[axis] + (seat[axis] - mouth[axis]) * length / handle.length for axis in range(3)
+        )
+        finish = renderer.world_to_display(target)
+        widget = renderer.widget
+        ratio = renderer.device_ratio()
+        start_pos = QPointF(start[0] / ratio, start[1] / ratio)
+        end_pos = QPointF(finish[0] / ratio, finish[1] / ratio)
+        first = len(self.recorder.slides)
+        self.add(*titles, *details, 4.0, target=widget.mapToGlobal(start_pos.toPoint()))
+        action_first = len(self.recorder.slides)
+        before = len(self.session.project.document.ops)
+
+        def mouse(kind: Any, point: QPointF, button: Any, buttons: Any) -> None:
+            event = QMouseEvent(
+                kind,
+                point,
+                QPointF(widget.mapToGlobal(point.toPoint())),
+                button,
+                buttons,
+                Qt.KeyboardModifier.NoModifier,
+            )
+            QApplication.sendEvent(widget, event)
+            self.recorder.app.processEvents()
+
+        mouse(QEvent.Type.MouseMove, start_pos, Qt.MouseButton.NoButton, Qt.MouseButton.NoButton)
+        mouse(
+            QEvent.Type.MouseButtonPress,
+            start_pos,
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+        )
+        self.recorder.events.append(
+            {
+                "start": self.recorder.seconds,
+                "duration": 2.4,
+                "title": words(*titles),
+                "detail": words(*details),
+            }
+        )
+        for index in range(1, 31):
+            phase = index / 30
+            point = start_pos + (end_pos - start_pos) * phase
+            mouse(QEvent.Type.MouseMove, point, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton)
+            renderer.render_now()
+            frame = self.recorder._capture_frame(words(*titles), words(*details), settle_frames=0)
+            pointer = self.recorder._point_for(widget.mapToGlobal(point.toPoint()))
+            lf.video_base._paint_pointer(frame, (float(pointer.x()), float(pointer.y()), True))
+            self.recorder._store(frame, 0.08)
+        mouse(
+            QEvent.Type.MouseButtonRelease,
+            end_pos,
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.NoButton,
+        )
+        self.settle(20)
+        action_last = len(self.recorder.slides)
+        if not viewport.slot_drag_waits() or len(self.session.project.document.ops) != before:
+            raise RuntimeError(
+                "Der Griffzug hat keinen wartenden Entwurf erzeugt; Aufnahme prüfen."
+            )
+        self.add(*titles, *details, 7.0)
+        flow = self.window._quiet_placement
+        if flow is None or flow.spec_of().name != "slot_hole":
+            raise RuntimeError("Der Langlochzug hat keine passenden Maßfelder geöffnet.")
+        origin = flow._measure_box.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+        focus = [
+            origin.x() - 7,
+            origin.y() - 7,
+            flow._measure_box.width() + 14,
+            flow._measure_box.height() + 14,
+        ]
+        crop = [500, 120, 1700, 1160]
+
+        def row_focus(control: Any) -> list[int]:
+            point = control.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+            return [focus[0], point.y() - 12, focus[2], control.height() + 24]
+
+        def scene(
+            key: str,
+            begin: int,
+            action_begin: int,
+            action_end: int,
+            *,
+            applied: bool = False,
+            close_focus: list[int] | None = None,
+        ) -> None:
+            text = step["stages"][key][LANGUAGE]
+            scenes.append(
+                {
+                    "key": f"{step['key']}-{key}",
+                    **text,
+                    "action": "drag_slot",
+                    "first_slide": begin,
+                    "last_slide": len(self.recorder.slides),
+                    "action_first_slide": action_begin,
+                    "action_last_slide": action_end,
+                    "short": bool(step.get("short")),
+                    "model_crop": crop,
+                    "focus": None if key == "drag" else focus,
+                    "after_focus": None if applied else focus,
+                    "minimum_after_action_seconds": 2,
+                }
+            )
+            if close_focus is not None:
+                scenes[-1].update(
+                    short_before_focus=close_focus,
+                    short_action_focus=close_focus,
+                    short_after_focus=None if applied else close_focus,
+                )
+
+        scene("drag", first, action_first, action_last)
+        write_json(
+            self.folder / f"gesture-{step['key']}.json",
+            {
+                "input": "Qt-Mausereignisse auf dem nativen Render-Widget",
+                "feature": step["feature"],
+                "original_centre": centre,
+                "requested_length": length,
+                "start_pixel": [start_pos.x(), start_pos.y()],
+                "end_pixel": [end_pos.x(), end_pos.y()],
+                "preview": viewport.waiting_slot_drag(step["feature"]),
+                "document_unchanged_until_accept": True,
+            },
+        )
+        group = self.window.feature_panel._measure_groups.get(id(flow.measure_group))
+        if group is None:
+            raise RuntimeError("Die Langlochmaßfelder fehlen; Aufnahme anhalten.")
+        for key, value in (("slot_length", length), ("slot_angle", float(step.get("angle", 0.0)))):
+            editor = group.widgets[key]
+            spin = getattr(editor, "spin", editor)
+            first = len(self.recorder.slides)
+            self.recorder.add("", "", 2.0, target=spin)
+            action_first = len(self.recorder.slides)
+            _type(self, spin, typed(value))
+            action_last = len(self.recorder.slides)
+            if not math.isclose(float(spin.value()), value, abs_tol=1e-6):
+                raise RuntimeError("Der getippte Langlochwert stimmt nicht; Eingabe prüfen.")
+            self.recorder.add("", "", 3.0, target=spin)
+            scene(key, first, action_first, action_last, close_focus=row_focus(spin))
+        import time
+
+        deadline = time.monotonic() + 120
+        while not flow._measure_accept.isEnabled():
+            if time.monotonic() > deadline:
+                raise RuntimeError("Der Langlochentwurf lässt sich noch nicht übernehmen.")
+            self.settle(5)
+        first = len(self.recorder.slides)
+        accept_focus = row_focus(flow._measure_accept)
+        self.recorder.add("", "", 2.0, target=flow._measure_accept)
+        action_first = len(self.recorder.slides)
+        _click(self, flow._measure_accept)
+        self.checked("Langloch über den wirklichen Übernehmen-Knopf bestätigt")
+        action_last = len(self.recorder.slides)
+        expected = before + int(step.get("expected_operation_delta", 1))
+        if len(self.session.project.document.ops) != expected:
+            raise RuntimeError("Der Langlochzug hat den geplanten Verlauf nicht hergestellt.")
+        self.window.object_tree.tree.clearSelection()
+        self.settle(12)
+        self.recorder.add("", "", 4.0)
+        scene("apply", first, action_first, action_last, applied=True, close_focus=accept_focus)
+        return scenes
 
     def card(
         self,
@@ -556,6 +1863,42 @@ class Tutorial:
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         self.settle(6)
         panel = self.window.feature_panel
+        flow = getattr(self.window, "_quiet_placement", None)
+        group = None
+        if flow is not None and flow.spec_of().name == op:
+            group = panel._measure_groups.get(id(flow.measure_group))
+        if group is not None and flow is not None:
+            import time
+
+            before = len(self.session.project.document.ops)
+            for name, value, step_de, step_en, note_de, note_en in steps:
+                editor = group.widgets[name]
+                spin = getattr(editor, "spin", editor)
+                if isinstance(spin, QDoubleSpinBox):
+                    line = spin.lineEdit()
+                    line.setFocus()
+                    line.selectAll()
+                    QTest.keyClicks(line, typed(float(value)))
+                    QTest.keyClick(line, Qt.Key.Key_Tab)
+                else:
+                    set_field(editor, value)
+                self.settle(12)
+                self.add(step_de, step_en, note_de, note_en, 7.0, target=spin)
+            button = flow._measure_accept
+            deadline = time.monotonic() + 120.0
+            while not button.isEnabled() and time.monotonic() < deadline:
+                self.settle(10)
+            if not button.isEnabled():
+                raise RuntimeError("Die Vorschau gibt Übernehmen nicht frei; Befunde prüfen.")
+            self.detail_shot(flow._measure_box, "measure")
+            self.add(title_de, title_en, detail_de, detail_en, 5.0, target=button)
+            button.click()
+            self.checked(f"{op}: " + ", ".join(f"{name}={value}" for name, value, *_ in steps))
+            if len(self.session.project.document.ops) <= before:
+                raise RuntimeError(f"{op}: Übernehmen hat keinen Schritt angelegt.")
+            self.window.object_tree.tree.clearSelection()
+            self.settle(8)
+            return
         key = next((entry for entry, run in panel._runs.items() if run.op == op), None)
         if key is None:
             raise RuntimeError(f"Die Karte bietet {op} an diesem Merkmal nicht an: {panel._runs}")
@@ -682,7 +2025,7 @@ class Tutorial:
         self.add(
             title_de, title_en, detail_de, detail_en, 11.0, dialog=dialog, target=lf._button(dialog)
         )
-        raw = self.recorder.app.primaryScreen().grabWindow(dialog.winId())
+        raw = dialog.screen().grabWindow(dialog.winId())
         path = self.folder / "shots" / f"dialog-{len(self.checks):02d}.png"
         if not raw.save(str(path)):
             raise RuntimeError("Der geöffnete Werte-Dialog ließ sich nicht aufnehmen.")
@@ -718,20 +2061,25 @@ class Tutorial:
         self.settle(12)
         panel = self.window.selection_operations
         button = panel._quick_buttons.get(op) or panel._buttons.get(op)
-        if button is None or not button.isVisible() or not button.isEnabled():
-            raise RuntimeError(f"Die Handlungsliste bietet {op} für diese Auswahl nicht an.")
-        panel.scroller.ensureWidgetVisible(button, 40, 80)
-        self.settle(10)
         before = len(self.session.project.document.ops)
-        self.add(
-            f"Rechts: „{button.text()}“",
-            f"On the right: “{button.text()}”",
-            hint_de,
-            hint_en,
-            7.0,
-            target=button,
-        )
-        button.click()
+        if button is not None and button.isVisible() and button.isEnabled():
+            panel.scroller.ensureWidgetVisible(button, 40, 80)
+            self.settle(10)
+            self.add(
+                f"Rechts: „{button.text()}“",
+                f"On the right: “{button.text()}”",
+                hint_de,
+                hint_en,
+                7.0,
+                target=button,
+            )
+            button.click()
+        else:
+            action = lf._operation_action(self.window, op)
+            if action is None or not action.isEnabled():
+                raise RuntimeError(f"Kein sichtbarer Kundenweg für {op}; Aufnahmeplan prüfen.")
+            lf._show_action_path(self.recorder, action, words(hint_de, hint_en))
+            action.trigger()
         self.settle(15)
         dialog = self.window._op_dialog
         if dialog is None:
@@ -740,6 +2088,209 @@ class Tutorial:
         self.confirm_dialog(
             dialog, title_de, title_en, detail_de, detail_en, values, before, new_step=True
         )
+
+    def operation_dialog_scenes(self, step: dict[str, Any], dialog: Any) -> list[dict[str, Any]]:
+        """Alle verlangten Werte und die Bestätigung über wirkliche Dialoggesten aufnehmen."""
+        from functools import partial
+        from time import monotonic
+
+        from PySide6.QtWidgets import QCheckBox, QComboBox
+
+        from tools.workshop_inventory_capture import _choose, _click, _type
+
+        before = len(self.session.project.document.ops)
+        scenes: list[dict[str, Any]] = []
+
+        def record(key: str, action: Any = None, target: Any = None) -> None:
+            stage = step["stages"][key]
+            scenes.append(
+                self.control_scene(
+                    f"{step['key']}-{key}",
+                    tuple(stage["de"][name] for name in ("title", "voice_before", "voice_after")),
+                    tuple(stage["en"][name] for name in ("title", "voice_before", "voice_after")),
+                    action=action,
+                    target=target,
+                    dialog=dialog,
+                    minimum_seconds=stage.get("minimum_seconds", 0),
+                    short=bool(stage.get("short", step.get("short", False))),
+                )
+            )
+
+        dialog.setMinimumWidth(840)
+        self.settle(12)
+        placement = getattr(dialog, "placement_flow", None)
+        if placement is not None and placement.active:
+            back = placement._back
+            if not back.isVisible() or not back.isEnabled():
+                raise RuntimeError("Werte bearbeiten ist nicht sichtbar; Platzierungsweg prüfen.")
+            record(
+                "placement",
+                lambda: _click(self, back, dialog=dialog),
+                back,
+            )
+            if placement.active or not dialog.isVisible():
+                raise RuntimeError("Die direkte Platzierung bleibt aktiv; Werte noch nicht ändern.")
+        declared = {entry.name: entry for entry in dialog.spec.params.spec()}
+        if (
+            any(declared[name].placement == "advanced" for name in step["values"])
+            and not dialog.advanced.isChecked()
+        ):
+            record("advanced", lambda: _click(self, dialog.advanced, dialog=dialog))
+        for name, value in step["values"].items():
+            field = dialog._editors.get(name)
+            if field is None:
+                raise RuntimeError(f"Das tatsächliche Feld {name} fehlt im Werte-Dialog.")
+            if isinstance(field, QComboBox):
+                gesture: Any = partial(_choose, self, field, value, dialog=dialog)
+            elif isinstance(field, QCheckBox):
+                gesture = (
+                    (lambda field=field: _click(self, field, dialog=dialog))
+                    if field.isChecked() != bool(value)
+                    else None
+                )
+            else:
+                spin = getattr(field, "spin", field)
+                text = typed(float(value)) if isinstance(value, (int, float)) else str(value)
+                gesture = partial(_type, self, spin, text, dialog=dialog)
+            record(name, gesture, field)
+        current = dialog.values()
+        for name, value in step["values"].items():
+            actual = current.get(name)
+            matches = (
+                math.isclose(float(actual), value, abs_tol=1e-6)
+                if isinstance(value, (int, float)) and not isinstance(value, bool)
+                else actual == value
+            )
+            if not matches:
+                raise RuntimeError(f"Die wirkliche Eingabe für {name} stimmt nicht: {actual}")
+        accept = lf._button(dialog)
+        deadline = monotonic() + 120
+        while not accept.isEnabled():
+            if monotonic() > deadline:
+                raise RuntimeError("Der Entwurf ist nicht übernehmbar; Aufnahme anhalten.")
+            self.settle(5)
+        if "preview" in step["stages"]:
+            record("preview", target=accept)
+
+        def apply_and_wait() -> None:
+            _click(self, accept, dialog=dialog)
+            self.checked("Operation mit sichtbaren Dialoggesten übernommen")
+
+        record("apply", apply_and_wait, accept)
+        if len(self.session.project.document.ops) != before + 1:
+            raise RuntimeError("Übernehmen hat nicht genau einen Verlaufsschritt erzeugt.")
+        write_json(
+            self.folder / f"operation-{step['key']}.json",
+            {
+                "operation": step["op"],
+                "chosen_values": current,
+                "stored_values": dict(self.session.project.document.ops[-1].params),
+            },
+        )
+        return scenes
+
+    def operation_scenes(self, step: dict[str, Any], bodies: Sequence[str]) -> list[dict[str, Any]]:
+        """Körper, Operation, einzelne Felder und Übernehmen als wirklichen Kundenweg erfassen."""
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+
+        from tools.workshop_inventory_capture import _click, _frame, _type
+
+        tree = self.window.object_tree.tree
+
+        def select() -> None:
+            for number, body in enumerate(bodies):
+                item = next(
+                    tree.topLevelItem(index)
+                    for index in range(tree.topLevelItemCount())
+                    if tree.topLevelItem(index).data(0, Qt.ItemDataRole.UserRole) == body
+                )
+                tree.scrollToItem(item)
+                self.settle(8)
+                point = tree.visualItemRect(item).center()
+                self.recorder.click("", "", target=tree.viewport().mapToGlobal(point))
+                QTest.mouseClick(
+                    tree.viewport(),
+                    Qt.MouseButton.LeftButton,
+                    Qt.KeyboardModifier.ControlModifier
+                    if number
+                    else Qt.KeyboardModifier.NoModifier,
+                    pos=point,
+                    delay=100,
+                )
+                self.settle(8)
+                _frame(self, seconds=1.0)
+
+        stage = step["stages"]["select"]
+        scenes = [
+            self.control_scene(
+                f"{step['key']}-select",
+                tuple(stage["de"][name] for name in ("title", "voice_before", "voice_after")),
+                tuple(stage["en"][name] for name in ("title", "voice_before", "voice_after")),
+                action=select,
+                target=tree,
+                short=bool(stage.get("short", False)),
+            )
+        ]
+        if self.window.settings.right_panel_visible:
+            self.window.action_toggle_right()
+        self.settle(10)
+        panel = self.window.selection_operations
+        button = panel._quick_buttons.get(step["op"]) or panel._buttons.get(step["op"])
+        if button is not None and not button.isVisible() and panel.search.isVisible():
+            stage = step["stages"]["search"]
+            query = str(button.property("operationTitle") or button.text())
+            scenes.append(
+                self.control_scene(
+                    f"{step['key']}-search",
+                    tuple(stage["de"][name] for name in ("title", "voice_before", "voice_after")),
+                    tuple(stage["en"][name] for name in ("title", "voice_before", "voice_after")),
+                    action=lambda: _type(self, panel.search, query),
+                    target=panel.search,
+                    short=bool(stage.get("short", False)),
+                )
+            )
+        first = len(self.recorder.slides)
+        if button is not None and button.isVisible() and button.isEnabled():
+            panel.scroller.ensureWidgetVisible(button, 40, 80)
+            self.settle(10)
+            self.recorder.add("", "", 2.0, target=button)
+            action_first = len(self.recorder.slides)
+            _click(self, button)
+        else:
+            action = lf._operation_action(self.window, step["op"])
+            if action is None or not action.isEnabled():
+                raise RuntimeError(
+                    "Die registrierte Operation ist über kein echtes Menü erreichbar."
+                )
+            self.menu_action(action)
+            action_first = self._menu_capture["action_first_slide"]
+        self.settle(15)
+        dialog = self.window._op_dialog
+        if dialog is None or not dialog.isVisible():
+            raise RuntimeError("Die Operation hat keinen sichtbaren Werte-Dialog geöffnet.")
+        dialog.setMinimumWidth(840)
+        _frame(self, dialog=dialog, seconds=1.0)
+        action_last = len(self.recorder.slides)
+        self.recorder.add("", "", 6.0, dialog=dialog)
+        point = dialog.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
+        stage = step["stages"]["entry"]
+        scenes.append(
+            {
+                "key": f"{step['key']}-entry",
+                **stage[LANGUAGE],
+                "first_slide": first,
+                "last_slide": len(self.recorder.slides),
+                "action_first_slide": action_first,
+                "action_last_slide": action_last,
+                "model_crop": [0, 0, *self.recorder.frame_size],
+                "after_model_crop": [point.x(), point.y(), dialog.width(), dialog.height()],
+                "minimum_seconds": 8,
+                "short": bool(stage.get("short", step.get("short", False))),
+            }
+        )
+        scenes.extend(self.operation_dialog_scenes(step, dialog))
+        return scenes
 
     def edit_step(
         self,
@@ -842,22 +2393,16 @@ class Tutorial:
         self.window.object_tree.tree.clearSelection()
         self.settle(6)
 
-    def history(self, redo: bool = False) -> None:
+    def history(self, redo: bool = False) -> dict[str, int]:
         """Tatsächliche Menüaktion, danach überprüftes Ergebnis."""
         action = self.window.redo_action if redo else self.window.undo_action
-        lf._show_action_path(
-            self.recorder,
-            action,
-            words(
-                "Rückgängig nimmt genau den letzten Schritt zurück — auch Strg+Z tut das.",
-                "Undo reverses exactly the last step — Ctrl+Z does the same.",
-            ),
-        )
         if not action.isEnabled():
             raise RuntimeError("Die erwartete Verlaufshandlung ist nicht freigegeben.")
-        action.trigger()
+        self.recorder.add("", "", 1.0)
+        action_first = len(self.recorder.slides)
+        self.menu_action(action)
         self.checked("Wiederholen" if redo else "Rücknahme")
-        lf._fit(self.window, self.recorder.app)
+        action_last = len(self.recorder.slides)
         self.add(
             "Wiederhergestellt" if redo else "Zurückgenommen",
             "Restored" if redo else "Undone",
@@ -865,6 +2410,7 @@ class Tutorial:
             "The part is rebuilt from the remaining steps — nothing is lost.",
             8.0,
         )
+        return {"action_first_slide": action_first, "action_last_slide": action_last}
 
     def shot(
         self,
@@ -892,9 +2438,11 @@ class Tutorial:
         original_pose = renderer.camera_pose()
         try:
             lf.video_base.show_panels(self.window, False)
-            self.window.resize(1120, 1120)
-            lf.video_base.settle_resize(self.window, self.recorder.app)
-            lf._fit(self.window, self.recorder.app)
+            if not self.raw:
+                self.window.resize(1120, 1120)
+                lf.video_base.settle_resize(self.window, self.recorder.app)
+            if not self.raw:
+                lf._fit(self.window, self.recorder.app)
             if focus is not None or mirror:
                 pose = renderer.camera_pose()
                 direction = unit(
@@ -911,9 +2459,9 @@ class Tutorial:
                 scale = distance * 0.3 if renderer.parallel_projection() else None
                 viewport.set_camera_pose(position, point, (0.0, 0.0, 1.0), parallel_scale=scale)
                 viewport.settle_camera()
-                renderer.render()
+                renderer.render_now()
                 self.settle(18)
-            captured = self.recorder.app.primaryScreen().grabWindow(self.window.winId()).toImage()
+            captured = self.window.screen().grabWindow(self.window.winId()).toImage()
             origin = viewport.mapTo(self.window, QPoint(0, 0))
             scale_factor = captured.width() / self.window.width()
             image = captured.copy(
@@ -948,21 +2496,57 @@ class Tutorial:
         )
         self._pending_detail = None
 
-    def finish(self) -> None:
+    def finish(self, *, minimum_seconds: float = 180.0) -> None:
         """Projekt durch den echten Speicherdialog sichern, dann Ergebnisse belegen."""
+        from app.branding import APP_VERSION
         from app.core.geom.mesh import as_mesh_data
 
         self.window.object_tree.tree.clearSelection()
-        lf._show_action_path(
-            self.recorder,
-            self.window.save_action,
-            words(
-                "Datei → Speichern sichert Original-STL, Maße und alle Schritte zusammen.",
-                "File → Save keeps the original STL, the dimensions and every step together.",
-            ),
-        )
+        save_first = len(self.recorder.slides)
         self.file_dialog(
-            self.window.save_action.trigger, self.folder / f"{self.story}.p3d", save=True
+            lambda: self.menu_action(self.window.save_action),
+            self.folder / f"{self.story}.p3d",
+            save=True,
+        )
+        self.finish_scenes.extend(
+            [
+                {
+                    "key": "save-menu",
+                    "action": "save",
+                    "short": False,
+                    "title": words("Das Projekt speichern", "Save the project"),
+                    "detail": words("Datei → Speichern", "File → Save"),
+                    "voice": words(
+                        "Ich speichere jetzt das Projekt über Datei und Speichern.",
+                        "I save the project using File and Save.",
+                    ),
+                    "first_slide": save_first,
+                    "last_slide": self._file_capture["first_slide"],
+                    "minimum_seconds": 6,
+                    "model_crop": [0, 0, 900, 900],
+                    "focus": None,
+                },
+                {
+                    "key": "save-file",
+                    "action": "save",
+                    "short": False,
+                    "title": words(
+                        "Name und Projektdatei prüfen", "Check the name and project file"
+                    ),
+                    "detail": words(
+                        "Das Projekt enthält den Verlauf.", "The project includes the history."
+                    ),
+                    "voice": words(
+                        "Ich gebe einen Namen ein und klicke auf Speichern. Die Projektdatei "
+                        "enthält die ursprüngliche Form und alle Bearbeitungsschritte.",
+                        "I enter a name and click Save. The project file keeps the original shape "
+                        "and every editing step.",
+                    ),
+                    **self._file_capture,
+                    "minimum_seconds": 10,
+                    "focus": None,
+                },
+            ]
         )
         self.checked("Gespeichertes Endergebnis")
         for index, body in enumerate(self.session.last_result.scene.objects.values(), 1):
@@ -974,23 +2558,41 @@ class Tutorial:
             "For printing, export an STL; the project stays editable for later changes.",
             8.0,
         )
-        lf._show_action_path(
-            self.recorder,
-            self.window.open_action,
-            words(
-                "Datei → Öffnen holt das Projekt zurück — mit allen Maßen und Schritten.",
-                "File → Open brings the project back — with all dimensions and steps.",
-            ),
+        self.file_dialog(
+            lambda: self.menu_action(self.window.open_action), self.folder / f"{self.story}.p3d"
         )
-        self.file_dialog(self.window.open_action.trigger, self.folder / f"{self.story}.p3d")
         self.checked("Gespeichertes Projekt erneut geöffnet")
         lf._fit(self.window, self.recorder.app)
+        restore_first = len(self.recorder.slides)
         self.add(
             "Alles wieder da",
             "Everything is back",
             "Verlauf und Maße sind erhalten. Jede Zahl lässt sich später wieder ändern.",
             "History and dimensions are preserved. Any number can be changed again later.",
             9.0,
+        )
+        self.finish_scenes.append(
+            {
+                "key": "saved-result",
+                "action": "save",
+                "short": False,
+                "title": words("Das Projekt bleibt änderbar", "The project stays editable"),
+                "detail": words(
+                    "Projekt zum Weiterarbeiten, STL für die Form.",
+                    "Project for editing, STL for the shape.",
+                ),
+                "voice": words(
+                    "Die Änderung ist gespeichert. Zum Weiterarbeiten behalte ich das Projekt. "
+                    "Eine STL enthält nur die fertige Form.",
+                    "The change is saved. I keep the project for further editing. "
+                    "An STL contains only the finished shape.",
+                ),
+                "first_slide": restore_first,
+                "last_slide": len(self.recorder.slides),
+                "minimum_seconds": 9,
+                "focus": None,
+                "model_crop": [0, 0, *self.recorder.frame_size],
+            }
         )
         self.shot(
             "final",
@@ -1009,7 +2611,7 @@ class Tutorial:
             seconds=6.0,
             degrees=35.0,
         )
-        if self.recorder.seconds < 180.0:
+        if self.recorder.seconds < minimum_seconds:
             raise RuntimeError(f"Der vollständige Ablauf ist zu kurz: {self.recorder.seconds}s.")
         write_json(
             self.folder / "short_shots.json",
@@ -1018,7 +2620,7 @@ class Tutorial:
                 "language": LANGUAGE,
                 "title": self.title,
                 "preview": True,
-                "version": "0.4.1",
+                "version": APP_VERSION,
                 "shots": self.shots,
             },
         )
@@ -1893,21 +3495,234 @@ def run_story(tutorial: Tutorial, paths: list[Path]) -> None:
     tutorial.finish()
 
 
+def run_recipe(tutorial: Tutorial, recipe: dict[str, Any], recipe_path: Path) -> None:
+    """Ein redaktionelles Rezept über die vorhandenen echten Kundenwege aufnehmen.
+
+    Die JSON-Datei enthält lokale Quellen, Werte und benannte Aufnahmehandlungen,
+    niemals auszuführenden Quelltext. Jeder Zustand bleibt an seine Rohbilder und
+    die geprüften Ergebnisnetze gebunden.
+    """
+    import hashlib
+
+    sources = tutorial.folder / "sources"
+    sources.mkdir(exist_ok=True)
+    bodies: list[str] = []
+    source_proof = []
+    scenes = tutorial.first_steps(recipe["setup"]) if recipe.get("setup") else []
+    for index, entry in enumerate(recipe["sources"], 1):
+        source = (recipe_path.parent / entry["path"]).resolve()
+        if not source.is_file() or not entry.get("rights"):
+            raise ValueError(f"Quelle oder Rechtebeleg fehlt; Rezept prüfen: {source.name}")
+        target = sources / f"{index:02d}-{source.name}"
+        shutil.copy2(source, target)
+        bodies.append(tutorial.import_file(target, unit=entry.get("unit")))
+        source_proof.append(
+            {
+                "file": target.name,
+                "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                "rights": entry["rights"],
+            }
+        )
+    if "import" in recipe[LANGUAGE]:
+        scenes.extend(tutorial.import_scenes)
+    for step in recipe["steps"]:
+        captured_scenes = None
+        action_bounds: dict[str, int] = {}
+        start = len(tutorial.recorder.slides)
+        event_start = len(tutorial.recorder.events)
+        text = step[LANGUAGE]
+        titles = (step["de"]["title"], step["en"]["title"])
+        details = (step["de"]["detail"], step["en"]["detail"])
+        action = step["action"]
+        body = bodies[int(step.get("body", 0))] if bodies else None
+        if action == "overview":
+            tutorial.overview(
+                *titles,
+                *details,
+                seconds=step.get("seconds", 7.0),
+                degrees=step.get("degrees", 40.0),
+                start_degrees=step.get("start_degrees", 0.0),
+            )
+        elif action == "view":
+            lf._view(
+                tutorial.window, tutorial.recorder.app, step["direction"], step.get("zoom", 1.0)
+            )
+            tutorial.add(*titles, *details, step.get("seconds", 7.0))
+        elif action == "close_up":
+            tutorial.close_up(
+                tuple(step["point"]),
+                step["distance"],
+                *titles,
+                *details,
+                seconds=step.get("seconds", 7.0),
+                steep=step.get("steep", 0.45),
+                mirror=step.get("mirror", False),
+            )
+        elif action == "feature":
+            if body is None:
+                raise ValueError("Die Merkmalauswahl benötigt einen importierten Körper.")
+            current = tutorial.session.last_result.scene.objects[body]
+            feature_id = step["feature"]
+            if feature_id not in current.features:
+                raise ValueError(f"Merkmal {feature_id} fehlt; Quellenaufnahme prüfen.")
+            action_bounds = tutorial.select_feature(body, feature_id, *titles)
+        elif action == "card":
+            if body is None:
+                raise ValueError("Die Maßbearbeitung benötigt einen importierten Körper.")
+            values = [
+                (
+                    value["field"],
+                    value["value"],
+                    value["de"]["title"],
+                    value["en"]["title"],
+                    value["de"]["detail"],
+                    value["en"]["detail"],
+                )
+                for value in step["values"]
+            ]
+            tutorial.card(step["op"], values, *titles, *details, body=body, feature=step["feature"])
+        elif action == "drag_slot":
+            if body is None:
+                raise ValueError("Das Langloch benötigt einen importierten Körper.")
+            captured_scenes = tutorial.drag_slot(step, body)
+        elif action == "operation":
+            chosen_bodies = (
+                tuple(tutorial.session.last_result.scene.objects)
+                if step.get("all_bodies")
+                else [bodies[index] for index in step.get("bodies", [0])]
+            )
+            if "stages" in step:
+                captured_scenes = tutorial.operation_scenes(step, chosen_bodies)
+            else:
+                tutorial.listed(
+                    step["op"],
+                    step["values"],
+                    *titles,
+                    *details,
+                    bodies=chosen_bodies,
+                    hint_de=step["de"]["detail"],
+                    hint_en=step["en"]["detail"],
+                )
+        elif action == "edit":
+            tutorial.edit_step(last_op_id(tutorial), step["values"], *titles, *details)
+        elif action == "parameter":
+            tutorial.parameter(
+                step[LANGUAGE]["name"],
+                step["value"],
+                *titles,
+                minimum=step["minimum"],
+                maximum=step["maximum"],
+            )
+        elif action == "change_parameter":
+            tutorial.change_parameter(step[LANGUAGE]["name"], step["value"], *titles)
+        elif action == "undo":
+            action_bounds = tutorial.history()
+        elif action == "redo":
+            action_bounds = tutorial.history(redo=True)
+        elif action == "move":
+            if body is None:
+                raise ValueError("Das Verschieben benötigt einen importierten Körper.")
+            tutorial.move(body, step["dx"], *titles, *details)
+        elif action == "print_settings":
+            captured_scenes = tutorial.print_settings(step)
+        elif action == "history_toggle":
+            action_bounds = tutorial.toggle_step(last_op_id(tutorial), titles, details)
+        elif action == "ai":
+            from tools.workshop_ai_capture import capture_step as capture_ai_step
+
+            captured_scenes = capture_ai_step(tutorial, step)
+        elif action == "inventory":
+            from tools.workshop_inventory_capture import capture_step as capture_inventory_step
+
+            captured_scenes = capture_inventory_step(tutorial, step)
+        elif action == "part_catalog":
+            from tools.workshop_part_capture import capture_step as capture_part_step
+
+            if body is None:
+                raise ValueError("Der Baustein benötigt einen importierten Körper.")
+            captured_scenes = capture_part_step(tutorial, step, body)
+        elif action == "short_interaction":
+            from tools.workshop_short_capture import capture_step as capture_short_step
+
+            if body is None:
+                raise ValueError("Die Bedienfolge benötigt einen importierten Körper.")
+            capture_short_step(tutorial, step, body)
+        else:
+            raise ValueError(f"Unbekannte Aufnahmehandlung; Rezept prüfen: {action}")
+        scene = {
+            "key": step["key"],
+            **text,
+            "action": action,
+            "first_slide": start,
+            "last_slide": len(tutorial.recorder.slides),
+            "events": tutorial.recorder.events[event_start:],
+            "short": bool(step.get("short", False)),
+            "focus": step.get("focus"),
+            "model_crop": step.get("model_crop"),
+            "minimum_seconds": step.get("minimum_seconds", 0.0),
+            **action_bounds,
+        }
+        if captured_scenes is None:
+            scenes.append(scene)
+        else:
+            scenes.extend(captured_scenes)
+        if action != "inventory":
+            tutorial.shot(step["key"], *titles, *details, cover=bool(step.get("cover")))
+    tutorial.finish(minimum_seconds=0.0)
+    scenes.extend(tutorial.finish_scenes)
+    if any(step["action"] == "ai" for step in recipe["steps"]):
+        from tools.workshop_ai_capture import finalize_evidence
+
+        finalize_evidence(tutorial)
+    write_json(
+        tutorial.folder / "editorial.json",
+        {
+            "schema": 1,
+            "story": recipe["id"],
+            "language": LANGUAGE,
+            "title": recipe[LANGUAGE]["title"],
+            "series_label": recipe[LANGUAGE].get("series_label"),
+            "hook": recipe[LANGUAGE]["hook"],
+            "short_hook": recipe[LANGUAGE]["short_hook"],
+            "thumbnail": recipe[LANGUAGE]["thumbnail"],
+            "music": recipe["music"],
+            "captured_at": datetime.now(UTC).isoformat(),
+            "source_files": source_proof,
+            "scenes": scenes,
+            "hero": recipe["hero"],
+            "redactions": tutorial.redactions,
+        },
+    )
+
+
 def main() -> int:
     """Aufnahmeprofil zuerst isolieren, danach Anwendung und Recorder laden."""
     global lf, LANGUAGE
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("story", choices=STORIES)
+    parser.add_argument("story", nargs="?", choices=STORIES)
+    parser.add_argument("--recipe", type=Path)
+    parser.add_argument("--output", type=Path, default=OUTPUT)
     parser.add_argument("--language", choices=("de", "en"), default="de")
     parser.add_argument("--capture-only", action="store_true")
     parser.add_argument("--encode-only", action="store_true")
     parser.add_argument("--inputs-only", action="store_true")
+    parser.add_argument("--screen-model")
+    parser.add_argument("--screen-serial")
+    parser.add_argument("--native-resolution", action="store_true")
     args = parser.parse_args()
-    if (OUTPUT / "pause-production").exists():
+    if args.native_resolution and (not args.recipe or not args.capture_only):
+        parser.error("Native Bildschirmgröße benötigt --recipe und --capture-only.")
+    recipe = json.loads(args.recipe.read_text("utf-8")) if args.recipe else None
+    if recipe:
+        args.story = recipe["id"]
+        STORIES[args.story] = (recipe["de"]["title"], recipe["en"]["title"])
+    elif args.story is None:
+        parser.error("Ein Thema oder --recipe ist erforderlich.")
+    if (args.output / "pause-production").exists():
         print("Produktionspause: zuerst den laufenden App-Prüflauf abschließen.", flush=True)
         return 75
     LANGUAGE = args.language
-    folder = OUTPUT / args.story / LANGUAGE
+    folder = args.output.resolve() / args.story / LANGUAGE
     folder.mkdir(parents=True, exist_ok=True)
     profile = folder / "profile"
     for name, child in (
@@ -1966,15 +3781,59 @@ def main() -> int:
         for stale in (*folder.glob("*.stl"), *folder.glob("variant-*.json")):
             stale.unlink()
         lf.video_base.require_screen(app)
-        paths = make_inputs(folder / "sources", args.story)
-        tutorial = Tutorial(app, folder, args.story)
+        paths = [] if recipe else make_inputs(folder / "sources", args.story)
+        wanted_screen = None
+        if args.screen_model or args.screen_serial:
+            matching = [
+                screen
+                for screen in app.screens()
+                if (not args.screen_model or screen.model() == args.screen_model)
+                and (not args.screen_serial or screen.serialNumber() == args.screen_serial)
+            ]
+            if len(matching) != 1:
+                raise RuntimeError(
+                    "Der Aufnahmebildschirm ist nicht eindeutig; Modell und Seriennummer prüfen."
+                )
+            wanted_screen = matching[0]
+        tutorial = Tutorial(
+            app,
+            folder,
+            args.story,
+            raw=recipe is not None,
+            screen=wanted_screen,
+            native_resolution=args.native_resolution,
+        )
+        actual_screen = tutorial.window.screen()
+        if wanted_screen is not None and actual_screen is not wanted_screen:
+            raise RuntimeError(
+                "Das Aufnahmefenster steht auf dem falschen Monitor; Position prüfen: "
+                f"{actual_screen.model()} / {actual_screen.serialNumber()}."
+            )
+        area = actual_screen.geometry()
+        write_json(
+            folder / "screen-evidence.json",
+            {
+                "model": actual_screen.model(),
+                "serial": actual_screen.serialNumber(),
+                "name": actual_screen.name(),
+                "geometry": [area.x(), area.y(), area.width(), area.height()],
+                "device_pixel_ratio": actual_screen.devicePixelRatio(),
+                "window_position": [tutorial.window.x(), tutorial.window.y()],
+                "window_size": [tutorial.window.width(), tutorial.window.height()],
+                "capture_size": tutorial.recorder.frame_size,
+                "native_resolution": args.native_resolution,
+            },
+        )
         try:
-            run_story(tutorial, paths)
+            if recipe:
+                run_recipe(tutorial, recipe, args.recipe.resolve())
+            else:
+                run_story(tutorial, paths)
             recorder = tutorial.recorder
         except BaseException:
             import traceback
 
-            app.primaryScreen().grabWindow(tutorial.window.winId()).save(
+            tutorial.window.screen().grabWindow(tutorial.window.winId()).save(
                 str(folder / "failed-state.png")
             )
             (folder / "failed-run.txt").write_text(traceback.format_exc(), encoding="utf-8")
@@ -1982,6 +3841,10 @@ def main() -> int:
         finally:
             lf._finish_video(tutorial.session, tutorial.window)
     if not args.capture_only:
+        if recipe:
+            raise ValueError(
+                "Rohaufnahme fertig; mit workshop_edit.py den gesprochenen Schnitt erzeugen."
+            )
         recorder.chapter = MUSIC_STYLES[args.story]
         lf._encode(recorder, folder / f"solidon3d-{args.story}-{LANGUAGE}.mp4")
     print(f"Fertig: {folder} ({recorder.seconds:.1f} Sekunden)", flush=True)
