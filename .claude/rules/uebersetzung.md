@@ -151,6 +151,11 @@ Materialprofil→perfil de material.
 Ton: Orthographie nach Acordo Ortográfico 1990, europäisch geprägt aber in
 Brasilien lesbar, Infinitiv bei Bedienaktionen, volle Diakritika.
 
+**Englisch:** Passung→fit · Spiel→clearance, als Feld „Clearance“. „play“
+bleibt nur, wo *Spiel* die Lose meint (Langloch für Schrauben, die sich
+verschieben lassen) — im 3D-Druck meint „play“ Wackeln, und ein Feld „Play“
+neben einem Satz über „clearance“ sind für den Kunden zwei Dinge.
+
 **Das Werkzeug *Trennen* und die Operation *Teilen* heißen in jeder Sprache
 verschieden** — en Cut/Split, es Separar/Dividir, fr Séparer/Diviser, it
 Taglia/Dividi, pt Separar/Dividir. Das Werkzeug folgt *An gezeichneter Linie
