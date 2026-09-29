@@ -4183,13 +4183,12 @@ def detect_fillets(
     # (``tangent``): Ihr Radius lässt sich nur ändern, wenn jede angrenzende
     # Fläche dabei in ihrer Ebene bleibt — Deckel, Boden und radial stehende
     # Wände tun das, eine tangential anschließende Flanke nicht
-    # (:func:`blends_into_its_neighbours`). Gemessen am 15.09.2026 an sieben
+    # (:func:`tangent_walls`). Gemessen am 15.09.2026 an sieben
     # Modellen aus dem Netz: 32 Absagen „lässt sich innerhalb ihrer Ränder
     # nicht versetzen" erst nach dem Klick; mit dem Kennzeichen stellt das
     # Panel die Zeile vorher grau.
     radials = [
-        radial_cylinder(body, fitted, patch, check_cancelled=check_cancelled)
-        for fitted, patch in big
+        radial_cylinder(body, patch, check_cancelled=check_cancelled) for _fitted, patch in big
     ]
     # Ein Durchlauf über die Nachbarschaft für alle runden Wände zusammen, nicht
     # einer je Wand: Am Hemmungsrad sind es 531 Verrundungen, und jede einzeln
@@ -4231,10 +4230,11 @@ def detect_fillets(
     ]
 
 
-def blends_into_its_neighbours(
-    body: trimesh.Trimesh, patch: Sequence[int], fit: CylinderFit
-) -> bool:
-    """Ob eine runde Wand tangential in eine Nachbarfläche übergeht.
+def tangent_walls(
+    body: trimesh.Trimesh, walls: Sequence[tuple[Sequence[int], CylinderFit | None]]
+) -> list[bool]:
+    """Je runder Wand, ob sie tangential in eine Nachbarfläche übergeht — in
+    **einem** Gang über die Nachbarschaft des Körpers.
 
     Eine radiale Verschiebung der Wand bewegt ihre Randecken radial. Eine
     Nachbarfläche bleibt dabei in ihrer Ebene, wenn ihre Normale quer zur
@@ -4243,23 +4243,12 @@ def blends_into_its_neighbours(
     an die Wand anschließt, hat ihre Normale **in** radialer Richtung und
     würde aus ihrer Ebene geschoben; ``radial_rounding`` sagt dort ab.
     Dieselbe Schwelle wie für die Ebenen neben einer Kante
-    (:data:`UPRIGHT_TO_AXIS`). Für eine Wand allein; die Erkennung fragt alle
-    Wände eines Körpers zusammen (:func:`tangent_walls`).
-    """
-    return tangent_walls(body, [(patch, fit)])[0]
-
-
-def tangent_walls(
-    body: trimesh.Trimesh, walls: Sequence[tuple[Sequence[int], CylinderFit | None]]
-) -> list[bool]:
-    """Je runder Wand, ob sie tangential in eine Nachbarfläche übergeht — in
-    **einem** Gang über die Nachbarschaft des Körpers.
+    (:data:`UPRIGHT_TO_AXIS`).
 
     Ein Feld nennt zu jedem Dreieck seine Wand; jede Nachbarschaftskante, deren
     Seiten verschiedenen Wänden gehören (oder eine keiner), liefert ein
-    Randdreieck mit der Wand, an die es grenzt. Dann wird je Wand gerechnet,
-    was :func:`blends_into_its_neighbours` beschreibt. Eine Wand ohne
-    Einpassung (``None``) ist nie tangential.
+    Randdreieck mit der Wand, an die es grenzt. Dann wird je Wand die obige
+    Frage gerechnet. Eine Wand ohne Einpassung (``None``) ist nie tangential.
     """
     verdict = [False] * len(walls)
     if not walls:
@@ -6144,18 +6133,6 @@ def _could_be_round(
     return ring is not None and ring.good
 
 
-def _patch_axial_midpoint(body: trimesh.Trimesh, patch: list[int], axis: np.ndarray) -> float:
-    """Die Mitte der echten Patch-Ausdehnung entlang einer Achse.
-
-    Dreiecksschwerpunkte gewichten dicht unterteilte Bereiche stärker. Die
-    Endpunkte beschreiben dagegen dieselbe Zylinderlage unabhängig davon, wie
-    viele Ringe dazwischen trianguliert wurden.
-    """
-    indices = np.unique(np.asarray(body.faces)[patch])
-    positions = np.asarray(body.vertices)[indices] @ axis
-    return float((positions.min() + positions.max()) / 2.0)
-
-
 def _chord_sag(body: trimesh.Trimesh, patch: list[int], axis: np.ndarray) -> float:
     """Die Sehnenhöhe der Polygonnäherung dieses Flecks, in Millimetern.
 
@@ -6584,7 +6561,6 @@ def _fit_cylinder_measured(
 
 def radial_cylinder(
     body: trimesh.Trimesh,
-    fit: CylinderFit,
     patch: list[int],
     *,
     check_cancelled: Callable[[], None] | None = None,
@@ -6593,7 +6569,8 @@ def radial_cylinder(
 
     Mindestens ein halber Mantel und die strengere Querstellung seiner
     Normalen schließen einen gewöhnlichen Übergang zwischen Tangentialebenen
-    aus. Auch ein extern aufgebauter Kandidat ersetzt den Formnachweis nicht.
+    aus. Eingepasst wird hier selbst: Ein anderswo aufgebauter Kandidat
+    ersetzt den Formnachweis nicht.
     """
     refined = fit_cylinder(body, patch, check_cancelled=check_cancelled)
     if refined is None or not refined.good:
@@ -11383,7 +11360,8 @@ def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozense
     Senkbohrung schloss sonst ein Paar ebener Dreiecke über einen Knick von
     39° die Kerbe des Senkkegels, und der Kegel las sich danach als Torus — je
     nach Vernetzung des Absatzes, an derselben Bohrung in einer Lage ja, in
-    der nächsten nicht (RM-274, ``sonden/bohren/p12_kippe.py``).
+    der nächsten nicht (RM-274,
+    ``konzepte/nachweise-release-0.5.1/sonden/bohren/p12_kippe.py``).
     """
     inside = np.zeros(len(body.faces), dtype=bool)
     inside[np.asarray(patch, dtype=np.intp)] = True

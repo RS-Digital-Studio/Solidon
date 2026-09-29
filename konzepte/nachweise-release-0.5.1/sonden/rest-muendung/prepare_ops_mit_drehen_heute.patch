@@ -1,0 +1,230 @@
+diff --git a/app/core/geom/prepare_ops.py b/app/core/geom/prepare_ops.py
+index 607f06b..10854db 100644
+--- a/app/core/geom/prepare_ops.py	
++++ b/app/core/geom/prepare_ops.py
+@@ -5511,7 +5511,15 @@ def _rotate_cavity_chain(
+ 
+     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
+     filled = _cavity_plug(body, chain, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+-    tool = _chain_tool(body, chain, pivot=pivot, tilt=tilt)
++    # Eine Verengung kennt nur ihr Einlaufprofil (``_narrowing_outline``) —
++    # gekippt wie am exakten Kern (:func:`_turned_entrance_tool`); jede andere
++    # Kette kommt aus Kennzahlen und wird unten gedreht.
++    narrowing = _narrows_outward(chain)
++    tool = (
++        _turned_entrance_tool(ctx, body, source, chain, matrix, pivot, tilt)
++        if narrowing
++        else _chain_tool(body, chain, pivot=pivot, tilt=tilt)
++    )
+     if filled is None or tool is None:
+         raise ValidationError(
+             field="at_feature",
+@@ -5528,10 +5536,12 @@ def _rotate_cavity_chain(
+             cancelled=ctx.cancelled,
+         )
+     )
+-    turned = tool.raw.copy()
+-    transform.moved(turned, matrix)
++    if not narrowing:
++        turned = tool.raw.copy()
++        transform.moved(turned, matrix)
++        tool = MeshData.of(turned)
+     turned_tool = _within_the_old_rims(
+-        MeshData.of(turned),
++        tool,
+         _old_rim_caps(body, chain[0], source.features, chain),
+         cancelled=ctx.cancelled,
+     )
+@@ -5599,6 +5609,44 @@ def _rotate_cavity_chain(
+     )
+ 
+ 
++def _turned_entrance_tool(
++    ctx: OpContext,
++    body: MeshData,
++    source: SceneObject,
++    chain: Sequence[Feature],
++    matrix: NDArray[np.float64],
++    pivot: NDArray[np.float64],
++    tilt: float,
++) -> MeshData | None:
++    """Das Werkzeug einer gekippten Kette mit Verengung am Netz — aus ihrem
++    Einlaufprofil, gekippt wie am exakten Kern (:func:`_turned_chain_planes`);
++    ``None``, wo sich die Kette nicht als Einlauf lesen lässt.
++
++    **Aus Kennzahlen kennt der Kegel nur die Senkung** (:func:`_chain_tool`):
++    An der Haltelippe einer Magnettasche gab er keinen Körper her. Das Profil
++    der Verengung läuft über ihre Mündung als Zylinder ihrer Öffnung weiter,
++    so weit die Neigung verlangt (Durchsicht 0.5.1, rest-lippe; RM-262).
++    """
++    try:
++        entrance = bore_entrance(
++            body, chain[0], source.features, cavity=tuple(chain), touches_other=False
++        )
++        if entrance is None:
++            return None
++        reach = float(body.bounds.diagonal)
++        frame, planes_of = _turned_chain_planes(entrance, matrix, pivot, tilt, reach)
++        return _entrance_mesh_tool(
++            entrance,
++            entrance.sections[0].inner_radius * 2.0,
++            reach,
++            ctx,
++            frame=frame,
++            planes_of=planes_of,
++        ).mesh
++    except ValidationError:
++        return None
++
++
+ def _old_rim_caps(
+     body: MeshData,
+     feature: Feature,
+@@ -5975,11 +6023,18 @@ def _sinks_must_close(chain: Sequence[Feature], tilt: float, angle: float) -> No
+     Eine Bohrung, die sich an beiden Enden weitet, hat zwei Mündungen
+     (``relations.cavity_sides``, RM-245); jede Senkung darunter muss sich auf
+     ihrer Fläche schließen. Gefragt wird die mit dem größeren Öffnungswinkel
+-    zuerst: Sie erlaubt die kleinere Neigung, und der Satz nennt diese.
++    zuerst: Sie erlaubt die kleinere Neigung, und der Satz nennt diese. Eine
++    Verengung ist keine Senkung: Über ihre Mündung läuft sie als Zylinder
++    ihrer Öffnung weiter (:func:`_turned_chain_planes`).
+     """
++    from app.core.perceive.actions import narrows_the_mouth
+     from app.core.perceive.relations import cavity_sides
+ 
+-    outer = [side[-1] for side in cavity_sides(chain) if side[-1].kind == "cone"]
++    outer = [
++        side[-1]
++        for side in cavity_sides(chain)
++        if side[-1].kind == "cone" and not narrows_the_mouth(side[-1])
++    ]
+     for cone in sorted(outer, key=lambda sink: -float(sink.params.get("angle", 0.0))):
+         _sink_must_close(cone, tilt, angle)
+ 
+@@ -9507,23 +9562,32 @@ def _entrance_mesh_tool(
+     *,
+     keep: bool = False,
+     mouths: Mapping[FeatureId, float] | None = None,
++    frame: PlaneFrame | None = None,
++    planes_of: Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]] | None = None,
+ ) -> BooleanOutcome:
+     """Die gemeinsame Profilfolge mit der vorhandenen Netz-Rückfallkette schneiden.
+ 
+-    ``keep`` und ``mouths`` wie in :func:`_entrance_tools`.
++    ``keep`` und ``mouths`` wie in :func:`_entrance_tools`. ``frame`` und
++    ``planes_of`` stellen die Profile an eine andere Achse und nennen je
++    Abschnitt seine Randebenen — gekippt wie am exakten Kern
++    (:func:`_turned_chain_planes`); ohne sie stehen sie, wo sie gemessen wurden.
+     """
+     from app.core.geom.section import cut
+     from app.core.sketch.planes import frame_of
+ 
+-    frame = frame_of(entrance.axis, entrance.origin)
++    if frame is None:
++        frame = frame_of(entrance.axis, entrance.origin)
+     rotation = np.asarray([frame.x_axis, frame.y_axis, frame.normal]).T
++    origin = np.asarray(frame.origin, dtype=np.float64)
+     tools = []
+-    for outline, planes in _entrance_tools(entrance, diameter, reach, keep=keep, mouths=mouths):
++    for index, (outline, (lower, upper)) in enumerate(
++        _entrance_tools(entrance, diameter, reach, keep=keep, mouths=mouths)
++    ):
+         ctx.cancelled.raise_if_cancelled()
+         raw = lathe.revolve(outline, sections=BORE_SECTIONS)
+-        raw.vertices = np.asarray(raw.vertices) @ rotation.T + entrance.origin
++        raw.vertices = np.asarray(raw.vertices) @ rotation.T + origin
+         tool = MeshData.of(raw)
+-        for plane in planes:
++        for plane in (lower, upper) if planes_of is None else planes_of(index, lower, upper):
+             tool = cut(tool, plane).mesh
+         if not tool.is_watertight or tool.volume <= EPS_GEOM:
+             raise _entrance_error()
+@@ -11870,9 +11934,33 @@ def _exact_chain_tool_turned(
+     Richtung nach außen, und der Schaft dazwischen hat keine eigene.
+     """
+     from app.core.brep import edit
+-    from app.core.sketch.planes import frame_of
+ 
+     at_most = float(solid.bounds.diagonal)
++    frame, planes_of = _turned_chain_planes(entrance, matrix, pivot, tilt, at_most)
++    tool = _exact_chain_solid(
++        entrance, at_most, filling=False, frame=frame, planes_of=planes_of, overlap=overlap
++    )
++    return edit.clipped_bore_tool(tool, caps) if caps else tool
++
++
++def _turned_chain_planes(
++    entrance: _BoreEntrance,
++    matrix: NDArray[np.float64],
++    pivot: NDArray[np.float64],
++    tilt: float,
++    at_most: float,
++) -> tuple[PlaneFrame, Callable[[int, SectionPlane, SectionPlane], tuple[SectionPlane, ...]]]:
++    """Wo die Profile einer gekippten Kette stehen und wo ihre Abschnitte enden —
++    für beide Kerne dieselben Zahlen (:func:`_exact_chain_tool_turned`, am Netz
++    :func:`_turned_entrance_tool` an einer Verengung).
++
++    **Eine Verengung läuft über ihre Mündung als Zylinder ihrer Öffnung weiter**
++    (:func:`_narrowing_outline`), nicht als größerer Kegel: Ihre Mündung rückt
++    so weit hinaus, wie ein Zylinder braucht, um die gekippte Fläche zu
++    durchstoßen (Durchsicht 0.5.1, rest-lippe; übernommen mit RM-262).
++    """
++    from app.core.sketch.planes import frame_of
++
+     axis = np.asarray(entrance.axis, dtype=float)
+     turned_axis = matrix[:3, :3] @ axis
+     origin = np.asarray(entrance.origin, dtype=float)
+@@ -11885,11 +11973,9 @@ def _exact_chain_tool_turned(
+     front_mouth = len(entrance.sections) - 1
+     back_mouth = front_mouth + len(entrance.back) - 1 if entrance.back else -1
+ 
+-    def outward(
+-        section: _EntranceSection, at: float, *, cone: bool, way: NDArray[np.float64]
+-    ) -> float:
++    def outward(section: _EntranceSection, at: float, *, way: NDArray[np.float64]) -> float:
+         distance = abs(at - float((pivot - origin) @ way))
+-        if cone:
++        if section.feature.kind == "cone" and not section.narrowing:
+             half_angle = float(section.feature.params.get("angle", 0.0)) / 2.0
+             return _cone_past_a_tilted_face(
+                 distance, section.outer_radius, half_angle, tilt, at_most=at_most
+@@ -11900,32 +11986,23 @@ def _exact_chain_tool_turned(
+         )
+ 
+     def planes_of(index: int, lower: SectionPlane, upper: SectionPlane) -> tuple[SectionPlane, ...]:
+-        low_shift = (
+-            outward(first, first.start, cone=False, way=axis) if index == 0 and through else 0.0
+-        )
++        low_shift = outward(first, first.start, way=axis) if index == 0 and through else 0.0
+         high_shift = 0.0
+         if index == front_mouth:
+-            high_shift = outward(last, last.end, cone=last.feature.kind == "cone", way=axis)
++            high_shift = outward(last, last.end, way=axis)
+         elif index == back_mouth:
+             far = entrance.back[-1]
+-            high_shift = outward(far, far.end, cone=far.feature.kind == "cone", way=-axis)
++            high_shift = outward(far, far.end, way=-axis)
+         return (
+             _plane_turned(lower, matrix, pivot, low_shift),
+             _plane_turned(upper, matrix, pivot, high_shift),
+         )
+ 
+-    tool = _exact_chain_solid(
+-        entrance,
+-        at_most,
+-        filling=False,
+-        frame=frame_of(
+-            (float(turned_axis[0]), float(turned_axis[1]), float(turned_axis[2])),
+-            (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
+-        ),
+-        planes_of=planes_of,
+-        overlap=overlap,
++    frame = frame_of(
++        (float(turned_axis[0]), float(turned_axis[1]), float(turned_axis[2])),
++        (float(turned_origin[0]), float(turned_origin[1]), float(turned_origin[2])),
+     )
+-    return edit.clipped_bore_tool(tool, caps) if caps else tool
++    return frame, planes_of
+ 
+ 
+ def _exact_move_chain(

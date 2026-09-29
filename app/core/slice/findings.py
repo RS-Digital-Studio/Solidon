@@ -31,7 +31,6 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from app.core.errors import ORIENT_FOR_PRINT, SHOW_SUPPORT_NEED
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import profiles
-from app.core.log import get_logger
 from app.core.slice import advise
 from app.core.slice.analysis import (
     _above_material,
@@ -53,8 +52,6 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM
 from app.i18n import _
-
-_log = get_logger(__name__)
 
 #: So viele Inseln eines Körpers bekommen eine eigene Zeile, die mit dem
 #: größten Stützbedarf zuerst. Ein Gitter mit zweihundert schwebenden Stegen

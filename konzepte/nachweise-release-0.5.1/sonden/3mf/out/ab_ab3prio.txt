@@ -1,0 +1,6 @@
+START 23:47:10 Last 100 %
+ab3prio_head1 exit 0 Last vorher 100 % nachher 100 % | fertig nach 45.4 | ERGEBNIS längste 1.38 über 100 ms 30 über 200 ms 19
+ab3prio_neu1 exit 0 Last vorher 100 % nachher 99 % | fertig nach 44.0 | ERGEBNIS längste 0.26 über 100 ms 7 über 200 ms 1
+ab3prio_head2 exit 0 Last vorher 100 % nachher 57 % | fertig nach 38.8 | ERGEBNIS längste 1.28 über 100 ms 19 über 200 ms 14
+ab3prio_neu2 exit 0 Last vorher 63 % nachher 66 % | fertig nach 37.8 | ERGEBNIS längste 0.22 über 100 ms 3 über 200 ms 1
+ENDE 23:50:21

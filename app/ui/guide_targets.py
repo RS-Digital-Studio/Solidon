@@ -208,7 +208,7 @@ def _named(window: MainWindow, kind: str, rest: str) -> QWidget:
     raise MissingTargetError(f"{name}: hat kein eigenes Widget, nur einen Ort (area_for)")
 
 
-def _print_dialog(window: MainWindow) -> QWidget:
+def _print_dialog() -> QWidget:
     """Der Druckdialog. Er läuft modal über ``exec()`` und hängt an keinem Attribut."""
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
@@ -289,7 +289,7 @@ def widget_for(window: MainWindow, name: str) -> QWidget:
     if name in _START:
         return _start(window, _START[name])
     if name in _PRINT:
-        return getattr(_print_dialog(window), _PRINT[name])  # type: ignore[no-any-return]
+        return getattr(_print_dialog(), _PRINT[name])  # type: ignore[no-any-return]
     finder = _FINDERS.get(name)
     if finder is not None:
         return finder(window)

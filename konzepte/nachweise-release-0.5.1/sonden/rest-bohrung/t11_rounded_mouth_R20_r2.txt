@@ -1,0 +1,5 @@
+R 20, Rundung 2: Kanten [9, 10]
+  mesh ausgeliefert: Kette ['hole_1', 'cone_1']; versetzen 5 mm -0.319, entfernen +179.304 | []
+  mesh ohne Füllung: Kette ['hole_1', 'cone_1']; versetzen 5 mm -0.319, entfernen +179.304 | []
+  brep ausgeliefert: Kette ['hole_2', 'cone_1', 'hole_1']; versetzen 5 mm -38.703, entfernen +438.591 | ['keine', 'keine']
+  brep ohne Füllung: Kette ['hole_2', 'cone_1', 'hole_1']; versetzen 5 mm -38.703, entfernen +438.591 | []

@@ -1009,7 +1009,7 @@ gesperrt und begründet. Entf löscht weiterhin das ganze Element.
 Robert: „Beim Zeichnen wäre es auch gut, wenn man nur einen Körper hat und
 nicht alle, also am besten den ausgewählten; oder wenn keiner ausgewählt ist,
 ist man beim neu Zeichnen." Umgesetzt als Paket Z1 der Bedienabnahme
-(`reports/zeichnen-bedienung.md`, Abschnitt 7). Die Stellen liegen im
+(`konzepte/nachweise-release-0.5.0/reports/zeichnen-bedienung.md`, Abschnitt 7). Die Stellen liegen im
 Hauptfenster (`start_sketch`, `_resolve_sketch_body`, `_apply_sketch_body`),
 in der Ansicht (`Viewport.set_sketch_focus`) und im Register
 (`sketch_join`).

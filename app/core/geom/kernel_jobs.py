@@ -3,8 +3,9 @@
 ``manifold3d`` gibt den Interpreter während seiner Aufrufe nie her — nicht beim
 Aufbau aus ``Mesh64``, nicht in ``simplify``, ``refine_to_length``,
 ``batch_boolean``, ``decompose`` oder ``to_mesh64``. Gemessen am 27.09.2026
-(``sonden/hilfsprozess/gil_kern.py``): Jeder dieser Aufrufe hielt einen
-Taktfaden so lange an, wie er rechnete — am Spielwürfel mit 250 488 Dreiecken
+(``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/gil_kern.py``): Jeder
+dieser Aufrufe hielt einen Taktfaden so lange an, wie er rechnete — am
+Spielwürfel mit 250 488 Dreiecken
 der Aufbau 110 ms, ``refine_to_length(0.05)`` 1,5 s, am Aufbau aus den 4 Mio.
 Dreiecken danach 1,3 s. Ein Arbeiterfaden, der den Kern ruft, hält damit das
 Fenster an, obwohl er ein Arbeiterfaden ist.
@@ -31,8 +32,8 @@ sie nichts kennt außer ihren Feldern und Zahlen:
 
 Die Rechnungen sind aus ``mesh_ops``, ``boolean``, ``prepare_ops`` und
 ``measure`` hierher gezogen und rechnen Schritt für Schritt wie zuvor; die
-Abdrücke vor und nach dem Umzug sind gleich (``sonden/hilfsprozess/
-referenz.py``).
+Abdrücke vor und nach dem Umzug sind gleich
+(``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/referenz.py``).
 
 Hier steht auch die Seite des Hilfsprozesses (:func:`serve`) samt dem
 gemeinsamen Speicher, über den die Felder reisen: Der Hilfsprozess lädt dieses
@@ -423,8 +424,9 @@ def component_labels(arrays: Mapping[str, np.ndarray], values: Values, check: Ch
     ``trimesh.graph.connected_components`` mit ``engine="scipy"`` sie stellt
     (``connected_component_labels``). ``scipy.sparse.csgraph`` hält den GIL wie
     der Kern: an den 5,8 Mio. Dreiecken des verfeinerten Spielwürfels 0,22 bis
-    0,26 s am Stück (RM-212, ``sonden/hilfsprozess/buchhaltung.py``). trimesh
-    wird erst hier geladen — der Hilfsprozess startet ohne es.
+    0,26 s am Stück (RM-212,
+    ``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/buchhaltung.py``).
+    trimesh wird erst hier geladen — der Hilfsprozess startet ohne es.
     """
     from trimesh import graph
 
@@ -613,7 +615,8 @@ def _yield_to_the_window() -> None:
     Senkplatte (genaue Vorschau *Bohrung ändern*, 311 296 Dreiecke) auf einem
     Rechner, den andere Programme zu 100 % auslasteten, brauchte er im Mittel
     von drei Runden 10 bis 30 % länger als mit normaler Priorität (Ø 7:
-    13,3 statt 10,3 s, ``sonden/hilfsprozess/senkplatte.py``, 28.09.2026) —
+    13,3 statt 10,3 s, 28.09.2026,
+    ``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/senkplatte.py``) —
     auf freien Kernen weicht er niemandem. Gewählt ist das bedienbare Fenster:
     Um das ging es (RM-212), und die längere Rechnung zeigt Balken und
     *Abbrechen*. Gelingt das Zurückstellen nicht, rechnet er mit gleicher

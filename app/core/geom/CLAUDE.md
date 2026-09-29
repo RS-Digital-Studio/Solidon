@@ -112,7 +112,8 @@ zu `PROJECTION_WORKERS` Arbeitern, Folge und Bits eines Fadens)
 **Körper erzeugen und formen** — `primitive_ops.py` (Netzzwillinge der
 exakten Grundkörper, `primitive_local_tool()` für Op und Vorschau) ·
 `blend.py` · `displace.py` · `lattice.py` · `texture_ops.py`
-(`tool_in_outline()`, auch für *Merkmal ändern* am Muster; eben heißt
+(`tool_in_outline()`; *Merkmal ändern* am Muster nimmt dasselbe
+`flat_tool()`; eben heißt
 `faces.FLAT_ENOUGH_FOR_A_TOOL`, nicht `EPS_GEOM`) · `texture.py` ·
 `sculpt.py`, `pose.py` (Sammelparameter-Ops) · `sketch_solid.py` (Umriss zu
 Netz ohne B-Rep) · `field_ops.py` (Schnittfeld: Raster

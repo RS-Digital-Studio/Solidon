@@ -4062,7 +4062,6 @@ def resolve_self_intersections(
     mesh: MeshData,
     cancelled: CancelToken | None = None,
     *,
-    checked_faces: tuple[int, ...] | None = None,
     budget: int | None = None,
 ) -> tuple[MeshData, bool]:
     """Überlappende positive Schalen vereinigen und das Ergebnis nachprüfen.
@@ -4074,8 +4073,7 @@ def resolve_self_intersections(
     zu überlappenden Außenhüllen ist damit nicht belegt.
 
     Nur die direkte Stufe ist erlaubt. Bleiben Schnitte oder ist die
-    Nachprüfung unvollständig, kommt der unveränderte Eingang zurück.
-    ``checked_faces`` ist ohne Wirkung und bleibt für ältere Aufrufer: Die
+    Nachprüfung unvollständig, kommt der unveränderte Eingang zurück. Die
     Prüfung desselben Netzes merkt sich das Netz selbst (:func:`crossings_of`).
 
     ``budget`` ist das Budget, mit dem der Aufrufer schon gesucht hat
@@ -4092,7 +4090,6 @@ def resolve_self_intersections(
     """
     from app.core.geom.boolean import boolean
 
-    del checked_faces
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if not _has_volume(mesh):

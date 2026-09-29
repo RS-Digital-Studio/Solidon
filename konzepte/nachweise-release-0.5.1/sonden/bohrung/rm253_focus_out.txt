@@ -1,0 +1,9 @@
+app aus F:\3D Druck.review-051\wt-bohrung\app\__init__.py
+Summe der Schalen 348163.18 (die Teile lassen sich nicht vereinigen)
+Kette: ['hole_11', 'cone_51']
+  hole_11 hole Ø6.500 Tiefe 0.9000652993579337 Mitte [-72.137, 93.476, 75.261] durch=True
+  cone_51 cone Ø8.100 Tiefe None Mitte [-72.137, 93.046, 76.435] durch=None
+Kappen: [([0.0, 0.344, -0.939], -38.037), ([0.0, -0.344, 0.939], 39.757)]
+gekippt 15° um x in 27.8 s: V 348106.42 (vereinigt vorher 348163.18, Δ -56.76) dicht=True Teile 20 ['boolean.parts_not_united', 'rotate_feature.no_longer_through'] solver=SolverInfo(strategy='direct', attempted=('direct',), seed=None, note=None)
+  jenseits [0.0, 0.344, -0.939]@-38.037: vorher 165114.533, nachher 165114.533
+  jenseits [0.0, -0.344, 0.939]@39.757: vorher 175184.600, nachher 175151.957

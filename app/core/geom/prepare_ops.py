@@ -3764,7 +3764,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             constraint="not_movable",
         )
     if feature.kind == "torus":
-        return _move_torus(ctx, source, feature, centre, target)
+        return _move_torus(ctx, source, feature, target)
     if source.kind == "brep" and chain is None and feature.kind in EXACT_CAVITY_KINDS:
         return _exact_move_cavity(ctx, source, feature, centre, target)
     if source.kind == "brep" and chain is not None:
@@ -11068,28 +11068,15 @@ def _exact_cavity_filled(solid: Any, feature: Feature) -> Any:
     )
 
 
-def _exact_cavity_cut(solid: Any, feature: Feature, centre: Vec3, axis: Vec3) -> Any:
-    """Dasselbe Merkmal an ``centre`` entlang ``axis`` exakt ausschneiden.
+def _exact_cavity_tool(
+    solid: Any, feature: Feature, centre: Vec3, axis: Vec3, *, reach: float = 0.0
+) -> Any:
+    """Das Werkzeug, das dasselbe Merkmal an ``centre`` entlang ``axis`` exakt
+    ausschneidet — einzeln wie im Muster, das viele davon zugleich schneidet.
 
     Eine durchgehende Bohrung bekommt die ganze Zielhülle als Tiefe
     (``_through_bore_depth``), eine blinde ihre gemessene; ein Langloch
     trägt seine Richtung im Rahmen der neuen Achse (``_slot_angle_in_frame``).
-    """
-    from app.core.brep import edit
-
-    tool = _exact_cavity_tool(solid, feature, centre, axis)
-    cut = edit.boolean("difference", [solid, tool])
-    # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter
-    # Flanken; ihre Teilungsnähte gehören nicht zum Mantel (``slot_bore``).
-    return edit.unified(cut) if feature.kind == "slot" else cut
-
-
-def _exact_cavity_tool(
-    solid: Any, feature: Feature, centre: Vec3, axis: Vec3, *, reach: float = 0.0
-) -> Any:
-    """Das Werkzeug von :func:`_exact_cavity_cut` — für das Muster, das viele
-    davon zugleich schneidet. Dieselben Maße: durchgehend über die ganze
-    Zielhülle, blind in der gemessenen Tiefe, das Langloch in seiner Richtung.
 
     ``reach`` verlängert eine Durchgangsbohrung an beiden Enden — für die
     Wiederholung mit mehr Überstand (:func:`_exact_rigid_cut`); ohne sie endete
@@ -12381,8 +12368,9 @@ def _exact_rigid_cut(
             )
         return edit.clipped_bore_tool(tool, tuple(planes))
 
-    # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken
-    # (``_exact_cavity_cut``) — deshalb vereinheitlicht, die Bohrung wie bisher
+    # Beim Langloch liegen die Flanken des Werkzeugs in der Ebene alter Flanken,
+    # ihre Teilungsnähte gehören nicht zum Mantel (``slot_bore``) — deshalb
+    # vereinheitlicht, die Bohrung wie bisher
     # nicht. Ohne offene Mündung ändert ein Überstand nichts: ein Versuch.
     return _exact_chain_cut_holding(
         solid,
@@ -13385,9 +13373,7 @@ def _torus_result(
     )
 
 
-def _move_torus(
-    ctx: OpContext, source: SceneObject, feature: Feature, centre: Vec3, target: Vec3
-) -> OpResult:
+def _move_torus(ctx: OpContext, source: SceneObject, feature: Feature, target: Vec3) -> OpResult:
     """Wulst oder Kehle versetzen: an der alten Stelle der Schaft, an der neuen der Ring."""
     from app.core.brep import edit
 

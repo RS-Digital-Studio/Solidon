@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-29 | [Tragende Nachweise im Repository: ein Punkt geschlossen (29.09.2026)](#tragende-nachweise-im-repository-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Creality Print schneidet über die Konsole: ein Punkt geschlossen (29.09.2026)](#creality-print-schneidet-über-die-konsole-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Sichere schnelle Druckausrichtung: ein Punkt geschlossen (29.09.2026)](#sichere-schnelle-druckausrichtung-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Schnitt an der Bohrungswand: ein Punkt geschlossen (29.09.2026)](#schnitt-an-der-bohrungswand-ein-punkt-geschlossen-29092026) |
@@ -33629,3 +33630,25 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   PrusaSlicer-3MF, Wedge-Lock und pista+biglie mit Standard und Vorschlägen ohne Befund der
   Gegenprobe; Okarina mit Stützen überall 0 m Stütze mit Sperre, 16,72 m ohne, Modellbahn
   151,03 m; zweifarbig beide Werkzeuge. Sonden unter `output/review/rm164-2026-09-29/`.
+
+## Tragende Nachweise im Repository: ein Punkt geschlossen (29.09.2026)
+
+<a id="rm-294"></a>
+
+- [x] **RM-294 — Tragende Dateien des Review-Ordners ins Repository holen.** Aus der Durchsicht v0.5.1 (Inventar 1.9).
+  Abgeschlossen am 29.09.2026 (Aufräumen, Zweig `aufraeumen-rm294`): Was offene Punkte
+  fortsetzen oder belegen, liegt unter `konzepte/nachweise-release-0.5.1/` — Berichte der
+  Durchsicht und des Releases 0.5.1, Sonden, Patches, kurze Ausgaben und das Resteinventar,
+  unter `review/` die Belege aus dem lokalen Prüfordner der Gesamtprüfung — und, für die
+  Verweise auf die Durchsicht 0.5.0 im Ordner `Releases`, unter
+  `konzepte/nachweise-release-0.5.0/`; je Datei eine Zeile im README des Ordners. Vorher
+  auf Namen, Adressen und Geheimnisse geprüft, Nutzerpfade durch `%USERPROFILE%` ersetzt;
+  keine Modelle, Netze, G-Code, Profile oder Arbeitsbaum-Schnappschüsse. Rohdaten (Profil
+  von RM-273, Suitelauf von RM-251, Protokoll von RM-288, G-Code von RM-281) und die
+  Temp-Ordner von RM-188 stehen als Aussage über die Messung. Umgeschrieben sind die
+  offenen Punkte, die Kommentare unter `app/` und `tests/` und die Konzepte. Die Sonden sind
+  von ruff ausgenommen (`pyproject.toml`), weil ein umgeschriebenes Messskript seine Zahl
+  nicht mehr belegt. Nachweis: Die Suche mit den Mustern der Abnahme trifft in offenen
+  Punkten, Regeln, Karten und Kommentaren keine Stelle mehr; den Prüfordner der
+  RM-Abarbeitung (`output/review/rm164-2026-09-29/`) nennen nur das archivierte RM-164
+  und `tests/test_export.py`.

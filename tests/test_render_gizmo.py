@@ -422,7 +422,8 @@ def test_a_click_on_the_placement_grip_does_not_bind_the_draft(scene: tuple) -> 
     hielt danach jede andere Auswahl fest — gemessen am Wabenhalter: nach
     einem Klick auf die Mitte von ``hole_4`` blieb ``hole_4`` gewählt, gleich
     wohin geklickt wurde, und die Statuszeile verlangte, eine Änderung zu
-    übernehmen, die es nicht gab (Sonde ``sonden/rest-auswahl``).
+    übernehmen, die es nicht gab (Sonde
+    ``konzepte/nachweise-release-0.5.1/sonden/rest-auswahl/scenario_repro.py``).
     """
     from app.ui.viewport import Viewport
 

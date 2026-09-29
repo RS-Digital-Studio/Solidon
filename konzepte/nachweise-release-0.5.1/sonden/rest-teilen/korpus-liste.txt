@@ -1,0 +1,7 @@
+schrauber-hex|screwdriver-holder-hex.stl|bambu-a1-mini
+schrauber-wabe|large-screwdriver-holder-with-honeycomb-pattern.stl|bambu-a1-mini
+sidekit|Side kit rest 3  Ø36.stl|bambu-a1-mini
+riser-mini|parametric-laptop-riser.stl|bambu-a1-mini
+schuessel|HydroBowl+–+Smart+Fruit+&+Veggie+Washer (1)/washing bowl v1.stl|bambu-a1-mini
+besteck|Modern++Cutlery+Organizer+with+Divider.3mf|bambu-a1-mini
+riser-cc2|parametric-laptop-riser.stl|centauri-carbon-2

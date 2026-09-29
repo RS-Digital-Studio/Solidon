@@ -1,0 +1,15 @@
+Last: CPU 6 %, Python-Prozesse 4
+Platte Zylinder R 40          mesh: alt: versetzen -4.9170 [] (0.4 s), entfernen +636.924 [] | neu: versetzen +0.0596 [] (0.6 s), entfernen +643.300 []
+Platte Zylinder R 40          brep: alt: versetzen -3.9975 [] (0.6 s), entfernen +638.698 [] | neu: versetzen -0.0000 [] (0.3 s), entfernen +645.209 []
+Platte Rinne R 40             mesh: alt: versetzen +2.6186 [] (0.3 s), entfernen +622.720 [] | neu: versetzen +0.1489 [] (0.5 s), entfernen +616.682 []
+Platte Rinne R 40             brep: alt: versetzen +3.9973 [] (0.6 s), entfernen +624.745 [] | neu: versetzen +0.0000 [] (0.3 s), entfernen +618.235 []
+Platte Naht Ebene-Zylinder    mesh: alt: versetzen -3.4925 [] (0.3 s), entfernen +642.989 [] | neu: versetzen +0.0277 [] (0.4 s), entfernen +646.064 []
+Platte Naht Ebene-Zylinder    brep: alt: versetzen -1.9619 [] (0.4 s), entfernen +645.093 [] | neu: versetzen +0.0027 [] (1.4 s), entfernen +648.290 []
+Gartenschlauchhalter hole_2 alt: versetzen 1 mm Höhenlinie +3.261 [] (34.8 s) | kippen 5° +35.351 [] | kippen 15° +68.739 [] | entfernen +786.702 []
+Gartenschlauchhalter hole_2 neu: versetzen 1 mm Höhenlinie +0.245 [] (36.0 s) | kippen 5° +34.294 [] | kippen 15° +62.579 [] | entfernen +760.331 []
+Gartenschlauchhalter hole_4 alt: versetzen 1 mm Höhenlinie +3.033 [] (34.2 s) | kippen 5° +9.143 [] | kippen 15° -1.079 ['bore.over_the_edge'] | entfernen +785.941 []
+Gartenschlauchhalter hole_4 neu: versetzen 1 mm Höhenlinie +0.029 [] (36.7 s) | kippen 5° +8.454 [] | kippen 15° -6.056 ['bore.over_the_edge'] | entfernen +760.113 []
+pegboard-gs-100-v2.3mf alt: versetzen 1 mm (−z, +z, +x) -3.478 -2.901 -2.505
+pegboard-gs-100-v2.3mf neu: versetzen 1 mm (−z, +z, +x) -3.478 -2.901 -2.505
+pegboard-gs-100-v2.step alt: versetzen 1 mm (−z, +z, +x) -4.072 -3.108 -2.911
+pegboard-gs-100-v2.step neu: versetzen 1 mm (−z, +z, +x) -4.072 -3.108 -2.911

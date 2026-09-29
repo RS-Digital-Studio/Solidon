@@ -1,0 +1,20 @@
+START 00:16:38 in wt-kanten: python ../sonden/kanten/dicht.py
+vorher dicht True Teile 1
+nachher dicht False Teile 1 gültig ?
+BRepCheck vorher True nachher True
+Tessellierung 0.05 False
+Tessellierung 0.01 False
+ganze Gruppe R 0,3: GeometryError
+dieselben 8 Kanten R 0.3: dicht False
+dieselben 8 Kanten R 0.5: dicht False
+dieselben 8 Kanten R 1.0: dicht False
+  einzeln 99 dicht True
+  einzeln 109 dicht True
+  einzeln 115 dicht True
+  einzeln 133 dicht True
+  einzeln 139 dicht True
+  einzeln 212 dicht False
+  einzeln 215 dicht True
+  einzeln 221 dicht False
+EXIT python=0
+ENDE 00:16:58

@@ -1,0 +1,93 @@
+app aus: F:\3D Druck.review-051\wt-rest-lippe\app\__init__.py
+##### Netz
+   gekippt 10°: V 15840.201 dicht True; Lippe 1.00 (83 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.174, -0.985) dreiecke=0 herkunft=generated
+      curve_1:curved_face Ø0.000 eng=None öff=None achse=(0.0, 0.0, 0.0) dreiecke=586 herkunft=detected
+      magnet_pocket_pocket_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=0 herkunft=generated
+   Zeilen cone_1 (cone):
+      Merkmal verschieben -> move_feature
+      Merkmal ändern -> GRAU: Die Weite einer Verengung lässt sich hier nicht ändern. „Merkmal entfernen“ nimmt sie weg; danach ist die Bohrung bis zur Mündung gleich weit.
+      Zum Langloch ziehen -> GRAU: Ein Langloch nimmt eine Verengung nicht mit. Nehmen Sie sie zuerst mit „Merkmal entfernen“ weg, oder lassen Sie die Bohrung rund.
+      Merkmal drehen -> rotate_feature
+      Merkmal verdoppeln -> duplicate_feature
+      Merkmal entfernen -> remove_feature
+   Zeilen curve_1 (curved_face):
+      Merkmal verschieben -> GRAU: Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen brauchen e
+      Merkmal ändern -> GRAU: Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen brauchen e
+      Zum Langloch ziehen -> GRAU: Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen brauchen e
+      Merkmal drehen -> GRAU: Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen brauchen e
+      Merkmal verdoppeln -> GRAU: Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen brauchen e
+      Merkmal entfernen -> GRAU: Eine gerundete Seite ist ein Stück der Oberfläche ohne eigene Ebene — der Bogen eines D, der Mantel eines o. Versetzen, Bohren und Zeichnen brauchen e
+   Zeilen magnet_pocket_pocket_1 (hole):
+      Merkmal verschieben -> move_feature
+      Bohrung ändern -> resize_hole
+      Zum Langloch ziehen -> slot_hole
+      Merkmal drehen -> rotate_feature
+      Merkmal verdoppeln -> duplicate_feature
+      Merkmal entfernen -> remove_feature
+   noch einmal drehen 10°: V 15847.578 dicht True; magnet_pocket_pocket_1: Lippe 0.00 (85 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.342, -0.94) dreiecke=108 herkunft=generated
+      magnet_pocket_pocket_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.342, 0.94) dreiecke=402 herkunft=generated
+   versetzen 3 mm X: V 15840.708 dicht True; magnet_pocket_pocket_1: Lippe 0.00 (97 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.174, -0.985) dreiecke=117 herkunft=generated
+      magnet_pocket_pocket_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=407 herkunft=generated
+   verdoppeln 10 mm X: V 15688.339 dicht True; hole_1: Lippe 1.00 (83 Punkte), Tasche frei 1.00; magnet_pocket_pocket_1: Lippe 1.00 (83 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.174, -0.985) dreiecke=0 herkunft=generated
+      cone_2:cone Ø8.250 eng=None öff=None achse=(-0.0, 0.174, -0.985) dreiecke=117 herkunft=detected
+      curve_1:curved_face Ø0.000 eng=None öff=None achse=(0.0, 0.0, 0.0) dreiecke=586 herkunft=detected
+      hole_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=408 herkunft=generated
+      magnet_pocket_pocket_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=0 herkunft=generated
+   Bohrung ändern Einlauf 8,5: V 15830.658 dicht True; magnet_pocket_pocket_1: Lippe 0.00 (83 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.174, -0.985) dreiecke=0 herkunft=generated
+      magnet_pocket_pocket_1:hole Ø8.500 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=98 herkunft=generated
+   Bohrung ändern nur 8,5: V 15830.658 dicht True; magnet_pocket_pocket_1: Lippe 0.00 (83 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.174, -0.985) dreiecke=0 herkunft=generated
+      magnet_pocket_pocket_1:hole Ø8.500 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=98 herkunft=generated
+   Bohrung ändern nur 7,8: V 15856.841 dicht True; magnet_pocket_pocket_1: Lippe 1.00 (83 Punkte), Tasche frei 0.00
+      cone_1:cone Ø8.250 eng=True öff=7.949999999999997 achse=(-0.0, 0.174, -0.985) dreiecke=0 herkunft=generated
+      magnet_pocket_pocket_1:hole Ø7.800 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=96 herkunft=generated
+evaluation stopped at op 4: op.remove_feature.ValidationError: Aus den Flächen dieses Merkmals entsteht kein eigener Körper; sein Rand ist nicht eindeutig. Ändern Sie den Schritt, aus dem es stammt.
+   cone_1 entfernen (nur): vollständig False; Halt ['op.remove_feature.ValidationError: Aus den Flächen dieses Merkmals entsteht kein eigener Körper; sein Rand ist nicht eindeutig. Ändern Sie den Sc']
+evaluation stopped at op 4: op.resize_feature.ValidationError: Die Weite einer Verengung lässt sich hier nicht ändern. „Merkmal entfernen“ nimmt sie weg; danach ist die Bohrung bis zur Mündung gleich weit.
+   cone_1 ändern +1: vollständig False; Halt ['op.resize_feature.ValidationError: Die Weite einer Verengung lässt sich hier nicht ändern. „Merkmal entfernen“ nimmt sie weg; danach ist die Bohr']
+evaluation stopped at op 4: op.rotate_feature.ValidationError: Aus den Flächen dieses Merkmals entsteht kein eigener Körper; sein Rand ist nicht eindeutig. Ändern Sie den Schritt, aus dem es stammt.
+   cone_1 drehen 10°: vollständig False; Halt ['op.rotate_feature.ValidationError: Aus den Flächen dieses Merkmals entsteht kein eigener Körper; sein Rand ist nicht eindeutig. Ändern Sie den Sc']
+##### exakt
+   gekippt 10°: V 15840.222 dicht True; Lippe 0.00 (97 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=None öff=None achse=(-0.0, 0.174, -0.985) dreiecke=61 herkunft=detected
+      magnet_pocket_pocket_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=87 herkunft=detected
+   Zeilen cone_1 (cone):
+      Merkmal verschieben -> GRAU: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+      Merkmal ändern -> GRAU: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+      Zum Langloch ziehen -> GRAU: Eine Senkung sitzt auf ihrer Bohrung, und ein Langloch verträgt keine Aufweitung. Ziehen Sie die Bohrung ohne sie, oder lassen Sie sie rund.
+      Merkmal drehen -> GRAU: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+      Merkmal verdoppeln -> GRAU: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+      Merkmal entfernen -> GRAU: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+   Zeilen magnet_pocket_pocket_1 (hole):
+      Merkmal verschieben -> GRAU: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und 
+      Bohrung ändern -> resize_hole
+      Zum Langloch ziehen -> GRAU: Diese Bohrung ist mit weiteren Hohlraumabschnitten verbunden. Entfernen Sie zuerst die Senkung, oder wählen Sie eine Bohrung ohne Senkung.
+      Merkmal drehen -> GRAU: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und 
+      Merkmal verdoppeln -> GRAU: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und 
+      Merkmal entfernen -> GRAU: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und 
+evaluation stopped at op 4: op.rotate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   noch einmal drehen 10°: vollständig False; Halt ['op.rotate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']
+evaluation stopped at op 4: op.move_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   versetzen 3 mm X: vollständig False; Halt ['op.move_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']
+evaluation stopped at op 4: op.duplicate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   verdoppeln 10 mm X: vollständig False; Halt ['op.duplicate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']
+evaluation stopped at op 4: op.resize_hole.ValidationError: Dieser Einlauf lässt sich nicht eindeutig gemeinsam ändern. Wählen Sie „Nur Bohrungsdurchmesser“ und bearbeiten Sie weitere Abschnitte einzeln.
+   Bohrung ändern Einlauf 8,5: vollständig False; Halt ['op.resize_hole.ValidationError: Dieser Einlauf lässt sich nicht eindeutig gemeinsam ändern. Wählen Sie „Nur Bohrungsdurchmesser“ und bearbeite']
+   Bohrung ändern nur 8,5: V 15831.882 dicht True; magnet_pocket_pocket_1: Lippe 0.00 (97 Punkte), Tasche frei 1.00
+      cone_1:cone Ø8.250 eng=None öff=None achse=(-0.0, 0.174, -0.985) dreiecke=61 herkunft=detected
+      magnet_pocket_pocket_1:hole Ø8.500 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=85 herkunft=detected
+   Bohrung ändern nur 7,8: V 15733.018 dicht False; hole_1: Lippe 0.25 (97 Punkte), Tasche frei 0.47; magnet_pocket_pocket_1: Lippe 0.25 (97 Punkte), Tasche frei 0.47
+      cone_1:cone Ø8.250 eng=None öff=None achse=(-0.0, 0.174, -0.985) dreiecke=91 herkunft=detected
+      hole_1:hole Ø8.250 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=151 herkunft=detected
+      magnet_pocket_pocket_1:hole Ø7.800 eng=None öff=None achse=(0.0, -0.174, 0.985) dreiecke=84 herkunft=detected
+evaluation stopped at op 4: op.remove_feature.ValidationError: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+   cone_1 entfernen (nur): vollständig False; Halt ['op.remove_feature.ValidationError: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.']
+evaluation stopped at op 4: op.resize_feature.ValidationError: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+   cone_1 ändern +1: vollständig False; Halt ['op.resize_feature.ValidationError: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.']
+evaluation stopped at op 4: op.rotate_feature.ValidationError: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.
+   cone_1 drehen 10°: vollständig False; Halt ['op.rotate_feature.ValidationError: Diese Kegelfläche ist ein Stück des Körpers ohne eigenen Rand; sie lässt sich nicht allein bearbeiten.']

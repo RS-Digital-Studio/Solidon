@@ -1163,7 +1163,8 @@ def _ellipsoid_session() -> tuple[Any, str, MeshData]:
     rechnet beim Ladeweg zweimal (Bild, dann Erkennung). Er ist fertig, bevor
     ein Test rechnet: Begann sein zweiter Lauf erst nach dem nächsten Schritt
     des Tests, rechnete er ihn mit — und kam er zuerst an, fand der Test das
-    Ergebnis im Cache (``sonden/hilfsprozess/zweimal_verfeinert.py``). Die
+    Ergebnis im Cache
+    (``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/zweimal_verfeinert.py``). Die
     Frist von ``wait_all`` (2 s) reichte dafür unter Last nicht.
     """
     from app.ui.session import Session

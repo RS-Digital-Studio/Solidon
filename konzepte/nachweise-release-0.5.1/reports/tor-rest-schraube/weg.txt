@@ -1,0 +1,36 @@
+F                                                                        [100%]
+================================== FAILURES ===================================
+__ test_a_way_through_the_kernel_does_not_hang_on_the_machine[slanted_part] ___
+
+way = 'slanted_part'
+
+    @pytest.mark.slow
+    @pytest.mark.parametrize("way", sorted(_WAYS))
+    def test_a_way_through_the_kernel_does_not_hang_on_the_machine(way: str) -> None:
+        """Derselbe Weg mit und ohne Plattformrauschen — derselbe Fingerabdruck.
+    
+        **Der Anlass ist der Änderungsweg aus RM-187**: Am 17.09.2026 trug die
+        geänderte Senkbohrung auf Windows, Ubuntu und macOS drei verschiedene
+        Fingerabdrücke, und die Bohrungskette zerfiel auf dem Mac. Nach der
+        Umstellung der Kreispunkte blieb eine letzte Stelle offen, und dieser Test
+        hat sie auf einer einzigen Maschine gefunden: Die Ebene einer schrägen
+        Mündung kam aus ``np.linalg.svd`` (``prepare_ops._bore_end_planes``), ihre
+        Lage aus ``np.dot`` (``prepare.resize_bore``). Rot war er außerdem für
+        *Drehen*, *Druckoptimal ausrichten*, den schrägen Schnitt, *An Merkmal
+        ausrichten*, *Stellung geben* und *Offene Fläche schließen* (22.09.2026).
+        """
+        quiet = _WAYS[way]()
+        with platform_noise():
+            noisy = _WAYS[way]()
+    
+>       assert noisy == quiet, f"{way} hängt an einer plattformabhängigen Rechnung"
+E       AssertionError: slanted_part hängt an einer plattformabhängigen Rechnung
+E       assert '368/f86deed651efc05c' == '368/74a9b93560d2bc38'
+E         
+E         - 368/74a9b93560d2bc38
+E         + 368/f86deed651efc05c
+
+tests\test_platform_identity.py:715: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_platform_identity.py::test_a_way_through_the_kernel_does_not_hang_on_the_machine[slanted_part]
+1 failed, 36 deselected in 0.92s

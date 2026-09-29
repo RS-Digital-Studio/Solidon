@@ -1,0 +1,5 @@
+R 13, Rundung 1: Kanten [9, 10]
+  mesh ausgeliefert: Kette ['hole_1', 'cone_1']; versetzen 5 mm -0.319, entfernen +179.304 | []
+  mesh ohne Füllung: Kette ['hole_1', 'cone_1']; versetzen 5 mm -0.319, entfernen +179.304 | []
+  brep ausgeliefert: ValidationError: Dieser Hohlraum lässt sich an diesem Körper nicht als eine Bohrung lesen: Ein Rand ist nicht eben, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus dem er stammt.
+  brep ohne Füllung: ValidationError: Dieser Hohlraum lässt sich an diesem Körper nicht als eine Bohrung lesen: Ein Rand ist nicht eben, oder eine Stufe wird nach außen enger. Ändern Sie den Schritt, aus dem er stammt.

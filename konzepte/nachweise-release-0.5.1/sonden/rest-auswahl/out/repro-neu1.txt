@@ -1,0 +1,84 @@
+app: F:\3D Druck.review-051\wt-rest-auswahl\app\__init__.py
+abgeschaltet: nichts
+Dateiempfang: app_events
+Bildschirm: NV-Failsafe 640 480
+Fenster: 640 409 Ansicht: (1, 1)
+geöffnet: large-screwdriver-holder-with-honeycomb-pattern.stl 2.4 s
+Bohrungen: 4 Dreiecke: 7956
+gewählt: hole_3 4.399998060457707 hole_4 4.400001317184424 Abstand 18.0 gefunden: True
+Körper: gewählt=None fluss=nein sitzt=None frozen=None surface=nein move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: []
+   Signale: []
+    press:{}
+      nach press: {} drag=None
+    release:{}
+      nach release: {} drag=None
+1 Klick (hole_3): gewählt=hole_3 fluss=ja sitzt=True frozen=True surface=ja move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: ['Außenkante rechts: 8,75 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: 18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: []
+    press:{}
+      nach press: {} drag=None
+    release:{}
+      nach release: {'_placement_grip': False} drag=None
+2 Klick (hole_4): gewählt=hole_4 fluss=ja sitzt=True frozen=True surface=ja move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: ['Außenkante links: 12,00 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: -18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: []
+    press:{}
+      nach press: {'_placement_grip': False} drag=None
+    release:{}
+      nach release: {'_placement_grip': False} drag=None
+3 zweiter Klick auf gewählte (hole_4): gewählt=hole_4 fluss=ja sitzt=True frozen=True surface=ja move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: ['Außenkante links: 12,00 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: -18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: []
+    press:{}
+      nach press: {'_placement_grip': True} drag=None
+    release:{'_placement_grip': True}
+      nach release: {'_placement_grip': False} drag=None
+4 Klick Nachbar (hole_3): gewählt=hole_3 fluss=ja sitzt=True frozen=True surface=ja move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: ['Außenkante rechts: 8,75 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: 18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: []
+    press:{}
+      nach press: {'_placement_grip': False} drag=None
+    release:{}
+      nach release: {'_placement_grip': False} drag=None
+5 Klick (hole_4): gewählt=hole_4 fluss=ja sitzt=True frozen=True surface=ja move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: ['Außenkante links: 12,00 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: -18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: []
+    press:{}
+      nach press: {'_placement_grip': False} drag=None
+    release:{}
+      nach release: {'_placement_grip': False} drag=None
+6 Klick (hole_3): gewählt=hole_3 fluss=ja sitzt=True frozen=True surface=ja move_target='' shift=(0.0, 0.0, 0.0) slot_waiting=False borrowed=False schritte=1
+   Maße: ['Außenkante rechts: 8,75 mm', 'Außenkante oben: 12,50 mm', 'Mitte 1: 18,00 mm', 'Mitte 2: 0,00 mm']
+   Signale: []
+    press:{}
+      nach press: {'_placement_grip': False} drag=None
+    release:{}
+      nach release: {'_placement_grip': False} drag=None
+Geschlossene Dialoge: []
+Windows fatal exception: access violation
+
+Thread 0x00006be0 [Thread-3] (most recent call first):
+  File "F:\3D Druck\.venv\Lib\site-packages\rendercanvas\core\coreutils.py", line 172 in run
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+
+Thread 0x00005910 [Thread-2] (most recent call first):
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 369 in wait
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 670 in wait
+  File "F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_poller.py", line 101 in run
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+
+Thread 0x00012b4c [Thread-1] (most recent call first):
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 373 in wait
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 670 in wait
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1383 in run
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082 in _bootstrap_inner
+  File "%USERPROFILE%\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1044 in _bootstrap
+
+Current thread 0x00010a4c (most recent call first):
+  File "F:\3D Druck.review-051\sonden\rest-auswahl\probe.py", line 259 in <module>
+
+Current thread's C stack trace (most recent call first):
+  <cannot get C stack on this system>

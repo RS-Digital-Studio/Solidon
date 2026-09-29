@@ -387,27 +387,18 @@ def _winds_around(body: trimesh.Trimesh, edges: NDArray[np.int64], helix: Helix)
     )
 
 
-def _sharp_chains(
+def _sharp_chain_edges(
     body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
-) -> list[NDArray[np.float64]]:
+) -> list[NDArray[np.int64]]:
     """Die scharfen Kanten, über gemeinsame Ecken zu Zügen verbunden.
 
     **Zusammenhängend und nicht am Stück**: Der Kamm eines Gewindes ist *ein*
     Zug, der Rand einer Platte ein anderer. Über den ganzen Körper gemittelt
     überstimmt die Platte das Gewinde — gemessen an einem M5 auf einer Platte
     200 auf 200 fand die Achse aus allen scharfen Kanten die falsche Steigung,
-    aus dem Zug allein die richtige (0,80 mm, Schärfe 15,8).
+    aus dem Zug allein die richtige (0,80 mm, Schärfe 15,8). Die Kanten
+    bleiben als Eckenpaare erhalten, damit ein Kamm einzeln verfolgbar bleibt.
     """
-    return [
-        np.asarray(body.vertices, dtype=float)[edges].mean(axis=1)
-        for edges in _sharp_chain_edges(body, check_cancelled=check_cancelled)
-    ]
-
-
-def _sharp_chain_edges(
-    body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
-) -> list[NDArray[np.int64]]:
-    """Bewahrt die Kantenverbindungen, damit ein Kamm einzeln verfolgbar bleibt."""
     angles = np.degrees(body.face_adjacency_angles)
     edges = body.face_adjacency_edges[angles > SHARP_EDGE_LIMIT]
     if check_cancelled is not None:

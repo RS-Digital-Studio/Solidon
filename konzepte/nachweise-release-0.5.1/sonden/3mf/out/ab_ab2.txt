@@ -1,0 +1,8 @@
+START 23:26:21 Last 100 %
+ab2_head1 exit 0 Last vorher 100 % nachher 100 % | fertig nach 55.3 | ERGEBNIS längste 2.28 über 100 ms 41 über 200 ms 22
+ab2_neu1 exit 0 Last vorher 100 % nachher 100 % | fertig nach 53.8 | ERGEBNIS längste 0.26 über 100 ms 13 über 200 ms 2
+ab2_head2 exit 0 Last vorher 100 % nachher 100 % | fertig nach 50.1 | ERGEBNIS längste 1.96 über 100 ms 36 über 200 ms 18
+ab2_neu2 exit 0 Last vorher 100 % nachher 100 % | fertig nach 55.1 | ERGEBNIS längste 0.63 über 100 ms 15 über 200 ms 2
+ab2_head3 exit 0 Last vorher 100 % nachher 100 % | fertig nach 47.5 | ERGEBNIS längste 1.58 über 100 ms 31 über 200 ms 20
+ab2_neu3 exit 0 Last vorher 100 % nachher 96 % | fertig nach 47.8 | ERGEBNIS längste 0.24 über 100 ms 8 über 200 ms 1
+ENDE 23:32:49

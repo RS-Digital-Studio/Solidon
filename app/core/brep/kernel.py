@@ -313,7 +313,8 @@ def boolean_builder(kind: str, first: Any, second: Any, *, tolerance: float | No
     # Gehäuse ``Cat_3.stp`` plus Gewindehals 2,01 → 0,33 s, Gewindebolzen
     # M3 x 0,5 x 60 auf Länge 2,49 → 1,77 s, kleine Körper unverändert; Topologie,
     # Flächenreihenfolge und Vernetzung bitgleich zum seriellen Lauf, zwölfmal
-    # hintereinander (``sonden/exakt/s30``, ``s31``).
+    # hintereinander (``s30`` und ``s31`` in
+    # ``konzepte/nachweise-release-0.5.0/sonden/exakt/``).
     operation.SetRunParallel(True)
     if tolerance is not None:
         operation.SetFuzzyValue(tolerance)

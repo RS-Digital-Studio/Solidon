@@ -1,0 +1,6 @@
+app: F:\3D Druck.review-051/wt-rest-kunde\app\__init__.py
+build_application: tuple
+Stil:  Einzelklick aktiviert: 0
+Einfachklick: []
+Doppelklick: ['a.p3d']
+Eingabetaste: ['b.p3d']
