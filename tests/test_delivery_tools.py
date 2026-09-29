@@ -387,6 +387,113 @@ def test_withdrawing_downloads_needs_no_windows_signing_tool(
 # --- check_new_texts -------------------------------------------------------------
 
 
+def _text_guard_git(root: Path, *arguments: str) -> str:
+    """Git nur im Prüfkorpus, ohne die Hooks und Signierung der Maschine."""
+    return subprocess.run(
+        [
+            "git",
+            "-c",
+            "core.hooksPath=unused-hooks",
+            "-c",
+            "commit.gpgsign=false",
+            *arguments,
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+        timeout=15,
+    ).stdout
+
+
+@pytest.fixture
+def text_guard_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Echter Index und davon unabhängiger Arbeitsbaum, ausschließlich unter tmp_path."""
+    from tools import check_new_texts
+
+    for name in ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(check_new_texts, "ROOT", tmp_path)
+    _text_guard_git(tmp_path, "init", "-q")
+    _text_guard_git(tmp_path, "config", "user.name", "Test")
+    _text_guard_git(tmp_path, "config", "user.email", "test@example.invalid")
+    _text_guard_git(tmp_path, "config", "core.quotePath", "true")
+    (tmp_path / "app").mkdir()
+    source = 'TEXT = tr("Alter Text")\n' + "VALUE = 1\n" * 30
+    (tmp_path / "app" / "message.py").write_text(source, encoding="utf-8")
+    catalogs = tmp_path / "app" / "i18n" / "locales"
+    catalogs.mkdir(parents=True)
+    (catalogs / "en.json").write_text("{}\n", encoding="utf-8")
+    _text_guard_git(tmp_path, "add", ".")
+    _text_guard_git(tmp_path, "commit", "-qm", "Ausgangsstand")
+    return tmp_path
+
+
+@pytest.mark.parametrize("staged_translation", [False, True])
+def test_the_commit_guard_uses_staged_translations_only(
+    text_guard_repo: Path, staged_translation: bool
+) -> None:
+    """Ungestagte Übersetzungen verdecken keinen Fehler und erzeugen keinen falschen."""
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    source = root / "app" / "message.py"
+    source.write_text(source.read_text(encoding="utf-8") + 'tr("Neuer Text")\n', encoding="utf-8")
+    _text_guard_git(root, "add", "app/message.py")
+    catalog = root / "app" / "i18n" / "locales" / "en.json"
+    catalog.write_text(json.dumps({"Neuer Text": "New text"}), encoding="utf-8")
+    if staged_translation:
+        _text_guard_git(root, "add", "app/i18n/locales/en.json")
+        catalog.write_text("{}\n", encoding="utf-8")
+
+    assert check_new_texts.added_texts() == ["Neuer Text"]
+    assert check_new_texts.main() == (0 if staged_translation else 1)
+
+
+@pytest.mark.parametrize("staged_catalog", [False, True])
+def test_the_commit_guard_takes_its_language_list_from_the_index(
+    text_guard_repo: Path, staged_catalog: bool
+) -> None:
+    """Ein neuer Indexkatalog wird geprüft, ein nur lokaler Katalog bleibt draußen."""
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    catalog = root / "app" / "i18n" / "locales" / "fr.json"
+    catalog.write_text("{}\n", encoding="utf-8")
+    if staged_catalog:
+        _text_guard_git(root, "add", "app/i18n/locales/fr.json")
+        catalog.unlink()
+
+    gaps = check_new_texts.missing(["Neuer Text"])
+
+    assert gaps == {
+        language: ["Neuer Text"] for language in (["en", "fr"] if staged_catalog else ["en"])
+    }
+
+
+@pytest.mark.parametrize("new_text", [False, True])
+def test_the_commit_guard_compares_both_names_of_a_renamed_source(
+    text_guard_repo: Path, new_text: bool
+) -> None:
+    """Nur neue Texte einer Umbenennung zählen, auch bei Umlaut und Leerraum im Pfad."""
+    from tools import check_new_texts
+
+    root = text_guard_repo
+    destination = "tools/ Neuer Name ö.py"
+    (root / "tools").mkdir()
+    _text_guard_git(root, "mv", "app/message.py", destination)
+    if new_text:
+        path = root / destination
+        path.write_text(path.read_text(encoding="utf-8") + 'tr("Neuer Text")\n', encoding="utf-8")
+        _text_guard_git(root, "add", destination)
+    # Die Erkennung gehört dem Wächter, nicht einer persönlichen Git-Einstellung.
+    _text_guard_git(root, "config", "diff.renames", "false")
+
+    assert check_new_texts.added_texts() == (["Neuer Text"] if new_text else [])
+    assert check_new_texts.main() == int(new_text)
+
+
 def _commit_hook_with(
     tmp_path: Path,
     *,
@@ -527,7 +634,7 @@ def _guard_with(monkeypatch: pytest.MonkeyPatch, *, before: str, after: str) -> 
 
     def fake_run(args: list[str], **_kwargs: object) -> SimpleNamespace:
         if args[1] == "diff":
-            return SimpleNamespace(stdout="app/ui/panels.py\n", returncode=0)
+            return SimpleNamespace(stdout="M\0app/ui/panels.py\0", returncode=0)
         return SimpleNamespace(stdout=before if args[2].startswith("HEAD") else after, returncode=0)
 
     monkeypatch.setattr(check_new_texts.subprocess, "run", fake_run)

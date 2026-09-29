@@ -14,7 +14,8 @@ schon einmal an der Kodierung, weil die Locale der Hook-Shell eine andere ist
 als die der Testausgabe — und ein Muster, das an der Kodierung scheitert,
 meldet dasselbe wie eines, das nichts findet. Gelesen wird deshalb die Datei
 selbst, in beiden Fassungen: ``git show :datei`` gegen ``git show HEAD:datei``,
-je durch ``ast``. Die Kataloge kommen als JSON daneben; beide Seiten sind
+je durch ``ast``. Auch die Katalogliste und ihre JSON-Inhalte kommen aus dem
+Index; ungestagte Übersetzungen ändern den Commit nicht. Beide Seiten sind
 eindeutig, und keine hängt an einer Zeilenform. Warum nicht der Diff, steht
 bei :func:`added_texts`.
 
@@ -41,21 +42,36 @@ ROOT = Path(__file__).resolve().parent.parent
 CALLS = frozenset({"tr", "_"})
 
 
-def _changed_files() -> list[str]:
-    """Die Python-Dateien unter ``app/`` und ``tools/``, die dieser Commit mitnimmt."""
+def _changed_files() -> list[tuple[str, str]]:
+    """Alter und neuer Pfad der Python-Dateien, die dieser Commit mitnimmt."""
     listing = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "--", "*.py"],
+        [
+            "git",
+            "diff",
+            "--cached",
+            "--name-status",
+            "--find-renames",
+            "--diff-filter=ACMR",
+            "-z",
+            "--",
+            "*.py",
+        ],
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="replace",
         cwd=str(ROOT),
+        check=True,
     ).stdout
-    return [
-        name
-        for name in listing.splitlines()
-        if name.startswith(("app/", "tools/")) and name.endswith(".py")
-    ]
+    fields = iter(listing.split("\0"))
+    changed: list[tuple[str, str]] = []
+    for status in fields:
+        if not status:
+            continue
+        before = next(fields)
+        after = next(fields) if status.startswith(("R", "C")) else before
+        if after.startswith(("app/", "tools/")) and after.endswith(".py"):
+            changed.append((before, after))
+    return changed
 
 
 def _texts_in(revision: str, path: str) -> set[str]:
@@ -142,27 +158,40 @@ def added_texts() -> list[str]:
     ist ein neuer Katalogschlüssel. Alles andere lag schon vorher da und
     gehört jemand anderem.
 
-    **Umbenannte Dateien bleiben draußen** (``--diff-filter=ACM``, ohne ``R``).
-    Bei einer Umbenennung nennt ``--name-only`` den **neuen** Namen, und
-    ``git show HEAD:neuername`` scheitert — die Vorher-Menge wäre leer, und
-    damit gälte **jeder** Text der Datei als neu. Wer eine Datei verschiebt
-    und dabei einen alten unübersetzten Text mitnimmt, würde aufgehalten,
-    obwohl er nichts angelegt hat; genau dagegen gibt es diesen Wächter.
+    **Umbenennungen vergleichen beide Pfade**: den alten unter ``HEAD``, den
+    neuen im Index. So bleiben mitgenommene ältere Kataloglücken draußen,
+    während neue Texte in derselben Änderung weiterhin geprüft werden.
     """
     found: set[str] = set()
-    for path in _changed_files():
-        found |= _texts_in("", path) - _texts_in("HEAD", path)
+    for before, after in _changed_files():
+        found |= _texts_in("", after) - _texts_in("HEAD", before)
     return sorted(found)
 
 
 def missing(texts: list[str]) -> dict[str, list[str]]:
-    """Welche davon in welchem Katalog fehlen oder leer stehen."""
+    """Welche davon in den Katalogen des Index fehlen oder leer stehen."""
+    listing = subprocess.run(
+        ["git", "ls-files", "--cached", "-z", "--", ":(glob)app/i18n/locales/*.json"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=str(ROOT),
+        check=True,
+    ).stdout
     gaps: dict[str, list[str]] = {}
-    for path in sorted((ROOT / "app" / "i18n" / "locales").glob("*.json")):
-        catalog = json.loads(path.read_text(encoding="utf-8"))
+    for path in sorted(name for name in listing.split("\0") if name):
+        source = subprocess.run(
+            ["git", "show", f":{path}"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=str(ROOT),
+            check=True,
+        ).stdout
+        catalog = json.loads(source)
         gone = [text for text in texts if not catalog.get(text, "").strip()]
         if gone:
-            gaps[path.stem] = gone
+            gaps[Path(path).stem] = gone
     return gaps
 
 
