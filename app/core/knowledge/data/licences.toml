@@ -61,6 +61,15 @@
 #                               (thorsten-voice.de, github.com/thorstenMueller/Thorsten-Voice).
 #                               Nur externe Medienproduktion; Quelle, Aufnahmehash
 #                               und Einwilligungsbeleg liegen bei der Referenz.
+#   Chatterbox        MIT       Sprachsynthese der Marketingfilme in .venv-tts
+#                               (tools/speak_chatterbox.py); nur externe
+#                               Medienproduktion, jede Aufnahme trägt Resembles
+#                               Wasserzeichen
+#   Piper             GPL-3.0-or-later
+#                               Sprachsynthese der Werkstattfilme, als Programm
+#                               aus .venv-video aufgerufen, nie importiert
+#                               (tools/speak_piper.py, Regel 15); die deutsche
+#                               Stimme ist Thorsten-Voice
 #   SDXL Base 1.0     CreativeML Open RAIL++-M
 #                               Bildmodell für den Textweg zu Weg 3
 #                               (``comfy_setup.fetch_image_model``,
