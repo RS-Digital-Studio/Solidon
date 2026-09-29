@@ -7,8 +7,10 @@
 # Pytest-Sammlung bestimmt die vollständige Menge, Laufzeittabellen verteilen
 # sie nur. Fenster laufen je Datei in einem frischen Prozess. Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
-# Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben löst
-# wöchentlich frei auf und meldet, was eine neue Version bricht.
+# Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
+# `latest`) löst frei auf und meldet, was eine neue Version bricht — wöchentlich
+# und beim Handstart mit `check_latest`, aber nur, solange das Repository
+# öffentlich ist (siehe unten).
 #
 # Ein Push prüft nur Ubuntu; die volle Matrix mit Paketen läuft bei Tags und
 # beim Handstart. Signiert wird getrennt davon: Windows lokal über
@@ -149,7 +151,7 @@ jobs:
         # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
         # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit
         # dieser Lauf denselben Satz installiert wie der letzte grüne.
-        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
       - name: Konturverkettung übersetzen
         # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
@@ -247,7 +249,7 @@ jobs:
         # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
         # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit
         # dieser Lauf denselben Satz installiert wie der letzte grüne.
-        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
       - name: Konturverkettung übersetzen
         # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
@@ -306,7 +308,7 @@ jobs:
         # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
         # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit
         # dieser Lauf denselben Satz installiert wie der letzte grüne.
-        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 
       - name: Konturverkettung übersetzen
         # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
@@ -408,7 +410,7 @@ jobs:
       - name: Abhängigkeiten
         # Derselbe Satz wie in der Suite: was geprüft wurde, wird paketiert.
         run: |
-          python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
+          python -m pip install -c constraints.txt -e ".[geom,ui,brep]"
           # Auch hier die Constraints, und hier besonders: `constraints.txt`
           # nagelt `pyinstaller` und `pyinstaller-hooks-contrib` fest, und
           # gerade dessen Hooks entscheiden, welche Metadaten und Datendateien
@@ -696,7 +698,7 @@ jobs:
         # Job hatte bis dahin nie ein echtes Artefakt gesehen. Dazu
         # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
         # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
-        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]" pyinstaller
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,brep]" pyinstaller
       - name: Äußere Linux-Pakete und App-Baum laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -921,7 +923,7 @@ jobs:
         # Job hatte bis dahin nie ein echtes Artefakt gesehen. Dazu
         # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
         # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
-        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]" pyinstaller
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,brep]" pyinstaller
       - name: Finalen Installer laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1395,7 +1397,7 @@ jobs:
         # Job hatte bis dahin nie ein echtes Artefakt gesehen. Dazu
         # `pyinstaller`: Der Lizenztext des Bootloaders kommt aus dieser
         # Distribution, wie im Paketjob; ohne sie starb die Akte von 0.4.4 hier.
-        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]" pyinstaller
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,brep]" pyinstaller
       - name: Finalen Installer laden
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1485,7 +1487,7 @@ jobs:
           php -r 'foreach (["sodium", "pdo_sqlite", "mbstring"] as $extension) { if (!extension_loaded($extension)) { throw new RuntimeException("PHP-Erweiterung fehlt: " . $extension); } }'
 
       - name: Abhängigkeiten ohne Constraints
-        run: python -m pip install -e ".[dev,geom,ui,agent,brep]"
+        run: python -m pip install -e ".[dev,geom,ui,brep]"
 
       - name: Schichtkern mit den neuesten Bauabhängigkeiten
         # Auch dieser Lauf prüft den übersetzten Kundenweg und den GEOS-Vergleich.

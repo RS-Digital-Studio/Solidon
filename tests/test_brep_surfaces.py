@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import math
 from typing import Any
 
@@ -16,17 +15,9 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.perceive.features import detect_curved_faces, detect_tori
 from app.core.types import measure_status
 from app.core.units import EPS_GEOM
+from tests.helpers import brep_bytes
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
-
-
-def _bytes(shape: Any) -> bytes:
-    """Die unveränderte native Eingabe einschließlich ihrer Geometrie festhalten."""
-    from OCP.BRepTools import BRepTools
-
-    stream = io.BytesIO()
-    BRepTools.Write_s(shape, stream)
-    return stream.getvalue()
 
 
 def _trimmed_native_cone(
@@ -94,7 +85,7 @@ def test_native_cone_trim_keeps_the_actual_nappe_and_positive_dimensions(
 
     span = (-5.0, -3.0) if opposite else (0.0, 2.0)
     source, transform = _trimmed_native_cone(sign, span, deviation, placement)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     low_radius, high_radius = sorted(abs(1.0 + value / math.sqrt(2.0)) for value in span)
     height = (span[1] - span[0]) / math.sqrt(2.0)
     expected_volume = (
@@ -137,7 +128,7 @@ def test_native_cone_trim_keeps_the_actual_nappe_and_positive_dimensions(
     radial = np.linalg.norm(relative - axial[:, None] * expected_axis, axis=1)
     assert np.all(axial > 0.0)
     assert radial == pytest.approx(axial, abs=EPS_GEOM)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("deviation", [0.03, 0.15])
@@ -152,7 +143,7 @@ def test_native_cone_trim_across_both_nappes_stays_without_a_single_cone_claim(
     from OCP.GeomAbs import GeomAbs_Cone
 
     source, _ = _trimmed_native_cone(sign, (first, 1.0), deviation, placement)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     native_index = next(
         index
         for index, face in enumerate(source.faces())
@@ -168,7 +159,7 @@ def test_native_cone_trim_across_both_nappes_stays_without_a_single_cone_claim(
         for feature in found.values()
         for patch in feature.surface_patches
     )
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("deviation", [0.03, 0.15])
@@ -187,7 +178,7 @@ def test_native_cone_trim_ending_at_the_apex_keeps_its_carrier(
     from OCP.TopoDS import TopoDS
 
     source = Solid(BRepPrimAPI_MakeCone(*radii, height).Shape(), deviation)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     expected_apex = (0.0, 0.0, 0.0 if radii[1] else height)
     apex_vertices = []
     edges = TopExp_Explorer(source.shape, TopAbs_EDGE)
@@ -213,7 +204,7 @@ def test_native_cone_trim_ending_at_the_apex_keeps_its_carrier(
     assert patch.source == "native" and patch.kind == "cone"
     assert patch.params["axis"] == pytest.approx((0.0, 0.0, 1.0 if radii[1] else -1.0))
     assert set(patch.face_indices) == set(cones[0].face_indices)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("deviation", [0.03, 0.15])
@@ -243,7 +234,7 @@ def test_native_carriers_cover_original_facets_without_using_selection_centres(
             "torus": lambda: BRepPrimAPI_MakeTorus(17.0, 3.0).Shape(),
         }[kind]()
         source = Solid(shape, deviation)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     features = features_of(source)
     mesh = as_mesh_data(source)
     covered = set()
@@ -289,7 +280,7 @@ def test_native_carriers_cover_original_facets_without_using_selection_centres(
         assert differing_centres == {"cylinder", "sphere"}
     else:
         assert kind in seen_kinds
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("deviation", [0.03, 0.15])
@@ -357,7 +348,7 @@ def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
         )
     assert BRepCheck_Analyzer(source.shape).IsValid()
     assert source.volume == pytest.approx(expected_volume, rel=1e-10)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     spheres = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
     assert len(spheres) == 1
     sphere = spheres[0]
@@ -376,7 +367,7 @@ def test_spherical_sections_keep_the_carrier_centre_and_oriented_material_side(
         triangle for index in sphere_indices for triangle in source.triangles_of_face(index)
     }
     assert expected_faces and set(sphere.face_indices) == expected_faces
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("kind", ["cone", "sphere", "torus"])
@@ -409,7 +400,7 @@ def test_native_and_mesh_round_twins_keep_independent_construction_measures(
     transform.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(1, 2, -0.5)), 0.73)
     transform.SetTranslationPart(gp_Vec(37, -19, 83))
     source = Solid(BRepBuilderAPI_Transform(shape, transform, True).Shape(), deviation)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     mesh = as_mesh_data(source)
     vertices, triangles = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
     wanted = {"cone": GeomAbs_Cone, "sphere": GeomAbs_Sphere, "torus": GeomAbs_Torus}[kind]
@@ -431,7 +422,7 @@ def test_native_and_mesh_round_twins_keep_independent_construction_measures(
         assert set(feature.face_indices) == expected_faces
     np.testing.assert_array_equal(mesh.raw.vertices, vertices)
     np.testing.assert_array_equal(mesh.raw.faces, triangles)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def _spherical_spline() -> Any:
@@ -461,13 +452,13 @@ def test_nurbs_sphere_keeps_its_measures_at_remote_coordinates() -> None:
         gp_Ax2(gp_Pnt(*centre), gp_Dir(1, 2, 3)), 8.123456789, 0.0, math.pi / 2
     ).Shape()
     source = Solid(BRepBuilderAPI_NurbsConvert(shape, True).Shape())
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     found = [feature for feature in features_of(source).values() if feature.kind == "sphere"]
     assert len(found) == 1
     assert found[0].params["diameter"] == pytest.approx(16.246913578, abs=EPS_GEOM, rel=0)
     assert found[0].params["centre"] == pytest.approx(centre, abs=EPS_GEOM, rel=0)
     assert found[0].params["recess"] is False
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate(
@@ -515,7 +506,7 @@ def test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate(
         return True
 
     face = BRepBuilderAPI_MakeFace(spline, EPS_GEOM).Face()
-    before = _bytes(face)
+    before = brep_bytes(face)
     monkeypatch.setattr(
         ShapeAnalysis,
         "ShapeAnalysis_CanonicalRecognition",
@@ -529,7 +520,7 @@ def test_narrow_nurbs_bulge_cannot_hide_behind_a_sphere_candidate(
         ),
     )
     assert describe(face) is None
-    assert _bytes(face) == before
+    assert brep_bytes(face) == before
 
 
 @pytest.mark.parametrize("kind", ["surface", "volume"])
@@ -548,13 +539,13 @@ def test_nurbs_spherical_integrals_are_conditioned_at_a_remote_origin(kind: Any)
         gp_Ax2(gp_Pnt(*centre), gp_Dir(*axis)), radius, 0.0, math.pi / 2
     ).Shape()
     source = Solid(BRepBuilderAPI_NurbsConvert(shape, True).Shape())
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     measured = properties(source.shape, kind)
     expected = 3 * math.pi * radius**2 if kind == "surface" else 2 * math.pi * radius**3 / 3
     shift = radius / 3 if kind == "surface" else 3 * radius / 8
     assert measured.mass == pytest.approx(expected, rel=INTEGRAL_RELATIVE_ERROR, abs=0)
     assert measured.centre == pytest.approx(centre + axis * shift, abs=EPS_GEOM, rel=0)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("interrupt", [False, True])
@@ -569,7 +560,7 @@ def test_spherical_proof_respects_work_limit_and_cancellation(
     from app.core.scene.cancel import CancelSignal
 
     face = BRepBuilderAPI_MakeFace(_spherical_spline(), EPS_GEOM).Face()
-    before = _bytes(face)
+    before = brep_bytes(face)
     signal = CancelSignal()
     if interrupt:
         original = canonical._product
@@ -586,7 +577,7 @@ def test_spherical_proof_respects_work_limit_and_cancellation(
     else:
         monkeypatch.setattr(canonical, "_MAX_COEFFICIENT_PRODUCTS", 0)
         assert canonical.describe(face) is None
-    assert _bytes(face) == before
+    assert brep_bytes(face) == before
 
 
 def _ring(angle: float = math.tau, *, recess: bool = False) -> Solid:
@@ -635,10 +626,10 @@ def test_step_round_surface_keeps_its_measure_source_through_cache_history_and_r
         shape = BRepPrimAPI_MakeTorus(17.123456789, 3.23456789).Shape()
         expected = {"diameter": 34.246913578, "tube_diameter": 6.46913578}
     original = Solid(shape)
-    original_bytes = _bytes(original.shape)
+    original_bytes = brep_bytes(original.shape)
     project = new_project("centauri-carbon-2", "petg")
     payload = step.write(original)
-    assert _bytes(original.shape) == original_bytes
+    assert brep_bytes(original.shape) == original_bytes
     project.sources["src_1"] = payload
     project.document.sources["src_1"] = Source(
         id="src_1", kind="import", path="sources/round.step", sha256=""
@@ -675,7 +666,7 @@ def test_step_round_surface_keeps_its_measure_source_through_cache_history_and_r
         assert measure_status(surface, "centre").source == "native"
         assert surface.face_indices and max(surface.face_indices) < entry.mesh.triangle_count
         assert current.sources["src_1"] == payload
-        assert _bytes(original.shape) == original_bytes
+        assert brep_bytes(original.shape) == original_bytes
         return surface.id
 
     original_id = checked(project, (0, 0, 0), cache)
@@ -714,7 +705,7 @@ def test_native_torus_reads_exact_measures_and_selected_original_faces(
     from OCP.GeomAbs import GeomAbs_Torus
 
     source = Solid(step.read(step.write(_ring(angle, recess=recess))).shape, deviation)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     native = [feature for feature in features_of(source).values() if feature.kind == "torus"]
     assert len(native) == 1
     ring = native[0]
@@ -731,7 +722,7 @@ def test_native_torus_reads_exact_measures_and_selected_original_faces(
     }
     assert expected
     assert set(ring.face_indices) == expected
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
     mesh = detect_tori(as_mesh_data(source))
     assert len(mesh) == 1
     assert mesh[0].params["recess"] is recess
@@ -750,7 +741,7 @@ def test_elliptic_wall_is_a_curved_face_without_invented_cylinder(deviation: flo
     original = BRepPrimAPI_MakeCylinder(3, 8).Shape()
     affine = gp_GTrsf(gp_Mat(2, 0, 0, 0, 1, 0, 0, 0, 1), gp_XYZ(7, -3, 5))
     source = Solid(BRepBuilderAPI_GTransform(original, affine, True).Shape(), deviation)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     found = features_of(source)
     assert {feature.kind for feature in found.values()} == {"face", "curved_face"}
     curved = [feature for feature in found.values() if feature.kind == "curved_face"]
@@ -769,7 +760,7 @@ def test_elliptic_wall_is_a_curved_face_without_invented_cylinder(deviation: flo
     )
     assert len(twin) == 1
     assert set(twin[0].face_indices) == set(wall.face_indices)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def test_a_ring_split_at_native_seams_keeps_one_complete_feature() -> None:
@@ -835,7 +826,7 @@ def test_nurbs_ring_keeps_its_exact_measures_without_replacing_the_surface(
     assert any(
         BRepAdaptor_Surface(face).GetType() == GeomAbs_BSplineSurface for face in source.faces()
     )
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     features = features_of(source)
     rings = [feature for feature in features.values() if feature.kind == "torus"]
     assert len(rings) == 1
@@ -845,7 +836,7 @@ def test_nurbs_ring_keeps_its_exact_measures_without_replacing_the_surface(
     assert ring.params["centre"] == pytest.approx((7.0, -3.0, 5.0), abs=EPS_GEOM)
     assert ring.params["axis"] == pytest.approx((0.0, 0.0, 1.0), abs=EPS_GEOM)
     assert ring.params["recess"] is recess
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def test_narrow_nurbs_bulge_cannot_hide_between_torus_samples(
@@ -876,14 +867,14 @@ def test_narrow_nurbs_bulge_cannot_hide_between_torus_samples(
     point = spline.Pole(row, 3)
     spline.SetPole(row, 3, gp_Pnt(point.X(), point.Y(), point.Z() + 0.04))
     face = BRepBuilderAPI_MakeFace(spline, EPS_GEOM).Face()
-    before = _bytes(face)
+    before = brep_bytes(face)
     monkeypatch.setattr(
         detection,
         "fit_torus_samples",
         lambda _points, _normals: detection.TorusFit((0, 0, 1), (7, -3, 5), 17, 3, 0, False),
     )
     assert describe(face) is None
-    assert _bytes(face) == before
+    assert brep_bytes(face) == before
 
 
 def test_torus_proof_preserves_its_explicit_work_limit(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -234,7 +234,7 @@ def test_the_release_gate_blocks_on_every_platform() -> None:
         assert "nicht blockierend" not in job, name
         assert "$global:LASTEXITCODE = 0" not in job, name
         assert not [line for line in calls if "|| " in line], name
-        assert '-e ".[geom,ui,agent,brep]" pyinstaller' in job, name
+        assert '-e ".[geom,ui,brep]" pyinstaller' in job, name
     windows = _job("windows-release-check")
     assert windows.count("if ($LASTEXITCODE -ne 0) { throw") >= 2
 

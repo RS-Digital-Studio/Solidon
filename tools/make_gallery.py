@@ -38,7 +38,6 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -157,7 +156,7 @@ def crop_box(window: Any, view: Any) -> tuple[int, int, int]:
 
 def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
     """Ein geladenes Teil aufnehmen und unter ``galerie-<stem>.webp`` ablegen."""
-    from make_figures import settle
+    from tools.make_figures import settle
 
     view = window.viewport
     # **Das Achsenkreuz gehört nicht ins Galeriebild.** In der Anwendung sagt
@@ -211,11 +210,10 @@ def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
 
 def main() -> int:
     """Jedes genannte Projekt aufnehmen; ohne Namen alle aus ``parts``."""
-    from make_figures import await_result, prepared
-
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
+    from tools.make_figures import await_result, prepared
 
     load_operations()
     app = QApplication.instance() or QApplication(sys.argv[:1])

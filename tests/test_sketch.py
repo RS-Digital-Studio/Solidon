@@ -24,6 +24,7 @@ from app.core.sketch.planes import (
 )
 from app.core.sketch.profile import _LEAST_STEPS, curves_of
 from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement, SolvedSketch
+from tests.helpers import assert_sketch_gradients
 
 # Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
 # ziehen die Ecken zusammen, die Maße kommen aus Projektparametern.
@@ -314,10 +315,6 @@ def test_every_analytic_gradient_matches_central_differences() -> None:
     Ableitungen — eine falsche wäre ein stiller Fehler, der nur langsam
     konvergiert. Hier steht jede Bedingungsart einmal in allgemeiner Lage
     gegen zentrale Differenzen."""
-    import numpy as np
-
-    from app.core.sketch import solver
-
     sketch = Sketch(
         plane="plane:xy",
         elements=(
@@ -342,37 +339,7 @@ def test_every_analytic_gradient_matches_central_differences() -> None:
             SketchConstraint("midpoint", (9, 0, 3)),
         ),
     )
-    equations, anchors = solver._build_equations(sketch, {})
-    pts = anchors.copy()
-    total_rows = sum(equation.rows for equation in equations)
-
-    analytic = np.zeros((total_rows, pts.shape[0], 2))
-    begin = 0
-    for equation in equations:
-        equation.grad(pts, analytic[begin : begin + equation.rows])
-        begin += equation.rows
-    analytic_flat = analytic.reshape(total_rows, pts.size)
-
-    def stacked(flat: np.ndarray) -> np.ndarray:
-        shaped = flat.reshape(-1, 2)
-        rows: list[float] = []
-        for equation in equations:
-            rows.extend(equation.fn(shaped))
-        return np.asarray(rows)
-
-    step = 1e-7
-    flat = pts.reshape(-1).copy()
-    numeric = np.zeros_like(analytic_flat)
-    for column in range(flat.size):
-        forward = flat.copy()
-        backward = flat.copy()
-        forward[column] += step
-        backward[column] -= step
-        numeric[:, column] = (stacked(forward) - stacked(backward)) / (2.0 * step)
-
-    assert np.allclose(analytic_flat, numeric, atol=1e-5), (
-        f"größte Abweichung: {float(np.max(np.abs(analytic_flat - numeric))):.2e}"
-    )
+    assert_sketch_gradients(sketch, step=1e-7, atol=1e-5)
 
 
 def test_a_reference_measure_reports_without_driving() -> None:

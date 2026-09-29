@@ -301,11 +301,8 @@ def _require_hash_map(
 
 def _sha256(path: Path) -> str:
     """Eine Datei ohne Zeitstempel an ihre tatsächlichen Bytes binden."""
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def _validate_delivery(document: dict[str, Any], manifest: Path) -> None:

@@ -16,6 +16,7 @@ from app.core.scene import History, OperationDraft
 from app.core.scene.history import StepNeed
 from app.core.scene.project import new_project, save
 from app.ui.panels import drop_before, needs_tip, replanned_steps, step_state
+from tests.helpers import stop_evaluation
 
 #: Die beiden Bohrungen der kleinen Platte, aus ihren Entwürfen.
 LEFT_X = -20.0
@@ -100,16 +101,6 @@ def test_a_drop_lands_before_the_next_step_below() -> None:
     assert drop_before(rows, -1) == 1
 
 
-def _stopped(session: Any) -> None:
-    """Den Arbeiter, den eine Änderung anstößt, anhalten und abwarten — ohne
-    Ereignisschleife meldet er nichts zurück, gerechnet wird hier im Test."""
-    running = session._worker
-    session.cancel_evaluation()
-    if running is not None:
-        assert running.wait(60_000)
-    session.cancel_signal.reset()
-
-
 def test_an_import_at_the_marker_does_not_land_on_a_kept_model(monkeypatch: Any) -> None:
     """Review N4 (Sonde p18): ein weiteres Modell an der Einfügemarke.
 
@@ -133,7 +124,7 @@ def test_an_import_at_the_marker_does_not_land_on_a_kept_model(monkeypatch: Any)
     session = Session()
     for name in ("cube_clean.stl", "block_with_rounded_edge.stl"):
         assert session.import_model(meshes / name, unit="mm")
-        _stopped(session)
+        stop_evaluation(session)
 
     def run(document: Any) -> Any:
         return evaluate(
@@ -147,7 +138,7 @@ def test_an_import_at_the_marker_does_not_land_on_a_kept_model(monkeypatch: Any)
     kept = session.project.document.ops[1]
     assert kept.params.get("spot_x") is not None, "die Stelle des ersten Blocks steht fest"
     assert session.start_inserting(kept.id)
-    _stopped(session)
+    stop_evaluation(session)
 
     handed: list[Any] = []
     monkeypatch.setattr(

@@ -84,7 +84,6 @@ def test_the_newest_version_comes_first() -> None:
 
 # --- das Fenster ----------------------------------------------------------------------
 
-pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt  # noqa: E402
 

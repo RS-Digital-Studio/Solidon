@@ -473,14 +473,14 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     des gekippten Kegels sich kreuzen.
     """
     from app.core.geom.prepare import FEATURE_OVERLAP
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     top = 10.0 if case == "vergrabene Senkung" else 12.0
     seen = {}
     for kernel in ("mesh", "brep"):
         source = _bored(kernel, RIBBED[case], ribbed=True)
         hole = _narrowest_hole(source)
-        changed, findings = _evaluated(
+        changed, findings = evaluated_operation(
             source, profile, "rotate_feature", at_feature=hole.id, axis="x", angle=30.0
         )
         lost = _removed(source, changed)
@@ -521,7 +521,7 @@ def test_a_tilted_through_slot_takes_only_its_own_slant(profile: Profile, kernel
     """
     from app.core.brep import edit
     from app.core.geom.prepare import FEATURE_OVERLAP
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     plate = edit.unified(
         edit.boolean(
@@ -546,7 +546,7 @@ def test_a_tilted_through_slot_takes_only_its_own_slant(profile: Profile, kernel
     )
     source = _body(kernel, solid)
     slot = next(feature for feature in source.features.values() if feature.kind == "slot")
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, "rotate_feature", at_feature=slot.id, axis="x", angle=10.0
     )
     lost = _removed(source, changed)
@@ -569,11 +569,11 @@ def test_a_tilted_bore_is_capped_where_the_flat_cut_fails(
     (25.09.2026). Die Lage wird an ``_cut_at_the_rims`` gestellt.
     """
     from app.core.geom.prepare import FEATURE_OVERLAP
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _bored("mesh", RIBBED["gesenkt"], ribbed=True)
     monkeypatch.setattr(prepare_ops, "_cut_at_the_rims", lambda *_args: None)
-    changed, _findings = _evaluated(
+    changed, _findings = evaluated_operation(
         source,
         profile,
         "rotate_feature",
@@ -614,7 +614,7 @@ def test_a_tilted_bore_reports_its_neighbour_on_both_kernels(
     schlichte Bohrung lässt 0,06 mm. Und die Senkung, die in die Mündung der
     Nachbarin läuft, hieß daneben „über die Kante" — an beiden Kernen.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     seen = {}
     for kernel in ("mesh", "brep"):
@@ -623,7 +623,7 @@ def test_a_tilted_bore_reports_its_neighbour_on_both_kernels(
             (feature for feature in source.features.values() if feature.kind == "hole"),
             key=lambda feature: abs(float(feature.params["centre"][0])),
         )
-        _changed, findings = _evaluated(
+        _changed, findings = evaluated_operation(
             source, profile, "rotate_feature", at_feature=hole.id, axis="y", angle=angle
         )
         walls = [finding for finding in findings if finding.code.startswith("bore.neighbour_")]
@@ -649,14 +649,14 @@ def test_a_countersunk_bore_moved_along_its_axis_says_what_it_is_there(
     einem Deckel, und die Bohrung geht an keinem Kern mehr durch — der exakte
     sagte das vorher nicht.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     for rise in (1.0, -1.0):
         source = _bored(kernel, SUNK, ribbed=False)
         hole = _narrowest_hole(source)
         cone = next(feature for feature in source.features.values() if feature.kind == "cone")
         x, y, z = (float(value) for value in hole.params["centre"])
-        changed, findings = _evaluated(
+        changed, findings = evaluated_operation(
             source, profile, "move_feature", at_feature=hole.id, x=x, y=y, z=z + rise
         )
         assert "move_feature.no_longer_through" in _warnings(findings), (rise, findings)
@@ -680,16 +680,18 @@ def test_a_blind_countersink_set_under_the_surface_says_its_mouth_is_covered(
     25.09.2026). Hier dieselbe Lage an der ebenen Platte: 8 mm quer und 1 mm
     tiefer. Quer allein bleibt die Mündung offen, und es kommt kein Satz.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _bored(kernel, RIBBED["gesenktes Sackloch"], ribbed=False)
     hole = _narrowest_hole(source)
     x, y, z = (float(value) for value in hole.params["centre"])
-    _deeper, findings = _evaluated(
+    _deeper, findings = evaluated_operation(
         source, profile, op, at_feature=hole.id, x=x + 8.0, y=y, z=z - 1.0
     )
     assert f"{op}.mouth_covered" in _warnings(findings), _warnings(findings)
-    _across, findings = _evaluated(source, profile, op, at_feature=hole.id, x=x + 8.0, y=y, z=z)
+    _across, findings = evaluated_operation(
+        source, profile, op, at_feature=hole.id, x=x + 8.0, y=y, z=z
+    )
     assert f"{op}.mouth_covered" not in _warnings(findings), _warnings(findings)
 
 
@@ -707,12 +709,12 @@ def test_a_through_bore_set_along_its_axis_leaves_material_on_both_kernels(
     Und die Kopie am Netz behielt ``through``, obwohl der Satz das Gegenteil
     sagte.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _bored(kernel, RIBBED["durchgehend"], ribbed=False)
     hole = _narrowest_hole(source)
     x, y, z = (float(value) for value in hole.params["centre"])
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, op, at_feature=hole.id, x=x + 8.0, y=y, z=z + 3.0
     )
     assert f"{op}.no_longer_through" in _warnings(findings), _warnings(findings)
@@ -738,15 +740,17 @@ def test_a_countersink_tilted_past_its_flank_is_refused_with_the_largest_angle(
     Die Operation sagt ab und nennt den größten Winkel; knapp darunter bleibt
     es eine Senkung.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _bored(kernel, RIBBED[case], ribbed=False)
     feature = _narrowest_hole(source)
     with pytest.raises(ValidationError) as refused:
-        _evaluated(source, profile, "rotate_feature", at_feature=feature.id, axis="x", angle=45.0)
+        evaluated_operation(
+            source, profile, "rotate_feature", at_feature=feature.id, axis="x", angle=45.0
+        )
     assert refused.value.constraint == "sink_runs_out"
     assert "45,0" in str(refused.value) or "45.0" in str(refused.value)
-    changed, _findings = _evaluated(
+    changed, _findings = evaluated_operation(
         source, profile, "rotate_feature", at_feature=feature.id, axis="x", angle=40.0
     )
     assert float(as_mesh_data(changed.mesh).volume) < float(as_mesh_data(source.mesh).volume)
@@ -764,7 +768,7 @@ def test_a_bore_moved_towards_its_neighbour_says_what_is_left_of_the_wall(
     Schritt etwas; um 3,5 mm blieben 0,5 mm Wand, und auch das blieb still.
     Von der Nachbarin weg bleibt es still.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _with_neighbour(kernel, RIBBED[case])
     hole = min(
@@ -778,13 +782,13 @@ def test_a_bore_moved_towards_its_neighbour_says_what_is_left_of_the_wall(
         (3.5 - reach, "bore.neighbour_wall_thin"),
         (4.5 - reach, "bore.neighbour_opened"),
     ):
-        _moved, findings = _evaluated(
+        _moved, findings = evaluated_operation(
             source, profile, "move_feature", at_feature=hole.id, x=x + step, y=y, z=z
         )
         codes = _warnings(findings)
         assert expected in codes, (step, codes)
         assert "bore.over_the_edge" not in codes, (step, codes)
-    _moved, findings = _evaluated(
+    _moved, findings = evaluated_operation(
         source, profile, "move_feature", at_feature=hole.id, x=x - 3.5, y=y, z=z
     )
     assert not [code for code in _warnings(findings) if code.startswith("bore.neighbour_")]
@@ -802,7 +806,7 @@ def test_a_copy_set_beside_its_original_says_what_is_left_of_the_wall(
     5 mm daneben überschneiden sich beide; 8 mm daneben ist alles gut. Bei der
     gesenkten Bohrung trifft die Senkung Ø 10 früher.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _with_neighbour(kernel, RIBBED[case])
     hole = min(
@@ -815,11 +819,11 @@ def test_a_copy_set_beside_its_original_says_what_is_left_of_the_wall(
         (wide + 0.5, "bore.neighbour_wall_thin"),
         (wide - 1.0, "bore.neighbour_opened"),
     ):
-        _copied, findings = _evaluated(
+        _copied, findings = evaluated_operation(
             source, profile, "duplicate_feature", at_feature=hole.id, x=x - step, y=y, z=z
         )
         assert expected in _warnings(findings), (step, _warnings(findings))
-    _copied, findings = _evaluated(
+    _copied, findings = evaluated_operation(
         source, profile, "duplicate_feature", at_feature=hole.id, x=x - wide - 2.0, y=y, z=z
     )
     assert not [code for code in _warnings(findings) if code.startswith("bore.neighbour_")]
@@ -867,7 +871,7 @@ def test_a_tilted_bore_that_opens_its_neighbour_is_no_edge_on_either_kernel(
     stehen, dort fiel es nicht auf
     (``test_a_tilted_bore_reports_its_neighbour_on_both_kernels``).
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     seen = {}
     for kernel in ("mesh", "brep"):
@@ -876,7 +880,7 @@ def test_a_tilted_bore_that_opens_its_neighbour_is_no_edge_on_either_kernel(
             (feature for feature in source.features.values() if feature.kind == "hole"),
             key=lambda feature: abs(float(feature.params["centre"][0])),
         )
-        _changed, findings = _evaluated(
+        _changed, findings = evaluated_operation(
             source, profile, "rotate_feature", at_feature=hole.id, axis="y", angle=angle
         )
         codes = _warnings(findings)
@@ -1025,7 +1029,7 @@ def test_a_countersink_tilted_near_a_side_says_what_the_side_shows(
     """
     from app.core.brep import edit
     from app.core.sketch.planes import frame_of
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     for kernel in ("mesh", "brep"):
         solid = edit.bore_profile(
@@ -1033,7 +1037,7 @@ def test_a_countersink_tilted_near_a_side_says_what_the_side_shows(
         )
         source = _body(kernel, solid)
         sink = _narrowest_hole(source)
-        changed, findings = _evaluated(
+        changed, findings = evaluated_operation(
             source, profile, "rotate_feature", at_feature=sink.id, axis="y", angle=angle
         )
         opened = _sides_lost(source, changed) > 1.0
@@ -1233,7 +1237,7 @@ def test_a_bore_widened_at_both_ends_moves_tilts_and_copies_on_both_kernels(
     einer Bohrung hieß „geht nicht mehr durch", weil die Erkennung der neuen
     Senkung den Namen der Kopie gegeben hatte.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     outline = BOTH_ENDS[case]
     source = _widened(kernel, outline)
@@ -1243,20 +1247,20 @@ def test_a_bore_widened_at_both_ends_moves_tilts_and_copies_on_both_kernels(
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
 
-    moved, findings = _evaluated(
+    moved, findings = evaluated_operation(
         source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
     )
     assert _warnings(findings) == [], findings
     assert abs(float(as_mesh_data(moved.mesh).volume)) == pytest.approx(before, abs=0.05)
     assert _chain_ids(moved) == members
 
-    turned, findings = _evaluated(
+    turned, findings = evaluated_operation(
         source, profile, "rotate_feature", at_feature=bore.id, axis="x", angle=15.0
     )
     assert _warnings(findings) == [], findings
     assert _chain_ids(turned) == members
 
-    copied, findings = _evaluated(
+    copied, findings = evaluated_operation(
         source, profile, "duplicate_feature", at_feature=bore.id, x=x + 16.0, y=y, z=z
     )
     assert _warnings(findings) == [], findings
@@ -1264,7 +1268,7 @@ def test_a_bore_widened_at_both_ends_moves_tilts_and_copies_on_both_kernels(
     assert taken == pytest.approx(cavity, rel=0.01), (taken, cavity)
     assert len(_chain_ids(copied)) == 6
 
-    closed, findings = _evaluated(
+    closed, findings = evaluated_operation(
         source, profile, "remove_feature", at_feature=bore.id, sections="chain"
     )
     assert _warnings(findings) == [], findings
@@ -1283,12 +1287,12 @@ def test_each_section_of_a_bore_widened_at_both_ends_is_removed_alone(
     Schritts und kein Befund; am exakten Kern stand dort „geht nicht mehr
     durch" (RM-245).
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _widened(kernel, BOTH_ENDS[case])
     bore = _narrowest_hole(source)
     for section in _cavity_members(source):
-        changed, findings = _evaluated(
+        changed, findings = evaluated_operation(
             source, profile, "remove_feature", at_feature=section.id, sections="single"
         )
         assert _warnings(findings) == [], (section.id, findings)
@@ -1321,14 +1325,14 @@ def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kerne
     sich nicht ändert: Das Volumen bleibt, gemessen am eigenen Kern (am
     exakten das Integral), auf einen halben Kubikmillimeter von 651.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _widened(kernel, BOTH_ENDS["Zylindersenkung und Fase"], bottom=bottom)
     before = abs(float(source.mesh.volume))
     bore = _narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
-    moved, findings = _evaluated(
+    moved, findings = evaluated_operation(
         source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
     )
     assert _warnings(findings) == [], findings
@@ -1379,7 +1383,7 @@ def test_a_rounded_mouth_travels_with_its_counterbore(profile: Profile, kernel: 
     eben, an der neuen ist die Senkung offen und ihre Kante gerundet.
     """
     from app.core.brep import edit
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _body(kernel, _rounded_mouth())
     before = abs(float(source.mesh.volume))
@@ -1387,7 +1391,7 @@ def test_a_rounded_mouth_travels_with_its_counterbore(profile: Profile, kernel: 
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
 
-    moved, findings = _evaluated(
+    moved, findings = evaluated_operation(
         source, profile, "move_feature", at_feature=bore.id, x=x + 5.0, y=y, z=z
     )
     assert _warnings(findings) == [], findings
@@ -1401,7 +1405,7 @@ def test_a_rounded_mouth_travels_with_its_counterbore(profile: Profile, kernel: 
     # liegt dicht über der Unterseite die Luft der mitgereisten Rundung.
     assert not contains(twin, [(-3.0, 0.0, 0.1), (-3.0, 0.0, 3.0), (2.5, 0.0, 0.05)]).any()
 
-    closed, findings = _evaluated(
+    closed, findings = evaluated_operation(
         source, profile, "remove_feature", at_feature=bore.id, sections="chain"
     )
     assert _warnings(findings) == [], findings
@@ -1411,7 +1415,7 @@ def test_a_rounded_mouth_travels_with_its_counterbore(profile: Profile, kernel: 
     # Die Kopie trägt dieselbe Rundung: Sie nimmt so viel ab, wie der Hohlraum
     # samt Rundung groß ist, und dicht über der Unterseite 5,5 mm neben ihrer
     # Achse ist Luft.
-    copied, findings = _evaluated(
+    copied, findings = evaluated_operation(
         source, profile, "duplicate_feature", at_feature=bore.id, x=x + 16.0, y=y, z=z
     )
     assert _warnings(findings) == [], findings
@@ -1433,12 +1437,12 @@ def test_a_bore_under_a_curved_face_is_closed_up_to_that_face(
     exakten Kern liegt der Deckel jetzt auf dem Träger oder folgt ihm als
     Füllung.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     outline = BOTH_ENDS["Zylindersenkung und Fase"]
     source = _widened("brep", outline, bottom=bottom)
     bore = _narrowest_hole(source)
-    closed, findings = _evaluated(
+    closed, findings = evaluated_operation(
         source, profile, "remove_feature", at_feature=bore.id, sections="chain"
     )
     assert _warnings(findings) == [], findings
@@ -1543,12 +1547,12 @@ def test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels(
     Versetzen „über die Kante". Eine Kopie, die ganz im Material steht, sagt
     nichts.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _narrow_plate(kernel)
     bore = _narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
-    _copied, findings = _evaluated(
+    _copied, findings = evaluated_operation(
         source, profile, "duplicate_feature", at_feature=bore.id, x=x, y=y + 9.5, z=z
     )
     assert _warnings(findings) == ["bore.over_the_edge", "duplicate_feature.feature_lost"]
@@ -1560,11 +1564,11 @@ def test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels(
     assert "Geometrie stimmt" not in str(lost.message)
     assert lost.location == pytest.approx((x, y + 9.5, z), abs=1e-6)
     assert SHOW_LOCATION in lost.suggestions
-    _moved, findings = _evaluated(
+    _moved, findings = evaluated_operation(
         source, profile, "move_feature", at_feature=bore.id, x=x, y=y + 6.0, z=z
     )
     assert _warnings(findings) == ["bore.over_the_edge"]
-    copied, findings = _evaluated(
+    copied, findings = evaluated_operation(
         source, profile, "duplicate_feature", at_feature=bore.id, x=x + 8.0, y=y, z=z
     )
     assert _warnings(findings) == []
@@ -1580,7 +1584,7 @@ def test_drilling_over_a_side_inside_the_hull_says_so(profile: Profile, kernel: 
     Nachbarn offen, und ein Strahl vom Kranz nach außen trifft dessen Wand.
     Und eine Bohrung ganz im Material sagt nichts.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _narrow_plate(kernel)
     for x, y, expected in (
@@ -1588,7 +1592,7 @@ def test_drilling_over_a_side_inside_the_hull_says_so(profile: Profile, kernel: 
         (-2.0, 3.0, []),
         (8.0, 3.0, []),
     ):
-        _drilled, findings = _evaluated(
+        _drilled, findings = evaluated_operation(
             source, profile, "drill_hole", x=x, y=y, z=6.0, diameter=6.0, depth=0.0, axis="z"
         )
         edge = [code for code in _warnings(findings) if code == "bore.over_the_edge"]
@@ -1603,7 +1607,7 @@ def test_a_bore_in_a_thin_plate_is_no_edge(profile: Profile, kernel: str) -> Non
     die Kante". Eine Platte 1 mm stark, gebohrt, versetzt und verdoppelt mitten
     im Material — kein Kantenbefund.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _narrow_plate(kernel, thickness=1.0)
     bore = _narrowest_hole(source)
@@ -1613,7 +1617,7 @@ def test_a_bore_in_a_thin_plate_is_no_edge(profile: Profile, kernel: str) -> Non
         ("move_feature", {"at_feature": bore.id, "x": x + 2.0, "y": y, "z": z}),
         ("duplicate_feature", {"at_feature": bore.id, "x": x + 8.0, "y": y, "z": z}),
     ):
-        _changed, findings = _evaluated(source, profile, op, **params)
+        _changed, findings = evaluated_operation(source, profile, op, **params)
         assert "bore.over_the_edge" not in _warnings(findings), (op, findings)
 
 
@@ -1668,7 +1672,7 @@ def test_a_bore_that_runs_out_of_a_step_says_so_on_both_kernels(
     Kopie lässt dort 0,5 mm zur Vorlage bei x = −10 stehen; bei −4 berührten
     sich beide Bohrungen in einer Linie, ein Körper ohne Wanddicke).
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     plain = _stepped(kernel, bored=False)
     bored = _stepped(kernel, bored=True)
@@ -1681,7 +1685,7 @@ def test_a_bore_that_runs_out_of_a_step_says_so_on_both_kernels(
             (bored, "duplicate_feature", {"at_feature": bore.id, "x": x, "y": y, "z": z}),
         )
         for source, op, params in cases:
-            changed, findings = _evaluated(source, profile, op, **params)
+            changed, findings = evaluated_operation(source, profile, op, **params)
             opened = _step_side_lost(source, changed) > 1.0
             assert opened is (x > -3.0), (kernel, op, x)
             assert ("bore.over_the_edge" in _warnings(findings)) is opened, (
@@ -1751,7 +1755,7 @@ def test_a_moved_bore_is_measured_where_it_stands(
     auskommen und tragen danach die Maße der Konstruktion: Ø 6 durchgehend an
     der neuen Stelle.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _bored("mesh", RIBBED[case], ribbed=False)
     hole = _narrowest_hole(source)
@@ -1761,7 +1765,7 @@ def test_a_moved_bore_is_measured_where_it_stands(
 
     monkeypatch.setattr(prepare_ops, "_detect_resized_bores", refused)
     x, y, z = (float(value) for value in hole.params["centre"])
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, "move_feature", at_feature=hole.id, x=x + 4.0, y=y, z=z
     )
     assert _warnings(findings) == []
@@ -1786,7 +1790,7 @@ def test_a_single_exact_bore_cut_is_held_like_a_chain(
     Überstand weiter über die offenen Mündungen — um genau die Differenz, je
     Mündung, also die doppelte Differenz in der Länge.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     source = _bored("brep", RIBBED["durchgehend"], ribbed=False)
     hole = _narrowest_hole(source)
@@ -1805,7 +1809,7 @@ def test_a_single_exact_bore_cut_is_held_like_a_chain(
 
     monkeypatch.setattr(prepare_ops, "_exact_chain_cut_holding", counted)
     x, y, z = (float(value) for value in hole.params["centre"])
-    _evaluated(source, profile, op, at_feature=hole.id, x=x + 4.0, y=y, z=z)
+    evaluated_operation(source, profile, op, at_feature=hole.id, x=x + 4.0, y=y, z=z)
     overlaps = [overlap for overlap, _length in seen]
     assert overlaps == pytest.approx(
         [prepare_ops.FEATURE_OVERLAP * factor for factor in prepare_ops.CUT_OVERLAPS]
@@ -1898,7 +1902,7 @@ def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
     weiter, denn sie geht starr mit und liegt danach ein Stück vor der
     Fläche. Die Kopie 12 mm daneben trägt so viel ab, wie der Hohlraum misst.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     solid = _sloped_slot_plate(chamfer=chamfer)
     source = _body(kernel, solid)
@@ -1912,7 +1916,7 @@ def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
         op, target = "move_feature", (x + 0.5, y, z)
     else:
         op, target = "duplicate_feature", (x + 12.0, y, z)
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, op, at_feature=slot.id, x=target[0], y=target[1], z=target[2]
     )
     assert _warnings(findings) == [], findings
@@ -1950,7 +1954,7 @@ def test_a_widened_through_bore_is_measured_where_it_stands(
     und trägt danach Ø 8; ein Sackloch braucht seinen Boden und darf sie
     nehmen — dort muss der Boden danach unter seinem Namen stehen.
     """
-    from tests.test_bore_depth import _evaluated
+    from tests.helpers import evaluated_operation
 
     outline = (
         RIBBED["durchgehend"]
@@ -1967,7 +1971,7 @@ def test_a_widened_through_bore_is_measured_where_it_stands(
         return real(*args, **kwargs)
 
     monkeypatch.setattr(prepare_ops, "_detect_resized_bores", watched)
-    changed, findings = _evaluated(
+    changed, findings = evaluated_operation(
         source, profile, "resize_hole", at_feature=hole.id, diameter=8.0, compensate=False
     )
     assert _warnings(findings) == []

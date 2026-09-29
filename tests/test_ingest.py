@@ -31,6 +31,7 @@ from app.core.scene.project import Project, ProjectSources, checksum, new_projec
 from app.core.types import Finding, Profile, Source
 from app.core.units import UNIT_NAMES
 from app.i18n import _
+from tests.helpers import two_cubes
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -640,7 +641,7 @@ def test_a_3mf_with_too_many_archive_entries_is_refused(
 ) -> None:
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2, raising=False)
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2)
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as container:
         for index in range(3):
@@ -674,7 +675,7 @@ def test_a_zip64_directory_cannot_hide_entries_from_the_preflight(
 ) -> None:
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2, raising=False)
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2)
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w") as container:
         for index in range(3):
@@ -827,8 +828,8 @@ def test_a_3mf_with_an_extreme_compression_ratio_is_refused(
 ) -> None:
     from app.core.ingest import loader
 
-    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 1, raising=False)
-    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0, raising=False)
+    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 1)
+    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0)
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
         container.writestr("3D/3dmodel.model", bytes(10_000))
@@ -2608,14 +2609,6 @@ def test_leaving_wide_openings_open_on_import_names_what_stays_open() -> None:
     assert kept.location is not None
 
 
-def _two_boxes(offset: float) -> MeshData:
-    """Zwei Würfel mit 20 mm Kante, der zweite um ``offset`` entlang X verschoben."""
-    first = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
-    second = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
-    second.apply_translation((offset, 0.0, 0.0))
-    return MeshData.of(trimesh.util.concatenate([first, second]))
-
-
 def test_parts_that_stick_into_each_other_are_named_on_import() -> None:
     """Zwei ineinandergeschobene Würfel: der Satz sagt es, und der erste Knopf löst es auf.
 
@@ -2623,7 +2616,7 @@ def test_parts_that_stick_into_each_other_are_named_on_import() -> None:
     Modell besteht aus mehreren Teilen" mit *In Einzelteile zerlegen* — zerlegt
     wären es zwei Teile am selben Ort.
     """
-    result = normalise(_two_boxes(10.0), "mm")
+    result = normalise(two_cubes(10.0), "mm")
 
     finding = next(f for f in result.findings if f.code == "ingest.multiple_components")
     assert str(finding.message) == "Das Modell besteht aus zwei Teilen, die ineinanderstecken."
@@ -2642,7 +2635,7 @@ def test_parts_apart_or_with_play_keep_the_plain_sentence() -> None:
     gemeinsame Stelle — ein Kettenglied, ein Druck-im-Stück-Gelenk. Dort
     steckt nichts ineinander, und *Überschneidungen auflösen* hätte nichts zu tun.
     """
-    apart = normalise(_two_boxes(30.0), "mm")
+    apart = normalise(two_cubes(30.0), "mm")
     finding = next(f for f in apart.findings if f.code == "ingest.multiple_components")
     assert str(finding.message) == "Das Modell besteht aus mehreren Teilen."
     assert not finding.suggestions

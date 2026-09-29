@@ -19,9 +19,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
 from app.i18n import tr

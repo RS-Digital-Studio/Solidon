@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import math
 from typing import Any
 
@@ -14,17 +13,9 @@ from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, available, boolean_builder
 from app.core.perceive.features import detect_voids
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
+from tests.helpers import brep_bytes
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
-
-
-def _bytes(shape: Any) -> bytes:
-    """Die vollständige native Form einschließlich vorhandener Triangulation."""
-    from OCP.BRepTools import BRepTools
-
-    stream = io.BytesIO()
-    BRepTools.Write_s(shape, stream)
-    return stream.getvalue()
 
 
 def _compound(*shapes: Any) -> Any:
@@ -75,7 +66,7 @@ def test_native_air_volume_and_selection_include_material_islands(
         source = Solid(BRepBuilderAPI_NurbsConvert(source.shape, True).Shape())
     if representation == "step":
         source = step.read(step.write(source))
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     expected = 72.0 * math.pi - (4.0 * math.pi / 3.0 if island else 0.0)
     assert BRepCheck_Analyzer(source.shape).IsValid()
     assert source.is_closed
@@ -108,7 +99,7 @@ def test_native_air_volume_and_selection_include_material_islands(
         for feature in found.values()
         if feature.id != air.id
     )
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("deflection", [MAX_FACET_SAG, MAX_FACET_SAG / 4.0])
@@ -162,7 +153,7 @@ def test_a_slotted_enclosure_is_air_instead_of_a_blind_slot(
         overlap=0.1,
     )
     source = Solid(source.shape, deflection=deflection)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     expected_volume = (6.1 * 14.0 + math.pi * 3.05**2) * 4.0
     assert BRepCheck_Analyzer(source.shape).IsValid()
     assert source.solid_count == 1
@@ -203,7 +194,7 @@ def test_a_slotted_enclosure_is_air_instead_of_a_blind_slot(
         for feature in found.values()
         if feature.id != air.id
     )
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def test_native_nested_air_chambers_are_each_published_once() -> None:
@@ -221,7 +212,7 @@ def test_native_nested_air_chambers_are_each_published_once() -> None:
         return builder.Shape()
 
     source = Solid(_compound(hollow(40, 12), hollow(6, 2)))
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     found = [feature for feature in features_of(source).values() if feature.kind == "void"]
     assert sorted(feature.params["volume"] for feature in found) == pytest.approx([8, 1512])
     assert sorted(len(source.faces_of_triangles(feature.face_indices)) for feature in found) == [
@@ -229,7 +220,7 @@ def test_native_nested_air_chambers_are_each_published_once() -> None:
         12,
     ]
     assert set(found[0].face_indices).isdisjoint(found[1].face_indices)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("reversed_order", [False, True])
@@ -252,7 +243,7 @@ def test_native_separate_chambers_keep_their_names_and_island_ownership(
         shape = builder.Shape()
     island = BRepPrimAPI_MakeSphere(gp_Pnt(-8, 0, 10), 1).Shape()
     source = Solid(_compound(island, shape) if reversed_order else _compound(shape, island))
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     voids = sorted(
         (feature for feature in features_of(source).values() if feature.kind == "void"),
         key=lambda feature: feature.id,
@@ -265,7 +256,7 @@ def test_native_separate_chambers_keep_their_names_and_island_ownership(
     assert voids[1].params["centre"] == pytest.approx((8, 0, 10))
     assert set(voids[0].face_indices).isdisjoint(voids[1].face_indices)
     assert [len(source.faces_of_triangles(feature.face_indices)) for feature in voids] == [4, 3]
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def test_an_open_native_shell_cannot_become_an_air_chamber() -> None:
@@ -287,7 +278,7 @@ def test_an_open_native_shell_cannot_become_an_air_chamber() -> None:
     for face in original.faces()[1:]:
         builder.Add(shell, face)
     source = Solid(shell)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     neighbours = NeighbourMap()
     TopExp.MapShapesAndAncestors_s(source.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
     free = []
@@ -299,7 +290,7 @@ def test_an_open_native_shell_cannot_become_an_air_chamber() -> None:
     assert len(free) == 4
     assert source.solid_count == 0
     assert _void_features(source) == []
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 def test_inverted_native_outer_shell_is_not_a_void() -> None:
@@ -309,9 +300,9 @@ def test_inverted_native_outer_shell_is_not_a_void() -> None:
     shape = BRepPrimAPI_MakeBox(10, 10, 10).Shape()
     shape.Reverse()
     source = Solid(shape)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     assert not [feature for feature in features_of(source).values() if feature.kind == "void"]
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
 
 
 @pytest.mark.parametrize("before_work", [False, True])
@@ -324,7 +315,7 @@ def test_native_air_recognition_cancels_without_changing_the_source(
     from app.core.scene.cancel import CancelSignal
 
     source = _pocket(island=True)
-    before = _bytes(source.shape)
+    before = brep_bytes(source.shape)
     signal = CancelSignal()
     original = native.boolean_builder
 
@@ -340,7 +331,7 @@ def test_native_air_recognition_cancels_without_changing_the_source(
         monkeypatch.setattr(native, "boolean_builder", stop)
     with pytest.raises(OperationCancelled):
         features_of(source, cancelled=signal)
-    assert _bytes(source.shape) == before
+    assert brep_bytes(source.shape) == before
     monkeypatch.setattr(native, "boolean_builder", original)
     found = [feature for feature in features_of(source).values() if feature.kind == "void"]
     assert len(found) == 1
@@ -411,7 +402,7 @@ def test_imported_void_actions_preserve_their_published_meaning(
 
     initial = run(project, cache)
     source = initial.scene.objects["obj_1"]
-    before = _bytes(source.mesh.shape)
+    before = brep_bytes(source.mesh.shape)
     air = next(feature for feature in source.features.values() if feature.kind == "void")
     offered = actions_for(air, source.features, mesh=as_mesh_data(source.mesh))
     assert {action.op for action in offered if action.op} == {"move_feature", "remove_feature"}
@@ -435,7 +426,7 @@ def test_imported_void_actions_preserve_their_published_meaning(
     else:
         assert output.mesh.volume == pytest.approx(24000.0, rel=1e-9)
         assert not [feature for feature in output.features.values() if feature.kind == "void"]
-    assert _bytes(source.mesh.shape) == before
+    assert brep_bytes(source.mesh.shape) == before
     reopened = load(save(project, tmp_path / "air.solidon"))
     fresh = run(reopened)
     assert fresh.scene.objects[source.id].mesh.volume == pytest.approx(output.mesh.volume)

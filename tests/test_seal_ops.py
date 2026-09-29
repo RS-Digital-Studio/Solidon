@@ -229,11 +229,10 @@ def test_groove_on_each_real_side_keeps_world_location_and_depth(direction, kind
     ],
 )
 def test_selected_opening_is_saved_and_rotated_without_new_guess(profile, axis, angle):
-    from test_seal_openings import plate
-
     from app.core.geom.seal import opening_choices
     from app.core.perceive.matching import moved_features
     from app.core.types import FeatureRef
+    from tests.test_seal_openings import plate
 
     entry = plate()
     choices = opening_choices(entry, FeatureRef(entry.id, "top"))
@@ -288,9 +287,8 @@ def test_a_tilted_support_read_from_an_stl_takes_its_seal(profile):
     Prüfplatte wird gekippt, als STL geschrieben und über den Ladeweg der
     Anwendung gelesen.
     """
-    from test_seal_openings import plate
-
     from app.core.ingest.loader import normalise, read_model
+    from tests.test_seal_openings import plate
 
     entry = plate()
     matrix = trimesh.transformations.rotation_matrix(0.57, (1, 2, 3))

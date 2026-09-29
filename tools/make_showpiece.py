@@ -926,7 +926,7 @@ def main() -> int:
     elif holder:
         default = ROOT / "website" / "teile" / "rollenhalter.p3d"
     else:
-        default = ROOT / "website" / "schaustueck.p3d"
+        default = ROOT / "website" / "teile" / "schaustueck.p3d"
     target = Path(chosen[0]) if chosen else default
     target.parent.mkdir(parents=True, exist_ok=True)
     save(project, target)

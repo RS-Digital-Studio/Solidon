@@ -18,9 +18,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-
-pytest.importorskip("PySide6")
-
 from PySide6 import QtWidgets
 from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QContextMenuEvent, QKeySequence, QShortcut
@@ -4157,7 +4154,7 @@ def test_the_panel_sends_a_feature_into_the_view_without_changing_it(window: Mai
     # **Die Betriebslage, nicht der Nullzustand** (`.claude/rules/tests.md`):
     # Ohne Renderer sagt `PlacementFlow.can_place()` nein, und offscreen gibt
     # es nie einen. Die Attrappe stellt her, was der Kunde hat.
-    from render_fakes import RecordingRenderer
+    from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
@@ -4220,9 +4217,8 @@ def test_a_feature_placement_stays_with_its_selected_place(
     window: MainWindow, selection: str
 ) -> None:
     """Eine neue Auswahl übernimmt keine wartende Änderung der vorherigen Stelle."""
-    from render_fakes import RecordingRenderer
-
     from app.ui.labels import LengthSpin
+    from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
@@ -4301,9 +4297,8 @@ def test_a_feature_placement_stays_with_its_selected_place(
 
 def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[str, Any]]:
     """Eine Bohrung mit echten Maßfeldern und einer vorbereiteten Bildplatzierung."""
-    from render_fakes import RecordingRenderer
-
     from app.ui.labels import LengthSpin
+    from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
@@ -4349,9 +4344,8 @@ def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: Main
     geht der Block mit dem Messen und kommt mit seinem Ende zurück; die übrigen
     Handlungen des Merkmals bleiben, wo sie waren.
     """
-    from render_fakes import RecordingRenderer
-
     from app.ui.labels import LengthSpin
+    from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
@@ -4408,9 +4402,8 @@ def test_the_next_hole_hides_its_twins_too_and_the_end_brings_them_back(
     dastehen. Bis zum 25.09.2026 war Escape dieser Ausgang; seither wählt es
     ab wie *Abbrechen* (Entscheidung Robert), und rechts steht nichts mehr.
     """
-    from render_fakes import RecordingRenderer
-
     from app.ui.labels import LengthSpin
+    from tests.render_fakes import RecordingRenderer
 
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
     window.open_path(MESHES / "plate_holes.stl")
@@ -8023,20 +8016,18 @@ def test_the_chamfer_marks_follow_the_panel_and_a_click_on_one_swaps_the_sides(
     den Werten aus dem Fenster; ein Strg+Z nimmt ihn zurück. Gleiche Breite
     nimmt die Marken weg, samt dem Satz in der Statuszeile.
     """
-    from render_fakes import RecordingRenderer
-
     from app.core.geom import edges as mesh_edges
     from app.core.geom.mesh import as_mesh_data
     from app.core.registry import REGISTRY
     from app.ui.viewport import FEATURE_EDGE_WIDTH, SELECTED_EDGE_WIDTH, chamfer_mark_texts
+    from tests.render_fakes import RecordingRenderer
 
     renderer = RecordingRenderer(size=(900, 600))
     window.viewport.renderer = renderer
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
-    if not REGISTRY.has("chamfer_edges"):
-        pytest.skip("ohne Fase im Register gibt es keine Marken")
+    assert REGISTRY.has("chamfer_edges"), "ohne Fase im Register gibt es keine Marken"
     object_id, body = next(iter(result.scene.objects.items()))
     before = len(window.session.project.document.ops)
     kanten = mesh_edges.edges_of(as_mesh_data(body.mesh))
@@ -15323,9 +15314,7 @@ def test_the_theme_stands_before_anything_is_shown(
     monkeypatch.setattr(app_module, "install_crash_logging", lambda: None)
 
     shown: list[bool] = []
-    monkeypatch.setattr(
-        "app.ui.dialogs.show_expired_demo", lambda state: shown.append(True), raising=False
-    )
+    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda state: shown.append(True))
 
     try:
         assert app_module.main([]) == 1, "eine abgelaufene Demo startet nicht"
@@ -15361,7 +15350,7 @@ def test_the_program_start_configures_https_before_reading_the_licence(
         "state",
         lambda: order.append("licence") or gone,
     )
-    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda _state: None, raising=False)
+    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda _state: None)
     monkeypatch.setattr(app_module, "install_crash_logging", lambda: None)
 
     assert app_module.main([]) == 1
@@ -17967,9 +17956,8 @@ def test_the_layer_outline_follows_its_body_to_the_second_plate(window: MainWind
     übereinander; was sie nicht bekamen, war der Ansichtsversatz, den jede
     andere Zeichenstelle über ``_view_offset`` längst nimmt.
     """
-    from render_fakes import RecordingRenderer
-
     from app.core.slice.analysis import slice_body
+    from tests.render_fakes import RecordingRenderer
 
     result = _two_plates(window)
     window.viewport.renderer = RecordingRenderer(size=(900, 600))
@@ -17993,9 +17981,8 @@ def test_looking_at_one_plate_puts_the_outline_back(window: MainWindow) -> None:
     liegt — ``_plate_offset`` ist null, und die Konturen dürfen nicht auf
     einem festen Versatz kleben bleiben.
     """
-    from render_fakes import RecordingRenderer
-
     from app.core.slice.analysis import slice_body
+    from tests.render_fakes import RecordingRenderer
 
     result = _two_plates(window)
     window.viewport.renderer = RecordingRenderer(size=(900, 600))

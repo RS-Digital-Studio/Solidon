@@ -5,13 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-import app
-
-pytest.importorskip("PySide6")
-
 from PySide6.QtWidgets import QApplication
 
+import app
 from app.core.registry import MENU_TWINS, REGISTRY, variant_members
 from app.ui.command_palette import CommandPalette, hidden_from_the_menu, matches
 from app.ui.theme import THEMES, contrast_ratio, viewport_colours

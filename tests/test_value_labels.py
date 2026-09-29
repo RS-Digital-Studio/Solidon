@@ -19,8 +19,6 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("PySide6")
-
 from app.ui.labels import (
     _VALUE_NAMES,
     _VALUE_UNITS,

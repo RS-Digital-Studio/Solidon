@@ -12,6 +12,7 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect, fit_cone, fit_sphere, fit_torus
 from app.core.units import EPS_GEOM
+from tests.helpers import stop_after
 
 
 def _round_surface(kind: str) -> trimesh.Trimesh:
@@ -240,19 +241,11 @@ def test_the_round_fit_can_stop_before_and_during_preparation(kind: str, stop_at
     Schätzung der Ableitung.
     """
     from app.core.errors import OperationCancelled
-    from app.core.scene.cancel import CancelSignal
 
     body = _subdivided(_round_surface(kind), "uniform")
     before = body.vertices.copy(), body.faces.copy()
     fitter = {"sphere": fit_sphere, "cone": fit_cone, "torus": fit_torus}[kind]
-    signal = CancelSignal()
-    reached = []
-
-    def stop() -> None:
-        reached.append(True)
-        if len(reached) == stop_at:
-            signal.cancel()
-        signal.raise_if_cancelled()
+    stop, reached = stop_after(stop_at)
 
     with pytest.raises(OperationCancelled):
         fitter(body, list(range(len(body.faces))), check_cancelled=stop)

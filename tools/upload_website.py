@@ -677,11 +677,8 @@ def promised_hashes(payload: dict[str, Any]) -> dict[str, str]:
 
 def _sha256_file(path: Path) -> str:
     """SHA-256 einer lokalen Datei, in Happen gelesen."""
-    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        while chunk := stream.read(_CHECKSUM_CHUNK):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 def promised_files(payload: dict[str, Any]) -> set[str]:

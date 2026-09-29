@@ -32,7 +32,7 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.slice.analysis import cross_section
 from app.core.types import Feature, OpContext, Profile, Scene, SceneObject, Vec3
 from tests.helpers import exact_kernel
-from tests.test_missing_ops import run
+from tests.helpers import run_operation as run
 
 A, B, C = 40.0, 30.0, 20.0
 WALL = 2.0

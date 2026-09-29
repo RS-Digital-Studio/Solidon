@@ -1054,7 +1054,7 @@ def test_an_unexpected_error_does_not_leave_the_generator_waiting(
         def text_to_mesh(self, prompt: str, *, seed: int = 0, progress: object = None) -> object:
             raise KeyError("outputs")
 
-    monkeypatch.setattr("app.ui.generate_dialog.show_error", lambda *args: None, raising=False)
+    monkeypatch.setattr("app.ui.generate_dialog.show_error", lambda *args: None)
     dialog = GenerateDialog(backend=Bricht())
     wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("ein Halter")

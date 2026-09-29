@@ -28,20 +28,14 @@ from app.core.knowledge.parts.shapes import building
 from app.core.knowledge.parts.structure import MIN_RIB, RIB_SHARE
 from app.core.knowledge.parts.testbodies import LABEL_DEPTH
 from app.core.types import Profile, SceneObject
-from tests.test_missing_ops import run
+from tests.helpers import exact_kernel
+from tests.helpers import run_operation as run
 
 #: Volumen eines einbeschriebenen 48-Ecks gegen den Kreis — der einzige erlaubte
 #: Unterschied zwischen Netz und exaktem Körper bei runden Formen.
 FACET = shapes.SEGMENTS * math.sin(2.0 * math.pi / shapes.SEGMENTS) / (2.0 * math.pi)
 HOST = (100.0, 100.0, 10.0)
 ON_TOP = {"x": 0.0, "y": 0.0, "z": 10.0, "nx": 0.0, "ny": 0.0, "nz": 1.0}
-
-
-def _kernel() -> Any:
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    return kernel
 
 
 def _built(name: str, exact: bool, **values: object) -> Any:
@@ -148,7 +142,7 @@ def test_every_basic_shape_has_an_exact_twin_with_the_same_frame(
     name: str, make: Any, ratio: float
 ) -> None:
     """Gleicher Rahmen, gleiche Maße; das Volumen weicht nur um die Facettierung ab."""
-    _kernel()
+    exact_kernel()
     mesh = make()
     assert isinstance(mesh, MeshData), name
     with building("brep"):
@@ -160,7 +154,7 @@ def test_every_basic_shape_has_an_exact_twin_with_the_same_frame(
 
 def test_the_slot_keeps_its_ends_as_true_arcs() -> None:
     """Das Netz hat keinen Punkt auf der Achse seiner Halbkreise; exakt endet es genau bei ±L/2."""
-    _kernel()
+    exact_kernel()
     mesh = shapes.slot(4.0, 12.0, 3.0)
     with building("brep"):
         exact = _sound(shapes.slot(4.0, 12.0, 3.0))
@@ -189,7 +183,7 @@ def test_the_rod_no_longer_carries_a_fuzzy_ladder() -> None:
 def test_a_union_that_leaves_two_bodies_is_refused_with_advice() -> None:
     from app.core.errors import GeometryError
 
-    _kernel()
+    exact_kernel()
     with building("brep"):
         apart = shapes.moved(shapes.box(2.0, 2.0, 2.0), (10.0, 0.0, 0.0))
         with pytest.raises(GeometryError) as refused:
@@ -201,7 +195,7 @@ def test_a_compound_carries_filament_slots_and_the_finest_deflection() -> None:
     """Ein Verbund verliert weder die Farben seiner Teile noch ihre Vernetzungsfeinheit (§20)."""
     import dataclasses
 
-    _kernel()
+    exact_kernel()
     with building("brep"):
         coloured = shapes.box(2.0, 2.0, 2.0)
         plain = shapes.moved(shapes.box(2.0, 2.0, 2.0), (10.0, 0.0, 0.0))
@@ -214,7 +208,7 @@ def test_a_compound_carries_filament_slots_and_the_finest_deflection() -> None:
 
 
 def test_a_mesh_only_path_refuses_an_exact_body_instead_of_failing_later() -> None:
-    _kernel()
+    exact_kernel()
     with building("brep"):
         exact = shapes.box(1.0, 1.0, 1.0)
         with pytest.raises(InternalError):
@@ -229,7 +223,7 @@ def test_a_mesh_only_path_refuses_an_exact_body_instead_of_failing_later() -> No
 
 
 def test_screw_hole_exact_matches_its_analytic_volume_and_lies_under_the_mouth() -> None:
-    _kernel()
+    exact_kernel()
     screw = standards.screw("M4")
     depth, head_room = 10.0, 2.0
     produced = _built(
@@ -258,7 +252,7 @@ def test_screw_hole_exact_matches_its_analytic_volume_and_lies_under_the_mouth()
 
 
 def test_heatset_exact_widens_at_the_mouth_and_matches_its_analytic_volume() -> None:
-    _kernel()
+    exact_kernel()
     entry = standards.insert("M4")
     produced = _built("heatset_m4", True, size="M4", lead_in=True, extra_depth=0.5)
     tool = _sound(produced.mesh)
@@ -278,7 +272,7 @@ def test_heatset_exact_widens_at_the_mouth_and_matches_its_analytic_volume() -> 
 
 
 def test_nut_trap_exact_is_pocket_channel_and_bolt_in_one_body() -> None:
-    _kernel()
+    exact_kernel()
     nut, screw, play = standards.nut("M4"), standards.screw("M4"), 0.2
     values = {"size": "M4", "direction": "side", "slide": 12.0, "play": play, "screw_hole": True}
     produced = _built("nut_trap", True, **values)
@@ -313,7 +307,7 @@ def test_nut_trap_exact_is_pocket_channel_and_bolt_in_one_body() -> None:
 @pytest.mark.parametrize("internal", [False, True])
 def test_printed_thread_exact_is_core_and_ridge_without_a_seam(internal: bool) -> None:
     """Kern und Gang sind ein genähter Körper; das Volumen ist das der Analytik."""
-    _kernel()
+    exact_kernel()
     screw = standards.screw("M6")
     length = 8.0
     produced = _built("printed_thread", True, size="M6", length=length, internal=internal, play=0.0)
@@ -337,7 +331,7 @@ def test_printed_thread_exact_is_core_and_ridge_without_a_seam(internal: bool) -
 
 
 def test_printed_screw_exact_has_its_head_on_top_and_the_thread_below() -> None:
-    _kernel()
+    exact_kernel()
     screw = standards.screw("M5")
     produced = _built("printed_screw", True, size="M5", length=12.0, countersunk=False, play=0.0)
     body = _sound(produced.mesh)
@@ -353,7 +347,7 @@ def test_printed_screw_exact_has_its_head_on_top_and_the_thread_below() -> None:
 
 def test_printed_countersunk_screw_exact_is_a_compound_of_head_and_thread() -> None:
     """Kegel und Gang berühren sich tangential; ein Verbund bleibt gültig und STEP-fähig (B2)."""
-    _kernel()
+    exact_kernel()
     screw = standards.screw("M5")
     builtin.load()
     spec = PARTS.get("printed_screw")
@@ -381,7 +375,7 @@ def test_printed_countersunk_screw_exact_is_a_compound_of_head_and_thread() -> N
 
 
 def test_printed_nut_exact_carries_the_internal_thread_through() -> None:
-    _kernel()
+    exact_kernel()
     screw, nut, play = standards.screw("M5"), standards.nut("M5"), 0.2
     produced = _built("printed_nut", True, size="M5", play=play)
     body = _sound(produced.mesh)
@@ -403,7 +397,9 @@ def test_printed_nut_exact_carries_the_internal_thread_through() -> None:
 
 
 def test_a_screw_hole_cuts_an_exact_host_and_keeps_it_exact(profile: Profile) -> None:
-    kernel = _kernel()
+    exact_kernel()
+    from app.core.brep import kernel
+
     host = _host()
     outcome = run(
         "insert_screw_hole", host, profile, size="M3", depth=8.0, countersink=True, **ON_TOP
@@ -426,7 +422,7 @@ def test_a_screw_hole_cuts_an_exact_host_and_keeps_it_exact(profile: Profile) ->
 
 
 def test_a_printed_thread_grows_on_an_exact_host_as_one_body(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     outcome = run(
         "insert_printed_thread",
@@ -457,7 +453,7 @@ def test_a_printed_screw_stays_a_loose_part_next_to_its_exact_host(profile: Prof
     Das Teil kommt über denselben Bauweg wie in der Operation, denn dort trägt
     es das Spiel aus dem Materialprofil des Trägers.
     """
-    _kernel()
+    exact_kernel()
     from app.core.knowledge.parts.ops import _built_part
     from app.core.knowledge.profiles import for_object
 
@@ -482,7 +478,7 @@ def test_a_printed_screw_stays_a_loose_part_next_to_its_exact_host(profile: Prof
 
 
 def test_a_part_that_misses_its_exact_host_says_so(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     beside = {**ON_TOP, "x": 80.0}
     missed = run("insert_screw_hole", host, profile, size="M3", depth=8.0, **beside)
@@ -515,7 +511,7 @@ def _polygon_area(points: list[tuple[float, float]]) -> float:
 
 
 def test_bearing_seat_exact_matches_its_analytic_volume() -> None:
-    _kernel()
+    exact_kernel()
     entry = standards.bearing("608")
     produced = _built("bearing_seat", True, size="608", removable=False, grip=0.1, extra_depth=0.0)
     tool = _sound(produced.mesh)
@@ -533,7 +529,7 @@ def test_bearing_seat_exact_matches_its_analytic_volume() -> None:
 
 
 def test_a_round_dowel_pin_exact_carries_its_chamfer_at_the_top() -> None:
-    _kernel()
+    exact_kernel()
     diameter, length, chamfer = 6.0, 8.0, 0.6
     values = {"diameter": diameter, "length": length, "kind": "pin", "chamfer": chamfer}
     pin_body = _sound(_built("dowel", True, **values, shape="round").mesh)
@@ -558,7 +554,7 @@ def test_a_round_dowel_pin_exact_carries_its_chamfer_at_the_top() -> None:
 
 
 def test_a_dowel_bore_exact_lies_under_the_mouth_and_widens_there() -> None:
-    _kernel()
+    exact_kernel()
     diameter, length, chamfer = 4.0, 8.0, 0.6
     produced = _built(
         "dowel", True, diameter=diameter, length=length, kind="bore", chamfer=chamfer, play=0.0
@@ -581,7 +577,7 @@ def test_a_dowel_bore_exact_lies_under_the_mouth_and_widens_there() -> None:
 
 def test_hinge_eye_exact_keeps_exactly_its_wall_without_the_facet_correction() -> None:
     """Am Netz wächst der Außendurchmesser um die Facettenkorrektur, exakt nicht."""
-    _kernel()
+    exact_kernel()
     values = {"pin": 3.0, "width": 8.0, "reach": 8.0, "wall": 2.0, "play": 0.2}
     produced = _built("hinge_eye", True, **values)
     body = _sound(produced.mesh)
@@ -604,7 +600,7 @@ def test_hinge_eye_exact_keeps_exactly_its_wall_without_the_facet_correction() -
 
 
 def test_latch_exact_is_the_same_wedge_as_the_mesh() -> None:
-    _kernel()
+    exact_kernel()
     values = {"width": 6.0, "depth": 1.0, "height": 3.0}
     body = _sound(_built("latch", True, **values, negative=False).mesh)
     mesh = _built("latch", False, **values, negative=False).mesh
@@ -622,7 +618,7 @@ def test_latch_exact_is_the_same_wedge_as_the_mesh() -> None:
 
 
 def test_living_hinge_exact_matches_its_analytic_volume() -> None:
-    _kernel()
+    exact_kernel()
     values = {"width": 30.0, "leaf": 15.0, "thickness": 2.0, "film": 0.4, "gap": 1.5}
     produced = _built("living_hinge", True, **values)
     body = _sound(produced.mesh)
@@ -635,7 +631,7 @@ def test_living_hinge_exact_matches_its_analytic_volume() -> None:
 
 
 def test_snap_connector_exact_pin_and_bore_match_the_mesh_and_the_analytic_pocket() -> None:
-    _kernel()
+    exact_kernel()
     values = {"diameter": 6.0, "length": 9.0, "play": 0.2}
     pin_body = _sound(_built("snap_connector", True, **values, kind="pin").mesh)
     assert _built("snap_connector", False, **values, kind="pin").mesh.volume == pytest.approx(
@@ -663,7 +659,7 @@ def test_snap_connector_exact_pin_and_bore_match_the_mesh_and_the_analytic_pocke
 
 
 def test_snap_fit_exact_is_one_side_profile_with_the_ramp_at_the_tip() -> None:
-    _kernel()
+    exact_kernel()
     values = {"width": 8.0, "length": 16.0, "thickness": 1.6, "hook": 1.2, "lead_angle": 35.0}
     produced = _built("snap_fit", True, **values)
     body = _sound(produced.mesh)
@@ -690,7 +686,7 @@ def test_snap_fit_exact_is_one_side_profile_with_the_ramp_at_the_tip() -> None:
 
 
 def test_barrel_hinge_exact_is_two_bodies_with_air_between_them() -> None:
-    _kernel()
+    exact_kernel()
     values = {"pin": 4.0, "width": 24.0, "reach": 12.0, "wall": 2.5, "play": 0.3}
     produced = _built("barrel_hinge", True, **values)
     hinge = _sound(produced.mesh, bodies=2)
@@ -707,7 +703,7 @@ def test_barrel_hinge_exact_is_two_bodies_with_air_between_them() -> None:
 
 
 def test_a_snap_fit_grows_on_an_exact_host_and_a_bearing_seat_cuts_it(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     grown = run(
         "insert_snap_fit",
@@ -736,7 +732,7 @@ def test_a_snap_fit_grows_on_an_exact_host_and_a_bearing_seat_cuts_it(profile: P
 def test_foot_exact_is_one_revolved_outline_with_the_chamfer_at_the_standing_end() -> None:
     from app.core.knowledge.parts.mounting import MIN_FOOT_TIP, POCKET_LEAD
 
-    _kernel()
+    exact_kernel()
     diameter, height = 10.0, 3.0
     body = _sound(
         _built(
@@ -773,7 +769,7 @@ def test_foot_exact_is_one_revolved_outline_with_the_chamfer_at_the_standing_end
 
 
 def test_keyhole_exact_runs_down_minus_y_with_true_slot_ends() -> None:
-    _kernel()
+    exact_kernel()
     values = {"size": "M4", "drop": 8.0, "depth": 4.0, "head_room": 2.5, "play": 0.2}
     produced = _built("keyhole", True, **values)
     tool = _sound(produced.mesh)
@@ -792,7 +788,7 @@ def test_keyhole_exact_runs_down_minus_y_with_true_slot_ends() -> None:
 def test_magnet_pocket_exact_narrows_at_the_lip_and_matches_its_analytic_volume() -> None:
     from app.core.knowledge.parts.mounting import MAGNET_LIP_HEIGHT
 
-    _kernel()
+    exact_kernel()
     entry = standards.magnet("8x3")
     values = {"size": "8x3", "play": 0.2, "cover": 0.0, "press_lip": True, "grip": 0.15}
     produced = _built("magnet_pocket", True, **values)
@@ -816,7 +812,7 @@ def test_magnet_pocket_exact_narrows_at_the_lip_and_matches_its_analytic_volume(
 
 
 def test_wall_mount_exact_matches_its_analytic_volume_with_holes_along_y() -> None:
-    _kernel()
+    exact_kernel()
     screw = standards.screw("M4")
     values = {
         "width": 30.0,
@@ -842,7 +838,7 @@ def test_wall_mount_exact_matches_its_analytic_volume_with_holes_along_y() -> No
 
 
 def test_pegboard_hook_exact_is_two_hooks_without_a_plate_and_one_body_with_it() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "system": "skadis",
         "count": 2,
@@ -868,7 +864,7 @@ def test_pegboard_hook_exact_is_two_hooks_without_a_plate_and_one_body_with_it()
 
 
 def test_a_magnet_pocket_cuts_and_a_wall_mount_grows_on_an_exact_host(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     cut = run(
         "insert_magnet_pocket", host, profile, size="8x3", cover=0.0, press_lip=False, **ON_TOP
@@ -911,7 +907,7 @@ def test_an_exact_host_reads_its_features_anew_after_a_part(profile: Profile) ->
     Tasche trägt ihre Dreiecke unter ihrem eigenen Namen und steht nicht ein
     zweites Mal als erkannte Bohrung daneben.
     """
-    _kernel()
+    exact_kernel()
     host = _host()
     outcome = run(
         "insert_magnet_pocket", host, profile, size="8x3", cover=0.0, press_lip=False, **ON_TOP
@@ -973,7 +969,7 @@ def test_an_offset_circle_section_stays_a_circle_exactly() -> None:
     from app.core.knowledge.parts.section import CONTOUR_SAG, Section
     from app.core.sketch.profile import Profile
 
-    _kernel()
+    exact_kernel()
     with building("brep"):
         seat = Section.of(Profile(circle=((0.0, 0.0), 10.125)))
         outer = seat.offset(4.0)
@@ -992,7 +988,7 @@ def test_an_offset_circle_section_stays_a_circle_exactly() -> None:
 
 
 def test_profile_clamp_shell_exact_has_cylindrical_seat_ears_and_holes() -> None:
-    _kernel()
+    exact_kernel()
     screw, nut = standards.screw("M4"), standards.nut("M4")
     values = {
         "seat_sketch": _circle_sketch(20.25),
@@ -1037,7 +1033,7 @@ def test_profile_clamp_shell_exact_has_cylindrical_seat_ears_and_holes() -> None
 
 
 def test_profile_clamp_liner_exact_has_its_flange_in_front_and_relief_behind() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "counter_sketch": _circle_sketch(20.0),
         "outer_sketch": "",
@@ -1072,7 +1068,7 @@ def test_profile_clamp_liner_exact_has_its_flange_in_front_and_relief_behind() -
 
 
 def test_a_clamp_shell_grows_on_an_exact_host(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     grown = run(
         "insert_profile_clamp_shell",
@@ -1109,7 +1105,7 @@ def _strip_area(radius: float, half_width: float) -> float:
 
 
 def test_a_rounded_box_is_four_true_quarter_circles_exactly() -> None:
-    _kernel()
+    exact_kernel()
     mesh = shapes.rounded_box(40.0, 30.0, 15.0, 4.0)
     assert isinstance(mesh, MeshData)
     with building("brep"):
@@ -1127,7 +1123,7 @@ def test_a_rounded_box_is_four_true_quarter_circles_exactly() -> None:
 
 
 def test_a_fully_rounded_box_is_a_cylinder_without_a_degenerate_edge() -> None:
-    _kernel()
+    exact_kernel()
     with building("brep"):
         exact = _sound(shapes.rounded_box(10.0, 10.0, 4.0, 5.0))
     assert exact.volume == pytest.approx(math.pi * 25.0 * 4.0, rel=1e-9)
@@ -1135,7 +1131,7 @@ def test_a_fully_rounded_box_is_a_cylinder_without_a_degenerate_edge() -> None:
 
 
 def test_rib_exact_is_the_bar_and_two_ramps_of_the_mesh() -> None:
-    _kernel()
+    exact_kernel()
     values = {"length": 20.0, "height": 10.0, "wall": 2.0, "thickness": 0.0, "fillet": 2.0}
     produced = _built("rib", True, **values)
     rib = _sound(produced.mesh)
@@ -1150,7 +1146,7 @@ def test_rib_exact_is_the_bar_and_two_ramps_of_the_mesh() -> None:
 
 
 def test_gusset_exact_is_the_same_wedge_as_the_mesh() -> None:
-    _kernel()
+    exact_kernel()
     values = {"legs": 12.0, "thickness": 2.0, "wall": 2.0}
     produced = _built("gusset", True, **values)
     gusset = _sound(produced.mesh)
@@ -1165,7 +1161,7 @@ def test_gusset_exact_is_the_same_wedge_as_the_mesh() -> None:
 
 
 def test_profile_tongue_exact_is_neck_and_tapered_head_from_the_table() -> None:
-    _kernel()
+    exact_kernel()
     entry = standards.profile_slot("2020")
     values = {"size": "2020", "length": 20.0, "lead_in": 1.5, "play": 0.2, "head": 0.0}
     produced = _built("profile_tongue", True, **values)
@@ -1188,7 +1184,7 @@ def test_profile_tongue_exact_is_neck_and_tapered_head_from_the_table() -> None:
 
 
 def test_cable_gland_exact_is_bore_and_relief_channel_under_the_mouth() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "size": "cable-5",
         "diameter": 0.0,
@@ -1218,7 +1214,7 @@ def test_cable_gland_exact_is_bore_and_relief_channel_under_the_mouth() -> None:
 
 
 def test_cable_clip_exact_keeps_exactly_its_wall_and_opens_by_the_grip() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "size": "cable-5",
         "diameter": 0.0,
@@ -1256,7 +1252,7 @@ def test_cable_clip_exact_keeps_exactly_its_wall_and_opens_by_the_grip() -> None
 
 
 def test_organizer_tray_exact_has_eight_cylinder_faces_and_native_face_areas() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "width": 120.0,
         "depth": 80.0,
@@ -1289,7 +1285,7 @@ def test_organizer_tray_exact_has_eight_cylinder_faces_and_native_face_areas() -
 
 
 def test_organizer_divider_exact_is_the_box_of_the_mesh() -> None:
-    _kernel()
+    exact_kernel()
     values = {"length": 30.0, "height": 15.0, "thickness": 3.0}
     produced = _built("organizer_divider", True, **values)
     divider = _sound(produced.mesh)
@@ -1302,7 +1298,7 @@ def test_organizer_divider_exact_is_the_box_of_the_mesh() -> None:
 
 
 def test_organizer_rim_exact_stands_on_material_with_its_analytic_volume() -> None:
-    _kernel()
+    exact_kernel()
     values = {"width": 40.0, "depth": 30.0, "height": 3.0, "thickness": 3.0, "radius": 4.0}
     produced = _built("organizer_rim", True, **values)
     rim = _sound(produced.mesh)
@@ -1319,7 +1315,7 @@ def test_organizer_rim_exact_stands_on_material_with_its_analytic_volume() -> No
 
 
 def test_organizer_foot_exact_is_flange_and_pin_with_native_ring_areas() -> None:
-    _kernel()
+    exact_kernel()
     values = {"diameter": 18.0, "height": 11.0, "pin_diameter": 13.0, "pin_length": 8.0}
     produced = _built("organizer_foot", True, **values)
     foot = _sound(produced.mesh)
@@ -1336,7 +1332,7 @@ def test_organizer_foot_exact_is_flange_and_pin_with_native_ring_areas() -> None
 
 
 def test_a_rib_and_a_cable_clip_grow_on_an_exact_host(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     grown = run(
         "insert_rib",
@@ -1377,7 +1373,7 @@ def test_a_rib_and_a_cable_clip_grow_on_an_exact_host(profile: Profile) -> None:
 
 
 def test_a_cable_gland_builds_its_relief_block_behind_an_exact_wall(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     wall = 3.0
     host = _host((100.0, 100.0, wall))
     cut = run(
@@ -1451,7 +1447,7 @@ def _cord_volume(perimeter: float, radius: float) -> float:
 
 
 def test_seal_groove_exact_is_a_band_with_round_outer_corners_under_the_mouth() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "path_sketch": _rectangle_sketch(20.0, 12.0),
         "offset": 0.0,
@@ -1487,7 +1483,7 @@ def test_seal_groove_exact_is_a_band_with_round_outer_corners_under_the_mouth() 
 
 
 def test_seal_gasket_exact_rectangle_stands_on_its_base_with_the_band_of_the_groove() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "path_sketch": _rectangle_sketch(20.0, 12.0),
         "offset": 0.0,
@@ -1510,7 +1506,7 @@ def test_seal_gasket_exact_rectangle_stands_on_its_base_with_the_band_of_the_gro
 
 
 def test_seal_gasket_exact_round_is_cylinders_and_sphere_pieces_around_a_rectangle() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "path_sketch": _rectangle_sketch(20.0, 12.0),
         "offset": 0.0,
@@ -1538,7 +1534,7 @@ def test_seal_gasket_exact_round_is_cylinders_and_sphere_pieces_around_a_rectang
 
 
 def test_seal_gasket_exact_round_on_a_circle_is_one_torus() -> None:
-    _kernel()
+    exact_kernel()
     values = {
         "path_sketch": _circle_sketch(20.0),
         "offset": 0.0,
@@ -1559,7 +1555,7 @@ def test_seal_gasket_exact_round_on_a_circle_is_one_torus() -> None:
 def test_a_seal_groove_cuts_an_exact_host_and_a_gasket_lies_loose_beside_it(
     profile: Profile,
 ) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     sketch = _rectangle_sketch(20.0, 12.0)
     cut = run(
@@ -1621,7 +1617,7 @@ def _ladder_volume(diameter: float, steps: int, first: float, step: float, heigh
 
 
 def test_fit_ladder_exact_is_two_rails_with_staggered_bores_and_engraved_bars() -> None:
-    _kernel()
+    exact_kernel()
     values = {"diameter": 6.0, "steps": 4, "first": 0.10, "step": 0.05, "height": 6.0}
     produced = _built("fit_ladder", True, **values)
     ladder = _sound(produced.mesh, bodies=2)
@@ -1639,7 +1635,7 @@ def test_fit_ladder_exact_is_two_rails_with_staggered_bores_and_engraved_bars() 
 
 
 def test_wall_ladder_exact_is_the_box_row_of_the_mesh() -> None:
-    _kernel()
+    exact_kernel()
     values = {"extrusion": 0.42, "steps": 6, "height": 15.0, "length": 25.0}
     produced = _built("wall_ladder", True, **values)
     ladder = _sound(produced.mesh)
@@ -1658,7 +1654,7 @@ def test_wall_ladder_exact_is_the_box_row_of_the_mesh() -> None:
 
 
 def test_overhang_fan_exact_leans_its_ramps_like_the_mesh() -> None:
-    _kernel()
+    exact_kernel()
     values = {"first": 20.0, "step": 10.0, "steps": 3, "width": 8.0, "length": 15.0}
     produced = _built("overhang_fan", True, **values)
     fan = _sound(produced.mesh)
@@ -1682,7 +1678,7 @@ def test_overhang_fan_exact_leans_its_ramps_like_the_mesh() -> None:
 
 
 def test_a_fit_ladder_grows_on_an_exact_host_as_one_body(profile: Profile) -> None:
-    _kernel()
+    exact_kernel()
     host = _host()
     grown = run(
         "insert_fit_ladder",
