@@ -130,16 +130,24 @@ def test_an_unrecorded_direct_mit_dependency_is_a_violation(
 def test_an_unrecorded_transitive_mit_dependency_is_checked_semantically(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Transitive Pakete brauchen keinen vorgetäuschten Direkteintrag."""
+    """Transitive Pakete brauchen keinen vorgetäuschten Direkteintrag.
+
+    ``more-itertools`` kommt mit ``keyring`` und nennt MIT maschinenlesbar; ohne
+    seinen Eintrag muss die Prüfung es über die Metadaten freigeben.
+    """
+    runtime = {licences.normalise(name) for name in licences.runtime_packages()}
+    assert "more-itertools" in runtime, "ohne das Paket in der Laufzeit prüft der Fall nichts"
     policy = licences.load_policy()
     known = {
-        name: record for name, record in policy.known.items() if licences.normalise(name) != "attrs"
+        name: record
+        for name, record in policy.known.items()
+        if licences.normalise(name) != "more-itertools"
     }
     monkeypatch.setattr(licences, "load_policy", lambda: replace(policy, known=known))
 
     violations = licences.check()
 
-    assert not any(licences.normalise(entry.package) == "attrs" for entry in violations)
+    assert not any(licences.normalise(entry.package) == "more-itertools" for entry in violations)
 
 
 def test_notices_list_every_package() -> None:
@@ -244,6 +252,45 @@ def test_every_package_solidon_installs_elsewhere_is_on_record() -> None:
         name = licences.normalise(entry.split("==")[0])
         assert name in known, f"{name} fehlt als direkte externe Freigabe"
         assert licences.licence_allowed(known[name]["licence"], policy), name
+
+
+def test_every_known_entry_names_a_package_that_exists_somewhere() -> None:
+    """Ein ``[known]``-Eintrag gilt einem Paket, das hier installiert ist, in
+    ``constraints.txt`` steht (auch für andere Plattformen) oder das
+    ``comfy_setup.PACKAGES`` in ComfyUI legt.
+
+    Die Prüfungen oben lesen die installierten Pakete gegen die Liste, nicht
+    umgekehrt — ein Eintrag, dessen Paket längst weg ist, altert dort still und
+    gibt beim nächsten Einzug ungeprüft eine Lizenz frei.
+    """
+    from importlib import metadata
+
+    from app.core.backends import comfy_setup
+
+    constraints = Path(__file__).parent.parent / "constraints.txt"
+    pinned = {
+        licences.normalise(line.split("==")[0])
+        for line in constraints.read_text(encoding="utf-8").splitlines()
+        if "==" in line and not line.startswith("#")
+    }
+    assert len(pinned) > 50, "constraints.txt ohne Pins — dann prüft der Fall nichts"
+    elsewhere = {licences.normalise(entry.split("==")[0]) for entry in comfy_setup.PACKAGES}
+    known = licences.load_policy().known
+    assert known, "leere Freigabeliste"
+
+    def installed(name: str) -> bool:
+        try:
+            metadata.distribution(name)
+        except metadata.PackageNotFoundError:
+            return False
+        return True
+
+    stale = sorted(
+        name
+        for name in known
+        if licences.normalise(name) not in pinned | elsewhere and not installed(name)
+    )
+    assert not stale, f"[known] nennt Pakete, die es hier nirgends gibt — austragen: {stale}"
 
 
 def test_the_shipped_workflows_name_no_gpl_node() -> None:

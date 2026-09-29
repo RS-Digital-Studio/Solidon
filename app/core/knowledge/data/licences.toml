@@ -223,30 +223,17 @@ keyring = { licence = "MIT", note = "Schlüsselbund des Systems für Geräteiden
 "jaraco.functools" = { licence = "MIT", note = "kommt mit keyring" }
 more-itertools = { licence = "MIT", note = "kommt mit keyring" }
 pywin32-ctypes = { licence = "BSD-3-Clause", note = "Windows-Anmeldespeicher hinter keyring" }
-"backports.tarfile" = { licence = "MIT", note = "kommt mit keyring" }
 certifi = { licence = "MPL-2.0" }
-attrs = { licence = "MIT" }
-charset-normalizer = { licence = "MIT" }
 contourpy = { licence = "BSD-3-Clause" }
 cycler = { licence = "BSD-3-Clause" }
-cyclopts = { licence = "Apache-2.0" }
-docstring_parser = { licence = "MIT" }
 fonttools = { licence = "MIT" }
-idna = { licence = "BSD-3-Clause" }
 kiwisolver = { licence = "BSD-3-Clause" }
-markdown-it-py = { licence = "MIT" }
-mdurl = { licence = "MIT" }
 packaging = { licence = "Apache-2.0 OR BSD-2-Clause" }
-platformdirs = { licence = "MIT" }
 Pygments = { licence = "BSD-2-Clause" }
 pyparsing = { licence = "MIT" }
 python-dateutil = { licence = "BSD-3-Clause OR Apache-2.0" }
-requests = { licence = "Apache-2.0" }
-rich = { licence = "MIT" }
-rich-rst = { licence = "MIT" }
 six = { licence = "MIT" }
 typing_extensions = { licence = "PSF-2.0" }
-urllib3 = { licence = "MIT" }
 SecretStorage = { licence = "BSD-3-Clause" }
 jeepney = { licence = "MIT" }
 cryptography = { licence = "Apache-2.0 OR BSD-3-Clause" }
