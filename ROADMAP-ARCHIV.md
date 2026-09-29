@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-29 | [Handbuch bis 0.5.1: der Weg von RM-283 (29.09.2026)](#handbuch-bis-051-der-weg-von-rm-283-29092026) |
 | 2026-09-29 | [Tragende Nachweise im Repository: ein Punkt geschlossen (29.09.2026)](#tragende-nachweise-im-repository-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Creality Print schneidet über die Konsole: ein Punkt geschlossen (29.09.2026)](#creality-print-schneidet-über-die-konsole-ein-punkt-geschlossen-29092026) |
 | 2026-09-29 | [Sichere schnelle Druckausrichtung: ein Punkt geschlossen (29.09.2026)](#sichere-schnelle-druckausrichtung-ein-punkt-geschlossen-29092026) |
@@ -33652,3 +33653,32 @@ Reviews stehen als RM-296 bis RM-299 in `ROADMAP.md`.
   Punkten, Regeln, Karten und Kommentaren keine Stelle mehr; den Prüfordner der
   RM-Abarbeitung (`output/review/rm164-2026-09-29/`) nennen nur das archivierte RM-164
   und `tests/test_export.py`.
+
+## Handbuch bis 0.5.1: der Weg von RM-283 (29.09.2026)
+
+Aus [RM-283](ROADMAP.md#rm-283), der bis zum 29.09.2026 hier im offenen Punkt stand;
+der Punkt selbst bleibt offen (Feldabnahme, Nummernplatzierung).
+
+**Aktueller Arbeitsort ist `main`:**
+Der Handbuchumbau bis `559412ac4` ist im Tag `v0.5.1` enthalten; die früheren
+Handbuchzweige und Arbeitsbäume sind entfernt. Die folgenden Paketstände
+beschreiben den Weg zum Release. **Erster Stand:** HB-1 bis HB-4, HB-6 und HB-13 fertig — fünfteilige
+Gliederung, fünf Bildanleitungen (Fenster, Modell prüfen und drucken, Loch
+bohren, erstes eigenes Teil, Gehäuse mit Deckel) aus der echten Oberfläche,
+Suche mit Rangfolge und Fundstelle (38 von 38 Kundensuchen unter den ersten
+drei, vorher 25), Ort je Operation in der Referenz; `/erzeugen` nimmt die
+Anleitungen bei jedem Release auf. **Auftrag für 0.5.1** (Robert, 27.09.2026:
+„handbuch kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Teil
+1 ist auf `main` (Merge `6a952cf81`), samt den Punkten im Changelog 0.5.1;
+beim Release läuft `make_guides.py` in allen Sprachen vor `make_manual.py`.
+**Auch der weitere Ausbau war für 0.5.1 beauftragt** (Robert, 27.09.2026 abends: „alle
+punkte davon sollen noch in 0.5.1“), und der Tag wartete auf die Meldung
+„Handbuch fertig“: HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
+HB-7 (F1 im Zusammenhang), der Rest von HB-8, HB-9 bis HB-12. Die
+Aufteilung in drei Stränge mit ihren Aufträgen steht in §12 des Konzepts.
+**Stand vor dem Tag:** Für 0.5.1 fertig und an die Release-Sitzung gemeldet: HB-5 bis
+HB-13 auf `handbuch-umbau`, B und C zusammengeführt, `main` mit texte-051
+und dem Oberflächenpaket hereingeholt und die Namen nachgezogen; alle
+fünfzehn Anleitungen in sechs Sprachen probeweise aufgenommen, das Handbuch
+im Wegwerfbaum vollständig erzeugt (§0 des Konzepts). Beim Release laufen
+`make_guides.py`, `make_manual.py` und `make_guide_video.py` (`/erzeugen`).

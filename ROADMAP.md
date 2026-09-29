@@ -2511,40 +2511,17 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 
 - [~] **RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht.** Ein
   Interessent schrieb am 27.09.2026, aus dem Handbuch sei alles schwer zu
-  lernen und Ausprobieren führe nicht zum Ziel. Robert am selben Tag: „anscheinend ist
-  das Handbuch zu umständlich/unübersichtlich nicht verständlich, suche
-  optimierungen arbeite ein konzept aus und leg los", dazu „am besten auch an
-  bildern live von der oberfläche erklären als durch wörter mit
-  kommentaren/pfeilen usw", aktuell zu jeder neuen Version und nur dann, und
-  so, dass jede Sitzung übernehmen kann. Konzept, Befund und Pakete HB-0 bis
-  HB-12: [`konzepte/konzept-handbuch-2026-09.md`](konzepte/konzept-handbuch-2026-09.md),
-  §0 sagt, wie man weitermacht. Befund: 50 Seiten, 44 420 Wörter, zwei Drittel davon
-  erzeugt, eine flache Liste, kein Bild mit Markierung, 15 der 30
-  geschriebenen Seiten ohne Bild, 18 Klickwege in Worten; die Suche bringt
-  die richtige Seite nur bei der Hälfte von 38 Kundensuchen unter die ersten
-  drei, und F1 führt nie in das passende Kapitel. **Aktueller Arbeitsort ist `main`:**
-  Der Handbuchumbau bis `559412ac4` ist im Tag `v0.5.1` enthalten; die früheren
-  Handbuchzweige und Arbeitsbäume sind entfernt. Die folgenden Paketstände
-  beschreiben den Weg zum Release. **Erster Stand:** HB-1 bis HB-4, HB-6 und HB-13 fertig — fünfteilige
-  Gliederung, fünf Bildanleitungen (Fenster, Modell prüfen und drucken, Loch
-  bohren, erstes eigenes Teil, Gehäuse mit Deckel) aus der echten Oberfläche,
-  Suche mit Rangfolge und Fundstelle (38 von 38 Kundensuchen unter den ersten
-  drei, vorher 25), Ort je Operation in der Referenz; `/erzeugen` nimmt die
-  Anleitungen bei jedem Release auf. **Auftrag für 0.5.1** (Robert, 27.09.2026:
-  „handbuch kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Teil
-  1 ist auf `main` (Merge `6a952cf81`), samt den Punkten im Changelog 0.5.1;
-  beim Release läuft `make_guides.py` in allen Sprachen vor `make_manual.py`.
-  **Auch der weitere Ausbau war für 0.5.1 beauftragt** (Robert, 27.09.2026 abends: „alle
-  punkte davon sollen noch in 0.5.1“), und der Tag wartete auf die Meldung
-  „Handbuch fertig“: HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
-  HB-7 (F1 im Zusammenhang), der Rest von HB-8, HB-9 bis HB-12. Die
-  Aufteilung in drei Stränge mit ihren Aufträgen steht in §12 des Konzepts.
-  **Stand vor dem Tag:** Für 0.5.1 fertig und an die Release-Sitzung gemeldet: HB-5 bis
-  HB-13 auf `handbuch-umbau`, B und C zusammengeführt, `main` mit texte-051
-  und dem Oberflächenpaket hereingeholt und die Namen nachgezogen; alle
-  fünfzehn Anleitungen in sechs Sprachen probeweise aufgenommen, das Handbuch
-  im Wegwerfbaum vollständig erzeugt (§0 des Konzepts). Beim Release laufen
-  `make_guides.py`, `make_manual.py` und `make_guide_video.py` (`/erzeugen`).
+  lernen und Ausprobieren führe nicht zum Ziel; Robert beauftragte ein Handbuch,
+  das an Bildern der echten Oberfläche erklärt, zu jeder Version aktuell ist und
+  nur dann erzeugt wird. Konzept, Befund und Pakete HB-0 bis HB-13:
+  [`konzepte/konzept-handbuch-2026-09.md`](konzepte/konzept-handbuch-2026-09.md),
+  §0 sagt, wie man weitermacht. **Mit 0.5.1 veröffentlicht:** fünfteilige
+  Gliederung mit „Wo fange ich an?“, fünfzehn Bildanleitungen in sechs Sprachen,
+  Suche mit Rangfolge (38 von 38 Kundensuchen unter den ersten drei, vorher 25),
+  F1 im Zusammenhang, der Ort je Operation in der Referenz und zwei
+  Anleitungsfilme je Sprache. Beim Release laufen `make_guides.py`,
+  `make_manual.py` und `make_guide_video.py` (`/erzeugen`). Der Weg dorthin steht
+  im [Archiv](ROADMAP-ARCHIV.md#handbuch-bis-051-der-weg-von-rm-283-29092026).
   **Offen nach 0.5.1:** die Feldabnahme aus §11 (ein Kunde ohne CAD geht
   *Das erste eigene Teil* ohne Hilfe durch) und die Nummernplatzierung der
   Bildanleitungen, die in *Ein Gehäuse mit Deckel* 3 und *Ein Teil
