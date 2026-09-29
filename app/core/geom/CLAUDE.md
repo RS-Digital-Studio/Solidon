@@ -148,7 +148,9 @@ für die Gruppe, die auslässt, was nicht trägt, `too_narrow_finding`) ·
 ungeschnittene Seite folgt aus der Volumenbilanz, auch mit Hohlräumen,
 `_shells_apart`) · `mesh_ops.py` · `colour_ops.py` ·
 `paint.py` (`feature_triangles`, auch für Wulst, Kehle, Gewinde) ·
-`label_ops.py` (Schriften in `data/fonts/`; Matplotlib gehört zum Extra `geom`)
+`label_ops.py` (Schriften in `data/fonts/`; Matplotlib gehört zum Extra `geom`;
+*Auf beiden Seiten* setzt die Rückseite am ersten Austritt entgegen der
+Richtung, `opposite_side`)
 
 ## Stolperfallen
 
