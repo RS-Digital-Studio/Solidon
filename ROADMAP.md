@@ -271,11 +271,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 ## Plattformen, Pakete und Grafik
 
-<a id="rm-001"></a>
-
-RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-001-abschluss-050).
-
 <a id="rm-011"></a>
 
 - [ ] **RM-011 — Erstinstallation auf einem fremden Rechner abnehmen.** Den veröffentlichten
@@ -4050,11 +4045,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Codefrist allein ist kein Betriebsnachweis.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
-<a id="rm-115"></a>
-
-RM-115 ist mit der Auslieferung von 0.5.0 abgeschlossen.
-[Nachweis und bisheriger Verlauf](ROADMAP-ARCHIV.md#rm-115-abschluss-050).
 
 <a id="rm-116"></a>
 
