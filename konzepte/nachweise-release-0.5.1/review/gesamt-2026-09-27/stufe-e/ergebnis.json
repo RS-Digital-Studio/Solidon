@@ -1,0 +1,410 @@
+[
+ {
+  "slicer": "elegoo",
+  "printer": "centauri-carbon-2",
+  "process": "0.20mm Standard @Elegoo CC2 0.4 nozzle",
+  "advice": [
+   {
+    "path": "adhesion.kind",
+    "was": "auto",
+    "value": "brim",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)",
+     "Pilz"
+    ],
+    "slot": false
+   },
+   {
+    "path": "speed.first_layer",
+    "was": "105.0",
+    "value": "50.0",
+    "parts": [],
+    "slot": false
+   },
+   {
+    "path": "shell.wall_generator",
+    "was": "classic",
+    "value": "arachne",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_2_Gövde59",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)"
+    ],
+    "slot": false
+   },
+   {
+    "path": "shell.scarf_seam",
+    "was": "False",
+    "value": "True",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)"
+    ],
+    "slot": false
+   },
+   {
+    "path": "support.style",
+    "was": "none",
+    "value": "auto",
+    "parts": [
+     "Pilz"
+    ],
+    "slot": false
+   },
+   {
+    "path": "support.placement",
+    "was": "everywhere",
+    "value": "build_plate",
+    "parts": [
+     "Pilz"
+    ],
+    "slot": false
+   },
+   {
+    "path": "cooling.minimum_layer_time",
+    "was": "4.0",
+    "value": "15.0",
+    "parts": [],
+    "slot": true
+   }
+  ],
+  "advice_seconds": 52.5,
+  "hersteller": {
+   "ok": true,
+   "error": null,
+   "detail": null,
+   "print_minutes": 565.3,
+   "filament_g": 322.95,
+   "keep_arrangement": true,
+   "export_findings": [
+    "warning:arrange.adhesion_too_close"
+   ],
+   "seconds": 302.4,
+   "per_body": {
+    "offset": [
+     128.0,
+     126.5
+    ],
+    "bodies": {
+     "obj_1_Mini Golf Son v17": {
+      "rim": 1.89
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1": {
+      "rim": 2.11
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)": {
+      "rim": 1.75
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 2": {
+      "rim": 1.62
+     },
+     "obj_2_Gövde59": {
+      "rim": 4.31
+     }
+    }
+   },
+   "gcode": "F:\\3D Druck\\output\\review\\gesamt-2026-09-27\\stufe-e\\elegoo\\hersteller\\plate_1.gcode"
+  },
+  "uebernommen": {
+   "ok": true,
+   "error": null,
+   "detail": null,
+   "print_minutes": 635.2,
+   "filament_g": 324.59,
+   "keep_arrangement": true,
+   "export_findings": [
+    "warning:arrange.adhesion_too_close",
+    "warning:export.part_setting"
+   ],
+   "seconds": 654.2,
+   "per_body": {
+    "offset": [
+     128.0,
+     126.5
+    ],
+    "bodies": {
+     "Pilz": {
+      "rim": 0.43,
+      "support": 64.13
+     },
+     "obj_1_Mini Golf Son v17": {
+      "rim": 0.94
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1": {
+      "rim": 1.41
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)": {
+      "rim": 0.93
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 2": {
+      "rim": 0.93
+     },
+     "obj_2_Gövde59": {
+      "rim": 4.3
+     }
+    }
+   },
+   "gcode": "F:\\3D Druck\\output\\review\\gesamt-2026-09-27\\stufe-e\\elegoo\\uebernommen\\plate_1.gcode"
+  }
+ },
+ {
+  "slicer": "prusa",
+  "printer": "prusa-mk4s",
+  "process": "0.20mm SPEED @MK4S HF0.4",
+  "advice": [
+   {
+    "path": "speed.first_layer",
+    "was": "100.0",
+    "value": "50.0",
+    "parts": [],
+    "slot": false
+   },
+   {
+    "path": "shell.outer_wall_first",
+    "was": "False",
+    "value": "True",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)"
+    ],
+    "slot": false
+   },
+   {
+    "path": "shell.scarf_seam",
+    "was": "False",
+    "value": "True",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)"
+    ],
+    "slot": false
+   },
+   {
+    "path": "support.style",
+    "was": "none",
+    "value": "auto",
+    "parts": [
+     "Pilz"
+    ],
+    "slot": false
+   },
+   {
+    "path": "support.placement",
+    "was": "everywhere",
+    "value": "build_plate",
+    "parts": [
+     "Pilz"
+    ],
+    "slot": false
+   },
+   {
+    "path": "cooling.minimum_layer_time",
+    "was": "6.0",
+    "value": "15.0",
+    "parts": [],
+    "slot": true
+   }
+  ],
+  "advice_seconds": 68.3,
+  "hersteller": {
+   "ok": true,
+   "error": null,
+   "detail": null,
+   "print_minutes": 514.5,
+   "filament_g": 337.45,
+   "keep_arrangement": true,
+   "export_findings": [
+    "warning:slicer.overrides_unreachable"
+   ],
+   "seconds": 287.9,
+   "per_body": {
+    "offset": [
+     125.0,
+     105.0
+    ],
+    "bodies": {}
+   },
+   "gcode": "F:\\3D Druck\\output\\review\\gesamt-2026-09-27\\stufe-e\\prusa\\hersteller\\solidon.gcode"
+  },
+  "uebernommen": {
+   "ok": true,
+   "error": null,
+   "detail": null,
+   "print_minutes": 601.9,
+   "filament_g": 337.9,
+   "keep_arrangement": true,
+   "export_findings": [
+    "warning:export.part_setting",
+    "warning:slicer.overrides_unreachable"
+   ],
+   "seconds": 210.7,
+   "per_body": {
+    "offset": [
+     125.0,
+     105.0
+    ],
+    "bodies": {}
+   },
+   "gcode": "F:\\3D Druck\\output\\review\\gesamt-2026-09-27\\stufe-e\\prusa\\uebernommen\\solidon.gcode"
+  }
+ },
+ {
+  "slicer": "cura",
+  "printer": "sovol-sv06",
+  "process": "",
+  "advice": [
+   {
+    "path": "adhesion.kind",
+    "was": "skirt",
+    "value": "brim",
+    "parts": [],
+    "slot": false
+   },
+   {
+    "path": "shell.outer_wall_first",
+    "was": "False",
+    "value": "True",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)"
+    ],
+    "slot": false
+   },
+   {
+    "path": "shell.scarf_seam",
+    "was": "False",
+    "value": "True",
+    "parts": [
+     "obj_1_Mini Golf Son v17",
+     "obj_1_Mini Golf Son v17 (Kopie) 1",
+     "obj_1_Mini Golf Son v17 (Kopie) 2",
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)"
+    ],
+    "slot": false
+   },
+   {
+    "path": "support.style",
+    "was": "none",
+    "value": "auto",
+    "parts": [
+     "Pilz"
+    ],
+    "slot": false
+   },
+   {
+    "path": "support.placement",
+    "was": "everywhere",
+    "value": "build_plate",
+    "parts": [],
+    "slot": false
+   },
+   {
+    "path": "cooling.minimum_layer_time",
+    "was": "8.0",
+    "value": "15.0",
+    "parts": [],
+    "slot": true
+   }
+  ],
+  "advice_seconds": 41.5,
+  "hersteller": {
+   "ok": true,
+   "error": null,
+   "detail": null,
+   "print_minutes": 1944.7,
+   "filament_g": null,
+   "keep_arrangement": true,
+   "export_findings": [
+    "warning:arrange.adhesion_off_bed",
+    "warning:slicer.overrides_unreachable"
+   ],
+   "seconds": 186.3,
+   "per_body": {
+    "offset": [
+     110.0,
+     110.0
+    ],
+    "bodies": {
+     "Pilz": {
+      "rim": 0.32
+     },
+     "keinem": {
+      "rim": 0.3
+     },
+     "obj_1_Mini Golf Son v17": {
+      "rim": 0.28
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1": {
+      "rim": 0.18
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)": {
+      "rim": 0.24
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 2": {
+      "rim": 0.14
+     },
+     "obj_2_Gövde59": {
+      "rim": 1.0
+     }
+    }
+   },
+   "gcode": "F:\\3D Druck\\output\\review\\gesamt-2026-09-27\\stufe-e\\cura\\hersteller\\solidon.gcode"
+  },
+  "uebernommen": {
+   "ok": true,
+   "error": null,
+   "detail": null,
+   "print_minutes": 2338.8,
+   "filament_g": null,
+   "keep_arrangement": true,
+   "export_findings": [
+    "warning:arrange.adhesion_off_bed",
+    "warning:arrange.adhesion_too_close",
+    "warning:export.part_setting",
+    "warning:slicer.overrides_unreachable"
+   ],
+   "seconds": 365.2,
+   "per_body": {
+    "offset": [
+     110.0,
+     110.0
+    ],
+    "bodies": {
+     "Pilz": {
+      "rim": 3.57,
+      "support": 74.05
+     },
+     "obj_1_Mini Golf Son v17": {
+      "rim": 1.1
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1": {
+      "rim": 1.73
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 1 (Kopie)": {
+      "rim": 1.11
+     },
+     "obj_1_Mini Golf Son v17 (Kopie) 2": {
+      "rim": 1.24
+     },
+     "obj_2_Gövde59": {
+      "rim": 4.28
+     }
+    }
+   },
+   "gcode": "F:\\3D Druck\\output\\review\\gesamt-2026-09-27\\stufe-e\\cura\\uebernommen\\solidon.gcode"
+  }
+ }
+]

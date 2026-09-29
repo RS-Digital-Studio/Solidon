@@ -1,0 +1,5 @@
+R 13, Rundung 0.5: Kanten [9, 10]
+  mesh ausgeliefert: Kette ['hole_1', 'cone_1']; versetzen 5 mm -0.319, entfernen +179.304 | []
+  mesh ohne Füllung: Kette ['hole_1', 'cone_1']; versetzen 5 mm -0.319, entfernen +179.304 | []
+  brep ausgeliefert: GeometryError: Das Ergebnis bliebe dort offen, auch nach zwei weiteren Versuchen. Setzen Sie die Stelle um einen Bruchteil eines Millimeters anders und versuchen Sie es erneut.
+  brep ohne Füllung: GeometryError: Das Ergebnis bliebe dort offen, auch nach zwei weiteren Versuchen. Setzen Sie die Stelle um einen Bruchteil eines Millimeters anders und versuchen Sie es erneut.

@@ -286,7 +286,8 @@ def test_a_consumed_body_offers_nothing_that_needs_it() -> None:
     """RM-268: Nach *Modell teilen* stand am Laptopständer „Das Modell besteht aus
     21 Teilen …“ am verbrauchten ``obj_1`` — mit *Überschneidungen auflösen* und
     *In Einzelteile zerlegen*; ein Klick legte eine Reparatur an einem Körper an,
-    den es nicht mehr gibt (``sonden/rest-kunde/s268_laptop.txt``).
+    den es nicht mehr gibt
+    (``konzepte/nachweise-release-0.5.1/sonden/rest-kunde/s268_laptop.txt``).
 
     Weggelassen wird jede Handlung, die den Körper des Befunds braucht
     (``panels.NEEDS_LIVE_BODY``); was ohne ihn gilt — den Schritt ändern, die

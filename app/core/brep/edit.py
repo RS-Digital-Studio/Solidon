@@ -551,9 +551,10 @@ def _section_ellipse(
     Ellipse als B-Spline: Nach einer elliptischen Tasche in einem exakten
     Block trägt die Deckfläche keine Ellipse mehr, und ihre Kontur kam als
     Kette aus 35 Strecken in die Zeichnung (gemessen,
-    ``sonden/p66/sonde_ellipse_boolean.py``). Steht die Ebene aber senkrecht
-    auf der Extrusionsrichtung und die Grundellipse ebenso, ist dieser
-    Schnitt die Grundellipse selbst, in die Ebene verschoben — eine Aussage
+    ``konzepte/nachweise-release-0.5.0/sonden/p66/sonde_ellipse_boolean.py``).
+    Steht die Ebene aber senkrecht auf der Extrusionsrichtung und die
+    Grundellipse ebenso, ist dieser Schnitt die Grundellipse selbst, in die
+    Ebene verschoben — eine Aussage
     über die beiden Flächen, keine Anpassung an Punkte.
 
     **Geprüft wird sie trotzdem.** Liegt ein Abtastpunkt der Kante weiter als

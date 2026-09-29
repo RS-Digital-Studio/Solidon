@@ -57,7 +57,8 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Ab wie vielen Dreiecken eine Rechnung in den Hilfsprozess geht — gemessen
-#: (``sonden/hilfsprozess/schwelle.py``, 27.09.2026, gebunden, unter Last):
+#: (``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/schwelle.py``,
+#: 27.09.2026, gebunden, unter Last):
 #: Im Prozess hielt eine Rechnung den Hauptfaden so lange an, wie sie rechnete,
 #: 12 bis 16 ms an 5 120 Dreiecken, 16 bis 18 ms an 12 736, 26 bis 27 ms an
 #: 20 480, 52 bis 57 ms an 81 920 und 178 ms an 327 680. Der Hilfsprozess
@@ -87,8 +88,9 @@ IDLE_KEPT: Final = 1
 
 #: Wie lange ein untätiger Hilfsprozess nach dem Schließen der Leitung selbst
 #: enden darf, bevor er beendet wird, in Sekunden (:meth:`_Helper.stop`).
-#: Gemessen endet er in 32 bis 45 ms (``sonden/hilfsprozess/sanft_enden.py``,
-#: 28.09.2026, unter Last); die Frist lässt das Zehnfache, und so lange
+#: Gemessen endet er in 32 bis 45 ms (28.09.2026, unter Last,
+#: ``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/sanft_enden.py``);
+#: die Frist lässt das Zehnfache, und so lange
 #: wartet das Beenden der Anwendung höchstens.
 GRACEFUL_SECONDS: Final = 0.5
 
@@ -102,8 +104,9 @@ STARTS_BEFORE_GIVING_UP: Final = 1
 #: Was ein Hilfsprozess in seiner Umgebung anders sieht als die Anwendung.
 #: OpenBLAS, das ``numpy`` und ``scipy`` je einmal mitbringen, legt beim Laden
 #: für jeden Rechenkern einen Puffer an: gemessen 758 MB privater Speicher je
-#: Bibliothek an 32 Kernen, mit einem Faden 19 MB (``sonden/hilfsprozess/
-#: privat.py``, 28.09.2026) — ein untätiger Hilfsprozess trug nach der ersten
+#: Bibliothek an 32 Kernen, mit einem Faden 19 MB (28.09.2026,
+#: ``konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/privat.py``) — ein
+#: untätiger Hilfsprozess trug nach der ersten
 #: Zusammenhangsrechnung 1,5 GB davon. Eine Rechnung in ``kernel_jobs`` ruft
 #: kein BLAS (``test_the_jobs_call_no_blas``), der eine Faden kostet sie also
 #: nichts und ändert kein Byte.

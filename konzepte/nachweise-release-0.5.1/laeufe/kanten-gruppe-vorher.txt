@@ -1,0 +1,73 @@
+START 00:08:08 in sonden/kanten/alt: python ../gruppe.py
+
+== Quader mit Querbohrung (Netz), „vertical“: 4 Kanten, Volumen 23154.190
+  Verrunden R0.5 gelungen: alle bearbeitet; Volumen 23149.719, dicht True, Befunde []
+  Verrunden R1.0 gelungen: alle bearbeitet; Volumen 23136.307, dicht True, Befunde []
+  Verrunden R2.0 gelungen: alle bearbeitet; Volumen 23082.657, dicht True, Befunde []
+  Verrunden R5.0 gelungen: alle bearbeitet; Volumen 22707.105, dicht True, Befunde []
+  Fase 1.0       gelungen: alle bearbeitet; Volumen 23114.190, dicht True, Befunde []
+
+== Quader mit Querbohrung (exakt), „vertical“: 4 Kanten, Volumen 23151.770
+  Verrunden R0.5 gelungen: alle bearbeitet; Volumen 23147.478, dicht True, Befunde []
+  Verrunden R1.0 gelungen: alle bearbeitet; Volumen 23134.602, dicht True, Befunde []
+  Verrunden R2.0 gelungen: alle bearbeitet; Volumen 23083.097, dicht True, Befunde []
+  Verrunden R5.0 gelungen: alle bearbeitet; Volumen 22722.566, dicht True, Befunde []
+  Fase 1.0       gelungen: alle bearbeitet; Volumen 23111.770, dicht True, Befunde []
+
+== Hohlkasten 3 mm Wand (exakt), „all“: 21 Kanten, Volumen 10128.000
+  Verrunden R0.5 gelungen: alle bearbeitet; Volumen 10108.880, dicht True, Befunde []
+  Verrunden R1.0 gelungen: alle bearbeitet; Volumen 10052.300, dicht True, Befunde []
+  Verrunden R2.0 ABGELEHNT, Grenze 1.4999999999999998
+  Verrunden R5.0 ABGELEHNT, Grenze 1.4999999999999998
+  Fase 1.0       gelungen: alle bearbeitet; Volumen 9955.000, dicht True, Befunde []
+
+== Hohlkasten 3 mm Wand (Netz), „all“: 21 Kanten, Volumen 10128.000
+  Verrunden R0.5 gelungen: alle bearbeitet; Volumen 10108.101, dicht True, Befunde []
+  Verrunden R1.0 gelungen: alle bearbeitet; Volumen 10049.285, dicht True, Befunde []
+  Verrunden R2.0 ABGELEHNT, Grenze 1.4999999999999998
+  Verrunden R5.0 ABGELEHNT, Grenze 1.4999999999999998
+  Fase 1.0       gelungen: alle bearbeitet; Volumen 9955.000, dicht True, Befunde []
+
+== pegboard-goot-ceramic-screwdrivers-v3 (exakt), „vertical“: 52 Kanten, Volumen 26804.108
+  Verrunden R0.5 ABGELEHNT, Grenze 0.37499999999999994
+  Verrunden R1.0 ABGELEHNT, Grenze 0.37499999999999994
+  Verrunden R2.0 ABGELEHNT, Grenze 0.37499999999999994
+  Verrunden R5.0 ABGELEHNT, Grenze 0.37499999999999994
+  Fase 1.0       ABGELEHNT, Grenze 0.375
+
+== pegboard-goot-ceramic-screwdrivers-v3 (Netz), „vertical“: 28 Kanten, Volumen 26815.497
+  Verrunden R0.5 ABGELEHNT, Grenze 0.37499999999999994
+  Verrunden R1.0 ABGELEHNT, Grenze 0.37499999999999994
+  Verrunden R2.0 ABGELEHNT, Grenze 0.37499999999999994
+  Verrunden R5.0 ABGELEHNT, Grenze 0.37499999999999994
+  Fase 1.0       ABGELEHNT, Grenze 0.375
+
+== pegboard-pb3041-v4 (exakt), „vertical“: 24 Kanten, Volumen 10670.714
+  Verrunden R0.5 ABGELEHNT, Grenze 0.2124419766684866
+  Verrunden R1.0 ABGELEHNT, Grenze 0.2124419766684866
+  Verrunden R2.0 ABGELEHNT, Grenze 0.2124419766684866
+  Verrunden R5.0 ABGELEHNT, Grenze 0.2124419766684866
+  Fase 1.0       ABGELEHNT, Grenze 0.21287493044905245
+
+== pegboard-pb3041-v4 (Netz), „vertical“: 2 Kanten, Volumen 10673.531
+  Verrunden R0.5 ABGELEHNT, Grenze 0.2124419766684866
+  Verrunden R1.0 ABGELEHNT, Grenze 0.2124419766684866
+  Verrunden R2.0 ABGELEHNT, Grenze 0.2124419766684866
+  Verrunden R5.0 ABGELEHNT, Grenze 0.2124419766684866
+  Fase 1.0       ABGELEHNT, Grenze 0.21287493044905245
+
+== pegboard-gs-100-v2 (exakt), „vertical“: 18 Kanten, Volumen 34646.081
+  Verrunden R0.5 gelungen: alle bearbeitet; Volumen 34645.166, dicht True, Befunde []
+  Verrunden R1.0 ABGELEHNT, Grenze 0.8535533905932737
+  Verrunden R2.0 ABGELEHNT, Grenze 0.8535533905932737
+  Verrunden R5.0 ABGELEHNT, Grenze 0.8535533905932737
+  Fase 1.0       ABGELEHNT, Grenze 0.3535533905932738
+
+== pegboard-gs-100-v2 (Netz), „vertical“: 10 Kanten, Volumen 34664.128
+  Verrunden R0.5 gelungen: alle bearbeitet; Volumen 34663.197, dicht True, Befunde []
+  Verrunden R1.0 ABGELEHNT, Grenze 0.8535533905932737
+  Verrunden R2.0 ABGELEHNT, Grenze 0.8535533905932737
+  Verrunden R5.0 ABGELEHNT, Grenze 0.8535533905932737
+  Fase 1.0       ABGELEHNT, Grenze 0.3535533905932738
+EXIT python=0
+ENDE 00:08:48

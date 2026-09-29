@@ -1,0 +1,8 @@
+START 23:13:22 Last 100 %
+ab1_head1 exit 139 Last vorher 100 % nachher 100 % | fertig nach 45.6 | ERGEBNIS längste 1.67 Anzahl 9
+ab1_neu1 exit 0 Last vorher 100 % nachher 100 % | fertig nach 46.6 | ERGEBNIS längste 0.77 Anzahl 2
+ab1_head2 exit 0 Last vorher 100 % nachher 100 % | fertig nach 46.8 | ERGEBNIS längste 1.75 Anzahl 11
+ab1_neu2 exit 0 Last vorher 100 % nachher 100 % | fertig nach 45.4 | ERGEBNIS längste 0.37 Anzahl 2
+ab1_head3 exit 0 Last vorher 100 % nachher 100 % | fertig nach 47.6 | ERGEBNIS längste 2.04 Anzahl 11
+ab1_neu3 exit 0 Last vorher 100 % nachher 100 % | fertig nach 45.5 | ERGEBNIS längste 0.36 Anzahl 1
+ENDE 23:18:55

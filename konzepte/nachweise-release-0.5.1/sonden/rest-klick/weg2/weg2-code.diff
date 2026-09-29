@@ -1,0 +1,165 @@
+diff --git a/app/ui/render/gizmo.py b/app/ui/render/gizmo.py
+index df7d089d4..e93caae6c 100644
+--- a/app/ui/render/gizmo.py
++++ b/app/ui/render/gizmo.py
+@@ -133,38 +133,90 @@ class Gizmo:
+         interact_callback: Callable[[np.ndarray], np.ndarray | None] | None = None,
+     ) -> None:
+         self._renderer = renderer
+-        self.target = target
+         self._release = release_callback
+         self._interact = interact_callback
+-        self._origin = np.asarray(origin if origin is not None else target.centre(), dtype=float)
+-        self._axes = np.eye(3) if axes is None else _validated(axes)
+         self._rotation = rotation
+-        self._scale = float(scale)
+-        self._cached = target.matrix()
+-        self._length = float(target.length())
+-        self._arrow_length = self._length * scale * ARROW_SHARE
+-        self._ring_radius = self._length * scale * RING_SHARE
+-        self._line_radius = line_radius * self._arrow_length
++        self._line_share = float(line_radius)
+         self._arrows: list[Item] = []
+         self._rings: list[Item] = []
+         self._selected: tuple[str, int] | None = None
+         self.pressing = False
+         self._init_parameter: float | None = None
+         self._init_vector: np.ndarray | None = None
++        self._aim(target, origin=origin, scale=scale, axes=axes)
+         self._build()
+ 
+     # --- Aufbau --------------------------------------------------------------------
+ 
++    def _aim(
++        self,
++        target: Item,
++        *,
++        origin: Vec3 | None,
++        scale: float,
++        axes: np.ndarray | None,
++    ) -> None:
++        """Ziel, Ursprung, Achsen und Maße — alles, was aus dem Ziel folgt."""
++        self.target = target
++        self._origin = np.asarray(origin if origin is not None else target.centre(), dtype=float)
++        self._axes = np.eye(3) if axes is None else _validated(axes)
++        self._scale = float(scale)
++        self._cached = target.matrix()
++        self._length = float(target.length())
++        self._arrow_length = self._length * scale * ARROW_SHARE
++        self._ring_radius = self._length * scale * RING_SHARE
++        self._line_radius = self._line_share * self._arrow_length
++
++    def _arrow(self, index: int) -> tuple[np.ndarray, np.ndarray]:
++        return shapes.arrow(
++            self._origin,
++            self._axes[index],
++            self._arrow_length,
++            shaft_radius=self._line_radius,
++            tip_radius=TIP_RADIUS_SHARE * self._arrow_length,
++        )
++
++    def _ring(self, index: int) -> np.ndarray:
++        return shapes.closed_ring(
++            shapes.circle_points(self._origin, self._axes[index], self._ring_radius, RING_SEGMENTS)
++        )
++
++    def retarget(
++        self,
++        target: Item,
++        *,
++        origin: Vec3 | None = None,
++        scale: float = 0.15,
++        axes: np.ndarray | None = None,
++    ) -> None:
++        """Denselben Griff an ein neues Ziel setzen — wie neu gebaut, ohne Neubau.
++
++        Pfeile und Ringe behalten ihre Renderer-Elemente und bekommen nur neue
++        Ecken: dieselbe Form, dieselbe Eckenzahl, also dieselben Puffer
++        (:meth:`Item.update_points`). Was ein frischer Griff anders hätte —
++        Ziel, Ursprung, Achsen, Maßstab, die Matrix des Ziels, keine
++        Hervorhebung, kein Zug —, setzt dieser Aufruf genauso. Ob Ringe
++        dazugehören, entscheidet der Bau; wer das ändern will, baut neu.
++
++        Die Platzierung hängt den Griff bei jedem Klick auf ein anderes
++        Merkmal an einen neuen Werkzeugkörper; drei Pfeile abzuräumen und neu
++        anzulegen kostete dort mehr als die Rechnung der Pfeile selbst
++        (RM-232, ``viewport.grip_placement``).
++        """
++        self._select(None)
++        self.pressing = False
++        self._init_parameter = None
++        self._init_vector = None
++        self._aim(target, origin=origin, scale=scale, axes=axes)
++        for index, arrow in enumerate(self._arrows):
++            arrow.update_points(self._arrow(index)[0])
++        for index, ring in enumerate(self._rings):
++            ring.update_points(self._ring(index))
++
+     def _build(self) -> None:
+         for index in range(3):
+             colour = AXIS_COLOURS[index]
+-            vertices, faces = shapes.arrow(
+-                self._origin,
+-                self._axes[index],
+-                self._arrow_length,
+-                shaft_radius=self._line_radius,
+-                tip_radius=TIP_RADIUS_SHARE * self._arrow_length,
+-            )
++            vertices, faces = self._arrow(index)
+             self._arrows.append(
+                 self._renderer.add_surface(
+                     vertices,
+@@ -177,14 +229,9 @@ class Gizmo:
+             )
+             if not self._rotation:
+                 continue
+-            ring = shapes.closed_ring(
+-                shapes.circle_points(
+-                    self._origin, self._axes[index], self._ring_radius, RING_SEGMENTS
+-                )
+-            )
+             self._rings.append(
+                 self._renderer.add_lines(
+-                    ring,
++                    self._ring(index),
+                     name=f"gizmo:ring:{index}",
+                     colour=colour,
+                     width=RING_WIDTH,
+@@ -224,6 +271,11 @@ class Gizmo:
+             and np.array_equal(self._cached, target.matrix())
+         )
+ 
++    @property
++    def rotation(self) -> bool:
++        """Ob der Griff Ringe zum Drehen trägt — das legt der Bau fest."""
++        return self._rotation
++
+     @property
+     def arrow_length(self) -> float:
+         """Die Länge der Pfeile — die Beschriftung stellt ihre Buchstaben dahinter."""
+diff --git a/app/ui/viewport.py b/app/ui/viewport.py
+index b8c97e515..ec70c08ff 100644
+--- a/app/ui/viewport.py
++++ b/app/ui/viewport.py
+@@ -13662,6 +13662,21 @@ class Viewport(QWidget):
+             )
+         ):
+             return
++        if (
++            grip is not None
++            and item is not None
++            and not grip.pressing
++            and grip.rotation == rotation
++            and self.renderer is not None
++        ):
++            # **Ein stehender Griff wandert an das neue Ziel** (RM-232): Ein
++            # Klick auf das nächste Merkmal gibt dem Fluss einen neuen
++            # Werkzeugkörper, und ein Griff gleicher Bauart ist dort derselbe
++            # mit anderen Ecken (:meth:`Gizmo.retarget`). Die Langlochknöpfe
++            # stehen schon, der Griff der Auswahl ist schon ab.
++            grip.retarget(item, scale=self._gizmo_scale_for(item))
++            self._placement_grip_item = item
++            return
+         self._placement_grip = None
+         if grip is not None:
+             grip.remove()

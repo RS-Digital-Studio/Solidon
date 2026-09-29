@@ -1,0 +1,17 @@
+START 00:10:47 in wt-kanten: python ../sonden/kanten/gruppe_brep.py
+== Hohlkasten: Netz-Gruppe 21, zu eng 4, exakte Gruppe 21
+  behalten 16 exakte Kanten, Befund {'skipped': 5, 'worked': 16, 'size_mm': 2.0, 'largest_mm': 1.5}
+  OpenCASCADE: GeometryError Der Radius ist für diese Kanten zu groß. Wählen Sie einen kleineren Radius oder weniger Kanten. {'size_mm': 2.0, 'edges': 16}
+  einzeln: 16 gelingen, 0 nicht: []
+  zusammen: Der Radius ist für diese Kanten zu groß. Wählen Sie einen kleineren Radius oder  {'size_mm': 2.0, 'edges': 16}
+== pegboard-goot-ceramic-screwdrivers-v3: Netz-Gruppe 28, zu eng 20, exakte Gruppe 52
+  behalten 32 exakte Kanten, Befund {'skipped': 20, 'worked': 32, 'size_mm': 1.0, 'largest_mm': 0.375}
+  OpenCASCADE: GeometryError Der Radius ist für diese Kanten zu groß. Wählen Sie einen kleineren Radius oder weniger Kanten. {'size_mm': 1.0, 'edges': 32}
+  einzeln: 12 gelingen, 20 nicht: [(94, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (96, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (97, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (101, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (107, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (112, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None)]
+  zusammen: Der Radius ist für diese Kanten zu groß. Wählen Sie einen kleineren Radius oder  {'size_mm': 1.0, 'edges': 12}
+== pegboard-gs-100-v2: Netz-Gruppe 10, zu eng 4, exakte Gruppe 18
+  behalten 14 exakte Kanten, Befund {'skipped': 4, 'worked': 14, 'size_mm': 5.0, 'largest_mm': 0.854}
+  OpenCASCADE: GeometryError Der Radius ist für diese Kanten zu groß. Wählen Sie einen kleineren Radius oder weniger Kanten. {'size_mm': 5.0, 'edges': 14, 'wall_mm': 2.27}
+  einzeln: 0 gelingen, 14 nicht: [(7, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (8, 'Der Radius ist für diese Kanten zu groß. Wählen Si', None), (16, 'Der Radius ist für diese Kanten zu groß. Wählen Si', 2.52), (20, 'Der Radius ist für diese Kanten zu groß. Wählen Si', 2.27), (22, 'Der Radius ist für diese Kanten zu groß. Wählen Si', 2.52), (24, 'Der Radius ist für diese Kanten zu groß. Wählen Si', 2.52)]
+EXIT python=0
+ENDE 00:11:41

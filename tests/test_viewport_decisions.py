@@ -5223,7 +5223,7 @@ def test_a_fresh_split_is_framed_once_with_all_its_parts(qt_app):
     ganzen Körper stand: ``outgrown`` rahmt erst ab dem Fünffachen, und die
     auseinandergezogenen Teile überdecken den alten Rahmen noch. Am Organizer
     (2,3-fach, sechs Teile) standen danach 29 % des Rahmens aller Teile im Bild
-    (``sonden/rest-kunde/out/teilen-vorher-organizer.txt``).
+    (``konzepte/nachweise-release-0.5.1/sonden/rest-kunde/out/teilen-vorher-organizer.txt``).
     ``frame_next_scene`` rahmt den nächsten Aufbau **einmal** auf alle Körper —
     samt Ansichtsversatz —, danach gilt wieder, dass die Kamera bleibt.
     """

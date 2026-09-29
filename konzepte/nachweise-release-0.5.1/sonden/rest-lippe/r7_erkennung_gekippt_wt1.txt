@@ -1,0 +1,31 @@
+app aus: F:\3D Druck.review-051\wt-rest-lippe\app\__init__.py
+   Magnettasche gerade: 302 Dreiecke, V 15840.855
+      im Baum:
+         cone_1: cone Ø8.250 eng=True dreiecke=96 detected
+         magnet_pocket_pocket_1: hole Ø8.250 eng=None dreiecke=96 generated
+      frisch erkannt:
+         cone_1: cone Ø8.250 eng=True dreiecke=96
+         hole_1: hole Ø8.250 eng=None dreiecke=96
+      Knicke im Hohlraum (Grad: Zahl): 0-1: 144, 1-5: 0, 5-10: 96, 10-15: 0, 15-20: 0, 20-25: 48, 25-30: 0, 30-45: 0, 45-60: 0, 60-90: 0, 90-180: 48
+   Magnettasche gekippt 10°: 1044 Dreiecke, V 15840.201
+      im Baum:
+         cone_1: cone Ø8.250 eng=True dreiecke=0 generated
+         curve_1: curved_face Ø0.000 eng=None dreiecke=586 detected
+         magnet_pocket_pocket_1: hole Ø8.250 eng=None dreiecke=0 generated
+      frisch erkannt:
+         curve_1: curved_face Ø0.000 eng=None dreiecke=586
+      Knicke im Hohlraum (Grad: Zahl): 0-1: 1077, 1-5: 0, 5-10: 107, 10-15: 0, 15-20: 0, 20-25: 109, 25-30: 0, 30-45: 0, 45-60: 0, 60-90: 75, 90-180: 73
+   Tasche ohne Lippe gekippt 10°: 262 Dreiecke, V 15847.155
+      im Baum:
+         magnet_pocket_pocket_1: hole Ø8.250 eng=None dreiecke=148 generated
+      frisch erkannt:
+         hole_1: hole Ø8.250 eng=None dreiecke=148
+      Knicke im Hohlraum (Grad: Zahl): 0-1: 175, 1-5: 0, 5-10: 73, 10-15: 0, 15-20: 0, 20-25: 0, 25-30: 0, 30-45: 0, 45-60: 0, 60-90: 28, 90-180: 46
+   Sackbohrung gekippt 10°: 262 Dreiecke, V 15839.864
+      im Baum:
+         hole_1: hole Ø8.450 eng=None dreiecke=148 generated
+      frisch erkannt:
+         hole_1: hole Ø8.450 eng=None dreiecke=148
+      Knicke im Hohlraum (Grad: Zahl): 0-1: 175, 1-5: 0, 5-10: 73, 10-15: 0, 15-20: 0, 20-25: 0, 25-30: 0, 30-45: 0, 45-60: 0, 60-90: 17, 90-180: 57
+evaluation stopped at op 4: op.rotate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide zusammen mit „Bohrung verschließen“ und setzen Sie es dann neu.
+   Sackbohrung mit Senkung gekippt 10°: vollständig False; Halt ['op.rotate_feature.ValidationError: Dieses Merkmal geht in einen anderen Hohlraum über, etwa eine Senkung in ihre Bohrung. Verschließen Sie beide ']

@@ -1,0 +1,18 @@
+app: F:\3D Druck.review-051\sonden\rest-kunde\head\app\__init__.py
+Bildschirm: NV-Failsafe PySide6.QtCore.QRect(0, 0, 640, 432)
+Fenster: PySide6.QtCore.QRect(0, 0, 1920, 1080)
+geöffnet: desk-organizer-v3_desk-organizer-v3_body1.stl 3.0 s
+--- vor dem Teilen: Bild 1670x970, gewählt ('obj_1',), Explosion 0.00, eingepasst auf objects
+   Kamera [287.0, -269.5, 273.0] Blick [11.2, 6.3, 52.4]
+   obj_1: Bildanteil im Rahmen   52%, Rahmen x -93..1679, y -234..1526
+   ALLE: im Bild   52%, Rahmen x -93..1679 (von 1670), y -234..1526 (von 970)
+--- nach dem Teilen: Bild 1670x970, gewählt (), Explosion 0.70, eingepasst auf objects
+   Kamera [287.0, -269.5, 273.0] Blick [11.2, 6.3, 52.4]
+   obj_4: Bildanteil im Rahmen   50%, Rahmen x -357..595, y 51..1208
+   obj_6: Bildanteil im Rahmen   40%, Rahmen x 108..1412, y 285..2007
+   obj_8: Bildanteil im Rahmen  100%, Rahmen x 436..1078, y 14..820
+   obj_9: Bildanteil im Rahmen   60%, Rahmen x 389..1107, y -353..526
+   obj_10: Bildanteil im Rahmen   59%, Rahmen x 977..1844, y 174..1247
+   obj_11: Bildanteil im Rahmen   50%, Rahmen x 993..2011, y -292..908
+   ALLE: im Bild   29%, Rahmen x -357..2011 (von 1670), y -353..2007 (von 970)
+Geschlossene Dialoge: []

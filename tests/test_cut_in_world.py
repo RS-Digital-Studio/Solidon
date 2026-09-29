@@ -181,7 +181,8 @@ def test_a_bore_into_a_tilted_face_of_an_stl_opens_at_its_mouth(
     Der Weg über den Rahmen ließ hier bei jedem dieser Fälle eine Scheibe in der
     Mündung stehen — zwei Teile, der Strahl von außen traf nach einem Millimeter
     auf Material, und die Erkennung fand keine Bohrung (Durchsicht 0.5.1,
-    ``sonden/bohren/p5_drill_platten.py``). Die Endebene in der Fläche lag um die
+    ``konzepte/nachweise-release-0.5.1/sonden/bohren/p5_drill_platten.py``). Die
+    Endebene in der Fläche lag um die
     float32-Rundung neben den Nachbardreiecken, und die Bereinigung fing nur
     Float64-Rauschen.
     """
@@ -224,7 +225,8 @@ def test_a_floor_in_a_face_with_air_behind_it_goes_through(angle: float, profile
     Tiefe. Im Rahmen der Bohrung legte die Bereinigung die Unterseite genau auf
     den Boden, und der Kern schnitt sie weg. In Weltlage trifft ein Boden eine
     schräge Fläche nicht genau — gemessen blieb bei 33° eine Haut unten
-    (``sonden/bohren/p4_koplanar.py``). Jetzt reicht dieses Ende wie die Mündung
+    (``konzepte/nachweise-release-0.5.1/sonden/bohren/p4_koplanar.py``). Jetzt
+    reicht dieses Ende wie die Mündung
     um ``BOOLEAN_OVERLAP`` in die Luft dahinter.
     """
     turn = transform.rotation("y", angle)
@@ -288,7 +290,8 @@ def test_changing_a_tilted_bore_leaves_every_corner_outside_the_cut_in_place(
     ``prepare.resize_bore`` und ``prepare.slot_bore`` legten den Körper wie das
     Bohren in den Rahmen der Bohrung und zurück (RM-274, derselbe Weg steht in
     RM-187 für ``resize_bore`` offen); an der Platte aus
-    ``sonden/bohren/p6_merkmalwege.py`` blieb danach kein Dreieck bitgleich.
+    ``konzepte/nachweise-release-0.5.1/sonden/bohren/p6_merkmalwege.py`` blieb
+    danach kein Dreieck bitgleich.
     """
     load_operations()
     point, normal = _on_top(_turn())

@@ -1,0 +1,13 @@
+{"total_s": 387.92, "cpu_s": 185.42, "fresh_detect_count": 18, "fresh_detect_s": 251.42, "carried": {"9:translate_object": 1}, "stopped_at": null}
+1:load fresh 1 35.7 s; carried 0 ; with_features 35.7 s
+2:duplicate_object fresh 0 0 s; carried 0 ; with_features 0.1 s
+3:duplicate_object fresh 0 0 s; carried 0 ; with_features 0.0 s
+4:orient_for_print fresh 1 23.9 s; carried 0 ; with_features 23.9 s
+5:load fresh 1 5.7 s; carried 0 ; with_features 5.7 s
+8:duplicate_object fresh 0 0 s; carried 0 ; with_features 0.0 s
+9:translate_object fresh 0 0 s; carried 1 ; with_features 0.0 s
+10:load fresh 1 7.4 s; carried 0 ; with_features 7.5 s
+11:duplicate_object fresh 0 0 s; carried 0 ; with_features 0.0 s
+12:duplicate_object fresh 0 0 s; carried 0 ; with_features 0.0 s
+13:duplicate_object fresh 0 0 s; carried 0 ; with_features 0.0 s
+14:orient_for_print fresh 14 178.7 s; carried 0 ; with_features 179.0 s
