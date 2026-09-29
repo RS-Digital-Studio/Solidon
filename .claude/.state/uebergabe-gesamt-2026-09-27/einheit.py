@@ -110,6 +110,7 @@ SLICERS: dict[str, str] = {
     "orca": r"C:\Program Files\OrcaSlicer\orca-slicer.exe",
     "prusa": r"C:\Program Files\Prusa3D\PrusaSlicer\prusa-slicer-console.exe",
     "cura": r"C:\Program Files\UltiMaker Cura 5.13.0\CuraEngine.exe",
+    "superslicer": os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "SuperSlicer", "SuperSlicer.exe"),
 }
 #: Je Slicer der Drucker, für den sein Hersteller ihn baut — bei OrcaSlicer und
 #: Cura einer, dessen Hersteller keinen eigenen Slicer liefert.
@@ -120,6 +121,7 @@ HOME: dict[str, str] = {
     "orca": "anycubic-kobra-2",
     "prusa": "prusa-mk4s",
     "cura": "sovol-sv06",
+    "superslicer": "prusa-mini",
 }
 
 
