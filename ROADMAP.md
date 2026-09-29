@@ -53,7 +53,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-209 — Die Rundform-Einpassung an Gittermodellen](#rm-209) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1): Kumiko −34 %, Meshy −22 % CPU unter Last; §31 nicht erreicht, nächster Hebel je Modell im Schlussbericht des Pakets |
 | [RM-210 — Die Erkennung hängt von der Lage des Körpers ab](#rm-210) | Geometrie, Erkennung und Druckvorbereitung | Mindestbogen nach Roberts Entscheidung gebaut (5 Grad, beide Kerne, `3fa7d719`), die Kippstellen der Verrundungen behoben — lageabhängig 17 statt 27 von 101 Körpern; offen sind Einpassungen an ihrer Kippe (deckungsgleiche Kegel am Budget, Flächen aus zwei Dreiecken, Langlöcher der CC2-Box, Freiformurteil, Torus gegen Langloch) oder die dokumentierte Grenze der Zusage ‚drehfest‘ — zwischen beidem entscheidet Robert |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), an der Freiform ohne messbare Wirkung (vergebliche Läufe in zu kleinen Gruppen); offen: anderer Hebel oder neu gefasstes Ziel |
-| [RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF](#rm-164) | Geometrie, Erkennung und Druckvorbereitung | Behoben an der Ursache: Jedes Objekt nennt sein Werkzeug, *Slicen* läuft mit Creality Print samt Sperre und Mehrfarbe; für das Fenster schreibt Solidon die Abweichungsliste, die 7.2.2 noch übergeht (Creality-Fehler 18082). Offen: Fensterweg mit 7.3.0.6149 abnehmen |
 | [RM-166 — Ergebnisnetze aus Mesh-Ops an einer STL überstehen keinen Weld](#rm-166) | Geometrie, Erkennung und Druckvorbereitung | Die Werkzeuge und der Eckanschluss rechnen plattformgleich (`9bc3d354e`, Ecke in `test_platform_identity._WAYS`); offen allein die Marke `xfail(linux)`, die nach drei grünen Linux-Läufen in Folge fällt, und das Beispielarchiv der Werkstattfilme mit der nächsten Filmrunde |
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | `slice_body` an der Hohlkugel 40 % schneller (`546eff16`: Stapelung, Inselzertifikat, Säulen auf Arbeitern, direkte Ringe), hochgerechnet rund 0,65 s auf der Referenzmaschine — 300 ms nicht erreicht; der Rest ist die Breitensuche mit sieben Öffnungen je Schicht. Robert gibt C++ frei (23.09.): native Breitensuche als eigener Bauauftrag; womit (eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython), entscheidet Robert |
@@ -992,64 +991,6 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   `F:\3D Druck\.claude\.state\release-0.5.1\reports\stapel-schluss.md` (Abschnitt „Nicht behoben“).
   An der Freiform: 65 von 274 Läufen sind vergeblich, 27 bis 38 davon erkennt der Stapel;
   der Rest der Zeit liegt woanders.
-
-<a id="rm-164"></a>
-
-- [~] **RM-164 — Creality Print rechnet über die Kommandozeile keine 3MF.** Das
-  Programm war installiert und wurde von Solidon gar nicht erkannt — `flavour_of` gab `None`,
-  und damit war es im Druckdialog nicht wählbar. Es ist ab Version 6 ein Orca-Abkömmling:
-  derselbe Profilbaum mit `machine_list`/`sub_path`, dieselben Schlüsselnamen; als `orca`
-  behandelt findet Solidon in Version 7.2 **4234 Profile** (459 Maschinen, 1240 Prozesse,
-  2535 Filamente). Seit dem 12.09.2026 steht es in `FLAVOUR_BY_NAME`, mit Fall in
-  `tests/test_print_settings.py`.
-
-  **Der Konsolenlauf ließ sich nicht abnehmen**: dreimal `0xC0000005` mitten im eigenen Start,
-  vor jeder Modellverarbeitung. Das Programm war auf dieser Maschine allerdings **nie
-  eingerichtet** — es stand im Dialog „Bitte wählen Sie den Softwaremodus" —, und ein Urteil
-  über seine Kommandozeile auf dieser Grundlage wäre voreilig. Ein Absturz wird seither als
-  Absturz gemeldet statt als „keine Druckdatei geschrieben" (`handover.crashed`), mit dem Rat,
-  den Slicer einmal von Hand zu starten.
-
-  Abnahme: Creality Print einrichten (Modus und Drucker wählen), dann drei Platten mit
-  mehreren Spulen übergeben — einmal über *Im Slicer öffnen*, einmal über *Slicen*. Läuft der
-  Konsolenweg auch dann nicht, gehört die Einschränkung benannt, statt sie den Kunden am
-  Absturz erfahren zu lassen.
-
-  **Durchsicht v0.5.1 (26.09.2026, druck, DRUCK-07):** Creality Print 7.2 rechnet über
-  die Kommandozeile keine 3MF — Solidons Übergabe, eine nackte aus trimesh, eine aus
-  PrusaSlicer, Bambu, Elegoo: jede endet mit −100 und „The print is empty“, dasselbe
-  Teil als STL schneidet. Die Meldung sagt das jetzt und führt zu *Im Slicer öffnen*
-  (`e401ce900`). Offen: einmal von Hand *Im Slicer öffnen* mit der Okarina und
-  *Vorschläge übernehmen*, im Fenster slicen und die Stütze in den Kanälen ansehen;
-  danach entscheiden, ob *Slicen* für Creality Print gesperrt oder über STL geführt
-  wird.
-
-  **Ursache gefunden und behoben (29.09.2026):** Die Konsole bricht am Schritt des
-  Reinigungsturms ab, weil das Objekt kein Werkzeug hat — Solidon schrieb `extruder` in
-  `model_settings.config` nur für Teile mit Spule. Am Würfel (Sonde
-  `output/review/rm164-2026-09-29/varianten.py`): unverändert −100, mit `extruder = 1` am
-  Objekt Exit 0; ohne Farbgruppe, ohne Beilagen oder nur mit dem Modell weiter −100.
-  Jetzt nennt jedes Objekt sein Werkzeug (`threemf._settings_xml`, auch ohne Spule das des
-  neutralen Platzes, das `tools_in_use` zählt), und der Satz „nur in seinem Fenster“ ist
-  gestrichen. *Slicen* mit Creality Print 7.2.2 am K1 über `slice_model`: Würfel,
-  PrusaSlicer-3MF, Wedge-Lock, Okarina, Blessed Family (zwei Platten), pista+biglie (zehn
-  Platten) schneiden mit Standard und Vorschlägen; Okarina mit Stützen überall 0 m Stütze
-  mit Sperre, 15,57 m ohne, Modellbahn beide Male 150,77 m; zweifarbiger Körper mit Spulen
-  wie im Druckdialog druckt beide Werkzeuge ohne Befund. Der Besteckeinsatz (231 mm) passt
-  nicht auf das 220er Bett und wird zu Recht abgelehnt.
-
-  **Fensterweg:** Die Okarina samt Sperre lädt; Creality fragt bei jeder fremden 3MF nach
-  dem Drucker (vorgewählt ist der dort eingestellte, hier ein CR-10) und nimmt Prozess und
-  Filament aus dessen Bestand. Aus der Datei übernimmt es nur Prozesswerte, die in
-  `different_settings_to_system` stehen (`Check3mfVendor::get3mfConfig` im Quelltext); ohne
-  die Liste galt keine Wahl aus Solidons Druckdialog (`full_print_config.json` nach dem
-  Schneiden im Fenster: Prozess ganz der des CR-10). Solidon schreibt die Liste jetzt für
-  Creality Print — die Abweichung vom Herstellerprozess (`handover._differing_from`) —, und
-  `slicer.window_asks_for_the_printer` sagt vor dem Öffnen, welcher Drucker zu wählen ist
-  und dass Temperaturen und Kühlung aus Crealitys Filamentprofil kommen. Version 7.2.2
-  übergeht die Liste noch (vier Wände und 37 % Füllung kamen nicht an); Creality führt das
-  als Fehler 18082, behoben in 7.3.0. Offen: der Fensterweg mit Creality Print 7.3.0.6149
-  (Liste wirkt, Wände und Füllung kommen an).
 
 <a id="rm-166"></a>
 

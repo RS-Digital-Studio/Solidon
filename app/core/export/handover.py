@@ -2399,7 +2399,6 @@ def project_settings(
     # kam aus der Auswahl des Nutzers — die 3MF sagte drei Wände, gedruckt
     # wurden zwei, und der Unterschied waren 127 Gramm.
     document: dict[str, object] = {}
-    manufacturer_process: dict[str, object] = {}
     foundations: tuple[tuple[slicer_profiles.ProfileKind, str], ...] = (
         ("machine", setup.machine_profile),
         ("process", setup.base_process),
@@ -2407,20 +2406,18 @@ def project_settings(
     for kind, chosen in foundations:
         found = profile_file(chosen, setup, kind)
         if found is not None:
-            values = slicer_profiles.resolve_values(found, roots=_profile_roots(setup))
-            document.update(values)
-            if kind == "process":
-                manufacturer_process = values
+            document.update(slicer_profiles.resolve_values(found, roots=_profile_roots(setup)))
 
-    process = _orca_process(
-        split.get("process", {}),
-        settings,
-        setup,
-        deviating=deviating.get("process", {}),
-        plate=plate,
-        suggested=_suggested_speed_keys(settings, setup.flavour),
+    document.update(
+        _orca_process(
+            split.get("process", {}),
+            settings,
+            setup,
+            deviating=deviating.get("process", {}),
+            plate=plate,
+            suggested=_suggested_speed_keys(settings, setup.flavour),
+        )
     )
-    document.update(process)
     document.update(_machine_keys(profile, setup.flavour))
 
     for key in ("type", "instantiation", "inherits"):
@@ -2523,22 +2520,6 @@ def project_settings(
     ]
     resolved.setdefault("printer_model", profile.printer.title)
     resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
-    if _is_creality_print(setup):
-        # **Creality Print liest aus einer fremden 3MF nur die Abweichung.**
-        # Sein Fenster fragt nach dem Drucker und nimmt dessen Prozess; aus
-        # der Datei übernimmt es allein die Prozesswerte, die in dieser Liste
-        # stehen (``Check3mfVendor::get3mfConfig``, Quelltext Creality Print).
-        # Ohne sie galt dort keine Wahl aus Solidons Druckdialog (RM-164).
-        # Die Liste ist dieselbe Abweichung, die Solidon über das
-        # Herstellerprofil schreibt; ohne Herstellerprozess weicht alles ab.
-        # Aufbau wie bei Bambu Studio: Prozess, je Filament, Drucker. Die
-        # Konsole leert den Prozesseintrag, sobald ``--load-settings`` einen
-        # Prozess lädt (``SliceCommand.cpp``), und rechnet wie bisher.
-        resolved["different_settings_to_system"] = [
-            ";".join(_differing_from(manufacturer_process, process)),
-            *([""] * len(filament_documents)),
-            "",
-        ]
     return resolved
 
 
@@ -2548,11 +2529,12 @@ def window_findings(setup: SlicerSetup) -> list[Finding]:
     Creality Print öffnet eine 3MF, die es nicht selbst schrieb, mit der
     Frage nach dem Drucker, vorgewählt ist der dort eingestellte
     (``ChoosePresetDlg``, Quelltext Creality Print). Prozess und Filament
-    nimmt es aus dem Bestand dieses Druckers; aus der Datei kommen die Teile
-    mit ihren Objektwerten, die gelisteten Prozessabweichungen
-    (:func:`project_settings`), Farben und Durchmesser. Gemessen am
-    29.09.2026 mit 7.2.2: Fenster und ``full_print_config.json`` nach dem
-    Schneiden (RM-164).
+    nimmt es aus dem Bestand dieses Druckers, nicht aus der Datei. Gemessen
+    am 29.09.2026 mit 7.2.2 und 7.3.0: Nach dem Schneiden im Fenster stand in
+    ``full_print_config.json`` der ganze Prozess des gewählten Druckers, vier
+    gewählte Wände und 37 % Füllung kamen nicht an, auch nicht mit
+    ``different_settings_to_system``, das ``Check3mfVendor::get3mfConfig``
+    liest (RM-164). Mit Solidons Einstellungen rechnet *Slicen*.
     """
     if not _is_creality_print(setup):
         return []
@@ -2560,14 +2542,16 @@ def window_findings(setup: SlicerSetup) -> list[Finding]:
     message = (
         _(
             "{slicer} fragt beim Öffnen nach dem Drucker. Wählen Sie dort „{printer}“. "
-            "Temperaturen und Kühlung nimmt es aus seinem eigenen Filamentprofil.",
+            "Die Druckeinstellungen nimmt es aus seinen eigenen Profilen; mit Solidons "
+            "Einstellungen rechnet „Slicen“.",
             slicer=setup.name,
             printer=printer,
         )
         if printer
         else _(
             "{slicer} fragt beim Öffnen nach dem Drucker. Wählen Sie dort Ihren Drucker. "
-            "Temperaturen und Kühlung nimmt es aus seinem eigenen Filamentprofil.",
+            "Die Druckeinstellungen nimmt es aus seinen eigenen Profilen; mit Solidons "
+            "Einstellungen rechnet „Slicen“.",
             slicer=setup.name,
         )
     )
@@ -2579,24 +2563,6 @@ def window_findings(setup: SlicerSetup) -> list[Finding]:
             values={"slicer": setup.name, "printer": printer},
         )
     ]
-
-
-def _differing_from(base: Mapping[str, object], process: Mapping[str, object]) -> list[str]:
-    """Die Prozessschlüssel, deren Wert nicht der des Herstellerprozesses ist."""
-
-    def text(value: object) -> str | None:
-        """Ein Wert in der Schreibweise der Datei; eine Liste mit einem Eintrag ist er."""
-        if value is None:
-            return None
-        if isinstance(value, list):
-            return str(value[0]) if len(value) == 1 else ",".join(str(item) for item in value)
-        return str(value)
-
-    return sorted(
-        key
-        for key, value in process.items()
-        if key not in slicer_profiles.DESCRIBING_KEYS and text(base.get(key)) != text(value)
-    )
 
 
 def _profile_name(reference: str) -> str:
@@ -3309,7 +3275,10 @@ def _command(
             [*([machine] if machine else []), config.process, *config.filaments], setup
         )
         settings_arg = f"{machine};{config.process}" if machine else str(config.process)
-        arguments = [binary, "--load-settings", settings_arg]
+        # Creality Print ab 7.3 rechnet nur mit ``--cli`` auf der Konsole
+        # (:func:`_creality_cli`).
+        arguments = [binary, *(["--cli"] if _creality_cli(setup) else []), "--load-settings"]
+        arguments.append(settings_arg)
         # Das Filament kommt über einen eigenen Schalter. Es mit in
         # ``--load-settings`` zu geben hilft nicht: der Slicer sortiert die
         # Dateien nach ihrem ``type``, und ein Filamentprofil, das dort
@@ -3320,7 +3289,7 @@ def _command(
         # ersten.
         if config.filaments:
             arguments += ["--load-filaments", ";".join(str(one) for one in config.filaments)]
-        if keep_arrangement:
+        if keep_arrangement and not _creality_cli(setup):
             # Ohne diesen Schalter ordnet die Orca-Familie **immer** neu an,
             # egal in welchen Koordinaten die Teile ankommen — gemessen an zwei
             # Läufen derselben Szene, die denselben G-Code ergaben. Damit war
@@ -3328,8 +3297,13 @@ def _command(
             # der Haftungsrand, die Plattenzuordnung. Gesetzt wird er nur, wenn
             # die Anordnung wirklich eine ist (siehe
             # :func:`app.core.export.writer.arrangement_holds`) — sonst
-            # druckten zwei Teile übereinander.
+            # druckten zwei Teile übereinander. Creality Print mit ``--cli``
+            # kennt den Schalter nicht und hält die Lage eines Projekts selbst.
             arguments += ["--arrange", "0"]
+        if _creality_cli(setup):
+            # Ohne ihn legt 7.3 die Druckdatei nur in sein eigenes Temp-Projekt,
+            # nicht nach ``--outputdir`` (``SliceCommand``: ``need_gcode_file``).
+            arguments.append("--need-gcode-file")
         return [*arguments, "--slice", "0", "--outputdir", str(output), *files]
 
     # **Ohne ``-v``.** Das ausführliche Protokoll nennt jede Schicht und
@@ -4020,6 +3994,25 @@ def off_the_bed(
 #: konkreten Platte darf keine späteren gültigen Anordnungen verwerfen.
 _REFUSES_THE_ARRANGE_FLAG: Final[set[Path]] = set()
 
+#: Creality Print vor 7.3, das ``--cli`` nicht kennt (siehe :func:`_creality_cli`).
+_REFUSES_THE_CLI_FLAG: Final[set[Path]] = set()
+
+
+def _creality_cli(setup: SlicerSetup) -> bool:
+    """Ob dieser Lauf Creality Print mit ``--cli`` rechnen lässt.
+
+    **Ab 7.3 startet Creality Print ohne ``--cli`` die Oberfläche**, gleich
+    welche Schalter folgen, und der Lauf wartete bis zum Zeitlimit (gemessen am
+    29.09.2026 mit 7.3.0.6149, ``CrealityPrint.cpp``:
+    ``parse_application_arguments``). Dieselbe Konsole kennt ``--arrange`` nicht
+    mehr und ordnet ein Projekt nicht an (``SliceCommand::arrange_model_input``
+    kehrt bei einer 3MF zurück), die Lage der Teile bleibt die der Datei; die
+    Druckdatei schreibt sie nur mit ``--need-gcode-file`` in den Ausgabeordner.
+    Version 7.2 lehnt ``--cli`` als unbekannten Schalter ab; dann läuft der
+    Aufruf ohne ihn, gemerkt je Programm.
+    """
+    return _is_creality_print(setup) and setup.executable not in _REFUSES_THE_CLI_FLAG
+
 
 def too_short(
     payload: str | gcode.GcodeAnalysis, model_height: float, settings: PrintSettings
@@ -4515,6 +4508,25 @@ def slice_model(
         # selbst, für sie bleibt es bei der jüngsten Datei.
         expected = "" if names_its_own_output(setup.flavour) else OUTPUT_NAME
         produced = _find_gcode(target, expected)
+        if (
+            produced is None
+            and _creality_cli(setup)
+            and _refuses_option(_tail(completed.stdout, completed.stderr), "--cli")
+        ):
+            # Creality Print vor 7.3 kennt ``--cli`` nicht und rechnet ohne ihn
+            # auf der Konsole (:func:`_creality_cli`).
+            _REFUSES_THE_CLI_FLAG.add(setup.executable)
+            completed = _run_slicer(
+                _command(setup, cli_models, config, target, wanted_arrangement),
+                workspace,
+                timeout,
+                setup,
+                cancelled,
+                finished=_result_written(target),
+            )
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            produced = _find_gcode(target, expected)
         arranged_by_slicer = keep_arrangement and not wanted_arrangement
         # **Der Familienname bleibt hier stehen, und das ist gemessen.** Die
         # anderen Vergleiche dieser Datei sind am 07.09.2026 auf benannte
@@ -4523,8 +4535,13 @@ def slice_model(
         # ohne die Anordnungsvorgabe" —, und die wird sonst nirgends gefragt.
         # Ein Prädikat für eine einzige Stelle ist Zierat; es entsteht, wenn
         # die zweite dazukommt oder ein Fork hier abweicht.
-        if produced is None and wanted_arrangement and setup.flavour == "orca":
-            refused_flag = _refuses_arrange_flag(_tail(completed.stdout, completed.stderr))
+        if (
+            produced is None
+            and wanted_arrangement
+            and setup.flavour == "orca"
+            and not _creality_cli(setup)
+        ):
+            refused_flag = _refuses_option(_tail(completed.stdout, completed.stderr), "arrange")
             # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
             # Bauart wie bei den Booleschen Ops, und wie dort wird die
             # benutzte Stufe ausgewiesen statt verschwiegen. Ein Slicer, der
@@ -5145,10 +5162,10 @@ ORCA_OFF_THE_PLATE: Final = -50
 SLICER_FAILED: Final = _("Der Slicer hat den Auftrag nicht gerechnet.")
 
 
-def _refuses_arrange_flag(output: str) -> bool:
+def _refuses_option(output: str, option: str) -> bool:
     """Erkennt eine ausdrückliche Ablehnung der CLI-Option, keinen Druckfehler."""
     return any(
-        "arrange" in line
+        option in line
         and any(
             marker in line
             for marker in (
