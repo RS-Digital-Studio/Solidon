@@ -11383,7 +11383,8 @@ def _candidates_at(body: trimesh.Trimesh, patch: Sequence[int], frayed: frozense
     Senkbohrung schloss sonst ein Paar ebener Dreiecke über einen Knick von
     39° die Kerbe des Senkkegels, und der Kegel las sich danach als Torus — je
     nach Vernetzung des Absatzes, an derselben Bohrung in einer Lage ja, in
-    der nächsten nicht (RM-274, ``sonden/bohren/p12_kippe.py``).
+    der nächsten nicht (RM-274,
+    ``konzepte/nachweise-release-0.5.1/sonden/bohren/p12_kippe.py``).
     """
     inside = np.zeros(len(body.faces), dtype=bool)
     inside[np.asarray(patch, dtype=np.intp)] = True

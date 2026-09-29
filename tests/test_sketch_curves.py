@@ -548,7 +548,8 @@ def test_an_extruded_turned_ellipse_measures_its_area_and_its_perimeter(degrees:
     Gemessen wird die Länge mit ``GCPnts_AbscissaPoint`` und ausdrücklicher
     Genauigkeit. ``BRepGProp`` integriert ohne Vorgabe grob (3·10⁻⁴ daneben),
     und die Mantelfläche kam selbst mit Vorgabe um 1,3 % neben Reihe und
-    Integral heraus, die sich auf 10⁻¹⁴ einig sind — gemessen, `sonden/p66`.
+    Integral heraus, die sich auf 10⁻¹⁴ einig sind — gemessen im Paket P6.6 der
+    Durchsicht 0.5.0 (`11c429cc2`; die Sonde ist nicht versioniert).
     """
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GCPnts import GCPnts_AbscissaPoint

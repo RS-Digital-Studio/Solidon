@@ -2111,7 +2111,8 @@ def _outside_meshes(model: ET.Element, tag: str) -> list[ET.Element]:
     besuchen**: ``findall`` mit ``.//`` sucht in C durch den ganzen Baum und
     hält den GIL dabei am Stück — am Mausoleum-Drachen 110 bis 160 ms je
     Suche, in denen der Hauptfaden bei jedem Griff wartete (RM-258,
-    ``sonden/3mf/p02_griffe.py``). Objekte und Materialgruppen stehen in den
+    ``konzepte/nachweise-release-0.5.1/sonden/3mf/p02_griffe.py``). Objekte und
+    Materialgruppen stehen in den
     ``resources``, nie in einem Netz.
     """
     found: list[ET.Element] = []
@@ -2210,7 +2211,7 @@ def _numbers_from(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarr
 #: und der Hauptfaden greift beim Malen für jedes Python-Ereignis einmal nach
 #: dem GIL — hundertmal je Bild wartet er hundertmal auf das Ende eines
 #: Stücks. 256 KB hielten ihn 9 bis 20 ms am Stück, 32 KB höchstens 2,3 ms
-#: (``sonden/3mf/p04_bloecke.py``).
+#: (``konzepte/nachweise-release-0.5.1/sonden/3mf/p04_bloecke.py``).
 XML_CHUNK: Final = 32 * 1024
 
 _TREES: ContextVar[list[ET.Element] | None] = ContextVar("threemf_trees", default=None)
@@ -2232,8 +2233,9 @@ def _reading_trees() -> Iterator[None]:
     Größe am Stück losgelassen hielt den GIL noch einmal 0,5 bis 0,6 s — und
     danach wieder aufgetaut.
 
-    Gemessen (``sonden/fenster/p31_xml_freeze.py``, ``p31b_phasen.py``, ohne
-    Qt, Nebenfaden im 5-ms-Takt, je drei Läufe): am Stück 9,4 s, längste Lücke
+    Gemessen (``p31_xml_freeze.py`` und ``p31b_phasen.py`` in
+    ``konzepte/nachweise-release-0.5.1/sonden/fenster/``, ohne Qt, Nebenfaden
+    im 5-ms-Takt, je drei Läufe): am Stück 9,4 s, längste Lücke
     4,6 s; stückweise mit Einfrieren 6,9 s, längste Lücke 0,7 s; dazu in
     Scheiben freigegeben längste Lücke 0,13 s.
 
@@ -2297,12 +2299,12 @@ def _release(root: ET.Element) -> None:
 #: Zahlen hält den GIL für die ganze Liste; am Mausoleum-Drachen (1,2 Mio.
 #: Ecken, 2,3 Mio. Dreiecke) stand das Fenster dabei bis 1,7 s still, obwohl
 #: der Import im Arbeiter lief (Durchsicht 0.5.1,
-#: ``sonden/fenster/p06_xml_gil.py``).
+#: ``konzepte/nachweise-release-0.5.1/sonden/fenster/p06_xml_gil.py``).
 #:
 #: **Ein Block ist eine Wartezeit je Griff des Hauptfadens**, wie ein Stück
 #: von :data:`XML_CHUNK` (RM-258): ``np.array`` über 65 536 Ecken hielt den
 #: GIL 40 ms am Stück, über 4 096 Ecken 2,3 ms; das Freigeben eines Blocks
-#: (``del node[:n]``) 19 ms gegen 0,6 ms (``sonden/3mf/p04_bloecke.py``).
+#: (``del node[:n]``) 19 ms gegen 0,6 ms (Sonde wie bei :data:`XML_CHUNK`).
 NUMBER_BLOCK: Final = 4_096
 
 

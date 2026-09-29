@@ -418,7 +418,8 @@ def test_one_click_opens_a_recent_project_once(screen: StartScreen) -> None:
 
     Er sieht aus wie ein Verweis, hing aber an ``itemActivated`` — unter Windows
     ein Doppelklick oder die Eingabetaste; ein Klick tat nichts
-    (``sonden/rest-kunde/s269_zuletzt_vorher.txt``). Und der Doppelklick, den
+    (``konzepte/nachweise-release-0.5.1/sonden/rest-kunde/s269_zuletzt_vorher.txt``).
+    Und der Doppelklick, den
     der Kunde aus dem Explorer kennt, öffnet trotzdem nur einmal: Er meldet
     ``itemClicked`` und ``itemActivated`` hintereinander, und dasselbe Projekt
     zweimal zu öffnen hieße, es zweimal zu laden. Die Tastatur bleibt.

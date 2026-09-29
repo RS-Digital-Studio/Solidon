@@ -417,7 +417,7 @@ Kundenmodellen sagte sie eine Absage, wo die genaue ein Ergebnis hat.
   und sie darf nie als bloß neu vernetzt erscheinen.
 * **Die Merkmale bleiben erkennbar.** Gemessen am 23.09.2026 am Anzeigeweg,
   Kugel r = 20 mm aus 327 680 Dreiecken, Ø-5-Bohrung nach der Verkleinerung
-  (`sonden/vorschau/probe_sphere_table.py`); genau: Geschlecht 1, erkannte
+  (`konzepte/nachweise-release-0.5.0/sonden/vorschau/probe_sphere_table.py`); genau: Geschlecht 1, erkannte
   Bohrung 5,20 mm, 843,5 mm³ Abtrag:
 
   | Ziel | Dreiecke | Abweichung | Geschlecht | Loch | abgetragen |
@@ -455,7 +455,7 @@ Kundenmodellen sagte sie eine Absage, wo die genaue ein Ergebnis hat.
 
 Was das bringt, am 23.09.2026 an den hochgerechneten Lochplatten und an
 Kundenmodellen aus `F:\3D Dateien` vorher und nachher gemessen
-(`sonden/vorschau/probe_preview.py`, *Bohrung* Ø 5 → 6 → 7 wie der Dialog,
+(`konzepte/nachweise-release-0.5.0/sonden/vorschau/probe_preview.py`, *Bohrung* Ø 5 → 6 → 7 wie der Dialog,
 belastete Maschine; „danach" ist jede weitere Zahl):
 
 | Modell | Dreiecke | grob erstmals | grob danach | genau |
@@ -581,7 +581,7 @@ Aufruf her, auch nicht beim Bauen des Körpers (RM-212).
 **Weg ist es mit dem Hilfsprozess** (RM-212, Entscheidung Robert vom
 27.09.2026): Die Verkleinerung und die Bohrung am groben Netz rechnen dort
 (`geom.kernel_process`). Derselbe Weg, im Wechsel gemessen
-(`sonden/hilfsprozess/grob_stillstand.py`, 28.09.2026): Lochplatte 516 → 92 ms,
+(`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/grob_stillstand.py`, 28.09.2026): Lochplatte 516 → 92 ms,
 Spiderman 573 → 7 ms, Piratenschiff 874 → 6 ms, Eiffelturm 425 → 75 ms,
 Waschschüssel 95 → 4 ms, derselbe Abtrag.
 

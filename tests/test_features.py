@@ -5858,7 +5858,8 @@ def test_a_triangle_beyond_an_edge_never_closes_a_notch() -> None:
     Dreiecke des Absatzes an derselben Ecke liegen über eine Kante von 45° an
     und gehören zu einer anderen Fläche. Nahm die Kerbenschließung sie mit, las
     sich der Kegel an der gedrehten Senkbohrung als Torus — je nach Vernetzung
-    des Absatzes (RM-274, ``sonden/bohren/p12_kippe.py``).
+    des Absatzes (RM-274,
+    ``konzepte/nachweise-release-0.5.1/sonden/bohren/p12_kippe.py``).
     """
     from app.core.perceive.features import CURVATURE_LIMIT, _candidates_at, _rim_of
 

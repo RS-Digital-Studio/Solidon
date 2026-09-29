@@ -495,7 +495,8 @@ class LoadingVeil(QWidget):
         Griff nach dem GIL** (``leash.GIL_SWITCH_S``). Mit dem ganzen Schleier
         malte der Sekundentakt jedes Mal das ganze Fenster — rund fünfzig
         Widgets, am Mausoleum-Drachen stand der Qt-Takt dabei bis 2 s
-        (``sonden/3mf/p01_nativ.py``). Symbol, Überschrift, Linie und die beiden
+        (``konzepte/nachweise-release-0.5.1/sonden/3mf/p01_nativ.py``). Symbol,
+        Überschrift, Linie und die beiden
         Textzeilen liegen in diesem Rechteck; der Verlauf darum ändert sich nie.
         """
         width = max(self._column().width(), float(MARK_SIZE))

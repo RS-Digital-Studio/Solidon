@@ -210,7 +210,8 @@ def _ellipse_edge(segment: ProfileSegment, lift: _Lift) -> Any:
     Der Bogen läuft vom Anfang zum Ende des Stücks, in der Richtung, die sein
     Stützpunkt sagt. ``GC_MakeArcOfEllipse`` mit ``True`` läuft gegen den
     Uhrzeigersinn vom ersten zum zweiten Punkt; mit ``False`` gibt es
-    denselben Bogen umgekehrt zurück (gemessen, `sonden/p66`). Ein Stück im
+    denselben Bogen umgekehrt zurück (gemessen im Paket P6.6 der Durchsicht
+    0.5.0, `11c429cc2`; die Sonde ist nicht versioniert). Ein Stück im
     Uhrzeigersinn ist also der Bogen vom Ende zum Anfang, umgekehrt.
     """
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge

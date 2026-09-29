@@ -484,7 +484,8 @@ def _load_beside_the_window(path: Path) -> Project:
     **Ein Dateizugriff ist eine Netzfrage** (RM-224) — auch für ein Projekt aus
     „Zuletzt geöffnet“ auf einem Netzlaufwerk. ``load`` lief im Hauptfaden: Um
     5 s verzögertes Lesen hielt das Fenster 5,1 s an, ein totes Laufwerk bis
-    zu seinem Zeitlimit (Durchsicht 0.5.1, ``sonden/fenster/p22``). Gelesen
+    zu seinem Zeitlimit (Durchsicht 0.5.1,
+    ``konzepte/nachweise-release-0.5.1/sonden/fenster/p22_projekt_oeffnen.py``). Gelesen
     wird deshalb in einem Daemon-Faden; solange er liest, stellt der
     Hauptfaden Ereignisse zu — Malen, Größe, Zeitgeber —, aber **keine
     Eingaben**: Das Öffnen bleibt ein Schritt, mitten in dem niemand das alte
@@ -605,7 +606,8 @@ class _AutosaveWorker(Worker):
     Projekt samt eingebetteter Modelle neu. Gemessen am Mausoleum-Drachen
     (33 MB Sicherung): 0,8 bis 1,0 s stand das Fenster, alle zwei Minuten,
     solange das Projekt ungespeichert war — und nach einem Import ist es das
-    (Durchsicht 0.5.1, ``sonden/fenster/p08_sicherung.py``). Geschrieben wird
+    (Durchsicht 0.5.1,
+    ``konzepte/nachweise-release-0.5.1/sonden/fenster/p08_sicherung.py``). Geschrieben wird
     eine Kopie des Dokuments von jetzt; die Quelldaten sind unveränderliche
     Bytes und werden geteilt.
 

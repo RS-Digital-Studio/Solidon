@@ -100,7 +100,8 @@ Warum auch einmal je Körper `vertex_rank` gefragt wird:
 
 RM-212, Entscheidung Robert vom 27.09.2026: ein Hilfsprozess statt eines Kerns,
 der den GIL hergibt. Gemessen am 27.09.2026 mit einem 2-ms-Takt neben dem
-Aufruf (`sonden/hilfsprozess/gil_kern.py`): Jeder Aufruf von `manifold3d` hält
+Aufruf (`konzepte/nachweise-release-0.5.1/sonden/hilfsprozess/gil_kern.py`; die übrigen
+Sonden dieses Abschnitts liegen daneben): Jeder Aufruf von `manifold3d` hält
 den GIL für seine ganze Dauer — der Aufbau aus `Mesh64` 110 ms am Spielwürfel
 (250 488 Dreiecke) bis 1,1 s am Spielbrett (1,95 Mio.), `simplify` 0,13 bis
 1,4 s, `refine_to_length` 1,5 bis 8,2 s, `to_mesh64` des feinen Netzes 0,2 bis
@@ -112,7 +113,7 @@ bis 0,9 s.
 - **Gemeinsamer Speicher statt `pickle`**: `pickle.dumps`/`loads` der 147 MB
   des verfeinerten Würfels hielten den GIL 70 und 37 ms, `np.copyto` in den
   gemeinsamen Speicher und die Kopie heraus je 1 ms.
-- **Die Schwelle** (`OFFLOAD_ABOVE`, `sonden/hilfsprozess/schwelle.py`): Unter
+- **Die Schwelle** (`OFFLOAD_ABOVE`, `schwelle.py`): Unter
   10 000 Dreiecken hielt eine Rechnung im Prozess den Hauptfaden höchstens
   16 bis 18 ms an, ein Bild bei 60 Hz; darüber wächst es mit der Größe (27 ms
   an 20 480, 178 ms an 327 680), während der Hilfsprozess 1 bis 3 ms
@@ -122,10 +123,10 @@ bis 0,9 s.
   10-ms-Schlaf auf, ohne dass ein Python-Faden rechnete — der Kern belegt jeden
   freigegebenen Kern.
 - **Bitgleich**: 26 Fälle vorher, nachher und im Hilfsprozess
-  (`sonden/hilfsprozess/referenz.py`), dazu je Rechnung ein Fall in
+  (`referenz.py`), dazu je Rechnung ein Fall in
   `tests/test_kernel_process.py`.
 - **Im Paket** startet `Solidon3D.exe` als Hilfsprozess und ist nach 0,4 bis
-  0,8 s bereit (`sonden/hilfsprozess/eingefroren/`); der Vorstart hinter dem
+  0,8 s bereit (`eingefroren/`); der Vorstart hinter dem
   Fenster (`warm_up`) nimmt diese Zeit aus der ersten Vorschau.
 - **Und die Buchhaltung danach**: Nach dem Hilfsprozess blieben am
   verfeinerten Würfel Stillstände von 0,2 bis 0,54 s, keiner davon im Kern —
@@ -137,7 +138,7 @@ bis 0,9 s.
 - **Ein BLAS-Faden, keine BLAS-Rechnung**: OpenBLAS legt beim Laden je
   Rechenkern einen Puffer an — `import numpy` 758 MB privater Speicher an 32
   Kernen, `scipy` noch einmal so viel, mit `OPENBLAS_NUM_THREADS=1` 19 MB
-  (`sonden/hilfsprozess/privat.py`, 28.09.2026). Ein untätiger Hilfsprozess
+  (`privat.py`, 28.09.2026). Ein untätiger Hilfsprozess
   trug danach 761 MB frisch und 1 605 MB nach der ersten
   Zusammenhangsrechnung, mit einem Faden 21 und 135 MB; Arbeitssatz und
   Dauer der Verfeinerung blieben gleich (`speicher.py`). Das geht nur, weil
@@ -150,7 +151,7 @@ bis 0,9 s.
   Zusagegrenze mit `WinError` 1455 oder 8 ab, nicht mit `MemoryError` — der
   Speicherhinweis von `remesh`, `uniform` und `subdivided` griff auf diesem Weg
   nie. Ein untätiger Hilfsprozess endet nach dem Schließen der Leitung in 32
-  bis 45 ms (`sonden/hilfsprozess/sanft_enden.py`); `GRACEFUL_SECONDS` (0,5 s)
+  bis 45 ms (`sanft_enden.py`); `GRACEFUL_SECONDS` (0,5 s)
   lässt ihm das Zehnfache.
 - **Ein verlorener Hilfsprozess ist kein Kern, der aufgibt** (B3): Die
   Boolesche Kette fing ihn als Stufenfehler, startete dieselbe Last noch

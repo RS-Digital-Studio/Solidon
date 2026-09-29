@@ -304,7 +304,7 @@ zusammen. Drei Leser kommen ohne Rechnung aus:
   (Roberts Projekt, 12 Schritte, 16 Körper) rechnete sie 18-mal statt dreimal,
   14 davon am zweiten Ausrichten; die CPU-Zeit der ganzen Auswertung fiel von
   185–190 s auf 70–87 s (je zwei Läufe im Wechsel, Sonde
-  `output/review/merkmale-kopien-2026-09-28/`). Nebenbei wurde der Bericht
+  `konzepte/nachweise-release-0.5.1/review/merkmale-kopien-2026-09-28/`). Nebenbei wurde der Bericht
   lageunabhängig: Neu erkannt ließ derselbe Körper nach jeder Drehung eine
   andere Zahl Rundformen weg (37, 36, 35 — RM-210) und stand dreimal im
   Bericht, übertragen bleibt es bei einer Zahl. Seit dem 28.09.2026 vermerkt
@@ -1516,7 +1516,7 @@ genügte ein Skalarprodukt der Achsen ungleich null.
   Kegel war danach nicht mehr belegt und las sich als Torus — je nach
   Vernetzung des Absatzes: über 17 Lagen je Achse verlor der Stand vor dem
   Umbau den Kegel bei 1,1 rad, der Stand mit dem Werkzeug in der Welt bei 0,73
-  rad, mit der Regel keiner (`sonden/bohren/p12_kippe.py`).
+  rad, mit der Regel keiner (`konzepte/nachweise-release-0.5.1/sonden/bohren/p12_kippe.py`).
   **Gesucht und geprüft wird am Knoten, nicht im Netz** (20.09.2026):
   `_rim_of` zählt Kanten und Randgrade eines Flecks einmal, `_candidates_at`
   liest die Kandidaten über den eigenen Index Ecke → Dreiecke
