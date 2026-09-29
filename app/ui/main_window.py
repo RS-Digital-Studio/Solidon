@@ -1828,9 +1828,11 @@ def _sketch_param(op_name: str) -> str:
 #: Die Operation, in die der Ziehgriff der Querschau mündet (§30.1).
 #:
 #: Er zieht eine **Höhe** aus einem Umriss, und das ist genau das, was
-#: ``sketch_extrude`` tut. Dieselbe Vorwahl, die auch der Dialog bei „Fertig"
-#: trifft (``op_dialog.DEFAULT_SKETCH_USE``) — der Griff ist die kurze Hand
-#: für den häufigsten der fünf Wege, nicht ein sechster.
+#: ``sketch_extrude`` tut — aus einer gezeichneten Fläche wird im Normalfall
+#: ein Körper, indem man sie aufzieht. Der Griff ist die kurze Hand für den
+#: häufigsten der fünf Wege, nicht ein sechster; unter *Mehr* steht er deshalb
+#: vorn und nicht nach Titel, wo „Entlang eines Bogens führen", der seltenste
+#: Fall, oben stünde (:meth:`MainWindow._fill_finish_menu`).
 PULL_OP = "sketch_extrude"
 
 #: Wie der Höhenparameter dieser Operation heißt.

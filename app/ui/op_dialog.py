@@ -239,7 +239,15 @@ class ValueField(QWidget):
         if shown:
             self.spin.setSuffix(f" {shown}")
 
-        # Auch hier der Deckel: Das Drehfeld hat die Größenrichtlinie
+        # **Gedeckelt wird nur die Zahl.** ``QFormLayout`` lässt Felder nach
+        # Vorgabe mitwachsen (``AllNonFixedFieldsGrow``), und die Breite des
+        # Dialogs kommt vom umgebrochenen Beschreibungssatz: gemessen bekam
+        # ``decimate_mesh.triangles`` 366 Pixel für einen Wunsch von 120.
+        # Aufklappmenüs, Textfelder und die Objektauswahl wachsen weiter — dort
+        # ist die Breite der Inhalt —, deshalb kein ``FieldsStayAtSizeHint`` für
+        # das ganze Formular. Gefragt wird die Wunschbreite, nicht die aktuelle:
+        # Vor dem ersten Legen hat ein Widget seine Vorgabegröße.
+        # Das Drehfeld hat die Größenrichtlinie
         # ``Expanding`` und wuchs deshalb mit dem Dialog — 270 Pixel für einen
         # Wunsch von 156, gemessen an *Kopien in Reihe oder Kreis*. Der
         # Umschalter bleibt rechts stehen, damit die Felder untereinander eine
@@ -393,11 +401,6 @@ class ValueField(QWidget):
         immer der Durchmesser."""
         whole = shown * 2.0 if self._half else shown
         return to_mm(whole, self._shown) if self._shown else whole
-
-    @property
-    def radius_view(self) -> bool:
-        """Ob das Feld gerade den Radius zeigt statt des Durchmessers."""
-        return self._half
 
     def caption(self) -> str:
         """Wie die Zeile heißt — der Titel des Schemas, oder „Radius"."""
@@ -1281,32 +1284,6 @@ def armature_bones(text: str) -> list[str]:
         return [bone.name for bone in armature_from_text(text)]
     except AppError:
         return []
-
-
-def _kept_narrow(editor: QWidget) -> QWidget:
-    """Ein Zahlenfeld bleibt so breit, wie eine Zahl ist.
-
-    ``QFormLayout`` wächst nach Vorgabe mit (``AllNonFixedFieldsGrow``), und die
-    Breite des Dialogs kommt vom umgebrochenen Beschreibungssatz — 490 bis 624
-    Pixel. Gemessen am gezeigten Dialog: ``decimate_mesh.triangles`` bekam 366
-    Pixel für einen Wunsch von 120, ``slots_from_texture.filaments`` 366 für 48.
-    Die Zahl klebte links, die Drehknöpfe saßen dreihundert Pixel weiter rechts,
-    dazwischen leere Fläche — in jedem Operationsdialog.
-
-    Gedeckelt wird **nur die Zahl**. Aufklappmenüs, Textfelder und die
-    Objektauswahl wachsen weiter: Dort ist die Breite der Inhalt („Bohrung 1 ·
-    Ø5,2 mm"), und ein Deckel darauf würde abschneiden. Deshalb kein
-    ``FieldsStayAtSizeHint`` für das ganze Formular.
-
-    Gefragt wird die Wunschbreite und nicht die aktuelle: Vor dem ersten Legen
-    hat ein Widget seine Vorgabegröße, und ein Deckel daraus wäre eine andere
-    Zahl bei jedem Öffnen.
-    """
-    # Boden und Deckel, siehe ``ValueField``: Ein Feld soll nicht wachsen,
-    # aber auch nicht unter das Maß schrumpfen, das seinen Wert zeigt.
-    editor.setMinimumWidth(editor.sizeHint().width())
-    editor.setMaximumWidth(editor.sizeHint().width() + NUMBER_AIR)
-    return editor
 
 
 class EdgeSetField(QWidget):
@@ -3513,25 +3490,3 @@ Rest, den der Löser auf seiner Toleranz stehen lässt. Zu klein gewählt, hielt
 eine Rundungsdifferenz den Dialog für eine Ansage und er streckte im Kreis; zu
 groß, verschluckte er eine echte Änderung.
 """
-
-#: Was vorausgewählt ist, wenn die Skizze fertig ist.
-#:
-#: **Nicht die erste Zeile.** Die Liste kommt alphabetisch nach Titel aus dem
-#: Register, und damit stand „Entlang eines Bogens führen" ganz oben — ein
-#: Rohrbogen, also der seltenste der fünf Fälle. Wer nach dem Zeichnen auf
-#: „Weiter" drückt, ohne die Liste zu lesen, bekam ihn.
-#:
-#: Aus einer gezeichneten Fläche wird im Normalfall ein Körper, indem man sie
-#: aufzieht. Steht der Eintrag einmal nicht im Register, bleibt es bei der
-#: ersten Zeile — eine Vorauswahl, die ins Leere zeigt, wäre schlimmer als
-#: eine unpassende.
-DEFAULT_SKETCH_USE = "sketch_extrude"
-
-#: Was vorausgewählt ist, wenn die Zeichnung auf einem Körper liegt.
-#:
-#: Dieselbe Entscheidung, die der Ziehgriff an der Richtung trifft, nur ohne
-#: Richtung: Wer über einem vorhandenen Körper zeichnet, meint in aller Regel
-#: eine Tasche darin. Der Griff nennt beide Namen bereits als Paar
-#: (``main_window.PULL_OP`` / ``POCKET_OP``); hier steht nur die zweite Hälfte,
-#: weil die erste schon oben steht.
-POCKET_SKETCH_USE = "sketch_pocket"
