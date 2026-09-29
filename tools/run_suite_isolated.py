@@ -577,7 +577,7 @@ def run_local(patterns: tuple[str, ...], *, release: bool, timeout: float = BUDG
 
     windowed, plain = split_windowed(files)
     selected = sorted({*plain, *(windowed if release else [])})
-    markexpr = "not performance" if release else "not performance and not windowed"
+    markexpr = "not performance" if release else "not performance and not windowed and not rendered"
     if not release and windowed:
         print("Zurückgestellt: die Fenstertests dieser Dateien nur mit --release.")
         for path in sorted(windowed):

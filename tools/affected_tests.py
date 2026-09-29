@@ -400,6 +400,9 @@ def _commands(
         base.extend(("-k", keyword))
     if markexpr is not None:
         base.extend(("-m", markexpr))
+    if release:
+        # Das Release-Tor fährt die Erzeugnisvergleiche mit, das Entwicklungstor nicht.
+        base.append("--with-rendered")
     # Die Fenstertrennung ergänzt der Laufplugin (``--window-group``) — so
     # bleibt ein ``-m`` aus Umgebung oder Konfiguration wirksam.
     lines: list[list[str]] = []

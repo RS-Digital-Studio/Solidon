@@ -655,8 +655,36 @@ def test_the_isolated_runner_uses_the_same_release_selection(
 
     assert run_suite_isolated.main(["--release"] if release else []) == 0
     assert [line[-1] for line in calls] == [str(plain), *([str(window)] if release else [])]
-    expected = "not performance" if release else "not performance and not windowed"
+    expected = "not performance" if release else "not performance and not windowed and not rendered"
     assert all(line[4:6] == ["-m", expected] for line in calls)
+
+
+@pytest.mark.parametrize("release", [False, True])
+def test_the_selection_leaves_out_generated_comparisons_like_the_gate(release: bool) -> None:
+    """Ein Test mit ``rendered`` hängt an einem Erzeugerlauf, nicht am Code.
+
+    Das Entwicklungstor wählt ihn ab (``suite-getrennt.sh``), das Release-Tor
+    nimmt ihn mit. Die Auswahl tat bis zum 29.09.2026 beides nicht: Ein
+    veraltetes Handbuchbild erschien in einer Schrittprüfung als roter Test,
+    den kein Codefix grün macht. Geprüft am Plugin, das den Filter setzt, und am
+    Aufruf, der es für das Release anders schaltet.
+    """
+    from types import SimpleNamespace
+
+    from tools import list_windowed_tests
+    from tools.affected_tests import _commands
+
+    options = {"--window-group": "plain", "--with-rendered": release}
+    config = SimpleNamespace(
+        getoption=lambda name, default=None: options.get(name, default),
+        option=SimpleNamespace(markexpr=""),
+    )
+    list_windowed_tests.pytest_configure(config)  # type: ignore[arg-type]
+
+    assert ("not rendered" in config.option.markexpr) is not release
+    assert "not performance" in config.option.markexpr
+    lines = _commands([], [Path("tests/test_plain.py").resolve()], release=release)
+    assert ("--with-rendered" in lines[0]) is release
 
 
 @pytest.mark.parametrize("exit_code", [0, 5, 139])
