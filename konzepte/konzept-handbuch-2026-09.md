@@ -1,7 +1,7 @@
 # Konzept — Ein Handbuch, das man ohne Ausprobieren versteht
 
-> **Stand:** 28.09.2026. Arbeitsbaum `F:\3D Druck.handbuch`, Zweig
-> `handbuch-umbau`, Registerpunkt [RM-283](../ROADMAP.md#rm-283).
+> **Stand:** 29.09.2026. In `main` zusammengeführt und mit 0.5.1 veröffentlicht;
+> Weiterarbeit im Hauptbaum, Registerpunkt [RM-283](../ROADMAP.md#rm-283).
 > **Anlass:** Ein Interessent (Elektronikbetrieb) schrieb am 27.09.2026, es sei
 > schwierig, alles aus dem Handbuch zu lernen, und Ausprobieren führe nicht
 > zum Ziel. Er fragte nach einem Video-Tutorial. Die Antwort sagt ein Tutorial
@@ -23,26 +23,21 @@ Wer diese Arbeit übernimmt, liest zuerst diesen Abschnitt und die
 Statustabelle in §9. Mehr braucht es nicht; die Nachweise liegen unter
 `konzepte/nachweise-handbuch-2026-09/`.
 
-- **Ort:** Gearbeitet wird im Arbeitsbaum `F:\3D Druck.handbuch` auf dem
-  Zweig `handbuch-umbau`, nicht im Hauptbaum. Der Hauptbaum bereitet
-  gleichzeitig das Release 0.5.1 vor, und ein halb umgebautes Handbuch darf
-  nicht in dessen Erzeugerlauf geraten. Fehlt der Arbeitsbaum auf einer
-  Maschine: `git worktree add "F:/3D Druck.handbuch" handbuch-umbau`.
-- **Zusammenführen:** `main` wird per Merge hereingeholt, nie per Rebase.
-  **Das Handbuch geht mit 0.5.1 hinaus** (Robert, 27.09.2026: „handbuch
-  kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Der Zweig
-  kommt vor dem Tag v0.5.1 nach `main`, und zwar mit dem Aufnahmeschritt in
-  `/erzeugen` — ohne ihn entstehen beim Release keine Anleitungsbilder, und
-  das Handbuch zeigte an ihrer Stelle nur den Alt-Text.
-- **Tests im Arbeitsbaum:** `cd "F:\3D Druck.handbuch"` und dann
+- **Ort:** Weiterarbeit in `F:\3D Druck` auf `main`. Der Handbuchumbau bis
+  `559412ac4` ist im Tag `v0.5.1` enthalten. Die früheren Handbuchzweige und
+  Arbeitsbäume sind entfernt; sie werden zum Fortsetzen nicht neu angelegt.
+- **Releaseanschluss:** Der Aufnahmeschritt in `/erzeugen` ist enthalten:
+  Beim Release entstehen die Anleitungsbilder vor dem Handbuch. Für die
+  nächste Arbeit gelten die offenen Kriterien von RM-283, kein Warten auf
+  den bereits veröffentlichten Tag 0.5.1.
+- **Tests im Hauptbaum:** `cd "F:\3D Druck"` und dann
   `& "F:\3D Druck\.venv\Scripts\python.exe" -m pytest …`. Mit `-m` steht das
   Arbeitsverzeichnis vorn im Suchpfad. Ein Skript außerhalb von pytest setzt
-  selbst `sys.path.insert(0, r"F:\3D Druck.handbuch")`, sonst lädt es die
-  editierbar installierte `app` aus dem Hauptbaum.
+  selbst `sys.path.insert(0, r"F:\3D Druck")`, damit es denselben Stand lädt.
 - **Bilder während der Entwicklung:** Das Aufnahmewerkzeug schreibt mit
   `--ziel <ordner>` in einen Ordner außerhalb des Baums. In
   `app/images/manual/` schreibt es nur beim Release (§6).
-- **Commit:** je abgeschlossenem Paket, mit Push des Zweigs (der
+- **Commit:** je abgeschlossenem Paket, mit Push von `main` (der
   `post-commit`-Hook pusht den aktuellen Zweig).
 - **Probelauf einer Anleitung**, eine Sprache, in einen fremden Ordner, auf
   dem zweiten Monitor:
@@ -54,6 +49,11 @@ Statustabelle in §9. Mehr braucht es nicht; die Nachweise liegen unter
 
 Diese Liste wird nach jedem Schritt fortgeschrieben, damit eine Sitzung, die
 am Nutzungslimit endet, keine Arbeit mitnimmt (Robert, 27.09.2026).
+
+**Releaseabschluss:** Der Stand bis `559412ac4` liegt auf `main` und in
+`v0.5.1`; die folgenden Einträge dokumentieren die Entwicklung davor.
+Für die Weiterarbeit gelten der Arbeitsort oben und die offenen Kriterien
+in [RM-283](../ROADMAP.md#rm-283).
 
 - **Committet und gepusht:** HB-0 (`daadc88fe`), HB-1 (`54e83a72e`), HB-2
   und HB-3 (`0f28f4368`), die toten PDF-Verweise aus HB-10 (`6af8fb5c7`),

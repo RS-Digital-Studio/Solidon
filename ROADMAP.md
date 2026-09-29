@@ -1,12 +1,12 @@
 # ROADMAP — Arbeitsliste
 
 Der ursprüngliche Bauplan-Abgleich vom 08.09.2026 und seine Fortschreibungen stehen im
-[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.0**, veröffentlicht
-am **24.09.2026** (`website/version.json`). Windows-Anwendung und Setup sind digital
-signiert und mit Zeitstempeln geprüft; beide Mac-Pakete sind signiert und notarisiert.
-Alle fünf Kundenpakete sind öffentlich vollständig per HTTPS geprüft. Die gebundenen
-Nachweise stehen unter `Releases/0.5.0/Nachweise/`; die offenen Aufgaben darunter
-führen ihre verbleibende Arbeit oder Abnahme.
+[Archiv](ROADMAP-ARCHIV.md). Der Veröffentlichungsstand ist **0.5.1**, veröffentlicht
+am **28.09.2026** (`website/version.json`, `1f5dc9f43`). Der Tag `v0.5.1` zeigt auf
+`585869a2c`; der [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
+ist erfolgreich abgeschlossen. Die Website bietet Windows-Setup, Linux-AppImage,
+Linux-Flatpak und die beiden Mac-Pakete an. Die offenen Aufgaben darunter führen ihre verbleibende
+Arbeit oder Abnahme; ein veröffentlichter Build ersetzt keinen Feldnachweis.
 
 Legende: `[ ]` offen · `[~]` teilweise umgesetzt, Abnahme oder Restarbeit offen ·
 `[x]` mit dokumentiertem Nachweis abgeschlossen. Ein historischer Haken ist
@@ -21,9 +21,10 @@ schließt RM-089 ab; seine acht neu zugeordneten Restverträge stehen bei RM-138
 
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
-Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die
-Mac-/Linux-Nachweise und die Absicherung der Releaseakte, außerdem die
-CRA-Betriebsvorbereitung — deren Frist ist am 11.09.2026 **abgelaufen**, die
+Auflagen werden daneben rechtzeitig bearbeitet. **Als Nächstes:** die nach 0.5.1
+zurückgestellten Kundenfehler, zuerst die blockierten Modell- und Slicerwege.
+Daneben bleiben die Mac-/Linux-Nachweise, die Absicherung der Releaseakte und die
+CRA-Betriebsvorbereitung offen — deren Frist ist am 11.09.2026 **abgelaufen**, die
 Meldepflicht aus Art. 14 gilt seither (RM-091). Eine zurückgestellte
 Produktentscheidung oder ein kostenpflichtiger Lauf wird durch diesen
 Abgleich nicht freigegeben.
@@ -34,13 +35,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | Konzept CI-01 bis CI-08 beauftragt; unabhängige Jobs, Kern und Fenster in je drei Teilen, Berichte, Testaufteilung, gemeinsame Vorbereitung, behobener Ausreißer und räumlicher Index der Wandmessung (`7e3442623`) umgesetzt, CI-01 bis CI-07 im Code belegt; offen CI-08 und die reale Fenster-/CI-Zeitabnahme am ersten Releaselauf mit der neuen Aufteilung |
+| [CI-Testlaufzeiten — vollständige Prüfungen früher abschließen](#ci-testlaufzeiten) | Tests und Entwicklungswerkzeuge | CI-01 bis CI-07 im Code belegt; die neue Aufteilung ist im erfolgreichen Taglauf 36454861126 von 0.5.1 gelaufen. Offen bleiben CI-08 mit vergleichbarer Vorher-/Nachher-Auswertung des Testbestands und der Laufzeiten sowie das Blättern in `tools/windows_signed_installer.py` |
 | [RM-184 — Dateiaudit vollständig umsetzen](#rm-184) | Geometrie, Erkennung und Druckvorbereitung | Kern und Verlauf der Dichtnut am echten Modell belegt (Durchsicht 0.5.1); offen der native Ablauf am Fenster mit Bildern (Release-Abnahme); die übrigen Familien und die Einzeldateiabnahme aller 187 Fälle sind zurückgestellt |
 | [RM-011 — Erstinstallation auf einem fremden Rechner abnehmen](#rm-011) | Plattformen, Pakete und Grafik | Fremdrechner ohne Entwicklungsumgebung von Download bis Export prüfen |
 | [RM-021 — Native Fensterlebensdauer am aktuellen Renderer abnehmen](#rm-021) | Plattformen, Pakete und Grafik | Der Riss in `test_ui.py` Teil 4 ist bis auf `processEvents` im Teardown eingegrenzt und trifft die Anwendung nicht; offen ist der Ereignistyp dahinter und die Gegenprobe auf Linux und Mac |
 | [RM-050 — Kopierkosten messen und verbleibende VTK-Geometrie ablösen](#rm-050) | Plattformen, Pakete und Grafik | VTK ist ausgebaut (`5a57e261`), die Wandmessung verwendet den eigenen Strahltest. Matplotlib ist seit `9bb1542b` wieder Laufzeitabhängigkeit; die Windows-Lizenzbeilage enthält 50 Komponenten. Offen bleiben die kopierten Bytes und Pufferkosten je großer Szene, gemessen am Fenster; die Bereichsprüfungsreste sind mit RM-214 geschlossen (Durchsicht 0.5.1) |
 | [RM-051 — Renderer und Grafiklaufzeit in Linux- und Mac-Paketen abnehmen](#rm-051) | Plattformen, Pakete und Grafik | Grafik und Eingabe der veröffentlichten 0.4.0-Pakete für Linux und Mac abnehmen |
-| [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Die CI protokolliert jetzt die echte Inno-Setup-Fassung (`920c609a`); offen sind der Flatpak-Lauf auf echter Linux-Grafik, der Feldlauf Installieren/Aktualisieren/Deinstallieren auf fremdem Windows und der Beleg des Signierprüfschritts (`73692bfbc`) am nächsten Installerlauf mit abweichendem Commit |
+| [RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen](#rm-055) | Plattformen, Pakete und Grafik | Installerlauf 36467614477 von 0.5.1 belegt Inno Setup 7.1.0 und den Signierprüfschritt bei abweichendem Commit (188 Tests). Offen bleiben der Flatpak-Lauf auf echter Linux-Grafik und Installieren/Aktualisieren/Deinstallieren auf fremdem Windows |
 | [RM-104 — Verbleibende Mac- und Unix-Befunde mit aktueller CI-Abdeckung abnehmen](#rm-104) | Plattformen, Pakete und Grafik | Intel-Hänger und übrige Unix-Fenster-/Export-/Chatfälle abnehmen |
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
@@ -88,7 +89,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-310 — Ein Schnitt genau an der Wand einer Bohrung lässt die Stifte an einer Berührlinie scheitern](#rm-310) | Geometrie, Erkennung und Druckvorbereitung | Absage mit Grund und Handgriff vor den Stiften statt des Satzes über ein offenes Modell, oder die Berührlinie auflösen; Messfall `plate_holes.stl` bei y = 12,3999996 |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Gebaut (`85dec7cb`): Zeilen je Signatur wiederverwendet (`_ActionRow`, `configure_feature_field`), Kernauskunft je Merkmal und Auswertung gemerkt; `show_feature` 41 → 12 ms, Wiederklick 8 ms, Klick bis Ruhe 391 → 140 ms (offscreen). Offen: Abnahme am echten Fenster beim Release (RM-213) |
-| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Alles in 0.5.1 (Robert), der Tag wartet auf „Handbuch fertig“. Auf `main`: Gliederung, fünf Bildanleitungen, Suche mit Rangfolge, Aufnahme in `/erzeugen`. Für 0.5.1 fertig und gemeldet: HB-5 bis HB-13 (fünfzehn Anleitungen, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter, Film), `main` mit texte-051 und Oberflächenpaket nachgezogen. Offen nach 0.5.1: Feldabnahme (§11 des Konzepts), Nummernplatzierung auf Text in zwei Bildern |
+| [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Auf `main` zusammengeführt (`559412ac4`) und in 0.5.1 enthalten: Gliederung, fünfzehn Bildanleitungen, Suche, F1, kürzere Erklärseiten, PDF-Gliederung, Wächter und Film. Weiterarbeit auf `main`; offen bleiben die Feldabnahme (§11 des Konzepts) und die Nummernplatzierung auf Text in zwei Bildern |
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Führen mit gezeichneter Bahn und Überblenden mit gezeichnetem Umriss am Fenster gefahren (`f19a7b4b`, sechs Fehler behoben), Tabulatorfolge, Bildschirmleser und Trennstriche im dunklen Thema (2,30:1) gemessen; offen allein die Rampe der 3D-Maus am echten Gerät — ob dieser Rest in RM-070 aufgeht (dasselbe Gerät) und der Punkt damit schließt, entscheidet Robert |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Welle 2 (`9145aedc`) und die Gebietsdurchsichten haben die in der Sollliste benannten Stellen, Preise, Generatoraussage, Sicherheit, Agentenquote und Sprachkonsistenz nachgezogen; die Durchsicht 0.5.1 hat jeden Text seit 0.5.0 gelesen und Wächter gegen Konstrukteurswörter und falsch zitierte Knöpfe eingecheckt (`e8f9f574d`); offen ist der erschöpfende Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website, dazu Presse A16/A23 und die C12-Namen |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
@@ -401,15 +402,15 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
 <a id="rm-055"></a>
 
 - [ ] **RM-055 — Neue Paketwerkzeuge im installierten Kundenpaket abnehmen.** Veröffentlicht ist
-  inzwischen das **0.4.0**-Flatpak, Laufzeit unverändert 26.08; offen bleibt der reale
+  inzwischen das **0.5.1**-Flatpak; offen bleibt der reale
   Linux-Lauf mit Grafik, Qt, Dateizugriff und Offline-Start.
 
-  **Zur Compilerfassung, nachgemessen am 10.09.2026:** Die CI sucht ISCC auf dem PATH und
-  nimmt 7 vor 6 — der Kommentar daneben hält fest, dass das Runner-Image heute **6** trägt.
-  Gebaut wird also mit Inno Setup 6, und die Fassung wird **nirgends protokolliert**: kein
+  **Historischer Compilerbefund vom 10.09.2026:** Die CI suchte ISCC auf dem PATH und
+  nahm 7 vor 6 — der Kommentar daneben hielt fest, dass das Runner-Image damals **6** trug.
+  Gebaut wurde mit Inno Setup 6, und die Fassung wurde **nirgends protokolliert**: kein
   Versionsaufruf vor dem Bau, kein Eintrag in der Releaseakte. Der Punkt sagte „für Inno Setup
-  7" und meinte damit eine Fassung, die dort gar nicht läuft. Ein `ISCC`-Versionsaufruf vor dem
-  Bau wäre der Beleg, der fehlt. Dazu Installieren, Aktualisieren und Deinstallieren auf einem
+  7" und meinte damit eine Fassung, die dort gar nicht lief. Dieser Nachweis liegt seit 0.5.1
+  vor (unten). Weiter offen sind Installieren, Aktualisieren und Deinstallieren auf einem
   fremden Windows. Abnahme mit Paket-/Compilerfassung und Feldprotokoll.
 
   **Durchsicht v0.5.1 (26.09.2026, werkzeuge):** Seit `0c58a7837` durfte der Installer auf
@@ -418,8 +419,15 @@ RM-001 ist mit der Auslieferung von 0.5.0 abgeschlossen.
   Installer-Workflow jetzt die volle Prüfumgebung und fährt `tests/test_sign_release.py`
   und `tests/test_windows_signed_installer.py` vor Herkunftsprüfung und Bau; rot endet
   vor dem Bau (`73692bfbc`, Wächter in `test_packaging.py` mit acht Gegenproben). Unter
-  nachgestellter CI-Umgebung grün (188); der Beleg auf einem Windows-Runner steht mit dem
-  nächsten Installerlauf mit abweichendem Commit aus.
+  nachgestellter CI-Umgebung grün (188).
+
+  **Am Windows-Runner belegt mit 0.5.1:** Der erfolgreiche
+  [Installerlauf 36467614477](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36467614477)
+  vom 28.09.2026 rechnet auf `637f79825`, abweichend vom Produktcommit `585869a2c`.
+  „Prüfumgebung der geänderten Orchestrierung“ und „Tests der geänderten Orchestrierung“
+  liefen vor Herkunftsprüfung und Bau erfolgreich; **188 bestanden in 42,46 s**.
+  Der Bau protokolliert **Inno Setup 7.1.0**. Das schließt die beiden CI-Nachweise,
+  nicht die Linux-Grafikabnahme oder den Installationsweg auf fremdem Windows.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-der-gesamtreview-liegen-ließ-05092026).
 
@@ -2566,23 +2574,24 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   erzeugt, eine flache Liste, kein Bild mit Markierung, 15 der 30
   geschriebenen Seiten ohne Bild, 18 Klickwege in Worten; die Suche bringt
   die richtige Seite nur bei der Hälfte von 38 Kundensuchen unter die ersten
-  drei, und F1 führt nie in das passende Kapitel. Gearbeitet wird auf dem Zweig `handbuch-umbau`
-  (Arbeitsbaum `F:\3D Druck.handbuch`), weil `main` das Release 0.5.1
-  vorbereitet. **Stand:** HB-1 bis HB-4, HB-6 und HB-13 fertig — fünfteilige
+  drei, und F1 führt nie in das passende Kapitel. **Aktueller Arbeitsort ist `main`:**
+  Der Handbuchumbau bis `559412ac4` ist im Tag `v0.5.1` enthalten; die früheren
+  Handbuchzweige und Arbeitsbäume sind entfernt. Die folgenden Paketstände
+  beschreiben den Weg zum Release. **Erster Stand:** HB-1 bis HB-4, HB-6 und HB-13 fertig — fünfteilige
   Gliederung, fünf Bildanleitungen (Fenster, Modell prüfen und drucken, Loch
   bohren, erstes eigenes Teil, Gehäuse mit Deckel) aus der echten Oberfläche,
   Suche mit Rangfolge und Fundstelle (38 von 38 Kundensuchen unter den ersten
   drei, vorher 25), Ort je Operation in der Referenz; `/erzeugen` nimmt die
-  Anleitungen bei jedem Release auf. **Geht mit 0.5.1** (Robert, 27.09.2026:
+  Anleitungen bei jedem Release auf. **Auftrag für 0.5.1** (Robert, 27.09.2026:
   „handbuch kommt noch vor 0.5.1 … also mit 0.5.1 wird es hochgeladen"): Teil
   1 ist auf `main` (Merge `6a952cf81`), samt den Punkten im Changelog 0.5.1;
   beim Release läuft `make_guides.py` in allen Sprachen vor `make_manual.py`.
-  **Alles Offene kommt ebenfalls in 0.5.1** (Robert, 27.09.2026 abends: „alle
-  punkte davon sollen noch in 0.5.1“), und der Tag wartet auf die Meldung
+  **Auch der weitere Ausbau war für 0.5.1 beauftragt** (Robert, 27.09.2026 abends: „alle
+  punkte davon sollen noch in 0.5.1“), und der Tag wartete auf die Meldung
   „Handbuch fertig“: HB-5 (Gruppen im Handbuchfenster, „Wo fange ich an?"),
   HB-7 (F1 im Zusammenhang), der Rest von HB-8, HB-9 bis HB-12. Die
   Aufteilung in drei Stränge mit ihren Aufträgen steht in §12 des Konzepts.
-  **Stand:** Für 0.5.1 fertig und an die Release-Sitzung gemeldet: HB-5 bis
+  **Stand vor dem Tag:** Für 0.5.1 fertig und an die Release-Sitzung gemeldet: HB-5 bis
   HB-13 auf `handbuch-umbau`, B und C zusammengeführt, `main` mit texte-051
   und dem Oberflächenpaket hereingeholt und die Namen nachgezogen; alle
   fünfzehn Anleitungen in sechs Sprachen probeweise aufgenommen, das Handbuch
@@ -3593,10 +3602,16 @@ Ubuntu-Lauf nachgewiesen; der zuvor behauptete Linux-Unterschied war nicht gemes
   (`68cd2ef6f`). Das lokale Tor verteilt wie die CI mit `--dist worksteal`, 850 → 587 s
   im Median, dieselben 17 166 Fälle (`c28e02c86`). CI-01 bis CI-07 sind im Code und an
   der echten Sammlung erfüllt (die drei Kernteile sammeln zusammen 17 191 Fälle, keiner
-  doppelt, keine Datei in zwei Teilen). CI-08, der gemessene Gewinn an einem
-  abgeschlossenen Lauf, wartet auf den ersten Releaselauf mit der neuen Aufteilung —
-  für 0.5.1 ist das Repository seit dem 27.09.2026 öffentlich (Lauf `36276673502`
-  angestoßen). Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
+  doppelt, keine Datei in zwei Teilen).
+
+  **Releaselauf 0.5.1:** Der erfolgreiche
+  [Taglauf 36454861126](https://github.com/RS-Digital-Studio/Solidon/actions/runs/36454861126)
+  vom 28.09.2026 enthält die neue Aufteilung: neun Kernjobs auf drei Plattformen,
+  drei plattformübergreifende Fensterverträge und drei Windows-Fenstergruppen.
+  Letztere liefen 18:36, 17:59 und 18:32 Minuten (Gruppen 0, 1, 2).
+  **CI-08 bleibt offen:** Den Gewinn gegenüber einem vergleichbaren Ausgangslauf
+  anhand der Testbestände, Berichte und Laufzeiten auswerten; ein grüner Lauf allein
+  belegt ihn nicht. Offen bleibt das Blättern in `tools/windows_signed_installer.py`.
 
 
 <a id="rm-020"></a>
