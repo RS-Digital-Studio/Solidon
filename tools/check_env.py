@@ -64,7 +64,7 @@ PLATFORM_PINS: Final = {
 #: alt genug, dass ein Sprung wehtut — deshalb die Erinnerung.
 DAYS_UNTIL_MAINTENANCE: Final = 90
 
-_LINE = re.compile(r"^([A-Za-z0-9._-]+)==([^\s;#]+)")
+_LINE = re.compile(r"^([A-Za-z0-9._-]+)==([^=\s;#]+)")
 #: Eine Obergrenze in `pyproject.toml`, etwa `trimesh>=4.4,<5`.
 _LIMIT = re.compile(r"^\s*[\"']?([A-Za-z0-9._-]+)[^\"']*?<=?\s*([0-9][0-9.]*)")
 
@@ -316,10 +316,21 @@ def freeze(python: Path) -> int:
             name = normal(match.group(1))
             if name in PLATFORM_PINS and PLATFORM_PINS[name] != sys.platform:
                 selected[name] = line.strip()
-    for line in result.stdout.splitlines():
-        match = _LINE.match(line.strip())
-        if match:
-            selected[normal(match.group(1))] = line.strip()
+    for number, line in enumerate(result.stdout.splitlines(), start=1):
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        match = _LINE.fullmatch(entry)
+        if match is None:
+            # Direktbezüge können Zugangsdaten tragen; nur die Stelle nennen,
+            # nie die fremde Requirement-Zeile ins Protokoll übernehmen.
+            print(
+                f"`pip freeze` enthält in Zeile {number} keinen festen Name==Version-Eintrag. "
+                "Direkte Paketquellen und andere Requirement-Formate bitte prüfen; "
+                "`constraints.txt` bleibt unverändert."
+            )
+            return 1
+        selected[normal(match.group(1))] = entry
     new = [selected[name] for name in sorted(selected)]
     CONSTRAINTS.write_text("\n".join([*head, "", *new]) + "\n", encoding="utf-8")
     print(f"`constraints.txt` neu geschrieben: {len(new)} Pakete, Kopf erhalten.")

@@ -769,6 +769,46 @@ def test_freezing_keeps_only_foreign_platform_pins(
     }
 
 
+@pytest.mark.parametrize(
+    "unsupported",
+    [
+        "numpy @ file:///private/wheelhouse/numpy.whl",
+        "numpy @ https://user:secret@example.invalid/numpy.whl",
+        "-e git+https://example.invalid/source.git#egg=numpy",
+        "numpy>=2.5",
+        "numpy===not-a-version",
+        "numpy==2.5.2 ; python_version > '3.14'",
+        "unbekannte Ausgabe",
+    ],
+)
+def test_freezing_rejects_unknown_requirements_without_changing_the_pins(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    unsupported: str,
+) -> None:
+    """Ein Direktbezug darf weder still verschwinden noch Zugangsdaten ins Protokoll tragen."""
+    from types import SimpleNamespace
+
+    target = tmp_path / "constraints.txt"
+    original = b"# Bewahrter Stand\r\nnumpy==2.5.2\r\n"
+    target.write_bytes(original)
+    monkeypatch.setattr(check_env, "CONSTRAINTS", target)
+    monkeypatch.setattr(
+        check_env.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0, stdout=f"setuptools==80.9.0\n{unsupported}\n", stderr=""
+        ),
+    )
+
+    assert check_env.freeze(Path("python")) == 1
+    assert target.read_bytes() == original
+    message = capsys.readouterr().out
+    assert "Zeile 2" in message and "unverändert" in message and "prüfen" in message
+    assert unsupported not in message
+
+
 # --- Der Zugang zum Webserver -------------------------------------------------------
 
 

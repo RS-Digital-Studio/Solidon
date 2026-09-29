@@ -29,7 +29,7 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 
 | Werkzeug | Tut |
 |---|---|
-| `check_env.py` | Prüft die Umgebung gegen den festgeschriebenen Stand und stellt ihn her; `--freeze` schreibt `constraints.txt` |
+| `check_env.py` | Prüft die Umgebung gegen den festgeschriebenen Stand und stellt ihn her; `--freeze` schreibt `constraints.txt` erst, wenn alle Paketangaben feste Versionspins sind — direkte Quellen und unbekannte Zeilen halten den Lauf an |
 | `sync_agents.py` | Codex-Agenten und Skills aus `.claude/agents/` und `.claude/skills/`; prüft alle Eingaben vor dem Schreiben, übersetzt Skillaufrufe und `disable-model-invocation`, meldet Dateien ohne Quelle, statt sie zu löschen. Ein neues Frontmatter-Feld braucht eine bewusste Übersetzung |
 | `link_memory.py` | Hängt die Erinnerungen einmal je Maschine ein, fasst `MEMORY.md` nie an; prüft vor dem Entfernen des lokalen Bestands jede Datei am Ziel bytegenau |
 | `memory_index.py` | Schreibt genau eine Zeile in `MEMORY.md`: Sperrdatei daneben, Index **unter** der Sperre gelesen, vor dem Schreiben nachgezählt |
