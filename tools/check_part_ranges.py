@@ -35,25 +35,38 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
 
 ROOT: Final = Path(__file__).resolve().parent.parent
 
 
-def _isolate() -> None:
-    """Nutzerverzeichnisse umlenken, bevor ``app`` sie liest (§38)."""
-    isolated = tempfile.mkdtemp(prefix="solidon-part-ranges-")
-    for variable in (
+@contextmanager
+def _isolate(parent: Path | None = None) -> Iterator[Path]:
+    """Eigene Profile vor dem Import setzen und nach Erfolg oder Fehler wieder entfernen (§38)."""
+    variables = (
         "APPDATA",
         "LOCALAPPDATA",
         "HOME",
         "XDG_DATA_HOME",
         "XDG_CONFIG_HOME",
         "XDG_CACHE_HOME",
-    ):
-        os.environ[variable] = isolated
+    )
+    before = {variable: os.environ.get(variable) for variable in variables}
+    with tempfile.TemporaryDirectory(prefix="solidon-part-ranges-", dir=parent) as isolated:
+        try:
+            for variable in variables:
+                os.environ[variable] = isolated
+            yield Path(isolated)
+        finally:
+            for variable, value in before.items():
+                if value is None:
+                    os.environ.pop(variable, None)
+                else:
+                    os.environ[variable] = value
 
 
 def _registry() -> Any:
@@ -65,27 +78,27 @@ def _registry() -> Any:
     return builtin.load()
 
 
-def _run_one(name: str) -> dict[str, Any]:
+def _run_one(name: str, temporary: Path | None = None) -> dict[str, Any]:
     """Ein Baustein, ein Prozess: den Bereichstest fahren und das Ergebnis melden."""
-    _isolate()
-    registry = _registry()
-    from app.core.knowledge.parts import range_check, range_proof
+    with _isolate(temporary):
+        registry = _registry()
+        from app.core.knowledge.parts import range_check, range_proof
 
-    spec = registry.get(name)
-    profile = range_proof.reference_profile()
-    started = time.perf_counter()
-    report = range_check.check_part(spec, profile)
-    return {
-        "name": name,
-        "version": spec.version,
-        "fingerprint": range_proof.fingerprint(spec, profile),
-        "corners": range_check.corner_count(spec.params),
-        "checked": report.checked,
-        "excluded": len(report.excluded),
-        "failures": [(dict(failure.values), failure.reason) for failure in report.failures],
-        "passed": report.passed,
-        "seconds": time.perf_counter() - started,
-    }
+        spec = registry.get(name)
+        profile = range_proof.reference_profile()
+        started = time.perf_counter()
+        report = range_check.check_part(spec, profile)
+        return {
+            "name": name,
+            "version": spec.version,
+            "fingerprint": range_proof.fingerprint(spec, profile),
+            "corners": range_check.corner_count(spec.params),
+            "checked": report.checked,
+            "excluded": len(report.excluded),
+            "failures": [(dict(failure.values), failure.reason) for failure in report.failures],
+            "passed": report.passed,
+            "seconds": time.perf_counter() - started,
+        }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,7 +109,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--jobs", type=int, default=min(4, os.cpu_count() or 1))
     args = parser.parse_args(argv)
 
-    _isolate()
+    with _isolate() as temporary:
+        return _run(args, temporary)
+
+
+def _run(args: argparse.Namespace, profile_root: Path) -> int:
+    """Plant und prüft innerhalb des Profils, das bis zum Ende aller Arbeiter lebt."""
     registry = _registry()
     from app.core.knowledge.parts import range_proof
 
@@ -130,8 +148,10 @@ def main(argv: list[str] | None = None) -> int:
     processes = "Prozess" if jobs == 1 else "Prozessen"
     print(f"Fahre {len(wanted)} {parts} mit {jobs} {processes}: {', '.join(wanted)}")
     results: dict[str, dict[str, Any]] = {}
-    with ProcessPoolExecutor(max_workers=jobs) as pool:
-        futures = {pool.submit(_run_one, name): name for name in wanted}
+    with ProcessPoolExecutor(max_workers=jobs, max_tasks_per_child=1) as pool:
+        # Der Elternlauf besitzt auch die Arbeiterprofile und räumt sie nach
+        # einem nativen Prozessabbruch, bei dem kein finally mehr laufen kann.
+        futures = {pool.submit(_run_one, name, profile_root): name for name in wanted}
         for future in as_completed(futures):
             outcome = future.result()
             results[outcome["name"]] = outcome
