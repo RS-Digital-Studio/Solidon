@@ -131,6 +131,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts](#rm-313) | Tests und Entwicklungswerkzeuge | Einen Lauf gegen die neuesten Versionen schaffen, der ohne öffentliches Repository läuft |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Lizenz von `en_US-ljspeech-high` und seinem Datensatz belegen (`/legal-review`) |
 | [RM-315 — Testhelfer zusammenführen: der Rest aus dem Aufräumen](#rm-315) | Tests und Entwicklungswerkzeuge | Inline-Wächter des exakten Kerns und private Querimporte auf die gemeinsamen Helfer umstellen |
+| [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | Die gesperrten Zwillinge nachziehen, die dünnen Hüllen auf ihren Produktionsweg umstellen, die Nur-Test-Kernfunktionen einzeln entscheiden |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -3679,6 +3680,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und `SOURCE` nach `tests/helpers.py` bzw. `tests/ui_helpers.py` ziehen. Abnahme: die Regel
   aus `tests/CLAUDE.md` („nie `from tests.test_x import _privat`“) ohne Ausnahme erfüllt und
   von einem Wächter gehalten.
+
+<a id="rm-316"></a>
+
+- [ ] **RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens.**
+  Aus dem Aufräumen vom 29./30.09.2026; die Durchgänge 1 und 2 stehen in `d8855f20e` und
+  `5369bdc5d`. (a) Zwillinge in Dateien, die an dem Tag in fremder Arbeit waren:
+  `print_settings_dialog.py` trägt zwei Kopien der Höhenregel und `_select_data` (künftig
+  `style.ContentHeight`, `style.select_data`), `manual_window._svg_pixmap` eine Kopie von
+  `icons.svg_pixmap`; `ai_disclosure._fit_content_height` ist eine Höhenvariante ohne
+  Untergrenze, an der die Freigabe über den Rollstand hängt — nur mit Fenstertest ändern.
+  Die Karte `app/ui/CLAUDE.md` nennt `ContentHeight`, `select_data` und `svg_pixmap` noch
+  nicht. (b) Dünne Hüllen, deren Produktionsweg anders heißt; Tests auf den echten Weg
+  umstellen, Hülle entfernen: `draft_vertical` (`brep/profiles.py`, `geom/faces.py`),
+  `placement.placement_tool`, die `_shadow_*`-Hüllen in `viewport.py`,
+  `perceive.features.detect_faces`, `slice.analysis._islands`, `slice.gcode.parse`,
+  `extrudes`, `printed_extent`, `stated_bed`, `generate.from_image`, `mesh_ops.decimate`,
+  `Session.embed_model`/`import_image`, `set_pickable`/`remove_pointer_listener` der
+  Renderer-API, `faces._upright_faces`, `autosplit.sections_along`. (c) Kernfunktionen ohne
+  Produktionsaufrufer, einzeln als Referenzweg behalten oder entfernen (etwa
+  `autosplit.find_plane`, `orient.evaluate_direction`, `section.section_volume`,
+  `repair.fill_holes`, `matching._cost_matrix` als Referenzmatrix). (d) `key.device_limit`
+  hat keinen Aufrufer; entfernen zieht den Grenznachweis der Lizenzgrenze nach. Abnahme:
+  kein Name der Listen ohne Produktionsaufrufer, es sei denn, sein Docstring nennt ihn
+  als Referenz- oder Prüfweg.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
