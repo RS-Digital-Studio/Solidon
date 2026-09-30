@@ -85,6 +85,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
+| [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
+| [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -2342,6 +2344,35 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Wirkung. Weg: den Vergleich in `verify_settings` über die entmaskierte Fassung beider
   Seiten führen, PrusaSlicer als Gegenfall. Abnahme: SuperSlicer am MINI ohne
   `slicer.setting_ignored`, ein wirklich übergangener Wert meldet weiter.
+
+<a id="rm-317"></a>
+
+- [ ] **RM-317 — Welche Objektwerte nimmt jeder Slicer an?**
+  Solidon schreibt übernommene Vorschläge je Teil als Objektwert (`advise.PART_PATHS`,
+  `handover._part_paths`) und nimmt für PrusaSlicer und die Orca-Familie an, dass jeder
+  Pfad dort ankommt. Gemessen ist das nur für ElegooSlicer 1.5.3.5 im Konsolenlauf
+  (30.09.2026, Stangenplatte des Minigolf-Satzes): Wandtempo außen und innen,
+  `outer_wall_acceleration`, `default_acceleration`, `brim_type`/`brim_width`/`brim_object_gap`
+  und `wall_sequence` je Objekt kommen an — am Centauri Carbon 2 steht die Beschleunigung als
+  `SET_VELOCITY_LIMIT ACCEL=`, nicht als `M204`. Offen sind OrcaSlicer, Bambu Studio,
+  Creality Print, PrusaSlicer, SuperSlicer und Cura (`CURA_PER_MESH`), dort vor allem die
+  Beschleunigungen und der Brim je Objekt, und die Regeln, die je Teil wirken (Stützen,
+  Brim, schlanke Teile über `_calm_walls`, Passungen). Weg: je Slicer eine Platte mit zwei
+  Körpern, an einem jeder Pfad als Objektwert, G-Code lesen; was ein Slicer nicht annimmt,
+  fällt aus `_part_paths` und geht über `unavailable` mit Hinweis an die Platte. Abnahme: je
+  Slicer ein Wächter, der `_part_paths` gegen die Messung hält.
+
+<a id="rm-318"></a>
+
+- [ ] **RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand.**
+  Dieselben Fahnenstangen (Ø 7,7 mm, 122 mm hoch, 46,5 mm² Fuß) rissen aus einem Brim, der
+  fest lag: Elegoos Brim hält 0,1 mm Abstand zum Teil, und so trägt er den Fuß nicht mit.
+  Solidon hat keinen Pfad für diesen Abstand (`AdhesionSettings`). Weg: Pfad für den
+  Brim-Abstand mit den drei Slicerschlüsseln, Vorschlag 0 am schlanken Teil auf kleinem Fuß
+  neben `_calm_walls`. Dazu legte *Auf dem Bett anordnen* die Stangen an den äußersten Rand
+  (x 241–251 von 256); hohe, schlanke Körper gehören in die Mitte (`scene/placement.py`, am
+  30.09. in fremder Arbeit). Abnahme: die Stangenplatte geht mit Solidons Übergabe ohne
+  Handarbeit im Slicer, Brim ohne Abstand an den Stangen, Stangen nicht am Rand.
 
 ## Bedienung und Darstellung
 

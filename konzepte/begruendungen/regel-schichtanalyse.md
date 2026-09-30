@@ -237,6 +237,20 @@ Gesamtprüfung über den Korpus prüft sie nach. Über dem Herstellerprofil
 bremst der Vorschlag nur: Wände, die der Hersteller langsamer legt, bleiben
 (Regel zur Übergabe in `dateiformat.md`).
 
+**Ein schlanker Körper auf kleinem Fuß wird gebremst, auch über dem Auto-Brim**
+(29.09.2026). Roberts Fahnenstangen am Centauri Carbon 2 — Ø 7,7 mm, 122 mm hoch,
+46,5 mm² Fuß, Höhe zu Breite 12,6 — rissen samt erster Schicht aus Elegoos
+Auto-Brim heraus, der selbst fest lag: Der Brim hält den Fuß, nicht die Stange
+darüber. Ab 25 mm liefen nur noch sie, mit Wänden bis 200 mm/s und 5000 bis
+10 000 mm/s². `_calm_walls` schlägt deshalb für Körper über `SLENDER_RATIO`
+unter `SMALL_FOOTPRINT` Außen- und Innenwand auf `SLENDER_WALL_SPEED` und beide
+Beschleunigungen auf `CAREFUL_ACCELERATION` vor, je Teil; in Orca fährt die
+Innenwand mit der Grundbeschleunigung. Die Schäfte derselben Platte (Ø 25,7 mm,
+200 mm hoch, 518 mm²) liefen mit vollem Tempo sauber und bleiben schnell. An
+der Stangenplatte kostete das Tempo 29 Minuten, 30 mm/s hätten 1 h 46 min
+gekostet. Offen: Brim ohne Abstand zum Teil (RM-318), die übrigen Slicer
+(RM-317).
+
 **Was in Geometrie gerechnet ist, wird nicht so gedruckt.** Die Stiftplanung
 sucht auf der Schnittfläche Platz für einen Kreis; der Drucker legt dort einen
 Ring aus Wänden mit Muster darin, und genau in diesem Muster sitzt die

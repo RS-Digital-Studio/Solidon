@@ -516,6 +516,60 @@ def test_the_orca_auto_brim_already_holds_a_part(flavour: str, kind: str, asks: 
     assert [("adhesion.kind" in _paths(entries)) for entries in cases] == [asks] * len(cases)
 
 
+CALM_WALLS: Final = {
+    "speed.outer_wall": advise.SLENDER_WALL_SPEED,
+    "speed.inner_wall": advise.SLENDER_WALL_SPEED,
+    "speed.outer_wall_acceleration": advise.CAREFUL_ACCELERATION,
+    "speed.acceleration": advise.CAREFUL_ACCELERATION,
+}
+
+
+@pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
+def test_a_slender_part_on_a_small_foot_is_slowed_down_even_under_an_auto_brim(
+    flavour: str,
+) -> None:
+    """Roberts Fahnenstangen (29.09.2026): Ø 7,7 × 122 mm auf 46,5 mm². Elegoos
+    Auto-Brim lag fest, die Stangen rissen bei 200 mm/s und 5000 bis
+    10 000 mm/s² samt erster Schicht aus ihm heraus. Der Brim hält den Fuß,
+    nicht die Stange — also werden Wände und Beschleunigung gebremst, bei
+    jedem Slicer und über dem Auto-Brim ebenso. Dieselben Pfade gehen je Teil
+    (``PART_PATHS``), damit nur die Stange langsamer wird."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    pole = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(9.7, 9.7, 122.0))
+    result = _layers(46.5, 46.5, 46.5)
+
+    for entries in (
+        advise.advise(settings, profile, result, bounds=pole, flavour=flavour),
+        advise.for_part(settings, pole, 46.5, profile=profile, result=result, flavour=flavour),
+    ):
+        chosen = {entry.path: entry for entry in entries if entry.path in CALM_WALLS}
+        assert {path: entry.value for path, entry in chosen.items()} == CALM_WALLS
+        assert all(entry.severity == "warning" and entry.reason for entry in chosen.values())
+    assert set(CALM_WALLS) <= advise.PART_PATHS
+
+
+def test_a_slender_part_on_a_broad_foot_keeps_its_pace() -> None:
+    """Die Schäfte derselben Minigolf-Platte (Ø 25,7 × 200 mm, 518 mm²) liefen
+    am 27.09.2026 mit vollem Tempo sauber: schlank, aber mit genug Fuß. Sie
+    zu bremsen kostete Stunden und brächte nichts; ebenso wenig die Stange,
+    wenn die Einstellungen schon ruhig sind."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    shaft = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(25.7, 25.7, 200.0))
+    calm = settings
+    for path, value in CALM_WALLS.items():
+        calm = print_settings.with_path(calm, path, value)
+    pole = BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(9.7, 9.7, 122.0))
+
+    cases = (
+        advise.advise(settings, profile, _layers(518.0, 518.0), bounds=shaft, flavour="orca"),
+        advise.advise(calm, profile, _layers(46.5, 46.5), bounds=pole, flavour="orca"),
+    )
+
+    assert [_paths(entries) & set(CALM_WALLS) for entries in cases] == [set(), set()]
+
+
 def test_without_a_known_slicer_automatic_adhesion_stays_unanchored() -> None:
     """Ohne Slicer ist offen, ob „automatisch“ etwas rechnet — dann bleibt es
     bei der Vorsicht, und ein Skirt hält auch unter Orca nichts fest."""
