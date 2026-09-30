@@ -131,16 +131,17 @@ offenem Drucker. Übernommen wird auf Klick, nie von allein.
 - **Eine runde Außenwand bekommt die Schrägnaht vorgeschlagen**: glatte
   Umrisse (kein Knick über `analysis.SMOOTH_TURN_DEGREES`, gemessen über Arme
   der Düsenbreite wie im Slicer, ab `advise.SCARF_MIN_LOOP` Umfang) über
-  `SCARF_MIN_HEIGHT`. Eine Ecke versteckt die Naht selbst.
+  `SCARF_MIN_HEIGHT`.
 - **Schmale Stege bekommen eine langsame erste Schicht**: Liegt mindestens
   `advise.NARROW_WEB_SHARE` der ersten Schicht in Stegen unter
   `NARROW_WEB_LINES` Bahnen (`analysis.narrow_share`) oder mehr als
   `NARROW_WEB_AREA` mm² davon, und ist sie schneller als `NARROW_WEB_SPEED`,
-  wird dieses Tempo vorgeschlagen — kurze Bodenbahnen zwischen Löchern reißen
-  im Herstellertempo. Über dem Herstellerprofil bremst er nur (`dateiformat.md`).
+  wird dieses Tempo vorgeschlagen. Über dem Herstellerprofil bremst er nur
+  (`dateiformat.md`).
 - **Kein Vorschlag überstimmt, was das Profil für denselben Zweck trägt**:
   Mindestzeit je Schicht nur ohne eine, kein Brim über Orcas Auto-Brim
-  (`AUTO_BRIM_FLAVOURS`).
+  (`AUTO_BRIM_FLAVOURS`) — gebremst wird dort trotzdem: `_calm_walls` für
+  schlanke Körper unter `SMALL_FOOTPRINT`, je Teil.
 - **Mehrere Körper werden gemeinsam beurteilt** (`advise.combine`), auch
   passende — ein Würfel schaltet die Stützen eines anderen nicht ab.
   Filamentwerte werden je tatsächlichem Slot aufgelöst und nur darin
