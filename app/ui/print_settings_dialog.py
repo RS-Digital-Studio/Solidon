@@ -2154,6 +2154,7 @@ class _AdviceWorker(Worker):
         candidates &= split.per_part
         if not candidates:
             return entries
+        chain = split.accepted_per_part()
         wanted: dict[str, list[str]] = {}
         for body in self.objects:
             self.cancelled.raise_if_cancelled()
@@ -2169,6 +2170,7 @@ class _AdviceWorker(Worker):
                 result=results[body.id][2],
                 fit_kinds=self.part_fits.get(body.id, ()),
                 flavour=self.flavour,
+                accepted=chain,
             ):
                 if entry.path in candidates:
                     wanted.setdefault(entry.path, []).append(str(body.name))

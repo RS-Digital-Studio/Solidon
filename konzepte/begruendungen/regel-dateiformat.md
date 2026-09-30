@@ -280,6 +280,14 @@ Warum ein Objektwert nie die ganze Einstellungsgruppe trägt: Sonst schriebe
 er Solidons Tabellenwerte über die des Herstellers (Review der
 Gesamtprüfung 0.5.1, B1).
 
+Warum der Rat je Teil bis zum Fixpunkt fragt: Die Keil-Regel verlangt
+Arachne, und beide Pfade gehen je Teil. Der Split setzte beide auf Elegoos
+`classic` zurück, der Rat je Teil fragte einmal dort, und kein Teil bekam
+„Außenwand zuerst“ — `_unserved` legte es an alle, auch an eine Schüssel mit
+49° nach innen kippender Wand, die Stützen brauchte (Fehldruck am Centauri
+Carbon 2, 29.09.2026). Nur übernommene Werte gehen in die Kette, sonst löste
+ein nicht übernommener Vorschlag eine Folgeregel aus.
+
 Warum der gemessene Überhangwinkel bei anderer Schichthöhe oder Bahnbreite
 zurückfällt: Sonst stützten Analyse und Slicer nach einer Probe, die für
 diesen Druck nichts sagt.

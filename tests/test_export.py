@@ -2532,6 +2532,82 @@ def test_a_plate_wide_reason_keeps_the_accepted_value_on_the_plate(
     assert geometry.base.adhesion.kind == "skirt"
 
 
+def _tapered_cup() -> MeshData:
+    """Der Organizer vom 20.09.2026 als Querschnitt: Außenwand 1,0 mm, in einer
+    Ecke ein Becher, der die Wand berührt — dort läuft die Stärke stetig von
+    1,0 auf 3,0 mm, ein Keil auf jeder Schicht (``test_slice``), ohne Überhang."""
+    from shapely.geometry import Point, box
+
+    outer = (
+        box(0.0, 0.0, 60.0, 40.0).buffer(6.0, join_style="round").buffer(-6.0, join_style="round")
+    )
+    block = box(-1.0, -1.0, 21.0, 21.0)
+    hole = Point(10.9, 10.9).buffer(9.0, quad_segs=64)
+    shape = outer.difference(outer.buffer(-1.0).difference(block)).difference(hole)
+    return MeshData.of(trimesh.creation.extrude_polygon(shape, 10.0))
+
+
+@pytest.mark.parametrize("support", [False, True], ids=["ohne-stuetze", "mit-stuetze"])
+def test_a_rule_behind_an_accepted_part_value_is_asked_with_it(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch, support: bool
+) -> None:
+    """Eine Regel, die einen anderen übernommenen Wert je Teil voraussetzt,
+    wird mit ihm gefragt (Entscheidung G; Fehldruck vom 29.09.2026).
+
+    „Außenwand zuerst" schlägt die Keil-Regel nur bei variabler Bahnbreite
+    vor, und nie, wo Stützen nötig sind. Beide Pfade gehen je Teil, und der
+    Split setzt beide auf die Grundlage zurück — beim Centauri Carbon 2
+    ``classic``. Einmal dort gefragt, bekam der Keilbecher nur Arachne, kein
+    Teil bediente „Außenwand zuerst", und ``_unserved`` legte es an jedes,
+    auch an die Schüssel, die Stützen brauchte. Jetzt fragt der Rat je Teil
+    nach den übernommenen Werten dieses Teils erneut, bis nichts dazukommt.
+    """
+    from app.core.export import manufacturer
+
+    classic = print_settings.with_path(
+        print_settings.resolve(profile, "standard"), "shell.wall_generator", "classic"
+    )
+    assert not classic.shell.outer_wall_first, "die Vorbedingung des Tests"
+    monkeypatch.setattr(
+        manufacturer,
+        "base_settings",
+        lambda *_args, **_kwargs: manufacturer.Foundation(classic, profile=profile),
+    )
+    settings = print_settings.with_accepted(classic, "shell.wall_generator", "arachne")
+    settings = print_settings.with_accepted(settings, "shell.outer_wall_first", True)
+    if support:
+        settings = print_settings.with_accepted(settings, "support.style", "auto")
+    mushroom = next(entry for entry in _mushroom_and_block() if entry.name == "Pilz")
+    objects = [
+        replace(scene_object("obj_1", "Becher"), mesh=_tapered_cup()),
+        replace(mushroom, id="obj_2"),
+    ]
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Regelkette", profile=profile, settings=settings
+    )
+
+    assert _plate_value(written, "orca", "wall_generator") == "classic", "die Platte bleibt"
+    values = _object_values(written, "Metadata/model_settings.config")
+    assert values["Becher"]["wall_generator"] == "arachne"
+    assert values["Becher"]["wall_sequence"] == "outer wall/inner wall"
+    assert "wall_sequence" not in values["Pilz"], "der Pilz braucht Stützen"
+    assert "wall_generator" not in values["Pilz"]
+    if support:
+        assert values["Pilz"]["enable_support"] == "1"
+    assert not [entry for entry in findings if entry.code == "export.part_setting_all"]
+    said = {
+        (entry.object_id, entry.values["setting"])
+        for entry in findings
+        if entry.code == "export.part_setting"
+    }
+    assert {("obj_1", "shell.wall_generator"), ("obj_1", "shell.outer_wall_first")} <= said
+    assert not {path for owner, path in said if owner == "obj_2"} & {
+        "shell.wall_generator",
+        "shell.outer_wall_first",
+    }
+
+
 def test_nothing_is_said_when_every_part_takes_the_plates_setting(
     tmp_path: Path, profile: Profile
 ) -> None:

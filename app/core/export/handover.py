@@ -857,6 +857,15 @@ class PartSplit:
     unavailable: frozenset[str] = frozenset()
     """Was die Geometrie je Teil will, der Slicer aber nicht je Teil annimmt —
     es bleibt plattenweit, und der Export sagt, wo es nicht reicht."""
+    accepted: PrintSettings | None = None
+    """Die Einstellungen mit allen Übernahmen, bevor der Split sie zurücksetzt."""
+
+    def accepted_per_part(self) -> dict[str, object]:
+        """Die übernommenen Werte der Pfade je Teil — was der Rat je Teil in
+        seiner Kette trägt (:func:`app.core.export.writer.part_advice`)."""
+        if self.accepted is None:
+            return {}
+        return {path: read_path(self.accepted, path) for path in sorted(self.per_part)}
 
 
 def _part_paths(flavour: SlicerFlavour) -> frozenset[str]:
@@ -919,8 +928,10 @@ def split_for_parts(
     for path in sorted(per_part):
         trimmed = print_settings.without_choice(trimmed, path, foundation)
     if flavour == "cura":
-        return PartSplit(settings, trimmed, per_part, revert=True, unavailable=unavailable)
-    return PartSplit(trimmed, trimmed, per_part, unavailable=unavailable)
+        return PartSplit(
+            settings, trimmed, per_part, revert=True, unavailable=unavailable, accepted=settings
+        )
+    return PartSplit(trimmed, trimmed, per_part, unavailable=unavailable, accepted=settings)
 
 
 def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:
