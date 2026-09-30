@@ -145,6 +145,13 @@ THIN_LAYER_AREA = 120.0
 #: und eine Passung ist auf Zehntelmillimeter gerechnet.
 CAREFUL_ACCELERATION = 2000.0
 
+#: Wandtempo in mm/s für einen schlanken Körper auf kleinem Fuß — ein Drittel
+#: von Elegoos 200 mm/s. Die Kippkraft kommt vor allem aus der Beschleunigung
+#: (:data:`CAREFUL_ACCELERATION`); das Tempo nimmt der Düse den Rest. An
+#: Roberts Stangenplatte (30.09.2026, ElegooSlicer) kostete das 29 Minuten,
+#: das Tempo einer Passungswand (30 mm/s) 1 h 46 min.
+SLENDER_WALL_SPEED = 60.0
+
 #: Ab wie vielen Linienbreiten eine Wand auf ganze Bahnen aufgeht. Darunter
 #: bleibt beim klassischen Generator eine Lücke, die mit Lückenfüllung
 #: geschlossen wird — bei einem Federarm ist genau das der Bruch.
@@ -992,6 +999,17 @@ def _from_geometry(
             )
         )
 
+    # **Ein Brim hält den Fuß, nicht die Stange darüber.** Roberts Fahnenstangen
+    # am Centauri Carbon 2 (29.09.2026): Ø 7,7 mm, 122 mm hoch, auf je 46,5 mm²,
+    # Elegoos Auto-Brim lag fest, und die Stangen rissen samt erster Schicht
+    # aus ihm heraus — ab 25 mm liefen nur noch sie, mit Wänden bis 200 mm/s
+    # und 5000 bis 10 000 mm/s². Gebremst wird deshalb, wo ein schlanker Körper
+    # zugleich auf zu wenig Fläche steht, auch unter einem Auto-Brim; die
+    # Schäfte derselben Platte (Ø 25,7 mm, 200 mm hoch, 518 mm²) liefen mit vollem
+    # Tempo sauber und bleiben schnell.
+    if bounds is not None and _slender(bounds) and 0.0 < result.first_layer_area < SMALL_FOOTPRINT:
+        advice += _calm_walls(settings)
+
     # **Schmale Stege brauchen eine langsame erste Schicht.** Roberts
     # Minigolf-Platte am Centauri Carbon 2 (27.09.2026): Elegoos Standard legt
     # die Füllung der ersten Schicht mit 105 mm/s, und an den Stegen zwischen
@@ -1400,6 +1418,8 @@ PART_PATHS: Final = frozenset(
         "shell.scarf_seam",
         "speed.outer_wall",
         "speed.outer_wall_acceleration",
+        "speed.inner_wall",
+        "speed.acceleration",
         "shell.wall_count",
         "infill.density",
         "shell.wall_generator",
@@ -1532,6 +1552,32 @@ def _on_small_feet(result: SliceResult) -> bool:
         return False
     feet = [piece_area(contour) for contour in result.layers[0].contours]
     return len(feet) >= 2 and max(feet) < SMALL_FOOTPRINT
+
+
+def _calm_walls(settings: PrintSettings) -> list[SettingAdvice]:
+    """Wände und Beschleunigung eines schlanken Körpers auf kleinem Fuß.
+
+    Innenwand und Grundbeschleunigung gehören dazu: Bei einer Stange sind die
+    Wände fast der ganze Querschnitt, und in Orca fährt die Innenwand mit der
+    Grundbeschleunigung — am Centauri Carbon 2 mit 10 000 mm/s², doppelt so
+    hart wie die Außenwand.
+    """
+    reason = _("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.")
+    wanted = (
+        ("speed.outer_wall", settings.speed.outer_wall, SLENDER_WALL_SPEED),
+        ("speed.inner_wall", settings.speed.inner_wall, SLENDER_WALL_SPEED),
+        (
+            "speed.outer_wall_acceleration",
+            settings.speed.outer_wall_acceleration,
+            CAREFUL_ACCELERATION,
+        ),
+        ("speed.acceleration", settings.speed.acceleration, CAREFUL_ACCELERATION),
+    )
+    return [
+        _advice(settings, path=path, value=calm, reason=reason, severity="warning")
+        for path, current, calm in wanted
+        if current > calm + EPS_GEOM
+    ]
 
 
 def _slender(bounds: BoundingBox) -> bool:
