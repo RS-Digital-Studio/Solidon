@@ -38,7 +38,7 @@ Nutzlastformat; das erste bleibt lesbar:
 (Begründung: `konzepte/konzept-lizenzarten-2026-09.md`, Entscheidungen A und
 J). **Einen Unterschied gibt es, und er sperrt nichts**: die Zahl der
 gleichzeitig freigeschalteten Rechner, `key.DEVICE_LIMITS` (privat einer,
-gewerblich zwei) über `device_limit(kind)`. Sie steht ein zweites Mal im
+gewerblich zwei). Sie steht ein zweites Mal im
 Dienst (`ACTIVATION_DEVICE_LIMITS`), weil dort entschieden wird;
 `test_the_php_service_knows_the_same_formats_and_kinds` hält beide zusammen.
 
