@@ -1182,6 +1182,28 @@ Auskunft lesen: `placement.seat_of` fragt beide Mündungen, denn die Achse
 sagt nicht, an welchem Ende die Öffnung liegt — ein Sackloch von unten hatte
 mit ihr keine Trägerfläche und kein Maß im Bild.
 
+**Und eine gemessene Achse neben einer Hauptachse bekommt deren Rahmen**
+(30.09.2026). `frame_of` nimmt das Kreuzprodukt aus Z und der Achse als erste
+Rahmenachse und die Weltachse erst unter `PLANE_PARALLEL` (1e-9); eine am Netz
+eingepasste Bohrungsachse liegt nie so genau. An der vernetzten Teppichecke
+stand sie 0,024°, 0,028° und 0,071° neben Z (Feinheit 0,01, 0,02, 0,05), und
+das Feld *Richtung* zeigte für dasselbe Langloch, in der Welt 90°, -168,5°,
+132,0° und 91,8°, exakt 90°. Ein bei 0,01 vorbelegter Zug drehte nach einer
+geänderten Feinheit um rund 100°, ragte über die Kante, zerteilte das Teil und
+verlor das Merkmal; ein getippter Winkel 90 tat dasselbe schon beim ersten
+Mal. Am Besenhalter lagen sechs Bohrungen 3e-6° neben Z, und Winkel 0 zeigte
+auf 53,1° bis 126,9°. `prepare.slot_frame` gibt innerhalb `SLOT_ACROSS_LIMIT`
+den Rahmen der Hauptachse, gegen die gemessene Achse gestellt; eine genau
+liegende oder wirklich geneigte Achse behält `frame_of`. Danach, am selben
+Lauf: Feld 90,000°, 90,000°, 90,000° und 89,982° (Spanne 0,018°), der Zug
+behält nach geänderter Feinheit Richtung, Länge und Merkmal, der getippte
+Winkel schneidet an beiden Kernen 90°, und Winkel 0 zeigt an allen sechs
+Bohrungen auf 0°. `plane_axes` bleibt, wie es ist: Eine Skizzenebene hat
+keine gemessene Achse. Gespeicherte Winkel rechnet die Migration 38 → 39 in
+den neuen Rahmen um — dieselbe Richtung, die der Kunde gesehen und gedruckt
+hat (`slot_angle_from_measured_frame`; bei *Zum Langloch ziehen* einmal in der
+Auswertung über `measured_frame`, weil die Achse erst dort feststeht).
+
 ## Die Werkzeugzugabe steht einmal, und ein Langloch bekommt sie nie
 
 **Und die Zugabe, die einen Werkzeugkörper vom gemessenen Maß fernhält, steht

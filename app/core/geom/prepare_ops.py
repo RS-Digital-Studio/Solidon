@@ -73,6 +73,7 @@ from app.core.geom.prepare import (
     BORE_SECTIONS,
     FEATURE_OVERLAP,
     MAX_PLATES,
+    SLOT_ACROSS_LIMIT,
     Arrangement,
     BoreAnchor,
     arrange_on_bed,
@@ -97,7 +98,9 @@ from app.core.geom.prepare import (
     shell,
     shortest_slot,
     sink_placement,
+    slot_angle_from_measured_frame,
     slot_bore,
+    slot_frame,
     slot_travel,
     split_at_plane,
     split_findings,
@@ -650,7 +653,8 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     # 1: mit freier Richtung liegt das Werkzeug in der Welt, der Körper bleibt,
     # wo er ist; ein Ende in einer Fläche mit Luft dahinter reicht um die
     # Zugabe hinaus (RM-274).
-    cache_version="1",
+    # 2: ein Langloch zählt seinen Winkel gegen ``prepare.slot_frame`` (30.09.2026).
+    cache_version="2",
     title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
@@ -7674,13 +7678,11 @@ def resize_hole(ctx: OpContext) -> OpResult:
             nothing = without_effect(source.mesh, solid, change, ctx.profile)
             if nothing is not None:
                 findings.append(nothing)
-        from app.core.sketch.planes import frame_of
-
         findings.extend(
             edge_findings(
                 source.mesh,
                 position=centre,
-                frame=frame_of(axis, centre),
+                frame=slot_frame(axis, centre),
                 diameter=cut,
                 travel=slot_travel_now,
                 angle_deg=slot_angle_of(feature, axis) if feature.kind == "slot" else 0.0,
@@ -8114,6 +8116,24 @@ class SlotHoleParams(BaseParams):
             "Aus bleibt das gemessene Maß unverändert."
         ),
     )
+    # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
+    # Ihr Winkel zählte gegen ``frame_of`` der gemessenen Achse, deren erste
+    # Rahmenachse an einer Achse im Messrauschen neben einer Hauptachse das
+    # Rauschen bestimmte (``prepare.slot_frame``). Welche Richtung er meinte,
+    # zeigt erst die Achse der Auswertung — die Operation liest ihn deshalb im
+    # alten Rahmen, schneidet dieselbe Richtung wie gespeichert und hält den
+    # Winkel von heute als Antwort fest (``answered``, wie die freie Stelle);
+    # danach steht der Haken wieder aus.
+    measured_frame: bool = param(
+        title=_("Richtung aus einem älteren Projekt"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Liest die gespeicherte Richtung so, wie Solidon sie bis Version 0.5.1 "
+            "gezählt hat, und rechnet sie beim Auswerten einmal um. Neue Langlöcher "
+            "brauchen den Haken nicht."
+        ),
+    )
 
 
 #: Die Arten, aus denen ein Langloch werden kann.
@@ -8146,7 +8166,9 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 7: ein verkürztes Langloch schließt zuerst seinen alten Umriss.
     # 8: genau die Breite als Länge schneidet wieder eine runde Bohrung.
     # 9: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
-    cache_version="9",
+    # 10: der Winkel zählt gegen ``prepare.slot_frame`` statt gegen das Rauschen
+    #     der gemessenen Achse (30.09.2026).
+    cache_version="10",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -8278,6 +8300,15 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Die Vorbelegung am Merkmal liefert dessen Richtung. Jeder übergebene
     # Winkel gilt unverändert, auch null; sonst widerspricht der Schnitt dem Griff.
     angle = params.slot_angle
+    # **Ein Winkel aus einem Projekt bis Format 38** zählte gegen ``frame_of``
+    # der gemessenen Achse (``measured_frame``, gesetzt von der Migration). Er
+    # wird an dieser Achse im alten Rahmen gelesen — dieselbe Richtung wie
+    # gespeichert — und im Rahmen von heute festgehalten; die Antwort landet im
+    # Schritt, und der nächste Lauf rechnet schon ohne Umweg.
+    converted: dict[str, Any] = {}
+    if params.measured_frame:
+        angle = slot_angle_from_measured_frame(axis, params.slot_angle)
+        converted = {"slot_angle": angle, "measured_frame": False}
     # Die Merkmale, die bleiben — ohne das, aus dem gerade ein Langloch wird.
     carried = {
         name: entry
@@ -8326,7 +8357,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     if rounded and feature.kind == "hole" and not moved and not widened:
         # Eine runde Bohrung auf ihre eigene Breite gezogen: Geschnitten und
         # gefüllt würde dasselbe Loch, und der Satz sagt, dass nichts geschah.
-        return OpResult(outputs=[source], findings=[_already_round(feature)])
+        return OpResult(outputs=[source], findings=[_already_round(feature)], answered=converted)
     # Die Länge, mit der geschnitten wird. Rund heißt: genau der geschnittene
     # Durchmesser — :func:`prepare.slot_bore` schneidet dann einen Zylinder.
     cut_length = diameter if rounded else params.slot_length
@@ -8399,13 +8430,11 @@ def slot_hole(ctx: OpContext) -> OpResult:
         if nothing is not None:
             findings.append(nothing)
         # Die Kantenfrage gilt beiden Bogenmittelpunkten, wie beim Verbreitern.
-        from app.core.sketch.planes import frame_of
-
         findings.extend(
             edge_findings(
                 source.mesh,
                 position=centre,
-                frame=frame_of(axis, centre),
+                frame=slot_frame(axis, centre),
                 diameter=diameter,
                 travel=0.0 if rounded else slot_travel(diameter=diameter, length=cut_length),
                 angle_deg=angle,
@@ -8450,6 +8479,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                     dataclasses.replace(source, mesh=solid, kind="brep", features=exact_features)
                 ],
                 findings=findings,
+                answered=converted,
             )
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den
@@ -8488,6 +8518,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         return OpResult(
             outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=exact_features)],
             findings=findings,
+            answered=converted,
         )
 
     body = as_mesh_data(source.mesh)
@@ -8561,6 +8592,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             outputs=[dataclasses.replace(source, mesh=result.mesh, features={**carried, **kept})],
             solver=deepest((closing_solver, result.solver)),
             findings=round_findings,
+            answered=converted,
         )
     # **Gesucht wird das Langloch, das gerade entstanden ist** — für zwei
     # verschiedene Antworten. Findet es sich nicht, sagt es der Befund unten
@@ -8604,6 +8636,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         outputs=[dataclasses.replace(source, mesh=result.mesh, features=features)],
         solver=deepest((closing_solver, result.solver)),
         findings=findings,
+        answered=converted,
     )
 
 
@@ -8914,22 +8947,6 @@ def _narrowing_after_resize(feature: Feature, narrowing: Feature, diameter: floa
     )
 
 
-#: Ab welchem Unterschied ein Zug nicht mehr in Richtung des bestehenden
-#: Langlochs geht.
-#:
-#: **Ein halbes Grad, und die Zahl ist gemessen.** Hier standen erst fünf Grad
-#: mit der Begründung, darunter setze die Erkennung beide Züge wieder zu einem
-#: Langloch zusammen. Das war geraten und falsch: An einem Langloch Ø 6 auf
-#: 20 mm, auf 28 mm nachgezogen, bleibt es bis 0,5 Grad **ein** Merkmal und
-#: zerfällt bei 0,75 Grad in zwei Verrundungen, bei einem Grad in vier.
-#:
-#: Wo genau es kippt, hängt von Länge und Breite ab — und deshalb steht die
-#: Zahl hier gerade **nicht** dafür. Sie deckt, was :func:`slot_angle_of` an
-#: Rundung erzeugt, und sonst nichts; alles darüber ist eine Richtungsänderung
-#: und wird gesagt.
-SLOT_ACROSS_LIMIT: Final = 0.5
-
-
 def _slot_turned(
     feature: Feature, axis: tuple[float, float, float], angle: float
 ) -> Finding | None:
@@ -8986,13 +9003,16 @@ def slot_angle_of(feature: Feature, axis: tuple[float, float, float]) -> float:
     gibt es nicht, aber eine Projektdatei aus einer älteren Fassung könnte
     eines tragen, und ein Fehler wäre dort die falsche Antwort auf eine Frage
     nach der Vorbelegung.
-    """
-    from app.core.sketch.planes import frame_of
 
+    Der Rahmen ist :func:`app.core.geom.prepare.slot_frame`: An einer Achse im
+    Messrauschen neben einer Hauptachse zählt der Winkel gegen die Hauptachse,
+    sonst bestimmte das Rauschen, was die Zahl bedeutet (gemessen 29.09.2026,
+    geändert 30.09.2026).
+    """
     along = feature.params.get("direction")
     if not isinstance(along, tuple | list) or len(along) != 3:
         return 0.0
-    frame = frame_of(axis, (0.0, 0.0, 0.0))
+    frame = slot_frame(axis, (0.0, 0.0, 0.0))
     direction = np.asarray(along, dtype=float)
     length = float(np.linalg.norm(direction))
     if length <= EPS_GEOM:
@@ -14745,10 +14765,10 @@ def _recognised_slot(
     ``None`` heißt, dass der Schnitt keine eindeutige Langlochform mehr hat,
     etwa nach dem Kreuzen mit sich selbst. Ein zum Rand offener Ausschnitt
     bleibt dagegen anhand seines verbliebenen Innenbogens zuordenbar.
-    """
-    from app.core.sketch.planes import frame_of
 
-    frame = frame_of(_bore_vector(feature, "axis"), centre)
+    ``angle`` zählt im Rahmen des Schnitts (``prepare.slot_frame``).
+    """
+    frame = slot_frame(_bore_vector(feature, "axis"), centre)
     direction = tuple(
         units.exact_cos_degrees(angle) * frame.x_axis[i]
         + units.exact_sin_degrees(angle) * frame.y_axis[i]

@@ -305,12 +305,11 @@ ihr (`actions._carried_by`).
 
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
-`drill_hole` rechnet ihn gegen die Normale der angeklickten Fläche, `slot_hole`
-gegen die Achse des erkannten Merkmals — **das bleibt so**, denn eine erkannte
-Bohrung hat zwei Mündungen (Regel 21); eine Zahl gilt nicht über ihren Weg
-hinaus. `units.positive_axis` normiert Achse und Langlochrichtung an beiden
-Kernen; das Vorzeichen ist keine Auskunft (`placement.seat_of` fragt beide
-Mündungen).
+`drill_hole` zählt ihn gegen die Normale der Fläche, `slot_hole` gegen die Achse
+des Merkmals — **das bleibt so**: eine erkannte Bohrung hat zwei Mündungen
+(Regel 21). Den Rahmen baut `prepare.slot_frame`, im Messrauschen neben einer
+Hauptachse aus dieser. `units.positive_axis` normiert Achse und Richtung; das
+Vorzeichen ist keine Auskunft (`placement.seat_of` fragt beide Mündungen).
 
 ## Die Werkzeugzugabe steht einmal, und ein Langloch bekommt sie nie
 

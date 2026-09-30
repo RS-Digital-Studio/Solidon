@@ -44,6 +44,7 @@ from app.core.geom.prepare import (
     over_the_edge,
     over_the_edge_along,
     slot_ends,
+    slot_frame,
     slot_profile,
     slot_travel,
     split_findings,
@@ -589,6 +590,8 @@ def thread_exact(ctx: OpContext) -> OpResult:
 @register_op(
     name="drill_brep_hole",
     requires_kind="brep",
+    # 1: ein Langloch zählt seinen Winkel gegen ``prepare.slot_frame`` (30.09.2026).
+    cache_version="1",
     title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
@@ -716,13 +719,12 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     if shape.slot_length > EPS_GEOM:
         # Ein Langloch steckt in der Mitte tief im Material und reißt trotzdem
         # an einem Ende auf — gefragt wird deshalb an beiden Bogenmittelpunkten
-        # und gemeldet höchstens einmal, wie im Netz-Zwilling.
-        from app.core.sketch.planes import frame_of
-
+        # und gemeldet höchstens einmal, wie im Netz-Zwilling; im Rahmen des
+        # Schnitts (``slot_frame``).
         travel = slot_travel(diameter=params.diameter, length=shape.slot_length)
         for end in slot_ends(
             (params.x, params.y, params.z),
-            frame_of(normal, (params.x, params.y, params.z)),
+            slot_frame(normal, (params.x, params.y, params.z)),
             travel,
             shape.slot_angle,
         ):
@@ -762,13 +764,14 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
 
 
 def _bore_span(
-    body: Solid, params: DrillParams, widening_diameter: float
+    body: Solid, params: DrillParams, widening_diameter: float, *, slotted: bool = False
 ) -> tuple[PlaneFrame, float, float]:
     """Rahmen, Werkzeuglänge und Mündungslage einer exakten Bohrung.
 
     Geteilt zwischen dem Rotationskörper und dem Langloch, weil beide dieselbe
     Frage haben: Wohin zeigt die Bohrung, wie lang muss das Werkzeug sein, und
-    wo liegt seine Mündung. Nur der Körper dazwischen ist ein anderer.
+    wo liegt seine Mündung. Nur der Körper dazwischen ist ein anderer — und am
+    Langloch der Rahmen des Winkels (``slotted``: :func:`slot_frame`).
     """
     from itertools import product
 
@@ -781,7 +784,7 @@ def _bore_span(
         values = [0.0, 0.0, 0.0]
         values[index] = 1.0 if position[index] >= body.bounds.centre[index] else -1.0
         normal = (values[0], values[1], values[2])
-    frame = frame_of(normal, position)
+    frame = slot_frame(normal, position) if slotted else frame_of(normal, position)
     if params.depth <= EPS_GEOM:
         box = body.bounds
         corners = product(*zip(box.minimum, box.maximum, strict=True))
@@ -832,7 +835,7 @@ def _slotted_bore(body: Solid, params: DrillParams, profile: Profile) -> tuple[S
 
     position = (params.x, params.y, params.z)
     shape = bore_shape(params)
-    frame, height, mouth = _bore_span(body, params, 0.0)
+    frame, height, mouth = _bore_span(body, params, 0.0, slotted=True)
     travel = slot_travel(diameter=params.diameter, length=shape.slot_length)
     radius = bore_diameter(params.diameter, profile, params.compensate) / 2.0
     floor = dataclasses.replace(

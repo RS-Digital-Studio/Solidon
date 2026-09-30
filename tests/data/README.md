@@ -150,7 +150,8 @@ Sonderfälle mit eigenem Inhalt (`drilled_v6`, `split_v10`, `scad_v12`,
 `painted_v13`, `circle_v18`, `generated_glb_v24`, `matching_answers_v26`,
 `sketch_v30` — Skizzen aus der Zeit vor Ellipse und Kurvenbedingungen —,
 `further_model_v37` — ein zweites Modell an seinen Dateikoordinaten, vor der
-freien Stelle), und werden von `test_project.py` durch die Migrationskette
+freien Stelle —, `slot_angle_frame_v38` — Langlochwinkel im Rahmen vor
+`prepare.slot_frame`), und werden von `test_project.py` durch die Migrationskette
 geschickt; eine neue Formatversion bringt ihre Beispieldatei mit (AGENTS.md,
 Checkliste Dateiformat).
 
@@ -164,6 +165,7 @@ Weitere Sonderfälle, je mit eigenem Test:
 | `projects/print_settings_v33.p3d` | Druckeinstellungen, wie 0.5.0 sie schrieb: Fein, Außenwand 30 mm/s, gewählt `shell.wall_count` und `infill.density` | öffnet mit genau diesen Werten, nichts als angenommen markiert | `test_manufacturer.py` |
 | `projects/repair_v34.p3d` | ein Reparaturschritt ohne `self_intersections` | rechnet wie gespeichert (`self_intersections: False`), der Befund bietet das Auflösen an | `test_project.py` |
 | `projects/edge_groups_v36.p3d` | zwei Quader 40 × 30 × 20 mm mit Querbohrung Ø 6, einer als Netz, einer exakt, beide R 1 an „waagerecht“ | die Migration setzt `rings_by_plane: False`, die Mündungen werden wie gespeichert mitgerundet; der exakte Körper rechnet auf die Stelle genau wie beim Schreiben gemessen | `test_project.py` |
+| `projects/slot_angle_frame_v38.p3d` | zwei Platten 80 × 60 × 10 mm, Netz und exakt; je eine Bohrung Ø 6 0,03° neben Z, zum Langloch gezogen (Winkel −40°), und eine Bohrung mit Haken *Langloch* 0,05° neben Z (Winkel 160°), geschrieben vom Stand vor `prepare.slot_frame` | alle vier Langlöcher liegen wie beim Schreiben gemessen entlang +Y (auf 0,5°); die Bohrungen kommen umgerechnet an (≈ 90°), *Zum Langloch ziehen* mit `measured_frame` und hält den Winkel von heute als Antwort fest | `test_project.py` |
 
 ## Daneben
 

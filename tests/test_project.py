@@ -11,6 +11,7 @@ import sys
 import zipfile
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -3748,3 +3749,139 @@ def test_v37_a_further_model_keeps_the_place_of_its_file(profile) -> None:
     assert moved.maximum[0] <= first.mesh.bounds.minimum[0] - 5.0 or moved.minimum[1] >= (
         first.mesh.bounds.maximum[1] + 5.0
     ), "neben dem ersten, nicht in ihm"
+
+
+def _slot_world_angles(result: Any, name: str) -> list[float]:
+    """Die Richtungen der Langlöcher eines Körpers in der Aufsicht, gegen X, modulo 180°."""
+    return sorted(
+        math.degrees(math.atan2(float(f.params["direction"][1]), float(f.params["direction"][0])))
+        % 180.0
+        for f in result.scene.objects[name].features.values()
+        if f.kind == "slot"
+    )
+
+
+def test_v38_a_slot_keeps_the_world_direction_it_was_cut_with(profile) -> None:
+    """38 → 39: Ein gespeichertes Langloch liegt nach dem Update, wo es lag.
+
+    ``slot_angle_frame_v38.p3d`` hat der Stand vor ``prepare.slot_frame``
+    geschrieben: zwei Platten, eine als Netz, eine exakt, auf jeder eine
+    Bohrung 0,03° neben Z mit *Zum Langloch ziehen* (Winkel −40°) und eine
+    Bohrung mit Haken *Langloch* 0,05° neben Z (Winkel 160°). Beide Winkel
+    meinten im Rahmen von damals die Weltrichtung +Y — gemessen beim
+    Schreiben: alle vier Langlöcher bei (0, 1, ±3e-4). Im Rahmen von heute
+    meinten dieselben Zahlen −40° und 160°. Die Migration rechnet den Winkel
+    der Bohrung um (ihre Normale steht im Schritt); *Zum Langloch ziehen*
+    trägt ``measured_frame``, liest den Winkel im alten Rahmen und hält ihn
+    als Antwort im neuen fest.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "slot_angle_frame_v38.p3d"
+    original = project_data(path)
+    assert original["format_version"] == 38
+    saved = {
+        entry["id"]: entry["params"].get("slot_angle")
+        for entry in original["ops"]
+        if entry["op"] in {"slot_hole", "drill_hole"} and "slot_angle" in entry["params"]
+    }
+    assert sorted(saved.values()) == pytest.approx([-40.0, -40.0, 160.0, 160.0], abs=1e-4)
+
+    project = load(path)
+    assert project.document.format_version == FORMAT_VERSION
+    pulls = [entry for entry in project.document.ops if entry.op == "slot_hole"]
+    drills = [entry for entry in project.document.ops if entry.params.get("slotted")]
+    assert len(pulls) == 2 and all(entry.params["measured_frame"] is True for entry in pulls)
+    assert len(drills) == 2
+    for entry in drills:
+        assert entry.params["slot_angle"] == pytest.approx(90.0, abs=0.5), entry.params
+
+    stored = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert stored.complete
+    for name in ("obj_1", "obj_2"):
+        assert _slot_world_angles(stored, name) == pytest.approx([90.0, 90.0], abs=0.5), name
+
+    history = History(project.document)
+    assert history.record_answers(stored.answers), "die Umrechnung wird festgehalten"
+    for entry in (e for e in project.document.ops if e.op == "slot_hole"):
+        assert entry.params["measured_frame"] is False
+        assert entry.params["slot_angle"] == pytest.approx(90.0, abs=0.5), entry.params
+    again = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert again.complete
+    for name in ("obj_1", "obj_2"):
+        assert _slot_world_angles(again, name) == pytest.approx([90.0, 90.0], abs=0.5), name
+
+
+def test_v38_slot_angles_keep_their_world_direction_on_both_undo_sides() -> None:
+    """38 → 39 rechnet jede gespeicherte Bohrung mit Langloch um, auch hinter Strg+Z.
+
+    Sollwert von außen: Der alte Winkel ist so gewählt, dass er im Rahmen von
+    damals (``frame_of``, Z × Normale) die Weltrichtung +Y meint; im Rahmen der
+    Hauptachse heißt +Y 90°. Unverändert bleiben: eine Bohrung ohne Haken, eine
+    ohne Normale (sie bohrt entlang einer Hauptachse), eine wirklich gekippte
+    (17,5°, außerhalb des Kegels) und fremde Schritte. *Zum Langloch ziehen*
+    bekommt ``measured_frame``, auch in den gespeicherten Fassungen.
+    """
+    from app.core.scene.migrations import _keep_slot_directions_as_they_were
+    from app.core.sketch.planes import frame_of
+
+    tilt, towards = math.radians(0.05), math.radians(200.0)
+    normal = (
+        math.sin(tilt) * math.cos(towards),
+        math.sin(tilt) * math.sin(towards),
+        math.cos(tilt),
+    )
+    old = frame_of(normal, (0.0, 0.0, 0.0))
+    towards_y = math.degrees(math.atan2(old.y_axis[1], old.x_axis[1]))
+    nx, ny, nz = normal
+    steep = (0.3, 0.0, math.sqrt(0.91))
+    data = {
+        "ops": [
+            {
+                "op": "drill_hole",
+                "params": {"slotted": True, "slot_angle": towards_y, "nx": nx, "ny": ny, "nz": nz},
+            },
+            {
+                "op": "drill_brep_hole",
+                "params": {"slotted": True, "slot_angle": towards_y, "nx": nx, "ny": ny, "nz": nz},
+            },
+            {"op": "drill_hole", "params": {"slot_angle": 30.0, "nx": nx, "ny": ny, "nz": nz}},
+            {"op": "drill_hole", "params": {"slotted": True, "slot_angle": 30.0}},
+            {
+                "op": "drill_hole",
+                "params": {
+                    "slotted": True,
+                    "slot_angle": 30.0,
+                    "nx": steep[0],
+                    "ny": steep[1],
+                    "nz": steep[2],
+                },
+            },
+            {"op": "slot_hole", "params": {"at_feature": "hole_1", "slot_angle": -40.0}},
+            {"op": "create_box"},
+        ],
+        "transactions": [
+            {
+                "changes": {
+                    "before": {"edited_ops": {"6": {"op": "slot_hole", "params": {}}}},
+                    "after": {"edited_ops": {"6": {"op": "slot_hole"}}},
+                }
+            },
+            {"changes": ["kein Verlaufsstand"]},
+        ],
+    }
+
+    migrated = _keep_slot_directions_as_they_were(data)
+
+    params = [entry.get("params") for entry in migrated["ops"]]
+    assert params[0]["slot_angle"] == pytest.approx(90.0, abs=0.06)
+    assert params[1]["slot_angle"] == pytest.approx(90.0, abs=0.06)
+    assert params[2]["slot_angle"] == 30.0, "ohne Haken kein Langloch"
+    assert params[3]["slot_angle"] == 30.0, "ohne Normale eine Hauptachse"
+    assert params[4]["slot_angle"] == 30.0, "wirklich gekippt: derselbe Rahmen"
+    assert params[5] == {"at_feature": "hole_1", "slot_angle": -40.0, "measured_frame": True}
+    assert params[6] is None, "ein fremder Schritt bekommt nichts"
+    changes = migrated["transactions"][0]["changes"]
+    assert changes["before"]["edited_ops"]["6"]["params"] == {"measured_frame": True}
+    assert changes["after"]["edited_ops"]["6"]["params"] == {"measured_frame": True}
