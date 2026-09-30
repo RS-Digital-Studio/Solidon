@@ -4,6 +4,22 @@
 > verdichtet wurde. Die Regel steht dort; hier steht, warum — mit den
 > Messwerten und Anlässen ihres Tages.
 
+## Migration ist Pflicht, nicht Kür
+
+**Umrechnen statt melden** (30.09.2026, Format 39). Der Winkel eines
+Langlochs zählt seitdem gegen `prepare.slot_frame`; bis Format 38 meinte
+derselbe Wert an einer Achse im Messrauschen eine andere Richtung — an der
+vernetzten Teppichecke dasselbe Langloch -168,5°, 132,0° oder 91,8° je nach
+Feinheit. Ein Hinweis beim Öffnen hätte dem Kunden gesagt, dass sein Langloch
+jetzt anders liegt, und ihn die alte Richtung suchen lassen, die er schon
+gedruckt hat. Der alte Rahmen ist aus derselben Achse berechenbar, also trifft
+die Umrechnung sie genau. Bei *Bohrung setzen* steht die Normale im Schritt,
+die Migration rechnet sofort um; bei *Zum Langloch ziehen* gibt erst die
+Erkennung die Achse, darum trägt der Schritt `measured_frame`, und die Op legt
+den umgerechneten Winkel über `answered` zurück — wie die freie Stelle eines
+weiteren Modells (Format 38). Belegt an `slot_angle_frame_v38.p3d`, geschrieben
+vom Stand davor (`test_project.test_v38_a_slot_keeps_the_world_direction_it_was_cut_with`).
+
 ## Was nicht in die Datei gehört
 
 Zu den mitreisenden Druckern und Materialien: Passungen aus *Teilen* und
