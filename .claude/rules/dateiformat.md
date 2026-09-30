@@ -20,9 +20,8 @@ Checkliste „Dateiformat ändern" in `AGENTS.md`; der Test belegt, dass die
 alte Datei **korrekt** rechnet, nicht nur fehlerfrei öffnet.
 
 **Ändert sich, was ein gespeicherter Wert meint, rechnet die Migration ihn
-um, statt es zu melden.** Kennt erst die Auswertung die Größe dazu, trägt der
-Schritt einen Haken, und die Op rechnet einmal um und hält die Antwort fest
-(`measured_frame`, Format 39).
+um, statt es zu melden** — braucht es die Auswertung, über einen Haken im
+Schritt (`measured_frame`, Format 39).
 
 ## Was nicht in die Datei gehört
 
@@ -292,10 +291,8 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Export und Druckdialog fragen diesen Rat an einer Stelle
   (`writer.part_advice`, je Spule über `handover.slot_processes`), sonst nennt
   die Zeile im Dialog ein Teil, das die Datei nicht bekommt. Der Rat je Teil
-  fragt bis zum Fixpunkt: Verlangt ein Teil einen übernommenen Wert je Teil,
-  fragt er mit ihm erneut (`PartSplit.accepted_per_part`), nur mit dem
-  übernommenen Wert — sonst sieht eine Regel, die einen anderen Pfad je Teil
-  voraussetzt („Außenwand zuerst“ nach Arachne), nur die Grundlage. CuraEngine nimmt
+  fragt bis zum Fixpunkt, mit den übernommenen Werten, die das Teil verlangt
+  (`PartSplit.accepted_per_part`). CuraEngine nimmt
   nur `CURA_PER_MESH` je Netz: Dort behält die Platte die Übernahme, ein Teil
   ohne Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was
   ein Slicer nicht je Teil annimmt, bleibt plattenweit
