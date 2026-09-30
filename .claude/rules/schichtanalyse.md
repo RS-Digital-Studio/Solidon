@@ -485,10 +485,10 @@ als Bohrungen ohne Öffnung läse, als Merkmalsart `void` aus;
 - `actions.no_own_body` fragt, was `prepare_ops._tool_for` fragt
   (`NO_OWN_BODY`; `NO_BODY_FROM_FACES` über `has_own_body`), an allen
   Körperhandlungen. Kundentexte: zwei Sätze, der Rückweg im zweiten.
-- **Zerfällt ein Körper nach einer Merkmalsänderung, sagt die Auswertung es**
-  (`touches_features`, `feature.body_split`, `evaluate._split_findings`;
-  Urteil einmal in `geom.boolean.body_split`; gewollt lose Teile:
-  `leaves_separate_parts`, `bausteine.md`).
+- **Zerfällt ein Körper nach einer Merkmalsänderung, sagt es ein Satz:**
+  `bore.splits_the_body` der Bohrung, sonst `feature.body_split`
+  (`touches_features`, `evaluate._split_findings`; Urteil in
+  `geom.boolean.body_split`; gewollt lose Teile: `bausteine.md`).
 - **Ein konvexes Werkzeug aus den Flächen wurzelt in seiner Grundfläche und
   spart durchlaufende Hohlräume aus** (`prepare_ops._rooted`,
   `_without_cavities`, `_placing_tool`) — nur beim Setzen, nicht beim

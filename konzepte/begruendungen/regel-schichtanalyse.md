@@ -1224,7 +1224,11 @@ ein Stadion mit Weg 0,00005 mm, angenommen, weil der Weg nur größer als
   Satz. Gemessen: *Merkmal entfernen* an einem Zapfen, der der Körper selbst
   war, ließ 50 Teile zurück, und der Bericht schwieg. Ein gewollt loses Teil
   zählt nicht (`leaves_separate_parts`, `bausteine.md`); das Urteil steht
-  einmal in `geom.boolean.body_split`.
+  einmal in `geom.boolean.body_split`. Meldet der Schritt den Zerfall selbst,
+  schweigt die Auswertung: Am Würfel 20 mm mit einem Langloch 100 mm quer
+  durch standen bis zum 29.09.2026 zwei Sätze über denselben Zerfall im
+  Bericht, der der Bohrung (`bore.splits_the_body`, mit Grund und *Eingabe
+  korrigieren*) und darunter dieser.
 * **Ein konvexes Werkzeug aus den Flächen wurzelt in seiner Grundfläche und
   spart die Hohlräume aus, die durch es laufen** (`prepare_ops._rooted`,
   `_without_cavities`, gebündelt in `_placing_tool`). Kegel und Kuppel

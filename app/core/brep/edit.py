@@ -1636,6 +1636,26 @@ def unified(solid: Solid) -> Solid:
     return solid.replacing(joined.Shape(), history=joined.History())
 
 
+def _bore_unit(direction: Vec3, depth: float) -> Vec3:
+    """Die Einheitsachse einer erkannten Bohrung — oder die Absage des Netz-Zwillings.
+
+    Dieselbe Frage und derselbe Satz wie in :func:`app.core.geom.prepare.resize_bore`
+    und :func:`~app.core.geom.prepare.slot_bore` (``bore_geometry_error``). Hier
+    stand bis zum 29.09.2026 dreimal ein nacktes ``ValueError`` ohne
+    Handlungsvorschlag (Regel 17), und eine Richtung oder Tiefe mit NaN kam an
+    ``<= EPS_GEOM`` vorbei bis zu OpenCASCADE. ``math.hypot`` wie am Netz, statt
+    einer Summe über ``** 2`` (``kern.md``: plattformgleich).
+    """
+    from app.core.geom.prepare import bore_geometry_error
+
+    if not math.isfinite(depth) or depth <= EPS_GEOM:
+        raise bore_geometry_error()
+    span = math.hypot(float(direction[0]), float(direction[1]), float(direction[2]))
+    if not math.isfinite(span) or span <= EPS_GEOM:
+        raise bore_geometry_error()
+    return (float(direction[0]) / span, float(direction[1]) / span, float(direction[2]) / span)
+
+
 def _slot_tool(
     position: Vec3,
     direction: Vec3,
@@ -1650,16 +1670,7 @@ def _slot_tool(
     from app.core.geom.prepare import slot_profile, slot_travel
     from app.core.sketch.planes import frame_of
 
-    if depth <= EPS_GEOM:
-        raise ValueError("a detected bore must have a positive depth")
-    span = math.sqrt(sum(float(value) ** 2 for value in direction))
-    if span <= EPS_GEOM:
-        raise ValueError("a bore direction must not be zero")
-    unit: Vec3 = (
-        float(direction[0]) / span,
-        float(direction[1]) / span,
-        float(direction[2]) / span,
-    )
+    unit = _bore_unit(direction, depth)
     frame = frame_of(unit, position)
     floor = replace(
         frame,
@@ -1698,17 +1709,7 @@ def resize_bore(
     """
     if is_close(diameter, previous_diameter):
         return solid
-    if depth <= EPS_GEOM:
-        raise ValueError("a detected bore must have a positive depth")
-
-    length = math.sqrt(sum(float(value) ** 2 for value in direction))
-    if length <= EPS_GEOM:
-        raise ValueError("a bore direction must not be zero")
-    unit: Vec3 = (
-        float(direction[0]) / length,
-        float(direction[1]) / length,
-        float(direction[2]) / length,
-    )
+    unit = _bore_unit(direction, depth)
     start: Vec3 = (
         float(position[0]) - unit[0] * depth / 2.0,
         float(position[1]) - unit[1] * depth / 2.0,
@@ -1829,16 +1830,7 @@ def _centred_bore(
     Füllen einen Zapfen stehen, den am exakten Körper nichts wieder abschneidet.
     """
     require()
-    if depth <= EPS_GEOM:
-        raise ValueError("a detected bore must have a positive depth")
-    span = math.sqrt(sum(float(value) ** 2 for value in direction))
-    if span <= EPS_GEOM:
-        raise ValueError("a bore direction must not be zero")
-    unit: Vec3 = (
-        float(direction[0]) / span,
-        float(direction[1]) / span,
-        float(direction[2]) / span,
-    )
+    unit = _bore_unit(direction, depth)
     start: Vec3 = (
         float(position[0]) - unit[0] * depth / 2.0,
         float(position[1]) - unit[1] * depth / 2.0,

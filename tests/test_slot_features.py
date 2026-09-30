@@ -2269,6 +2269,157 @@ def test_a_slot_that_cuts_the_body_in_two_says_so(profile: Profile) -> None:
     assert "bore.splits_the_body" in [finding.code for finding in findings]
 
 
+def _a_cube_cut_in_two(profile: Profile, kernel: str) -> tuple[object, object, str]:
+    """Würfel 20 mm und ein Langloch Ø 5 auf 100 mm quer durch — zwei Teile, im Stapel.
+
+    Zurück kommen Projekt, Verlauf und der Name der Quader-Operation des Kerns.
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    load_operations()
+    box = "create_brep_box" if kernel == "brep" else "create_box"
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Würfel und Langloch",
+        [
+            OperationDraft(op=box, params={"width": 20.0, "depth": 20.0, "height": 20.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": 5.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 20.0,
+                    "axis": "z",
+                    "depth": 0.0,
+                    "anchor": "mouth",
+                    "slotted": True,
+                    "slot_length": 100.0,
+                },
+            ),
+        ],
+    )
+    split = evaluate(project.document, profile, quality="fine")
+    assert split.scene.objects["obj_1"].mesh.component_count == 2, "die Vorbedingung"
+    return project, history, box
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_bore_that_cuts_the_body_in_two_says_so_once(profile: Profile, kernel: str) -> None:
+    """Ein Zerfall, ein Satz — der, der sagt, woran es lag.
+
+    Gemessen am 29.09.2026 im Prüfbericht des Würfels mit dem Langloch quer
+    durch, an beiden Kernen: „Die Bohrung schneidet den Körper ganz durch — er
+    zerfällt in mehrere Teile. Verkürzen Sie die Länge oder versetzen Sie die
+    Bohrung." (``bore.splits_the_body``, mit *Eingabe korrigieren*) und darunter
+    „Der Körper zerfällt nach diesem Schritt in lose Teile." — derselbe Zerfall
+    zweimal, der zweite Satz aus ``evaluate._split_findings``, zwei Tage nach dem
+    ersten entstanden. Wie bei einem gewollt losen Teil urteilt die Auswertung
+    nicht über einen Zerfall, den der Schritt selbst gemeldet hat.
+    """
+    from app.core.scene import evaluate
+
+    project, _history, _box = _a_cube_cut_in_two(profile, kernel)
+
+    result = evaluate(project.document, profile, quality="fine")
+
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert codes.count("bore.splits_the_body") == 1, codes
+    assert "feature.body_split" not in codes, codes
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("bridged", [True, False], ids=["wieder-ein-stueck", "bleibt-zerfallen"])
+def test_the_report_forgets_the_split_once_the_body_is_one_piece_again(
+    profile: Profile, kernel: str, bridged: bool
+) -> None:
+    """„Er zerfällt in mehrere Teile" gilt nur, solange der Körper zerfallen ist.
+
+    Gemessen am 29.09.2026: Würfel 20 mm, Langloch 100 mm quer durch (zwei
+    Teile), danach ein Quader darüber vereinigt — am Endstand ein Stück, an
+    beiden Kernen, und im Bericht standen weiter zwei Sätze vom Zerfall.
+    ``bore.splits_the_body`` und der allgemeine ``feature.body_split`` der
+    Auswertung fehlten in ``evaluate.ONE_PIECE_CODES``, wo ihr Zwilling
+    ``mesh.components_split`` steht (``.claude/rules/operationen.md``,
+    „Befunde statt Protokoll"). Die Gegenrichtung: Bleibt der Körper in zwei
+    Teilen, bleibt auch der Satz.
+    """
+    from app.core.scene import OperationDraft, evaluate
+
+    project, history, box = _a_cube_cut_in_two(profile, kernel)
+    if bridged:
+        history.apply(
+            "Brücke",
+            [OperationDraft(op=box, params={"width": 20.0, "depth": 20.0, "height": 4.0})],
+        )
+        history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"))])
+
+    result = evaluate(project.document, profile, quality="fine")
+
+    assert result.stopped_at is None
+    parts = result.scene.objects["obj_1"].mesh.component_count
+    assert parts == (1 if bridged else 2), "die Vorbedingung: der Endstand, den der Test meint"
+    codes = [finding.code for finding in result.scene.report.findings]
+    if bridged:
+        assert not {"bore.splits_the_body", "feature.body_split"} & set(codes), codes
+    else:
+        assert "bore.splits_the_body" in codes, codes
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_the_split_sentence_names_the_parts_the_body_has_at_the_end(
+    profile: Profile, kernel: str
+) -> None:
+    """Eine Teilezahl im Bericht ist die des Endstands, nicht die eines Zwischenschritts.
+
+    Gemessen am 29.09.2026 an ``build_tray_v3.step`` (fünf Körper): quer
+    durchgeschnitten acht Teile, danach überbrückt drei — und im Bericht stand
+    weiter der Zerfall mit „Anzahl 8", an beiden Kernen. Hier kleiner: Der
+    Würfel zerfällt am ersten Langloch in zwei Teile, am zweiten, quer dazu, in
+    vier. Stehen bleibt der Satz mit vier; der mit zwei fällt wie beim
+    Zwilling ``mesh.components_split`` (``evaluate.COUNTED_PARTS``).
+    """
+    from app.core.scene import OperationDraft, evaluate
+
+    project, history, _box = _a_cube_cut_in_two(profile, kernel)
+    history.apply(
+        "Zweites Langloch quer",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": 5.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 20.0,
+                    "axis": "z",
+                    "depth": 0.0,
+                    "anchor": "mouth",
+                    "slotted": True,
+                    "slot_length": 100.0,
+                    "slot_angle": 90.0,
+                },
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, quality="fine")
+
+    assert result.scene.objects["obj_1"].mesh.component_count == 4, "die Vorbedingung"
+    said = [
+        (finding.code, dict(finding.values))
+        for finding in result.scene.report.findings
+        if finding.code in {"bore.splits_the_body", "feature.body_split"}
+    ]
+    assert said == [("bore.splits_the_body", {"count": 4})], said
+
+
 def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     """An beiden Enden wird gefragt — an beiden Kernen.
 
@@ -2293,14 +2444,76 @@ def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     assert "bore.over_the_edge" in codes["brep"], codes
 
 
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("at", "length", "said"),
+    [(36.0, 20.0, 1), (-36.0, 20.0, 1), (30.0, 20.0, 0), (0.0, 96.0, 1)],
+    ids=["rechtes-ende", "linkes-ende", "innen", "beide-enden"],
+)
+def test_setting_a_slot_asks_at_both_ends_on_both_kernels(
+    profile: Profile, kernel: str, at: float, length: float, said: int
+) -> None:
+    """*Bohrung setzen* mit dem Haken *Langloch* fragt an beiden Bogenmitten nach
+    der Kante — an beiden Kernen, und über beide Enden mit einem Satz.
+
+    Der exakte Zweig (``drill_brep_hole``) fragt so seit dem 12.09.2026, aber kein
+    Test hielt es: Mit ``slot_ends`` auf die Mitte verkürzt blieben alle 559
+    Langloch-, Bohr- und Vorschaufälle grün (Gegenprobe 29.09.2026). Der einzige
+    Fall über das Register lag mitten in der Platte (Übergabe der Durchsicht vom
+    11.09.2026).
+
+    Soll von außen: Platte 90 mm breit, Kante bei 45; Langloch Ø 6 auf ``length``,
+    Mitte bei ``at``. Das Stadion reicht bis ``|at| + (length - 6) / 2 + 3``, die
+    runde Bohrung an derselben Mitte bis ``|at| + 3``: bei 36 also 46 gegen 39 mm
+    — ein Ende steht über, die Mitte nicht. Bei 30 bleiben es 40 mm.
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        entry = SceneObject(id="obj_1", name="Platte", mesh=edit.box(90.0, 60.0, 10.0), kind="brep")
+        top = 10.0
+    else:
+        entry = SceneObject(
+            id="obj_1",
+            name="Platte",
+            mesh=MeshData.of(trimesh.creation.box(extents=(90.0, 60.0, 10.0))),
+        )
+        top = 5.0
+    reach = abs(at) + (length - 6.0) / 2.0 + 3.0
+    assert (reach > 45.0) is (said == 1), "die Vorbedingung: das Soll kommt aus dem Umriss"
+    assert abs(at) + 3.0 < 45.0, "die Vorbedingung: die Mitte allein bleibt im Material"
+
+    _output, findings = run_op_with_findings(
+        "drill_hole",
+        entry,
+        profile,
+        x=at,
+        y=0.0,
+        z=top,
+        axis="z",
+        diameter=6.0,
+        depth=0.0,
+        anchor="mouth",
+        compensate=False,
+        slotted=True,
+        slot_length=length,
+    )
+
+    over = [finding for finding in findings if finding.code == "bore.over_the_edge"]
+    assert len(over) == said, [finding.code for finding in findings]
+
+
 def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
-    """Die Zugabe gilt dem ersten Zug — danach bleibt die Breite.
+    """Die Breite bleibt über jeden Zug — keiner bekommt die Zugabe aus §39.
 
     Gemessen 11.09.2026 am Netz, Bohrung Ø 5 mit Materialtoleranz (5,1901):
     nach drei Zügen mit Zugabe 5,2057, 5,2213, 5,2371 — ein Sechzehntel
-    Millimeter je Zug, ein Viertel der Materialtoleranz nach dreien. Ohne
-    Zugabe am zweiten und dritten Zug bleibt die Änderung unter dem
-    Messrauschen der Bogeneinpassung (Fund des Reviews).
+    Millimeter je Zug, ein Viertel der Materialtoleranz nach dreien (Fund des
+    Reviews). Seit dem 22.09.2026 schneidet auch der erste Zug ohne Zugabe, und
+    am 29.09.2026 gemessen blieb die Breite über drei Züge Bit für Bit die der
+    Bohrung: 5,2. Die Toleranz hier stand auf 0,006 und 0,01 — eine Zugabe unter
+    einem halben Hundertstel je Zug wäre durchgerutscht.
     """
     mesh = drill(
         MeshData.of(trimesh.creation.box(extents=(80.0, 40.0, 10.0))),
@@ -2314,6 +2527,7 @@ def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
     ).mesh
     entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
     chosen = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    measured = float(entry.features[chosen].params["diameter"])
     widths: list[float] = []
     for length in (20.0, 24.0, 28.0):
         entry = run_op("slot_hole", entry, profile, at_feature=chosen, slot_length=length)
@@ -2321,8 +2535,48 @@ def test_pulling_a_slot_again_does_not_widen_it(profile: Profile) -> None:
         widths.append(float(slot.params["diameter"]))
         chosen = slot.id
 
-    assert abs(widths[1] - widths[0]) < 0.006, widths
-    assert abs(widths[2] - widths[0]) < 0.01, widths
+    assert widths == pytest.approx([measured] * 3, abs=1e-9), (measured, widths)
+
+
+def test_a_slot_says_the_width_it_cut(profile: Profile) -> None:
+    """``BoreResult.diameter`` ist der wirklich geschnittene Durchmesser — auch beim Langloch.
+
+    ``prepare.slot_bore`` schnitt mit ``(diameter + overlap) / 2`` und meldete
+    ``diameter``; die Vorgabe für ``overlap`` war die Zugabe aus §39
+    (Übergabe der Durchsicht vom 11.09.2026). Solange jeder Aufrufer
+    ``overlap=0.0`` gibt, fällt es nicht auf — wer es vergaß, bekam still ein
+    um 0,02 mm breiteres Langloch unter dem alten Maß. Die Zugabe sagt jetzt
+    der Aufrufer, wie am exakten Zwilling ``brep.edit.slot_bore``. Soll von
+    außen: der Abstand der Flanken im Mittelschnitt, exakte Geraden bei ±r.
+    """
+    import inspect
+
+    from app.core.geom.prepare import slot_bore
+
+    given = inspect.signature(slot_bore).parameters["overlap"].default
+    assert given is inspect.Parameter.empty, "die Zugabe sagt der Aufrufer, keine Vorgabe"
+    for overlap in (0.0, 0.1):
+        result = slot_bore(
+            plate(),
+            position=(0.0, 0.0, 0.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=5.0,
+            depth=10.0,
+            through=True,
+            length=20.0,
+            angle_deg=0.0,
+            profile=profile,
+            overlap=overlap,
+        )
+        section = result.mesh.raw.section(
+            plane_origin=[0.0, 0.0, 0.0], plane_normal=[0.0, 0.0, 1.0]
+        )
+        points = np.asarray(section.vertices)
+        inner = points[(np.abs(points[:, 0]) < 20.0) & (np.abs(points[:, 1]) < 10.0)]
+        width = float(np.ptp(inner[:, 1]))
+
+        assert width == pytest.approx(5.0 + overlap, abs=1e-9), overlap
+        assert result.diameter == pytest.approx(width, abs=1e-9), overlap
 
 
 def test_pulling_an_exact_slot_again_keeps_its_width_exactly(profile: Profile) -> None:

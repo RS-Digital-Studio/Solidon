@@ -1101,6 +1101,7 @@ def _evaluate(
                         prepared_objects[object_id],
                         operation,
                         spec,
+                        result.findings,
                     )
                 )
             prepared_hashes[object_id] = object_hash(
@@ -1427,9 +1428,13 @@ CLOSED_STATE_CODES: Final = frozenset(
 
 #: Und die, die „mehr als ein Teil" aussagen — am Endstand gestrichen, wenn
 #: der Körper dort aus einem Stück besteht. Ein Teil im Teil gehört dazu:
-#: Ohne zweite Schale gibt es keines.
+#: Ohne zweite Schale gibt es keines. Ebenso der Zerfall an einem Schritt, den
+#: ein späterer wieder zu einem Stück vereinigt hat — ob die Bohrung ihn meldet
+#: (``bore.splits_the_body``) oder die Auswertung (``feature.body_split``).
 ONE_PIECE_CODES: Final = frozenset(
     {
+        "bore.splits_the_body",
+        "feature.body_split",
         "ingest.multiple_components",
         "ingest.small_components",
         "mesh.components_split",
@@ -1441,8 +1446,12 @@ ONE_PIECE_CODES: Final = frozenset(
 #: Sie fallen auch an einem Körper, der am Endstand aus **anderen** vielen
 #: Teilen besteht: „69 Teile, von denen manche ineinanderstecken" stand über
 #: dem Bohrmaschinenhalter, den *Überschneidungen auflösen* zu vier Teilen
-#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13).
+#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13). Ebenso „Anzahl 8"
+#: über einer Wanne, die ein späterer Schritt zu drei Teilen überbrückt hatte.
+#: **Nicht** ``feature.body_split``: Bei einem Baustein mit lösbarem Teil zählt
+#: sein „Nachher" nur die Stücke des Trägers, der Körper hat eines mehr.
 COUNTED_PARTS: Final[dict[str, str]] = {
+    "bore.splits_the_body": "count",
     "ingest.multiple_components": "components",
     "repair.part_inside": "components",
     "mesh.components_split": "after_components",
@@ -5215,7 +5224,11 @@ def _missing_inputs(
 
 
 def _split_findings(
-    before: SceneObject | None, after: SceneObject, operation: Operation, spec: OperationSpec
+    before: SceneObject | None,
+    after: SceneObject,
+    operation: Operation,
+    spec: OperationSpec,
+    said: Sequence[Finding] = (),
 ) -> list[Finding]:
     """Ein Körper, der nach einer Merkmalsänderung in Teile zerfällt, sagt es.
 
@@ -5238,8 +5251,17 @@ def _split_findings(
     zurückzunehmen. Welche Operation das tut, sagt ihr Registereintrag
     (``leaves_separate_parts``, aus ``PartSpec.separate_from_host``); über
     ihren Träger urteilt sie selbst, und hier bleibt es still.
+
+    **Und ein Zerfall, den der Schritt selbst gemeldet hat, steht einmal da.**
+    ``said`` sind die Befunde des Schritts. Eine Bohrung, die den Körper ganz
+    durchschneidet, sagt es mit ``bore.splits_the_body`` — mit dem Grund und dem
+    Knopf, der den Schritt öffnet. Darunter stand bis zum 29.09.2026 noch dieser
+    Satz über denselben Zerfall. Still bleibt es bei jeder Aussage über die
+    Teilezahl (:data:`ONE_PIECE_CODES`) zu diesem Körper oder ohne Körper.
     """
     if before is None or spec.leaves_separate_parts:
+        return []
+    if any(entry.code in ONE_PIECE_CODES and entry.object_id in (None, after.id) for entry in said):
         return []
     were = getattr(before.mesh, "component_count", None)
     are = getattr(after.mesh, "component_count", None)

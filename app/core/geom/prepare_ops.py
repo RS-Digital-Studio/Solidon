@@ -3367,6 +3367,14 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
         cone_piece_blocked(feature) or cone_reason(feature, op) or reason_against(op, feature.kind)
     )
     if against is None:
+        # **Ohne Achse keine Bohrung und kein Langloch**, gefragt hier und nicht
+        # erst dort, wo sie zuerst gebraucht wird: Mit (0, 0, 0) im Merkmal
+        # sagten 34 von 36 Wegen ab, jeder an einer anderen Stelle; *Merkmal
+        # drehen* am exakten Langloch rechnete bis zu einer Division durch null
+        # weiter, *Merkmal verdoppeln* am Netz-Langloch setzte die Kopie still
+        # entlang +Z (gemessen 29.09.2026, Regel 21).
+        if feature.kind in EXACT_CAVITY_KINDS:
+            _bore_vector(feature, "axis")
         return feature
     raise ValidationError(
         field="at_feature",
