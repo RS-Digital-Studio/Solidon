@@ -19,9 +19,8 @@
 # Erneuern: Umgebung neu aufbauen, Suite grün fahren, dann
 #   .venv\Scripts\python.exe tools/check_env.py --freeze
 # Wann es lohnt, sagt der Job „Neueste Versionen" in build.yml, der ohne diese
-# Datei frei auflöst. Er liefert nur, solange das Repository öffentlich ist —
-# dazwischen scheitert auch der Wochenlauf an der Abrechnung; rund um einen
-# Release deshalb von Hand mit check_latest starten.
+# Datei frei auflöst. Er läuft an Release-Tags oder beim Handstart mit
+# check_latest und liefert, solange das Repository öffentlich ist.
 
 altgraph==0.17.5
 ast_serialize==0.11.1

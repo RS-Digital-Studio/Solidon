@@ -675,15 +675,19 @@ def test_the_orchestration_guard_rejects_tests_after_the_build() -> None:
         _assert_changed_orchestration_is_tested(moved)
 
 
-def test_only_the_requested_latest_dependencies_run_alongside_a_manual_build() -> None:
-    """Der wöchentliche Versionswächter ist beim Handstart ausdrücklich zuschaltbar."""
+def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() -> None:
+    """Der freie Versionswächter läuft beim Release oder auf ausdrücklichen Handstart."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    triggers = workflow.split("\non:", 1)[1].split("\n# **Ein Stand", 1)[0]
+    assert "\n  schedule:" not in triggers
+    push = triggers.split("  push:\n", 1)[1].split("\n  pull_request:", 1)[0]
+    assert 'tags: ["v*"]' in push
     inputs = workflow.split("  workflow_dispatch:\n", 1)[1].split("\nconcurrency:", 1)[0]
     latest_input = inputs.split("      check_latest:\n", 1)[1].split("\n#", 1)[0]
     assert "type: boolean" in latest_input and "default: false" in latest_input
     latest = job_block(workflow, "latest")
     assert (
-        "    if: github.event_name == 'schedule' || "
+        "    if: startsWith(github.ref, 'refs/tags/') || "
         "(github.event_name == 'workflow_dispatch' && inputs.check_latest == true)"
     ) in latest
     assert "python -m ruff check ." in job_block(workflow, "quality")

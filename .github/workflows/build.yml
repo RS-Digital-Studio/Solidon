@@ -8,8 +8,8 @@
 # sie nur. Fenster laufen je Datei in einem frischen Prozess. Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
 # Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
-# `latest`) löst frei auf und meldet, was eine neue Version bricht — wöchentlich
-# und beim Handstart mit `check_latest`, aber nur, solange das Repository
+# `latest`) löst frei auf und meldet, was eine neue Version bricht — bei
+# Release-Tags und auf Handstart mit `check_latest`, solange das Repository
 # öffentlich ist (siehe unten).
 #
 # Ein Push prüft nur Ubuntu; die volle Matrix mit Paketen läuft bei Tags und
@@ -28,10 +28,6 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
-  schedule:
-    # Montags früh: ein Lauf die Woche findet eine gebrochene Version, bevor
-    # sie jemandem im Weg steht.
-    - cron: "0 5 * * 1"
   workflow_dispatch:
     inputs:
       tests_only:
@@ -52,8 +48,8 @@ on:
 # einmal abgelehnt hatte. Ein neuer Push auf denselben Zweig bricht den
 # älteren Lauf deshalb ab: Geprüft wird, was liegt, nicht, was war. Für
 # Tags gilt das nicht — ein Tag ist ein Release, und ein zweiter Tag am
-# selben Tag darf dem ersten nicht das Paket wegnehmen; Zeitplan und
-# Handstart bleiben aus demselben Grund ungestört.
+# selben Tag darf dem ersten nicht das Paket wegnehmen; Handstarts bleiben aus
+# demselben Grund ungestört.
 concurrency:
   group: bauen-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
@@ -1451,10 +1447,10 @@ jobs:
     # Wird dieser Job rot, während `suite` grün bleibt, liegt es an einer neuen
     # Version und nicht am Code — und im Protokoll steht, an welcher.
     #
-    # Nur Ubuntu und nur wöchentlich: private Minuten sind gezählt, und für
-    # diese Frage genügt eine Plattform. Er hängt an keinem anderen Job und
-    # blockiert nichts — er meldet.
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.check_latest == true)
+    # Nur Ubuntu: private Minuten sind gezählt, und für diese Frage genügt
+    # eine Plattform. Er hängt an keinem anderen Job und blockiert nichts —
+    # er meldet. Beim Handstart wird er ausdrücklich zugeschaltet.
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.check_latest == true)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
