@@ -87,6 +87,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
+| [RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an einer Bohrung durch beide Material](#rm-319) | Geometrie, Erkennung und Druckvorbereitung | Berührung in der Vorfrage wie Durchdringung behandeln oder nach dem Stopfen innere Flächen entfernen (Laufzeit §31) |
+| [RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am Netz bleibt sein Überstand](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Beide Kerne schneiden die gemessene Länge der Bohrung, wie das Netz |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -114,6 +116,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Auftrag Robert: Größen aus den Maschinenvarianten des Slicers, Auswahl mit „Andere …“; vorher mit der Dialog-Sitzung abstimmen |
+| [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Vorschauwerkzeug im Rahmen des Schnitts bauen; wartet auf `app/core/scene/placement.py` (fremd geändert) |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -2374,6 +2377,38 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   30.09. in fremder Arbeit). Abnahme: die Stangenplatte geht mit Solidons Übergabe ohne
   Handarbeit im Slicer, Brim ohne Abstand an den Stangen, Stangen nicht am Rand.
 
+<a id="rm-319"></a>
+
+- [ ] **RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an
+  einer Bohrung durch beide Material.** Gemessen am 30.09.2026: zwei Platten
+  40 x 20 x 10 als eigene Schalen, in z = 10 aufeinander, Bohrung Ø 6 durch
+  beide; *Zum Langloch ziehen* auf 12 mm lässt am Netz 12 167,2 mm³ statt
+  14 714,6 (Δ -2 547,4 mm³) und verliert das Merkmal; derselbe Körper aus
+  einem Block ergibt 14 715,2. Der Stopfen (`_closed_at`) macht daraus ein
+  Teil mit 16 000,0 mm³, dicht, aber mit den 104 Berührdreiecken in z = 10 im
+  Inneren; die Differenz danach verliert das Material.
+  `repair.parts_that_cross` meldet sich berührende Schalen nicht, also
+  vereinigt `boolean._parts_united_first` sie nicht vorher (RM-221-Familie).
+  *Bohrung setzen* durch dieselben Platten ohne Stopfen stimmt (15 397,9 mm³
+  mit Materialzuschlag). An echten Modellen noch nicht gesehen (Teppichecke:
+  ΔV -138,2 vernetzt gegen -138,1 exakt). Vorschlag: Berührung in der Vorfrage
+  wie Durchdringung behandeln, oder nach dem Stopfen innere Flächen entfernen.
+  Abnahme: die zwei Platten mit 14 714,6 ± 1 mm³ und erkanntem Langloch, an
+  beiden Kernen.
+
+<a id="rm-320"></a>
+
+- [ ] **RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am
+  Netz bleibt sein Überstand.** Gemessen am 30.09.2026: Platte 40 x 20 x 10
+  mit Bohrung Ø 6, darin ein Stift Ø 5 x 15 als zweiter Körper (Verbund bzw.
+  dessen Tessellierung). *Zum Langloch ziehen* auf 12 mm: exakt ein Teil,
+  7 358,3 mm³ — der Stift ist ganz weg, auch die 5 mm über der Platte; am Netz
+  zwei Teile, Platte 7 357,6 und Stiftrest 97,6 mm³ (z 10,01 bis 15). Beide
+  Kerne sagen nicht dasselbe. Der Fall steht für eine Baugruppe aus einem STEP
+  mit Schraube in der Bohrung. Weg: Beide schneiden die gemessene Länge
+  der Bohrung wie das Netz, nicht durch alles in der Flucht. Abnahme: an
+  beiden Kernen zwei Teile, Stiftrest gleich auf 0,1 mm³.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -3316,6 +3351,29 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Sitzung abstimmen, die den Dialog umgebaut hat (`4d955a9e7`). Abnahme: Elegoo CC2 bietet
   0,2/0,4/0,6/0,8 an, eine Wahl stellt Bahnbreite und Maschinenprofil, eine eigene Größe
   bleibt möglich.
+
+<a id="rm-321"></a>
+
+- [ ] **RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung
+  auf der Gegenseite gespiegelt.** Die Op zählt den Winkel gegen
+  `slot_frame` der positiven Achse (`units.positive_axis`), das
+  Vorschauwerkzeug entsteht in `placement` im Rahmen der Sitzfläche
+  (`seat_of`, deren Normale nach außen zeigt). Gerechnet am 30.09.2026 mit
+  beiden Rahmen: Sitz -Z, Winkel 45° → Vorschau (-0,707; 0,707; 0), Schnitt
+  (0,707; 0,707; 0); ebenso gespiegelt an -X und -Y, gleich an +Z. Dazu eine
+  Bohrung, die 0,5° bis 2,6° schief zu ihrer Sitzfläche steht
+  (`SLOT_ACROSS_LIMIT` bis `_SEAT_PARALLEL`): Winkel 0 in der Vorschau +X, im
+  Schnitt je nach Kipprichtung bis 90° daneben (gerechnet bei 1° und 2°,
+  Richtungen 0°/45°/90°: 90°, 45°, 0° Unterschied). Betrifft
+  Sacklöcher von unten und aus Seitenflächen nach -X/-Y, auch *Bohrung
+  ändern* an einem Langloch dort; *Bohrung setzen* mit Haken nicht (dort ist
+  die Flächennormale die Achse des Schnitts). So schon vor dem Umbau
+  (`surface.frame`). Nicht am Fenster gesehen — Fenstertests laufen zum
+  Release. Vorschlag: Das Vorschauwerkzeug von `slot_hole` und `resize_hole`
+  im Rahmen des Schnitts bauen (Winkel dort spiegeln, wo die Sitznormale
+  gegen die Achse zeigt), `PlacementFlow._tool_axes` nimmt dann die Achse.
+  Abnahme: Umriss der Vorschau und geschnittenes Langloch an einem Sackloch
+  von unten bei 45° auf 0,5° gleich.
 
 ## KI und Generatoren
 
