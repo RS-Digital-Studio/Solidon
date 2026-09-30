@@ -924,3 +924,288 @@ def test_operator_cli_explains_a_missing_display(
     assert licence_admin.main([]) == 1
     message = capsys.readouterr().out
     assert "Bildschirm" in message and "starten" in message
+
+
+def test_delivery_matrix_resumes_only_a_matching_well_formed_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    model = tmp_path / "plate.stl"
+    output = tmp_path / "matrix"
+    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "einheit.py"
+    monkeypatch.setattr(sys, "argv", [str(script), str(root), str(model), str(output), "heim"])
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    sys.path.insert(0, str(script.parent))
+    specification = importlib.util.spec_from_file_location("delivery_matrix_unit", script)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+
+    identity = {
+        "code_sha256": "code",
+        "plan": "modelle",
+        "spec": "heim",
+        "model": str(model.resolve()),
+        "model_sha256": "model",
+    }
+    combos = [
+        {"slicer": slicer, "printer": printer, "complete": True, "skip": "not part of this probe"}
+        for slicer, printer in module.combos("heim")
+    ]
+    previous = {
+        "code": str(root),
+        "model": str(model.resolve()),
+        "spec": "heim",
+        "_matrix_run": identity,
+        "combos": combos,
+    }
+
+    assert module._can_resume_result(previous, identity)
+    assert not module._can_resume_result(previous, None)
+    assert not module._can_resume_result({**previous, "_matrix_run": {"plan": "anderer"}}, identity)
+    assert not module._can_resume_result({**previous, "load_error": "OSError"}, identity)
+    assert not module._can_resume_result(
+        {**previous, "combos": [{key: value for key, value in combos[0].items() if key != "skip"}]},
+        identity,
+    )
+    assert not module._can_resume_result(
+        {**previous, "combos": [{**combos[0], "skip": ["not a text result"]}]}, identity
+    )
+    assert not module._can_resume_result({**previous, "combos": [*combos, combos[0]]}, identity)
+    assert not module._can_resume_result(
+        {**previous, "combos": [*combos, {"slicer": "fremd", "printer": "x", "complete": True}]},
+        identity,
+    )
+    assert not module._can_resume_result([previous], identity)
+
+
+def test_delivery_matrix_report_excludes_legacy_and_mismatched_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "bericht.py"
+    folder = tmp_path / "matrix"
+    nested = folder / "plate-a1b2c3d4"
+    nested.mkdir(parents=True)
+    identity = {
+        "code_root": str(root),
+        "code_sha256": "code",
+        "plan": "modelle",
+        "expected_combos": {"heim": [["orca", "anycubic-kobra-2"]]},
+        "models": [{"path": "plate.stl", "sha256": "model", "spec": "heim"}],
+    }
+    (folder / ".matrix-identity").write_text(json.dumps(identity), encoding="utf-8")
+    marker: dict[str, object] = {
+        "run_sha256": "",
+        "code_sha256": "code",
+        "plan": "modelle",
+        "spec": "heim",
+        "model": "plate.stl",
+        "model_sha256": "model",
+    }
+    specification = importlib.util.spec_from_file_location("delivery_matrix_report", script)
+    assert specification is not None and specification.loader is not None
+    report = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(report)
+    marker["run_sha256"] = report.identity_hash(identity)
+    (folder / ".matrix-status").write_text(
+        json.dumps({"run_sha256": marker["run_sha256"], "status": "complete"}),
+        encoding="utf-8",
+    )
+    result = {
+        "model": marker["model"],
+        "code": str(root),
+        "spec": "heim",
+        "done": True,
+        "_matrix_run": marker,
+        "combos": [
+            {
+                "slicer": "orca",
+                "printer": "anycubic-kobra-2",
+                "complete": True,
+                "variants": {"standard": [{"ok": True, "flags": []}]},
+            }
+        ],
+    }
+    (nested / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    (folder / "legacy.json").write_text(json.dumps(result), encoding="utf-8")
+    foreign_folder = folder / "foreign"
+    foreign_folder.mkdir()
+    foreign = {**result, "_matrix_run": {**marker, "run_sha256": "old"}}
+    (foreign_folder / "result.json").write_text(json.dumps(foreign), encoding="utf-8")
+
+    malformed = {
+        **identity,
+        "expected_combos": {"heim": [["orca", ["nested"]]]},
+    }
+    assert not report.belongs_to_run(
+        {
+            **result,
+            "_matrix_run": {
+                **marker,
+                "run_sha256": report.identity_hash(malformed),
+            },
+        },
+        malformed,
+    )
+    changed_model = {**result, "_matrix_run": {**marker, "model_sha256": "changed"}}
+    assert not report.belongs_to_run(changed_model, identity)
+    monkeypatch.setattr(sys, "argv", [str(script), str(folder)])
+    assert report.main() == 0
+    output = capsys.readouterr().out
+    assert "1 Modelle gelesen, 1 vollständig." in output
+    assert "2 Ergebnisdateien mit fehlerhafter oder fremder Laufkennung ausgelassen." in output
+    (folder / ".matrix-status").write_text(
+        json.dumps({"run_sha256": marker["run_sha256"], "status": "failed"}),
+        encoding="utf-8",
+    )
+    assert report.main() == 0
+    output = capsys.readouterr().out
+    assert "0 Modelle gelesen, 0 vollständig." in output
+    assert "1 Matrixläufe nicht abgeschlossen" in output
+
+    (folder / ".matrix-status").write_text(
+        json.dumps({"run_sha256": marker["run_sha256"], "status": "complete"}),
+        encoding="utf-8",
+    )
+    incomplete = {**result, "done": False}
+    (nested / "result.json").write_text(json.dumps(incomplete), encoding="utf-8")
+    assert not report.belongs_to_run(incomplete, identity)
+    assert report.main() == 0
+    output = capsys.readouterr().out
+    assert "0 Modelle gelesen, 0 vollständig." in output
+    assert "1 Matrixläufe nicht abgeschlossen" in output
+
+    (nested / "result.json").unlink()
+    assert report.main() == 0
+    output = capsys.readouterr().out
+    assert "0 Modelle gelesen, 0 vollständig." in output
+    assert "1 Matrixläufe nicht abgeschlossen" in output
+
+
+def test_delivery_matrix_seal_requires_each_expected_combo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "treiber.py"
+    monkeypatch.setattr(sys, "argv", [str(script), str(root), str(tmp_path / "matrix"), "modelle"])
+    monkeypatch.setattr(sys, "path", [*sys.path, str(script.parent)])
+    specification = importlib.util.spec_from_file_location("delivery_matrix_driver", script)
+    assert specification is not None and specification.loader is not None
+    driver = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(driver)
+
+    expected = driver._expected_combos("heim")
+    assert len(expected) == len(driver.SLICERS)
+    complete = {
+        "combos": [
+            {"slicer": slicer, "printer": printer, "complete": True, "skip": "probe"}
+            for slicer, printer in expected
+        ]
+    }
+    assert len(driver._code_digest(root)) == 64
+    assert driver._has_complete_combos(complete, "heim")
+    assert not driver._has_complete_combos({"combos": complete["combos"][:-1]}, "heim")
+    assert not driver._has_complete_combos(
+        {"combos": [*complete["combos"], complete["combos"][0]]}, "heim"
+    )
+    invalid_terminal = {**complete["combos"][0], "skip": ["probe"]}
+    assert not driver._has_complete_combos(
+        {"combos": [invalid_terminal, *complete["combos"][1:]]}, "heim"
+    )
+
+
+def test_delivery_matrix_fingerprints_cura_material_profiles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    root = tmp_path / "cura-profiles"
+    root.mkdir()
+    (root / "printer.def.json").write_text("{}", encoding="utf-8")
+    (root / "pla.xml.fdm_material").write_text("<fdmmaterial />", encoding="utf-8")
+    (root / "readme.xml").write_text("not a profile", encoding="utf-8")
+
+    repo = Path(__file__).resolve().parents[1]
+    script = repo / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "treiber.py"
+    monkeypatch.syspath_prepend(str(script.parent))
+    monkeypatch.setattr(sys, "argv", [str(script), str(repo), str(tmp_path / "out"), "modelle"])
+    specification = importlib.util.spec_from_file_location("delivery_matrix_profile_files", script)
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(module)
+
+    assert [path.name for path in module._profile_files(root)] == [
+        "pla.xml.fdm_material",
+        "printer.def.json",
+    ]
+
+
+def test_delivery_matrix_requires_boolean_completion_and_binds_worker_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / ".claude" / ".state" / "uebergabe-gesamt-2026-09-27" / "treiber.py"
+    model = tmp_path / "plate.stl"
+    model.write_bytes(b"model")
+    output = tmp_path / "matrix"
+    monkeypatch.syspath_prepend(str(script.parent))
+    monkeypatch.setattr(sys, "argv", [str(script), str(root), str(output), "modelle"])
+    specification = importlib.util.spec_from_file_location(
+        "delivery_matrix_strict_completion", script
+    )
+    assert specification is not None and specification.loader is not None
+    driver = importlib.util.module_from_spec(specification)
+    specification.loader.exec_module(driver)
+
+    identity_seed = {"code_sha256": "code", "plan": "modelle"}
+    driver.RUN_IDENTITY = identity_seed
+    driver.MODEL_DIGESTS[model.resolve()] = driver._file_digest(model)
+    monkeypatch.setattr(driver, "_code_digest", lambda _root: "code-hash")
+    monkeypatch.setattr(driver, "_slicer_identity", lambda: {})
+    monkeypatch.setattr(driver, "_expected_combos", lambda _spec: [("orca", "printer")])
+    planned = [(model, "heim")]
+    monkeypatch.setattr(driver, "WORKERS", 2)
+    two_workers = driver._run_identity(planned)
+    monkeypatch.setattr(driver, "WORKERS", 3)
+    three_workers = driver._run_identity(planned)
+    assert two_workers["schema"] == 2
+    assert two_workers["workers"] == 2
+    assert three_workers["workers"] == 3
+    assert two_workers != three_workers
+
+    driver.RUN_IDENTITY = two_workers
+    driver._expected_combos = lambda _spec: [("orca", "printer")]
+    result_path = driver.result_of(model)
+    result_path.parent.mkdir(parents=True)
+    marker = driver._result_identity(model, "heim")
+    result = {
+        "done": "false",
+        "code": str(root),
+        "model": str(model.resolve()),
+        "spec": "heim",
+        "_matrix_run": marker,
+        "combos": [
+            {
+                "slicer": "orca",
+                "printer": "printer",
+                "complete": True,
+                "skip": "probe",
+            }
+        ],
+    }
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    assert not driver.done(model, "heim")
+    assert not driver._seal_result(model, "heim")
+    result["done"] = 1
+    result_path.write_text(json.dumps(result), encoding="utf-8")
+    assert not driver.done(model, "heim")
+    assert not driver._seal_result(model, "heim")
