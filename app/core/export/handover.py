@@ -5111,10 +5111,12 @@ def _same(actual: str, wanted: str) -> bool:
     """Ob zwei Werte dasselbe meinen.
 
     Verglichen wird nachsichtig: ``0.2`` und ``0.20``, ``15%`` und ``15``,
-    und eine Liste aus einem Element gegen dieses Element. Sonst meldete die
-    Gegenprobe Unterschiede, die keine sind, und würde nach dem dritten Mal
-    weggesehen.
+    eine Liste aus einem Element gegen dieses Element und maskierte Anführungs-
+    zeichen gegen ihre Schreibweise im G-Code. Sonst meldete die Gegenprobe
+    Unterschiede, die keine sind, und würde nach dem dritten Mal weggesehen.
     """
+    actual = actual.replace(r"\"", '"')
+    wanted = wanted.replace(r"\"", '"')
     if actual.strip() == wanted.strip():
         return True
 

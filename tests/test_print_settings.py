@@ -6373,6 +6373,41 @@ def test_the_gcode_comparison_preserves_all_filament_values(actual: str) -> None
     )
 
 
+def test_the_gcode_comparison_unescapes_quotes_without_hiding_real_differences() -> None:
+    """PrusaStartcode bleibt gleich, wenn der Slicer Anführungszeichen entmaskiert."""
+    written = {"start_gcode": r"M862.3 P \"[printer_model]\""}
+
+    assert handover.verify_settings({"start_gcode": 'M862.3 P "[printer_model]"'}, written) == []
+    findings = handover.verify_settings({"start_gcode": 'M862.3 P "[different_printer]"'}, written)
+    assert [item.code for item in findings] == ["slicer.setting_ignored"]
+
+
+def test_filament_profile_comparison_uses_the_same_quote_normalization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die zweite Nutzung von ``_same`` unterscheidet keine G-Code-Schreibweisen."""
+    profile_path = tmp_path / "filament.json"
+    profile_path.touch()
+    settings = print_settings.resolve(profiles.make_profile())
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"), flavour="orca", base_filament=str(profile_path)
+    )
+    monkeypatch.setattr(handover, "profile_file", lambda *_args: profile_path)
+    monkeypatch.setattr(handover, "_profile_roots", lambda _setup: ())
+    monkeypatch.setattr(
+        handover.slicer_profiles,
+        "resolve_values",
+        lambda _base, *, roots: {"filament_start_gcode": ['M862.3 P \\"[printer_model]\\"']},
+    )
+    monkeypatch.setattr(
+        handover,
+        "by_section",
+        lambda *_args: {"filament": {"filament_start_gcode": 'M862.3 P "[printer_model]"'}},
+    )
+
+    assert handover.profile_differences(settings, setup) == []
+
+
 @pytest.mark.parametrize("initial_error", [b"outside printable area", b"found error, exit"])
 def test_arrangement_fallback_does_not_disable_later_valid_layouts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, initial_error: bytes
