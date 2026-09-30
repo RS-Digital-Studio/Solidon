@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 38
+FORMAT_VERSION: Final = 39
 
 
 @dataclass(frozen=True, slots=True)
@@ -1035,6 +1035,86 @@ def _place_further_models_freely(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Die Schritte, deren Langloch ihren Winkel im Rahmen der Normalen des Schritts zählen.
+_SLOTTED_DRILLS: Final = frozenset({"drill_hole", "drill_brep_hole"})
+
+
+def _keep_slot_directions_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """38 → 39: Ein gespeicherter Langlochwinkel meint weiter dieselbe Richtung.
+
+    Seit dem 30.09.2026 zählt der Winkel eines Langlochs gegen
+    ``prepare.slot_frame``: Eine Achse im Messrauschen neben einer Hauptachse
+    gilt als die Hauptachse. Bis Format 38 zählte er gegen ``frame_of`` der
+    Achse, und dort bestimmte das Rauschen die erste Rahmenachse — derselbe
+    Winkel meinte heute eine andere Richtung, und ein gespeichertes Langloch
+    stünde nach dem Update verdreht im Teil.
+
+    **Umgerechnet, nicht gemeldet.** Der Kunde hat sein Langloch in die
+    Richtung gelegt, die er im Bild sah, und das Teil so gedruckt; ein Hinweis
+    beim Öffnen hätte ihm nur gesagt, dass es jetzt anders liegt, und ihn die
+    alte Richtung von Hand suchen lassen. Die Umrechnung trifft sie genau, denn
+    der alte Rahmen ist aus derselben Achse berechenbar. Deshalb, je Schritt:
+
+    * *Bohrung setzen* mit Haken *Langloch* trägt seine Normale im Schritt. Der
+      alte Rahmen lässt sich daraus rechnen, und der Winkel wird hier
+      umgerechnet (``prepare.slot_angle_from_measured_frame``): dieselbe
+      Richtung in der Welt, geschnitten wie gespeichert. Ohne Normale gilt eine
+      Hauptachse, und beide Rahmen sind gleich.
+    * *Zum Langloch ziehen* zählt gegen die Achse des erkannten Merkmals, und
+      die steht erst bei der Auswertung fest. Der Schritt bekommt
+      ``measured_frame``: Die Operation liest den Winkel im alten Rahmen und
+      hält ihn einmal im neuen fest (``answered``).
+
+    Wie 34 → 35 auch in den gespeicherten Fassungen ``before`` und ``after``
+    jeder Änderung; ein Schritt, der den Schlüssel schon trägt, bleibt, wie er
+    ist. Festgehalten an ``tests/data/projects/slot_angle_frame_v38.p3d``,
+    geschrieben vom Stand vor der Änderung.
+    """
+    from app.core.units import EPS_GEOM
+
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        kind = operation.get("op")
+        if kind != "slot_hole" and kind not in _SLOTTED_DRILLS:
+            continue
+        params = operation.setdefault("params", {})
+        if not isinstance(params, dict):
+            continue
+        if kind == "slot_hole":
+            params.setdefault("measured_frame", True)
+            continue
+        if params.get("slotted") is not True:
+            continue
+        # Erst hier, und nur für ein gespeichertes Langloch: Die Rahmen kommen
+        # aus dem Geometriekern, den eine Datei ohne Langloch nicht braucht.
+        from app.core.geom.prepare import slot_angle_from_measured_frame, slot_frame
+        from app.core.sketch.planes import frame_of
+
+        raw = [params.get(name, 0.0) for name in ("nx", "ny", "nz", "slot_angle")]
+        if not all(isinstance(value, int | float) and math.isfinite(value) for value in raw):
+            continue
+        normal = (float(raw[0]), float(raw[1]), float(raw[2]))
+        # Ohne Normale bohrt der Schritt entlang einer Hauptachse (``axis``),
+        # und dort sind beide Rahmen gleich — wie überall außerhalb des Kegels.
+        if math.hypot(*normal) <= EPS_GEOM:
+            continue
+        origin = (0.0, 0.0, 0.0)
+        if slot_frame(normal, origin) == frame_of(normal, origin):
+            continue
+        params["slot_angle"] = slot_angle_from_measured_frame(normal, float(raw[3]))
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1074,6 +1154,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=35, to_version=36, apply=_mark_own_print_settings),
     Step(from_version=36, to_version=37, apply=_keep_edge_groups_as_they_were),
     Step(from_version=37, to_version=38, apply=_place_further_models_freely),
+    Step(from_version=38, to_version=39, apply=_keep_slot_directions_as_they_were),
 )
 
 

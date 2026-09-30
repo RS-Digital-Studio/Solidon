@@ -270,6 +270,37 @@ def test_the_outline_is_the_one_the_cut_uses() -> None:
     assert np.allclose(drawn[0], drawn[-1]), "der Umriss ist geschlossen"
 
 
+@pytest.mark.parametrize("towards", [0.0, 40.0, 200.0])
+def test_the_handle_reads_a_world_direction_as_the_same_angle_at_a_noisy_axis(
+    towards: float,
+) -> None:
+    """Ein Zug entlang +Y heißt 90°, auch wenn die Achse im Messrauschen neben Z steht.
+
+    Der Griff zählt gegen denselben Rahmen wie der Schnitt
+    (``prepare.slot_frame``). Am Besenhalter (Achsen 4e-8 rad neben Z) und an
+    der vernetzten Teppichecke (0,02° bis 0,07°) zeigte Winkel 0 bis zum
+    30.09.2026 in eine Richtung, die das Rauschen bestimmte — derselbe Zug zur
+    selben Wand ergab an jeder Bohrung eine andere Zahl. Hier steht die Achse
+    0,03° neben Z, in drei Richtungen gekippt; Zug und Umriss bleiben bei +Y.
+    """
+    tilt = math.radians(0.03)
+    axis = (
+        math.sin(tilt) * math.cos(math.radians(towards)),
+        math.sin(tilt) * math.sin(math.radians(towards)),
+        math.cos(tilt),
+    )
+    centre = (2.0, -3.0, 5.0)
+
+    length, angle = dragged_slot(centre, axis, BORE, (centre[0], centre[1] + 12.0, centre[2]))
+    drawn = slot_outline(centre, axis, BORE, 24.0, 90.0)
+
+    assert length == pytest.approx(24.0, abs=1e-3)
+    assert angle == pytest.approx(90.0, abs=0.5)
+    spread = np.ptp(drawn, axis=0)
+    assert spread[1] == pytest.approx(24.0, abs=0.05), "der Umriss liegt entlang +Y"
+    assert spread[0] == pytest.approx(BORE, abs=0.05)
+
+
 # --- Der Griff als Bedienelement --------------------------------------------------
 
 

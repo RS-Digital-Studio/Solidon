@@ -765,6 +765,28 @@ def exact_atan_degrees(ratio: float) -> float:
     return _exact_atan_degrees(float(ratio))
 
 
+def exact_atan2_degrees(y: float, x: float) -> float:
+    """Der Winkel des Punkts ``(x, y)`` gegen die x-Achse, in Grad in ``(-180, 180]``.
+
+    Der Arkustangens aus :func:`exact_atan_degrees`, immer über das Verhältnis
+    der kleineren zur größeren Koordinate (höchstens eins, also kein Überlauf),
+    der Rest aus Grundrechenarten — plattformgleich wie der Arkustangens
+    selbst, anders als ``math.atan2``. Der Ursprung hat keine Richtung und
+    bekommt null.
+    """
+    if not (math.isfinite(x) and math.isfinite(y)):
+        raise ValueError(f"Ein Punkt muss endlich sein, nicht ({x}, {y})")
+    if abs(x) >= abs(y):
+        if x == 0.0:
+            return 0.0
+        base = exact_atan_degrees(y / x)
+        if x > 0.0:
+            return base
+        return base + (180.0 if y >= 0.0 else -180.0)
+    base = exact_atan_degrees(x / y)
+    return 90.0 - base if y > 0.0 else -90.0 - base
+
+
 @functools.lru_cache(maxsize=ANGLE_CACHE)
 def _exact_atan_degrees(ratio: float) -> float:
     """Der Arkustangens über die Reihe, nach Rückführung auf ein kleines Argument.

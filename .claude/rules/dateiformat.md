@@ -19,6 +19,11 @@ Eine Projektdatei ist Fehlerbericht und Archiv. Jede Formatänderung folgt der
 Checkliste „Dateiformat ändern" in `AGENTS.md`; der Test belegt, dass die
 alte Datei **korrekt** rechnet, nicht nur fehlerfrei öffnet.
 
+**Ändert sich, was ein gespeicherter Wert meint, rechnet die Migration ihn
+um, statt es zu melden.** Kennt erst die Auswertung die Größe dazu, trägt der
+Schritt einen Haken, und die Op rechnet einmal um und hält die Antwort fest
+(`measured_frame`, Format 39).
+
 ## Was nicht in die Datei gehört
 
 Keine absoluten Pfade, kein ausführbarer Code, keine eigenen Bausteine — sie

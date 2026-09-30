@@ -2420,6 +2420,138 @@ def test_the_split_sentence_names_the_parts_the_body_has_at_the_end(
     assert said == [("bore.splits_the_body", {"count": 4})], said
 
 
+def _plate_with_a_second_body(kernel: str, *, inside: bool, slot: bool = False) -> SceneObject:
+    """Platte 40 x 20 x 10 mit Bohrung Ø 6 und ein zweiter Körper im selben Objekt.
+
+    ``inside``: ein Stift Ø 5 auf 15 mm steht als eigener Körper in der
+    Bohrung und ragt 5 mm heraus — eine Baugruppe, die als ein Objekt kam. Sonst
+    steht ein Klotz 15 mm neben der Platte. ``slot`` zieht die Bohrung vorher
+    auf 12 mm. Exakt ein Verbund zweier Körper, am Netz dessen Tessellierung:
+    Beide Kerne sehen dieselbe Form.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(40.0, 20.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    if slot:
+        plate = edit.slot_bore(
+            plate,
+            position=(0.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=12.0,
+            length=12.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    second = (
+        edit.cylinder(5.0, 15.0)
+        if inside
+        else edit.moved(edit.box(10.0, 10.0, 10.0), (40.0, 0.0, 0.0))
+    )
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, second.shape)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def _bore_in(entry: SceneObject, kind: str) -> str:
+    return next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == kind and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    )
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_second_body_in_the_bore_does_not_make_the_pull_a_split(
+    profile: Profile, kernel: str
+) -> None:
+    """Gezählt wird gegen den Körper vor dem Schritt, nicht gegen den gestopften.
+
+    Gemessen am 30.09.2026: Die Teppichecke (zwei Körper im STEP, Langloch
+    gedreht) und der Besenhalter (drei Schalen im STL, erster Zug) hatten nach
+    *Zum Langloch ziehen* so viele Teile wie vorher, 2 und 3, und am Netz stand
+    trotzdem „Die Bohrung schneidet den Körper ganz durch — er zerfällt in
+    mehrere Teile." Der Zug schließt die alte Öffnung zuerst, der Stopfen
+    verbindet die Körper, die durch sie gehen, und der Schnitt trennt sie
+    wieder; gezählt wurde gegen den gestopften Körper mit einem Teil weniger.
+    Der exakte Kern zählte schon gegen den Schritt davor.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    entry = _plate_with_a_second_body(kernel, inside=True)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
+
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+
+    assert output.mesh.component_count <= 2, "die Vorbedingung: nichts ist zerfallen"
+    assert "bore.splits_the_body" not in {finding.code for finding in findings}, findings
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_widening_a_slot_with_a_second_body_in_it_is_no_split(
+    profile: Profile, kernel: str
+) -> None:
+    """Derselbe Stopfen beim Ändern eines Langlochs (*Bohrung ändern*, ``resize_hole``).
+
+    Ein Langloch geht vor dem Neuschnitt immer zu (RM-156); am Netz stand danach
+    derselbe falsche Zerfall wie beim Zug (gemessen 30.09.2026: zwei Teile vor
+    und nach dem Ändern auf Ø 7, dazu ``bore.splits_the_body``).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    entry = _plate_with_a_second_body(kernel, inside=True, slot=True)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
+
+    output, findings = run_op_with_findings(
+        "resize_hole", entry, profile, at_feature=_bore_in(entry, "slot"), diameter=7.0
+    )
+
+    assert output.mesh.component_count <= 2, "die Vorbedingung: nichts ist zerfallen"
+    assert "bore.splits_the_body" not in {finding.code for finding in findings}, findings
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_pull_through_the_plate_beside_a_second_body_still_says_it_splits(
+    profile: Profile, kernel: str
+) -> None:
+    """Die Gegenrichtung: Zerfällt die Platte wirklich, bleibt der Satz — mit drei Teilen.
+
+    Ein Langloch von 46 mm quer durch die 40 mm lange Platte teilt sie in zwei
+    Hälften; mit dem Klotz daneben hat das Objekt danach drei Teile statt zwei.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    entry = _plate_with_a_second_body(kernel, inside=False)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Klotz"
+
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=46.0
+    )
+
+    assert output.mesh.component_count == 3, "die Vorbedingung: die Platte ist geteilt"
+    said = [dict(entry.values) for entry in findings if entry.code == "bore.splits_the_body"]
+    assert said == [{"count": 3}], findings
+
+
 def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     """An beiden Enden wird gefragt — an beiden Kernen.
 
@@ -2798,3 +2930,268 @@ def test_both_ways_to_a_slot_cut_the_same_slot(profile: Profile, kernel: str) ->
         if exact:
             assert result.mesh.volume == pytest.approx(stadium, rel=1e-9)
     assert pulled.mesh.volume == pytest.approx(drilled.mesh.volume, rel=1e-6 if exact else 2e-4)
+
+
+# --- Der Rahmen des Winkels an einer gemessenen Achse ------------------------------
+
+
+def _tilted(degrees: float, towards: float) -> tuple[float, float, float]:
+    """Eine Achse ``degrees`` Grad neben +Z, gekippt zur Richtung ``towards`` (Grad gegen X)."""
+    s, c = math.sin(math.radians(degrees)), math.cos(math.radians(degrees))
+    return (s * math.cos(math.radians(towards)), s * math.sin(math.radians(towards)), c)
+
+
+def _along_world_y(axis: tuple[float, float, float]) -> Feature:
+    """Ein Langloch, das in der Welt entlang +Y liegt — in der Ebene quer zu ``axis``."""
+    unit = np.asarray(axis, dtype=float) / np.linalg.norm(axis)
+    along = np.array([0.0, 1.0, 0.0]) - unit[1] * unit
+    along /= np.linalg.norm(along)
+    return Feature(
+        id="slot_1",
+        kind="slot",
+        provenance="detected",
+        params={"axis": tuple(unit), "direction": tuple(float(value) for value in along)},
+    )
+
+
+#: Wie weit eine gemessene Achse in den Fällen unten neben +Z steht, in Grad:
+#: das Rauschen eines float32-Netzes (Besenhalter, 4e-8 rad), die vernetzte
+#: Teppichecke bei Feinheit 0,01 und 0,05 (0,023° und 0,071°), und knapp
+#: innerhalb von ``SLOT_ACROSS_LIMIT``.
+MEASURED_NOISE = (math.degrees(4e-8), 0.023, 0.071, 0.45)
+
+
+@pytest.mark.parametrize("noise", MEASURED_NOISE)
+@pytest.mark.parametrize("towards", [0.0, 40.0, 135.0, 200.0, 290.0])
+def test_a_slot_angle_counts_against_the_main_axis_despite_measurement_noise(
+    noise: float, towards: float
+) -> None:
+    """Ein Langloch entlang +Y zeigt im Feld 90°, gleich wohin das Rauschen die Achse kippt.
+
+    Gemessen am 29.09.2026 an ``carpet-corner-clip.step``, vernetzt: Dasselbe
+    Langloch (in der Welt 90°) zeigte bei Feinheit 0,01 −168,5°, bei 0,02
+    132,0°, bei 0,05 91,8°; exakt 90°. ``frame_of`` nimmt Z × Achse als erste
+    Rahmenachse bis 1e-9 neben Z, und deren Richtung bestimmte das Rauschen.
+    Innerhalb von ``SLOT_ACROSS_LIMIT`` neben einer Hauptachse zählt der Winkel
+    jetzt gegen die Hauptachse (Entscheidung 30.09.2026).
+    """
+    from app.core.geom.prepare_ops import slot_angle_of
+
+    axis = _tilted(noise, towards)
+
+    assert slot_angle_of(_along_world_y(axis), axis) == pytest.approx(90.0, abs=0.5)
+
+
+@pytest.mark.parametrize(
+    ("main", "tilt_towards"),
+    [((0.0, 0.0, -1.0), 70.0), ((1.0, 0.0, 0.0), 10.0), ((0.0, 1.0, 0.0), 250.0)],
+    ids=["unten", "seitlich-x", "seitlich-y"],
+)
+def test_the_slot_frame_of_a_noisy_axis_is_the_frame_of_its_main_axis(
+    main: tuple[float, float, float], tilt_towards: float
+) -> None:
+    """Auch von unten und an einer Seitenwand: der Rahmen der Hauptachse, gegen die Achse gestellt.
+
+    Sollwert von außen ist der Rahmen der exakten Hauptachse aus ``frame_of``
+    (von unten −X und +Y, an +X die Achsen +Y und +Z). Die gemessene Achse
+    steht 0,05° daneben; erste und zweite Rahmenachse dürfen um höchstens
+    diesen Winkel abweichen, und beide stehen senkrecht auf der Achse.
+    """
+    from app.core.geom.prepare import slot_frame
+    from app.core.sketch.planes import frame_of
+
+    main_vector = np.asarray(main, dtype=float)
+    side = np.cross(main_vector, [0.0, 0.0, 1.0] if abs(main[2]) < 0.5 else [1.0, 0.0, 0.0])
+    side /= np.linalg.norm(side)
+    other = np.cross(main_vector, side)
+    turn = math.radians(tilt_towards)
+    tilt = math.radians(0.05)
+    axis = math.cos(tilt) * main_vector + math.sin(tilt) * (
+        math.cos(turn) * side + math.sin(turn) * other
+    )
+
+    frame = slot_frame(tuple(float(value) for value in axis), (1.0, 2.0, 3.0))
+    exact = frame_of(main, (1.0, 2.0, 3.0))
+
+    for got, wanted in ((frame.x_axis, exact.x_axis), (frame.y_axis, exact.y_axis)):
+        assert float(np.dot(got, wanted)) >= math.cos(tilt) - 1e-12, (got, wanted)
+        assert abs(float(np.dot(got, axis))) < 1e-12
+    assert frame.origin == (1.0, 2.0, 3.0)
+
+
+@pytest.mark.parametrize(
+    "axis",
+    [
+        (0.0, 0.0, 1.0),
+        (0.0, 0.0, -1.0),
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        _tilted(1.0, 40.0),
+        _tilted(17.5, 0.0),
+        _tilted(17.5, 90.0),
+    ],
+    ids=["+z", "-z", "+x", "+y", "1-grad", "17.5-grad-x", "17.5-grad-y"],
+)
+def test_the_slot_frame_keeps_the_frame_of_exact_and_really_tilted_axes(
+    axis: tuple[float, float, float],
+) -> None:
+    """Eine exakte Hauptachse und eine wirklich gekippte behalten ihren Rahmen Bit für Bit.
+
+    Gespeicherte Winkel an exakten Körpern und an gekippten Bohrungen (17,5°)
+    bedeuten damit dasselbe wie vorher — geändert hat sich nur, was im Kegel
+    von ``SLOT_ACROSS_LIMIT`` um eine Hauptachse liegt, ohne auf ihr zu liegen.
+    """
+    from app.core.geom.prepare import slot_frame
+    from app.core.sketch.planes import frame_of
+
+    assert slot_frame(axis, (1.0, 2.0, 3.0)) == frame_of(axis, (1.0, 2.0, 3.0))
+
+
+def _pulled_world_angle(entry: SceneObject, near: float) -> float | None:
+    """Die Richtung des Langlochs bei x = ``near`` in der Aufsicht, gegen X, modulo 180°."""
+    slots = [
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "slot" and abs(float(feature.params["centre"][0]) - near) < 1.0
+    ]
+    return _direction_angle(slots[0]) if len(slots) == 1 else None
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_pulled_slot_keeps_its_direction_when_an_earlier_step_tilts_its_bore_otherwise(
+    profile: Profile, kernel: str
+) -> None:
+    """Die Teppichecke im Kleinen: Ändert sich ein früherer Schritt, behält das Langloch seine Lage.
+
+    Gemessen am 29.09.2026: Ein Zug, dessen Winkel bei Feinheit 0,01
+    vorbelegt war, drehte nach einer Feinheit von 0,05 um rund 100°, ragte über
+    die Kante, zerteilte das Teil und verlor das Merkmal. Hier kippt der frühere
+    Schritt die Bohrung um 0,03° — erst zur einen Seite, dann zur anderen, wie
+    zwei Vernetzungen derselben Bohrung. Vorbelegt wird wie im Feld: der Winkel
+    eines Langlochs entlang +Y im Rahmen der gemessenen Achse.
+    """
+    from app.core.geom.prepare_ops import slot_angle_of
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    box = "create_brep_box" if kernel == "brep" else "create_box"
+    first, second = _tilted(0.03, 40.0), _tilted(0.03, 200.0)
+    history.apply(
+        "Platte und Bohrung",
+        [
+            OperationDraft(op=box, params={"width": 80.0, "depth": 60.0, "height": 10.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": 6.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 10.0,
+                    "nx": first[0],
+                    "ny": first[1],
+                    "nz": first[2],
+                    "depth": 0.0,
+                    "compensate": False,
+                },
+            ),
+        ],
+    )
+    drilled = evaluate(project.document, profile)
+    hole = next(f for f in drilled.scene.objects["obj_1"].features.values() if f.kind == "hole")
+    axis = tuple(float(value) for value in hole.params["axis"])
+    angle = slot_angle_of(_along_world_y(axis), axis)
+    history.apply(
+        "Ziehen",
+        [
+            OperationDraft(
+                op="slot_hole",
+                inputs=("obj_1",),
+                params={"at_feature": hole.id, "slot_length": 20.0, "slot_angle": angle},
+            )
+        ],
+    )
+    pulled = evaluate(project.document, profile)
+    assert _pulled_world_angle(pulled.scene.objects["obj_1"], 0.0) == pytest.approx(
+        90.0, abs=0.5
+    ), "die Vorbedingung: das Langloch liegt entlang +Y"
+
+    drill_step = next(entry for entry in project.document.ops if entry.op == "drill_hole")
+    history.change_params(drill_step.id, {"nx": second[0], "ny": second[1], "nz": second[2]})
+    changed = evaluate(project.document, profile)
+
+    assert changed.stopped_at is None
+    codes = {finding.code for finding in changed.scene.report.findings}
+    assert not {"slot_hole.turned", "slot_hole.feature_lost"} & codes, codes
+    assert _pulled_world_angle(changed.scene.objects["obj_1"], 0.0) == pytest.approx(90.0, abs=0.5)
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_bores_with_their_own_noise_all_pull_to_the_same_world_direction(
+    profile: Profile, kernel: str
+) -> None:
+    """Der Besenhalter im Kleinen: Winkel 0 heißt an jeder Bohrung dieselbe Weltrichtung.
+
+    Gemessen am 29.09.2026 an ``broomholdervcd_d35mm.stl``: Die Achsen der
+    sechs Bohrungen Ø 6,12 stehen 4e-8 rad neben Z, jede in eine andere
+    Richtung, und Winkel 0 zeigte an ihnen auf 53° oder 127°. Hier sechs
+    Bohrungen, gekippt um 0,01° bis 0,06° in sechs Richtungen; jede wird mit
+    Winkel 0 gezogen, und jedes Langloch liegt entlang X — an beiden Kernen.
+    """
+    if kernel == "brep":
+        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        from app.core.brep import edit
+
+        entry = SceneObject(
+            id="obj_1", name="Platte", kind="brep", mesh=edit.box(160.0, 60.0, 10.0)
+        )
+        top = 10.0
+    else:
+        entry = SceneObject(
+            id="obj_1",
+            name="Platte",
+            mesh=MeshData.of(trimesh.creation.box(extents=(160.0, 60.0, 10.0))),
+        )
+        top = 5.0
+    places = [-60.0 + 24.0 * index for index in range(6)]
+    for index, x in enumerate(places):
+        normal = _tilted(0.01 * (index + 1), 60.0 * index)
+        entry = run_op(
+            "drill_hole",
+            entry,
+            profile,
+            x=x,
+            y=0.0,
+            z=top,
+            nx=normal[0],
+            ny=normal[1],
+            nz=normal[2],
+            diameter=6.0,
+            depth=0.0,
+            compensate=False,
+        )
+    if kernel == "brep":
+        from app.core.brep.features import features_of
+
+        entry = dataclasses.replace(entry, features=features_of(entry.mesh))
+    holes = sorted(
+        (f for f in entry.features.values() if f.kind == "hole"),
+        key=lambda f: float(f.params["centre"][0]),
+    )
+    assert len(holes) == 6, "die Vorbedingung: sechs Bohrungen"
+
+    angles = []
+    for hole in holes:
+        pulled = run_op(
+            "slot_hole", entry, profile, at_feature=hole.id, slot_length=16.0, slot_angle=0.0
+        )
+        angles.append(_pulled_world_angle(pulled, float(hole.params["centre"][0])))
+
+    for angle in angles:
+        assert angle is not None, angles
+        assert min(angle, 180.0 - angle) == pytest.approx(0.0, abs=0.5), angles

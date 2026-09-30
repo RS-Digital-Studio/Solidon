@@ -634,6 +634,10 @@ _NOT_A_FIELD: Final[frozenset[tuple[str, str]]] = frozenset(
         # Der Musterstil hat eine Vorgabe (``other``), aber nur ein Muster hat
         # einen Stil.
         *((kind, "style") for kind in ("pin", "cone", "sphere", "fillet", "torus", "thread")),
+        # Der Haken für einen Winkel aus einem Projekt bis Format 38 hat an
+        # keinem Merkmal einen Gegenstand: Die Migration setzt ihn, die
+        # Operation liest ihn einmal und nimmt ihn wieder heraus.
+        *((kind, "measured_frame") for kind in ("hole", "slot")),
     }
 )
 

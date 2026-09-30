@@ -1665,13 +1665,15 @@ def _slot_tool(
     angle_deg: float,
     overlap: float,
 ) -> Solid:
-    """Der vollständige Langlochumriss zum Schneiden und zum Wiederauffüllen."""
+    """Der vollständige Langlochumriss zum Schneiden und zum Wiederauffüllen.
+
+    Der Winkel zählt im Rahmen des Netz-Zwillings (``prepare.slot_frame``).
+    """
     from app.core.brep.profiles import extrude
-    from app.core.geom.prepare import slot_profile, slot_travel
-    from app.core.sketch.planes import frame_of
+    from app.core.geom.prepare import slot_frame, slot_profile, slot_travel
 
     unit = _bore_unit(direction, depth)
-    frame = frame_of(unit, position)
+    frame = slot_frame(unit, position)
     floor = replace(
         frame,
         origin=cast(

@@ -112,16 +112,16 @@ __all__ = [
 def plane_axes(axis: shapes.Vec) -> tuple[np.ndarray, np.ndarray]:
     """Die beiden Achsen der Mündungsebene, wie der Kern sie zählt.
 
-    Aus :func:`app.core.sketch.planes.frame_of`, und aus keiner zweiten Quelle:
-    Der Winkel eines Langlochs wird gegen genau diese x-Achse gemessen — beim
-    Schneiden (:func:`app.core.geom.prepare.slot_profile`) wie beim Nachmessen
-    an einem erkannten (``prepare_ops.slot_angle_of``). Wer hier eine eigene
-    Achse wählte, bekäme einen Griff, der um einen Winkel danebenliegt, den
-    niemand erklären kann.
+    Aus :func:`app.core.geom.prepare.slot_frame`, und aus keiner zweiten
+    Quelle: Der Winkel eines Langlochs wird gegen genau diese x-Achse gemessen
+    — beim Schneiden (:func:`app.core.geom.prepare.slot_profile`) wie beim
+    Nachmessen an einem erkannten (``prepare_ops.slot_angle_of``). Wer hier
+    eine eigene Achse wählte, bekäme einen Griff, der um einen Winkel
+    danebenliegt, den niemand erklären kann.
     """
-    from app.core.sketch.planes import frame_of
+    from app.core.geom.prepare import slot_frame
 
-    frame = frame_of((float(axis[0]), float(axis[1]), float(axis[2])), (0.0, 0.0, 0.0))
+    frame = slot_frame((float(axis[0]), float(axis[1]), float(axis[2])), (0.0, 0.0, 0.0))
     return (
         np.asarray(frame.x_axis, dtype=float),
         np.asarray(frame.y_axis, dtype=float),
@@ -219,11 +219,11 @@ def slot_outline(
     Kreis (:func:`app.core.sketch.profile.arc_through`) und werden abgetastet;
     die Geraden bleiben Geraden.
     """
-    from app.core.geom.prepare import slot_profile, slot_travel
-    from app.core.sketch.planes import frame_of, to_world
+    from app.core.geom.prepare import slot_frame, slot_profile, slot_travel
+    from app.core.sketch.planes import to_world
     from app.core.sketch.profile import arc_through
 
-    frame = frame_of(
+    frame = slot_frame(
         (float(axis[0]), float(axis[1]), float(axis[2])),
         (float(centre[0]), float(centre[1]), float(centre[2])),
     )

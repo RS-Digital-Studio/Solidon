@@ -1006,7 +1006,6 @@ def slot_bore(
     Öffnung vorher; hier wird nur geschnitten.
     """
     from app.core.geom.sketch_solid import extrude_profile
-    from app.core.sketch.planes import frame_of
 
     round_bore = is_close(length, diameter)
     travel = 0.0 if round_bore else slot_travel(diameter=diameter, length=length)
@@ -1031,9 +1030,11 @@ def slot_bore(
         raise bore_geometry_error()
     unit = vector / span
     axis: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
-    frame = frame_of(axis, position)
+    # Der Rahmen des Winkels (:func:`slot_frame`): Eine gemessene Achse im
+    # Rauschen neben einer Hauptachse zählt gegen die Hauptachse.
+    frame = slot_frame(axis, position)
     # **Derselbe Rahmenbau wie beim Bohren, und trotzdem nicht immer dieselbe
-    # Zahl.** ``frame_of`` spiegelt seine erste Achse, wenn die Normale kippt
+    # Zahl.** Der Rahmen spiegelt seine erste Achse, wenn die Normale kippt
     # (das Kreuzprodukt aus Z und ihr) — und ``drill`` bekommt die Normale der
     # **Fläche**, die Erkennung dagegen eine Achse, deren größte Komponente sie
     # auf positiv normiert. Gemessen an derselben Platte mit 45 Grad: von oben
@@ -1393,6 +1394,114 @@ def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> Ske
     )
 
 
+#: Ab welchem Unterschied ein Zug nicht mehr in Richtung des bestehenden
+#: Langlochs geht — und bis zu welchem Abstand eine gemessene Achse als die
+#: Hauptachse gilt, neben der sie steht (:func:`slot_frame`).
+#:
+#: **Ein halbes Grad, und die Zahl ist gemessen.** Hier standen erst fünf Grad
+#: mit der Begründung, darunter setze die Erkennung beide Züge wieder zu einem
+#: Langloch zusammen. Das war geraten und falsch: An einem Langloch Ø 6 auf
+#: 20 mm, auf 28 mm nachgezogen, bleibt es bis 0,5 Grad **ein** Merkmal und
+#: zerfällt bei 0,75 Grad in zwei Verrundungen, bei einem Grad in vier.
+#:
+#: Wo genau es kippt, hängt von Länge und Breite ab — und deshalb steht die
+#: Zahl hier gerade **nicht** dafür. Sie deckt, was ``slot_angle_of`` an
+#: Rundung erzeugt, und sonst nichts; alles darüber ist eine Richtungsänderung
+#: und wird gesagt. Für den Rahmen gilt dieselbe Aussage von der anderen Seite:
+#: Das Messrauschen einer Achse lag an echten Netzen bei 4e-8 rad bis 0,07°
+#: (29.09.2026), weit darunter; eine Achse, die weiter geneigt ist, hat jemand
+#: so gewollt.
+SLOT_ACROSS_LIMIT: Final = 0.5
+
+
+def slot_frame(axis: Vec3, origin: Vec3) -> PlaneFrame:
+    """Der Rahmen, gegen den der Winkel eines Langlochs zählt — beim Schneiden an
+    beiden Kernen, beim Nachmessen, am Griff und in der Vorschau.
+
+    **Warum nicht :func:`app.core.sketch.planes.frame_of`.** Dessen erste Achse
+    ist das Kreuzprodukt aus Z und der Achse, bis ``units.PLANE_PARALLEL``
+    (1e-9) neben Z. An einer **gemessenen** Achse bestimmt dort das Rauschen der
+    Einpassung, wohin sie zeigt: Gemessen am 29.09.2026 an
+    ``carpet-corner-clip.step``, vernetzt, zeigte dasselbe Langloch (in der Welt
+    90°) im Feld -168,5°, 132,0° und 91,8° bei den Feinheiten 0,01, 0,02 und
+    0,05, exakt 90°; am Besenhalter (Achsen 4e-8 rad neben Z) zeigte Winkel 0 an
+    sechs Bohrungen auf 53° und 127°. Ein gespeicherter Winkel drehte das
+    Langloch damit nach jeder Änderung eines früheren Schritts in eine andere
+    Richtung.
+
+    **Innerhalb von** :data:`SLOT_ACROSS_LIMIT` **neben ±X, ±Y oder ±Z gilt die
+    Achse als diese Hauptachse** (Entscheidung 30.09.2026): Die erste
+    Rahmenachse kommt aus der Hauptachse (``units.plane_axes``) und wird gegen
+    die gemessene Achse gestellt, die zweite ist das Kreuzprodukt aus Achse und
+    erster. Eine exakte Hauptachse und eine Achse außerhalb des Kegels bekommen
+    genau den Rahmen von ``frame_of`` — dort zählt der Winkel weiter gegen das
+    Kreuzprodukt aus Z und Achse, die waagerechte Richtung der Fläche.
+    ``plane_axes`` selbst bleibt, wie es ist: Es trägt auch die Skizzenebenen.
+
+    Plattformgleich: Grundrechenarten, ``math.hypot``, ``units.dot3`` und der
+    Sinus aus ``units.exact_sin_degrees`` (RM-187).
+    """
+    from app.core.sketch.planes import frame_of
+
+    x, y, z = (float(axis[0]), float(axis[1]), float(axis[2]))
+    span = math.hypot(x, y, z)
+    if not math.isfinite(span) or span <= EPS_GEOM:
+        return frame_of(axis, origin)
+    unit = (x / span, y / span, z / span)
+    main = max(range(3), key=lambda index: abs(unit[index]))
+    beside = math.hypot(*(unit[index] for index in range(3) if index != main))
+    if beside == 0.0 or beside > units.exact_sin_degrees(SLOT_ACROSS_LIMIT):
+        return frame_of(axis, origin)
+    principal = [0.0, 0.0, 0.0]
+    principal[main] = 1.0 if unit[main] > 0.0 else -1.0
+    axes = units.plane_axes(principal)
+    if axes is None:  # pragma: no cover - eine Hauptachse hat immer Länge eins
+        return frame_of(axis, origin)
+    first = axes[0]
+    along = units.dot3(first, unit)
+    across = (first[0] - along * unit[0], first[1] - along * unit[1], first[2] - along * unit[2])
+    reach = math.hypot(*across)
+    x_axis = (across[0] / reach, across[1] / reach, across[2] / reach)
+    second = (
+        unit[1] * x_axis[2] - unit[2] * x_axis[1],
+        unit[2] * x_axis[0] - unit[0] * x_axis[2],
+        unit[0] * x_axis[1] - unit[1] * x_axis[0],
+    )
+    width = math.hypot(*second)
+    y_axis = (second[0] / width, second[1] / width, second[2] / width)
+    return PlaneFrame(
+        origin=(float(origin[0]), float(origin[1]), float(origin[2])),
+        x_axis=x_axis,
+        y_axis=y_axis,
+        normal=unit,
+    )
+
+
+def slot_angle_from_measured_frame(axis: Vec3, angle_deg: float) -> float:
+    """Ein gespeicherter Langlochwinkel aus der Zeit vor :func:`slot_frame`, im Rahmen von heute.
+
+    Bis Format 38 zählte der Winkel gegen ``frame_of`` der Achse. Hier wird die
+    Richtung, die dieser Rahmen mit ``angle_deg`` meinte, im Rahmen von
+    :func:`slot_frame` gelesen — an derselben Achse dieselbe Richtung in der
+    Welt, also derselbe Schnitt wie gespeichert. Außerhalb des Kegels um eine
+    Hauptachse sind beide Rahmen gleich, und der Winkel bleibt (bis auf die
+    Rundung) derselbe. Zurück kommt ein Winkel in ``(-180, 180]``.
+
+    Zwei Leser: die Migration 38 → 39 für *Bohrung setzen* (die Normale steht
+    im Schritt) und *Zum Langloch ziehen* bei der Auswertung (die Achse gibt
+    erst die Erkennung). Plattformgleich über ``units.exact_cos_degrees``,
+    ``exact_sin_degrees`` und ``exact_atan2_degrees``.
+    """
+    from app.core.sketch.planes import frame_of
+
+    old = frame_of(axis, (0.0, 0.0, 0.0))
+    new = slot_frame(axis, (0.0, 0.0, 0.0))
+    cosine = units.exact_cos_degrees(angle_deg)
+    sine = units.exact_sin_degrees(angle_deg)
+    world = tuple(cosine * old.x_axis[index] + sine * old.y_axis[index] for index in range(3))
+    return units.exact_atan2_degrees(units.dot3(world, new.y_axis), units.dot3(world, new.x_axis))
+
+
 def edge_findings(
     mesh: HasBounds,
     *,
@@ -1655,14 +1764,14 @@ def drill(
 
     ``slot_length`` über null zieht die Bohrung zu einem Langloch auseinander.
     Ein Langloch geht **immer** über den Rahmen, auch bei einer achsparallelen
-    Achse: ``slot_angle`` zählt gegen die x-Achse aus
-    :func:`app.core.sketch.planes.frame_of`, und der achsparallele Zweig
-    weiter unten kennt diesen Rahmen nicht — derselbe Winkel bedeutete dort
-    eine andere Richtung.
+    Achse: ``slot_angle`` zählt gegen die x-Achse aus :func:`slot_frame` — für
+    eine Normale knapp neben einer Hauptachse gegen die der Hauptachse —, und
+    der achsparallele Zweig weiter unten kennt diesen Rahmen nicht; derselbe
+    Winkel bedeutete dort eine andere Richtung.
 
     **Der Rahmen hängt an der Normalen, also an der Seite, von der aus gebohrt
     wird.** Gemessen an derselben Platte: 45 Grad von oben ergeben 45 Grad,
-    45 Grad von unten ergeben 135 — ``frame_of`` spiegelt seine erste Achse mit
+    45 Grad von unten ergeben 135 — der Rahmen spiegelt seine erste Achse mit
     der Normalen. Für den Kunden ist das die richtige Antwort, weil er die
     Fläche anklickt und die Vorschau sieht; wer die Zahl von hier zu
     :func:`slot_bore` überträgt, bekommt an einer von unten gebohrten Bohrung
@@ -1686,7 +1795,12 @@ def drill(
         from app.core.sketch.planes import frame_of
 
         outward = direction / length
-        frame = frame_of((float(outward[0]), float(outward[1]), float(outward[2])), position)
+        pointing = (float(outward[0]), float(outward[1]), float(outward[2]))
+        # Ein Langloch zählt seinen Winkel gegen :func:`slot_frame`; eine runde
+        # Bohrung ist um ihre Achse gleich, ihr Vieleck bleibt, wo es war.
+        frame = (
+            slot_frame(pointing, position) if travel > EPS_GEOM else frame_of(pointing, position)
+        )
         # **Das Werkzeug wandert in die Welt, nicht der Körper in den Rahmen**
         # (RM-274). Bis zur Durchsicht 0.5.1 lag hier der ganze Körper für den
         # Schnitt im Rahmen der Bohrung und danach wieder in der Welt; die

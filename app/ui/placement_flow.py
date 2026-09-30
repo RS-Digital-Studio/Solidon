@@ -3307,6 +3307,45 @@ class PlacementFlow(QObject):
         ]
         return found[0] if len(found) == 1 else (None, None)
 
+    def _tool_axes(self, surface: Any) -> tuple[Any, Any]:
+        """Die zwei Achsen in der Fläche, in die das Werkzeug der Vorschau gelegt wird.
+
+        **Ein Langloch liegt im Rahmen seines Schnitts, soweit die Fläche ihn
+        trägt.** Sein Winkel zählt seit dem 30.09.2026 gegen
+        :func:`app.core.geom.prepare.slot_frame` — an einer Normalen knapp neben
+        einer Hauptachse gegen die Hauptachse, in Operation und Griff. Der Rahmen
+        der Fläche (``frame_of``) folgt dort dem Rauschen; mit ihm zeigte die
+        Vorschau das Langloch in einer anderen Richtung, als geschnitten wird.
+
+        Beim Bohren ist die Normale der Fläche die des Schnitts. *Zum Langloch
+        ziehen* und *Bohrung ändern* zählen dagegen gegen die positive Achse der
+        Bohrung (``units.positive_axis``): Sitzt die Mündung auf einer Fläche, die
+        entgegen zeigt, oder steht die Bohrung mehr als ``SLOT_ACROSS_LIMIT``
+        schief zu ihr, liegt die Vorschau gespiegelt oder gedreht — ihr Werkzeug
+        wird im Rahmen der Fläche gebaut (``placement``), nicht in dem der Achse.
+
+        Alles andere liegt im Rahmen der Fläche: Eine runde Bohrung ist um ihre
+        Achse gleich, ein Baustein oder eine Beschriftung zählen ihren Winkel
+        gegen ihn.
+        """
+        name = self.spec_of().name
+        slotted = name in {"slot_hole", "resize_hole"} or (
+            name in placement.DRILL_OPERATIONS and bool(self.dialog.values().get("slotted"))
+        )
+        if not slotted:
+            return (
+                np.asarray(surface.frame.x_axis, dtype=np.float64),
+                np.asarray(surface.frame.y_axis, dtype=np.float64),
+            )
+        from app.core.geom.prepare import slot_frame
+
+        normal = np.asarray(surface.normal, dtype=np.float64)
+        frame = slot_frame((float(normal[0]), float(normal[1]), float(normal[2])), (0.0, 0.0, 0.0))
+        return (
+            np.asarray(frame.x_axis, dtype=np.float64),
+            np.asarray(frame.y_axis, dtype=np.float64),
+        )
+
     def _dragged_in_preview(self, matrix: Any) -> None:
         """Ein Zug am Griff der Vorschau wird zu Zahlen im offenen Dialog.
 
@@ -4800,11 +4839,10 @@ class PlacementFlow(QObject):
                 self._draw_soon()
             return
         point = np.asarray(surface.point, dtype=np.float64)
+        axis_u, axis_v = self._tool_axes(surface)
         if self._tool is not None:
             matrix = np.eye(4, dtype=np.float64)
-            matrix[:3, :3] = np.asarray(
-                [surface.frame.x_axis, surface.frame.y_axis, surface.normal], dtype=np.float64
-            ).T
+            matrix[:3, :3] = np.asarray([axis_u, axis_v, surface.normal], dtype=np.float64).T
             matrix[:3, 3] = self.viewport.view_point_of(surface.point, self._object_id)
             self._tool.set_matrix(matrix)
             if self._addition is not None:
@@ -4850,8 +4888,6 @@ class PlacementFlow(QObject):
         # Wartet ein Langlochzug, steht sein Umriss im Bild (`SlotHandle`);
         # der runde der Mündung sagte daneben etwas Falsches.
         if outline and not slot_waits:
-            axis_u = np.asarray(surface.frame.x_axis, dtype=np.float64)
-            axis_v = np.asarray(surface.frame.y_axis, dtype=np.float64)
             self._canvas.outline = [
                 screen(tuple(point + axis_u * u + axis_v * v)) for u, v in outline
             ]
