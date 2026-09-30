@@ -22,13 +22,18 @@ kosten Millisekunden und hätten beide gefangen.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
+import shlex
 import stat
 import subprocess
 import sys
+import textwrap
 import tomllib
+from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
@@ -46,6 +51,822 @@ from tools.check_env import (
 
 #: Die Wurzel des Arbeitsbaums — von hier aus liegt ``pyproject.toml`` daneben.
 _ROOT: Final = Path(__file__).resolve().parent.parent
+
+# Diese Nutzerdateien sind während RM-315 bereits anderweitig in Arbeit.
+# Die Gegenprobe hält die Zwischenliste klein und sichtbar; nach deren Abschluss
+# werden die Einträge entfernt, sodass kein privater Querimport erlaubt bleibt.
+_KNOWN_IN_FLIGHT_PRIVATE_IMPORTS: Final = Counter(
+    {
+        ("tests/test_local_recognition_flow.py", "tests.test_outline_dialog", "_until"): 1,
+        ("tests/test_organizer_dialog.py", "tests.test_outline_dialog", "_until"): 1,
+        ("tests/test_ui.py", "tests.test_outline_dialog", "_until"): 4,
+        ("tests/test_ui.py", "tests.test_recipes", "_clean_globals"): 1,
+        ("tests/test_ui.py", "tests.test_recipes", "_document"): 1,
+        ("tests/test_ui.py", "tests.test_recipes", "_plate_with_halter"): 1,
+        ("tests/test_ui.py", "tests.test_bore_mouth_resize", "_two_bores"): 1,
+    }
+)
+
+
+@dataclass(frozen=True)
+class _ModuleAlias:
+    name: str
+
+
+@dataclass(frozen=True)
+class _CallableAlias:
+    name: str
+
+
+@dataclass(frozen=True)
+class _ScriptText:
+    value: str
+    line: int
+    exact: bool = True
+    dynamic_tokens: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class _PrivateAlias:
+    module: str
+    name: str
+
+
+_UNKNOWN: Final = object()
+_PYTHON_EXECUTABLE: Final = object()
+_DYNAMIC_IDENTIFIER: Final = "codex_dynamic_value"
+_PROCESS_FUNCTIONS: Final = {"run", "Popen", "check_call", "check_output"}
+
+
+def _private_test_imports(source: str) -> list[tuple[str, int, str]]:
+    """Liefert private Querimporte aus Tests, Aliasen und Python-Kindskripten."""
+    findings: set[tuple[str, int, str, int, int]] = set()
+    parsed_scripts: set[tuple[str, int, int]] = set()
+
+    def scan(
+        parsed: ast.AST,
+        outer_line: int | None = None,
+        depth: int = 0,
+        dynamic_tokens: frozenset[str] = frozenset(),
+    ) -> None:
+        if depth > 4:
+            return
+
+        def record(module: str, line: int, name: str, column: int) -> None:
+            for token in dynamic_tokens:
+                module = module.replace(token, "<dynamisch>")
+            findings.add(
+                (module, outer_line if outer_line is not None else line, name, column, line)
+            )
+
+        node_scope: dict[ast.AST, ast.AST] = {}
+        scope_parent: dict[ast.AST, ast.AST | None] = {parsed: None}
+
+        def assign_scopes(node: ast.AST, scope: ast.AST) -> None:
+            node_scope[node] = scope
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                scope_parent[node] = scope
+                body = set(node.body)
+                for child in ast.iter_child_nodes(node):
+                    assign_scopes(child, node if child in body else scope)
+                return
+            if isinstance(node, ast.Lambda):
+                scope_parent[node] = scope
+                for child in ast.iter_child_nodes(node):
+                    assign_scopes(child, node if child is node.body else scope)
+                return
+            if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                scope_parent[node] = scope
+                for index, generator in enumerate(node.generators):
+                    node_scope[generator] = node
+                    for child in ast.iter_child_nodes(generator):
+                        assign_scopes(
+                            child,
+                            scope if index == 0 and child is generator.iter else node,
+                        )
+                for child in ast.iter_child_nodes(node):
+                    if child not in node.generators:
+                        assign_scopes(child, node)
+                return
+            for child in ast.iter_child_nodes(node):
+                assign_scopes(child, scope)
+
+        assign_scopes(parsed, parsed)
+        scopes = list(scope_parent)
+        scoped_nodes: dict[ast.AST, list[ast.AST]] = {scope: [] for scope in scopes}
+        parents: dict[ast.AST, ast.AST] = {}
+        for node in ast.walk(parsed):
+            scoped_nodes[node_scope[node]].append(node)
+            for child in ast.iter_child_nodes(node):
+                parents[child] = node
+
+        imports_by_scope: dict[ast.AST, dict[str, object]] = {scope: {} for scope in scopes}
+        assignments_by_scope: dict[ast.AST, dict[str, ast.expr | object]] = {
+            scope: {} for scope in scopes
+        }
+        local_names: dict[ast.AST, set[str]] = {scope: set() for scope in scopes}
+
+        def bind_import(scope: ast.AST, name: str, value: object) -> None:
+            local_names[scope].add(name)
+            imports_by_scope[scope][name] = value
+
+        def target_names(target: ast.expr) -> list[str]:
+            if isinstance(target, ast.Name):
+                return [target.id]
+            return [
+                name.id
+                for name in ast.walk(target)
+                if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store)
+            ]
+
+        for scope, nodes in scoped_nodes.items():
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                arguments = scope.args
+                local_names[scope].update(
+                    argument.arg
+                    for argument in (
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    )
+                )
+                if arguments.vararg is not None:
+                    local_names[scope].add(arguments.vararg.arg)
+                if arguments.kwarg is not None:
+                    local_names[scope].add(arguments.kwarg.arg)
+            for node in nodes:
+                if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                    local_names[scope].add(node.id)
+                elif (
+                    isinstance(
+                        node,
+                        (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.ExceptHandler),
+                    )
+                    and node.name
+                ):
+                    local_names[scope].add(node.name)
+
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        root = alias.asname or alias.name.split(".")[0]
+                        value: object = _UNKNOWN
+                        if alias.name.startswith("tests.test_"):
+                            parts = alias.name.split(".")
+                            private_module = next(
+                                (part for part in parts[2:] if part.startswith("_")), None
+                            )
+                            if private_module is not None:
+                                record(alias.name, node.lineno, private_module, node.col_offset)
+                            value = _ModuleAlias(alias.name if alias.asname else "tests")
+                        elif alias.name in {
+                            "tests",
+                            "subprocess",
+                            "importlib",
+                            "sys",
+                            "textwrap",
+                            "builtins",
+                        }:
+                            value = _ModuleAlias(alias.name)
+                        bind_import(scope, root, value)
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    for index, alias in enumerate(node.names):
+                        root = alias.asname or alias.name
+                        value = _UNKNOWN
+                        if module.startswith("tests.test_") and alias.name.startswith("_"):
+                            column = getattr(alias, "col_offset", node.col_offset + index)
+                            record(module, node.lineno, alias.name, column)
+                        elif module.startswith("tests.test_") and any(
+                            token in alias.name for token in dynamic_tokens
+                        ):
+                            column = getattr(alias, "col_offset", node.col_offset + index)
+                            record(module, node.lineno, "<dynamisch>", column)
+                        elif module == "tests" and alias.name.startswith("test_"):
+                            value = _ModuleAlias(f"tests.{alias.name}")
+                        elif module == "subprocess" and alias.name in _PROCESS_FUNCTIONS:
+                            value = _CallableAlias(f"subprocess.{alias.name}")
+                        elif module == "importlib" and alias.name == "import_module":
+                            value = _CallableAlias("importlib.import_module")
+                        elif module == "sys" and alias.name == "executable":
+                            value = _PYTHON_EXECUTABLE
+                        elif module == "textwrap" and alias.name == "dedent":
+                            value = _CallableAlias("textwrap.dedent")
+                        elif module == "builtins" and alias.name == "getattr":
+                            value = _CallableAlias("getattr")
+                        bind_import(scope, root, value)
+
+                if isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr, ast.AugAssign)):
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    expression = node.value if not isinstance(node, ast.AugAssign) else _UNKNOWN
+                    for target in targets:
+                        for name in target_names(target):
+                            local_names[scope].add(name)
+                            if isinstance(target, ast.Name) and expression is not None:
+                                assignments_by_scope[scope][name] = expression
+                            else:
+                                assignments_by_scope[scope][name] = _UNKNOWN
+                elif isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                    for name in target_names(node.target):
+                        local_names[scope].add(name)
+                        assignments_by_scope[scope][name] = _UNKNOWN
+                elif isinstance(node, (ast.With, ast.AsyncWith)):
+                    for item in node.items:
+                        if item.optional_vars is not None:
+                            for name in target_names(item.optional_vars):
+                                local_names[scope].add(name)
+                                assignments_by_scope[scope][name] = _UNKNOWN
+
+        def parent_of(scope: ast.AST) -> ast.AST | None:
+            parent = scope_parent.get(scope)
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)) and isinstance(
+                parent, ast.ClassDef
+            ):
+                return scope_parent.get(parent)
+            return parent
+
+        def resolve_name(
+            name: str, scope: ast.AST, seen: frozenset[tuple[ast.AST, str]] = frozenset()
+        ) -> object:
+            key = (scope, name)
+            if key in seen:
+                return _UNKNOWN
+            seen = seen | {key}
+            assignment = assignments_by_scope[scope].get(name, None)
+            if assignment is _UNKNOWN:
+                return _UNKNOWN
+            if isinstance(assignment, ast.expr):
+                return resolve(assignment, scope, seen)
+            if name in imports_by_scope[scope]:
+                return imports_by_scope[scope][name]
+            if name in local_names[scope]:
+                return _UNKNOWN
+            parent = parent_of(scope)
+            if parent is not None:
+                return resolve_name(name, parent, seen)
+            if name == "getattr":
+                return _CallableAlias("getattr")
+            return _UNKNOWN
+
+        def resolve(
+            expression: ast.AST,
+            scope: ast.AST,
+            seen: frozenset[tuple[ast.AST, str]],
+        ) -> object:
+            if isinstance(expression, ast.Constant):
+                if isinstance(expression.value, str):
+                    return _ScriptText(expression.value, expression.lineno)
+                return expression.value
+            if isinstance(expression, ast.Name):
+                return resolve_name(expression.id, scope, seen)
+            if isinstance(expression, ast.Attribute):
+                value = resolve(expression.value, scope, seen)
+                if isinstance(value, _ModuleAlias):
+                    if value.name == "tests" and expression.attr.startswith("test_"):
+                        return _ModuleAlias(f"tests.{expression.attr}")
+                    if value.name.startswith("tests.test_") and expression.attr.startswith("_"):
+                        record(
+                            value.name,
+                            expression.lineno,
+                            expression.attr,
+                            expression.col_offset,
+                        )
+                        return _PrivateAlias(value.name, expression.attr)
+                    if value.name == "sys" and expression.attr == "executable":
+                        return _PYTHON_EXECUTABLE
+                    if value.name == "subprocess" and expression.attr in _PROCESS_FUNCTIONS:
+                        return _CallableAlias(f"subprocess.{expression.attr}")
+                    if value.name == "importlib" and expression.attr == "import_module":
+                        return _CallableAlias("importlib.import_module")
+                    if value.name == "textwrap" and expression.attr == "dedent":
+                        return _CallableAlias("textwrap.dedent")
+                    if value.name == "builtins" and expression.attr == "getattr":
+                        return _CallableAlias("getattr")
+                return _UNKNOWN
+            if isinstance(expression, ast.JoinedStr):
+                parts: list[str | None] = []
+                exact = True
+                inherited_tokens: set[str] = set()
+                for part in expression.values:
+                    if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                        parts.append(part.value)
+                        continue
+                    if not isinstance(part, ast.FormattedValue):
+                        exact = False
+                        parts.append(None)
+                        continue
+                    value = resolve(part.value, scope, seen)
+                    if isinstance(value, _ScriptText):
+                        static = value.value if value.exact else None
+                        if static is not None:
+                            inherited_tokens.update(value.dynamic_tokens)
+                    elif isinstance(value, str):
+                        static = value
+                    else:
+                        static = None
+                    if static is None:
+                        exact = False
+                        parts.append(None)
+                        continue
+                    if part.conversion == ord("r"):
+                        static = repr(static)
+                    elif part.conversion == ord("a"):
+                        static = ascii(static)
+                    if part.format_spec is not None:
+                        spec = resolve(part.format_spec, scope, seen)
+                        if not isinstance(spec, _ScriptText) or not spec.exact:
+                            exact = False
+                            parts.append(None)
+                            continue
+                        try:
+                            static = format(static, spec.value)
+                        except TypeError, ValueError:
+                            exact = False
+                            parts.append(None)
+                            continue
+                    parts.append(static)
+                reserved_text = "".join(part for part in parts if part is not None)
+                generated_tokens: set[str] = set()
+                for index, fragment in enumerate(parts):
+                    if fragment is not None:
+                        continue
+                    marker = _DYNAMIC_IDENTIFIER
+                    suffix = 0
+                    while marker in reserved_text or marker in generated_tokens:
+                        suffix += 1
+                        marker = f"{_DYNAMIC_IDENTIFIER}_{suffix}"
+                    generated_tokens.add(marker)
+                    parts[index] = marker
+                return _ScriptText(
+                    "".join(part for part in parts if part is not None),
+                    expression.lineno,
+                    exact,
+                    frozenset(generated_tokens) | inherited_tokens,
+                )
+            if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Add):
+                left = resolve(expression.left, scope, seen)
+                right = resolve(expression.right, scope, seen)
+                if isinstance(left, _ScriptText) and isinstance(right, _ScriptText):
+                    return _ScriptText(
+                        left.value + right.value,
+                        min(left.line, right.line),
+                        left.exact and right.exact,
+                        left.dynamic_tokens | right.dynamic_tokens,
+                    )
+                if isinstance(left, _ScriptText) and isinstance(right, str):
+                    return _ScriptText(
+                        left.value + right, left.line, left.exact, left.dynamic_tokens
+                    )
+                if isinstance(left, str) and isinstance(right, _ScriptText):
+                    return _ScriptText(
+                        left + right.value, right.line, right.exact, right.dynamic_tokens
+                    )
+                return _UNKNOWN
+            if isinstance(expression, (ast.List, ast.Tuple)):
+                values = [resolve(value, scope, seen) for value in expression.elts]
+                return values if all(value is not _UNKNOWN for value in values) else _UNKNOWN
+            if isinstance(expression, ast.Call):
+                function = resolve(expression.func, scope, seen)
+                if isinstance(function, _CallableAlias):
+                    if function.name == "importlib.import_module" and expression.args:
+                        name = resolve(expression.args[0], scope, seen)
+                        if (
+                            isinstance(name, _ScriptText)
+                            and name.exact
+                            and (
+                                name.value
+                                in {"tests", "subprocess", "importlib", "sys", "textwrap"}
+                                or name.value.startswith("tests.test_")
+                            )
+                        ):
+                            private_module = next(
+                                (
+                                    part
+                                    for part in name.value.split(".")[2:]
+                                    if part.startswith("_")
+                                ),
+                                None,
+                            )
+                            if private_module is not None:
+                                record(
+                                    name.value,
+                                    expression.lineno,
+                                    private_module,
+                                    expression.col_offset,
+                                )
+                            return _ModuleAlias(name.value)
+                    if function.name == "getattr" and len(expression.args) >= 2:
+                        module = resolve(expression.args[0], scope, seen)
+                        name = resolve(expression.args[1], scope, seen)
+                        if isinstance(module, _ModuleAlias) and isinstance(name, _ScriptText):
+                            if (
+                                name.exact
+                                and module.name == "tests"
+                                and name.value.startswith("test_")
+                            ):
+                                return _ModuleAlias(f"tests.{name.value}")
+                            if (
+                                name.exact
+                                and module.name.startswith("tests.test_")
+                                and name.value.startswith("_")
+                            ):
+                                record(
+                                    module.name,
+                                    expression.lineno,
+                                    name.value,
+                                    expression.col_offset,
+                                )
+                                return _PrivateAlias(module.name, name.value)
+                            if (
+                                name.exact
+                                and module.name == "subprocess"
+                                and name.value in _PROCESS_FUNCTIONS
+                            ):
+                                return _CallableAlias(f"subprocess.{name.value}")
+                            if (
+                                name.exact
+                                and module.name == "importlib"
+                                and name.value == "import_module"
+                            ):
+                                return _CallableAlias("importlib.import_module")
+                            if name.exact and module.name == "sys" and name.value == "executable":
+                                return _PYTHON_EXECUTABLE
+                    if function.name == "textwrap.dedent" and expression.args:
+                        value = resolve(expression.args[0], scope, seen)
+                        if isinstance(value, _ScriptText):
+                            return _ScriptText(
+                                textwrap.dedent(value.value),
+                                value.line,
+                                value.exact,
+                                value.dynamic_tokens,
+                            )
+                return _UNKNOWN
+            return _UNKNOWN
+
+        def script_line(value: object, fallback: int) -> int:
+            return value.line if isinstance(value, _ScriptText) else fallback
+
+        def inspect_script(value: object, line: int) -> None:
+            if not isinstance(value, _ScriptText):
+                return
+            reported_line = outer_line if outer_line is not None else line
+            key = (value.value, reported_line, depth)
+            if key in parsed_scripts:
+                return
+            parsed_scripts.add(key)
+            try:
+                embedded = ast.parse(value.value)
+            except SyntaxError:
+                return
+            scan(embedded, reported_line, depth + 1, value.dynamic_tokens)
+
+        for scope, nodes in scoped_nodes.items():
+            for node in nodes:
+                if isinstance(node, ast.Attribute):
+                    parent = parents.get(node)
+                    if not isinstance(parent, ast.Attribute):
+                        resolve(node, scope, frozenset())
+                elif isinstance(node, ast.Call):
+                    command_function = resolve(node.func, scope, frozenset())
+                    if not isinstance(command_function, _CallableAlias) or not (
+                        command_function.name.startswith("subprocess.")
+                    ):
+                        resolve(node, scope, frozenset())
+                        continue
+                    command = (
+                        node.args[0]
+                        if node.args
+                        else next(
+                            (keyword.value for keyword in node.keywords if keyword.arg == "args"),
+                            None,
+                        )
+                    )
+                    if command is None:
+                        continue
+                    value = resolve(command, scope, frozenset())
+                    if isinstance(value, list):
+                        executable = next(
+                            (
+                                keyword.value
+                                for keyword in node.keywords
+                                if keyword.arg == "executable"
+                            ),
+                            _UNKNOWN,
+                        )
+                        executable_value = (
+                            resolve(executable, scope, frozenset())
+                            if isinstance(executable, ast.expr)
+                            else _UNKNOWN
+                        )
+                        inspect_python_command(
+                            value,
+                            node.lineno,
+                            inspect_script,
+                            _UNKNOWN if executable_value is None else executable_value,
+                        )
+                    shell = next(
+                        (keyword.value for keyword in node.keywords if keyword.arg == "shell"),
+                        None,
+                    )
+                    shell_value = resolve(shell, scope, frozenset()) if shell is not None else False
+                    if isinstance(shell_value, _ScriptText):
+                        shell_value = shell_value.value if shell_value.exact else _UNKNOWN
+                    if shell_value is True and isinstance(value, _ScriptText) and value.exact:
+                        for posix in (False, True):
+                            try:
+                                tokens = shlex.split(value.value, posix=posix)
+                            except ValueError:
+                                continue
+                            tokens = [unquote_shell_token(token) for token in tokens]
+                            inspect_python_command(
+                                [_ScriptText(token, value.line) for token in tokens],
+                                node.lineno,
+                                inspect_script,
+                            )
+
+            for node in nodes:
+                if not isinstance(node, (ast.Assign, ast.AnnAssign, ast.NamedExpr)):
+                    continue
+                if node.value is None:
+                    continue
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if any(
+                    isinstance(target, ast.Name)
+                    and (
+                        target.id in {"script", "code", "program"}
+                        or target.id.endswith(("_script", "_code"))
+                    )
+                    for target in targets
+                ):
+                    value = resolve(node.value, scope, frozenset())
+                    inspect_script(value, script_line(value, node.lineno))
+
+    def inspect_python_command(
+        tokens: list[object],
+        call_line: int,
+        inspect_script_value: Any,
+        executable: object = _UNKNOWN,
+    ) -> None:
+        if executable is not _UNKNOWN:
+            if not is_python_executable(executable):
+                return
+            first_option = 0
+        elif tokens and is_python_executable(tokens[0]):
+            first_option = 1
+        else:
+            return
+        for index, token in enumerate(tokens[first_option:], start=first_option):
+            option = token_text(token)
+            if option != "-c" or index + 1 >= len(tokens):
+                continue
+            script = tokens[index + 1]
+            if isinstance(script, _ScriptText):
+                inspect_script_value(script, script.line or call_line)
+            return
+
+    def token_text(value: object) -> str | None:
+        if isinstance(value, _ScriptText) and value.exact:
+            return value.value
+        if isinstance(value, str):
+            return value
+        return None
+
+    def unquote_shell_token(token: str) -> str:
+        if len(token) >= 2 and token[0] == token[-1] and token[0] in "\"'":
+            return token[1:-1]
+        return token
+
+    def is_python_executable(value: object) -> bool:
+        if value is _PYTHON_EXECUTABLE:
+            return True
+        name = token_text(value)
+        if name is None:
+            return False
+        basename = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+        return bool(
+            re.fullmatch(
+                r"(?:python(?:3(?:\.\d+)?)?|pythonw(?:3(?:\.\d+)?)?|py)(?:\.exe)?",
+                basename,
+            )
+        )
+
+    scan(ast.parse(source))
+    return [(module, line, name) for module, line, name, _column, _source_line in sorted(findings)]
+
+
+def test_private_test_import_guard_catches_its_counterprobe() -> None:
+    """Der Wächter findet from-, Modulalias- und eingebettete Code-Importe."""
+    counterprobe = "from tests.test_probe import public_name, _private_helper as public_alias\n"
+    embedded = "script = 'from tests.test_probe import _private_helper as public_alias\\n'\n"
+    module_alias = "import tests.test_probe as probe\nprobe._private_helper()\n"
+    package_alias = "import tests.test_probe\ntests.test_probe._private_helper()\n"
+    package_from_alias = "from tests import test_probe as probe\nprobe._private_helper()\n"
+    code_string = 'code = "from tests.test_probe import _private_helper as public_alias\\n"\n'
+    f_string = 'code = f"import tests.test_{module} as probe\\nprobe._private_helper()\\n"\n'
+    static_f_string = "code = f\"{'from tests.test_probe import _private_helper'}\"\n"
+    known_f_string = (
+        "source = 'from tests.test_probe import _private_helper\\n'\nprogram = f\"{source}\"\n"
+    )
+    unknown_imported_name = 'name = input()\ncode = f"from tests.test_probe import {name}"\n'
+    dynamic_placeholder_with_literal_name = (
+        "name = input()\n"
+        + r'code = f"from tests.test_probe import codex_dynamic_value\n# {name}\n"'
+        + "\n"
+    )
+    subprocess_module_alias = (
+        "import subprocess as child_process, sys\n"
+        "child_process.run([sys.executable, '-c', "
+        "'from tests.test_probe import _private_helper'])\n"
+    )
+    shell_string = (
+        "from subprocess import run as launch\n"
+        "command = 'python -c \"from tests.test_probe import _private_helper\"'\n"
+        "launch(command, shell=True)\n"
+    )
+    child_source = (
+        "import subprocess, sys\n"
+        "source = 'from tests.test_probe import _private_helper'\n"
+        "subprocess.run([sys.executable, '-c', source])\n"
+    )
+    inline_command = (
+        "import subprocess, sys\n"
+        "subprocess.run([sys.executable, '-c', "
+        "'from tests.test_probe import _private_helper'])\n"
+    )
+
+    assert _private_test_imports(counterprobe) == [("tests.test_probe", 1, "_private_helper")]
+    assert _private_test_imports(embedded) == [("tests.test_probe", 1, "_private_helper")]
+    assert _private_test_imports(module_alias) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(package_alias) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(package_from_alias) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(code_string) == [("tests.test_probe", 1, "_private_helper")]
+    assert _private_test_imports(f_string) == [("tests.test_<dynamisch>", 1, "_private_helper")]
+    assert _private_test_imports(static_f_string) == [("tests.test_probe", 1, "_private_helper")]
+    assert _private_test_imports(known_f_string) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(unknown_imported_name) == [("tests.test_probe", 2, "<dynamisch>")]
+    assert _private_test_imports(dynamic_placeholder_with_literal_name) == []
+    assert _private_test_imports(subprocess_module_alias) == [
+        ("tests.test_probe", 2, "_private_helper")
+    ]
+    assert _private_test_imports(shell_string) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(child_source) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(inline_command) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports("from tests.test_probe import public_name\n") == []
+    assert _private_test_imports("import tests.test_probe as probe\nprobe.public_helper()\n") == []
+
+
+def test_private_test_import_guard_resolves_static_alias_chains() -> None:
+    """Statische Import-, Attribut- und Zuweisungsketten bleiben sichtbar."""
+    imports = (
+        "import importlib as loader\n"
+        "module_factory = loader.import_module\n"
+        "load = module_factory\n"
+        "probe = load('tests.test_probe')\n"
+        "read_attribute = getattr\n"
+        "read = read_attribute\n"
+        "private_helper = read(probe, '_private_helper')\n"
+        "private_alias = private_helper\n"
+        "private_alias()\n"
+    )
+    imported_function = (
+        "from importlib import import_module as load_module\n"
+        "module = load_module('tests.test_probe')\n"
+        "getattr(module, '_private_helper')\n"
+    )
+    imported_private_module = (
+        "from importlib import import_module as load_module\n"
+        "load_module('tests.test_probe._private_helper')\n"
+    )
+    builtins_getattr = (
+        "import builtins as b\n"
+        "import tests.test_probe as probe\n"
+        "read_attribute = b.getattr\n"
+        "read_attribute(probe, '_private_helper')\n"
+    )
+    imported_process_module = (
+        "from importlib import import_module as load_module\n"
+        "process = load_module('subprocess')\n"
+        "runner = process.run\n"
+        "launch = runner\n"
+        "import sys\n"
+        "source = 'from tests.test_probe import _private_helper'\n"
+        "launch([sys.executable, '-c', source])\n"
+    )
+    nested_attribute = "import tests.test_probe as probe\nprobe._private_helper.child()\n"
+    repeated_embedded_attribute = (
+        'script = "import tests.test_probe as probe\\n'
+        'probe._private_helper()\\nprobe._private_helper()\\n"\n'
+    )
+    separate_scopes = (
+        "def imports_only_here():\n"
+        "    import tests.test_probe as probe\n"
+        "\n"
+        "def unrelated_scope():\n"
+        "    probe._private_helper()\n"
+    )
+    local_shadow = (
+        "import tests.test_probe as probe\n"
+        "def unrelated_scope():\n"
+        "    probe = object()\n"
+        "    probe._private_helper()\n"
+    )
+    argument_shadow = (
+        "import tests.test_probe as probe\n"
+        "def unrelated_scope(probe):\n"
+        "    probe._private_helper()\n"
+    )
+    comprehension_shadow = (
+        "import tests.test_probe as probe\n[probe._private_helper for probe in values]\n"
+    )
+    local_use = (
+        "def use_local_alias():\n"
+        "    from tests import test_probe as probe\n"
+        "    probe._private_helper()\n"
+    )
+
+    assert _private_test_imports(imports) == [("tests.test_probe", 7, "_private_helper")]
+    assert _private_test_imports(imported_function) == [("tests.test_probe", 3, "_private_helper")]
+    assert _private_test_imports(imported_private_module) == [
+        ("tests.test_probe._private_helper", 2, "_private_helper")
+    ]
+    assert _private_test_imports(builtins_getattr) == [("tests.test_probe", 4, "_private_helper")]
+    assert _private_test_imports(imported_process_module) == [
+        ("tests.test_probe", 6, "_private_helper")
+    ]
+    assert _private_test_imports(nested_attribute) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(repeated_embedded_attribute) == [
+        ("tests.test_probe", 1, "_private_helper"),
+        ("tests.test_probe", 1, "_private_helper"),
+    ]
+    assert _private_test_imports(separate_scopes) == []
+    assert _private_test_imports(local_shadow) == []
+    assert _private_test_imports(argument_shadow) == []
+    assert _private_test_imports(comprehension_shadow) == []
+    assert _private_test_imports(local_use) == [("tests.test_probe", 3, "_private_helper")]
+
+
+def test_private_test_import_guard_limits_child_code_to_python() -> None:
+    """`-c` ist nur bei Python sicher und verfolgte Runner-Aliase zählen."""
+    aliases = (
+        "import subprocess as process\n"
+        "runner = process.run\n"
+        "launch = runner\n"
+        "import sys\n"
+        "source = 'from tests.test_probe import _private_helper'\n"
+        "launch([sys.executable, '-c', source])\n"
+    )
+    shell_alias = (
+        "from subprocess import run as launch\n"
+        "runner = launch\n"
+        "command = 'python -c \\\"from tests.test_probe import _private_helper\\\"'\n"
+        "runner(command, shell=True)\n"
+    )
+    shell_path = (
+        "from subprocess import run as launch\n"
+        'command = \'"C:\\\\Python 3.13\\\\python.exe" -c '
+        '"from tests.test_probe import _private_helper"\'\n'
+        "launch(command, shell=True)\n"
+    )
+    sys_alias = (
+        "from subprocess import run as launch\n"
+        "from sys import executable as interpreter\n"
+        "source = 'from tests.test_probe import _private_helper'\n"
+        "launch(['-c', source], executable=interpreter)\n"
+    )
+    git_option = (
+        "import subprocess\n"
+        "subprocess.run(['git', '-c', 'from tests.test_probe import _private_helper'])\n"
+        "subprocess.run("
+        "'git -c \\\"from tests.test_probe import _private_helper\\\"', shell=True)\n"
+    )
+
+    assert _private_test_imports(aliases) == [("tests.test_probe", 5, "_private_helper")]
+    assert _private_test_imports(shell_alias) == [("tests.test_probe", 3, "_private_helper")]
+    assert _private_test_imports(shell_path) == [("tests.test_probe", 2, "_private_helper")]
+    assert _private_test_imports(sys_alias) == [("tests.test_probe", 3, "_private_helper")]
+    assert _private_test_imports(git_option) == []
+
+
+def test_test_files_do_not_import_private_names_from_each_other() -> None:
+    """Querimporte finden in der Zwischenzeit nur die bekannten In-flight-Nutzer."""
+    sources = sorted((_ROOT / "tests").glob("test_*.py"))
+    assert sources, "keine Testdateien gefunden — der Querimport-Wächter prüft nichts"
+
+    locations: list[tuple[str, int, str, str]] = []
+    found: Counter[tuple[str, str, str]] = Counter()
+    for path in sources:
+        relative = path.relative_to(_ROOT).as_posix()
+        source = path.read_text(encoding="utf-8")
+        for module, line, name in _private_test_imports(source):
+            locations.append((relative, line, module, name))
+            found[(relative, module, name)] += 1
+
+    assert found == _KNOWN_IN_FLIGHT_PRIVATE_IMPORTS, (
+        "private Querimporte wurden ergänzt oder die bekannte Zwischenliste ist veraltet:\n"
+        + "\n".join(
+            f"{path}:{line}: from {module} import {name}"
+            for path, line, module, name in sorted(locations)
+        )
+    )
 
 
 def _pyproject() -> dict[str, Any]:
