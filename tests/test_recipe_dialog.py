@@ -104,6 +104,20 @@ def test_the_dialog_names_and_limits_the_range_before_starting(qt_app: QApplicat
         dialog.deleteLater()
 
 
+def test_a_one_corner_range_uses_the_singular(qt_app: QApplication, monkeypatch) -> None:
+    """Ein Bereich aus genau einer Kombination darf nicht im Plural stehen."""
+    from app.ui import recipe_dialog
+
+    monkeypatch.setattr(recipe_dialog.recipes, "range_size", lambda _exposed: 1)
+    dialog = _dialog(qt_app)
+    try:
+        assert dialog.range_plan.text() == "Bereichstest: eine Kombination."
+        assert "Kombinationen" not in dialog.range_plan.text()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_the_dialog_offers_a_row_for_every_parameter(qt_app: QApplication) -> None:
     """Jeder Projektparameter kann ein einstellbares Maß des Bausteins werden.
 

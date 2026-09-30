@@ -19,6 +19,7 @@ from typing import Any, Final
 from PySide6.QtCore import QEvent, QLocale, QSize, Qt, QTimer, QUrl, QUrlQuery, Signal
 from PySide6.QtGui import QDesktopServices, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -110,6 +111,7 @@ from app.ui.style import (
     DialogScrollArea,
     fit_dialog_to_screen,
     fit_height_after_show,
+    make_danger,
     make_large_target,
     make_primary,
     no_primary,
@@ -332,6 +334,7 @@ class CalibrationDialog(QDialog):
         self._original_values: dict[str, float] = {}
         self._edited_fields: set[str] = set()
         form = QFormLayout()
+        form.setHorizontalSpacing(NORMAL)
         form.setVerticalSpacing(NORMAL)
         for name, title in (
             ("clearance", tr("Spiel für Schiebesitz")),
@@ -624,12 +627,14 @@ class ParameterDialog(QDialog):
         value_row = QWidget(self)
         value_layout = QHBoxLayout(value_row)
         value_layout.setContentsMargins(0, 0, 0, 0)
+        value_layout.setSpacing(NORMAL)
         value_layout.addWidget(self.value_field, 1)
         value_layout.addWidget(self.fx_button)
 
         self.expression_row = QWidget(self)
         expression_layout = QHBoxLayout(self.expression_row)
         expression_layout.setContentsMargins(0, 0, 0, 0)
+        expression_layout.setSpacing(NORMAL)
         expression_layout.addWidget(self.expression_field, 1)
         expression_layout.addWidget(self.parameter_button)
 
@@ -637,6 +642,8 @@ class ParameterDialog(QDialog):
         # Wertzeile blendet ihn ein und sperrt die Zahl; er stand drei Zeilen
         # tiefer, unter Einheit und Grenzen.
         form = QFormLayout()
+        form.setHorizontalSpacing(NORMAL)
+        form.setVerticalSpacing(NORMAL)
         form.addRow(tr("Name"), self.name_field)
         form.addRow(tr("Wert"), value_row)
         form.addRow(tr("Ausdruck"), self.expression_row)
@@ -1027,18 +1034,23 @@ class KeyDialog(QDialog):
         mehr etwas an — auch nicht das Signal, das beim Trennen schon in
         Qts Schlange lag."""
 
+        self._key_source = keys.source(account)
         state = {
             "keychain": tr("Ein Schlüssel liegt im Schlüsselbund."),
             "environment": tr("Ein Schlüssel kommt aus der Umgebung."),
             "none": tr("Es ist kein Schlüssel hinterlegt."),
-        }[keys.source(account)]
+        }[self._key_source]
 
         # Der Satz darüber, was antwortet, kommt nachgereicht: Er fragt ein
         # Backend, und das ist ein HTTP-Aufruf (:class:`_Look`).
         self._key_state = state
+        key_status_text = f"{state} {tr('Wird nachgesehen …')}"
+        self._key_status_error: str | None = None
+        self.key_status = QLabel(key_status_text, self)
+        self.key_status.setWordWrap(True)
+        self.key_status.setAccessibleName(key_status_text)
         self.explanation = QLabel(
-            f"{state} {tr('Wird nachgesehen …')}\n\n"
-            + tr(
+            tr(
                 "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist "
                 "nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer "
                 "dem Chat nutzbar."
@@ -1058,16 +1070,13 @@ class KeyDialog(QDialog):
         # Speichern ist die Handlung, also trägt sie den Akzent — und zwar
         # ausdrücklich. Qt gab ihn beim ersten ``show()`` ohnehin an denselben
         # Knopf, aber ohne die halbfette Schrift; Farbe allein ist keine
-        # zweite Kodierung (Regel 18). Wichtig ist das hier besonders, weil
-        # „Löschen" gleich daneben steht: Zwischen zwei gleich aussehenden
-        # Knöpfen entscheidet sonst nichts, welcher der gemeinte ist.
+        # zweite Kodierung (Regel 18).
         save = buttons.button(QDialogButtonBox.StandardButton.Save)
-        if save is not None:
-            make_primary(save)
-        self.forget_button = buttons.addButton(
-            tr("Löschen"), QDialogButtonBox.ButtonRole.DestructiveRole
-        )
-        self.forget_button.clicked.connect(self._forget)
+        assert save is not None
+        make_primary(save)
+        cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        assert cancel is not None
+        self.buttons = buttons
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
 
@@ -1075,9 +1084,10 @@ class KeyDialog(QDialog):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(WIDE)
-        layout.addWidget(self.explanation)
-        layout.addWidget(self._cloud_model_section())
-        layout.addWidget(self._local_model_section())
+        self.cloud_model_section = self._cloud_model_section()
+        layout.addWidget(self.cloud_model_section)
+        self.local_model_section = self._local_model_section()
+        layout.addWidget(self.local_model_section)
         layout.addStretch(1)
         self._scroll = DialogScrollArea(self)
         self._scroll.setWidget(content)
@@ -1087,6 +1097,7 @@ class KeyDialog(QDialog):
         outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
         outer.addWidget(buttons)
+        self._set_tab_order()
         wheel_needs_focus(self.model_field)
 
         self._look: _Look | None = None
@@ -1102,6 +1113,42 @@ class KeyDialog(QDialog):
     def _fit_key_content(self) -> None:
         """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
         self._height.fit(self, self._scroll)
+
+    def _set_tab_order(self) -> None:
+        """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
+        button_layout = self.buttons.layout()
+        assert button_layout is not None
+        footer: list[QAbstractButton] = []
+        buttons = self.buttons.buttons()
+        for index in range(button_layout.count()):
+            item = button_layout.itemAt(index)
+            if item is None:
+                continue
+            widget = item.widget()
+            if isinstance(widget, QAbstractButton) and widget in buttons:
+                footer.append(widget)
+        order = (
+            self.field,
+            self.forget_button,
+            self.service_button,
+            self.model_field,
+            self.pull_button,
+            self.probe_button,
+            *footer,
+        )
+        for earlier, later in pairwise(order):
+            QWidget.setTabOrder(earlier, later)
+
+    def _set_key_status(self, text: str, *, role: str | None = None) -> None:
+        """Sichtbarer und vorgelesener Name folgen demselben Schlüsselzustand."""
+        if role is None:
+            self.key_status.setText(text)
+            self.key_status.setAccessibleDescription("")
+        else:
+            set_role(self.key_status, role, text)
+        # Ein fester AccessibleName würde den sichtbaren, wechselnden Satz
+        # ersetzen; der Screenreader muss denselben aktuellen Zustand erhalten.
+        self.key_status.setAccessibleName(text)
 
     # --- nachsehen --------------------------------------------------------------
 
@@ -1212,9 +1259,10 @@ class KeyDialog(QDialog):
             return
         assert isinstance(found, ChatState)
         self.state = found
-        text = self.explanation.text().split("\n\n", 1)
-        rest = text[1] if len(text) > 1 else ""
-        self.explanation.setText(f"{self._key_state} {found.answers}\n\n{rest}")
+        if self._key_status_error is None:
+            self._set_key_status(f"{self._key_state} {found.answers}")
+        else:
+            self._set_key_status(self._key_status_error, role="warning")
         self._show_service(found.service)
         self._fill_models(found.installed)
 
@@ -1242,11 +1290,35 @@ class KeyDialog(QDialog):
         note.setMaximumWidth(600)
 
         form = QFormLayout(section)
+        form.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        form.setHorizontalSpacing(NORMAL)
         form.setVerticalSpacing(NORMAL)
         form.addRow(tr("Anbieter"), provider)
         form.addRow(tr("API-Schlüssel"), self.field)
         form.addRow(note)
+        form.addRow(self.key_status)
+        form.addRow(self.explanation)
+
+        forget_actions = QDialogButtonBox(section)
+        self.forget_button = forget_actions.addButton(
+            tr("Löschen"), QDialogButtonBox.ButtonRole.DestructiveRole
+        )
+        make_danger(self.forget_button)
+        self.forget_button.clicked.connect(self._forget)
+        if self._key_source == "keychain":
+            forget_reason = ""
+        elif self._key_source == "environment":
+            forget_reason = str(
+                tr("Ein Schlüssel aus der Umgebung muss außerhalb von Solidon entfernt werden.")
+            )
+        else:
+            forget_reason = str(tr("Es ist kein Schlüssel hinterlegt."))
+        self.forget_button.setEnabled(self._key_source == "keychain")
+        self.forget_button.setToolTip(forget_reason)
+        self.forget_button.setStatusTip(forget_reason)
+        self.forget_button.setAccessibleDescription(forget_reason)
+        form.addRow(forget_actions)
         return section
 
     def _local_model_section(self) -> QWidget:
@@ -1306,10 +1378,12 @@ class KeyDialog(QDialog):
         self.probe_result.setWordWrap(True)
 
         service_row = QHBoxLayout()
+        service_row.setSpacing(NORMAL)
         service_row.addWidget(self.service_state, stretch=1)
         service_row.addWidget(self.service_button)
 
         row = QHBoxLayout()
+        row.setSpacing(NORMAL)
         row.addWidget(self.model_field, stretch=1)
         row.addWidget(self.pull_button)
         row.addWidget(self.probe_button)
@@ -1766,7 +1840,16 @@ class KeyDialog(QDialog):
         self.accept()
 
     def _forget(self) -> None:
-        keys.forget(self.account)
+        if self._key_source != "keychain":
+            return
+        if not keys.forget(self.account):
+            message = tr(
+                "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund "
+                "und versuchen Sie es erneut."
+            )
+            self._key_status_error = str(message)
+            self._set_key_status(self._key_status_error, role="warning")
+            return
         self.field.clear()
         self.accept()
 
@@ -1879,13 +1962,13 @@ class OfflineActivationDialog(QDialog):
         layout.addWidget(explanation)
         layout.addWidget(save)
         page_actions = QHBoxLayout()
+        page_actions.setSpacing(NORMAL)
         page_actions.addWidget(website)
         page_actions.addWidget(copy_address)
         layout.addLayout(page_actions)
         layout.addWidget(self.page_address)
         layout.addWidget(import_answer)
         layout.setSpacing(NORMAL)
-        layout.addStretch(1)
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)
         outer = QVBoxLayout(self)
@@ -2084,6 +2167,7 @@ class ActivationDialog(QDialog):
 
         key_group = QGroupBox(tr("1 · Lizenzschlüssel einfügen"), self)
         key_layout = QVBoxLayout(key_group)
+        key_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         key_layout.setSpacing(NORMAL)
         key_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         key_explanation = QLabel(
@@ -2094,6 +2178,7 @@ class ActivationDialog(QDialog):
         key_layout.addWidget(key_explanation)
         key_layout.addWidget(self.field)
         key_actions = QHBoxLayout()
+        key_actions.setSpacing(NORMAL)
         key_actions.addWidget(self.check_button)
         key_actions.addWidget(self.buy_button)
         key_actions.addStretch(1)
@@ -2101,6 +2186,7 @@ class ActivationDialog(QDialog):
 
         device_group = QGroupBox(tr("2 · Diesen Rechner aktivieren"), self)
         device_layout = QVBoxLayout(device_group)
+        device_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         device_layout.setSpacing(NORMAL)
         device_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         device_explanation = QLabel(
@@ -2115,6 +2201,7 @@ class ActivationDialog(QDialog):
         device_layout.addWidget(QLabel(tr("Gerätename"), device_group))
         device_layout.addWidget(self.device_name)
         activation_actions = QHBoxLayout()
+        activation_actions.setSpacing(NORMAL)
         activation_actions.addWidget(self.online_button)
         activation_actions.addWidget(self.offline_button)
         activation_actions.addStretch(1)
@@ -2169,7 +2256,7 @@ class ActivationDialog(QDialog):
         elif state.licensed and state.licence is not None and state.certificate is not None:
             set_role(
                 self.state_label,
-                "info",
+                "ok",
                 # Die Lizenzart steht hier wie im Über-Dialog (RM-182): Wer
                 # nachsieht, auf welchem Geräteplatz er steht, fragt auch,
                 # welche Lizenz er gekauft hat — die gewerbliche hat zwei.
@@ -2187,7 +2274,7 @@ class ActivationDialog(QDialog):
         elif state.licensed and state.licence is not None:
             set_role(
                 self.state_label,
-                "info",
+                "ok",
                 tr(
                     "Freigeschaltet für {holder} — {kind} (Bestellung {order}). Dieser "
                     "Bestandsschlüssel braucht keine Geräteaktivierung und bleibt "
@@ -2877,6 +2964,8 @@ class StepValuesDialog(QDialog):
         self.setMinimumSize(520, 360)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         hint = QLabel(
             tr(
                 "Diesen Schritt kann Solidon nicht rechnen — seine Werte stehen "
@@ -3404,7 +3493,6 @@ class DonationDialog(QDialog):
         layout.addWidget(without_heading)
         layout.addWidget(without)
         layout.addLayout(helping)
-        layout.addStretch(1)
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)
         outer = QVBoxLayout(self)
@@ -3442,7 +3530,7 @@ class DonationDialog(QDialog):
         set_level(explanation, "caption")
         words = QVBoxLayout()
         words.setContentsMargins(0, 0, 0, 0)
-        words.setSpacing(TIGHT // 2)
+        words.setSpacing(TIGHT)
         words.addWidget(headline)
         words.addWidget(explanation)
         row = QHBoxLayout()
@@ -3584,6 +3672,7 @@ class AboutDialog(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(made_by)
         supporting = QHBoxLayout()
+        supporting.setSpacing(NORMAL)
         supporting.addWidget(self.support_button)
         supporting.addStretch(1)
         layout.addLayout(supporting)

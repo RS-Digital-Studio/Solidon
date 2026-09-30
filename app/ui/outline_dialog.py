@@ -40,7 +40,7 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.labels import LengthSpin, area, length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import ROOMY, make_primary, no_primary, set_level
+from app.ui.style import ROOMY, SPACE, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 
@@ -250,6 +250,7 @@ class OutlineDialog(QDialog):
         self._timer.timeout.connect(self._preview)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(ROOMY)
         note = QLabel(tr("Wählen Sie die Flächen für Ihr Teil. Innenringe bleiben Löcher."), self)
         note.setWordWrap(True)
@@ -324,6 +325,9 @@ class OutlineDialog(QDialog):
             field.setToolTip(str(spec.doc))
             field.setStatusTip(str(spec.doc))
             field.setEnabled(not selection_only)
+            natural_width = field.sizeHint().width()
+            field.setMinimumWidth(natural_width)
+            field.setMaximumWidth(natural_width + WIDE)
             form.addRow(str(spec.title), field)
             label = form.labelForField(field)
             label.setToolTip(str(spec.doc))
@@ -343,6 +347,9 @@ class OutlineDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.accept_button.setText(tr("Zeichnung hochziehen"))
         self.accept_button.setEnabled(False)

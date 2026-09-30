@@ -14,6 +14,7 @@ paths:
   - "app/ui/print_findings_flow.py"
   - "app/ui/app_events.py"
   - "app/ui/placement_flow.py"
+  - "app/ui/comfy_dialog.py"
 ---
 
 # Regeln für Wartezeit und Nebenläufigkeit
@@ -490,6 +491,19 @@ einem rechnenden Arbeiter wartet jeder. Daraus folgt:
 an der Leine — ein hängendes `stat` ist nicht abbrechbar, und ein `QThread`
 darin risse beim Beenden den Prozess mit. Nach 50 ms steht die ungeprüfte
 Liste. Jede gemerkte Pfadliste wird so geprüft.
+
+Auch die ComfyUI-Ordnerprüfung läuft außerhalb von Qt: `find_comfyui` und die
+Modellbestände können auf einem nicht erreichbaren Netzlaufwerk in einem
+Dateizugriff hängen. Höchstens zwei Daemon-Fäden prüfen systemweit; je Dialog
+bleibt nur der neueste noch nicht gestartete Pfad vorgemerkt. Jede Antwort
+trägt die Eingabegeneration und darf nach Pfadwechsel oder Schließen den
+Dialogzustand nicht ändern. Dauert eine Prüfung fünf Sekunden, bleibt
+*Einrichten* gesperrt und erklärt, dass ein anderer erreichbarer Ordner gewählt
+oder die Antwort abgewartet werden muss. Eine verspätete erfolgreiche Antwort
+darf freigeben; eine Fehler- oder Crashantwort derselben Generation nicht. Erst
+ein neuer Prüfversuch darf einen fehlgeschlagenen Timeout ablösen. So wird der
+potenziell blockierende Aufruf nach einem Timeout nicht direkt im Setup-
+`QThread` wiederholt.
 
 ### Ein Zeiger, der fragt, wird gedrosselt, nicht entprellt
 

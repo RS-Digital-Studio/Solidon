@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -407,9 +408,16 @@ class FirstRunDialog(QDialog):
         self.custom_printer = QWidget(self)
         custom_form = QFormLayout(self.custom_printer)
         custom_form.setContentsMargins(0, 0, 0, 0)
+        custom_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.printer_name = QLineEdit(self.custom_printer)
         self.printer_name.setPlaceholderText(tr("Name Ihres Druckers"))
         custom_form.addRow(tr("Name"), self.printer_name)
+        self.printer_name_hint = QLabel(
+            tr("So finden Sie den Drucker später in der Liste wieder."), self.custom_printer
+        )
+        self.printer_name_hint.setWordWrap(True)
+        set_level(self.printer_name_hint, "caption")
+        custom_form.addRow("", self.printer_name_hint)
         # Das Verfahren entscheidet, welche Maße darunter gefragt werden:
         # Düse und Düsenzahl bei FDM, Pixelgröße und Mindestwand bei Resin
         # (Resin-Konzept §4). Ein Feld, das für das gewählte Verfahren
@@ -420,11 +428,14 @@ class FirstRunDialog(QDialog):
         self.printer_technology.currentIndexChanged.connect(self._technology_changed)
         custom_form.addRow(tr("Verfahren"), self.printer_technology)
         self.printer_dimensions: list[NumberSpin] = []
-        dimensions = QHBoxLayout()
+        dimensions = QGridLayout()
+        dimensions.setContentsMargins(0, 0, 0, 0)
+        dimensions.setHorizontalSpacing(NORMAL)
+        dimensions.setVerticalSpacing(TIGHT)
         template = profiles.printer(profiles.DEFAULT_PRINTER)
         resin_template = profiles.printer(profiles.DEFAULT_RESIN_PRINTER)
-        for label, value in zip(
-            (tr("Breite"), tr("Tiefe"), tr("Höhe")), template.build_volume, strict=True
+        for column, (label, value) in enumerate(
+            zip((tr("Breite"), tr("Tiefe"), tr("Höhe")), template.build_volume, strict=True)
         ):
             field = NumberSpin(self.custom_printer)
             field.setRange(1, 100_000)
@@ -432,8 +443,10 @@ class FirstRunDialog(QDialog):
             field.setSuffix(" " + tr("mm"))
             field.setValue(value)
             field.setAccessibleName(label)
-            dimensions.addWidget(QLabel(label, self.custom_printer))
-            dimensions.addWidget(field)
+            heading = QLabel(label, self.custom_printer)
+            heading.setBuddy(field)
+            dimensions.addWidget(heading, 0, column)
+            dimensions.addWidget(field, 1, column)
             self.printer_dimensions.append(field)
         custom_form.addRow(tr("Bauraum"), dimensions)
         self.printer_nozzle = NumberSpin(self.custom_printer)
@@ -527,16 +540,17 @@ class FirstRunDialog(QDialog):
         #
         # „Maße" und nicht „Bauraum und Düse": Ein eigener Resin-Drucker fragt
         # Pixelgröße und Mindestwand, eine Düse hat er nicht (RM-071).
-        printer_hint = QLabel(
+        self.printer_hint = QLabel(
             tr(
                 "Ihr Drucker ist nicht dabei? Wählen Sie „Benutzerdefiniert“ "
                 "und tragen Sie seinen Namen und seine Maße ein."
             ),
             basics,
         )
-        printer_hint.setWordWrap(True)
-        set_level(printer_hint, "caption")
-        form.addRow(printer_hint)
+        self.printer_hint.setWordWrap(True)
+        set_level(self.printer_hint, "caption")
+        self.printer_hint.setVisible(self.printer.currentData() != "__custom__")
+        form.addRow(self.printer_hint)
         # **Das eigene Formular nach Zustand und Hinweis**: Beide sprechen über
         # die Druckerwahl und standen hinter acht Zeilen eigener Maße.
         form.addRow(self.custom_printer)
@@ -1052,6 +1066,7 @@ class FirstRunDialog(QDialog):
         """Eigene Druckerdaten stehen direkt unter der entsprechenden Auswahl."""
         custom = self.printer.currentData() == "__custom__"
         self.custom_printer.setVisible(custom)
+        self.printer_hint.setVisible(not custom)
         valid = valid_printer_choice(self.printer)
         reason = "" if valid else str(tr("Wählen Sie einen Drucker aus der Liste."))
         for button in (self.start, self.open_button, self.inventory_button):

@@ -401,6 +401,37 @@ class SettingsDialog(QDialog):
         # Beschriftungsspalte für sich: Die Felder begannen oben bei 148 und
         # unten bei 70 Punkten, gemessen am gebauten Dialog (Befund B11).
         align_forms(self)
+        # Auch die zugeklappten Zusatzzeilen bestimmen die Breite schon beim
+        # Öffnen. Sonst sprang das Fenster beim Aufklappen nach rechts.
+        margins = self._advanced_form.contentsMargins()
+        label_width = max(
+            (
+                item.sizeHint().width()
+                for row in range(self._advanced_form.rowCount())
+                if (item := self._advanced_form.itemAt(row, QFormLayout.ItemRole.LabelRole))
+                is not None
+            ),
+            default=0,
+        )
+        field_width = max(
+            (
+                item.sizeHint().width()
+                for row in range(self._advanced_form.rowCount())
+                if (item := self._advanced_form.itemAt(row, QFormLayout.ItemRole.FieldRole))
+                is not None
+            ),
+            default=0,
+        )
+        self.advanced.setMinimumWidth(
+            max(
+                self.advanced.minimumWidth(),
+                margins.left()
+                + label_width
+                + self._advanced_form.horizontalSpacing()
+                + field_width
+                + margins.right(),
+            )
+        )
         heading = self.advanced.findChild(QToolButton)
         assert heading is not None
         heading.toggled.connect(self._fit_soon)
@@ -459,6 +490,7 @@ class SettingsDialog(QDialog):
         box = QGroupBox(tr("Anwendung"), self)
         form = QFormLayout(box)
         form.setVerticalSpacing(NORMAL)
+        form.setHorizontalSpacing(NORMAL)
         # **Eine Zeilenform für alle Zeilen.** Mit ``WrapLongRows`` stand die
         # Beschriftung von „Slicer" und „Navigation" über ihrem Feld, die der
         # übrigen daneben — zwei Formen in einem Dialog. Der Dialog wird dafür
@@ -475,6 +507,7 @@ class SettingsDialog(QDialog):
         slicer_row = QWidget(box)
         slicer_layout = QHBoxLayout(slicer_row)
         slicer_layout.setContentsMargins(0, 0, 0, 0)
+        slicer_layout.setSpacing(NORMAL)
         slicer_layout.addWidget(self.slicer, 1)
         slicer_layout.addWidget(self.slicer_file)
         form.addRow(tr("Slicer"), slicer_row)
@@ -484,6 +517,7 @@ class SettingsDialog(QDialog):
         details = QFormLayout(more)
         details.setContentsMargins(0, 0, 0, 0)
         details.setVerticalSpacing(NORMAL)
+        details.setHorizontalSpacing(NORMAL)
         details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         # Was zusammengehört, steht beisammen: erst die Kamera (Navigation,
         # 3D-Maus), dann die Tasten, das Bild, der Chat, die Fernsteuerung.
@@ -500,6 +534,7 @@ class SettingsDialog(QDialog):
         for row in (self.spacemouse, self.spacemouse_speed, self.spacemouse_invert):
             details.setRowVisible(row, self.settings.spacemouse_seen)
         self.advanced = collapsible(tr("Weitere Einstellungen"), more, open_now=False)
+        self._advanced_form = details
         form.addRow(self.advanced)
         return box
 
@@ -507,6 +542,7 @@ class SettingsDialog(QDialog):
         box = QGroupBox(tr("Vorgaben für neue Projekte"), self)
         form = QFormLayout(box)
         form.setVerticalSpacing(NORMAL)
+        form.setHorizontalSpacing(NORMAL)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         note = QLabel(
             tr(

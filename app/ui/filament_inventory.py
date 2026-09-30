@@ -70,7 +70,7 @@ from app.ui.icons import icon
 from app.ui.labels import NumberSpin, calendar_day, local_timestamp, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, WIDE, make_primary, set_level
+from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
 
 _log = get_logger(__name__)
 
@@ -364,6 +364,8 @@ class SlicerSpoolDialog(QDialog):
         self.setWindowTitle(tr("Spulen aus dem Slicer übernehmen"))
         self.resize(560, 420)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         hint = QLabel(
             tr("Markieren Sie nur Spulen, die Sie besitzen. Die Restmenge bleibt unbekannt."), self
         )
@@ -380,6 +382,9 @@ class SlicerSpoolDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, parent=self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
@@ -492,6 +497,8 @@ class InventoryView(QWidget):
         layout.addWidget(self.filters)
         settings_area = QWidget(shelf)
         settings_layout = QVBoxLayout(settings_area)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+        settings_layout.setSpacing(NORMAL)
         self.booking_mode = QComboBox(settings_area)
         self.booking_mode.setAccessibleName(tr("Bestand nach der Ausgabe buchen"))
         booking_label = QLabel(tr("Nach einer Ausgabe an den Slicer buchen"), settings_area)
@@ -517,12 +524,23 @@ class InventoryView(QWidget):
         self.low_stock_threshold.setToolTip(
             tr("Spulen unter diesem Anteil ihrer Nennfüllung als „Wenig Filament“ kennzeichnen.")
         )
+        threshold_width = self.low_stock_threshold.sizeHint().width()
+        self.low_stock_threshold.setMinimumWidth(threshold_width)
+        self.low_stock_threshold.setMaximumWidth(threshold_width + WIDE)
         self.low_stock_threshold.valueChanged.connect(self._threshold_changed)
         threshold_label = QLabel(tr("Warnschwelle für niedrigen Bestand"), shelf)
         threshold_label.setBuddy(self.low_stock_threshold)
-        settings_layout.addWidget(threshold_label)
-        settings_layout.addWidget(self.low_stock_threshold)
-        settings_panel = collapsible(tr("Lager-Einstellungen"), settings_area, open_now=False)
+        self.threshold_row = QWidget(shelf)
+        threshold_layout = QHBoxLayout(self.threshold_row)
+        threshold_layout.setContentsMargins(0, 0, 0, 0)
+        threshold_layout.setSpacing(NORMAL)
+        threshold_layout.addWidget(threshold_label)
+        threshold_layout.addWidget(self.low_stock_threshold)
+        threshold_layout.addStretch(1)
+        self.settings_area = settings_area
+        self.settings_panel = collapsible(tr("Lager-Einstellungen"), settings_area, open_now=False)
+        layout.addWidget(self.threshold_row)
+        layout.addWidget(self.settings_panel)
         self.import_button = QPushButton(tr("Aus dem Slicer übernehmen"), shelf)
         self.import_button.clicked.connect(self._import)
         # **Der Leerzustand ist ein Ort, kein Satz über der Leere.** Vorher
@@ -574,7 +592,6 @@ class InventoryView(QWidget):
         actions.addWidget(self.import_button)
         actions.addStretch(1)
         layout.addLayout(actions)
-        layout.addWidget(settings_panel)
         self.pages.addWidget(shelf)
         self.detail = QWidget(self)
         detail_scroll = QScrollArea(self)
@@ -928,6 +945,9 @@ class InventoryView(QWidget):
         self.reverse_button = QPushButton(tr("Gewählten Vorgang zurücknehmen"), self.detail)
         self.reverse_button.clicked.connect(self._reverse)
         self.detail_layout.addWidget(self.reverse_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.reverse_hint = QLabel("", self.detail)
+        self.reverse_hint.setWordWrap(True)
+        self.detail_layout.addWidget(self.reverse_hint)
         self._describe_reverse_button(False)
         self._fill_history(entry, snapshot.bookings(identifier))
         self.pages.setCurrentIndex(1)
@@ -1032,6 +1052,7 @@ class InventoryView(QWidget):
         self.reverse_button.setToolTip(hint)
         self.reverse_button.setStatusTip(hint)
         self.reverse_button.setAccessibleDescription(hint)
+        self.reverse_hint.setText(hint)
 
     def show_shelf(self) -> None:
         self._clear_stock_conflict()

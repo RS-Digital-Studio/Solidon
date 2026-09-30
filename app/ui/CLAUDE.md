@@ -67,7 +67,7 @@ Karte, dort das Gesetz.
 | `ansicht.md` | Picks, Messen, Bildpunkte, Zeiger, wann gemalt wird, Druckplatten | `viewport`, `render/`, `qt_platform`, `placement_flow`, `overlay`, `cursors`, `analysis_bar`, `section_bar`, `split_bar`, `transform_bar`, `explode_bar`, `scale_widget`, `snapshots` |
 | `griffe.md` | Zeigervorfahrt, Bewegen, Skalieren, Langloch, Maße am Merkmal | `slot_handle`, `viewport`, `transform_bar`, `render/gizmo`, `scale_widget`, `placement_flow` |
 | `kamera.md` | Navigation, Drehpunkt, Einpassen, 3D-Maus | `spacemouse`, `viewport`, `render/navigator`, `render/api`, `settings`, `settings_dialog` |
-| `wartezeit.md` | Fortschritt, Abbruch, Arbeiter, Qt-Abbau | `session`, `loading`, `leash`, `splash`, `main_window`, `outline_dialog`, `step_dialog`, `organizer_dialog`, `local_recognition`, `local_recognition_flow`, `print_findings_flow`, `app_events`, `placement_flow` |
+| `wartezeit.md` | Fortschritt, Abbruch, Arbeiter, Qt-Abbau | `session`, `loading`, `leash`, `splash`, `main_window`, `outline_dialog`, `step_dialog`, `organizer_dialog`, `local_recognition`, `local_recognition_flow`, `print_findings_flow`, `app_events`, `placement_flow`, `comfy_dialog` |
 | `zeichenflaeche.md` | der Skizzeneditor | `sketch_editor` |
 
 ## Module
@@ -142,7 +142,7 @@ Karte, dort das Gesetz.
 | `seal_flow.py` | bindet die Dichtwegwahl an den normalen Operationsdialog |
 | `generate_dialog.py` | Weg 3: beschreiben oder ein Bild fallen lassen (§2.2, §27) |
 | `variants_dialog.py` | Variantengenerator (§28.3, §25) |
-| `comfy_dialog.py` | ComfyUI einrichten (§27, §36) |
+| `comfy_dialog.py` | ComfyUI einrichten (§27, §36); Dateiprüfung siehe `wartezeit.md` |
 | `install_dialog.py` | was fehlt, und ein Knopf, der es holt (§36, §38); eine begonnene Installation läuft beim Schließen geordnet aus |
 | `update_dialog.py`, `changes_dialog.py` | die neue Version; was neu ist (§37.2) |
 

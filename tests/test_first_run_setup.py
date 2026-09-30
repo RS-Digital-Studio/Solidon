@@ -192,6 +192,24 @@ def setup_dialog(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> First
     return FirstRunDialog(UiSettings())
 
 
+def test_custom_printer_name_hint_stays_with_its_field(setup_dialog: FirstRunDialog) -> None:
+    """Der Namenshinweis steht direkt unter dem Feld, das er erklärt."""
+    from PySide6.QtWidgets import QFormLayout
+
+    form = setup_dialog.custom_printer.layout()
+    assert isinstance(form, QFormLayout)
+    name_row, name_role = form.getWidgetPosition(setup_dialog.printer_name)
+    hint_row, hint_role = form.getWidgetPosition(setup_dialog.printer_name_hint)
+    assert name_role == QFormLayout.ItemRole.FieldRole
+    assert hint_role == QFormLayout.ItemRole.FieldRole
+    assert hint_row == name_row + 1
+
+    setup_dialog.printer.setCurrentIndex(setup_dialog.printer.findData("__custom__"))
+    assert not setup_dialog.custom_printer.isHidden()
+    assert setup_dialog.printer_hint.isHidden()
+    assert setup_dialog.printer_name_hint.text()
+
+
 def test_selected_slicer_filters_printers_and_keeps_custom_choice(
     setup_dialog: FirstRunDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -676,15 +694,18 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         dialog.show()
         QTest.qWait(100)
         initial_height = dialog.height()
+        initial_width = dialog.width()
         default = dialog.printer.currentData()
         dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
         QTest.qWait(100)
         assert dialog._scroll.horizontalScrollBar().maximum() == 0
+        assert dialog.width() == initial_width
         assert dialog.height() >= initial_height
         expanded_height = dialog.height()
         dialog.printer.setCurrentIndex(dialog.printer.findData(default))
         QTest.qWait(100)
         assert dialog.height() < expanded_height
+        assert dialog.width() == initial_width
 
         manual_height = dialog.height() + 70
         dialog.resize(dialog.width(), manual_height)

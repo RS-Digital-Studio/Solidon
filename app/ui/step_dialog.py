@@ -38,7 +38,7 @@ from app.ui.filament_picker import swatch
 from app.ui.labels import colour_name, length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.outline_dialog import ContourField
-from app.ui.style import ROOMY, make_primary, no_primary, set_level
+from app.ui.style import ROOMY, SPACE, WIDE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 #: Wie groß die Vorschau gezeichnet wird, in Pixeln (die längere Seite).
@@ -221,6 +221,7 @@ class StepBodiesDialog(QDialog):
         self._timer.timeout.connect(self._render)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(ROOMY)
         note = QLabel(
             tr("Wählen Sie die Körper, die Sie übernehmen. Namen und Farben kommen aus der Datei."),
@@ -278,6 +279,9 @@ class StepBodiesDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.accept_button.setText(tr("Übernehmen"))
         self.accept_button.setEnabled(False)

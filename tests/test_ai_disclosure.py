@@ -497,6 +497,8 @@ def test_the_local_privacy_reader_says_it_is_german(qt_app: QApplication) -> Non
     german = LocalPrivacyDialog("# Datenschutz")
     try:
         assert "Deutsch" not in german.note.text()
+        assert "Version" in german.note.text()
+        assert "Fassung" not in german.note.text()
     finally:
         german.deleteLater()
     install_language("en")

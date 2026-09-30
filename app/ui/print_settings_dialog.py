@@ -2700,6 +2700,7 @@ class PrintSettingsDialog(QDialog):
 
         self._editors: dict[str, QWidget] = {}
         self._labels: dict[str, QLabel] = {}
+        self._tab_forms: dict[str, QFormLayout] = {}
         self._resets: dict[str, QToolButton] = {}
         """Der Knopf *Zurücksetzen* je Feld — sichtbar bei eigener Wahl."""
         self._foreign_notes: dict[str, QLabel] = {}
@@ -3875,6 +3876,7 @@ class PrintSettingsDialog(QDialog):
         for group in GROUPS:
             page = QWidget(self.tabs)
             form = QFormLayout(page)
+            self._tab_forms[group] = form
             for field in FIELDS:
                 if field.group == group and not field.front:
                     self._add_row(form, field)
@@ -6299,6 +6301,36 @@ class PrintSettingsDialog(QDialog):
                 _set_setting_editor(editor, field, value)
         finally:
             self._loading = False
+        self._update_inactive_setting_rows()
+
+    def _update_inactive_setting_rows(self) -> None:
+        """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
+        support_enabled = (
+            _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
+            != "none"
+        )
+        for path in (
+            "support.placement",
+            "support.threshold_angle",
+            "support.z_gap",
+            "support.xy_gap",
+            "support.density",
+            "support.interface_layers",
+            "support.block_channels",
+        ):
+            self._tab_forms["support"].setRowVisible(self._labels[path], support_enabled)
+
+        adhesion_enabled = (
+            _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
+            != "none"
+        )
+        for path in (
+            "adhesion.skirt_loops",
+            "adhesion.skirt_distance",
+            "adhesion.brim_width",
+            "adhesion.raft_layers",
+        ):
+            self._tab_forms["adhesion"].setRowVisible(self._labels[path], adhesion_enabled)
 
     def _editor_changed(self, path: str) -> None:
         """Ein Feld hat sich geändert: **genau dieses** wird eigene Wahl — und
@@ -6322,6 +6354,7 @@ class PrintSettingsDialog(QDialog):
             # dessen Feld muss es dann auch zeigen.
             if self.settings.explicit - before - {path}:
                 self._load_into_editors()
+        self._update_inactive_setting_rows()
         self._mark_origins()
         # Ein Hinweis, der am Wert hängt, folgt dem Wert (``slicer_keys.LIMITED``).
         self._mark_fields_this_slicer_ignores()

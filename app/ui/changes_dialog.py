@@ -35,7 +35,7 @@ from app.branding import APP_NAME, APP_VERSION, website_page_url
 from app.core import changes
 from app.core.markup import inline
 from app.i18n import get_language, tr
-from app.ui.style import NORMAL, no_primary, set_level
+from app.ui.style import NORMAL, WIDE, no_primary, set_level
 
 #: Womit der Dialog aufgeht. Eine **Anfangsgröße**, kein Deckel: Der Deckel
 #: saß vorher als ``setMaximumHeight`` auf dem Rollbereich, und wer das
@@ -218,6 +218,7 @@ class ChangesDialog(QDialog):
         buttons.accepted.connect(self.accept)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
         layout.setSpacing(NORMAL)
         layout.addWidget(self.headline)
         layout.addWidget(self.picker)

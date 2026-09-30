@@ -166,6 +166,8 @@ class VariantsDialog(QDialog):
         self.mark.setAccessibleDescription(marking)
 
         form = QFormLayout()
+        form.setHorizontalSpacing(NORMAL)
+        form.setVerticalSpacing(NORMAL)
         form.addRow(tr("Parameter"), self.parameter)
         form.addRow(tr("Erster Wert"), self.first)
         form.addRow(tr("Schrittweite"), self.step)

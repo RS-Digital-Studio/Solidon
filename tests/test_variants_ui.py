@@ -51,6 +51,31 @@ def _empty_set(parameter: str) -> Any:
     return VariantSet(parameter=parameter)
 
 
+def test_empty_projects_hide_controls_that_cannot_do_anything(qt_app: QApplication) -> None:
+    dialog = VariantsDialog(Session())
+    try:
+        for field in (dialog.parameter, dialog.first, dialog.step, dialog.count, dialog.mark):
+            assert field.isHidden(), f"{field!r} bleibt ohne Projektparameter sichtbar"
+        create = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert create is not None and not create.isEnabled()
+        assert "keine Parameter" in dialog.state.text()
+    finally:
+        dialog.deleteLater()
+
+
+def test_changing_the_parameter_moves_the_first_value_with_it(qt_app: QApplication) -> None:
+    session = Session()
+    session.project.document.parameters["breite"] = Parameter(name="breite", value=18.0, unit="mm")
+    session.project.document.parameters["spiel"] = Parameter(name="spiel", value=0.35, unit="mm")
+    dialog = VariantsDialog(session)
+    try:
+        assert dialog.first.value() == pytest.approx(18.0)
+        dialog.parameter.setCurrentIndex(dialog.parameter.findData("spiel"))
+        assert dialog.first.value() == pytest.approx(0.35)
+    finally:
+        dialog.deleteLater()
+
+
 def test_the_dialog_computes_off_the_interface_thread(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

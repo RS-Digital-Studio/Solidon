@@ -42,6 +42,7 @@ from app.core.log import get_logger
 from app.i18n import get_language, tr
 from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import (
+    NORMAL,
     ROOMY,
     TIGHT,
     WIDE,
@@ -384,6 +385,7 @@ class AiDisclosureDialog(QDialog):
         self.provider_card.setFrameShape(QFrame.Shape.StyledPanel)
         provider_layout = QVBoxLayout(self.provider_card)
         provider_layout.setContentsMargins(WIDE, ROOMY, WIDE, ROOMY)
+        provider_layout.setSpacing(NORMAL)
         self.provider_text = _paragraph(_provider_text(target), self.provider_card)
         provider_layout.addWidget(self.provider_text)
 
@@ -484,6 +486,7 @@ class AiDisclosureDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, ROOMY)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.scroll_area, 1)
         layout.addWidget(self.buttons)
 
@@ -916,6 +919,7 @@ class LocalPrivacyDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
         layout.addWidget(note)
         layout.addWidget(self.text, 1)
         layout.addWidget(buttons)

@@ -11,10 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from app.core import updates
-from app.ui.update_dialog import UpdateDialog
+from app.ui.update_dialog import CHANGES_START_HEIGHT, UpdateDialog
 
 
 def release(**changes: object) -> updates.Release:
@@ -52,6 +53,47 @@ def test_the_window_says_what_is_new(qt_app: QApplication, monkeypatch: pytest.M
     assert "Der erste Punkt." in dialog.changes.text()
     assert "Der zweite Punkt." in dialog.changes.text()
     assert dialog.scroller.isVisible() or not dialog.isVisible()
+
+
+def test_the_change_list_starts_at_its_content_height_and_can_grow(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kurze Hinweise lassen keinen leeren Rollbereich; längere wachsen beim Ziehen."""
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    short = UpdateDialog(release(changes={"de": ("Erster kurzer Punkt.", "Zweiter kurzer Punkt.")}))
+    long = UpdateDialog(
+        release(
+            changes={"de": tuple(f"Punkt {index}: Ein längerer Hinweis." for index in range(20))}
+        )
+    )
+    try:
+        short.show()
+        long.show()
+        QTest.qWait(100)
+        assert short.height() < CHANGES_START_HEIGHT, (
+            "kurze Hinweise lassen keinen hohen Leerraum stehen"
+        )
+
+        initial_list_height = long.scroller.height()
+        initial_scroll = long.scroller.verticalScrollBar().maximum()
+        assert initial_list_height < long.changes.height(), (
+            "lange Hinweise rollen erst am sichtbaren Anfang"
+        )
+        assert initial_scroll > 0
+        assert long.scroller.horizontalScrollBar().maximum() == 0
+        long.resize(long.width(), long.height() + 100)
+        QTest.qWait(100)
+        assert long.scroller.height() > initial_list_height
+        assert long.scroller.verticalScrollBar().maximum() < initial_scroll
+        assert long.width() == short.width()
+    finally:
+        short.close()
+        long.close()
+        short.deleteLater()
+        long.deleteLater()
+        qt_app.processEvents()
 
 
 def shown_text(dialog: UpdateDialog) -> str:

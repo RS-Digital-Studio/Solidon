@@ -41,7 +41,7 @@ from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
+from app.ui.style import NORMAL, SPACE, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
 
 #: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
 #: wichtigsten — und das sind die zwei zuerst deklarierten, denn eine
@@ -267,6 +267,9 @@ class PartCatalog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # „OK" sagt nicht, was es tut — derselbe Befund, der jedem
         # Operationsdialog seinen handelnden Knopf gegeben hat. Dieser hier
         # setzt den gewählten Baustein in die Szene, also heißt er so.

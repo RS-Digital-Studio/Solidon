@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 from itertools import pairwise
 from typing import Any, Final, Literal
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QKeySequence,
@@ -32,6 +32,7 @@ from PySide6.QtGui import (
     QPainterPathStroker,
     QPen,
     QShortcut,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -5121,9 +5122,10 @@ class ExpressionDialog(QDialog):
         self.setWindowTitle(tr("Maß"))
         self.setMinimumWidth(320)
         self._values = dict(parameter_values)
+        self._height = style.ContentHeight()
 
-        hint = QLabel(tr("Eine Zahl oder ein Ausdruck — Projektparameter mit @name."), self)
-        hint.setWordWrap(True)
+        self.hint = QLabel(tr("Eine Zahl oder ein Ausdruck — Projektparameter mit @name."), self)
+        self.hint.setWordWrap(True)
         self.field = QLineEdit(start, self)
         self.field.setAccessibleName(tr("Maß"))
         self.problem = QLabel("", self)
@@ -5134,6 +5136,7 @@ class ExpressionDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
+        self.buttons = buttons
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Maß setzen"))
@@ -5141,14 +5144,33 @@ class ExpressionDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
+        content = QWidget(self)
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(style.NORMAL)
+        content_layout.addWidget(self.hint)
+        content_layout.addWidget(self.field)
+        content_layout.addWidget(self.problem)
+        content_layout.addStretch(1)
+        self.scroll_area = style.DialogScrollArea(self)
+        self.scroll_area.setWidget(content)
+        self.scroll_area.contentSizeChanged.connect(self._fit_soon)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(style.WIDE, style.WIDE, style.WIDE, style.WIDE)
         layout.setSpacing(style.NORMAL)
-        layout.addWidget(hint)
-        layout.addWidget(self.field)
-        layout.addWidget(self.problem)
-        layout.addStretch(1)
+        layout.addWidget(self.scroll_area, 1)
         layout.addWidget(buttons)
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon()
+
+    def _fit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_content)
+
+    def _fit_content(self) -> None:
+        self._height.fit(self, self.scroll_area)
 
     def _accept(self) -> None:
         from app.core import expressions
@@ -5237,6 +5259,8 @@ class PointDialog(QDialog):
         # und dann heißen die Felder nach der Richtung im Bild.
         first, second = axes
         form = QFormLayout()
+        form.setHorizontalSpacing(style.NORMAL)
+        form.setVerticalSpacing(style.NORMAL)
         form.addRow(first or tr("Waagerecht"), self._across)
         form.addRow(second or tr("Senkrecht"), self._up)
         for field in (self._across, self._up):
@@ -5434,6 +5458,8 @@ class NewPlaneDialog(QDialog):
         style.set_level(self.anchored, "caption")
 
         self._form = QFormLayout()
+        self._form.setHorizontalSpacing(style.NORMAL)
+        self._form.setVerticalSpacing(style.NORMAL)
         self._form.addRow(tr("Art"), self.kind)
         self._form.addRow(tr("Basis"), self.base)
         self._form.addRow(tr("Abstand"), self.distance)
@@ -5444,6 +5470,7 @@ class NewPlaneDialog(QDialog):
             holder = QWidget(self)
             line = QHBoxLayout(holder)
             line.setContentsMargins(0, 0, 0, 0)
+            line.setSpacing(style.NORMAL)
             for spin in row_fields:
                 line.addWidget(spin)
             self._form.addRow(tr("Punkt {number}").format(number=number), holder)
@@ -5475,6 +5502,8 @@ class NewPlaneDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(style.WIDE, style.WIDE, style.WIDE, style.WIDE)
+        layout.setSpacing(style.NORMAL)
         layout.addLayout(self._form)
         layout.addWidget(self.anchored)
         layout.addWidget(self.moving)
@@ -6326,7 +6355,8 @@ class SketchPanel(QWidget):
         # Breite, dass er auf sieben Zeilen umbrach und die ganze Leiste hoch
         # machte. Er gehört unter die Wahl, auf die er sich bezieht.
         plane_row = QHBoxLayout()
-        self.plane_role = QLabel(tr("Zeichenebene:"), self)
+        plane_row.setSpacing(style.NORMAL)
+        self.plane_role = QLabel(tr("Zeichenebene"), self)
         """Wofür das benachbarte Feld **jetzt** gilt.
 
         Vor dem ersten Strich legt es die Zeichenebene fest. Danach ist diese
@@ -6374,10 +6404,9 @@ class SketchPanel(QWidget):
         # und kommt deshalb über sein eigenes Signal.
         self.canvas.viewPlaneChanged.connect(self._show_layer_note)
 
-        # Der Rasterfang, an derselben Zeile wie die Ebene: beides entscheidet
-        # man vor dem ersten Strich, nicht mittendrin. Ein Haken und eine
-        # Weite — an ist die Vorgabe, weil ein Klick sonst auf -29,75 mm
-        # landet und daraus kein Maß wird, sondern Nacharbeit.
+        # Der Rasterfang steht unmittelbar unter der Ebenenwahl. Haken und
+        # beschriftete Weite bleiben beieinander — an ist die Vorgabe, weil ein
+        # Klick sonst auf -29,75 mm landet und daraus Nacharbeit wird.
         self.snap_toggle = QCheckBox(tr("Rasterfang"), self)
         self.snap_toggle.setAccessibleName(tr("Am Raster fangen"))
         self.snap_toggle.setChecked(self.canvas.snapping)
@@ -6413,7 +6442,9 @@ class SketchPanel(QWidget):
         self.snap_step.setStatusTip(snap_note)
         self.snap_step.setAccessibleDescription(snap_note)
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
-        self.snap_step.setAccessibleName(tr("Raster"))
+        self.snap_step_label = QLabel(tr("Rasterweite"), self)
+        self.snap_step_label.setBuddy(self.snap_step)
+        self.snap_step.setAccessibleName(self.snap_step_label.text())
         # **Kein Haken „Auto" neben dem Feld** (Robert, 16.09.2026: „weniger
         # ist manchmal mehr"): Er sagte dasselbe wie der Sonderwert
         # „Automatisch" im Feld, und wer eines umschaltete, sah das andere
@@ -6426,12 +6457,13 @@ class SketchPanel(QWidget):
         self.snap_toggle.toggled.connect(self._snapping_changed)
         self.snap_step.valueChanged.connect(self._step_typed)
         self._snapping_changed()
-        plane_row.addWidget(self.snap_toggle)
-        plane_row.addWidget(self.snap_step)
-        # Der Rest der Zeile gehört dem Leerraum dahinter: Ohne Anschlag
-        # verteilte Qt ihn zwischen die Teile — die Ebene rückte zur Mitte, die
-        # Rasterweite an den rechten Rand, weit weg von ihrem Haken.
         plane_row.addStretch(1)
+        snap_row = QHBoxLayout()
+        snap_row.setSpacing(style.NORMAL)
+        snap_row.addWidget(self.snap_toggle)
+        snap_row.addWidget(self.snap_step_label)
+        snap_row.addWidget(self.snap_step)
+        snap_row.addStretch(1)
         tools.addStretch(1)
 
         # Die drei Grundebenen stehen immer; die Flächen des Körpers kommen
@@ -6560,6 +6592,7 @@ class SketchPanel(QWidget):
         self.selection_tools = QWidget(self)
         selection_tools = QHBoxLayout(self.selection_tools)
         selection_tools.setContentsMargins(0, 0, 0, 0)
+        selection_tools.setSpacing(style.TIGHT)
         # **Die Zeile beschriftet sich selbst.** „Auswahl:" kostete 96
         # Bildpunkte und benannte eine Zeile, deren Inhalt keine Frage offen
         # lässt — sie erscheint ohnehin nur, wenn etwas ausgewählt ist. Der
@@ -6666,6 +6699,8 @@ class SketchPanel(QWidget):
         constraints_box.setMinimumWidth(1)
         constraints_row = QGridLayout(constraints_box)
         constraints_row.setContentsMargins(0, 0, 0, 0)
+        constraints_row.setHorizontalSpacing(style.TIGHT)
+        constraints_row.setVerticalSpacing(style.TIGHT)
         self._constraints_row = constraints_row
         self._constraint_columns = CONSTRAINTS_PER_ROW
         self._constraint_shown: tuple[str, ...] = ()
@@ -6797,6 +6832,7 @@ class SketchPanel(QWidget):
         self._side_box = QWidget(self)
         side = QVBoxLayout(self._side_box)
         side.setContentsMargins(0, 0, 0, 0)
+        side.setSpacing(style.NORMAL)
         # Die Überschrift gehört dem Träger, nicht der Liste: Neben der
         # Zeichenfläche steht sie hier, in der linken Spalte trägt sie der
         # einklappbare Abschnitt. Beides zugleich hieße „Bedingungen" zweimal
@@ -6806,6 +6842,7 @@ class SketchPanel(QWidget):
         side.addWidget(self.constraint_list, stretch=1)
 
         middle = QHBoxLayout()
+        middle.setSpacing(style.NORMAL)
         self._middle = middle
         """Canvas und Bedingungsliste im eigenständigen Editor.
 
@@ -6818,8 +6855,10 @@ class SketchPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(style.TIGHT)
         layout.addLayout(tools)
         layout.addLayout(plane_row)
+        layout.addLayout(snap_row)
         # Der Schichthinweis steht unter der Zeile, auf die er sich bezieht —
         # siehe die Begründung bei seinem Aufbau. Im Viewport-Modus nimmt ihn
         # ``use_viewport`` wieder heraus, dort trägt der Tooltip am Feld die
@@ -6829,6 +6868,7 @@ class SketchPanel(QWidget):
         layout.addWidget(constraints_box)
         layout.addLayout(middle, stretch=1)
         status_row = QHBoxLayout()
+        status_row.setSpacing(style.TIGHT)
         status_row.addWidget(self.status, stretch=1)
         status_row.addWidget(self.state)
         status_row.addWidget(self.coordinates)
@@ -7436,7 +7476,7 @@ class SketchPanel(QWidget):
     def _refresh_plane_role(self) -> None:
         """Das Auswahlfeld als Zeichenebene oder als Ansicht benennen."""
         locked = bool(self.canvas.sketch.elements)
-        self.plane_role.setText(tr("Ansicht:") if locked else tr("Zeichenebene:"))
+        self.plane_role.setText(tr("Ansicht") if locked else tr("Zeichenebene"))
         if locked:
             tip = str(
                 tr(
@@ -8185,6 +8225,8 @@ class SketchEditorDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(style.WIDE, style.WIDE, style.WIDE, style.WIDE)
+        layout.setSpacing(style.NORMAL)
         layout.addWidget(self.panel, stretch=1)
         layout.addWidget(buttons)
 
@@ -8273,6 +8315,7 @@ class SketchField(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(style.NORMAL)
         layout.addWidget(self.summary, stretch=1)
         layout.addWidget(self.space_button)
         layout.addWidget(self.edit_button)

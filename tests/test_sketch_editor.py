@@ -452,12 +452,14 @@ def test_a_bed_that_arrives_late_still_gets_fitted(qt_app: QApplication) -> None
 
 
 def test_the_hook_in_the_bar_reaches_the_canvas(qt_app: QApplication) -> None:
-    """Haken und Weite stehen an der Ebenenzeile — beides entscheidet man vor
-    dem ersten Strich."""
+    """Haken und beschriftete Weite stehen beieinander vor dem ersten Strich."""
     panel = SketchPanel()
     try:
         assert panel.snap_toggle.isChecked(), "an ist die Vorgabe"
         assert panel.snap_step.isEnabled()
+        assert panel.snap_step_label.buddy() is panel.snap_step
+        assert panel.snap_step.accessibleName() == panel.snap_step_label.text()
+        assert panel.snap_step_label.text() == "Rasterweite"
 
         panel.snap_step.setValue(5.0)
         assert panel.canvas.snap_step == pytest.approx(5.0)
@@ -571,6 +573,48 @@ def test_the_expression_dialog_validates_inline(qt_app: QApplication) -> None:
     dialog.field.setText("=@width / 2")
     dialog._accept()
     assert dialog.result() == ExpressionDialog.DialogCode.Accepted
+
+
+def test_the_expression_dialog_keeps_its_hint_and_actions_inside_when_resized(
+    qt_app: QApplication,
+) -> None:
+    dialog = ExpressionDialog({"width": 25.0})
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.resize(320, 120)
+    dialog.show()
+    for _ in range(5):
+        qt_app.processEvents()
+
+    def assert_actions_fit() -> None:
+        for button in dialog.buttons.buttons():
+            bottom_right = button.mapTo(dialog, button.rect().bottomRight())
+            assert dialog.rect().contains(bottom_right), button.text()
+        assert dialog.hint.width() > 0
+        assert dialog.hint.height() >= dialog.hint.heightForWidth(dialog.hint.width())
+
+    try:
+        assert_actions_fit()
+        assert dialog.height() > 120, "der Dialog wächst über die zu kleine Startgröße hinaus"
+        opening_height = dialog.height()
+
+        dialog.problem.setText("Der Ausdruck braucht eine Korrektur. " * 40)
+        dialog.problem.show()
+        for _ in range(5):
+            qt_app.processEvents()
+        expanded_height = dialog.height()
+        assert (
+            expanded_height > opening_height or dialog.scroll_area.verticalScrollBar().maximum() > 0
+        ), "der längere Hinweis bekommt Platz oder wird erreichbar"
+        assert_actions_fit()
+
+        dialog.problem.hide()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert dialog.height() <= expanded_height
+        assert_actions_fit()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def test_the_sketch_field_carries_the_parameter(qt_app: QApplication) -> None:
@@ -4592,14 +4636,14 @@ def test_plane_field_changes_role_but_never_moves_an_existing_sketch(
 
     panel = SketchPanel()
     try:
-        assert panel.plane_role.text() == "Zeichenebene:"
+        assert panel.plane_role.text() == "Zeichenebene"
         panel.canvas.set_sketch(
             Sketch(
                 plane="plane:xy",
                 elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
             )
         )
-        assert panel.plane_role.text() == "Ansicht:"
+        assert panel.plane_role.text() == "Ansicht"
 
         panel.reflect_camera_view(None)
         assert panel.plane_choice.currentData() == FREE_VIEW
@@ -8095,13 +8139,30 @@ def test_a_tilted_and_a_three_point_plane_are_written_as_the_contract_says(
     panel = SketchPanel()
     try:
         dialog = panel.open_new_plane()
+        offset_height = dialog.height()
+        assert dialog._form.isRowVisible(dialog.distance)
+        assert not dialog._form.isRowVisible(dialog.axis)
+        assert all(not dialog._form.isRowVisible(row) for row in dialog._point_rows)
+
         dialog.choose_kind("tilt")
+        tilt_height = dialog.height()
+        assert not dialog._form.isRowVisible(dialog.distance)
+        assert dialog._form.isRowVisible(dialog.axis)
+        assert all(not dialog._form.isRowVisible(row) for row in dialog._point_rows)
+        assert tilt_height != offset_height, "die Fensterhöhe folgt den sichtbaren Feldern"
         dialog.angle.set_value(30.0)
         assert dialog.plane() == "tilt:plane:xy:x:30"
         assert panel.canvas.layer_note().startswith("Diese Ebene ist geneigt")
         assert panel.canvas.axis_names() == ("", ""), "gekippt stimmen X und Y nicht mehr"
 
         dialog.choose_kind("through")
+        through_height = dialog.height()
+        assert all(dialog._form.isRowVisible(row) for row in dialog._point_rows)
+        assert through_height > tilt_height, "drei Punkte brauchen mehr Fensterhöhe als Winkel"
+        dialog.choose_kind("tilt")
+        assert dialog.height() < through_height, "beim Zuklappen wird die Fensterhöhe frei"
+        dialog.choose_kind("through")
+        assert dialog.height() >= through_height, "beim erneuten Aufklappen wächst sie wieder"
         assert dialog.anchored.isVisibleTo(dialog), "der Hinweis auf die fehlende Körperbindung"
         dialog.points[2][0].set_value_mm(20.0)
         dialog.points[2][1].set_value_mm(0.0)

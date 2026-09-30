@@ -283,7 +283,6 @@
   "Ansicht": "Vista",
   "Ansicht von oben": "Vista desde arriba",
   "Ansicht von schräg oben": "Vista en perspectiva desde arriba",
-  "Ansicht:": "Vista:",
   "Ansicht: Ihr Modell. Klicken wählt aus, rechts ziehen dreht.": "Vista: su modelo. Clic para seleccionar, arrastrar con el botón derecho para girar.",
   "Anteil": "Proporción",
   "Anthropic": "Anthropic",
@@ -6547,7 +6546,6 @@
   "Zapfendurchmesser": "Diámetro de la espiga",
   "Zapfenlänge": "Longitud de la espiga",
   "Zeichen": "Carácter",
-  "Zeichenebene:": "Plano de dibujo:",
   "Zeichenebene: {place}": "Plano de boceto: {place}",
   "Zeichnen": "Dibujar",
   "Zeichnen Sie Bereich und Ausschlüsse auf derselben Ebene.": "Dibuje la zona del patrón y las zonas excluidas en el mismo plano.",
@@ -7211,5 +7209,14 @@
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper wieder her.": "«{operation}» ha convertido «{object}» en un modelo de triángulos. Las caras y aristas siguen siendo editables; las formas redondeadas ahora constan de segmentos rectos. Deshacer restaura el cuerpo anterior.",
   "„{operation}“ macht aus „{object}“ ein Dreiecksmodell.": "«{operation}» convierte «{object}» en un modelo de triángulos.",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "«Abrir en la superficie» solo vale sin aberturas elegidas. Introduzca la cara en «Aberturas» y vacíe este campo.",
-  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. El informe completo está en la carpeta guardada como «bericht.txt»; adjúntelo, por favor."
+  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. El informe completo está en la carpeta guardada como «bericht.txt»; adjúntelo, por favor.",
+  "Ein Schlüssel aus der Umgebung muss außerhalb von Solidon entfernt werden.": "Una clave del entorno debe eliminarse fuera de Solidon.",
+  "ComfyUI-Ordner wird geprüft …": "Comprobando la carpeta de ComfyUI…",
+  "Zeichenebene": "Plano de dibujo",
+  "So finden Sie den Drucker später in der Liste wieder.": "Este nombre le ayudará a encontrar la impresora más adelante en la lista.",
+  "ComfyUI-Ordner wird noch geprüft. Wählen Sie einen anderen erreichbaren Ordner oder warten Sie auf die Antwort.": "La carpeta de ComfyUI sigue comprobándose. Elija otra carpeta accesible o espere al resultado.",
+  "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "No se pudo comprobar la carpeta. Elija una carpeta accesible o inténtelo de nuevo.",
+  "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "No se pudo eliminar la clave. Compruebe el llavero y vuelva a intentarlo.",
+  "Datum zurücksetzen": "Restablecer fecha",
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "No se pudo comprobar la carpeta de ComfyUI después de esperar. Elija otra carpeta accesible o inténtelo de nuevo."
 }

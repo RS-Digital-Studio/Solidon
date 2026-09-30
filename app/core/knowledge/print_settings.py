@@ -476,13 +476,13 @@ GROUPS: Final = (
     "layers",
     "shell",
     "infill",
+    "filament",
     "temperature",
     "cooling",
     "speed",
     "support",
     "adhesion",
     "retraction",
-    "filament",
 )
 
 

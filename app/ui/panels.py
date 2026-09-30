@@ -175,6 +175,7 @@ from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import (
     NORMAL,
+    ROOMY,
     TARGET_SIZE,
     TIGHT,
     make_danger,
@@ -4599,6 +4600,8 @@ class BodyChoiceDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(title)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
         layout.addWidget(QLabel(tr("Für welche Körper soll das gelten?"), self))
         self.list = QListWidget(self)
         for identifier in bodies:

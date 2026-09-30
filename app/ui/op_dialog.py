@@ -70,7 +70,9 @@ from app.ui.outline_dialog import ContourField
 from app.ui.panels import align_forms
 from app.ui.seal_dialog import SealPathField
 from app.ui.style import (
+    NORMAL,
     TIGHT,
+    WIDE,
     ContentHeight,
     DialogScrollArea,
     fit_dialog_to_screen,
@@ -361,7 +363,7 @@ class ValueField(QWidget):
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(TIGHT)
-        row.addWidget(self.spin, 1)
+        row.addWidget(self.spin)
         row.addWidget(self.text, 1)
         row.addWidget(self.parameter_button)
         if self.circle_toggle is not None:
@@ -372,7 +374,7 @@ class ValueField(QWidget):
         # seiner Höchstbreite stand: Das Feld rückte zur Mitte, *fx* an den
         # rechten Rand — je Zeile an eine andere Stelle, weil jedes Feld so
         # breit ist wie sein Wertebereich.
-        row.addStretch(0)
+        row.addStretch(1)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1775,6 +1777,8 @@ class OperationDialog(QDialog):
                     editor.captionChanged.connect(caption.setText)
 
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
         self._scroll = DialogScrollArea(self)
         contents = QWidget(self._scroll)
         layout = QVBoxLayout(contents)

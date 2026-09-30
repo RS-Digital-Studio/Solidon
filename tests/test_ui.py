@@ -16961,6 +16961,45 @@ def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
         assert all(chr(10) in row for row in both), both
 
 
+def test_command_palette_shows_explanations_without_repeating_window_titles(
+    window: MainWindow,
+) -> None:
+    from app.ui.command_palette import CommandPalette, first_sentence
+
+    entries = window.palette_rows()
+    commands = window.window_commands()
+    palette = CommandPalette(entries, parent=window)
+    entry = next(
+        candidate
+        for candidate in entries
+        if candidate.available
+        and candidate.name not in commands
+        and str(candidate.doc).strip()
+        and first_sentence(str(candidate.doc)).strip() != str(candidate.title).strip()
+    )
+    palette._refilter(str(entry.title))
+    row = next(
+        palette.list.item(index)
+        for index in range(palette.list.count())
+        if palette.list.item(index).data(Qt.ItemDataRole.UserRole) == str(entry.name)
+    )
+
+    assert row.text().splitlines()[1] == first_sentence(str(entry.doc)).strip()
+
+    window_entry = next(
+        candidate
+        for candidate in entries
+        if candidate.name in commands and candidate.available and candidate.doc == candidate.title
+    )
+    palette._refilter(str(window_entry.title))
+    window_row = next(
+        palette.list.item(index)
+        for index in range(palette.list.count())
+        if palette.list.item(index).data(Qt.ItemDataRole.UserRole) == str(window_entry.name)
+    )
+    assert "\n" not in window_row.text(), "ein Suchtext aus dem Titel ist keine Erklärung"
+
+
 def test_a_question_of_several_words_still_finds_something(window: MainWindow) -> None:
     """„ecke abrunden" gab eine leere Liste, obwohl „abrunden" das *Verrunden*
     findet — die Suche verlangte alle Wörter, und die Leerantwort bot keinen

@@ -96,6 +96,7 @@ from app.ui.leash import RELEASE_RETRY_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash,
 from app.ui.overlay import rows_height
 from app.ui.panels import (
     MAX_ROWS,
+    align_forms,
     collapsible,
     least_height_of,
     open_section,
@@ -475,7 +476,14 @@ class SlicerFilamentDialog(QDialog):
         if not found:
             # Keine Sackgasse (§2.1): Der Satz sagt, was zu tun ist, und die
             # Liste bleibt leer statt zu schweigen.
-            self.count.setText(tr("Kein Profil passt zu dieser Auswahl — Filter weiter öffnen."))
+            self.count.setText(
+                tr(
+                    "Keine Filamentprofile gefunden. Prüfen Sie den Slicer unter "
+                    "Bearbeiten → Einstellungen."
+                )
+                if not self._entries
+                else tr("Kein Profil passt zu dieser Auswahl — Filter weiter öffnen.")
+            )
         elif len(found) > MAX_HITS:
             self.count.setText(
                 tr("{shown} von {total} Profilen — enger filtern, um den Rest zu sehen.").format(
@@ -494,16 +502,12 @@ class SlicerFilamentDialog(QDialog):
 
         Zwei Lagen führen hierher, und der Satz trennt sie: eine Liste, in der
         nichts markiert ist, und eine Liste, in der nichts steht. Die zweite
-        ist der häufigere Fall — ein Rechner ohne installierten Slicer bringt
-        keine Profile mit, und dort ist „wählen Sie eines" ein Rat ins Leere.
+        übernimmt den Satz aus der Zählzeile. Sie unterscheidet einen leeren
+        Slicerbestand von einer Filterauswahl ohne Treffer.
         """
         why = ""
         if current is None:
-            why = str(
-                tr("Kein Profil gewählt.")
-                if self.list.count()
-                else tr("Dieser Slicer bringt keine Filamentprofile mit.")
-            )
+            why = str(tr("Kein Profil gewählt.")) if self.list.count() else self.count.text()
         self._ok_button.setEnabled(not why)
         self._ok_button.setToolTip(why)
         self._ok_button.setStatusTip(why)
@@ -617,9 +621,10 @@ class NewFilamentDialog(QDialog):
         layout = QFormLayout(content)
         layout.setContentsMargins(0, ROOMY, NORMAL, NORMAL)
         layout.setVerticalSpacing(NORMAL)
+        layout.setHorizontalSpacing(NORMAL)
         layout.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self._scroll.setWidget(content)
         self._scroll.contentSizeChanged.connect(self._fit_soon)
         outer.addWidget(self._scroll)
@@ -725,7 +730,10 @@ class NewFilamentDialog(QDialog):
 
         self.more = QWidget(self)
         details = QFormLayout(self.more)
-        details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        details.setContentsMargins(0, 0, 0, 0)
+        details.setVerticalSpacing(NORMAL)
+        details.setHorizontalSpacing(NORMAL)
+        details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
         self.diameter = NumberSpin(self)
         self.diameter.setRange(0, 100)
         self.diameter.setDecimals(2)
@@ -736,6 +744,12 @@ class NewFilamentDialog(QDialog):
         # Sprache, gespeichert weiter ISO (:class:`DateField`).
         self.bought_on = DateField(self)
         self.opened_on = DateField(self)
+        for unknown_date_field in (self.bought_on, self.opened_on):
+            # Das Feld nennt „Unbekannt“ selbst; der zweite gleichlautende
+            # Knopf wird zur knappen, barrierefrei benannten Löschtaste.
+            unknown_date_field.clear_button.setText("")
+            unknown_date_field.clear_button.setIcon(icon("remove", unknown_date_field.clear_button))
+            unknown_date_field.clear_button.setAccessibleName(tr("Datum zurücksetzen"))
         details.addRow(tr("Gekauft am"), self.bought_on)
         details.addRow(tr("Geöffnet am"), self.opened_on)
         self.price_known = QCheckBox(tr("Spulenpreis eintragen"), self)
@@ -881,6 +895,7 @@ class NewFilamentDialog(QDialog):
                 label.setStatusTip(help_text)
                 label.setAccessibleDescription(help_text)
         self.name.setFocus()
+        align_forms(self)
         for choice in self.findChildren(QComboBox) + self.findChildren(NumberSpin):
             wheel_needs_focus(choice)
         wheel_needs_focus(self.stock_slider)

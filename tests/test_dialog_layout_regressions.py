@@ -87,3 +87,26 @@ def test_palette_detail_has_its_own_line_without_horizontal_scrolling(qt_app: QA
     finally:
         dialog.close()
         dialog.deleteLater()
+
+
+def test_palette_shows_a_description_for_an_available_command(qt_app: QApplication) -> None:
+    """Ein verfügbarer Treffer erklärt sein Ergebnis direkt in der Liste."""
+    from app.core.registry import PaletteEntry
+    from app.ui.command_palette import CommandPalette
+
+    entry = PaletteEntry(
+        name="available_dialog_layout_sample",
+        title="Maß setzen",
+        category="modify",
+        doc="Legt den gewählten Wert für diesen Körper fest.",
+        shortcut="",
+        available=True,
+        reason="",
+    )
+    dialog = CommandPalette([entry])
+    try:
+        item = dialog.list.item(0)
+        assert item is not None
+        assert item.text() == f"{entry.title}\n{entry.doc}"
+    finally:
+        dialog.deleteLater()

@@ -6,7 +6,7 @@ import threading
 
 import numpy as np
 import pytest
-from PySide6.QtWidgets import QApplication, QDialog, QLineEdit
+from PySide6.QtWidgets import QApplication, QDialog, QLineEdit, QScrollArea
 
 from app.core.organizer.build import build_organizer
 from app.core.organizer.serialize import (
@@ -24,6 +24,29 @@ def dispose(dialog: OrganizerDialog, app: QApplication) -> None:
     dialog.close()
     dialog.deleteLater()
     app.processEvents()
+
+
+def test_translated_editor_wraps_long_labels_without_horizontal_scrolling(qt_app):
+    """Lange spanische Beschriftungen bleiben im schmalen linken Formular lesbar."""
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    spoken = get_language()
+    install_language("es")
+    set_language("es")
+    dialog = OrganizerDialog({})
+    try:
+        dialog.show()
+        _until(qt_app, dialog.accept_button.isEnabled)
+        scroll = dialog.editor.parentWidget().parentWidget()
+        assert isinstance(scroll, QScrollArea)
+        assert scroll.horizontalScrollBar().maximum() == 0
+        for field in dialog._edit_fields.values():
+            assert dialog.editor.rect().contains(field.geometry())
+    finally:
+        dispose(dialog, qt_app)
+        install_language(spoken)
+        set_language(spoken)
 
 
 @pytest.mark.parametrize("blocked", [False, True])
@@ -286,6 +309,26 @@ def test_the_name_and_the_basis_carry_their_labels(qt_app):
         ]
         assert buddies and buddies[0].text().strip(), "das Feld trägt eine sichtbare Beschriftung"
         assert dialog.basis.accessibleName().strip()
+    finally:
+        dispose(dialog, qt_app)
+
+
+def test_the_three_columns_share_heading_scale_and_labels_have_no_colon(qt_app):
+    """Die Kopfzeilen bilden eine Reihe, und das Namensfeld bleibt schlicht benannt."""
+    from PySide6.QtWidgets import QLabel
+
+    dialog = OrganizerDialog({})
+    try:
+        expected = {"Aufteilung", "Draufsicht · Fach oder Wand anklicken", "So sieht Ihr Teil aus"}
+        headings = [label for label in dialog.findChildren(QLabel) if label.text() in expected]
+        assert {label.text() for label in headings} == expected
+        assert all(label.property("level") == "section" for label in headings)
+        assert dialog.tree.isHeaderHidden()
+        name_labels = [
+            label for label in dialog.findChildren(QLabel) if label.buddy() is dialog.name_field
+        ]
+        assert len(name_labels) == 1
+        assert not name_labels[0].text().endswith(":")
     finally:
         dispose(dialog, qt_app)
 

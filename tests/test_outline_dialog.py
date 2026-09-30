@@ -11,7 +11,7 @@ from functools import partial
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog, QLineEdit, QPushButton
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushButton
 
 from app.core.ingest import outline
 from app.ui.outline_dialog import ContourField, OutlineDialog
@@ -91,6 +91,25 @@ def test_image_keyboard_and_real_result_share_selected_profiles(qt_app: QApplica
         assert dialog.result_preview.mesh.volume == pytest.approx(original * 2)
         dialog.accept()
         assert dialog.result() == QDialog.DialogCode.Accepted
+    finally:
+        _dispose(dialog, qt_app)
+
+
+def test_columns_share_heading_scale_and_outline_measures_stay_compact(
+    qt_app: QApplication,
+) -> None:
+    """Die drei Spalten lesen sich gleich; ihre Maßfelder behalten ihre Wunschbreite."""
+    from app.ui.style import WIDE
+
+    dialog = OutlineDialog(SOURCE, ".svg")
+    try:
+        _until(qt_app, dialog.accept_button.isEnabled)
+        expected = {"Konturen", "Konturvorschau", "So sieht Ihr Teil aus"}
+        headings = [label for label in dialog.findChildren(QLabel) if label.text() in expected]
+        assert {label.text() for label in headings} == expected
+        assert all(label.property("level") == "section" for label in headings)
+        for field in dialog._fields.values():
+            assert field.maximumWidth() - field.minimumWidth() == WIDE
     finally:
         _dispose(dialog, qt_app)
 

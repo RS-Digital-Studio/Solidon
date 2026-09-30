@@ -283,7 +283,6 @@
   "Ansicht": "Vista",
   "Ansicht von oben": "Vista dall'alto",
   "Ansicht von schräg oben": "Vista a tre quarti dall'alto",
-  "Ansicht:": "Vista:",
   "Ansicht: Ihr Modell. Klicken wählt aus, rechts ziehen dreht.": "Vista: il tuo modello. Fai clic per selezionare, trascina con il tasto destro per ruotare.",
   "Anteil": "Quota",
   "Anthropic": "Anthropic",
@@ -6547,7 +6546,6 @@
   "Zapfendurchmesser": "Diametro del perno",
   "Zapfenlänge": "Lunghezza del perno",
   "Zeichen": "Carattere",
-  "Zeichenebene:": "Piano di disegno:",
   "Zeichenebene: {place}": "Piano di schizzo: {place}",
   "Zeichnen": "Disegna",
   "Zeichnen Sie Bereich und Ausschlüsse auf derselben Ebene.": "Disegnare l’area del campo e le aree escluse sullo stesso piano.",
@@ -7211,5 +7209,14 @@
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper wieder her.": "«{operation}» ha convertito «{object}» in un modello a triangoli. Le facce e gli spigoli restano modificabili; le forme arrotondate ora sono composte da segmenti rettilinei. Annulla ripristina il corpo precedente.",
   "„{operation}“ macht aus „{object}“ ein Dreiecksmodell.": "«{operation}» trasforma «{object}» in un modello a triangoli.",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "«Aprire sulla faccia» vale solo senza aperture scelte. Inserisci la faccia in «Aperture» e svuota questo campo.",
-  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abbreviato. Il rapporto completo si trova nella cartella salvata come «bericht.txt»: allegalo, per favore."
+  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abbreviato. Il rapporto completo si trova nella cartella salvata come «bericht.txt»: allegalo, per favore.",
+  "Ein Schlüssel aus der Umgebung muss außerhalb von Solidon entfernt werden.": "Una chiave proveniente dall'ambiente deve essere rimossa al di fuori di Solidon.",
+  "ComfyUI-Ordner wird geprüft …": "Verifica della cartella ComfyUI…",
+  "Zeichenebene": "Piano di disegno",
+  "So finden Sie den Drucker später in der Liste wieder.": "Questo nome ti aiuterà a ritrovare la stampante più avanti nell’elenco.",
+  "ComfyUI-Ordner wird noch geprüft. Wählen Sie einen anderen erreichbaren Ordner oder warten Sie auf die Antwort.": "La cartella di ComfyUI è ancora in fase di verifica. Scegli un'altra cartella raggiungibile o attendi il risultato.",
+  "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Impossibile verificare la cartella. Scegli una cartella raggiungibile o riprova.",
+  "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "Impossibile rimuovere la chiave. Controlla il portachiavi e riprova.",
+  "Datum zurücksetzen": "Reimposta data",
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Non è stato possibile controllare la cartella di ComfyUI dopo l'attesa. Scegli un'altra cartella raggiungibile o riprova."
 }

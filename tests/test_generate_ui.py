@@ -7,6 +7,7 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QApplication, QDialogButtonBox, QPushButton
@@ -333,6 +334,7 @@ def test_the_dialog_can_be_asked_to_let_go_of_its_worker(qt_app: QApplication) -
         dialog.wait_for_workers()
         assert seen, "auf einen laufenden Arbeiter wird gewartet"
     finally:
+        dialog.release()
         dialog.deleteLater()
 
 
@@ -837,6 +839,18 @@ def test_the_way_out_stays_open_while_it_runs(
 # --- ComfyUI einrichten, aus der Anwendung (§27, §36) -----------------------------
 
 
+def _wait_for_comfy_probe(dialog: Any, qt_app: QApplication) -> None:
+    """Stellt die entkoppelte Ordnerprüfung zu, statt synchrone Ergebnisse anzunehmen."""
+    from PySide6.QtTest import QTest
+
+    deadline = time.monotonic() + 5
+    while dialog._probe_pending and time.monotonic() < deadline:
+        qt_app.processEvents()
+        QTest.qWait(10)
+    qt_app.processEvents()
+    assert not dialog._probe_pending, "Ordnerprüfung blieb im Wartezustand"
+
+
 def test_the_setup_dialog_prefills_what_it_finds(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -851,9 +865,112 @@ def test_the_setup_dialog_prefills_what_it_finds(
     monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: comfyui)
 
     dialog = ComfySetupDialog()
+    try:
+        assert not dialog.start_button.isEnabled()
+        assert dialog.start_button.toolTip()
+        assert dialog.start_button.statusTip()
+        assert dialog.start_button.accessibleDescription()
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert dialog.folder.text() == str(comfyui)
+        assert dialog.weights.isChecked(), "die Gewichte fehlen, also werden sie geholt"
+        assert dialog.start_button.isEnabled()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
-    assert dialog.folder.text() == str(comfyui)
-    assert dialog.weights.isChecked(), "die Gewichte fehlen, also werden sie geholt"
+
+def test_leaving_a_verified_comfy_folder_does_not_repeat_the_check(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PySide6.QtTest import QTest
+
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    comfyui = tmp_path / "ComfyUI"
+    typed = tmp_path / "typed"
+    find_calls = 0
+
+    def find(given: str | Path | None = None) -> Path:
+        nonlocal find_calls
+        find_calls += 1
+        return Path(given) if given else comfyui
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", find)
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        checked_generation = dialog._probe_generation
+        checked_calls = find_calls
+
+        dialog.folder.setText(str(typed))
+        dialog.folder.textEdited.emit(str(typed))
+        typed_generation = dialog._probe_generation
+        dialog.folder.editingFinished.emit()
+        assert dialog._probe_generation == typed_generation == checked_generation + 1
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert find_calls == checked_calls + 1, "Tippen und Fokusverlust teilen sich eine Prüfung"
+
+        checked_generation = dialog._probe_generation
+        checked_calls = find_calls
+        dialog.folder.editingFinished.emit()
+        QTest.qWait(350)
+        qt_app.processEvents()
+
+        assert dialog._probe_generation == checked_generation
+        assert find_calls == checked_calls, "Fokusverlust darf den geprüften Pfad nicht neu prüfen"
+        assert dialog.start_button.isEnabled()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_changing_the_comfy_folder_refreshes_model_status_and_keeps_choices(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    image_folder = tmp_path / "image"
+    weights_folder = tmp_path / "weights"
+    image_folder.mkdir()
+    weights_folder.mkdir()
+    monkeypatch.setattr(
+        comfy_setup,
+        "find_comfyui",
+        lambda given=None: Path(given) if given else image_folder,
+    )
+    monkeypatch.setattr(
+        comfy_setup, "weights_present", lambda folder: Path(folder) == weights_folder
+    )
+    monkeypatch.setattr(
+        comfy_setup, "image_model_present", lambda folder: Path(folder) == image_folder
+    )
+
+    dialog = ComfySetupDialog(image_model=True)
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert not dialog.image_model.isEnabled()
+        assert dialog.image_model.text() == "Bildmodell ist schon da"
+        assert dialog.weights.isChecked()
+
+        dialog.weights.setChecked(False)
+        dialog.folder.setText(str(weights_folder))
+        dialog.folder.editingFinished.emit()
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert not dialog.weights.isEnabled()
+        assert dialog.weights.text() == "Modell ist schon da"
+        assert dialog.image_model.isEnabled() and dialog.image_model.isChecked()
+
+        dialog.folder.setText(str(image_folder))
+        dialog.folder.editingFinished.emit()
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert dialog.weights.isEnabled() and not dialog.weights.isChecked()
+        assert not dialog.image_model.isEnabled()
+        assert dialog.image_model.text() == "Bildmodell ist schon da"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
 
 def test_the_setup_dialog_says_where_to_point_it(
@@ -869,9 +986,338 @@ def test_the_setup_dialog_says_where_to_point_it(
     monkeypatch.setattr(comfy_setup, "find_comfyui", nothing)
 
     dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert not dialog.folder.text()
+        assert "custom_nodes" in dialog.state.text(), "woran man den Ordner erkennt"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
-    assert not dialog.folder.text()
-    assert "custom_nodes" in dialog.state.text(), "woran man den Ordner erkennt"
+
+def test_slow_and_outdated_comfy_folder_probes_do_not_freeze_or_change_the_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PySide6.QtCore import QTimer
+    from PySide6.QtTest import QTest
+
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    initial = tmp_path / "initial"
+    slow = tmp_path / "slow"
+    current = tmp_path / "current"
+    gate = threading.Event()
+    gate.set()
+    probe_threads: list[int] = []
+    active_probes = 0
+    peak_active_probes = 0
+    slow_weights_calls = 0
+    probe_lock = threading.Lock()
+    setup_started = threading.Event()
+    setup_paths: list[str] = []
+
+    def find(given: str | Path | None = None) -> Path:
+        return Path(given) if given else initial
+
+    def weights(folder: Path) -> bool:
+        nonlocal active_probes, peak_active_probes, slow_weights_calls
+        if folder == slow:
+            with probe_lock:
+                slow_weights_calls += 1
+                call = slow_weights_calls
+                active_probes += 1
+                peak_active_probes = max(peak_active_probes, active_probes)
+            probe_threads.append(threading.get_ident())
+            if call == 1:
+                gate.wait(5)
+            with probe_lock:
+                active_probes -= 1
+            return call > 1
+        return False
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", find)
+    monkeypatch.setattr(comfy_setup, "weights_present", weights)
+    monkeypatch.setattr(
+        comfy_setup,
+        "image_model_present",
+        lambda folder: Path(folder) == current,
+    )
+
+    def setup(folder: str | Path | None, **_kwargs: object) -> comfy_setup.Result:
+        setup_paths.append(str(folder))
+        setup_started.set()
+        return comfy_setup.Result(comfyui=Path(folder or slow), nodes=Path("nodes"), weights=True)
+
+    monkeypatch.setattr(comfy_setup, "setup", setup)
+    dialog = ComfySetupDialog(image_model=True)
+    ticks: list[bool] = []
+    timer = QTimer(dialog)
+    timer.setInterval(20)
+    timer.timeout.connect(lambda: ticks.append(True))
+    timer.start()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        gate.clear()
+        dialog.folder.setText(str(slow))
+        dialog.folder.editingFinished.emit()
+        QTest.qWait(30)
+        first_generation = next(iter(dialog._probe_running_generations))
+        started = time.perf_counter()
+        QTest.qWait(80)
+        assert time.perf_counter() - started < 0.5, (
+            "ein langsamer Dateiblick darf Qt nicht blockieren"
+        )
+        assert ticks, "die Ereignisschleife muss während der Dateiprüfung weiterlaufen"
+        assert dialog._probe_pending
+
+        dialog._folder_probe_timed_out()
+        assert not dialog.start_button.isEnabled(), (
+            "ein ungeprüfter Pfad darf Setup nicht erneut im Einrichtungsarbeiter prüfen"
+        )
+        assert dialog.start_button.accessibleDescription()
+        assert "anderen erreichbaren Ordner" in dialog.state.text()
+        dialog.start_button.click()
+        assert dialog._worker is None, "Setup bleibt bis zur erfolgreichen Pfadprüfung gesperrt"
+
+        dialog.folder.setText(str(current))
+        dialog.folder.editingFinished.emit()
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert dialog.folder.text() == str(current)
+        assert not dialog.image_model.isEnabled(), "der erreichbare Ersatzordner ist geprüft"
+
+        dialog.start_button.click()
+        worker = dialog._worker
+        assert worker is not None and worker.wait(5_000)
+        qt_app.processEvents()
+        assert setup_started.is_set()
+        assert setup_paths == [str(current)], "Setup übernimmt den erfolgreich geprüften Ersatzpfad"
+
+        dialog.folder.setText(str(slow))
+        dialog.folder.editingFinished.emit()
+        latest_generation = dialog._probe_generation
+        assert first_generation < latest_generation
+        assert dialog._probe_target == str(slow), (
+            "erste und neueste Generation prüfen denselben eingegebenen Pfad"
+        )
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert probe_threads and probe_threads[0] != threading.get_ident()
+        assert dialog.folder.text() == str(slow)
+        assert slow_weights_calls == 2
+        assert peak_active_probes == 2, "der zweite Platz prüft trotz des alten Dateiblicks weiter"
+        assert not dialog.weights.isEnabled(), (
+            "die alte Antwort desselben Pfades darf die neuere Modellprüfung nicht überholen"
+        )
+        assert dialog.weights.text() == "Modell ist schon da"
+
+        gate.set()
+        deadline = time.monotonic() + 5
+        while dialog._probe_running_generations and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        qt_app.processEvents()
+        assert not dialog._probe_running_generations
+        assert not dialog.weights.isEnabled() and dialog.weights.text() == "Modell ist schon da", (
+            "Eine verspätete Antwort desselben Pfads "
+            "darf den aktuellen Modellbestand nicht überschreiben"
+        )
+    finally:
+        gate.set()
+        timer.stop()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_late_failed_comfy_folder_probe_keeps_setup_locked_until_retry(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PySide6.QtTest import QTest
+
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    initial = tmp_path / "initial"
+    slow = tmp_path / "slow"
+    probe_started = threading.Event()
+    release_probe = threading.Event()
+    slow_calls = 0
+    setup_calls: list[str] = []
+
+    def find(given: str | Path | None = None) -> Path:
+        nonlocal slow_calls
+        folder = Path(given) if given else initial
+        if folder == slow:
+            slow_calls += 1
+            if slow_calls == 1:
+                probe_started.set()
+                release_probe.wait(5)
+                raise comfy_setup.SetupFailed("Ordnerprüfung hat die Wartezeit überschritten")
+        return folder
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", find)
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda _folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda _folder: False)
+    monkeypatch.setattr(
+        comfy_setup, "setup", lambda folder, **_kwargs: setup_calls.append(str(folder))
+    )
+
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        dialog.folder.setText(str(slow))
+        dialog.folder.editingFinished.emit()
+
+        deadline = time.monotonic() + 2
+        while not probe_started.is_set() and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        assert probe_started.is_set(), "die langsame Prüfung muss tatsächlich laufen"
+
+        generation = dialog._probe_generation
+        dialog._folder_probe_timed_out()
+        assert not dialog.start_button.isEnabled()
+        assert dialog.start_button.accessibleDescription()
+
+        release_probe.set()
+        deadline = time.monotonic() + 2
+        while generation in dialog._probe_running_generations and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        qt_app.processEvents()
+
+        assert not dialog._probe_pending
+        assert not dialog.start_button.isEnabled(), (
+            "eine verspätete Fehlerantwort derselben Generation darf Setup nicht freigeben"
+        )
+        assert "anderen erreichbaren Ordner" in dialog.state.text()
+        dialog._start()
+        assert dialog._worker is None and not setup_calls, (
+            "auch ein direkter Startaufruf darf den Timeout-Pfad nicht wiederholen"
+        )
+
+        failed_generation = dialog._probe_generation
+        dialog.folder.editingFinished.emit()
+        assert dialog._probe_generation == failed_generation + 1, (
+            "erneutes Prüfen muss eine neue Generation starten"
+        )
+        _wait_for_comfy_probe(dialog, qt_app)
+        assert slow_calls == 2, "der Nutzer kann denselben Ordner ausdrücklich erneut prüfen"
+        assert dialog.start_button.isEnabled(), "eine neue erfolgreiche Prüfung gibt Setup frei"
+    finally:
+        release_probe.set()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_late_successful_comfy_folder_probe_unlocks_setup_after_timeout(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PySide6.QtTest import QTest
+
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    initial = tmp_path / "initial"
+    slow = tmp_path / "slow"
+    probe_started = threading.Event()
+    release_probe = threading.Event()
+
+    def find(given: str | Path | None = None) -> Path:
+        folder = Path(given) if given else initial
+        if folder == slow:
+            probe_started.set()
+            release_probe.wait(5)
+        return folder
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", find)
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda _folder: False)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda _folder: False)
+
+    dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        dialog.folder.setText(str(slow))
+        dialog.folder.editingFinished.emit()
+
+        deadline = time.monotonic() + 2
+        while not probe_started.is_set() and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        assert probe_started.is_set(), "die langsame Prüfung muss tatsächlich laufen"
+
+        generation = dialog._probe_generation
+        dialog._folder_probe_timed_out()
+        assert not dialog.start_button.isEnabled()
+
+        release_probe.set()
+        deadline = time.monotonic() + 2
+        while generation in dialog._probe_running_generations and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        qt_app.processEvents()
+
+        assert dialog._probe_succeeded
+        assert dialog._probe_timed_out_generation is None
+        assert dialog.start_button.isEnabled(), (
+            "eine verspätete erfolgreiche Antwort derselben Generation darf Setup freigeben"
+        )
+    finally:
+        release_probe.set()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_comfy_folder_probes_are_bounded_across_dialogs(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtTest import QTest
+
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    gate = threading.Event()
+    probe_started = threading.Event()
+    active_probes = 0
+    peak_active_probes = 0
+    probe_lock = threading.Lock()
+
+    def slow_weights(_folder: Path) -> bool:
+        nonlocal active_probes, peak_active_probes
+        with probe_lock:
+            active_probes += 1
+            peak_active_probes = max(peak_active_probes, active_probes)
+            if active_probes == 2:
+                probe_started.set()
+        gate.wait(5)
+        with probe_lock:
+            active_probes -= 1
+        return False
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda _given=None: Path("ComfyUI"))
+    monkeypatch.setattr(comfy_setup, "weights_present", slow_weights)
+    monkeypatch.setattr(comfy_setup, "image_model_present", lambda _folder: False)
+    dialogs = [ComfySetupDialog() for _ in range(3)]
+    try:
+        deadline = time.monotonic() + 3
+        while not probe_started.is_set() and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        assert probe_started.is_set(), "zwei Dateiblicke dürfen unabhängig geprüft werden"
+        assert peak_active_probes == 2
+
+        gate.set()
+        for dialog in dialogs:
+            _wait_for_comfy_probe(dialog, qt_app)
+        assert peak_active_probes == 2, "weitere Fenster dürfen keinen dritten Prüffaden starten"
+    finally:
+        gate.set()
+        deadline = time.monotonic() + 3
+        while active_probes and time.monotonic() < deadline:
+            qt_app.processEvents()
+            QTest.qWait(10)
+        for dialog in dialogs:
+            dialog.release()
+            dialog.deleteLater()
 
 
 def test_a_setup_that_cannot_start_says_why_and_offers_the_run_again(
@@ -890,18 +1336,23 @@ def test_a_setup_that_cannot_start_says_why_and_offers_the_run_again(
 
     monkeypatch.setattr(comfy_setup, "setup", refuse)
     dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
 
-    dialog.start_button.click()
-    for _ in range(100):
+        dialog.start_button.click()
+        for _ in range(100):
+            qt_app.processEvents()
+            if dialog._worker is None:
+                break
+            dialog._worker.wait(20)
         qt_app.processEvents()
-        if dialog._worker is None:
-            break
-        dialog._worker.wait(20)
-    qt_app.processEvents()
 
-    assert "custom_nodes" in dialog.state.text()
-    assert dialog.start_button.text() == "Einrichten", "der Weg zurück ist derselbe Knopf"
-    assert dialog.progress.isHidden()
+        assert "custom_nodes" in dialog.state.text()
+        assert dialog.start_button.text() == "Einrichten", "der Weg zurück ist derselbe Knopf"
+        assert dialog.progress.isHidden()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
 
 def test_closing_the_setup_while_it_runs_cancels_it_without_waiting(
@@ -921,8 +1372,21 @@ def test_closing_the_setup_while_it_runs_cancels_it_without_waiting(
     monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: comfyui)
     gate = threading.Event()
     asked: list[bool] = []
+    setup_paths: list[object] = []
+    setup_choices: list[tuple[object, object]] = []
+    setup_entered = threading.Event()
 
-    def slow(*_args: object, cancelled: object = None, **_kwargs: object) -> object:
+    def slow(
+        comfyui: object,
+        *_args: object,
+        weights: object = None,
+        image_model: object = None,
+        cancelled: object = None,
+        **_kwargs: object,
+    ) -> object:
+        setup_paths.append(comfyui)
+        setup_choices.append((weights, image_model))
+        setup_entered.set()
         gate.wait(10)
         asked.append(bool(callable(cancelled) and cancelled()))
         raise comfy_setup.SetupFailed("abgebrochen")
@@ -930,9 +1394,23 @@ def test_closing_the_setup_while_it_runs_cancels_it_without_waiting(
     monkeypatch.setattr(comfy_setup, "setup", slow)
     dialog = ComfySetupDialog()
     try:
+        _wait_for_comfy_probe(dialog, qt_app)
         dialog.start_button.click()
         worker = dialog._worker
         assert worker is not None and worker.isRunning()
+        for _ in range(100):
+            qt_app.processEvents()
+            if setup_entered.is_set():
+                break
+            worker.wait(10)
+        assert setup_entered.is_set(), (
+            "der Einrichtungsarbeiter muss den sichtbaren Zielpfad erhalten"
+        )
+        assert setup_paths == [str(comfyui)]
+        assert setup_choices == [(True, True)], "gesperrte Häkchen müssen zur Einrichtung passen"
+        assert not dialog.folder.isEnabled(), "der sichtbare Zielpfad bleibt beim Lauf fest"
+        assert not dialog.choose.isEnabled(), "die Ordnerwahl bleibt beim Lauf gesperrt"
+        assert not dialog.weights.isEnabled() and not dialog.image_model.isEnabled()
         started = time.perf_counter()
         dialog.reject()
         waited = time.perf_counter() - started
@@ -1124,14 +1602,18 @@ def test_the_setup_dialog_says_how_long_a_step_has_been_running(
     monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("C:/ComfyUI"))
     monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
     dialog = ComfySetupDialog()
+    try:
+        _wait_for_comfy_probe(dialog, qt_app)
+        dialog._note_step("Gewichte laden — rund 7,5 GB, das dauert")
 
-    dialog._note_step("Gewichte laden — rund 7,5 GB, das dauert")
+        assert "Gewichte laden" in dialog.state.text()
+        assert "(0 s)" in dialog.state.text(), "und wie lange er schon läuft"
 
-    assert "Gewichte laden" in dialog.state.text()
-    assert "(0 s)" in dialog.state.text(), "und wie lange er schon läuft"
-
-    dialog._idle()
-    assert not dialog._tick.isActive(), "danach zählt nichts mehr"
+        dialog._idle()
+        assert not dialog._tick.isActive(), "danach zählt nichts mehr"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
 
 
 def test_the_dialog_asks_for_the_way_it_would_actually_run(qt_app: QApplication) -> None:

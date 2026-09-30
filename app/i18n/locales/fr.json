@@ -283,7 +283,6 @@
   "Ansicht": "Vue",
   "Ansicht von oben": "Vue de dessus",
   "Ansicht von schräg oben": "Vue de trois quarts",
-  "Ansicht:": "Vue :",
   "Ansicht: Ihr Modell. Klicken wählt aus, rechts ziehen dreht.": "Vue : votre modèle. Cliquer sélectionne, glisser avec le bouton droit fait pivoter.",
   "Anteil": "Part",
   "Anthropic": "Anthropic",
@@ -6547,7 +6546,6 @@
   "Zapfendurchmesser": "Diamètre du tenon",
   "Zapfenlänge": "Longueur du tenon",
   "Zeichen": "Caractère",
-  "Zeichenebene:": "Plan de dessin :",
   "Zeichenebene: {place}": "Plan d’esquisse : {place}",
   "Zeichnen": "Dessiner",
   "Zeichnen Sie Bereich und Ausschlüsse auf derselben Ebene.": "Dessinez la zone du réseau et les zones exclues sur le même plan.",
@@ -7211,5 +7209,14 @@
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper wieder her.": "« {operation} » a converti « {object} » en un modèle triangulé. Les faces et les arêtes restent modifiables ; les formes arrondies sont désormais composées de segments droits. Annuler rétablit le corps précédent.",
   "„{operation}“ macht aus „{object}“ ein Dreiecksmodell.": "« {operation} » transforme « {object} » en modèle de triangles.",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "« Ouvrir sur la face » ne vaut que sans ouvertures choisies. Inscrivez la face sous « Ouvertures » et videz ce champ.",
-  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abrégé. Le rapport complet se trouve dans le dossier enregistré sous « bericht.txt » — merci de le joindre."
+  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abrégé. Le rapport complet se trouve dans le dossier enregistré sous « bericht.txt » — merci de le joindre.",
+  "Ein Schlüssel aus der Umgebung muss außerhalb von Solidon entfernt werden.": "Une clé provenant de l'environnement doit être supprimée en dehors de Solidon.",
+  "ComfyUI-Ordner wird geprüft …": "Vérification du dossier ComfyUI…",
+  "Zeichenebene": "Plan de dessin",
+  "So finden Sie den Drucker später in der Liste wieder.": "Ce nom vous aidera à retrouver l’imprimante plus tard dans la liste.",
+  "ComfyUI-Ordner wird noch geprüft. Wählen Sie einen anderen erreichbaren Ordner oder warten Sie auf die Antwort.": "Le dossier ComfyUI est toujours en cours de vérification. Choisissez un autre dossier accessible ou attendez le résultat.",
+  "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Impossible de vérifier le dossier. Choisissez un dossier accessible ou réessayez.",
+  "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "Impossible de supprimer la clé. Vérifiez le trousseau et réessayez.",
+  "Datum zurücksetzen": "Réinitialiser la date",
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Le dossier ComfyUI n’a pas pu être vérifié après l’attente. Choisissez un autre dossier accessible ou réessayez."
 }

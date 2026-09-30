@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QListView, QListWidgetItem
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QListView, QListWidgetItem
 
 from app.core.knowledge.parts import PARTS
 from app.ui.catalog import TILE_WIDTH, PartCatalog
@@ -159,6 +159,10 @@ def test_insert_stays_shut_until_something_is_chosen(qt_app: QApplication) -> No
     """
     catalog = PartCatalog()
     assert catalog._insert is not None
+    buttons = catalog.findChild(QDialogButtonBox)
+    assert buttons is not None
+    layout = catalog.layout()
+    assert layout.indexOf(catalog.insert_hint) + 1 == layout.indexOf(buttons)
     assert not catalog._insert.isEnabled(), "ohne Auswahl kann er nichts einfügen"
 
     for row in range(catalog.list.count()):

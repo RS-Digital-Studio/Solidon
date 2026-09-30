@@ -251,7 +251,7 @@ SHORTCUT_MARGIN: Final = 12
 
 
 def first_sentence(text: str) -> str:
-    """Der erste Satz eines ``doc``-Texts — für die zweite Zeile eines Zwillings."""
+    """Der erste Satz eines ``doc``-Texts für die Erklärungszeile."""
     head, dot, _rest = text.partition(". ")
     return f"{head}." if dot else text
 
@@ -371,7 +371,7 @@ class CommandPalette(QDialog):
         # erreichbar sein soll (§19.2) — sieben Zeilen machen daraus eine
         # Suchmaske, in der man tippen *muss*, statt eine Liste, in der man
         # blättern *kann*. Ein Eintrag kann zwei Zeilen hoch sein (Titel plus
-        # Grund für das Ausgrauen), 480 zeigen also zwölf bis sechzehn.
+        # Erklärung), 480 zeigen also zwölf bis sechzehn.
         self.setMinimumSize(520, 480)
         self._entries = entries if entries is not None else list(palette_entries())
         # Die Suchtexte der Wortsuche im Kern, einmal je Palette — sie ordnet
@@ -441,10 +441,8 @@ class CommandPalette(QDialog):
         hidden_names = hidden_from_the_menu()
         # Vier Paare tragen wörtlich denselben Titel („Quader anlegen" zweimal)
         # — im Menü unsichtbar, in der Suche stehen sie untereinander, und der
-        # Unterschied stand nur im Tooltip. Beide Zwillinge bekommen ihren
-        # ``doc``-Satz als zweite Zeile, so wie der gesperrte Fall seinen Grund
-        # (Review 02.09.2026).
-        twins = menu_twins().keys() | menu_twins().values()
+        # Unterschied stand nur im Tooltip. Die Erklärungszeile steht nun bei
+        # jedem Befehl; so lassen sich auch gleiche Titel direkt unterscheiden.
         # **Die dritte Runde ordnet die Wortsuche des Kerns** — dieselbe, mit
         # der der Agent seine Werkzeuge wählt (``registry.search``). Nach der
         # bloßen Trefferzahl stand bei „Teil kleiner machen" *Fläche
@@ -487,13 +485,19 @@ class CommandPalette(QDialog):
             label = str(entry.title)
             if entry.shortcut:
                 label = f"{label}\t{native_key(entry.shortcut)}"
+            detail = first_sentence(str(entry.doc)).strip()
+            # Fensterbefehle tragen den Titel als Suchtext, nicht als eigene
+            # Erklärung. Eine zweite Zeile mit demselben Wort wäre redundant.
+            if detail == str(entry.title).strip():
+                detail = ""
             if not entry.available and entry.reason:
                 # Der Grund als zweite Zeile: das Ausgrauen allein wäre die
                 # halbe Antwort (Regel 18) — und über die Palette stand die
                 # modale Sackgasse offen, die das Menü längst beseitigt hat.
-                label = f"{label}\n{entry.reason}"
-            elif entry.name in twins:
-                label = f"{label}\n{first_sentence(str(entry.doc))}"
+                reason = str(entry.reason).strip()
+                detail = f"{detail} — {reason}" if detail else reason
+            if detail:
+                label = f"{label}\n{detail}"
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, entry.name)
             item.setToolTip(

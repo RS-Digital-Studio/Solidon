@@ -283,7 +283,6 @@
   "Ansicht": "Vista",
   "Ansicht von oben": "Vista de cima",
   "Ansicht von schräg oben": "Vista oblíqua de cima",
-  "Ansicht:": "Vista:",
   "Ansicht: Ihr Modell. Klicken wählt aus, rechts ziehen dreht.": "Vista: o seu modelo. Clicar seleciona, arrastar com o botão direito roda.",
   "Anteil": "Proporção",
   "Anthropic": "Anthropic",
@@ -6547,7 +6546,6 @@
   "Zapfendurchmesser": "Diâmetro do pino",
   "Zapfenlänge": "Comprimento do pino",
   "Zeichen": "Caractere",
-  "Zeichenebene:": "Plano de desenho:",
   "Zeichenebene: {place}": "Plano de esboço: {place}",
   "Zeichnen": "Desenhar",
   "Zeichnen Sie Bereich und Ausschlüsse auf derselben Ebene.": "Desenhe a área do padrão e as áreas excluídas no mesmo plano.",
@@ -7211,5 +7209,14 @@
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper wieder her.": "«{operation}» converteu «{object}» num modelo de triângulos. As faces e arestas continuam editáveis; as formas arredondadas passam a ser compostas por segmentos retos. Desfazer restaura o corpo anterior.",
   "„{operation}“ macht aus „{object}“ ein Dreiecksmodell.": "«{operation}» transforma «{object}» num modelo de triângulos.",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "«Abrir na face» só vale sem aberturas escolhidas. Introduza a face em «Aberturas» e esvazie este campo.",
-  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. O relatório completo está na pasta guardada como «bericht.txt» — anexe-o, por favor."
+  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… abreviado. O relatório completo está na pasta guardada como «bericht.txt» — anexe-o, por favor.",
+  "Ein Schlüssel aus der Umgebung muss außerhalb von Solidon entfernt werden.": "Uma chave do ambiente tem de ser removida fora do Solidon.",
+  "ComfyUI-Ordner wird geprüft …": "A verificar a pasta do ComfyUI…",
+  "Zeichenebene": "Plano de desenho",
+  "So finden Sie den Drucker später in der Liste wieder.": "Este nome ajuda a encontrar a impressora novamente na lista.",
+  "ComfyUI-Ordner wird noch geprüft. Wählen Sie einen anderen erreichbaren Ordner oder warten Sie auf die Antwort.": "A pasta do ComfyUI ainda está a ser verificada. Escolha outra pasta acessível ou aguarde o resultado.",
+  "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "Não foi possível verificar a pasta. Escolha uma pasta acessível ou tente novamente.",
+  "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "Não foi possível remover a chave. Verifique o porta-chaves e tente novamente.",
+  "Datum zurücksetzen": "Repor data",
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "Não foi possível verificar a pasta do ComfyUI após a espera. Escolha outra pasta acessível ou tente novamente."
 }

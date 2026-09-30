@@ -11,7 +11,7 @@ from time import monotonic
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QDialog, QMenu
+from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenu, QToolButton
 
 from app.core.errors import ValidationError
 from app.core.knowledge import filaments
@@ -722,11 +722,26 @@ def test_detail_displays_note_as_plain_text(inventory: InventoryView) -> None:
 
 def test_multi_import_only_takes_checked_spools(qt_app: QApplication) -> None:
     """Der Slicer ist kein Besitznachweis: keine Spule ist vorausgewählt."""
+    from app.ui.style import NORMAL, SPACE, WIDE
+
     entries = (
         filaments.CatalogueFilament("PLA One", "#112233", "PLA"),
         filaments.CatalogueFilament("PETG Two", "#223344", "PETG"),
     )
     dialog = SlicerSpoolDialog(entries)
+    layout = dialog.layout()
+    assert layout is not None
+    margins = layout.contentsMargins()
+    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (
+        WIDE,
+        WIDE,
+        WIDE,
+        WIDE,
+    )
+    assert layout.spacing() == NORMAL
+    buttons = dialog.findChild(QDialogButtonBox)
+    assert buttons is not None and buttons.layout() is not None
+    assert buttons.layout().spacing() == SPACE
     assert not dialog._ok_button.isEnabled()
     dialog.list.item(0).setCheckState(Qt.CheckState.Checked)
     assert dialog._ok_button.isEnabled()
@@ -825,6 +840,7 @@ def test_journal_shows_source_correction_and_reverses_entire_operation(
         project_name="Halter",
     )
     inventory.show_spool(first.identifier)
+    assert "Rückgängig geht es am selben Knopf" in inventory.reverse_hint.text()
     assert "G-Code geplant" in inventory.history.item(0).text()
     assert "Korrektur" in inventory.history.item(0).text()
     inventory.history.setCurrentRow(0)
@@ -837,6 +853,7 @@ def test_journal_shows_source_correction_and_reverses_entire_operation(
     # Die Rücknahme ist rücknehmbar (B2): derselbe Knopf, anderer Satz.
     assert inventory.reverse_button.isEnabled()
     assert inventory.reverse_button.text() == "Rücknahme rückgängig machen"
+    assert inventory.reverse_hint.text() == "Der Vorgang zählt wieder für alle beteiligten Spulen."
     inventory.reverse_button.click()
     _wait_for_action(inventory)
     assert filaments.get(first.identifier).remaining_grams == pytest.approx(175)
@@ -845,6 +862,7 @@ def test_journal_shows_source_correction_and_reverses_entire_operation(
     assert len(filaments.bookings()) == 1
     inventory.history.setCurrentRow(0)
     assert inventory.reverse_button.text() == "Gewählten Vorgang zurücknehmen"
+    assert "Rückgängig geht es am selben Knopf" in inventory.reverse_hint.text()
 
 
 def test_newer_stock_count_is_not_overwritten_by_reverse(inventory: InventoryView) -> None:
@@ -877,6 +895,33 @@ def test_low_stock_warning_has_text_and_respects_threshold(inventory: InventoryV
     inventory.set_low_stock_threshold(20)
     assert "Wenig Filament" in inventory.cards[0].accessibleName()
     assert filaments.get(entry.identifier).remaining_grams == pytest.approx(150)
+
+
+def test_stock_settings_are_before_cards_and_keep_their_state_when_folded(
+    inventory: InventoryView,
+) -> None:
+    """Die Schwelle steht neben den Karten, die sie steuert, und Zuklappen bewahrt sie."""
+    shelf = inventory.pages.widget(0)
+    assert shelf is not None and shelf.layout() is not None
+    layout = shelf.layout()
+    assert layout.indexOf(inventory.threshold_row) < layout.indexOf(inventory.page_scroll)
+    assert layout.indexOf(inventory.settings_panel) < layout.indexOf(inventory.page_scroll)
+    heading = inventory.settings_panel.findChild(QToolButton)
+    assert heading is not None and not heading.isChecked()
+    assert not inventory.low_stock_threshold.isHidden(), (
+        "die Warnschwelle bleibt auch bei zugeklappten Lager-Einstellungen sichtbar"
+    )
+    assert inventory.settings_area.isHidden()
+
+    inventory.low_stock_threshold.setValue(22)
+    heading.click()
+    assert heading.isChecked()
+    assert not inventory.settings_area.isHidden()
+    heading.click()
+    assert inventory.settings_area.isHidden()
+    heading.click()
+    assert not inventory.settings_area.isHidden()
+    assert inventory.low_stock_threshold.value() == 22
 
 
 def test_full_spool_is_only_set_by_explicit_action(qt_app: QApplication) -> None:
@@ -1221,3 +1266,4 @@ def test_the_resting_reverse_button_says_what_it_waits_for(inventory: InventoryV
     said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
     assert said[0] == said[1] == said[2]
     assert "Noch keine Buchungen" in said[0] or "wählen" in said[0], said[0]
+    assert inventory.reverse_hint.text() == said[0]

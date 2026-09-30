@@ -197,6 +197,35 @@ def test_variable_output_count_keeps_a_fixed_integer_editor(qt_app: QApplication
             dialog.deleteLater()
 
 
+def test_expression_toggle_stays_next_to_a_number_when_its_field_grows(
+    qt_app: QApplication,
+) -> None:
+    """Überschüssige Zeilenbreite bleibt hinter fx statt zwischen Maß und Knopf."""
+    entry = next(
+        entry for entry in REGISTRY.get("create_box").params.spec() if entry.name == "width"
+    )
+    field = ValueField(entry)
+    try:
+        preferred = field.sizeHint()
+        field.resize(preferred.width() + 240, preferred.height())
+        field.show()
+        qt_app.processEvents()
+
+        outer = field.layout()
+        assert outer is not None
+        row_item = outer.itemAt(0)
+        assert row_item is not None and row_item.layout() is not None
+        row = row_item.layout()
+        gap = field.toggle.geometry().left() - (
+            field.spin.geometry().x() + field.spin.geometry().width()
+        )
+        assert gap <= row.spacing() + 1, f"zwischen Zahl und fx liegen {gap} Punkte"
+    finally:
+        field.close()
+        field.deleteLater()
+        qt_app.processEvents()
+
+
 @pytest.mark.parametrize("name", ["sketch_revolve", "sketch_sweep", "sketch_loft", "sketch_pocket"])
 def test_sketch_variant_rebuilds_its_complete_schema(qt_app: QApplication, name: str) -> None:
     """Die gewählte Art bietet wirklich ihre eigenen Werte und Grenzen an."""

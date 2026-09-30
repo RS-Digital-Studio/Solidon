@@ -283,7 +283,6 @@
   "Ansicht": "View",
   "Ansicht von oben": "View from above",
   "Ansicht von schräg oben": "View from a three-quarter angle",
-  "Ansicht:": "View:",
   "Ansicht: Ihr Modell. Klicken wählt aus, rechts ziehen dreht.": "View: your model. Click to select, drag with the right button to rotate.",
   "Anteil": "Share",
   "Anthropic": "Anthropic",
@@ -6547,7 +6546,6 @@
   "Zapfendurchmesser": "Peg diameter",
   "Zapfenlänge": "Peg length",
   "Zeichen": "Character",
-  "Zeichenebene:": "Drawing plane:",
   "Zeichenebene: {place}": "Sketch plane: {place}",
   "Zeichnen": "Draw",
   "Zeichnen Sie Bereich und Ausschlüsse auf derselben Ebene.": "Draw the field area and excluded areas on the same plane.",
@@ -7211,5 +7209,14 @@
   "„{operation}“ hat „{object}“ in ein Dreiecksmodell umgewandelt. Flächen und Kanten bleiben bearbeitbar; Rundungen bestehen jetzt aus geraden Teilstücken. Rückgängig stellt den vorherigen Körper wieder her.": "“{operation}” converted “{object}” into a triangle model. Faces and edges remain editable; rounded shapes now consist of straight segments. Undo restores the previous body.",
   "„{operation}“ macht aus „{object}“ ein Dreiecksmodell.": "“{operation}” turns “{object}” into a triangle model.",
   "„Öffnen an Fläche“ gilt nur ohne gewählte Öffnungen. Tragen Sie die Fläche unter „Öffnungen“ ein und leeren Sie dieses Feld.": "“Open at face” applies only without chosen openings. Enter the face under “Openings” and clear this field.",
-  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… shortened. The full report is in the saved folder as “bericht.txt” — please attach it."
+  "… gekürzt. Der vollständige Bericht liegt als „bericht.txt“ im abgelegten Ordner — bitte als Anhang beifügen.": "… shortened. The full report is in the saved folder as “bericht.txt” — please attach it.",
+  "Ein Schlüssel aus der Umgebung muss außerhalb von Solidon entfernt werden.": "A key from the environment must be removed outside Solidon.",
+  "ComfyUI-Ordner wird geprüft …": "Checking the ComfyUI folder…",
+  "Zeichenebene": "Drawing plane",
+  "So finden Sie den Drucker später in der Liste wieder.": "Use this name to find the printer in the list later.",
+  "ComfyUI-Ordner wird noch geprüft. Wählen Sie einen anderen erreichbaren Ordner oder warten Sie auf die Antwort.": "The ComfyUI folder is still being checked. Choose another reachable folder or wait for the result.",
+  "Der Ordner ließ sich nicht prüfen. Wählen Sie einen erreichbaren Ordner oder versuchen Sie es erneut.": "The folder could not be checked. Choose a reachable folder or try again.",
+  "Der Schlüssel ließ sich nicht entfernen. Prüfen Sie den Schlüsselbund und versuchen Sie es erneut.": "The key could not be removed. Check your keychain and try again.",
+  "Datum zurücksetzen": "Reset date",
+  "Der ComfyUI-Ordner ließ sich nach der Wartezeit nicht prüfen. Wählen Sie einen anderen erreichbaren Ordner oder versuchen Sie es erneut.": "The ComfyUI folder could not be checked after waiting. Choose another reachable folder or try again."
 }

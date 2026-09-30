@@ -741,8 +741,13 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
     slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
     dialog = FilamentOverrideDialog(slot, settings)
+
+    def settle() -> None:
+        for _ in range(8):
+            qt_app.processEvents()
+
     dialog.show()
-    qt_app.processEvents()
+    settle()
     collapsed_height = dialog.height()
 
     assert all(not group.isChecked() for group in dialog.groups.values())
@@ -750,7 +755,7 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
         "ohne eigene Werte bleiben die neunzehn Detailfelder eingeklappt"
     )
     dialog.groups["temperature"].setChecked(True)
-    qt_app.processEvents()
+    settle()
     assert not dialog.group_bodies["temperature"].isHidden()
     assert dialog.height() > collapsed_height, "geöffnete Felder brauchen sichtbar mehr Raum"
     nozzle = dialog.editors["temperature.nozzle"]
@@ -767,9 +772,11 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert override.filament is None
 
     dialog.project_values_button.click()
+    settle()
 
     assert all(not group.isChecked() for group in dialog.groups.values())
     assert all(body.isHidden() for body in dialog.group_bodies.values())
+    assert dialog.height() == collapsed_height, "Zuklappen gibt die geöffnete Höhe zurück"
     assert isinstance(nozzle, QSpinBox)
     assert nozzle.value() == settings.temperature.nozzle
     assert dialog.override() is None, "ein sichtbarer Knopf nimmt alle eigenen Werte zurück"
@@ -778,6 +785,12 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
 def test_every_field_lands_in_a_known_group() -> None:
     for field in FIELDS:
         assert field.group in GROUPS
+
+
+def test_filament_settings_precede_temperature_and_speed_tabs() -> None:
+    """Materialwerte stehen vor den davon abgeleiteten Druckgeschwindigkeiten."""
+    assert GROUPS.index("filament") < GROUPS.index("temperature")
+    assert GROUPS.index("filament") < GROUPS.index("speed")
 
 
 def test_the_front_page_stays_short() -> None:
@@ -979,6 +992,57 @@ def test_an_enum_writes_through(dialog: PrintSettingsDialog) -> None:
     editor.setCurrentIndex(editor.findData("tree"))
 
     assert dialog.settings.support.style == "tree"
+
+
+def test_disabled_support_and_bed_adhesion_hide_their_detail_rows(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Abgeschaltete Stützen und Haftung lassen keine wirkungslosen Felder stehen."""
+    support_paths = (
+        "support.placement",
+        "support.threshold_angle",
+        "support.z_gap",
+        "support.xy_gap",
+        "support.density",
+        "support.interface_layers",
+        "support.block_channels",
+    )
+    support = dialog._editors["support.style"]
+    assert isinstance(support, QComboBox)
+    support.setCurrentIndex(support.findData("tree"))
+    threshold = dialog._editors["support.threshold_angle"]
+    assert isinstance(threshold, QDoubleSpinBox)
+    threshold.setValue(37.0)
+    saved_threshold = dialog.settings.support.threshold_angle
+    assert all(not dialog._labels[path].isHidden() for path in support_paths)
+    support.setCurrentIndex(support.findData("none"))
+    assert all(dialog._labels[path].isHidden() for path in support_paths)
+    assert dialog.settings.support.threshold_angle == saved_threshold
+    support.setCurrentIndex(support.findData("tree"))
+    assert all(not dialog._labels[path].isHidden() for path in support_paths)
+    assert threshold.value() == saved_threshold
+
+    adhesion_paths = (
+        "adhesion.skirt_loops",
+        "adhesion.skirt_distance",
+        "adhesion.brim_width",
+        "adhesion.raft_layers",
+    )
+    adhesion = dialog._editors["adhesion.kind"]
+    assert isinstance(adhesion, QComboBox)
+    adhesion.setCurrentIndex(adhesion.findData("brim"))
+    brim_width = dialog._editors["adhesion.brim_width"]
+    assert isinstance(brim_width, QDoubleSpinBox)
+    brim_width.setValue(9.5)
+    saved_brim_width = dialog.settings.adhesion.brim_width
+    assert all(not dialog._labels[path].isHidden() for path in adhesion_paths)
+    adhesion.setCurrentIndex(adhesion.findData("none"))
+    assert all(dialog._labels[path].isHidden() for path in adhesion_paths)
+    assert dialog.settings.adhesion.brim_width == saved_brim_width
+
+    adhesion.setCurrentIndex(adhesion.findData("brim"))
+    assert all(not dialog._labels[path].isHidden() for path in adhesion_paths)
+    assert brim_width.value() == saved_brim_width
 
 
 def test_an_enum_shows_words_and_stores_the_english_value(dialog: PrintSettingsDialog) -> None:

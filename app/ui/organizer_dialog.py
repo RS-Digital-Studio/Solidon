@@ -50,7 +50,7 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice, problem_text
 from app.ui.labels import length
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import ROOMY, make_primary, no_primary
+from app.ui.style import NORMAL, ROOMY, SPACE, make_primary, no_primary, set_level
 from app.ui.theme import Theme, current_theme
 
 if TYPE_CHECKING:
@@ -255,6 +255,7 @@ class OrganizerDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setSpacing(NORMAL)
         header = QLabel(
             tr(
                 "Wählen Sie ein Fach oder eine Trennwand. Die Vorschau zeigt "
@@ -337,8 +338,13 @@ class OrganizerDialog(QDialog):
         middle = QSplitter(Qt.Orientation.Horizontal, self)
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(NORMAL)
+        tree_heading = QLabel(tr("Aufteilung"), left)
+        set_level(tree_heading, "section")
+        left_layout.addWidget(tree_heading)
         self.tree = QTreeWidget(left)
-        self.tree.setHeaderLabel(tr("Aufteilung"))
+        self.tree.setHeaderHidden(True)
         self.tree.setAccessibleName(tr("Fächer und Teilungen"))
         self.tree.setMinimumWidth(215)
         self.tree.currentItemChanged.connect(self._tree_chosen)
@@ -361,14 +367,23 @@ class OrganizerDialog(QDialog):
         middle.addWidget(left)
         image_column = QWidget(self)
         image_layout = QVBoxLayout(image_column)
-        image_layout.addWidget(QLabel(tr("Draufsicht · Fach oder Wand anklicken"), self))
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.setSpacing(NORMAL)
+        image_heading = QLabel(tr("Draufsicht · Fach oder Wand anklicken"), image_column)
+        image_heading.setWordWrap(True)
+        set_level(image_heading, "section")
+        image_layout.addWidget(image_heading)
         self.layout_view = _LayoutView(self)
         self.layout_view.chosen.connect(self._graphic_chosen)
         image_layout.addWidget(self.layout_view, 1)
         middle.addWidget(image_column)
         preview_column = QWidget(self)
         preview_layout = QVBoxLayout(preview_column)
-        preview_layout.addWidget(QLabel(tr("So sieht Ihr Teil aus"), self))
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setSpacing(NORMAL)
+        preview_heading = QLabel(tr("So sieht Ihr Teil aus"), preview_column)
+        set_level(preview_heading, "section")
+        preview_layout.addWidget(preview_heading)
         self.preview = QSvgWidget(self)
         self.preview.setAccessibleName(tr("Ergebnisvorschau"))
         self.preview.setMinimumSize(260, 240)
@@ -384,6 +399,9 @@ class OrganizerDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.accept_button.setText(
             tr("Aufteilung übernehmen") if layout_only else tr("Organizer anlegen")

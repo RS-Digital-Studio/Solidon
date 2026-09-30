@@ -57,7 +57,7 @@ from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised, wheel_needs_focus
 from app.ui.leash import Worker, WorkerLeash
-from app.ui.style import NORMAL, WIDE, ContentHeight, DialogScrollArea, make_primary
+from app.ui.style import NORMAL, SPACE, WIDE, ContentHeight, DialogScrollArea, make_primary
 
 _log = get_logger(__name__)
 
@@ -602,6 +602,9 @@ class RecipeDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # ``button()`` gibt für eine Standardschaltfläche, die man selbst
         # angefordert hat, immer eine zurück — eine Prüfung auf ``None`` wäre
         # ein Zweig, den mypy als unerreichbar meldet.

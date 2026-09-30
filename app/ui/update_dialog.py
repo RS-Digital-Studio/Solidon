@@ -40,13 +40,12 @@ from app.i18n import get_language, tr
 from app.ui.changes_dialog import groups_html
 from app.ui.dialogs import open_link
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import make_primary
+from app.ui.style import NORMAL, WIDE, make_primary
 
-#: Wie hoch die Liste der Neuerungen beim Öffnen ist, bevor sie rollt — eine
-#: **Anfangshöhe**, kein Deckel: Als ``setMaximumHeight`` am Rollbereich ging
-#: jeder gezogene Bildpunkt in Leere statt in die Liste (derselbe Fund wie im
-#: Neuerungen-Dialog, Robert 26.08.2026). Den Bildschirmrand schützt die
-#: Größe beim Öffnen; was der Nutzer zieht, gehört der Liste.
+#: Wie viel Liste beim Öffnen sichtbar ist, bevor sie rollt — eine
+#: **Anfangshöhe**, kein Deckel. Kurze Texte behalten ihre natürliche Höhe;
+#: längere beginnen mit diesem Ausschnitt. Was der Nutzer später zieht,
+#: vergrößert weiter die Liste.
 CHANGES_START_HEIGHT = 240
 
 
@@ -229,6 +228,8 @@ class UpdateDialog(QDialog):
         self.buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.headline)
         layout.addWidget(self.notes)
         # Stretch 1: Ein größer gezogenes Fenster gibt jeden Bildpunkt der
@@ -238,10 +239,18 @@ class UpdateDialog(QDialog):
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
         layout.addWidget(self.buttons)
-        if points:
-            self.resize(self.sizeHint().width(), self.sizeHint().height() + CHANGES_START_HEIGHT)
-
         self._show_offer()
+        if points:
+            hint = self.sizeHint()
+            margins = layout.contentsMargins()
+            width = max(self.minimumWidth(), hint.width())
+            content_width = max(1, width - margins.left() - margins.right())
+            natural_height = self.changes.heightForWidth(content_width)
+            if natural_height <= 0:
+                natural_height = self.changes.sizeHint().height()
+            list_height = min(CHANGES_START_HEIGHT, natural_height)
+            scroll_hint = self.scroller.sizeHint().height()
+            self.resize(width, hint.height() - scroll_hint + list_height)
 
     # --- die vier Zustände ----------------------------------------------------------
 

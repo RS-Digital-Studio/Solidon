@@ -247,16 +247,21 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
         assert dialog.wait_for_survey(5000)
         settle()
         compact = dialog.height()
+        compact_width = dialog.width()
         heading = dialog.advanced.findChild(QToolButton)
         assert heading is not None
         heading.click()
         settle()
         assert dialog.navigation.isVisibleTo(dialog)
         assert dialog.height() >= compact
+        assert dialog.width() == compact_width, (
+            "Zusatzzeilen dürfen das Fenster nicht seitlich springen lassen"
+        )
         assert not dialog._scroll.isAncestorOf(dialog.save)
         heading.click()
         settle()
         assert dialog.height() == compact
+        assert dialog.width() == compact_width
         dialog.resize(dialog.width(), compact + 80)
         drawn = dialog.height()
         heading.click()
@@ -266,6 +271,27 @@ def test_settings_details_give_back_only_their_own_height(qt_app, monkeypatch) -
         assert dialog.height() == drawn
     finally:
         dialog.close()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_settings_slicer_choice_and_program_button_share_one_row(qt_app, monkeypatch) -> None:
+    """Auswahl und Programmdatei stehen nebeneinander wie die übrigen Formularfelder."""
+    from PySide6.QtWidgets import QHBoxLayout
+
+    from app.ui import settings_dialog as module
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    dialog = module.SettingsDialog(UiSettings())
+    try:
+        row = dialog.slicer.parentWidget()
+        assert row is not None
+        row_layout = row.layout()
+        assert isinstance(row_layout, QHBoxLayout)
+        assert row_layout.indexOf(dialog.slicer) < row_layout.indexOf(dialog.slicer_file)
+    finally:
         dialog.release()
         dialog.deleteLater()
 

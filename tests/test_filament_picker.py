@@ -97,6 +97,55 @@ def test_spool_details_fit_then_return_their_window_height(qt_app) -> None:
     assert hex_of(None) == "", "keine Farbe ist keine Farbe, nicht Schwarz"
 
 
+def test_spool_form_columns_align_and_unknown_dates_have_one_label(qt_app) -> None:
+    """Vorder- und Zusatzangaben teilen die Feldkante.
+
+    Datum und Löschtaste wiederholen „Unbekannt“ nicht.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QFormLayout, QToolButton
+
+    from app.ui.filament_picker import NewFilamentDialog
+
+    dialog = NewFilamentDialog(name="Werkstattrolle")
+
+    def settle() -> None:
+        for _ in range(12):
+            qt_app.processEvents()
+
+    try:
+        dialog.show()
+        settle()
+        heading = dialog.more_section.findChild(QToolButton)
+        assert heading is not None
+        heading.click()
+        settle()
+        content = dialog._scroll.widget()
+        assert content is not None
+        first = dialog.name.mapTo(content, QPoint(0, 0)).x()
+        later = dialog.bought_on.mapTo(content, QPoint(0, 0)).x()
+        assert later == first
+        assert not dialog._scroll.isAncestorOf(dialog.validation)
+        for date_editor in (dialog.bought_on, dialog.opened_on):
+            assert date_editor.editor.specialValueText() == "Unbekannt"
+            assert not date_editor.clear_button.text()
+            assert not date_editor.clear_button.icon().isNull()
+            assert date_editor.clear_button.accessibleName() == "Datum zurücksetzen"
+            assert (
+                date_editor.clear_button.accessibleDescription()
+                == date_editor.clear_button.toolTip()
+            )
+            assert (
+                date_editor.clear_button.accessibleName()
+                != date_editor.clear_button.accessibleDescription()
+            )
+        assert isinstance(content.layout(), QFormLayout)
+        assert isinstance(dialog.more.layout(), QFormLayout)
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_the_panel_offers_the_backup_and_setting_aside_as_buttons(qt_app, tmp_path, monkeypatch):
     """Zurückholen und Beiseitelegen sind auch im Filamentbereich Knöpfe, nicht nur im Lager."""
     from dataclasses import replace
@@ -1410,7 +1459,27 @@ def test_an_empty_result_says_what_to_do(qt_app: QApplication) -> None:
 
     assert dialog.list.count() == 0
     assert "Filter" in dialog.count.text(), "der Satz nennt den Weg heraus"
+    assert dialog._ok_button.toolTip() == dialog.count.text()
+    assert dialog._ok_button.statusTip() == dialog.count.text()
+    assert dialog._ok_button.accessibleDescription() == dialog.count.text()
     assert not dialog._ok_button.isEnabled(), "ohne Treffer gibt es nichts zu übernehmen"
+
+
+def test_a_slicer_without_profiles_is_not_mistaken_for_a_filtered_result(
+    qt_app: QApplication,
+) -> None:
+    """Ein fehlender Profilbestand braucht einen anderen Hinweis als zu enge Filter."""
+    from app.ui.filament_picker import SlicerFilamentDialog
+
+    dialog = SlicerFilamentDialog(None, [])
+    try:
+        assert "Bearbeiten → Einstellungen" in dialog.count.text()
+        assert "Slicer" in dialog.count.text()
+        assert dialog._ok_button.toolTip() == dialog.count.text()
+        assert dialog._ok_button.accessibleDescription() == dialog.count.text()
+        assert not dialog._ok_button.isEnabled()
+    finally:
+        dialog.deleteLater()
 
 
 def test_one_found_profile_is_counted_in_the_singular(qt_app: QApplication) -> None:

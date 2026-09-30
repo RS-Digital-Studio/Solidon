@@ -35,7 +35,7 @@ from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, w
 from app.ui.outline_dialog import _ProfileView
 from app.ui.panels import align_forms
 from app.ui.sketch_editor import SketchEditorDialog, Surroundings
-from app.ui.style import make_primary, no_primary
+from app.ui.style import NORMAL, WIDE, make_primary, no_primary
 
 _FIELDS = ("path_sketch", "support_feature", "opening_signature", "counterface")
 
@@ -271,6 +271,8 @@ class SealPathDialog(QDialog):
         self.setWindowTitle(tr("Dichtweg wählen"))
         self.resize(860, 580)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
         self.mode = QComboBox(self)
         self.mode.addItem(tr("Zeichnung"), userData="drawn")
         self.mode.addItem(tr("Öffnung am Körper"), userData="opening")

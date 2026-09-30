@@ -820,7 +820,7 @@ def test_closing_the_key_dialog_does_not_wait_for_the_model_survey(
             qt_app.processEvents()
         # Die Wirkung des echten Slots, nicht ein Lambda an seiner Stelle —
         # ``_show_state`` setzt ``state`` und schreibt „Probe" in die Erklärung.
-        assert not hasattr(dialog, "state") and "Probe" not in dialog.explanation.text(), (
+        assert not hasattr(dialog, "state") and "Probe" not in dialog.key_status.text(), (
             "die Antwort einer losgelassenen Erhebung erreicht den Dialog nicht"
         )
         assert leash.wait_for_all() == ()
@@ -873,7 +873,7 @@ def test_a_queued_answer_of_a_finished_survey_does_not_reach_the_closed_dialog(
         dialog.reject()
         for _ in range(5):
             qt_app.processEvents()
-        assert not hasattr(dialog, "state") and "Probe" not in dialog.explanation.text(), (
+        assert not hasattr(dialog, "state") and "Probe" not in dialog.key_status.text(), (
             "die eingereihte Antwort erreicht den geschlossenen Dialog nicht"
         )
     finally:
@@ -1698,15 +1698,126 @@ def test_the_chat_dialog_is_there_before_the_answers_are(
     dialog = KeyDialog()
 
     assert dialog.field.echoMode() == dialog.field.EchoMode.Password, "die Fragen stehen sofort"
-    assert "nachgesehen" in dialog.explanation.text()
+    assert "nachgesehen" in dialog.key_status.text()
     assert "nachgesehen" in dialog.service_state.text()
     assert not dialog.pull_button.isEnabled(), "kein Knopf auf eine Vermutung"
 
     dialog.wait_for_look()
     qt_app.processEvents()
 
-    assert "nachgesehen" not in dialog.explanation.text()
+    assert "nachgesehen" not in dialog.key_status.text()
     assert "nachgesehen" not in dialog.service_state.text()
+
+
+@pytest.mark.parametrize("source", ["none", "environment", "keychain"])
+def test_key_status_and_removal_stay_inside_the_cloud_model_section(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
+    source: str,
+) -> None:
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "source", lambda _account: source)
+    dialog = KeyDialog()
+    try:
+        assert dialog.cloud_model_section.isAncestorOf(dialog.key_status)
+        assert dialog.cloud_model_section.isAncestorOf(dialog.explanation)
+        assert dialog.cloud_model_section.isAncestorOf(dialog.forget_button)
+        assert not dialog.buttons.isAncestorOf(dialog.forget_button)
+        assert dialog.buttons.button(QDialogButtonBox.StandardButton.Save) is not None
+        assert dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel) is not None
+        assert dialog.key_status.accessibleName() == dialog.key_status.text()
+        assert dialog.forget_button.property("danger") is True
+        assert dialog.forget_button.isEnabled() is (source == "keychain")
+        if source == "environment":
+            assert "außerhalb von Solidon" in dialog.forget_button.toolTip()
+        elif source == "none":
+            assert dialog.forget_button.toolTip()
+    finally:
+        dialog.release(5000)
+        dialog.deleteLater()
+
+
+def test_the_key_dialog_tab_order_follows_its_visible_sections(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
+) -> None:
+    from PySide6.QtWidgets import QAbstractButton, QDialogButtonBox
+
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "source", lambda _account: "keychain")
+    dialog = KeyDialog()
+    try:
+        dialog.service_button.setEnabled(True)
+        dialog.service_button.setVisible(True)
+        save = dialog.buttons.button(QDialogButtonBox.StandardButton.Save)
+        cancel = dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        assert save is not None and cancel is not None
+        button_layout = dialog.buttons.layout()
+        assert button_layout is not None
+        footer = []
+        for index in range(button_layout.count()):
+            item = button_layout.itemAt(index)
+            assert item is not None
+            widget = item.widget()
+            if isinstance(widget, QAbstractButton):
+                footer.append(widget)
+        assert set(footer) == {save, cancel}
+        expected = (
+            dialog.forget_button,
+            dialog.service_button,
+            dialog.model_field,
+            dialog.pull_button,
+            dialog.probe_button,
+            *footer,
+        )
+        chain = []
+        current = dialog.field
+        for _ in range(128):
+            current = current.nextInFocusChain()
+            if current is dialog.field:
+                break
+            chain.append(current)
+        assert current is dialog.field, "die Fokusfolge muss geschlossen bleiben"
+        positions = [chain.index(widget) for widget in expected]
+        assert positions == sorted(positions)
+    finally:
+        dialog.release(5000)
+        dialog.deleteLater()
+
+
+def test_a_late_chat_survey_does_not_replace_a_key_removal_error(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    quick_survey: None,
+) -> None:
+    from app.core.backends import keys
+    from app.ui import dialogs as module
+
+    monkeypatch.setattr(keys, "source", lambda _account: "keychain")
+    monkeypatch.setattr(keys, "forget", lambda _account: False)
+    dialog = module.KeyDialog()
+    try:
+        assert dialog.wait_for_look(5000)
+        qt_app.processEvents()
+        dialog._forget()
+        error = dialog._key_status_error
+        assert error is not None
+
+        dialog._show_state(module.ChatState("Später geprüft", None, ()))
+
+        assert dialog.key_status.accessibleName() == error
+        assert error in dialog.key_status.accessibleDescription()
+    finally:
+        dialog.release(5000)
+        dialog.deleteLater()
 
 
 def test_looking_for_the_chat_does_not_happen_in_the_gui_thread(
