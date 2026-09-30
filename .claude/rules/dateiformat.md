@@ -291,7 +291,11 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   der Rat je Körper schreibt ihn als Objektwert (`writer._part_values`).
   Export und Druckdialog fragen diesen Rat an einer Stelle
   (`writer.part_advice`, je Spule über `handover.slot_processes`), sonst nennt
-  die Zeile im Dialog ein Teil, das die Datei nicht bekommt. CuraEngine nimmt
+  die Zeile im Dialog ein Teil, das die Datei nicht bekommt. Der Rat je Teil
+  fragt bis zum Fixpunkt: Verlangt ein Teil einen übernommenen Wert je Teil,
+  fragt er mit ihm erneut (`PartSplit.accepted_per_part`), nur mit dem
+  übernommenen Wert — sonst sieht eine Regel, die einen anderen Pfad je Teil
+  voraussetzt („Außenwand zuerst“ nach Arachne), nur die Grundlage. CuraEngine nimmt
   nur `CURA_PER_MESH` je Netz: Dort behält die Platte die Übernahme, ein Teil
   ohne Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was
   ein Slicer nicht je Teil annimmt, bleibt plattenweit

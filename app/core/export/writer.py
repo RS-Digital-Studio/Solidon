@@ -46,7 +46,7 @@ from app.core.export.slicer_keys import (
 from app.core.geom import transform
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.prepare import check_build_volume
-from app.core.knowledge.print_settings import read_path
+from app.core.knowledge.print_settings import read_path, same_value
 from app.core.log import get_logger
 from app.core.types import (
     BoundingBox,
@@ -1143,6 +1143,7 @@ def part_advice(
     result: SliceResult | None,
     fit_kinds: Sequence[str],
     flavour: SlicerFlavour | None = None,
+    accepted: Mapping[str, object] | None = None,
 ) -> list[SettingAdvice]:
     """Was dieses Teil anders braucht als die Platte (§29, Entscheidung G).
 
@@ -1159,6 +1160,14 @@ def part_advice(
     kaum Halt. Passungen (``fit_kinds``) und Zapfen zählen nur, wenn dieses
     Teil sie trägt. ``flavour`` sagt, ob der Slicer unter „automatisch“ seinen
     Brim selbst rechnet (:data:`advise.AUTO_BRIM_FLAVOURS`).
+
+    **Eine Regel kann einen Wert je Teil voraussetzen** (``accepted``, die
+    übernommenen Werte je Teil aus :meth:`handover.PartSplit.accepted_per_part`):
+    „Außenwand zuerst“ folgt am Keil erst auf Arachne, und ``settings`` trägt
+    für beide die Grundlage. Verlangt dieses Teil einen übernommenen Wert,
+    wird er angewandt und erneut gefragt, bis nichts dazukommt — höchstens
+    einmal je übernommenem Pfad. In die Kette geht nur, was übernommen ist, und
+    nur mit dem übernommenen Wert; ``was`` bleibt der Wert von ``settings``.
     """
     # Erst hier: ``handover`` zieht die G-Code-Auswertung mit, und ein Export
     # soll nicht davon abhängen, dass ein Slicer im Spiel ist.
@@ -1170,23 +1179,54 @@ def part_advice(
     section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
     footprint = 0.0 if section is None or section.is_empty else float(section.area)
     connectors = advise.connector_diameters([entry])
-    groups = [
-        (
-            process.settings,
-            advise.for_part(
+
+    def asked(current: PrintSettings) -> list[SettingAdvice]:
+        groups = [
+            (
                 process.settings,
-                mesh.bounds,
-                footprint,
-                profile=process.profile,
-                result=result,
-                fit_kinds=fit_kinds,
-                connectors=connectors,
-                flavour=flavour,
-            ),
-        )
-        for process in handover.slot_processes(entry, settings, profile, setup, slot_profiles)
+                advise.for_part(
+                    process.settings,
+                    mesh.bounds,
+                    footprint,
+                    profile=process.profile,
+                    result=result,
+                    fit_kinds=fit_kinds,
+                    connectors=connectors,
+                    flavour=flavour,
+                ),
+            )
+            for process in handover.slot_processes(entry, current, profile, setup, slot_profiles)
+        ]
+        return advise.combine(current, groups)
+
+    advice = asked(settings)
+    chain = dict(accepted or {})
+    served: dict[str, SettingAdvice] = {}
+    current = settings
+    for _round in range(len(chain)):
+        follows = [
+            item
+            for item in advice
+            if item.path in chain
+            and item.path not in served
+            and same_value(item.value, chain[item.path])
+        ]
+        if not follows:
+            break
+        served.update((item.path, item) for item in follows)
+        current = advise.apply(current, follows)
+        advice = asked(current)
+    if not served:
+        return advice
+    # Was eine spätere Runde zu einem schon angewandten Pfad sagt, hat den
+    # Stand der früheren gesehen und gewinnt; ``was`` gilt ``settings``.
+    merged = dict(served)
+    merged.update((item.path, item) for item in advice)
+    return [
+        replace(item, was=read_path(settings, item.path))
+        for item in merged.values()
+        if not same_value(item.value, read_path(settings, item.path))
     ]
-    return advise.combine(settings, groups)
 
 
 def _part_values(
@@ -1241,6 +1281,7 @@ def _part_values(
         result=result,
         fit_kinds=fit_kinds_for(document, {entry.id}) if document is not None else (),
         flavour=flavour,
+        accepted=split.accepted_per_part(),
     )
     applied = [item for item in advice if item.path in split.per_part]
     unavailable = [item for item in advice if item.path in split.unavailable]
