@@ -76,6 +76,7 @@ from app.core.geom.prepare import (
     SLOT_ACROSS_LIMIT,
     Arrangement,
     BoreAnchor,
+    BoreResult,
     arrange_on_bed,
     bore_diameter,
     bore_geometry_error,
@@ -7872,6 +7873,9 @@ def resize_hole(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             end_planes=end_planes,
         )
+    # Gestopft oder abschnittsweise geschlossen wurde vielleicht; gezählt wird
+    # gegen den Körper vor dem Schritt (:func:`_split_counted_from`).
+    result = _split_counted_from(original_body, result)
     if result.solver is None:
         return OpResult(outputs=[source], findings=result.findings, answered=answered)
     # **Und die Toleranz wird auch beim Versetzen gemeldet.** `drill` erzeugt
@@ -8555,6 +8559,8 @@ def slot_hole(ctx: OpContext) -> OpResult:
         seed=ctx.seed,
         overlap=overlap,
     )
+    # Zerfallen ist, was mehr Teile hat als vor dem Schritt — nicht mehr als der Stopfen.
+    result = _split_counted_from(as_mesh_data(source.mesh), result)
     if rounded:
         from app.core.perceive.features import detect
 
@@ -8638,6 +8644,33 @@ def slot_hole(ctx: OpContext) -> OpResult:
         findings=findings,
         answered=converted,
     )
+
+
+def _split_counted_from(original: MeshData, result: BoreResult) -> BoreResult:
+    """Der Zerfall eines Schnitts am gestopften Körper, gezählt gegen den vor dem Schritt.
+
+    ``drill``, ``slot_bore`` und ``resize_bore`` zählen die Teile gegen den
+    Körper, den sie bekommen — nach dem Schließen der alten Öffnung ist das der
+    gestopfte. **Der Stopfen verbindet, was durch die alte Bohrung geht**, und
+    der Schnitt trennt es wieder: Gemessen am 30.09.2026 hatten die Teppichecke
+    (zwei Körper im STEP, Langloch gedreht) und der Besenhalter (drei Schalen im
+    STL, erster Zug) gestopft ein Teil weniger und danach wieder 2 und 3, und
+    darüber stand „Die Bohrung schneidet den Körper ganz durch — er zerfällt in
+    mehrere Teile."
+    Der Kunde vergleicht mit dem Körper vor dem Schritt, der exakte Zweig von
+    ``slot_hole`` auch (``split_findings(source.mesh, solid)``). Der Satz
+    bleibt an seinem Platz; nur sein Urteil kommt vom Original.
+    """
+    verdict = split_findings(original, result.mesh)
+    findings: list[Finding] = []
+    for entry in result.findings:
+        if entry.code != "bore.splits_the_body":
+            findings.append(entry)
+        elif verdict:
+            findings.extend(verdict)
+            verdict = []
+    findings.extend(verdict)
+    return dataclasses.replace(result, findings=findings)
 
 
 def _neighbour_bore_findings(

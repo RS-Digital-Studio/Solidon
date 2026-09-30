@@ -1156,6 +1156,24 @@ geschlossen (`test_moving_or_duplicating_a_bore_over_the_edge_says_so`,
 `test_every_way_that_sets_a_bore_anew_asks_about_the_edge`,
 `test_a_widened_countersink_over_the_edge_says_so`).
 
+**Den Zerfall zählt derselbe Weg gegen den Körper vor dem Schritt**
+(30.09.2026). `drill`, `slot_bore` und `resize_bore` zählen die Teile gegen den
+Körper, den sie bekommen, und nach dem Schließen der alten Öffnung ist das der
+gestopfte. Der Stopfen verbindet aber, was durch die Öffnung geht: Die
+vernetzte Teppichecke (zwei Körper im STEP) war beim Drehen ihres Langlochs
+gestopft ein Stück, der Besenhalter (drei Schalen im STL) beim ersten Zug zwei,
+und nach dem Schnitt hatten beide wieder 2 und 3 Teile — darüber stand „Die
+Bohrung schneidet den Körper ganz durch — er zerfällt in mehrere Teile". Am
+Besenhalter traf das jeden Zug an den sechs Bohrungen Ø 6,12; gegen den Körper
+vor dem Schritt gezählt bleibt bei 7,12 mm nichts, bei 12,24 mm nur in einer
+von vier Richtungen ein echtes loses Stück von 66 mm³. Der exakte Zweig von
+`slot_hole` zählte schon gegen den Schritt davor;
+`prepare_ops._split_counted_from` tut es jetzt am Netz, für *Zum Langloch
+ziehen* und *Bohrung ändern*
+(`test_a_second_body_in_the_bore_does_not_make_the_pull_a_split`,
+`test_widening_a_slot_with_a_second_body_in_it_is_no_split`, Gegenrichtung
+`test_a_pull_through_the_plate_beside_a_second_body_still_says_it_splits`).
+
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
 **Der Winkel zählt gegen den Rahmen, den er bekommt — und die zwei Wege

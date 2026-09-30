@@ -297,7 +297,8 @@ ihr (`actions._carried_by`).
   über jede Oberfläche, `HOLE_IS_NOT_EMPTY`); ob man hindurchsieht, sagt die
   ganze Mündung, nicht die Achse.
 - **Jeder Weg, der eine Bohrung neu setzt, fragt nach der Kante**
-  (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt): Mitte,
+  (`prepare_ops._edge_findings`, am gefüllten Körper vor dem Schnitt; den
+  Zerfall gegen den Körper vor dem Schritt, `_split_counted_from`): Mitte,
   beide Enden eines Langlochs (`prepare.slot_ends`), Austritte der Achse (erster
   Durchstoß, nicht der Hüllquader) — einmal, an beiden Kernen; eine Senkung nur
   am weiten Ende, am Austritt nur einen halben Radius tief
@@ -306,17 +307,17 @@ ihr (`actions._carried_by`).
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
 `drill_hole` zählt ihn gegen die Normale der Fläche, `slot_hole` gegen die Achse
-des Merkmals — **das bleibt so**: eine erkannte Bohrung hat zwei Mündungen
-(Regel 21). Den Rahmen baut `prepare.slot_frame`, im Messrauschen neben einer
-Hauptachse aus dieser. `units.positive_axis` normiert Achse und Richtung; das
-Vorzeichen ist keine Auskunft (`placement.seat_of` fragt beide Mündungen).
+des Merkmals — **das bleibt so** (zwei Mündungen, Regel 21). Den Rahmen baut
+`prepare.slot_frame`, im Messrauschen neben einer Hauptachse aus dieser.
+`units.positive_axis` normiert Achse und Richtung; das Vorzeichen ist keine
+Auskunft (`placement.seat_of` fragt beide Mündungen).
 
 ## Die Werkzeugzugabe steht einmal, und ein Langloch bekommt sie nie
 
-`prepare.FEATURE_OVERLAP`, nie eine zweite Konstante gleichen Werts; ihr Grund
-ist Tangentialkontakt, nicht Koplanarität. `slot_hole` schließt auch die runde
-Bohrung vor dem ersten Zug (`closes_the_old`) und schneidet ohne Zugabe
-(`overlap=0.0`) — beide Wege und Kerne schneiden dasselbe Langloch.
+`prepare.FEATURE_OVERLAP`, nie eine zweite Konstante gleichen Werts. `slot_hole`
+schließt auch die runde Bohrung vor dem ersten Zug (`closes_the_old`) und
+schneidet ohne Zugabe (`overlap=0.0`) — beide Wege und Kerne schneiden dasselbe
+Langloch.
 
 ## Ein Füllkörper hat die Form des Werkzeugs, nicht die des Hohlraums
 

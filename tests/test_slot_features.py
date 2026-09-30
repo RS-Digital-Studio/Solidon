@@ -2420,6 +2420,138 @@ def test_the_split_sentence_names_the_parts_the_body_has_at_the_end(
     assert said == [("bore.splits_the_body", {"count": 4})], said
 
 
+def _plate_with_a_second_body(kernel: str, *, inside: bool, slot: bool = False) -> SceneObject:
+    """Platte 40 x 20 x 10 mit Bohrung Ø 6 und ein zweiter Körper im selben Objekt.
+
+    ``inside``: ein Stift Ø 5 auf 15 mm steht als eigener Körper in der
+    Bohrung und ragt 5 mm heraus — eine Baugruppe, die als ein Objekt kam. Sonst
+    steht ein Klotz 15 mm neben der Platte. ``slot`` zieht die Bohrung vorher
+    auf 12 mm. Exakt ein Verbund zweier Körper, am Netz dessen Tessellierung:
+    Beide Kerne sehen dieselbe Form.
+    """
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.cut_bore(
+        edit.box(40.0, 20.0, 10.0),
+        position=(0.0, 0.0, 5.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+    )
+    if slot:
+        plate = edit.slot_bore(
+            plate,
+            position=(0.0, 0.0, 5.0),
+            direction=(0.0, 0.0, 1.0),
+            diameter=6.0,
+            depth=12.0,
+            length=12.0,
+            angle_deg=0.0,
+            overlap=0.0,
+        )
+    second = (
+        edit.cylinder(5.0, 15.0)
+        if inside
+        else edit.moved(edit.box(10.0, 10.0, 10.0), (40.0, 0.0, 0.0))
+    )
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, plate.shape)
+    builder.Add(compound, second.shape)
+    solid = Solid(compound)
+    if kernel == "brep":
+        return SceneObject(
+            id="obj_1", name="Platte", mesh=solid, kind="brep", features=features_of(solid)
+        )
+    mesh = MeshData.of(as_mesh_data(solid).raw.copy())
+    return SceneObject(id="obj_1", name="Platte", mesh=mesh, features=detect(mesh))
+
+
+def _bore_in(entry: SceneObject, kind: str) -> str:
+    return next(
+        name
+        for name, feature in entry.features.items()
+        if feature.kind == kind and abs(float(feature.params["diameter"]) - 6.0) < 0.1
+    )
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_second_body_in_the_bore_does_not_make_the_pull_a_split(
+    profile: Profile, kernel: str
+) -> None:
+    """Gezählt wird gegen den Körper vor dem Schritt, nicht gegen den gestopften.
+
+    Gemessen am 30.09.2026: Die Teppichecke (zwei Körper im STEP, Langloch
+    gedreht) und der Besenhalter (drei Schalen im STL, erster Zug) hatten nach
+    *Zum Langloch ziehen* so viele Teile wie vorher, 2 und 3, und am Netz stand
+    trotzdem „Die Bohrung schneidet den Körper ganz durch — er zerfällt in
+    mehrere Teile." Der Zug schließt die alte Öffnung zuerst, der Stopfen
+    verbindet die Körper, die durch sie gehen, und der Schnitt trennt sie
+    wieder; gezählt wurde gegen den gestopften Körper mit einem Teil weniger.
+    Der exakte Kern zählte schon gegen den Schritt davor.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    entry = _plate_with_a_second_body(kernel, inside=True)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
+
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=12.0
+    )
+
+    assert output.mesh.component_count <= 2, "die Vorbedingung: nichts ist zerfallen"
+    assert "bore.splits_the_body" not in {finding.code for finding in findings}, findings
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_widening_a_slot_with_a_second_body_in_it_is_no_split(
+    profile: Profile, kernel: str
+) -> None:
+    """Derselbe Stopfen beim Ändern eines Langlochs (*Bohrung ändern*, ``resize_hole``).
+
+    Ein Langloch geht vor dem Neuschnitt immer zu (RM-156); am Netz stand danach
+    derselbe falsche Zerfall wie beim Zug (gemessen 30.09.2026: zwei Teile vor
+    und nach dem Ändern auf Ø 7, dazu ``bore.splits_the_body``).
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    entry = _plate_with_a_second_body(kernel, inside=True, slot=True)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
+
+    output, findings = run_op_with_findings(
+        "resize_hole", entry, profile, at_feature=_bore_in(entry, "slot"), diameter=7.0
+    )
+
+    assert output.mesh.component_count <= 2, "die Vorbedingung: nichts ist zerfallen"
+    assert "bore.splits_the_body" not in {finding.code for finding in findings}, findings
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_pull_through_the_plate_beside_a_second_body_still_says_it_splits(
+    profile: Profile, kernel: str
+) -> None:
+    """Die Gegenrichtung: Zerfällt die Platte wirklich, bleibt der Satz — mit drei Teilen.
+
+    Ein Langloch von 46 mm quer durch die 40 mm lange Platte teilt sie in zwei
+    Hälften; mit dem Klotz daneben hat das Objekt danach drei Teile statt zwei.
+    """
+    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    entry = _plate_with_a_second_body(kernel, inside=False)
+    assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Klotz"
+
+    output, findings = run_op_with_findings(
+        "slot_hole", entry, profile, at_feature=_bore_in(entry, "hole"), slot_length=46.0
+    )
+
+    assert output.mesh.component_count == 3, "die Vorbedingung: die Platte ist geteilt"
+    said = [dict(entry.values) for entry in findings if entry.code == "bore.splits_the_body"]
+    assert said == [{"count": 3}], findings
+
+
 def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     """An beiden Enden wird gefragt — an beiden Kernen.
 
