@@ -3310,14 +3310,23 @@ class PlacementFlow(QObject):
     def _tool_axes(self, surface: Any) -> tuple[Any, Any]:
         """Die zwei Achsen in der Fläche, in die das Werkzeug der Vorschau gelegt wird.
 
-        **Ein Langloch liegt im Rahmen seines Schnitts.** Sein Winkel zählt seit
-        dem 30.09.2026 gegen :func:`app.core.geom.prepare.slot_frame` — an einer
-        Normalen knapp neben einer Hauptachse gegen die Hauptachse, in Operation
-        und Griff. Der Rahmen der Fläche (``frame_of``) folgt dort dem Rauschen;
-        mit ihm zeigte die Vorschau das Langloch in einer anderen Richtung, als
-        geschnitten wird. Alles andere liegt im Rahmen der Fläche: Eine runde
-        Bohrung ist um ihre Achse gleich, ein Baustein oder eine Beschriftung
-        zählen ihren Winkel gegen ihn.
+        **Ein Langloch liegt im Rahmen seines Schnitts, soweit die Fläche ihn
+        trägt.** Sein Winkel zählt seit dem 30.09.2026 gegen
+        :func:`app.core.geom.prepare.slot_frame` — an einer Normalen knapp neben
+        einer Hauptachse gegen die Hauptachse, in Operation und Griff. Der Rahmen
+        der Fläche (``frame_of``) folgt dort dem Rauschen; mit ihm zeigte die
+        Vorschau das Langloch in einer anderen Richtung, als geschnitten wird.
+
+        Beim Bohren ist die Normale der Fläche die des Schnitts. *Zum Langloch
+        ziehen* und *Bohrung ändern* zählen dagegen gegen die positive Achse der
+        Bohrung (``units.positive_axis``): Sitzt die Mündung auf einer Fläche, die
+        entgegen zeigt, oder steht die Bohrung mehr als ``SLOT_ACROSS_LIMIT``
+        schief zu ihr, liegt die Vorschau gespiegelt oder gedreht — ihr Werkzeug
+        wird im Rahmen der Fläche gebaut (``placement``), nicht in dem der Achse.
+
+        Alles andere liegt im Rahmen der Fläche: Eine runde Bohrung ist um ihre
+        Achse gleich, ein Baustein oder eine Beschriftung zählen ihren Winkel
+        gegen ihn.
         """
         name = self.spec_of().name
         slotted = name in {"slot_hole", "resize_hole"} or (
