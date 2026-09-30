@@ -70,6 +70,27 @@
 #                               aus .venv-video aufgerufen, nie importiert
 #                               (tools/speak_piper.py, Regel 15); die deutsche
 #                               Stimme ist Thorsten-Voice
+#   en_US-ljspeech-high Public Domain laut Modellautor Bryce Beattie; von ihm
+#                               von Grund auf mit dem LJ Speech Dataset trainiert
+#                               und für Uploads freigegeben
+#                               (brycebeattie.com/files/tts/). Das Modellkarten-
+#                               Verzeichnis auf Hugging Face zeigt zwar MIT auf
+#                               Repository-Ebene; die einzelne Karte nennt keine
+#                               eigene Lizenz und widerspricht dem Modellautor
+#                               bei den Trainingsangaben (1000 statt 2000 Epochen,
+#                               22.500 statt 22.050 Hz).
+#                               Die Rechteangabe stützt sich deshalb auf die
+#                               explizite Erklärung des Modellautors. LJ Speech
+#                               v1.1 nennt Texte, Aufnahmen und Annotationen
+#                               gemeinfrei (keithito.com/LJ-Speech-Dataset/).
+#                               Der lokale ONNX-Stand hat SHA-256
+#                               5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a,
+#                               die Konfiguration
+#                               7e1f4634af596d83cca997fb7a931ba80b70f8a316a2655ee69c55365e0ace14.
+#                               Die Quellen belegen Modell- und Datenherkunft;
+#                               eine gesonderte Einwilligung der Sprecherin in
+#                               die Nachahmung ihrer Stimme oder deren Werbung
+#                               belegen sie nicht.
 #   SDXL Base 1.0     CreativeML Open RAIL++-M
 #                               Bildmodell für den Textweg zu Weg 3
 #                               (``comfy_setup.fetch_image_model``,
