@@ -27,24 +27,44 @@ SLICER_ORDER = ["elegoo", "bambu", "creality", "orca", "prusa", "superslicer", "
 FOREIGN = ("wie Hersteller", "nur im Fenster")
 
 
+def _advice_flag(entry: dict[str, Any]) -> str | None:
+    """Macht einen Fehler der Vorschlagsberechnung im Bericht sichtbar."""
+    advice_error = entry.get("advice_error")
+    if isinstance(advice_error, str) and advice_error.strip():
+        return f"Vorschläge nicht geprüft: {advice_error.strip()[:120]}"
+    return None
+
+
 def state_of(entry: dict[str, Any]) -> tuple[str, list[str]]:
     if entry.get("skip"):
         return "kein Profil", []
+    advice_flag = _advice_flag(entry)
     if entry.get("error"):
-        return "kein Druck", [entry["error"][:120]]
+        flags = [entry["error"][:120]]
+        if advice_flag:
+            flags.append(advice_flag)
+        return "kein Druck", flags
     runs = entry.get("variants", {}).get("standard", [])
     if not runs:
-        return "kein Druck", ["keine Läufe"]
+        flags = ["keine Läufe"]
+        if advice_flag:
+            flags.append(advice_flag)
+        return "kein Druck", flags
     details = " ".join(str(r.get("detail", "")) for r in runs)
     if any(not r.get("ok") for r in runs):
         if "größer als der Bauraum" in details or "außerhalb seines Bauraums" in details:
-            return "passt nicht", []
+            return "passt nicht", [advice_flag] if advice_flag else []
         if "nur in seinem Fenster" in details:
             flags = [f for r in runs for f in r.get("flags", []) if not f.startswith(FOREIGN)]
+            if advice_flag:
+                flags.append(advice_flag)
             return "nur Fenster", flags
-        return "kein Druck", [
+        flags = [
             str(r.get("title") or r.get("error"))[:80] for r in runs if not r.get("ok")
         ]
+        if advice_flag:
+            flags.append(advice_flag)
+        return "kein Druck", flags
     flags = sorted(
         {
             f"{variant}: {flag}" if variant != "standard" else flag
@@ -54,6 +74,9 @@ def state_of(entry: dict[str, Any]) -> tuple[str, list[str]]:
             if not flag.startswith(FOREIGN)
         }
     )
+    if advice_flag:
+        flags.append(advice_flag)
+        flags.sort()
     return ("Befund" if flags else "ok"), flags
 
 

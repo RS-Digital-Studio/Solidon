@@ -400,44 +400,7 @@ def picture(reference: dict, run: dict, target: Path, bed: tuple[float, float]) 
 
 
 def first_layer_segments(path: Path) -> dict[str, list[tuple[float, float, float, float]]]:
-    out: dict[str, list[tuple[float, float, float, float]]] = {"model": [], "support": [], "rim": [], "other": []}
-    kind, x, y, last_e, absolute = "?", 0.0, 0.0, 0.0, True
-    marks, layer = 0, -1
-    pending = False
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if stripped.startswith(";"):
-                if gcode_lesen.LAYER_MARK.match(stripped):
-                    pending = True
-                    marks += 1
-                typed = gcode_lesen.TYPE_MARK.match(stripped)
-                if typed:
-                    kind = typed.group("type")
-                continue
-            upper = stripped.split(";", 1)[0].strip().upper()
-            if upper.startswith("M83"):
-                absolute = False
-            elif upper.startswith("M82"):
-                absolute = True
-            if not upper.startswith(("G0", "G1", "G2", "G3")) or upper.startswith(("G10", "G11", "G28", "G29")):
-                continue
-            words = {m.group("name").upper(): float(m.group("value")) for m in gcode_lesen.WORD.finditer(upper[2:])}
-            nx, ny = words.get("X", x), words.get("Y", y)
-            pushed = 0.0
-            if "E" in words:
-                pushed = (words["E"] - last_e) if absolute else words["E"]
-                if absolute:
-                    last_e = words["E"]
-            if pending and (nx != x or ny != y) and marks:
-                pending = False
-                layer += 1
-                if layer > 0:
-                    break
-            if layer == 0 and pushed > 0 and (nx != x or ny != y):
-                out[gcode_lesen.kind_of(kind)].append((x, y, nx, ny))
-            x, y = nx, ny
-    return out
+    return gcode_lesen.first_layer_segments(path)
 
 
 def main() -> int:

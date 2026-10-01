@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import ctypes
 import json
-import math
 import os
 import re
 import shutil
@@ -341,6 +340,7 @@ def same(left: str, right: str) -> bool:
 BAMBU_CONSOLE_LIMITS = frozenset(
     {"machine_max_acceleration_x", "machine_max_acceleration_y", "machine_max_acceleration_travel"}
 )
+STARTCODE_KEYS = frozenset({"machine_start_gcode", "start_gcode"})
 
 
 def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> dict[str, Any]:
@@ -357,7 +357,8 @@ def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> 
     """
     differences: dict[str, list[str]] = {}
     normalised: dict[str, list[str]] = {}
-    missing = 0
+    missing_keys: list[str] = []
+    compared_keys: list[str] = []
     single = len(str(block.get("filament_settings_id", "")).split(";")) <= 1
     for key, (kind, value) in sorted(wanted.items()):
         if key in gcode_lesen.TECHNICAL or key in slicer_profiles.DESCRIBING_KEYS:
@@ -372,12 +373,20 @@ def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> 
             continue
         found = block.get(key)
         if found is None:
-            missing += 1
+            missing_keys.append(key)
             continue
+        compared_keys.append(key)
         if key == "thumbnails":
             # Der G-Code nennt das Format dazu: „144x144/PNG“ für „144x144“.
             found = re.sub(r"/[A-Z_]+", "", str(found))
             value = re.sub(r"/[A-Z_]+", "", value)
+        if key in STARTCODE_KEYS:
+            if not same(str(found), value):
+                if value == "":
+                    normalised[key] = [kind, value[:120], str(found)[:120]]
+                else:
+                    differences[key] = [kind, value[:120], str(found)[:120]]
+            continue
         first = str(found).split(",")[0].split(";")[0]
         # PrusaSlicer liest alte Ja/Nein-Werte als Aufzählung: Sovols Bündel
         # schreibt ``ensure_vertical_shell_thickness = 1``, gedruckt wird
@@ -395,7 +404,9 @@ def against_chain(block: dict[str, str], wanted: dict[str, tuple[str, str]]) -> 
                 differences[key] = [kind, value[:120], str(found)[:120]]
     return {
         "keys": len(wanted),
-        "missing": missing,
+        "missing": len(missing_keys),
+        "missing_keys": missing_keys,
+        "compared_keys": compared_keys,
         "differences": differences,
         "console": normalised,
     }
@@ -600,6 +611,7 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
     """Tempo der ersten Schicht je Bahnart: längengewichteter Median und Höchstwert in mm/s."""
     kind, x, y, feed = "?", 0.0, 0.0, 0.0
     absolute, last_e = True, 0.0
+    coordinates_absolute, centres_absolute = True, False
     started, pending, layer = False, False, -1
     samples: dict[str, list[tuple[float, float]]] = {}
     with path.open(encoding="utf-8", errors="replace") as handle:
@@ -624,31 +636,51 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
             if upper.startswith("M82"):
                 absolute = True
                 continue
-            if upper.startswith("G92"):
+            match = gcode_lesen.COMMAND.match(upper)
+            if match is None:
+                continue
+            number = float(match.group("number"))
+            arguments = code[match.end() :]
+            if number == 90.1:
+                centres_absolute = True
+                continue
+            if number == 91.1:
+                centres_absolute = False
+                continue
+            if number == 90.0:
+                coordinates_absolute = True
+                continue
+            if number == 91.0:
+                coordinates_absolute = False
+                continue
+            if number == 92.0:
                 found = {
                     m.group("name").upper(): m.group("value")
-                    for m in gcode_lesen.WORD.finditer(code[3:])
+                    for m in gcode_lesen.WORD.finditer(arguments)
                 }
                 if "E" in found:
                     last_e = float(found["E"])
                 continue
-            if not upper.startswith(("G0", "G1", "G2", "G3")) or upper.startswith(
-                ("G10", "G11", "G28", "G29")
-            ):
+            if number not in (0.0, 1.0, 2.0, 3.0):
                 continue
+            motion = int(number)
             words = {
                 m.group("name").upper(): float(m.group("value"))
-                for m in gcode_lesen.WORD.finditer(code[2:])
+                for m in gcode_lesen.WORD.finditer(arguments)
             }
             if "F" in words:
                 feed = words["F"] / 60.0
-            nx, ny = words.get("X", x), words.get("Y", y)
+            nx = words.get("X", x) if coordinates_absolute else x + words.get("X", 0.0)
+            ny = words.get("Y", y) if coordinates_absolute else y + words.get("Y", 0.0)
             pushed = 0.0
             if "E" in words:
                 pushed = (words["E"] - last_e) if absolute else words["E"]
                 if absolute:
                     last_e = words["E"]
-            moved = nx != x or ny != y
+            length, _extrema = gcode_lesen._move_geometry(
+                motion, (x, y), (nx, ny), words, centres_absolute=centres_absolute
+            )
+            moved = length > 0.0
             if started and pending and moved:
                 pending = False
                 layer += 1
@@ -657,7 +689,7 @@ def first_layer_speeds(path: Path) -> dict[str, Any]:
             if layer == 0 and moved and pushed > 0 and feed > 0:
                 samples.setdefault(
                     gcode_lesen.kind_of(kind) if gcode_lesen.kind_of(kind) != "model" else kind, []
-                ).append((math.hypot(nx - x, ny - y), feed))
+                ).append((length, feed))
             x, y = nx, ny
     speeds: dict[str, Any] = {}
     for name, values in samples.items():
@@ -756,13 +788,18 @@ def flags_for(
         # Der Startcode ist, was die Maschine vorgibt. Gleicht der Lauf der
         # Herstellerkette, ist es auch der des Herstellers (Kobra 2: keine
         # Vermessung, das Netz kommt aus LeviQ am Drucker).
-        chain_check = row.get("chain")
-        differing = chain_check.get("differences", {}) if chain_check else {}
+        chain_check = row.get("chain") or {}
+        differing = chain_check.get("differences", {})
+        normalised = chain_check.get("console", {})
+        compared_startcode = set(chain_check.get("compared_keys", ())) & STARTCODE_KEYS
+        missing_startcode = set(chain_check.get("missing_keys", ())) & STARTCODE_KEYS
+        changed_startcode = set(differing) | set(normalised)
         vendor = (
             "wie Hersteller: "
             if chain_check
-            and "machine_start_gcode" not in differing
-            and "start_gcode" not in differing
+            and compared_startcode
+            and not missing_startcode
+            and not (compared_startcode & changed_startcode)
             else ""
         )
         if not row.get("start_levelling"):
@@ -836,52 +873,7 @@ def picture(rows: list[tuple[str, dict[str, Any]]], target: Path, bed: tuple[flo
 
 
 def first_layer_segments(path: Path) -> dict[str, list[tuple[float, float, float, float]]]:
-    out: dict[str, list[tuple[float, float, float, float]]] = {
-        "model": [],
-        "support": [],
-        "rim": [],
-        "other": [],
-    }
-    kind, x, y, last_e, absolute = "?", 0.0, 0.0, 0.0, True
-    started, pending, layer = False, False, -1
-    with path.open(encoding="utf-8", errors="replace") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if stripped.startswith(";"):
-                if gcode_lesen.LAYER_MARK.match(stripped):
-                    started, pending = True, True
-                typed = gcode_lesen.TYPE_MARK.match(stripped)
-                if typed:
-                    kind = typed.group("type")
-                continue
-            upper = stripped.split(";", 1)[0].strip().upper()
-            if upper.startswith("M83"):
-                absolute = False
-            elif upper.startswith("M82"):
-                absolute = True
-            if not upper.startswith(("G0", "G1", "G2", "G3")) or upper.startswith(
-                ("G10", "G11", "G28", "G29")
-            ):
-                continue
-            words = {
-                m.group("name").upper(): float(m.group("value"))
-                for m in gcode_lesen.WORD.finditer(upper[2:])
-            }
-            nx, ny = words.get("X", x), words.get("Y", y)
-            pushed = 0.0
-            if "E" in words:
-                pushed = (words["E"] - last_e) if absolute else words["E"]
-                if absolute:
-                    last_e = words["E"]
-            if started and pending and (nx != x or ny != y):
-                pending = False
-                layer += 1
-                if layer > 0:
-                    break
-            if layer == 0 and pushed > 0 and (nx != x or ny != y):
-                out[gcode_lesen.kind_of(kind)].append((x, y, nx, ny))
-            x, y = nx, ny
-    return out
+    return gcode_lesen.first_layer_segments(path)
 
 
 # --- Ablauf -----------------------------------------------------------------------------------------

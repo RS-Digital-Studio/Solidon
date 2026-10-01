@@ -27,10 +27,14 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from itertools import pairwise
 from pathlib import Path
+
+from app.core.slice import gcode as core_gcode
 
 LAYER_MARK = re.compile(r"^;\s*(?:LAYER\s*:\s*-?[0-9]+|LAYER_CHANGE|CHANGE_LAYER)\s*$", re.IGNORECASE)
 TYPE_MARK = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*(?P<type>.+?)\s*$", re.IGNORECASE)
+COMMAND = re.compile(r"^G(?P<number>[0-9]+(?:\.[0-9]+)?)(?=\s|[A-Z]|$)", re.IGNORECASE)
 WORD = re.compile(r"(?P<name>[A-Z])(?P<value>[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))", re.IGNORECASE)
 SETTING = re.compile(r"^;\s*(?P<key>[a-z_0-9 \[\]()]+?)\s*[=:]\s*(?P<value>.*?)\s*$", re.IGNORECASE)
 
@@ -155,11 +159,201 @@ HEADER_KEYS = (
 )
 
 
+def _arc_data(
+    command: int,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    words: dict[str, float],
+    *,
+    centres_absolute: bool,
+) -> tuple[tuple[float, float], float, float] | None:
+    """Liest dieselbe Bogenmitte und denselben Winkelweg wie der G-Code-Kern."""
+    if command not in (2, 3):
+        return None
+    centre = core_gcode._arc_center(
+        start,
+        end,
+        words,
+        clockwise=command == 2,
+        centres_absolute=centres_absolute,
+    )
+    if centre is None:
+        return None
+    sx, sy = start
+    ex, ey = end
+    cx, cy = centre
+    radius = math.hypot(sx - cx, sy - cy)
+    if not math.isfinite(radius) or radius <= 0.0:
+        return None
+    start_angle = math.atan2(sy - cy, sx - cx)
+    end_angle = math.atan2(ey - cy, ex - cx)
+    full = math.isclose(sx, ex) and math.isclose(sy, ey)
+    sweep = core_gcode._arc_sweep(start_angle, end_angle, clockwise=command == 2, full=full)
+    if not math.isfinite(sweep) or sweep <= 0.0:
+        return None
+    return centre, radius, sweep
+
+
+def _move_geometry(
+    command: int,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    words: dict[str, float],
+    *,
+    centres_absolute: bool,
+) -> tuple[float, tuple[tuple[float, float], ...]]:
+    """Länge und exakte XY-Extrema einer Geraden oder Kreisbogenbahn."""
+    chord = math.hypot(end[0] - start[0], end[1] - start[1])
+    arc = _arc_data(command, start, end, words, centres_absolute=centres_absolute)
+    if arc is None:
+        return chord, (start, end)
+    _centre, radius, sweep = arc
+    points = core_gcode._path_points(
+        command,
+        (start[0], start[1], None),
+        (end[0], end[1], None),
+        words,
+        arc_centres_absolute=centres_absolute,
+    )
+    extrema = tuple(
+        (point[0], point[1])
+        for point in points
+        if point[0] is not None and point[1] is not None
+    )
+    return radius * sweep, extrema
+
+
+def _sampled_move_points(
+    command: int,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    words: dict[str, float],
+    *,
+    centres_absolute: bool,
+) -> tuple[tuple[float, float], ...]:
+    """Zeichnet Kreisbögen mit höchstens fünf Grad je Geradenstück."""
+    arc = _arc_data(command, start, end, words, centres_absolute=centres_absolute)
+    if arc is None:
+        return (start, end)
+    (cx, cy), radius, sweep = arc
+    start_angle = math.atan2(start[1] - cy, start[0] - cx)
+    direction = -1.0 if command == 2 else 1.0
+    count = max(1, math.ceil(sweep / math.radians(5.0)))
+    points: list[tuple[float, float]] = []
+    for index in range(count + 1):
+        if index == 0:
+            points.append(start)
+        elif index == count:
+            points.append(end)
+        else:
+            angle = start_angle + direction * sweep * index / count
+            points.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+    return tuple(points)
+
+
+def first_layer_segments(path: Path) -> dict[str, list[tuple[float, float, float, float]]]:
+    """Erste Schicht als gezeichnete Linienzüge, Kreisbögen eingeschlossen."""
+    out: dict[str, list[tuple[float, float, float, float]]] = {
+        "model": [],
+        "support": [],
+        "rim": [],
+        "other": [],
+    }
+    kind, x, y, last_e = "?", 0.0, 0.0, 0.0
+    extrusion_absolute = True
+    coordinates_absolute = True
+    centres_absolute = False
+    started = False
+    pending_layer = False
+    layer_index = -1
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith(";"):
+                if LAYER_MARK.match(stripped):
+                    started = True
+                    pending_layer = True
+                typed = TYPE_MARK.match(stripped)
+                if typed:
+                    kind = typed.group("type")
+                continue
+            code = stripped.split(";", 1)[0].strip()
+            upper = code.upper()
+            if upper.startswith("M83"):
+                extrusion_absolute = False
+                continue
+            if upper.startswith("M82"):
+                extrusion_absolute = True
+                continue
+            match = COMMAND.match(upper)
+            if match is None:
+                continue
+            number = float(match.group("number"))
+            arguments = code[match.end() :]
+            if number == 90.1:
+                centres_absolute = True
+                continue
+            if number == 91.1:
+                centres_absolute = False
+                continue
+            if number == 90.0:
+                coordinates_absolute = True
+                continue
+            if number == 91.0:
+                coordinates_absolute = False
+                continue
+            words = {
+                found.group("name").upper(): float(found.group("value"))
+                for found in WORD.finditer(arguments)
+            }
+            if number == 92.0:
+                if "E" in words:
+                    last_e = words["E"]
+                continue
+            if number not in (0.0, 1.0, 2.0, 3.0):
+                continue
+            motion = int(number)
+            nx = words.get("X", x) if coordinates_absolute else x + words.get("X", 0.0)
+            ny = words.get("Y", y) if coordinates_absolute else y + words.get("Y", 0.0)
+            pushed = 0.0
+            if "E" in words:
+                pushed = words["E"] - last_e if extrusion_absolute else words["E"]
+                if extrusion_absolute:
+                    last_e = words["E"]
+            start, end = (x, y), (nx, ny)
+            length, _extrema = _move_geometry(
+                motion, start, end, words, centres_absolute=centres_absolute
+            )
+            if not started:
+                x, y = nx, ny
+                continue
+            if pending_layer and length > 0.0:
+                pending_layer = False
+                layer_index += 1
+                if layer_index > 0:
+                    break
+            if layer_index == 0 and pushed > 0.0 and length > 0.0:
+                points = _sampled_move_points(
+                    motion, start, end, words, centres_absolute=centres_absolute
+                )
+                target = out[kind_of(kind)]
+                target.extend(
+                    (before[0], before[1], after[0], after[1])
+                    for before, after in pairwise(points)
+                )
+            x, y = nx, ny
+    return out
+
+
 def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int = 3) -> Reading:
     reading = Reading()
     kind = "?"
     x = y = 0.0
-    absolute = True
+    extrusion_absolute = True
+    coordinates_absolute = True
+    centres_absolute = False
     last_e = 0.0
     started = False  # nach der ersten Schichtmarke
     pending_layer = False  # Marke gesehen, erste Bahn der Schicht steht aus
@@ -203,28 +397,49 @@ def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int
             if upper.startswith(("M104", "M109", "M140", "M190", "M141", "M191")):
                 reading.temperatures.append(upper[:30])
             if upper.startswith("M83"):
-                absolute = False
+                extrusion_absolute = False
                 continue
             if upper.startswith("M82"):
-                absolute = True
+                extrusion_absolute = True
                 continue
-            if upper.startswith("G92"):
-                found = dict((m.group("name").upper(), m.group("value")) for m in WORD.finditer(code[3:]))
+            match = COMMAND.match(upper)
+            if match is None:
+                continue
+            number = float(match.group("number"))
+            arguments = code[match.end() :]
+            if number == 90.1:
+                centres_absolute = True
+                continue
+            if number == 91.1:
+                centres_absolute = False
+                continue
+            if number == 90.0:
+                coordinates_absolute = True
+                continue
+            if number == 91.0:
+                coordinates_absolute = False
+                continue
+            if number == 92.0:
+                found = dict((m.group("name").upper(), m.group("value")) for m in WORD.finditer(arguments))
                 if "E" in found:
                     last_e = float(found["E"])
                 continue
-            if not upper.startswith(("G0", "G1", "G2", "G3")) or upper.startswith(("G10", "G11", "G28", "G29")):
+            if number not in (0.0, 1.0, 2.0, 3.0):
                 continue
-            words = dict((m.group("name").upper(), float(m.group("value"))) for m in WORD.finditer(code[2:]))
-            nx, ny = words.get("X", x), words.get("Y", y)
+            motion = int(number)
+            words = dict((m.group("name").upper(), float(m.group("value"))) for m in WORD.finditer(arguments))
+            nx = words.get("X", x) if coordinates_absolute else x + words.get("X", 0.0)
+            ny = words.get("Y", y) if coordinates_absolute else y + words.get("Y", 0.0)
             pushed = 0.0
             if "E" in words:
                 e = words["E"]
-                pushed = (e - last_e) if absolute else e
-                if absolute:
+                pushed = (e - last_e) if extrusion_absolute else e
+                if extrusion_absolute:
                     last_e = e
-            moved = nx != x or ny != y
-            length = math.hypot(nx - x, ny - y) if moved else 0.0
+            length, points = _move_geometry(
+                motion, (x, y), (nx, ny), words, centres_absolute=centres_absolute
+            )
+            moved = length > 0.0
             if not started:
                 if pushed > 0:
                     reading.start_extrusion += pushed
@@ -244,7 +459,13 @@ def read(path: Path, *, bed: tuple[float, float] | None = None, keep_layers: int
                 if layer_index == 0 and kind_of(kind) == "support":
                     reading.first_layer_support += length
                 if bed is not None and kind_of(kind) != "other":
-                    if not (-0.5 <= nx <= bed[0] + 0.5 and -0.5 <= ny <= bed[1] + 0.5):
+                    if any(
+                        not (
+                            -0.5 <= point_x <= bed[0] + 0.5
+                            and -0.5 <= point_y <= bed[1] + 0.5
+                        )
+                        for point_x, point_y in points
+                    ):
                         reading.off_bed[kind] = reading.off_bed.get(kind, 0) + 1
                 if current is not None:
                     current.paths[kind] = current.paths.get(kind, 0.0) + length
