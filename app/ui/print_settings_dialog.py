@@ -121,8 +121,8 @@ from app.ui.first_run import (
 )
 from app.ui.header import filament_names
 from app.ui.labels import (
-    LengthSpin,
-    NumberSpin,
+    BoundedLengthSpin,
+    BoundedSpin,
     RowCheckBox,
     caption_toggles,
     choice_label,
@@ -223,6 +223,10 @@ GROUPS = print_settings.GROUPS
 #: der ursprüngliche Satz zurück — und der lässt sich nicht neu bauen. Der
 #: Farbknopf etwa nennt in seinem Tooltip den Hexwert, den sonst nichts zeigt.
 _OWN_TIP: Final = "solidonOwnTip"
+
+#: Die eigene Beschreibung eines Zahlenfelds, bevor Grenzhinweise dazukommen.
+_REFUSAL_BASE_DESCRIPTION: Final = "solidonRefusalBaseDescription"
+_NOZZLE_RANGE_MM: Final[tuple[float, float]] = (0.1, 2.0)
 
 #: Wie weit der Dialog beim Wachsen vom Rand der nutzbaren Bildschirmfläche
 #: bleibt, in Punkten — Platz für Rahmen und Titelleiste des Fensters.
@@ -1284,11 +1288,6 @@ def _make_setting_editor(
     if field.kind == "bool":
         editor = RowCheckBox(parent)
         editor.toggled.connect(changed)
-    elif field.kind == "int":
-        spin = QSpinBox(parent)
-        spin.setRange(int(field.minimum), int(field.maximum))
-        spin.valueChanged.connect(changed)
-        editor = spin
     elif field.kind == "enum":
         combo = QComboBox(parent)
         for choice in field.choices:
@@ -1308,10 +1307,11 @@ def _make_setting_editor(
         button.changed.connect(changed)
         editor = button
     else:
-        number = NumberSpin(parent)
+        number = BoundedSpin(parent)
         number.setRange(field.minimum, field.maximum)
-        number.setSingleStep(field.step)
-        number.setDecimals(field.decimals)
+        number.setSingleStep(1 if field.kind == "int" else field.step)
+        number.setDecimals(0 if field.kind == "int" else field.decimals)
+        number.setKeyboardTracking(False)
         number.valueChanged.connect(changed)
         editor = number
 
@@ -1337,7 +1337,37 @@ def _make_setting_editor(
             editor.setToolTip(note)
         editor.setStatusTip(note)
         editor.setAccessibleDescription(note)
+    if isinstance(editor, BoundedSpin):
+        editor.setProperty(_REFUSAL_BASE_DESCRIPTION, editor.accessibleDescription())
     return editor
+
+
+def _make_refusal_label(editor: BoundedSpin | BoundedLengthSpin, parent: QWidget) -> QLabel:
+    """Baut den Platz für die Grenzangabe direkt unter einem Zahlenfeld."""
+    label = QLabel(parent)
+    label.setWordWrap(True)
+    label.setTextFormat(Qt.TextFormat.PlainText)
+    label.setAccessibleName(editor.accessibleName())
+    label.hide()
+    set_level(label, "caption")
+    return label
+
+
+def _show_refusal(editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str:
+    """Zeigt die abgelehnte Eingabe und ergänzt die Beschreibung des Felds."""
+    reason = editor.refusal()
+    if label.text() != reason:
+        label.setText(reason)
+    label.setToolTip(reason)
+    label.setStatusTip(reason)
+    label.setAccessibleDescription(reason)
+    label.setVisible(bool(reason))
+
+    base = str(editor.property(_REFUSAL_BASE_DESCRIPTION) or "")
+    own = editor.toolTip()
+    description = "\n".join(dict.fromkeys(part for part in (base, own, reason) if part))
+    editor.setAccessibleDescription(description)
+    return reason
 
 
 def accessible_name(field: Field) -> str:
@@ -1370,6 +1400,9 @@ def _setting_editor_value(editor: QWidget, field: Field) -> object:
     """Liest den Modellwert aus seinem Feld."""
     if isinstance(editor, QCheckBox):
         return editor.isChecked()
+    if isinstance(editor, BoundedSpin):
+        value = editor.value()
+        return int(value) if field.kind == "int" else float(value) / field.factor
     if isinstance(editor, QSpinBox):
         return editor.value()
     if isinstance(editor, QComboBox):
@@ -1406,8 +1439,10 @@ class FilamentOverrideDialog(QDialog):
         self._last_content_height: int | None = None
         self._fitted_visible = False
         self.editors: dict[str, QWidget] = {}
+        self._refusals: dict[str, QLabel] = {}
         self.groups: dict[str, QCheckBox] = {}
         self.group_bodies: dict[str, QWidget] = {}
+        self._ok_button: QPushButton | None = None
         self._refit = QTimer(self)
         """Misst die Höhe einen Ereignisumlauf nach dem Klappen — sofort gemessen
         kannte das Layout die eben gezeigte Gruppe noch nicht."""
@@ -1507,6 +1542,23 @@ class FilamentOverrideDialog(QDialog):
                 editor = _make_setting_editor(field, body, lambda *_args: None)
                 _set_setting_editor(editor, field, getattr(source, field.path.partition(".")[2]))
                 self.editors[field.path] = editor
+                editor_holder = QWidget(body)
+                editor_layout = QVBoxLayout(editor_holder)
+                editor_layout.setContentsMargins(0, 0, 0, 0)
+                editor_layout.setSpacing(0)
+                editor_layout.addWidget(editor)
+                if isinstance(editor, BoundedSpin):
+                    refusal = _make_refusal_label(editor, editor_holder)
+                    self._refusals[field.path] = refusal
+                    editor_layout.addWidget(refusal)
+                    callback = weak_slot(
+                        self,
+                        FilamentOverrideDialog._refresh_field_refusal,
+                        field.path,
+                    )
+                    editor.valueRefused.connect(callback)
+                    editor.lineEdit().textEdited.connect(callback)
+                    editor.valueChanged.connect(callback)
                 # Ohne Einheit in der Klammer (B12): Das Feld trägt sie als
                 # Suffix, und „Düse [°C]" über „210 °C" sagte sie zweimal.
                 label = QLabel(str(field.title), body)
@@ -1515,12 +1567,13 @@ class FilamentOverrideDialog(QDialog):
                 if note:
                     label.setToolTip(note)
                     label.setStatusTip(note)
-                form.addRow(label, editor)
+                form.addRow(label, editor_holder)
                 if isinstance(editor, RowCheckBox):
                     caption_toggles(label, editor)
             section_layout.addWidget(body)
             box.toggled.connect(body.setVisible)
             box.toggled.connect(self._refit_later)
+            box.toggled.connect(self._refresh_group_refusals)
             body.setVisible(box.isChecked())
             self.groups[group] = box
             self.group_bodies[group] = body
@@ -1535,6 +1588,7 @@ class FilamentOverrideDialog(QDialog):
             parent=self,
         )
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._ok_button = ok
         ok.setText(tr("Übernehmen"))
         make_primary(ok)
         self.project_values_button = buttons.addButton(
@@ -1549,6 +1603,7 @@ class FilamentOverrideDialog(QDialog):
         align_forms(self)
         even_fields(self)
         self._fit_depth()
+        self._refresh_all_refusals()
 
     def _refit_later(self, *_args: object) -> None:
         """Die Höhe nachziehen, sobald das Layout die neue Gruppe kennt."""
@@ -1557,6 +1612,52 @@ class FilamentOverrideDialog(QDialog):
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         super().showEvent(event)
         self._refit_later()
+
+    def _first_refusal(self) -> str:
+        """Die erste Ablehnung in einem eingeschalteten Spulenbereich."""
+        for path, editor in self.editors.items():
+            if not self.groups[path.partition(".")[0]].isChecked():
+                continue
+            if isinstance(editor, BoundedSpin) and (reason := editor.refusal()):
+                return reason
+        return ""
+
+    def _settle_refusal_state(self) -> None:
+        """Hält Übernehmen und seine Rückmeldung an den aktiven Werten."""
+        if self._ok_button is None:
+            return
+        reason = self._first_refusal()
+        self._ok_button.setEnabled(not reason)
+        self._ok_button.setToolTip(reason)
+        self._ok_button.setStatusTip(reason)
+        self._ok_button.setAccessibleDescription(reason)
+
+    def _refresh_field_refusal(self, path: str, *_args: object) -> None:
+        """Zeigt die Grenze beim Feld und sperrt Übernehmen bis zur Korrektur."""
+        editor = self.editors.get(path)
+        label = self._refusals.get(path)
+        if not isinstance(editor, BoundedSpin) or label is None:
+            return
+        _show_refusal(editor, label)
+        self._settle_refusal_state()
+        self._refit_later()
+
+    def _refresh_group_refusals(self, *_args: object) -> None:
+        """Neu bewerten, sobald ein Spulenbereich ein- oder ausgeschaltet wird."""
+        self._settle_refusal_state()
+
+    def _refresh_all_refusals(self) -> None:
+        """Alle sichtbaren Grenzhinweise nach einem Laden neu aufbauen."""
+        for path in self._refusals:
+            self._refresh_field_refusal(path)
+        self._settle_refusal_state()
+
+    def accept(self) -> None:
+        """Übernimmt keine Spulengruppe mit einer abgelehnten Zahl."""
+        self._refresh_all_refusals()
+        if self._first_refusal():
+            return
+        super().accept()
 
     def _take_legacy_values(self) -> None:
         """Alte Angaben ausdrücklich laden; das Projekt bleibt bis zur Bestätigung unverändert."""
@@ -1572,6 +1673,7 @@ class FilamentOverrideDialog(QDialog):
                     _set_setting_editor(self.editors[field.path], field, getattr(source, name))
             box.setChecked(own is not None)
         self.legacy_values_button.setEnabled(False)
+        self._refresh_all_refusals()
 
     def _fit_depth(self, _checked: bool | None = None) -> None:
         """Die Dialoghöhe an geöffnete Gruppen und den Bildschirm anpassen.
@@ -1605,6 +1707,7 @@ class FilamentOverrideDialog(QDialog):
             _set_setting_editor(self.editors[field.path], field, value)
         for box in self.groups.values():
             box.setChecked(False)
+        self._refresh_all_refusals()
 
     def override(self) -> SlotOverride | None:
         """Die vier Gruppen aus den Feldern, oder Projektwerte für alle."""
@@ -2701,6 +2804,9 @@ class PrintSettingsDialog(QDialog):
         self.setMinimumWidth(560)
 
         self._editors: dict[str, QWidget] = {}
+        self._refusals: dict[str, QLabel] = {}
+        self._refusal_forms: dict[str, QFormLayout] = {}
+        self._header_refusals: dict[str, QLabel] = {}
         self._labels: dict[str, QLabel] = {}
         self._tab_forms: dict[str, QFormLayout] = {}
         self._resets: dict[str, QToolButton] = {}
@@ -3035,13 +3141,13 @@ class PrintSettingsDialog(QDialog):
         # hängen alle daran. Am 16.09.2026 stand ElegooSlicer deshalb auf der
         # 0,2er Variante, während der Auftrag für 0,4 gerechnet war — der
         # Slicer nahm ihn nicht an und meldete „zu geringe Linienbreite".
-        # ``LengthSpin`` und keine blanke ``QDoubleSpinBox``: Außen steht die
-        # Anzeigeeinheit, innen bleiben Millimeter. Ein festes „ mm" wäre
-        # zweimal falsch — eine Zeichenkette an ``tr()`` vorbei (Regel 20) und
-        # bei eingestellten Zoll eine Behauptung, die nicht stimmt.
-        self.nozzle = LengthSpin(self)
-        self.nozzle.set_range_mm(0.1, 2.0)
+        # ``BoundedLengthSpin`` hält Anzeigeeinheit, Millimeterwert und
+        # Grenzablehnung zusammen. Ein festes „ mm“ wäre bei eingestellten
+        # Zoll eine Behauptung, die nicht stimmt.
+        self.nozzle = BoundedLengthSpin(self)
+        self.nozzle.set_range_mm(*_NOZZLE_RANGE_MM)
         self.nozzle.set_step_mm(0.05)
+        self.nozzle.setKeyboardTracking(False)
         self.nozzle.setAccessibleName(tr("Düsendurchmesser"))
         self.nozzle.setToolTip(
             tr(
@@ -3049,11 +3155,23 @@ class PrintSettingsDialog(QDialog):
                 "deshalb für jedes Projekt darauf."
             )
         )
-        self._show_nozzle()
+        self.nozzle.setAccessibleDescription(self.nozzle.toolTip())
+        self.nozzle.setProperty(_REFUSAL_BASE_DESCRIPTION, self.nozzle.accessibleDescription())
         # ``valueChangedMm`` und nicht ``valueChanged``: Letzteres trägt die
         # Zahl aus dem Feld, also einen Anzeigewert. Bei eingestellten Zoll
         # käme darüber 0,0157 als Düsendurchmesser an.
         self.nozzle.valueChangedMm.connect(self._nozzle_changed)
+        self.nozzle_control = QWidget(self)
+        nozzle_layout = QVBoxLayout(self.nozzle_control)
+        nozzle_layout.setContentsMargins(0, 0, 0, 0)
+        nozzle_layout.setSpacing(0)
+        nozzle_layout.addWidget(self.nozzle)
+        self._header_refusals["nozzle"] = _make_refusal_label(self.nozzle, self.nozzle_control)
+        nozzle_layout.addWidget(self._header_refusals["nozzle"])
+        callback = weak_slot(self, PrintSettingsDialog._refresh_header_refusal, "nozzle")
+        self.nozzle.valueRefused.connect(callback)
+        self.nozzle.lineEdit().textEdited.connect(callback)
+        self._show_nozzle()
 
         # **Und wie viele Düsen** — die Zahl entscheidet, ob *Auf dem Bett
         # anordnen* und *Druckoptimal ausrichten* jedes Filament auf eine
@@ -3061,8 +3179,11 @@ class PrintSettingsDialog(QDialog):
         # zwei Filamente ohne Spülgang (Entscheidung Robert, 19.09.2026). Sie
         # gehört wie der Durchmesser zum Drucker und wird in dessen Profil
         # abgelegt; die Tabelle führt jedes Gerät mit einer.
-        self.nozzle_count = QSpinBox(self)
+        self.nozzle_count = BoundedSpin(self)
         self.nozzle_count.setRange(1, 8)
+        self.nozzle_count.setSingleStep(1)
+        self.nozzle_count.setDecimals(0)
+        self.nozzle_count.setKeyboardTracking(False)
         self.nozzle_count.setAccessibleName(tr("Düsen"))
         self.nozzle_count.setToolTip(
             tr(
@@ -3070,8 +3191,24 @@ class PrintSettingsDialog(QDialog):
                 "nicht dazu — sie spült bei jedem Filamentwechsel."
             )
         )
+        self.nozzle_count.setAccessibleDescription(self.nozzle_count.toolTip())
+        self.nozzle_count.setProperty(
+            _REFUSAL_BASE_DESCRIPTION, self.nozzle_count.accessibleDescription()
+        )
         self._show_nozzle_count()
         self.nozzle_count.valueChanged.connect(self._nozzle_count_changed)
+        self.nozzle_count_control = QWidget(self)
+        nozzle_count_layout = QVBoxLayout(self.nozzle_count_control)
+        nozzle_count_layout.setContentsMargins(0, 0, 0, 0)
+        nozzle_count_layout.setSpacing(0)
+        nozzle_count_layout.addWidget(self.nozzle_count)
+        self._header_refusals["nozzle_count"] = _make_refusal_label(
+            self.nozzle_count, self.nozzle_count_control
+        )
+        nozzle_count_layout.addWidget(self._header_refusals["nozzle_count"])
+        callback = weak_slot(self, PrintSettingsDialog._refresh_header_refusal, "nozzle_count")
+        self.nozzle_count.valueRefused.connect(callback)
+        self.nozzle_count.lineEdit().textEdited.connect(callback)
 
         # **Das Material wird hier nicht mehr gewählt, sondern berichtet.**
         # Es kommt aus der Spule (``profiles.for_object``), und eine zweite
@@ -3179,10 +3316,10 @@ class PrintSettingsDialog(QDialog):
         nozzle_row = QHBoxLayout()
         nozzle_row.setContentsMargins(0, 0, 0, 0)
         nozzle_row.setSpacing(NORMAL)
-        nozzle_row.addWidget(self.nozzle)
+        nozzle_row.addWidget(self.nozzle_control)
         nozzle_row.addSpacing(NORMAL)
         nozzle_row.addWidget(nozzle_count_label)
-        nozzle_row.addWidget(self.nozzle_count)
+        nozzle_row.addWidget(self.nozzle_count_control)
         nozzle_row.addStretch(1)
         head.addRow(nozzle_label, nozzle_row)
         # **Die Platte vor den Filamenten**: Sie bestimmt, welche Slots die
@@ -3225,8 +3362,10 @@ class PrintSettingsDialog(QDialog):
             self.quality,
             self.share_settings,
             self.nozzle_label,
+            self.nozzle_control,
             self.nozzle,
             self.nozzle_count_label,
+            self.nozzle_count_control,
             self.nozzle_count,
             self.front_box,
             self.tabs_box,
@@ -3450,10 +3589,11 @@ class PrintSettingsDialog(QDialog):
         finally:
             self.nozzle_count.blockSignals(blocked)
 
-    def _nozzle_count_changed(self, value: int) -> None:
+    def _nozzle_count_changed(self, value: float) -> None:
         """Dieselbe Regel wie beim Durchmesser: Die Zahl gehört zum Drucker und
         wird in seinem Profil abgelegt — wer zwei Düsen hat, hat sie auch
         morgen noch. Danach rechnet die Szene neu, denn die Anordnung hängt daran."""
+        value = int(value)
         if not valid_printer_choice(self.printer_choice):
             return
         entry = profiles.printer(str(self.printer_choice.currentData()))
@@ -5772,6 +5912,7 @@ class PrintSettingsDialog(QDialog):
         """
         self._check_print_result()
         selection_issue = self._printer_selection_issue()
+        field_refusal = self._first_numeric_refusal()
         self.nozzle.setEnabled(valid_printer_choice(self.printer_choice))
         self.nozzle_count.setEnabled(valid_printer_choice(self.printer_choice))
         if self._gcode and self._result_context == self._print_context():
@@ -5802,6 +5943,8 @@ class PrintSettingsDialog(QDialog):
             reason = licence_lock_line(state)
         elif selection_issue:
             reason = selection_issue
+        elif field_refusal:
+            reason = field_refusal
         elif searching:
             reason = searching
         elif found is None:
@@ -5844,6 +5987,8 @@ class PrintSettingsDialog(QDialog):
             open_reason = licence_lock_line(state)
         elif selection_issue:
             open_reason = selection_issue
+        elif field_refusal:
+            open_reason = field_refusal
         elif searching:
             open_reason = searching
         elif found is None:
@@ -5862,6 +6007,7 @@ class PrintSettingsDialog(QDialog):
         # Angebot vor der Antwort — und der Kunde hat vielleicht längst einen.
         self.setup_button.setVisible(found is None and not searching)
         self._mark_fields_this_slicer_ignores()
+        self._refresh_all_refusals()
         if selection_issue:
             self.state.setText(selection_issue)
             self._state_shows_reason = True
@@ -5870,6 +6016,9 @@ class PrintSettingsDialog(QDialog):
             # solange er zutrifft, und wird vom Zweig ganz unten wieder
             # geräumt, sobald die Suche antwortet.
             self.state.setText(searching)
+            self._state_shows_reason = True
+        elif field_refusal:
+            self.state.setText(field_refusal)
             self._state_shows_reason = True
         elif found is None:
             self.state.setText(
@@ -6152,6 +6301,16 @@ class PrintSettingsDialog(QDialog):
         self._resets[field.path] = reset
         self._foreign_notes[field.path] = foreign
         form.addRow(label, holder)
+        if isinstance(editor, BoundedSpin):
+            refusal = _make_refusal_label(editor, form.parentWidget() or self)
+            self._refusals[field.path] = refusal
+            self._refusal_forms[field.path] = form
+            form.addRow("", refusal)
+            form.setRowVisible(refusal, False)
+            callback = weak_slot(self, PrintSettingsDialog._refresh_field_refusal, field.path)
+            editor.valueRefused.connect(callback)
+            editor.lineEdit().textEdited.connect(callback)
+            editor.valueChanged.connect(callback)
         if isinstance(editor, RowCheckBox):
             caption_toggles(label, editor)
 
@@ -6389,6 +6548,7 @@ class PrintSettingsDialog(QDialog):
     def _load_into_editors(self) -> None:
         """Aus dem Modell in die Felder. ``_loading`` hält die Rückmeldung an,
         sonst schriebe jedes gesetzte Feld sofort wieder zurück."""
+        had_refusal = bool(self._first_numeric_refusal())
         self._loading = True
         try:
             for field in FIELDS:
@@ -6397,7 +6557,79 @@ class PrintSettingsDialog(QDialog):
                 _set_setting_editor(editor, field, value)
         finally:
             self._loading = False
+        self._refresh_all_refusals()
         self._update_inactive_setting_rows()
+        if self._built and had_refusal:
+            self._show_slicer_state()
+
+    def _first_numeric_refusal(self) -> str:
+        """Die erste Grenzablehnung an einem aktiven Druckwert."""
+        if self.session.profile.printer.is_resin:
+            return ""
+        for editor in (self.nozzle, self.nozzle_count):
+            if reason := editor.refusal():
+                return reason
+        inactive = {
+            "support": (
+                _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
+                == "none"
+            ),
+            "adhesion": (
+                _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
+                == "none"
+            ),
+        }
+        for field in FIELDS:
+            group = field.path.partition(".")[0]
+            if inactive.get(group, False):
+                continue
+            field_editor = self._editors.get(field.path)
+            if isinstance(field_editor, BoundedSpin) and (reason := field_editor.refusal()):
+                return reason
+        return ""
+
+    def _refresh_header_refusal(self, path: str, *_args: object) -> None:
+        """Zeigt Grenzangaben im Druckerkopf und erneuert die Übergabefreigabe."""
+        editor = self.nozzle if path == "nozzle" else self.nozzle_count
+        label = self._header_refusals.get(path)
+        if label is None:
+            return
+        _show_refusal(editor, label)
+        if self._built and not self._loading:
+            self._show_slicer_state()
+
+    def _refresh_field_refusal(self, path: str, *_args: object) -> None:
+        """Zeigt die Grenze am Feld und erneuert die Freigabe der Übergabe."""
+        editor = self._editors.get(path)
+        label = self._refusals.get(path)
+        if not isinstance(editor, BoundedSpin) or label is None:
+            return
+        reason = _show_refusal(editor, label)
+        form = self._refusal_forms[path]
+        field_label = self._labels.get(path)
+        form.setRowVisible(
+            label,
+            bool(reason) and field_label is not None and not field_label.isHidden(),
+        )
+        if self._built and not self._loading:
+            self._show_slicer_state()
+
+    def _refresh_all_refusals(self) -> None:
+        """Löscht oder erneuert Grenzhinweise nach dem Laden von Modellwerten."""
+        for path in self._refusals:
+            editor = self._editors.get(path)
+            label = self._refusals[path]
+            if isinstance(editor, BoundedSpin):
+                reason = _show_refusal(editor, label)
+                field_label = self._labels.get(path)
+                self._refusal_forms[path].setRowVisible(
+                    label,
+                    bool(reason) and field_label is not None and not field_label.isHidden(),
+                )
+        for path, editor in (("nozzle", self.nozzle), ("nozzle_count", self.nozzle_count)):
+            header_label = self._header_refusals.get(path)
+            if header_label is not None:
+                _show_refusal(editor, header_label)
 
     def _update_inactive_setting_rows(self) -> None:
         """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
@@ -6414,7 +6646,12 @@ class PrintSettingsDialog(QDialog):
             "support.interface_layers",
             "support.block_channels",
         ):
-            self._tab_forms["support"].setRowVisible(self._labels[path], support_enabled)
+            form = self._tab_forms["support"]
+            form.setRowVisible(self._labels[path], support_enabled)
+            editor = self._editors[path]
+            refusal = self._refusals.get(path)
+            if isinstance(editor, BoundedSpin) and refusal is not None:
+                form.setRowVisible(refusal, support_enabled and bool(editor.refusal()))
 
         adhesion_enabled = (
             _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
@@ -6426,7 +6663,12 @@ class PrintSettingsDialog(QDialog):
             "adhesion.brim_width",
             "adhesion.raft_layers",
         ):
-            self._tab_forms["adhesion"].setRowVisible(self._labels[path], adhesion_enabled)
+            form = self._tab_forms["adhesion"]
+            form.setRowVisible(self._labels[path], adhesion_enabled)
+            editor = self._editors[path]
+            refusal = self._refusals.get(path)
+            if isinstance(editor, BoundedSpin) and refusal is not None:
+                form.setRowVisible(refusal, adhesion_enabled and bool(editor.refusal()))
         self._queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
@@ -7301,6 +7543,9 @@ class PrintSettingsDialog(QDialog):
         im Arbeiter; das fremde Fenster wird erst mit vollständiger Datei
         geöffnet.
         """
+        if self._first_numeric_refusal():
+            self._show_slicer_state()
+            return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
         if not objects:
@@ -7352,6 +7597,9 @@ class PrintSettingsDialog(QDialog):
         self._leash.start(worker)
 
     def _slice(self) -> None:
+        if self._first_numeric_refusal():
+            self._show_slicer_state()
+            return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
         if not objects:

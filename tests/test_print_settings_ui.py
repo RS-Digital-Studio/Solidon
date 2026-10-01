@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QPushButton,
-    QSpinBox,
     QToolButton,
     QWidget,
 )
@@ -38,6 +37,7 @@ from app.core.slice import gcode
 from app.core.slice.analysis import total_overhang
 from app.core.types import Feature, MaterialSlot, Profile, SceneObject, SlotOverride
 from app.i18n import tr
+from app.ui.labels import BoundedLengthSpin, BoundedSpin
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
     FIELDS,
@@ -1076,7 +1076,7 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert not dialog.group_bodies["temperature"].isHidden()
     assert dialog.height() > collapsed_height, "geöffnete Felder brauchen sichtbar mehr Raum"
     nozzle = dialog.editors["temperature.nozzle"]
-    assert isinstance(nozzle, QSpinBox)
+    assert isinstance(nozzle, BoundedSpin)
     nozzle.setValue(210)
 
     override = dialog.override()
@@ -1094,9 +1094,61 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert all(not group.isChecked() for group in dialog.groups.values())
     assert all(body.isHidden() for body in dialog.group_bodies.values())
     assert dialog.height() == collapsed_height, "Zuklappen gibt die geöffnete Höhe zurück"
-    assert isinstance(nozzle, QSpinBox)
+    assert isinstance(nozzle, BoundedSpin)
     assert nozzle.value() == settings.temperature.nozzle
     assert dialog.override() is None, "ein sichtbarer Knopf nimmt alle eigenen Werte zurück"
+
+
+def test_filament_override_refuses_a_number_until_it_is_corrected(
+    qt_app: QApplication,
+) -> None:
+    """Eine Spule übernimmt weder einen geklemmten Wert noch eine offene Ablehnung."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    dialog = FilamentOverrideDialog(slot, settings)
+    dialog.show()
+    try:
+        dialog.groups["temperature"].setChecked(True)
+        qt_app.processEvents()
+        editor = dialog.editors["temperature.nozzle"]
+        assert isinstance(editor, BoundedSpin)
+        before = settings.temperature.nozzle
+        line = editor.lineEdit()
+        line.setFocus()
+        line.selectAll()
+        QTest.keyClicks(line, "401")
+        refusal = editor.refusal()
+        assert editor.refused_value() == pytest.approx(401)
+        assert "Obergrenze" in refusal and "400" in refusal
+        assert dialog._refusals["temperature.nozzle"].isVisibleTo(dialog)
+        ok = dialog._ok_button
+        assert ok is not None
+        assert not ok.isEnabled()
+        assert refusal in ok.toolTip()
+
+        QTest.keyClick(line, Qt.Key.Key_Return)
+        dialog.accept()
+        assert dialog.result() != QDialog.DialogCode.Accepted
+        assert editor.value() == before
+
+        line.selectAll()
+        QTest.keyClicks(line, "400")
+        QTest.keyClick(line, Qt.Key.Key_Return)
+        assert editor.refused_value() is None
+        assert dialog._refusals["temperature.nozzle"].isHidden()
+        assert ok.isEnabled()
+        dialog.accept()
+        assert dialog.result() == QDialog.DialogCode.Accepted
+        override = dialog.override()
+        assert override is not None and override.temperature is not None
+        assert override.temperature.nozzle == 400
+    finally:
+        dialog.reject()
+        qt_app.processEvents()
+        dialog.deleteLater()
 
 
 def test_every_field_lands_in_a_known_group() -> None:
@@ -1122,8 +1174,211 @@ def test_the_front_page_stays_short() -> None:
 
 def test_the_editors_start_on_the_resolved_values(dialog: PrintSettingsDialog) -> None:
     editor = dialog._editors["layers.layer_height"]
-    assert isinstance(editor, QDoubleSpinBox)
+    assert isinstance(editor, BoundedSpin)
     assert editor.value() == pytest.approx(dialog.settings.layers.layer_height)
+
+
+def test_the_printer_header_refuses_out_of_range_numbers(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+) -> None:
+    """Düsendurchmesser und Düsenanzahl lehnen Zahlen jenseits ihrer Grenzen ab."""
+    from PySide6.QtTest import QTest
+
+    dialog.show()
+    qt_app.processEvents()
+    try:
+        for path, editor, boundary in (
+            ("nozzle", dialog.nozzle, dialog.nozzle.maximum()),
+            ("nozzle_count", dialog.nozzle_count, dialog.nozzle_count.maximum()),
+        ):
+            assert isinstance(editor, BoundedLengthSpin | BoundedSpin)
+            line = editor.lineEdit()
+            line.setFocus()
+            line.selectAll()
+            invalid = editor.maximum() + 1
+            shown = str(int(invalid)) if path == "nozzle_count" else editor.textFromValue(invalid)
+            QTest.keyClicks(line, shown)
+
+            reason = editor.refusal()
+            assert editor.refused_value() == pytest.approx(invalid)
+            assert "Obergrenze" in reason
+            assert editor.textFromValue(boundary) in reason
+            assert dialog._header_refusals[path].isVisibleTo(dialog)
+            assert dialog._first_numeric_refusal() == reason
+
+            line.selectAll()
+            corrected = (
+                str(int(boundary)) if path == "nozzle_count" else editor.textFromValue(boundary)
+            )
+            QTest.keyClicks(line, corrected)
+            assert editor.refused_value() is None
+            assert dialog._header_refusals[path].isHidden()
+    finally:
+        dialog.reject()
+        dialog.wait_for_workers()
+        qt_app.processEvents()
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("path", "invalid", "boundary", "bound_word"),
+    [
+        ("layers.layer_height", 1.5, 1.2, "Obergrenze"),
+        ("shell.wall_count", 21, 20, "Obergrenze"),
+        ("shell.wall_count", 0, 1, "Untergrenze"),
+    ],
+)
+def test_print_settings_refuse_out_of_range_numbers_until_corrected_or_reset(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    path: str,
+    invalid: float,
+    boundary: float,
+    bound_word: str,
+) -> None:
+    """Grenzen bleiben beim Feld sichtbar; weder Tippen noch Enter klemmt den Wert."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    dialog.show()
+    dialog._lift(path)
+    qt_app.processEvents()
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    editor = dialog._editors[path]
+    assert isinstance(editor, BoundedSpin)
+    assert not editor.keyboardTracking(), "ein Zwischenstand darf das Modell nicht verändern"
+    field = dialog._fields[path]
+    before = print_settings.read_path(dialog.settings, path)
+    line = editor.lineEdit()
+
+    def type_number(value: float) -> None:
+        line.setFocus()
+        line.selectAll()
+        shown = (
+            str(int(value))
+            if field.kind == "int"
+            else editor.locale().toString(value, "f", editor.decimals())
+        )
+        QTest.keyClicks(line, shown)
+
+    type_number(invalid)
+    refusal = editor.refusal()
+    assert editor.refused_value() == pytest.approx(invalid)
+    assert bound_word in refusal
+    assert editor.textFromValue(boundary) in refusal
+    assert dialog._refusals[path].isVisibleTo(dialog)
+    assert print_settings.read_path(dialog.settings, path) == before
+
+    QTest.keyClick(line, Qt.Key.Key_Return)
+    assert line.text().strip(), "Enter lässt den abgelehnten Tipp stehen"
+    assert editor.refused_value() == pytest.approx(invalid)
+    assert print_settings.read_path(dialog.settings, path) == before
+
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        SimpleNamespace(scene=SimpleNamespace(objects={"Teil": _cube_object()})),
+    )
+
+    def unexpected_setup() -> None:
+        pytest.fail("eine offene Grenzablehnung darf keinen Übergabeweg erreichen")
+
+    monkeypatch.setattr(dialog, "_current_setup", unexpected_setup)
+    dialog._slice()
+    dialog._open_in_slicer()
+    assert editor.refused_value() == pytest.approx(invalid)
+
+    type_number(boundary)
+    QTest.keyClick(line, Qt.Key.Key_Return)
+    assert editor.refused_value() is None
+    assert dialog._refusals[path].isHidden()
+    expected = int(boundary) if field.kind == "int" else boundary
+    assert print_settings.read_path(dialog.settings, path) == expected
+    assert not editor.refusal()
+
+    type_number(invalid)
+    QTest.keyClick(line, Qt.Key.Key_Return)
+    assert editor.refused_value() == pytest.approx(invalid)
+    dialog._resets[path].click()
+    assert editor.refused_value() is None
+    assert dialog._refusals[path].isHidden()
+    assert print_settings.read_path(dialog.settings, path) == print_settings.read_path(
+        dialog._base(), path
+    )
+
+
+@pytest.mark.parametrize(
+    ("selector_path", "active_value", "number_path"),
+    [
+        ("support.style", "grid", "support.density"),
+        ("adhesion.kind", "brim", "adhesion.brim_width"),
+    ],
+)
+def test_disabling_a_settings_group_clears_its_refusal_gate(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    request: pytest.FixtureRequest,
+    selector_path: str,
+    active_value: str,
+    number_path: str,
+) -> None:
+    """Ein ausgeblendeter Zahlenwert darf die Druckübergabe nicht weiter sperren."""
+    from PySide6.QtTest import QTest
+
+    dialog.show()
+    dialog._lift(number_path)
+    qt_app.processEvents()
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    selector = dialog._editors[selector_path]
+    selector.setCurrentIndex(selector.findData(active_value))
+    editor = dialog._editors[number_path]
+    assert isinstance(editor, BoundedSpin)
+    line = editor.lineEdit()
+    line.setFocus()
+    line.selectAll()
+    invalid = editor.maximum() + 1
+    shown = editor.locale().toString(invalid, "f", editor.decimals())
+    QTest.keyClicks(line, shown)
+
+    refusal = editor.refusal()
+    assert refusal
+    assert dialog._first_numeric_refusal() == refusal
+    assert dialog._refusals[number_path].isVisibleTo(dialog)
+
+    selector.setCurrentIndex(selector.findData("none"))
+    qt_app.processEvents()
+
+    assert editor.refusal() == refusal
+    assert dialog._first_numeric_refusal() == ""
+    assert dialog._refusals[number_path].isHidden()
+    assert refusal not in dialog.slice_button.toolTip()
+    assert refusal not in dialog.open_button.toolTip()
+
+    selector.setCurrentIndex(selector.findData(active_value))
+    qt_app.processEvents()
+
+    assert editor.refusal() == refusal
+    assert dialog._first_numeric_refusal() == refusal
+    assert dialog._refusals[number_path].isVisibleTo(dialog)
+    assert refusal in dialog.slice_button.toolTip()
+    assert refusal in dialog.open_button.toolTip()
 
 
 def test_advice_values_read_like_the_field_beside_them(dialog: PrintSettingsDialog) -> None:
@@ -1252,7 +1507,9 @@ def test_filling_the_filament_list_changes_nothing(dialog: PrintSettingsDialog) 
 
 def test_changing_a_field_reaches_the_settings(dialog: PrintSettingsDialog) -> None:
     editor = dialog._editors["shell.wall_count"]
-    assert isinstance(editor, QSpinBox)
+    assert isinstance(editor, BoundedSpin)
+    assert editor.decimals() == 0
+    assert editor.singleStep() == 1
 
     editor.setValue(7)
 

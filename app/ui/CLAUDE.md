@@ -158,7 +158,7 @@ Karte, dort das Gesetz.
 | Datei | Zweck |
 |---|---|
 | `print_findings_flow.py` | die Befunde der Schichtanalyse nach jeder Auswertung im Arbeiter (§2.8, §22); ein neuer Stand löst den laufenden ab |
-| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); am Resin-Drucker nur, was gilt (`_reduce_for_resin`) |
+| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); Grenzablehnung direkt am Zahlenfeld; am Resin-Drucker nur, was gilt (`_reduce_for_resin`) |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
 **Druckfelder:** Grundlage aus `manufacturer.base_settings`, Feldherkunft und
