@@ -17117,18 +17117,28 @@ def test_command_palette_shows_explanations_without_repeating_window_titles(
 
     assert row.text().splitlines()[1] == first_sentence(str(entry.doc)).strip()
 
-    window_entry = next(
-        candidate
-        for candidate in entries
-        if candidate.name in commands and candidate.available and candidate.doc == candidate.title
-    )
+    for key, tool in window.tools.tools().items():
+        tool_entry = next(candidate for candidate in entries if candidate.name == f"tool.{key}")
+        assert tool_entry.doc == str(tool.hint), key
+        assert tool_entry.doc.strip() and tool_entry.doc != tool_entry.title, key
+
+    for name in ("file.part_adopt", "file.part_share"):
+        part_entry = next(candidate for candidate in entries if candidate.name == name)
+        assert part_entry.doc.strip() and part_entry.doc != part_entry.title, name
+
+    window_entry = next(candidate for candidate in entries if candidate.name == "view.bed")
+    action = window._palette_actions[window_entry.name]
+    assert window_entry.doc == action.statusTip()
+    assert window_entry.doc != window_entry.title
     palette._refilter(str(window_entry.title))
     window_row = next(
         palette.list.item(index)
         for index in range(palette.list.count())
         if palette.list.item(index).data(Qt.ItemDataRole.UserRole) == str(window_entry.name)
     )
-    assert "\n" not in window_row.text(), "ein Suchtext aus dem Titel ist keine Erklärung"
+    assert window_row.text().splitlines()[1] == first_sentence(str(window_entry.doc)).strip()
+    tooltip_lines = window_row.toolTip().splitlines()
+    assert tooltip_lines == [str(window_entry.title), str(window_entry.doc)]
 
 
 def test_a_question_of_several_words_still_finds_something(window: MainWindow) -> None:

@@ -11959,11 +11959,42 @@ class MainWindow(QMainWindow):
         Listen, von denen niemand garantiert, dass sie dieselbe ist.
         """
         commands = self.window_commands() if commands is None else commands
+        registered_tools = self.tools.tools()
+
+        def explanation(key: str, title: str, usable: bool) -> str:
+            """Nimmt den Erklärungssatz aus der Quelle der Handlung."""
+            if not usable:
+                return ""
+            action = self._palette_actions.get(key)
+            if action is not None:
+                doc = action.statusTip().strip() or action.toolTip().strip()
+            elif key.startswith("tool."):
+                tool = registered_tools.get(key.removeprefix("tool."))
+                doc = str(tool.hint).strip() if tool is not None else ""
+            elif key == "file.part_adopt":
+                doc = str(
+                    tr(
+                        "Liest eine Bausteindatei ein und fügt den geprüften Baustein "
+                        "dem Katalog hinzu."
+                    )
+                )
+            elif key == "file.part_share":
+                doc = str(
+                    tr(
+                        "Öffnet den Katalog, damit Sie einen eigenen Baustein "
+                        "als Datei speichern können."
+                    )
+                )
+            else:
+                return ""
+            doc = doc.strip()
+            return "" if doc == title.strip() else doc
+
         extra = [
             PaletteEntry(
                 name=key,
                 title=title,
-                doc=title,
+                doc=explanation(key, title, usable),
                 shortcut=shortcut,
                 category=key.split(".", 1)[0],
                 available=usable,
