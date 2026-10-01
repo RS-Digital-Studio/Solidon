@@ -3770,10 +3770,9 @@ def test_v38_a_slot_keeps_the_world_direction_it_was_cut_with(profile) -> None:
     Bohrung mit Haken *Langloch* 0,05° neben Z (Winkel 160°). Beide Winkel
     meinten im Rahmen von damals die Weltrichtung +Y — gemessen beim
     Schreiben: alle vier Langlöcher bei (0, 1, ±3e-4). Im Rahmen von heute
-    meinten dieselben Zahlen −40° und 160°. Die Migration rechnet den Winkel
-    der Bohrung um (ihre Normale steht im Schritt); *Zum Langloch ziehen*
-    trägt ``measured_frame``, liest den Winkel im alten Rahmen und hält ihn
-    als Antwort im neuen fest.
+    meinten dieselben Zahlen −40° und 160°. Beide Operationen tragen nach der
+    Migration ``measured_frame`` und rechnen den Winkel bei jeder Auswertung
+    anhand der jeweils aktuellen Achse um.
     """
     from app.core.scene.evaluate import evaluate
     from app.core.scene.project import ProjectSources
@@ -3794,8 +3793,9 @@ def test_v38_a_slot_keeps_the_world_direction_it_was_cut_with(profile) -> None:
     drills = [entry for entry in project.document.ops if entry.params.get("slotted")]
     assert len(pulls) == 2 and all(entry.params["measured_frame"] is True for entry in pulls)
     assert len(drills) == 2
-    for entry in drills:
-        assert entry.params["slot_angle"] == pytest.approx(90.0, abs=0.5), entry.params
+    for entry in (*pulls, *drills):
+        assert entry.params["measured_frame"] is True
+        assert entry.params["slot_angle"] == pytest.approx(saved[entry.id], abs=1e-4)
 
     stored = evaluate(project.document, profile, sources=ProjectSources(project))
     assert stored.complete
@@ -3803,10 +3803,10 @@ def test_v38_a_slot_keeps_the_world_direction_it_was_cut_with(profile) -> None:
         assert _slot_world_angles(stored, name) == pytest.approx([90.0, 90.0], abs=0.5), name
 
     history = History(project.document)
-    assert history.record_answers(stored.answers), "die Umrechnung wird festgehalten"
-    for entry in (e for e in project.document.ops if e.op == "slot_hole"):
-        assert entry.params["measured_frame"] is False
-        assert entry.params["slot_angle"] == pytest.approx(90.0, abs=0.5), entry.params
+    assert not history.record_answers(stored.answers), "die Umrechnung bleibt auswertungsabhängig"
+    for entry in (*pulls, *drills):
+        assert entry.params["measured_frame"] is True
+        assert entry.params["slot_angle"] == pytest.approx(saved[entry.id], abs=1e-4)
     again = evaluate(project.document, profile, sources=ProjectSources(project))
     assert again.complete
     for name in ("obj_1", "obj_2"):
@@ -3821,7 +3821,7 @@ def test_v38_slot_angles_keep_their_world_direction_on_both_undo_sides() -> None
     Hauptachse heißt +Y 90°. Unverändert bleiben: eine Bohrung ohne Haken, eine
     ohne Normale (sie bohrt entlang einer Hauptachse), eine wirklich gekippte
     (17,5°, außerhalb des Kegels) und fremde Schritte. *Zum Langloch ziehen*
-    bekommt ``measured_frame``, auch in den gespeicherten Fassungen.
+    Alte Langlöcher werden markiert, ohne ihre Winkel in Zahlen umzuschreiben.
     """
     from app.core.scene.migrations import _keep_slot_directions_as_they_were
     from app.core.sketch.planes import frame_of
@@ -3875,13 +3875,294 @@ def test_v38_slot_angles_keep_their_world_direction_on_both_undo_sides() -> None
     migrated = _keep_slot_directions_as_they_were(data)
 
     params = [entry.get("params") for entry in migrated["ops"]]
-    assert params[0]["slot_angle"] == pytest.approx(90.0, abs=0.06)
-    assert params[1]["slot_angle"] == pytest.approx(90.0, abs=0.06)
+    assert params[0]["slot_angle"] == pytest.approx(towards_y, abs=1e-8)
+    assert params[1]["slot_angle"] == pytest.approx(towards_y, abs=1e-8)
+    assert params[0]["measured_frame"] is True
+    assert params[1]["measured_frame"] is True
     assert params[2]["slot_angle"] == 30.0, "ohne Haken kein Langloch"
-    assert params[3]["slot_angle"] == 30.0, "ohne Normale eine Hauptachse"
-    assert params[4]["slot_angle"] == 30.0, "wirklich gekippt: derselbe Rahmen"
+    assert params[3]["slot_angle"] == 30.0 and params[3]["measured_frame"] is True, (
+        "ohne Normale bleibt die Hauptachse markiert"
+    )
+    assert params[4]["slot_angle"] == 30.0 and params[4]["measured_frame"] is True, (
+        "wirklich gekippt: gleicher Rahmen, aber markiert"
+    )
     assert params[5] == {"at_feature": "hole_1", "slot_angle": -40.0, "measured_frame": True}
     assert params[6] is None, "ein fremder Schritt bekommt nichts"
     changes = migrated["transactions"][0]["changes"]
     assert changes["before"]["edited_ops"]["6"]["params"] == {"measured_frame": True}
     assert changes["after"]["edited_ops"]["6"]["params"] == {"measured_frame": True}
+
+
+def test_v38_parameterized_slot_angles_and_axes_remain_live(profile, tmp_path: Path) -> None:
+    """Migration, Parameterverlauf und Dateirundlauf erhalten alte Langlöcher."""
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.history import change_for
+    from app.core.scene.project import ProjectSources
+    from app.core.scene.serialise import document_from_data, document_to_data
+
+    path = Path(__file__).parent / "data" / "projects" / "slot_angle_frame_v38.p3d"
+    data = project_data(path)
+    data["parameters"] = {}
+    angle_parameters: dict[Any, str] = {}
+    axis_parameters: dict[Any, dict[str, str]] = {}
+    for entry in data["ops"]:
+        params = entry.get("params", {})
+        if entry["op"] == "slot_hole" or (
+            entry["op"] in {"drill_hole", "drill_brep_hole"} and params.get("slotted") is True
+        ):
+            name = f"slot_angle_{entry['id']}"
+            data["parameters"][name] = {"value": params["slot_angle"], "unit": "°"}
+            params["slot_angle"] = f"=@{name}"
+            angle_parameters[entry["id"]] = name
+        if entry["op"] in {"drill_hole", "drill_brep_hole"} and params.get("slotted") is True:
+            axis_parameters[entry["id"]] = {}
+            for component in ("nx", "ny", "nz"):
+                name = f"{component}_{entry['id']}"
+                data["parameters"][name] = {"value": params[component], "unit": ""}
+                params[component] = f"=@{name}"
+                axis_parameters[entry["id"]][component] = name
+
+    history_document = document_from_data(data)
+    history = History(history_document)
+    edited_slot = next(entry for entry in history.operations if entry.op == "slot_hole")
+    original_slot_length = float(edited_slot.params["slot_length"])
+    history.change_params(edited_slot.id, {"slot_length": original_slot_length + 0.25})
+    data = document_to_data(history_document)
+    data["format_version"] = 38
+
+    def assert_migrated_history(document) -> None:
+        transaction = next(
+            entry
+            for entry in document.transactions
+            if entry.changes is not None
+            and entry.changes.before.edited_ops is not None
+            and edited_slot.id in entry.changes.before.edited_ops
+        )
+        before = transaction.changes.before.edited_ops[edited_slot.id]
+        after = transaction.changes.after.edited_ops[edited_slot.id]
+        angle_expression = f"=@{angle_parameters[edited_slot.id]}"
+        assert before.params["slot_angle"] == angle_expression
+        assert after.params["slot_angle"] == angle_expression
+        assert before.params["measured_frame"] is True
+        assert after.params["measured_frame"] is True
+        assert before.params["slot_length"] == pytest.approx(original_slot_length)
+        assert after.params["slot_length"] == pytest.approx(original_slot_length + 0.25)
+
+    project = load(path)
+    project.document = document_from_data(migrate(data))
+    operations = {entry.id: entry for entry in project.document.ops}
+    assert set(angle_parameters).issubset(operations)
+    for operation_id, name in angle_parameters.items():
+        assert operations[operation_id].params["slot_angle"] == f"=@{name}"
+        assert operations[operation_id].params["measured_frame"] is True
+    for operation_id, values in axis_parameters.items():
+        assert operations[operation_id].params["measured_frame"] is True
+        for component, name in values.items():
+            assert operations[operation_id].params[component] == f"=@{name}"
+    assert_migrated_history(project.document)
+
+    original = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert original.complete, original.findings
+    assert History(project.document).record_answers(original.answers) is False
+    for operation_id, name in angle_parameters.items():
+        assert operations[operation_id].params["slot_angle"] == f"=@{name}"
+
+    stored = tmp_path / "langloch-parameter.p3d"
+    save(project, stored)
+    reopened = load(stored)
+    assert_migrated_history(reopened.document)
+    for operation_id, name in angle_parameters.items():
+        operation = next(entry for entry in reopened.document.ops if entry.id == operation_id)
+        assert operation.params["slot_angle"] == f"=@{name}"
+        assert operation.params["measured_frame"] is True
+
+    initial_angles = {
+        name: reopened.document.parameters[name].value for name in angle_parameters.values()
+    }
+
+    def legacy_world_angle(axis: tuple[float, float, float], angle: float) -> float:
+        from app.core.sketch.planes import frame_of
+
+        frame = frame_of(axis, (0.0, 0.0, 0.0))
+        radians = math.radians(angle)
+        direction = tuple(
+            math.cos(radians) * frame.x_axis[index] + math.sin(radians) * frame.y_axis[index]
+            for index in range(3)
+        )
+        return math.degrees(math.atan2(direction[1], direction[0])) % 180.0
+
+    drill_id = next(iter(axis_parameters))
+    x_name = axis_parameters[drill_id]["nx"]
+    changed_parameters = {
+        name: Parameter(
+            name=name,
+            value=initial_angles[name] + 10.0,
+            unit=reopened.document.parameters[name].unit,
+        )
+        for name in angle_parameters.values()
+    }
+    old_nx = reopened.document.parameters[x_name]
+    changed_parameters[x_name] = Parameter(
+        name=x_name, value=old_nx.value + 0.001, unit=old_nx.unit
+    )
+    history = History(reopened.document)
+    history.apply(
+        _("Langlochparameter ändern"),
+        changes=change_for(reopened.document, parameters=changed_parameters),
+    )
+
+    changed_angles = {
+        name: value.value for name, value in changed_parameters.items() if name in initial_angles
+    }
+
+    def assert_live_parameters(document) -> None:
+        operations_by_id = {entry.id: entry for entry in document.ops}
+        for operation_id, name in angle_parameters.items():
+            operation = operations_by_id[operation_id]
+            assert operation.params["slot_angle"] == f"=@{name}"
+            assert operation.params["measured_frame"] is True
+        for operation_id, components in axis_parameters.items():
+            operation = operations_by_id[operation_id]
+            assert operation.params["measured_frame"] is True
+            for component, name in components.items():
+                assert operation.params[component] == f"=@{name}"
+
+    def assert_world_directions(result, angles: dict[str, float]) -> dict[Any, Any]:
+        slots = {
+            feature.created_by: feature
+            for scene_object in result.scene.objects.values()
+            for feature in scene_object.features.values()
+            if feature.kind == "slot"
+        }
+        for operation_id, name in angle_parameters.items():
+            feature = slots[operation_id]
+            actual = (
+                math.degrees(
+                    math.atan2(
+                        float(feature.params["direction"][1]), float(feature.params["direction"][0])
+                    )
+                )
+                % 180.0
+            )
+            expected = legacy_world_angle(tuple(feature.params["axis"]), angles[name])
+            difference = (actual - expected + 90.0) % 180.0 - 90.0
+            assert abs(difference) <= 0.5, operation_id
+        return slots
+
+    assert_live_parameters(reopened.document)
+    assert_migrated_history(reopened.document)
+    angle_changed = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+    assert angle_changed.complete, angle_changed.findings
+    changed_slots = assert_world_directions(angle_changed, changed_angles)
+    axis_values = [
+        changed_parameters[axis_parameters[drill_id][key]].value
+        if axis_parameters[drill_id][key] in changed_parameters
+        else reopened.document.parameters[axis_parameters[drill_id][key]].value
+        for key in ("nx", "ny", "nz")
+    ]
+    axis_length = math.sqrt(sum(value * value for value in axis_values))
+    expected_axis = tuple(value / axis_length for value in axis_values)
+    changed_axis = tuple(changed_slots[drill_id].params["axis"])
+    assert changed_axis == pytest.approx(expected_axis, abs=1e-6)
+
+    history.undo()
+    assert {
+        name: reopened.document.parameters[name].value for name in initial_angles
+    } == pytest.approx(initial_angles)
+    assert reopened.document.parameters[x_name].value == pytest.approx(old_nx.value)
+    assert_live_parameters(reopened.document)
+    assert_migrated_history(reopened.document)
+    undone = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+    assert undone.complete, undone.findings
+    assert_world_directions(undone, initial_angles)
+
+    history.redo()
+    assert {
+        name: reopened.document.parameters[name].value for name in changed_angles
+    } == pytest.approx(changed_angles)
+    assert reopened.document.parameters[x_name].value == pytest.approx(old_nx.value + 0.001)
+    assert_live_parameters(reopened.document)
+    assert_migrated_history(reopened.document)
+
+    after_redo = tmp_path / "langloch-parameter-nach-redo.p3d"
+    save(reopened, after_redo)
+    assert project_data(after_redo)["format_version"] == FORMAT_VERSION
+    restored = load(after_redo)
+    assert_live_parameters(restored.document)
+    assert_migrated_history(restored.document)
+    after_open = evaluate(restored.document, profile, sources=ProjectSources(restored))
+    assert after_open.complete, after_open.findings
+    restored_slots = assert_world_directions(after_open, changed_angles)
+    assert tuple(restored_slots[drill_id].params["axis"]) == pytest.approx(expected_axis, abs=1e-6)
+
+
+def test_v39_slot_angle_without_origin_marker_survives_file_roundtrip(
+    profile, tmp_path: Path
+) -> None:
+    """V39-Winkel ohne Herkunft bleiben erhalten; ihre alte Bedeutung ist nicht mehr ableitbar."""
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+    from app.core.scene.serialise import document_from_data
+
+    path = Path(__file__).parent / "data" / "projects" / "slot_angle_frame_v38.p3d"
+    data = migrate(project_data(path))
+    assert data["format_version"] == FORMAT_VERSION
+    operation = next(
+        entry
+        for entry in data["ops"]
+        if entry["op"] == "drill_hole" and entry["params"].get("slotted") is True
+    )
+    operation_id = operation["id"]
+    operation["params"]["slot_angle"] = 17.25
+    saved_angle = operation["params"]["slot_angle"]
+
+    def lose_old_provenance(value: Any, *, key: str | None = None) -> None:
+        """Simuliert v39, in dem die alte Winkelherkunft schon nicht mehr vorliegt."""
+        if isinstance(value, dict):
+            params = value.get("params")
+            target = value.get("id") == operation_id or key == str(operation_id)
+            if isinstance(params, dict):
+                params.pop("measured_frame", None)
+                if target and "slot_angle" in params:
+                    params["slot_angle"] = saved_angle
+            for child_key, child in value.items():
+                lose_old_provenance(child, key=str(child_key))
+        elif isinstance(value, list):
+            for child in value:
+                lose_old_provenance(child)
+
+    lose_old_provenance(data)
+    snapshot = deepcopy(data)
+
+    current = migrate(data)
+
+    assert current == snapshot
+    assert current is data
+    assert operation["params"]["slot_angle"] == saved_angle
+    assert "measured_frame" not in operation["params"]
+
+    project = load(path)
+    project.document = document_from_data(data)
+    stored = tmp_path / "langloch-v39-ohne-herkunft.p3d"
+    save(project, stored)
+    reopened = load(stored)
+    assert reopened.document.format_version == FORMAT_VERSION
+    restored_operation = next(entry for entry in reopened.document.ops if entry.id == operation_id)
+    assert restored_operation.params["slot_angle"] == saved_angle
+    assert "measured_frame" not in restored_operation.params
+
+    evaluated = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+    assert evaluated.complete, evaluated.findings
+    assert any(
+        feature.created_by == operation_id and feature.kind == "slot"
+        for scene_object in evaluated.scene.objects.values()
+        for feature in scene_object.features.values()
+    )

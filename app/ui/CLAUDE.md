@@ -80,7 +80,7 @@ Karte, dort das Gesetz.
 |---|---|
 | `app.py` | Einstiegspunkt (§38); richtet vor dem ersten Qt-Import den lokalen Absturzschutz ein (ein bloßer Import installiert nichts, `main()` ergänzt idempotent) und zieht die Adapterfrage des Renderers vor |
 | `qt_platform.py` | welche Qt-Plattform die 3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import |
-| `main_window.py` | das Hauptfenster (§2.5): Menüs samt Sperrgrund (`_reason_locked`), Auswahl, Vorschaufreigabe, Export, Quittungen (`announce`), die Verdrahtung aller Panels und Flüsse |
+| `main_window.py` | Menüs (`_reason_locked`), Auswahl, Vorschau, Export, Quittungen (`announce`), Panel-/Flussverdrahtung; Griff-/Panelwinkel löschen `measured_frame` nur bei Richtungsänderung |
 | `splash.py` | Ladebildschirm beim Start (§2.8) |
 | `first_run.py` | Erstlauf (§38); `_PrinterSurvey`, `PrinterComboBox` mit fester Live-Suche; Druckerlisten gemeinsam gruppiert |
 | `start_screen.py` | die ersten fünf Minuten (§2.3) |
@@ -109,7 +109,7 @@ Karte, dort das Gesetz.
 
 | Datei | Zweck |
 |---|---|
-| `placement_flow.py` | Flächenplatzierung (§18.5): zielen, Stelle (`_settle`), Maße, Tiefe (`_begin_depth`), Escape je Stufe zurück (`step_back`). Träger ist ein Operationsdialog oder `QuietHost` am gewählten Merkmal (`PlacementHost`); Fläche und Werkzeug rechnet `Session.placement_async`; die Maßtinte `_Dimensions` zeichnet im Renderer. Die Tiefe beginnt mit dem Material unter der Mündung statt mit `depth = 0` (durch das ganze Teil); die Null bleibt tippbar |
+| `placement_flow.py` | Flächenplatzierung (§18.5): `_settle` setzt, `_begin_depth` steuert Tiefe; Escape: `step_back`. Dialog/`QuietHost` über `PlacementHost`, Fläche/Werkzeug über `Session.placement_async`, Maße über `_Dimensions`. Mündung zuerst, `0`=Durchgang. Langlochrahmen: Flächennormale beim Setzen, positive Merkmalachse beim Ziehen/Ändern; Gegenmündung dreht rechtshändig. Der Mündungsumriss trifft die gewählte Ebene entlang der Werkzeugachse; bei nahezu paralleler Achse bleibt der Werkzeugkörper sichtbar. Alt-`measured_frame`: Achse im Arbeiter lösen, Ausdrücke beim Verschieben erhalten. |
 | `slot_handle.py` | der Langlochgriff: zwei Knöpfe am gewählten Loch, der Zug gibt Länge und Richtung (`slotDragged`); übernommen wird im Merkmalfenster |
 | `scale_widget.py` | der Skalierwürfel am Gizmo (§18.11) |
 | `transform_bar.py` | die Bewegen-Leiste: drei Rollen, die Zahlen daneben (§18.11) |

@@ -19780,3 +19780,54 @@ def test_a_late_manufacturer_foundation_starts_no_run_in_a_closing_window(
     window._foundation_found(key, foundation)
 
     assert runs == ([] if closing else [True])
+
+
+def test_changing_a_migrated_slot_angle_returns_it_to_the_current_frame() -> None:
+    """Ein Griffwinkel ist heute gemessen; eine reine Längenänderung bleibt alt."""
+    from types import SimpleNamespace
+
+    from app.core.sketch.planes import frame_of
+
+    axis = (0.001, 0.0, 1.0)
+    previous = frame_of(axis, (0.0, 0.0, 0.0))
+    feature = SimpleNamespace(
+        kind="slot",
+        created_by=17,
+        params={
+            "axis": axis,
+            "direction": previous.x_axis,
+            "centre": (0.0, 0.0, 0.0),
+            "length": 20.0,
+            "diameter": 6.0,
+        },
+    )
+    step = SimpleNamespace(
+        id=17, op="slot_hole", params={"slot_angle": 0.0, "measured_frame": True}
+    )
+    result = SimpleNamespace(
+        scene=SimpleNamespace(objects={"obj_1": SimpleNamespace(features={"slot_1": feature})})
+    )
+    window = SimpleNamespace(
+        object_tree=SimpleNamespace(selected=lambda: "obj_1"),
+        session=SimpleNamespace(
+            last_result=result,
+            project=SimpleNamespace(document=SimpleNamespace(ops=[step])),
+        ),
+    )
+    values = {
+        "slot_angle": 0.0,
+        "slot_length": 20.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+    }
+
+    changed_angle = MainWindow._prepare_slot_change(window, "slot_1", values)
+    changed_length = MainWindow._prepare_slot_change(
+        window, "slot_1", {**values, "slot_angle": 90.0, "slot_length": 25.0}
+    )
+
+    assert changed_angle is not None
+    assert changed_angle.change_values == {"slot_angle": 0.0, "measured_frame": False}
+    assert changed_length is not None
+    assert changed_length.change_values == {"slot_length": 25.0}

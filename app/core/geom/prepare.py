@@ -1789,7 +1789,7 @@ def drill(
     # wird die Richtung, und aus der Richtung der Rahmen des Werkzeugs.
     length = math.hypot(float(direction[0]), float(direction[1]), float(direction[2]))
     if length <= EPS_GEOM and (widening_diameter > EPS_GEOM or travel > EPS_GEOM):
-        direction[AXIS_INDEX[axis]] = -_into_the_material(mesh, axis, position)
+        direction = np.asarray(drill_outward_axis(mesh, axis, position), dtype=np.float64)
         length = 1.0
     if length > EPS_GEOM:
         from app.core.sketch.planes import frame_of
@@ -2370,6 +2370,21 @@ def _into_the_material(mesh: MeshData, axis: Axis, position: Vec3) -> float:
     if len(sides) == 1:
         return -sides[0]
     return into_the_body(mesh, axis, position)
+
+
+def drill_outward_axis(mesh: MeshData, axis: Axis, position: Vec3) -> Vec3:
+    """Die vom Netzkern bei einer Nullnormalen gewählte Außenrichtung."""
+    direction = [0.0, 0.0, 0.0]
+    direction[AXIS_INDEX[axis]] = -_into_the_material(mesh, axis, position)
+    return (direction[0], direction[1], direction[2])
+
+
+def drill_outward_axis_from_bounds(axis: Axis, position: Vec3, centre: Vec3) -> Vec3:
+    """Die gemeinsame Hüllmittenentscheidung des exakten Bohrkerns."""
+    index = AXIS_INDEX[axis]
+    direction = [0.0, 0.0, 0.0]
+    direction[index] = 1.0 if position[index] >= centre[index] else -1.0
+    return (direction[0], direction[1], direction[2])
 
 
 def _axis_alignment(axis: Axis) -> np.ndarray:

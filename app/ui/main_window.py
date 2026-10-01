@@ -12670,6 +12670,8 @@ class MainWindow(QMainWindow):
             value = params.get(name)
             if isinstance(value, int | float) and abs(float(value) - was) > EPS_DISPLAY:
                 changed[name] = float(value)
+        if "slot_angle" in changed and step.params.get("measured_frame") is True:
+            changed["measured_frame"] = False
         diameter = params.get("diameter")
         if isinstance(diameter, int | float):
             from app.core.geom.prepare import bore_diameter

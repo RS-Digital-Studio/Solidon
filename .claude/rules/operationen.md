@@ -306,11 +306,13 @@ ihr (`actions._carried_by`).
 
 ## Ein Winkel gilt dem Rahmen, den er bekommt
 
-`drill_hole` zählt ihn gegen die Normale der Fläche, `slot_hole` gegen die Achse
-des Merkmals — **das bleibt so** (zwei Mündungen, Regel 21). Den Rahmen baut
-`prepare.slot_frame`, im Messrauschen neben einer Hauptachse aus dieser.
-`units.positive_axis` normiert Achse und Richtung; das Vorzeichen ist keine
-Auskunft (`placement.seat_of` fragt beide Mündungen).
+`drill_hole` nutzt Flächennormale, `slot_hole` Merkmalsachse. `slot_frame` baut
+den Rahmen; `positive_axis` normiert. `seat_of` prüft beide Mündungen,
+Vorzeichen sagen nichts.
+
+`measured_frame` hält Altwinkel: Auswertung/Vorschau rechnen je Lauf mit aktueller
+Achse um. Griff/Panel löschen ihn nur bei Richtungswechsel; Länge/Position
+behalten Marker und Ausdruck.
 
 ## Die Werkzeugzugabe steht einmal, und ein Langloch bekommt sie nie
 

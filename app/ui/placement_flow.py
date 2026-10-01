@@ -87,6 +87,33 @@ _log = get_logger(__name__)
 _PICK_IN_MODEL: Final = "pick"
 
 
+def _mouth_outline_on_surface(
+    outline: Sequence[tuple[float, float]],
+    point: Vec3,
+    normal: Vec3,
+    axis_u: Vec3,
+    axis_v: Vec3,
+    axis_w: Vec3,
+) -> tuple[Vec3, ...]:
+    """Legt den Mündungsumriss entlang der Werkzeugachse in die Flächenebene."""
+    if not outline:
+        return ()
+    surface_normal = np.asarray(normal, dtype=np.float64)
+    tool_axis = np.asarray(axis_w, dtype=np.float64)
+    axis_dot_normal = float(np.dot(tool_axis, surface_normal))
+    if abs(axis_dot_normal) <= EPS_GEOM:
+        return ()
+    coordinates = np.asarray(outline, dtype=np.float64)
+    offsets = coordinates[:, :1] * np.asarray(axis_u, dtype=np.float64) + coordinates[
+        :, 1:
+    ] * np.asarray(axis_v, dtype=np.float64)
+    offsets -= np.outer((offsets @ surface_normal) / axis_dot_normal, tool_axis)
+    positions = np.asarray(point, dtype=np.float64) + offsets
+    return tuple(
+        (float(position[0]), float(position[1]), float(position[2])) for position in positions
+    )
+
+
 @runtime_checkable
 class PlacementHost(Protocol):
     """Woran eine Platzierung hängt — und das ist weniger als ein Dialog.
@@ -1378,6 +1405,10 @@ class PlacementFlow(QObject):
         self._tool: Item | None = None
         self._addition: Item | None = None
         self._tool_context: placement.PlacementTool | None = None
+        #: Die im Arbeiter aufgelöste Altachse; kein Parameterlauf je Zeigerbild.
+        self._tool_axis: tuple[float, float, float] | None = None
+        #: Der Winkel des vorbereiteten Werkzeugs im lokalen Rahmen.
+        self._tool_angle: float | None = None
         self._tool_key = ""
         self._prepared: Any = None
         self._prepared_mesh: Any = None
@@ -2217,6 +2248,8 @@ class PlacementFlow(QObject):
         self.viewport.grip_placement(None)
         self._remove_tools()
         self._tool_context = None
+        self._tool_axis = None
+        self._tool_angle = None
         self._tool_key = ""
         if self._showing_input:
             self._showing_input = False
@@ -3260,22 +3293,39 @@ class PlacementFlow(QObject):
             return True
         if self._surface is None or self._tool_context is None:
             return False
+        refresh_tool = False
         self._updating = True
         try:
             source, feature = self._source_feature()
-            self.dialog.take_placement(
-                placement.surface_values(
-                    self.spec_of(),
-                    self._surface,
-                    feature=feature,
-                    source=source,
-                    prepared_tool=self._tool_context,
-                    mouth=self._own_mouth,
-                )
+            values = placement.surface_values(
+                self.spec_of(),
+                self._surface,
+                feature=feature,
+                source=source,
+                prepared_tool=self._tool_context,
+                mouth=self._own_mouth,
             )
-            return True
+            entered = self.dialog.values()
+            spec = self.spec_of()
+            if spec.name in placement.DRILL_OPERATIONS and entered.get("measured_frame"):
+                # Eine Positionsgeste darf die alte Achse samt Ausdruck nicht
+                # durch die Normale der angeklickten Fläche ersetzen.
+                for field in normal_fields(spec.params):
+                    if field in entered:
+                        values[field] = entered[field]
+            self.dialog.take_placement(values)
+            refresh_tool = (
+                spec.name in placement.DRILL_OPERATIONS
+                and bool(entered.get("measured_frame"))
+                and bool(self._tool_context.position_dependent_axis)
+            )
         finally:
             self._updating = False
+        if refresh_tool:
+            # Bei alten Nullachsen hängt der Kernpfad von der neuen Mündung ab.
+            # Der Worker löst Richtung, Werkzeug und Cache-Schlüssel gemeinsam auf.
+            self._request_tool()
+        return True
 
     def _source_feature(self) -> tuple[SceneObject | None, Feature | None]:
         """Ein vorhandenes Merkmal gehört eindeutig zu einem Eingangskörper."""
@@ -3307,43 +3357,96 @@ class PlacementFlow(QObject):
         ]
         return found[0] if len(found) == 1 else (None, None)
 
-    def _tool_axes(self, surface: Any) -> tuple[Any, Any]:
-        """Die zwei Achsen in der Fläche, in die das Werkzeug der Vorschau gelegt wird.
+    def _tool_axes(self, surface: Any) -> tuple[Any, Any, Any]:
+        """Die drei Weltachsen, in die das Vorschauwerkzeug gelegt wird.
 
-        **Ein Langloch liegt im Rahmen seines Schnitts, soweit die Fläche ihn
-        trägt.** Sein Winkel zählt seit dem 30.09.2026 gegen
-        :func:`app.core.geom.prepare.slot_frame` — an einer Normalen knapp neben
-        einer Hauptachse gegen die Hauptachse, in Operation und Griff. Der Rahmen
-        der Fläche (``frame_of``) folgt dort dem Rauschen; mit ihm zeigte die
-        Vorschau das Langloch in einer anderen Richtung, als geschnitten wird.
-
-        Beim Bohren ist die Normale der Fläche die des Schnitts. *Zum Langloch
-        ziehen* und *Bohrung ändern* zählen dagegen gegen die positive Achse der
-        Bohrung (``units.positive_axis``): Sitzt die Mündung auf einer Fläche, die
-        entgegen zeigt, oder steht die Bohrung mehr als ``SLOT_ACROSS_LIMIT``
-        schief zu ihr, liegt die Vorschau gespiegelt oder gedreht — ihr Werkzeug
-        wird im Rahmen der Fläche gebaut (``placement``), nicht in dem der Achse.
-
-        Alles andere liegt im Rahmen der Fläche: Eine runde Bohrung ist um ihre
-        Achse gleich, ein Baustein oder eine Beschriftung zählen ihren Winkel
-        gegen ihn.
+        *Zum Langloch ziehen* und *Bohrung ändern* schneiden entlang der
+        positiven Achse des gewählten Merkmals. Ihre Vorschau muss deshalb
+        ``slot_frame`` dieser Achse verwenden, auch wenn die Mündung auf einer
+        entgegengesetzten Fläche oder auf einer leicht geneigten Fläche sitzt.
+        *Bohrung setzen* nimmt bei neuen Langlöchern die Flächennormale. Ein
+        migrierter Schritt mit ``measured_frame`` behält seine gespeicherte,
+        bei jeder Auswertung aufgelöste Achse.
         """
-        name = self.spec_of().name
-        slotted = name in {"slot_hole", "resize_hole"} or (
-            name in placement.DRILL_OPERATIONS and bool(self.dialog.values().get("slotted"))
-        )
-        if not slotted:
-            return (
-                np.asarray(surface.frame.x_axis, dtype=np.float64),
-                np.asarray(surface.frame.y_axis, dtype=np.float64),
-            )
-        from app.core.geom.prepare import slot_frame
+        spec = self.spec_of()
+        name = spec.name
+        if name in {"slot_hole", "resize_hole"}:
+            _source, feature = self._source_feature()
+            if feature is not None:
+                from app.core.geom.prepare import slot_frame
+                from app.core.units import positive_axis
 
-        normal = np.asarray(surface.normal, dtype=np.float64)
-        frame = slot_frame((float(normal[0]), float(normal[1]), float(normal[2])), (0.0, 0.0, 0.0))
+                axis = positive_axis(feature.params["axis"])
+                frame = slot_frame(axis, (0.0, 0.0, 0.0))
+                basis = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+                side = (
+                    1.0
+                    if float(np.dot(frame.normal, np.asarray(surface.normal, dtype=np.float64)))
+                    >= 0.0
+                    else -1.0
+                )
+                if side < 0.0:
+                    from app.core.units import exact_cos_degrees, exact_sin_degrees
+
+                    angle = self._tool_angle or 0.0
+                    direction = np.asarray(
+                        (exact_cos_degrees(angle), exact_sin_degrees(angle)), dtype=np.float64
+                    )
+                    turn = 2.0 * np.outer(direction, direction) - np.eye(2, dtype=np.float64)
+                    local = np.eye(3, dtype=np.float64)
+                    local[:2, :2] = turn
+                    local[2, 2] = -1.0
+                    basis = basis @ local
+                return (
+                    np.asarray(basis[:, 0], dtype=np.float64),
+                    np.asarray(basis[:, 1], dtype=np.float64),
+                    np.asarray(basis[:, 2], dtype=np.float64),
+                )
+
+        values = self.dialog.values()
+        measured_drill = name in placement.DRILL_OPERATIONS and bool(values.get("measured_frame"))
+        if measured_drill:
+            assert self._tool_context is not None and not self._tool_busy
+            assert self._tool_axis is not None, "Die Altachse wurde im Arbeiter nicht aufgelöst."
+            normal = np.asarray(self._tool_axis, dtype=np.float64)
+            length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
+            assert length > EPS_GEOM, "Die Altachse muss eine endliche Richtung tragen."
+            normal /= length
+            if values.get("slotted"):
+                from app.core.geom.prepare import slot_frame
+
+                frame = slot_frame(
+                    (float(normal[0]), float(normal[1]), float(normal[2])), (0.0, 0.0, 0.0)
+                )
+            else:
+                from app.core.sketch.planes import frame_of
+
+                frame = frame_of(
+                    (float(normal[0]), float(normal[1]), float(normal[2])), (0.0, 0.0, 0.0)
+                )
+            return (
+                np.asarray(frame.x_axis, dtype=np.float64),
+                np.asarray(frame.y_axis, dtype=np.float64),
+                np.asarray(frame.normal, dtype=np.float64),
+            )
+
+        slotted_drill = name in placement.DRILL_OPERATIONS and bool(values.get("slotted"))
+        if slotted_drill:
+            from app.core.geom.prepare import slot_frame
+
+            normal = np.asarray(surface.normal, dtype=np.float64)
+            frame = slot_frame(
+                (float(normal[0]), float(normal[1]), float(normal[2])), (0.0, 0.0, 0.0)
+            )
+            return (
+                np.asarray(frame.x_axis, dtype=np.float64),
+                np.asarray(frame.y_axis, dtype=np.float64),
+                np.asarray(frame.normal, dtype=np.float64),
+            )
         return (
-            np.asarray(frame.x_axis, dtype=np.float64),
-            np.asarray(frame.y_axis, dtype=np.float64),
+            np.asarray(surface.frame.x_axis, dtype=np.float64),
+            np.asarray(surface.frame.y_axis, dtype=np.float64),
+            np.asarray(surface.normal, dtype=np.float64),
         )
 
     def _dragged_in_preview(self, matrix: Any) -> None:
@@ -3433,19 +3536,27 @@ class PlacementFlow(QObject):
             return
         spec = self.spec_of()
         source, feature = self._source_feature()
-        # **Eine eigene Kopie**, denn gleich werden Achsen und Ort auf null
-        # gesetzt: Der Schlüssel soll dieselbe Form beschreiben, gleich wo sie
-        # steht. Der Träger gibt ein ``Mapping`` zurück — er verspricht nicht,
-        # dass man hineinschreiben darf, und beim Dialog wäre es die Rechnung
-        # eines fremden Feldes.
+        # **Eine eigene Kopie**, denn für gewöhnliche Werkzeuge werden Ort und
+        # Normale auf null gesetzt: Der Schlüssel soll dieselbe Form
+        # beschreiben, gleich wo sie steht. Alte Bohrungen mit gemessener
+        # Rahmenachse behalten Ort und Achswahl für die Kernentscheidung.
+        # Der Träger gibt ein ``Mapping`` zurück — er verspricht nicht, dass man
+        # hineinschreiben darf, und beim Dialog wäre es die Rechnung eines
+        # fremden Feldes.
         values = dict(self.dialog.values())
         placed = placement_fields(spec.params)
-        for name in (*(placed[axis] for axis in ("x", "y", "z")), *normal_fields(spec.params)):
+        measured_drill = spec.name in placement.DRILL_OPERATIONS and bool(
+            values.get("measured_frame")
+        )
+        names_to_zero = () if measured_drill else tuple(placed[axis] for axis in ("x", "y", "z"))
+        if not measured_drill:
+            names_to_zero += tuple(normal_fields(spec.params))
+        for name in names_to_zero:
             if name in values:
                 values[name] = 0.0
         if placed["at_feature"] in values and feature is None:
             values[placed["at_feature"]] = ""
-        if placed["axis"] in values:
+        if placed["axis"] in values and not measured_drill:
             values[placed["axis"]] = "z"
         profile = for_object(self.session.profile, source)
         parameters = dict(self.session.project.document.parameters)
@@ -3466,7 +3577,7 @@ class PlacementFlow(QObject):
         self._tool_context = None
         self.redraw()
 
-        def compute() -> Any:
+        def compute() -> placement.PlacementTool:
             resolved = expressions.resolve(parameters)
             entered = expressions.resolve_params(values, resolved)
             return placement.prepare_tool(
@@ -3485,6 +3596,8 @@ class PlacementFlow(QObject):
                 return
             self._tool_busy = False
             if self.active and epoch == self._epoch and not self._tool_again:
+                self._tool_axis = context.outward_axis if context is not None else None
+                self._tool_angle = context.angle if context is not None else None
                 renderer = self.viewport.renderer
                 if renderer is not None:
                     self._remove_tools()
@@ -4803,26 +4916,11 @@ class PlacementFlow(QObject):
         for field in self._centre_measures:
             field.setVisible(local_visible and not self._deepening and bool(self._centre_id))
         self._depth_measure.setVisible(local_visible and self._deepening)
-        # **Wo ein Umriss die Stelle zeigt, tritt der Körper zurück.** Der
-        # halbtransparente Zylinder steht auch außerhalb des Materials, und
-        # beim Drehen der Ansicht war schwer zu sehen, wo das Loch hinkommt
-        # (Befund Robert, 09.09.2026). Gebaut wird er weiter — er trägt die
-        # Geometrie, an der das Setzen hängt —, gezeigt nur, wo er die
-        # einzige Auskunft ist: bei einem Werkzeug ohne Mündung in der Fläche,
-        # und für die Tiefe, die man allein an ihm sieht.
-        # **In der Tiefenstufe kehrt sich das um.** Dort ist der Körper die
-        # einzige Auskunft, die es gibt — der Umriss sagt nichts über die
-        # Tiefe, und wer sie zieht, muss sehen, wie weit der Zylinder reicht
-        # (Robert, 09.09.2026: „bei weiter zur tiefe sehe ich den zylinder für
-        # die bohrung nicht").
-        has_outline = (
-            not self._deepening
-            and self._tool_context is not None
-            and bool(placement.mouth_outline(self._tool_context))
-        )
+        # Die endgültige Sichtbarkeit folgt dem Umriss, nachdem dessen Lage in
+        # der gewählten Flächenebene feststeht.
         for item in (self._tool, self._addition):
             if item is not None:
-                item.set_visible(tool_valid and local_visible and not has_outline)
+                item.set_visible(tool_valid and local_visible)
         if not local_visible:
             self._canvas.hide()
             # Eine wartende Karte bleibt, wo sie ist: auch ``raise_`` malt über
@@ -4839,10 +4937,26 @@ class PlacementFlow(QObject):
                 self._draw_soon()
             return
         point = np.asarray(surface.point, dtype=np.float64)
-        axis_u, axis_v = self._tool_axes(surface)
-        if self._tool is not None:
+        values = self.dialog.values()
+        needs_measured_axis = self.spec_of().name in placement.DRILL_OPERATIONS and bool(
+            values.get("measured_frame")
+        )
+        measured_axis_ready = not needs_measured_axis or (
+            self._tool_context is not None and not self._tool_busy and self._tool_axis is not None
+        )
+        if measured_axis_ready:
+            axis_u, axis_v, axis_w = self._tool_axes(surface)
+        else:
+            # Die Flächenmaße bleiben sichtbar; Werkzeugachsen erscheinen erst
+            # nach einer passenden Antwort des Arbeiters.
+            axis_u, axis_v, axis_w = (
+                np.asarray(surface.frame.x_axis, dtype=np.float64),
+                np.asarray(surface.frame.y_axis, dtype=np.float64),
+                np.asarray(surface.normal, dtype=np.float64),
+            )
+        if self._tool is not None and tool_valid and measured_axis_ready:
             matrix = np.eye(4, dtype=np.float64)
-            matrix[:3, :3] = np.asarray([axis_u, axis_v, surface.normal], dtype=np.float64).T
+            matrix[:3, :3] = np.asarray([axis_u, axis_v, axis_w], dtype=np.float64).T
             matrix[:3, 3] = self.viewport.view_point_of(surface.point, self._object_id)
             self._tool.set_matrix(matrix)
             if self._addition is not None:
@@ -4880,17 +4994,44 @@ class PlacementFlow(QObject):
         # Zylinder, auch außerhalb des Materials, und beim Drehen der Ansicht
         # war beides schwer auseinanderzuhalten (Befund Robert, 09.09.2026).
         #
-        # Gerechnet wird nichts: Der Umriss steht im vorbereiteten Werkzeug,
-        # und hier wird er nur in die Ebene der Fläche gelegt und projiziert.
+        # Gerechnet wird nichts: Der Umriss steht im vorbereiteten Werkzeug.
+        # Jeder Randpunkt wird entlang der Werkzeugachse dort abgetragen, wo
+        # diese die angeklickte Flächenebene trifft.
         outline = (
             placement.mouth_outline(self._tool_context) if self._tool_context is not None else ()
         )
+        surface_outline = (
+            _mouth_outline_on_surface(
+                outline,
+                surface.point,
+                surface.normal,
+                axis_u,
+                axis_v,
+                axis_w,
+            )
+            if outline and not self._deepening
+            else ()
+        )
+        # **Wo ein Umriss die Stelle zeigt, tritt der Körper zurück.** Der
+        # halbtransparente Zylinder steht auch außerhalb des Materials, und
+        # beim Drehen der Ansicht war schwer zu sehen, wo das Loch hinkommt
+        # (Befund Robert, 09.09.2026). Gebaut wird er weiter — er trägt die
+        # Geometrie, an der das Setzen hängt —, gezeigt nur, wo er die
+        # einzige Auskunft ist: bei einem Werkzeug ohne Mündung in der Fläche,
+        # und für die Tiefe, die man allein an ihm sieht.
+        # **In der Tiefenstufe kehrt sich das um.** Dort ist der Körper die
+        # einzige Auskunft, die es gibt — der Umriss sagt nichts über die
+        # Tiefe, und wer sie zieht, muss sehen, wie weit der Zylinder reicht
+        # (Robert, 09.09.2026: „bei weiter zur tiefe sehe ich den zylinder für
+        # die bohrung nicht").
+        has_outline = bool(surface_outline)
+        for item in (self._tool, self._addition):
+            if item is not None:
+                item.set_visible(tool_valid and local_visible and not has_outline)
         # Wartet ein Langlochzug, steht sein Umriss im Bild (`SlotHandle`);
         # der runde der Mündung sagte daneben etwas Falsches.
-        if outline and not slot_waits:
-            self._canvas.outline = [
-                screen(tuple(point + axis_u * u + axis_v * v)) for u, v in outline
-            ]
+        if surface_outline and not slot_waits:
+            self._canvas.outline = [screen(position) for position in surface_outline]
             self._canvas.outline_colour = QColor(
                 DIFF_PALETTES[getattr(self.viewport, "_diff_palette", "blue_orange")].removed.colour
             )

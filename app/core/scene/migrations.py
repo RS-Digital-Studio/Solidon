@@ -1049,29 +1049,26 @@ def _keep_slot_directions_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     Winkel meinte heute eine andere Richtung, und ein gespeichertes Langloch
     stünde nach dem Update verdreht im Teil.
 
-    **Umgerechnet, nicht gemeldet.** Der Kunde hat sein Langloch in die
-    Richtung gelegt, die er im Bild sah, und das Teil so gedruckt; ein Hinweis
-    beim Öffnen hätte ihm nur gesagt, dass es jetzt anders liegt, und ihn die
-    alte Richtung von Hand suchen lassen. Die Umrechnung trifft sie genau, denn
-    der alte Rahmen ist aus derselben Achse berechenbar. Deshalb, je Schritt:
+    **Bei der Auswertung umrechnen, nicht in der Datei.** Ein gespeicherter
+    Winkel kann ein Ausdruck über Projektparameter sein. Sein Zahlenwert und
+    die Achse, auf die er wirkt, können sich bei jeder Auswertung ändern. Die
+    Migration markiert deshalb nur alte Langlöcher mit ``measured_frame``;
+    die Operation rechnet den unveränderten Winkel anhand der dann aufgelösten
+    Achse um. So bleiben Winkel- und Achsausdrücke auch nach Verlauf,
+    Speichern und erneutem Öffnen gebunden.
 
-    * *Bohrung setzen* mit Haken *Langloch* trägt seine Normale im Schritt. Der
-      alte Rahmen lässt sich daraus rechnen, und der Winkel wird hier
-      umgerechnet (``prepare.slot_angle_from_measured_frame``): dieselbe
-      Richtung in der Welt, geschnitten wie gespeichert. Ohne Normale gilt eine
-      Hauptachse, und beide Rahmen sind gleich.
-    * *Zum Langloch ziehen* zählt gegen die Achse des erkannten Merkmals, und
-      die steht erst bei der Auswertung fest. Der Schritt bekommt
-      ``measured_frame``: Die Operation liest den Winkel im alten Rahmen und
-      hält ihn einmal im neuen fest (``answered``).
+    * *Bohrung setzen* mit Haken *Langloch* liest seine Normale aus den
+      aufgelösten Parametern. Ohne Normale gilt eine Hauptachse; beide Rahmen
+      stimmen dort überein.
+    * *Zum Langloch ziehen* liest die Achse des erkannten Merkmals erst bei der
+      Auswertung. Der Marker bleibt im Schritt, damit auch spätere Änderungen
+      an vorherigen Schritten dieselbe alte Winkelbedeutung behalten.
 
     Wie 34 → 35 auch in den gespeicherten Fassungen ``before`` und ``after``
     jeder Änderung; ein Schritt, der den Schlüssel schon trägt, bleibt, wie er
     ist. Festgehalten an ``tests/data/projects/slot_angle_frame_v38.p3d``,
     geschrieben vom Stand vor der Änderung.
     """
-    from app.core.units import EPS_GEOM
-
     operations = list(data.get("ops", []))
     for transaction in data.get("transactions", []):
         changes = transaction.get("changes")
@@ -1095,23 +1092,7 @@ def _keep_slot_directions_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
             continue
         if params.get("slotted") is not True:
             continue
-        # Erst hier, und nur für ein gespeichertes Langloch: Die Rahmen kommen
-        # aus dem Geometriekern, den eine Datei ohne Langloch nicht braucht.
-        from app.core.geom.prepare import slot_angle_from_measured_frame, slot_frame
-        from app.core.sketch.planes import frame_of
-
-        raw = [params.get(name, 0.0) for name in ("nx", "ny", "nz", "slot_angle")]
-        if not all(isinstance(value, int | float) and math.isfinite(value) for value in raw):
-            continue
-        normal = (float(raw[0]), float(raw[1]), float(raw[2]))
-        # Ohne Normale bohrt der Schritt entlang einer Hauptachse (``axis``),
-        # und dort sind beide Rahmen gleich — wie überall außerhalb des Kegels.
-        if math.hypot(*normal) <= EPS_GEOM:
-            continue
-        origin = (0.0, 0.0, 0.0)
-        if slot_frame(normal, origin) == frame_of(normal, origin):
-            continue
-        params["slot_angle"] = slot_angle_from_measured_frame(normal, float(raw[3]))
+        params.setdefault("measured_frame", True)
     return data
 
 

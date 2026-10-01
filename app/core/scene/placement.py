@@ -915,6 +915,9 @@ class PlacementTool:
     selected_offset: Vec3 | None = None
     feature_id: str = ""
     addition: MeshData | None = None
+    outward_axis: Vec3 | None = None
+    angle: float | None = None
+    position_dependent_axis: bool = False
 
 
 def _vec(values: Any) -> Vec3:
@@ -2414,7 +2417,7 @@ def prepare_tool(
             parameters=parameters,
         )
         return PlacementTool(primary, addition=addition)
-    return PlacementTool(_creation_tool(spec, entered_values, profile, source=source))
+    return _creation_tool(spec, entered_values, profile, source=source)
 
 
 def _feature_named(source: SceneObject | None, name: str) -> Feature | None:
@@ -2429,14 +2432,48 @@ def _feature_named(source: SceneObject | None, name: str) -> Feature | None:
     return source.features.get(name)
 
 
+def _outward_drill_axis(values: Any, source: SceneObject | None) -> Vec3:
+    """Die gespeicherte oder am Kernpfad aufgelöste Außenachse einer Bohrung."""
+    from app.core.geom.prepare import (
+        AXIS_INDEX,
+        drill_outward_axis,
+        drill_outward_axis_from_bounds,
+    )
+
+    normal = (float(values.nx), float(values.ny), float(values.nz))
+    length = math.hypot(*normal)
+    if length > EPS_GEOM:
+        return (normal[0] / length, normal[1] / length, normal[2] / length)
+
+    axis = values.axis
+    index = AXIS_INDEX[axis]
+    position = (float(values.x), float(values.y), float(values.z))
+    if source is None:
+        direction = [0.0, 0.0, 0.0]
+        direction[index] = 1.0
+        return (direction[0], direction[1], direction[2])
+    elif source.kind == "brep":
+        # Dieselbe Kernentscheidung liegt im BRep-Werkzeugweg über dem Netz.
+        bounds_centre = source.mesh.bounds.centre
+        centre = (
+            float(bounds_centre[0]),
+            float(bounds_centre[1]),
+            float(bounds_centre[2]),
+        )
+        return drill_outward_axis_from_bounds(axis, position, centre)
+    else:
+        # Der Netzkern prüft zuerst die offene Strahlseite, dann die Materialsäule.
+        return drill_outward_axis(as_mesh_data(source.mesh), axis, position)
+
+
 def _creation_tool(
     spec: OperationSpec,
     entered_values: Mapping[str, Any],
     profile: Profile,
     *,
     source: SceneObject | None = None,
-) -> MeshData:
-    """Vorhandene Erzeugungsgeometrie im lokalen Mündungs-/Basisrahmen."""
+) -> PlacementTool:
+    """Werkzeug samt den Achsen und Winkeln der tatsächlichen Vorschau vorbereiten."""
     from app.core.knowledge.parts.ops import part_of
     from app.core.knowledge.profiles import for_object
     from app.core.registry.params import validate
@@ -2451,12 +2488,12 @@ def _creation_tool(
         # Vorgaben füllen ``segments`` und ``anchor``, wo der exakte sie nicht hat).
         mesh_name = _mesh_primitive_name(spec.name)
         checked = validate(REGISTRY.get(mesh_name).params, entered_values)
-        return primitive_local_tool(mesh_name, checked.as_dict(), "fine")
+        return PlacementTool(primitive_local_tool(mesh_name, checked.as_dict(), "fine"))
     part = part_of(spec.name)
     if part is not None:
         from app.core.knowledge.parts.ops import placement_tool as part_tool
 
-        return part_tool(part, entered_values, profile)
+        return PlacementTool(part_tool(part, entered_values, profile))
     if spec.name in DRILL_OPERATIONS:
         from app.core.geom.prepare import drill_tool
         from app.core.geom.prepare_ops import bore_shape
@@ -2473,22 +2510,32 @@ def _creation_tool(
         # abschaltet, darf auch die Vorschau nicht zeigen — sonst steht dort
         # eine Senkung, die der fertige Schnitt nicht hat.
         shape = bore_shape(values)
-        return drill_tool(
-            diameter=float(values.diameter),
-            depth=depth,
-            profile=profile,
-            compensate=bool(values.compensate),
-            widening_diameter=shape.widening_diameter,
-            widening_depth=shape.widening_depth,
-            transition_angle=float(values.transition_angle),
-            slot_length=shape.slot_length,
-            slot_angle=shape.slot_angle,
+        raw_axis = (float(values.nx), float(values.ny), float(values.nz))
+        position_dependent_axis = (
+            bool(values.measured_frame) and source is not None and math.hypot(*raw_axis) <= EPS_GEOM
+        )
+        return PlacementTool(
+            drill_tool(
+                diameter=float(values.diameter),
+                depth=depth,
+                profile=profile,
+                compensate=bool(values.compensate),
+                widening_diameter=shape.widening_diameter,
+                widening_depth=shape.widening_depth,
+                transition_angle=float(values.transition_angle),
+                slot_length=shape.slot_length,
+                slot_angle=shape.slot_angle,
+            ),
+            outward_axis=(_outward_drill_axis(values, source) if values.measured_frame else None),
+            angle=shape.slot_angle if shape.slot_length > EPS_GEOM else None,
+            position_dependent_axis=position_dependent_axis,
         )
     if spec.name in {"slot_hole", "resize_hole"}:
         from app.core.geom.prepare import (
             bore_diameter,
             drill_tool,
             is_round_length,
+            slot_angle_from_measured_frame,
             slot_travel,
         )
 
@@ -2532,6 +2579,8 @@ def _creation_tool(
             )
             length = float(values.slot_length)
             angle = float(values.slot_angle)
+            if values.measured_frame:
+                angle = slot_angle_from_measured_frame(tuple(feature.params["axis"]), angle)
             # **Genau die Breite heißt rund** (:func:`prepare.is_round_length`),
             # dieselbe Frage wie im Kern und am Griff: Die Vorschau zeigt die
             # Bohrung, zu der das Langloch zurückgeht. Sonst ist eine Länge
@@ -2544,31 +2593,36 @@ def _creation_tool(
                 or slot_travel(diameter=cut, length=length) <= 0.0
             ):
                 length = 0.0
-        return drill_tool(
-            diameter=cut,
-            depth=depth,
-            profile=profile,
-            # **Schon gerechnet.** ``bore_diameter`` oben hat die Toleranz
-            # aufgeschlagen, wo sie gilt; ein zweites Mal wäre sie zweimal drauf.
-            compensate=False,
-            slot_length=length,
-            slot_angle=angle,
+        return PlacementTool(
+            drill_tool(
+                diameter=cut,
+                depth=depth,
+                profile=profile,
+                # **Schon gerechnet.** ``bore_diameter`` oben hat die Toleranz
+                # aufgeschlagen, wo sie gilt; ein zweites Mal wäre sie zweimal drauf.
+                compensate=False,
+                slot_length=length,
+                slot_angle=angle,
+            ),
+            angle=angle if length > EPS_GEOM else None,
         )
     if spec.name in {"label_text", "create_label"}:
         from app.core.geom.label_ops import local_text_body
 
         values = validate(spec.params, entered_values)
-        return local_text_body(
-            values.text,
-            values.size,
-            values.font,
-            values.depth,
-            # Der Schnitt gehört zur Form, nicht zur Farbe: Fett ist rund
-            # anderthalbmal so breit wie normal. Ohne ihn zeigte die Vorschau
-            # den normalen und die Operation baute den gewählten.
-            style=values.style,
-            mode=values.mode if spec.name == "label_text" else "body",
-            angle=getattr(values, "angle", 0.0),
+        return PlacementTool(
+            local_text_body(
+                values.text,
+                values.size,
+                values.font,
+                values.depth,
+                # Der Schnitt gehört zur Form, nicht zur Farbe: Fett ist rund
+                # anderthalbmal so breit wie normal. Ohne ihn zeigte die Vorschau
+                # den normalen und die Operation baute den gewählten.
+                style=values.style,
+                mode=values.mode if spec.name == "label_text" else "body",
+                angle=getattr(values, "angle", 0.0),
+            )
         )
     raise _reject(
         "operation",

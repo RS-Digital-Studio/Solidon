@@ -2787,3 +2787,1220 @@ def test_swapped_feature_names_do_not_read_a_remembered_face():
     assert other_after[1][:2] == pytest.approx(at_the_mouth(first)), (
         "die andere Bohrung, nicht die eigene Mitte"
     )
+
+
+def _preview_matrix(
+    operation,
+    normal,
+    *,
+    monkeypatch,
+    feature_axis=None,
+    slotted=False,
+    angle_degrees=0.0,
+    measured_frame=False,
+    tool_axis=None,
+    source=None,
+    axis="z",
+    surface_point=(3.0, -4.0, 5.0),
+    tool_context=None,
+    tool_ready=True,
+    tool_busy=False,
+    capture_projection=None,
+    request_flow=None,
+    captured_items=None,
+    deepening=False,
+):
+    """Die Matrix am echten Zuweisungspunkt in ``PlacementFlow.redraw`` erheben."""
+    from types import MethodType, SimpleNamespace
+
+    from PySide6.QtCore import QRect
+
+    from app.core.sketch.planes import frame_of
+    from app.ui import placement_flow
+    from app.ui.placement_flow import PlacementFlow
+    from tests.ui_helpers import PlacementItem
+
+    feature = None if feature_axis is None else SimpleNamespace(params={"axis": feature_axis})
+    surface = SimpleNamespace(normal=normal, frame=frame_of(normal, (0.0, 0.0, 0.0)))
+    surface.point = surface_point
+    surface.edges = ()
+    surface.centres = ()
+
+    class Widget:
+        def adjustSize(self):  # noqa: N802 - Qt-Protokollname des Testdoppels
+            pass
+
+        def hide(self):
+            pass
+
+        def height(self):
+            return 1
+
+        def isVisibleTo(self, _parent):  # noqa: N802 - Qt-Protokollname des Testdoppels
+            return False
+
+        def move(self, *_args):
+            pass
+
+        def raise_(self):
+            pass
+
+        def setMaximumWidth(self, _width):  # noqa: N802 - Qt-Protokollname des Testdoppels
+            pass
+
+        def setVisible(self, _visible):  # noqa: N802 - Qt-Protokollname des Testdoppels
+            pass
+
+        def setText(self, _text):  # noqa: N802 - Qt-Protokollname des Testdoppels
+            pass
+
+        def show(self):
+            pass
+
+        def sizeHint(self):  # noqa: N802 - Qt-Protokollname des Testdoppels
+            return SimpleNamespace(height=lambda: 1)
+
+        def width(self):
+            return 1
+
+    class RendererStub:
+        def __init__(self):
+            self.items = []
+
+        def add_surface(self, *_args, **_kwargs):
+            item = CapturedMatrix()
+            self.items.append(item)
+            if captured_items is not None:
+                captured_items.append(item)
+            return item
+
+        def world_to_display(self, point):
+            if capture_projection is not None:
+                capture_projection.append(tuple(float(value) for value in point))
+                raise MatrixWasSetError
+            return float(point[0]), float(point[1]), float(point[2])
+
+    class ViewportStub:
+        def __init__(self, renderer):
+            self.renderer = renderer
+            self._diff_palette = "blue_orange"
+            self._object_colour = "blue"
+
+        def rect(self):
+            return QRect(0, 0, 640, 480)
+
+        def slot_drag_waits(self):
+            return False
+
+        def view_point_of(self, point, _object_id):
+            return point
+
+        def grip_placement(self, *_args, **_kwargs):
+            pass
+
+        def _device_ratio(self):
+            return 1.0
+
+        def gizmo_reach(self):
+            return None
+
+    class CapturedMatrix(PlacementItem):
+        def set_matrix(self, matrix):
+            super().set_matrix(matrix)
+            if capture_projection is None:
+                raise MatrixWasSetError
+
+    class MatrixWasSetError(Exception):
+        pass
+
+    renderer = RendererStub()
+    tool = CapturedMatrix() if tool_ready and request_flow is None else None
+    context = tool_context if tool_ready else None
+    if request_flow is None:
+        flow = SimpleNamespace(
+            active=True,
+            _disposed=False,
+            _redraw_held=False,
+            viewport=ViewportStub(renderer),
+            window=SimpleNamespace(),
+            session=SimpleNamespace(result_current=True),
+            spec_of=lambda: SimpleNamespace(name=operation),
+            dialog=SimpleNamespace(
+                values=lambda: {
+                    "slotted": slotted,
+                    "slot_angle": angle_degrees,
+                    "measured_frame": measured_frame,
+                    "axis": axis,
+                }
+            ),
+            _source_feature=lambda: (source, feature),
+            _bar=Widget(),
+            _surface=surface,
+            _display_ready=lambda: True,
+            _change_op=None,
+            _showing_input=False,
+            _tool_context=context if context is not None else (object() if tool_ready else None),
+            _tool_axis=getattr(context, "outward_axis", None) or tool_axis,
+            _tool_angle=getattr(context, "angle", None)
+            if getattr(context, "angle", None) is not None
+            else angle_degrees,
+            _tool_busy=tool_busy,
+            _tool=tool,
+            _addition=None,
+            _accept=SimpleNamespace(setEnabled=lambda _enabled: None),
+            _canvas=SimpleNamespace(hide=lambda: None),
+            _measures=[],
+            _reference_boxes=[Widget(), Widget(), Widget()],
+            _centre=Widget(),
+            _centre_id="",
+            _centre_measures=[],
+            _depth_measure=Widget(),
+            _deepening=deepening,
+            _measure_group=None,
+            _distance_valid=True,
+            _show_bar=lambda: None,
+            _refresh_measure_actions=lambda: None,
+            _size_measure_fields=lambda _room: None,
+            _seat_is_coming=lambda: False,
+            _object_id="object",
+            _frozen=False,
+            _seated_at_feature=False,
+            _field_slots={},
+            _rest=Widget(),
+        )
+    else:
+        flow = request_flow
+        flow.active = True
+        flow._disposed = False
+        flow._redraw_held = False
+        flow.viewport = ViewportStub(renderer)
+        flow.window = SimpleNamespace()
+        flow.session.result_current = True
+        flow._bar = Widget()
+        flow._surface = surface
+        flow._display_ready = lambda: True
+        flow._change_op = None
+        flow._showing_input = False
+        flow._tool = None
+        flow._addition = None
+        flow._accept = SimpleNamespace(setEnabled=lambda _enabled: None)
+        flow._canvas = SimpleNamespace(hide=lambda: None)
+        flow._measures = []
+        flow._reference_boxes = [Widget(), Widget(), Widget()]
+        flow._centre = Widget()
+        flow._centre_id = ""
+        flow._centre_measures = []
+        flow._depth_measure = Widget()
+        flow._deepening = deepening
+        flow._measure_group = None
+        flow._distance_valid = True
+        flow._show_bar = lambda: None
+        flow._refresh_measure_actions = lambda: None
+        flow._size_measure_fields = lambda _room: None
+        flow._seat_is_coming = lambda: False
+        flow._object_id = "object"
+        flow._frozen = False
+        flow._seated_at_feature = False
+        flow._field_slots = {}
+        flow._rest = Widget()
+        flow._tool_legend = Widget()
+        flow._depth_name = lambda: "depth"
+        flow._depth_now = lambda _name: 1.0
+        flow._material_below = lambda: 2.0
+    flow._tool_axes = MethodType(PlacementFlow._tool_axes, flow)
+    monkeypatch.setattr(placement_flow, "QApplication", SimpleNamespace(focusWidget=lambda: None))
+    if capture_projection is None:
+        monkeypatch.setattr(placement_flow.placement, "mouth_outline", lambda _tool: ())
+
+    if request_flow is None:
+        with pytest.raises(MatrixWasSetError):
+            PlacementFlow.redraw(flow, draw=False)
+    else:
+        flow.redraw = lambda: PlacementFlow.redraw(flow, draw=False)
+        compute, done = flow._placement_callbacks[0]
+        with pytest.raises(MatrixWasSetError):
+            done(compute())
+    if tool is not None:
+        return tool.matrix
+    if captured_items:
+        return captured_items[0].matrix
+    return None
+
+
+def _requested_tool_for_preview(
+    operation, values, source, profile, monkeypatch, *, worker_reply="ready"
+):
+    """Einen echten Werkzeugauftrag bis zum Rückruf der Vorschau ausführen."""
+    from types import SimpleNamespace
+
+    from app.core.registry import REGISTRY
+    from app.ui import placement_flow
+    from app.ui.placement_flow import PlacementFlow
+    from tests.ui_helpers import PlacementItem
+
+    entered = dict(values)
+    requests = []
+    callbacks = []
+
+    class RendererStub:
+        def add_surface(self, *_args, **_kwargs):
+            return PlacementItem()
+
+    def placement_async(compute, done, _failed, _refused=None):
+        requests.append(None)
+        if worker_reply == "pending":
+            callbacks.append((compute, done))
+        elif worker_reply == "refused":
+            done(None)
+        else:
+            done(compute())
+
+    dialog = SimpleNamespace(
+        values=lambda: dict(entered), take_placement=lambda changed: entered.update(changed)
+    )
+    flow = SimpleNamespace(
+        active=True,
+        _disposed=False,
+        _tool_busy=False,
+        _tool_again=False,
+        _tool_context=None,
+        _tool_axis=None,
+        _tool_angle=None,
+        _tool_key="",
+        _epoch=1,
+        spec_of=lambda: REGISTRY.get(operation),
+        _source_feature=lambda: (source, source.features.get(entered.get("at_feature", ""))),
+        dialog=dialog,
+        session=SimpleNamespace(
+            profile=profile,
+            project=SimpleNamespace(document=SimpleNamespace(parameters={})),
+            placement_async=placement_async,
+        ),
+        viewport=SimpleNamespace(
+            renderer=RendererStub(), _diff_palette="blue_orange", _object_colour="blue"
+        ),
+        _remove_tools=lambda: None,
+        _set_values=lambda: None,
+        _tool=None,
+        _addition=None,
+        _refused_note=None,
+        _note=SimpleNamespace(text=lambda: "", setText=lambda _text: None),
+        _accept_pending=False,
+        redraw=lambda: None,
+    )
+    flow._placement_requests = requests
+    flow._placement_callbacks = callbacks
+    monkeypatch.setattr(placement_flow, "isValid", lambda _flow: True)
+    PlacementFlow._request_tool(flow)
+    assert (flow._tool_context is not None) is (worker_reply == "ready")
+    return flow
+
+
+@pytest.mark.parametrize("operation", ["slot_hole", "resize_hole"])
+@pytest.mark.parametrize(
+    ("tilt_degrees", "deepening", "expected_visible"),
+    [
+        (1.0, False, False),
+        (2.0, False, False),
+        (90.0, False, True),
+        (1.0, True, True),
+    ],
+    ids=["1-grad", "2-grad", "parallel", "depth"],
+)
+def test_requested_slot_angle_and_mouth_plane_reach_redraw(
+    operation, tilt_degrees, deepening, expected_visible, profile, monkeypatch
+):
+    """Werkzeugrückruf, Umriss und Sichtbarkeit laufen im selben Vorschaufluss."""
+    from types import SimpleNamespace
+
+    from app.core.geom.prepare import slot_angle_from_measured_frame, slot_frame
+    from app.core.geom.prepare_ops import slot_angle_of
+    from app.ui.placement_flow import _mouth_outline_on_surface
+
+    axis = (
+        math.sin(math.radians(tilt_degrees)),
+        0.0,
+        math.cos(math.radians(tilt_degrees)),
+    )
+    feature_frame = slot_frame(axis, (0.0, 0.0, 0.0))
+    feature_angle = 27.0
+    direction = tuple(
+        math.cos(math.radians(feature_angle)) * feature_frame.x_axis[index]
+        + math.sin(math.radians(feature_angle)) * feature_frame.y_axis[index]
+        for index in range(3)
+    )
+    feature = SimpleNamespace(
+        id="slot_1",
+        kind="slot",
+        params={
+            "axis": axis,
+            "direction": direction,
+            "centre": (0.0, 0.0, 0.0),
+            "diameter": 6.0,
+            "depth": 8.0,
+            "length": 20.0,
+            "travel": 14.0,
+        },
+    )
+    source = SimpleNamespace(
+        kind="mesh",
+        material=None,
+        material_slots=(),
+        mesh=MeshData.of(trimesh.creation.box((30.0, 30.0, 8.0))),
+        features={feature.id: feature},
+    )
+    spec = REGISTRY.get(operation)
+    values = {
+        entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+    }
+    values["at_feature"] = feature.id
+    if operation == "slot_hole":
+        values.update(slot_length=20.0, slot_angle=33.0, measured_frame=True)
+        expected_angle = slot_angle_from_measured_frame(axis, 33.0)
+    else:
+        values["diameter"] = 6.0
+        expected_angle = slot_angle_of(feature, axis)
+
+    flow = _requested_tool_for_preview(
+        operation, values, source, profile, monkeypatch, worker_reply="pending"
+    )
+    assert flow._tool_context is None
+    assert flow._tool_busy
+
+    surface_normal = (0.0, 0.0, -1.0)
+    surface_point = (12.0, 0.0, 0.0)
+    projected: list[tuple[float, float, float]] = []
+    captured_items = []
+    matrix = _preview_matrix(
+        operation,
+        surface_normal,
+        feature_axis=axis,
+        measured_frame=operation == "slot_hole",
+        angle_degrees=33.0 if operation == "slot_hole" else feature_angle,
+        source=source,
+        surface_point=surface_point,
+        capture_projection=projected,
+        request_flow=flow,
+        captured_items=captured_items,
+        deepening=deepening,
+        monkeypatch=monkeypatch,
+    )
+    assert flow._tool_context is not None
+    assert not flow._tool_busy
+    assert flow._tool_context.angle == pytest.approx(expected_angle)
+    assert flow._tool_angle == pytest.approx(expected_angle)
+    assert captured_items
+    assert all(item.visible is expected_visible for item in captured_items)
+    basis = matrix[:3, :3]
+    preview_direction = basis @ np.asarray(
+        (math.cos(math.radians(expected_angle)), math.sin(math.radians(expected_angle)), 0.0)
+    )
+    expected_direction = np.asarray(feature_frame.x_axis) * math.cos(
+        math.radians(expected_angle)
+    ) + np.asarray(feature_frame.y_axis) * math.sin(math.radians(expected_angle))
+
+    assert preview_direction == pytest.approx(expected_direction, abs=1e-12)
+
+    if expected_visible:
+        assert projected == [surface_point]
+        assert flow._canvas.outline == []
+    else:
+        outline = np.asarray(placement.mouth_outline(flow._tool_context), dtype=np.float64)
+        local_offsets = outline @ basis[:, :2].T
+        axis_normal = float(np.dot(basis[:, 2], surface_normal))
+        expected_points = (
+            np.asarray(surface_point)
+            + local_offsets
+            - np.outer((local_offsets @ np.asarray(surface_normal)) / axis_normal, basis[:, 2])
+        )
+        plane_distances = (expected_points - np.asarray(surface_point)) @ np.asarray(surface_normal)
+        assert np.max(np.abs(plane_distances)) == pytest.approx(0.0, abs=1e-10)
+        assert projected == [pytest.approx(tuple(expected_points[0]), abs=1e-10)]
+        surface_outline = _mouth_outline_on_surface(
+            tuple((float(coordinate[0]), float(coordinate[1])) for coordinate in outline),
+            surface_point,
+            surface_normal,
+            tuple(float(value) for value in basis[:, 0]),
+            tuple(float(value) for value in basis[:, 1]),
+            tuple(float(value) for value in basis[:, 2]),
+        )
+        assert np.asarray(surface_outline) == pytest.approx(expected_points, abs=1e-10)
+
+
+def test_parallel_tool_axis_has_no_finite_mouth_outline_on_surface():
+    """Eine achsparallele Ebene besitzt keinen endlichen Umriss entlang der Werkzeugachse."""
+    from app.ui.placement_flow import _mouth_outline_on_surface
+
+    assert (
+        _mouth_outline_on_surface(
+            ((-1.0, -1.0), (1.0, -1.0), (1.0, 1.0)),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (0.0, 1.0, 0.0),
+        )
+        == ()
+    )
+
+
+@pytest.mark.parametrize("operation", ["slot_hole", "resize_hole"])
+def test_slot_redraw_projects_the_real_prepared_mouth_outline(operation, profile, monkeypatch):
+    """Der vollständige Umrisspfad verarbeitet Float-Koordinaten als Vektoren."""
+    from app.core.geom.prepare import drill_tool, slot_frame
+    from app.core.scene import placement
+    from app.core.scene.placement import PlacementTool
+
+    angle = 23.0
+    tool = PlacementTool(
+        drill_tool(
+            diameter=5.0,
+            depth=8.0,
+            profile=profile,
+            compensate=False,
+            slot_length=20.0,
+            slot_angle=angle,
+        ),
+        angle=angle,
+    )
+    outline = placement.mouth_outline(tool)
+    assert len(outline) >= 3
+
+    point = (3.0, -4.0, 5.0)
+    projected: list[tuple[float, float, float]] = []
+    _preview_matrix(
+        operation,
+        (0.0, 0.0, 1.0),
+        feature_axis=(0.0, 0.0, 1.0),
+        angle_degrees=angle,
+        surface_point=point,
+        tool_context=tool,
+        capture_projection=projected,
+        monkeypatch=monkeypatch,
+    )
+
+    frame = slot_frame((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    u, v = outline[0]
+    expected = np.asarray(point) + np.asarray(frame.x_axis) * u + np.asarray(frame.y_axis) * v
+    assert projected == [pytest.approx(tuple(expected))]
+
+
+@pytest.mark.parametrize("worker_reply", ["pending", "refused"])
+def test_measured_frame_redraw_waits_for_a_resolved_tool_axis(worker_reply, profile, monkeypatch):
+    """Wartende und abgelehnte Arbeiter lassen die Flächenmaße weiterzeichnen."""
+    from types import SimpleNamespace
+
+    values = {
+        entry.name: entry.default
+        for entry in REGISTRY.get("drill_hole").params.spec()
+        if entry.default is not None
+    }
+    values.update(
+        x=3.0,
+        y=0.0,
+        z=0.0,
+        axis="x",
+        nx=0.0,
+        ny=0.0,
+        nz=0.0,
+        slotted=True,
+        slot_length=20.0,
+        measured_frame=True,
+    )
+    source = SimpleNamespace(
+        kind="mesh",
+        material=None,
+        material_slots=(),
+        mesh=MeshData.of(trimesh.creation.box()),
+        features={},
+    )
+    flow = _requested_tool_for_preview(
+        "drill_hole",
+        values,
+        source,
+        profile,
+        monkeypatch,
+        worker_reply=worker_reply,
+    )
+    assert flow._tool_context is None
+    assert flow._tool_axis is None
+    assert flow._tool_busy is (worker_reply == "pending")
+    if worker_reply == "refused":
+        assert flow._refused_note is not None
+
+    surface_point = (3.0, -4.0, 5.0)
+    projected: list[tuple[float, float, float]] = []
+    _preview_matrix(
+        "drill_hole",
+        (-1.0, 0.0, 0.0),
+        slotted=True,
+        measured_frame=True,
+        axis="x",
+        surface_point=surface_point,
+        tool_ready=False,
+        tool_busy=flow._tool_busy,
+        capture_projection=projected,
+        monkeypatch=monkeypatch,
+    )
+    assert projected == [surface_point]
+
+
+def test_turning_off_slot_keeps_a_migrated_drill_axis(profile, monkeypatch):
+    """Eine runde Altbohrung bleibt in der Richtung des gespeicherten Kerns."""
+    from types import SimpleNamespace
+
+    axis = (math.sin(math.radians(10.0)), 0.0, math.cos(math.radians(10.0)))
+    source = SimpleNamespace(
+        kind="mesh",
+        material=None,
+        material_slots=(),
+        mesh=MeshData.of(trimesh.creation.box((30.0, 30.0, 8.0))),
+        features={},
+    )
+    spec = REGISTRY.get("drill_hole")
+    values = {
+        entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+    }
+    values.update(
+        x=0.0,
+        y=0.0,
+        z=0.0,
+        axis="z",
+        nx=axis[0],
+        ny=axis[1],
+        nz=axis[2],
+        slotted=False,
+        measured_frame=True,
+    )
+    flow = _requested_tool_for_preview("drill_hole", values, source, profile, monkeypatch)
+    assert flow._tool_axis == pytest.approx(axis)
+
+    matrix = _preview_matrix(
+        "drill_hole",
+        (0.0, 0.0, 1.0),
+        measured_frame=True,
+        tool_axis=flow._tool_axis,
+        source=source,
+        tool_context=flow._tool_context,
+        monkeypatch=monkeypatch,
+    )
+    assert matrix[:3, 2] == pytest.approx(axis)
+
+
+def test_legacy_zero_axis_uses_core_direction_and_refreshes_after_moving(profile, monkeypatch):
+    """Position, Achswahl und Kernpfad bestimmen den Vorschauwinkel gemeinsam."""
+    from types import MethodType, SimpleNamespace
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.placement import PlacementTool
+    from app.ui.placement_flow import PlacementFlow
+
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cutter = trimesh.creation.box(extents=(9.0, 6.0, 6.0))
+    cutter.apply_translation((-1.5, 0.0, 0.0))
+    pocket = MeshData.of(trimesh.boolean.difference([body, cutter], engine="manifold"))
+    source = SimpleNamespace(
+        kind="mesh",
+        material=None,
+        material_slots=(),
+        mesh=MeshData.of(body),
+        features={},
+    )
+    spec = REGISTRY.get("drill_hole")
+    values = {
+        entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+    }
+    values.update(
+        x=3.0,
+        y=0.0,
+        z=0.0,
+        axis="x",
+        nx=0.0,
+        ny=0.0,
+        nz=0.0,
+        slotted=True,
+        slot_length=20.0,
+        slot_angle=0.0,
+        measured_frame=True,
+    )
+    flow = _requested_tool_for_preview("drill_hole", values, source, profile, monkeypatch)
+
+    assert flow._tool_context.position_dependent_axis
+    assert flow._tool_axis == pytest.approx((1.0, 0.0, 0.0))
+    first = _preview_matrix(
+        "drill_hole",
+        (-1.0, 0.0, 0.0),
+        slotted=True,
+        measured_frame=True,
+        axis="x",
+        source=source,
+        surface_point=(3.0, 0.0, 0.0),
+        tool_context=flow._tool_context,
+        monkeypatch=monkeypatch,
+    )
+    assert first[:3, 2] == pytest.approx((1.0, 0.0, 0.0))
+    assert flow._tool_key and "3.0" in flow._tool_key and "x" in flow._tool_key
+
+    dialog_values = flow.dialog.values()
+    dialog_values.update(x=-3.0, y=0.0, z=0.0)
+    flow.dialog.take_placement(dialog_values)
+    surface = SimpleNamespace(point=(-3.0, 0.0, 0.0), normal=(-1.0, 0.0, 0.0))
+    flow._surface = surface
+    flow._own_mouth = None
+    flow._updating = False
+    flow._measure_group = None
+    flow._measure_without_surface = False
+    flow._change_op = None
+    flow._position_edited = True
+    flow._set_values = MethodType(PlacementFlow._set_values, flow)
+    flow._request_tool = MethodType(PlacementFlow._request_tool, flow)
+    monkeypatch.setattr(
+        placement,
+        "surface_values",
+        lambda *_args, **_kwargs: {"x": -3.0, "y": 0.0, "z": 0.0},
+    )
+
+    assert PlacementFlow._set_values(flow)
+    assert len(flow._placement_requests) == 2
+    assert flow._tool_axis == pytest.approx((-1.0, 0.0, 0.0))
+    second = _preview_matrix(
+        "drill_hole",
+        (-1.0, 0.0, 0.0),
+        slotted=True,
+        measured_frame=True,
+        axis="x",
+        source=source,
+        surface_point=(-3.0, 0.0, 0.0),
+        tool_context=flow._tool_context,
+        monkeypatch=monkeypatch,
+    )
+    assert second[:3, 2] == pytest.approx((-1.0, 0.0, 0.0))
+
+    mesh_source = SimpleNamespace(
+        kind="mesh",
+        material=None,
+        material_slots=(),
+        mesh=pocket,
+        features={},
+    )
+    mesh_flow = _requested_tool_for_preview("drill_hole", values, mesh_source, profile, monkeypatch)
+    assert mesh_flow._tool_context.position_dependent_axis
+    assert mesh_flow._tool_axis == pytest.approx((-1.0, 0.0, 0.0))
+    assert isinstance(mesh_flow._tool_context, PlacementTool)
+
+
+def test_brep_legacy_zero_axis_matches_the_core_and_refreshes_after_moving(profile, monkeypatch):
+    """Die echte BRep-Bohrung und ihre Vorschau teilen die Hüllmittenrichtung."""
+    from types import MethodType, SimpleNamespace
+
+    exact_kernel()
+
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.gp import gp_Pnt
+
+    from app.core.brep.kernel import Solid
+    from app.core.brep.ops import _bore_span
+    from app.core.geom.prepare_ops import DrillParams
+    from app.core.scene.placement import PlacementTool
+    from app.ui.placement_flow import PlacementFlow
+
+    body = Solid(BRepPrimAPI_MakeBox(gp_Pnt(-5.0, -5.0, -5.0), 10.0, 10.0, 10.0).Shape())
+    source = SimpleNamespace(kind="brep", material=None, material_slots=(), mesh=body, features={})
+    spec = REGISTRY.get("drill_hole")
+    values = {
+        entry.name: entry.default for entry in spec.params.spec() if entry.default is not None
+    }
+    values.update(
+        x=3.0,
+        y=0.0,
+        z=0.0,
+        axis="x",
+        nx=0.0,
+        ny=0.0,
+        nz=0.0,
+        slotted=True,
+        slot_length=20.0,
+        slot_angle=0.0,
+        measured_frame=True,
+    )
+    flow = _requested_tool_for_preview("drill_hole", values, source, profile, monkeypatch)
+    assert flow._tool_context.position_dependent_axis
+    assert isinstance(flow._tool_context, PlacementTool)
+
+    def core_axis(x: float) -> tuple[float, float, float]:
+        params = DrillParams(
+            x=x,
+            y=0.0,
+            z=0.0,
+            axis="x",
+            nx=0.0,
+            ny=0.0,
+            nz=0.0,
+            slotted=True,
+            slot_length=20.0,
+            slot_angle=0.0,
+        )
+        frame, _height, _mouth = _bore_span(body, params, 0.0, slotted=True)
+        return frame.normal
+
+    assert flow._tool_axis == pytest.approx(core_axis(3.0))
+    assert flow._tool_axis == pytest.approx((1.0, 0.0, 0.0))
+
+    dialog_values = flow.dialog.values()
+    dialog_values.update(x=-3.0, y=0.0, z=0.0)
+    flow.dialog.take_placement(dialog_values)
+    flow._surface = SimpleNamespace(point=(-3.0, 0.0, 0.0), normal=(-1.0, 0.0, 0.0))
+    flow._own_mouth = None
+    flow._updating = False
+    flow._measure_group = None
+    flow._measure_without_surface = False
+    flow._change_op = None
+    flow._position_edited = True
+    flow._set_values = MethodType(PlacementFlow._set_values, flow)
+    flow._request_tool = MethodType(PlacementFlow._request_tool, flow)
+    monkeypatch.setattr(
+        placement,
+        "surface_values",
+        lambda *_args, **_kwargs: {"x": -3.0, "y": 0.0, "z": 0.0},
+    )
+
+    assert PlacementFlow._set_values(flow)
+    assert len(flow._placement_requests) == 2
+    assert flow._tool_axis == pytest.approx(core_axis(-3.0))
+    assert flow._tool_axis == pytest.approx((-1.0, 0.0, 0.0))
+
+
+@pytest.mark.parametrize("operation", ["slot_hole", "resize_hole"])
+@pytest.mark.parametrize(
+    ("surface_normal", "feature_axis"),
+    [
+        ((0.0, 0.0, 1.0), (0.0, 0.0, 1.0)),
+        ((0.0, 0.0, -1.0), (0.0, 0.0, 1.0)),
+        ((1.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+        ((-1.0, 0.0, 0.0), (1.0, 0.0, 0.0)),
+        ((0.0, 1.0, 0.0), (0.0, 1.0, 0.0)),
+        ((0.0, -1.0, 0.0), (0.0, 1.0, 0.0)),
+        (
+            (0.0, 0.0, 1.0),
+            (math.sin(math.radians(1.0)), 0.0, math.cos(math.radians(1.0))),
+        ),
+        (
+            (0.0, 0.0, -1.0),
+            (math.sin(math.radians(1.0)), 0.0, math.cos(math.radians(1.0))),
+        ),
+    ],
+    ids=[
+        "positive-z",
+        "negative-z",
+        "positive-x",
+        "negative-x",
+        "positive-y",
+        "negative-y",
+        "positive-face-one-degree-tilt",
+        "negative-face-one-degree-tilt",
+    ],
+)
+@pytest.mark.parametrize("angle_degrees", [0.0, 45.0, 90.0], ids=["0", "45", "90"])
+def test_existing_slot_preview_uses_the_positive_feature_axis_for_every_angle(
+    operation, surface_normal, feature_axis, angle_degrees, monkeypatch
+):
+    """Der Vorschaurichtung liegt derselbe Achsenrahmen wie dem Schnitt zugrunde."""
+    from app.core.geom.prepare import slot_frame
+    from app.core.units import positive_axis
+
+    # Gegenüberliegende Mündungen und eine um 1° geneigte Achse dürfen weder
+    # spiegeln noch die Tiefe skalieren.
+    matrix = _preview_matrix(
+        operation,
+        surface_normal,
+        feature_axis=feature_axis,
+        angle_degrees=angle_degrees,
+        monkeypatch=monkeypatch,
+    )
+    basis = matrix[:3, :3]
+    frame = slot_frame(positive_axis(feature_axis), (0.0, 0.0, 0.0))
+    expected_basis = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    angle = math.radians(angle_degrees)
+    direction = basis @ np.asarray((math.cos(angle), math.sin(angle), 0.0))
+    expected_direction = expected_basis @ np.asarray((math.cos(angle), math.sin(angle), 0.0))
+    if float(np.dot(frame.normal, surface_normal)) < 0.0:
+        local_direction = np.asarray((math.cos(angle), math.sin(angle)))
+        correction = np.eye(3)
+        correction[:2, :2] = 2.0 * np.outer(local_direction, local_direction) - np.eye(2)
+        correction[2, 2] = -1.0
+        expected_basis = expected_basis @ correction
+
+    assert basis == pytest.approx(expected_basis, abs=1e-12)
+    assert direction == pytest.approx(expected_direction, abs=1e-12)
+    assert basis.T @ basis == pytest.approx(np.eye(3), abs=1e-12)
+    assert np.linalg.det(basis) == pytest.approx(1.0, abs=1e-12)
+    assert matrix[:3, 3] == pytest.approx((3.0, -4.0, 5.0))
+    if feature_axis == (0.0, 0.0, 1.0) and angle_degrees == 45.0:
+        assert direction == pytest.approx((math.sqrt(0.5), math.sqrt(0.5), 0.0))
+
+
+def test_a_slotted_drill_preview_keeps_the_surface_normal_as_its_cut_axis(monkeypatch):
+    """Beim Setzen bestimmt die Flächennormale weiter Achse und Langlochwinkel."""
+    from app.core.geom.prepare import slot_frame
+
+    normal = np.asarray((0.0, 0.0, -1.0))
+    matrix = _preview_matrix("drill_hole", tuple(normal), slotted=True, monkeypatch=monkeypatch)
+    basis = matrix[:3, :3]
+    frame = slot_frame(tuple(normal), (0.0, 0.0, 0.0))
+    expected_basis = np.column_stack((frame.x_axis, frame.y_axis, normal))
+    angle = math.radians(45.0)
+    direction = basis @ np.asarray((math.cos(angle), math.sin(angle), 0.0))
+    expected_direction = expected_basis @ np.asarray((math.cos(angle), math.sin(angle), 0.0))
+
+    assert basis == pytest.approx(expected_basis, abs=1e-12)
+    assert direction == pytest.approx(expected_direction, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("tool_axis", "axis", "surface_normal", "surface_point", "expected_axis"),
+    [
+        ((0.0, 0.0, 2.0), "z", (0.0, 0.0, 1.0), (3.0, -4.0, 5.0), (0.0, 0.0, 1.0)),
+    ],
+    ids=["normalize"],
+)
+def test_a_legacy_drill_preview_normalizes_or_uses_its_selected_axis(
+    tool_axis, axis, surface_normal, surface_point, expected_axis, monkeypatch
+):
+    """Die vorbereitete alte Achse bleibt endlich und maßstabsgetreu."""
+    from types import SimpleNamespace
+
+    body = SimpleNamespace(mesh=SimpleNamespace(bounds=SimpleNamespace(centre=(0.0, 0.0, 0.0))))
+    matrix = _preview_matrix(
+        "drill_hole",
+        surface_normal,
+        slotted=True,
+        measured_frame=True,
+        tool_axis=tool_axis,
+        source=body,
+        axis=axis,
+        surface_point=surface_point,
+        monkeypatch=monkeypatch,
+    )
+    basis = matrix[:3, :3]
+
+    assert basis[:, 2] == pytest.approx(expected_axis, abs=1e-12)
+    assert basis.T @ basis == pytest.approx(np.eye(3), abs=1e-12)
+    assert np.linalg.det(basis) == pytest.approx(1.0, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("feature_axis", "surface_normal", "surface_point"),
+    [
+        ((0.0, 0.0, 1.0), (0.0, 0.0, 1.0), (5.0, 5.0, 10.0)),
+        ((0.0, 0.0, 1.0), (0.0, 0.0, -1.0), (5.0, 5.0, 0.0)),
+        ((1.0, 0.0, 0.0), (1.0, 0.0, 0.0), (10.0, 5.0, 5.0)),
+        ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 5.0, 5.0)),
+        ((0.0, 1.0, 0.0), (0.0, 1.0, 0.0), (5.0, 10.0, 5.0)),
+        ((0.0, 1.0, 0.0), (0.0, -1.0, 0.0), (5.0, 0.0, 5.0)),
+        (
+            (math.sin(math.radians(1.0)), 0.0, math.cos(math.radians(1.0))),
+            (0.0, 0.0, 1.0),
+            (5.0, 5.0, 10.0),
+        ),
+        (
+            (math.sin(math.radians(1.0)), 0.0, math.cos(math.radians(1.0))),
+            (0.0, 0.0, -1.0),
+            (5.0, 5.0, 0.0),
+        ),
+    ],
+    ids=[
+        "z-top",
+        "z-bottom",
+        "x-right",
+        "x-left",
+        "y-back",
+        "y-front",
+        "tilted-top",
+        "tilted-bottom",
+    ],
+)
+@pytest.mark.parametrize("angle_degrees", [0.0, 45.0, 90.0], ids=["0", "45", "90"])
+def test_the_prepared_slot_tool_enters_from_both_mouths_with_a_right_handed_frame(
+    feature_axis, surface_normal, surface_point, angle_degrees, profile, monkeypatch
+):
+    """Die echte Werkzeugform behält Winkel und Tiefe an beiden Mündungen."""
+    from types import SimpleNamespace
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.prepare import slot_frame
+    from app.core.registry import REGISTRY
+    from app.core.scene import placement
+    from app.core.units import positive_axis
+
+    axis = positive_axis(feature_axis)
+    angle = math.radians(angle_degrees)
+    frame = slot_frame(axis, (5.0, 5.0, 5.0))
+    direction = tuple(
+        math.cos(angle) * frame.x_axis[index] + math.sin(angle) * frame.y_axis[index]
+        for index in range(3)
+    )
+    feature = SimpleNamespace(
+        id="slot_1",
+        kind="slot",
+        params={
+            "axis": axis,
+            "direction": direction,
+            "centre": (5.0, 5.0, 5.0),
+            "diameter": 6.0,
+            "depth": 8.0,
+            "length": 20.0,
+            "travel": 14.0,
+        },
+    )
+    raw_body = trimesh.creation.box((10.0, 10.0, 10.0))
+    raw_body.apply_translation((5.0, 5.0, 5.0))
+    source = SimpleNamespace(
+        material=None,
+        material_slots=(),
+        mesh=MeshData.of(raw_body),
+        features={feature.id: feature},
+    )
+    prepared = placement.prepare_tool(
+        REGISTRY.get("slot_hole"),
+        {
+            "at_feature": feature.id,
+            "slot_length": 20.0,
+            "slot_angle": angle_degrees,
+            "measured_frame": False,
+        },
+        profile,
+        source=source,
+        feature=feature,
+    )
+    original_outline = placement.mouth_outline
+    matrix = _preview_matrix(
+        "slot_hole",
+        surface_normal,
+        feature_axis=axis,
+        angle_degrees=angle_degrees,
+        source=source,
+        surface_point=surface_point,
+        tool_context=prepared,
+        monkeypatch=monkeypatch,
+    )
+    basis = matrix[:3, :3]
+    moved = prepared.mesh.raw.copy()
+    moved.apply_transform(matrix)
+    depth_coordinates = (np.asarray(moved.vertices) - np.asarray(surface_point)) @ np.asarray(axis)
+    side = 1.0 if float(np.dot(axis, surface_normal)) >= 0.0 else -1.0
+
+    assert basis.T @ basis == pytest.approx(np.eye(3), abs=1e-12)
+    assert np.linalg.det(basis) == pytest.approx(1.0, abs=1e-12)
+    assert depth_coordinates.min() == pytest.approx(min(0.0, -side * 8.0), abs=1e-9)
+    assert depth_coordinates.max() == pytest.approx(max(0.0, -side * 8.0), abs=1e-9)
+    assert moved.volume > 0.0
+
+    from app.core.units import MAX_FACET_SAG
+
+    outline = np.asarray(original_outline(prepared), dtype=np.float64)
+    segments = np.roll(outline, -1, axis=0) - outline
+    longest = segments[np.argmax(np.sum(segments * segments, axis=1))]
+    outline_length = float(np.linalg.norm(longest))
+    local_direction = longest / outline_length
+    world_direction = basis[:, :2] @ local_direction
+    expected_direction = np.asarray(frame.x_axis) * math.cos(angle) + np.asarray(
+        frame.y_axis
+    ) * math.sin(angle)
+    difference = math.degrees(
+        math.acos(min(1.0, abs(float(np.dot(world_direction, expected_direction)))))
+    )
+    angle_limit = math.degrees(math.atan2(2.0 * MAX_FACET_SAG, outline_length))
+    assert difference <= angle_limit
+
+
+def test_legacy_slot_angle_uses_the_measured_axis_in_placement_tool(profile):
+    """Die Vorschau hält bei Altprojekten dieselbe Weltrichtung wie der Schnitt."""
+    from types import SimpleNamespace
+
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.core.sketch.planes import frame_of
+
+    axis = (0.001, 0.0, 1.0)
+    previous = frame_of(axis, (0.0, 0.0, 0.0))
+    feature = SimpleNamespace(
+        id="slot_1",
+        kind="slot",
+        params={
+            "axis": axis,
+            "direction": previous.x_axis,
+            "centre": (0.0, 0.0, 0.0),
+            "diameter": 6.0,
+            "depth": 8.0,
+            "length": 20.0,
+            "travel": 14.0,
+        },
+    )
+    source = SimpleNamespace(
+        material=None,
+        material_slots=(),
+        mesh=MeshData.of(trimesh.creation.box((30.0, 30.0, 8.0))),
+        features={feature.id: feature},
+    )
+
+    tool = placement.prepare_tool(
+        REGISTRY.get("slot_hole"),
+        {
+            "at_feature": feature.id,
+            "slot_length": 20.0,
+            "slot_angle": 0.0,
+            "measured_frame": True,
+        },
+        profile,
+        source=source,
+    )
+    spans = np.ptp(np.asarray(placement.mouth_outline(tool)), axis=0)
+
+    assert spans[1] > spans[0] * 2.0, "das alte +Y liegt heute entlang der zweiten Rahmenachse"
+
+
+def test_migrated_drill_preview_keeps_parameter_bound_axis_through_request(profile, monkeypatch):
+    """Die echte Vorschauanfrage hält Winkel und Achse des migrierten Schnitts."""
+    import copy
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.migrations import migrate
+    from app.core.scene.project import project_data
+    from app.core.scene.serialise import document_from_data
+    from app.core.sketch.planes import frame_of
+    from app.core.units import MAX_FACET_SAG
+    from app.ui import placement_flow
+    from app.ui.placement_flow import PlacementFlow
+
+    data = project_data(Path(__file__).parent / "data/projects/slot_angle_frame_v38.p3d")
+    for step in data["ops"]:
+        if step["op"] not in {"drill_hole", "drill_brep_hole"} or not step["params"].get("slotted"):
+            continue
+        for name in ("slot_angle", "nx", "ny", "nz"):
+            parameter = f"{name}_{step['id']}"
+            data.setdefault("parameters", {})[parameter] = {
+                "value": step["params"][name],
+                "unit": "°" if name == "slot_angle" else "",
+            }
+            step["params"][name] = f"=@{parameter}"
+
+    document = document_from_data(migrate(copy.deepcopy(data)))
+    result = evaluate(document, profile, quality="fine")
+    assert result.complete, result.findings
+
+    checked = set()
+    monkeypatch.setattr(placement_flow, "isValid", lambda _flow: True)
+    for step in document.ops:
+        if step.op not in {"drill_hole", "drill_brep_hole"} or not step.params.get("slotted"):
+            continue
+        assert step.params["measured_frame"]
+        source, feature = next(
+            (owner, feature)
+            for owner in result.scene.objects.values()
+            for feature in owner.features.values()
+            if feature.kind == "slot" and feature.created_by == step.id
+        )
+        prepared = []
+        dialog_values = dict(step.params)
+
+        def placement_async(compute, done, *_callbacks, prepared=prepared):
+            tool = compute()
+            prepared.append(tool)
+            done(tool)
+
+        flow = SimpleNamespace(
+            active=True,
+            _disposed=False,
+            _tool_busy=False,
+            _tool_again=False,
+            _tool_key=None,
+            _tool_context=None,
+            _tool_axis=None,
+            _tool_angle=None,
+            _epoch=1,
+            spec_of=lambda step=step: REGISTRY.get(step.op),
+            _source_feature=lambda source=source: (source, None),
+            dialog=SimpleNamespace(
+                values=lambda values=dialog_values: dict(values),
+                take_placement=lambda update, values=dialog_values: values.update(update),
+            ),
+            session=SimpleNamespace(
+                profile=profile,
+                project=SimpleNamespace(document=document),
+                placement_async=placement_async,
+            ),
+            viewport=SimpleNamespace(renderer=None),
+            _accept_pending=False,
+            _measure_group=None,
+            _change_op=step,
+            _surface=None,
+            _own_mouth=None,
+            _updating=False,
+            redraw=lambda: None,
+        )
+
+        PlacementFlow._request_tool(flow)
+        assert len(prepared) == 1
+        prepared_tool = prepared[0]
+        assert flow._tool_axis is not None
+        original_axis = flow._tool_axis
+        flow._tool_context = prepared_tool
+
+        surface_normal = np.asarray((0.0, 0.0, 1.0), dtype=np.float64)
+        surface = SimpleNamespace(
+            point=(0.0, 0.0, 0.0),
+            normal=tuple(surface_normal),
+            frame=frame_of(tuple(surface_normal), (0.0, 0.0, 0.0)),
+        )
+        flow._surface = surface
+        assert PlacementFlow._set_values(flow)
+        assert len(prepared) == 1, "eine Positionsänderung darf kein Werkzeug erneut anfordern"
+        assert flow._tool_axis == original_axis
+        assert all(dialog_values[name] == step.params[name] for name in ("nx", "ny", "nz")), (
+            "die gebundenen Richtungswerte bleiben beim Verschieben erhalten"
+        )
+
+        axes = PlacementFlow._tool_axes(flow, surface)
+        outline = np.asarray(placement.mouth_outline(prepared_tool), dtype=np.float64)
+        segments = np.roll(outline, -1, axis=0) - outline
+        longest = segments[np.argmax(np.sum(segments * segments, axis=1))]
+        major_axis = np.r_[longest, 0.0]
+        preview_direction = np.column_stack(axes) @ major_axis
+        actual_direction = np.asarray(feature.params["direction"], dtype=np.float64)
+        preview_angle = math.degrees(math.atan2(preview_direction[1], preview_direction[0])) % 180.0
+        actual_angle = math.degrees(math.atan2(actual_direction[1], actual_direction[0])) % 180.0
+        difference = abs((preview_angle - actual_angle + 90.0) % 180.0 - 90.0)
+        # Die sichtbare Kontur wird mit MAX_FACET_SAG vereinfacht. Wenn beide
+        # Endpunkte des langen Umrisses jeweils um höchstens diesen Betrag
+        # wandern, bleibt seine Winkelabweichung durch die Konturvereinfachung
+        # innerhalb des daraus folgenden Winkels.
+        outline_length = float(np.linalg.norm(longest))
+        outline_angle_limit = math.degrees(math.atan2(2.0 * MAX_FACET_SAG, outline_length))
+
+        assert difference <= outline_angle_limit, (
+            f"{step.op}, {source.kind}: {difference:.6f}° > "
+            f"{outline_angle_limit:.6f}° aus MAX_FACET_SAG"
+        )
+        checked.add((step.op, source.kind))
+
+        dialog_values.update(nx=1.0, ny=0.0, nz=0.0)
+        PlacementFlow._request_tool(flow)
+        assert len(prepared) == 2
+        assert flow._tool_axis == (1.0, 0.0, 0.0)
+        flow._tool_context = prepared[-1]
+        axes = PlacementFlow._tool_axes(flow, surface)
+        assert axes[2] == pytest.approx((1.0, 0.0, 0.0))
+        assert PlacementFlow._set_values(flow)
+        assert (dialog_values["nx"], dialog_values["ny"], dialog_values["nz"]) == (
+            1.0,
+            0.0,
+            0.0,
+        )
+
+    assert checked == {("drill_hole", "mesh"), ("drill_hole", "brep")}

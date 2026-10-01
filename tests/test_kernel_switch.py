@@ -232,10 +232,10 @@ def test_the_surface_placement_previews_the_exact_primitives_too(profile: Profil
             item.name: item.default for item in spec.params.spec() if item.default is not None
         }
         tool = _creation_tool(spec, values, profile)
-        assert tool is not None, f"{brep_name} hat keine Vorschau am Körper"
+        assert tool.mesh is not None, f"{brep_name} hat keine Vorschau am Körper"
         twin = _creation_tool(REGISTRY.get(mesh_name), values, profile)
-        assert twin is not None
-        assert float(tool.volume) == pytest.approx(float(twin.volume))
+        assert twin.mesh is not None
+        assert float(tool.mesh.volume) == pytest.approx(float(twin.mesh.volume))
 
 
 def test_the_history_offers_the_switch_only_at_primitives(monkeypatch: pytest.MonkeyPatch) -> None:

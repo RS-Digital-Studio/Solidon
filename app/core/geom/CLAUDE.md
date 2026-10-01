@@ -129,7 +129,9 @@ Ersatzweg prüft Geometrie, nie Metadaten)
 GEOS-Rechteckecken, die auf macOS/arm64 durch null teilen)
 
 **Druckvorbereitung** — `prepare.py`, `prepare_ops.py` (Bohrungen, Teilen,
-Anordnen, Kollisionen, §18.6; Merkmalshandlungen, `pattern_feature`) ·
+Anordnen, Kollisionen, §18.6; Merkmalshandlungen, `pattern_feature`; die
+Nullnormalenrichtung am BRep teilt `drill_outward_axis_from_bounds` mit
+`brep.ops._bore_span`, die Netzrichtung prüft die Materialsäule) ·
 `mouth_cap.py` (Deckel einer gekrümmten Mündung als Höhenfeld, `None` ohne
 glatte Fläche) · `autosplit.py` (schneiden, bis es passt) · `symmetry.py`
 (`mirror_plane`) · `pins.py` (Passstifte, `first_pin`)
@@ -192,6 +194,13 @@ Richtung, `opposite_side`)
   `local_text_body()` trägt jeden Formparameter. Ein Ring ohne gemessene Achse
   hat keine Lage (`FEATURE_WITHOUT_AXIS`); beim Platzieren fallen alte
   Dreiecks- und Trägerbezüge gemeinsam.
+- **Altwinkel** (`measured_frame`, Migration 38 → 39): `slot_angle` bleibt als
+  Ausdruck im Schritt; `bore_shape` und `slot_hole` rechnen ihn in jeder
+  Auswertung mit der dann aktuellen Achse um, auch wenn deren Komponenten
+  Parameter sind. `prepare.slot_frame` hält den Rahmen im Messrauschen neben
+  einer Hauptachse stabil. Nicht als Antwort zurückschreiben: Erst Griff oder
+  Merkmalfenster können den Marker bei einer Richtungsänderung im heutigen
+  Rahmen löschen; Längen- und Positionsänderungen behalten ihn.
 - **Innen oder außen** fragt `mesh.on_surface` über die Normale des nächsten
   Dreiecks — nie `trimesh.contains` oder die Parität von
   `ray_hit_distances`. Ein Langlochumriss (`prepare.slot_profile`)

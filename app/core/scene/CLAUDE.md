@@ -27,7 +27,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 |---|---|
 | `project.py` | Der Container (§16.1): `save()`, `load()`, Autosave, Wiederherstellung, Prüfsumme, `content_digest` |
 | `serialise.py` | Dokument zu Daten und zurück — Parameter, Passungen, Quellen, Herkunft, Transaktionen, Chat |
-| `migrations.py` | `FORMAT_VERSION` und die Kette `vN → vN+1`; **ältere Migrationen werden nie zusammengefasst** |
+| `migrations.py` | `FORMAT_VERSION` und die Kette `vN → vN+1`; Parameterausdrücke bleiben erhalten, wertabhängige Altformat-Umrechnungen tragen einen Marker und laufen mit den aufgelösten Werten bei jeder Auswertung; **ältere Migrationen werden nie zusammengefasst** |
 | `gathered.py` | Große Sammelwerte wandern aus dem Stapel in den Container (§12) |
 | `foreign.py` | Was eine fremde Projektdatei außer Geometrie mitbringt (§32) |
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan` |
@@ -41,7 +41,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 | `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
-| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_of`: wo sitzt, was schon da ist |
+| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |
 | `variants.py` | Der Variantengenerator (§28.3): `_marked` graviert den Wert ein, wo Material für drei Schichten plus Mindestwand steht (`label_ops.too_thin_to_print`), sonst `variants.no_mark`; fein, mit geteiltem Cache; ein Druckauftrag, kein Dokumentzustand (Regel 2) |
 

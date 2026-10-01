@@ -490,6 +490,19 @@ class DrillParams(BaseParams):
         depends_on=("slotted", (True,)),
         doc=_("Dreht das Langloch in der angeklickten Fläche. Die Vorschau zeigt die Lage mit."),
     )
+    # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
+    # Der Winkel bleibt ein Ausdruck und wird mit der jeweils ausgewerteten
+    # Richtung aus dem alten Rahmen in den heutigen übersetzt.
+    measured_frame: bool = param(
+        title=_("Richtung aus einem älteren Projekt"),
+        default=False,
+        placement="advanced",
+        depends_on=("slotted", (True,)),
+        doc=_(
+            "Liest die gespeicherte Richtung im alten Rahmen und rechnet sie bei jeder "
+            "Auswertung in den neuen Rahmen um. Neue Langlöcher brauchen den Haken nicht."
+        ),
+    )
     widening_diameter: float = param(
         title=_("Durchmesser der Aufweitung"),
         default=0.0,
@@ -645,7 +658,12 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
             )
         if within is not None:
             _reject_oversized("slot_length", params.slot_length, within, kind="length")
-        return BoreShape(params.slot_length, params.slot_angle, 0.0, 0.0)
+        angle = params.slot_angle
+        if params.measured_frame:
+            measured_axis = (params.nx, params.ny, params.nz)
+            if math.hypot(*measured_axis) > EPS_GEOM:
+                angle = slot_angle_from_measured_frame(measured_axis, angle)
+        return BoreShape(params.slot_length, angle, 0.0, 0.0)
     return BoreShape(0.0, 0.0, params.widening_diameter, params.widening_depth)
 
 
@@ -655,7 +673,8 @@ def bore_shape(params: DrillParams, *, within: Mesh | None = None) -> BoreShape:
     # wo er ist; ein Ende in einer Fläche mit Luft dahinter reicht um die
     # Zugabe hinaus (RM-274).
     # 2: ein Langloch zählt seinen Winkel gegen ``prepare.slot_frame`` (30.09.2026).
-    cache_version="2",
+    # 3: alte Winkel bleiben gebunden und werden anhand der aktuellen Achse umgerechnet (RM-323).
+    cache_version="3",
     title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
@@ -8121,21 +8140,15 @@ class SlotHoleParams(BaseParams):
         ),
     )
     # **Nur für Schritte aus Projekten bis Format 38** (Migration 38 → 39).
-    # Ihr Winkel zählte gegen ``frame_of`` der gemessenen Achse, deren erste
-    # Rahmenachse an einer Achse im Messrauschen neben einer Hauptachse das
-    # Rauschen bestimmte (``prepare.slot_frame``). Welche Richtung er meinte,
-    # zeigt erst die Achse der Auswertung — die Operation liest ihn deshalb im
-    # alten Rahmen, schneidet dieselbe Richtung wie gespeichert und hält den
-    # Winkel von heute als Antwort fest (``answered``, wie die freie Stelle);
-    # danach steht der Haken wieder aus.
+    # Der Winkel bleibt ein Ausdruck. Bei jeder Auswertung wird er anhand der
+    # aktuellen Merkmalsachse in den heutigen Rahmen übersetzt.
     measured_frame: bool = param(
         title=_("Richtung aus einem älteren Projekt"),
         default=False,
         placement="advanced",
         doc=_(
-            "Liest die gespeicherte Richtung so, wie Solidon sie bis Version 0.5.1 "
-            "gezählt hat, und rechnet sie beim Auswerten einmal um. Neue Langlöcher "
-            "brauchen den Haken nicht."
+            "Liest die gespeicherte Richtung im alten Rahmen und rechnet sie bei jeder "
+            "Auswertung in den neuen Rahmen um. Neue Langlöcher brauchen den Haken nicht."
         ),
     )
 
@@ -8172,7 +8185,8 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 9: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
     # 10: der Winkel zählt gegen ``prepare.slot_frame`` statt gegen das Rauschen
     #     der gemessenen Achse (30.09.2026).
-    cache_version="10",
+    # 13: die alte Winkelbedeutung bleibt an Projektparametern gebunden (RM-323).
+    cache_version="13",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -8305,14 +8319,11 @@ def slot_hole(ctx: OpContext) -> OpResult:
     # Winkel gilt unverändert, auch null; sonst widerspricht der Schnitt dem Griff.
     angle = params.slot_angle
     # **Ein Winkel aus einem Projekt bis Format 38** zählte gegen ``frame_of``
-    # der gemessenen Achse (``measured_frame``, gesetzt von der Migration). Er
-    # wird an dieser Achse im alten Rahmen gelesen — dieselbe Richtung wie
-    # gespeichert — und im Rahmen von heute festgehalten; die Antwort landet im
-    # Schritt, und der nächste Lauf rechnet schon ohne Umweg.
-    converted: dict[str, Any] = {}
+    # der gemessenen Achse. Der Marker bleibt im Schritt: Die Umrechnung hängt
+    # von der bei jeder Auswertung aktuellen Achse ab und darf den ursprünglichen
+    # Winkel samt möglichem Parameterausdruck nicht überschreiben.
     if params.measured_frame:
         angle = slot_angle_from_measured_frame(axis, params.slot_angle)
-        converted = {"slot_angle": angle, "measured_frame": False}
     # Die Merkmale, die bleiben — ohne das, aus dem gerade ein Langloch wird.
     carried = {
         name: entry
@@ -8361,7 +8372,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
     if rounded and feature.kind == "hole" and not moved and not widened:
         # Eine runde Bohrung auf ihre eigene Breite gezogen: Geschnitten und
         # gefüllt würde dasselbe Loch, und der Satz sagt, dass nichts geschah.
-        return OpResult(outputs=[source], findings=[_already_round(feature)], answered=converted)
+        return OpResult(outputs=[source], findings=[_already_round(feature)])
     # Die Länge, mit der geschnitten wird. Rund heißt: genau der geschnittene
     # Durchmesser — :func:`prepare.slot_bore` schneidet dann einen Zylinder.
     cut_length = diameter if rounded else params.slot_length
@@ -8483,7 +8494,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
                     dataclasses.replace(source, mesh=solid, kind="brep", features=exact_features)
                 ],
                 findings=findings,
-                answered=converted,
             )
         # **Dieselbe Auskunft wie am Netz** (Robert, 10.09.2026: „zwischen den
         # beiden soll es keinen unterschied geben bei garnichts"). Wer über den
@@ -8522,7 +8532,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
         return OpResult(
             outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=exact_features)],
             findings=findings,
-            answered=converted,
         )
 
     body = as_mesh_data(source.mesh)
@@ -8598,7 +8607,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
             outputs=[dataclasses.replace(source, mesh=result.mesh, features={**carried, **kept})],
             solver=deepest((closing_solver, result.solver)),
             findings=round_findings,
-            answered=converted,
         )
     # **Gesucht wird das Langloch, das gerade entstanden ist** — für zwei
     # verschiedene Antworten. Findet es sich nicht, sagt es der Befund unten
@@ -8642,7 +8650,6 @@ def slot_hole(ctx: OpContext) -> OpResult:
         outputs=[dataclasses.replace(source, mesh=result.mesh, features=features)],
         solver=deepest((closing_solver, result.solver)),
         findings=findings,
-        answered=converted,
     )
 
 

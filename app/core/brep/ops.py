@@ -41,6 +41,7 @@ from app.core.geom.prepare import (
     bore_diameter,
     compensation_findings,
     drill_outline,
+    drill_outward_axis_from_bounds,
     over_the_edge,
     over_the_edge_along,
     slot_ends,
@@ -591,7 +592,8 @@ def thread_exact(ctx: OpContext) -> OpResult:
     name="drill_brep_hole",
     requires_kind="brep",
     # 1: ein Langloch zählt seinen Winkel gegen ``prepare.slot_frame`` (30.09.2026).
-    cache_version="1",
+    # 2: alte Winkel bleiben gebunden und werden anhand der aktuellen Achse umgerechnet (RM-323).
+    cache_version="2",
     title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
@@ -780,10 +782,9 @@ def _bore_span(
     position = (params.x, params.y, params.z)
     normal = (params.nx, params.ny, params.nz)
     if math.hypot(*normal) <= EPS_GEOM:
-        index = "xyz".index(params.axis)
-        values = [0.0, 0.0, 0.0]
-        values[index] = 1.0 if position[index] >= body.bounds.centre[index] else -1.0
-        normal = (values[0], values[1], values[2])
+        normal = drill_outward_axis_from_bounds(
+            cast(Axis, params.axis), position, body.bounds.centre
+        )
     frame = slot_frame(normal, position) if slotted else frame_of(normal, position)
     if params.depth <= EPS_GEOM:
         box = body.bounds
