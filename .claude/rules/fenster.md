@@ -5,6 +5,8 @@ paths:
   - "app/ui/app.py"
   - "app/ui/dialogs.py"
   - "app/ui/*dialog*.py"
+  - "app/ui/style.py"
+  - "app/ui/filament_picker.py"
   - "app/ui/start_screen.py"
   - "app/ui/first_run.py"
   - "app/ui/manual_window.py"
@@ -354,28 +356,28 @@ der Knopf die Handlung („Trennen“, „Jetzt trennen“;
 
 ## Ein Dialog, der höher ist als sein Inhalt
 
-Von Hand gezogen, von einem langen Satz gewachsen oder von einer Aufnahme
-gesetzt — der Überschuss braucht **eine** Stelle, sonst verteilt Qt ihn als
-Lücken zwischen Widgets fester Höhe (im KI-Hinweis stand die Überschrift
-allein über einer leeren Fläche). Die Stelle ist ein `addStretch` dort, wo Leere nicht stört,
+Von Hand gezogen oder beim Öffnen an den Inhalt angepasst — überschüssiger
+Raum braucht **eine** Stelle, sonst verteilt Qt ihn als Lücken zwischen
+Widgets fester Höhe (im KI-Hinweis stand die Überschrift allein über einer
+leeren Fläche). Die Stelle ist ein `addStretch` dort, wo Leere nicht stört,
 oder ein Widget, das den Platz nutzt (die Versuchsliste des Erzeugen-Dialogs
-nach dem Lauf). Ein Fenster, das seinem Inhalt nachwächst, gibt zurück, was nur
-ein Satz genommen hat, eine gezogene Höhe nicht
-(`GenerateDialog._grow_to_content`); `style.WrappedNote` misst dafür ohne die
+nach dem Lauf). Lange Statusmeldungen bleiben im Rollbereich erreichbar und
+ändern den Außenrahmen nicht; `style.WrappedNote` misst dafür ohne die
 gepinnte Höhe, denn `QLabel.heightForWidth` meldet nie weniger als die
 Mindesthöhe.
 
-**Normale Formulare öffnen vollständig:** `style.DialogScrollArea` meldet
-die natürliche Inhaltshöhe; gescrollt wird erst bei Platzmangel oder bewusst
-kleineren Fenstern. Aktionsknöpfe stehen außerhalb und bleiben erreichbar.
-`contentSizeChanged` meldet auch verzögerte Änderungen der Inhaltshöhe;
-ein unveränderter Größenwunsch löst keine neue Anpassung aus. Nach dem
-Anzeigen und einer inhaltlichen Größenänderung hält
-`fit_dialog_to_screen` auch den Rahmen innerhalb des aktuellen Monitors.
-Klappen verändern die erforderliche Höhe, behalten eine ausreichende Breite und
-geben automatisch hinzugewonnenen Platz beim Zuklappen wieder zurück.
-Bewusst größer gezogene Fenster behalten ihre Höhe. Reiter messen nur die
-sichtbare Seite; verschachtelte Rollbereiche werden vermieden.
+**Dialoggröße nach Auslöser:** `ContentHeight` misst die natürliche Geometrie
+des aktuellen Inhalts einmal nach dem Anzeigen. Eine manuell gezogene Breite
+oder Höhe bleibt für die Dialoglebensdauer maßgeblich; Mehrinhalt rollt im
+äußeren Scrollbereich, Aktionsknöpfe bleiben außerhalb. Nur ausdrücklich
+betätigtes Auf- und Zuklappen darf bei automatischer Größe die Höhe anpassen;
+dabei bleibt der Fensteranker, Platz bis zum Bildschirmrand wird genutzt, der
+Rest rollt. Reiter, Suche, Statusmeldungen und bedingte Zeilen lassen den
+Außenrahmen stehen. `contentSizeChanged` meldet verzögerte Innenlayoutänderungen.
+Beim Öffnen sowie nach Monitorwechseln, geänderter nutzbarer Fläche oder
+logischer DPI stellt `DialogScrollArea` mit `fit_dialog_to_screen` die
+Erreichbarkeit wieder her. `form_natural_width` berücksichtigt zugeklappte
+Formularzeilen bei der einmaligen Anfangsbreite.
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
@@ -386,11 +388,12 @@ Knöpfen endet mit `addStretch`. Beschriftungen ohne Doppelpunkt.
 
 **Klappen:** überall die flache Überschrift (`panels.collapsible`,
 `sectionHeading`). Werte, die sich ein- und ausschalten lassen, sind eine
-Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Gemessen
-wird einen Ereignisumlauf nach dem Klappen, sonst gilt die nachgewachsene Höhe
-als gezogen; die Aufmachhöhe misst `style.fit_height_after_show` nach. Ein
-Ausgang ist `RejectRole` — als `AcceptRole` macht die Knopfleiste ihn beim
-Anzeigen zum Hauptknopf.
+Schalterzeile mit eingerückten Feldern, kein ankreuzbarer Rahmen. Bei
+`ContentHeight`-Dialogen werden Anfangsgröße und ausdrücklich bedientes
+Klappen getrennt gemessen; passive Änderungen bleiben im Rollbereich und
+werden nicht als gezogene Nutzergröße gemerkt. Andere Dialoge behalten ihren
+eigenen Größenweg. Ein Ausgang ist `RejectRole` — als `AcceptRole` macht ihn
+die Knopfleiste beim Anzeigen zum Hauptknopf.
 
 **Was eine Angabe bestimmt, steht vor ihr** (Entscheidung Robert,
 29.09.2026): was eine Liste füllt, eine Vorgabe setzt oder sperrt, davor; ein

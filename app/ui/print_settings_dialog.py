@@ -144,6 +144,8 @@ from app.ui.style import (
     ROOMY,
     TIGHT,
     WIDE,
+    ContentFitIntent,
+    ContentHeight,
     DialogScrollArea,
     fit_dialog_to_screen,
     make_primary,
@@ -2709,6 +2711,10 @@ class PrintSettingsDialog(QDialog):
         self._search_term = ""
         self._search_hits: list[str] = []
         self._search_at = -1
+        self._search_requirement_control = ""
+        self._search_requirement_base = ""
+        self._search_requirement_target = ""
+        self._search_revealing = False
         self._lifted = ""
         self._fields: dict[str, Field] = {}
         self._loading = False
@@ -2810,10 +2816,12 @@ class PrintSettingsDialog(QDialog):
         """Der Standardprozess der gewählten Maschine als Auswahlkennung."""
         self._built = False
         """Erst wenn jede Zeile steht, darf die Grundlage die Felder füllen."""
-        self._content_user_height = 0
-        self._last_content_height: int | None = None
-        self._content_user_width = 0
-        self._last_content_width: int | None = None
+        self._content_height = ContentHeight()
+        self._size_refit = QTimer(self)
+        self._size_refit.setSingleShot(True)
+        self._size_refit_intent: ContentFitIntent = "passive"
+        self._slicer_toggle_fit_intent: ContentFitIntent | None = None
+        self._size_refit.timeout.connect(self._run_queued_refit)
         # Woran :meth:`has_changes` misst, ob dieser Dialog etwas bewirkt hat.
         # Bis zum 03.09.2026 schrieb schon das bloße Öffnen die aufgelösten
         # Werte ins Projekt: Wer nur nachsah, welche Temperatur vorgeschlagen
@@ -2922,7 +2930,7 @@ class PrintSettingsDialog(QDialog):
                 wheel_needs_focus(control)
         for toggle in (self.front_toggle, self.advice_toggle):
             if toggle is not None:
-                toggle.toggled.connect(self._refit_sections)
+                toggle.toggled.connect(self._unfold_sections)
         self._scroll.contentSizeChanged.connect(self._refit_sections)
         self._fit_buttons()
 
@@ -3226,7 +3234,12 @@ class PrintSettingsDialog(QDialog):
             self.slice_button,
             self.save_button,
         ]
-        widgets += [self.search_label, self.search, self.search_state]
+        widgets += [
+            self.search_label,
+            self.search,
+            self.search_state,
+            self.search_requirement,
+        ]
         return widgets
 
     def _reduce_for_resin(self) -> None:
@@ -3689,6 +3702,10 @@ class PrintSettingsDialog(QDialog):
         # section, body und caption —, und gerendert war die Zeile deshalb
         # gewöhnlicher Text. Gemeint war leise, und das ist „caption".
         set_level(self.search_state, "caption")
+        self.search_requirement = QLabel(self)
+        self.search_requirement.setWordWrap(True)
+        self.search_requirement.hide()
+        set_level(self.search_requirement, "caption")
         self.search_label = QLabel(tr("Suchen"), self)
         self.search_label.setBuddy(self.search)
         field = QHBoxLayout()
@@ -3697,6 +3714,7 @@ class PrintSettingsDialog(QDialog):
         field.addWidget(self.search, 1)
         field.addWidget(self.search_state)
         row.addRow(self.search_label, field)
+        row.addRow("", self.search_requirement)
         return row
 
     def search_hits(self, term: str) -> list[str]:
@@ -3794,6 +3812,8 @@ class PrintSettingsDialog(QDialog):
         self._search_term = term
         self._search_hits = self.search_hits(term)
         self._search_at = -1
+        self._search_requirement_target = ""
+        self._show_search_requirement("")
         if not term:
             self._lift("")
         self._show_search_state()
@@ -3821,23 +3841,42 @@ class PrintSettingsDialog(QDialog):
         for old in (self._lifted, path):
             if old and old in self._labels:
                 self._labels[old].setStyleSheet("")
-        self._lifted = path
         if not path:
+            self._lifted = ""
+            self._search_requirement_target = ""
+            self._show_search_requirement("")
             return
+        control = self._inactive_search_control(path)
+        if control is not None:
+            self._search_requirement_target = path
+            control_title = str(self._fields[control].title)
+            requirement = str(
+                tr("Ändern Sie die Auswahl bei „{control}“, um dieses Feld anzuzeigen.")
+            ).replace("{control}", control_title)
+            self._show_search_requirement(requirement, control)
+            path = control
+        else:
+            self._search_requirement_target = ""
+            self._show_search_requirement("")
+        self._lifted = path
         field = next((entry for entry in FIELDS if entry.path == path), None)
         editor = self._editors.get(path)
         label = self._labels.get(path)
         if field is None or editor is None or label is None:
             return
-        if field.front:
-            if self.front_toggle is not None:
-                self.front_toggle.setChecked(True)
-        else:
-            if self.tabs_toggle is not None and not self.tabs_toggle.isChecked():
-                self.tabs_toggle.setChecked(True)
-            index = GROUPS.index(field.group) if field.group in GROUPS else -1
-            if index >= 0:
-                self.tabs.setCurrentIndex(index)
+        self._search_revealing = True
+        try:
+            if field.front:
+                if self.front_toggle is not None:
+                    self.front_toggle.setChecked(True)
+            else:
+                if self.tabs_toggle is not None and not self.tabs_toggle.isChecked():
+                    self.tabs_toggle.setChecked(True)
+                index = GROUPS.index(field.group) if field.group in GROUPS else -1
+                if index >= 0:
+                    self.tabs.setCurrentIndex(index)
+        finally:
+            self._search_revealing = False
         # **Die Füllfarbe füllt, sie schreibt nicht.** Als Schriftfarbe auf der
         # Dialogfläche brachte ``select`` im hellen Thema 1,70 — die am
         # schlechtesten lesbare Zeile des Dialogs war ausgerechnet die gesuchte.
@@ -3855,6 +3894,48 @@ class PrintSettingsDialog(QDialog):
         )
         editor.setFocus(Qt.FocusReason.OtherFocusReason)
         QTimer.singleShot(0, self, self._show_search_target)
+
+    def _inactive_search_control(self, path: str) -> str | None:
+        """Führt zu einem sichtbaren Umschalter, wenn dessen Detailfeld ruht."""
+        field = next((entry for entry in FIELDS if entry.path == path), None)
+        if field is None or field.front:
+            return None
+        control = {"support": "support.style", "adhesion": "adhesion.kind"}.get(field.group)
+        if control is None or path == control:
+            return None
+        editor = self._editors.get(control)
+        selector = self._fields.get(control)
+        if editor is None or selector is None:
+            return None
+        return control if _setting_editor_value(editor, selector) == "none" else None
+
+    def _show_search_requirement(self, text: str, control: str = "") -> None:
+        """Zeigt und benennt die Wahl, die ein bedingtes Trefferfeld freigibt."""
+        previous = (self.search_requirement.text(), self.search_requirement.isHidden())
+        old_control = self._search_requirement_control
+        if old_control and (old_control != control or not text):
+            old_editor = self._editors.get(old_control)
+            if old_editor is not None:
+                old_editor.setAccessibleDescription(self._search_requirement_base)
+            self._search_requirement_base = ""
+        if text and control:
+            editor = self._editors.get(control)
+            if editor is not None:
+                if old_control != control:
+                    self._search_requirement_base = editor.accessibleDescription()
+                description = "\n".join(
+                    part for part in (self._search_requirement_base, text) if part
+                )
+                editor.setAccessibleDescription(description)
+                self._search_requirement_control = control
+        else:
+            self._search_requirement_control = ""
+        self.search_requirement.setText(text)
+        self.search_requirement.setVisible(bool(text))
+        self.search_requirement.setStatusTip(text)
+        self.search_requirement.setAccessibleDescription(text)
+        if previous != (text, self.search_requirement.isHidden()):
+            self._refit_sections()
 
     def _show_search_target(self) -> None:
         """Den Suchtreffer erst nach dem Aufklappen in den sichtbaren Bereich rollen."""
@@ -3903,37 +3984,40 @@ class PrintSettingsDialog(QDialog):
             self.tabs_toggle.toggled.connect(self._unfold_tabs)
         return box
 
-    def _unfold_tabs(self, open_now: bool) -> None:
+    def _unfold_tabs(self, _open_now: bool) -> None:
         """Die Tiefe wächst mit ihrer aktuellen Seite und gibt den Platz wieder frei."""
-        self._refit_sections(open_now)
+        self._queue_refit("passive" if self._search_revealing else "explicit")
+
+    def _unfold_sections(self, _open_now: bool) -> None:
+        """Vorn und Vorschläge passen sich nur nach einer bewussten Klappe an."""
+        self._queue_refit("passive" if self._search_revealing else "explicit")
 
     def _refit_sections(self, _state: bool | int = False) -> None:
-        """Erst nach der Sichtbarkeitsänderung die neue Inhaltshöhe messen."""
-        if self._built:
-            QTimer.singleShot(0, self, self._resize_to_content)
+        """Passiv aktualisieren, etwa nach Reiter-, Such- oder Statusänderung."""
+        self._queue_refit("passive")
 
-    def _resize_to_content(self) -> None:
-        """Eine Rollfläche, feste Aktionen und die gewählte Breite beim Klappen."""
-        if (
-            self.isVisible()
-            and self._last_content_height is not None
-            and self.height() != self._last_content_height
-        ):
-            self._content_user_height = self.height()
-        if (
-            self.isVisible()
-            and self._last_content_width is not None
-            and self.width() != self._last_content_width
-        ):
-            self._content_user_width = self.width()
-        if not self._content_user_width and self.tabs_toggle is not None:
-            # Die normale Ansicht zeigt die Reiternamen vollständig, und zwar
-            # **schon zugeklappt**: Erst beim Aufklappen gemessen sprang das
-            # Fenster von 560 auf 794 Punkte zur Seite, und beim Zuklappen
-            # blieb es breit — die Klappe änderte zwei Maße, eines davon
-            # dauerhaft. So wächst es beim Aufklappen nur nach unten. Nur eine
-            # bewusst schmaler gezogene Ansicht kürzt die Namen ab.
-            self.resize(max(self.width(), self._room_for_tabs()), self.height())
+    def _queue_refit(self, intent: ContentFitIntent) -> None:
+        """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Klappe zusammen."""
+        if not self._built:
+            return
+        priority = {"passive": 0, "explicit": 1, "initial": 2}
+        if priority[intent] > priority[self._size_refit_intent]:
+            self._size_refit_intent = intent
+        self._size_refit.start(0)
+
+    def _run_queued_refit(self) -> None:
+        """Misst nach dem Layoutumlauf mit dem stärksten offenen Größenwunsch."""
+        intent = self._size_refit_intent
+        self._size_refit_intent = "passive"
+        self._resize_to_content(intent)
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        """Passt die natürliche Dialoggröße genau beim ersten Anzeigen ein."""
+        super().showEvent(event)
+        self._queue_refit("initial")
+
+    def _resize_to_content(self, intent: ContentFitIntent = "passive") -> None:
+        """Misst den Inhalt je nach Anlass, ohne passive Außenrahmensprünge."""
         page = self.tabs.currentWidget()
         if page is not None:
             page_layout = page.layout()
@@ -3955,10 +4039,13 @@ class PrintSettingsDialog(QDialog):
         if layout is not None:
             layout.invalidate()
             layout.activate()
-        self.resize(self.width(), max(self._content_user_height, self.sizeHint().height()))
-        fit_dialog_to_screen(self)
-        self._last_content_height = self.height()
-        self._last_content_width = self.width()
+        self._content_height.fit(
+            self,
+            self._scroll,
+            grow_width=intent == "initial",
+            intent=intent,
+            natural_width=self._room_for_tabs() if intent == "initial" else 0,
+        )
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         super().resizeEvent(event)
@@ -4189,20 +4276,25 @@ class PrintSettingsDialog(QDialog):
         box.setDetailedText(written or tr("Der Slicer hat nichts geschrieben."))
         box.exec()
 
-    def _open_slicer_section(self) -> None:
-        """Den Abschnitt aufklappen, weil darin etwas zu entscheiden ist.
+    def _open_slicer_section(self, *, intent: ContentFitIntent = "explicit") -> None:
+        """Macht die Profilauswahl sichtbar; Profilantworten bleiben passiv.
 
         Drei Stellen tun das: kein Profil passt von selbst, der Slicer verlangt
         ein Druckerprofil, er verlangt ein Prozessprofil. Ein Hinweis, der auf
         eine Auswahl zeigt, die zugeklappt ist, wäre einer, dem man nicht
-        folgen kann.
+        folgen kann. Nachgereichte Profilergebnisse öffnen passiv; ein gewählter
+        Rückweg öffnet ausdrücklich.
         """
         if self.slicer_toggle is not None:
-            self.slicer_toggle.setChecked(True)
+            self._slicer_toggle_fit_intent = intent
+            try:
+                self.slicer_toggle.setChecked(True)
+            finally:
+                self._slicer_toggle_fit_intent = None
 
-    def _unfold_slicer(self, open_now: bool) -> None:
-        """Auch nachgereichte Profile bekommen Raum, ohne die oberen Felder zu stauchen."""
-        self._refit_sections(open_now)
+    def _unfold_slicer(self, _open_now: bool) -> None:
+        """Nur eine bewusste Klappe darf den äußeren Rahmen anpassen."""
+        self._queue_refit(self._slicer_toggle_fit_intent or "explicit")
 
     def _forget_result(self) -> None:
         """Das Ergebnis des vorigen Slicers verwerfen.
@@ -4352,8 +4444,7 @@ class PrintSettingsDialog(QDialog):
                 "unten von Hand wählen."
             )
         )
-        if self.slicer_toggle is not None:
-            self.slicer_toggle.setChecked(True)
+        self._open_slicer_section(intent="passive")
         self._show_slicer_state()
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
@@ -4516,7 +4607,7 @@ class PrintSettingsDialog(QDialog):
                     tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
                 )
             self._offer_the_slicers_printer(self._printer_of_the_slicer())
-            self._open_slicer_section()
+            self._open_slicer_section(intent="passive")
         else:
             # Passt ein Profil, gibt es keinen Drucker mehr zu übernehmen — auch
             # nicht nach dem Klick auf den Knopf, der genau das bewirkt hat.
@@ -6336,6 +6427,7 @@ class PrintSettingsDialog(QDialog):
             "adhesion.raft_layers",
         ):
             self._tab_forms["adhesion"].setRowVisible(self._labels[path], adhesion_enabled)
+        self._queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
         """Ein Feld hat sich geändert: **genau dieses** wird eigene Wahl — und
@@ -6360,6 +6452,18 @@ class PrintSettingsDialog(QDialog):
             if self.settings.explicit - before - {path}:
                 self._load_into_editors()
         self._update_inactive_setting_rows()
+        target = self._search_requirement_target
+        if (
+            path == self._search_requirement_control
+            and target
+            and 0 <= self._search_at < len(self._search_hits)
+            and self._search_hits[self._search_at] == target
+            and self._inactive_search_control(target) is None
+        ):
+            self._search_requirement_target = ""
+            self._lift(target)
+        if path in {"support.style", "adhesion.kind"}:
+            self._show_slicer_state()
         self._mark_origins()
         # Ein Hinweis, der am Wert hängt, folgt dem Wert (``slicer_keys.LIMITED``).
         self._mark_fields_this_slicer_ignores()

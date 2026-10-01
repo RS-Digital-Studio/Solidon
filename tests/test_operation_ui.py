@@ -2302,6 +2302,10 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindo
     dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {}, empty_window)
     dialog.show()
     try:
+        # Erst den initialen Inhaltsfit abschließen, bevor die Ausgangsgröße
+        # als Vergleich dient.
+        for _ in range(3):
+            QApplication.processEvents()
         front = [
             name
             for name, editor in dialog._editors.items()
@@ -2316,10 +2320,10 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindo
 
         shape = dialog._editors["shape"]
         assert isinstance(shape, QComboBox)
-        tall_before = dialog.height()
+        fitted_size = dialog.size()
         shape.setCurrentIndex(shape.findData("hole_grid"))
-        # Die Höhe zieht einen Ereignisumlauf später nach (``_refit``).
-        QApplication.processEvents()
+        for _ in range(3):
+            QApplication.processEvents()
         front = [
             name
             for name, editor in dialog._editors.items()
@@ -2327,7 +2331,20 @@ def test_a_rectangle_shows_only_the_rows_a_rectangle_has(empty_window: MainWindo
         ]
         # Die Breite geht: Ein Lochraster hat keine — dafür kommen seine drei.
         assert front == ["shape", "length", "height", "columns", "rows", "hole_diameter"], front
-        assert dialog.height() > tall_before, "der Dialog wächst mit seinen Zeilen"
+        assert dialog.size() == fitted_size, "bedingte Zeilen verschieben den Außenrahmen nicht"
+
+        from PySide6.QtCore import QRect
+
+        viewport = dialog._scroll.viewport()
+        for name in ("columns", "rows", "hole_diameter"):
+            editor = dialog._editors[name]
+            dialog._scroll.ensureWidgetVisible(editor)
+            QApplication.processEvents()
+            top_left = editor.mapTo(viewport, editor.rect().topLeft())
+            assert viewport.rect().intersects(QRect(top_left, editor.size())), (
+                f"das Feld {name} bleibt im Rollbereich erreichbar"
+            )
+            assert dialog.size() == fitted_size, "Scrollen verändert nicht die Fenstergröße"
     finally:
         dialog.reject()
         dialog.deleteLater()

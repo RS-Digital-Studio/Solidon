@@ -74,6 +74,7 @@ from app.ui.style import (
     WIDE,
     ContentHeight,
     DialogScrollArea,
+    form_natural_width,
     make_primary,
     select_data,
 )
@@ -401,40 +402,10 @@ class SettingsDialog(QDialog):
         # Beschriftungsspalte für sich: Die Felder begannen oben bei 148 und
         # unten bei 70 Punkten, gemessen am gebauten Dialog (Befund B11).
         align_forms(self)
-        # Auch die zugeklappten Zusatzzeilen bestimmen die Breite schon beim
-        # Öffnen. Sonst sprang das Fenster beim Aufklappen nach rechts.
-        margins = self._advanced_form.contentsMargins()
-        label_width = max(
-            (
-                item.sizeHint().width()
-                for row in range(self._advanced_form.rowCount())
-                if (item := self._advanced_form.itemAt(row, QFormLayout.ItemRole.LabelRole))
-                is not None
-            ),
-            default=0,
-        )
-        field_width = max(
-            (
-                item.sizeHint().width()
-                for row in range(self._advanced_form.rowCount())
-                if (item := self._advanced_form.itemAt(row, QFormLayout.ItemRole.FieldRole))
-                is not None
-            ),
-            default=0,
-        )
-        self.advanced.setMinimumWidth(
-            max(
-                self.advanced.minimumWidth(),
-                margins.left()
-                + label_width
-                + self._advanced_form.horizontalSpacing()
-                + field_width
-                + margins.right(),
-            )
-        )
+        self._natural_advanced_width = self._reserve_advanced_width()
         heading = self.advanced.findChild(QToolButton)
         assert heading is not None
-        heading.toggled.connect(self._fit_soon)
+        heading.toggled.connect(self._fit_explicit_soon)
         tab_order = (
             self.language,
             self.unit,
@@ -475,16 +446,56 @@ class SettingsDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._fit_soon()
+        self._fit_initial_soon()
 
     def _fit_soon(self) -> None:
         QTimer.singleShot(0, self, self._fit_content)
 
+    def _fit_initial_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_initial_content)
+
+    def _fit_explicit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_explicit_content)
+
     def _fit_content(self) -> None:
-        """Eine Klappe erhält Platz und gibt ihn zurück; gezogene Höhen bleiben."""
-        # So breit wie die breiteste Zeile — sonst rollte der Inhalt waagerecht,
-        # seit keine Zeile ihre Beschriftung mehr über das Feld stellt.
-        self._height.fit(self, self._scroll, grow_width=True)
+        """Nachgereichte Inhalte ändern nur den Rollbereich, nicht den Rahmen."""
+        self._height.fit(self, self._scroll, intent="passive")
+
+    def _fit_initial_content(self) -> None:
+        """Misst den Dialog einmal mit der breitesten eingeklappten Zeile."""
+        self._natural_advanced_width = self._reserve_advanced_width()
+        self._height.fit(
+            self,
+            self._scroll,
+            grow_width=True,
+            intent="initial",
+            natural_width=self._natural_advanced_width,
+        )
+
+    def _fit_explicit_content(self) -> None:
+        """Die Klappe darf nur bei einer automatischen Größe Höhe ändern."""
+        self._height.fit(self, self._scroll, intent="explicit")
+
+    def _reserve_advanced_width(self) -> int:
+        """Ermittelt die natürliche Fensterbreite samt verborgener Zusatzzeilen."""
+        self._advanced_form.invalidate()
+        self._advanced_form.activate()
+        wrapper = self.advanced.layout()
+        assert wrapper is not None
+        margins = wrapper.contentsMargins()
+        heading = self.advanced.findChild(QToolButton)
+        assert heading is not None
+        expanded_width = (
+            max(
+                heading.sizeHint().width(),
+                form_natural_width(self._advanced_form),
+            )
+            + margins.left()
+            + margins.right()
+        )
+        collapsed_width = max(heading.sizeHint().width(), self.advanced.sizeHint().width())
+        base_width = max(self.sizeHint().width(), self.minimumWidth())
+        return base_width + max(0, expanded_width - collapsed_width)
 
     def _application_group(self) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)

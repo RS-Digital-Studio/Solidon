@@ -686,48 +686,51 @@ def test_the_main_button_stays_the_default_through_the_run(qt_app: QApplication)
     qt_app.processEvents()
 
 
-def test_the_window_gives_back_the_height_a_long_sentence_took(qt_app: QApplication) -> None:
-    """Ein langer Satz macht das Fenster hoch; ein kurzer danach gibt es zurück.
-
-    Bis hierher wuchs der Dialog nur: Nach einer Absage in fünf Zeilen stand
-    danach „Bereit“ über einer leeren Fläche. Was das Fenster selbst genommen
-    hat, gibt es zurück — eine Höhe, die jemand von Hand gezogen hat, nicht.
-    """
+def test_status_text_stays_reachable_without_resizing_the_dialog(qt_app: QApplication) -> None:
+    """Passive Statuswechsel halten den Außenrahmen und rollen den Mehrinhalt."""
     dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
-    long_text = "Ein langer Satz, der mehrere Zeilen braucht. " * 12
+    long_text = "Ein langer Satz, der mehrere Zeilen braucht. " * 140
     short_text = "Bereit."
     try:
         dialog.show()
         wait_for_readiness(dialog, qt_app)
         _settle(qt_app)
-        before = dialog.height()
+        before = dialog.size()
 
         dialog.state.setText(long_text)
         _settle(qt_app)
-        grown = dialog.height()
-        assert grown > before, "der lange Satz bekommt seine Höhe"
+        assert dialog.size() == before, "eine Statusmeldung bewegt den Außenrahmen nicht"
+        scroll = dialog._scroll
+        bar = scroll.verticalScrollBar()
+        assert bar.maximum() > 0, "der lange Text liegt im erreichbaren Rollbereich"
+        bar.setValue(0)
+        _settle(qt_app)
+        top = dialog.state.mapTo(scroll.viewport(), dialog.state.rect().topLeft()).y()
+        assert top >= 0, "der Anfang der Meldung ist erreichbar"
+        bar.setValue(bar.maximum())
+        _settle(qt_app)
+        bottom = dialog.state.mapTo(scroll.viewport(), dialog.state.rect().bottomLeft()).y()
+        assert bottom <= scroll.viewport().rect().bottom(), "das Ende der Meldung ist erreichbar"
 
         dialog.state.setText(short_text)
         _settle(qt_app)
-        back = dialog.height()
-        assert back < grown, f"das Fenster bleibt {grown} hoch statt {back}"
-        assert back <= before
+        assert dialog.size() == before, "auch der kurze Status lässt den Außenrahmen stehen"
 
         dialog.state.setText(long_text)
         _settle(qt_app)
         dialog.state.setText(short_text)
         _settle(qt_app)
-        assert dialog.height() == back, "dieselbe Lage, dieselbe Höhe"
+        assert dialog.size() == before, "wiederholte Statuswechsel bleiben stabil"
 
         # Von Hand gezogen: Das bleibt, auch nach einem langen Satz.
-        drawn = back + 200
-        dialog.resize(dialog.width(), drawn)
+        dialog.resize(before.width(), before.height() + 200)
         _settle(qt_app)
+        drawn = dialog.size()
         dialog.state.setText(long_text)
         _settle(qt_app)
         dialog.state.setText(short_text)
         _settle(qt_app)
-        assert dialog.height() >= drawn, "die gezogene Höhe gehört dem Nutzer"
+        assert dialog.size() == drawn, "die gezogene Höhe gehört dem Nutzer"
     finally:
         dialog.wait_for_workers()
         dialog.close()

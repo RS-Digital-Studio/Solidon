@@ -299,13 +299,19 @@ class ComfySetupDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt gibt den Namen vor
         super().showEvent(event)
-        self._fit_soon()
+        self._fit_initial_soon()
 
     def _fit_soon(self) -> None:
         QTimer.singleShot(0, self, self._fit_content)
 
+    def _fit_initial_soon(self) -> None:
+        QTimer.singleShot(0, self, self._fit_initial_content)
+
     def _fit_content(self) -> None:
-        self._height.fit(self, self.content_scroll)
+        self._height.fit(self, self.content_scroll, intent="passive")
+
+    def _fit_initial_content(self) -> None:
+        self._height.fit(self, self.content_scroll, grow_width=True, intent="initial")
 
     def _choose_folder(self) -> None:
         chosen = QFileDialog.getExistingDirectory(

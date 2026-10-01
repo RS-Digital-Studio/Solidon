@@ -86,8 +86,10 @@ from app.ui.style import (
     ROOMY,
     TIGHT,
     WIDE,
+    ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    form_natural_width,
     make_primary,
     select_data,
     set_level,
@@ -417,7 +419,7 @@ class FirstRunDialog(QDialog):
         )
         self.printer_name_hint.setWordWrap(True)
         set_level(self.printer_name_hint, "caption")
-        custom_form.addRow("", self.printer_name_hint)
+        custom_form.addRow(self.printer_name_hint)
         # Das Verfahren entscheidet, welche Maße darunter gefragt werden:
         # Düse und Düsenzahl bei FDM, Pixelgröße und Mindestwand bei Resin
         # (Resin-Konzept §4). Ein Feld, das für das gewählte Verfahren
@@ -721,8 +723,8 @@ class FirstRunDialog(QDialog):
         self.wait_for_survey()
         self._leash.wait_all(timeout_ms)
 
-    def _grow_to_content(self) -> None:
-        """Geöffnete Felder bekommen Platz, zurückgenommene geben ihn wieder frei.
+    def _grow_to_content(self, intent: ContentFitIntent = "passive") -> None:
+        """Aktualisiert den Inhalt nach dem Auslöser, der ihn sichtbar machte.
 
         Ein Nullzeitgeber wartet die geänderte Zeilenanordnung ab. Er bindet
         den Dialog als Empfänger, damit beim Schließen kein Rückruf übrig bleibt.
@@ -732,22 +734,27 @@ class FirstRunDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
-        floor = self._height.floor(self)
-        # Die zusätzlichen Maße können auch mehr Breite brauchen, etwa in
-        # Französisch und Italienisch. Zuerst die verfügbare natürliche Breite
-        # setzen, erst danach die umgebrochenen Absätze in der Höhe messen.
-        wanted_width = max(self.width(), self.sizeHint().width())
-        screen = self.screen()
-        if screen is not None:
-            frame_width = self.frameGeometry().width() - self.width()
-            wanted_width = min(
-                wanted_width, screen.availableGeometry().width() - 2 * NORMAL - frame_width
+        natural_width = max(self.sizeHint().width(), self.minimumWidth())
+        form = self.custom_printer.layout()
+        if isinstance(form, QFormLayout):
+            natural_width += max(
+                0,
+                form_natural_width(form) - self.custom_printer.sizeHint().width(),
             )
-        self.resize(wanted_width, self.height())
+        may_size_initially = intent == "initial" and not self._height.initial_fit_done
+        if may_size_initially:
+            natural_width = max(self.width(), natural_width)
+            screen = self.screen()
+            if screen is not None:
+                frame_width = self.frameGeometry().width() - self.width()
+                natural_width = min(
+                    natural_width,
+                    screen.availableGeometry().width() - 2 * NORMAL - frame_width,
+                )
+            self._height.prepare_width_for_measurement(self, natural_width)
         layout.activate()
-        # Gemessen wird ohne die vorherige Mindesthöhe: Sonst bleibt nach
-        # einer langen Antwort oder einem schmaleren Fenster die alte Höhe.
-        # Ein bewusst verkleinertes Fenster behält den Rollbereich als Reserve.
+        # Umbrüche folgen der wirklichen Breite des Rollbereichs. Eine
+        # Nutzergröße lässt Zusatzinhalt darin scrollbar.
         for label in self._contents.findChildren(QLabel):
             if label.wordWrap() and label.width() > 0 and label.isVisibleTo(self._contents):
                 label.setMinimumHeight(0)
@@ -760,14 +767,26 @@ class FirstRunDialog(QDialog):
         self._scroll.updateGeometry()
         layout.invalidate()
         layout.activate()
-        self._height.settle(self, self.width(), max(self.sizeHint().height(), floor))
+        self._height.fit(
+            self,
+            self._scroll,
+            grow_width=may_size_initially,
+            intent=intent,
+            natural_width=natural_width if may_size_initially else 0,
+        )
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._grow_soon()
+        self._grow_initial_soon()
 
     def _grow_soon(self) -> None:
         QTimer.singleShot(0, self, self._grow_to_content)
+
+    def _grow_initial_soon(self) -> None:
+        QTimer.singleShot(0, self, self._grow_initial_content)
+
+    def _grow_initial_content(self) -> None:
+        self._grow_to_content("initial")
 
     def _say_why_locked(self, why: str) -> None:
         """Den Programme-Knopf sperren und sagen, warum — oder ihn freigeben.

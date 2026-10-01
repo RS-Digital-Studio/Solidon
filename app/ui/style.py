@@ -27,16 +27,18 @@ einen einzelnen Fehler benennen kann.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, Literal, cast
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QResizeEvent, QShowEvent
+from PySide6.QtGui import QFont, QResizeEvent, QScreen, QShowEvent, QWindow
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
+    QFormLayout,
     QFrame,
     QLabel,
+    QLayoutItem,
     QMenu,
     QPushButton,
     QScrollArea,
@@ -236,6 +238,9 @@ class DialogScrollArea(QScrollArea):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._content_hint: QSize | None = None
+        self._content_height: object | None = None
+        self._screen_window: QWindow | None = None
+        self._screen: QScreen | None = None
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -281,15 +286,48 @@ class DialogScrollArea(QScrollArea):
     def _fit_window(self) -> None:
         window = self.window()
         if isinstance(window, QDialog):
-            fit_dialog_to_screen(window)
+            handle = window.windowHandle()
+            if handle is not None:
+                self._watch_screen(handle)
+            height = self._content_height
+            if isinstance(height, ContentHeight):
+                height.fit_to_screen(window)
+            else:
+                fit_dialog_to_screen(window)
+
+    def _watch_screen(self, window: QWindow) -> None:
+        """Bildschirmwechsel, nutzbare Fläche und DPI an den Dialog binden."""
+        if window is not self._screen_window:
+            if self._screen_window is not None:
+                self._screen_window.screenChanged.disconnect(self._screen_changed)
+            self._screen_window = window
+            window.screenChanged.connect(self._screen_changed)
+        self._watch_screen_metrics(window.screen())
+
+    def _watch_screen_metrics(self, screen: QScreen | None) -> None:
+        if screen is self._screen:
+            return
+        if self._screen is not None:
+            self._screen.availableGeometryChanged.disconnect(self._screen_changed)
+            self._screen.logicalDotsPerInchChanged.disconnect(self._screen_changed)
+        self._screen = screen
+        if screen is not None:
+            screen.availableGeometryChanged.connect(self._screen_changed)
+            screen.logicalDotsPerInchChanged.connect(self._screen_changed)
+
+    def _screen_changed(self, *_args: object) -> None:
+        """Die Fensterbegrenzung nach dem Qt-Umlauf neu berechnen."""
+        if self._screen_window is not None:
+            self._watch_screen_metrics(self._screen_window.screen())
+        QTimer.singleShot(0, self, self._fit_window)
 
 
 def fit_dialog_to_screen(dialog: QWidget) -> None:
-    """Größe und Lage samt Rahmen innerhalb des aktuellen Monitors halten.
+    """Ein Dialogfenster beim Öffnen oder Bildschirmwechsel erreichbar halten.
 
-    Erst nach dem Anzeigen aufrufen, wenn Qt den Fensterrahmen kennt, sowie
-    nach einer inhaltlichen Größenänderung. Normale Nutzergrößen und maximierte
-    Fenster bleiben erhalten; überlange Inhalte gehören in einen Rollbereich.
+    Erst nach dem Anzeigen aufrufen, wenn Qt den Fensterrahmen kennt. Bei
+    gewöhnlichen Größenänderungen bleibt der Anker stehen; überlange Inhalte
+    gehören in einen Rollbereich.
     """
     screen = dialog.screen()
     if screen is None or dialog.isMaximized() or dialog.isFullScreen():
@@ -308,59 +346,215 @@ def fit_dialog_to_screen(dialog: QWidget) -> None:
         dialog.move(x, y)
 
 
-class ContentHeight:
-    """Die Höhe eines Dialogs mit Rollbereich: dem Inhalt nach, eine gezogene
-    Höhe als Untergrenze.
+ContentFitIntent = Literal["content", "initial", "explicit", "passive"]
 
-    Der Dialog merkt sich, welche Höhe er selbst zuletzt gesetzt hat
-    (``fitted``). Steht er beim nächsten Anpassen anders da, hat der Kunde
-    gezogen, und diese Höhe (``user``) bleibt Untergrenze: Wächst der Inhalt
-    — eine aufgeklappte Klappe, ein nachgereichter Satz —, bekommt er Platz;
-    schrumpft er, gibt das Fenster zurück, was es selbst genommen hat, und nie
-    mehr. Die Regel stand in jedem Dialog mit Rollbereich als eigene Kopie;
-    zwei prüften in anderer Reihenfolge, einer kannte keine Untergrenze.
+
+def _natural_item_width(item: QLayoutItem | None) -> int:
+    """Liest die natürliche Breite auch dann, wenn Qt das Element verbirgt."""
+    if item is None:
+        return 0
+    hints = [item.sizeHint(), item.minimumSize()]
+    widget = item.widget()
+    if widget is not None:
+        hints.extend((widget.sizeHint(), widget.minimumSizeHint(), widget.minimumSize()))
+    layout = item.layout()
+    if layout is not None:
+        hints.extend((layout.sizeHint(), layout.minimumSize()))
+    return max((hint.width() for hint in hints if hint.isValid()), default=0)
+
+
+def form_natural_width(form: QFormLayout) -> int:
+    """Breite eines Formulars samt verborgenen und spaltenübergreifenden Zeilen."""
+    margins = form.contentsMargins()
+    label_width = 0
+    field_width = 0
+    spanning_width = 0
+    for index in range(form.count()):
+        item = form.itemAt(index)
+        if item is None:
+            continue
+        _, role = cast(tuple[int, QFormLayout.ItemRole], form.getItemPosition(index))
+        width = _natural_item_width(item)
+        if role == QFormLayout.ItemRole.LabelRole:
+            label_width = max(label_width, width)
+        elif role == QFormLayout.ItemRole.FieldRole:
+            field_width = max(field_width, width)
+        elif role == QFormLayout.ItemRole.SpanningRole:
+            spanning_width = max(spanning_width, width)
+    spacing = form.horizontalSpacing()
+    if spacing < 0:
+        spacing = max(0, form.spacing())
+    paired_width = label_width + field_width
+    if label_width and field_width:
+        paired_width += spacing
+    return margins.left() + max(paired_width, spanning_width) + margins.right()
+
+
+def _content_size_for_intent(
+    current: QSize,
+    natural: QSize,
+    intent: ContentFitIntent,
+    *,
+    grow_width: bool = False,
+    natural_width: int = 0,
+    height_floor: int = 0,
+    available_height: int | None = None,
+) -> QSize | None:
+    """Reine Größenentscheidung; äußere Qt-Messungen bleiben beim Aufrufer."""
+    if intent == "passive":
+        return None
+    if intent == "explicit":
+        height = natural.height()
+        if available_height is not None:
+            height = min(height, available_height)
+        return QSize(current.width(), max(1, height))
+    width = current.width()
+    if grow_width:
+        width = max(width, natural.width())
+    width = max(width, natural_width)
+    return QSize(width, max(natural.height(), height_floor))
+
+
+class ContentHeight:
+    """Größenvertrag für Dialoge mit Rollbereich.
+
+    Eine anfängliche Messung passt den aktuellen Dialoginhalt ein. Explizites
+    Auf- und Zuklappen darf Höhe zurückgeben oder hinzufügen und hält den
+    Fensteranker; passive Inhaltsänderungen lassen den Außenrahmen stehen.
+    Sobald der Kunde Breite oder Höhe ändert, bleiben beide Maße für die
+    Dialoglebenszeit maßgeblich. Mehrinhalt rollt dann im Scrollbereich.
     """
 
-    __slots__ = ("fitted", "user")
+    __slots__ = ("_initialized", "fitted", "user")
 
     def __init__(self) -> None:
-        self.fitted: int | None = None
-        self.user = 0
+        self.fitted: QSize | None = None
+        self.user: QSize | None = None
+        self._initialized = False
+
+    @property
+    def initial_fit_done(self) -> bool:
+        """Ob die natürliche Anfangsgröße des Dialogs bereits gemessen wurde."""
+        return self._initialized
+
+    def _observe_user_size(self, dialog: QWidget) -> None:
+        if dialog.isVisible() and self.fitted is not None and dialog.size() != self.fitted:
+            self.user = QSize(dialog.size())
+
+    def _remember_size(self, dialog: QWidget) -> None:
+        self.fitted = QSize(dialog.size())
+        if self.user is not None:
+            self.user = QSize(dialog.size())
 
     def floor(self, dialog: QWidget) -> int:
-        """Die gezogene Höhe, nachdem eine neue Nutzergröße gemerkt ist.
+        """Merkt eine seit der letzten eigenen Messung gewählte Nutzergröße."""
+        self._observe_user_size(dialog)
+        return self.user.height() if self.user is not None else 0
 
-        Vor dem Messen fragen: Das Aktivieren des Layouts kann die Höhe schon
-        ändern, und das wäre dann kein Zug des Kunden.
-        """
-        if dialog.isVisible() and self.fitted is not None and dialog.height() != self.fitted:
-            self.user = dialog.height()
-        return self.user
-
-    def settle(self, dialog: QWidget, width: int, height: int) -> None:
-        """Setzt die gemessene Größe, hält sie auf dem Bildschirm und merkt sie."""
-        dialog.resize(width, height)
+    def fit_to_screen(self, dialog: QWidget) -> None:
+        """Stellt nach einem Bildschirmwechsel nur die Erreichbarkeit her."""
+        self._observe_user_size(dialog)
         fit_dialog_to_screen(dialog)
-        self.fitted = dialog.height()
+        self._remember_size(dialog)
 
-    def fit(self, dialog: QWidget, scroll: QScrollArea, *, grow_width: bool = False) -> None:
-        """Die gewöhnliche Anpassung: Rollbereich und Layout neu messen, dann
-        :meth:`settle` mit der Wunschhöhe des Dialogs.
+    def prepare_width_for_measurement(self, dialog: QWidget, width: int) -> None:
+        """Legt die automatische Breite vor der Inhaltshöhenmessung fest.
 
-        Nur an einem sichtbaren Dialog — vorher kennt Qt weder Stylesheet noch
-        Breite (:func:`fit_height_after_show`). ``grow_width`` lässt auch die
-        Breite bis zum Wunsch wachsen, nie schmaler werden.
+        Ein Dialog muss für umbrochene Inhalte manchmal zuerst auf seine
+        natürliche Breite kommen. Diese eigene Zwischenanpassung darf nicht als
+        manuelle Nutzergröße gelten, auch wenn ein früher Bildschirmfit bereits
+        eine Ausgangsgröße gespeichert hat.
         """
+        self._observe_user_size(dialog)
+        if self.user is not None:
+            return
+        dialog.resize(max(dialog.width(), width), dialog.height())
+        self._remember_size(dialog)
+
+    @staticmethod
+    def _available_height_at_anchor(dialog: QWidget) -> int:
+        screen = dialog.screen()
+        room = screen.availableGeometry().adjusted(NORMAL, NORMAL, -NORMAL, -NORMAL)
+        frame = dialog.frameGeometry()
+        top = max(frame.top(), room.top())
+        frame_height = max(1, room.bottom() - top + 1)
+        border_height = frame.height() - dialog.height()
+        return max(1, frame_height - border_height)
+
+    def settle(
+        self,
+        dialog: QWidget,
+        width: int,
+        height: int,
+        *,
+        intent: ContentFitIntent = "content",
+    ) -> None:
+        """Setzt eine automatische Größe oder bewahrt eine manuelle vollständig."""
+        self._observe_user_size(dialog)
+        if self.user is not None:
+            self._remember_size(dialog)
+            return
+        anchor = dialog.frameGeometry().topLeft() if intent == "explicit" else None
+        if intent == "explicit":
+            available = self._available_height_at_anchor(dialog)
+            if available is not None:
+                height = min(height, available)
+        dialog.resize(width, height)
+        layout = dialog.layout()
+        if layout is not None:
+            layout.activate()
+        if intent == "explicit":
+            if anchor is not None and dialog.frameGeometry().topLeft() != anchor:
+                dialog.move(anchor)
+        else:
+            fit_dialog_to_screen(dialog)
+        self._remember_size(dialog)
+        if intent == "initial":
+            self._initialized = True
+
+    def fit(
+        self,
+        dialog: QWidget,
+        scroll: QScrollArea,
+        *,
+        grow_width: bool = False,
+        intent: ContentFitIntent = "content",
+        natural_width: int = 0,
+        natural_size: QSize | None = None,
+    ) -> None:
+        """Misst Inhalt einmal, nach ausdrücklichem Klappen oder ohne Rahmenzug.
+
+        ``content`` erhält für noch nicht umgestellte Dialoge das bisherige
+        automatische Verhalten. ``initial`` darf zusätzlich bis zur natürlichen
+        Breite wachsen; ``explicit`` hält Breite und Anker; ``passive`` ändert
+        nur das Layout im Scrollbereich.
+        """
+        if isinstance(scroll, DialogScrollArea):
+            scroll._content_height = self
         layout = dialog.layout()
         if layout is None or not dialog.isVisible():
             return
+        if intent == "initial" and self._initialized:
+            intent = "passive"
         floor = self.floor(dialog)
         scroll.updateGeometry()
         layout.invalidate()
         layout.activate()
-        wanted = dialog.sizeHint()
-        width = max(dialog.width(), wanted.width()) if grow_width else dialog.width()
-        self.settle(dialog, width, max(wanted.height(), floor))
+        wanted = natural_size if natural_size is not None else dialog.sizeHint()
+        target = _content_size_for_intent(
+            dialog.size(),
+            wanted,
+            intent,
+            grow_width=grow_width,
+            natural_width=natural_width,
+            height_floor=floor,
+            available_height=(
+                self._available_height_at_anchor(dialog) if intent == "explicit" else None
+            ),
+        )
+        if target is None:
+            return
+        self.settle(dialog, target.width(), target.height(), intent=intent)
 
 
 def select_data(box: QComboBox, identifier: str) -> None:

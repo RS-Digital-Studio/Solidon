@@ -1,11 +1,18 @@
 """Dialogzustände behalten ihre erreichbaren Inhalte nach einer Layoutänderung."""
 
-from PySide6.QtCore import Qt
+import pytest
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QMenuBar, QWidget
 
 from app.ui.counterpart_dialog import CounterpartDialog
 from app.ui.shortcuts_window import ShortcutsWindow
+
+
+def _settle(application: QApplication) -> None:
+    """Lässt verzögerte Layoutmessungen einen vollständigen Umlauf durchlaufen."""
+    for _ in range(12):
+        application.processEvents()
 
 
 def test_shortcut_search_reveals_closed_groups_and_restores_their_state(qt_app: QApplication):
@@ -110,3 +117,115 @@ def test_palette_shows_a_description_for_an_available_command(qt_app: QApplicati
         assert item.text() == f"{entry.title}\n{entry.doc}"
     finally:
         dialog.deleteLater()
+
+
+@pytest.mark.parametrize("language", ["fr", "it"])
+def test_settings_advanced_rows_fit_without_widening_the_dialog(
+    qt_app: QApplication, language: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die zurückgestellten Zeilen passen schon vor dem Aufklappen in die Breite."""
+    from PySide6.QtWidgets import QToolButton
+
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+    from app.ui import settings_dialog as settings_module
+    from app.ui.settings import UiSettings
+
+    spoken = get_language()
+    dialog: settings_module.SettingsDialog | None = None
+    monkeypatch.setattr(settings_module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(settings_module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    try:
+        install_language(language)
+        set_language(language)
+        dialog = settings_module.SettingsDialog(UiSettings(language=language))
+        dialog.show()
+        _settle(qt_app)
+        initial_width = dialog.width()
+        heading = dialog.advanced.findChild(QToolButton)
+        assert heading is not None
+        heading.click()
+        _settle(qt_app)
+        assert dialog.width() == initial_width
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+    finally:
+        if dialog is not None:
+            dialog.release()
+            dialog.close()
+        install_language(spoken)
+        set_language(spoken)
+
+
+def test_dialog_rechecks_reachability_when_screen_metrics_change(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Monitor- und DPI-Wechsel planen eine neue, reine Erreichbarkeitsprüfung."""
+    from app.ui import style
+
+    class SignalProbe:
+        def __init__(self) -> None:
+            self.slots: list[object] = []
+
+        def connect(self, slot: object) -> None:
+            self.slots.append(slot)
+
+        def disconnect(self, slot: object) -> None:
+            self.slots.remove(slot)
+
+        def emit(self, *args: object) -> None:
+            for slot in tuple(self.slots):
+                assert callable(slot)
+                slot(*args)
+
+    class ScreenProbe:
+        def __init__(self) -> None:
+            self.availableGeometryChanged = SignalProbe()
+            self.logicalDotsPerInchChanged = SignalProbe()
+
+    class WindowProbe:
+        def __init__(self, screen: ScreenProbe) -> None:
+            self.screenChanged = SignalProbe()
+            self.current_screen = screen
+
+        def screen(self) -> ScreenProbe:
+            return self.current_screen
+
+    scheduled: list[object] = []
+    fitted: list[QWidget] = []
+
+    class TimerProbe:
+        @staticmethod
+        def singleShot(  # noqa: N802 — Qt-Name
+            _delay: int, _receiver: QObject, callback: object
+        ) -> None:
+            scheduled.append(callback)
+
+    monkeypatch.setattr(style, "QTimer", TimerProbe)
+    monkeypatch.setattr(style, "fit_dialog_to_screen", fitted.append)
+
+    dialog = QDialog()
+    scroll = style.DialogScrollArea(dialog)
+    first = ScreenProbe()
+    second = ScreenProbe()
+    window = WindowProbe(first)
+    try:
+        scroll._watch_screen(window)  # type: ignore[arg-type]
+        assert len(first.availableGeometryChanged.slots) == 1
+        assert len(first.logicalDotsPerInchChanged.slots) == 1
+
+        window.current_screen = second
+        window.screenChanged.emit(second)
+        assert first.availableGeometryChanged.slots == []
+        assert first.logicalDotsPerInchChanged.slots == []
+        assert len(second.availableGeometryChanged.slots) == 1
+        assert len(second.logicalDotsPerInchChanged.slots) == 1
+
+        second.logicalDotsPerInchChanged.emit(144.0)
+        assert len(scheduled) == 2
+        for callback in scheduled:
+            assert callable(callback)
+            callback()
+        assert fitted == [dialog, dialog]
+    finally:
+        dialog.deleteLater()
+        qt_app.processEvents()

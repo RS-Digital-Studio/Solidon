@@ -62,7 +62,7 @@ Karte, dort das Gesetz.
 |---|---|---|
 | `oberflaeche.md` | Texte, Zahlen, gestufte Tiefe, Barrierefreiheit, Tests am Fenster | jeder Datei hier |
 | `zwillinge.md` | doppelte Stellen und Zwillinge | jeder Datei unter `app/` |
-| `fenster.md` | Zonen, Hauptknopf, Sicherung, Kartenhöhen, Aufräumen | `main_window`, `app`, `dialogs`, `*dialog*`, `start_screen`, `first_run`, `manual_window`, `overlay`, `panels` |
+| `fenster.md` | Zonen, Hauptknopf, Sicherung, Dialoggröße, Aufräumen | `main_window`, `app`, `*dialog*`, `style`, `filament_picker`, `start_screen`, `first_run`, `manual_window`, `overlay`, `panels` |
 | `grenzen.md` | Menüs, Werkzeuge, Felder vorn | `main_window`, `panels`, `op_dialog`, `tool_strip`, `command_palette`, `catalog`, `selection_operations` |
 | `ansicht.md` | Picks, Messen, Bildpunkte, Zeiger, wann gemalt wird, Druckplatten | `viewport`, `render/`, `qt_platform`, `placement_flow`, `overlay`, `cursors`, `analysis_bar`, `section_bar`, `split_bar`, `transform_bar`, `explode_bar`, `scale_widget`, `snapshots` |
 | `griffe.md` | Zeigervorfahrt, Bewegen, Skalieren, Langloch, Maße am Merkmal | `slot_handle`, `viewport`, `transform_bar`, `render/gizmo`, `scale_widget`, `placement_flow` |
@@ -161,13 +161,12 @@ Karte, dort das Gesetz.
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29, §2.4); am Resin-Drucker nur, was gilt (`_reduce_for_resin`) |
 | `print_disclosure.py` | der Hinweis vor der ersten Arbeit mit Druckeinstellungen (§29): Er sperrt nichts; die Wahl darunter entscheidet, ob die Erfahrungswerte mit einer 3MF mitreisen |
 
-**Druckfelder:** `_rebase` unterlegt die Wahl mit `manufacturer.base_settings`;
-`_foundation_key` vermeidet Wiederholungen. `_editor_changed(path)` übernimmt
-nur das berührte Feld, nie gerundete Grundlagewerte anderer Felder.
-`_resets`/`_mark_origins` zeigen eigene Werte fett mit *Zurücksetzen*,
-`_foreign_notes` unübersetzte Werte, `foundation_note`/`bed_plate_choice` die
-Grundlage. `has_changes` misst nur `print_settings.own_part`. Die Grundlage
-entsteht im `_FoundationWorker`; `follow_print_settings` übernimmt sie.
+**Druckfelder:** Grundlage aus `manufacturer.base_settings`, Feldherkunft und
+Rücksetzen: `konzepte/begruendungen/karte-app-ui.md`. `_editor_changed` ändert
+nur das berührte Feld; gerundete Basiswerte anderer Felder bleiben unberührt.
+Suchtreffer in inaktiven Stützen-/Haftungsfeldern nennen den Umschalter,
+ändern keine Werte und stellen nach dessen Wahl den Fokus am Feld wieder her;
+der Hinweis bleibt scrollbar.
 
 ### Filamente und Lager
 
@@ -210,7 +209,7 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 
 | Datei | Zweck |
 |---|---|
-| `style.py` | Stylesheet, Typografie, Abstände (§19.3); `make_primary`, `rule`; `DialogScrollArea`, `fit_dialog_to_screen`, `fit_height_after_show`; Pfeil- und Hakenbilder |
+| `style.py` | Formsprache/Typografie/Raster; `make_primary`, `rule`; `ContentHeight` nach Auslöser/Nutzermaß; `DialogScrollArea`, `form_natural_width`, Bildschirmfit, Aufmachmaß, Pfeil/Haken |
 | `theme.py` | hell und dunkel (§19.3) |
 | `window_chrome.py` | die Titelleiste in den Farben der Anwendung (Windows malt sie und bekommt nur die Farbe gesagt); ein idempotent angemeldeter Wächter am Ereignisstrom |
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |

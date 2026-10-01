@@ -201,7 +201,7 @@ def test_custom_printer_name_hint_stays_with_its_field(setup_dialog: FirstRunDia
     name_row, name_role = form.getWidgetPosition(setup_dialog.printer_name)
     hint_row, hint_role = form.getWidgetPosition(setup_dialog.printer_name_hint)
     assert name_role == QFormLayout.ItemRole.FieldRole
-    assert hint_role == QFormLayout.ItemRole.FieldRole
+    assert hint_role == QFormLayout.ItemRole.SpanningRole
     assert hint_row == name_row + 1
 
     setup_dialog.printer.setCurrentIndex(setup_dialog.printer.findData("__custom__"))
@@ -700,11 +700,10 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         QTest.qWait(100)
         assert dialog._scroll.horizontalScrollBar().maximum() == 0
         assert dialog.width() == initial_width
-        assert dialog.height() >= initial_height
-        expanded_height = dialog.height()
+        assert dialog.height() == initial_height
         dialog.printer.setCurrentIndex(dialog.printer.findData(default))
         QTest.qWait(100)
-        assert dialog.height() < expanded_height
+        assert dialog.height() == initial_height
         assert dialog.width() == initial_width
 
         manual_height = dialog.height() + 70
@@ -712,7 +711,7 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         QTest.qWait(100)
         dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
         QTest.qWait(100)
-        assert dialog.height() >= max(manual_height, expanded_height)
+        assert dialog.height() == manual_height
         assert dialog._scroll.horizontalScrollBar().maximum() == 0
         dialog.printer.setCurrentIndex(dialog.printer.findData(default))
         QTest.qWait(100)

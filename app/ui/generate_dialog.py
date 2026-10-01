@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Final
 
 from PySide6.QtCore import QSize, QTimer, Signal
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -56,6 +57,7 @@ from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
     WrappedNote,
@@ -308,8 +310,7 @@ class GenerateDialog(QDialog):
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
         self._height = ContentHeight()
-        """Die Höhe, die das Fenster zuletzt selbst genommen hat — woran
-        :meth:`_grow_to_content` erkennt, ob jemand anders sie bestimmt hat."""
+        """Die zuletzt gesetzte Fenstergröße für den gemeinsamen Größenvertrag."""
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
@@ -387,10 +388,8 @@ class GenerateDialog(QDialog):
 
         self.advanced = collapsible(tr("Weitere Einstellungen"), advanced, open_now=False)
 
-        # Ein Satz, der wächst — und das Fenster mit ihm: Nach der Antwort
-        # „kein ComfyUI" wurde der lange Hinweis aus dem Beschreibungsfeld
-        # gepresst, 11 von 26 Punkten blieben (Befund Robert, 19.09.2026).
-        # Warum ein QLabel das nicht von allein kann, steht an ``WrappedNote``.
+        # Lange Hinweise bleiben vollständig im Rollbereich erreichbar, ohne
+        # Statuswechsel als bewusste Fenstergrößenänderung zu behandeln.
         self.state = WrappedNote(self)
         self.state.grown.connect(self._grow_soon)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
@@ -466,7 +465,7 @@ class GenerateDialog(QDialog):
         outer.addWidget(self.buttons)
         heading = self.advanced.findChild(QToolButton)
         if heading is not None:
-            heading.toggled.connect(self._grow_soon)
+            heading.toggled.connect(self._grow_explicit_soon)
         wheel_needs_focus(self.seed)
 
         self.prompt.textChanged.connect(self._update_state)
@@ -536,38 +535,30 @@ class GenerateDialog(QDialog):
         self._leash.start(worker)
 
     def _grow_soon(self) -> None:
-        """Einen Ereignisdurchlauf später — unmittelbar nach dem Pinnen der
-        Mindesthöhe kam dieselbe Rechnung am gebauten Dialog gequetscht zurück,
-        einen Durchlauf später stimmt sie (dieselbe Bauart wie im Erststart)."""
+        """Nachgereichte Hinweise aktualisieren den Rollbereich nach dem Layout."""
         QTimer.singleShot(0, self, self._grow_to_content)
 
-    def _grow_to_content(self) -> None:
-        """Das Fenster nimmt die Höhe, die sein Inhalt jetzt braucht.
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        super().showEvent(event)
+        self._grow_initial_soon()
 
-        Gerufen, sobald der Hinweis eine neue Mindesthöhe gepinnt hat.
+    def _grow_initial_soon(self) -> None:
+        QTimer.singleShot(0, self, self._grow_initial_content)
 
-        **In beide Richtungen, solange die Höhe dem Fenster gehört.** Bis
-        hierher ging es nur nach oben: Ein langer Satz — eine Absage in fünf
-        Zeilen, der Weg zum fehlenden Bildmodell — machte das Fenster hoch,
-        und als danach „Bereit“ dastand, blieb die Höhe, und der Überschuss
-        stand als leere Fläche über dem Hinweis. Was das Fenster selbst
-        genommen hat, gibt es jetzt zurück.
+    def _grow_initial_content(self) -> None:
+        self._grow_to_content("initial")
 
-        Eine gezogene Nutzerhöhe bleibt als Untergrenze erhalten. Braucht ein
-        Abschnitt zwischenzeitlich mehr Platz, gibt er genau diesen Zusatz
-        wieder zurück, wenn er sich schließt.
-        """
+    def _grow_explicit_soon(self) -> None:
+        QTimer.singleShot(0, self, self._grow_explicit_content)
+
+    def _grow_explicit_content(self) -> None:
+        self._grow_to_content("explicit")
+
+    def _grow_to_content(self, intent: ContentFitIntent = "passive") -> None:
+        """Misst das Layout, ohne Statusmeldungen den Außenrahmen bewegen zu lassen."""
         layout = self.layout()
         if layout is None or not self.isVisible():
             return
-        floor = self._height.floor(self)
-        # Ungültig machen, bevor gemessen wird: Der Satz hat seine Mindesthöhe
-        # gerade erst gepinnt, und die Rechnung darunter hielt sonst den alten
-        # Stand — gemessen blieb das Feld nach dem Wachsen gequetscht, bis
-        # irgendetwas anderes das Layout anstieß. Und gleich neu setzen: Die
-        # Mindesthöhe des Fensters übernimmt Qt erst mit ``activate``, und
-        # bis dahin klemmte ``resize`` an der alten — ein Fenster, das einen
-        # langen Satz zurückgeben sollte, blieb auf dessen Höhe stehen.
         self._content_layout.invalidate()
         self._content_layout.activate()
         self._scroll.updateGeometry()
@@ -583,11 +574,13 @@ class GenerateDialog(QDialog):
                 + layout.spacing()
                 + self.buttons.sizeHint().height()
             )
-        self._height.settle(self, self.width(), max(wanted, floor))
-        # Das Aktivieren danach übernimmt die neue Mindesthöhe und kann die
-        # Höhe noch einmal setzen; gemerkt wird, was dann steht.
-        layout.activate()
-        self._height.fitted = self.height()
+        self._height.fit(
+            self,
+            self._scroll,
+            grow_width=intent == "initial",
+            intent=intent,
+            natural_size=QSize(self.sizeHint().width(), max(wanted, 1)),
+        )
 
     def _readiness_done(self, workflow: str, found: object, choices: object) -> None:
         """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""

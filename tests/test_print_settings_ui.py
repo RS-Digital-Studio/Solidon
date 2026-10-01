@@ -122,10 +122,322 @@ def test_search_opens_the_matching_section_and_scrolls_to_its_field(
         dialog.deleteLater()
 
 
-def test_print_dialog_depth_keeps_width_and_uses_one_scroll_area(
+@pytest.mark.parametrize(
+    (
+        "selector_path",
+        "active_value",
+        "target_path",
+        "unrelated_selector_path",
+        "unrelated_active_value",
+    ),
+    [
+        ("support.style", "tree", "support.z_gap", "adhesion.kind", "brim"),
+        ("adhesion.kind", "brim", "adhesion.brim_width", "support.style", "tree"),
+    ],
+)
+def test_search_guides_to_the_selector_for_an_inactive_detail_field(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    request: pytest.FixtureRequest,
+    selector_path: str,
+    active_value: str,
+    target_path: str,
+    unrelated_selector_path: str,
+    unrelated_active_value: str,
+) -> None:
+    """Die Suche nennt den nötigen Umschalter und aktiviert die Gruppe nicht selbst."""
+    from PySide6.QtTest import QTest
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog.show()
+    for _ in range(3):
+        qt_app.processEvents()
+    selector = dialog._editors[selector_path]
+    target = dialog._editors[target_path]
+    before = dialog.settings
+    target_before = print_settings.read_path(before, target_path)
+    search_window_size_before = (dialog.width(), dialog.height())
+    assert isinstance(selector, QComboBox)
+    selector_description = selector.accessibleDescription()
+    assert selector.currentData() == "none"
+    assert dialog._labels[target_path].isHidden()
+
+    term = str(dialog._fields[target_path].title)
+    assert dialog.search_hits(term) == [target_path]
+    dialog.search.setText(term)
+    QTest.keyClick(dialog.search, Qt.Key.Key_Return)
+    for _ in range(3):
+        qt_app.processEvents()
+
+    assert dialog.settings == before
+    assert selector.currentData() == "none"
+    assert dialog._labels[target_path].isHidden()
+    assert dialog.highlighted() == selector_path
+    assert selector.isVisibleTo(dialog)
+    assert dialog._search_at == 0
+    assert dialog.search_state.text()
+    assert (dialog.width(), dialog.height()) == search_window_size_before
+    requirement = dialog.search_requirement.text()
+    assert requirement
+    assert str(dialog._fields[selector_path].title) in requirement
+    assert dialog.search_requirement.isVisibleTo(dialog)
+    assert dialog.search_requirement.accessibleDescription() == requirement
+    assert requirement in selector.accessibleDescription()
+
+    unrelated = dialog._editors[unrelated_selector_path]
+    assert isinstance(unrelated, QComboBox)
+    assert dialog.tabs_toggle is not None
+    if not dialog.tabs_toggle.isChecked():
+        folded_frame = dialog.frameGeometry()
+        QTest.mouseClick(dialog.tabs_toggle, Qt.MouseButton.LeftButton)
+        for _ in range(3):
+            qt_app.processEvents()
+        assert dialog.tabs_toggle.isChecked()
+        assert dialog.frameGeometry().topLeft() == folded_frame.topLeft()
+    unrelated_group = GROUPS.index(unrelated_selector_path.partition(".")[0])
+    dialog.tabs.setCurrentIndex(unrelated_group)
+    for _ in range(3):
+        qt_app.processEvents()
+    assert unrelated.isVisibleTo(dialog)
+    window_size_before_changes = (dialog.width(), dialog.height())
+    frame_anchor_before_changes = dialog.frameGeometry().topLeft()
+    unrelated.setFocus()
+    unrelated.setCurrentIndex(unrelated.findData(unrelated_active_value))
+    for _ in range(3):
+        qt_app.processEvents()
+    assert dialog.tabs.currentIndex() == unrelated_group
+    assert unrelated.hasFocus()
+    assert dialog.search_requirement.isVisibleTo(dialog)
+    assert dialog._search_requirement_target == target_path
+    assert (dialog.width(), dialog.height()) == window_size_before_changes
+    assert dialog.frameGeometry().topLeft() == frame_anchor_before_changes
+
+    dialog.tabs.setCurrentIndex(GROUPS.index(selector_path.partition(".")[0]))
+    for _ in range(3):
+        qt_app.processEvents()
+    selector.setCurrentIndex(selector.findData(active_value))
+    for _ in range(3):
+        qt_app.processEvents()
+
+    assert selector.currentData() == active_value
+    assert not dialog._labels[target_path].isHidden()
+    assert target.isVisibleTo(dialog)
+    assert dialog.highlighted() == target_path
+    assert not dialog.search_requirement.isVisibleTo(dialog)
+    assert dialog.search_requirement.text() == ""
+    assert dialog._search_requirement_target == ""
+    assert (dialog.width(), dialog.height()) == window_size_before_changes
+    assert dialog.frameGeometry().topLeft() == frame_anchor_before_changes
+    assert selector.accessibleDescription() == selector_description
+    assert print_settings.read_path(dialog.settings, target_path) == target_before
+
+    dialog.tabs.setCurrentIndex(unrelated_group)
+    for _ in range(3):
+        qt_app.processEvents()
+    unrelated.setFocus()
+    unrelated.setCurrentIndex(unrelated.findData("none"))
+    for _ in range(3):
+        qt_app.processEvents()
+    assert dialog.tabs.currentIndex() == unrelated_group
+    assert unrelated.hasFocus()
+    assert not dialog.search_requirement.isVisibleTo(dialog)
+
+
+def test_changing_a_selector_does_not_revisit_an_unrelated_search_hit(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Eine Auswahl in Haftung hält den aktiven Suchtreffer unter Stützen nicht im Fokus."""
+    from PySide6.QtTest import QTest
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog.show()
+    for _ in range(3):
+        qt_app.processEvents()
+    dialog.search.setText("wall_loops")
+    QTest.keyClick(dialog.search, Qt.Key.Key_Return)
+    for _ in range(3):
+        qt_app.processEvents()
+
+    assert dialog._search_hits[dialog._search_at] == "shell.wall_count"
+    assert dialog._search_requirement_target == ""
+    assert dialog.tabs_toggle is not None
+    assert not dialog.tabs_toggle.isChecked()
+    folded_frame = dialog.frameGeometry()
+    QTest.mouseClick(dialog.tabs_toggle, Qt.MouseButton.LeftButton)
+    for _ in range(3):
+        qt_app.processEvents()
+    assert dialog.tabs_toggle.isChecked()
+    assert dialog.frameGeometry().topLeft() == folded_frame.topLeft()
+    adhesion_group = GROUPS.index("adhesion")
+    dialog.tabs.setCurrentIndex(adhesion_group)
+    for _ in range(3):
+        qt_app.processEvents()
+    selector = dialog._editors["adhesion.kind"]
+    target = dialog._editors["shell.wall_count"]
+    assert isinstance(selector, QComboBox)
+    assert selector.isVisibleTo(dialog)
+    window_size_after_open = (dialog.width(), dialog.height())
+    frame_anchor_after_open = dialog.frameGeometry().topLeft()
+    selector.setFocus()
+    selector.setCurrentIndex(selector.findData("brim"))
+    for _ in range(3):
+        qt_app.processEvents()
+
+    assert dialog.tabs.currentIndex() == adhesion_group
+    assert selector.hasFocus()
+    assert not target.hasFocus()
+    assert dialog._search_requirement_target == ""
+    assert (dialog.width(), dialog.height()) == window_size_after_open
+    assert dialog.frameGeometry().topLeft() == frame_anchor_after_open
+
+
+@pytest.mark.parametrize("outcome", ["unmatched-profile", "empty-inventory", "failure"])
+def test_late_slicer_profile_outcomes_keep_the_outer_frame(
+    qt_app: QApplication,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    """Ein Fremdprofil öffnet passiv; ein leerer Bestand bleibt ohne Größenwechsel."""
+    from PySide6.QtTest import QTest
+
+    from app.ui.style import ContentFitIntent
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    queued: list[ContentFitIntent] = []
+    queue_refit = dialog._queue_refit
+
+    def record_intent(intent: ContentFitIntent) -> None:
+        queued.append(intent)
+        queue_refit(intent)
+
+    monkeypatch.setattr(dialog, "_queue_refit", record_intent)
+    dialog.show()
+    try:
+        dialog.wait_for_workers()
+        for _ in range(3):
+            qt_app.processEvents()
+        toggle = dialog.slicer_toggle
+        assert toggle is not None
+        if toggle.isChecked():
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            for _ in range(3):
+                qt_app.processEvents()
+        assert not toggle.isChecked()
+        folded_frame = dialog.frameGeometry()
+        queued.clear()
+
+        if outcome == "unmatched-profile":
+            dialog._profiles_found(
+                [
+                    SlicerProfile(
+                        path=Path("/x/Fremder Drucker.json"),
+                        name="Fremder Drucker 0.6 nozzle",
+                        kind="machine",
+                        printer_model="Fremder Drucker",
+                        nozzle=0.6,
+                    )
+                ]
+            )
+        elif outcome == "empty-inventory":
+            dialog._profiles_found([])
+        else:
+            dialog._profiles_failed("Prüfungsfehler")
+        for _ in range(4):
+            qt_app.processEvents()
+
+        passively_opened = outcome != "empty-inventory"
+        assert toggle.isChecked() is passively_opened
+        assert dialog.slicer_inner.isVisibleTo(dialog.slicer_box) is passively_opened
+        assert dialog.frameGeometry() == folded_frame
+        if passively_opened:
+            assert queued and set(queued) == {"passive"}
+        else:
+            assert not queued
+
+        for expected_checked in (not passively_opened, passively_opened):
+            queued.clear()
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            for _ in range(3):
+                qt_app.processEvents()
+            assert toggle.isChecked() is expected_checked
+            assert queued and queued[-1] == "explicit"
+            assert dialog.frameGeometry().topLeft() == folded_frame.topLeft()
+    finally:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+
+def test_changing_search_clears_the_pending_prerequisite_target(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Eine neue Suche löst keine Rückkehr zum alten, inzwischen fremden Treffer aus."""
+    from PySide6.QtTest import QTest
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog.show()
+    for _ in range(3):
+        qt_app.processEvents()
+    target_path = "support.z_gap"
+    dialog.search.setText(str(dialog._fields[target_path].title))
+    QTest.keyClick(dialog.search, Qt.Key.Key_Return)
+    for _ in range(3):
+        qt_app.processEvents()
+    assert dialog._search_requirement_target == target_path
+
+    dialog.search.setText("wall_loops")
+    QTest.keyClick(dialog.search, Qt.Key.Key_Return)
+    for _ in range(3):
+        qt_app.processEvents()
+    assert dialog._search_hits[dialog._search_at] == "shell.wall_count"
+    assert dialog._search_requirement_target == ""
+
+    support_group = GROUPS.index("support")
+    dialog.tabs.setCurrentIndex(support_group)
+    for _ in range(3):
+        qt_app.processEvents()
+    selector = dialog._editors["support.style"]
+    target = dialog._editors["shell.wall_count"]
+    assert isinstance(selector, QComboBox)
+    selector.setFocus()
+    selector.setCurrentIndex(selector.findData("tree"))
+    for _ in range(3):
+        qt_app.processEvents()
+
+    assert dialog.tabs.currentIndex() == support_group
+    assert selector.hasFocus()
+    assert not target.hasFocus()
+    assert dialog._search_requirement_target == ""
+
+
+def test_print_dialog_depth_keeps_the_frame_anchor_and_returns_collapsed_height(
     qt_app: QApplication, session: Session
 ) -> None:
-    """Der Dialog rollt als Ganzes; kurze Reiter erben keine Höhe einer längeren Nachbarseite."""
+    """Explizites Klappen passt die Höhe an; Zuklappen stellt sie am selben Anker zurück."""
     from PySide6.QtWidgets import QScrollArea
 
     dialog = PrintSettingsDialog(session, UiSettings())
@@ -135,6 +447,8 @@ def test_print_dialog_depth_keeps_width_and_uses_one_scroll_area(
         for _ in range(3):
             qt_app.processEvents()
         width = dialog.width()
+        collapsed_height = dialog.height()
+        anchor = dialog.frameGeometry().topLeft()
         assert dialog.findChildren(QScrollArea) == [dialog._scroll]
         assert not dialog._scroll.isAncestorOf(dialog._buttons)
         for opened in (True, False, True, False):
@@ -142,6 +456,9 @@ def test_print_dialog_depth_keeps_width_and_uses_one_scroll_area(
             for _ in range(3):
                 qt_app.processEvents()
             assert dialog.width() == width
+            assert dialog.frameGeometry().topLeft() == anchor
+            if not opened:
+                assert dialog.height() == collapsed_height
             assert dialog._buttons.isVisibleTo(dialog)
     finally:
         dialog.reject()
@@ -7015,23 +7332,25 @@ def test_a_printer_that_cannot_be_saved_says_so_and_shows_what_holds(
     assert profiles.printer(before.id) == before
 
 
-def test_switching_print_tabs_fits_the_current_page_without_a_second_click(
+def test_switching_print_tabs_keeps_the_outer_size_and_scrolls_the_current_page(
     dialog: PrintSettingsDialog, qt_app: QApplication
 ) -> None:
-    """Die Höhe gehört zum neuen Reiter, nicht zum zuvor sichtbaren."""
+    """Ein Reiterwechsel lässt den Außenrahmen stehen und aktualisiert die Rollfläche."""
     dialog.show()
     assert dialog.tabs_toggle is not None
     dialog.tabs_toggle.setChecked(True)
+    for _ in range(16):
+        qt_app.processEvents()
+    opened_size = (dialog.width(), dialog.height())
+    anchor = dialog.frameGeometry().topLeft()
     for index in range(dialog.tabs.count()):
         dialog.tabs.setCurrentIndex(index)
         for _ in range(16):
             qt_app.processEvents()
-        expected = max(dialog._content_user_height, dialog.sizeHint().height())
-        room = dialog.screen().availableGeometry()
-        border = dialog.frameGeometry().height() - dialog.height()
-        if expected + border + 32 < room.height():
-            assert dialog.height() >= expected
-            assert dialog._scroll.verticalScrollBar().maximum() == 0
+        assert (dialog.width(), dialog.height()) == opened_size
+        assert dialog.frameGeometry().topLeft() == anchor
+        page = dialog.tabs.currentWidget()
+        assert page is not None and page.isVisibleTo(dialog)
     assert dialog.width() >= dialog._room_for_tabs()
     chosen_width = max(dialog.minimumWidth(), 620)
     dialog.resize(chosen_width, dialog.height())

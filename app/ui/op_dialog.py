@@ -73,9 +73,10 @@ from app.ui.style import (
     NORMAL,
     TIGHT,
     WIDE,
+    ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
-    fit_dialog_to_screen,
+    form_natural_width,
     make_primary,
     set_level,
 )
@@ -2027,7 +2028,8 @@ class OperationDialog(QDialog):
         """Zieht die Höhe nach, wenn eine Zeile mit ihrer Bedingung kommt oder
         geht — einen Ereignisumlauf später, siehe ``_resize_to_content``."""
         self._refit.setSingleShot(True)
-        self._refit.timeout.connect(self._resize_to_content)
+        self._refit_intent: ContentFitIntent = "passive"
+        self._refit.timeout.connect(self._run_queued_refit)
         self._couple_dependent_fields()
         self._link_sketch_planes()
         self._hide_legacy_feature_field()
@@ -2447,7 +2449,7 @@ class OperationDialog(QDialog):
             # aus 533 — neunzehn Punkte unter dem Inhalt). Und einen
             # Ereignisumlauf später, nicht sofort: siehe ``_resize_to_content``.
             if changed and self.isVisible():
-                self._refit.start(0)
+                self._queue_refit("passive")
 
         self.valuesChanged.connect(follow)
         self._couplings.append(follow)
@@ -3223,12 +3225,12 @@ class OperationDialog(QDialog):
         self._hide_legacy_feature_field()
         align_forms(self)
         self._even_number_fields()
-        self._resize_to_content()
+        self._resize_to_content("passive")
         self.schemaChanged.emit()
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         super().showEvent(event)
-        self._refit.start(0)
+        self._queue_refit("initial")
 
     def place_beside(self, anchor: QWidget | None) -> None:
         """Setzt den Dialog an den Rand statt in die Bildmitte.
@@ -3266,7 +3268,7 @@ class OperationDialog(QDialog):
         corner = anchor.mapToGlobal(area.topRight())
         self.move(corner.x() - width - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
         if self.isVisible():
-            fit_dialog_to_screen(self)
+            self._height.fit_to_screen(self)
 
     def _even_number_fields(self) -> None:
         """Alle Zahlenfelder des Dialogs so breit wie das breiteste."""
@@ -3291,42 +3293,47 @@ class OperationDialog(QDialog):
             self.advanced.setFocus(Qt.FocusReason.OtherFocusReason)
         inner.setVisible(open_now)
         self.advanced.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+        self._queue_refit("explicit")
+
+    def _queue_refit(self, intent: ContentFitIntent) -> None:
+        """Fasst gleichzeitige Größenwünsche mit Vorrang der bewussten Aktion zusammen."""
+        priority = {"passive": 0, "explicit": 1, "initial": 2}
+        if priority[intent] > priority[self._refit_intent]:
+            self._refit_intent = intent
         self._refit.start(0)
 
-    def _resize_to_content(self, at_least: int = 0) -> None:
-        """Die Höhe auf den Inhalt setzen — bis an den sichtbaren Bildschirmrand.
+    def _run_queued_refit(self) -> None:
+        intent = self._refit_intent
+        self._refit_intent = "passive"
+        self._resize_to_content(intent)
 
-        Der Weg an ``adjustSize`` vorbei, das bei zwei Dritteln der
-        Bildschirmhöhe deckelt. Zwei Stellen brauchen ihn: das Aufklappen der
-        Rückseite (``_unfold_advanced``) und eine Zeile, die mit ihrer
-        Bedingung kommt oder geht (``_couple_dependent_fields``, über den
-        Zeitgeber ``_refit``). ``at_least`` hält eine Höhe, die der Dialog
-        schon hat — beim Aufklappen wird nichts kleiner.
+    def _resize_to_content(self, intent: ContentFitIntent = "passive") -> None:
+        """Misst den aktuellen Inhalt entsprechend seiner Änderung.
 
-        **Die Kopplung ruft ihn einen Ereignisumlauf später.** Sofort gemessen
-        zählte der Größenwunsch die eben versteckten Zeilen der Rückseite noch
-        mit (14.09.2026, *Bohrung setzen*: *Langloch* an — 610 gesetzt, 523
-        Inhalt); erst nach der zugestellten Layout-Anfrage stimmt er.
+        Eine Klappe darf ein automatisch bemessenes Fenster vertikal anpassen;
+        bedingte Felder und Schemaänderungen aktualisieren nur den Rollbereich.
+        Die anfängliche Breite berücksichtigt auch die verborgene Rückseite.
         """
         layout = self.layout()
         if layout is None:
             return
-        floor = self._height.floor(self)
         content = self._scroll.widget()
         content_layout = content.layout() if content is not None else None
         if content_layout is not None:
             content_layout.activate()
         self._scroll.updateGeometry()
         layout.activate()
-        wanted = max(at_least, floor, layout.sizeHint().height())
         margins = layout.contentsMargins()
         content_width = content_layout.minimumSize().width() if content_layout is not None else 0
-        # Auch die zugeklappte Rückseite zählt mit: Sie misst ihre Zeilen, ob
-        # sichtbar oder nicht, und wer „Weitere Einstellungen" öffnet, soll
-        # das Fenster nur wachsen sehen, nicht zur Seite springen.
-        content_width = max(content_width, self._advanced_form.minimumSize().width())
-        width = max(self.width(), content_width + margins.left() + margins.right())
-        self._height.settle(self, width, wanted)
+        natural_width = max(content_width, form_natural_width(self._advanced_form))
+        natural_width += margins.left() + margins.right()
+        self._height.fit(
+            self,
+            self._scroll,
+            grow_width=intent == "initial",
+            intent=intent,
+            natural_width=natural_width if intent == "initial" else 0,
+        )
 
     def _fill_filament_fields(
         self,

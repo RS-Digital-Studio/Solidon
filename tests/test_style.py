@@ -54,6 +54,295 @@ def test_the_grid_is_one_number_and_its_multiples() -> None:
     assert TIGHT < NORMAL < ROOMY < WIDE
 
 
+def test_dialog_size_decision_follows_the_change_intent() -> None:
+    from PySide6.QtCore import QSize
+
+    from app.ui.style import _content_size_for_intent
+
+    current = QSize(700, 420)
+    natural = QSize(920, 680)
+    assert _content_size_for_intent(
+        current, natural, "initial", grow_width=True, natural_width=960
+    ) == QSize(960, 680)
+    assert _content_size_for_intent(current, natural, "explicit", available_height=250) == QSize(
+        700, 250
+    )
+    assert _content_size_for_intent(current, natural, "passive") is None
+
+
+def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
+    from PySide6.QtCore import QSize
+
+    from app.ui.style import ContentHeight
+
+    class Layout:
+        def invalidate(self) -> None:
+            pass
+
+        def activate(self) -> None:
+            pass
+
+    class Scroll:
+        def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
+            pass
+
+    class Geometry:
+        def __init__(self) -> None:
+            self._size = QSize(680, 420)
+
+        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
+            return True
+
+        def size(self) -> QSize:
+            return QSize(self._size)
+
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(720, 500)
+
+        def screen(self):
+            return None
+
+        def layout(self) -> Layout:
+            return Layout()
+
+        def resize(self, width: int, height: int) -> None:
+            self._size = QSize(width, height)
+
+    dialog = Geometry()
+    scroll = Scroll()
+    height = ContentHeight()
+
+    # Frühe passive Messung und der Bildschirmfit setzen fitted, aber noch
+    # nicht die natürliche Anfangsmessung.
+    height.fit(dialog, scroll, intent="passive")  # type: ignore[arg-type]
+    height.fit_to_screen(dialog)  # type: ignore[arg-type]
+    assert not height.initial_fit_done
+    assert height.fitted == QSize(680, 420)
+
+    height.fit(
+        dialog,  # type: ignore[arg-type]
+        scroll,  # type: ignore[arg-type]
+        grow_width=True,
+        intent="initial",
+        natural_width=980,
+    )
+    assert dialog.size() == QSize(980, 500)
+    assert height.initial_fit_done
+
+    # Der umgekehrte Ablauf verhindert, dass ein späterer Callback erneut passt.
+    height.fit(dialog, scroll, intent="initial")  # type: ignore[arg-type]
+    assert dialog.size() == QSize(980, 500)
+
+
+def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() -> None:
+    from PySide6.QtCore import QSize
+
+    from app.ui.first_run import FirstRunDialog
+    from app.ui.style import ContentHeight
+
+    class Layout:
+        def invalidate(self) -> None:
+            pass
+
+        def activate(self) -> None:
+            pass
+
+    class Content:
+        def layout(self) -> Layout:
+            return Layout()
+
+        def findChildren(self, _kind: type) -> list[object]:  # noqa: N802 — Qt-Name
+            return []
+
+    class Scroll:
+        def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
+            pass
+
+    class PrinterForm:
+        def layout(self) -> None:
+            return None
+
+    class Dialog:
+        def __init__(self) -> None:
+            self._size = QSize(680, 400)
+            self._height = ContentHeight()
+            self._height.fitted = QSize(self._size)
+            self._contents = Content()
+            self._scroll = Scroll()
+            self.custom_printer = PrinterForm()
+
+        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
+            return True
+
+        def layout(self) -> Layout:
+            return Layout()
+
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(980, 620)
+
+        def minimumWidth(self) -> int:  # noqa: N802 — Qt-Name
+            return 0
+
+        def width(self) -> int:
+            return self._size.width()
+
+        def height(self) -> int:
+            return self._size.height()
+
+        def resize(self, width: int, height: int) -> None:
+            self._size = QSize(width, height)
+
+        def screen(self):
+            return None
+
+        def size(self) -> QSize:
+            return QSize(self._size)
+
+    dialog = Dialog()
+
+    FirstRunDialog._grow_to_content(dialog, "initial")  # type: ignore[arg-type]
+
+    assert dialog.size() == QSize(980, 620)
+    assert dialog._height.user is None
+    assert dialog._height.initial_fit_done
+
+
+def test_natural_form_width_counts_each_hidden_and_spanning_item_once() -> None:
+    from PySide6.QtCore import QSize
+    from PySide6.QtWidgets import QFormLayout
+
+    from app.ui.style import form_natural_width
+
+    class Margins:
+        def left(self) -> int:
+            return 2
+
+        def right(self) -> int:
+            return 3
+
+    class Widget:
+        def __init__(self, width: int, minimum_width: int) -> None:
+            self.width = width
+            self.minimum_width = minimum_width
+
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(self.width, 1)
+
+        def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(0, 1)
+
+        def minimumSize(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(self.minimum_width, 1)
+
+    class Layout:
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(210, 1)
+
+        def minimumSize(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(230, 1)
+
+    class Item:
+        def __init__(
+            self,
+            width: int,
+            widget: Widget | None = None,
+            layout: Layout | None = None,
+        ) -> None:
+            self.width = width
+            self._widget = widget
+            self._layout = layout
+
+        def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(self.width, 1)
+
+        def minimumSize(self) -> QSize:  # noqa: N802 — Qt-Name
+            return QSize(0, 1)
+
+        def widget(self) -> Widget | None:
+            return self._widget
+
+        def layout(self) -> Layout | None:
+            return self._layout
+
+    class Form:
+        def __init__(self) -> None:
+            self.items = [
+                (0, QFormLayout.ItemRole.LabelRole, Item(40)),
+                (0, QFormLayout.ItemRole.FieldRole, Item(100)),
+                # Verborgene Widget-Items melden leer, das Widget behält seine
+                # natürliche und festgelegte Mindestbreite.
+                (1, QFormLayout.ItemRole.FieldRole, Item(0, Widget(200, 220))),
+                # Die SpanningRole-Zelle liegt im Feldspeicher; eine Abfrage
+                # ihrer Zeile als FieldRole liefert deshalb dasselbe Element.
+                (2, QFormLayout.ItemRole.SpanningRole, Item(0, layout=Layout())),
+            ]
+
+        def contentsMargins(self) -> Margins:  # noqa: N802 — Qt-Name
+            return Margins()
+
+        def count(self) -> int:
+            return len(self.items)
+
+        def itemAt(  # noqa: N802 — Qt-Name
+            self, index: int, role: QFormLayout.ItemRole | None = None
+        ) -> Item | None:
+            if role is None:
+                return self.items[index][2]
+            for row, item_role, item in self.items:
+                if row == index and (
+                    item_role == role
+                    or (
+                        role == QFormLayout.ItemRole.FieldRole
+                        and item_role == QFormLayout.ItemRole.SpanningRole
+                    )
+                ):
+                    return item
+            return None
+
+        def getItemPosition(self, index: int) -> tuple[int, QFormLayout.ItemRole]:  # noqa: N802
+            row, role, _item = self.items[index]
+            return row, role
+
+        def horizontalSpacing(self) -> int:  # noqa: N802 — Qt-Name
+            return 8
+
+        def spacing(self) -> int:
+            return -1
+
+    assert form_natural_width(Form()) == 273  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("chosen", [(630, 420), (700, 360)])
+def test_dialog_keeps_a_manually_chosen_width_and_height(chosen: tuple[int, int]) -> None:
+    from PySide6.QtCore import QSize
+
+    from app.ui.style import ContentHeight
+
+    class Geometry:
+        def __init__(self) -> None:
+            self.resize_calls = 0
+
+        def isVisible(self) -> bool:  # noqa: N802 — Qt-Name
+            return True
+
+        def size(self) -> QSize:
+            return QSize(*chosen)
+
+        def resize(self, _width: int, _height: int) -> None:
+            self.resize_calls += 1
+
+    dialog = Geometry()
+    height = ContentHeight()
+    height.fitted = QSize(700, 420)
+
+    assert height.floor(dialog) == chosen[1]
+    height.settle(dialog, 940, 760, intent="explicit")
+
+    assert height.user == QSize(*chosen)
+    assert height.fitted == QSize(*chosen)
+    assert dialog.resize_calls == 0
+
+
 #: ``setSpacing(…)`` und ``setContentsMargins(…)`` mit nackten Zahlen.
 _SPACING = re.compile(r"set(?:Spacing|ContentsMargins)\(([^)]*)\)")
 
