@@ -1423,15 +1423,42 @@ def _discovered_printer(
 
 
 def _printer_identifier(entry: SlicerProfile, flavour: SlicerFlavour, source: str) -> str:
-    """Die native Identität bleibt bei gleicher Beschriftung und nach Umzügen eindeutig."""
+    """Cura-Instanzen behalten ihre Kennung bei geändertem Anzeigenamen."""
     vendor = entry.vendor or ("" if entry.from_user else _vendor_of(entry.path, "machine"))
     native_id = entry.section or (entry.printer_model if flavour == "cura" else entry.name)
-    digest = hashlib.sha256(
-        json.dumps((source, flavour, vendor, native_id, entry.name), ensure_ascii=False).encode(
-            "utf-8"
-        )
-    ).hexdigest()[:20]
+    identity: tuple[str, ...] = (source, flavour, vendor, native_id)
+    if flavour != "cura" or entry.cura_instance is None:
+        identity += (entry.name,)
+    digest = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode("utf-8")).hexdigest()[
+        :20
+    ]
     return f"slicer-{flavour}-{digest}"
+
+
+def _legacy_cura_printer_identifier(entry: SlicerProfile, source: str, title: str) -> str:
+    """Eine gespeicherte Cura-Kennung mit Namensanteil berechnen."""
+    vendor = entry.vendor or ("" if entry.from_user else _vendor_of(entry.path, "machine"))
+    native_id = entry.section or entry.printer_model
+    identity = (source, "cura", vendor, native_id, title)
+    digest = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode("utf-8")).hexdigest()
+    return f"slicer-cura-{digest[:20]}"
+
+
+def matches_saved_cura_printer(entry: SlicerProfile, printer: PrinterProfile, source: str) -> bool:
+    """Ordnet eine gespeicherte Cura-Kennung ihrer nativen Instanz zu.
+
+    Der historische Hash enthält den gespeicherten Anzeigenamen. Zusätzlich
+    muss die Cura-Druckerdefinition exakt übereinstimmen; Ähnlichkeit reicht
+    nicht.
+    """
+    return (
+        entry.cura_instance is not None
+        and bool(entry.section)
+        and printer.id.startswith("slicer-cura-")
+        and bool(printer.cura_definition)
+        and printer.cura_definition == entry.printer_model
+        and _legacy_cura_printer_identifier(entry, source, printer.title) == printer.id
+    )
 
 
 def chosen_printer(
@@ -1441,7 +1468,17 @@ def chosen_printer(
     chosen = chosen_machine(flavour, executable)
     if flavour == "cura":
         entry = profile_by_name(executable, flavour, chosen, "machine") if chosen else None
-        return entry.printer_id if entry is not None and entry.printer_id in known else ""
+        if entry is None:
+            return ""
+        source = discover.program_mark(executable.name)
+        saved = [
+            identifier
+            for identifier, printer in known.items()
+            if matches_saved_cura_printer(entry, printer, source)
+        ]
+        if len(saved) == 1:
+            return saved[0]
+        return entry.printer_id if entry.printer_id in known else ""
     return printer_for(chosen, known)
 
 
@@ -3119,7 +3156,7 @@ def type_of(
 
 
 def match(
-    profiles: list[SlicerProfile], printer: PrinterProfile
+    profiles: list[SlicerProfile], printer: PrinterProfile, *, source: str = ""
 ) -> tuple[SlicerProfile | None, SlicerProfile | None]:
     """Das Paar, das zu diesem Drucker gehört — Maschine und Prozess.
 
@@ -3134,6 +3171,12 @@ def match(
     ohne Input Shaper und den SV06 gar nicht (27.09.2026).
     """
     native = [entry for entry in machines(profiles) if entry.printer_id == printer.id]
+    if not native and source:
+        native = [
+            entry
+            for entry in machines(profiles)
+            if matches_saved_cura_printer(entry, printer, source)
+        ]
     if (
         printer.id.startswith("slicer-cura-")
         and any(entry.printer_id.startswith("slicer-cura-") for entry in profiles)

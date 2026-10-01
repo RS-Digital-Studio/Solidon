@@ -30,6 +30,10 @@ Erst die bestätigte Auswahl übernimmt ein Druckerprofil in den Nutzerbestand.
 Cura-Maschineninstanzen bleiben über `SlicerProfile.cura_instance` und die
 portable Auswahlkennung `cura-instance:<ID>` von gleich benannten
 Werksdefinitionen getrennt. `chosen_printer` ordnet die aktive Instanz zu;
+alte Kennungen werden nur über den historischen Hash aus Programmmarke,
+nativer Instanzkennung, Hersteller und gespeichertem Druckernamen zugeordnet;
+zusätzlich muss die Cura-Druckerdefinition exakt übereinstimmen. Ähnliche
+Namen oder Definitionen reichen nicht (`matches_saved_cura_printer`).
 `resolve_profile` liest DefinitionChanges, Düsenvariante und Nutzercontainer.
 Die Übergabe übernimmt daraus Hardwarewerte sowie Start- und Endcode. Ein
 fehlender oder unvollständiger gespeicherter Stapel fällt nicht auf Werkswerte

@@ -4421,7 +4421,12 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice.setEnabled(True)
         self.process_choice.setEnabled(True)
 
-        chosen, process = slicer_profiles.match(found, self.session.profile.printer)
+        source_mark = (
+            discover.program_mark(self._slicer_path.name) if self._slicer_path is not None else ""
+        )
+        chosen, process = slicer_profiles.match(
+            found, self.session.profile.printer, source=source_mark
+        )
         # **Eine getroffene Wahl bleibt stehen.** Die Profilsuche läuft in einem
         # Arbeiter und antwortet nachgereicht; wer in der Zwischenzeit selbst
         # eine Maschine gewählt hat, sah sie danach auf etwas anderes springen —

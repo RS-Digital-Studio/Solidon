@@ -1590,6 +1590,154 @@ def test_discovery_reads_all_configured_cura_machines_and_the_actual_nozzle(
     assert machine.nozzle == pytest.approx(chosen.nozzle_diameter)
 
 
+def test_cura_printer_selection_survives_a_display_name_change(
+    cura: Path,
+    cura_configured_printers: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Alte Nutzer- und Projektkennungen bleiben nach einer Cura-Umbenennung zugeordnet."""
+    import hashlib
+
+    from app.core import discover
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+    from app.core.scene import project
+
+    original_user_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_user_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+
+    def old_identifier(machine_id: str, title: str) -> str:
+        identity = (discover.program_mark(cura.name), "cura", "", machine_id, title)
+        digest = hashlib.sha256(
+            json.dumps(identity, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        return f"slicer-cura-{digest[:20]}"
+
+    user_profiles = tmp_path / "user-profiles"
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: user_profiles)
+    profiles.reload()
+    before = {printer.id: printer for printer in sp.discover_printers(cura, "cura")}
+    selected = before[sp.chosen_printer("cura", cura, before)]
+    other = next(printer for printer in before.values() if printer.title == "Andere Maschine")
+    previous_id = old_identifier("Meine Werkstatt", "Meine Werkstatt")
+    other_previous_id = old_identifier("Andere Maschine", "Andere Maschine")
+    assert previous_id == "slicer-cura-417d70edad598890e4fd"
+    assert previous_id != other_previous_id
+    saved_printer = profiles.save_printer(replace(selected, id=previous_id))
+    profiles.save_printer(replace(other, id=other_previous_id))
+    profiles.reload()
+    source_mark = discover.program_mark(cura.name)
+    primary_entry = next(
+        entry
+        for entry in sp.find_profiles(cura, "cura", ("machine",))
+        if entry.section == "Meine Werkstatt"
+    )
+    assert sp.matches_saved_cura_printer(primary_entry, saved_printer, source_mark)
+    assert not sp.matches_saved_cura_printer(
+        primary_entry, replace(saved_printer, title="Werkstatt neu"), source_mark
+    )
+    assert not sp.matches_saved_cura_printer(
+        primary_entry, replace(saved_printer, cura_definition="other.def.json"), source_mark
+    )
+
+    profile = Profile(printer=saved_printer, material=profiles.material("pla"))
+    native = sp.chosen_machine("cura", cura)
+    setup = handover.SlicerSetup(cura, "cura", machine_profile=native)
+    implicit_setup = replace(setup, machine_profile="")
+    known = {**profiles.printer_profiles(), **before}
+    assert sp.chosen_printer("cura", cura, known) == previous_id
+    assert handover.machine_for(setup, profile) == native
+    assert handover.machine_for(implicit_setup, profile) == native
+
+    project_path = project.save(
+        project.new_project(previous_id, profile.material.id), tmp_path / "vor-f04.p3d"
+    )
+    opened = project.load(project_path)
+    assert opened.document.printer == previous_id
+    carried_printers = opened.document.carried_profiles.get(profiles.CARRIED_PRINTERS, {})
+    assert set(carried_printers) == {previous_id}
+
+    before_directory = tmp_path / "before"
+    before_directory.mkdir()
+    before_written = handover.write_config(
+        print_settings.resolve(profile), profile, setup, before_directory
+    )
+    assert before_written.cura_machine is not None
+
+    for machine_path in (cura_configured_printers / "machine_instances").glob("*.global.cfg"):
+        original = machine_path.read_text(encoding="utf-8")
+        machine_id = "Meine Werkstatt" if "id = Meine Werkstatt" in original else "Andere Maschine"
+        old_name = machine_id
+        renamed = original.replace(f"name = {old_name}", "name = Werkstatt neu", 1)
+        assert renamed != original
+        machine_path.write_text(renamed, encoding="utf-8")
+
+    after = {printer.id: printer for printer in sp.discover_printers(cura, "cura")}
+    renamed = [printer for printer in after.values() if printer.title == "Werkstatt neu"]
+    assert len(renamed) == 2
+    assert len({printer.id for printer in renamed}) == 2
+    known = {**profiles.printer_profiles(), **after}
+    assert sp.chosen_printer("cura", cura, known) == previous_id
+    assert handover.machine_for(setup, profile) == native
+    assert handover.machine_for(implicit_setup, profile) == native
+    machine_profiles = sp.find_profiles(cura, "cura", ("machine",))
+    matched, _process = sp.match(
+        machine_profiles,
+        profiles.printer_profiles()[previous_id],
+        source=source_mark,
+    )
+    assert matched is not None and matched.section == "Meine Werkstatt"
+    other_matched, _process = sp.match(
+        machine_profiles,
+        profiles.printer_profiles()[other_previous_id],
+        source=source_mark,
+    )
+    assert other_matched is not None and other_matched.section == "Andere Maschine"
+    stale_setup = replace(setup, machine_profile="cura-instance:unknown")
+    fallback = handover._cura_machine(stale_setup, profile, {})
+    assert fallback.from_printer
+    assert fallback.definition.name == "abax_pri3.def.json"
+
+    after_directory = tmp_path / "after"
+    after_directory.mkdir()
+    written = handover.write_config(
+        print_settings.resolve(profile), profile, setup, after_directory
+    )
+    assert written.cura_machine is not None
+    assert written.cura_machine.definition.name == "abax_pri3.def.json"
+
+    restored = profiles.project_profile(
+        opened.document.printer,
+        opened.document.material,
+        opened.document.carried_profiles,
+    )
+    assert restored.printer.id == previous_id
+    assert handover.machine_for(implicit_setup, restored) == native
+
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path / "second-computer")
+    profiles.reload()
+    portable = profiles.project_profile(
+        opened.document.printer,
+        opened.document.material,
+        opened.document.carried_profiles,
+    )
+    assert portable.printer.id == previous_id
+    assert handover.machine_for(implicit_setup, portable) == native
+    portable_directory = tmp_path / "portable"
+    portable_directory.mkdir()
+    portable_written = handover.write_config(
+        print_settings.resolve(portable), portable, implicit_setup, portable_directory
+    )
+    assert portable_written.cura_machine is not None
+
+
 def test_cura_instance_with_factory_name_keeps_its_own_identity(
     cura: Path, cura_configured_printers: Path
 ) -> None:

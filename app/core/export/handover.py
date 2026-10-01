@@ -323,6 +323,11 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
                 (
                     profile.printer.id.startswith("slicer-cura-")
                     and selected.printer_id != profile.printer.id
+                    and not slicer_profiles.matches_saved_cura_printer(
+                        selected,
+                        profile.printer,
+                        discover.program_mark(setup.executable.name),
+                    )
                 )
                 or (
                     profile.printer.cura_definition
@@ -3517,7 +3522,9 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
     source = profile_source(setup.machine_profile, setup, "machine")
     if source is None:
         source, _process = slicer_profiles.match(
-            slicer_profiles.find_profiles(setup.executable, "cura", ("machine",)), profile.printer
+            slicer_profiles.find_profiles(setup.executable, "cura", ("machine",)),
+            profile.printer,
+            source=discover.program_mark(setup.executable.name),
         )
         if source is None and profile.printer.id.startswith("slicer-cura-"):
             raise slicer_profiles._incomplete_profile(Path(profile.printer.title))
