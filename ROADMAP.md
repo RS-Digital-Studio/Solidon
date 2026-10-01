@@ -67,7 +67,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-247 — Die Waschschüssel ließ sich nach Solidons Übergabe nicht drucken](#rm-247) | Geometrie, Erkennung und Druckvorbereitung | Kanaldecken, Gitter als Gitter, Leerfahrt und Tempo vom Drucker, Kanalsperre je Slicerfamilie, Brim auf Füßen — gebaut und im ElegooSlicer und PrusaSlicer belegt; offen: Probedruck am Centauri |
 | [RM-252 — Der Korpuslauf der Übergabe ist durch, ein Slicerabsturz ist ungeklärt](#rm-252) | Geometrie, Erkennung und Druckvorbereitung | Beide Befunde behoben (CuraEngine ohne `-v`, `e401ce900`; Mehrplattendateien auf ihren Platten, `a32a54ba2`), Korpusrest gefahren: 225 Läufe, 204 mit Druckdatei, 17 zu Recht abgelehnt. Die 4 Abstürze am zweifarbigen Besteckeinsatz brauchen Solidons aufbereitetes Netz mit Gitterstützen; das Originalprojekt stürzt nicht ab. Offen: was an Solidons Netz den Slicer abstürzen lässt — erst danach eine Meldung beim Hersteller |
 | [RM-281 — Die Übergabe auf dem Herstellerprofil: Stufen C bis F](#rm-281) | Geometrie, Erkennung und Druckvorbereitung | A bis F, K und L stehen und sind im Slicer abgenommen (C `44ab90965`, E `83a8e3de1`, F `d4dd5332b`, K `f1a1fba65`, L `e0e3cf982`); offen Paket 3 und der Lauf „jedes Modell × jeder Slicer“ |
-| [RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie schreibt](#rm-282) | Geometrie, Erkennung und Druckvorbereitung | Anycubic Kobra 2 in OrcaSlicer (Prozente in Feldern ohne Prozent: Dialog zeigt Solidons Wert, gedruckt wird Orcas Vorgabe) und Bambus Listen je Düsenvariante mit High-Flow-Düse — beides messen, dann Rücklesung und Schreibweise festlegen |
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-273 — Das Übernehmen rechnet die Operation noch einmal](#rm-273) | Geometrie, Erkennung und Druckvorbereitung | Gartenschlauchhalter, Versetzen einer Bohrung übernehmen: 16 bis 17,5 s unter Last, davon 9 bis 10 s die Operation in voller Güte nach der Vorschau in Entwurfsgüte (rund 5 s ihre örtliche Nachmessung) — das Vorschauergebnis übernehmen, wo beide Güten dieselbe Geometrie liefern, sonst die Nachmessung im Übernehmen auslassen |
@@ -1994,21 +1993,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Anteil der ersten Schicht oder nach Fläche: Der Rumpf der Platte trägt 195 mm² Stege,
   aber nur 8,6 % — gegen den Anteil allein blieb die Regel dort stumm. Die Fläche ist an
   186 Körpern des Korpus geeicht (`NARROW_WEB_AREA`).
-
-<a id="rm-282"></a>
-
-- [ ] **RM-282 — Profilwerte, die das Programm anders liest, als die Datei sie
-  schreibt.** Gefunden am 27.09.2026 bei der Gegenprobe von Stufe B (RM-281).
-  (a) Anycubics „0.20mm Standard @Anycubic Kobra2“ in OrcaSlicer führt
-  `initial_layer_speed` als „50%“ und `support_object_xy_distance` als „60%“; beide Felder
-  nehmen keine Prozente, OrcaSlicer druckt mit seinen Vorgaben 30 mm/s und 0,35 mm. Die
-  Rücklesung lässt den Wert als fremd stehen, der Dialog zeigt deshalb Solidons Wert, nicht
-  den gedruckten. (b) Bambu Studio führt Tempo, Beschleunigung und Filamentwerte je
-  Düsenvariante (`inner_wall_speed` [300, 400] für Standard und High Flow); ohne Angabe
-  druckt es die erste. Eine eigene Wahl schreibt Solidon als Liste mit einem Eintrag —
-  ungemessen ist, was eine High-Flow-Düse daraus macht. Abnahme: je Fall ein Konsolenlauf,
-  (a) Dialog und G-Code zeigen dasselbe, (b) eine eigene Außenwandgeschwindigkeit kommt
-  mit `nozzle_volume_type = High Flow` im G-Code an.
 
 <a id="rm-259"></a>
 

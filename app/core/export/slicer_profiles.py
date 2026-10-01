@@ -1679,6 +1679,28 @@ def _strings(value: Any) -> list[str]:
     return [str(value)] if isinstance(value, str) else []
 
 
+def variant_index(
+    values: Mapping[str, Any],
+    variant_key: str,
+    extruder_key: str,
+    variant_name: str,
+    extruder_id: str,
+) -> tuple[int, int] | None:
+    """Ordnet eine aktive Variante der passenden Liste im Profil zu."""
+    variants = _strings(values.get(variant_key))
+    if not variants:
+        return None
+    if not variant_name:
+        return (0, len(variants))
+    matches = [
+        index for index, name in enumerate(variants) if name.casefold() == variant_name.casefold()
+    ]
+    ids = _strings(values.get(extruder_key))
+    if extruder_id and len(ids) == len(variants):
+        matches = [index for index in matches if ids[index] == extruder_id]
+    return (matches[0], len(variants)) if len(matches) == 1 else None
+
+
 #: Curas Ordner und was darin liegt.
 #:
 #: **Der Bestand ist da, er liegt nur woanders und anders.** Die Orca-Familie
@@ -3602,9 +3624,21 @@ _CURA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
 )
 
 
-def filament_values(
-    path: Path | SlicerProfile, roots: Sequence[Path] = ()
-) -> dict[str, float | int]:
+@dataclass(frozen=True, slots=True)
+class FilamentReadback:
+    """Materialwerte und ob die aktive Düsenvariante sicher zugeordnet ist."""
+
+    values: dict[str, float | int]
+    variant_resolved: bool
+
+
+def filament_readback(
+    path: Path | SlicerProfile,
+    roots: Sequence[Path] = (),
+    *,
+    variant_name: str = "",
+    extruder_id: str = "",
+) -> FilamentReadback:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 
     Die Erbkette wird aufgelöst — ein Profil bei Elegoo setzt selbst drei Werte
@@ -3621,6 +3655,21 @@ def filament_values(
         else resolve_values(path, roots)
     )
     source = path.path if isinstance(path, SlicerProfile) else path
+    if _strings(resolved.get("filament_extruder_variant")):
+        position = variant_index(
+            resolved,
+            "filament_extruder_variant",
+            "filament_extruder_id",
+            variant_name,
+            extruder_id,
+        )
+        if position is None:
+            return FilamentReadback({}, False)
+        index, count = position
+        resolved = {
+            key: value[index] if isinstance(value, list) and len(value) == count else value
+            for key, value in resolved.items()
+        }
     readback = FILAMENT_READBACK
     if source.suffix == ".ini":
         readback = PRUSA_FILAMENT_READBACK
@@ -3651,4 +3700,15 @@ def filament_values(
         if solidon in _AS_FRACTION:
             number /= 100.0
         values[solidon] = kind(number)
-    return values
+    return FilamentReadback(values, True)
+
+
+def filament_values(
+    path: Path | SlicerProfile,
+    roots: Sequence[Path] = (),
+    *,
+    variant_name: str = "",
+    extruder_id: str = "",
+) -> dict[str, float | int]:
+    """Liest bekannte Materialwerte, wenn die Profilvariante eindeutig ist."""
+    return filament_readback(path, roots, variant_name=variant_name, extruder_id=extruder_id).values

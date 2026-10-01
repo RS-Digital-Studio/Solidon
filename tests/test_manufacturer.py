@@ -328,6 +328,878 @@ def test_the_base_is_read_back_from_the_manufacturers_profile(
     assert not base.explicit
 
 
+def test_orcaslicer_legacy_percentages_match_the_values_it_prints(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OrcaSlicer 2.4.2 verwirft die Prozentwerte für Wandtempo und
+    Stützenabstand, liest beim Füllungstempo aber den Zahlenteil als mm/s."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "orcaslicer")
+    profile_root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    process = profile_root / "process" / "ECC2" / "standard.json"
+    document = json.loads(process.read_text(encoding="utf-8"))
+    document.update(
+        {
+            "initial_layer_speed": "50%",
+            "support_object_xy_distance": "60%",
+        }
+    )
+    _write(process, document)
+
+    fallback = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+    assert fallback.settings.speed.first_layer == pytest.approx(30.0)
+    assert fallback.settings.support.xy_gap == pytest.approx(0.35)
+    assert "speed.first_layer" not in fallback.foreign
+
+    document["initial_layer_infill_speed"] = "50%"
+    _write(process, document)
+    printed = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert printed.settings.speed.first_layer == pytest.approx(50.0)
+    assert printed.settings.support.xy_gap == pytest.approx(0.35)
+    assert "speed.first_layer" not in printed.foreign
+
+
+def test_bambu_reads_the_explicit_high_flow_variant(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Bambu-Werte folgen der ausgewählten Düsenvariante, auch beim Filament."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ["1", "1"],
+        }
+    )
+    _write(machine_path, machine)
+
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "print_extruder_variant": variants,
+            "print_extruder_id": ["1", "1"],
+            "inner_wall_speed": ["300", "400"],
+            "outer_wall_speed": ["200", "350"],
+        }
+    )
+    _write(process_path, process)
+    standard = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+    assert standard.settings.speed.inner_wall == pytest.approx(300.0)
+    assert standard.settings.speed.outer_wall == pytest.approx(200.0)
+
+    process["nozzle_volume_type"] = "High Flow"
+    _write(process_path, process)
+
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "filament_flow_ratio": ["0.98", "0.985"],
+            "filament_max_volumetric_speed": ["21", "29"],
+            "filament_retraction_length": ["nil", "0.4"],
+            "filament_retraction_speed": ["nil", "50"],
+            "filament_z_hop": ["nil", "0.6"],
+        }
+    )
+    _write(filament_path, filament)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert foundation.settings.speed.inner_wall == pytest.approx(400.0)
+    assert foundation.settings.speed.outer_wall == pytest.approx(350.0)
+    assert foundation.settings.filament.flow_ratio == pytest.approx(0.985)
+    assert foundation.settings.filament.max_flow == pytest.approx(29.0)
+    assert foundation.settings.retraction.length == pytest.approx(0.4)
+    assert foundation.settings.retraction.speed == pytest.approx(50.0)
+    assert foundation.settings.retraction.z_hop == pytest.approx(0.6)
+
+    chosen = print_settings.with_choice(foundation.settings, "speed.outer_wall", 210.0)
+    config = handover.write_config(chosen, _cc2(), _setup(bestand), tmp_path)
+
+    assert config.written["outer_wall_speed"] == "210"
+    assert config.written["filament_flow_ratio"] == "0.985"
+    assert config.written["filament_max_volumetric_speed"] == "29"
+    assert config.written["filament_retraction_length"] == "0.4"
+    assert config.written["filament_retraction_speed"] == "50"
+    assert config.written["filament_z_hop"] == "0.6"
+
+
+def test_bambu_high_flow_uses_the_exact_variant_instead_of_e3d(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P2S High Flow bleibt von der ähnlich benannten E3D-Düse getrennt."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = [
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+        "Direct Drive E3D High Flow",
+    ]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ["1", "1", "1"],
+        }
+    )
+    _write(machine_path, machine)
+
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ["1", "1", "1"],
+            "inner_wall_speed": ["300", "600", "600"],
+        }
+    )
+    _write(process_path, process)
+
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "filament_max_volumetric_speed": ["21", "40", "21"],
+        }
+    )
+    _write(filament_path, filament)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert foundation.variant_name == "Direct Drive High Flow"
+    assert foundation.settings.speed.inner_wall == pytest.approx(600.0)
+    assert foundation.settings.filament.max_flow == pytest.approx(40.0)
+    assert "speed.inner_wall" in foundation.from_profile
+
+
+def test_bambu_maps_the_selected_variant_in_each_profile_independently(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """H2C-Prozess, Maschine und Filament haben verschieden lange Variantenlisten."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = [
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+        "Direct Drive E3D High Flow",
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+    ]
+    extruder_ids = ["1", "1", "1", "2", "2"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive", "Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": extruder_ids,
+        }
+    )
+    _write(machine_path, machine)
+
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "E3D High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": extruder_ids,
+            "outer_wall_speed": ["200", "300", "400", "200", "300"],
+        }
+    )
+    _write(process_path, process)
+
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants[:3],
+            "filament_flow_ratio": ["0.96", "0.97", "0.97"],
+            "filament_max_volumetric_speed": ["15", "21", "21"],
+            "filament_retraction_length": ["0.6", "0.4", "0.4"],
+            "nozzle_temperature": ["245", "250", "250"],
+        }
+    )
+    _write(filament_path, filament)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert foundation.variant_name == "Direct Drive E3D High Flow"
+    assert foundation.variant_id == "1"
+    assert foundation.settings.speed.outer_wall == pytest.approx(400.0)
+    assert foundation.settings.filament.flow_ratio == pytest.approx(0.97)
+    assert foundation.settings.filament.max_flow == pytest.approx(21.0)
+    assert foundation.settings.retraction.length == pytest.approx(0.4)
+    assert foundation.settings.temperature.nozzle == pytest.approx(250.0)
+
+    chosen = print_settings.with_choice(foundation.settings, "speed.outer_wall", 450.0)
+    config = handover.write_config(chosen, _cc2(), _setup(bestand), tmp_path)
+
+    assert config.written["outer_wall_speed"] == "450"
+    assert config.written["filament_flow_ratio"] == "0.97"
+    assert config.written["filament_max_volumetric_speed"] == "21"
+    assert config.written["filament_retraction_length"] == "0.4"
+    assert config.written["nozzle_temperature"] == "250"
+
+
+def test_bambu_without_an_explicit_variant_keeps_the_first_extruder(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Standard bleibt Eintrag 0, auch wenn sein Name an Extruder 2 vorkommt."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = [
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+        "Direct Drive E3D High Flow",
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+    ]
+    ids = ["1", "1", "1", "2", "2"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive", "Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+            "inner_wall_speed": ["300", "400", "500", "350", "450"],
+        }
+    )
+    assert "nozzle_volume_type" not in process
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants[:3],
+            "filament_flow_ratio": ["0.96", "0.97", "0.97"],
+            "filament_max_volumetric_speed": ["15", "21", "21"],
+        }
+    )
+    _write(filament_path, filament)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert foundation.has_profile
+    assert foundation.variant_name == "Direct Drive Standard"
+    assert foundation.variant_id == "1"
+    assert foundation.variant_index == 0
+    assert foundation.settings.speed.inner_wall == pytest.approx(300.0)
+    assert foundation.settings.filament.max_flow == pytest.approx(15.0)
+
+
+def test_bambu_bound_slot_uses_the_active_filament_variant(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein gebundenes Filament behält Fluss und Rückzug der High-Flow-Düse."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow"]
+    ids = ["1", "1"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+            "inner_wall_speed": ["300", "400"],
+        }
+    )
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "filament_flow_ratio": ["0.98", "0.985"],
+            "filament_max_volumetric_speed": ["21", "29"],
+            "filament_retraction_length": ["0.6", "0.4"],
+        }
+    )
+    _write(filament_path, filament)
+    setup = _setup(bestand)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    slot = MaterialSlot(index=0, name="PLA", material=str(filament_path), material_type="PLA")
+
+    slot_settings = handover.settings_for_slot(foundation.settings, _cc2(), slot, setup)
+
+    assert slot_settings.filament.flow_ratio == pytest.approx(0.985)
+    assert slot_settings.filament.max_flow == pytest.approx(29.0)
+    assert slot_settings.retraction.length == pytest.approx(0.4)
+
+    chosen = print_settings.with_choice(foundation.settings, "speed.outer_wall", 210.0)
+    chosen = handover.with_slot_override(chosen, slot, SlotOverride(temperature=chosen.temperature))
+    output = tmp_path / "bound-slot"
+    output.mkdir()
+    original_base_settings = manufacturer.base_settings
+    base_settings_calls: list[None] = []
+
+    def count_base_settings(*args: Any, **kwargs: Any) -> manufacturer.Foundation:
+        base_settings_calls.append(None)
+        return original_base_settings(*args, **kwargs)
+
+    monkeypatch.setattr(manufacturer, "base_settings", count_base_settings)
+    config = handover.write_config(chosen, _cc2(), setup, output, slots=(slot,))
+    assert len(base_settings_calls) == 1
+
+    assert config.written["filament_flow_ratio"] == "0.985"
+    assert config.written["filament_max_volumetric_speed"] == "29"
+    assert config.written["filament_retraction_length"] == "0.4"
+
+    base_settings_calls.clear()
+    handover.project_settings(chosen, _cc2(), setup, slots=(slot,))
+    assert len(base_settings_calls) == 1
+
+    four_slots = tuple(
+        MaterialSlot(
+            index=index,
+            name=f"PLA {index}",
+            material=str(filament_path),
+            material_type="PLA",
+        )
+        for index in range(4)
+    )
+    four_slot_settings = print_settings.with_choice(foundation.settings, "speed.outer_wall", 210.0)
+    for four_slot in four_slots:
+        four_slot_settings = handover.with_slot_override(
+            four_slot_settings,
+            four_slot,
+            SlotOverride(temperature=four_slot_settings.temperature),
+        )
+    four_slot_output = tmp_path / "four-bound-slots"
+    four_slot_output.mkdir()
+    base_settings_calls.clear()
+    handover.write_config(four_slot_settings, _cc2(), setup, four_slot_output, slots=four_slots)
+    assert len(base_settings_calls) == 1
+
+    base_settings_calls.clear()
+    handover.project_settings(four_slot_settings, _cc2(), setup, slots=four_slots)
+    assert len(base_settings_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "bound_variants",
+    [
+        ["Direct Drive Standard", "Direct Drive E3D High Flow"],
+        ["Direct Drive High Flow", "Direct Drive High Flow"],
+    ],
+    ids=["high-flow-fehlt", "high-flow-mehrdeutig"],
+)
+def test_unresolved_bound_bambu_variant_uses_one_checked_fallback(
+    bestand: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    bound_variants: list[str],
+) -> None:
+    """Ein unauflösbares Spulenprofil darf keine andere Temperatur einschleusen."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow"]
+    ids = ["1", "1"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+        }
+    )
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "nozzle_temperature": ["210", "220"],
+            "nozzle_temperature_initial_layer": ["210", "220"],
+        }
+    )
+    _write(filament_path, filament)
+    setup = _setup(bestand)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    assert foundation.has_profile
+    assert foundation.variant_name == "Direct Drive High Flow"
+    slot_path = root / "filament" / "ECC2" / "bound.json"
+    bound = dict(filament)
+    bound.update(
+        {
+            "name": "Gebundene Spule",
+            "filament_extruder_variant": bound_variants,
+            "nozzle_temperature": ["235", "245"],
+            "nozzle_temperature_initial_layer": ["235", "245"],
+        }
+    )
+    _write(slot_path, bound)
+    slot = MaterialSlot(index=0, name="PLA-Schrift", material=str(slot_path), material_type="PLA")
+
+    slot_settings = handover.settings_for_slot(
+        foundation.settings, _cc2(), slot, setup, foundation=foundation
+    )
+    output = tmp_path / "unresolved-bound-slot"
+    output.mkdir()
+    config = handover.write_config(foundation.settings, _cc2(), setup, output, slots=(slot,))
+    filament_document = json.loads(config.filament.read_text(encoding="utf-8"))
+    project = handover.project_settings(foundation.settings, _cc2(), setup, slots=(slot,))
+    findings = handover.foundation_findings(foundation.settings, _cc2(), setup, slots=(slot,))
+
+    assert slot_settings.temperature.nozzle == pytest.approx(220.0)
+    assert filament_document["nozzle_temperature"] == ["220"]
+    assert config.written["nozzle_temperature"] == "220"
+    assert project["nozzle_temperature"] == ["220"]
+    assert [finding.code for finding in findings] == ["slicer.filament_variant_unresolved"]
+    assert findings[0].suggestions
+    assert str(findings[0].message) == (
+        "Die gebundene Spule „PLA-Schrift“ hat keine eindeutige Variante für "
+        "Direct Drive High Flow. Wählen Sie das passende Spulenprofil im Druckdialog; "
+        "bis dahin gelten die Projektwerte."
+    )
+    assert [
+        finding.code
+        for finding in handover.verify_settings({"nozzle_temperature": "999"}, config.written)
+    ] == ["slicer.setting_ignored"]
+
+
+@pytest.mark.parametrize(
+    ("bound_variants", "unresolved_first"),
+    [
+        (["Direct Drive Standard", "Direct Drive E3D High Flow"], False),
+        (["Direct Drive Standard", "Direct Drive E3D High Flow"], True),
+        (["Direct Drive High Flow", "Direct Drive High Flow"], False),
+        (["Direct Drive High Flow", "Direct Drive High Flow"], True),
+        (["Direct Drive TPU High Flow"], False),
+        (["Direct Drive TPU High Flow"], True),
+    ],
+    ids=[
+        "fehlend-zweiter-slot",
+        "fehlend-erster-slot",
+        "doppelt-zweiter-slot",
+        "doppelt-erster-slot",
+        "h2d-tpu85-neben-tpu95",
+        "h2d-tpu85-erster-slot",
+    ],
+)
+def test_mixed_bound_bambu_variants_keep_temperatures_in_3mf(
+    bestand: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    bound_variants: list[str],
+    unresolved_first: bool,
+) -> None:
+    """TPU-85A neben TPU-95A bewahrt H2D-AMS-Vektoren in der wirklichen 3MF."""
+    import trimesh
+
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = [
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+        "Direct Drive TPU High Flow",
+        "Direct Drive E3D High Flow",
+    ]
+    ids = ["1"] * len(variants)
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+        }
+    )
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "nozzle_temperature": ["210", "220", "230", "240"],
+            "nozzle_temperature_initial_layer": ["210", "220", "230", "240"],
+            "filament_dev_ams_drying_temperature": ["65", "75", "45", "45"],
+            "filament_dev_ams_drying_time": ["12", "18", "12", "18"],
+            "filament_custom_curve": ["a", "b", "c"],
+        }
+    )
+    _write(filament_path, filament)
+    setup = _setup(bestand)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    assert foundation.has_profile
+    valid_path = root / "filament" / "ECC2" / "bound-valid.json"
+    valid = dict(filament)
+    valid.update(
+        {
+            "name": "Gültige gebundene Spule",
+            "nozzle_temperature": ["235", "245", "250", "255"],
+            "nozzle_temperature_initial_layer": ["235", "245", "250", "255"],
+        }
+    )
+    _write(valid_path, valid)
+    unresolved_path = root / "filament" / "ECC2" / "bound-unresolved.json"
+    unresolved = dict(filament)
+    unresolved.update(
+        {
+            "name": "Unklare gebundene Spule",
+            "filament_extruder_variant": bound_variants,
+            "nozzle_temperature": ["235", "245"],
+            "nozzle_temperature_initial_layer": ["235", "245"],
+        }
+    )
+    _write(unresolved_path, unresolved)
+    profiles = (unresolved_path, valid_path) if unresolved_first else (valid_path, unresolved_path)
+    slots = tuple(
+        MaterialSlot(
+            index=index,
+            name=f"Spule {index + 1}",
+            material=str(path),
+            material_type="PLA",
+        )
+        for index, path in enumerate(profiles)
+    )
+    expected = ["220", "245"] if unresolved_first else ["245", "220"]
+
+    config_dir = tmp_path / "mixed-bound-slots"
+    config_dir.mkdir()
+    config = handover.write_config(foundation.settings, _cc2(), setup, config_dir, slots=slots)
+    project = handover.project_settings(foundation.settings, _cc2(), setup, slots=slots)
+
+    assert config.written["nozzle_temperature"] == ",".join(expected)
+    assert project["nozzle_temperature"] == expected
+    assert project["filament_dev_ams_drying_temperature"] == ["65", "75", "45", "45"]
+    assert project["filament_dev_ams_drying_time"] == ["12", "18", "12", "18"]
+    assert project["filament_custom_curve"] == ["a", "b", "c"]
+
+    unbound_slots = tuple(replace(slot, material=None) for slot in slots)
+    raw = trimesh.creation.box(extents=(10, 10, 10))
+    raw.apply_translation((0, 0, 5))
+    body = SceneObject(
+        id="bambu-mixed-variants",
+        name="Gemischte Bambu-Spulen",
+        mesh=MeshData(raw, tuple(index % len(slots) for index in range(len(raw.faces)))),
+        material_slots=list(unbound_slots),
+    )
+    bound_settings = handover.bind_slot_profiles(
+        replace(foundation.settings, slot_profiles=tuple(slot.material for slot in slots)),
+        unbound_slots,
+    )
+    assembly_dir = tmp_path / "mixed-bound-assembly"
+    assembly_dir.mkdir()
+    monkeypatch.setattr(writer.activation, "require", lambda _feature: None)
+    assembly, findings = writer.write_assembly(
+        [body],
+        assembly_dir,
+        project_name="Gemischte Spulen",
+        profile=_cc2(),
+        settings=bound_settings,
+        setup=setup,
+        checked=[],
+        for_slicer=False,
+    )
+    with zipfile.ZipFile(assembly) as archive:
+        metadata = json.loads(archive.read("Metadata/project_settings.config"))
+
+    assert metadata["nozzle_temperature"] == expected
+    assert metadata["filament_dev_ams_drying_temperature"] == ["65", "75", "45", "45"]
+    assert metadata["filament_dev_ams_drying_time"] == ["12", "18", "12", "18"]
+    assert metadata["filament_custom_curve"] == ["a", "b", "c"]
+    assert any(finding.code == "slicer.filament_variant_unresolved" for finding in findings)
+
+
+def test_manual_temperature_for_second_valid_bambu_slot_is_written_to_3mf(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine einzelne Bambu-Düsentemperatur je Slot bleibt im geschriebenen 3MF."""
+    import trimesh
+
+    from app.core.export import writer
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow"]
+    ids = ["1", "1"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+        }
+    )
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "nozzle_temperature": ["215", "230"],
+            "nozzle_temperature_initial_layer": ["215", "230"],
+            "filament_dev_ams_drying_temperature": ["65", "75", "45", "45"],
+            "filament_dev_ams_drying_time": ["12", "18", "12", "18"],
+            "filament_custom_curve": ["a", "b", "c"],
+        }
+    )
+    _write(filament_path, filament)
+    setup = _setup(bestand)
+    profile = _cc2()
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+    assert foundation.has_profile
+    assert foundation.variant_name == "Direct Drive High Flow"
+
+    slots = []
+    for index in range(2):
+        bound_path = root / "filament" / "ECC2" / f"bound-valid-{index}.json"
+        bound = dict(filament)
+        bound["name"] = f"Gültiges H2D-Profil {index + 1}"
+        _write(bound_path, bound)
+        slots.append(
+            MaterialSlot(
+                index=index,
+                name=f"Spule {index + 1}",
+                material=str(bound_path),
+                material_type="PLA",
+            )
+        )
+    bound_slots = tuple(slots)
+    settings = foundation.settings
+    second_base = handover.settings_for_slot(
+        settings, profile, bound_slots[1], setup, foundation=foundation
+    )
+    settings = handover.with_slot_override(
+        settings,
+        bound_slots[1],
+        SlotOverride(
+            temperature=replace(
+                second_base.temperature,
+                nozzle=231,
+                nozzle_first_layer=232,
+            )
+        ),
+    )
+
+    config_dir = tmp_path / "manual-second-slot-config"
+    config_dir.mkdir()
+    config = handover.write_config(settings, profile, setup, config_dir, slots=bound_slots)
+    project = handover.project_settings(settings, profile, setup, slots=bound_slots)
+
+    expected_nozzle = ["230", "231"]
+    expected_first_layer = ["230", "232"]
+    assert config.written["nozzle_temperature"] == ",".join(expected_nozzle)
+    assert config.written["nozzle_temperature_initial_layer"] == ",".join(expected_first_layer)
+    assert project["nozzle_temperature"] == expected_nozzle
+    assert project["nozzle_temperature_initial_layer"] == expected_first_layer
+    assert project["filament_dev_ams_drying_temperature"] == ["65", "75", "45", "45"]
+    assert project["filament_dev_ams_drying_time"] == ["12", "18", "12", "18"]
+    assert project["filament_custom_curve"] == ["a", "b", "c"]
+
+    unbound_slots = tuple(replace(slot, material=None) for slot in bound_slots)
+    raw = trimesh.creation.box(extents=(10, 10, 10))
+    raw.apply_translation((0, 0, 5))
+    body = SceneObject(
+        id="bambu-manual-temperature",
+        name="Manuelle Bambu-Düsentemperatur",
+        mesh=MeshData(raw, tuple(index % len(bound_slots) for index in range(len(raw.faces)))),
+        material_slots=list(unbound_slots),
+    )
+    bound_settings = handover.bind_slot_profiles(
+        replace(settings, slot_profiles=tuple(slot.material for slot in bound_slots)),
+        unbound_slots,
+    )
+    assembly_dir = tmp_path / "manual-second-slot-assembly"
+    assembly_dir.mkdir()
+    monkeypatch.setattr(writer.activation, "require", lambda _feature: None)
+    assembly, findings = writer.write_assembly(
+        [body],
+        assembly_dir,
+        project_name="Manuelle Bambu-Düsentemperatur",
+        profile=profile,
+        settings=bound_settings,
+        setup=setup,
+        checked=[],
+        for_slicer=False,
+    )
+    with zipfile.ZipFile(assembly) as archive:
+        metadata = json.loads(archive.read("Metadata/project_settings.config"))
+
+    assert metadata["nozzle_temperature"] == expected_nozzle
+    assert metadata["nozzle_temperature_initial_layer"] == expected_first_layer
+    assert metadata["filament_dev_ams_drying_temperature"] == ["65", "75", "45", "45"]
+    assert metadata["filament_dev_ams_drying_time"] == ["12", "18", "12", "18"]
+    assert metadata["filament_custom_curve"] == ["a", "b", "c"]
+    assert not any(finding.code == "slicer.filament_variant_unresolved" for finding in findings)
+
+
+def test_bambu_high_flow_keeps_a_slower_accepted_speed_suggestion(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """350 mm/s darf die aktive High-Flow-Innenwand mit 400 mm/s bremsen."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow"]
+    ids = ["1", "1"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+            "inner_wall_speed": ["300", "400"],
+        }
+    )
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants,
+            "filament_max_volumetric_speed": ["21", "29"],
+        }
+    )
+    _write(filament_path, filament)
+    setup = _setup(bestand)
+    foundation = manufacturer.base_settings(_cc2(), "standard", setup)
+    suggestion = print_settings.with_accepted(foundation.settings, "speed.inner_wall", 350.0)
+    output = tmp_path / "accepted-speed"
+    output.mkdir()
+
+    config = handover.write_config(suggestion, _cc2(), setup, output)
+    process_document = json.loads(config.process.read_text(encoding="utf-8"))
+
+    assert process_document["inner_wall_speed"] == "350"
+    assert process_document["print_extruder_variant"] == variants
+    assert handover.project_settings(suggestion, _cc2(), setup)["inner_wall_speed"] == "350"
+
+
+def test_bambu_does_not_guess_between_duplicate_extruder_variants(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein zweiter gleichartiger H2C-Extruder macht High Flow mehrdeutig."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = [
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+        "Direct Drive E3D High Flow",
+        "Direct Drive Standard",
+        "Direct Drive High Flow",
+    ]
+    ids = ["1", "1", "1", "2", "2"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive", "Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ids,
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ids,
+            "inner_wall_speed": ["300", "400", "500", "300", "450"],
+        }
+    )
+    _write(process_path, process)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert not foundation.has_profile
+    assert foundation.unreadable == "0.20mm Standard @CC2"
+
+
 def test_what_the_chain_does_not_name_is_the_programs_default(
     bestand: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

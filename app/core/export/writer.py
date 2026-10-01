@@ -1925,7 +1925,9 @@ def write_assembly(
             # Einstellung eines fremden Programms nichts hören.
             findings += handover.machine_missing(setup, profile)
             if settings is not None:
-                findings += handover.foundation_findings(settings, profile, setup)
+                findings += handover.foundation_findings(
+                    settings, profile, setup, slots=configured_slots
+                )
     target = _written(
         directory / (given_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(

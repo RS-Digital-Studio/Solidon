@@ -260,9 +260,9 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
 Entscheidung Robert (Bauplan §29): Gedruckt wird mit dem Profil des
 Herstellers, Solidon schreibt darüber nur die Abweichung.
 
-- **Nur `chosen`, `accepted`, das Gemessene und die Werte der Stufe gehen über
-  das Herstellerprofil.** Ein neuer Weg in die Übergabe fragt
-  `manufacturer.written_paths`; ein Wert ohne Herkunft ist Grundlage.
+- **Nur `chosen`, `accepted`, Gemessenes und Stufenwerte gehen über das
+  Herstellerprofil.** Jeder Übergabepfad fragt `manufacturer.written_paths`;
+  Werte ohne Herkunft kommen aus der Grundlage.
 - **Die Stufe wählt den Herstellerprozess** (`manufacturer.for_stage`,
   Zuordnung `slicer_profiles.stage_process`): Jede Stelle, die eine
   Einrichtung aus `remembered_setup` baut, wendet sie an, und der Druckdialog
@@ -362,8 +362,9 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
 - **Die Gegenprobe hält, was Solidon schreibt, plus eine Stichprobe der
   Grundlage** (`handover.FOUNDATION_SAMPLE`; PrusaSlicer
   `PRUSA_FOUNDATION_SAMPLE` und `PRUSA_IDENTITY`: Druckermodell, Profilname,
-  Startcode). Listen je Düsenvariante gelten mit dem ersten Eintrag
-  (`handover._printed`), den der Slicer ohne Variantenwahl druckt.
+  Startcode). Bambu: Variante/ID je Profil (ohne Wahl Index 0, mehrdeutig:
+  Tabelle); 3MF: nur Variantenschlüssel je Slot, gleiche Listenlänge zählt
+  nicht. Unklare Spulen: Projektwerte; Befund zum Druckdialog.
 - **Die Abnahme ist der Konfigurationsblock**: Ohne Vorschläge gleicht
   Solidons G-Code-Konfiguration der des Herstellerprofils allein, bis auf
   Namen, Objektmarken und `filament_self_index` (Messstand in `ROADMAP.md`).

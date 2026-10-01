@@ -31,7 +31,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 from xml.etree import ElementTree as ET
 
 from app.core import activation, discover, expressions
@@ -44,6 +44,7 @@ from app.core.errors import (
     CHOOSE_SLICER,
     EXPORT_ONLY,
     INSTALL_MISSING,
+    OPEN_PRINT_SETTINGS,
     OPEN_SETTINGS,
     REPAIR_AND_RETRY,
     RETRY,
@@ -104,6 +105,58 @@ _log = get_logger(__name__)
 #: Slicen dauert länger als alles andere, was Solidon außer Haus gibt. Fünf
 #: Minuten sind großzügig für ein Teil und immer noch eine Grenze.
 TIMEOUT_SECONDS: Final = 300.0
+
+#: Bambu Studio wendet nur diese Filamentwerte je Düsenvariante an. Die
+#: Wertfelder spiegeln ``filament_options_with_variant`` in
+#: ``src/libslic3r/PrintConfig.cpp``; der Selektor selbst bleibt Profilangabe.
+#: Die Länge einer Liste ist kein Feldvertrag: AMS-Trocknungswerte können
+#: zufällig so viele Einträge wie das Variantenprofil haben.
+BAMBU_FILAMENT_VARIANT_SETTINGS: Final = frozenset(
+    {
+        "filament_flow_ratio",
+        "filament_max_volumetric_speed",
+        "filament_ramming_volumetric_speed",
+        "filament_pre_cooling_temperature",
+        "filament_ramming_travel_time",
+        "filament_ramming_volumetric_speed_nc",
+        "filament_pre_cooling_temperature_nc",
+        "filament_ramming_travel_time_nc",
+        "filament_retraction_length",
+        "filament_retract_length_nc",
+        "filament_z_hop",
+        "filament_z_hop_types",
+        "filament_retract_restart_extra",
+        "filament_retraction_speed",
+        "filament_deretraction_speed",
+        "filament_retraction_minimum_travel",
+        "filament_retract_when_changing_layer",
+        "filament_wipe",
+        "filament_wipe_distance",
+        "filament_retract_before_wipe",
+        "filament_long_retractions_when_cut",
+        "filament_retraction_distances_when_cut",
+        "long_retractions_when_ec",
+        "retraction_distances_when_ec",
+        "nozzle_temperature_initial_layer",
+        "nozzle_temperature",
+        "filament_flush_volumetric_speed",
+        "filament_flush_temp",
+        "filament_flush_temp_fast",
+        "filament_enable_overhang_speed",
+        "filament_bridge_speed",
+        "filament_overhang_1_4_speed",
+        "filament_overhang_2_4_speed",
+        "filament_overhang_3_4_speed",
+        "filament_overhang_4_4_speed",
+        "filament_overhang_totally_speed",
+        "override_process_overhang_speed",
+        "volumetric_speed_coefficients",
+        "filament_adaptive_volumetric_speed",
+        "filament_preheat_temperature_delta",
+        "filament_cooling_before_tower",
+        "slow_down_min_speed",
+    }
+)
 
 #: Konsolenausgaben der Slicer sind Diagnose, keine Druckdatei. Acht MiB
 #: lassen ausführliche Protokolle zu, ohne dass ein defekter Slicer den
@@ -402,13 +455,42 @@ def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
 
 
 def foundation_findings(
-    settings: PrintSettings, profile: Profile, setup: SlicerSetup | None
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slots: Sequence[MaterialSlot] = (),
 ) -> list[Finding]:
     """Was der Kunde über die Grundlage wissen muss — Platte und lesbares
     Prozessprofil (:func:`app.core.export.manufacturer.findings`)."""
     if setup is None or setup.flavour not in ("orca", "prusa"):
         return []
-    return manufacturer.findings(manufacturer.base_settings(profile, settings.quality, setup))
+    foundation = manufacturer.base_settings(profile, settings.quality, setup)
+    findings = manufacturer.findings(foundation)
+    if setup.flavour != "orca" or not foundation.has_profile:
+        return findings
+    for slot in slots:
+        resolved = _resolve_slot(settings, profile, slot, setup, foundation=foundation)
+        if not resolved.variant_unresolved:
+            continue
+        findings.append(
+            Finding(
+                code="slicer.filament_variant_unresolved",
+                severity="warning",
+                message=_(
+                    "Die gebundene Spule „{slot}“ hat keine eindeutige Variante für "
+                    "{variant}. Wählen Sie das passende Spulenprofil im Druckdialog; "
+                    "bis dahin gelten die Projektwerte.",
+                    slot=slot.name or str(slot.index + 1),
+                    variant=foundation.variant_name,
+                ),
+                values={
+                    "slot": slot.name or str(slot.index + 1),
+                    "variant": foundation.variant_name,
+                },
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        )
+    return findings
 
 
 def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
@@ -1574,12 +1656,32 @@ class SlicerConfig:
         return self.filaments[0] if self.filaments else None
 
 
-def settings_for_slot(
+@dataclass(frozen=True, slots=True)
+class _SlotResolution:
+    """Wirksame Einstellungen und sichere Zuordnung des gebundenen Profils."""
+
+    settings: PrintSettings
+    source: Path | slicer_profiles.SlicerProfile | None = None
+    readback: slicer_profiles.FilamentReadback | None = None
+
+    @property
+    def variant_unresolved(self) -> bool:
+        """Ob ein gebundenes Profil wegen einer ungeklärten Variante entfällt."""
+        return (
+            self.source is not None
+            and self.readback is not None
+            and not self.readback.variant_resolved
+        )
+
+
+def _resolve_slot(
     settings: PrintSettings,
     profile: Profile,
     slot: MaterialSlot,
     setup: SlicerSetup | None = None,
-) -> PrintSettings:
+    *,
+    foundation: manufacturer.Foundation | None = None,
+) -> _SlotResolution:
     """Die Einstellungen, mit denen dieser eine Slot fährt (§20, §29).
 
     Vier Spulen sind nicht vier Farben desselben Materials: Ein Schriftzug in
@@ -1605,23 +1707,47 @@ def settings_for_slot(
             retraction=defaults.retraction,
             filament=defaults.filament,
         )
+    source: Path | slicer_profiles.SlicerProfile | None = None
+    readback: slicer_profiles.FilamentReadback | None = None
     if setup is not None and slot.material:
         source = profile_source(slot.material, setup, "filament")
         if source is not None:
-            for path, value in slicer_profiles.filament_values(
-                source, _profile_roots(setup)
-            ).items():
+            if foundation is None and setup.flavour == "orca":
+                foundation = manufacturer.base_settings(profile, settings.quality, setup)
+            readback = slicer_profiles.filament_readback(
+                source,
+                _profile_roots(setup),
+                variant_name=foundation.variant_name if foundation is not None else "",
+                extruder_id=foundation.variant_id if foundation is not None else "",
+            )
+            for path, value in readback.values.items():
                 settings = with_path(settings, path, value)
     override = override_for(settings, slot)
-    if override is None or override.empty:
-        return settings
-    return replace(
-        settings,
-        temperature=override.temperature or settings.temperature,
-        cooling=override.cooling or settings.cooling,
-        retraction=override.retraction or settings.retraction,
-        filament=override.filament or settings.filament,
+    if override is not None and not override.empty:
+        settings = replace(
+            settings,
+            temperature=override.temperature or settings.temperature,
+            cooling=override.cooling or settings.cooling,
+            retraction=override.retraction or settings.retraction,
+            filament=override.filament or settings.filament,
+        )
+    return _SlotResolution(
+        settings=settings,
+        source=source,
+        readback=readback,
     )
+
+
+def settings_for_slot(
+    settings: PrintSettings,
+    profile: Profile,
+    slot: MaterialSlot,
+    setup: SlicerSetup | None = None,
+    *,
+    foundation: manufacturer.Foundation | None = None,
+) -> PrintSettings:
+    """Die Einstellungen, mit denen dieser eine Slot fährt (§20, §29)."""
+    return _resolve_slot(settings, profile, slot, setup, foundation=foundation).settings
 
 
 @dataclass(frozen=True, slots=True)
@@ -1657,6 +1783,7 @@ def slot_processes(
     """
     mesh = as_mesh_data(body.mesh)
     own_profile = profiles.for_object(profile, body)
+    foundation: manufacturer.Foundation | None = None
     present = set(used_slots(mesh))
     processes: list[SlotProcess] = []
     for original in threemf.assembly_slots(
@@ -1670,7 +1797,9 @@ def slot_processes(
         material_profile = (
             replace(own_profile, material=profiles.material(material)) if material else own_profile
         )
-        effective = settings_for_slot(settings, profile, slot, setup)
+        if foundation is None and setup is not None and setup.flavour == "orca" and slot.material:
+            foundation = manufacturer.base_settings(profile, settings.quality, setup)
+        effective = settings_for_slot(settings, profile, slot, setup, foundation=foundation)
         processes.append(
             SlotProcess(
                 slot, profiles.for_process(material_profile, effective, effective=True), effective
@@ -2185,6 +2314,7 @@ def write_config(
             deviating=deviating.get("process", {}),
             plate=plate,
             suggested=_suggested_speed_keys(settings, setup.flavour),
+            foundation=foundation,
         )
         target.write_text(
             json.dumps(process_document, indent=2, ensure_ascii=False),
@@ -2203,15 +2333,30 @@ def write_config(
         written: list[Path] = []
         filament_documents: list[dict[str, object]] = []
         for slot in slots or (MaterialSlot(index=0, name=""),):
-            own = replace(setup, base_filament=slot.material) if slot.material else setup
             # Je Slot seine eigenen Werte: Temperaturen, Kühlung,
             # Rückzug und Materialkennwerte dürfen sich unterscheiden,
             # denn sie hängen an der Spule. Was der Slot nicht setzt,
             # kommt aus dem Projekt — deshalb wird die Aufteilung hier
             # noch einmal gerechnet und nicht die von oben genommen.
-            mine = settings_for_slot(settings, profile, slot, setup)
+            resolution = _resolve_slot(settings, profile, slot, setup, foundation=foundation)
+            mine = resolution.settings
+            own = (
+                replace(setup, base_filament="")
+                if resolution.variant_unresolved
+                else replace(setup, base_filament=slot.material)
+                if slot.material
+                else setup
+            )
             part = split if mine is settings else by_section(mine, setup.flavour)
-            own_paths = _for_the_slot(paths, settings, slot, profile, setup)
+            own_paths = _for_the_slot(
+                paths,
+                settings,
+                slot,
+                profile,
+                setup,
+                foundation=foundation,
+                resolution=resolution,
+            )
             filament_documents.append(
                 _orca_filament(
                     part.get("filament", {}),
@@ -2245,11 +2390,19 @@ def write_config(
         # eine Warnung bei jedem Auftrag, gegen die niemand etwas tun kann
         # (gemessen 27.09.2026). Ohne Herstellerprofil ist alles eigene Wahl.
         own_process = deviating.get("process", {})
-        expected = {
-            key: _printed(value)
-            for key, value in process_document.items()
-            if key in own_process or key in FOUNDATION_SAMPLE
-        }
+        expected = {}
+        for key, value in process_document.items():
+            if key not in own_process and key not in FOUNDATION_SAMPLE:
+                continue
+            printed_value = _printed_variant(
+                value,
+                process_document,
+                "print_extruder_variant",
+                "print_extruder_id",
+                foundation,
+            )
+            if printed_value is not None:
+                expected[key] = printed_value
         if plate:
             expected["curr_bed_type"] = plate
         firmware = machine_document.get("gcode_flavor")
@@ -2263,9 +2416,20 @@ def write_config(
             # Ein Wert je Spule, wie der G-Code sie führt. Die Filamentwerte
             # des Herstellers bleiben ganz in der Gegenprobe: an ElegooSlicer,
             # Bambu Studio, Creality Print und OrcaSlicer kam jeder an.
-            expected[entry.key] = ",".join(
-                _printed(document[entry.key]) for document in filament_documents
-            )
+            printed_values = [
+                _printed_variant(
+                    document[entry.key],
+                    document,
+                    "filament_extruder_variant",
+                    "filament_extruder_id",
+                    foundation,
+                )
+                for document in filament_documents
+            ]
+            if all(value is not None for value in printed_values):
+                expected[entry.key] = ",".join(
+                    value for value in printed_values if value is not None
+                )
         # Eine eigene Betttemperatur steht unter dem Schlüssel der aufliegenden
         # Platte (``_on_the_plate``), nicht unter ``hot_plate_temp`` — geprüft
         # wird sie dort (Review Stufe A+B, H3).
@@ -2273,9 +2437,20 @@ def write_config(
         if bed_key is not None:
             for key in (bed_key, f"{bed_key}_initial_layer"):
                 if all(key in document for document in filament_documents):
-                    expected[key] = ",".join(
-                        _printed(document[key]) for document in filament_documents
-                    )
+                    plate_values = [
+                        _printed_variant(
+                            document[key],
+                            document,
+                            "filament_extruder_variant",
+                            "filament_extruder_id",
+                            foundation,
+                        )
+                        for document in filament_documents
+                    ]
+                    if all(value is not None for value in plate_values):
+                        expected[key] = ",".join(
+                            value for value in plate_values if value is not None
+                        )
         return SlicerConfig(
             process=target, filaments=tuple(written), machine=machine_target, written=expected
         )
@@ -2432,6 +2607,7 @@ def project_settings(
             deviating=deviating.get("process", {}),
             plate=plate,
             suggested=_suggested_speed_keys(settings, setup.flavour),
+            foundation=foundation,
         )
     )
     document.update(_machine_keys(profile, setup.flavour))
@@ -2453,14 +2629,33 @@ def project_settings(
     ordered_slots: tuple[MaterialSlot | None, ...] = tuple(placed) + (None,) * (count - len(placed))
     filament_documents: list[dict[str, object]] = []
     for slot in ordered_slots:
-        mine = settings if slot is None else settings_for_slot(settings, profile, slot, setup)
+        resolution = (
+            None
+            if slot is None
+            else _resolve_slot(settings, profile, slot, setup, foundation=foundation)
+        )
+        mine = settings if resolution is None else resolution.settings
         own = (
-            replace(setup, base_filament=slot.material)
+            replace(setup, base_filament="")
+            if resolution is not None and resolution.variant_unresolved
+            else replace(setup, base_filament=slot.material)
             if slot is not None and slot.material
             else setup
         )
         slot_values = by_section(mine, setup.flavour).get("filament", {})
-        slot_paths = paths if slot is None else _for_the_slot(paths, settings, slot, profile, setup)
+        slot_paths = (
+            paths
+            if slot is None
+            else _for_the_slot(
+                paths,
+                settings,
+                slot,
+                profile,
+                setup,
+                foundation=foundation,
+                resolution=resolution,
+            )
+        )
         filament_documents.append(
             _orca_filament(
                 slot_values,
@@ -2488,6 +2683,25 @@ def project_settings(
             return value[0]
         return value
 
+    def project_value(key: str, value: object, entry: Mapping[str, Any]) -> object | None:
+        """Löst nur ausdrücklich variantengebundene Werte je Profil auf."""
+        if key not in BAMBU_FILAMENT_VARIANT_SETTINGS:
+            return value
+        variants = manufacturer._variant_entries(entry.get("filament_extruder_variant"))
+        if (
+            isinstance(value, list)
+            and len(value) > 1
+            and (variants is None or len(value) != len(variants))
+        ):
+            return value
+        return _printed_variant(
+            value,
+            entry,
+            "filament_extruder_variant",
+            "filament_extruder_id",
+            foundation,
+        )
+
     resolved: dict[str, object] = dict(document)
     for key in filament_keys:
         filament_values = [entry.get(key, "") for entry in filament_documents]
@@ -2495,19 +2709,31 @@ def project_settings(
             value for value in filament_values if isinstance(value, list) and len(value) != 1
         ]
         if vectors:
-            # Listen mit null oder mehreren Einträgen beschreiben **einen**
-            # Profilwert und keine Extruderbelegung. Sind sie überall gleich,
-            # bleibt die gültige flache Form erhalten. Verschiedene Vektoren
-            # kann das Projektformat nicht je Extruder ausdrücken; dann wird
-            # der Schlüssel weggelassen, statt eine ungültige verschachtelte
-            # Liste zu erfinden, die der Slicer still verwirft.
-            stated = [value for value in filament_values if value not in ("", [])]
-            if not stated:
-                resolved[key] = []
-            elif all(value == stated[0] for value in stated):
-                resolved[key] = stated[0]
+            # Variantengebundene Werte werden anhand des jeweiligen Profils
+            # je Slot auf die aktive Variante abgebildet. Andere Profilvektoren
+            # bleiben vollständig; verschiedene Vektoren kann das Projektformat
+            # nicht je Slot ausdrücken.
+            resolved_values = [
+                project_value(key, value, entry)
+                for entry, value in zip(filament_documents, filament_values, strict=True)
+            ]
+            if any(value is None for value in resolved_values):
+                _log.warning("not writing unresolved multi-value filament key %s", key)
+                continue
+            projected_values = [value for value in resolved_values if value is not None]
+            projected_vectors = [
+                value for value in projected_values if isinstance(value, list) and len(value) != 1
+            ]
+            if projected_vectors:
+                stated = [value for value in projected_values if value not in ("", [])]
+                if not stated:
+                    resolved[key] = []
+                elif all(value == stated[0] for value in stated):
+                    resolved[key] = stated[0]
+                else:
+                    _log.warning("not writing incompatible multi-value filament key %s", key)
             else:
-                _log.warning("not writing incompatible multi-value filament key %s", key)
+                resolved[key] = projected_values
             continue
         resolved[key] = [scalar(value) for value in filament_values]
 
@@ -2669,6 +2895,8 @@ def _followers_not_faster(
     deviating: Mapping[str, str],
     suggested: frozenset[str] = frozenset(),
     followers: frozenset[str] = _ORCA_FOLLOWERS,
+    *,
+    foundation: manufacturer.Foundation | None = None,
 ) -> dict[str, str]:
     """Eine Abweichung macht einen mitbedienten Schlüssel nie schneller als beim Hersteller.
 
@@ -2687,7 +2915,18 @@ def _followers_not_faster(
     """
     kept = dict(deviating)
     for key in (followers | suggested) & kept.keys():
-        vendor = _as_float(_printed(base.get(key, "")))
+        printed = (
+            _printed_variant(
+                base.get(key, ""),
+                base,
+                "print_extruder_variant",
+                "print_extruder_id",
+                foundation,
+            )
+            if foundation is not None
+            else _printed(base.get(key, ""))
+        )
+        vendor = _as_float(printed) if printed is not None else None
         own = _as_float(kept[key])
         if vendor is None or own is None or own > vendor:
             del kept[key]
@@ -2714,6 +2953,7 @@ def _orca_process(
     deviating: Mapping[str, str] | None = None,
     plate: str = "",
     suggested: frozenset[str] = frozenset(),
+    foundation: manufacturer.Foundation | None = None,
 ) -> dict[str, object]:
     """Das Prozessprofil für die Orca-Familie.
 
@@ -2756,7 +2996,7 @@ def _orca_process(
     document.update(
         values
         if base is None or deviating is None
-        else _followers_not_faster(document, deviating, suggested)
+        else _followers_not_faster(document, deviating, suggested, foundation=foundation)
     )
     # **Die Druckplatte, ausdrücklich** (Entscheidung F). Ohne sie nimmt die
     # Konsole „Cool Plate" — gemessen am ElegooSlicer mit 35 °C Bett für PLA,
@@ -2954,17 +3194,38 @@ FOUNDATION_SAMPLE: Final = frozenset({"layer_height", "wall_loops", "support_thr
 def _printed(value: object) -> str:
     """Der eine Wert, den der Slicer aus einem Profileintrag druckt.
 
-    Bambu Studio führt viele Prozess- und Filamentwerte je Düsenvariante als
-    Liste: ``inner_wall_speed`` ist ``["300", "400"]`` für Standard und High
-    Flow, ``filament_max_volumetric_speed`` ``["21", "29"]``. Solidon nennt
-    keine Variante; der Slicer nimmt die erste und schreibt nur sie in den
-    G-Code. Gegen die ganze Liste gehalten, meldete die Gegenprobe an jedem
-    Auftrag für die P1S fünfzehn „anders übernommene" Werte (gemessen
-    27.09.2026).
+    Für einfache Listen nimmt der Slicer den ersten Eintrag. Bambu-Listen, die
+    parallel zu den Düsenvarianten stehen, gehen über :func:`_printed_variant`.
     """
     if isinstance(value, list):
         return str(value[0]) if value else ""
     return str(value)
+
+
+def _printed_variant(
+    value: object,
+    document: Mapping[str, Any],
+    variant_key: str,
+    extruder_key: str,
+    foundation: manufacturer.Foundation,
+) -> str | None:
+    """Prüft eine Liste anhand der Variantenliste ihres eigenen Profils."""
+    variants = manufacturer._variant_entries(document.get(variant_key))
+    if variants is None:
+        return _printed(value)
+    position = manufacturer._variant_index(
+        document,
+        variant_key,
+        extruder_key,
+        foundation.variant_name,
+        foundation.variant_id,
+    )
+    if position is None:
+        return None if isinstance(value, list) else _printed(value)
+    index, count = position
+    if isinstance(value, list) and len(value) == count:
+        return str(value[index])
+    return _printed(value)
 
 
 def _deviating(
@@ -2980,6 +3241,9 @@ def _for_the_slot(
     slot: MaterialSlot,
     profile: Profile | None = None,
     setup: SlicerSetup | None = None,
+    *,
+    foundation: manufacturer.Foundation | None = None,
+    resolution: _SlotResolution | None = None,
 ) -> frozenset[str] | None:
     """Die Abweichungen eines Slots: die des Projekts und was seine Spule
     ausdrücklich anders will als ihre Grundlage — das gehört ihr, nicht dem
@@ -2991,6 +3255,12 @@ def _for_the_slot(
     Bett, erste Schicht und Kammer mit über das Herstellerfilament (Review
     Stufe A+B, H15). Ohne Drucker zum Vergleich bleibt es bei der ganzen Gruppe.
     """
+    if profile is not None and resolution is None:
+        resolution = _resolve_slot(settings, profile, slot, setup, foundation=foundation)
+    if resolution is not None and resolution.variant_unresolved:
+        # Ohne sichere Zuordnung darf das gebundene Profil keine Werte erben;
+        # die Projektgrundlage wird vollständig in das Ausgabefilament geschrieben.
+        return None
     if paths is None:
         return None
     override = override_for(settings, slot)
@@ -3010,8 +3280,12 @@ def _for_the_slot(
         settings,
         slot_overrides=tuple(entry for entry in settings.slot_overrides if entry is not override),
     )
-    base = settings_for_slot(without, profile, slot, setup)
-    mine = settings_for_slot(settings, profile, slot, setup)
+    base = _resolve_slot(without, profile, slot, setup, foundation=foundation).settings
+    mine = (
+        resolution.settings
+        if resolution is not None
+        else _resolve_slot(settings, profile, slot, setup, foundation=foundation).settings
+    )
     return paths | frozenset(
         path
         for path in candidates
@@ -4205,10 +4479,16 @@ def _readback_materials(
     Cura überträgt keine Dichte; dort stammt sie aus genau dem einen wirksamen
     Materialwertsatz. Eine Mehrwerkzeugliste bleibt vollständig erhalten.
     """
+    material_slots = tuple(slots) or (MaterialSlot(index=0, name=""),)
+    foundation = (
+        manufacturer.base_settings(profile, settings.quality, setup)
+        if setup.flavour == "orca" and any(slot.material for slot in material_slots)
+        else None
+    )
     effective = (
         tuple(
-            settings_for_slot(settings, profile, slot, setup)
-            for slot in slots or (MaterialSlot(index=0, name=""),)
+            settings_for_slot(settings, profile, slot, setup, foundation=foundation)
+            for slot in material_slots
         )
         if has_filament_profiles(setup.flavour)
         else (settings_for_handover(settings, profile, setup.flavour, slots, setup),)
@@ -4745,7 +5025,7 @@ def slice_model(
         # Slicers statt mit den Werten aus Solidon — oder er scheitert, und die
         # Orca-Familie sagt dazu nur „process not compatible with printer".
         *machine_missing(setup, profile),
-        *foundation_findings(settings, profile, setup),
+        *foundation_findings(settings, profile, setup, slots=slots),
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),

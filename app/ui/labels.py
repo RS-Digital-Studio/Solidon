@@ -1783,6 +1783,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "printer": _("Drucker"),
     "produced": _("Erzeugt"),
     "profile": _("Profil"),
+    "variant": _("Variante"),
     "radius": _("Radius"),
     "reachable": _("Erreichbar"),
     "read": _("Gelesen"),

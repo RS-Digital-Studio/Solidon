@@ -106,6 +106,14 @@ class Foundation:
     """Kennt der Slicer Druckplatten mit eigener Betttemperatur? PrusaSlicer
     nicht: Dort steht die Betttemperatur am Filament, und eine Platte, die
     niemand nennt, ist kein Mangel."""
+    variant_index: int = 0
+    """Der Profilindex, den der ausgewählte Slicer für diesen Auftrag liest."""
+    variant_count: int = 1
+    """Die Zahl der Einträge je Profilvariante, für die G-Code-Gegenprobe."""
+    variant_name: str = ""
+    """Der vollständige Name der gewählten Bambu-Düsenvariante."""
+    variant_id: str = ""
+    """Der Extruder der gewählten Variante, soweit das Profil ihn benennt."""
 
     @property
     def has_profile(self) -> bool:
@@ -118,9 +126,23 @@ class Foundation:
 
 @dataclass(frozen=True, slots=True)
 class _Context:
-    """Was eine relative Angabe braucht: die Düse für Bahnbreiten in Prozent."""
+    """Die Düse und die ausgewählte Bambu-Variante für Profilwerte."""
 
     nozzle: float
+    variant_index: int = 0
+    variant_count: int = 1
+    variant_name: str = ""
+    variant_id: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _VariantSelection:
+    """Ein vollständiger Variantenname und seine Position im Ausgangsprofil."""
+
+    name: str = ""
+    extruder_id: str = ""
+    index: int = 0
+    count: int = 1
 
 
 Reader = Callable[[str, _Context], object]
@@ -135,6 +157,134 @@ def _text(raw: object) -> str | None:
         return None
     text = str(raw).strip()
     return None if text in ("", "nil") else text
+
+
+def _variant_entries(raw: object) -> tuple[str, ...] | None:
+    """Liest eine Variantenliste, ohne aus mehreren Einträgen einen auszuwählen."""
+    if isinstance(raw, list):
+        return tuple(_text(value) or "" for value in raw)
+    if isinstance(raw, str) and (text := _text(raw)) is not None:
+        return (text,)
+    return None
+
+
+def _variant_index(
+    values: Mapping[str, Any],
+    variant_key: str,
+    extruder_key: str,
+    variant_name: str,
+    extruder_id: str,
+) -> tuple[int, int] | None:
+    """Ordnet die gewählte Variante in der Variantenliste dieses Profils zu."""
+    return slicer_profiles.variant_index(
+        values, variant_key, extruder_key, variant_name, extruder_id
+    )
+
+
+def _variant_selection(
+    process: Mapping[str, Any], machine: Mapping[str, Any]
+) -> _VariantSelection | None:
+    """Die Profilvariante für diesen Konsolenlauf, sonst keine sichere Zuordnung.
+
+    Bambu führt Varianten parallel zu Drucker-, Prozess- und Filamentwerten.
+    ``nozzle_volume_type`` wird mit dem Extrudertyp zum vollständigen Namen.
+    Ohne aktive Angabe wählt die installierte Konsole den ersten Listeneintrag.
+    Nicht eindeutige Angaben werden nicht geraten.
+    """
+    process_variants = _variant_entries(process.get("print_extruder_variant"))
+    machine_variants = _variant_entries(machine.get("printer_extruder_variant"))
+    if process_variants is not None and len(process_variants) > 1:
+        source, variants, extruder_key = (
+            process,
+            process_variants,
+            "print_extruder_id",
+        )
+    elif machine_variants is not None and len(machine_variants) > 1:
+        source, variants, extruder_key = (
+            machine,
+            machine_variants,
+            "printer_extruder_id",
+        )
+    elif process_variants is not None:
+        source, variants, extruder_key = (
+            process,
+            process_variants,
+            "print_extruder_id",
+        )
+    elif machine_variants is not None:
+        source, variants, extruder_key = (
+            machine,
+            machine_variants,
+            "printer_extruder_id",
+        )
+    else:
+        source, variants, extruder_key = process, (), ""
+
+    active_raw = process.get("nozzle_volume_type")
+    if active_raw is None:
+        active_raw = machine.get("nozzle_volume_type")
+    active_values = _variant_entries(active_raw)
+    if active_raw is not None and (active_values is None or len(active_values) != 1):
+        return None
+    active = active_values[0] if active_values else None
+
+    if active is None:
+        if not variants:
+            return _VariantSelection()
+        ids = _variant_entries(source.get(extruder_key)) if extruder_key else None
+        extruder_id = ids[0] if ids is not None and len(ids) == len(variants) else ""
+        return _VariantSelection(variants[0], extruder_id, 0, len(variants))
+    elif any(name.casefold() == active.casefold() for name in variants):
+        selected_name = active
+    else:
+        extruder_types = _variant_entries(machine.get("extruder_type")) or _variant_entries(
+            process.get("extruder_type")
+        )
+        wanted = {
+            f"{extruder_type} {active}".casefold()
+            for extruder_type in extruder_types or ()
+            if extruder_type
+        }
+        matching_names = {name for name in variants if name.casefold() in wanted}
+        if len(matching_names) != 1:
+            return None
+        selected_name = next(iter(matching_names))
+
+    if not selected_name:
+        return _VariantSelection()
+    matches = [
+        index for index, name in enumerate(variants) if name.casefold() == selected_name.casefold()
+    ]
+    ids = _variant_entries(source.get(extruder_key)) if extruder_key else None
+    if ids is not None and len(ids) == len(variants) and len(matches) == 1:
+        extruder_id = ids[matches[0]]
+    else:
+        extruder_id = ""
+    if len(matches) != 1:
+        return None
+    return _VariantSelection(selected_name, extruder_id, matches[0], len(variants))
+
+
+def _variant_values(
+    values: Mapping[str, Any],
+    context: _Context,
+    variant_key: str,
+    extruder_key: str,
+) -> dict[str, Any] | None:
+    """Liest parallele Werte am eigenen, eindeutig zugeordneten Profilindex."""
+    variants = _variant_entries(values.get(variant_key))
+    if variants is None:
+        return dict(values)
+    position = _variant_index(
+        values, variant_key, extruder_key, context.variant_name, context.variant_id
+    )
+    if position is None:
+        return None
+    index, count = position
+    return {
+        key: value[index] if isinstance(value, list) and len(value) == count else value
+        for key, value in values.items()
+    }
 
 
 def _float(text: str) -> float | None:
@@ -264,10 +414,9 @@ ORCA_PROCESS: Final[tuple[tuple[str, str, Reader], ...]] = (
 #: Konsolenlauf je Programm mit vollständiger Maschine und Filament des
 #: Herstellers und leerem Prozess, abgelesen im Konfigurationsblock des
 #: G-Codes (27.09.2026; ElegooSlicer 1.5.3.4, OrcaSlicer 2.4.2, Bambu Studio
-#: 02.08.02.61, Creality Print 7.2). Gefehlt haben in den Ketten der zwölf
-#: zugeordneten Drucker nur diese vier; die übrigen Vorgaben stehen in jeder.
-#: Bemerkenswert: ``wall_generator`` ist überall ``arachne`` — wer ``classic``
-#: fährt, setzt es in seinem Profil.
+#: 02.08.02.61, Creality Print 7.2). In den Ketten der zwölf zugeordneten
+#: Drucker fehlen vier Vorgaben; OrcaSlicer braucht zusätzlich die am
+#: Kobra-2-Prozess gemessenen Rückfälle für nicht unterstützte Prozentwerte.
 PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     "elegooslicer": {
         "brim_type": "auto_brim",
@@ -277,7 +426,9 @@ PROGRAM_DEFAULTS: Final[Mapping[str, Mapping[str, str]]] = {
     },
     "orcaslicer": {
         "brim_type": "auto_brim",
+        "initial_layer_speed": "30",
         "precise_outer_wall": "1",
+        "support_object_xy_distance": "0.35",
         "wall_generator": "arachne",
         "wall_sequence": "inner wall/outer wall",
     },
@@ -446,7 +597,7 @@ def _read_process(
             foreign[path] = value.raw
         elif value is not None:
             read[path] = value
-    first = _first_layer_speed(values, context)
+    first = _first_layer_speed(values, context, defaults)
     if isinstance(first, Foreign):
         foreign["speed.first_layer"] = first.raw
     elif first is not None:
@@ -465,7 +616,7 @@ def _read_process(
         foreign["adhesion.kind"] = kind.raw
     elif kind is not None:
         read["adhesion.kind"] = kind
-    gap = _support_gap(values, read, context)
+    gap = _support_gap(values, read, context, defaults)
     if gap is not None:
         read["support.xy_gap"] = gap
     density = _support_density(values, read, context)
@@ -474,7 +625,9 @@ def _read_process(
     return read, foreign
 
 
-def _first_layer_speed(values: Mapping[str, Any], context: _Context) -> object:
+def _first_layer_speed(
+    values: Mapping[str, Any], context: _Context, defaults: Mapping[str, str]
+) -> object:
     """Das Tempo der ersten Schicht, wie sie gedruckt wird: das schnellere aus
     Wänden (``initial_layer_speed``) und Füllung (``initial_layer_infill_speed``).
 
@@ -483,12 +636,34 @@ def _first_layer_speed(values: Mapping[str, Any], context: _Context) -> object:
     läuft — und wer dann 50 einstellt, änderte nichts, weil der Wert schon
     dasteht. Ist keiner der beiden eine Zahl, bleibt der Wert fremd
     (:class:`Foreign`) wie jeder andere, der sich nicht übersetzen lässt.
+    OrcaSlicer 2.4.2 verwirft beim Anycubic-Kobra-2-Profil den Prozentwert der
+    Wände und fährt 30 mm/s; beim Füllungsschlüssel verwendet es den Zahlenteil
+    als mm/s. Beide gemessenen Fälle werden hier getrennt abgebildet.
     """
-    found = [
-        _positive(text, context)
-        for key in ("initial_layer_speed", "initial_layer_infill_speed")
-        if (text := _text(values.get(key))) is not None
-    ]
+    wall_text = _text(values.get("initial_layer_speed"))
+    wall = _positive(wall_text, context) if wall_text is not None else None
+    wall_default = defaults.get("initial_layer_speed")
+    if (
+        isinstance(wall, Foreign)
+        and wall_text is not None
+        and wall_text.endswith("%")
+        and wall_default is not None
+    ):
+        # OrcaSlicer 2.4.2 verwirft diesen Prozentwert und fährt seinen
+        # Vorgabewert. Andere nicht lesbare Angaben bleiben fremd.
+        wall = _positive(wall_default, context)
+    elif wall is None and wall_default is not None:
+        wall = _positive(wall_default, context)
+
+    infill_text = _text(values.get("initial_layer_infill_speed"))
+    infill = _positive(infill_text, context) if infill_text is not None else None
+    if isinstance(infill, Foreign) and infill_text is not None and infill_text.endswith("%"):
+        # OrcaSlicer liest hier den Zahlenteil als mm/s, obwohl die
+        # Prozentangabe dieselbe Schreibweise wie beim Wandtempo hat.
+        number = _float(infill_text[:-1].strip())
+        infill = number if number is not None and number > 0.0 else infill
+
+    found = [value for value in (wall, infill) if value is not None]
     speeds = [value for value in found if isinstance(value, float)]
     if speeds:
         return max(speeds)
@@ -567,14 +742,22 @@ def _adhesion(values: Mapping[str, Any], defaults: Mapping[str, str]) -> object:
 
 
 def _support_gap(
-    values: Mapping[str, Any], read: Mapping[str, object], context: _Context
+    values: Mapping[str, Any],
+    read: Mapping[str, object],
+    context: _Context,
+    defaults: Mapping[str, str],
 ) -> float | None:
-    """Der seitliche Abstand in Millimetern; Anycubic und Sovol nennen ihn in
-    Prozent der Bahnbreite."""
+    """Der seitliche Abstand in Millimetern; Orca-Ableger wie Elegoo und Sovol
+    nennen ihn in Prozent der Bahnbreite. OrcaSlicer 2.4.2 verwirft den
+    Anycubic-Prozentwert und setzt seinen Vorgabewert ein."""
     text = _text(values.get("support_object_xy_distance"))
     if text is None:
         return None
     if text.endswith("%"):
+        if "support_object_xy_distance" in defaults:
+            # OrcaSlicer 2.4.2 verwirft die Anycubic-Angabe „60%“ und setzt
+            # 0,35 mm ein; sie ist dort kein Anteil der Bahnbreite.
+            return _float(defaults["support_object_xy_distance"])
         share = _float(text[:-1].strip())
         width = read.get("layers.line_width")
         base = float(width) if isinstance(width, int | float) else context.nozzle
@@ -599,7 +782,10 @@ def _support_density(
 
 
 def _read_filament(
-    filament: Mapping[str, Any], machine: Mapping[str, Any], plate: str, source: Path
+    filament: Mapping[str, Any],
+    machine: Mapping[str, Any],
+    plate: str,
+    source: Path,
 ) -> tuple[dict[str, object], bool]:
     """Die Filamentwerte in Solidons Pfaden — samt Rückzug der Maschine, wo das
     Filament ``nil`` sagt, und der Betttemperatur der gewählten Platte."""
@@ -1447,12 +1633,34 @@ def base_settings(
         or default_plate(machine, model)
         or ("" if offers_plates(machine, model) else SINGLE_PLATE)
     )
-    context = _Context(nozzle=profile.printer.nozzle_diameter)
+    variant = _variant_selection(process, machine)
+    if variant is None:
+        return _table_foundation(profile, fallback, unreadable=setup.base_process)
+    context = _Context(
+        nozzle=profile.printer.nozzle_diameter,
+        variant_index=variant.index,
+        variant_count=variant.count,
+        variant_name=variant.name,
+        variant_id=variant.extruder_id,
+    )
+    process_values = _variant_values(
+        process, context, "print_extruder_variant", "print_extruder_id"
+    )
+    machine_values = _variant_values(
+        machine, context, "printer_extruder_variant", "printer_extruder_id"
+    )
+    filament_values = _variant_values(
+        filament, context, "filament_extruder_variant", "filament_extruder_id"
+    )
+    if process_values is None or machine_values is None or filament_values is None:
+        return _table_foundation(profile, fallback, unreadable=setup.base_process)
     defaults = PROGRAM_DEFAULTS.get(program(setup), {})
-    read, foreign = _read_process(process, context, defaults)
+    read, foreign = _read_process(process_values, context, defaults)
     refuses = False
     if filament_file is not None:
-        filament_read, refuses = _read_filament(filament, machine, plate, filament_file)
+        filament_read, refuses = _read_filament(
+            filament_values, machine_values, plate, filament_file
+        )
         read.update(filament_read)
     staged = (
         _stage_values(profile, quality) if _runs_the_standard_process(process_file, machine) else {}
@@ -1482,7 +1690,11 @@ def base_settings(
         filament=setup.base_filament,
         plate=plate,
         plate_refuses_filament=refuses,
-        plates=plate_temperatures(filament),
+        plates=plate_temperatures(filament_values),
+        variant_index=variant.index,
+        variant_count=variant.count,
+        variant_name=variant.name,
+        variant_id=variant.extruder_id,
     )
 
 
