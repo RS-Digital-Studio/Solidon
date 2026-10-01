@@ -437,7 +437,8 @@ class ComfySetupDialog(QDialog):
                 result = self._probe_results.get_nowait()
             except Empty:
                 if self._probe_requested:
-                    self._probe_timer.start(FOLDER_PROBE_RETRY_MS)
+                    if not self._probe_timer.isActive():
+                        self._probe_timer.start(FOLDER_PROBE_RETRY_MS)
                 elif not self._probe_running_generations:
                     self._probe_poll.stop()
                 return

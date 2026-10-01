@@ -995,6 +995,76 @@ def test_the_setup_dialog_says_where_to_point_it(
         dialog.deleteLater()
 
 
+def test_comfy_folder_poll_does_not_replace_the_debounce_delay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Neue Eingaben entprellen; der Antwortpoll ersetzt den Termin nicht durch Retry."""
+    from queue import Queue
+    from types import SimpleNamespace
+
+    from app.ui import comfy_dialog
+
+    class ProbeTimer:
+        def __init__(self) -> None:
+            self.active = False
+            self.delays: list[int] = []
+            self.stop_count = 0
+
+        def isActive(self) -> bool:  # noqa: N802 — Qt-API
+            return self.active
+
+        def start(self, delay: int = 0) -> None:
+            self.delays.append(delay)
+            self.active = True
+
+        def stop(self) -> None:
+            self.stop_count += 1
+            self.active = False
+
+    class PollTimer:
+        def stop(self) -> None:
+            raise AssertionError("Eine laufende Prüfung muss weiter abgeholt werden.")
+
+    start_timer = ProbeTimer()
+    slow_timer = ProbeTimer()
+    dialog = SimpleNamespace(
+        _worker=None,
+        _probe_target="alter Pfad",
+        _probe_pending=False,
+        _probe_requested=False,
+        _probe_succeeded=True,
+        _probe_generation=0,
+        _probe_timed_out_generation=None,
+        _probe_running_generations={0},
+        _probe_results=Queue(),
+        _probe_timer=start_timer,
+        _probe_slow_timer=slow_timer,
+        _probe_poll=PollTimer(),
+        _weights_present=True,
+        _image_model_present=True,
+        progress=SimpleNamespace(setVisible=lambda _visible: None),
+        state=object(),
+        _setup_is_running=lambda: False,
+        _remember_model_choices=lambda: None,
+        _set_start_enabled=lambda _enabled: None,
+        _set_model_options=lambda _weights, _image: None,
+    )
+    monkeypatch.setattr(comfy_dialog, "set_role", lambda *_args: None)
+
+    comfy_dialog.ComfySetupDialog._queue_folder_probe(dialog, "neuer Pfad")
+    comfy_dialog.ComfySetupDialog._collect_folder_probe(dialog)
+    comfy_dialog.ComfySetupDialog._queue_folder_probe(dialog, "jüngster Pfad")
+    comfy_dialog.ComfySetupDialog._collect_folder_probe(dialog)
+
+    assert start_timer.delays == [
+        comfy_dialog.FOLDER_PROBE_DELAY_MS,
+        comfy_dialog.FOLDER_PROBE_DELAY_MS,
+    ]
+    assert start_timer.stop_count == 2
+    assert dialog._probe_target == "jüngster Pfad"
+    assert dialog._probe_requested
+
+
 def test_slow_and_outdated_comfy_folder_probes_do_not_freeze_or_change_the_dialog(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
