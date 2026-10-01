@@ -1092,6 +1092,9 @@ def test_french_names_the_escape_key_as_its_keyboard_does() -> None:
     (``.claude/rules/uebersetzung.md``, Tastennamen).
     """
     catalog = read_catalog("fr")
+    escape_keys = [key for key in catalog if re.search(r"\bEsc(?:ape)?\b", key)]
+    assert escape_keys, "fr: keine Quelltexte zur Escape-Taste — sonst prüft dieser Test nichts"
+
     found = sorted(key for key, value in catalog.items() if re.search(r"\bEsc\b", value))
     unexpected = [key for key in found if not key.startswith(FRENCH_ESC_ON_MANUAL_PAGES)]
     assert not unexpected, "fr sagt „Esc“ statt „Échap“:\n" + "\n".join(unexpected)
@@ -1291,10 +1294,12 @@ def test_italian_says_tu_outside_the_manual() -> None:
     """
     manual_only = _manual_only()
     catalog = read_catalog("it")
+    reviewed = {key: value for key, value in catalog.items() if key not in manual_only}
+    assert reviewed, "it: keine Einträge außerhalb des Handbuchs — sonst prüft dieser Test nichts"
+
     voi = [
         f"{key[:50]!r}: {why!r}"
-        for key, value in catalog.items()
-        if key not in manual_only
+        for key, value in reviewed.items()
         for why in [_italian_formal(key, value)]
         if why
     ]
@@ -1310,9 +1315,11 @@ def test_no_entry_mixes_two_apostrophes(language: str) -> None:
     ein anderer.
     """
     manual_only = _manual_only()
-    mixed = [
-        key[:60]
-        for key, value in read_catalog(language).items()
-        if key not in manual_only and "'" in value and "’" in value
-    ]
+    catalog = read_catalog(language)
+    reviewed = {key: value for key, value in catalog.items() if key not in manual_only}
+    assert reviewed, (
+        f"{language}: keine Einträge außerhalb des Handbuchs — sonst prüft dieser Test nichts"
+    )
+
+    mixed = [key[:60] for key, value in reviewed.items() if "'" in value and "’" in value]
     assert not mixed, f"{language}: beide Apostrophe in einem Text:\n" + "\n".join(mixed)

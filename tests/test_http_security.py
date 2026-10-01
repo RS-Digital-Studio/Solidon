@@ -715,17 +715,23 @@ def test_the_read_timeout_caps_a_single_read_below_the_total_deadline() -> None:
     assert body.timeouts and all(seconds == pytest.approx(60.0) for seconds in body.timeouts)
 
 
-def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block() -> None:
+@pytest.mark.parametrize("delay_writer_start", [False, True])
+def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block(
+    monkeypatch: pytest.MonkeyPatch, delay_writer_start: bool
+) -> None:
     """Gesamtreview 05.09.2026, CORE-06: ``HTTPResponse.read(n)`` füllt seinen
     Block aus vielen Socket-Lesezugriffen, und der Socket-Timeout beginnt bei
     jedem neu. Ein Gegenüber, das alle 10 ms ein Byte schickt, hielt eine
     Gesamtfrist von 150 ms so bis zum letzten angekündigten Byte offen. Ein
     prozesslokales Socketpaar, kein Netz.
 
-    Gemessen wird, ob der Leser **vor der Frist überhaupt etwas liefert**: Mit
-    einem Lesezugriff je Runde kommen die ersten Bytes als Stücke an, bevor die
-    Frist reißt (gemessen 4 Stücke in 82 ms); der gefüllte Block dagegen
-    blockiert bis zum letzten Byte und liefert bis dahin nichts (0 in 410 ms).
+    Ein Byte liegt bereit; die übrigen 79 kommen im Abstand von 10 ms. Der
+    Schreiber wartet auf ein Tor, damit seine Einrichtung vor der Lesefrist
+    abgeschlossen ist. Die Gegenprobe verzögert ``Thread.start`` absichtlich
+    um 250 ms. Diese Testvorbereitung darf nicht als verstrichene Netzwerkzeit
+    gelten. Gemessen wird, ob der Leser **vor der Frist etwas liefert**: Ein
+    einzelner Lesezugriff gibt bereits gelesene Stücke zurück, der gefüllte
+    Block dagegen wartet auf den ganzen angekündigten Körper.
     Der Sender taugt nicht als Maß — auf Windows nimmt der Kern Sendungen an
     ein geschlossenes Gegenüber still an —, und auch nicht, was der Abbruch
     verschluckt: Das zuletzt gelesene Stück wird in beiden Fassungen nicht mehr
@@ -736,12 +742,16 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block()
     from app.core.http import iter_limited
 
     left, right = socket.socketpair()
-    total = 20
+    total = 80
+    release_writer = threading.Event()
+    writer_ready = threading.Event()
 
     def trickle() -> None:
         try:
-            right.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\n")
-            for _index in range(total):
+            writer_ready.set()
+            if not release_writer.wait(timeout=5.0):
+                return
+            for _index in range(total - 1):
                 time.sleep(0.01)
                 right.sendall(b"x")
         except OSError:
@@ -750,17 +760,39 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block()
             right.close()
 
     writer = threading.Thread(target=trickle, daemon=True)
+    right.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 80\r\n\r\nx")
+    start_requested = time.monotonic()
+    if delay_writer_start:
+        original_start = threading.Thread.start
+
+        def delayed_start(thread: threading.Thread) -> None:
+            original_start(thread)
+            if thread is writer:
+                time.sleep(0.25)
+
+        monkeypatch.setattr(threading.Thread, "start", delayed_start)
     writer.start()
+    start_delay = time.monotonic() - start_requested
+    if delay_writer_start:
+        assert start_delay >= 0.25, "die Gegenprobe muss die Thread-Einrichtung verschieben"
+    assert writer_ready.wait(timeout=1.0), "der Schreiber muss vor der Lesefrist bereit sein"
+
     response = http.client.HTTPResponse(left, method="GET")
     response.begin()
+    deadline = deadline_after(0.4)
     received = bytearray()
     try:
+        release_writer.set()
         with pytest.raises(ResponseDeadlineError):
-            for chunk in iter_limited(response, limit=100, deadline=deadline_after(0.15)):
+            for chunk in iter_limited(response, limit=100, deadline=deadline):
                 received.extend(chunk)
     finally:
+        release_writer.set()
+        response.close()
         left.close()
-        writer.join(timeout=5.0)
+        right.close()
+        if writer.ident is not None:
+            writer.join(timeout=5.0)
 
     assert received, "vor der Frist kam nichts an — der Leser wartete auf den ganzen Block"
     assert len(received) < total, "und die Frist galt, nicht der angekündigte Block"

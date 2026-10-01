@@ -8874,15 +8874,31 @@ def test_the_finding_ring_stands_in_front_of_the_material_at_its_place(
         viewport.deleteLater()
 
 
-def test_the_finding_mark_never_wears_the_colour_of_the_selection() -> None:
-    """*Stelle zeigen* wählt den Körper — die Marke darauf darf nicht dessen Farbe tragen.
+def test_the_finding_ring_never_uses_the_selection_colour() -> None:
+    """Die gezeichnete Befundmarke bleibt vom Auswahlton unterscheidbar."""
+    from app.ui.viewport import SELECTED_COLOUR, Viewport
 
-    Ring und Satz standen in der Auswahlfarbe auf einem Körper in der
-    Auswahlfarbe (Handbuchbild *Ein Modell reparieren*, 3). Ohne Fenster.
-    """
-    from app.ui.viewport import FINDING_COLOUR, FINDING_MARK_MS, FINDING_OUTLINE_MS, SELECTED_COLOUR
+    renderer = RecordingRenderer()
+    viewport = SimpleNamespace(
+        renderer=renderer,
+        _finding_mark=((0.0, 0.0, 0.0), "", ""),
+        _finding_outline=(),
+        _finding_actors=[],
+        _remove_finding_actors=lambda: None,
+        view_point_of=lambda point, _object_id: point,
+    )
+    Viewport._draw_finding_mark(viewport)
 
-    assert FINDING_COLOUR.lower() != SELECTED_COLOUR.lower()
+    ring = renderer.item_of("finding_ring")
+    assert ring.colour().lower() != SELECTED_COLOUR.lower(), (
+        "der Befundring verschwindet farblich auf dem ausgewählten Körper"
+    )
+
+
+def test_a_finding_outline_is_shown_longer_than_a_ring_only_mark() -> None:
+    """Eine umrandete Fläche bleibt länger sichtbar als eine Ortsmarke."""
+    from app.ui.viewport import FINDING_MARK_MS, FINDING_OUTLINE_MS
+
     assert FINDING_OUTLINE_MS > FINDING_MARK_MS, "eine Fläche will länger angesehen werden"
 
 
