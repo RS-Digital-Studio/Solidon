@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
 | 2026-10-01 | [RM-282: Profilwerte, die das Programm anders liest, als die Datei sie schreibt (01.10.2026)](#rm-282-profilwerte-die-das-programm-anders-liest-als-die-datei-sie-schreibt-01102026) |
 | 2026-09-29 | [CAD-Ausbau bis 0.5.1: der Weg von RM-188 (29.09.2026)](#cad-ausbau-bis-051-der-weg-von-rm-188-29092026) |
 | 2026-09-29 | [Handbuch bis 0.5.1: der Weg von RM-283 (29.09.2026)](#handbuch-bis-051-der-weg-von-rm-283-29092026) |
@@ -34086,3 +34087,24 @@ Bambu Studio speichert Tempo-, Maschinen- und Filamentwerte je Düsenvariante al
 **Konsolenproben:** OrcaSlicer 2.4.2 mit `0.20mm Standard @Anycubic Kobra2` erzeugte `initial_layer_speed = 30` und `support_object_xy_distance = 0.35`; G-Code-SHA-256 `1ADA06CE89B8AD1FF701EFEBDA866EA91FFBAF318E5C151CDF541A3740D65D73`. Bambu Studio 02.08.02.61 mit P1S, 0,4-mm-Düse und gebundener `Bambu PLA Basic`-Spule lief mit `return_code = 0`, leerer Warnung und ohne `slicer.setting_ignored`. Der G-Code führt `High Flow` in Prozess, Maschine und Filament, die angenommene Innenwand mit 350 mm/s, Außenwand mit 210 mm/s sowie Flussverhältnis 0,985, Maximalfluss 29 mm³/s und Rückzug 0,4 mm; G-Code-SHA-256 `3A9DEE8598E73419D4F220E8A8C3D3B1EB40418D6969E5DB2D070AD40A82FC98`.
 
 **Gezielte Verifikation:** `tests/test_manufacturer.py tests/test_slicer_profiles.py tests/test_print_settings.py -q`: 705 bestanden, 4 übersprungen, Exit 0. Ruff, Formatprüfung und `git diff --check` für die Änderung waren grün. Das unabhängige Schlussreview fand keine weiteren bestätigten Befunde; es führte den 3MF-Regressionstest mit 1 bestandenem Fall aus. Fenster- und Leistungstests bleiben Release-Abnahmen. Das gemeinsame Entwicklungstor für den stabilen Gesamtstand steht vor dem Commit noch aus.
+
+## RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)
+
+<a id="rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026"></a>
+
+Die gemeinsamen Testhelfer ersetzen die privaten Querimporte zwischen Testdateien. Die
+Inline-Wächter des exakten Kerns verwenden `tests.helpers.exact_kernel()`: ein nicht
+installiertes OpenCASCADE überspringt den betreffenden Test, ein Importfehler im eigenen
+Kernelmodul bleibt dagegen sichtbar. Die Zwischen-Allowlist für private Importe ist entfernt;
+der AST-Wächter verbietet sie vollständig. `cube`, `rectangle`, `blind_cylinder`, `bore_seed`,
+`SOURCE` und die Qt-Wartehilfe liegen an den gemeinsamen Stellen. Auch der doppelte
+Viewport-Szenenbauer nutzt die gemeinsame `ui_helpers`-Fassung; seine zehn Aufrufe bleiben
+über den bisherigen lokalen Namen gebunden.
+
+**Nachweis:** Der RM-315-Commit `8cb4eae960abcc596117c5c0412965be06caaf9e` liegt auf
+`main` und `origin/main`. Das vollständige Entwicklungstor des exakt zusammengesetzten
+Prüfstands bestand **18 732 Tests**, übersprang **62**; Ruff, Formatprüfung und mypy endeten
+jeweils mit Exit 0. Das unabhängige Review wurde nach Beseitigung der letzten doppelten
+Testhilfe fortgesetzt. Der AST-Wächter bestand; die Sammlung der betroffenen
+Viewport-Entscheidungstests ergab **306 Tests**. Fenster-, Render- und Leistungsprüfungen
+bleiben der Release-Abnahme vorbehalten.
