@@ -26,6 +26,7 @@ from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene.cache import ResultCache
 from app.core.scene.cancel import CancelSignal, NeverCancelled
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate
@@ -2086,6 +2087,181 @@ def test_auto_split_numbers_three_or_more_pieces_and_names_what_each_carries(
         names.append(source_text(entry.name))
         assert source_text(entry.name) == f"Leiste {number} von {count} · {notes[carries]}"
     assert all(" A" not in name and " B" not in name for name in names), names
+
+
+@pytest.mark.parametrize("suppress", [False, True], ids=["delete", "suppress"])
+def test_auto_split_names_follow_active_pieces_after_last_cut_change(
+    profile: Profile, suppress: bool
+) -> None:
+    """Der Rest eines Auto-Split-Bündels zählt nach Löschen und Ausschalten neu.
+
+    Derselbe Cache bleibt absichtlich über alle Auswertungen erhalten: Ein
+    Drei-Stücke-Ergebnis darf die neue Zwei-Stücke-Zählung nicht überdecken.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 600.0, "depth": 60.0, "height": 40.0, "name": "Leiste"},
+            )
+        ],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(600.0, 60.0, 40.0)))
+    applied = apply_split(project.document, block, "obj_1", profile)
+    split_ops = [entry for entry in project.document.ops if entry.op == "split_pinned"]
+    assert len(split_ops) == 2
+    last = split_ops[-1]
+    saved_params = {entry.id: dict(entry.params) for entry in project.document.ops}
+    saved_format_version = project.document.format_version
+    cache = ResultCache()
+
+    def evaluated_bases() -> set[str]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+        assert result.complete
+        return {
+            source_text(entry.name).split(" · ", maxsplit=1)[0]
+            for entry in result.scene.objects.values()
+        }
+
+    assert len(applied.object_ids) == 3
+    assert evaluated_bases() == {"Leiste 1 von 3", "Leiste 2 von 3", "Leiste 3 von 3"}
+
+    if suppress:
+        history.commit(history.plan_suppress([last.id]))
+    else:
+        history.remove_operations([last.id])
+
+    assert evaluated_bases() == {"Leiste A", "Leiste B"}
+    assert project.document.format_version == saved_format_version
+    assert all(dict(entry.params) == saved_params[entry.id] for entry in project.document.ops)
+
+    if not suppress:
+        history.apply(
+            "Anordnen",
+            [OperationDraft(op="arrange_bed", inputs=split_ops[0].outputs)],
+        )
+        assert evaluated_bases() == {"Leiste A", "Leiste B"}
+        history.undo()
+
+    history.undo()
+    assert evaluated_bases() == {"Leiste 1 von 3", "Leiste 2 von 3", "Leiste 3 von 3"}
+
+    history.redo()
+    assert evaluated_bases() == {"Leiste A", "Leiste B"}
+    assert all(dict(entry.params) == saved_params[entry.id] for entry in project.document.ops)
+
+    if suppress:
+        history.commit(history.plan_reactivate([last.id]))
+        assert evaluated_bases() == {"Leiste 1 von 3", "Leiste 2 von 3", "Leiste 3 von 3"}
+    assert project.document.format_version == saved_format_version
+
+
+@pytest.mark.parametrize("revision", ["move", "retry"], ids=["Verschieben", "Neu-fassen"])
+def test_auto_split_names_follow_the_bundle_after_history_clones(
+    profile: Profile, revision: str
+) -> None:
+    """Verschobene und beim Reparieren neu gefasste Schnitte bleiben im Bündel."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 600.0, "depth": 60.0, "height": 40.0, "name": "Leiste"},
+            )
+        ],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(600.0, 60.0, 40.0)))
+    applied = apply_split(project.document, block, "obj_1", profile)
+    split_ops = [entry for entry in project.document.ops if entry.op == "split_pinned"]
+    assert len(split_ops) == 2
+
+    history.apply(
+        "Unabhängig umbenennen",
+        [
+            OperationDraft(
+                op="rename_object",
+                inputs=(applied.object_ids[0],),
+                params={"name": "Randstück"},
+            )
+        ],
+    )
+    if revision == "move":
+        history.commit(history.plan_move([split_ops[-1].id], before=None))
+    else:
+        history.repair_and_retry(split_ops[0].id)
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    names = {
+        source_text(entry.name).split(" · ", maxsplit=1)[0]
+        for object_id, entry in result.scene.objects.items()
+        if object_id in applied.object_ids
+    }
+    assert names == {"Randstück", "Leiste 2 von 3", "Leiste 3 von 3"}
+
+
+def test_auto_split_suffix_clones_do_not_form_a_new_smaller_run(profile: Profile) -> None:
+    """Zwei verschobene Schnitte bleiben Teil des Vier-Stücke-Laufs."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 900.0, "depth": 60.0, "height": 40.0, "name": "Leiste"},
+            ),
+            OperationDraft(
+                op="create_box",
+                params={
+                    "width": 20.0,
+                    "depth": 20.0,
+                    "height": 20.0,
+                    "y": 80.0,
+                    "name": "Nebenmodell",
+                },
+            ),
+        ],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(900.0, 60.0, 40.0)))
+    applied = apply_split(project.document, block, "obj_1", profile)
+    split_ops = [entry for entry in project.document.ops if entry.op == "split_pinned"]
+    assert len(applied.object_ids) == 4
+    assert len(split_ops) == 3
+
+    history.apply(
+        "Unabhängig umbenennen",
+        [
+            OperationDraft(
+                op="rename_object",
+                inputs=("obj_2",),
+                params={"name": "Randstück"},
+            )
+        ],
+    )
+    history.commit(history.plan_move([entry.id for entry in split_ops[-2:]], before=None))
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    assert source_text(result.scene.objects["obj_2"].name) == "Randstück"
+    names = {
+        source_text(entry.name).split(" · ", maxsplit=1)[0]
+        for object_id, entry in result.scene.objects.items()
+        if object_id in applied.object_ids
+    }
+    assert names == {
+        "Leiste 1 von 4",
+        "Leiste 2 von 4",
+        "Leiste 3 von 4",
+        "Leiste 4 von 4",
+    }
 
 
 def test_one_undo_restores_a_complete_multi_cut_auto_split(profile: Profile) -> None:

@@ -150,6 +150,7 @@ from app.core.types import (
     SceneObject,
     SolverInfo,
     SourceAccess,
+    Transaction,
     Transform,
     kind_of,
 )
@@ -386,6 +387,93 @@ def evaluate(
     return dataclasses.replace(result, parameter_usage=usage)
 
 
+def _auto_split_name_parameters(
+    operations: Sequence[Operation], transactions: Sequence[Transaction]
+) -> dict[OpId, dict[str, int]]:
+    """Zählt Endstücke aktiver Schnitte eines ursprünglichen Auto-Split-Bündels.
+
+    Stabile Ausgangs-IDs ordnen neu gefasste Schritte dem ursprünglichen
+    Transaktionsverbund zu; Ein- und Ausgänge bilden die Stückfolge. So bleibt
+    die Nummerierung nach Löschen, Ausschalten oder Neuplanen eindeutig. Die
+    Rückgabe überlagert nur Laufzeitparameter; gespeicherte Werte bleiben stehen.
+    """
+    split_ops = frozenset({"split_pinned", "split_line"})
+    by_id = {entry.id: entry for entry in operations}
+    by_outputs = {
+        entry.outputs: entry for entry in operations if entry.outputs and entry.op in split_ops
+    }
+    versions_by_id: dict[OpId, Operation] = {}
+    for transaction in transactions:
+        if transaction.changes is None:
+            continue
+        for state in (transaction.changes.before, transaction.changes.after):
+            for op_id, version in (state.edited_ops or {}).items():
+                if version is not None:
+                    versions_by_id[op_id] = version
+    versions_by_id.update(by_id)
+    normalized: dict[OpId, dict[str, int]] = {}
+
+    for transaction in transactions:
+        if transaction.changes is not None and any(
+            state.edited_ops is not None
+            for state in (transaction.changes.before, transaction.changes.after)
+        ):
+            # Verlaufsrevisionen gruppieren Klone nur für Undo/Redo. Ihre
+            # Mitgliedschaft kommt aus der ursprünglichen Transaktion.
+            continue
+        original_members = [
+            versions_by_id[op_id]
+            for op_id in transaction.ops
+            if op_id in versions_by_id and versions_by_id[op_id].op in split_ops
+        ]
+        if len(original_members) < 2 or not any(
+            type(entry.params.get("piece_count")) is int and entry.params["piece_count"] >= 3
+            for entry in original_members
+        ):
+            continue
+        # Verlaufsumbauten klonen Operationskennungen, lassen aber die
+        # Objektkennungen stehen. Die alten Fassungen aus ``edited_ops``
+        # ordnen solche Klone wieder dem ursprünglichen Split-Bündel zu.
+        members = [
+            current
+            for original in original_members
+            if (current := by_outputs.get(original.outputs)) is not None and current.op in split_ops
+        ]
+        if not members:
+            continue
+
+        first = members[0]
+        if len(first.inputs) != 1:
+            continue
+        pieces = [first.inputs[0]]
+        active: list[Operation] = []
+        valid_chain = True
+        for entry in members:
+            if entry.suppressed is not None:
+                continue
+            if len(entry.inputs) != 1 or len(entry.outputs) != 2:
+                valid_chain = False
+                break
+            try:
+                index = pieces.index(entry.inputs[0])
+            except ValueError:
+                valid_chain = False
+                break
+            pieces[index : index + 1] = entry.outputs
+            active.append(entry)
+
+        if not valid_chain or not active or len(pieces) < 2:
+            continue
+        final_numbers = {object_id: number for number, object_id in enumerate(pieces, start=1)}
+        for entry in active:
+            normalized[entry.id] = {
+                "piece_count": len(pieces),
+                "number_a": final_numbers.get(entry.outputs[0], 0),
+                "number_b": final_numbers.get(entry.outputs[1], 0),
+            }
+    return normalized
+
+
 def _evaluate(
     document: Document,
     profile: Profile,
@@ -406,6 +494,7 @@ def _evaluate(
     source = registry or REGISTRY
     token = cancelled or NeverCancelled()
     operations = sorted(document.ops, key=lambda entry: entry.id)
+    auto_split_names = _auto_split_name_parameters(operations, document.transactions)
     total = len(operations) or 1
 
     try:
@@ -602,7 +691,12 @@ def _evaluate(
             break
 
         try:
-            resolved = expressions.resolve_params(operation.params, values)
+            resolved = dict(expressions.resolve_params(operation.params, values))
+            # Nach Löschen oder Ausschalten eines Schnitts zählt derselbe
+            # Auto-Split-Verbund nur seine noch aktiven Endstücke. Die
+            # gespeicherten Parameter bleiben unverändert; die Laufzeitwerte
+            # müssen aber vor Validierung und Cache-Schlüssel angepasst sein.
+            resolved.update(auto_split_names.get(operation.id, {}))
             # **Zwei Fassungen derselben Parameter, und der Unterschied ist der
             # ganze Punkt.** ``resolved`` behält die Message-ID als schlichte
             # Zeichenkette und geht so in den Op-Hash (§4.1) — dieselbe Datei
