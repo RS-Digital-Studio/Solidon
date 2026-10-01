@@ -34,30 +34,12 @@ from app.core.perceive.features import _fitted, _one_body, detect
 from app.core.perceive.slots import find_slots
 from app.core.registry import REGISTRY
 from app.core.types import Feature, Finding, OpContext, Profile, Quality, Scene, SceneObject
+from tests.helpers import exact_kernel, inside
 
 
 def plate() -> MeshData:
     """60 x 40 x 10 mm, wasserdicht."""
     return MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
-
-
-def _inside(mesh: MeshData, points: list[tuple[float, float, float]]) -> np.ndarray:
-    """Innen/Außen aus der Summe der orientierten Raumwinkel — ohne ``rtree``."""
-    inside = []
-    for point in points:
-        directions = np.asarray(mesh.raw.triangles) - np.asarray(point)
-        directions /= np.linalg.norm(directions, axis=2)[:, :, None]
-        first, second, third = directions.transpose(1, 0, 2)
-        numerator = np.einsum("ij,ij->i", first, np.cross(second, third))
-        denominator = (
-            1.0
-            + np.einsum("ij,ij->i", first, second)
-            + np.einsum("ij,ij->i", second, third)
-            + np.einsum("ij,ij->i", third, first)
-        )
-        angle = 2.0 * np.arctan2(numerator, denominator).sum()
-        inside.append(abs(angle) > 2.0 * np.pi)
-    return np.asarray(inside)
 
 
 def slotted(profile: Profile, **values: float | str) -> MeshData:
@@ -389,8 +371,7 @@ def test_an_open_slot_on_the_exact_core_carries_native_measures_where_it_can() -
     Mündung, Weg und Länge hängen am Rand des Netzes und bleiben ``fit``;
     am reinen Netz bleibt alles ``fit``. Keine pauschale Hochstufung.
     """
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -769,7 +750,7 @@ def test_a_slot_can_be_shortened_and_narrowed_in_both_kernels(
     """Beide Maße ändern gemeinsam, auch unter die alte Mindestlänge; der Boden bleibt."""
     exact = kernel == "brep"
     if exact:
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
         from app.core.brep.features import features_of
 
@@ -859,7 +840,7 @@ def test_a_slot_pulled_back_to_its_width_is_a_round_bore_again(
     """
     exact = kernel == "brep"
     if exact:
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
         from app.core.brep.features import features_of
 
@@ -934,7 +915,7 @@ def test_both_kernels_report_the_same_when_a_slot_snaps_round_with_tolerance(
     meldete ihn (Review 24.09.2026). Die Zwillingsregel verlangt dieselbe
     Antwort auf dieselbe Frage.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -997,7 +978,7 @@ def test_a_wider_round_bore_warns_about_its_neighbour_like_resize_hole(
     ändern* sagte das, derselbe Weg über Länge = Breite = 10 nicht (Review
     24.09.2026).
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -1038,7 +1019,7 @@ def test_a_moved_round_bore_is_not_reported_as_cutting_nothing(
     Gleiches Volumen vorher und nachher hieß dort „Der Schnitt hat nichts
     abgetragen", am Netz nicht (Review 24.09.2026).
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -1532,7 +1513,7 @@ def test_a_slot_can_be_pulled_and_widened_in_one_step(
     ist 24 000 − 10 · (Breite · (20 − Breite) + π · Breite² / 4).
     """
     if kind == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
         from app.core.brep.features import features_of
         from app.core.geom.mesh import as_mesh_data
@@ -1583,8 +1564,8 @@ def test_a_slot_can_be_pulled_and_widened_in_one_step(
     mid = (float(body.bounds.minimum[2]) + float(body.bounds.maximum[2])) / 2.0
     open_points = [(10.0 - 0.3, 0.0, mid), (0.0, half - 0.2, mid), (0.0, 0.0, mid)]
     solid_points = [(0.0, half + 0.3, mid), (10.0 + 0.4, 0.0, mid)]
-    assert not _inside(body, open_points).any(), "offen in der neuen Breite"
-    assert _inside(body, solid_points).all(), "daneben Material"
+    assert not inside(body, open_points).any(), "offen in der neuen Breite"
+    assert inside(body, solid_points).all(), "daneben Material"
     expected = float(np.prod(body.bounds.size)) - 10.0 * (
         width * (20.0 - width) + math.pi * width**2 / 4.0
     )
@@ -1714,7 +1695,7 @@ def test_the_same_word_comes_from_the_exact_kernel(profile: Profile) -> None:
     (``brep.features.features_of``) und lief deshalb an der Prüfung des
     Netz-Zweigs vorbei: dieselbe Geste, dasselbe Ergebnis, kein Wort dazu.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -1810,7 +1791,7 @@ def test_the_exact_kernel_looks_for_the_one_slot_and_not_for_any(profile: Profil
     Länge und Winkel) —, und gesucht wird weiter **das eine** Langloch: das
     gedrehte an seiner Stelle, nicht irgendeines.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -2128,7 +2109,7 @@ def test_both_kernels_pull_the_same_angle_from_a_bore_drilled_from_below(profile
     der Normalen, also lag derselbe Winkel 45 an den zwei Kernen gespiegelt —
     45 Grad am Netz, 135 am exakten Körper (Fund des Reviews).
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
 
     on_the_mesh = _mesh_plate_with_a_bore(profile, (0.0, 0.0, -1.0))
     exact = _exact_plate_with_a_bore((0.0, 0.0, -1.0))
@@ -2153,7 +2134,7 @@ def test_pulling_twice_with_the_same_angle_lengthens_on_both_kernels(profile: Pr
     (gemessen 11.09.2026: ``slot_hole.crosses``, danach vier Verrundungen und
     kein Langloch mehr — Fund des Reviews).
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep.features import features_of
     from app.core.geom.prepare_ops import slot_angle_of
 
@@ -2199,7 +2180,7 @@ def test_a_tilted_bore_keeps_its_axis_when_pulled_to_a_slot(profile: Profile) ->
     gekippt (Fund des Reviews). Die *Erkennung* war gekippt geprüft, die
     *Operation* nicht. Hier steht die Achse 17,5 Grad schräg, an beiden Kernen.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
 
     tilted = (0.3, 0.0, math.sqrt(1.0 - 0.09))
     for entry in (_mesh_plate_with_a_bore(profile, tilted), _exact_plate_with_a_bore(tilted)):
@@ -2228,7 +2209,7 @@ def test_a_slot_that_cuts_the_body_in_two_says_so(profile: Profile) -> None:
     Befund war ``bore.over_the_edge`` mit seiner offenen Flanke. Beide Kerne
     kennen ihre Teilezahl; hier sagen beide dasselbe.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
 
     cube = SceneObject(
         id="obj_1",
@@ -2275,7 +2256,7 @@ def _a_cube_cut_in_two(profile: Profile, kernel: str) -> tuple[object, object, s
     Zurück kommen Projekt, Verlauf und der Name der Quader-Operation des Kerns.
     """
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import new_project
 
@@ -2496,7 +2477,7 @@ def test_a_second_body_in_the_bore_does_not_make_the_pull_a_split(
     wieder; gezählt wurde gegen den gestopften Körper mit einem Teil weniger.
     Der exakte Kern zählte schon gegen den Schritt davor.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     entry = _plate_with_a_second_body(kernel, inside=True)
     assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
 
@@ -2518,7 +2499,7 @@ def test_widening_a_slot_with_a_second_body_in_it_is_no_split(
     derselbe falsche Zerfall wie beim Zug (gemessen 30.09.2026: zwei Teile vor
     und nach dem Ändern auf Ø 7, dazu ``bore.splits_the_body``).
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     entry = _plate_with_a_second_body(kernel, inside=True, slot=True)
     assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Stift"
 
@@ -2539,7 +2520,7 @@ def test_a_pull_through_the_plate_beside_a_second_body_still_says_it_splits(
     Ein Langloch von 46 mm quer durch die 40 mm lange Platte teilt sie in zwei
     Hälften; mit dem Klotz daneben hat das Objekt danach drei Teile statt zwei.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     entry = _plate_with_a_second_body(kernel, inside=False)
     assert entry.mesh.component_count == 2, "die Vorbedingung: Platte und Klotz"
 
@@ -2559,7 +2540,7 @@ def test_the_exact_kernel_warns_at_the_edge_as_well(profile: Profile) -> None:
     ``bore.over_the_edge`` und am exakten Körper nichts (gemessen 11.09.2026,
     Fund des Reviews). Der Netz-Zwilling steht als Gegenprobe daneben.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
 
     codes: dict[str, set[str]] = {}
     for entry in (
@@ -2600,7 +2581,7 @@ def test_setting_a_slot_asks_at_both_ends_on_both_kernels(
     — ein Ende steht über, die Mitte nicht. Bei 30 bleiben es 40 mm.
     """
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         entry = SceneObject(id="obj_1", name="Platte", mesh=edit.box(90.0, 60.0, 10.0), kind="brep")
@@ -2713,7 +2694,7 @@ def test_a_slot_says_the_width_it_cut(profile: Profile) -> None:
 
 def test_pulling_an_exact_slot_again_keeps_its_width_exactly(profile: Profile) -> None:
     """Am exakten Körper ist die Zugabe kein Messrauschen, sondern genau 0,02 je Zug."""
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep.features import features_of
 
     entry = _exact_plate_with_a_bore((0.0, 0.0, 1.0))
@@ -2900,7 +2881,7 @@ def test_both_ways_to_a_slot_cut_the_same_slot(profile: Profile, kernel: str) ->
         "compensate": False,
     }
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
         from app.core.brep.features import features_of
 
@@ -3075,7 +3056,7 @@ def test_a_pulled_slot_keeps_its_direction_when_an_earlier_step_tilts_its_bore_o
     from app.core.scene.project import new_project
 
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
@@ -3144,7 +3125,7 @@ def test_bores_with_their_own_noise_all_pull_to_the_same_world_direction(
     Winkel 0 gezogen, und jedes Langloch liegt entlang X — an beiden Kernen.
     """
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         entry = SceneObject(

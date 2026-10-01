@@ -20,7 +20,7 @@ import math
 from collections.abc import Sequence
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pytest
@@ -33,7 +33,14 @@ from app.core.ingest.plan import import_plan
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, checksum, new_project
 from app.core.types import Feature, Finding, Profile, Quality, SceneObject, Source
-from tests.helpers import contains
+from tests.helpers import (
+    BOTH_ENDS,
+    cavity_under,
+    contains,
+    narrowest_hole,
+    sloped_slot_plate,
+    widened_bore,
+)
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -381,14 +388,6 @@ def _bored(kernel: str, outline: Sequence[tuple[float, float]], *, ribbed: bool)
     return _body(kernel, solid)
 
 
-def _narrowest_hole(source: SceneObject) -> Feature:
-    """Die Bohrung einer Kette — oder die Senkung, wo es keine Bohrung gibt."""
-    holes = [feature for feature in source.features.values() if feature.kind == "hole"]
-    if not holes:
-        holes = [feature for feature in source.features.values() if feature.kind == "cone"]
-    return min(holes, key=lambda feature: float(feature.params["diameter"]))
-
-
 def _warnings(findings: Sequence[Finding]) -> list[str]:
     return sorted({finding.code for finding in findings if finding.severity == "warning"})
 
@@ -479,7 +478,7 @@ def test_a_tilted_bore_takes_nothing_from_what_stands_before_its_mouths(
     seen = {}
     for kernel in ("mesh", "brep"):
         source = _bored(kernel, RIBBED[case], ribbed=True)
-        hole = _narrowest_hole(source)
+        hole = narrowest_hole(source)
         changed, findings = evaluated_operation(
             source, profile, "rotate_feature", at_feature=hole.id, axis="x", angle=30.0
         )
@@ -577,7 +576,7 @@ def test_a_tilted_bore_is_capped_where_the_flat_cut_fails(
         source,
         profile,
         "rotate_feature",
-        at_feature=_narrowest_hole(source).id,
+        at_feature=narrowest_hole(source).id,
         axis="x",
         angle=30.0,
     )
@@ -653,7 +652,7 @@ def test_a_countersunk_bore_moved_along_its_axis_says_what_it_is_there(
 
     for rise in (1.0, -1.0):
         source = _bored(kernel, SUNK, ribbed=False)
-        hole = _narrowest_hole(source)
+        hole = narrowest_hole(source)
         cone = next(feature for feature in source.features.values() if feature.kind == "cone")
         x, y, z = (float(value) for value in hole.params["centre"])
         changed, findings = evaluated_operation(
@@ -683,7 +682,7 @@ def test_a_blind_countersink_set_under_the_surface_says_its_mouth_is_covered(
     from tests.helpers import evaluated_operation
 
     source = _bored(kernel, RIBBED["gesenktes Sackloch"], ribbed=False)
-    hole = _narrowest_hole(source)
+    hole = narrowest_hole(source)
     x, y, z = (float(value) for value in hole.params["centre"])
     _deeper, findings = evaluated_operation(
         source, profile, op, at_feature=hole.id, x=x + 8.0, y=y, z=z - 1.0
@@ -712,7 +711,7 @@ def test_a_through_bore_set_along_its_axis_leaves_material_on_both_kernels(
     from tests.helpers import evaluated_operation
 
     source = _bored(kernel, RIBBED["durchgehend"], ribbed=False)
-    hole = _narrowest_hole(source)
+    hole = narrowest_hole(source)
     x, y, z = (float(value) for value in hole.params["centre"])
     changed, findings = evaluated_operation(
         source, profile, op, at_feature=hole.id, x=x + 8.0, y=y, z=z + 3.0
@@ -743,7 +742,7 @@ def test_a_countersink_tilted_past_its_flank_is_refused_with_the_largest_angle(
     from tests.helpers import evaluated_operation
 
     source = _bored(kernel, RIBBED[case], ribbed=False)
-    feature = _narrowest_hole(source)
+    feature = narrowest_hole(source)
     with pytest.raises(ValidationError) as refused:
         evaluated_operation(
             source, profile, "rotate_feature", at_feature=feature.id, axis="x", angle=45.0
@@ -923,7 +922,7 @@ def test_tilting_a_bore_writes_the_stage_its_closing_needed(
         source,
         profile,
         quality="fine",
-        at_feature=_narrowest_hole(source).id,
+        at_feature=narrowest_hole(source).id,
         axis="x",
         angle=20.0,
     )
@@ -966,7 +965,7 @@ def test_boxes_cap_a_tilted_bore_only_on_the_lossless_stages(
         source,
         profile,
         quality=quality,
-        at_feature=_narrowest_hole(source).id,
+        at_feature=narrowest_hole(source).id,
         axis="x",
         angle=30.0,
     )
@@ -988,7 +987,7 @@ def test_a_tilted_countersink_keeps_its_flank_beyond_the_mouth(profile: Profile)
     from app.core.geom import transform
 
     source = _bored("mesh", RIBBED["Senkung ohne Bohrung"], ribbed=False)
-    sink = _narrowest_hole(source)
+    sink = narrowest_hole(source)
     assert sink.kind == "cone"
     centre = tuple(float(value) for value in sink.params["centre"])
     matrix = np.asarray(transform.rotation("x", 30.0, centre), dtype=np.float64)
@@ -1036,7 +1035,7 @@ def test_a_countersink_tilted_near_a_side_says_what_the_side_shows(
             edit.box(30.0, 24.0, 12.0), list(RIBBED[case]), frame_of((0, 0, 1), (10.0, 0, 0))
         )
         source = _body(kernel, solid)
-        sink = _narrowest_hole(source)
+        sink = narrowest_hole(source)
         changed, findings = evaluated_operation(
             source, profile, "rotate_feature", at_feature=sink.id, axis="y", angle=angle
         )
@@ -1078,25 +1077,6 @@ def test_a_needle_in_the_tool_is_no_wall_of_the_through_column() -> None:
 
 # --- Bohrungen mit Erweiterung an beiden Enden (RM-245) -----------------------------
 
-#: Profile als (Radius, Höhe) um die Z-Achse in einer Platte 44 x 24 x 12: Die
-#: Bohrung Ø 6 weitet sich unten und oben — wie an den Lochplatten aus
-#: ``F:\\3D Dateien`` (Zylindersenkung hinten, Fase vorn).
-BOTH_ENDS: dict[str, list[tuple[float, float]]] = {
-    "Zylindersenkung und Fase": [(0, 0), (5, 0), (5, 6), (3, 6), (3, 11), (4, 12), (0, 12), (0, 0)],
-    "Fase beidseitig": [(0, 0), (4, 0), (3, 1), (3, 11), (4, 12), (0, 12), (0, 0)],
-    "Stufen beidseitig": [
-        (0, 0),
-        (5, 0),
-        (5, 3),
-        (3, 3),
-        (3, 9),
-        (4.5, 9),
-        (4.5, 12),
-        (0, 12),
-        (0, 0),
-    ],
-}
-
 
 #: Die gekrümmten Unterseiten der Platte, in denen die untere Mündung liegt
 #: (RM-248): gewölbt wie ein Zylinder R 40 entlang X, als Rinne R 40 von 0,5 mm
@@ -1104,58 +1084,6 @@ BOTH_ENDS: dict[str, list[tuple[float, float]]] = {
 #: Hohlkehle des Gartenschlauchhalters), und eben für y < 0, tangential in den
 #: Zylinder für y > 0 — die Mündung liegt über der Naht zweier Flächen.
 CURVED_BOTTOMS: tuple[str, ...] = ("Zylinder R 40", "Rinne R 40", "Naht Ebene-Zylinder")
-
-
-def _widened(kernel: str, outline: Sequence[tuple[float, float]], *, bottom: str = "eben") -> Any:
-    """Die Platte 44 × 24 × 12 mit einer Bohrung aus ``outline`` bei x = −8.
-
-    ``bottom`` legt die Unterseite in eine der :data:`CURVED_BOTTOMS`: Die
-    untere Mündung liegt dann in einer gekrümmten Fläche und streut entlang
-    der Achse — am Zylinder R 40 um 0,31 mm, wie die untere Schraubbohrung an
-    ``pegboard-gs-100-v2.step``.
-    """
-    from app.core.brep import edit
-    from app.core.sketch.planes import frame_of
-
-    plate = edit.box(44.0, 24.0, 12.0)
-    if bottom != "eben":
-        axis_height = -39.5 if bottom == "Rinne R 40" else 40.0
-        roll = edit.revolved_bore_tool(
-            [(0.0, -30.0), (40.0, -30.0), (40.0, 30.0), (0.0, 30.0), (0.0, -30.0)],
-            frame_of((1.0, 0.0, 0.0), (0.0, 0.0, axis_height)),
-        )
-        if bottom == "Rinne R 40":
-            plate = edit.unified(edit.boolean("difference", [plate, roll]))
-        elif bottom == "Zylinder R 40":
-            plate = edit.unified(edit.boolean("intersection", [plate, roll]))
-        else:
-            flat = edit.moved(edit.box(60.0, 12.0, 20.0), (0.0, -6.0, 0.0))
-            support = edit.unified(edit.boolean("union", [roll, flat]))
-            plate = edit.unified(edit.boolean("intersection", [plate, support]))
-    solid = edit.bore_profile(plate, list(outline), frame_of((0, 0, 1), (-8.0, 0, 0)))
-    return _body(kernel, solid)
-
-
-def _bottom_height(bottom: str, y: np.ndarray) -> np.ndarray:
-    """Die Höhe der Unterseite über z = 0 an der Stelle ``y`` (sie hängt nicht von x ab)."""
-    arc = np.sqrt(1600.0 - y * y)
-    if bottom == "Zylinder R 40":
-        return 40.0 - arc
-    if bottom == "Rinne R 40":
-        return np.maximum(arc - 39.5, 0.0)
-    if bottom == "Naht Ebene-Zylinder":
-        return np.where(y > 0.0, 40.0 - arc, 0.0)
-    return np.zeros_like(y)
-
-
-def _cavity_under(bottom: str, outline: Sequence[tuple[float, float]]) -> float:
-    """Der Hohlraum aus ``outline`` bis an die Unterseite ``bottom``: das Profil
-    abzüglich dessen, was die Unterseite unter der Zylindersenkung Ø 10 höher
-    liegt als z = 0 — über die Scheibe integriert (y = 5 sin t)."""
-    turn = np.linspace(-np.pi / 2.0, np.pi / 2.0, 20001)
-    width = 50.0 * np.cos(turn) ** 2
-    raised = np.trapezoid(width * _bottom_height(bottom, 5.0 * np.sin(turn)), turn)
-    return _profile_volume(outline) - float(raised)
 
 
 def _profile_volume(outline: Sequence[tuple[float, float]]) -> float:
@@ -1198,9 +1126,9 @@ def test_a_bore_widened_at_both_ends_is_one_chain_with_two_sides(kernel: str, ca
     """
     from app.core.perceive.relations import cavity_chain_state_at, cavity_sides
 
-    source = _widened(kernel, BOTH_ENDS[case])
+    source = widened_bore(kernel, BOTH_ENDS[case])
     mesh = as_mesh_data(source.mesh)
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     states = [
         cavity_chain_state_at(part, source.features, mesh) for part in _cavity_members(source)
     ]
@@ -1216,7 +1144,7 @@ def test_a_bore_widened_at_both_ends_is_one_chain_with_two_sides(kernel: str, ca
 
     one_sided = _bored(kernel, SUNK, ribbed=False)
     single = cavity_chain_state_at(
-        _narrowest_hole(one_sided), one_sided.features, as_mesh_data(one_sided.mesh)
+        narrowest_hole(one_sided), one_sided.features, as_mesh_data(one_sided.mesh)
     ).chain
     assert single is not None and cavity_sides(single) == (single,)
 
@@ -1240,10 +1168,10 @@ def test_a_bore_widened_at_both_ends_moves_tilts_and_copies_on_both_kernels(
     from tests.helpers import evaluated_operation
 
     outline = BOTH_ENDS[case]
-    source = _widened(kernel, outline)
+    source = widened_bore(kernel, outline)
     before = abs(float(as_mesh_data(source.mesh).volume))
     cavity = _profile_volume(outline)
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
 
@@ -1289,8 +1217,8 @@ def test_each_section_of_a_bore_widened_at_both_ends_is_removed_alone(
     """
     from tests.helpers import evaluated_operation
 
-    source = _widened(kernel, BOTH_ENDS[case])
-    bore = _narrowest_hole(source)
+    source = widened_bore(kernel, BOTH_ENDS[case])
+    bore = narrowest_hole(source)
     for section in _cavity_members(source):
         changed, findings = evaluated_operation(
             source, profile, "remove_feature", at_feature=section.id, sections="single"
@@ -1327,9 +1255,9 @@ def test_a_widened_bore_whose_mouth_lies_in_a_curved_face_is_moved_on_both_kerne
     """
     from tests.helpers import evaluated_operation
 
-    source = _widened(kernel, BOTH_ENDS["Zylindersenkung und Fase"], bottom=bottom)
+    source = widened_bore(kernel, BOTH_ENDS["Zylindersenkung und Fase"], bottom=bottom)
     before = abs(float(source.mesh.volume))
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
     moved, findings = evaluated_operation(
@@ -1387,7 +1315,7 @@ def test_a_rounded_mouth_travels_with_its_counterbore(profile: Profile, kernel: 
 
     source = _body(kernel, _rounded_mouth())
     before = abs(float(source.mesh.volume))
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     members = {feature.id for feature in _cavity_members(source)}
 
@@ -1440,14 +1368,14 @@ def test_a_bore_under_a_curved_face_is_closed_up_to_that_face(
     from tests.helpers import evaluated_operation
 
     outline = BOTH_ENDS["Zylindersenkung und Fase"]
-    source = _widened("brep", outline, bottom=bottom)
-    bore = _narrowest_hole(source)
+    source = widened_bore("brep", outline, bottom=bottom)
+    bore = narrowest_hole(source)
     closed, findings = evaluated_operation(
         source, profile, "remove_feature", at_feature=bore.id, sections="chain"
     )
     assert _warnings(findings) == [], findings
     given = float(closed.mesh.volume) - float(source.mesh.volume)
-    assert given == pytest.approx(_cavity_under(bottom, outline), abs=0.05)
+    assert given == pytest.approx(cavity_under(bottom, outline), abs=0.05)
 
 
 def test_the_exact_filling_asks_the_faces_around_the_rim_and_not_only_its_own() -> None:
@@ -1473,10 +1401,10 @@ def test_the_exact_filling_asks_the_faces_around_the_rim_and_not_only_its_own() 
     from app.core.brep import edit
     from app.core.perceive.relations import cavity_chain_state_at, cavity_surface_indices
 
-    source = _widened("brep", BOTH_ENDS["Zylindersenkung und Fase"], bottom="Rinne R 40")
+    source = widened_bore("brep", BOTH_ENDS["Zylindersenkung und Fase"], bottom="Rinne R 40")
     solid = source.mesh
     mesh = as_mesh_data(solid)
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     chain = cavity_chain_state_at(bore, source.features, mesh).chain
     assert chain is not None
     chosen = set(solid.faces_of_triangles(cavity_surface_indices(mesh, chain)))
@@ -1550,7 +1478,7 @@ def test_a_copy_over_a_side_inside_the_hull_says_so_on_both_kernels(
     from tests.helpers import evaluated_operation
 
     source = _narrow_plate(kernel)
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     _copied, findings = evaluated_operation(
         source, profile, "duplicate_feature", at_feature=bore.id, x=x, y=y + 9.5, z=z
@@ -1610,7 +1538,7 @@ def test_a_bore_in_a_thin_plate_is_no_edge(profile: Profile, kernel: str) -> Non
     from tests.helpers import evaluated_operation
 
     source = _narrow_plate(kernel, thickness=1.0)
-    bore = _narrowest_hole(source)
+    bore = narrowest_hole(source)
     x, y, z = (float(value) for value in bore.params["centre"])
     for op, params in (
         ("drill_hole", {"x": -2.0, "y": 0.0, "z": 1.0, "diameter": 6.0, "depth": 0.0, "axis": "z"}),
@@ -1676,7 +1604,7 @@ def test_a_bore_that_runs_out_of_a_step_says_so_on_both_kernels(
 
     plain = _stepped(kernel, bored=False)
     bored = _stepped(kernel, bored=True)
-    bore = _narrowest_hole(bored)
+    bore = narrowest_hole(bored)
     _x, y, z = (float(value) for value in bore.params["centre"])
     for x in (-1.0, -3.5):
         cases = (
@@ -1758,7 +1686,7 @@ def test_a_moved_bore_is_measured_where_it_stands(
     from tests.helpers import evaluated_operation
 
     source = _bored("mesh", RIBBED[case], ribbed=False)
-    hole = _narrowest_hole(source)
+    hole = narrowest_hole(source)
 
     def refused(*_args: Any, **_kwargs: Any) -> Any:
         raise AssertionError("die volle Erkennung lief")
@@ -1793,7 +1721,7 @@ def test_a_single_exact_bore_cut_is_held_like_a_chain(
     from tests.helpers import evaluated_operation
 
     source = _bored("brep", RIBBED["durchgehend"], ribbed=False)
-    hole = _narrowest_hole(source)
+    hole = narrowest_hole(source)
     seen: list[tuple[float, float]] = []
     real = prepare_ops._exact_chain_cut_holding
 
@@ -1820,49 +1748,6 @@ def test_a_single_exact_bore_cut_is_held_like_a_chain(
 
 #: Die Neigung der Unterseite in :func:`_sloped_slot_plate`, in Grad.
 _SLOPE = 4.0
-
-
-def _sloped_slot_plate(*, chamfer: bool, slotted: bool = True) -> Any:
-    """Platte 40 × 40, oben z = 6, Unterseite um :data:`_SLOPE` geneigt
-    (z = 2 + tan · y), darin ein durchgehendes Langloch Ø 6 × 20 entlang y —
-    auf Wunsch mit einer Fase von 0,75 mm an beiden Mündungen.
-
-    Nachgebaut nach der Zunge des Wedge-Lock (``Wedge-Lock (Base).stl``) und des
-    Teppichclips: Langloch Ø 9 × 15,5 mit Fasen, die Unterseite um 3,6° geneigt.
-    """
-    from app.core.brep import edit
-    from app.core.geom.transform import composed, rotation, translation
-
-    plate = edit.box(40.0, 40.0, 6.0)
-    below = edit.moved(edit.box(120.0, 120.0, 30.0), (0.0, 0.0, -30.0))
-    matrix = np.asarray(composed(translation((0.0, 0.0, 2.0)), rotation("x", _SLOPE)))
-    below = edit.transformed(
-        below, cast(Any, tuple(tuple(float(value) for value in row) for row in matrix))
-    )
-    plate = edit.boolean("difference", [plate, below])
-    if not slotted:
-        return plate
-    plate = edit.slot_bore(
-        plate,
-        position=(0.0, 0.0, 3.0),
-        direction=(0.0, 0.0, 1.0),
-        diameter=6.0,
-        depth=12.0,
-        length=20.0,
-        angle_deg=90.0,
-        overlap=0.0,
-    )
-    if not chamfer:
-        return plate
-    rims = [
-        entry
-        for entry in edit.edges_of(plate)
-        if not entry.upright
-        and all(
-            abs(point[0]) <= 3.01 and abs(point[1]) <= 13.01 for point in edit.edge_points(entry)
-        )
-    ]
-    return edit.chamfer(plate, 0.75, selected_edges=edit.native_edge_indices(plate, rims))
 
 
 @pytest.mark.parametrize(
@@ -1904,7 +1789,7 @@ def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
     """
     from tests.helpers import evaluated_operation
 
-    solid = _sloped_slot_plate(chamfer=chamfer)
+    solid = sloped_slot_plate(chamfer=chamfer)
     source = _body(kernel, solid)
     slot = next(feature for feature in source.features.values() if feature.kind == "slot")
     x, y, z = (float(value) for value in slot.params["centre"])
@@ -1934,7 +1819,7 @@ def test_a_slot_through_a_sloped_wall_moves_as_a_whole(
     elif way == "quer":
         expected = 0.0
     else:
-        cavity = float(_body(kernel, _sloped_slot_plate(chamfer=False, slotted=False)).mesh.volume)
+        cavity = float(_body(kernel, sloped_slot_plate(chamfer=False, slotted=False)).mesh.volume)
         expected = -(cavity - float(source.mesh.volume))
     assert change == pytest.approx(expected, abs=0.15), (kernel, change, expected)
     slots = [feature for feature in changed.features.values() if feature.kind == "slot"]
@@ -1962,7 +1847,7 @@ def test_a_widened_through_bore_is_measured_where_it_stands(
         else [(0, 4), (3, 4), (3, 12), (0, 12), (0, 4)]
     )
     source = _bored("mesh", outline, ribbed=False)
-    hole = _narrowest_hole(source)
+    hole = narrowest_hole(source)
     ran: list[int] = []
     real = prepare_ops._detect_resized_bores
 

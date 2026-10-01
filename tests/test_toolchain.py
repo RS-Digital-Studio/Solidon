@@ -52,21 +52,6 @@ from tools.check_env import (
 #: Die Wurzel des Arbeitsbaums — von hier aus liegt ``pyproject.toml`` daneben.
 _ROOT: Final = Path(__file__).resolve().parent.parent
 
-# Diese Nutzerdateien sind während RM-315 bereits anderweitig in Arbeit.
-# Die Gegenprobe hält die Zwischenliste klein und sichtbar; nach deren Abschluss
-# werden die Einträge entfernt, sodass kein privater Querimport erlaubt bleibt.
-_KNOWN_IN_FLIGHT_PRIVATE_IMPORTS: Final = Counter(
-    {
-        ("tests/test_local_recognition_flow.py", "tests.test_outline_dialog", "_until"): 1,
-        ("tests/test_organizer_dialog.py", "tests.test_outline_dialog", "_until"): 1,
-        ("tests/test_ui.py", "tests.test_outline_dialog", "_until"): 4,
-        ("tests/test_ui.py", "tests.test_recipes", "_clean_globals"): 1,
-        ("tests/test_ui.py", "tests.test_recipes", "_document"): 1,
-        ("tests/test_ui.py", "tests.test_recipes", "_plate_with_halter"): 1,
-        ("tests/test_ui.py", "tests.test_bore_mouth_resize", "_two_bores"): 1,
-    }
-)
-
 
 @dataclass(frozen=True)
 class _ModuleAlias:
@@ -847,7 +832,7 @@ def test_private_test_import_guard_limits_child_code_to_python() -> None:
 
 
 def test_test_files_do_not_import_private_names_from_each_other() -> None:
-    """Querimporte finden in der Zwischenzeit nur die bekannten In-flight-Nutzer."""
+    """Testdateien verwenden gemeinsame Helfer statt private Querimporte."""
     sources = sorted((_ROOT / "tests").glob("test_*.py"))
     assert sources, "keine Testdateien gefunden — der Querimport-Wächter prüft nichts"
 
@@ -860,13 +845,66 @@ def test_test_files_do_not_import_private_names_from_each_other() -> None:
             locations.append((relative, line, module, name))
             found[(relative, module, name)] += 1
 
-    assert found == _KNOWN_IN_FLIGHT_PRIVATE_IMPORTS, (
-        "private Querimporte wurden ergänzt oder die bekannte Zwischenliste ist veraltet:\n"
+    assert not found, (
+        "private Querimporte sind verboten; gemeinsame Helfer gehören nach `tests/helpers.py` "
+        "oder `tests/ui_helpers.py`:\n"
         + "\n".join(
             f"{path}:{line}: from {module} import {name}"
             for path, line, module, name in sorted(locations)
         )
     )
+
+
+def test_the_shared_exact_kernel_guard_does_not_skip_its_own_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Importfehler im eigenen Kern darf nicht als fehlendes Extra verschwinden."""
+    from app.core.brep import edit, kernel
+    from tests.helpers import exact_kernel
+
+    def importorskip_is_a_failure(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("der gemeinsame Wächter darf sein eigenes Kernelmodul nicht überspringen")
+
+    monkeypatch.setattr(pytest, "importorskip", importorskip_is_a_failure)
+    monkeypatch.setattr(kernel, "available", lambda: True)
+
+    assert exact_kernel() is edit
+
+    monkeypatch.setattr(kernel, "available", lambda: False)
+    with pytest.raises(pytest.skip.Exception) as skipped:
+        exact_kernel()
+    assert skipped.value.msg == "ohne OpenCASCADE gibt es den exakten Kern nicht"
+
+
+def test_the_shared_exact_kernel_guard_keeps_its_import_errors_visible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Importfehler des Kernmoduls bleibt ein Fehler und wird kein Skip."""
+    import builtins
+
+    from tests.helpers import exact_kernel
+
+    original_import = builtins.__import__
+
+    def fail_kernel_import(
+        name: str,
+        global_ns: dict[str, Any] | None = None,
+        local_ns: dict[str, Any] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> Any:
+        if name == "app.core.brep" and "kernel" in fromlist:
+            raise ImportError("synthetischer Fehler beim Kernelimport")
+        return original_import(name, global_ns, local_ns, fromlist, level)
+
+    def importorskip_is_a_failure(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("ein interner Importfehler darf nicht als fehlendes Extra übersprungen werden")
+
+    monkeypatch.setattr(builtins, "__import__", fail_kernel_import)
+    monkeypatch.setattr(pytest, "importorskip", importorskip_is_a_failure)
+
+    with pytest.raises(ImportError, match="synthetischer Fehler beim Kernelimport"):
+        exact_kernel()
 
 
 def _pyproject() -> dict[str, Any]:

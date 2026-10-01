@@ -9,6 +9,8 @@ und die Einzelbefunde, die beim Bau an Kundenmodellen gefunden wurden — mit
 nachgebauter Geometrie, denn Kundenmodelle gehören nicht in den Korpus.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
@@ -20,12 +22,14 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.brep.kernel import Solid, available
+from tests.helpers import exact_kernel
+
+exact_kernel()
+
+from app.core.brep.kernel import Solid
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.types import Profile
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

@@ -34,7 +34,7 @@ from app.ui.op_dialog import OperationDialog
 from app.ui.overlay import OverlayHost
 from app.ui.placement_flow import SPACE, PlacementFlow, _crosses, _Dimensions, _untangle
 from app.ui.session import Session
-from tests.test_surface_placement_ui import _Item, _Viewport
+from tests.ui_helpers import PlacementItem, PlacementViewport
 
 
 @pytest.mark.parametrize("quiet", [True, False])
@@ -571,7 +571,7 @@ def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
         # hier nur der Werkzeugkörper.
         if name == "surface_placement_tool":
             styles.append(style)
-        return _Item(_points, capacity)
+        return PlacementItem(_points, capacity)
 
     # Ein bereits vorbereiteter Körper genügt; geprüft wird hier allein seine
     # Übergabe an den gemeinsamen Renderer-Vertrag, ohne GPU und zweite Geometrie.
@@ -607,9 +607,9 @@ def test_dimension_ink_stays_below_the_grip_and_the_knobs(qt_app: QApplication) 
     maßlinien zu treffen"). Der Renderer schreibt die Ordnung seit dem
     21.09.2026 mit, damit ein Test sie überhaupt lesen kann (Review Tests #8).
     """
-    from tests.test_surface_placement_ui import _Viewport
+    from tests.ui_helpers import PlacementViewport
 
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     renderer = viewport.renderer
     canvas = _Dimensions(viewport)
     canvas.lines = [(QPointF(20, 40), QPointF(180, 40))]
@@ -638,9 +638,9 @@ def test_a_dimension_line_swallowed_by_the_grip_is_drawn_whole(qt_app: QApplicat
     Linie, die über den Griff hinausreicht, verliert weiter nur das Stück im
     Griff — und den Pfeil, der darin steht.
     """
-    from tests.test_surface_placement_ui import _Viewport
+    from tests.ui_helpers import PlacementViewport
 
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     canvas = _Dimensions(viewport)
     canvas.clearing = (QPointF(100, 100), 50.0)
     short = (QPointF(100, 100), QPointF(130, 100))
@@ -693,9 +693,9 @@ def test_moving_dimension_ink_keeps_its_renderer_items_and_swaps_their_points(
     entstehen alle acht neu — auf das Doppelte des Bedarfs, in ihrer
     Reihenfolge.
     """
-    from tests.test_surface_placement_ui import _Viewport
+    from tests.ui_helpers import PlacementViewport
 
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     renderer = viewport.renderer
     canvas = _Dimensions(viewport)
     canvas.lines = [(QPointF(20, 40), QPointF(180, 40))]
@@ -1450,7 +1450,7 @@ def test_the_mouth_outline_marks_the_spot_instead_of_the_whole_cylinder(
         bohrer = trimesh.creation.cylinder(radius=2.5, height=20.0)
         bohrer.apply_translation((0.0, 0.0, -10.0))
         flow._tool_context = PlacementTool(MeshData(bohrer))
-        flow._tool = _Item()
+        flow._tool = PlacementItem()
         viewport.renderer.world_to_display = lambda point: (
             450 + (point[0] - 10) * 12,
             300 + (point[1] - 10) * 12,
@@ -1552,7 +1552,7 @@ def _layout(
     result = EvaluationResult(Scene(objects={"obj_1": SceneObject("obj_1", "Platte", mesh)}))
     session.last_result = result
     session.result_current = True
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     viewport.resize(*size)
     viewport.show_scene(result)
     viewport.renderer.world_to_display = lambda point: (
@@ -1585,7 +1585,7 @@ def _layout(
     flow._prepared_mesh = mesh
     flow._object_id = "obj_1"
     flow._centre_id = "hole_1"
-    flow._tool = _Item()
+    flow._tool = PlacementItem()
     flow._tool_context = PlacementTool(mesh)
     flow._surface = SurfacePlacement(
         point=(10, 10, 0),

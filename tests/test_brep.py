@@ -8,6 +8,7 @@ nachrechnen lässt, nicht gegen ein Bild.
 
 from __future__ import annotations
 
+import importlib
 import math
 from collections.abc import Callable
 from pathlib import Path
@@ -18,7 +19,7 @@ import trimesh
 
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available, tessellate
+from app.core.brep.kernel import Solid, tessellate
 from app.core.errors import GeometryError, NeedsSolidError, ValidationError
 from app.core.export.writer import export_bytes, plan_export, write_plan
 from app.core.geom.mesh import MeshData, as_mesh_data
@@ -31,13 +32,11 @@ from app.core.sketch.profile import Profile as Outline
 from app.core.sketch.profile import ProfileSegment as Segment
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
 from app.core.units import EPS_DISPLAY, EPS_GEOM
-from tests.helpers import CountingToken
+from tests.helpers import CountingToken, exact_kernel
 
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+exact_kernel()
 
-# Nach dem Skip, nicht davor: Ein Quellklon ohne das Extra ``brep`` scheiterte
-# an dieser Zeile beim Sammeln, bevor die Markierung darüber greifen konnte.
-BRepPrimAPI_MakeSphere = pytest.importorskip("OCP.BRepPrimAPI").BRepPrimAPI_MakeSphere
+BRepPrimAPI_MakeSphere = importlib.import_module("OCP.BRepPrimAPI").BRepPrimAPI_MakeSphere
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 
@@ -1979,9 +1978,6 @@ def test_step_comes_back_addressable_and_stable() -> None:
     Wäre die Reihenfolge zufällig, zeigte eine gespeicherte Skizzenebene
     (`feature:face_3`) morgen auf eine andere Wand — und niemand sähe, warum.
     """
-    if not available():
-        pytest.skip("ohne OpenCASCADE gibt es kein STEP")
-
     payload = step.write(edit.box(40.0, 30.0, 20.0))
     runs = [
         {

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -17,10 +16,10 @@ from app.core.geom.primitive_ops import (
 )
 from app.core.geom.transform import apply
 from app.core.registry import REGISTRY
-from app.core.scene.cancel import NeverCancelled
 from app.core.sketch.planes import frame_of
-from app.core.types import OpContext, OpResult, Profile, Quality, Scene
+from app.core.types import Profile
 from app.core.units import DEGREE_UNIT
+from tests.helpers import primitive_operation
 
 load_operations()
 
@@ -51,28 +50,6 @@ CASES: tuple[tuple[str, dict[str, Any]], ...] = (
 )
 
 
-def _run(
-    name: str,
-    values: Mapping[str, Any],
-    profile: Profile,
-    quality: Quality = "fine",
-) -> OpResult:
-    spec = REGISTRY.get(name)
-    return spec.fn(
-        OpContext(
-            scene=Scene(),
-            inputs=[],
-            params=spec.params(**values),
-            profile=profile,
-            quality=quality,
-            seed=None,
-            progress=lambda _fraction, _text: None,
-            ask=lambda _question, choices: choices[0],
-            cancelled=NeverCancelled(),
-        )
-    )
-
-
 @pytest.mark.parametrize(("name", "values"), CASES)
 def test_mesh_primitives_offer_one_advanced_position_and_normal(
     name: str, values: dict[str, Any]
@@ -101,9 +78,15 @@ def test_the_angle_turns_the_body_around_its_own_upright_axis(
     Umdrehung bringt denselben Körper zurück, und eine Vierteldrehung dreht
     die Hüllmaße in der Ebene, ohne Volumen oder Bezugspunkt zu bewegen.
     """
-    gerade = as_mesh_data(_run(name, {**values, "angle": 0.0}, profile).outputs[0].mesh)
-    gedreht = as_mesh_data(_run(name, {**values, "angle": 90.0}, profile).outputs[0].mesh)
-    ganz = as_mesh_data(_run(name, {**values, "angle": 360.0}, profile).outputs[0].mesh)
+    gerade = as_mesh_data(
+        primitive_operation(name, {**values, "angle": 0.0}, profile).outputs[0].mesh
+    )
+    gedreht = as_mesh_data(
+        primitive_operation(name, {**values, "angle": 90.0}, profile).outputs[0].mesh
+    )
+    ganz = as_mesh_data(
+        primitive_operation(name, {**values, "angle": 360.0}, profile).outputs[0].mesh
+    )
 
     # **Zuerst: Sie wirkt überhaupt.** Die drei Zusicherungen darunter sind
     # Invarianten — Volumen, Bezugspunkt und die volle Umdrehung stimmen auch
@@ -140,7 +123,7 @@ def test_zero_placement_keeps_the_previous_primitive_geometry(
     spec = REGISTRY.get(name)
     params = spec.params(**values)
     local = primitive_local_tool(name, params.as_dict(), "fine")
-    actual = as_mesh_data(_run(name, values, profile).outputs[0].mesh)
+    actual = as_mesh_data(primitive_operation(name, values, profile).outputs[0].mesh)
 
     assert np.asarray(actual.raw.vertices) == pytest.approx(
         np.asarray(local.raw.vertices), abs=1e-12
@@ -157,7 +140,7 @@ def test_zero_normal_translates_the_existing_local_anchor(
     params = spec.params(**values)
     local = primitive_local_tool(name, params.as_dict(), "fine")
     actual = as_mesh_data(
-        _run(
+        primitive_operation(
             name,
             {**values, "x": position[0], "y": position[1], "z": position[2]},
             profile,
@@ -186,7 +169,7 @@ def test_slanted_operation_and_surface_ghost_share_the_same_local_basis(
     matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
     matrix[:3, 3] = position
     shown = apply(local, matrix)
-    actual = _run(
+    actual = primitive_operation(
         name,
         {
             **values,
@@ -213,7 +196,7 @@ def test_slanted_operation_and_surface_ghost_share_the_same_local_basis(
 
 def test_box_corner_remains_the_local_anchor_when_it_is_moved(profile: Profile) -> None:
     position = np.asarray((4.0, 5.0, 6.0))
-    result = _run(
+    result = primitive_operation(
         "create_box",
         {
             "width": 12.0,

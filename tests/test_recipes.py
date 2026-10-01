@@ -27,7 +27,12 @@ from app.core.knowledge.parts.user import travelling_parts
 from app.core.registry.registry import Registry
 from app.core.scene import foreign
 from app.core.types import Document, Operation, Parameter, Profile, Source
-from tests.helpers import break_writes_after_a_first_piece
+from tests.helpers import (
+    break_writes_after_a_first_piece,
+    clean_recipe_globals,
+    recipe_document_seed,
+    recipe_with_halter,
+)
 
 
 @pytest.fixture(scope="module")
@@ -36,39 +41,9 @@ def profile() -> Profile:
     return profiles.make_profile("centauri-carbon-2", "petg")
 
 
-def _document(width: float = 30.0) -> Document:
-    """Ein Quader, dessen Breite am Projektparameter ``w`` hängt (§13).
-
-    ``format_version`` ist die echte: Seit ``from_data`` den Dokumentteil
-    durch die Migrationen schickt, hieße eine 1 hier, dass elf
-    Umstellungsschritte über modern geformte Daten laufen.
-    """
-    from app.core.scene.migrations import FORMAT_VERSION
-
-    return Document(
-        format_version=FORMAT_VERSION,
-        app_version="test",
-        parameters={"w": Parameter(name="w", value=width)},
-        ops=[
-            Operation(
-                id=1,
-                op="create_box",
-                outputs=("obj_1",),
-                params={
-                    "width": "@w",
-                    "depth": 20.0,
-                    "height": 8.0,
-                    "anchor": "corner",
-                    "name": "",
-                },
-            )
-        ],
-    )
-
-
 def _recipe(profile: Profile, name: str = "probe_halter") -> recipe.Recipe:
     return recipe.capture(
-        _document(),
+        recipe_document_seed(),
         {},
         name=name,
         title="Probehalter",
@@ -109,7 +84,7 @@ def test_capture_after_print_settings_exports_a_geometry_recipe(
     from app.core.knowledge import print_settings
     from app.core.knowledge.parts.part_file import PartFileIO
 
-    document = _document()
+    document = recipe_document_seed()
     document.print_settings = print_settings.resolve(profile)
     made = recipe.capture(
         document,
@@ -136,7 +111,7 @@ def test_a_travelled_alias_never_overwrites_a_local_recipe(profile: Profile) -> 
     recipe.register(local, parts, registry)
     recipe.register(alias, parts, registry)
     original = parts.get(alias.name)
-    arrived = dataclasses.replace(local, document=_document(50))
+    arrived = dataclasses.replace(local, document=recipe_document_seed(50))
     assert recipe.adopt(recipe.file_data(arrived), parts, registry) == []
     assert parts.get(alias.name) is original
     assert parts.get("probe_halter_travelled_2").source == recipe.TRAVELLED_SOURCE
@@ -155,7 +130,7 @@ def test_nested_recipes_reach_a_project_receiver_without_local_recipes(
     names = ("review_z_inner", "review_a_outer")
     try:
         recipe.register(_recipe(profile, names[0]))
-        document = _document(40)
+        document = recipe_document_seed(40)
         document.ops.append(
             Operation(
                 id=2,
@@ -177,7 +152,7 @@ def test_nested_recipes_reach_a_project_receiver_without_local_recipes(
             profile=profile,
         )
         recipe.register(outer)
-        target = _document(50)
+        target = recipe_document_seed(50)
         target.ops.append(
             Operation(
                 id=2,
@@ -196,7 +171,7 @@ def test_nested_recipes_reach_a_project_receiver_without_local_recipes(
         from app.core.knowledge.parts.part_file import PartFileIO
 
         exchanged = PartFileIO().export_file(outer)
-        _clean_globals(*names)
+        clean_recipe_globals(*names)
         imported = PartFileIO().import_file(exchanged)
         imported_mesh = recipe.build(imported.recipe, profile=profile).mesh
         assert imported_mesh.volume > 0
@@ -207,7 +182,7 @@ def test_nested_recipes_reach_a_project_receiver_without_local_recipes(
             before.scene.objects["obj_1"].mesh.volume
         )
     finally:
-        _clean_globals(*names)
+        clean_recipe_globals(*names)
 
 
 def test_a_recipe_survives_the_round_trip_and_keeps_its_hash(profile: Profile) -> None:
@@ -353,7 +328,7 @@ def test_capture_passes_the_licence_through(profile: Profile) -> None:
     Python-Builtin und darf kein Parametername sein.
     """
     made = recipe.capture(
-        _document(),
+        recipe_document_seed(),
         {},
         name="mit_lizenz",
         title="Mit Lizenz",
@@ -705,7 +680,7 @@ def test_a_slice_with_two_bodies_is_refused_at_capture(profile: Profile) -> None
     Abgewiesen wird beim **Speichern** und nicht später halb gebaut — der
     Fehler gehört an die Stelle, an der er behebbar ist.
     """
-    document = _document()
+    document = recipe_document_seed()
     document.ops.append(
         Operation(
             id=2,
@@ -734,7 +709,7 @@ def test_a_recipe_without_named_features_is_refused_at_capture(profile: Profile)
     Provenienzkette — und der Fehler hieße sonst erst „beim Laden"."""
     with pytest.raises(ValidationError) as caught:
         recipe.capture(
-            _document(),
+            recipe_document_seed(),
             {},
             name="ohne_merkmal",
             title="Ohne Merkmal",
@@ -752,7 +727,7 @@ def test_a_vanished_feature_id_is_refused(profile: Profile) -> None:
     mit Handlungsvorschlag — kein leerer Eintrag im Katalog."""
     with pytest.raises(ValidationError) as caught:
         recipe.capture(
-            _document(),
+            recipe_document_seed(),
             {},
             name="falsches_merkmal",
             title="Falsches Merkmal",
@@ -815,7 +790,7 @@ def test_recipe_dimensions_do_not_collide_with_surface_normals(
     """Ein vorhandenes Rezeptmaß bleibt nach Laden und Platzieren ein Maß."""
     import numpy as np
 
-    document = _document()
+    document = recipe_document_seed()
     document.parameters = {parameter: Parameter(name=parameter, value=30.0)}
     document.ops[0] = dataclasses.replace(
         document.ops[0], params={**document.ops[0].params, "width": f"@{parameter}"}
@@ -1003,7 +978,7 @@ def test_a_draft_brings_the_embedded_sources_along(profile: Profile) -> None:
     Ohne die Quellen hielte der Entwurf beim ersten Schritt an, der sie liest —
     und zwar aus einem Grund, den der Kunde nicht sieht.
     """
-    document = _document()
+    document = recipe_document_seed()
     document.sources["src_1"] = Source(
         id="src_1", kind="import", path="modell.stl", sha256="0" * 64, embedded=True
     )
@@ -1174,7 +1149,7 @@ def test_an_edited_import_stays_an_import(profile: Profile) -> None:
     quittung = recipe.ImportedOrigin(source_sha256="c" * 64, imported_at="2026-09-09T08:15:00Z")
 
     made = recipe.capture(
-        _document(),
+        recipe_document_seed(),
         {},
         name="probe_halter",
         title="Probehalter",
@@ -1291,7 +1266,7 @@ def test_capture_refuses_an_unbounded_range_before_building(
     monkeypatch.setattr(recipe, "build", must_not_build)
     with pytest.raises(ValidationError) as caught:
         recipe.capture(
-            _document(),
+            recipe_document_seed(),
             {},
             name="too_wide",
             title="Zu viele Maße",
@@ -1333,7 +1308,7 @@ def test_a_breaking_corner_is_named_not_hidden(profile: Profile) -> None:
     """Eine brechende Ecke ist das Ergebnis, kein Absturz — und sie nennt
     die Werte, bei denen es geschah (Regel 17 in Berichtsform)."""
     broken = recipe.capture(
-        _document(),
+        recipe_document_seed(),
         {},
         name="bricht_unten",
         title="Bricht unten",
@@ -1732,17 +1707,6 @@ def test_a_recipe_that_cannot_become_an_operation_leaves_no_catalog_entry(
 # --- Die Reise in der Projektdatei (Konzept §17.1) --------------------------------
 
 
-def _clean_globals(*names: str) -> None:
-    """Baut die globalen Einträge eines Reisetests wieder aus — wie bei E6:
-    Die Bausteinsweeps anderer Tests parametrisieren über denselben Katalog."""
-    from app.core.knowledge.parts.registry import PARTS
-    from app.core.registry import REGISTRY
-
-    for name in names:
-        PARTS._parts.pop(name, None)
-        REGISTRY._ops.pop(part_ops.op_name(name), None)
-
-
 def _travelling_project(profile: Profile, tmp_path: Path, prepared: recipe.Recipe | None = None):
     """Ein Rezept global registriert und ein Projekt, das es benutzt.
 
@@ -1754,7 +1718,7 @@ def _travelling_project(profile: Profile, tmp_path: Path, prepared: recipe.Recip
 
     made = prepared if prepared is not None else recipe.range_check(_recipe(profile), profile)
     recipe.register(made)
-    document = _document()
+    document = recipe_document_seed()
     document.ops.append(
         Operation(
             id=2,
@@ -1794,7 +1758,7 @@ def _nesting_recipe(inner: str, name: str) -> recipe.Recipe:
     innere Rezept mit, und genau das soll hier niemand tun müssen, um die
     Frage „startet das fremden Quelltext?" zu beantworten.
     """
-    document = _document()
+    document = recipe_document_seed()
     document.ops.append(Operation(id=2, op=part_ops.op_name(inner), outputs=("obj_2",), params={}))
     return recipe.Recipe(
         name=name,
@@ -1828,7 +1792,7 @@ def test_a_recipe_travels_inside_the_project_file(profile: Profile, tmp_path: Pa
             )
 
         # Die fremde Maschine: kein Rezept im Katalog, keine Operation.
-        _clean_globals("probe_halter")
+        clean_recipe_globals("probe_halter")
         loaded = load(target)
         spec = PARTS.get("probe_halter")
         assert spec.source == "travelled", "aufgenommen und als mitgereist gekennzeichnet"
@@ -1840,7 +1804,7 @@ def test_a_recipe_travels_inside_the_project_file(profile: Profile, tmp_path: Pa
         assert any(entry.code == "parts.travelled" for entry in findings)
         assert not any(entry.code == "parts.missing" for entry in findings)
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 def test_a_local_part_beats_the_travelled_one(profile: Profile, tmp_path: Path) -> None:
@@ -1855,7 +1819,7 @@ def test_a_local_part_beats_the_travelled_one(profile: Profile, tmp_path: Path) 
     try:
         made, target = _travelling_project(profile, tmp_path)
         # Die fremde Maschine trägt unter demselben Namen einen anderen Stand.
-        _clean_globals("probe_halter")
+        clean_recipe_globals("probe_halter")
         local = dataclasses.replace(made, doc="lokal ein anderer Satz")
         recipe.register(local)
 
@@ -1876,26 +1840,7 @@ def test_a_local_part_beats_the_travelled_one(profile: Profile, tmp_path: Path) 
         assert changed[0].values["parts"] == "Probehalter", "der Titel, nicht die Kennung"
         assert not any(entry.code == "parts.travelled_shadowed" for entry in findings)
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
-
-
-def _plate_with_halter(width_default: float, profile: Profile) -> recipe.Recipe:
-    """Das Probe-Rezept mit einer eigenen Vorgabebreite — ein anderer Stand."""
-    return recipe.capture(
-        _document(),
-        {},
-        name="probe_halter",
-        title="Probehalter",
-        group="structure",
-        op_ids=(1,),
-        exposed=(
-            recipe.ExposedParam(
-                name="w", title="Breite", default=width_default, minimum=10.0, maximum=90.0
-            ),
-        ),
-        features={"top": "face_top"},
-        profile=profile,
-    )
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 def test_the_saved_state_of_an_own_part_can_be_chosen_again(
@@ -1920,8 +1865,8 @@ def test_the_saved_state_of_an_own_part_can_be_chosen_again(
         return float(result.scene.objects["obj_1"].mesh.volume)
 
     try:
-        recipe.register(_plate_with_halter(30.0, profile))
-        document = _document()
+        recipe.register(recipe_with_halter(30.0, profile))
+        document = recipe_document_seed()
         document.ops[0] = dataclasses.replace(
             document.ops[0],
             params={"width": 100.0, "depth": 100.0, "height": 3.0, "anchor": "corner"},
@@ -1941,8 +1886,8 @@ def test_the_saved_state_of_an_own_part_can_be_chosen_again(
         as_saved = volume(load(saved))
 
         # Später: das Rezept geändert, das Projekt wieder geöffnet.
-        _clean_globals("probe_halter")
-        recipe.register(_plate_with_halter(50.0, profile))
+        clean_recipe_globals("probe_halter")
+        recipe.register(recipe_with_halter(50.0, profile))
         opened = load(saved)
         assert volume(opened) > as_saved, "zuerst gilt der lokale, breitere Stand"
         assert part_check.saved_states(opened.document) == {
@@ -1965,7 +1910,7 @@ def test_the_saved_state_of_an_own_part_can_be_chosen_again(
         # Reproduzierbar: gespeichert und auf einem frischen Katalog geöffnet.
         again = tmp_path / "wieder.p3d"
         save(opened, again)
-        _clean_globals("probe_halter_travelled")
+        clean_recipe_globals("probe_halter_travelled")
         reopened = load(again)
         assert PARTS.get("probe_halter").version != PARTS.get("probe_halter_travelled").version
         assert volume(reopened) == pytest.approx(as_saved)
@@ -1975,7 +1920,7 @@ def test_the_saved_state_of_an_own_part_can_be_chosen_again(
         assert [entry.op for entry in opened.document.ops[1:]] == ["insert_probe_halter"] * 2
         assert volume(opened) > as_saved
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 def test_a_changed_own_part_without_its_saved_state_is_explained_not_offered(
@@ -1991,8 +1936,8 @@ def test_a_changed_own_part_without_its_saved_state_is_explained_not_offered(
     from app.core.knowledge.parts.user import FINGERPRINT_KEY
 
     try:
-        recipe.register(_plate_with_halter(50.0, profile))
-        document = _document()
+        recipe.register(recipe_with_halter(50.0, profile))
+        document = recipe_document_seed()
         document.ops.append(
             Operation(id=2, op=part_ops.op_name("probe_halter"), outputs=("obj_2",), params={})
         )
@@ -2005,7 +1950,7 @@ def test_a_changed_own_part_without_its_saved_state_is_explained_not_offered(
         assert "nicht mehr vor" in str(findings[0].message)
         assert part_check.saved_states(document) == {}
     finally:
-        _clean_globals("probe_halter")
+        clean_recipe_globals("probe_halter")
 
 
 def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> None:
@@ -2022,7 +1967,7 @@ def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> N
             "der lokale Eintrag wird nicht zum mitgereisten umgestempelt"
         )
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 def test_a_travelling_recipe_with_source_code_is_announced_when_the_file_opens(
@@ -2044,7 +1989,7 @@ def test_a_travelling_recipe_with_source_code_is_announced_when_the_file_opens(
     try:
         _made, target = _travelling_project(profile, tmp_path, _scripted_recipe(profile))
         # Die fremde Maschine: kein Rezept im Katalog, keine Operation.
-        _clean_globals("probe_halter")
+        clean_recipe_globals("probe_halter")
         loaded = load(target)
 
         scripted = [
@@ -2058,7 +2003,7 @@ def test_a_travelling_recipe_with_source_code_is_announced_when_the_file_opens(
             entry.code == "parts.scripted_recipe" for entry in part_check.check(loaded.document)
         ), "dieselbe Auskunft aus der zweiten Richtung, über den benutzten Baustein"
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 def test_a_recipe_inside_a_recipe_still_runs_foreign_source(
@@ -2084,7 +2029,7 @@ def test_a_recipe_inside_a_recipe_still_runs_foreign_source(
         "mittelbar ist auch ausgeführt — die Frage gilt der Wirkung"
     )
 
-    document = _document()
+    document = recipe_document_seed()
     document.ops.append(
         Operation(id=2, op=part_ops.op_name("probe_huelle"), outputs=("obj_2",), params={})
     )
@@ -2120,7 +2065,7 @@ def test_a_broken_recipe_beside_the_document_is_a_finding_and_not_an_abort(
 
     try:
         _made, target = _travelling_project(profile, tmp_path)
-        _clean_globals("probe_halter")
+        clean_recipe_globals("probe_halter")
         damaged = tmp_path / "beschaedigt.p3d"
         with zf.ZipFile(target) as source, zf.ZipFile(damaged, "w") as broken:
             for entry_name in source.namelist():
@@ -2136,7 +2081,7 @@ def test_a_broken_recipe_beside_the_document_is_a_finding_and_not_an_abort(
             "der Grund steht als Befund da, statt das Öffnen abzubrechen"
         )
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 def test_replace_is_one_way_for_both_cases(profile: Profile, tmp_path: Path) -> None:
@@ -2155,7 +2100,7 @@ def test_replace_is_one_way_for_both_cases(profile: Profile, tmp_path: Path) -> 
     assert first.exists() and parts.has("probe_halter")
 
     changed = recipe.capture(
-        _document(width=40.0),
+        recipe_document_seed(width=40.0),
         {},
         name="probe_halter",
         title="Probehalter",
@@ -2340,7 +2285,7 @@ def test_an_adopted_recipe_is_marked_as_travelled(profile: Profile) -> None:
             "ohne Angabe gilt der mitgereiste Weg"
         )
     finally:
-        _clean_globals("probe_halter")
+        clean_recipe_globals("probe_halter")
 
 
 def test_different_travelled_versions_remain_available(profile: Profile, tmp_path: Path) -> None:
@@ -2370,14 +2315,14 @@ def test_different_travelled_versions_remain_available(profile: Profile, tmp_pat
         assert recipe.adopt(recipe.file_data(second)) == []
         assert REGISTRY.has(part_ops.op_name("probe_halter_travelled"))
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled", "probe_halter_travelled_2")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled", "probe_halter_travelled_2")
 
 
 def test_container_dependency_collection_terminates_at_a_recipe_cycle(profile):
     parts, registry = PartRegistry(), Registry()
     recipe.register(_nesting_recipe("probe_zwei", "probe_eins"), parts, registry)
     recipe.register(_nesting_recipe("probe_eins", "probe_zwei"), parts, registry)
-    document = _document()
+    document = recipe_document_seed()
     document.ops.append(
         Operation(id=2, op=part_ops.op_name("probe_eins"), outputs=("obj_2",), params={})
     )
@@ -2390,7 +2335,7 @@ def test_inserting_a_recipe_uses_the_material_of_the_target(profile):
 
     name = "review_material_recipe"
     try:
-        document = _document()
+        document = recipe_document_seed()
         document.ops.append(
             Operation(
                 id=2,
@@ -2432,7 +2377,7 @@ def test_inserting_a_recipe_uses_the_material_of_the_target(profile):
             for feature in result.scene.objects["obj_1"].features.values()
         )
     finally:
-        _clean_globals(name)
+        clean_recipe_globals(name)
 
 
 @pytest.mark.parametrize("backend", ["memory", "existing_disk", "reopened_disk"])
@@ -2448,7 +2393,7 @@ def test_replacing_recipe_invalidates_warm_geometry_cache(profile, tmp_path, bac
         operations.register(operation)
     made = _recipe(profile)
     recipe.register(made, parts, operations)
-    document = _document()
+    document = recipe_document_seed()
     document.ops.append(
         Operation(
             id=2, op="insert_probe_halter", inputs=("obj_1",), outputs=("obj_1",), params={"z": 8.0}
@@ -2498,7 +2443,7 @@ def test_loaded_legacy_recipe_placement_preserves_bound_dimensions_and_undo(
     from app.core.types import DocumentChange, DocumentState, Transaction
 
     name = "legacy_placement_recipe"
-    recipe_document = _document()
+    recipe_document = recipe_document_seed()
     recipe_document.format_version = 21
     recipe_document.parameters = {
         "x": Parameter(name="x", value=12.0),
@@ -2521,7 +2466,7 @@ def test_loaded_legacy_recipe_placement_preserves_bound_dimensions_and_undo(
             ),
         ),
     )
-    document = _document()
+    document = recipe_document_seed()
     document.format_version = 21
     document.parts_version = library_version
     document.printer, document.material = "centauri-carbon-2", "petg"
@@ -2595,7 +2540,7 @@ def test_loaded_legacy_recipe_placement_preserves_bound_dimensions_and_undo(
         assert reopened.document.ops[1].params == loaded.document.ops[1].params
         assert target.read_bytes() != saved.read_bytes()
     finally:
-        _clean_globals(name, name + "_travelled")
+        clean_recipe_globals(name, name + "_travelled")
 
 
 @pytest.mark.parametrize("library_version", ["0", "15", "16"])
@@ -2608,7 +2553,7 @@ def test_nested_legacy_recipe_placement_uses_private_children_without_mutating_t
 
     from app.core.knowledge.parts.registry import PARTS
 
-    leaf_document = _document()
+    leaf_document = recipe_document_seed()
     leaf_document.parts_version = "15"
     leaf_document.parameters = {
         "x": Parameter(name="x", value=12.0),
@@ -2629,7 +2574,7 @@ def test_nested_legacy_recipe_placement_uses_private_children_without_mutating_t
         ),
         features={"top": "face_top"},
     )
-    middle_document = _document(100)
+    middle_document = recipe_document_seed(100)
     middle_document.parts_version = library_version
     middle_document.parameters.update(
         span=Parameter(name="span", value=12.0), turn=Parameter(name="turn", value=30.0)
@@ -2653,7 +2598,7 @@ def test_nested_legacy_recipe_placement_uses_private_children_without_mutating_t
         document=middle_document,
         features={"top": "private_legacy_leaf_top"},
     )
-    outer_document = _document(150)
+    outer_document = recipe_document_seed(150)
     outer_document.parts_version = "16"
     outer_document.ops.append(
         Operation(
@@ -2703,7 +2648,7 @@ def test_part_placement_schema_fields_survive_another_recipe_registration():
     from app.core.knowledge.parts.registry import PARTS
 
     load_operations()
-    document = _document()
+    document = recipe_document_seed()
     document.parameters["x"] = Parameter(name="x", value=12.0)
     part = recipe.Recipe(
         name="placement_field_owner",

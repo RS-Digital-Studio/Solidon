@@ -30,6 +30,7 @@ from app.ui.render.api import (
     rgb,
 )
 from app.ui.render.gfx_renderer import GfxRenderer
+from tests.helpers import cube_surface as cube
 
 SIZE = (400, 300)
 BACKGROUND = "#101418"
@@ -65,31 +66,6 @@ def same(pixel: np.ndarray, expected: tuple[int, ...], slack: int = COLOUR_SLACK
     return all(
         abs(int(have) - int(want)) <= slack for have, want in zip(pixel, expected, strict=True)
     )
-
-
-def cube(edge: float = 20.0, origin: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> tuple:
-    """Ein geschlossener Würfel mit zwölf Dreiecken, Normalen nach außen."""
-    base = np.array(
-        [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]],
-        dtype=float,
-    )
-    faces = np.array(
-        [
-            [0, 2, 1],
-            [0, 3, 2],
-            [4, 5, 6],
-            [4, 6, 7],
-            [0, 1, 5],
-            [0, 5, 4],
-            [1, 2, 6],
-            [1, 6, 5],
-            [2, 3, 7],
-            [2, 7, 6],
-            [3, 0, 4],
-            [3, 4, 7],
-        ]
-    )
-    return base * edge + np.asarray(origin, dtype=float), faces
 
 
 def plate(z: float, size: float = 40.0) -> tuple:

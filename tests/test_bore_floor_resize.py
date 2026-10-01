@@ -17,7 +17,7 @@ from app.core.perceive.local import detect_local
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, Finding, OpContext, Operation, Profile, Scene, SceneObject
-from tests.test_local_detection import blind_cylinder, bore_seed
+from tests.helpers import blind_cylinder, bore_seed
 
 
 def _resize(source: SceneObject, hole: Feature, diameter: float, profile: Profile, **params):
@@ -157,9 +157,9 @@ def test_sloping_floor_keeps_its_entire_surface_and_identifier(
     profile: Profile, mode: str, diameter: float, turned: bool
 ) -> None:
     """Schräger Boden und freie Lage werden an der realen Ebene wiedererkannt."""
-    from tests.test_bore_mouth_resize import _sloping_bore
+    from tests.helpers import sloping_bore
 
-    mesh, _features, _hole = _sloping_bore()
+    mesh, _features, _hole = sloping_bore()
     transform = np.eye(4)
     if turned:
         transform = trimesh.transformations.rotation_matrix(0.73, (1, 2, 3))

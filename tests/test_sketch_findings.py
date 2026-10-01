@@ -16,11 +16,10 @@ ist nachgemessen und gilt.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
-from app.core.brep.kernel import Solid, available
-from app.core.brep.profiles import bounds
 from app.core.sketch.profile import (
     Profile,
     ProfileSegment,
@@ -37,10 +36,8 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
+from tests.helpers import exact_kernel
 from tests.helpers import run_with_parameters as run
-from tests.test_sketch_ops import solid_of
-
-needs_brep = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 #: Der Radius des Pac-Man in allen Tests darüber.
 PAC_RADIUS = 10.0
@@ -48,6 +45,16 @@ PAC_RADIUS = 10.0
 #: weg vom fehlenden Viertel.
 HOLE_CENTRE = (4.0, -3.0)
 HOLE_RADIUS = 1.5
+
+
+@pytest.fixture
+def exact_sketch_helpers() -> tuple[Any, Any]:
+    """Lädt exakte Skizzenhelfer erst, wenn der gemeinsame Wächter sie freigibt."""
+    exact_kernel()
+    from app.core.brep.profiles import bounds
+    from tests.test_sketch_ops import solid_of
+
+    return solid_of, bounds
 
 
 def pac_man() -> Sketch:
@@ -120,14 +127,16 @@ def test_a_clockwise_pac_man_measures_the_same_area_the_other_way() -> None:
     assert signed_area(mirrored) == pytest.approx(-signed_area(outer), rel=1e-9)
 
 
-@needs_brep
-def test_a_pac_man_gets_smaller_when_it_is_drilled() -> None:
+def test_a_pac_man_gets_smaller_when_it_is_drilled(
+    exact_sketch_helpers: tuple[Any, Any],
+) -> None:
     """Ein Loch nimmt Material weg — das war der eigentliche Schaden.
 
     Gemessen: 1213,44 mm³ **mit** Loch gegen 1178,10 mm³ ohne, Soll 1142,75.
     Der Kern las das Loch als gleichsinnig, drehte es um und setzte es damit
     als zweite Außenkontur ein (``brep.profiles._face``).
     """
+    solid_of = exact_sketch_helpers[0]
     drawn = sketch_to_text(pac_man())
     body = solid_of(run("sketch_extrude", sketch=drawn, height=5.0))
 
@@ -181,14 +190,16 @@ def test_three_points_on_a_line_carry_no_circle() -> None:
     assert arc_through((0.0, 0.0), (5.0, 0.0), (10.0, 0.0)) is None
 
 
-@needs_brep
-def test_a_closed_arc_extrudes_to_a_cylinder() -> None:
+def test_a_closed_arc_extrudes_to_a_cylinder(
+    exact_sketch_helpers: tuple[Any, Any],
+) -> None:
     """Und im exakten Kern wird daraus ein Zylinder, kein ``StdFail_NotDone``.
 
     ``GC_MakeArcOfCircle`` macht aus drei Punkten, von denen zwei
     zusammenfallen, keinen Bogen; die C++-Ausnahme wurde nach der Regel in
     ``errors.py`` zu „Im Programm ist ein unerwarteter Fehler aufgetreten".
     """
+    solid_of = exact_sketch_helpers[0]
     body = solid_of(run("sketch_extrude", sketch=sketch_to_text(closed_arc()), height=4.0))
 
     assert body.volume == pytest.approx(math.pi * 100.0 * 4.0, rel=1e-9)
@@ -227,15 +238,17 @@ def test_a_closed_arc_also_carries_through_the_mesh_path() -> None:
 # --- Befund 4: der Rotationskörper und sein Vieleck ----------------------------
 
 
-@needs_brep
 @pytest.mark.parametrize("corners", [3, 5, 6])
-def test_a_revolved_polygon_stands_on_the_bed(corners: int) -> None:
+def test_a_revolved_polygon_stands_on_the_bed(
+    corners: int, exact_sketch_helpers: tuple[Any, Any]
+) -> None:
     """„Der Körper steht auf dem Druckbett" — das stand im ``doc`` und galt nicht.
 
     ``rise = length / 2`` ist der halbe Umkreisdurchmesser und trifft nur beim
     Kreis. Ein Dreieck mit ``length=20`` reicht in y von -5 bis 10 und
     schwebte damit 5,00 mm über null, ein Sechseck 1,34 mm.
     """
+    solid_of, bounds = exact_sketch_helpers
     body = solid_of(
         run("sketch_revolve", shape="polygon", corners=corners, length=20.0, offset=10.0)
     )
@@ -243,9 +256,10 @@ def test_a_revolved_polygon_stands_on_the_bed(corners: int) -> None:
     assert bounds(body)[2] == pytest.approx(0.0, abs=1e-9)
 
 
-@needs_brep
 @pytest.mark.parametrize("corners", [3, 5, 6])
-def test_a_revolved_polygon_keeps_its_distance_from_the_axis(corners: int) -> None:
+def test_a_revolved_polygon_keeps_its_distance_from_the_axis(
+    corners: int, exact_sketch_helpers: tuple[Any, Any]
+) -> None:
     """„Abstand der Innenkante des Querschnitts von der Drehachse" — ebenso.
 
     Der äußerste Punkt liegt beim vollen Umlauf um die Breite des Querschnitts
@@ -256,6 +270,7 @@ def test_a_revolved_polygon_keeps_its_distance_from_the_axis(corners: int) -> No
     steht fest und wurde nicht angefasst; gemessen wird hier, wohin
     ``sketch_revolve`` das Ergebnis legt.
     """
+    solid_of, bounds = exact_sketch_helpers
     radius = 10.0
     start_angle = -math.pi / 2.0 - math.pi / corners
     width = (
@@ -270,14 +285,16 @@ def test_a_revolved_polygon_keeps_its_distance_from_the_axis(corners: int) -> No
     assert bounds(body)[3] == pytest.approx(10.0 + width, rel=1e-9), "außen = Abstand + Breite"
 
 
-@needs_brep
-def test_the_other_three_shapes_revolve_exactly_as_before() -> None:
+def test_the_other_three_shapes_revolve_exactly_as_before(
+    exact_sketch_helpers: tuple[Any, Any],
+) -> None:
     """Die Gegenprobe: Rechteck, Langloch und Kreis dürfen sich nicht bewegen.
 
     Für sie war die alte Formel richtig, und der gemessene Bereich gibt
     dieselbe Verschiebung — sonst wäre aus einer Reparatur eine stille
     Verhaltensänderung geworden.
     """
+    solid_of, bounds = exact_sketch_helpers
     ring = solid_of(run("sketch_revolve", shape="rectangle", length=5.0, width=8.0, offset=10.0))
     assert ring.volume == pytest.approx(2.0 * math.pi * 12.5 * 40.0, rel=1e-9)
 
@@ -327,7 +344,9 @@ def test_a_pocket_in_a_mesh_leaves_no_skin_on_top(through: bool) -> None:
 
     assert cube.volume - cut.volume == pytest.approx(taken, rel=1e-9)
     assert result.solver is not None and result.solver.strategy == "direct"
-    assert not isinstance(cut, Solid), "aus einem Netz entsteht ein Netz"
+    from app.core.geom.mesh import MeshData
+
+    assert isinstance(cut, MeshData), "aus einem Netz entsteht ein Netz"
 
 
 # --- Befund 6: der Rückfall auf die erste Bedingung ----------------------------

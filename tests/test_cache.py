@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import json
 import logging
@@ -739,10 +740,9 @@ def test_a_step_without_process_values_never_reads_one(profile: Profile, case: s
             path, payload = "sources/plate_holes.stl", (MESHES / "plate_holes.stl").read_bytes()
             runs: list[dict[str, Any]] = [{"source": "src_1", "unit": "auto"}]
         elif case == "load_step":
-            from app.core.brep.kernel import available
+            from tests.helpers import exact_kernel
 
-            if not available():
-                pytest.skip("ohne OpenCASCADE gibt es kein STEP")
+            exact_kernel()
             from app.core.brep import step
             from app.core.ingest.plan import selection
 
@@ -2131,6 +2131,25 @@ def test_every_caller_says_whether_the_result_may_go_to_disk() -> None:
     """
     root = Path(__file__).parent.parent / "app"
     offenders = []
+    queue_path = root / "ui" / "comfy_dialog.py"
+    queue_lines: set[int] = set()
+    queue_source = queue_path.read_text(encoding="utf-8").splitlines()
+    queue_tree = ast.parse("\n".join(queue_source))
+    for node in ast.walk(queue_tree):
+        if not isinstance(node, ast.FunctionDef) or node.name != "_probe_folder":
+            continue
+        results = next((argument for argument in node.args.args if argument.arg == "results"), None)
+        if (
+            results is None
+            or results.annotation is None
+            or ast.unparse(results.annotation) != "Queue[_FolderProbeResult]"
+        ):
+            continue
+        queue_lines.update(
+            number
+            for number in range(node.lineno, node.end_lineno + 1)
+            if "results.put(" in queue_source[number - 1]
+        )
     for path in sorted(root.rglob("*.py")):
         if path.name == "cache.py":
             continue  # dort wohnt die Klasse, und `DiskCache.put` kennt kein Wort
@@ -2143,6 +2162,10 @@ def test_every_caller_says_whether_the_result_may_go_to_disk() -> None:
                 # Kuratierte Ausnahme wie GERMAN_STEMS: Wer eine weitere
                 # Warteschlange baut, trägt ihren Namen hier ein, und das
                 # breite Netz bleibt gespannt.
+                continue
+            if path == queue_path and number in queue_lines and "results.put(" in line:
+                # ``_probe_folder`` schickt ``Queue[_FolderProbeResult]`` an
+                # den UI-Faden; das ist kein Schreibpfad in den Ergebniscache.
                 continue
             offenders.append(f"{path.relative_to(root)}:{number}")
     assert not offenders, (

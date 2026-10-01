@@ -1,5 +1,7 @@
 """Geschlossene Luftkammern beider Kerne einschließlich ihrer Materialinseln."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
@@ -8,14 +10,15 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.helpers import brep_bytes, exact_kernel
+
+exact_kernel()
+
 from app.core.brep import step
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available, boolean_builder
+from app.core.brep.kernel import Solid, boolean_builder
 from app.core.perceive.features import detect_voids
 from app.core.units import EPS_GEOM, MAX_FACET_SAG
-from tests.helpers import brep_bytes
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 
 def _compound(*shapes: Any) -> Any:

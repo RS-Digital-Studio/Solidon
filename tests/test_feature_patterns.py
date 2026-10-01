@@ -26,14 +26,9 @@ from app.core.geom.mesh import as_mesh_data, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import detect
 from app.core.types import Feature, Profile, SceneObject
-from tests.helpers import exact_kernel
+from tests.helpers import countersunk_plate, exact_kernel, material_plate
 from tests.helpers import run_operation as run
-from tests.test_exact_feature_ops import (
-    COUNTERSUNK_CAVITY,
-    PIN_VOLUME,
-    _countersunk_plate,
-    _material_plate,
-)
+from tests.test_exact_feature_ops import COUNTERSUNK_CAVITY, PIN_VOLUME
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 PLATE = (60.0, 40.0, 10.0)
@@ -273,7 +268,7 @@ def test_a_slot_turns_its_direction_in_a_circular_pattern(profile: Profile) -> N
 
 def test_a_row_of_exact_pins(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("pin")
+    source = material_plate("pin")
     pin = _holes(source, "pin")[0]
 
     result = run(
@@ -296,7 +291,7 @@ def test_a_row_of_exact_pins(profile: Profile) -> None:
 def test_a_countersunk_bore_repeats_as_a_whole(profile: Profile) -> None:
     """Bohrung und Senkung sind ein Hohlraum; jede Instanz bekommt beide."""
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole = _holes(source)[0]
 
     result = run(
@@ -320,7 +315,7 @@ def test_a_countersunk_bore_repeats_as_a_whole(profile: Profile) -> None:
 def test_an_exact_pin_in_the_air_is_explained_and_left_out(profile: Profile) -> None:
     """Die zweite Instanz stünde neben der Platte in der Luft — sie entsteht nicht."""
     load_operations()
-    source = _material_plate("pin")
+    source = material_plate("pin")
     pin = _holes(source, "pin")[0]
 
     result = run(

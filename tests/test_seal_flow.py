@@ -18,9 +18,9 @@ from app.ui.op_dialog import OperationDialog
 from app.ui.seal_dialog import SealPathField
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from tests.test_outline_dialog import _until
+from tests.helpers import seal_cube
 from tests.test_seal_openings import plate
-from tests.test_seal_ops import cube
+from tests.ui_helpers import wait_until
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ def test_one_field_keeps_all_four_values_and_preserves_dimension_expressions(qt_
 
 
 def test_empty_path_disables_apply_and_does_not_launch_a_sketch_first(qt_app, tmp_path, spec):
-    window = open_window(tmp_path, cube())
+    window = open_window(tmp_path, seal_cube())
     window.object_tree.tree.topLevelItem(0).setSelected(True)
     window.launch_operation(spec)
     dialog = window._op_dialog
@@ -135,10 +135,10 @@ def test_opening_choice_is_readonly_until_the_normal_operation_dialog_applies(
         if feature.kind == "face" and feature.params["normal"][2] > 0.99
     )
     chooser.support.setCurrentIndex(chooser.support.findData(f"{source.id}:{top}"))
-    _until(qt_app, lambda: chooser.contours.count() == 2)
+    wait_until(qt_app, lambda: chooser.contours.count() == 2)
     assert not chooser.accept_button.isEnabled()
     chooser.contours.setCurrentRow(1)
-    _until(qt_app, chooser.accept_button.isEnabled)
+    wait_until(qt_app, chooser.accept_button.isEnabled)
     chosen = chooser.values()
     QTest.mouseClick(chooser.accept_button, Qt.MouseButton.LeftButton)
     assert field.selection() == chosen
@@ -151,12 +151,12 @@ def test_opening_choice_is_readonly_until_the_normal_operation_dialog_applies(
 def test_drawing_applies_once_and_history_chooses_the_input_before_the_groove(
     qt_app, tmp_path, spec
 ):
-    window = open_window(tmp_path, cube())
+    window = open_window(tmp_path, seal_cube())
     session = window.session
     before = session.last_result
     dialog = open_operation(window, spec, **drawing_values())
     assert dialog._accept_button.isEnabled()
-    _until(qt_app, lambda: window._preview_shown and not window._preview_busy.isActive())
+    wait_until(qt_app, lambda: window._preview_shown and not window._preview_busy.isActive())
     assert session.last_result is before
     dialog.accept()
     assert session.wait_for_idle(30000)
@@ -173,9 +173,9 @@ def test_drawing_applies_once_and_history_chooses_the_input_before_the_groove(
     assert editing is not None
     assert editing.values()["path_sketch"] == drawing_values()["path_sketch"]
     QTest.mouseClick(editing._editors["path_sketch"].button, Qt.MouseButton.LeftButton)
-    _until(qt_app, lambda: editing.seal_flow.editor is not None)
+    wait_until(qt_app, lambda: editing.seal_flow.editor is not None)
     chooser = editing.seal_flow.editor
-    _until(qt_app, chooser.accept_button.isEnabled)
+    wait_until(qt_app, chooser.accept_button.isEnabled)
     assert chooser.source.mesh.volume == pytest.approx(8000)
     assert len(chooser.objects) == 1
     assert chooser._surroundings.bodies[0].volume == pytest.approx(8000)
@@ -197,7 +197,7 @@ def test_drawing_applies_once_and_history_chooses_the_input_before_the_groove(
 def test_closed_history_ignores_late_preparation_and_keeps_sources_snapshot(
     qt_app, tmp_path, spec, monkeypatch
 ):
-    window = open_window(tmp_path, cube())
+    window = open_window(tmp_path, seal_cube())
     dialog = open_operation(window, spec, **drawing_values())
     flow = dialog.seal_flow
     flow.baseline = None
@@ -217,7 +217,7 @@ def test_closed_history_ignores_late_preparation_and_keeps_sources_snapshot(
 
 
 def test_document_change_closes_the_readonly_chooser(qt_app, tmp_path, spec):
-    window = open_window(tmp_path, cube())
+    window = open_window(tmp_path, seal_cube())
     dialog = open_operation(window, spec, **drawing_values())
     flow = dialog.seal_flow
     flow.choose()

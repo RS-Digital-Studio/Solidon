@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pytest
 import trimesh
-from PySide6.QtCore import QLocale, QPointF, QThread, Signal
+from PySide6.QtCore import QLocale, QPointF, QThread
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.geom.mesh import MeshData
@@ -22,264 +22,7 @@ from app.ui.op_dialog import OperationDialog
 from app.ui.placement_flow import _PICK_IN_MODEL, SNAP_PIXELS, PlacementFlow
 from app.ui.render.api import PointerEvent
 from app.ui.session import Session
-
-
-class _Item:
-    def __init__(self, points: Any = None, capacity: int | None = None) -> None:
-        self.visible = True
-        self.matrix = np.eye(4)
-        self.points = np.zeros((0, 3)) if points is None else np.asarray(points, dtype=float)
-        #: Platz in den Puffern (Vertrag ``capacity``) — ``update_points``
-        #: darf dann weniger bringen, und der Test zählt die Tausche.
-        self.capacity = capacity
-        self.updates = 0
-        self.colour: str | None = None
-
-    def set_visible(self, visible: bool) -> None:
-        self.visible = visible
-
-    def set_matrix(self, matrix: np.ndarray) -> None:
-        self.matrix = matrix
-
-    def set_colour(self, colour: str) -> None:
-        self.colour = colour
-
-    def update_points(self, points: Any) -> None:
-        fresh = np.asarray(points, dtype=float).reshape(-1, 3)
-        if self.capacity is not None and len(fresh) > self.capacity:
-            raise ValueError(f"{len(fresh)} Punkte für eine Kapazität von {self.capacity}")
-        self.points = fresh
-        self.updates += 1
-
-
-class _Renderer:
-    widget = None
-    #: Wird beim Aufbau gesetzt — die Projektion liest darüber den Zoom.
-    viewport: Any = None
-
-    def __init__(self) -> None:
-        #: Was die Maßtinte anlegt und wieder abräumt — je Aufruf Name und
-        #: Argumente, damit ein Test fragen kann, was im Bild steht.
-        self.lines: list[dict[str, Any]] = []
-        self.surfaces: list[dict[str, Any]] = []
-        self.removed: list[Any] = []
-        #: Angehaltene Bilder und Freigaben — wie ``render_fakes.RecordingRenderer``.
-        #: Der Fluss hält das Bild an, solange die Fläche am Merkmal entsteht
-        #: (``PlacementFlow._hold_frames``, seit ``a255b14f8``).
-        self.holds: list[int] = []
-        self.releases = 0
-
-    def hold_frames(self, milliseconds: int) -> None:
-        self.holds.append(int(milliseconds))
-
-    def release_frames(self) -> None:
-        self.releases += 1
-
-    def add_surface(self, *_args: Any, **_kwargs: Any) -> _Item:
-        item = _Item(_args[0] if _args else None, _kwargs.get("capacity"))
-        self.surfaces.append({"args": _args, "item": item, **_kwargs})
-        return item
-
-    def add_lines(self, points: Any, **kwargs: Any) -> _Item:
-        item = _Item(points, kwargs.get("capacity"))
-        self.lines.append({"points": np.asarray(points, dtype=float), "item": item, **kwargs})
-        return item
-
-    def remove(self, item: Any) -> None:
-        self.removed.append(item)
-        self.lines = [entry for entry in self.lines if entry["item"] is not item]
-        self.surfaces = [entry for entry in self.surfaces if entry["item"] is not item]
-
-    def device_ratio(self) -> float:
-        return 1.0
-
-    def display_to_world(self, x: float, y: float, _depth: float) -> tuple[float, float, float]:
-        """Die Umkehrung von ``world_to_display`` in der Ebene z = 0."""
-        scale = _Viewport.SCALE * self.viewport.zoom()
-        return ((x - 320) / scale, (240 - y) / scale, 0.0)
-
-    def world_to_display(self, point: Any) -> tuple[float, float, float]:
-        """Eine Projektion, in der auch **z** ankommt.
-
-        Vorher fiel die Höhe weg. Für die Tiefenstufe heißt das: Mündung und
-        ein Millimeter darunter landen auf demselben Bildpunkt,
-        ``_axis_on_screen`` findet keine Richtung und gibt ``None`` zurück —
-        die ganze Tiefenrechnung lief nie, und kein Test hat es gemerkt.
-        Zehn Bildpunkte je Millimeter, in y auch für z: eine Seitenansicht.
-        """
-        scale = _Viewport.SCALE * self.viewport.zoom()
-        return (
-            320 + point[0] * scale,
-            240 - point[1] * scale - point[2] * scale,
-            0.5,
-        )
-
-
-class _Viewport(QWidget):
-    cameraMoved = Signal()  # noqa: N815 — Qt-Schnittstelle
-    sceneApplied = Signal()  # noqa: N815 — Qt-Schnittstelle
-    previewDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
-    placementDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
-    placementDragStarted = Signal()  # noqa: N815 — Qt-Schnittstelle
-    slotProposed = Signal(str, float, float)  # noqa: N815 — Qt-Schnittstelle
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.renderer = _Renderer()
-        #: Woran der Griff der Platzierung gerade hängt — der echte Viewport
-        #: baut daran einen Bewegungsgriff; hier zählt nur die Entscheidung.
-        self.gripped: Any = None
-        # Die Projektion braucht den Zoom, und der steht an der Kamera.
-        self.renderer.viewport = self
-        self._object_colour = "#aaaaaa"
-        self.waiting_slot = False
-        """Ob ein gezogenes Langloch auf seine Bestätigung wartet.
-
-        Die Attrappe trug bis zum 11.09.2026 eine echte `SlotBar`, nur damit
-        der Fluss `slot_bar.active` fragen konnte — und verdeckte damit, dass
-        er das überhaupt tat: Nach dem Ausbau der Leiste blieben die Tests
-        hier grün, während 27 andere an `'Viewport' object has no attribute
-        'slot_bar'` fielen. Eine Attrappe, die mehr kann als die Sache, prüft
-        ihre eigene Nachstellung."""
-        self.hit: Any = None
-        self.result: Any = None
-        self.pointer: Any = None
-        #: Ob am Vorschaukörper ein Griff hängen soll. Der echte Viewport baut
-        #: ihn an einem Aktor des Renderers; hier zählt nur die Entscheidung.
-        self.preview_gizmo = False
-        #: Ursprung und Reichweite des Bewegungsgriffs, oder ``None``. Ein Test,
-        #: der ihn setzt, prüft, dass die Maßfelder seinen Platz frei lassen.
-        self.handle: tuple[tuple[float, float, float], float] | None = None
-        #: Kamerastellung und Darstellungsart — die Tiefenstufe fasst beide an.
-        self.pose: tuple[Any, Any, Any, float | None] = (
-            (0.0, -100.0, 0.0),
-            (0.0, 0.0, 0.0),
-            (0.0, 0.0, 1.0),
-            None,
-        )
-        self.display = "solid"
-        self.resize(900, 600)
-
-    def set_preview_gizmo(self, active: bool) -> None:
-        self.preview_gizmo = bool(active)
-
-    def grip_placement(self, item: Any, *, rotation: bool = True) -> None:
-        self.gripped = item
-
-    def scene_point_of(self, point: Any, object_id: str = "") -> Any:
-        return point
-
-    def gizmo_reach(self) -> tuple[tuple[float, float, float], float] | None:
-        """Wo der Bewegungsgriff sitzt — hier keiner, sofern der Test keinen setzt.
-
-        Der echte Viewport hängt ihn an ein gewähltes Merkmal; die Platzierung
-        hält seinen Platz frei, damit Pfeile und Ringe bedienbar bleiben.
-        """
-        return self.handle
-
-    def set_placement_pointer(self, handler: Any) -> None:
-        self.pointer = handler
-
-    def set_placement_resume(self, handler: Any) -> None:
-        self.resume = handler
-
-    def clear_placement_resume(self, handler: Any) -> None:
-        if getattr(self, "resume", None) == handler:
-            self.resume = None
-
-    def placement_hit(self, _x: int, _y: int) -> Any:
-        return self.hit
-
-    def is_scene_applied(self, result: Any) -> bool:
-        return result is not None and self.result is result
-
-    def show_scene(self, result: Any) -> None:
-        self.result = result
-        self.sceneApplied.emit()
-
-    def _section_planes(self) -> tuple[None, None]:
-        return None, None
-
-    def view_point_of(self, point: Any, _object_id: str) -> Any:
-        return point
-
-    def camera_pose(self) -> tuple[Any, Any, Any, float | None]:
-        """Standort, Blickpunkt, Oben und der Parallelmaßstab — vier Werte.
-
-        Die Tiefenstufe schwenkt quer zur Werkzeugachse und braucht dafür die
-        heutige Stellung. Vier und nicht drei, wie der echte Viewport: Wer die
-        Attrappe kürzer hält als den Vertrag, prüft einen Aufruf, den es so
-        nicht gibt.
-        """
-        return self.pose
-
-    def set_camera_pose(
-        self, position: Any, focal_point: Any, view_up: Any, parallel_scale: float | None = None
-    ) -> None:
-        self.pose = (position, focal_point, view_up, parallel_scale)
-
-    def settle_camera(self) -> None:
-        pass
-
-    #: Bildpunkte je Millimeter — dieselbe Zahl, mit der ``world_to_display``
-    #: projiziert. Zwei verschiedene Maßstäbe in einer Attrappe ergäben eine
-    #: Tiefe, die niemand herleiten kann, und einen Test, dessen Sollwert aus
-    #: dem Prüfling stammt.
-    #:
-    #: **Und ausdrücklich nicht zehn.** Die Tiefenstufe fällt ohne Maßstab auf
-    #: einen Zehntelmillimeter je Bildpunkt zurück, und bei zehn Bildpunkten je
-    #: Millimeter ist der Rückfall vom Ergebnis der Rechnung nicht zu
-    #: unterscheiden: Die Gegenprobe blieb damit grün, als die Rechnung durch
-    #: genau diesen Rückfall ersetzt wurde. Acht macht beide Wege sichtbar.
-    SCALE = 8.0
-
-    #: Der Abstand, bei dem ``SCALE`` gilt. Die echte Ansicht rechnet
-    #: perspektivisch (``settings.projection`` steht auf ``perspective``), der
-    #: Maßstab hängt dort also am Kameraabstand — und genau das muss die
-    #: Attrappe können, sonst ist ein eingefrorener Maßstab von einem je
-    #: Bewegung gemessenen nicht zu unterscheiden.
-    REFERENCE_DISTANCE = 100.0
-
-    def zoom(self) -> float:
-        """Wie stark das Bild gerade vergrößert ist — eins am Bezugsabstand."""
-        position = np.asarray(self.pose[0], dtype=np.float64)
-        focus = np.asarray(self.pose[1], dtype=np.float64)
-        away = float(np.linalg.norm(position - focus))
-        if away < 1e-9:
-            return 1.0
-        return self.REFERENCE_DISTANCE / away
-
-    def _pixels_per_mm_at(self, _point: Any) -> float | None:
-        """Der Maßstab an einer Stelle — mit dem Abstand der Kamera.
-
-        Die Tiefenstufe rechnet daraus, wie weit ein Bildpunkt Zug die Bohrung
-        wachsen lässt. Was er **nicht** sein darf, ist ``None`` an einer Stelle,
-        an der der echte Viewport eine Zahl liefert — sonst prüft der Test den
-        Rückfall statt der Rechnung.
-        """
-        return self.SCALE * self.zoom()
-
-    def set_display_mode(self, mode: str) -> None:
-        self.display = mode
-
-    @property
-    def display_mode(self) -> str:
-        """Eine **Property**, wie im Viewport (``viewport.py``).
-
-        Als Methode gab die Attrappe eine gebundene Methode zurück, und die
-        Platzierung merkte sie sich als Darstellungsart, um sie am Ende
-        zurückzustellen — geprüft war damit nichts von beidem.
-        """
-        return self.display
-
-    def _device_ratio(self) -> float:
-        return 1.0
-
-    def _draw(self) -> None:
-        pass
-
-    def slot_drag_waits(self) -> bool:
-        return self.waiting_slot
+from tests.ui_helpers import PlacementItem, PlacementViewport
 
 
 def test_mixed_part_preview_shows_and_removes_both_bodies(flow: Any, monkeypatch: Any) -> None:
@@ -296,8 +39,8 @@ def test_mixed_part_preview_shows_and_removes_both_bodies(flow: Any, monkeypatch
     created = []
     removed = []
 
-    def add_surface(*_args: Any, **kwargs: Any) -> _Item:
-        item = _Item()
+    def add_surface(*_args: Any, **kwargs: Any) -> PlacementItem:
+        item = PlacementItem()
         created.append((item, kwargs))
         return item
 
@@ -333,7 +76,7 @@ def test_mixed_part_preview_shows_and_removes_both_bodies(flow: Any, monkeypatch
 @pytest.fixture
 def flow(qt_app: QApplication) -> Any:
     session = Session()
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     dialog: OperationDialog | None = None
     controller: PlacementFlow | None = None
     try:
@@ -808,7 +551,7 @@ def test_placing_a_hole_goes_through_three_stages(flow: Any) -> None:
     # Projektion, die auch das Bild macht — nicht aus einer Handrechnung, die
     # bei der ersten Änderung an der Attrappe still falsch wird.
     mouth = viewport.renderer.world_to_display(controller._surface.point)
-    erwartet = (300 - mouth[1]) / _Viewport.SCALE
+    erwartet = (300 - mouth[1]) / PlacementViewport.SCALE
     assert gezogen == pytest.approx(erwartet, abs=0.2), (
         f"die Spitze folgt dem Zeiger nicht — {gezogen} statt {erwartet}"
     )
@@ -1014,7 +757,7 @@ def test_the_depth_follows_the_pointer_after_a_zoom(flow: Any) -> None:
 
     def erwartet_bei(y: int) -> float:
         mouth = viewport.renderer.world_to_display(controller._surface.point)
-        return (y - float(mouth[1])) / (_Viewport.SCALE * viewport.zoom())
+        return (y - float(mouth[1])) / (PlacementViewport.SCALE * viewport.zoom())
 
     nah = gezogen_bei(300)
     assert nah == pytest.approx(erwartet_bei(300), abs=0.2)
@@ -1708,7 +1451,7 @@ def test_a_drag_in_the_preview_becomes_numbers_in_the_dialog(qt_app: QApplicatio
 
     load_operations()
     session = Session()
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     spec = REGISTRY.get("create_box")
     dialog = OperationDialog(spec, {})
     window = SimpleNamespace(
@@ -1812,7 +1555,7 @@ def test_editing_a_hole_opens_the_same_placement_as_drilling(
 
     load_operations()
     session = Session()
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     dialog: OperationDialog | None = None
     controller: PlacementFlow | None = None
     try:
@@ -1884,7 +1627,7 @@ def test_moving_a_feature_starts_where_it_already_sits(qt_app: QApplication) -> 
 
     load_operations()
     session = Session()
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     dialog: OperationDialog | None = None
     controller: PlacementFlow | None = None
     try:
@@ -3071,7 +2814,7 @@ def test_the_flow_runs_on_a_host_without_a_window(
     from app.ui.placement_flow import PlacementHost, QuietHost
 
     session = Session()
-    viewport = _Viewport()
+    viewport = PlacementViewport()
     controller: PlacementFlow | None = None
     übernommen: list[Any] = []
     try:
@@ -3971,7 +3714,7 @@ def test_a_drag_at_a_foreign_tool_grip_leaves_the_other_flow_alone(qt_app: QAppl
         viewport = window.viewport
         host = flow.dialog
         before = tuple(flow._surface.point)
-        foreign = _Item()
+        foreign = PlacementItem()
         moved = np.eye(4)
         moved[:3, 3] = (before[0] + 18.0, before[1], before[2])
 

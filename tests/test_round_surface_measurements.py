@@ -12,36 +12,7 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect, fit_cone, fit_sphere, fit_torus
 from app.core.units import EPS_GEOM
-from tests.helpers import stop_after
-
-
-def _round_surface(kind: str) -> trimesh.Trimesh:
-    """Drei unabhängig parametrisierte Träger mit bekannten Maßen erzeugen."""
-    if kind == "sphere":
-        return trimesh.creation.icosphere(subdivisions=2, radius=7.234567)
-    if kind == "torus":
-        return trimesh.creation.torus(
-            major_radius=17.125, minor_radius=3.234567, major_sections=48, minor_sections=24
-        )
-    angles = np.linspace(0.0, math.tau, 48, endpoint=False)
-    heights = (4.0, 12.0)
-    vertices = np.asarray(
-        [
-            (z * math.tan(math.pi / 6) * math.cos(a), z * math.tan(math.pi / 6) * math.sin(a), z)
-            for z in heights
-            for a in angles
-        ]
-    )
-    faces = []
-    for lower in range(len(angles)):
-        following = (lower + 1) % len(angles)
-        faces.extend(
-            (
-                (lower, following, following + len(angles)),
-                (lower, following + len(angles), lower + len(angles)),
-            )
-        )
-    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+from tests.helpers import round_surface, stop_after
 
 
 def _subdivided(body: trimesh.Trimesh, manner: str) -> trimesh.Trimesh:
@@ -105,7 +76,7 @@ def _assert_measures(kind: str, fit: Any) -> None:
 )
 def test_round_surface_measures_use_original_points(kind: str, manner: str) -> None:
     """Reine Unterteilung verändert kein analytisches Maß und kein Eingabearray."""
-    source = _round_surface(kind)
+    source = round_surface(kind)
     body = _subdivided(source, manner)
     points, triangles = body.vertices.copy(), body.faces.copy()
     fitter = {"sphere": fit_sphere, "cone": fit_cone, "torus": fit_torus}[kind]
@@ -120,7 +91,7 @@ def test_round_surface_measures_use_original_points(kind: str, manner: str) -> N
 @pytest.mark.parametrize("kind", ("sphere", "cone", "torus"))
 def test_true_detection_publishes_unrounded_round_surface_measures(kind: str) -> None:
     """Der wirkliche Erkennungsweg veröffentlicht dieselben ungerundeten Endmaße."""
-    body = _round_surface(kind)
+    body = round_surface(kind)
     before_points, before_faces = body.vertices.copy(), body.faces.copy()
 
     found = [feature for feature in detect(MeshData.of(body)).values() if feature.kind == kind]
@@ -153,7 +124,7 @@ def test_true_detection_publishes_unrounded_round_surface_measures(kind: str) ->
 @pytest.mark.parametrize("pose", ("rotation", "translation", "reflection", "scale"))
 def test_end_measures_follow_the_known_rigid_frame(kind: str, pose: str) -> None:
     """Große Lage, Spiegelung und Maßstab verändern die unabhängigen Sollmaße korrekt."""
-    body = _subdivided(_round_surface(kind), "one_side")
+    body = _subdivided(round_surface(kind), "one_side")
     matrix = trimesh.transformations.rotation_matrix(0.73, (1.0, 2.0, -0.5))
     scale = 3.7 if pose == "scale" else 1.0
     matrix[:3, :3] *= scale
@@ -198,16 +169,15 @@ def test_end_measures_follow_the_known_rigid_frame(kind: str, pose: str) -> None
 @pytest.mark.parametrize("kind", ("sphere", "cone", "torus"))
 def test_a_trimmed_round_patch_passes_the_real_classification(kind: str) -> None:
     """Der nicht vorhandene Vollkörper darf die belegte Teilfläche nicht aussperren."""
-    from tests.test_cone_fit_quality import _partial_cone
-    from tests.test_torus_fit_quality import _partial_torus
+    from tests.helpers import partial_cone, partial_torus
 
     if kind == "sphere":
-        source = _round_surface(kind)
+        source = round_surface(kind)
         body = trimesh.intersections.slice_mesh_plane(source, (0.0, 0.0, 1.0), (0.0, 0.0, 3.0))
     elif kind == "cone":
-        body = _partial_cone(12, 4, reverse=True)
+        body = partial_cone(12, 4, reverse=True)
     else:
-        source, patch = _partial_torus(96, 48)
+        source, patch = partial_torus(96, 48)
         body = source.submesh([patch], append=True, repair=False)
     points, faces = body.vertices.copy(), body.faces.copy()
 
@@ -242,7 +212,7 @@ def test_the_round_fit_can_stop_before_and_during_preparation(kind: str, stop_at
     """
     from app.core.errors import OperationCancelled
 
-    body = _subdivided(_round_surface(kind), "uniform")
+    body = _subdivided(round_surface(kind), "uniform")
     before = body.vertices.copy(), body.faces.copy()
     fitter = {"sphere": fit_sphere, "cone": fit_cone, "torus": fit_torus}[kind]
     stop, reached = stop_after(stop_at)
@@ -265,7 +235,7 @@ def test_true_detection_stops_inside_the_first_solver_evaluation(
     from app.core.perceive import features, refine
     from app.core.scene.cancel import CancelSignal
 
-    mesh = MeshData.of(_round_surface(kind))
+    mesh = MeshData.of(round_surface(kind))
     before = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
     signal = CancelSignal()
     features.forget_cache()
@@ -331,7 +301,7 @@ def test_cylinder_and_planar_measure_sources_follow_their_calculation() -> None:
 @pytest.mark.parametrize("kind", ("sphere", "cone", "torus"))
 def test_opposite_coincident_faces_do_not_promote_chord_points_to_round_corners(kind: str) -> None:
     """Zwei entgegengesetzte Häute erzeugen keine zusätzliche Stützung ihrer Sehnenpunkte."""
-    source = _subdivided(_round_surface(kind), "uniform")
+    source = _subdivided(round_surface(kind), "uniform")
     body = trimesh.Trimesh(
         vertices=source.vertices.copy(),
         faces=np.r_[source.faces, source.faces[:, ::-1]],
@@ -380,7 +350,7 @@ def test_the_support_reads_the_same_counted_sorted_or_marked(
     """
     from app.core.perceive import features
 
-    body = _round_surface("torus")
+    body = round_surface("torus")
     if not welded:
         body = trimesh.Trimesh(
             vertices=body.triangles.reshape(-1, 3),
@@ -430,7 +400,7 @@ def test_new_surface_points_recover_the_same_independent_measures(kind: str, sec
 @pytest.mark.parametrize("kind", ("sphere", "cone", "torus"))
 def test_float32_source_resolution_is_not_claimed_as_float64_input_accuracy(kind: str) -> None:
     """Die Eingabeschranke folgt der ursprünglichen Float32-Koordinatenauflösung."""
-    source = _round_surface(kind)
+    source = round_surface(kind)
     quantised = np.asarray(source.vertices, dtype=np.float32)
     body = trimesh.Trimesh(vertices=quantised, faces=source.faces, process=False)
     tolerance = math.sqrt(3) * float(np.spacing(np.float32(np.abs(quantised).max())))
@@ -457,7 +427,7 @@ def test_a_used_up_solver_budget_publishes_no_unfinished_fit(
     """Ein begrenzter Löserlauf darf keinen bloßen Zwischenwert als Endmaß liefern."""
     from app.core.perceive import features
 
-    body = _round_surface(kind)
+    body = round_surface(kind)
     if kind == "sphere":
         body.vertices[0] *= 1.0002
     fitter = {"sphere": fit_sphere, "cone": fit_cone, "torus": fit_torus}[kind]
@@ -479,7 +449,7 @@ def test_all_original_faces_must_support_a_published_round_form(
     """Einzelne Beulen und elliptische Gegenträger verschwinden nicht im mittleren Rückstand."""
     from app.core.perceive.features import detect_cones, detect_spheres, detect_tori
 
-    body = _round_surface(kind)
+    body = round_surface(kind)
     if deformation == "ellipse":
         body.vertices[:, 2 if kind == "torus" else 0] *= 1.2
     else:
@@ -495,9 +465,9 @@ def test_all_original_faces_must_support_a_published_round_form(
 def test_a_normal_constrained_chamfer_does_not_claim_an_original_cone_angle() -> None:
     """Ein Kreis und Facettennormalen liefern einen geschätzten Winkel, keinen Ursprungsnachweis."""
     from app.core.perceive import features
-    from tests.test_features import _plate_with_a_chamfered_slot
+    from tests.helpers import plate_with_a_chamfered_slot
 
-    mesh = _plate_with_a_chamfered_slot()
+    mesh = plate_with_a_chamfered_slot()
     fitted = features._fitted(mesh)
     candidates = [(fit, faces) for fit, faces in fitted.cones if fit.normal_constrained]
     assert len(candidates) == 2
@@ -515,9 +485,9 @@ def test_a_normal_constrained_chamfer_does_not_claim_an_original_cone_angle() ->
 @pytest.mark.parametrize("name", ("shallow_sphere_cap_icosphere.stl", "shallow_sphere_cap_uv.stl"))
 def test_true_detection_measures_the_independently_constructed_five_degree_cap(name: str) -> None:
     """Die echte Erkennung erhält R80 bei zwei Float32-Kalotten aus dem Korpus."""
-    from tests.test_sphere_fit_quality import _surface
+    from tests.helpers import surface_mesh
 
-    body = _surface(name)
+    body = surface_mesh(name)
     points, faces = body.vertices.copy(), body.faces.copy()
     # Eine Höhenänderung wird bei der 5°-Kalotte um den Kehrwert der relativen
     # Stichhöhe verstärkt. Die Schranke folgt aus der Float32-Quelldatei und
@@ -539,7 +509,7 @@ def test_true_detection_measures_the_independently_constructed_five_degree_cap(n
 def test_local_detection_keeps_the_actual_measure_sources() -> None:
     """Die lokale Veröffentlichung erhält Fitmaß und gemessene Netzgrenzen getrennt."""
     from app.core.perceive.local import detect_local
-    from tests.test_local_detection import blind_cylinder, bore_seed
+    from tests.helpers import blind_cylinder, bore_seed
 
     mesh = blind_cylinder()
     face, point, normal = bore_seed(mesh)
@@ -573,7 +543,7 @@ def test_round_mesh_measures_survive_real_history_quality_and_project_roundtrips
     from app.core.types import Source
 
     load_operations()
-    source = _round_surface(kind)
+    source = round_surface(kind)
     source_points, source_faces = source.vertices.copy(), source.faces.copy()
     # OBJ erhält die Float64-Sollpunkte; dieser Test prüft den Verlauf und
     # nicht die getrennt nachgewiesene Quantisierung binärer STL-Koordinaten.

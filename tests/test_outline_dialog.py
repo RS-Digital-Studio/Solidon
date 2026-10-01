@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import threading
-import time
-from collections.abc import Callable
 from functools import partial
 
 import pytest
@@ -15,17 +13,8 @@ from PySide6.QtWidgets import QApplication, QDialog, QLabel, QLineEdit, QPushBut
 
 from app.core.ingest import outline
 from app.ui.outline_dialog import ContourField, OutlineDialog
-from tests.test_outline_profiles import SOURCE
-
-
-def _until(app: QApplication, condition: Callable[[], bool]) -> None:
-    deadline = time.monotonic() + 10
-    while not condition() and time.monotonic() < deadline:
-        app.processEvents()
-        # QTest.qWait hält hier den GIL; der kalte SciPy-Import im Arbeiter
-        # käme zwischen den kurzen Python-Takten sonst nicht weiter.
-        time.sleep(0.01)
-    assert condition(), "dialog did not reach the expected state"
+from tests.helpers import SOURCE
+from tests.ui_helpers import wait_until
 
 
 def _dispose(dialog: OutlineDialog, app: QApplication) -> None:
@@ -43,7 +32,7 @@ def test_contour_updates_restore_previous_signal_state_on_error(
     """Auch eine Ausnahme während der Konturdarstellung erhält die vorherige Signalsperre."""
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         dialog.profiles.blockSignals(blocked)
 
         def refuse(*_args):
@@ -70,7 +59,7 @@ def test_image_keyboard_and_real_result_share_selected_profiles(qt_app: QApplica
     dialog = OutlineDialog(SOURCE, ".svg")
     dialog.show()
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert dialog.profiles.count() == 2
         assert dialog.result_preview.mesh.volume == pytest.approx((140 + 48) * 3)
         QTest.mouseClick(dialog.select_none, Qt.MouseButton.LeftButton)
@@ -80,14 +69,14 @@ def test_image_keyboard_and_real_result_share_selected_profiles(qt_app: QApplica
         dialog.profiles.setCurrentRow(0)
         dialog.profiles.setFocus()
         QTest.keyClick(dialog.profiles, Qt.Key.Key_Space)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         chosen = json.loads(dialog.values()["contours"])
         assert len(chosen) == 1
         assert dialog.result_preview.mesh.is_watertight
         original = dialog.result_preview.mesh.volume
         dialog._fields["height"].set_value_mm(6)
         assert not dialog.accept_button.isEnabled()
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert dialog.result_preview.mesh.volume == pytest.approx(original * 2)
         dialog.accept()
         assert dialog.result() == QDialog.DialogCode.Accepted
@@ -103,7 +92,7 @@ def test_columns_share_heading_scale_and_outline_measures_stay_compact(
 
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         expected = {"Konturen", "Konturvorschau", "So sieht Ihr Teil aus"}
         headings = [label for label in dialog.findChildren(QLabel) if label.text() in expected]
         assert {label.text() for label in headings} == expected
@@ -118,11 +107,11 @@ def test_click_in_outline_picture_toggles_its_profile(qt_app: QApplication) -> N
     dialog = OutlineDialog(SOURCE, ".svg")
     dialog.show()
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         entry = dialog._profiles[0]
         point = dialog.contour_view.mapFromScene(entry.label_at)
         QTest.mouseClick(dialog.contour_view.viewport(), Qt.MouseButton.LeftButton, pos=point)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert entry.profile.id not in json.loads(dialog.values()["contours"])
         assert len(json.loads(dialog.values()["contours"])) == 1
     finally:
@@ -143,12 +132,12 @@ def test_saved_choice_and_unknown_choice_are_not_replaced(qt_app: QApplication) 
             },
         )
         try:
-            _until(qt_app, lambda current=dialog: current.profiles.count() == 2)
+            wait_until(qt_app, lambda current=dialog: current.profiles.count() == 2)
             assert json.loads(dialog.values()["contours"]) == (
                 identifiers if identifiers == [chosen] else []
             )
             if identifiers == [chosen]:
-                _until(qt_app, dialog.accept_button.isEnabled)
+                wait_until(qt_app, dialog.accept_button.isEnabled)
                 assert dialog.result_preview.mesh.bounds.size[0] == pytest.approx(32)
                 assert dialog.result_preview.mesh.bounds.size[2] == pytest.approx(7)
             else:
@@ -179,7 +168,7 @@ def test_profile_work_and_projection_run_outside_main_thread(
     monkeypatch.setattr(module.drawing, "project", projecting)
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert {name for name, _ in calls} == {"read", "project"}
         assert all(identifier != main_thread for _, identifier in calls)
     finally:
@@ -202,7 +191,7 @@ def test_cancel_during_read_discards_late_result(
     monkeypatch.setattr(outline, "read_profiles", slow_read)
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, entered.is_set)
+        wait_until(qt_app, entered.is_set)
         dialog.reject()
         gate.set()
         dialog.release()
@@ -228,7 +217,7 @@ def test_invalid_profile_stays_visible_with_reason(
     monkeypatch.setattr(outline, "profile_reason", checked)
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert dialog.profiles.count() == 2
         row = next(index for index, entry in enumerate(dialog._profiles) if entry.reason)
         item = dialog.profiles.item(row)
@@ -259,13 +248,13 @@ def test_old_preview_cannot_overwrite_new_values_or_enable_acceptance(
     monkeypatch.setattr(outline, "extrude_profiles", delayed)
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, entered.is_set)
+        wait_until(qt_app, entered.is_set)
         dialog._fields["height"].set_value_mm(5)
         dialog._fields["height"].set_value_mm(8)
         dialog.accept()
         assert dialog.result() != QDialog.DialogCode.Accepted
         gate.set()
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert heights == [3, 8]
         assert dialog.result_preview.mesh.bounds.size[2] == pytest.approx(8)
         assert dialog._ready_revision == dialog._revision
@@ -283,7 +272,7 @@ def test_preview_failure_keeps_previous_image_and_recovers(
     calculate = outline.extrude_profiles
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         previous = dialog.result_preview
 
         def refused(*args: object, **kwargs: object) -> object:
@@ -291,13 +280,13 @@ def test_preview_failure_keeps_previous_image_and_recovers(
 
         monkeypatch.setattr(outline, "extrude_profiles", refused)
         dialog._fields["height"].set_value_mm(4)
-        _until(qt_app, lambda: "andere Höhe" in dialog.state.text())
+        wait_until(qt_app, lambda: "andere Höhe" in dialog.state.text())
         assert dialog.result_preview is previous
         assert dialog.preview.renderer().isValid()
         assert not dialog.accept_button.isEnabled()
         monkeypatch.setattr(outline, "extrude_profiles", calculate)
         dialog._fields["height"].set_value_mm(6)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert dialog.result_preview.mesh.bounds.size[2] == pytest.approx(6)
     finally:
         _dispose(dialog, qt_app)
@@ -347,7 +336,7 @@ def test_operation_dialog_uses_contour_field_and_preserves_dimension_expressions
 def test_selection_only_dialog_keeps_dimensions_read_only(qt_app: QApplication) -> None:
     dialog = OutlineDialog(SOURCE, ".svg", values={"height": 8, "width": 96}, selection_only=True)
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert all(not field.isEnabled() for field in dialog._fields.values())
         assert dialog.values()["height"] == pytest.approx(8)
         assert dialog.values()["width"] == pytest.approx(96)
@@ -362,7 +351,7 @@ def test_focused_secondary_button_keeps_the_primary_and_selection_clear(
     dialog = OutlineDialog(SOURCE, ".svg")
     dialog.show()
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         for button in dialog.findChildren(QPushButton):
             button.setFocus()
             qt_app.processEvents()
@@ -393,7 +382,7 @@ def test_a_drawing_without_any_extrudable_contour_says_so_instead_of_asking(
     monkeypatch.setattr(outline, "profile_reason", lambda _entry: reason)
     dialog = OutlineDialog(SOURCE, ".svg")
     try:
-        _until(qt_app, lambda: dialog.profiles.count() == 2)
+        wait_until(qt_app, lambda: dialog.profiles.count() == 2)
         qt_app.processEvents()
 
         assert not dialog.accept_button.isEnabled()

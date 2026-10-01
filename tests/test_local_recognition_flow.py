@@ -16,9 +16,9 @@ from app.ui.main_window import MainWindow
 from app.ui.render.api import PointerEvent
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from tests.test_local_detection import blind_cylinder, bore_seed
+from tests.helpers import blind_cylinder, bore_seed
 from tests.test_local_recognition_ui import choose_action
-from tests.test_outline_dialog import _until
+from tests.ui_helpers import wait_until
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def start(window, app):
     flow.begin(surface_hit(window))
     dialog = flow.dialog
     assert dialog is not None
-    _until(app, dialog.save_button.isEnabled)
+    wait_until(app, dialog.save_button.isEnabled)
     return flow, dialog
 
 
@@ -68,7 +68,7 @@ def test_local_edit_has_one_transaction_and_restores_original_on_undo(local_wind
     assert not window.viewport._comparing
     choose_action(dialog, "resize_hole")
     dialog.editor._editors["diameter"].set_value(8)
-    _until(qt_app, lambda: dialog._preview_valid)
+    wait_until(qt_app, lambda: dialog._preview_valid)
     assert not window.viewport.banner.legend.isHidden()
     assert window.viewport._comparing
     assert session.last_result is before
@@ -184,7 +184,7 @@ def test_palette_click_and_escape_share_the_local_flow(local_window, qt_app, mon
     monkeypatch.setattr(window.viewport, "placement_hit", lambda x, y: surface_hit(window))
     assert flow.pointer(PointerEvent(kind="release", x=5, y=7, button="left"))
     assert flow.dialog is not None
-    _until(qt_app, flow.dialog.save_button.isEnabled)
+    wait_until(qt_app, flow.dialog.save_button.isEnabled)
     window._escape()
     assert not flow.active
     assert len(window.session.project.document.ops) == 1
@@ -212,7 +212,7 @@ def test_bad_surface_can_be_picked_again_without_a_document_change(
     monkeypatch.setattr(window.viewport, "placement_hit", lambda x, y: surface_hit(window))
     assert flow.pointer(PointerEvent(kind="release", x=5, y=7, button="left"))
     assert flow.dialog is not None and flow.dialog is not dialog
-    _until(qt_app, flow.dialog.save_button.isEnabled)
+    wait_until(qt_app, flow.dialog.save_button.isEnabled)
     assert window.session.project.document == document
     flow.dialog.reject()
 
@@ -225,7 +225,7 @@ def test_failed_preview_stays_visible_and_cannot_be_accepted(local_window, qt_ap
 
     monkeypatch.setattr(local_window.session, "_preview_outcome", crash)
     choose_action(dialog, "resize_hole")
-    _until(qt_app, lambda: "Ändern Sie die Werte" in dialog.edit_notice.text())
+    wait_until(qt_app, lambda: "Ändern Sie die Werte" in dialog.edit_notice.text())
     assert not dialog._preview_valid
     dialog.editor.accept()
     assert flow.dialog is dialog
@@ -271,7 +271,7 @@ def test_context_action_uses_the_clicked_original_instead_of_old_selection(
     window._on_viewport_context_menu(20, 30)
     flow = window.local_features()
     assert len(clicks) == 1 and flow.dialog is not None
-    _until(qt_app, flow.dialog.save_button.isEnabled)
+    wait_until(qt_app, flow.dialog.save_button.isEnabled)
     assert flow.dialog.inspection.object_id == hit[0]
     window.run_operation(REGISTRY.get("scale_object"), on_bodies=(hit[0],))
     assert not flow.active
@@ -298,11 +298,11 @@ def test_old_worker_crash_cannot_override_new_preview_status(qt_app, monkeypatch
     monkeypatch.setattr(session, "_preview_outcome", compute)
     try:
         session.preview_async(results.append, failed=errors.append)
-        _until(qt_app, entered.is_set)
+        wait_until(qt_app, entered.is_set)
         session.preview_async(results.append, failed=errors.append)
-        _until(qt_app, lambda: results == [None])
+        wait_until(qt_app, lambda: results == [None])
         release.set()
-        _until(qt_app, lambda: not session._previews)
+        wait_until(qt_app, lambda: not session._previews)
         assert errors == []
     finally:
         release.set()
@@ -326,7 +326,7 @@ def test_a_recalculation_in_between_does_not_swallow_the_accepted_edit(local_win
     flow, dialog = start(window, qt_app)
     choose_action(dialog, "resize_hole")
     dialog.editor._editors["diameter"].set_value(8)
-    _until(qt_app, lambda: dialog._preview_valid)
+    wait_until(qt_app, lambda: dialog._preview_valid)
 
     session.evaluate_now()
     assert flow.dialog is dialog, "eine Neuberechnung schließt das Fenster nicht"

@@ -9,12 +9,14 @@ from typing import Any
 import numpy as np
 import pytest
 
-from app.core.brep import edit, profiles
-from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available, tessellate
 from app.core.units import EPS_GEOM
+from tests.helpers import exact_kernel
 
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+exact_kernel()
+
+from app.core.brep import edit, profiles  # noqa: E402
+from app.core.brep.features import features_of  # noqa: E402
+from app.core.brep.kernel import Solid, tessellate  # noqa: E402
 
 
 def _triangulations(solid: Solid) -> tuple[tuple[int, int], ...]:

@@ -28,7 +28,7 @@ from app.core.errors import SketchConflictError, ValidationError
 from app.core.sketch import solver
 from app.core.sketch.solver import solve_sketch
 from app.core.types import Sketch, SketchConstraint, SketchElement
-from tests.helpers import assert_sketch_gradients
+from tests.helpers import assert_sketch_gradients, exact_kernel
 
 
 def _axes(points: tuple[tuple[float, float], ...]) -> tuple[float, float, float]:
@@ -501,13 +501,6 @@ def test_the_mesh_outline_keeps_its_chords_within_the_facet_sag() -> None:
     _assert_chords_within(points, [*ring, ring[0]], MAX_FACET_SAG)
 
 
-def _brep_ready() -> bool:
-    from app.core.brep.kernel import available
-
-    return available()
-
-
-@pytest.mark.skipif(not _brep_ready(), reason="OpenCASCADE is an optional dependency")
 @pytest.mark.parametrize("degrees", [0.0, 30.0, 104.0])
 def test_an_extruded_turned_ellipse_measures_its_area_and_its_perimeter(degrees: float) -> None:
     """Der exakte Kern baut eine **echte** Ellipse: Volumen π·a·b·h, und die
@@ -519,6 +512,8 @@ def test_an_extruded_turned_ellipse_measures_its_area_and_its_perimeter(degrees:
     Integral heraus, die sich auf 10⁻¹⁴ einig sind — gemessen im Paket P6.6 der
     Durchsicht 0.5.0 (`11c429cc2`; die Sonde ist nicht versioniert).
     """
+    exact_kernel()
+
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GCPnts import GCPnts_AbscissaPoint
     from OCP.GeomAbs import GeomAbs_Ellipse
@@ -539,10 +534,11 @@ def test_an_extruded_turned_ellipse_measures_its_area_and_its_perimeter(degrees:
     assert rims == pytest.approx([_perimeter(a, b)] * 2, rel=1e-10)
 
 
-@pytest.mark.skipif(not _brep_ready(), reason="OpenCASCADE is an optional dependency")
 def test_an_extruded_cut_arc_measures_its_segment_and_its_arc_length() -> None:
     """Der angeschnittene Bogen am Körper: Volumen aus der Segmentformel, die
     Länge der gekrümmten Kante aus einem eigenen Integral."""
+    exact_kernel()
+
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.GCPnts import GCPnts_AbscissaPoint
     from OCP.GeomAbs import GeomAbs_Ellipse, GeomAbs_Line
@@ -606,12 +602,10 @@ def _volume(result: object) -> float:
     return float(result.outputs[0].mesh.volume)  # type: ignore[attr-defined]
 
 
-needs_brep = pytest.mark.skipif(not _brep_ready(), reason="OpenCASCADE is an optional dependency")
-
-
-@needs_brep
 @pytest.mark.parametrize("plane", ["plane:xy", "plane:xz", "plane:yz"])
 def test_extruding_a_drawn_ellipse_gives_pi_a_b_h_on_every_plane(plane: str) -> None:
+    exact_kernel()
+
     ellipse = _ellipse_element(16.0, 6.0, 22.0, (4.0, 9.0))
 
     result = _run("sketch_extrude", sketch=_text(ellipse, plane=plane), height=7.0)
@@ -619,8 +613,9 @@ def test_extruding_a_drawn_ellipse_gives_pi_a_b_h_on_every_plane(plane: str) -> 
     assert _volume(result) == pytest.approx(math.pi * 16.0 * 6.0 * 7.0, rel=1e-9)
 
 
-@needs_brep
 def test_an_elliptical_pocket_takes_pi_a_b_times_its_depth_from_an_exact_block() -> None:
+    exact_kernel()
+
     block = _run("create_brep_box", width=60.0, depth=40.0, height=20.0).outputs[0]  # type: ignore[attr-defined]
     block.id = "obj_1"
     ellipse = _ellipse_element(14.0, 8.0, 35.0, (0.0, 0.0))
@@ -653,9 +648,10 @@ def test_an_elliptical_pocket_in_a_mesh_stays_within_its_chord_bound() -> None:
     assert exact - _perimeter(a, b) * MAX_FACET_SAG * 20.0 <= removed <= exact * (1.0 + 1e-9)
 
 
-@needs_brep
 def test_turning_an_elliptical_section_follows_pappus() -> None:
     """Ein Ring mit elliptischem Querschnitt: 2π · Abstand der Mitte · π·a·b."""
+    exact_kernel()
+
     section = _ellipse_element(4.0, 7.0, 0.0, (30.0, 10.0))
 
     result = _run("sketch_revolve", sketch=_text(section, plane="plane:xz"))
@@ -663,9 +659,10 @@ def test_turning_an_elliptical_section_follows_pappus() -> None:
     assert _volume(result) == pytest.approx(2.0 * math.pi * 30.0 * math.pi * 4.0 * 7.0, rel=1e-9)
 
 
-@needs_brep
 def test_an_elliptical_section_swept_along_the_bend_follows_pappus() -> None:
     """Querschnitt mit der Mitte im Ursprung, entlang des Bogens: π·a·b · R · θ."""
+    exact_kernel()
+
     section = _ellipse_element(3.0, 2.0, 15.0, (0.0, 0.0))
 
     result = _run(
@@ -675,12 +672,13 @@ def test_an_elliptical_section_swept_along_the_bend_follows_pappus() -> None:
     assert _volume(result) == pytest.approx(math.pi * 3.0 * 2.0 * 25.0 * math.pi / 2.0, rel=1e-6)
 
 
-@needs_brep
 def test_a_tube_follows_a_drawn_elliptical_path() -> None:
     """Ein Rohr Ø 4 entlang eines Viertels einer Ellipse — senkrecht beginnend
     an ihrem linken Scheitel und gegen den Uhrzeigersinn nach unten: π·r² mal
     Viertelumfang, der aus der Reihe. (Am oberen Scheitel begonnen, liefe die
     Bahn waagerecht los, und die Operation sagte zu Recht ab.)"""
+    exact_kernel()
+
     a, b = 30.0, 20.0
     path = SketchElement(
         "elliptical_arc",
@@ -698,9 +696,10 @@ def test_a_tube_follows_a_drawn_elliptical_path() -> None:
     assert _volume(result) == pytest.approx(math.pi * 4.0 * _perimeter(a, b) / 4.0, rel=1e-6)
 
 
-@needs_brep
 def test_a_loft_between_an_ellipse_and_its_half_is_an_elliptical_frustum() -> None:
     """Ähnliche Querschnitte: h/3 · (A₁ + A₂ + √(A₁A₂)) = h · π·a·b · 7/12."""
+    exact_kernel()
+
     ellipse = _ellipse_element(12.0, 5.0, 10.0, (3.0, -2.0))
 
     result = _run("sketch_loft", sketch=_text(ellipse), top="scaled", top_scale=0.5, height=9.0)
@@ -708,10 +707,11 @@ def test_a_loft_between_an_ellipse_and_its_half_is_an_elliptical_frustum() -> No
     assert _volume(result) == pytest.approx(9.0 * math.pi * 12.0 * 5.0 * 7.0 / 12.0, rel=1e-6)
 
 
-@needs_brep
 def test_a_loft_from_an_ellipse_to_a_drawn_circle_is_a_valid_body() -> None:
     """Rund auf elliptisch: kein geschlossener Wert, aber ein gültiger Körper
     zwischen den beiden Querschnittsflächen."""
+    exact_kernel()
+
     from app.core.brep.kernel import Solid
 
     bottom = _ellipse_element(12.0, 5.0, 0.0, (0.0, 0.0))
@@ -1867,13 +1867,14 @@ def _cap_outlines(solid: object, name: str) -> list[object]:
     return found
 
 
-@needs_brep
 def test_a_wide_arc_that_reaches_over_the_axis_is_refused_with_its_reason() -> None:
     """Ein Bogen über 340°: Anfang, Ende und Stützpunkt liegen rechts der
     Achse, sein linker Scheitel bei x = -1 nicht. Die Achsprüfung sah nur die
     drei Punkte und ließ den Querschnitt durch; der Kern scheiterte danach mit
     „Aus diesem Querschnitt entsteht kein Drehkörper" statt mit dem Grund —
     dieselbe Lücke, die der Spline schon einmal hatte (Gesamtreview D-3)."""
+    exact_kernel()
+
     from app.core.brep import profiles as brep_profiles
     from app.core.sketch.profile import regions_of
 
@@ -1898,11 +1899,12 @@ def test_a_wide_arc_that_reaches_over_the_axis_is_refused_with_its_reason() -> N
     assert refused.value.constraint == "crosses_axis"
 
 
-@needs_brep
 def test_the_outline_of_an_exact_face_keeps_its_elliptical_arc() -> None:
     """Am exakten Körper kommt eine elliptische Kante als Ellipsenbogen in die
     Zeichnung und nicht als Sehnenkette — auf der Deck- und der Bodenfläche,
     deren Rahmen gespiegelt liegt, mit Achsen und Fläche aus der Formel."""
+    exact_kernel()
+
     from app.core.brep import profiles as brep_profiles
     from app.core.sketch.profile import regions_of, signed_area
 
@@ -1925,13 +1927,12 @@ def test_the_outline_of_an_exact_face_keeps_its_elliptical_arc() -> None:
         )
 
 
-@needs_brep
 def test_the_outline_of_an_exact_face_keeps_its_elliptical_hole() -> None:
+    brep = exact_kernel()
+
     from app.core.brep import profiles as brep_profiles
     from app.core.sketch.profile import regions_of, signed_area
-    from tests.helpers import exact_kernel
 
-    brep = exact_kernel()
     opening = Sketch("plane:xy", (_ellipse_element(9.0, 4.0, 25.0, (3.0, 2.0)),))
     hole = brep_profiles.extrude(regions_of(solve_sketch(opening))[0], 20.0)
     drilled = brep.boolean(

@@ -42,11 +42,10 @@ def bone(
 
 def test_exact_armature_gestures_reach_the_guarded_operation_dialog(window: MainWindow) -> None:
     """Skelett zeichnen übergibt erst an den Editor, dessen Vorschau die Konvertierung zeigt."""
-    from app.core.brep.kernel import available
     from app.core.scene.history import OperationDraft
+    from tests.helpers import exact_kernel
 
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
     assert window.session.apply(
         "Quader",
         [OperationDraft("create_brep_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],

@@ -527,7 +527,7 @@ def test_drawn_profile_expressions_change_all_roles_and_keep_their_usage(documen
     from app.core.scene.evaluate import evaluate
     from app.core.scene.parameter_usage import ParameterUse
     from app.core.types import Operation, Parameter
-    from tests.test_sketch import rectangle
+    from tests.helpers import rectangle
 
     drawing = sketch_to_text(rectangle("=@base*2", "@height"))
     document.parameters = {"base": Parameter("base", 12.0), "height": Parameter("height", 14.0)}

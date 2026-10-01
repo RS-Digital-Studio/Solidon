@@ -19,6 +19,7 @@ import pytest
 from app.core.errors import ValidationError
 from app.core.sketch import edit
 from app.core.types import Sketch, SketchConstraint, SketchElement
+from tests.helpers import exact_kernel
 
 
 def flat(points: tuple[tuple[float, float], ...]) -> list[float]:
@@ -614,9 +615,8 @@ def test_projecting_beside_the_body_says_so() -> None:
 
 def _exact_plate() -> object:
     """Platte 60 x 40 x 10 mit einer Bohrung Ø 8 bei (−10 | 5) und einem Langloch."""
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit as brep_edit
 
     plate = brep_edit.box(60.0, 40.0, 10.0)
@@ -690,9 +690,8 @@ def test_a_section_through_an_exact_body_keeps_its_circles_and_arcs() -> None:
 def test_an_oblique_section_of_an_exact_cylinder_becomes_a_curve() -> None:
     """Was weder Strecke noch Kreis ist — die Ellipse eines schräg geschnittenen
     Zylinders —, kommt als Kurve durch Punkte auf der echten Schnittlinie."""
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit as brep_edit
 
     tilt = math.radians(30.0)
@@ -1178,13 +1177,10 @@ def test_the_two_drawn_shapes_become_bodies_with_the_volume_they_promise() -> No
     Langloch 20 mm Mittenabstand, 6 mm breit: ``(20 · 6 + π · 3²) · 10``
     = 1482,743 mm³.
     """
+    exact_kernel()
     from app.core.brep import profiles as brep_profiles
-    from app.core.brep.kernel import available
     from app.core.sketch import solve_sketch
     from app.core.sketch.profile import regions_of
-
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
 
     polygon = regions_of(solve_sketch(edit.polygon_at((0.0, 0.0), (10.0, 0.0), 6)))[0]
     assert brep_profiles.extrude(polygon, 10.0).volume == pytest.approx(

@@ -24,36 +24,11 @@ from app.core.sketch.planes import (
 )
 from app.core.sketch.profile import _LEAST_STEPS, curves_of
 from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement, SolvedSketch
-from tests.helpers import assert_sketch_gradients
 
 # Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
 # ziehen die Ecken zusammen, die Maße kommen aus Projektparametern.
 # Flache Punktindizes: unten (0,1), rechts (2,3), oben (4,5), links (6,7).
-
-
-def rectangle(width_value: str = "@width", height_value: str = "@height") -> Sketch:
-    return Sketch(
-        plane="plane:xy",
-        elements=(
-            SketchElement("line", ((0.3, -0.2), (39.5, 0.4))),
-            SketchElement("line", ((40.2, 0.1), (39.8, 19.7))),
-            SketchElement("line", ((40.1, 20.3), (0.2, 19.8))),
-            SketchElement("line", ((-0.3, 20.1), (0.1, 0.2))),
-        ),
-        constraints=(
-            SketchConstraint("coincident", (1, 2)),
-            SketchConstraint("coincident", (3, 4)),
-            SketchConstraint("coincident", (5, 6)),
-            SketchConstraint("coincident", (7, 0)),
-            SketchConstraint("horizontal", (0, 1)),
-            SketchConstraint("vertical", (2, 3)),
-            SketchConstraint("horizontal", (4, 5)),
-            SketchConstraint("vertical", (6, 7)),
-            SketchConstraint("distance", (0, 1), width_value),
-            SketchConstraint("distance", (2, 3), height_value),
-        ),
-    )
-
+from tests.helpers import assert_sketch_gradients, exact_kernel, rectangle
 
 PARAMS = {"width": 40.0, "height": 20.0}
 
@@ -733,15 +708,11 @@ def test_a_spline_closes_a_profile_and_becomes_a_body() -> None:
     geschlossene Formel, ihre Ausdehnung schon. Der Spline geht durch seine
     Punkte, also ist die Breite genau der Abstand von erstem zu letztem.
     """
-    from app.core.brep.kernel import available
+    exact_kernel()
+    from app.core.brep import profiles as brep_profiles
     from app.core.sketch.profile import profile_of
     from app.core.sketch.solver import solve_sketch
     from app.core.types import Sketch, SketchElement
-
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
-
-    from app.core.brep import profiles as brep_profiles
 
     # Ein Deckel mit gewölbter Oberkante: Spline hin, Linie zurück.
     sketch = Sketch(
@@ -874,14 +845,11 @@ def test_a_plate_with_a_hole_has_the_volume_of_both() -> None:
     den der Kern nicht als Loch nimmt, sieht in jeder Ansicht richtig aus und
     wiegt trotzdem zu viel.
     """
+    exact_kernel()
     from app.core.brep import profiles as brep_profiles
-    from app.core.brep.kernel import available
     from app.core.sketch.profile import regions_of
     from app.core.sketch.solver import solve_sketch
     from app.core.types import Sketch
-
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
 
     sketch = Sketch(plane="plane:xy", elements=_square(40.0) + _square(10.0))
     region = regions_of(solve_sketch(sketch))[0]
@@ -1408,7 +1376,6 @@ def test_every_plane_has_a_frame_and_an_unknown_one_has_none() -> None:
     assert frame_for_plane("feature:face_99") is None, "eine Fläche, die es nicht gibt, auch nicht"
 
 
-@pytest.mark.skipif(not brep_available(), reason="OpenCASCADE is an optional dependency")
 def test_the_base_frames_agree_with_the_kernel_to_the_last_digit() -> None:
     """Zwei Tabellen für dieselben drei Ebenen, und sie müssen gleich sein.
 
@@ -1420,6 +1387,7 @@ def test_the_base_frames_agree_with_the_kernel_to_the_last_digit() -> None:
     nächsten Nachbessern auseinander — die Anzeige zeigte dann etwas anderes,
     als der Kern baut.
     """
+    exact_kernel()
     from app.core.brep.profiles import PLANES
 
     for plane, (lift, normal) in PLANES.items():
@@ -1739,13 +1707,10 @@ def test_an_island_inside_a_hole_is_material_again() -> None:
     weggeworfen: Die Zeichnung zeigte die Insel, der Körper hatte sie nicht,
     und keine Zeile sagte es. Am Volumen gemessen, wie beim Loch darüber.
     """
+    exact_kernel()
     from app.core.brep import profiles as brep_profiles
     from app.core.brep.edit import boolean
-    from app.core.brep.kernel import available
     from app.core.sketch.profile import regions_of
-
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
 
     sketch = Sketch(plane="plane:xy", elements=_square(40.0) + _square(20.0) + _square(10.0))
     regions = regions_of(solve_sketch(sketch))
@@ -1762,13 +1727,10 @@ def test_a_hole_in_an_island_stays_a_hole() -> None:
     Die Zuordnung ist rekursiv, nicht zweistufig mit Rest: gerade Tiefe ist
     Material, ungerade Tiefe ist Loch, auf jeder Ebene.
     """
+    exact_kernel()
     from app.core.brep import profiles as brep_profiles
     from app.core.brep.edit import boolean
-    from app.core.brep.kernel import available
     from app.core.sketch.profile import regions_of
-
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
 
     sketch = Sketch(
         plane="plane:xy",
@@ -2459,8 +2421,7 @@ def test_two_arcs_of_one_circle_that_meet_at_a_seam_do_not_cross() -> None:
     „kreuzt sich selbst" (23.09.2026). Gezählt wird ein gemeinsames Stück erst
     mit Länge; das Gegenstück steht darunter.
     """
-    if not brep_available():
-        pytest.skip("die Kreuzungsprüfung mit Kurven braucht den exakten Kern")
+    exact_kernel()
     from app.core.sketch.profile import regions_of, signed_area
 
     (region,) = regions_of(_slot_with_a_seam())

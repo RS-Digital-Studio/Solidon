@@ -2,7 +2,6 @@
 
 import math
 from dataclasses import replace
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -13,22 +12,9 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.seal_ops import CreateSealParams, create_seal
 from app.core.scene.cancel import NeverCancelled
 from app.core.sketch import shapes
-from app.core.sketch.profile import profile_of
 from app.core.sketch.serialize import sketch_to_text
-from app.core.sketch.solver import solve_sketch
 from app.core.types import Feature, OpContext, Scene, SceneObject
-
-
-def cube(kind="mesh"):
-    if kind == "brep":
-        from app.core.brep import edit, profiles
-
-        body = edit.moved(
-            profiles.extrude(profile_of(solve_sketch(shapes.rectangle(20, 20))), 20), (0, 0, -10)
-        )
-    else:
-        body = MeshData.of(trimesh.load_mesh(Path(__file__).parent / "data/meshes/cube_clean.stl"))
-    return SceneObject("body", "Träger", body, kind=kind)
+from tests.helpers import seal_cube
 
 
 def run(entry, *, counter=None, profile=None, quality="fine", ask=None, cancelled=None, **changes):
@@ -84,7 +70,7 @@ def test_named_groove_floor_proof_keeps_the_original_cancel_token(profile, monke
 
     monkeypatch.setattr(surfaces, "planar_patch", cancel_inside)
     with pytest.raises(OperationCancelled):
-        run(cube(), profile=profile, cancelled=token)
+        run(seal_cube(), profile=profile, cancelled=token)
     assert calls == [token.raise_if_cancelled], "der Rückruf ist der des Aufrufers, einmal"
 
 
@@ -96,7 +82,7 @@ def test_one_transaction_produces_real_groove_and_separate_material(kind, profil
     Netz (``shapes.mesh_only``); jetzt folgt sie der Bauart ihres Trägers und
     trifft die Analytik der Kreisringe auf 10⁻⁹ statt auf die Sehnen.
     """
-    entry = cube(kind)
+    entry = seal_cube(kind)
     result = run(entry, profile=profile)
     carrier, gasket = result.outputs
     assert len(result.outputs) == 2
@@ -133,7 +119,7 @@ def test_one_transaction_produces_real_groove_and_separate_material(kind, profil
 )
 def test_missing_material_or_breaking_through_wall_is_rejected(profile, changes):
     with pytest.raises(ValidationError) as caught:
-        run(cube(), profile=profile, **changes)
+        run(seal_cube(), profile=profile, **changes)
     assert caught.value.suggestions
 
 
@@ -152,11 +138,13 @@ def counterface(z=10.2):
 
 
 def test_counterface_is_measured_instead_of_trusted_from_saved_values(profile):
-    result = run(cube(), counter=counterface(), counterface="counter:bottom", profile=profile)
+    result = run(seal_cube(), counter=counterface(), counterface="counter:bottom", profile=profile)
     coverage = next(f for f in result.findings if f.code == "seal.counterface")
     assert coverage.values["gap_mm"] == pytest.approx(0.2)
     assert coverage.values["overlap_mm"] == pytest.approx(0.2)
-    distant = run(cube(), counter=counterface(12), counterface="counter:bottom", profile=profile)
+    distant = run(
+        seal_cube(), counter=counterface(12), counterface="counter:bottom", profile=profile
+    )
     coverage = next(f for f in distant.findings if f.code == "seal.counterface")
     assert coverage.severity == "warning"
     assert coverage.values["overlap_mm"] == pytest.approx(-1.6)
@@ -165,7 +153,7 @@ def test_counterface_is_measured_instead_of_trusted_from_saved_values(profile):
     cut.vertices[:, 0] *= 0.1
     with pytest.raises(ValidationError):
         run(
-            cube(),
+            seal_cube(),
             counter=replace(missing, mesh=MeshData.of(cut)),
             counterface="counter:bottom",
             profile=profile,
@@ -178,7 +166,7 @@ def test_counterface_is_measured_instead_of_trusted_from_saved_values(profile):
 def test_round_and_rectangular_sections_obey_the_same_result_in_both_qualities(
     kind, quality, section, profile
 ):
-    result = run(cube(kind), quality=quality, section=section, groove_width=3, profile=profile)
+    result = run(seal_cube(kind), quality=quality, section=section, groove_width=3, profile=profile)
     gasket = as_mesh_data(result.outputs[1].mesh)
     expected = math.pi * 10 * 1.6 * 2.4 if section == "rectangle" else 2 * math.pi**2 * 5 * 1.2**2
     assert gasket.volume == pytest.approx(expected, rel=0.015)
@@ -195,7 +183,7 @@ def test_round_and_rectangular_sections_obey_the_same_result_in_both_qualities(
 )
 @pytest.mark.parametrize("kind", ["mesh", "brep"])
 def test_groove_on_each_real_side_keeps_world_location_and_depth(direction, kind, profile):
-    entry = cube(kind)
+    entry = seal_cube(kind)
     mesh = as_mesh_data(entry.mesh)
     indices = np.flatnonzero(mesh.raw.face_normals @ direction > 0.99)
     entry.features = {
@@ -401,7 +389,7 @@ def test_sketch_expression_is_reused_by_the_parameter_collector(document, profil
     from app.core.scene import ResultCache, evaluate
     from app.core.scene.parameter_usage import ParameterUse
     from app.core.types import Operation, Parameter
-    from tests.test_sketch import rectangle
+    from tests.helpers import rectangle
 
     load_operations()
     drawing = sketch_to_text(rectangle("=@path_width", "@path_height"))
@@ -500,7 +488,7 @@ def test_material_change_preserves_colour_faces_but_releases_incompatible_filame
     from app.core.geom.attributes import with_slot
     from app.core.types import MaterialSlot
 
-    source = cube()
+    source = seal_cube()
     source = replace(
         source,
         material="pla",

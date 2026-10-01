@@ -612,10 +612,10 @@ def _step_assembly() -> str:
     from pathlib import Path
 
     from app.core.brep import step
-    from app.core.brep.kernel import Solid, available
+    from app.core.brep.kernel import Solid
+    from tests.helpers import exact_kernel
 
-    if not available():
-        pytest.skip("ohne OpenCASCADE gibt es kein STEP")
+    exact_kernel()
     payload = (Path(__file__).parent / "data" / "step" / "nested.step").read_bytes()
     bodies = step.read_assembly(payload, "nested").bodies
     return "|".join(
@@ -663,10 +663,10 @@ def _curved_mouth() -> str:
     from app.core.geom import prepare_ops
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.relations import cavity_chains
-    from tests.test_feature_moves_keep_shape import BOTH_ENDS, _widened
+    from tests.helpers import BOTH_ENDS, widened_bore
 
     if not _GROOVED:
-        source = _widened("mesh", BOTH_ENDS["Zylindersenkung und Fase"], bottom="Rinne R 40")
+        source = widened_bore("mesh", BOTH_ENDS["Zylindersenkung und Fase"], bottom="Rinne R 40")
         mesh = as_mesh_data(source.mesh)
         _GROOVED.extend((mesh, cavity_chains(source.features, mesh)[0]))
     mesh, chain = _GROOVED
@@ -760,7 +760,7 @@ def test_the_noise_reaches_what_it_should() -> None:
     assert exact == (4.25, 1.0), "was überall exakt ist, bekommt kein Rauschen"
 
 
-def _fingerprints() -> dict[str, str]:
+def platform_fingerprints() -> dict[str, str]:
     """Alle Wege auf einmal — für den Vergleich über zwei BLAS-Kerne."""
     return {way: _WAYS[way]() for way in sorted(_WAYS)}
 
@@ -778,13 +778,13 @@ def test_a_way_through_the_kernel_does_not_follow_the_blas_kernel() -> None:
     blas = str(np.show_config(mode="dicts")["Build Dependencies"]["blas"]["name"])
     if "openblas" not in blas.lower() or platform.machine().lower() not in ("x86_64", "amd64"):
         pytest.skip(f"kein austauschbarer OpenBLAS-Kern ({blas}, {platform.machine()})")
-    here = _fingerprints()
+    here = platform_fingerprints()
     root = str(Path(__file__).resolve().parents[1])
     script = (
         "import json, sys\n"
         "sys.path.insert(0, sys.argv[1])\n"
-        "from tests.test_platform_identity import _fingerprints\n"
-        "print(json.dumps(_fingerprints()))\n"
+        "from tests.test_platform_identity import platform_fingerprints\n"
+        "print(json.dumps(platform_fingerprints()))\n"
     )
     finished = subprocess.run(
         [sys.executable, "-c", script, root],

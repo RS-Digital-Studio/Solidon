@@ -18,6 +18,7 @@ from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, OpContext, Profile, Scene, SceneObject, is_a_cavity
+from tests.helpers import exact_kernel
 from tests.test_mesh_edges import run
 
 
@@ -28,7 +29,7 @@ def _clip(kind: str) -> SceneObject:
         mesh = MeshData.of(trimesh.load_mesh(path, process=True))
         return SceneObject(id="clip", name="Clip", mesh=mesh, features=detect(mesh))
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
 
     from app.core.brep import edit
@@ -137,7 +138,7 @@ def test_an_unorientable_radial_skin_is_rejected_before_publication(
     monkeypatch: pytest.MonkeyPatch, profile: Profile, failure_mode: str
 ) -> None:
     """Eine ungeklärte Materialseite bleibt ein Fehler, ohne Quelle oder Cache umzuschreiben."""
-    pytest.importorskip("OCP")
+    exact_kernel()
     from OCP.BRepLib import BRepLib
 
     source = _clip("brep")
@@ -357,7 +358,7 @@ def test_a_thin_clip_changes_its_outer_radius_without_touching_the_inner(
     kind: str, mirrored: bool, profile: Profile
 ) -> None:
     """R12,4 außen wird R12,2; die nahe Innenwand bleibt auf R12."""
-    pytest.importorskip("OCP")
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
 
     from app.core.brep import edit

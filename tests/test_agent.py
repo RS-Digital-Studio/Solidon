@@ -36,7 +36,7 @@ from app.core.types import (
     Scene,
     Severity,
 )
-from tests.helpers import plate_project
+from tests.helpers import exact_kernel, plate_project
 from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -2838,7 +2838,7 @@ def test_exact_conversion_waits_for_the_existing_proposal_acceptance(profile, op
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.project import new_project
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     load_operations()
     project = new_project(profile.printer.id, profile.material.id)
     history = History(project.document)
@@ -2864,7 +2864,7 @@ def test_exact_conversion_waits_for_the_existing_proposal_acceptance(profile, op
 
 def test_a_real_agent_turn_keeps_new_conversions_in_the_pending_proposal(profile):
     """Der Werkzeugweg reicht neue Umwandlungen weiter; alte bleiben beim alten Zug."""
-    pytest.importorskip("OCP")
+    exact_kernel()
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
     history.apply(

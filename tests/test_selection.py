@@ -36,6 +36,7 @@ from app.ui.render.api import Pick
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.viewport import Viewport
+from tests.helpers import exact_kernel
 from tests.render_fakes import RecordingRenderer
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -2082,10 +2083,6 @@ def _exact_block(view: Viewport) -> tuple[Any, str]:
     return solid, brep_edit.edge_key(obere)
 
 
-@pytest.mark.skipif(
-    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
-    reason="OpenCASCADE is an optional dependency",
-)
 def test_a_click_beside_an_edge_chooses_the_edge_and_not_the_face(qt_app: QApplication) -> None:
     """Eine Kante lässt sich anklicken — die zweite Hälfte von RM-147 E4.
 
@@ -2103,6 +2100,7 @@ def test_a_click_beside_an_edge_chooses_the_edge_and_not_the_face(qt_app: QAppli
       ein Teil mit tausend Kanten überhaupt keinen Weg mehr, als Ganzes
       gewählt zu werden.
     """
+    exact_kernel()
     view = Viewport()
     renderer = _DepthRenderer()
     view.renderer = renderer
@@ -2255,10 +2253,6 @@ def test_a_mesh_body_offers_its_edges_like_an_exact_one(qt_app: QApplication) ->
     assert edge_label(view._edge_info[("block", next(iter(schluessel)))]) == beschriftet
 
 
-@pytest.mark.skipif(
-    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
-    reason="OpenCASCADE is an optional dependency",
-)
 def test_a_chosen_edge_gives_way_to_every_other_selection(qt_app: QApplication) -> None:
     """Die Kante hängt an einem Weg — und fällt auf allen anderen.
 
@@ -2271,6 +2265,7 @@ def test_a_chosen_edge_gives_way_to_every_other_selection(qt_app: QApplication) 
     Geprüft werden alle vier Wege einzeln. Ein Test, der nur einen fährt,
     ist grün gegen drei stehengebliebene.
     """
+    exact_kernel()
     view = Viewport()
     view.renderer = _DepthRenderer()
     _solid, oben = _exact_block(view)
@@ -2314,10 +2309,6 @@ def test_a_chosen_edge_gives_way_to_every_other_selection(qt_app: QApplication) 
     assert view.highlighted_feature_refs() == (), "die Kante räumt auch mehrere Merkmale"
 
 
-@pytest.mark.skipif(
-    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
-    reason="OpenCASCADE is an optional dependency",
-)
 def test_a_clicked_edge_never_eats_a_measuring_or_adding_click(qt_app: QApplication) -> None:
     """Was die Kante **nicht** verschlucken darf.
 
@@ -2330,6 +2321,7 @@ def test_a_clicked_edge_never_eats_a_measuring_or_adding_click(qt_app: QApplicat
       Kante trifft, bekam sie — und der Objektbaum erfuhr vom Dazunehmen
       nichts, denn ``objectPicked`` blieb aus.
     """
+    exact_kernel()
     from PySide6.QtWidgets import QWidget
 
     view = Viewport()
@@ -2449,10 +2441,6 @@ def test_a_right_click_on_an_edge_means_the_edge(qt_app: QApplication) -> None:
     assert gemeldet == [(360, 300)], "und das Menü geht trotzdem auf"
 
 
-@pytest.mark.skipif(
-    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
-    reason="OpenCASCADE is an optional dependency",
-)
 def test_a_right_click_on_an_edge_means_it_before_the_body_is_chosen(
     qt_app: QApplication,
 ) -> None:
@@ -2471,6 +2459,7 @@ def test_a_right_click_on_an_edge_means_it_before_the_body_is_chosen(
     und ``run_operation``); ohne die Ansage leuchtete die Linie, und der
     Menüeintrag darüber fände nichts, woran er ansetzen könnte.
     """
+    exact_kernel()
     view = Viewport()
     renderer = _DepthRenderer()
     view.renderer = renderer
@@ -2495,10 +2484,6 @@ def test_a_right_click_on_an_edge_means_it_before_the_body_is_chosen(
     assert gemeldet == [(360, 300)], "und das Menü geht auf"
 
 
-@pytest.mark.skipif(
-    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
-    reason="OpenCASCADE is an optional dependency",
-)
 def test_a_right_click_finds_the_edge_where_the_body_is_drawn(qt_app: QApplication) -> None:
     """Auf Platte 2 trifft der Rechtsklick dieselbe Kante wie der linke.
 
@@ -2510,6 +2495,7 @@ def test_a_right_click_finds_the_edge_where_the_body_is_drawn(qt_app: QApplicati
     das Menü bot wieder das Merkmal an — derselbe Fehler, den derselbe Klick
     schon einmal beim Körper hatte.
     """
+    exact_kernel()
     view = Viewport()
     renderer = _DepthRenderer()
     view.renderer = renderer
@@ -2635,10 +2621,6 @@ def test_the_grip_of_a_chosen_face_shows_one_arrow_along_it(window: MainWindow) 
         assert view._gizmo_label_texts == ["<->"], view._gizmo_label_texts
 
 
-@pytest.mark.skipif(
-    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
-    reason="OpenCASCADE is an optional dependency",
-)
 def test_a_right_click_on_an_edge_opens_the_edge_menu(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2654,6 +2636,7 @@ def test_a_right_click_on_an_edge_opens_the_edge_menu(
     hinge an einem Fenster, das niemand sieht (dasselbe Vorgehen wie in
     ``tests/test_locked_says_why.py``).
     """
+    exact_kernel()
     from app.core.perceive.actions import edge_actions
     from app.core.scene.history import OperationDraft
 

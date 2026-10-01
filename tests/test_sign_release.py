@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import pack_release, product_tree
 from tools import make_installer, sign_release
 
 APP = make_installer.APP_NAME
@@ -42,47 +43,6 @@ def _certificate() -> sign_release.Certificate:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _product_tree(root: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Baut einen kleinen Windows-Bau und lässt make_installer die Übergabe schreiben."""
-    source = root / "dist" / APP
-    packaging = root / "packaging"
-    build = packaging / "build"
-    for path, content in (
-        (source / f"{APP}.exe", b"Programm"),
-        (source / "_internal" / "python313.dll", b"Python-Laufzeit"),
-        (source / "_internal" / f"{APP}.cdx.json", b"{}"),
-        (source / "THIRD-PARTY-NOTICES.md", b"Lizenzbeilage"),
-        (packaging / "solidon3d.iss", b"Skript"),
-        (packaging / "eula.txt", b"Vertrag"),
-        (packaging / "solidon3d.ico", b"Symbol"),
-        (build / "licence.manifest", b"Manifest"),
-    ):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
-    handoff = build / "windows-signing.json"
-    monkeypatch.setattr(make_installer, "ROOT", root)
-    monkeypatch.setattr(make_installer, "SOURCE_DIR", source)
-    monkeypatch.setattr(make_installer, "OUTPUT_DIR", root / "dist")
-    monkeypatch.setattr(make_installer, "SCRIPT", packaging / "solidon3d.iss")
-    monkeypatch.setattr(make_installer, "SIGNING_HANDOFF", handoff)
-    monkeypatch.setattr(make_installer, "_licence_file", lambda: packaging / "eula.txt")
-    monkeypatch.setattr(make_installer, "stale_reason", lambda: "")
-    assert make_installer.write_signing_handoff() == 0
-    return root
-
-
-def _pack(tree: Path, target_dir: Path) -> Path:
-    """Packt den Baum so, wie der Paketjob es tut: Archiv plus Prüfsummenzeile."""
-    archive = target_dir / sign_release.ARCHIVE_NAME
-    target_dir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for path in sorted(tree.rglob("*")):
-            if path.is_file():
-                zip_file.write(path, path.relative_to(tree).as_posix())
-    _write_checksum(archive)
-    return archive
 
 
 def _write_checksum(archive: Path) -> None:
@@ -372,8 +332,8 @@ def test_incomplete_or_foreign_git_evidence_is_rejected(
 
 @pytest.fixture
 def signing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
-    tree = _product_tree(tmp_path / "ci", monkeypatch)
-    archive = _pack(tree, tmp_path / "download")
+    tree = product_tree(tmp_path / "ci", monkeypatch)
+    archive = pack_release(tree, tmp_path / "download")
     tools = FakeTools()
     tools.application_archive = archive
     monkeypatch.setattr(sign_release, "_run", tools)
@@ -494,7 +454,7 @@ def _repack(signing: dict[str, object], mutate: object) -> None:
     mutate(tree)  # type: ignore[operator]
     archive = signing["archive"]
     assert isinstance(archive, Path)
-    _pack(tree, archive.parent)
+    pack_release(tree, archive.parent)
 
 
 def test_the_chain_signs_the_application_before_the_installer_and_binds_everything(

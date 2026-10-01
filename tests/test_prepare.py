@@ -46,6 +46,7 @@ from app.core.types import (
 )
 from app.core.units import EPS_GEOM
 from app.i18n import _
+from tests.helpers import cube_mesh, exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -53,10 +54,6 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 def plate():
     """80 x 50 x 8 mm, watertight."""
     return normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
-
-
-def cube():
-    return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
 
 
 def l_profile() -> MeshData:
@@ -235,7 +232,7 @@ def test_an_unchanged_bore_does_not_recalculate_the_mesh(profile: Profile) -> No
 
 
 def test_drilling_removes_material(profile: Profile) -> None:
-    body = cube()
+    body = cube_mesh()
     result = drill(body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
 
     assert result.mesh.is_watertight
@@ -253,7 +250,7 @@ def test_a_bore_hanging_over_the_edge_says_so(profile: Profile) -> None:
     keinen Befund dazu, denn abgetragen *wurde* ja etwas, und der Agent
     schrieb danach „Das Loch ist durchgehend und mittig positioniert".
     """
-    body = cube()
+    body = cube_mesh()
     edge = body.bounds.maximum[0]
 
     result = drill(body, position=(edge, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
@@ -381,7 +378,7 @@ def test_a_bore_that_takes_a_visible_bite_stays_quiet(profile: Profile) -> None:
 
 def test_a_bore_well_inside_stays_quiet(profile: Profile) -> None:
     """Die Gegenprobe — sonst warnt jede zweite Bohrung und keine zählt mehr."""
-    result = drill(cube(), position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
+    result = drill(cube_mesh(), position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
 
     assert "bore.over_the_edge" not in {finding.code for finding in result.findings}
 
@@ -389,7 +386,7 @@ def test_a_bore_well_inside_stays_quiet(profile: Profile) -> None:
 def test_a_bore_touching_the_edge_from_inside_stays_quiet(profile: Profile) -> None:
     """Eine Bohrung, die den Rand gerade noch trifft, ist eine Absicht und
     kein Versehen; gewarnt wird erst, wenn sie darüber hinausragt."""
-    body = cube()
+    body = cube_mesh()
     inside = body.bounds.maximum[0] - 3.2
 
     result = drill(body, position=(inside, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
@@ -398,7 +395,7 @@ def test_a_bore_touching_the_edge_from_inside_stays_quiet(profile: Profile) -> N
 
 
 def test_a_blind_bore_does_not_go_through(profile: Profile) -> None:
-    body = cube()
+    body = cube_mesh()
     through = drill(body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
     blind = drill(
         body, position=(0.0, 0.0, 5.0), axis="z", diameter=6.0, depth=10.0, profile=profile
@@ -416,7 +413,7 @@ def test_a_bore_starts_where_it_was_placed(profile: Profile) -> None:
     Millimeter tief heißt bis ``z = 5``. Vor Formatversion 7 lag die *Mitte*
     dort — die Bohrung ging bis 7,5 und stand zur Hälfte in der Luft.
     """
-    body = cube()
+    body = cube_mesh()
     mouth = drill(
         body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, depth=5.0, profile=profile
     )
@@ -439,7 +436,7 @@ def test_the_mouth_of_a_bore_finds_the_material_from_either_side(profile: Profil
     """Von unten angeklickt geht es nach oben — sonst bohrte eine Bohrung an
     der Unterseite ins Nichts.
     """
-    body = cube()
+    body = cube_mesh()
     result = drill(
         body, position=(0.0, 0.0, -10.0), axis="z", diameter=6.0, depth=5.0, profile=profile
     )
@@ -452,7 +449,7 @@ def test_a_through_bore_ignores_the_anchor(profile: Profile) -> None:
     """Durch ist durch: bei Tiefe null darf der Bezugspunkt nichts ändern —
     das ist es, was die Migration alter Dateien so einfach hält.
     """
-    body = cube()
+    body = cube_mesh()
     mouth = drill(body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, profile=profile)
     centred = drill(
         body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, anchor="centre", profile=profile
@@ -467,14 +464,14 @@ def test_a_through_bore_ignores_the_anchor(profile: Profile) -> None:
 @pytest.mark.parametrize("axis", ["x", "y", "z"])
 def test_a_bore_follows_its_axis(axis: str, profile: Profile) -> None:
     result = drill(
-        cube(),
+        cube_mesh(),
         position=(0.0, 0.0, 0.0),
         axis=axis,
         diameter=6.0,
         profile=profile,  # type: ignore[arg-type]
     )
     assert result.mesh.is_watertight
-    assert result.mesh.volume < cube().volume
+    assert result.mesh.volume < cube_mesh().volume
 
 
 def test_a_blind_bore_into_a_step_reaches_the_material(profile: Profile) -> None:
@@ -571,7 +568,12 @@ def test_a_countersink_without_a_neighbour_still_finds_the_far_mouth(profile: Pr
     auf die nächste Grenze dieselbe Zahl: 15,07 mm³.
     """
     body = drill(
-        cube(), position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, compensate=False, profile=profile
+        cube_mesh(),
+        position=(0.0, 0.0, 0.0),
+        axis="z",
+        diameter=6.0,
+        compensate=False,
+        profile=profile,
     ).mesh
 
     found = countersink(body, position=(0.0, 0.0, 0.0), axis="z", diameter=8.4, profile=profile)
@@ -593,7 +595,7 @@ def test_a_through_plug_fills_the_whole_bore(profile: Profile) -> None:
     ``* 2.0``-Länge wie beim Bohren deckt den ganzen Körper ab, und ``_shell``
     schneidet den Überstand weg.
     """
-    body = cube()
+    body = cube_mesh()
     drilled = drill(
         body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, compensate=False, profile=profile
     )
@@ -634,7 +636,7 @@ def test_a_plug_closes_a_bore_that_was_widened_for_the_material(profile: Profile
     Der Test daneben (:func:`test_a_through_plug_fills_the_whole_bore`) umgeht
     die Frage mit ``compensate=False`` und konnte sie deshalb nicht stellen.
     """
-    body = cube()
+    body = cube_mesh()
     drilled = drill(body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
     assert section_rings(drilled.mesh, 0.0) == 1, "die Bohrung ist da"
 
@@ -654,7 +656,7 @@ def test_a_plug_can_be_told_to_ignore_the_material_tolerance(profile: Profile) -
     Toleranz in ein Loch hinein, das sie nie bekommen hat. Die zwei Schalter
     gehören zusammengedacht, und darum trägt der Stopfen denselben.
     """
-    body = cube()
+    body = cube_mesh()
     drilled = drill(
         body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, compensate=False, profile=profile
     )
@@ -716,7 +718,7 @@ def test_the_boolean_overlap_is_the_one_from_the_rule_set() -> None:
 
 
 def test_splitting_yields_two_closed_halves() -> None:
-    body = cube()
+    body = cube_mesh()
     first, second, findings = split_at_plane(body, SectionPlane.along("z", 0.0))
 
     assert first.is_watertight and second.is_watertight
@@ -738,7 +740,7 @@ def test_splitting_a_plate_with_holes_stays_closed() -> None:
 
 
 def test_arranging_puts_the_bodies_on_the_plate(profile: Profile) -> None:
-    bodies = [cube(), apply(cube(), translation((200.0, 200.0, 50.0)))]
+    bodies = [cube_mesh(), apply(cube_mesh(), translation((200.0, 200.0, 50.0)))]
     result = arrange_on_bed(bodies, profile, spacing=5.0)
 
     for body in result.meshes:
@@ -749,7 +751,7 @@ def test_arranging_puts_the_bodies_on_the_plate(profile: Profile) -> None:
 
 
 def test_arranging_keeps_the_spacing(profile: Profile) -> None:
-    arranged = arrange_on_bed([cube(), cube()], profile, spacing=8.0).meshes
+    arranged = arrange_on_bed([cube_mesh(), cube_mesh()], profile, spacing=8.0).meshes
 
     gap = arranged[1].bounds.minimum[0] - arranged[0].bounds.maximum[0]
     assert gap == pytest.approx(8.0, abs=1e-6)
@@ -763,7 +765,7 @@ def test_what_sticks_out_of_the_build_volume_is_reported(profile: Profile) -> No
     die anklickbaren Handlungen, und *Auf dem Bett anordnen* behebt genau das
     (``_fits_at_all``).
     """
-    far_away = apply(cube(), translation((400.0, 0.0, 0.0)))
+    far_away = apply(cube_mesh(), translation((400.0, 0.0, 0.0)))
     findings = check_build_volume([far_away], profile)
 
     assert findings
@@ -779,7 +781,7 @@ def test_a_volume_finding_names_the_body_instead_of_its_index(profile: Profile) 
     ``object`` trägt. Die Exportprüfung übergab Kennungen und zeigte trotzdem
     „— 0 · 10,00 mm".
     """
-    sunk = apply(cube(), translation((0.0, 0.0, -5.0)))
+    sunk = apply(cube_mesh(), translation((0.0, 0.0, -5.0)))
 
     with_ids = check_build_volume([sunk], profile, object_ids=["obj_7"])
     assert with_ids[0].object_id == "obj_7"
@@ -814,7 +816,7 @@ def test_a_misplaced_body_weighs_less_than_one_that_does_not_fit(profile: Profil
     Dateien liest sie niemand mehr — und die eine Datei, die wirklich zu groß
     ist, verschwindet zwischen den anderen.
     """
-    daneben = apply(cube(), translation((400.0, 0.0, 0.0)))
+    daneben = apply(cube_mesh(), translation((400.0, 0.0, 0.0)))
     zu_gross = normalise(read_mesh((MESHES / "oversized.stl").read_bytes(), ".stl"), "mm").mesh
 
     zur_lage = check_build_volume([daneben], profile)
@@ -838,7 +840,9 @@ def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) 
     # Kennung und Schlüssel sind dasselbe — die Auswertung setzt ``id`` beim
     # Einhängen, und ein Test, der das anders macht, prüft eine Szene, die es
     # nicht gibt.
-    sunk = SceneObject(id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, -5.0))))
+    sunk = SceneObject(
+        id="obj_1", name="Halter", mesh=apply(cube_mesh(), translation((0.0, 0.0, -5.0)))
+    )
     scene = Scene(objects={"obj_1": sunk}, profile=profile)
 
     findings = check_placement(scene)
@@ -872,7 +876,7 @@ def test_a_body_floating_above_the_bed_is_reported(profile: Profile) -> None:
     from app.core.types import Scene
 
     floating = SceneObject(
-        id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 40.0)))
+        id="obj_1", name="Halter", mesh=apply(cube_mesh(), translation((0.0, 0.0, 40.0)))
     )
     scene = Scene(objects={"obj_1": floating}, profile=profile)
 
@@ -897,14 +901,16 @@ def test_a_body_resting_on_another_one_does_not_float(profile: Profile) -> None:
     from app.core.scene.evaluate import check_placement
     from app.core.types import Scene
 
-    base = SceneObject(id="obj_1", name="Dose", mesh=cube())
-    lid = SceneObject(id="obj_2", name="Deckel", mesh=apply(cube(), translation((0.0, 0.0, 20.0))))
+    base = SceneObject(id="obj_1", name="Dose", mesh=cube_mesh())
+    lid = SceneObject(
+        id="obj_2", name="Deckel", mesh=apply(cube_mesh(), translation((0.0, 0.0, 20.0)))
+    )
     # Der dritte hängt wirklich in der Luft — **ohne ihn wäre dieser Test auch
     # ohne die Prüfung grün** und würde nichts zusichern (`.claude/rules/
     # tests.md`, „Ein Verbotstest über eine leere Menge ist immer grün").
     # Gemessen: In der Gegenprobe war genau das der Fall.
     apart = SceneObject(
-        id="obj_3", name="Klammer", mesh=apply(cube(), translation((60.0, 0.0, 40.0)))
+        id="obj_3", name="Klammer", mesh=apply(cube_mesh(), translation((60.0, 0.0, 40.0)))
     )
     scene = Scene(objects={"obj_1": base, "obj_2": lid, "obj_3": apart}, profile=profile)
 
@@ -930,7 +936,7 @@ def test_floating_so_high_that_it_leaves_the_volume_says_so(profile: Profile) ->
     from app.core.types import Scene
 
     high = SceneObject(
-        id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 300.0)))
+        id="obj_1", name="Halter", mesh=apply(cube_mesh(), translation((0.0, 0.0, 300.0)))
     )
     scene = Scene(objects={"obj_1": high}, profile=profile)
 
@@ -946,7 +952,7 @@ def test_a_body_on_the_bed_says_nothing(profile: Profile) -> None:
     from app.core.types import Scene
 
     standing = SceneObject(
-        id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 10.0)))
+        id="obj_1", name="Halter", mesh=apply(cube_mesh(), translation((0.0, 0.0, 10.0)))
     )
 
     assert not check_placement(Scene(objects={"obj_1": standing}, profile=profile))
@@ -963,8 +969,10 @@ def test_a_finding_names_its_bodies_instead_of_their_places(profile: Profile) ->
     from app.core.types import SceneObject
 
     entries = [
-        SceneObject(id="obj_1", name="Gehäuse", mesh=cube()),
-        SceneObject(id="obj_2", name="Deckel", mesh=apply(cube(), translation((5.0, 0.0, 0.0)))),
+        SceneObject(id="obj_1", name="Gehäuse", mesh=cube_mesh()),
+        SceneObject(
+            id="obj_2", name="Deckel", mesh=apply(cube_mesh(), translation((5.0, 0.0, 0.0)))
+        ),
     ]
     findings = named_for(check_collisions([entry.mesh for entry in entries]), entries)
 
@@ -980,7 +988,7 @@ def test_a_collision_says_how_deep(profile: Profile) -> None:
     Der Bericht sagte für beides dasselbe. Jetzt steht das gemeinsame Volumen
     dabei — dieselbe Zahl, an der man entscheidet, ob es ein Problem ist.
     """
-    findings = check_collisions([cube(), apply(cube(), translation((5.0, 0.0, 0.0)))])
+    findings = check_collisions([cube_mesh(), apply(cube_mesh(), translation((5.0, 0.0, 0.0)))])
 
     assert findings and "shared" in findings[0].values
 
@@ -989,7 +997,7 @@ def test_sticking_out_says_how_far(profile: Profile) -> None:
     """Sonst steht dort eine Warnung, die ein Zehntel Millimeter und ein halbes
     Modell nicht unterscheidet.
     """
-    far_away = apply(cube(), translation((400.0, 0.0, 0.0)))
+    far_away = apply(cube_mesh(), translation((400.0, 0.0, 0.0)))
 
     findings = check_build_volume([far_away], profile)
 
@@ -999,14 +1007,14 @@ def test_sticking_out_says_how_far(profile: Profile) -> None:
 
 
 def test_overlapping_bodies_are_reported() -> None:
-    findings = check_collisions([cube(), apply(cube(), translation((5.0, 0.0, 0.0)))])
+    findings = check_collisions([cube_mesh(), apply(cube_mesh(), translation((5.0, 0.0, 0.0)))])
 
     assert findings and findings[0].code == "arrange.collision"
-    assert not check_collisions([cube(), apply(cube(), translation((40.0, 0.0, 0.0)))])
+    assert not check_collisions([cube_mesh(), apply(cube_mesh(), translation((40.0, 0.0, 0.0)))])
 
 
 def test_a_clearance_makes_the_check_stricter() -> None:
-    bodies = [cube(), apply(cube(), translation((25.0, 0.0, 0.0)))]
+    bodies = [cube_mesh(), apply(cube_mesh(), translation((25.0, 0.0, 0.0)))]
 
     assert not check_collisions(bodies)
     assert check_collisions(bodies, clearance=10.0), "closer than the clearance counts"
@@ -1068,7 +1076,7 @@ def test_an_open_body_falls_back_to_the_box_and_says_so() -> None:
     broken = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
     broken.update_faces([True] * (len(broken.faces) - 2) + [False, False])
 
-    findings = check_collisions([MeshData.of(broken), cube()])
+    findings = check_collisions([MeshData.of(broken), cube_mesh()])
 
     assert findings and findings[0].values["checked"] == "box"
 
@@ -1214,7 +1222,7 @@ def test_what_the_chain_behind_the_pins_says_reaches_the_split(
         return real(kind, meshes, **{**options, "stages": ("welded",)})
 
     monkeypatch.setattr(pins, "boolean", welded_only)
-    entry = SceneObject(id="obj_1", name="Würfel", mesh=cube())
+    entry = SceneObject(id="obj_1", name="Würfel", mesh=cube_mesh())
 
     result = _run_op("split_pinned", entry, profile, axis="z", position=0.0, pins=2)
 
@@ -1889,8 +1897,8 @@ def test_bodies_stacked_on_each_other_are_reported(profile: Profile) -> None:
     from app.core.scene.evaluate import check_bodies_in_one_place
     from app.core.types import Scene
 
-    first = SceneObject(id="obj_1", name="Quader", mesh=cube())
-    second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube())
+    first = SceneObject(id="obj_1", name="Quader", mesh=cube_mesh())
+    second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube_mesh())
     scene = Scene(objects={"obj_1": first, "obj_2": second}, profile=profile)
 
     findings = check_bodies_in_one_place(scene)
@@ -1914,8 +1922,8 @@ def test_bodies_in_the_same_spot_on_different_plates_are_fine(profile: Profile) 
     from app.core.scene.evaluate import check_bodies_in_one_place
     from app.core.types import Scene
 
-    first = SceneObject(id="obj_1", name="Quader", mesh=cube(), plate=0)
-    second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube(), plate=1)
+    first = SceneObject(id="obj_1", name="Quader", mesh=cube_mesh(), plate=0)
+    second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube_mesh(), plate=1)
     scene = Scene(objects={"obj_1": first, "obj_2": second}, profile=profile)
 
     findings = check_bodies_in_one_place(scene)
@@ -1934,9 +1942,9 @@ def test_two_alike_bodies_side_by_side_are_not_reported(profile: Profile) -> Non
     from app.core.scene.evaluate import check_bodies_in_one_place
     from app.core.types import Scene
 
-    first = SceneObject(id="obj_1", name="Quader", mesh=cube())
+    first = SceneObject(id="obj_1", name="Quader", mesh=cube_mesh())
     second = SceneObject(
-        id="obj_2", name="Quader daneben", mesh=apply(cube(), translation((60.0, 0.0, 0.0)))
+        id="obj_2", name="Quader daneben", mesh=apply(cube_mesh(), translation((60.0, 0.0, 0.0)))
     )
     scene = Scene(objects={"obj_1": first, "obj_2": second}, profile=profile)
 
@@ -3806,7 +3814,7 @@ def _grooved_block_with_a_counterbore() -> tuple[SceneObject, MeshData]:
     """Quader 40 × 30 × 20 mit einer Rinne oben (r 12 entlang x, Achse bei z = 26)
     und bei y = 5 einer Bohrung Ø 4 mit Zylindersenkung Ø 8, die in die gekrümmte
     Rinnenfläche mündet — zurück kommen der Körper und der Rinnenraum."""
-    pytest.importorskip("OCP", reason="OpenCASCADE baut die Rinne")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.geom import lathe
     from app.core.geom import transform as moving
@@ -4333,10 +4341,10 @@ def test_split_bodies_keeps_the_filament_of_every_triangle(profile: Profile) -> 
     cubes = []
     slots: list[int] = []
     for size, x, slot in ((10.0, 0.0, 7), (9.0, 200.0, 0), (8.0, 15.0, 5)):
-        cube = trimesh.creation.box(extents=(size, size, size))
-        cube.apply_translation((x, 0.0, 0.0))
-        cubes.append(cube)
-        slots += [slot] * len(cube.faces)
+        cube_mesh = trimesh.creation.box(extents=(size, size, size))
+        cube_mesh.apply_translation((x, 0.0, 0.0))
+        cubes.append(cube_mesh)
+        slots += [slot] * len(cube_mesh.faces)
     painted = MeshData.of(trimesh.util.concatenate(cubes), slots=tuple(slots))
     entry = SceneObject(id="obj_1", name="Schrift", mesh=painted)
 
@@ -4889,7 +4897,7 @@ def _slot_volume(diameter: float, length: float, depth: float) -> float:
 
 
 def test_a_slot_takes_out_the_shape_it_promises(profile: Profile) -> None:
-    body = cube()
+    body = cube_mesh()
 
     result = drill(
         body,
@@ -4918,7 +4926,7 @@ def test_a_slot_points_where_its_angle_says(profile: Profile) -> None:
     wirklich dorthin zeigt, wo der Kunde die Vorschau gesehen hat, sagt nur
     das Ergebnis.
     """
-    body = cube()
+    body = cube_mesh()
     values = {
         "axis": "z",
         "diameter": 5.0,
@@ -4958,7 +4966,7 @@ def test_the_material_tolerance_widens_a_slot_and_keeps_its_travel(profile: Prof
     hielte man stattdessen die Gesamtlänge fest, nähme jeder Druck dem Kunden
     ein Stück des Weges ab, den er ausgerechnet hat.
     """
-    body = cube()
+    body = cube_mesh()
     schmal = drill(
         body,
         position=(0.0, 0.0, 10.0),
@@ -5023,7 +5031,7 @@ def test_a_slot_and_a_widening_do_not_go_together(profile: Profile) -> None:
 
     with pytest.raises(ValidationError) as fehler:
         drill(
-            cube(),
+            cube_mesh(),
             position=(0.0, 0.0, 10.0),
             axis="z",
             diameter=5.0,
@@ -5043,7 +5051,7 @@ def test_a_slot_no_longer_than_its_diameter_is_refused(length: float, profile: P
 
     with pytest.raises(ValidationError) as fehler:
         drill(
-            cube(),
+            cube_mesh(),
             position=(0.0, 0.0, 10.0),
             axis="z",
             diameter=5.0,
@@ -5064,7 +5072,7 @@ def test_a_slot_that_hangs_over_the_edge_says_so_although_its_centre_does_not(
     Fall nichts, und der Kunde bekommt eine aufgerissene Flanke ohne ein Wort
     dazu.
     """
-    body = cube()
+    body = cube_mesh()
     rand = float(body.bounds.maximum[0])
 
     mittig = drill(
@@ -5088,7 +5096,7 @@ def test_a_slot_that_hangs_over_the_edge_says_so_although_its_centre_does_not(
 
 def test_only_one_word_about_a_slot_that_hangs_over_both_ends(profile: Profile) -> None:
     """Zwei gleichlautende Sätze über dasselbe Loch sagen nichts Zweites."""
-    body = cube()
+    body = cube_mesh()
     rand = float(body.bounds.maximum[0])
 
     result = drill(
@@ -5363,9 +5371,8 @@ def test_resizing_a_slot_checks_its_two_ends(
     kind: str, y: float, diameter: float, opens: bool, profile: Profile
 ) -> None:
     """Die Mitte bleibt im Material, obwohl die verbreiterten Enden die Flanke öffnen."""
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -5543,7 +5550,7 @@ def test_invalid_detected_bore_geometry_has_a_translated_error(
     from app.core.errors import ValidationError
     from app.core.geom.prepare import slot_bore
 
-    body = cube()
+    body = cube_mesh()
     common = {
         "position": (0.0, 0.0, 0.0),
         "direction": direction,
@@ -5587,7 +5594,7 @@ def test_the_exact_bore_helpers_refuse_unusable_geometry_like_their_twins(
     OpenCASCADE bekam sie. Am Netz behoben seit dem 12.09.2026 (Übergabe der
     Durchsicht vom 11.09.2026).
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.errors import ValidationError
 
@@ -5636,7 +5643,7 @@ def test_feature_operations_reject_a_zero_axis_before_geometry(
     from app.core.errors import ValidationError
 
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
         from app.core.brep.features import features_of
 
@@ -5694,7 +5701,7 @@ def test_bore_operations_reject_a_zero_axis_before_geometry(
     from app.core.errors import ValidationError
 
     drilled = drill(
-        cube(),
+        cube_mesh(),
         position=(0.0, 0.0, 10.0),
         axis="z",
         diameter=6.0,
@@ -5806,9 +5813,8 @@ def test_both_cores_cut_the_same_slot(profile: Profile) -> None:
     daneben in einem anderen Test, an einem anderen Körper, mit einer anderen
     Länge.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit
     from app.core.brep.ops import _slotted_bore
     from app.core.geom.prepare_ops import DrillParams
@@ -5858,9 +5864,8 @@ def test_the_exact_core_cuts_a_slot_through_the_operation(profile: Profile) -> N
     Testart *Anschluss* — „nicht der Cache kann es, sondern die Anwendung tut
     es".
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -6502,9 +6507,8 @@ def _double_plate_with_roundings(*, sharp_level: float | None = None) -> SceneOb
     Ø4. Der Sollkörper entsteht direkt aus seinen ursprünglichen Kanten;
     weder remove_feature noch unround baut ihn.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
+
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -6879,9 +6883,9 @@ def test_a_tilted_pin_stands_on_the_plate_all_around(profile: Profile) -> None:
         rim.append(point + axis * (level - point[2]) / axis[2])
     # Innen und außen über den Raumwinkel: Die nächste Fläche sagt es an der
     # Kehle zwischen Zapfen und Platte nicht eindeutig.
-    from tests.test_slot_features import _inside
+    from tests.helpers import inside
 
-    assert bool(_inside(body, [tuple(point) for point in rim]).all()), (
+    assert bool(inside(body, [tuple(point) for point in rim]).all()), (
         "unter der hohen Seite fehlt Material"
     )
 
@@ -6965,7 +6969,7 @@ def test_a_countersink_over_the_edge_says_so(profile: Profile, kernel: str) -> N
     der Bericht schwieg (22.09.2026).
     """
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         body: object = edit.cut_bore(

@@ -63,6 +63,7 @@ from app.ui.render.api import CameraPose, Pick
 from app.ui.theme import THEMES, viewport_colours
 from app.ui.viewport import PLATE_GAP
 from tests.render_fakes import BrokenDriverRenderer, RecordingItem, RecordingRenderer
+from tests.ui_helpers import scene_with_a_hole_and_a_fillet as _scene_with_a_hole_and_a_fillet
 
 
 def _finish_difference(viewport: Any, app: QApplication) -> None:
@@ -5383,47 +5384,6 @@ def test_the_body_edges_are_searched_once_per_mesh(
     viewport._feature_edges_for("body", vertices, faces, None)
     viewport._feature_edges_for("body", vertices, faces, None)
     assert len(searched) == 4, "ohne Schlüssel kein Cache"
-
-
-def _scene_with_a_hole_and_a_fillet() -> Any:
-    """Ein Körper mit einer Bohrung und einer Verrundung.
-
-    Die kleinste Szene für die Frage „an welchem Merkmal hängt der Griff":
-    Eine Bohrung lässt sich versetzen, eine Verrundung nicht — sie hängt an
-    ihrer Kante, und versetzt bliebe die Kante scharf.
-    """
-    import trimesh
-
-    from app.core.geom.mesh import MeshData
-    from app.core.scene import EvaluationResult
-    from app.core.types import Feature, Scene, SceneObject
-
-    mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
-    features = {
-        "hole_1": Feature(
-            id="hole_1",
-            kind="hole",
-            provenance="detected",
-            params={"diameter": 5.0, "centre": (-10.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
-        ),
-        "fillet_1": Feature(
-            id="fillet_1",
-            kind="fillet",
-            provenance="detected",
-            params={"radius": 2.0, "centre": (10.0, 0.0, 5.0)},
-        ),
-        "face_1": Feature(
-            id="face_1",
-            kind="face",
-            provenance="detected",
-            params={"centre": (0.0, 0.0, 5.0), "normal": (0.0, 0.0, 1.0)},
-        ),
-    }
-    return EvaluationResult(
-        scene=Scene(
-            objects={"obj_1": SceneObject(id="obj_1", name="A", mesh=mesh, features=features)}
-        )
-    )
 
 
 @pytest.mark.parametrize("kind", ["move", "turn"])

@@ -46,16 +46,20 @@ from app.core.perceive.features import (
 from app.core.perceive.relations import widening_at_the_mouth
 from app.core.types import Feature, FeatureId, Profile, SurfacePatch
 from app.core.units import EPS_GEOM
+from tests.helpers import (
+    STUD_CENTRES,
+    cube_mesh,
+    exact_kernel,
+    plate_with_a_chamfered_slot,
+    small_faces,
+    stud_on_a_plate,
+)
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def plate(name: str = "plate_holes.stl") -> MeshData:
     return normalise(read_mesh((MESHES / name).read_bytes(), ".stl"), "mm").mesh
-
-
-def cube() -> MeshData:
-    return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
 
 
 def as_a_file_arrives(body: trimesh.Trimesh) -> MeshData:
@@ -451,7 +455,7 @@ def test_a_blind_bore_stays_blind() -> None:
 
 
 def test_a_cube_has_no_bores() -> None:
-    assert detect_holes(cube()) == []
+    assert detect_holes(cube_mesh()) == []
 
 
 def test_a_pin_is_not_reported_as_a_bore() -> None:
@@ -532,7 +536,7 @@ def test_a_real_pin_is_kept() -> None:
 
 
 def test_the_six_faces_of_a_cube_are_found() -> None:
-    faces = detect_faces(cube())
+    faces = detect_faces(cube_mesh())
 
     assert len(faces) == 6
     for face in faces:
@@ -603,7 +607,7 @@ def test_turning_a_part_does_not_renumber_its_faces() -> None:
 
 
 def test_a_face_knows_where_it_looks() -> None:
-    top = max(detect_faces(cube()), key=lambda face: face.params["centre"][2])
+    top = max(detect_faces(cube_mesh()), key=lambda face: face.params["centre"][2])
     assert top.params["normal"][2] == pytest.approx(1.0, abs=1e-6)
 
 
@@ -623,7 +627,7 @@ def test_an_open_model_reports_its_edges() -> None:
 
 
 def test_a_closed_model_has_no_open_edges() -> None:
-    assert detect_edge_loops(cube()) == []
+    assert detect_edge_loops(cube_mesh()) == []
 
 
 def test_two_holes_in_a_shell_are_two_features() -> None:
@@ -1071,7 +1075,7 @@ def test_a_coarse_prism_keeps_its_sides() -> None:
 def test_components_are_counted() -> None:
     two = normalise(read_mesh((MESHES / "two_components.stl").read_bytes(), ".stl"), "mm").mesh
     assert component_count(two) == 2
-    assert component_count(cube()) == 1
+    assert component_count(cube_mesh()) == 1
 
 
 # --- gesenkte Bohrung (§21.1) ---------------------------------------------------
@@ -1858,7 +1862,7 @@ def test_cancelled_recognition_does_not_reorder_a_warm_cache() -> None:
     from app.core.scene.cancel import CancelSignal
 
     forget_cache()
-    first, second = cube(), plate()
+    first, second = cube_mesh(), plate()
     detect(first)
     detect(second)
     before = list(features_module._FEATURE_CACHE.items())
@@ -5128,36 +5132,12 @@ def test_a_patch_on_a_different_cylinder_stays_apart() -> None:
     assert len(_merged_cylinders(body, MeshData.of(body), [(first, big), (second, small)])) == 2
 
 
-def _plate_with_a_chamfered_slot() -> MeshData:
-    """Eine Platte mit Langloch Ø 6 × 26, dessen Mündung eine 45-Grad-Fase trägt."""
-    from shapely.geometry import LineString
-
-    from app.core.geom.boolean import boolean
-
-    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
-    outline = LineString([(-10.0, 0.0), (10.0, 0.0)]).buffer(3.0, quad_segs=16)
-    cutter = trimesh.creation.extrude_polygon(outline, height=20.0)
-    cutter.apply_translation((0.0, 0.0, -10.0))
-    lower = np.asarray(outline.exterior.coords, dtype=float)
-    upper = np.asarray(outline.buffer(1.5, quad_segs=16).exterior.coords, dtype=float)
-    chamfer = trimesh.convex.convex_hull(  # type: ignore[no-untyped-call]
-        np.vstack(
-            (
-                np.column_stack((lower, np.full(len(lower), 3.0))),
-                np.column_stack((upper, np.full(len(upper), 4.5))),
-            )
-        )
-    )
-    body = boolean("difference", [plate, MeshData.of(cutter)]).mesh
-    return boolean("difference", [body, MeshData.of(chamfer)]).mesh
-
-
 def test_the_chamfer_at_a_slot_mouth_belongs_to_the_slot() -> None:
     """Am Rahmen eines Schreibtisch-Organizers (MakerWorld, 15.09.2026) wurden aus
     33 gefasten Langlöchern 126 „Senkungen 90°" — je Langloch vier Halbkegel, an
     denen jede Operation absagte. Ein Kegelstück am Mantel eines Langlochs ist
     dessen Mündungsfase und geht darin auf."""
-    mesh = _plate_with_a_chamfered_slot()
+    mesh = plate_with_a_chamfered_slot()
     found = detect(mesh)
 
     kinds = {
@@ -5699,8 +5679,7 @@ def test_the_widening_over_a_through_bore_is_not_through_however_it_is_tessellat
 
 def test_the_widening_reads_the_same_on_the_tessellated_exact_body() -> None:
     """Dieselbe Aufweitung aus dem exakten Kern, gelesen an seiner Tessellierung (P1.5)."""
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
@@ -6120,37 +6099,6 @@ def test_a_coarsely_facetted_bore_survives_a_dense_triangulation() -> None:
 # --- kleine echte Flächen (P1.5) --------------------------------------------------------
 
 
-def _stud_on_a_plate() -> trimesh.Trimesh:
-    """Ein 1-mm-Nocken auf einer Platte 40 × 30 × 4 — als Netz, ohne exakten Kern.
-
-    Beide Quader überlappen in genau 1 mm³, damit der Bau nicht an einer bloßen
-    Berührung zweier Deckflächen hängt (Review P1.5). Volumen 4801, Oberfläche
-    2964, fünf Nockenflächen zu je 1 mm².
-    """
-    base = trimesh.creation.box(extents=(40.0, 30.0, 4.0))
-    base.apply_translation((0.0, 0.0, 2.0))
-    post = trimesh.creation.box(extents=(1.0, 1.0, 2.0))
-    post.apply_translation((0.0, 0.0, 4.0))
-    return trimesh.boolean.union([base, post])
-
-
-def _small_faces(found: dict[FeatureId, Feature]) -> dict[tuple[float, float, float], Feature]:
-    return {
-        tuple(round(float(value), 3) for value in entry.params["centre"]): entry  # type: ignore[misc]
-        for entry in found.values()
-        if entry.kind == "face" and float(entry.params["area"]) < features_module.MIN_FACE_AREA
-    }
-
-
-STUD_CENTRES = {
-    (0.0, 0.0, 5.0),
-    (0.5, 0.0, 4.5),
-    (-0.5, 0.0, 4.5),
-    (0.0, 0.5, 4.5),
-    (0.0, -0.5, 4.5),
-}
-
-
 @pytest.mark.parametrize("subdivided", [False, True], ids=["roh", "unterteilt"])
 def test_a_one_millimetre_stud_keeps_its_five_faces(subdivided: bool) -> None:
     """Fünf Flächen zu je 1 mm² liegen unter ``MIN_FACE_AREA`` — und sind Flächen.
@@ -6161,7 +6109,7 @@ def test_a_one_millimetre_stud_keeps_its_five_faces(subdivided: bool) -> None:
     Unterteilung derselben Dreiecke ändert daran nichts — weder entsteht eine
     Fläche mehr, noch fällt eine weg.
     """
-    raw = _stud_on_a_plate()
+    raw = stud_on_a_plate()
     if subdivided:
         raw = trimesh.Trimesh(*trimesh.remesh.subdivide(raw.vertices, raw.faces))
     body = MeshData.of(raw)
@@ -6171,7 +6119,7 @@ def test_a_one_millimetre_stud_keeps_its_five_faces(subdivided: bool) -> None:
     faces = [entry for entry in found.values() if entry.kind == "face"]
 
     assert len(found) == len(faces) == 11, sorted(entry.kind for entry in found.values())
-    small = _small_faces(found)
+    small = small_faces(found)
     assert set(small) == STUD_CENTRES
     for centre, entry in small.items():
         assert float(entry.params["area"]) == pytest.approx(1.0)
@@ -6196,10 +6144,10 @@ def test_the_stud_faces_keep_their_names_after_a_translation() -> None:
     """
     from app.core.perceive.matching import match, moved_features
 
-    body = _stud_on_a_plate()
+    body = stud_on_a_plate()
     mesh = MeshData.of(body)
     before = detect(mesh)
-    small_before = _small_faces(before)
+    small_before = small_faces(before)
     assert set(small_before) == STUD_CENTRES
 
     matrix = np.eye(4)
@@ -6222,8 +6170,7 @@ def test_the_stud_faces_keep_their_names_after_a_translation() -> None:
 
 def test_the_stud_is_read_the_same_from_the_exact_body_and_its_tessellation() -> None:
     """Dieselben elf Flächen aus ``features_of`` und aus ``detect`` an zwei Abweichungen."""
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -6231,10 +6178,10 @@ def test_the_stud_is_read_the_same_from_the_exact_body_and_its_tessellation() ->
         "union", [edit.box(40.0, 30.0, 4.0), edit.moved(edit.box(1.0, 1.0, 2.0), (0.0, 0.0, 3.0))]
     )
     native = features_of(body)
-    assert set(_small_faces(native)) == STUD_CENTRES and len(native) == 11
+    assert set(small_faces(native)) == STUD_CENTRES and len(native) == 11
     for deflection in (0.1, 0.02):
         found = detect(body.to_mesh(deflection=deflection))
-        assert len(found) == 11 and set(_small_faces(found)) == STUD_CENTRES, deflection
+        assert len(found) == 11 and set(small_faces(found)) == STUD_CENTRES, deflection
 
 
 def test_a_small_facet_needs_sharp_borders_all_around_to_count() -> None:
@@ -6252,7 +6199,7 @@ def test_a_small_facet_needs_sharp_borders_all_around_to_count() -> None:
 
     found = detect(body)
 
-    assert not _small_faces(found), "Mantelstreifen sind keine Flächen"
+    assert not small_faces(found), "Mantelstreifen sind keine Flächen"
     assert sorted(entry.kind for entry in found.values()).count("pin") == 1
     sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=5.0))
     assert not [entry for entry in detect(sphere).values() if entry.kind == "face"]
@@ -6336,8 +6283,7 @@ def test_the_mouth_chamfer_of_a_slot_belongs_to_it_on_both_cores() -> None:
     fehlten die Flanken ganz. Die Träger bleiben mit ihren wirklichen Spitzen
     und Normalen erhalten, die Maße des Langlochs bleiben die Nennmaße.
     """
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep.features import features_of
 
     body = _exact_slot_with_a_mouth_chamfer()
@@ -6364,13 +6310,12 @@ def test_the_mouth_chamfer_on_a_sloped_face_belongs_to_the_slot_on_both_cores() 
     Kegelstück, ist sie Mündungsfase. Beide Kerne wählen danach dieselben
     Dreiecke.
     """
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
-    from tests.test_feature_moves_keep_shape import _sloped_slot_plate
+    from tests.helpers import sloped_slot_plate
 
-    solid = _sloped_slot_plate(chamfer=True)
+    solid = sloped_slot_plate(chamfer=True)
     native = features_of(solid)
     mesh = as_mesh_data(solid)
     netted = detect(mesh)
@@ -6455,8 +6400,7 @@ def test_a_partial_cone_between_two_slots_stays_where_it_is() -> None:
     verschwand im zweiten Langloch — der exakte Kern ließ ihn als Kegelfläche
     stehen. Beide Kerne sagen jetzt dasselbe, an zwei Abweichungen des Netzes.
     """
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep.features import features_of
 
     body = _cone_between_two_slots()
@@ -6475,8 +6419,7 @@ def test_a_partial_cone_with_one_clear_owner_still_folds_into_that_slot() -> Non
     dort teilt der Kegel mehr Kanten mit ``slot_2`` als mit ``slot_1`` und
     geht als Mündungsfase darin auf, wie an einem Langloch allein.
     """
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.brep import edit
 
     body = edit.box(60.0, 30.0, 8.0)

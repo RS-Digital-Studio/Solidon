@@ -24,6 +24,7 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, load, new_project, save
 from app.core.types import Profile
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
+from tests.helpers import exact_kernel
 
 CREATORS = [("create_box", "mesh"), ("create_brep_box", "brep")]
 
@@ -31,9 +32,7 @@ CREATORS = [("create_box", "mesh"), ("create_brep_box", "brep")]
 def needs_exact(kind: str) -> None:
     if kind != "brep":
         return
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
 
 
 def polygon_share(radius: float) -> float:

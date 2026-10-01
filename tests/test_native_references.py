@@ -33,7 +33,7 @@ from app.core.types import (
     Scene,
     SceneObject,
 )
-from tests.helpers import FakeMesh, make_object
+from tests.helpers import FakeMesh, exact_kernel, make_object
 from tests.test_cache import FakeCodec
 
 # Über den Paketnamen käme die **Funktion** ``evaluate`` — das Paket exportiert
@@ -266,10 +266,7 @@ def test_an_invalid_continuation_stops_the_chain_before_any_output(profile: Prof
 
 
 def _exact_box():
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    from app.core.brep import edit
+    edit = exact_kernel()
     from app.core.brep.features import features_of
 
     solid = edit.box(10.0, 10.0, 10.0)
@@ -524,8 +521,7 @@ _UNPROVEN_PUSH: dict[str, float] = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
 
 
 def _box_project(profile: Profile):
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     project = new_project("centauri-carbon-2", "pla")
     history = History(project.document)
     history.apply(

@@ -199,7 +199,7 @@ def test_workflow_code_is_bound_to_the_actual_main_checkout(
 @pytest.fixture
 def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Verwendet den vorhandenen echten Übergabeerzeuger mit kleinen Produktdateien."""
-    from tests.test_sign_release import _pack, _product_tree
+    from tests.helpers import pack_release, product_tree
 
     monkeypatch.setenv("GITHUB_SHA", COMMIT)
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
@@ -207,8 +207,8 @@ def ci_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
     monkeypatch.setattr(tool, "_checkout_commit", lambda: COMMIT)
-    tree = _product_tree(tmp_path / "product", monkeypatch)
-    archive = _pack(tree, tmp_path / "artifact")
+    tree = product_tree(tmp_path / "product", monkeypatch)
+    archive = pack_release(tree, tmp_path / "artifact")
     unsigned = tree / "dist/Solidon3D/Solidon3D.exe"
     signed = unsigned.read_bytes() + b" SIGNED"
     signed_digest = hashlib.sha256(signed).hexdigest()

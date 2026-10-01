@@ -24,7 +24,7 @@ from app.core.types import Feature, OpContext, OpResult, Profile, Quality, Scene
 from app.core.units import EPS_GEOM
 from tests.helpers import contains as _contains
 from tests.helpers import feature_operation as _operation
-from tests.helpers import sloping_bore as _sloping_bore
+from tests.helpers import sloping_bore, two_bores
 
 
 def _resize(
@@ -204,7 +204,7 @@ def _why_no_chain(mesh: MeshData, detected: dict, chosen: Feature) -> str:
 
 def test_sloping_bore_and_its_entire_countersink_share_one_chain() -> None:
     """Der echte gemeinsame Rand entscheidet trotz des schrägen Kegelfits."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     chain = cavity_chain_at(hole, features, mesh)
     assert chain is not None
     assert [section.kind for section in chain] == ["hole", "cone"]
@@ -212,7 +212,7 @@ def test_sloping_bore_and_its_entire_countersink_share_one_chain() -> None:
 
 def test_numerically_unchanged_diameter_does_not_recut_a_bore(profile: Profile) -> None:
     """Die bestehende Gleichheitsgrenze gilt vor jedem möglichen Neuschnitt."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     diameter = float(hole.params["diameter"]) - EPS_GEOM / 2.0
     result = _resize(mesh, features, hole, diameter, profile)
     changed = result.outputs[0].mesh
@@ -362,7 +362,7 @@ def test_follow_at_a_new_place_keeps_the_axial_level_of_the_recut(profile: Profi
     Die Außenfläche steigt dort um 0,24 mm, die starr versetzte Mündung liegt
     darunter, und der Schritt sagt es (``mouth_covered``).
     """
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     centre = tuple(float(v) for v in hole.params["centre"])
     still = _operation(
         "resize_hole",
@@ -419,7 +419,7 @@ def test_follow_at_a_new_place_measures_the_neighbour_wall_there(profile: Profil
     meldete „dünn"; das ist eine Aussage über eine Stelle, die es danach nicht
     mehr gibt.
     """
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     centre = tuple(float(v) for v in hole.params["centre"])
     result = _operation(
         "resize_hole",
@@ -503,7 +503,7 @@ def test_moving_a_bore_without_the_entrance_reports_the_neighbour_it_opens(
     Bohrerhalter aus ``F:\\3D Dateien`` nachgestellt). Der Satz nennt die
     Stelle als Ausweg, nicht den Durchmesser.
     """
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     centre = tuple(float(v) for v in hole.params["centre"])
     result = _operation(
         "resize_hole",
@@ -537,7 +537,7 @@ def test_follow_at_a_new_place_refuses_when_the_chain_is_not_found_again(
     from app.core.errors import GeometryError
     from app.core.geom import prepare_ops
 
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     centre = tuple(float(v) for v in hole.params["centre"])
     original = prepare_ops._recognised_resized_feature
 
@@ -569,7 +569,7 @@ def test_follow_default_is_explicit_only_for_a_suitable_feature_action(profile: 
     """Alte Operationen behalten keep; die belegte Senkbohrung bietet follow an."""
     from app.core.perceive.actions import actions_for
 
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     spec = REGISTRY.get("resize_hole")
     assert spec.params(at_feature=hole.id).entrance_mode == "keep"
     action = next(a for a in actions_for(hole, features, mesh=mesh) if a.op == "resize_hole")
@@ -579,7 +579,7 @@ def test_follow_default_is_explicit_only_for_a_suitable_feature_action(profile: 
 @pytest.mark.parametrize("mode", ["keep", "follow"])
 def test_resized_bore_keeps_its_proven_nominal_diameter(profile: Profile, mode: str) -> None:
     """Die neue Wand hat Sehnenfehler; ihr bekanntes Operationsmaß driftet dadurch nicht."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     changed = _operation(
         "resize_hole", mesh, features, hole, profile, diameter=14.86, entrance_mode=mode
     ).outputs[0]
@@ -609,7 +609,7 @@ def test_resized_bore_keeps_its_proven_nominal_diameter(profile: Profile, mode: 
 
 def test_repeated_follow_keeps_the_nominal_angle_without_facet_drift(profile: Profile) -> None:
     """Wiederholte Änderungen verwenden den gesetzten Winkel statt den erneuten Facettenfit."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     sink = next(f for f in features.values() if f.kind == "cone")
     angle = sink.params["angle"]
     for diameter in (6.0, 8.0, 6.0):
@@ -656,7 +656,7 @@ def test_resized_known_bore_uses_bounded_detection(monkeypatch) -> None:
     from app.core.geom import prepare_ops
     from app.core.perceive import local
 
-    mesh, _features, hole = _sloping_bore()
+    mesh, _features, hole = sloping_bore()
     observed = []
     real = local.detect_known
 
@@ -679,7 +679,7 @@ def test_follow_sends_every_expected_section_to_the_bounded_search(
     """Die lokale Nachprüfung kennt Schaft und Senkung vor dem ersten Fit gemeinsam."""
     from app.core.perceive import local
 
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     chain = cavity_chain_at(hole, features, mesh)
     assert chain is not None
     observed = []
@@ -705,7 +705,7 @@ def test_large_mesh_resize_keeps_the_real_blind_depth(profile: Profile, monkeypa
     """Ø6 auf Ø8 am echten Millionennetz: Sackloch, Volumen und örtliche Suche bleiben belegt."""
     from app.core.perceive import features as detection
     from app.core.perceive import local
-    from tests.test_local_detection import blind_cylinder, bore_seed
+    from tests.helpers import blind_cylinder, bore_seed
 
     mesh = blind_cylinder(dense=True)
     monkeypatch.setattr(local, "FEATURE_LIMIT_TRIANGLES", 1_000_000)
@@ -828,7 +828,7 @@ def test_follow_opens_a_sloping_mouth_and_keeps_its_sloping_floor(
     profile: Profile, diameter: float, quality: Quality
 ) -> None:
     """Die nominale Senkung bleibt auch an der schräg geschnittenen Außenfläche vollständig."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     result = _operation(
         "resize_hole",
         mesh,
@@ -895,7 +895,7 @@ def test_follow_rejects_an_inner_undercut_with_the_available_keep_choice(profile
 
 def test_follow_on_a_plain_cylinder_is_the_same_operation(profile: Profile) -> None:
     """Ohne Einlauf hat die Wahl keine zusätzliche geometrische Bedeutung."""
-    mesh, features, hole = _two_bores(15.0)
+    mesh, features, hole = two_bores(15.0)
     keep = (
         _operation("resize_hole", mesh, features, hole, profile, diameter=8.0, entrance_mode="keep")
         .outputs[0]
@@ -1013,7 +1013,7 @@ def test_follow_declines_a_duplicated_owner_of_the_same_ring(profile: Profile) -
 
     from app.core.errors import ValidationError
 
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     sink = next(f for f in features.values() if f.kind == "cone")
     features["cone_copy"] = replace(sink, id="cone_copy")
     with pytest.raises(ValidationError) as problem:
@@ -1057,7 +1057,7 @@ def test_follow_survives_project_roundtrip_and_one_undo_redo(
     from app.core.scene.project import ProjectSources, checksum, load, new_project, save
     from app.core.types import Source
 
-    mesh, _features, _hole = _sloping_bore()
+    mesh, _features, _hole = sloping_bore()
     payload = mesh.raw.export(file_type="stl")
     project = new_project("centauri-carbon-2", "petg")
     project.document.sources["src_1"] = Source(
@@ -1129,7 +1129,7 @@ def test_resize_a_shallow_bore_also_opens_its_rounded_entrance(profile: Profile)
 
 def test_resize_reaches_the_sloping_mouth_and_keeps_the_floor(profile: Profile) -> None:
     """An der alten Mündung bleibt kein Material innerhalb des neuen Lochs."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     result = _resize(mesh, features, hole, 14.86, profile)
     changed = result.outputs[0].mesh
     assert isinstance(changed, MeshData)
@@ -1147,7 +1147,7 @@ def test_resize_reaches_the_sloping_mouth_and_keeps_the_floor(profile: Profile) 
 
 def test_resize_reports_the_new_connection_to_its_neighbour(profile: Profile) -> None:
     """Die unterbrochene innere Wand ist auch ohne neue Komponente ein Konflikt."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     result = _resize(mesh, features, hole, 14.86, profile)
     conflicts = [finding for finding in result.findings if finding.code == "bore.neighbour_opened"]
     assert len(conflicts) == 1
@@ -1155,33 +1155,12 @@ def test_resize_reports_the_new_connection_to_its_neighbour(profile: Profile) ->
     assert len(conflicts[0].feature_ids) == 2
 
 
-def _two_bores(
-    spacing: float, *, upper: bool = False
-) -> tuple[MeshData, dict[str, Feature], Feature]:
-    """Zwei bekannte Sacklöcher, auf Wunsch ohne gemeinsame Tiefenlage."""
-    stock = trimesh.creation.box(extents=(36.0, 24.0, 24.0))
-    stock.apply_translation((6.0, 0.0, 12.0))
-    first = lathe.cylinder(radius=3.0, height=8.0, sections=96)
-    first.apply_translation((0.0, 0.0, 4.0))
-    second = lathe.cylinder(radius=3.0, height=8.0, sections=96)
-    second.apply_translation((spacing, 0.0, 20.0 if upper else 4.0))
-    mesh = boolean(
-        "difference", [MeshData.of(stock), MeshData.of(first), MeshData.of(second)], quality="fine"
-    ).mesh
-    features = detect(mesh)
-    hole = min(
-        (feature for feature in features.values() if feature.kind == "hole"),
-        key=lambda feature: abs(float(feature.params["centre"][0])),
-    )
-    return mesh, features, hole
-
-
 @pytest.mark.parametrize("upper", [False, True])
 def test_projected_neighbours_only_warn_when_their_depths_overlap(
     profile: Profile, upper: bool
 ) -> None:
     """Ein Abstand im Grundriss allein beweist keine verlorene Trennwand."""
-    mesh, features, hole = _two_bores(7.5, upper=upper)
+    mesh, features, hole = two_bores(7.5, upper=upper)
     result = _resize(mesh, features, hole, 10.0, profile)
     assert any(f.code == "bore.neighbour_opened" for f in result.findings) is not upper
 
@@ -1189,7 +1168,7 @@ def test_projected_neighbours_only_warn_when_their_depths_overlap(
 def test_resize_reports_a_remaining_wall_below_the_material_limit(profile: Profile) -> None:
     """Eine noch geschlossene, zu dünne Nachbarwand wird ebenfalls benannt."""
     wall = profile.minimum_wall_thickness / 2.0
-    mesh, features, hole = _two_bores(8.0 + wall)
+    mesh, features, hole = two_bores(8.0 + wall)
     result = _resize(mesh, features, hole, 10.0, profile)
     findings = [f for f in result.findings if f.code == "bore.neighbour_wall_thin"]
     assert len(findings) == 1
@@ -1198,7 +1177,7 @@ def test_resize_reports_a_remaining_wall_below_the_material_limit(profile: Profi
 
 def test_resize_preserves_a_sufficient_neighbour_wall(profile: Profile) -> None:
     """Eine tragende Restwand bekommt keine vorsorgliche Warnung."""
-    mesh, features, hole = _two_bores(8.0 + profile.minimum_wall_thickness * 2.0)
+    mesh, features, hole = two_bores(8.0 + profile.minimum_wall_thickness * 2.0)
     result = _resize(mesh, features, hole, 10.0, profile)
     assert not [f for f in result.findings if f.code.startswith("bore.neighbour_")]
 
@@ -1209,7 +1188,7 @@ def test_resize_keeps_the_sloping_floor_and_the_feature_reference(
     profile: Profile, diameter: float, turned: bool
 ) -> None:
     """Die tatsächlichen Endflächen tragen auch nach freier Drehung und Versatz."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     transform = np.eye(4)
     if turned:
         transform = trimesh.transformations.rotation_matrix(0.73, (1.0, 2.0, 3.0))
@@ -1238,7 +1217,7 @@ def test_resize_keeps_the_sloping_floor_and_the_feature_reference(
 
 def test_moderate_growth_keeps_the_outer_countersink_surface(profile: Profile) -> None:
     """Der Zylinder wächst bis in den Kegel; dessen verbleibende Außenform bleibt."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     result = _resize(mesh, features, hole, 10.0, profile)
     changed = result.outputs[0].mesh
     assert isinstance(changed, MeshData)
@@ -1251,7 +1230,7 @@ def test_moderate_growth_keeps_the_outer_countersink_surface(profile: Profile) -
 
 def test_shrinking_keeps_the_countersink_and_recognises_the_new_shoulder(profile: Profile) -> None:
     """Die unveränderte Senkung hängt über die neue Ringstufe am kleineren Loch."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     changed = _resize(mesh, features, hole, 6.0, profile).outputs[0].mesh
     assert isinstance(changed, MeshData)
     # Die alte Übergangsebene wird zur Schulter, nicht zum erhabenen Kragen.
@@ -1286,7 +1265,7 @@ def test_shrinking_float32_boundaries_does_not_create_degenerate_slivers(
     profile: Profile, quality: Quality
 ) -> None:
     """Eine STL-genaue Randebene wird beim Auffüllen nicht in Hautdreiecke zerlegt."""
-    mesh, _features, _hole = _sloping_bore()
+    mesh, _features, _hole = sloping_bore()
     raw = mesh.raw.copy()
     raw.vertices = np.asarray(raw.vertices, dtype=np.float32).astype(np.float64)
     mesh = MeshData.of(raw)
@@ -1392,7 +1371,7 @@ def test_removing_a_sloping_countersink_keeps_the_requested_scope(
     profile: Profile, sections: str
 ) -> None:
     """Nur Senkung oder ganzer Hohlraum: beide Antworten bleiben geometrisch klar."""
-    mesh, features, hole = _sloping_bore()
+    mesh, features, hole = sloping_bore()
     chain = cavity_chain_at(hole, features, mesh)
     assert chain is not None
     cone = chain[1]

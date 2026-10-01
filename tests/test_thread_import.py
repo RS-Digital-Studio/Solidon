@@ -21,12 +21,13 @@ from typing import Any
 import numpy as np
 import pytest
 
-from app.core.brep.kernel import Solid, available
+from app.core.brep.kernel import Solid
 from app.core.errors import OperationCancelled
 from app.core.sketch.profile import Profile, ProfileSegment
 from app.core.types import SceneObject
+from tests.helpers import exact_kernel, mirrored_thread
 
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+exact_kernel()
 
 THREADS = Path(__file__).parent / "data" / "threads"
 
@@ -188,19 +189,6 @@ def _rotated_axis(degrees: float, axis: tuple[float, float, float]) -> tuple[flo
     return (x * z * (1 - c) + y * s, y * z * (1 - c) - x * s, c + z * z * (1 - c))
 
 
-def _mirrored(solid: Solid) -> Solid:
-    """Spiegelung an der XZ-Ebene: Achse bleibt Z, aus rechts wird links."""
-    from app.core.brep import edit
-
-    matrix = (
-        (1.0, 0.0, 0.0, 0.0),
-        (0.0, -1.0, 0.0, 0.0),
-        (0.0, 0.0, 1.0, 0.0),
-        (0.0, 0.0, 0.0, 1.0),
-    )
-    return edit.transformed(solid, matrix)
-
-
 def _slab(solid: Solid, z0: float, z1: float) -> Solid:
     """Nur z0..z1 bleibt, beide Enden geschnitten."""
     from app.core.brep import edit
@@ -301,7 +289,7 @@ def test_an_imported_thread_names_its_measures(name: str) -> None:
 
 def test_a_left_hand_thread_is_measured_left(m6: Solid) -> None:
     """Die Spiegelung desselben Bolzens ist links — und sonst in jedem Maß gleich."""
-    _expect(_reading(_mirrored(m6)), {**BASES["m6_rechts"], "handedness": "left"})
+    _expect(_reading(mirrored_thread(m6)), {**BASES["m6_rechts"], "handedness": "left"})
 
 
 @pytest.mark.parametrize("name", ["m8_innen", "innen_zweigaengig"])
@@ -310,7 +298,7 @@ def test_a_left_hand_internal_thread_is_measured_left(name: str) -> None:
 
     Die Achse bleibt Z, und die Mitte sitzt unter der Mündung wie beim Original.
     """
-    reading = _reading(_mirrored(_read(name)))
+    reading = _reading(mirrored_thread(_read(name)))
     _expect(reading, {**BASES[name], "handedness": "left"})
     assert reading.centre[2] == pytest.approx(-BASES[name]["length"] / 2.0, abs=1e-6)
 

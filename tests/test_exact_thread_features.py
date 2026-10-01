@@ -1,5 +1,7 @@
 """Der exakte Gewindebolzen erklärt seinen Gang über den vorhandenen Merkmalsvertrag."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
@@ -7,8 +9,12 @@ import math
 import numpy as np
 import pytest
 
+from tests.helpers import exact_kernel
+
+exact_kernel()
+
 from app.core.bootstrap import load_operations
-from app.core.brep.kernel import Solid, available
+from app.core.brep.kernel import Solid
 from app.core.geom.ops import as_transform
 from app.core.geom.transform import translation
 from app.core.perceive.matching import moved_features
@@ -16,8 +22,6 @@ from app.core.types import SceneObject
 from app.core.units import EPS_GEOM
 from tests.helpers import CountingToken
 from tests.helpers import run_with_parameters as run
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 DIAMETER = 6.123456789
 PITCH = 1.23456789

@@ -12,6 +12,7 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.types import Feature, SurfacePatch
 from app.core.units import EPS_GEOM
+from tests.helpers import exact_kernel
 
 
 def _patch(kind: str = "cylinder", indices: tuple[int, ...] = (0, 1)) -> SurfacePatch:
@@ -205,9 +206,9 @@ def test_patch_helpers_stop_before_publishing_a_partial_result() -> None:
 @pytest.mark.parametrize("kind", ("cone", "sphere", "torus"))
 def test_real_recognition_keeps_the_accepted_carrier_without_a_second_fit(kind: str) -> None:
     from app.core.perceive.features import detect
-    from tests.test_round_surface_measurements import _round_surface
+    from tests.helpers import round_surface
 
-    body = _round_surface(kind)
+    body = round_surface(kind)
     vertices, faces = body.vertices.copy(), body.faces.copy()
     feature = next(value for value in detect(MeshData.of(body)).values() if value.kind == kind)
     assert len(feature.surface_patches) == 1
@@ -351,7 +352,7 @@ def test_enclosed_air_keeps_its_original_cylinder_and_material_island(local: boo
 
 @pytest.mark.parametrize("round_cut", (False, True))
 def test_open_slot_retains_its_actual_arc_and_newly_joined_faces(round_cut: bool) -> None:
-    pytest.importorskip("OCP")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.features import detect
@@ -392,9 +393,9 @@ def test_open_slot_retains_its_actual_arc_and_newly_joined_faces(round_cut: bool
 
 def test_merged_slot_chamfer_retains_its_true_apices_and_radian_half_angles() -> None:
     from app.core.perceive import features
-    from tests.test_features import _plate_with_a_chamfered_slot
+    from tests.helpers import plate_with_a_chamfered_slot
 
-    mesh = _plate_with_a_chamfered_slot()
+    mesh = plate_with_a_chamfered_slot()
     fitted = features._fitted(mesh)
     expected = features.detect_cones(mesh, fitted.cones)
     assert len(expected) == 2
@@ -430,7 +431,7 @@ def test_a_slot_does_not_average_its_two_accepted_reference_radii() -> None:
 
 def test_local_detection_reindexes_carriers_after_vertex_and_face_selection() -> None:
     from app.core.perceive.local import detect_local
-    from tests.test_local_detection import blind_cylinder, bore_seed
+    from tests.helpers import blind_cylinder, bore_seed
 
     mesh = blind_cylinder()
     seed, point, normal = bore_seed(mesh)
@@ -461,7 +462,7 @@ def test_local_detection_reindexes_carriers_after_vertex_and_face_selection() ->
 def test_native_retriangulation_maps_patch_faces_and_discards_only_unproved_subsets(
     deviation: float,
 ) -> None:
-    pytest.importorskip("OCP")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
@@ -652,9 +653,9 @@ def test_two_real_air_chambers_keep_their_own_round_surfaces() -> None:
 
 def test_recognised_reflected_cone_keeps_the_nappe_containing_its_actual_skin() -> None:
     from app.core.perceive.features import detect
-    from tests.test_round_surface_measurements import _round_surface
+    from tests.helpers import round_surface
 
-    body = _round_surface("cone")
+    body = round_surface("cone")
     pose = np.diag((1.0, 1.0, -1.0, 1.0))
     pose[:3, 3] = (7.0, -11.0, 19.0)
     body.apply_transform(pose)

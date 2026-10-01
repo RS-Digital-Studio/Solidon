@@ -47,6 +47,7 @@ from app.core.scene.project import ProjectSources, load, new_project, save
 from app.core.slice.analysis import cross_section
 from app.core.types import PrintSettings, Profile, SceneObject
 from tests.helpers import plate_project as _project
+from tests.helpers import set_test_license
 from tests.scripted_backend import ScriptedBackend
 from tools.make_licence_keys import make_key, public_key, sign
 
@@ -54,11 +55,6 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 
 #: Der erste Testvektor aus RFC 8032 — nur für die Signaturen dieser Datei.
 TEST_SEED = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
-
-
-def _lock(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stellt den Zustand dieses Prozesses auf „Testlauf abgelaufen"."""
-    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
 
 
 def test_a_locked_chat_neither_enters_nor_unloads_a_local_resource_session(
@@ -77,7 +73,7 @@ def test_a_locked_chat_neither_enters_nor_unloads_a_local_resource_session(
         document=new_project().document,
         profile=profile,
     )
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     with pytest.raises(LicenceRequired):
         agent.propose("Beschreibe das Modell")
     assert calls == [], "a locked chat must not even unload the local model"
@@ -91,20 +87,6 @@ def _certificate() -> activation.ActivationCertificate:
         device_name="Prüfrechner",
         activation_id="test-activation",
         issued_on=date(2026, 8, 28),
-    )
-
-
-def _license(monkeypatch: pytest.MonkeyPatch) -> None:
-    licence = key.Licence(
-        major=key.current_major(),
-        purchased_on=date(2026, 8, 6),
-        order="A-1234",
-        holder="kaeufer@beispiel.de",
-    )
-    monkeypatch.setattr(
-        activation,
-        "_cached",
-        activation.Activation(licence=licence, certificate=_certificate()),
     )
 
 
@@ -126,7 +108,7 @@ def test_an_expired_trial_blocks_every_document_change(monkeypatch: pytest.Monke
     diese eine Stelle für jede Änderung — Op, Parameter, Passung, Material."""
     project = _project()
     before = list(project.document.transactions)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     with pytest.raises(LicenceRequired) as raised:
         History(project.document).apply(
             "Duplizieren",
@@ -148,7 +130,7 @@ def test_an_expired_trial_blocks_reparametrising_a_step(monkeypatch: pytest.Monk
     history = History(project.document)
     op_id = project.document.ops[0].id
     before = list(project.document.ops)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
 
     changes = (
         lambda: history.change_params(op_id, {"unit": "cm"}),
@@ -174,7 +156,7 @@ def test_an_expired_trial_blocks_removing_a_step(monkeypatch: pytest.MonkeyPatch
     op_id = project.document.ops[0].id
     before_ops = list(project.document.ops)
     before_transactions = list(project.document.transactions)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
 
     assert history.removal_closure([op_id]) == (op_id,), "die Vorschau ist Lesen und bleibt frei"
 
@@ -217,9 +199,9 @@ def test_retry_boundaries_keep_reading_free_and_guard_changes(
     }
     before = deepcopy(project.document)
     if licensed:
-        _license(monkeypatch)
+        set_test_license(monkeypatch, active=True)
     else:
-        _lock(monkeypatch)
+        set_test_license(monkeypatch, active=False)
 
     assert history.operation(step.id) == step
     assert history.removal_closure([step.id]) == (step.id,)
@@ -241,7 +223,7 @@ def test_an_expired_trial_blocks_the_export(
 ) -> None:
     """Planen und Prüfen sind Lesen und bleiben frei — die Datei nicht."""
     plan = plan_export([_scene_object()], project_name="P", profile=profile)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     with pytest.raises(LicenceRequired) as raised:
         write_plan(plan, tmp_path)
     assert raised.value.action == activation.EXPORT
@@ -251,7 +233,7 @@ def test_an_expired_trial_blocks_the_export(
 def test_an_expired_trial_blocks_the_assembly_export(
     profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     with pytest.raises(LicenceRequired) as raised:
         write_assembly([_scene_object()], tmp_path, project_name="P", profile=profile)
     assert raised.value.action == activation.EXPORT
@@ -263,7 +245,7 @@ def test_an_expired_trial_blocks_the_slicer(
 ) -> None:
     """Die Grenze steht vor allem anderen — auch vor der Prüfung, ob der
     Slicer überhaupt eingerichtet ist."""
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     setup = SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
     with pytest.raises(LicenceRequired) as raised:
         slice_model(tmp_path / "teil.stl", PrintSettings(), profile, setup)
@@ -275,7 +257,7 @@ def test_an_expired_trial_blocks_opening_in_the_slicer(
 ) -> None:
     """Beide Übergabearten aus §29 stehen hinter derselben Grenze — auch das
     Öffnen im Fenster, bevor irgendetwas geprüft oder gestartet wird."""
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     setup = SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
     with pytest.raises(LicenceRequired) as raised:
         open_in_slicer(tmp_path / "teil.3mf", setup)
@@ -288,7 +270,7 @@ def test_an_expired_trial_blocks_the_chat(
     """Schon der Vorschlag, nicht erst das Übernehmen: ein Zug kostet
     Modellaufrufe. Das leere Skript belegt, dass das Backend nie gefragt wird."""
     project = _project()
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     agent = AgentSession(
         backend=ScriptedBackend(answers=[]), document=project.document, profile=profile
     )
@@ -307,7 +289,7 @@ def test_opening_evaluating_saving_and_undo_stay_free(
     wiederherstellen — der Betrachter bleibt vollständig."""
     project = _project()
     history = History(project.document)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
 
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.scene.objects, "auswerten läuft nach Ablauf weiter"
@@ -337,7 +319,7 @@ def test_answers_to_questions_of_the_evaluation_stay_free(
     """
     project = _project()
     history = History(project.document)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
 
     with pytest.raises(LicenceRequired):
         activation.require(activation.CHANGE)
@@ -367,7 +349,7 @@ def test_a_licence_lets_a_step_be_reparametrised(monkeypatch: pytest.MonkeyPatch
         [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"name": "Kopie"})],
     )
     op_id = project.document.ops[-1].id
-    _license(monkeypatch)
+    set_test_license(monkeypatch, active=True)
 
     changed = history.change_params(op_id, {"name": "Andere"})
     assert changed.params["name"] == "Andere"
@@ -376,7 +358,7 @@ def test_a_licence_lets_a_step_be_reparametrised(monkeypatch: pytest.MonkeyPatch
 def test_the_slice_analysis_and_the_maps_stay_free(monkeypatch: pytest.MonkeyPatch) -> None:
     """Schichtanalyse und Analysekarten sind Lesen — sie rechnen über dem
     Netz, nicht am Dokument."""
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
     mesh = as_mesh_data(_body())
     section = cross_section(mesh, float(mesh.bounds.minimum[2]) + 0.2)
     assert section is not None and not section.is_empty
@@ -393,7 +375,7 @@ def test_a_licence_opens_all_four_boundaries(
     der Grenze vorbei und scheitert erst am fehlenden Werkzeug, was genau die
     Aussage ist."""
     project = _project()
-    _license(monkeypatch)
+    set_test_license(monkeypatch, active=True)
 
     History(project.document).apply(
         "Duplizieren",
@@ -629,7 +611,7 @@ def test_a_refused_import_leaves_nothing_behind(
     stl = (Path(__file__).parent / "data" / "meshes" / "plate_holes.stl").read_bytes()
     gemeldet: list[object] = []
     session.failed.connect(gemeldet.append)
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
 
     session.import_payload("plate_holes.stl", stl, unit="mm")
 
@@ -658,7 +640,7 @@ def test_an_image_needs_the_same_permission_as_everything_else(
     bild = tmp_path / "relief.png"
     bild.write_bytes(bytes([137]) + b"PNG" + b"0" * 64)
     session = Session()
-    _lock(monkeypatch)
+    set_test_license(monkeypatch, active=False)
 
     with pytest.raises(LicenceRequired):
         session.import_image(bild)
@@ -682,7 +664,7 @@ def test_the_scad_command_obeys_the_export_boundary(
     target = tmp_path / "rib.scad"
     if to_file:
         target.write_bytes(b"existing-output")
-    (_license if unlocked else _lock)(monkeypatch)
+    set_test_license(monkeypatch, active=unlocked)
     arguments = Namespace(part="rib", set=["length=30"], out=str(target) if to_file else None)
     if unlocked:
         assert command_scad(arguments) == 0

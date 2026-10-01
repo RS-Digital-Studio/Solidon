@@ -39,9 +39,9 @@ from app.core.types import (
     Scene,
     SceneObject,
 )
-from tests.helpers import evaluated_operation
+from tests.helpers import blind_bore, bore_plate, evaluated_operation, exact_kernel
 
-pytest.importorskip("OCP", reason="OpenCASCADE baut die analytischen Vorlagen")
+exact_kernel()
 
 PLATE = 60.0 * 40.0 * 10.0
 RADIUS = 3.0
@@ -61,27 +61,8 @@ def _bore(kernel: str, radius: float, height: float) -> float:
     return area * height
 
 
-def _plate(kernel: str, outline: Sequence[tuple[float, float]], *, box=(60.0, 40.0, 10.0)):
-    """Eine Platte mit einer gedrehten Bohrung aus ``outline`` (Radius, Höhe)."""
-    from app.core.brep import edit
-    from app.core.brep.features import features_of
-    from app.core.perceive.features import detect
-    from app.core.sketch.planes import frame_of
-
-    solid = edit.bore_profile(edit.box(*box), list(outline), frame_of((0, 0, 1), (0, 0, 0)))
-    if kernel == "brep":
-        return SceneObject("plate", "Platte", solid, kind="brep", features=features_of(solid))
-    mesh = as_mesh_data(solid)
-    return SceneObject("plate", "Platte", mesh, features=detect(mesh))
-
-
-def _blind(kernel: str) -> SceneObject:
-    """Sackloch Ø 6, 6 mm tief von der Oberseite: Boden bei z = 4."""
-    return _plate(kernel, [(0, 4), (3, 4), (3, 10), (0, 10), (0, 4)])
-
-
 def _through(kernel: str) -> SceneObject:
-    return _plate(kernel, [(0, 0), (3, 0), (3, 10), (0, 10), (0, 0)])
+    return bore_plate(kernel, [(0, 0), (3, 0), (3, 10), (0, 10), (0, 0)])
 
 
 def _hole(source: SceneObject) -> Feature:
@@ -151,9 +132,9 @@ def _volume(entry: SceneObject) -> float:
 
 def _material_at(entry: SceneObject, *points: tuple[float, float, float]) -> list[bool]:
     """Innen/Außen über den Raumwinkel — ``contains`` bräuchte ``rtree``."""
-    from tests.test_slot_features import _inside
+    from tests.helpers import inside
 
-    return [bool(value) for value in _inside(as_mesh_data(entry.mesh), list(points))]
+    return [bool(value) for value in inside(as_mesh_data(entry.mesh), list(points))]
 
 
 def _assert_volume(entry: SceneObject, expected: float, bore: float = 0.0) -> None:
@@ -171,7 +152,7 @@ def test_a_blind_hole_goes_deeper_or_shallower_from_its_mouth(
     profile: Profile, kernel: str, depth: float
 ) -> None:
     """Tiefer schneidet nach, flacher füllt vom Grund auf — die Mündung bleibt."""
-    source = _blind(kernel)
+    source = blind_bore(kernel)
     hole, floor = _hole(source), _floor(source, 4.0)
 
     changed, findings, _result = _run(source, profile, depth=depth)
@@ -198,7 +179,7 @@ def test_a_blind_hole_goes_deeper_or_shallower_from_its_mouth(
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_diameter_and_depth_change_together(profile: Profile, kernel: str) -> None:
-    source = _blind(kernel)
+    source = blind_bore(kernel)
 
     changed, _findings, _result = _run(source, profile, diameter=8.0, depth=8.0)
 
@@ -213,7 +194,7 @@ def test_diameter_and_depth_change_together(profile: Profile, kernel: str) -> No
 def test_a_blind_hole_becomes_a_through_hole_and_says_so(
     profile: Profile, kernel: str, depth: float
 ) -> None:
-    source = _blind(kernel)
+    source = blind_bore(kernel)
 
     changed, findings, _result = _run(source, profile, depth=depth)
 
@@ -267,7 +248,7 @@ def test_the_depth_of_a_sunk_bore_moves_its_floor_and_keeps_the_countersink(
     profile: Profile, kernel: str
 ) -> None:
     """Senkbohrung: Die Mündung der Bohrung liegt unter der Senkung — die bleibt."""
-    source = _plate(
+    source = bore_plate(
         kernel,
         [(0, 2), (3, 2), (3, 10), (5, 12), (0, 12), (0, 2)],
         box=(30.0, 24.0, 12.0),
@@ -290,7 +271,7 @@ def test_the_depth_of_a_sunk_bore_moves_its_floor_and_keeps_the_countersink(
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_a_floor_left_too_thin_says_so(profile: Profile, kernel: str) -> None:
-    source = _blind(kernel)
+    source = blind_bore(kernel)
 
     changed, findings, _result = _run(source, profile, depth=9.6)
 
@@ -385,7 +366,7 @@ def test_the_depth_wish_distinguishes_real_changes_from_display_rounding(
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_an_unchanged_depth_changes_nothing(profile: Profile, kernel: str) -> None:
-    blind = _blind(kernel)
+    blind = blind_bore(kernel)
     _changed, findings, result = _run(blind, profile, depth=6.0)
     assert result.outputs[0] is blind
     assert "bore.resize_unchanged" in _codes(findings)
@@ -404,7 +385,7 @@ def test_the_depth_is_a_field_at_the_hole_and_the_side_is_asked() -> None:
     load_operations()
     spec = REGISTRY.get("resize_hole")
     assert "open_side" in asked_fields(spec)
-    source = _blind("mesh")
+    source = blind_bore("mesh")
     hole = _hole(source)
     action = next(
         entry
@@ -525,7 +506,7 @@ def test_a_wider_entrance_and_a_new_depth_in_one_step(profile: Profile, kernel: 
 
     Erst der Einlauf, dann der Boden.
     """
-    source = _plate(
+    source = bore_plate(
         kernel,
         [(0, 2), (3, 2), (3, 10), (5, 12), (0, 12), (0, 2)],
         box=(30.0, 24.0, 12.0),
@@ -549,7 +530,7 @@ def test_a_wider_entrance_and_a_new_depth_in_one_step(profile: Profile, kernel: 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
 def test_a_new_depth_says_nothing_about_the_countersink(profile: Profile, kernel: str) -> None:
     """Nur die Tiefe geändert: Die Senkung bleibt, wie sie war — kein Satz über sie."""
-    source = _plate(
+    source = bore_plate(
         kernel,
         [(0, 2), (3, 2), (3, 10), (5, 12), (0, 12), (0, 2)],
         box=(30.0, 24.0, 12.0),
@@ -560,7 +541,7 @@ def test_a_new_depth_says_nothing_about_the_countersink(profile: Profile, kernel
 
 def _sunk_blind(kernel: str) -> SceneObject:
     """Sackloch Ø 6 mit Senkung Ø 10: Boden bei z = 2, Senkung 10 … 12."""
-    return _plate(
+    return bore_plate(
         kernel, [(0, 2), (3, 2), (3, 10), (5, 12), (0, 12), (0, 2)], box=(30.0, 24.0, 12.0)
     )
 
@@ -629,7 +610,7 @@ def test_a_tilted_blind_hole_stays_open_at_its_mouth(profile: Profile, kernel: s
         [(0, -3), (3, -3), (3, 6), (0, 6), (0, -3)],
         frame_of(axis, (0.0, 0.0, 7.0)),
     )
-    source = _blind(kernel)
+    source = blind_bore(kernel)
 
     changed, findings = evaluated_operation(
         source, profile, "rotate_feature", at_feature=_hole(source).id, axis="x", angle=10.0

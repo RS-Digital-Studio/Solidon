@@ -336,12 +336,13 @@ def test_exact_quick_assignment_previews_then_commits_the_same_spool_and_scope(
     """Vorschau, Abbruch und Übernahme halten Körperart, Flächen und Lagerbindung zusammen."""
     from copy import deepcopy
 
-    from app.core.brep.kernel import Solid, available
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    from app.core.brep.kernel import Solid
     from app.core.scene.history import OperationDraft
     from app.ui.session import Session
 
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
     window = main_window.MainWindow(Session(), UiSettings())
     try:
         assert window.session.apply(

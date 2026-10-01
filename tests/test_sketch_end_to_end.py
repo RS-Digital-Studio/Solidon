@@ -8,6 +8,8 @@ Eckradien aus der Differenz, und der Beweis für den Deckel ist, dass er mit
 dem Gehäuse kein Volumen teilt.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
@@ -15,7 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from app.core.brep.kernel import available
+from tests.helpers import exact_kernel
+
+exact_kernel()
+
 from app.core.export.writer import plan_export, write_plan
 from app.core.geom.boolean import shared_volume
 from app.core.geom.mesh import as_mesh_data
@@ -23,8 +28,6 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Profile
 from app.i18n import source_text
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 OUTER = (60.0, 40.0, 30.0)
 WALL = 3.0

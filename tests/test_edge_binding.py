@@ -39,6 +39,7 @@ from app.core.scene.edge_binding import bind_edges
 from app.core.scene.history import _copy_operation_matches
 from app.core.scene.project import load, project_data, save
 from app.core.types import Document, OpContext, Operation, OpResult, SceneObject
+from tests.helpers import exact_kernel
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 #: Zwei Quader, deren Nachbarkanten vier Tausendstel auseinanderliegen — der
@@ -56,8 +57,7 @@ def _mesh_pair() -> MeshData:
 
 
 def _brep_pair() -> Any:
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from OCP.BRep import BRep_Builder
     from OCP.TopoDS import TopoDS_Compound
 
@@ -479,8 +479,7 @@ def test_the_alias_case_becomes_a_parameter_not_a_record(captured: dict[str, Any
     """Ein alter Rohrschlüssel trifft beide Ränder; die Wahl ist ein eindeutiger neuer Schlüssel."""
     from app.core.brep import edit
 
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     tube = edit.boolean("difference", [edit.cylinder(20.0, HEIGHT), edit.cylinder(10.0, HEIGHT)])
     legacy = f"e:0.00,0.00,{HEIGHT:.2f}:0.000,0.000,0.000"
     document = _document(legacy)

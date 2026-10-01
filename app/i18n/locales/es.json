@@ -2435,7 +2435,6 @@
   "Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen.": "Este slicer necesita además un perfil de proceso — elegir uno.",
   "Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.": "Este slicer necesita un perfil de impresora — elegir uno.",
   "Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.": "Este slicer no necesita un perfil: Solidon describe la máquina por sí mismo.",
-  "Dieser Slicer bringt keine Filamentprofile mit.": "Este slicer no incluye perfiles de filamento.",
   "Dieser Slicer nimmt die Anordnungsvorgabe nicht an und hat die Teile selbst angeordnet — die Plattenbelegung aus Solidon gilt für diese Druckdatei nicht.": "Este slicer no acepta la indicación de disposición y colocó las piezas por su cuenta — la ocupación de la placa de Solidon no vale para este archivo de impresión.",
   "Dieser Slicer übernimmt Filamentwerte nur für das erste Filament der Platte. Wählen Sie für diese Empfehlung einen Slicer mit Filamentprofilen je Slot.": "Este slicer aplica los ajustes de filamento solo al primer filamento de la placa. Para usar esta recomendación, elige un slicer con un perfil de filamento para cada ranura.",
   "Dieser Slicer übernimmt die empfohlenen Einstellungen für einzelne Teile nicht. Übernehmen Sie den genannten Vorschlag für die ganze Platte oder wählen Sie einen Slicer, der 3MF-Baugruppen liest.": "Este slicer no aplica los ajustes recomendados para piezas individuales. Aplique la sugerencia a toda la placa o elija un slicer que lea conjuntos 3MF.",

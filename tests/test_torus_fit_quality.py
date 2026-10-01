@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect_tori, fit_torus
+from tests.helpers import partial_torus
 from tests.helpers import placed as _placed
 
 
@@ -60,24 +59,6 @@ def _freeform_patch() -> trimesh.Trimesh:
     return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
 
-def _partial_torus(major_sections: int, minor_sections: int) -> tuple[trimesh.Trimesh, list[int]]:
-    """Ein echter Torus mit je einem begrenzten Bogen in beiden Richtungen."""
-    ring = trimesh.creation.torus(
-        major_radius=20.0,
-        minor_radius=5.0,
-        major_sections=major_sections,
-        minor_sections=minor_sections,
-    )
-    centres = np.asarray(ring.triangles_center, dtype=float)
-    major_angle = np.arctan2(centres[:, 1], centres[:, 0])
-    radial = np.linalg.norm(centres[:, :2], axis=1)
-    minor_angle = np.arctan2(centres[:, 2], radial - 20.0)
-    patch = np.flatnonzero(
-        (np.abs(major_angle) <= math.radians(45.0)) & (np.abs(minor_angle) <= math.radians(60.0))
-    )
-    return ring, [int(index) for index in patch]
-
-
 @pytest.mark.parametrize(("scale", "angle"), [(1.0, 0.0), (3.7, 53.0), (0.25, -31.0)])
 def test_a_freeform_patch_with_a_good_point_fit_is_not_published_as_a_torus(
     scale: float, angle: float
@@ -103,7 +84,7 @@ def test_a_true_partial_torus_survives_pose_scale_and_triangulation(
     scale: float, angle: float, sections: tuple[int, int]
 ) -> None:
     """Ein begrenzter echter Ring bleibt ein sicher bearbeitbares Merkmal."""
-    body, patch = _partial_torus(*sections)
+    body, patch = partial_torus(*sections)
     body = _placed(body, scale, angle)
     fit = fit_torus(body, patch)
 

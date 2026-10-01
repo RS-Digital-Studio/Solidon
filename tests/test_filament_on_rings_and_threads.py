@@ -26,10 +26,11 @@ from tests.helpers import (
     TUBE_RADIUS,
     exact_kernel,
     ridged_shaft,
+    studded_thread_plate,
+    tapped_thread_plate,
     the_torus,
 )
 from tests.helpers import run_operation as run
-from tests.test_thread_feature_ops import _studded_plate, _tapped_plate
 
 
 @pytest.fixture(params=["brep", "mesh"])
@@ -72,7 +73,7 @@ def test_a_generated_thread_colours_its_flanks_but_not_its_seat(
     """Ein erzeugtes Gewinde nennt keine Dreiecke; gefärbt werden alle in seiner Hülle über der
     Platte, nicht die Deckflächen quer zur Achse — Spitze und Sockel bleiben.
     """
-    source = _studded_plate(kind)
+    source = studded_thread_plate(kind)
     feature = source.features["thread_1"]
     assert not feature.face_indices, "ein Bausteingewinde nennt keine Dreiecke"
     mesh = as_mesh_data(source.mesh)
@@ -104,7 +105,7 @@ def test_a_tapped_hole_colours_its_thread_but_not_the_plate_faces(
     """Ein Gewindeloch färbt seine Gangflächen in der Bohrung, nicht die Stirnflächen der Platte
     darum.
     """
-    source = _tapped_plate(kind)
+    source = tapped_thread_plate(kind)
     painted = run("paint_slot", source, profile, at_feature="thread_1", slot=4, colour="#0000ff")
     output = painted.outputs[0]
     mesh = as_mesh_data(output.mesh)

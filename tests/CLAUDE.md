@@ -75,8 +75,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Datei | Rolle |
 |---|---|
 | `conftest.py` | Offscreen-Qt, Nutzerverzeichnisse im Temp-Ordner (§38), Marker `windowed` für jeden `qt_app`-Test, `--ci-shard I/N` (Verteilung aus `tools/ci_shards.py`). Unter `CI` endet der Lauf in `pytest_sessionstart`, wenn der exakte Kern fehlt — lokal bleibt das ein Skip |
-| `helpers.py` | Was mehr als eine Testdatei liest, unter öffentlichem Namen (`exact_kernel`, `FakeMesh`, `make_object`, `ridged_shaft`, `the_torus`, die Maße des Schafts, `CountingToken`, `stop_after`, `two_cubes`, `assert_sketch_gradients` …) — nie `from tests.test_x import _privat` und nie aus `conftest`, das pytest als Plugin lädt und ein zweiter Import noch einmal ausführt; was noch fehlt, nennt der Modul-Docstring |
-| `ui_helpers.py` | Gemeinsame Fixtures der `test_ui*.py`; Fenster und Sitzung je Test frisch; `shown_window` für ein gezeigtes Fenster ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur |
+| `helpers.py` | Gemeinsame, nicht fenstergebundene Helfer unter öffentlichen Namen (`exact_kernel`, `FakeMesh`, `make_object`, `ridged_shaft`, `the_torus`, `CountingToken`, `stop_after`, `two_cubes`, `NavigationLog`, `SOURCE`, `rectangle`, `blind_cylinder`, `bore_seed`, `STUD_CENTRES`, `cube` für 3MF und `cube_surface` für Renderer …); keine privaten Querimporte aus `test_*.py` und nie aus `conftest`, das pytest als Plugin lädt und bei einem zweiten Import noch einmal ausgeführt wird |
+| `ui_helpers.py` | Qt-gebundene gemeinsame Helfer der Fenstertests; Fenster und Sitzung je Test frisch; `shown_window` für ein gezeigtes Fenster ohne Startbildschirm, `with_a_body` für die ausgewählte Korpusfigur, `wait_until` für zugestellte Qt-Ereignisse sowie `PlacementItem`, `PlacementViewport` und `scene_with_a_hole_and_a_fillet` für Platzierungsfälle |
 | `render_fakes.py` | Renderer-Doppel der Ansichtstests: schreibt Aktoren, Stile, Beschriftungen und Kamera mit, statt zu zeichnen — wer das Bild misst, nimmt den echten Renderer ohne Fenster |
 | `release_signing.py` | Eigenes Schlüsselpaar der Suite für unterschriebene Versionsdateien; ob die ausgelieferte Datei gegen den echten Schlüssel trägt, prüft `test_the_published_version_file_is_signed` |
 | `workflow_helpers.py` | Grenzt Jobs und Schritte der Workflows ab, ohne allgemeiner YAML-Parser zu sein |
@@ -85,10 +85,17 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 
 ## Stolperfallen
 
-- **`tests.helpers.exact_kernel()` steht vor jedem `OCP`-Import** einer
-  Testfunktion: Lokal wird ein fehlender Kern so ein Skip, unter `CI` hält
+- **`tests.helpers.exact_kernel()` steht vor jedem `OCP`-Import**, auch am
+  Modulanfang: Lokal wird ein fehlender Kern so ein Skip, unter `CI` hält
   `conftest.py` an, statt dass sich die Dateien des exakten Kerns still
-  überspringen; `test_toolchain.py` prüft die Zusicherung.
+  überspringen. Es importiert das eigene Kernelmodul regulär, damit dessen
+  Importfehler nicht als fehlendes Extra verschwinden;
+  `test_toolchain.py` prüft beides.
+- **Testdateien importieren keine privaten Namen voneinander.** Gemeinsame
+  Daten und Konstruktoren liegen unter öffentlichen Namen in `helpers.py`
+  oder `ui_helpers.py`; der AST-Wächter samt Gegenprobe steht in
+  `test_toolchain.py` und prüft auch eingebettete Python-Skripte für
+  Kindprozesse.
 - **Wer `WorkerLeash.start` durch eine Testfunktion ersetzt, übernimmt den
   Abbau** der absichtlich nicht gestarteten Arbeiter: Ein lokaler Finalizer
   ruft `release_finished_references()`, merkt `deleteLater()` vor und stellt

@@ -68,6 +68,7 @@ from app.core.perceive.features import (
     forget_cache,
     span_about,
 )
+from tests.helpers import exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -659,7 +660,7 @@ def test_the_exact_kernel_holds_the_same_minimum_arc() -> None:
     Netzzwilling eine gekrümmte Fläche; bei zwölf Grad (R 191) ist es an ihm
     eine Verrundung.
     """
-    pytest.importorskip("OCP.BRepPrimAPI")
+    exact_kernel()
     from app.core.brep import profiles
     from app.core.brep.features import features_of
     from app.core.sketch.profile import Profile, ProfileSegment

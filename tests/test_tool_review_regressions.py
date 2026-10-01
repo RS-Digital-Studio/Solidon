@@ -9,24 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import bash_executable
 from tools import affected_tests, link_memory, make_linux_packages
-
-
-def _bash_executable() -> Path | None:
-    """Findet Bash im Suchpfad oder relativ zur tatsächlich installierten Git-Ausgabe."""
-    executable = shutil.which("bash")
-    if executable and "system32" not in Path(executable).parts[-2].lower():
-        return Path(executable)
-    git = shutil.which("git")
-    roots = [Path(git).parent.parent] if git else []
-    for variable, suffix in (("ProgramFiles", "Git"), ("LOCALAPPDATA", "Programs/Git")):
-        value = os.environ.get(variable)
-        if value:
-            roots.append(Path(value) / suffix)
-    return next(
-        (root / "bin" / "bash.exe" for root in roots if (root / "bin" / "bash.exe").is_file()),
-        None,
-    )
 
 
 def test_bash_is_found_beside_a_custom_git_installation(tmp_path, monkeypatch) -> None:
@@ -38,7 +22,7 @@ def test_bash_is_found_beside_a_custom_git_installation(tmp_path, monkeypatch) -
     monkeypatch.setattr(
         shutil, "which", lambda name: str(root / "cmd" / "git.exe") if name == "git" else None
     )
-    assert _bash_executable() == executable
+    assert bash_executable() == executable
 
 
 def test_b14_deleted_module_keeps_relative_and_indirect_importers(tmp_path: Path) -> None:
@@ -99,7 +83,7 @@ def test_r19_existing_machine_backups_are_not_overwritten(tmp_path, monkeypatch)
 )
 def test_r24_generated_menu_entry_preserves_the_full_launcher_path(tmp_path, part, encoded) -> None:
     """Echte generierte Shellzeilen erfüllen beide Desktop-Entry-Escape-Ebenen."""
-    bash = _bash_executable()
+    bash = bash_executable()
     if not bash or not Path(bash).is_file():
         pytest.skip("POSIX shell unavailable")
     here, applications = tmp_path / "here", tmp_path / "applications"
@@ -139,7 +123,7 @@ def test_r24_generated_menu_entry_preserves_the_full_launcher_path(tmp_path, par
 )
 def test_r24_the_generated_shell_launcher_preserves_literal_target(tmp_path, part) -> None:
     """Der Menüeintrag erreicht einen Starter, der denselben literal gemeinten Pfad öffnet."""
-    bash = _bash_executable()
+    bash = bash_executable()
     if not bash or not Path(bash).is_file():
         pytest.skip("Bash unavailable")
     source = make_linux_packages.install_script()
@@ -185,7 +169,7 @@ def test_r24_the_generated_shell_launcher_preserves_literal_target(tmp_path, par
 
 def test_r24_uninstall_paths_are_literal_saved_values(tmp_path) -> None:
     """Nur der erzeugte Variablenkopf läuft; keine Löschung oder Desktop-Aktion."""
-    bash = _bash_executable()
+    bash = bash_executable()
     if not bash or not Path(bash).is_file():
         pytest.skip("Bash unavailable")
     source = make_linux_packages.install_script()

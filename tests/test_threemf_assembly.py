@@ -24,6 +24,7 @@ from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData
 from app.core.ingest import threemf as threemf_reader
+from tests.helpers import cube
 
 CORE = threemf.CORE_NAMESPACE
 PRODUCTION = threemf_reader.PRODUCTION_NAMESPACE
@@ -111,12 +112,6 @@ def production_container(
                 threemf.SETTINGS_PATH, f'<?xml version="1.0"?><config>{parts}</config>'
             )
     return buffer.getvalue()
-
-
-def cube(size: float, at: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> trimesh.Trimesh:
-    body = trimesh.creation.box(extents=(size, size, size))
-    body.apply_translation(at)
-    return body
 
 
 # --- die Vervielfältigung -------------------------------------------------------

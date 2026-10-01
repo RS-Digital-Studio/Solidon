@@ -14,7 +14,8 @@ import pytest
 
 from app.ui.render.api import AxesMarkerStyle, CameraPose, CellColours, LabelStyle, SurfaceStyle
 from app.ui.render.gfx_renderer import GfxLabels, GfxRenderer
-from tests.test_render_contract import GFX_MISSING, cube, look_down, plate
+from tests.helpers import cube_surface as cube
+from tests.test_render_contract import GFX_MISSING, look_down, plate
 
 pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
 

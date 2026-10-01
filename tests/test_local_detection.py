@@ -15,6 +15,14 @@ import trimesh
 from app.core import units
 from app.core.geom.mesh import MeshData
 from app.core.perceive.helix import _facet_of_face
+from tests.helpers import (
+    STUD_CENTRES,
+    blind_cylinder,
+    bore_seed,
+    exact_kernel,
+    small_faces,
+    stud_on_a_plate,
+)
 
 DATA = Path(__file__).parent / "data"
 
@@ -109,57 +117,6 @@ def test_local_void_passes_the_cancel_callback_to_the_complete_original(
             source, point, normal=normal, radius=9, seed_faces=(face,), check_cancelled=check
         )
     assert calls == [check]
-
-
-def blind_cylinder(*, dense: bool = False) -> MeshData:
-    """Analytischer Körper aus der eigenen Korpusdefinition, ohne Booleschen Kern."""
-    spec = json.loads((DATA / "local_detection.json").read_text(encoding="utf-8"))
-    count = spec["sections"] if dense else 64
-    levels = spec["outer_levels"] if dense else 2
-    angles = np.arange(count) * (2 * np.pi / count)
-    radial = np.column_stack((np.cos(angles), np.sin(angles)))
-    outer = np.empty((levels + 1, count, 3))
-    outer[:, :, :2] = radial * spec["outer_radius"]
-    outer[:, :, 2] = np.linspace(0, spec["height"], levels + 1)[:, None]
-    top = np.column_stack((radial * spec["bore_radius"], np.full(count, spec["height"])))
-    floor_z = spec["height"] - spec["bore_depth"]
-    floor = np.column_stack((radial * spec["bore_radius"], np.full(count, floor_z)))
-    vertices = np.vstack((outer.reshape(-1, 3), top, floor, [[0, 0, 0], [0, 0, floor_z]]))
-    ti, bi, ci = (levels + 1) * count, (levels + 2) * count, (levels + 3) * count
-    k, following = np.arange(count), np.roll(np.arange(count), -1)
-    lower = np.arange(levels)[:, None] * count + k
-    after = np.arange(levels)[:, None] * count + following
-    faces = np.vstack(
-        (
-            np.stack((lower, after, lower + count), axis=-1).reshape(-1, 3),
-            np.stack((after, after + count, lower + count), axis=-1).reshape(-1, 3),
-            np.column_stack((levels * count + k, levels * count + following, ti + k)),
-            np.column_stack((levels * count + following, ti + following, ti + k)),
-            np.column_stack((following, k, np.full(count, ci))),
-            np.column_stack((ti + k, ti + following, bi + k)),
-            np.column_stack((ti + following, bi + following, bi + k)),
-            np.column_stack((bi + k, bi + following, np.full(count, ci + 1))),
-        )
-    )
-    return MeshData.of(trimesh.Trimesh(vertices, faces, process=False))
-
-
-def bore_seed(mesh: MeshData) -> tuple[int, tuple[float, ...], tuple[float, ...]]:
-    """Echte Dreiecksmitte einer nach innen gerichteten Wand, ohne Erkennung."""
-    triangles = np.asarray(mesh.raw.triangles)
-    radial = np.linalg.norm(triangles[:, :, :2], axis=2)
-    face = int(
-        np.flatnonzero(
-            np.all(np.isclose(radial, 3), axis=1)
-            & (triangles[:, :, 2].max(axis=1) > 19)
-            & (triangles[:, :, 2].min(axis=1) < 16)
-        )[0]
-    )
-    return (
-        face,
-        tuple(float(value) for value in mesh.raw.triangles_center[face]),
-        tuple(float(value) for value in mesh.raw.face_normals[face]),
-    )
 
 
 @pytest.mark.parametrize(
@@ -322,9 +279,8 @@ def test_a_one_millimetre_stud_face_is_found_locally() -> None:
     ``all_facets`` in der lokalen Rollenprüfung.
     """
     from app.core.perceive.local import detect_local
-    from tests.test_features import STUD_CENTRES, _small_faces, _stud_on_a_plate
 
-    mesh = MeshData.of(_stud_on_a_plate())
+    mesh = MeshData.of(stud_on_a_plate())
     for point, normal in (((0.0, 0.0, 5.0), (0.0, 0.0, 1.0)), ((0.5, 0.0, 4.5), (1.0, 0.0, 0.0))):
         result = detect_local(mesh, point, normal=normal, radius=3.0)
         assert result.complete and not result.seed_choices, result.reason
@@ -333,7 +289,7 @@ def test_a_one_millimetre_stud_face_is_found_locally() -> None:
         assert chosen.kind == "face"
         assert float(chosen.params["area"]) == pytest.approx(1.0)
         assert chosen.params["centre"] == pytest.approx(point, abs=1e-3)
-        assert set(_small_faces(result.features)) == STUD_CENTRES
+        assert set(small_faces(result.features)) == STUD_CENTRES
 
 
 def test_shared_diagonal_on_one_plane_is_one_surface() -> None:
@@ -2049,8 +2005,7 @@ def test_a_counterbore_that_opens_into_a_cove_is_measured_at_its_spot() -> None:
     (Durchsicht 0.5.1, REST-BOHRUNG-07). Jetzt kommen alle drei Glieder — auch
     wenn jedes gebraucht wird.
     """
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     from app.core.perceive import features as detection
     from app.core.perceive.local import detect_known, forget_known
     from app.core.perceive.relations import cavity_chains

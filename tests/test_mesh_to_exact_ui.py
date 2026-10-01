@@ -6,23 +6,27 @@ an der Oberfläche von der Umwandlung sieht. Der Kern ist in
 erreicht.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
 import pytest
+
+from tests.helpers import exact_kernel
+
+exact_kernel()
+
 from PySide6.QtWidgets import QApplication, QFileDialog
 
-from app.core.brep.kernel import available
 from app.core.errors import CONVERT_TO_EXACT
 from app.core.registry import REGISTRY
 from app.core.scene.history import OperationDraft
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

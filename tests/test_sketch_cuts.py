@@ -18,6 +18,8 @@ Beide Kerne: ein exakter Zielkörper bleibt exakt, ein Netz geht über die
 Boolesche Rückfallkette, und die erreichte Stufe steht in ``solver``.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
@@ -27,7 +29,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from app.core.brep.kernel import Solid, available
+from tests.helpers import exact_kernel
+
+exact_kernel()
+
+from app.core.brep.kernel import Solid
 from app.core.errors import AppError, GeometryError, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.ingest.loader import normalise
@@ -36,8 +42,6 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.sketch.serialize import sketch_to_text
 from app.core.types import OpContext, OpResult, Scene, SceneObject, Sketch, SketchElement
 from app.core.units import MAX_FACET_SAG
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

@@ -23,6 +23,7 @@ from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import BaseParams, Feature, OpContext, OpResult, Profile, SceneObject, Source
+from tests.helpers import exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 # Ausdrückliche Zusagen für beide Darstellungen, unabhängig vom Op-Register.
@@ -1511,7 +1512,7 @@ def test_every_operation_completes_with_its_declared_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ein gültiger Auftrag wird geplant, vollständig ausgewertet und fachlich gemessen."""
-    pytest.importorskip("OCP")
+    exact_kernel()
     from app.core.brep.kernel import Solid
 
     load_operations()

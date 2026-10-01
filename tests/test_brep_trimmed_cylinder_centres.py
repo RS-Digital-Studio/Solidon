@@ -6,11 +6,18 @@ neben und 0,2 mm über der Achsmitte, und ``resize_hole`` baute daraus einen
 Schneidzylinder, der nicht koaxial war — die Tessellation ging auf.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
 
 import pytest
+
+from tests.helpers import exact_kernel
+
+exact_kernel()
+
 from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 from OCP.BRepBuilderAPI import (
     BRepBuilderAPI_MakeFace,
@@ -28,11 +35,9 @@ from OCP.gp import gp_Ax1, gp_Ax2, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
 
 from app.core.brep import edit
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available
+from app.core.brep.kernel import Solid
 from app.core.types import Feature
 from app.core.units import EPS_GEOM
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 
 def _sloped_bore() -> Solid:

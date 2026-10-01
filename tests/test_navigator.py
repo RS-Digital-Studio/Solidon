@@ -35,11 +35,11 @@ from app.ui.render.navigator import (
     DOLLY_MOTION_FACTOR,
     WHEEL_STEP,
     Navigator,
-    NavigatorCallbacks,
     is_click,
     navigation_action,
     turntable_camera,
 )
+from tests.helpers import NavigationLog
 
 SIZE = (400, 300)
 
@@ -230,36 +230,6 @@ class _FlatRenderer(Renderer):
         return
 
 
-class _Log:
-    """Zeichnet jeden Rückruf auf — so viel, wie der Test fragen will."""
-
-    def __init__(self, *, sculpting: bool = False, body: bool = False) -> None:
-        self.calls: list[tuple[Any, ...]] = []
-        self.sculpting = sculpting
-        self.body = body
-
-    def callbacks(self) -> NavigatorCallbacks:
-        return NavigatorCallbacks(
-            on_context=lambda x, y: self.calls.append(("context", x, y)),
-            on_pick=lambda x, y, add: self.calls.append(("pick", x, y, add)),
-            on_cursor=lambda role: self.calls.append(("cursor", role)),
-            on_paint=lambda x, y, fresh: self.calls.append(("paint", x, y, fresh)),
-            is_sculpting=lambda: self.sculpting,
-            on_body_drag=self._body_drag,
-            on_rotate_start=lambda: self.calls.append(("rotate_start",)),
-            on_camera=lambda: self.calls.append(("camera",)),
-            on_tilt=lambda step: self.calls.append(("tilt", step)),
-            on_end=lambda: self.calls.append(("end",)),
-        )
-
-    def _body_drag(self, phase: str, x: int, y: int) -> bool:
-        self.calls.append(("body", phase, x, y))
-        return self.body
-
-    def kinds(self) -> list[str]:
-        return [str(call[0]) for call in self.calls]
-
-
 def press(
     x: int, y: int, button: str = "left", shift: bool = False, ctrl: bool = False
 ) -> PointerEvent:
@@ -281,8 +251,8 @@ def wheel(x: int, y: int, delta: float) -> PointerEvent:
 
 
 @pytest.fixture
-def scene() -> tuple[_FlatRenderer, _Log]:
-    return _FlatRenderer(), _Log()
+def scene() -> tuple[_FlatRenderer, NavigationLog]:
+    return _FlatRenderer(), NavigationLog()
 
 
 def test_the_table_says_what_each_button_does() -> None:
@@ -298,7 +268,7 @@ def test_the_table_says_what_each_button_does() -> None:
     assert not is_click(None, (10, 10))
 
 
-def test_shift_and_ctrl_both_arrive_at_the_pick(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_shift_and_ctrl_both_arrive_at_the_pick(scene: tuple[_FlatRenderer, NavigationLog]) -> None:
     """Beide Auswahltasten kommen als dieselbe Auskunft an (Konzept G).
 
     Der Navigator entscheidet nicht, was daraus wird — er sagt nur, ob eine
@@ -322,7 +292,7 @@ def test_shift_and_ctrl_both_arrive_at_the_pick(scene: tuple[_FlatRenderer, _Log
     assert ("pick", 100, 100, False) in log.calls, "ohne Taste bleibt es beim Ersetzen"
 
 
-def test_a_click_picks_and_a_drag_does_not(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_a_click_picks_and_a_drag_does_not(scene: tuple[_FlatRenderer, NavigationLog]) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "slicer", log.callbacks())
     navigator.handle(press(100, 100))
@@ -338,7 +308,7 @@ def test_a_click_picks_and_a_drag_does_not(scene: tuple[_FlatRenderer, _Log]) ->
 
 
 def test_left_pans_and_still_selects_in_the_solidon_scheme(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "solidon", log.callbacks())
@@ -367,7 +337,7 @@ def test_left_pans_and_still_selects_in_the_solidon_scheme(
     assert renderer.renders >= 1
 
 
-def test_the_turntable_keeps_the_view_upright(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_the_turntable_keeps_the_view_upright(scene: tuple[_FlatRenderer, NavigationLog]) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "solidon", log.callbacks())
     navigator.handle(press(200, 150, "right"))
@@ -386,7 +356,9 @@ def test_the_turntable_keeps_the_view_upright(scene: tuple[_FlatRenderer, _Log])
     assert "context" not in log.kinds(), "ein Zug öffnet kein Menü"
 
 
-def test_turntable_camera_matches_the_direct_call(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_turntable_camera_matches_the_direct_call(
+    scene: tuple[_FlatRenderer, NavigationLog],
+) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "orbit", log.callbacks())
     expected = turntable_camera((0.0, -100.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 40, 20, SIZE)
@@ -400,7 +372,7 @@ def test_turntable_camera_matches_the_direct_call(scene: tuple[_FlatRenderer, _L
 
 @pytest.mark.parametrize("steps", [0.125, 0.5, 1.0, 1.5, 3.0])
 def test_a_wheel_step_keeps_the_point_under_the_pointer(
-    scene: tuple[_FlatRenderer, _Log], steps: float
+    scene: tuple[_FlatRenderer, NavigationLog], steps: float
 ) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "solidon", log.callbacks())
@@ -414,7 +386,7 @@ def test_a_wheel_step_keeps_the_point_under_the_pointer(
     assert renderer.scale == pytest.approx(50.0)
 
 
-def test_tilt_reports_steps_upwards_positive(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_tilt_reports_steps_upwards_positive(scene: tuple[_FlatRenderer, NavigationLog]) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "solidon", log.callbacks())
     navigator.handle(press(200, 150, "middle"))
@@ -428,7 +400,7 @@ def test_tilt_reports_steps_upwards_positive(scene: tuple[_FlatRenderer, _Log]) 
 
 
 def test_a_drag_on_the_chosen_body_moves_the_body_not_the_camera(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     renderer, log = scene
     log.body = True
@@ -446,7 +418,7 @@ def test_a_drag_on_the_chosen_body_moves_the_body_not_the_camera(
     assert renderer.pose.focal_point == (0.0, 0.0, 0.0), "die Kamera blieb stehen"
 
 
-def test_a_click_on_the_chosen_body_still_picks(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_a_click_on_the_chosen_body_still_picks(scene: tuple[_FlatRenderer, NavigationLog]) -> None:
     renderer, log = scene
     log.body = True
     navigator = Navigator(renderer, "solidon", log.callbacks())
@@ -457,7 +429,7 @@ def test_a_click_on_the_chosen_body_still_picks(scene: tuple[_FlatRenderer, _Log
 
 
 def test_painting_takes_the_left_button_while_sculpting(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     renderer, log = scene
     log.sculpting = True
@@ -480,7 +452,7 @@ def test_painting_takes_the_left_button_while_sculpting(
 
 
 def test_a_right_click_opens_the_menu_only_without_a_drag(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "slicer", log.callbacks())
@@ -496,7 +468,7 @@ def test_a_right_click_opens_the_menu_only_without_a_drag(
 
 
 def test_dragging_with_the_zoom_button_zooms_like_the_trackball(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "cad", log.callbacks())
@@ -512,7 +484,7 @@ def test_dragging_with_the_zoom_button_zooms_like_the_trackball(
 
 
 def test_a_scheme_switch_takes_effect_on_the_next_press(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "slicer", log.callbacks())
@@ -525,11 +497,11 @@ def test_a_scheme_switch_takes_effect_on_the_next_press(
     assert ("rotate_start",) in log.calls
 
 
-def test_a_wobbly_click_stays_a_click(scene: tuple[_FlatRenderer, _Log]) -> None:
+def test_a_wobbly_click_stays_a_click(scene: tuple[_FlatRenderer, NavigationLog]) -> None:
     """Fünf Bildpunkte Wandern beim Klicken bleiben ein Klick — sonst rutscht
     der Körper bei jedem Klick ein Stück (Robert, 23.08.2026)."""
     renderer, _quiet = scene
-    log = _Log(body=True)
+    log = NavigationLog(body=True)
     navigator = Navigator(renderer, "solidon", log.callbacks())
     navigator.handle(press(100, 200))
     navigator.handle(move(104, 203))
@@ -540,7 +512,7 @@ def test_a_wobbly_click_stays_a_click(scene: tuple[_FlatRenderer, _Log]) -> None
 
 
 def test_where_nothing_is_chosen_the_camera_keeps_the_button(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     """Liegt unter dem Zeiger nichts Gewähltes, bleibt die linke Taste, was
     sie im Schema war — kein ``move`` erreicht den Körperzug."""
@@ -555,7 +527,7 @@ def test_where_nothing_is_chosen_the_camera_keeps_the_button(
 
 @pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_the_same_wobble_in_logical_points_stays_a_click_at_any_scaling(
-    scene: tuple[_FlatRenderer, _Log], ratio: float
+    scene: tuple[_FlatRenderer, NavigationLog], ratio: float
 ) -> None:
     """Acht Logikpunkte Wackeln sind ein Klick — auf jedem Bildschirm.
 
@@ -571,7 +543,7 @@ def test_the_same_wobble_in_logical_points_stays_a_click_at_any_scaling(
     """
     renderer, _quiet = scene
     renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
-    log = _Log(body=True)
+    log = NavigationLog(body=True)
     navigator = Navigator(renderer, "solidon", log.callbacks())
     wobble = (round(100 + 8 * ratio), round(200 + 6 * ratio))
     navigator.handle(press(100, 200))
@@ -584,7 +556,7 @@ def test_the_same_wobble_in_logical_points_stays_a_click_at_any_scaling(
 
 @pytest.mark.parametrize("ratio", [1.0, 1.5, 2.0])
 def test_a_real_drag_stays_a_drag_at_any_scaling(
-    scene: tuple[_FlatRenderer, _Log], ratio: float
+    scene: tuple[_FlatRenderer, NavigationLog], ratio: float
 ) -> None:
     """Die Gegenprobe: Dreißig Logikpunkte sind überall ein Zug.
 
@@ -593,7 +565,7 @@ def test_a_real_drag_stays_a_drag_at_any_scaling(
     """
     renderer, _quiet = scene
     renderer.device_ratio = lambda: ratio  # type: ignore[method-assign]
-    log = _Log(body=True)
+    log = NavigationLog(body=True)
     navigator = Navigator(renderer, "solidon", log.callbacks())
     away = (round(100 + 30 * ratio), 200)
     navigator.handle(press(100, 200))
@@ -605,7 +577,7 @@ def test_a_real_drag_stays_a_drag_at_any_scaling(
 
 
 def test_a_click_without_camera_motion_does_not_end_a_gesture(
-    scene: tuple[_FlatRenderer, _Log],
+    scene: tuple[_FlatRenderer, NavigationLog],
 ) -> None:
     """Ein Klick, der die Kamera nicht bewegt, meldet kein Gestenende (Durchsicht 0.5.1).
 

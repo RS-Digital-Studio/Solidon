@@ -18,6 +18,7 @@ import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.types import Profile, SceneObject
+from tests.helpers import countersunk_plate, material_plate
 from tests.helpers import exact_kernel as _kernel
 from tests.helpers import run_operation as run
 
@@ -203,37 +204,6 @@ def test_removing_a_slot_keeps_the_body_exact(profile: Profile) -> None:
 # --- Ketten: Bohrung mit Senkung ------------------------------------------------------
 
 
-def _countersunk_plate(profile: Profile) -> SceneObject:
-    """Platte 60 × 40 × 10, Bohrung Ø 6 mit 90°-Senkung Ø 12 an der Oberseite.
-
-    Das Profil kommt aus ``drill_outline`` wie beim exakten Bohren; der Kegel
-    von Ø 12 auf Ø 6 misst 3 mm Höhe, das Volumen ist analytisch bekannt:
-    π·3²·(10 − 3) für den Schaft, π·3·(6² + 6·3 + 3²)/3 für den Stumpf.
-    """
-    edit = _kernel()
-    from app.core.brep.features import features_of
-    from app.core.geom.prepare import drill_outline
-    from app.core.sketch.planes import frame_of
-
-    outline = drill_outline(
-        diameter=2.0 * RADIUS,
-        depth=12.0,
-        profile=profile,
-        compensate=False,
-        widening_diameter=12.0,
-        widening_depth=0.0,
-        transition_angle=90.0,
-    )
-    body = edit.bore_profile(edit.box(*PLATE), outline, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0)))
-    assert body.volume == pytest.approx(24000.0 - COUNTERSUNK_CAVITY, rel=1e-9)
-    entry = SceneObject(
-        id="obj_1", name="Platte", mesh=body, kind="brep", features=features_of(body)
-    )
-    kinds = sorted(feature.kind for feature in entry.features.values())
-    assert kinds == ["cone"] + ["face"] * 6 + ["hole"], kinds
-    return entry
-
-
 COUNTERSUNK_CAVITY = BORE_AREA * 7.0 + math.pi * 3.0 * (36.0 + 18.0 + 9.0) / 3.0
 
 
@@ -312,7 +282,7 @@ def test_the_widening_of_a_through_bore_is_not_through_in_either_kernel(profile:
 def test_moving_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -> None:
     """Bohrung **und** Senkung wandern, beide Kennungen bleiben belegt, das Volumen auch."""
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, cone = _chain_of(source)
 
     height = hole.params["centre"][2]
@@ -333,7 +303,7 @@ def test_moving_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -> Non
 def test_moving_a_countersunk_bore_from_its_sink_takes_the_bore_along(profile: Profile) -> None:
     """Gewählt ist die Senkung: der Hohlraum wandert als Ganzes um denselben Weg."""
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     _hole, cone = _chain_of(source)
     sink_centre = cone.params["centre"]
 
@@ -355,7 +325,7 @@ def test_moving_a_countersunk_bore_from_its_sink_takes_the_bore_along(profile: P
 
 def test_duplicating_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, cone = _chain_of(source)
 
     result = run("duplicate_feature", source, profile, at_feature=hole.id, x=20.0, y=0.0, z=3.5)
@@ -375,7 +345,7 @@ def test_duplicating_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -
 
 def test_removing_a_countersunk_bore_closes_the_whole_cavity_exactly(profile: Profile) -> None:
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, cone = _chain_of(source)
 
     result = run("remove_feature", source, profile, at_feature=hole.id, sections="chain")
@@ -402,7 +372,7 @@ def test_rotating_a_countersunk_bore_keeps_the_body_exact(profile: Profile) -> N
     from app.core.geom.mesh import MeshData
     from app.core.perceive.features import detect
 
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, _cone = _chain_of(source)
 
     result = run("rotate_feature", source, profile, at_feature=hole.id, axis="x", angle=30.0)
@@ -439,45 +409,9 @@ DOME_VOLUME = 2.0 / 3.0 * math.pi * 4.0**3
 TAPER_VOLUME = math.pi * 6.0 / 3.0 * (25.0 + 10.0 + 4.0)
 
 
-def _material_plate(kind: str) -> SceneObject:
-    """Die Platte mit genau einem Materialmerkmal auf der Oberseite.
-
-    ``pin``: Zylinder Ø 6 × 8 mittig. ``sphere``: Halbkugel r = 4 bei x = 20.
-    ``cone``: Kegelstumpf r 5 → 2 über 6 mm bei x = −20. Volumen analytisch.
-    """
-    edit = _kernel()
-    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone, BRepPrimAPI_MakeSphere
-    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
-
-    from app.core.brep.features import features_of
-    from app.core.brep.kernel import Solid
-
-    plate = edit.box(*PLATE)
-    if kind == "pin":
-        part = edit.moved(edit.cylinder(2.0 * RADIUS, 8.0), (0.0, 0.0, 10.0))
-        added = PIN_VOLUME
-    elif kind == "sphere":
-        part = Solid(BRepPrimAPI_MakeSphere(gp_Pnt(20.0, 0.0, 10.0), 4.0).Shape())
-        added = DOME_VOLUME
-    else:
-        part = Solid(
-            BRepPrimAPI_MakeCone(
-                gp_Ax2(gp_Pnt(-20.0, 0.0, 10.0), gp_Dir(0.0, 0.0, 1.0)), 5.0, 2.0, 6.0
-            ).Shape()
-        )
-        added = TAPER_VOLUME
-    body = edit.boolean("union", [plate, part])
-    assert body.volume == pytest.approx(24000.0 + added, rel=1e-9)
-    entry = SceneObject(
-        id="obj_1", name="Platte", mesh=body, kind="brep", features=features_of(body)
-    )
-    assert [f.kind for f in entry.features.values() if f.kind != "face"] == [kind]
-    return entry
-
-
 def test_moving_a_pin_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("pin")
+    source = material_plate("pin")
     pin = _the_one(source, "pin")
     assert pin.params["centre"] == pytest.approx((0.0, 0.0, 14.0), abs=1e-9)
 
@@ -493,7 +427,7 @@ def test_moving_a_pin_keeps_the_body_exact(profile: Profile) -> None:
 
 def test_duplicating_a_pin_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("pin")
+    source = material_plate("pin")
     pin = _the_one(source, "pin")
 
     result = run("duplicate_feature", source, profile, at_feature=pin.id, x=20.0, y=0.0, z=14.0)
@@ -510,7 +444,7 @@ def test_duplicating_a_pin_keeps_the_body_exact(profile: Profile) -> None:
 
 def test_removing_a_pin_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("pin")
+    source = material_plate("pin")
     pin = _the_one(source, "pin")
 
     result = run("remove_feature", source, profile, at_feature=pin.id)
@@ -535,7 +469,7 @@ def test_rotating_a_pin_keeps_it_rooted_in_the_plate(profile: Profile) -> None:
     from app.core.geom.mesh import MeshData
     from app.core.perceive.features import detect
 
-    source = _material_plate("pin")
+    source = material_plate("pin")
     pin = _the_one(source, "pin")
 
     result = run("rotate_feature", source, profile, at_feature=pin.id, axis="x", angle=30.0)
@@ -561,7 +495,7 @@ def test_rotating_a_pin_keeps_it_rooted_in_the_plate(profile: Profile) -> None:
 
 def test_moving_a_dome_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("sphere")
+    source = material_plate("sphere")
     dome = _the_one(source, "sphere")
 
     result = run("move_feature", source, profile, at_feature=dome.id, x=0.0, y=5.0, z=10.0)
@@ -575,7 +509,7 @@ def test_moving_a_dome_keeps_the_body_exact(profile: Profile) -> None:
 
 def test_removing_a_taper_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("cone")
+    source = material_plate("cone")
     taper = _the_one(source, "cone")
     assert taper.params["recess"] is False
 
@@ -591,7 +525,7 @@ def test_removing_a_taper_keeps_the_body_exact(profile: Profile) -> None:
 
 def test_duplicating_a_taper_keeps_the_body_exact(profile: Profile) -> None:
     load_operations()
-    source = _material_plate("cone")
+    source = material_plate("cone")
     taper = _the_one(source, "cone")
     centre = taper.params["centre"]
 
@@ -621,7 +555,7 @@ SINK_VOLUME = COUNTERSUNK_CAVITY - BORE_AREA * 7.0
 def test_removing_only_the_countersink_keeps_the_bore_exact(profile: Profile) -> None:
     """Nur die Senkung geht; die Bohrung bleibt und geht bis zur Oberseite durch."""
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, cone = _chain_of(source)
 
     result = run("remove_feature", source, profile, at_feature=cone.id, sections="single")
@@ -649,7 +583,7 @@ def test_removing_only_the_bore_leaves_the_countersink_exact(profile: Profile) -
     aus ihren Flächen gefüllt, sechs Flächen bleiben.
     """
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, cone = _chain_of(source)
 
     result = run("remove_feature", source, profile, at_feature=hole.id, sections="single")
@@ -677,7 +611,7 @@ def test_removing_only_the_bore_leaves_the_countersink_exact(profile: Profile) -
 def test_a_standalone_countersink_moves_and_copies_exactly(profile: Profile) -> None:
     """Die Bohrung ist gefüllt; ihre Senkung wird aus ihren Flächen versetzt und verdoppelt."""
     load_operations()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, _cone = _chain_of(source)
     alone = run("remove_feature", source, profile, at_feature=hole.id, sections="single").outputs[0]
     sink = _the_one(alone, "cone")
@@ -762,7 +696,7 @@ def test_rotating_a_taper_keeps_it_rooted_in_the_plate(profile: Profile) -> None
     """
     load_operations()
     edit = _kernel()
-    source = _material_plate("cone")
+    source = material_plate("cone")
     taper = _the_one(source, "cone")
     assert taper.params["centre"] == pytest.approx((-20.0, 0.0, 10.0), abs=1e-9)
 
@@ -801,7 +735,7 @@ def test_rotating_a_standalone_countersink_stays_open(profile: Profile) -> None:
     """
     load_operations()
     edit = _kernel()
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, _cone = _chain_of(source)
     alone = run("remove_feature", source, profile, at_feature=hole.id, sections="single").outputs[0]
     sink = _the_one(alone, "cone")
@@ -1130,7 +1064,7 @@ def test_resizing_a_material_feature_keeps_the_body_exact(
     Grundfläche liegt. Soll: das Volumen der Form im neuen Maß, analytisch.
     """
     load_operations()
-    source = _material_plate(kind)
+    source = material_plate(kind)
     feature = _the_one(source, kind)
 
     result = run("resize_feature", source, profile, at_feature=feature.id, diameter=diameter)
@@ -1159,7 +1093,7 @@ def test_a_standalone_countersink_moved_over_the_edge_says_so_like_the_mesh(
     from app.core.geom.mesh import MeshData
     from app.core.perceive.features import detect
 
-    source = _countersunk_plate(profile)
+    source = countersunk_plate(profile)
     hole, _cone = _chain_of(source)
     alone = run("remove_feature", source, profile, at_feature=hole.id, sections="single").outputs[0]
     sink = _the_one(alone, "cone")
@@ -1206,7 +1140,7 @@ def test_a_nurbs_taper_is_handled_like_an_analytic_one(action: str, profile: Pro
     dafür am belegten Träger.
     """
     load_operations()
-    analytic = _material_plate("cone")
+    analytic = material_plate("cone")
     source = _as_nurbs(analytic)
     taper = _the_one(source, "cone")
     assert taper.params["centre"] == pytest.approx((-20.0, 0.0, 10.0), abs=1e-9)

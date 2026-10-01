@@ -1,5 +1,7 @@
 """Native Rund- und Freiformflächen behalten Maße und wirkliche Auswahlgrenzen."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import math
@@ -8,16 +10,17 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.helpers import brep_bytes, exact_kernel
+
+exact_kernel()
+
 from app.core.brep import step
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available, boolean_builder
+from app.core.brep.kernel import Solid, boolean_builder
 from app.core.geom.mesh import as_mesh_data
 from app.core.perceive.features import detect_curved_faces, detect_tori
 from app.core.types import measure_status
 from app.core.units import EPS_GEOM
-from tests.helpers import brep_bytes
-
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
 
 def _trimmed_native_cone(

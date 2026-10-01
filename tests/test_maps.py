@@ -1110,12 +1110,12 @@ def test_an_analysis_map_works_on_an_exact_body(profile: Profile) -> None:
     ``to_mesh``) — die Karte rechnet also auf der Tessellation, wie jede
     Mesh-Operation an einem exakten Körper.
     """
-    from app.core.brep.kernel import Solid, available
+    from tests.helpers import exact_kernel
 
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
-
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+
+    from app.core.brep.kernel import Solid
 
     shape = BRepPrimAPI_MakeBox(20.0, 20.0, 5.0).Shape()
     exact = SceneObject(id="obj_1", name="shim", mesh=Solid(shape))

@@ -29,6 +29,7 @@ from app.core.scene.fits import active_fits
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import new_project
 from app.core.types import Document, Feature, Profile, Scene
+from tests.helpers import exact_kernel
 
 
 @pytest.fixture(autouse=True)
@@ -38,9 +39,7 @@ def _operations() -> None:
 
 def _kernel_or_skip(kind: str) -> None:
     if kind == "brep":
-        kernel = pytest.importorskip("app.core.brep.kernel")
-        if not kernel.available():
-            pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+        exact_kernel()
 
 
 def _generated(

@@ -14,7 +14,7 @@ import trimesh
 from app.core.bootstrap import load_operations
 from app.core.brep import edit
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available
+from app.core.brep.kernel import Solid
 from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.perceive import local, matching
@@ -27,8 +27,9 @@ from app.core.types import OpContext, Operation, Profile, Scene, SceneObject
 
 def _source(kind: str, *, entrance: bool = False) -> SceneObject:
     """Eine wirkliche Bohrung, wahlweise mit dem eindeutigen Einlauf derselben Achse."""
-    if not available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
     stock = edit.box(40.0, 30.0, 12.0)
     if entrance:
         exact = edit.bore_profile(

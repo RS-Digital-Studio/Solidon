@@ -19,7 +19,6 @@ from app.core.registry import (
     MENU_TWINS,
     PRIMITIVE_TWINS,
     REGISTRY,
-    exact_kernel_present,
     kernel_switch_label,
     kernel_twin_of,
     shown_of_twins,
@@ -30,6 +29,7 @@ from app.core.scene.history import History, OperationDraft
 from app.core.scene.placement import _creation_tool
 from app.core.scene.project import new_project
 from app.core.types import Profile
+from tests.helpers import exact_kernel
 from tests.helpers import run_operation as run
 
 
@@ -39,8 +39,7 @@ def _operations() -> None:
 
 
 def _kernel() -> None:
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
 
 
 def test_new_primitives_are_exact_where_the_kernel_is_present() -> None:

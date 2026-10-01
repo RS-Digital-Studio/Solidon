@@ -1009,7 +1009,7 @@ def test_blind_drill_keeps_the_exact_bottom_and_anchor(route, side, anchor, wide
     from app.core.geom.mesh import ray_hit_distances
     from app.core.geom.prepare import BORE_SECTIONS, drill
     from app.core.sketch.planes import frame_of
-    from tests.test_prepare import cube
+    from tests.helpers import cube_mesh
 
     outward = (
         np.asarray((0.3, 0.4, math.sqrt(0.75)))
@@ -1020,7 +1020,7 @@ def test_blind_drill_keeps_the_exact_bottom_and_anchor(route, side, anchor, wide
     frame = frame_of(tuple(outward), (0.0, 0.0, 0.0))
     matrix = np.eye(4)
     matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
-    original = cube().raw.copy()
+    original = cube_mesh().raw.copy()
     original.apply_transform(matrix)
     mesh = MeshData.of(original)
     depth = 2.0
@@ -1118,10 +1118,10 @@ def test_the_shared_drill_tool_has_no_hidden_end_allowance(widened, profile):
 def test_an_entered_mouth_inside_material_keeps_its_exact_start(widened, profile):
     """Eine manuell im Material gesetzte Mündung ist kein belegter Außenanschluss."""
     from app.core.geom.prepare import drill
-    from tests.test_prepare import cube
+    from tests.helpers import cube_mesh
 
     result = drill(
-        cube(),
+        cube_mesh(),
         position=(0.0, 0.0, 5.0),
         axis="z",
         normal=(0.0, 0.0, 1.0),
@@ -1148,9 +1148,9 @@ def test_through_drilling_stays_open_after_removing_blind_allowances(
     """Die ausdrücklich überlange Durchgangsgeometrie lässt auf keiner Seite einen Boden."""
     from app.core.geom.mesh import ray_hit_distances
     from app.core.geom.prepare import drill
-    from tests.test_prepare import cube
+    from tests.helpers import cube_mesh
 
-    mesh = cube()
+    mesh = cube_mesh()
     result = drill(
         mesh,
         position=(0.0, 0.0, -10.0),
@@ -1192,13 +1192,13 @@ def test_a_real_offset_from_the_drill_mouth_survives_roundoff_cleanup(gap, widen
     from app.core.geom.mesh import ray_hit_distances
     from app.core.geom.prepare import drill
     from app.core.sketch.planes import frame_of
-    from tests.test_prepare import cube
+    from tests.helpers import cube_mesh
 
     outward = np.asarray((0.3, 0.4, math.sqrt(0.75)))
     frame = frame_of(tuple(outward), (0.0, 0.0, 0.0))
     matrix = np.eye(4)
     matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
-    raw = cube().raw.copy()
+    raw = cube_mesh().raw.copy()
     # apply_translation überspringt solche kleinen Verschiebungen als Identität;
     # hier muss der analytisch vorgegebene Abstand wirklich im Eingang stehen.
     raw.vertices = np.asarray(raw.vertices) + np.asarray((0.0, 0.0, gap))
@@ -1234,7 +1234,7 @@ def test_a_coplanar_drill_mouth_keeps_its_bottom_after_welding(widened, profile,
 
     from app.core.geom.mesh import ray_hit_distances
     from app.core.geom.prepare import drill
-    from tests.test_prepare import cube
+    from tests.helpers import cube_mesh
 
     module = import_module("app.core.geom.boolean")
     original = module._run_stage
@@ -1244,7 +1244,7 @@ def test_a_coplanar_drill_mouth_keeps_its_bottom_after_welding(widened, profile,
 
     monkeypatch.setattr(module, "_run_stage", skip_direct)
     result = drill(
-        cube(),
+        cube_mesh(),
         position=(0.0, 0.0, 10.0),
         axis="z",
         normal=(0.0, 0.0, 1.0),
@@ -1551,7 +1551,7 @@ def test_primitive_surface_route_places_the_actual_tool_without_rounding(
     operation, values, profile
 ):
     """Jeder Grundkörper nutzt vom Originaltreffer bis zur echten Op denselben Rahmen."""
-    from tests.test_primitive_placement import _run
+    from tests.helpers import primitive_operation
 
     load_operations()
     raw = trimesh.creation.box((40.0, 30.0, 8.0))
@@ -1570,7 +1570,7 @@ def test_primitive_surface_route_places_the_actual_tool_without_rounding(
     matrix[:3, :3] = np.column_stack((hit.frame.x_axis, hit.frame.y_axis, hit.normal))
     matrix[:3, 3] = point
     shown = apply(tool.mesh, matrix)
-    actual = _run(operation, {**values, **placed_values}, profile).outputs[0].mesh
+    actual = primitive_operation(operation, {**values, **placed_values}, profile).outputs[0].mesh
     assert actual.raw.vertices == pytest.approx(shown.raw.vertices, abs=1e-12)
     assert np.array_equal(actual.raw.faces, shown.raw.faces)
 
@@ -1642,18 +1642,13 @@ def test_a_chain_whose_mouth_lies_in_a_curved_face_can_be_placed_by_hand(
     from app.core.geom.mesh import as_mesh_data
     from app.core.geom.prepare_ops import feature_placement_geometry
     from app.core.units import MAX_FACET_SAG
+    from tests.helpers import BOTH_ENDS, cavity_under, narrowest_hole, widened_bore
     from tests.helpers import run_operation as run
-    from tests.test_feature_moves_keep_shape import (
-        BOTH_ENDS,
-        _cavity_under,
-        _narrowest_hole,
-        _widened,
-    )
 
     load_operations()
     outline = BOTH_ENDS["Zylindersenkung und Fase"]
-    source = _widened(kernel, outline, bottom="Zylinder R 40")
-    bore = _narrowest_hole(source)
+    source = widened_bore(kernel, outline, bottom="Zylinder R 40")
+    bore = narrowest_hole(source)
     geometry = feature_placement_geometry(source, bore, "move_feature")
     assert geometry.mesh.is_watertight
     assert len(geometry.related) == 3
@@ -1681,7 +1676,7 @@ def test_a_chain_whose_mouth_lies_in_a_curved_face_can_be_placed_by_hand(
     assert abs(float(moved.volume)) - before == pytest.approx(0.0, abs=0.5)
     assert float(moved.bounds.minimum[2]) > -MAX_FACET_SAG
     removed = before - abs(float(placed["duplicate_feature"].volume))
-    assert removed == pytest.approx(_cavity_under("Zylinder R 40", outline), rel=0.01)
+    assert removed == pytest.approx(cavity_under("Zylinder R 40", outline), rel=0.01)
 
 
 def test_the_welded_adjacency_is_built_once_per_mesh_and_not_once_per_click():

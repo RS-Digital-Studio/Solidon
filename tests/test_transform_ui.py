@@ -27,9 +27,9 @@ def test_the_values_bar_rotates_the_selected_feature_with_its_axis_and_angle(
 ) -> None:
     """Die Werte-Leiste liefert denselben Merkmalsauftrag wie ein Zug am Drehring."""
     from app.core.scene.history import OperationDraft
-    from tests.test_viewport_decisions import _scene_with_a_hole_and_a_fillet
+    from tests.ui_helpers import scene_with_a_hole_and_a_fillet
 
-    result = _scene_with_a_hole_and_a_fillet()
+    result = scene_with_a_hole_and_a_fillet()
     window.session.last_result = result
     window.object_tree.show_scene(result)
     window.object_tree.select_feature("obj_1", "hole_1")
@@ -330,12 +330,12 @@ def test_typed_scaling_updates_selected_face_measures_and_undo_redo(
     """Getippte 200 Prozent erreichen Fläche, Auswahlkarte und Rückweg auf beiden Kernen."""
     from PySide6.QtWidgets import QLabel, QScrollArea
 
-    from app.core.brep.kernel import available
     from app.core.scene.history import OperationDraft
     from app.ui.labels import area
+    from tests.helpers import exact_kernel
 
-    if source_op == "create_brep_box" and not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    if source_op == "create_brep_box":
+        exact_kernel()
 
     window.resize(1500, 950)
     window.show()

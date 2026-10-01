@@ -17,8 +17,8 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import ResultCache
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Finding, Parameter, Source
-from tests.test_local_detection import blind_cylinder, bore_seed
-from tests.test_outline_dialog import _until
+from tests.helpers import blind_cylinder, bore_seed
+from tests.ui_helpers import wait_until
 
 
 @pytest.mark.parametrize("entry", ["arm", "begin"])
@@ -283,7 +283,7 @@ def test_local_list_excludes_the_complete_but_distant_outer_shell(qt_app, profil
     dialog, project, before = make_dialog(profile, monkeypatch, full_detection=True)
     document = copy.deepcopy(project.document)
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         inspection = dialog.inspection
         entry = inspection.evaluation.scene.objects["obj_1"]
         point = np.array([inspection.detect_draft.params[name] for name in ("x", "y", "z")])
@@ -320,7 +320,7 @@ def test_local_radius_filter_resolves_the_saved_project_expression(qt_app, profi
         parameters=(Parameter("search_radius", 8),),
     )
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         assert len(dialog.inspection.features) == 2
         assert dialog.inspection.detect_draft.params["radius"] == "=@search_radius"
     finally:
@@ -339,7 +339,7 @@ def test_local_list_keeps_old_region_features_only_in_the_scene(qt_app, profile,
     )
     later = None
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         inspection = dialog.inspection
         History(project.document).apply("Erste Stelle", (inspection.detect_draft,))
         old_features = inspection.evaluation.scene.objects["obj_1"].features
@@ -357,7 +357,7 @@ def test_local_list_keeps_old_region_features_only_in_the_scene(qt_app, profile,
             cache=dialog._cache,
             original_ray=(tuple(place + np.asarray(normal) * 0.5), tuple(-np.asarray(normal))),
         )
-        _until(qt_app, later.save_button.isEnabled)
+        wait_until(qt_app, later.save_button.isEnabled)
         entry = later.inspection.evaluation.scene.objects["obj_1"]
         assert old_features.keys() <= entry.features.keys()
         assert set(later.inspection.features).isdisjoint(old_features)
@@ -373,9 +373,9 @@ def test_local_list_keeps_old_region_features_only_in_the_scene(qt_app, profile,
 def test_local_list_keeps_the_confirmed_bore_and_entrance(qt_app, profile, monkeypatch):
     """Eine vollständige Senkbohrung wird im Suchraum als gemeinsam bearbeitbare Kette angeboten."""
     from app.core.perceive.relations import cavity_chain_at
-    from tests.test_bore_mouth_resize import _sloping_bore
+    from tests.helpers import sloping_bore
 
-    mesh, _, hole = _sloping_bore()
+    mesh, _, hole = sloping_bore()
     face = hole.face_indices[0]
     point, normal = tuple(mesh.raw.triangles_center[face]), tuple(mesh.raw.face_normals[face])
     dialog, _project, before = make_dialog(
@@ -387,7 +387,7 @@ def test_local_list_keeps_the_confirmed_bore_and_entrance(qt_app, profile, monke
         full_detection=True,
     )
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         entry = dialog.inspection.evaluation.scene.objects["obj_1"]
         selected = next(
             feature
@@ -448,7 +448,7 @@ def test_search_and_actions_run_outside_qt_and_leave_the_source_unchanged(
     dialog.recognitionReady.connect(results.append)
     dialog.featureSelected.connect(selected.append)
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         assert threads and all(value != threading.get_ident() for value in threads)
         assert project.document == document
         assert before.scene.objects["obj_1"].features == {}
@@ -469,14 +469,14 @@ def test_edit_preview_and_acceptance_use_one_identical_transaction(qt_app, profi
     dialog.previewRequested.connect(previews.append)
     dialog.draftsReady.connect(accepted.append)
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         choose_action(dialog, "resize_hole")
         assert dialog.editor is not None
-        _until(qt_app, lambda: bool(previews))
+        wait_until(qt_app, lambda: bool(previews))
         assert [draft.op for draft in previews[-1]] == ["detect_region", "resize_hole"]
         assert previews[-1][1].params["at_feature"] == dialog.features.currentItem().data(256)
         dialog.editor._editors["diameter"].set_value(8)
-        _until(qt_app, lambda: previews[-1][1].params["diameter"] == 8)
+        wait_until(qt_app, lambda: previews[-1][1].params["diameter"] == 8)
         revision = dialog.preview_revision
         dialog.preview_status("Korrigieren Sie das Maß.", revision=revision)
         dialog.editor.accept()
@@ -502,7 +502,7 @@ def test_new_radius_immediately_invalidates_selection_and_old_reply(qt_app, prof
     cleared = []
     dialog.previewCleared.connect(lambda: cleared.append(True))
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         previous, revision = dialog.inspection, dialog._revision
         dialog.radius.set_value(0.5)
         assert dialog.inspection is None
@@ -510,7 +510,7 @@ def test_new_radius_immediately_invalidates_selection_and_old_reply(qt_app, prof
         assert dialog.features.currentItem() is None
         dialog._ready(revision, previous)
         assert dialog.inspection is None and cleared
-        _until(qt_app, lambda: dialog._worker is None and not dialog._pending)
+        wait_until(qt_app, lambda: dialog._worker is None and not dialog._pending)
         assert not dialog.save_button.isEnabled()
         assert "Suchradius" in dialog.state.text()
     finally:
@@ -520,7 +520,7 @@ def test_new_radius_immediately_invalidates_selection_and_old_reply(qt_app, prof
 def test_old_preview_cannot_unlock_new_values(qt_app, profile, monkeypatch):
     dialog, _project, _before = make_dialog(profile, monkeypatch)
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         choose_action(dialog, "resize_hole")
         old_revision = dialog.preview_revision
         dialog.editor._editors["diameter"].set_value(8)
@@ -538,7 +538,7 @@ def test_detection_only_has_an_explicit_single_draft_button(qt_app, profile, mon
     accepted = []
     dialog.draftsReady.connect(accepted.append)
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         assert "Merkmale übernehmen" in dialog.save_button.text()
         dialog.save_button.click()
         assert len(accepted) == 1 and len(accepted[0]) == 1
@@ -553,7 +553,7 @@ def test_invalidation_rejects_late_worker_and_edit_results(qt_app, profile, monk
     accepted, results = [], []
     dialog.draftsReady.connect(accepted.append)
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         previous, revision = dialog.inspection, dialog._revision
         choose_action(dialog, "resize_hole")
         dialog.recognitionReady.connect(results.append)
@@ -585,10 +585,10 @@ def test_radius_queue_keeps_only_the_latest_request_and_cancels_the_running_one(
 
     monkeypatch.setattr(local, "evaluate", held)
     try:
-        _until(qt_app, entered.is_set)
+        wait_until(qt_app, entered.is_set)
         dialog.radius.set_value(0.5)
         dialog.radius.set_value(8.5)
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         assert calls == [8, 8.5]
         assert dialog.inspection.detect_draft.params["radius"] == 8.5
     finally:
@@ -610,16 +610,16 @@ def test_real_surface_ambiguity_answers_or_cancels_without_a_waiting_worker(
         hit=(-1, (0, 0, 2.5), (0, 0, 1)),
     )
     try:
-        _until(qt_app, lambda: dialog._question is not None)
+        wait_until(qt_app, lambda: dialog._question is not None)
         assert dialog._question.list.count() == 2
         if accept:
             dialog._question.list.setCurrentRow(1)
             dialog._question.accept()
-            _until(qt_app, dialog.save_button.isEnabled)
+            wait_until(qt_app, dialog.save_button.isEnabled)
             assert dialog.inspection.detect_draft.params["seed_face"] >= 0
         else:
             dialog._question.reject()
-            _until(qt_app, lambda: dialog._worker is None)
+            wait_until(qt_app, lambda: dialog._worker is None)
             assert not dialog.save_button.isEnabled()
             assert "abgebrochen" in dialog.state.text()
             assert not dialog.progress.isVisible()
@@ -640,10 +640,10 @@ def test_closing_a_waiting_question_releases_the_worker(qt_app, profile, monkeyp
         hit=(-1, (0, 0, 2.5), (0, 0, 1)),
     )
     try:
-        _until(qt_app, lambda: dialog._question is not None)
+        wait_until(qt_app, lambda: dialog._question is not None)
         worker = dialog._worker
         dialog.invalidate()
-        _until(qt_app, lambda: not worker.isRunning())
+        wait_until(qt_app, lambda: not worker.isRunning())
         assert dialog._request is None and dialog._question is None
     finally:
         dispose(dialog, qt_app)
@@ -667,7 +667,7 @@ def test_lod_ray_is_resolved_on_the_original_inside_the_worker(qt_app, profile, 
         original_ray=((0, 0, 17.5), (1, 0, 0)),
     )
     try:
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         draft = dialog.inspection.detect_draft
         assert len(threads) == 1 and threads[0] != threading.get_ident()
         assert draft.params["x"] == pytest.approx(3)
@@ -677,7 +677,7 @@ def test_lod_ray_is_resolved_on_the_original_inside_the_worker(qt_app, profile, 
         expected = before.scene.objects["obj_1"].mesh.raw.face_normals[seed]
         assert np.allclose([draft.params[key] for key in ("nx", "ny", "nz")], expected)
         dialog.radius.set_value(8.5)
-        _until(qt_app, dialog.save_button.isEnabled)
+        wait_until(qt_app, dialog.save_button.isEnabled)
         assert len(threads) == 1
     finally:
         dispose(dialog, qt_app)
@@ -688,7 +688,7 @@ def test_ray_with_no_original_hit_never_uses_the_lod_placeholder(qt_app, profile
         profile, monkeypatch, original_ray=((200, 0, 17.5), (1, 0, 0))
     )
     try:
-        _until(qt_app, lambda: dialog._worker is None and not dialog._pending)
+        wait_until(qt_app, lambda: dialog._worker is None and not dialog._pending)
         assert dialog.inspection is None
         assert not dialog.save_button.isEnabled()
         assert "Stelle" in dialog.state.text()
@@ -713,7 +713,7 @@ def test_original_ray_respects_the_current_section_planes(qt_app, profile, monke
         clip_planes=(SectionPlane.along("z", 15),),
     )
     try:
-        _until(qt_app, lambda: dialog._worker is None and not dialog._pending)
+        wait_until(qt_app, lambda: dialog._worker is None and not dialog._pending)
         assert dialog.inspection is None and not dialog.save_button.isEnabled()
     finally:
         dispose(dialog, qt_app)
@@ -729,7 +729,7 @@ def test_unexpected_worker_error_leaves_a_visible_recovery_state(qt_app, profile
 
     monkeypatch.setattr(local, "actions_for", crash)
     try:
-        _until(qt_app, lambda: dialog._worker is None and not dialog._pending)
+        wait_until(qt_app, lambda: dialog._worker is None and not dialog._pending)
         assert dialog.inspection is None and not dialog.save_button.isEnabled()
         assert dialog.state.text()
         assert not dialog.progress.isVisible()

@@ -28,7 +28,7 @@ from app.core.knowledge.parts.shapes import building
 from app.core.knowledge.parts.structure import MIN_RIB, RIB_SHARE
 from app.core.knowledge.parts.testbodies import LABEL_DEPTH
 from app.core.types import Profile, SceneObject
-from tests.helpers import exact_kernel
+from tests.helpers import exact_kernel, thread_volume
 from tests.helpers import run_operation as run
 
 #: Volumen eines einbeschriebenen 48-Ecks gegen den Kreis — der einzige erlaubte
@@ -72,24 +72,6 @@ def _roundtrip(solid: Any) -> None:
 def _frustum(bottom: float, top: float, height: float) -> float:
     lower, upper = bottom / 2.0, top / 2.0
     return math.pi * height / 3.0 * (lower**2 + lower * upper + upper**2)
-
-
-def _thread_volume(diameter: float, pitch: float, length: float, *, internal: bool) -> float:
-    """Kern plus Gang des Bausteingewindes: Pappus je Umlauf über das Gangprofil,
-    schraubensymmetrisch je Länge — gerechnet aus derselben Quelle wie beide Kerne.
-    """
-    profile = list(shapes.ridge_profile(diameter, pitch, internal=internal))
-    root = profile[0][0]
-    # Das Profil schließt am Fuß; Schwerpunkt und Fläche über die Schuhbandformel.
-    corners = [*profile, profile[0]]
-    area = 0.0
-    moment = 0.0
-    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
-        cross = r_a * z_b - r_b * z_a
-        area += cross
-        moment += (r_a + r_b) * cross
-    area, moment = abs(area) / 2.0, abs(moment) / 6.0
-    return math.pi * root**2 * length + 2.0 * math.pi * moment * (length / pitch)
 
 
 def _host(size: tuple[float, float, float] = HOST) -> SceneObject:
@@ -316,7 +298,7 @@ def test_printed_thread_exact_is_core_and_ridge_without_a_seam(internal: bool) -
     diameter = screw.nominal - 2.0 * depth if internal else screw.nominal
     # Das Innengewinde reicht als Werkzeug ein Hundertstel über seine Mündung.
     built = length + BOOLEAN_OVERLAP if internal else length
-    expected = _thread_volume(diameter, screw.pitch, built, internal=internal)
+    expected = thread_volume(diameter, screw.pitch, built, internal=internal)
     assert body.volume == pytest.approx(expected, rel=1e-6)
     top, bottom = (BOOLEAN_OVERLAP, -length) if internal else (length, 0.0)
     assert body.bounds.maximum[2] == pytest.approx(top, abs=1e-6)
@@ -336,7 +318,7 @@ def test_printed_screw_exact_has_its_head_on_top_and_the_thread_below() -> None:
     produced = _built("printed_screw", True, size="M5", length=12.0, countersunk=False, play=0.0)
     body = _sound(produced.mesh)
     head = math.sqrt(3.0) / 2.0 * screw.head**2 * screw.head_height
-    thread = _thread_volume(screw.nominal, screw.pitch, 12.0, internal=False)
+    thread = thread_volume(screw.nominal, screw.pitch, 12.0, internal=False)
     overlap = math.pi * (screw.nominal / 2.0) ** 2 * BOOLEAN_OVERLAP
     assert head + thread - overlap <= body.volume <= head + thread
     assert body.bounds.maximum[2] == pytest.approx(screw.head_height, abs=1e-6)
@@ -357,7 +339,7 @@ def test_printed_countersunk_screw_exact_is_a_compound_of_head_and_thread() -> N
         host_cut = spec.host_cut(params)
     body = _sound(produced.mesh, bodies=2)
     head_height = (screw.countersink - screw.nominal) / 2.0
-    expected = _frustum(screw.nominal, screw.countersink, head_height) + _thread_volume(
+    expected = _frustum(screw.nominal, screw.countersink, head_height) + thread_volume(
         screw.nominal, screw.pitch, 12.0, internal=False
     )
     assert body.volume == pytest.approx(expected, rel=1e-6)
@@ -382,7 +364,7 @@ def test_printed_nut_exact_carries_the_internal_thread_through() -> None:
     depth = screw.pitch * shapes.RIDGE_SHARE
     bore = screw.nominal - 2.0 * depth + play
     prism = math.sqrt(3.0) / 2.0 * nut.width**2 * nut.height
-    removed = _thread_volume(bore, screw.pitch, nut.height, internal=True)
+    removed = thread_volume(bore, screw.pitch, nut.height, internal=True)
     assert body.volume == pytest.approx(prism - removed, rel=1e-6)
     # Die Mutter steht um das Spiel über ihrer Fläche (RM-276).
     assert body.bounds.maximum[2] == pytest.approx(play + nut.height, abs=1e-6)

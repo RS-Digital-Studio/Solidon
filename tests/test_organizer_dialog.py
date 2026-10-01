@@ -16,7 +16,7 @@ from app.core.organizer.serialize import (
     layout_to_text,
 )
 from app.ui.organizer_dialog import OrganizerDialog, OrganizerLayoutField
-from tests.test_outline_dialog import _until
+from tests.ui_helpers import wait_until
 
 
 def dispose(dialog: OrganizerDialog, app: QApplication) -> None:
@@ -37,7 +37,7 @@ def test_translated_editor_wraps_long_labels_without_horizontal_scrolling(qt_app
     dialog = OrganizerDialog({})
     try:
         dialog.show()
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         scroll = dialog.editor.parentWidget().parentWidget()
         assert isinstance(scroll, QScrollArea)
         assert scroll.horizontalScrollBar().maximum() == 0
@@ -54,7 +54,7 @@ def test_tree_rebuild_restores_the_previous_signal_state_on_error(qt_app, monkey
     """Ein fehlerhafter Baumaufbau darf den Wähler weder stummschalten noch fremd freigeben."""
     dialog = OrganizerDialog({})
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         dialog.tree.blockSignals(blocked)
 
         def refuse():
@@ -76,19 +76,19 @@ def test_editor_keeps_expressions_and_exact_preview_and_changes_one_repeated_wal
         layout_only=True,
     )
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         before = dialog._layout
         wall = next(w for w in before.walls if "columns/wall_1" in w.id)
         dialog._graphic_chosen("wall", wall.id)
         assert dialog.tree.currentItem() is None
         assert not dialog.tree.selectedItems()
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert 'data-highlight="true"' in dialog._preview_svg
         assert 'data-selection-contour="true"' in dialog._preview_svg
         assert "Ausgewählt: Trennwand" in dialog._preview_svg
         dialog._edit_fields["height"].set_value(50)
         assert not dialog.accept_button.isEnabled()
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert [w.id for w in dialog._layout.walls if w.height == pytest.approx(50)] == [wall.id]
         assert dialog.values()["width"] == "=@outer_width"
         expected = build_organizer(dialog._layout)
@@ -104,10 +104,10 @@ def test_split_preserves_inner_bounds_and_uses_existing_wall_value(qt_app):
     spec = LayoutSpec("inner", Node("cell", "cell", width=80, depth=60, radius=0))
     dialog = OrganizerDialog({"layout": layout_to_text(spec), "wall": 4, "radius": 0})
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         before = dialog._layout
         dialog._split_node("cell", "x")
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert (dialog._layout.width, dialog._layout.depth) == pytest.approx(
             (before.width, before.depth)
         )
@@ -124,9 +124,9 @@ def test_layout_only_basis_change_preserves_original_outer_expression(qt_app):
         layout_only=True,
     )
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         dialog.basis.setCurrentIndex(0)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert dialog.values()["width"] == "=@outer_width"
         assert dialog._layout.width == pytest.approx(190)
         assert "vorher" in dialog.basis_notice.text()
@@ -141,10 +141,10 @@ def test_standalone_basis_switch_keeps_free_measures_or_explains_bound_change(qt
         {"width": outer, "layout": layout_to_text(grid_layout(basis="inner"))}, {"outer_width": 190}
     )
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         previous = dialog._layout.width
         dialog.basis.setCurrentIndex(0)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         if isinstance(outer, str):
             assert dialog.values()["width"] == outer
             assert dialog._layout.width == pytest.approx(190)
@@ -170,7 +170,7 @@ def test_cancelled_slow_preview_never_becomes_an_accepted_result(qt_app, monkeyp
     monkeypatch.setattr(module, "build_organizer", slow)
     dialog = OrganizerDialog({})
     try:
-        _until(qt_app, entered.is_set)
+        wait_until(qt_app, entered.is_set)
         dialog.reject()
         gate.set()
         dialog.release()
@@ -185,16 +185,16 @@ def test_cancelled_slow_preview_never_becomes_an_accepted_result(qt_app, monkeyp
 def test_invalid_wall_height_blocks_acceptance_until_corrected(qt_app):
     dialog = OrganizerDialog({})
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         wall = dialog._layout.walls[0]
         dialog._graphic_chosen("wall", wall.id)
         dialog._edit_fields["height"].set_value(1)
-        _until(qt_app, lambda: dialog._worker is None and not dialog._pending)
+        wait_until(qt_app, lambda: dialog._worker is None and not dialog._pending)
         dialog.accept()
         assert dialog.result() != QDialog.DialogCode.Accepted
         assert not dialog.accept_button.isEnabled()
         dialog._edit_fields["height"].set_value(30)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
     finally:
         dispose(dialog, qt_app)
 
@@ -221,7 +221,7 @@ def test_worker_calculates_layout_mesh_and_projection_off_main_thread(qt_app, mo
     monkeypatch.setattr(module.drawing, "project", project)
     dialog = OrganizerDialog({})
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert {name for name, _ in calls} == {"resolve_layout", "build_organizer", "project"}
         assert all(thread != main for _, thread in calls)
     finally:
@@ -254,15 +254,15 @@ def test_selection_reprojects_existing_body_without_rebuilding_geometry(qt_app, 
     monkeypatch.setattr(module, "build_organizer", counted)
     dialog = OrganizerDialog({})
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         body = dialog.result_preview.mesh
         count = len(calls)
         dialog._graphic_chosen("wall", dialog._layout.walls[0].id)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert len(calls) == count
         assert dialog.result_preview.mesh is body
         dialog._graphic_chosen("cell", dialog._layout.cells[0].id)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert len(calls) == count
         assert 'data-highlight="true"' in dialog._preview_svg
     finally:
@@ -290,7 +290,7 @@ def test_the_resting_accept_button_says_why(qt_app):
             dialog.accept_button.accessibleDescription(),
         )
         assert all(text.strip() for text in said), said
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert not dialog.accept_button.toolTip(), "frei trägt er keinen Sperrgrund"
     finally:
         dispose(dialog, qt_app)
@@ -338,7 +338,7 @@ def test_a_split_beyond_the_limit_is_said_not_thrown(qt_app):
     spec = LayoutSpec("inner", Node("cell", "cell", width=80, depth=60, radius=0))
     dialog = OrganizerDialog({"layout": layout_to_text(spec), "wall": 4, "radius": 0})
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         full = dialog._nodes["cell"]
         dialog._nodes.update({f"cell_{index}": full for index in range(1, 1025)})
         dialog._split_node("cell", "x")

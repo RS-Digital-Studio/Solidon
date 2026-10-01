@@ -1273,7 +1273,8 @@ def test_the_same_assembly_twice_keeps_every_name_apart(profile: Profile) -> Non
     gleiche Zeilen im Baum und im Prüfbericht (Durchsicht 0.5.0). Die dritte
     Kopie bekommt die nächste Nummer, nicht noch einmal die zweite.
     """
-    from tests.test_threemf_assembly import cube, production_container
+    from tests.helpers import cube
+    from tests.test_threemf_assembly import production_container
 
     payload = production_container(
         {"1": cube(10.0), "2": cube(12.0, at=(30.0, 0.0, 0.0))},
@@ -1299,7 +1300,8 @@ def test_an_unnamed_body_in_a_3mf_is_named_after_its_file(profile: Profile) -> N
     Körper nach der Datei: „Körper 1" und „drill-holder 2" im selben Baum,
     gemessen an ``drill-holder.3mf`` (Durchsicht 0.5.0).
     """
-    from tests.test_threemf_assembly import cube, production_container
+    from tests.helpers import cube
+    from tests.test_threemf_assembly import production_container
 
     payload = production_container({"1": cube(10.0)})
 

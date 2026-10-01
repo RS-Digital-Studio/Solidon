@@ -54,7 +54,14 @@ from app.ui.op_dialog import OperationDialog
 from app.ui.palette import DIFF_PALETTES
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings
-from tests.ui_helpers import MESHES, wait_for_export
+from tests.helpers import (
+    SOURCE,
+    clean_recipe_globals,
+    recipe_document_seed,
+    recipe_with_halter,
+    two_bores,
+)
+from tests.ui_helpers import MESHES, wait_for_export, wait_until
 from tests.ui_helpers import expire_trial as _expired
 from tests.ui_helpers import session as session
 from tests.ui_helpers import window as window
@@ -1352,12 +1359,11 @@ def _needs_the_exact_kernel() -> None:
     """Ein Test an einem exakten Körper braucht OpenCASCADE — und sagt es, statt rot zu werden.
 
     Die CI installiert das Extra ``brep``; ein Quellklon ohne es lief in diesen
-    Tests in einen Importfehler statt in einen Skip (Review Tests-1 #4).
+    Tests früher in einen Importfehler statt in einen Skip (Review Tests-1 #4).
     """
-    from app.core.registry import exact_kernel_present
+    from tests.helpers import exact_kernel
 
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
 
 
 # --- session --------------------------------------------------------------------
@@ -1374,8 +1380,6 @@ def test_outline_import_waits_for_the_shown_contours(
 ) -> None:
     """Auswahl, Vorschau, Übernahme und Rücknahme benutzen dieselben Konturen."""
     from app.ui.outline_dialog import OutlineDialog
-    from tests.test_outline_dialog import _until
-    from tests.test_outline_profiles import SOURCE
 
     path = tmp_path / "contours.svg"
     path.write_bytes(SOURCE)
@@ -1385,9 +1389,9 @@ def test_outline_import_waits_for_the_shown_contours(
     dialog = window.findChild(OutlineDialog)
     assert dialog is not None
     assert not window.session.history.operations
-    _until(qt_app, lambda: dialog.accept_button.isEnabled())
+    wait_until(qt_app, lambda: dialog.accept_button.isEnabled())
     dialog.profiles.item(1).setCheckState(Qt.CheckState.Unchecked)
-    _until(qt_app, lambda: dialog.accept_button.isEnabled())
+    wait_until(qt_app, lambda: dialog.accept_button.isEnabled())
     expected = dialog.result_preview
     chosen = dialog.values()
     assert expected is not None and expected.contours == 1
@@ -1414,7 +1418,7 @@ def test_cancelling_outline_import_drops_only_its_pending_source(
 ) -> None:
     """Abbrechen hinterlässt weder eine Operation noch eine eingebettete Dateiwaise."""
     from app.ui.outline_dialog import OutlineDialog
-    from tests.test_outline_profiles import SOURCE
+    from tests.helpers import SOURCE
 
     path = tmp_path / "cancel.svg"
     path.write_bytes(SOURCE)
@@ -1435,7 +1439,7 @@ def test_cancelling_outline_import_drops_only_its_pending_source(
 def test_stale_outline_answer_cannot_apply_to_another_project(session: Session) -> None:
     """Die gleiche Quellenkennung im neuen Projekt gehört nicht zur alten Antwort."""
     from app.core.knowledge.profiles import DEFAULT_MATERIAL, DEFAULT_PRINTER
-    from tests.test_outline_profiles import SOURCE
+    from tests.helpers import SOURCE
 
     session.choose_outline = True
     requests = []
@@ -1458,8 +1462,6 @@ def test_editing_outline_contours_keeps_bound_dimensions(
     from PySide6.QtTest import QTest
 
     from app.ui.outline_dialog import ContourField, OutlineDialog
-    from tests.test_outline_dialog import _until
-    from tests.test_outline_profiles import SOURCE
 
     session = window.session
     assert session.add_parameter(Parameter(name="thickness", value=4.0))
@@ -1479,12 +1481,12 @@ def test_editing_outline_contours_keeps_bound_dimensions(
     QTest.mouseClick(field.button, Qt.MouseButton.LeftButton)
     picker = operation_dialog.findChild(OutlineDialog)
     assert picker is not None
-    _until(qt_app, lambda: picker.accept_button.isEnabled())
+    wait_until(qt_app, lambda: picker.accept_button.isEnabled())
     assert picker.values()["height"] == pytest.approx(4.0)
     assert picker.values()["width"] == pytest.approx(80.0)
     assert not picker._fields["height"].isEnabled()
     picker.profiles.item(1).setCheckState(Qt.CheckState.Unchecked)
-    _until(qt_app, lambda: picker.accept_button.isEnabled())
+    wait_until(qt_app, lambda: picker.accept_button.isEnabled())
     chosen = picker.values()["contours"]
     picker.accept()
     assert operation_dialog.values()["height"] == "=@thickness"
@@ -1507,7 +1509,6 @@ def test_organizer_layout_choice_keeps_bound_dimensions_and_reaches_history(
     from app.core.organizer.ops import OrganizerParams
     from app.core.organizer.serialize import layout_from_text
     from app.ui.organizer_dialog import OrganizerDialog, OrganizerLayoutField
-    from tests.test_outline_dialog import _until
 
     session = window.session
     assert session.add_parameter(Parameter(name="span", value=180.0))
@@ -1534,11 +1535,11 @@ def test_organizer_layout_choice_keeps_bound_dimensions_and_reaches_history(
     QTest.mouseClick(field.button, Qt.MouseButton.LeftButton)
     picker = parent.findChild(OrganizerDialog)
     assert picker is not None
-    _until(qt_app, picker.accept_button.isEnabled)
+    wait_until(qt_app, picker.accept_button.isEnabled)
     assert not picker._fields["width"].isEnabled()
     picker.tree.setCurrentItem(picker._tree_items["rows"])
     picker._edit_fields["count"].set_value(2)
-    _until(qt_app, picker.accept_button.isEnabled)
+    wait_until(qt_app, picker.accept_button.isEnabled)
     chosen = picker.values()["layout"]
     assert layout_from_text(chosen).root.count == 2
     assert len(picker._layout.cells) == 6
@@ -1571,7 +1572,6 @@ def test_cancelled_or_stale_organizer_editor_cannot_change_the_document(
     from app.core.knowledge.profiles import DEFAULT_MATERIAL, DEFAULT_PRINTER
     from app.core.organizer.ops import OrganizerParams
     from app.ui.organizer_dialog import OrganizerDialog
-    from tests.test_outline_dialog import _until
 
     errors_seen = []
     monkeypatch.setattr(
@@ -1591,9 +1591,9 @@ def test_cancelled_or_stale_organizer_editor_cannot_change_the_document(
     QTest.mouseClick(parent._editors["layout"].button, Qt.MouseButton.LeftButton)
     picker = parent.findChild(OrganizerDialog)
     assert picker is not None
-    _until(qt_app, picker.accept_button.isEnabled)
+    wait_until(qt_app, picker.accept_button.isEnabled)
     picker._edit_fields["count"].set_value(2)
-    _until(qt_app, picker.accept_button.isEnabled)
+    wait_until(qt_app, picker.accept_button.isEnabled)
     if new_project:
         session.start_new(DEFAULT_PRINTER, DEFAULT_MATERIAL)
         assert session.wait_for_idle()
@@ -7133,10 +7133,9 @@ def test_a_fieldless_operation_on_exact_bodies_runs_without_a_dialog(
     Umwandlung, und die gibt es hier nicht: Alle vier bleiben an exakten
     Körpern exakt (``test_exact_body_parity``: KEEP).
     """
-    from app.core.registry import exact_kernel_present
+    from tests.helpers import exact_kernel
 
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     window.session.start_new()
     window.session.apply(
         "Zwei Quader",
@@ -7173,10 +7172,9 @@ def test_a_fieldless_operation_that_mixes_body_kinds_still_shows_its_preview(
     Umwandlung, vor der die Vorschau stehen muss — und der einzige Grund, aus
     dem eine feldlose Operation einen Dialog bekommt.
     """
-    from app.core.registry import exact_kernel_present
+    from tests.helpers import exact_kernel
 
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     window.session.start_new()
     window.session.apply(
         "Gemischt",
@@ -8521,12 +8519,11 @@ def test_the_saved_part_state_button_switches_every_step_at_once(
     from app.core.knowledge.parts import recipe
     from app.core.scene.project import Project, save
     from app.core.types import Operation
-    from tests.test_recipes import _clean_globals, _document, _plate_with_halter
 
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     try:
-        recipe.register(_plate_with_halter(30.0, profile))
-        document = _document()
+        recipe.register(recipe_with_halter(30.0, profile))
+        document = recipe_document_seed()
         halter = Operation(
             id=2,
             op="insert_probe_halter",
@@ -8539,8 +8536,8 @@ def test_the_saved_part_state_button_switches_every_step_at_once(
         )
         saved = tmp_path / "halter.p3d"
         save(Project(document=document), saved)
-        _clean_globals("probe_halter")
-        recipe.register(_plate_with_halter(50.0, profile))
+        clean_recipe_globals("probe_halter")
+        recipe.register(recipe_with_halter(50.0, profile))
 
         window.session.open_project(saved)
         finding = next(
@@ -8558,7 +8555,7 @@ def test_the_saved_part_state_button_switches_every_step_at_once(
         steps = [entry.op for entry in window.session.project.document.ops[1:]]
         assert steps == ["insert_probe_halter"] * 2
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        clean_recipe_globals("probe_halter", "probe_halter_travelled")
 
 
 #: Kennungen, die absichtlich neben ``errors.py`` entstehen — sie gehören einem
@@ -15609,10 +15606,9 @@ def test_a_step_can_be_made_exact_afterwards(window: MainWindow) -> None:
     bauen. Seit P2.8 steht der Wechsel am Schritt im Verlauf
     (``MainWindow.switch_kernel``); der Dialog trägt keinen Haken mehr.
     """
-    from app.core.registry import exact_kernel_present
+    from tests.helpers import exact_kernel
 
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     window.session.start_new()
     window.session.history.apply(
         "Quader", [OperationDraft(op="create_box", params={"width": 30.0})]
@@ -16442,10 +16438,10 @@ def test_no_dialog_asks_for_the_kernel_any_more(window: MainWindow) -> None:
     """
     from PySide6.QtWidgets import QCheckBox
 
-    from app.core.registry import MENU_TWINS, exact_kernel_present
+    from app.core.registry import MENU_TWINS
+    from tests.helpers import exact_kernel
 
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
     assert "create_brep_box" in window._op_actions, "das Menü ruft den exakten Quader"
     assert "create_box" not in window._op_actions, "der Netz-Quader ist der versteckte Zwilling"
     assert MENU_TWINS["create_box"] == "create_brep_box"
@@ -17931,15 +17927,12 @@ def test_a_clicked_edge_reaches_the_selection_window(
     dahinter — dieselbe Regel wie überall: Wer eine Oberfläche prüft,
     drückt, tippt und wählt.
     """
-    from app.core.brep import edit as brep_edit
     from app.core.brep.features import features_of
-    from app.core.brep.kernel import available
     from app.core.scene.evaluate import EvaluationResult
     from app.core.types import Scene, SceneObject
+    from tests.helpers import exact_kernel
 
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
-
+    brep_edit = exact_kernel()
     solid = brep_edit.box(40.0, 30.0, 20.0)
     entry = SceneObject(
         id="block", name="Block", mesh=solid, kind="brep", features=features_of(solid)
@@ -18616,9 +18609,7 @@ def test_a_changed_preview_keeps_its_warning_and_its_result(
     window: MainWindow, tmp_path: Path
 ) -> None:
     """Eine geöffnete Nachbarbohrung wird vor dem Übernehmen sichtbar benannt."""
-    from tests.test_bore_mouth_resize import _two_bores
-
-    mesh, _features, _hole = _two_bores(7.5)
+    mesh, _features, _hole = two_bores(7.5)
     source = tmp_path / "neighbour.stl"
     mesh.raw.export(source)
     window.open_path(source)

@@ -2731,12 +2731,12 @@ def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplica
     ``e:-20.00,0.00,20.00:0.000,1.000,0.000`` als Beschriftung zeigt.
     """
     from app.core.bootstrap import load_operations
+    from tests.helpers import exact_kernel
 
     # Ohne geladenes Register ist die Grundmenge leer, und der Test wäre grün,
     # ohne eine Handlung gesehen zu haben.
+    exact_kernel()
     load_operations()
-    if not REGISTRY.has("fillet_edges"):
-        pytest.skip("OpenCASCADE is an optional dependency")
     schluessel = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
     panel = FeaturePanel()
     gerufen: list[tuple[str, dict[str, Any]]] = []
@@ -2779,9 +2779,10 @@ def test_the_chamfer_edge_row_carries_the_kind_and_its_fields_from_the_register(
     Breite bleibt vorn, damit eine Fase mit gleicher Breite so aussieht wie
     bisher; *Verrunden* und *Wulst* behalten ihr eines Maß.
     """
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
     load_operations()
-    if not REGISTRY.has("chamfer_edges"):
-        pytest.skip("OpenCASCADE is an optional dependency")
     key = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
     rows: dict[str, Any] = {}
     for action in actions.edge_actions(key):
@@ -2832,10 +2833,10 @@ def test_the_chamfer_row_at_an_edge_shows_only_the_fields_of_its_kind(
     *Seiten tauschen* von außen (die Marke im Bild) geht über denselben Haken.
     """
     from app.ui.op_dialog import ValueField
+    from tests.helpers import exact_kernel
 
+    exact_kernel()
     load_operations()
-    if not REGISTRY.has("chamfer_edges"):
-        pytest.skip("OpenCASCADE is an optional dependency")
     schema = {entry.name: entry for entry in REGISTRY.get("chamfer_edges").params.spec()}
     key = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
     panel = FeaturePanel()

@@ -511,9 +511,9 @@ def _commit_hook_with(
     pytest noch Qt. Die Index-/AST-Prüfung selbst hat ihre Gegenproben unten;
     hier zählt, wann der Hook sie aufruft und welchen Ausgang er übernimmt.
     """
-    from tests.test_tool_review_regressions import _bash_executable
+    from tests.helpers import bash_executable
 
-    bash = _bash_executable()
+    bash = bash_executable()
     if bash is None:
         pytest.skip("ohne Bash lässt sich der echte Commit-Hook nicht ausführen")
     for relative in {*staged_paths, *source_paths}:
@@ -1170,7 +1170,7 @@ def test_delivery_matrix_requires_boolean_completion_and_binds_worker_count(
     driver.RUN_IDENTITY = identity_seed
     driver.MODEL_DIGESTS[model.resolve()] = driver._file_digest(model)
     monkeypatch.setattr(driver, "_code_digest", lambda _root: "code-hash")
-    monkeypatch.setattr(driver, "_slicer_identity", lambda: {})
+    monkeypatch.setattr(driver, "_slicer_identity", dict)
     monkeypatch.setattr(driver, "_expected_combos", lambda _spec: [("orca", "printer")])
     planned = [(model, "heim")]
     monkeypatch.setattr(driver, "WORKERS", 2)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -10,16 +9,16 @@ import re
 import shutil
 import subprocess
 import time
-from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 import pytest
 
+from tests.helpers import php_server
 from tests.php_probe import WITHOUT_OPCACHE, free_port, php_command, php_executable
 
 ROOT = Path(__file__).parent.parent
@@ -100,51 +99,6 @@ def _temporary_docroot(tmp_path: Path) -> Path:
     shutil.copytree(API, docroot / "api")
     (docroot / "dl").mkdir()
     return docroot
-
-
-@contextlib.contextmanager
-def _php_server(
-    tmp_path: Path,
-    extra_environment: dict[str, str] | None = None,
-    *,
-    prepend: Path | None = None,
-    error_log: Path | None = None,
-    ini: dict[str, str] | None = None,
-    docroot: Path | None = None,
-    extensions: tuple[str, ...] = (),
-) -> Iterator[str]:
-    php = php_command(*extensions)
-    port = free_port()
-    environment = os.environ.copy()
-    environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
-    environment["SOLIDON_ACTIVATION_RATE_FILE"] = str(tmp_path / "activation-rate.json")
-    environment["SOLIDON_SUPPORT_RATE_FILE"] = str(tmp_path / "support-rate.json")
-    if extra_environment:
-        environment.update(extra_environment)
-    command = _php_command(
-        php, port, prepend=prepend, error_log=error_log, ini=ini, docroot=docroot
-    )
-    process = subprocess.Popen(
-        command,
-        cwd=ROOT,
-        env=environment,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    base = f"http://127.0.0.1:{port}/api"
-    try:
-        for _attempt in range(50):
-            try:
-                _request(f"{base}/activation_common.php")
-                break
-            except URLError:
-                time.sleep(0.05)
-        else:
-            pytest.fail("der lokale PHP-Prüfserver ist nicht gestartet")
-        yield base
-    finally:
-        process.terminate()
-        process.wait(timeout=5)
 
 
 def _request(
@@ -327,7 +281,7 @@ def test_private_cleanup_is_valid_php_and_cannot_run_over_http(tmp_path: Path) -
     lint = subprocess.run([php, "-l", str(CLEANUP)], capture_output=True, text=True, timeout=30)
     assert lint.returncode == 0, lint.stdout + lint.stderr
 
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status, _headers, _body = _request(f"{base}/cleanup_private_state.php")
 
     assert status == 404
@@ -517,7 +471,7 @@ def test_private_cleanup_accepts_update_rows_from_the_live_writer(
     paths = _prepare_cleanup_state(tmp_path, {"activation": 1000, "support": 3700})
     old = tmp_path / "stats" / f"{_utc_month(-2)}.jsonl"
     _write_month(old, _utc_month(-2))
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status, _headers, _body = _request(f"{base}/count.php?u=1", headers={"User-Agent": agent})
     assert status == 200
     current = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
@@ -1046,7 +1000,7 @@ def test_count_rate_window_survives_utc_midnight_without_the_day_salt() -> None:
 
 @pytest.mark.parametrize("endpoint", ["activation_common.php", "day_zone.php"])
 def test_shared_php_helpers_are_not_public_blank_endpoints(tmp_path: Path, endpoint: str) -> None:
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status, headers, _body = _request(f"{base}/{endpoint}")
 
     assert status == 404
@@ -1069,7 +1023,7 @@ def test_shared_php_helpers_are_not_public_blank_endpoints(tmp_path: Path, endpo
 def test_methods_are_bound_before_configuration_is_disclosed(
     tmp_path: Path, endpoint: str, method: str, allow: str
 ) -> None:
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status, headers, _body = _request(f"{base}/{endpoint}", method=method, data=b"")
 
     assert status == 405
@@ -1093,7 +1047,7 @@ def test_post_content_types_are_fail_closed(
     extensions = (
         ("sodium", "pdo_sqlite") if endpoint in {"activation.php", "deactivation.php"} else ()
     )
-    with _php_server(tmp_path, extensions=extensions) as base:
+    with php_server(tmp_path, extensions=extensions) as base:
         headers = {"Content-Type": content_type}
         if endpoint in {"count.php", "stats.php"}:
             headers["Origin"] = "https://solidon3d.de"
@@ -1128,7 +1082,7 @@ def test_cross_site_browser_posts_are_rejected(tmp_path: Path, endpoint: str) ->
             else "application/json"
         )
     )
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status, _headers, _body = _request(
             f"{base}/{endpoint}",
             method="POST",
@@ -1140,7 +1094,7 @@ def test_cross_site_browser_posts_are_rejected(tmp_path: Path, endpoint: str) ->
 
 
 def test_security_headers_cover_json_html_and_redirect_responses(tmp_path: Path) -> None:
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         responses = [
             _request(f"{base}/activation-health.php"),
             _request(f"{base}/stats.php"),
@@ -1160,7 +1114,7 @@ def test_counter_rate_limit_caps_disk_growth(tmp_path: Path) -> None:
         "Content-Type": "application/x-www-form-urlencoded",
         "Origin": "https://solidon3d.de",
     }
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         statuses = [
             _request(f"{base}/count.php", method="POST", data=body, headers=headers)[0]
             for _attempt in range(61)
@@ -1216,7 +1170,7 @@ def test_update_response_keeps_one_file_snapshot_across_the_counter(tmp_path: Pa
     )
     endpoint.write_text(source.replace(recording, substituted, 1), encoding="utf-8")
 
-    with _php_server(tmp_path, docroot=docroot) as base:
+    with php_server(tmp_path, docroot=docroot) as base:
         status, headers, body = _request(f"{base}/count.php?u=1")
 
     assert (status, body.encode()) == (200, metadata)
@@ -1236,7 +1190,7 @@ def test_busy_counter_storage_keeps_updates_available_and_reports_storage_failur
         "Content-Type": "application/x-www-form-urlencoded",
         "Origin": "https://solidon3d.de",
     }
-    with _php_server(tmp_path, docroot=docroot) as base:
+    with php_server(tmp_path, docroot=docroot) as base:
         assert _request(f"{base}/count.php?u=1")[0] == 200
         state = (
             tmp_path
@@ -1304,7 +1258,7 @@ def test_counter_rejects_linked_quota_and_month_files(
         "Origin": "https://solidon3d.de",
     }
 
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status = _request(
             f"{base}/count.php",
             method="POST",
@@ -1331,7 +1285,7 @@ def test_counter_rejects_group_readable_quota_and_month_files(
     state.write_text("", encoding="ascii")
     state.chmod(0o640)
 
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         status = _request(
             f"{base}/count.php",
             method="POST",
@@ -1354,7 +1308,7 @@ def test_activation_rate_key_never_depends_on_the_signing_seed(tmp_path: Path) -
     }
     headers = {"Content-Type": "application/json"}
     rate_key = tmp_path / "activation-rate.json.key"
-    with _php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
+    with php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
         status, _headers, answer = _request(
             f"{base}/activation.php", method="POST", data=b"{}", headers=headers
         )
@@ -1411,7 +1365,7 @@ def test_one_client_cannot_fill_the_global_request_budget(tmp_path: Path, endpoi
     global_key = "issue:global" if endpoint == "activation" else "global"
     headers = {"Content-Type": content_type, "X-Test-Address": "192.0.2.1"}
     extensions = ("sodium", "pdo_sqlite") if endpoint == "activation" else ("mbstring",)
-    with _php_server(tmp_path, environment, prepend=prepend, extensions=extensions) as base:
+    with php_server(tmp_path, environment, prepend=prepend, extensions=extensions) as base:
         for _attempt in range(budget):
             status, _headers, answer = _request(
                 f"{base}/{endpoint}.php", method="POST", data=payload, headers=headers
@@ -1504,9 +1458,7 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
         f"--{boundary}--\r\n"
     ).encode()
 
-    with _php_server(
-        tmp_path, environment, extensions=("sodium", "pdo_sqlite", "mbstring")
-    ) as base:
+    with php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite", "mbstring")) as base:
         assert (
             _request(
                 f"{base}/count.php",
@@ -1632,7 +1584,7 @@ def test_corrupt_rate_limit_states_fail_closed(tmp_path: Path) -> None:
         f"--{boundary}--\r\n"
     ).encode()
 
-    with _php_server(
+    with php_server(
         tmp_path,
         {"SOLIDON_STATS_ACCESS_FILE": str(access_file)},
         prepend=prepend,
@@ -1717,7 +1669,7 @@ def test_counter_storage_quotas_fail_closed_without_growth(tmp_path: Path, quota
     }
 
     log = tmp_path / "quota.log"
-    with _php_server(tmp_path, error_log=log, docroot=docroot) as base:
+    with php_server(tmp_path, error_log=log, docroot=docroot) as base:
         status, _headers, _body = _request(
             f"{base}/count.php", method="POST", data=body, headers=headers
         )
@@ -1882,7 +1834,7 @@ def test_private_php_state_rejects_symlinked_storage_paths(tmp_path: Path) -> No
     environment = {
         "SOLIDON_ACTIVATION_RATE_FILE": str(link / "activation-rate.json"),
     }
-    with _php_server(tmp_path, environment) as base:
+    with php_server(tmp_path, environment) as base:
         activation_status, _headers, _body = _request(
             f"{base}/activation.php",
             method="POST",
@@ -1928,7 +1880,7 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path, link_kind: 
         "idea\r\n"
         f"--{boundary}--\r\n"
     ).encode()
-    with _php_server(tmp_path, extensions=("sodium", "pdo_sqlite", "mbstring")) as base:
+    with php_server(tmp_path, extensions=("sodium", "pdo_sqlite", "mbstring")) as base:
         activation_status = _request(
             f"{base}/activation.php",
             method="POST",
@@ -2066,7 +2018,7 @@ def test_update_version_chart_keeps_even_small_counts_visible(tmp_path: Path) ->
     row["v"] = "0.3.4"
     month.write_text(line * 1000 + json.dumps(row) + "\n", encoding="ascii")
     environment, headers = _stats_test_access(tmp_path)
-    with _php_server(tmp_path, environment) as base:
+    with php_server(tmp_path, environment) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
     assert status == 200 and "</html>" in page
     # Seit dem Umbau vom 24.09.2026 ist die Versionstabelle „Je Version" im
@@ -2083,7 +2035,7 @@ def test_stats_renders_a_numeric_download_filename_completely(tmp_path: Path) ->
     stats.mkdir(mode=0o700)
     _write_month(stats / f"{_utc_month(0)}.jsonl", _utc_month(0))
     environment, headers = _stats_test_access(tmp_path)
-    with _php_server(tmp_path, environment, docroot=docroot) as base:
+    with php_server(tmp_path, environment, docroot=docroot) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
     assert status == 200
     assert '<a href="/dl/2026">2026</a>' in page
@@ -2096,7 +2048,7 @@ def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path)
     (docroot / "version.json").write_bytes(metadata)
     environment, stats_headers = _stats_test_access(tmp_path)
     month = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
-    with _php_server(tmp_path, environment, docroot=docroot) as base:
+    with php_server(tmp_path, environment, docroot=docroot) as base:
         for _attempt in range(2):
             status, headers, body = _request(
                 f"{base}/count.php?u=1",
@@ -2227,7 +2179,7 @@ def test_stats_rolling_windows_compare_with_the_period_before(tmp_path: Path) ->
     stats.mkdir(mode=0o700)
     _write_stats_rows(stats, rows)
     environment, headers = _stats_test_access(tmp_path)
-    with _php_server(tmp_path, environment) as base:
+    with php_server(tmp_path, environment) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
         json_status, json_headers, body = _request(f"{base}/stats.php?format=json", headers=headers)
         anonymous_status, _anonymous_headers, _anonymous = _request(f"{base}/stats.php?format=json")
@@ -2279,7 +2231,7 @@ def test_stats_derives_conversion_sources_and_pages_from_the_five_fields(
     stats.mkdir(mode=0o700)
     _write_stats_rows(stats, _stats_sample(anchor))
     environment, headers = _stats_test_access(tmp_path)
-    with _php_server(tmp_path, environment, docroot=docroot) as base:
+    with php_server(tmp_path, environment, docroot=docroot) as base:
         status, _headers, page = _request(f"{base}/stats.php?m={month}", headers=headers)
         json_status, _json_headers, body = _request(
             f"{base}/stats.php?m={month}&format=json", headers=headers
@@ -2404,7 +2356,7 @@ def test_stats_gives_every_version_its_column_and_counts_from_its_first_day(
     docroot = _temporary_docroot(tmp_path)
     (docroot / "version.json").write_text('{"version": "0.5.0"}', encoding="ascii")
     environment, headers = _stats_test_access(tmp_path)
-    with _php_server(tmp_path, environment, docroot=docroot) as base:
+    with php_server(tmp_path, environment, docroot=docroot) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
         json_status, _json_headers, body = _request(
             f"{base}/stats.php?format=json", headers=headers
@@ -2472,7 +2424,7 @@ def test_stats_findings_warn_about_a_silent_counter_and_a_missing_package(
     (docroot / "dl" / "Solidon3D-Setup-0.5.0.exe").write_bytes(b"kein echtes Paket")
     (docroot / "dl" / "Solidon3D-0.4.4-x86_64.AppImage").write_bytes(b"kein echtes Paket")
     environment, headers = _stats_test_access(tmp_path)
-    with _php_server(tmp_path, environment, docroot=docroot) as base:
+    with php_server(tmp_path, environment, docroot=docroot) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
         _json_status, _json_headers, body = _request(
             f"{base}/stats.php?format=json", headers=headers
@@ -2521,7 +2473,7 @@ def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:
         assert real.exists() == existed_before, (
             "der Test legt sein Paket im eigenen Dokumentenstamm an, nicht im echten (R33)"
         )
-        with _php_server(tmp_path, docroot=docroot) as base:
+        with php_server(tmp_path, docroot=docroot) as base:
             head_status, head_target = _without_redirects(f"{base}/count.php?f={package}", "HEAD")
             assert head_status == 302, "ein HEAD auf einen Paketverweis wird bedient"
             assert head_target.endswith(package)
@@ -2558,7 +2510,7 @@ def test_head_reaches_the_statistics_page_like_a_get(tmp_path: Path) -> None:
     access_file.write_text("<?php return ['hash' => " + repr(stored) + "];\n", encoding="utf-8")
     _chmod_private(access_file)
 
-    with _php_server(tmp_path, {"SOLIDON_STATS_ACCESS_FILE": str(access_file)}) as base:
+    with php_server(tmp_path, {"SOLIDON_STATS_ACCESS_FILE": str(access_file)}) as base:
         head_status, _head_headers, head_body = _request(f"{base}/stats.php", method="HEAD")
         get_status, get_headers, get_body = _request(f"{base}/stats.php", method="GET")
 
@@ -2606,7 +2558,7 @@ def test_a_counter_that_stops_counting_says_so(tmp_path: Path) -> None:
     package = "Solidon3D-Setup-0.0.0-stumm.exe"
     (downloads / package).write_bytes(b"kein echtes Paket")
     try:
-        with _php_server(
+        with php_server(
             tmp_path, {"SOLIDON_STATS_DIR": str(stats)}, error_log=protokoll, docroot=docroot
         ) as base:
             status, _ziel = _without_redirects(f"{base}/count.php?f={package}", "GET")
@@ -2647,7 +2599,7 @@ def test_a_counter_pointed_into_the_document_root_says_so(tmp_path: Path) -> Non
     package = "Solidon3D-Setup-0.0.0-stamm.exe"
     (downloads / package).write_bytes(b"kein echtes Paket")
     try:
-        with _php_server(
+        with php_server(
             tmp_path, {"SOLIDON_STATS_DIR": str(verzeichnis)}, error_log=protokoll, docroot=docroot
         ) as base:
             status, _ziel = _without_redirects(f"{base}/count.php?f={package}", "GET")
@@ -2716,7 +2668,7 @@ def test_an_old_download_link_leads_to_the_current_one(tmp_path: Path) -> None:
         "Eine queryseitige datei darf die Plattform aus dem Pfad nicht ersetzen"
     )
     manifest = json.loads((ROOT / "website" / "version.json").read_text(encoding="utf-8"))
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         for name, platform in (
             ("Solidon3D-Setup-0.2.2.exe", "windows"),
             ("Solidon3D-0.2.2-x86_64.flatpak", "linux"),
@@ -2748,7 +2700,7 @@ def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None
     weder in einen Pfad noch in eine Ausgabe —, aber eine Eingabeprüfung, die
     zwei Zeichenketten für eine hält, ist keine.
     """
-    with _php_server(tmp_path) as base:
+    with php_server(tmp_path) as base:
         for name in (
             "Solidon3D-0.1.1-linux-x86_64.tar.gz",
             "Solidon3D-..%2F..%2Fetc%2Fpasswd",
@@ -2815,7 +2767,7 @@ def test_every_delivered_kind_finds_its_current_file(tmp_path: Path) -> None:
 
     for _old_name, current_name in fälle:
         (docroot / "dl" / current_name).write_bytes(b"kein echtes Paket")
-    with _php_server(tmp_path, docroot=docroot) as base:
+    with php_server(tmp_path, docroot=docroot) as base:
         for angefragt, erwartet in fälle:
             status, target = _redirect_target(base, angefragt)
             assert status == 302, f"{angefragt}: {status}"
@@ -2885,7 +2837,7 @@ def test_an_attachment_that_php_rejected_is_not_sent_as_a_success(tmp_path: Path
         f"--{boundary}--\r\n"
     ).encode()
 
-    with _php_server(tmp_path, prepend=prepend, ini={"upload_max_filesize": "1K"}) as base:
+    with php_server(tmp_path, prepend=prepend, ini={"upload_max_filesize": "1K"}) as base:
         status, _headers, text = _request(
             f"{base}/support.php",
             method="POST",
@@ -2938,7 +2890,7 @@ def test_a_lost_upload_is_rejected_before_the_support_mail(
         "vollständiger Inhalt\r\n"
         f"--{boundary}--\r\n"
     ).encode()
-    with _php_server(tmp_path, prepend=prepend, extensions=("mbstring",)) as base:
+    with php_server(tmp_path, prepend=prepend, extensions=("mbstring",)) as base:
         status, _headers, text = _request(
             f"{base}/support.php",
             method="POST",
@@ -3067,7 +3019,7 @@ def test_activation_configuration_has_private_diagnostics(
         _chmod_private(path)
     log = tmp_path / "private-errors.log"
     _chmod_private(tmp_path)
-    with _php_server(
+    with php_server(
         tmp_path,
         {"SOLIDON_ACTIVATION_SEED_FILE": "relative.seed" if case == "relative" else str(path)},
         error_log=log,
@@ -3105,7 +3057,7 @@ def test_stats_configuration_has_private_diagnostics(
         _chmod_private(path)
     log = tmp_path / "private-errors.log"
     _chmod_private(tmp_path)
-    with _php_server(tmp_path, {"SOLIDON_STATS_ACCESS_FILE": str(path)}, error_log=log) as base:
+    with php_server(tmp_path, {"SOLIDON_STATS_ACCESS_FILE": str(path)}, error_log=log) as base:
         status, _headers, body = _request(f"{base}/stats.php")
     assert status == 503
     assert body == "Diese Seite ist vorübergehend nicht verfügbar.\n"
@@ -3123,7 +3075,7 @@ def test_activation_burst_limits_have_distinct_codes(tmp_path: Path, scope: str)
         state_file.write_text(json.dumps({"issue:global": [int(time.time())] * 3000}))
         _chmod_private(state_file)
     headers = {"Content-Type": "application/json"}
-    with _php_server(tmp_path, extensions=("sodium", "pdo_sqlite")) as base:
+    with php_server(tmp_path, extensions=("sodium", "pdo_sqlite")) as base:
         if scope == "client":
             for _attempt in range(30):
                 status, _, _ = _request(

@@ -39,11 +39,10 @@ def window(qt_app: QApplication) -> MainWindow:
 @pytest.fixture
 def exact_body(window: MainWindow) -> str:
     """Ein unvernetzter Quader für die tatsächlichen Konvertierungswege."""
-    from app.core.brep.kernel import available
     from app.core.scene.history import OperationDraft
+    from tests.helpers import exact_kernel
 
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
     assert window.session.apply(
         "Quader",
         [OperationDraft("create_brep_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],

@@ -1732,7 +1732,7 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
     from app.core import activation
     from app.core.errors import LicenceRequired
     from app.ui import main_window
-    from tests.test_licence_boundary import _license, _lock
+    from tests.helpers import set_test_license
 
     target = tmp_path / "rib.scad"
     target.write_bytes(b"existing-output")
@@ -1742,7 +1742,7 @@ def test_the_catalog_scad_export_obeys_the_export_boundary(
         main_window.QFileDialog, "getSaveFileName", lambda *_args: (str(target), "")
     )
     monkeypatch.setattr(main_window, "show_error", lambda error, _parent: errors.append(error))
-    (_license if unlocked else _lock)(monkeypatch)
+    set_test_license(monkeypatch, active=unlocked)
     host = SimpleNamespace(_current_part_values=lambda spec: spec.params(length=30))
     try:
         main_window.MainWindow._write_part_scad(host, catalog, "rib")

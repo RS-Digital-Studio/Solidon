@@ -30,6 +30,7 @@ from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Document, OpContext, Profile, Scene, SceneObject, Source
 from app.core.units import EPS_GEOM
+from tests.helpers import exact_kernel
 from tests.helpers import run_operation as run
 
 SVG = (
@@ -2059,10 +2060,8 @@ def test_text_on_an_exact_body_stays_exact_and_follows_the_curves(
     Glyphenkurven mal die Tiefe (Sollwert aus Green, unabhängig vom
     Prüfling), auf 10⁻⁹ — ein Vieleck träfe das nicht: „Oo8" hat nur Kurven.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    from app.core.brep import edit, step
+    exact_kernel()
+    from app.core.brep import edit, kernel, step
     from app.core.brep.features import features_of
 
     box = edit.box(40.0, 20.0, 4.0)
@@ -2091,10 +2090,8 @@ def test_exact_text_on_both_sides_stays_exact(profile: Profile) -> None:
     4 mm dicken Platte trägt denselben Text, der Körper wird 5,2 mm hoch und
     bleibt ein exakter Körper aus einem Stück.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
-    from app.core.brep import edit
+    exact_kernel()
+    from app.core.brep import edit, kernel
     from app.core.brep.features import features_of
 
     box = edit.box(40.0, 20.0, 4.0)
@@ -2115,9 +2112,8 @@ def test_exact_text_on_both_sides_stays_exact(profile: Profile) -> None:
 
 def test_exact_text_with_its_own_filament_keeps_the_slot_on_its_faces(profile: Profile) -> None:
     """Erhabene Schrift in einem eigenen Filament: die Buchstabenflächen tragen den Slot."""
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -2151,9 +2147,8 @@ def test_exact_engraved_text_carries_its_slot_in_its_walls_and_floor(profile: Pr
     *Filament* stand wieder ohne Wirkung da — schlechter als vorher, denn bis
     dahin wurde ein exakter Körper vernetzt und bekam die Rillen gefärbt.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -2191,9 +2186,8 @@ def test_exact_letters_fill_overlapping_strokes_like_the_font(font: str, text: s
     von 0,02 mm über dicht abgetasteten Kurven (64 Punkte je Kurve), gezählt
     nach der Umlaufzahl — unabhängig vom Prüfling, auf 10⁻³.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
-    if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
+
     import shapely
     from matplotlib.path import Path as MplPath
     from matplotlib.textpath import TextPath

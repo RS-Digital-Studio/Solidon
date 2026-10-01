@@ -18,6 +18,7 @@ from app.core.sketch.planes import feature_plane
 from app.core.sketch.serialize import sketch_to_text
 from app.core.sketch.shapes import rectangle
 from app.core.types import Sketch, SketchConstraint, SketchElement
+from tests.helpers import exact_kernel
 
 
 @pytest.mark.parametrize(
@@ -47,7 +48,7 @@ def test_exact_transform_operations_forward_cancellation_to_native_work(
     from app.core.scene.cancel import CancelSignal
     from app.core.types import OpContext, Scene, SceneObject
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     load_operations()
     source = SceneObject(
         id="obj_1", name="Grundkörper", mesh=edit.box(20.0, 16.0, 10.0), kind="brep"
@@ -94,7 +95,7 @@ def review_run(profile):
 @pytest.fixture
 def bore_review_body():
     """Dieselbe analytische Platte als exakter Körper oder als importierbares Netz."""
-    pytest.importorskip("OCP")
+    exact_kernel()
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
     from app.core.perceive.features import detect
@@ -1228,7 +1229,7 @@ def test_p0_box_transforms_keep_six_current_faces(document, profile, kind, quali
     from app.core.scene import History, OperationDraft, evaluate
 
     if kind == "brep":
-        pytest.importorskip("OCP")
+        exact_kernel()
     load_operations()
     history = History(document)
     history.apply(
@@ -1319,7 +1320,7 @@ def test_p0_pattern_copies_keep_all_six_feature_locations(document, profile, kin
     from app.core.scene import History, OperationDraft, evaluate
 
     if kind == "brep":
-        pytest.importorskip("OCP")
+        exact_kernel()
     load_operations()
     history = History(document)
     history.apply(
@@ -1698,7 +1699,7 @@ def test_p21_exact_round_selection_survives_retessellation(
     from app.core.scene.cache import ResultCache
     from app.core.scene.project import ProjectSources, load, new_project, save
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     load_operations()
     project = new_project(profile.printer.id, profile.material.id)
     history = History(project.document)
@@ -1782,7 +1783,7 @@ def test_p02_split_conversion_names_both_descendants(document, profile):
     from app.core.scene import OperationDraft, evaluate
     from app.core.scene.cache import ResultCache
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = _p21_boolean_history(document, ("brep", "brep"))
     history.change_params(document.ops[1].id, {"x": 100.0})
     history.apply(
@@ -1867,7 +1868,7 @@ def test_p21_boolean_kind_matrix(
     from app.core.scene import OperationDraft, evaluate
     from app.core.scene.cache import ResultCache
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = _p21_boolean_history(document, kinds)
     inputs = ("obj_2", "obj_1") if reverse else ("obj_1", "obj_2")
     history.apply("Boolesche Änderung", [OperationDraft(op=op, inputs=inputs)])
@@ -1907,7 +1908,7 @@ def test_p21_boolean_third_input_changes_the_result(
     from app.core.brep.kernel import Solid
     from app.core.scene import OperationDraft, evaluate
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = _p21_boolean_history(document, kinds, third)
     history.apply("Drei Körper", [OperationDraft(op=op, inputs=("obj_1", "obj_2", "obj_3"))])
     result = evaluate(document, profile, quality="fine")
@@ -1928,7 +1929,7 @@ def test_p21_blended_union_states_and_measures_its_raster(document, profile, kin
     """Der vierte Boolesche Weg bleibt als Rasterverfahren kenntlich und verändert die Kehle."""
     from app.core.scene import OperationDraft, evaluate
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = _p21_boolean_history(document, kinds)
     volumes = []
     for radius in (0.0, 4.0):
@@ -1975,7 +1976,7 @@ def test_p02_boolean_conversion_names_every_exact_input(document, profile, kinds
     from app.core.scene import OperationDraft, evaluate
     from app.core.scene.cache import ResultCache
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = _p21_boolean_history(document, kinds)
     history.apply("Boolesche Änderung", [OperationDraft(op=op, inputs=("obj_1", "obj_2"))])
     cache = ResultCache()
@@ -2012,7 +2013,7 @@ def test_p21_empty_boolean_preserves_both_inputs(document, profile, kinds, op):
     """Leere Ergebnisse halten mit Handlungsvorschlag an und verbrauchen keinen Körper."""
     from app.core.scene import OperationDraft, evaluate
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = _p21_boolean_history(document, kinds)
     history.change_params(
         document.ops[1].id,
@@ -2047,7 +2048,7 @@ def test_p02_explicit_conversion_has_one_complete_notice(document, profile):
     from app.core.scene import History, OperationDraft, evaluate
     from app.core.scene.cache import ResultCache
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     history = History(document)
     history.apply(
         "Grundkörper und Umwandlung",
@@ -2079,7 +2080,7 @@ def test_p21_an_unchanged_exact_body_keeps_a_partial_surface_feature():
     from app.core.geom.transform import moved_object
     from app.core.types import SceneObject
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     solid = box(20.0, 16.0, 10.0)
     full = next(feature for feature in features_of(solid).values() if feature.kind == "face")
     partial = dataclasses.replace(full, id="selected_region", face_indices=full.face_indices[:1])

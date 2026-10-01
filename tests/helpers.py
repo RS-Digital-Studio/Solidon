@@ -10,26 +10,30 @@ Testfunktion daneben, damit pytest die Datei nicht als Test sammelt.
 Hier liegt nur, was **keinen** Fensteraufbau braucht: Ein Helfer, der Qt
 zieht, gehört nicht in eine Datei, die auch Kerntests importieren.
 
-**Noch nicht hier:** ``test_thread_feature_ops._studded_plate``/``_tapped_plate``
-(``test_filament_on_rings_and_threads``), ``test_cache.FakeCodec``
-(``test_native_references``), ``test_features._small_faces``/
-``_stud_on_a_plate``/``_plate_with_a_chamfered_slot`` (``test_local_detection``,
-``test_round_surface_measurements``, ``test_surface_patches``),
-``test_slot_features.a_foreign_slot``, ``test_local_detection.blind_cylinder``/
-``bore_seed``, ``test_outline_dialog._until`` (Fensterdateien),
-``test_sketch.rectangle``, ``test_prepare.cube`` und
-``test_outline_profiles.SOURCE``.
+**Noch nicht hier:** ``test_cache.FakeCodec`` in der gesperrten Datei
+``test_native_references`` und ``test_slot_features.a_foreign_slot``.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import io
 import math
+import os
+import shutil
 import struct
-from collections.abc import Callable, Sequence
+import subprocess
+import time
+import zipfile
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from datetime import date
+from functools import cache
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 import numpy as np
 import pytest
@@ -40,33 +44,66 @@ from app.core.scene import History, OperationDraft
 from app.core.scene.project import Project, new_project
 from app.core.types import (
     BoundingBox,
+    Document,
     Feature,
     Finding,
+    Operation,
     OpResult,
     Parameter,
     Profile,
     Quality,
     SceneObject,
     Sketch,
+    SketchConstraint,
+    SketchElement,
     Source,
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
+#: Profil (Radius, Höhe) um die Z-Achse in einer Platte 44 mal 24 mal 12 mit
+#: einer Bohrung Ø 6, die sich unten und oben weitet.
+BOTH_ENDS: dict[str, list[tuple[float, float]]] = {
+    "Zylindersenkung und Fase": [
+        (0, 0),
+        (5, 0),
+        (5, 6),
+        (3, 6),
+        (3, 11),
+        (4, 12),
+        (0, 12),
+        (0, 0),
+    ],
+    "Fase beidseitig": [(0, 0), (4, 0), (3, 1), (3, 11), (4, 12), (0, 12), (0, 0)],
+    "Stufen beidseitig": [
+        (0, 0),
+        (5, 0),
+        (5, 3),
+        (3, 3),
+        (3, 9),
+        (4.5, 9),
+        (4.5, 12),
+        (0, 12),
+        (0, 0),
+    ],
+}
+
 
 def exact_kernel() -> Any:
     """Überspringt ohne OpenCASCADE und gibt sonst ``app.core.brep.edit`` zurück.
 
-    Der Wächter steht **vor** jedem ``OCP``-Import einer Testfunktion: Ein
-    Quellklon ohne das Extra ``brep`` bekam sonst einen ``ImportError`` statt
-    eines Skips — und in der CI, die das Extra in jedem Lauf installiert,
-    macht ``tests/conftest.py`` aus dem fehlenden Kern einen Fehler, damit
-    sich die zweiunddreißig Dateien des exakten Kerns dort nie still
-    verabschieden.
+    Der Wächter steht **vor** jedem ``OCP``-Import, auch am Modulanfang: Ein
+    Quellklon ohne das Extra ``brep`` überspringt den Test. Das eigene
+    Kernelmodul wird regulär importiert, damit ein Importfehler darin nicht
+    wie ein fehlendes optionales Paket als Skip aussieht. In der CI, die das
+    Extra in jedem Lauf installiert, macht ``tests/conftest.py`` aus dem
+    fehlenden Kern einen Fehler, damit sich die Dateien des exakten Kerns
+    dort nie still verabschieden.
     """
-    kernel = pytest.importorskip("app.core.brep.kernel")
+    from app.core.brep import kernel
+
     if not kernel.available():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht", allow_module_level=True)
     from app.core.brep import edit
 
     return edit
@@ -493,6 +530,41 @@ def at_the_start_rule(profile: Profile) -> Profile:
     return dataclasses.replace(profile, printer=printer)
 
 
+# --- Renderer, der Kamerarückrufe sichtbar macht -----------------------------------
+
+
+class NavigationLog:
+    """Zeichnet jeden Navigationsrückruf auf — so viel, wie der Test fragen will."""
+
+    def __init__(self, *, sculpting: bool = False, body: bool = False) -> None:
+        self.calls: list[tuple[Any, ...]] = []
+        self.sculpting = sculpting
+        self.body = body
+
+    def callbacks(self) -> Any:
+        from app.ui.render.navigator import NavigatorCallbacks
+
+        return NavigatorCallbacks(
+            on_context=lambda x, y: self.calls.append(("context", x, y)),
+            on_pick=lambda x, y, add: self.calls.append(("pick", x, y, add)),
+            on_cursor=lambda role: self.calls.append(("cursor", role)),
+            on_paint=lambda x, y, fresh: self.calls.append(("paint", x, y, fresh)),
+            is_sculpting=lambda: self.sculpting,
+            on_body_drag=self._body_drag,
+            on_rotate_start=lambda: self.calls.append(("rotate_start",)),
+            on_camera=lambda: self.calls.append(("camera",)),
+            on_tilt=lambda step: self.calls.append(("tilt", step)),
+            on_end=lambda: self.calls.append(("end",)),
+        )
+
+    def _body_drag(self, phase: str, x: int, y: int) -> bool:
+        self.calls.append(("body", phase, x, y))
+        return self.body
+
+    def kinds(self) -> list[str]:
+        return [str(call[0]) for call in self.calls]
+
+
 # --- Abbruch, Teilwrite und angehaltene Läufe ---------------------------------------
 
 
@@ -706,3 +778,889 @@ def evaluated_operation(
         previous_bounds=source.mesh.bounds,
     )
     return changed, findings
+
+
+# --- Geteilte Prüfkörper und kleine Geometriehelfer ----------------------------------
+
+SOURCE = b"""<svg xmlns=\"http://www.w3.org/2000/svg\">
+<g transform=\"translate(7,11)\">
+<path d=\"M0 0 H20 V10 H0 Z M5 2 H15 V8 H5 Z\"/>
+<rect x=\"40\" y=\"0\" width=\"8\" height=\"6\"/>
+</g></svg>"""
+
+
+def cube_mesh() -> MeshData:
+    """Der saubere Würfel aus dem Korpus, in Millimetern."""
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def cube(size: float, at: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> trimesh.Trimesh:
+    """Ein verschiebbarer Würfel für 3MF-Baugruppen."""
+    body = trimesh.creation.box(extents=(size, size, size))
+    body.apply_translation(at)
+    return body
+
+
+def cube_surface(
+    edge: float = 20.0,
+    origin: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> tuple[np.ndarray, np.ndarray]:
+    """Ein Würfel als Eckpunkte und Dreiecke für den Renderer ohne Fenster."""
+    base = np.array(
+        [
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 1, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 1, 1],
+        ],
+        dtype=float,
+    )
+    faces = np.array(
+        [
+            [0, 2, 1],
+            [0, 3, 2],
+            [4, 5, 6],
+            [4, 6, 7],
+            [0, 1, 5],
+            [0, 5, 4],
+            [1, 2, 6],
+            [1, 6, 5],
+            [2, 3, 7],
+            [2, 7, 6],
+            [3, 0, 4],
+            [3, 4, 7],
+        ]
+    )
+    return base * edge + np.asarray(origin, dtype=float), faces
+
+
+def rectangle(width_value: str = "@width", height_value: str = "@height") -> Sketch:
+    """Eine leicht verzogene Rechteckskizze mit Maßen aus Projektparametern."""
+    return Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.3, -0.2), (39.5, 0.4))),
+            SketchElement("line", ((40.2, 0.1), (39.8, 19.7))),
+            SketchElement("line", ((40.1, 20.3), (0.2, 19.8))),
+            SketchElement("line", ((-0.3, 20.1), (0.1, 0.2))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("horizontal", (0, 1)),
+            SketchConstraint("vertical", (2, 3)),
+            SketchConstraint("horizontal", (4, 5)),
+            SketchConstraint("vertical", (6, 7)),
+            SketchConstraint("distance", (0, 1), width_value),
+            SketchConstraint("distance", (2, 3), height_value),
+        ),
+    )
+
+
+def inside(mesh: MeshData, points: Sequence[tuple[float, float, float]]) -> np.ndarray:
+    """Prüft Innenpunkte über die Summe orientierter Raumwinkel, ohne ``rtree``."""
+    inside_points = []
+    for point in points:
+        directions = np.asarray(mesh.raw.triangles) - np.asarray(point)
+        directions /= np.linalg.norm(directions, axis=2)[:, :, None]
+        first, second, third = directions.transpose(1, 0, 2)
+        numerator = np.einsum("ij,ij->i", first, np.cross(second, third))
+        denominator = (
+            1.0
+            + np.einsum("ij,ij->i", first, second)
+            + np.einsum("ij,ij->i", second, third)
+            + np.einsum("ij,ij->i", third, first)
+        )
+        angle = 2.0 * np.arctan2(numerator, denominator).sum()
+        inside_points.append(abs(angle) > 2.0 * np.pi)
+    return np.asarray(inside_points)
+
+
+def blind_cylinder(*, dense: bool = False) -> MeshData:
+    """Sackloch-Prüfkörper aus ``local_detection.json``, ohne Booleschen Kern."""
+    import json
+
+    spec = json.loads(
+        (Path(__file__).parent / "data" / "local_detection.json").read_text(encoding="utf-8")
+    )
+    count = spec["sections"] if dense else 64
+    levels = spec["outer_levels"] if dense else 2
+    angles = np.arange(count) * (2 * np.pi / count)
+    radial = np.column_stack((np.cos(angles), np.sin(angles)))
+    outer = np.empty((levels + 1, count, 3))
+    outer[:, :, :2] = radial * spec["outer_radius"]
+    outer[:, :, 2] = np.linspace(0, spec["height"], levels + 1)[:, None]
+    top = np.column_stack((radial * spec["bore_radius"], np.full(count, spec["height"])))
+    floor_z = spec["height"] - spec["bore_depth"]
+    floor = np.column_stack((radial * spec["bore_radius"], np.full(count, floor_z)))
+    vertices = np.vstack((outer.reshape(-1, 3), top, floor, [[0, 0, 0], [0, 0, floor_z]]))
+    ti, bi, ci = (levels + 1) * count, (levels + 2) * count, (levels + 3) * count
+    k, following = np.arange(count), np.roll(np.arange(count), -1)
+    lower = np.arange(levels)[:, None] * count + k
+    after = np.arange(levels)[:, None] * count + following
+    faces = np.vstack(
+        (
+            np.stack((lower, after, lower + count), axis=-1).reshape(-1, 3),
+            np.stack((after, after + count, lower + count), axis=-1).reshape(-1, 3),
+            np.column_stack((levels * count + k, levels * count + following, ti + k)),
+            np.column_stack((levels * count + following, ti + following, ti + k)),
+            np.column_stack((following, k, np.full(count, ci))),
+            np.column_stack((ti + k, ti + following, bi + k)),
+            np.column_stack((ti + following, bi + following, bi + k)),
+            np.column_stack((bi + k, bi + following, np.full(count, ci + 1))),
+        )
+    )
+    return MeshData.of(trimesh.Trimesh(vertices, faces, process=False))
+
+
+def bore_seed(mesh: MeshData) -> tuple[int, tuple[float, ...], tuple[float, ...]]:
+    """Wählt eine echte Dreiecksmitte auf der nach innen gerichteten Bohrungswand."""
+    triangles = np.asarray(mesh.raw.triangles)
+    radial = np.linalg.norm(triangles[:, :, :2], axis=2)
+    face = int(
+        np.flatnonzero(
+            np.all(np.isclose(radial, 3), axis=1)
+            & (triangles[:, :, 2].max(axis=1) > 19)
+            & (triangles[:, :, 2].min(axis=1) < 16)
+        )[0]
+    )
+    return (
+        face,
+        tuple(float(value) for value in mesh.raw.triangles_center[face]),
+        tuple(float(value) for value in mesh.raw.face_normals[face]),
+    )
+
+
+def bore_plate(
+    kernel: str,
+    outline: Sequence[tuple[float, float]],
+    *,
+    box: tuple[float, float, float] = (60.0, 40.0, 10.0),
+) -> SceneObject:
+    """Baut eine Platte mit dem genannten Bohrungsprofil an beiden Kernarten."""
+    edit = exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+    from app.core.sketch.planes import frame_of
+
+    solid = edit.bore_profile(edit.box(*box), list(outline), frame_of((0, 0, 1), (0, 0, 0)))
+    if kernel == "brep":
+        return SceneObject("plate", "Platte", solid, kind="brep", features=features_of(solid))
+    mesh = as_mesh_data(solid)
+    return SceneObject("plate", "Platte", mesh, features=detect(mesh))
+
+
+def blind_bore(kernel: str) -> SceneObject:
+    """Platte mit Sackloch Ø 6 und 6 mm Tiefe, Boden bei z = 4."""
+    return bore_plate(kernel, [(0, 4), (3, 4), (3, 10), (0, 10), (0, 4)])
+
+
+def two_bores(
+    spacing: float, *, upper: bool = False
+) -> tuple[MeshData, dict[str, Feature], Feature]:
+    """Zwei bekannte Sacklöcher, auf Wunsch ohne gemeinsame Tiefenlage."""
+    from app.core.geom import lathe
+    from app.core.geom.boolean import boolean
+    from app.core.perceive.features import detect
+
+    stock = trimesh.creation.box(extents=(36.0, 24.0, 24.0))
+    stock.apply_translation((6.0, 0.0, 12.0))
+    first = lathe.cylinder(radius=3.0, height=8.0, sections=96)
+    first.apply_translation((0.0, 0.0, 4.0))
+    second = lathe.cylinder(radius=3.0, height=8.0, sections=96)
+    second.apply_translation((spacing, 0.0, 20.0 if upper else 4.0))
+    mesh = boolean(
+        "difference", [MeshData.of(stock), MeshData.of(first), MeshData.of(second)], quality="fine"
+    ).mesh
+    features = detect(mesh)
+    hole = min(
+        (feature for feature in features.values() if feature.kind == "hole"),
+        key=lambda feature: abs(float(feature.params["centre"][0])),
+    )
+    return mesh, features, hole
+
+
+def surface_mesh(name: str) -> trimesh.Trimesh:
+    """Lädt eine Testfläche mit verbundenen Ecken aus dem Mesh-Korpus."""
+    from app.core.geom.mesh import read_mesh
+
+    body = read_mesh((MESHES / name).read_bytes(), ".stl").raw
+    body.merge_vertices()
+    return body
+
+
+def round_surface(kind: str) -> trimesh.Trimesh:
+    """Baut eine Kugel-, Torus- oder Kegelfläche mit festgelegten Maßen."""
+    if kind == "sphere":
+        return trimesh.creation.icosphere(subdivisions=2, radius=7.234567)
+    if kind == "torus":
+        return trimesh.creation.torus(
+            major_radius=17.125, minor_radius=3.234567, major_sections=48, minor_sections=24
+        )
+    angles = np.linspace(0.0, math.tau, 48, endpoint=False)
+    heights = (4.0, 12.0)
+    vertices = np.asarray(
+        [
+            (
+                z * math.tan(math.pi / 6) * math.cos(angle),
+                z * math.tan(math.pi / 6) * math.sin(angle),
+                z,
+            )
+            for z in heights
+            for angle in angles
+        ]
+    )
+    faces = []
+    for lower in range(len(angles)):
+        following = (lower + 1) % len(angles)
+        faces.extend(
+            (
+                (lower, following, following + len(angles)),
+                (lower, following + len(angles), lower + len(angles)),
+            )
+        )
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+
+
+def partial_cone(angular_sections: int, height_sections: int, *, reverse: bool) -> trimesh.Trimesh:
+    """45°-Teilbogen eines 60°-Kegels ohne Deckflächen."""
+    angles = np.linspace(-math.radians(22.5), math.radians(22.5), angular_sections + 1)
+    heights = np.linspace(5.0, 15.0, height_sections + 1)
+    vertices = []
+    for height in heights:
+        radius = height * math.tan(math.radians(30.0))
+        vertices.extend(
+            (radius * math.cos(angle), radius * math.sin(angle), height) for angle in angles
+        )
+    faces: list[tuple[int, int, int]] = []
+    row = len(angles)
+    for height_index in range(height_sections):
+        for angle_index in range(angular_sections):
+            lower = height_index * row + angle_index
+            if (height_index + angle_index) % 2:
+                faces.extend(
+                    [(lower, lower + row, lower + 1), (lower + 1, lower + row, lower + row + 1)]
+                )
+            else:
+                faces.extend(
+                    [(lower, lower + row, lower + row + 1), (lower, lower + row + 1, lower + 1)]
+                )
+    if reverse:
+        faces = [(first, third, second) for first, second, third in faces]
+    return trimesh.Trimesh(vertices=np.asarray(vertices), faces=faces, process=False)
+
+
+def partial_torus(major_sections: int, minor_sections: int) -> tuple[trimesh.Trimesh, list[int]]:
+    """Echter Torus mit begrenztem Bogen in beiden Richtungen."""
+    ring = trimesh.creation.torus(
+        major_radius=20.0,
+        minor_radius=5.0,
+        major_sections=major_sections,
+        minor_sections=minor_sections,
+    )
+    centres = np.asarray(ring.triangles_center, dtype=float)
+    major_angle = np.arctan2(centres[:, 1], centres[:, 0])
+    radial = np.linalg.norm(centres[:, :2], axis=1)
+    minor_angle = np.arctan2(centres[:, 2], radial - 20.0)
+    patch = np.flatnonzero(
+        (np.abs(major_angle) <= math.radians(45.0)) & (np.abs(minor_angle) <= math.radians(60.0))
+    )
+    return ring, [int(index) for index in patch]
+
+
+def stud_on_a_plate() -> trimesh.Trimesh:
+    """Netzplatte 40 × 30 × 4 mit einem 1-mm-Nocken."""
+    base = trimesh.creation.box(extents=(40.0, 30.0, 4.0))
+    base.apply_translation((0.0, 0.0, 2.0))
+    post = trimesh.creation.box(extents=(1.0, 1.0, 2.0))
+    post.apply_translation((0.0, 0.0, 4.0))
+    return trimesh.boolean.union([base, post])
+
+
+def small_faces(found: dict[str, Feature]) -> dict[tuple[float, float, float], Feature]:
+    """Nennt kleine ebene Flächen nach ihrem Mittelpunkt."""
+    from app.core.perceive import features as features_module
+
+    return {
+        tuple(round(float(value), 3) for value in entry.params["centre"]): entry
+        for entry in found.values()
+        if entry.kind == "face" and float(entry.params["area"]) < features_module.MIN_FACE_AREA
+    }
+
+
+STUD_CENTRES = {
+    (0.0, 0.0, 5.0),
+    (0.5, 0.0, 4.5),
+    (-0.5, 0.0, 4.5),
+    (0.0, 0.5, 4.5),
+    (0.0, -0.5, 4.5),
+}
+
+
+def plate_with_a_chamfered_slot() -> MeshData:
+    """Platte mit einem Langloch Ø 6 × 26 und gefaster Mündung."""
+    from shapely.geometry import LineString
+
+    from app.core.geom.boolean import boolean
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
+    outline = LineString([(-10.0, 0.0), (10.0, 0.0)]).buffer(3.0, quad_segs=16)
+    cutter = trimesh.creation.extrude_polygon(outline, height=20.0)
+    cutter.apply_translation((0.0, 0.0, -10.0))
+    lower = np.asarray(outline.exterior.coords, dtype=float)
+    upper = np.asarray(outline.buffer(1.5, quad_segs=16).exterior.coords, dtype=float)
+    chamfer = trimesh.convex.convex_hull(
+        np.vstack(
+            (
+                np.column_stack((lower, np.full(len(lower), 3.0))),
+                np.column_stack((upper, np.full(len(upper), 4.5))),
+            )
+        )
+    )
+    body = boolean("difference", [plate, MeshData.of(cutter)]).mesh
+    return boolean("difference", [body, MeshData.of(chamfer)]).mesh
+
+
+def countersunk_plate(profile: Profile) -> SceneObject:
+    """Exakte Platte mit durchgehender Bohrung Ø 6 und Senkung Ø 12."""
+    edit = exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.geom.prepare import drill_outline
+    from app.core.sketch.planes import frame_of
+
+    outline = drill_outline(
+        diameter=6.0,
+        depth=12.0,
+        profile=profile,
+        compensate=False,
+        widening_diameter=12.0,
+        widening_depth=0.0,
+        transition_angle=90.0,
+    )
+    body = edit.bore_profile(
+        edit.box(60.0, 40.0, 10.0), outline, frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0))
+    )
+    cavity = math.pi * 3.0**2 * 7.0 + math.pi * 3.0 * (36.0 + 18.0 + 9.0) / 3.0
+    assert body.volume == pytest.approx(24000.0 - cavity, rel=1e-9)
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind="brep", features=features_of(body)
+    )
+    kinds = sorted(feature.kind for feature in entry.features.values())
+    assert kinds == ["cone"] + ["face"] * 6 + ["hole"], kinds
+    return entry
+
+
+def material_plate(kind: str) -> SceneObject:
+    """Platte mit einem Stift, Halbkugel oder Kegelstumpf als Materialmerkmal."""
+    edit = exact_kernel()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCone, BRepPrimAPI_MakeSphere
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    plate = edit.box(60.0, 40.0, 10.0)
+    if kind == "pin":
+        part = edit.moved(edit.cylinder(6.0, 8.0), (0.0, 0.0, 10.0))
+        added = math.pi * 3.0**2 * 8.0
+    elif kind == "sphere":
+        part = Solid(BRepPrimAPI_MakeSphere(gp_Pnt(20.0, 0.0, 10.0), 4.0).Shape())
+        added = 2.0 * math.pi * 4.0**3 / 3.0
+    else:
+        part = Solid(
+            BRepPrimAPI_MakeCone(
+                gp_Ax2(gp_Pnt(-20.0, 0.0, 10.0), gp_Dir(0.0, 0.0, 1.0)), 5.0, 2.0, 6.0
+            ).Shape()
+        )
+        added = math.pi * 6.0 * (25.0 + 10.0 + 4.0) / 3.0
+    body = edit.boolean("union", [plate, part])
+    assert body.volume == pytest.approx(24000.0 + added, rel=1e-9)
+    entry = SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind="brep", features=features_of(body)
+    )
+    assert [feature.kind for feature in entry.features.values() if feature.kind != "face"] == [kind]
+    return entry
+
+
+def narrowest_hole(source: SceneObject) -> Feature:
+    """Die schmalste Bohrung einer Kette oder deren Senkung."""
+    holes = [feature for feature in source.features.values() if feature.kind == "hole"]
+    if not holes:
+        holes = [feature for feature in source.features.values() if feature.kind == "cone"]
+    return min(holes, key=lambda feature: float(feature.params["diameter"]))
+
+
+def widened_bore(
+    kernel: str, outline: Sequence[tuple[float, float]], *, bottom: str = "eben"
+) -> SceneObject:
+    """Platte mit einer Bohrung am Ursprung und ebener oder gekrümmter Unterseite."""
+    edit = exact_kernel()
+    from app.core.brep.features import features_of
+    from app.core.perceive.features import detect
+    from app.core.sketch.planes import frame_of
+
+    plate = edit.box(44.0, 24.0, 12.0)
+    if bottom != "eben":
+        axis_height = -39.5 if bottom == "Rinne R 40" else 40.0
+        roll = edit.revolved_bore_tool(
+            [(0.0, -30.0), (40.0, -30.0), (40.0, 30.0), (0.0, 30.0), (0.0, -30.0)],
+            frame_of((1.0, 0.0, 0.0), (0.0, 0.0, axis_height)),
+        )
+        if bottom == "Rinne R 40":
+            plate = edit.unified(edit.boolean("difference", [plate, roll]))
+        elif bottom == "Zylinder R 40":
+            plate = edit.unified(edit.boolean("intersection", [plate, roll]))
+        else:
+            flat = edit.moved(edit.box(60.0, 12.0, 20.0), (0.0, -6.0, 0.0))
+            support = edit.unified(edit.boolean("union", [roll, flat]))
+            plate = edit.unified(edit.boolean("intersection", [plate, support]))
+    solid = edit.bore_profile(plate, list(outline), frame_of((0, 0, 1), (-8.0, 0, 0)))
+    if kernel == "brep":
+        return SceneObject("plate", "Platte", solid, kind="brep", features=features_of(solid))
+    mesh = as_mesh_data(solid)
+    return SceneObject("plate", "Platte", mesh, features=detect(mesh))
+
+
+def cavity_under(bottom: str, outline: Sequence[tuple[float, float]]) -> float:
+    """Berechnet das Hohlraumvolumen oberhalb einer gekrümmten Unterseite."""
+    from itertools import pairwise
+
+    turn = np.linspace(-np.pi / 2.0, np.pi / 2.0, 20001)
+    width = 50.0 * np.cos(turn) ** 2
+    y = 5.0 * np.sin(turn)
+    arc = np.sqrt(1600.0 - y * y)
+    if bottom == "Zylinder R 40":
+        raised = 40.0 - arc
+    elif bottom == "Rinne R 40":
+        raised = np.maximum(arc - 39.5, 0.0)
+    elif bottom == "Naht Ebene-Zylinder":
+        raised = np.where(y > 0.0, 40.0 - arc, 0.0)
+    else:
+        raised = np.zeros_like(y)
+    profile_volume = sum(
+        np.pi * (z1 - z0) * (r0 * r0 + r0 * r1 + r1 * r1) / 3.0
+        for (r0, z0), (r1, z1) in pairwise(outline[1:-1])
+    )
+    return profile_volume - float(np.trapezoid(width * raised, turn))
+
+
+def sloped_slot_plate(*, chamfer: bool, slotted: bool = True) -> Any:
+    """Platte mit um 4° geneigter Unterseite und optional gefastem Langloch."""
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.geom.transform import composed, rotation, translation
+
+    plate = edit.box(40.0, 40.0, 6.0)
+    below = edit.moved(edit.box(120.0, 120.0, 30.0), (0.0, 0.0, -30.0))
+    matrix = np.asarray(composed(translation((0.0, 0.0, 2.0)), rotation("x", 4.0)))
+    below = edit.transformed(
+        below,
+        tuple(tuple(float(value) for value in row) for row in matrix),
+    )
+    plate = edit.boolean("difference", [plate, below])
+    if not slotted:
+        return plate
+    plate = edit.slot_bore(
+        plate,
+        position=(0.0, 0.0, 3.0),
+        direction=(0.0, 0.0, 1.0),
+        diameter=6.0,
+        depth=12.0,
+        length=20.0,
+        angle_deg=90.0,
+        overlap=0.0,
+    )
+    if not chamfer:
+        return plate
+    rims = [
+        entry
+        for entry in edit.edges_of(plate)
+        if not entry.upright
+        and all(
+            abs(point[0]) <= 3.01 and abs(point[1]) <= 13.01 for point in edit.edge_points(entry)
+        )
+    ]
+    return edit.chamfer(plate, 0.75, selected_edges=edit.native_edge_indices(plate, rims))
+
+
+def seal_cube(kind: str = "mesh") -> SceneObject:
+    """Baut den Trägerkörper der Dichtungsprüfungen an beiden Kernarten."""
+    if kind == "brep":
+        edit = exact_kernel()
+        from app.core.brep import profiles
+        from app.core.sketch import shapes
+        from app.core.sketch.profile import profile_of
+        from app.core.sketch.solver import solve_sketch
+
+        body = edit.moved(
+            profiles.extrude(profile_of(solve_sketch(shapes.rectangle(20, 20))), 20),
+            (0, 0, -10),
+        )
+    else:
+        body = MeshData.of(trimesh.load_mesh(MESHES / "cube_clean.stl"))
+    return SceneObject("body", "Träger", body, kind=kind)
+
+
+def primitive_operation(
+    name: str, values: dict[str, Any], profile: Profile, quality: Quality = "fine"
+) -> OpResult:
+    """Fährt eine registrierte Grundkörper-Op ohne Dokument oder Verlauf."""
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    load_operations()
+    spec = REGISTRY.get(name)
+    return spec.fn(
+        OpContext(
+            scene=Scene(),
+            inputs=[],
+            params=spec.params(**values),
+            profile=profile,
+            quality=quality,
+            seed=None,
+            progress=lambda _fraction, _text: None,
+            ask=lambda _question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def thread_volume(diameter: float, pitch: float, length: float, *, internal: bool) -> float:
+    """Analytisches Volumen eines Bausteingewindes nach Pappus."""
+    from itertools import pairwise
+
+    from app.core.knowledge.parts import shapes
+
+    profile = list(shapes.ridge_profile(diameter, pitch, internal=internal))
+    root = profile[0][0]
+    corners = [*profile, profile[0]]
+    area = 0.0
+    moment = 0.0
+    for (r_a, z_a), (r_b, z_b) in pairwise(corners):
+        cross = r_a * z_b - r_b * z_a
+        area += cross
+        moment += (r_a + r_b) * cross
+    area, moment = abs(area) / 2.0, abs(moment) / 6.0
+    return math.pi * root**2 * length + 2.0 * math.pi * moment * (length / pitch)
+
+
+@cache
+def studded_thread_plate(kind: str, handedness: str = "right") -> SceneObject:
+    """Baut eine Platte mit aufgesetztem M6 × 1, dessen Gang leicht einsinkt."""
+    edit = exact_kernel()
+    from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
+    from app.core.knowledge.parts import build
+    from app.core.knowledge.parts.shapes import building
+
+    plate_size = (40.0, 40.0, 10.0)
+    length = 8.0
+    bottom = plate_size[2] - BOOLEAN_OVERLAP
+    if kind == "brep":
+        with building("brep"):
+            stud = build.threaded(6.0, 1.0, length, bottom=bottom)
+        body = edit.unified(edit.boolean("union", [edit.box(*plate_size), stud]))
+    else:
+        stud = build.threaded(6.0, 1.0, length, bottom=bottom)
+        mesh_plate = as_mesh_data(edit.box(*plate_size))
+        body = boolean("union", [mesh_plate, stud], quality="fine").mesh
+    feature = Feature(
+        id="thread_1",
+        kind="thread",
+        provenance="generated",
+        params={
+            "diameter": 6.0,
+            "pitch": 1.0,
+            "handedness": handedness,
+            "centre": (0.0, 0.0, bottom + length / 2.0),
+            "axis": (0.0, 0.0, 1.0),
+            "internal": False,
+            "length": length,
+        },
+        measure_sources=dict.fromkeys(
+            ("diameter", "pitch", "centre", "axis", "length"), "parameter"
+        ),
+    )
+    return SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind=kind, features={feature.id: feature}
+    )
+
+
+@cache
+def tapped_thread_plate(kind: str) -> SceneObject:
+    """Baut eine Platte mit durchgehendem M6 × 1 Innengewinde."""
+    edit = exact_kernel()
+    from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
+    from app.core.knowledge.parts import build, shapes
+    from app.core.knowledge.parts.shapes import building
+
+    plate_size = (40.0, 40.0, 10.0)
+    diameter, pitch, length = 6.0, 1.0, plate_size[2] + 2.0 * BOOLEAN_OVERLAP
+    bore = diameter - 2.0 * pitch * shapes.RIDGE_SHARE
+    if kind == "brep":
+        with building("brep"):
+            tap = build.threaded(bore, pitch, length, internal=True, bottom=-BOOLEAN_OVERLAP)
+        body = edit.unified(edit.boolean("difference", [edit.box(*plate_size), tap]))
+    else:
+        tap = build.threaded(bore, pitch, length, internal=True, bottom=-BOOLEAN_OVERLAP)
+        mesh_plate = as_mesh_data(edit.box(*plate_size))
+        body = boolean("difference", [mesh_plate, tap], quality="fine").mesh
+    feature = Feature(
+        id="thread_1",
+        kind="thread",
+        provenance="generated",
+        params={
+            "diameter": diameter,
+            "pitch": pitch,
+            "handedness": "right",
+            "centre": (0.0, 0.0, plate_size[2] / 2.0),
+            "axis": (0.0, 0.0, 1.0),
+            "internal": True,
+            "length": plate_size[2],
+        },
+        measure_sources=dict.fromkeys(
+            ("diameter", "pitch", "centre", "axis", "length"), "parameter"
+        ),
+    )
+    return SceneObject(
+        id="obj_1", name="Platte", mesh=body, kind=kind, features={feature.id: feature}
+    )
+
+
+def mirrored_thread(solid: Any) -> Any:
+    """Spiegelt einen exakten Gewindekörper an der XZ-Ebene."""
+    edit = exact_kernel()
+    matrix = (
+        (1.0, 0.0, 0.0, 0.0),
+        (0.0, -1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    return edit.transformed(solid, matrix)
+
+
+def bash_executable() -> Path | None:
+    """Findet Bash im Suchpfad oder relativ zur tatsächlich installierten Git-Ausgabe."""
+    executable = shutil.which("bash")
+    if executable and "system32" not in Path(executable).parts[-2].lower():
+        return Path(executable)
+    git = shutil.which("git")
+    roots = [Path(git).parent.parent] if git else []
+    for variable, suffix in (("ProgramFiles", "Git"), ("LOCALAPPDATA", "Programs/Git")):
+        value = os.environ.get(variable)
+        if value:
+            roots.append(Path(value) / suffix)
+    return next(
+        (root / "bin" / "bash.exe" for root in roots if (root / "bin" / "bash.exe").is_file()),
+        None,
+    )
+
+
+def set_test_license(monkeypatch: Any, *, active: bool) -> None:
+    """Setzt den Freischaltzustand für Lizenzgrenztests."""
+    from app.core import activation
+
+    if not active:
+        monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+        return
+
+    from app.core.activation import key
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-1234",
+        holder="kaeufer@beispiel.de",
+    )
+    certificate = activation.ActivationCertificate(
+        licence_digest="test-licence",
+        device_public=b"\x01" * 32,
+        device_name="Prüfrechner",
+        activation_id="test-activation",
+        issued_on=date(2026, 8, 28),
+    )
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(licence=licence, certificate=certificate),
+    )
+
+
+@contextmanager
+def php_server(
+    tmp_path: Path,
+    extra_environment: dict[str, str] | None = None,
+    *,
+    prepend: Path | None = None,
+    error_log: Path | None = None,
+    ini: dict[str, str] | None = None,
+    docroot: Path | None = None,
+    extensions: tuple[str, ...] = (),
+) -> Iterator[str]:
+    """Startet einen isolierten lokalen PHP-Testserver ohne ausgehende E-Mail."""
+    from tests.php_probe import free_port, php_command
+
+    php = php_command(*extensions)
+    port = free_port()
+    environment = os.environ.copy()
+    environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
+    environment["SOLIDON_ACTIVATION_RATE_FILE"] = str(tmp_path / "activation-rate.json")
+    environment["SOLIDON_SUPPORT_RATE_FILE"] = str(tmp_path / "support-rate.json")
+    if extra_environment:
+        environment.update(extra_environment)
+    command = [
+        *php,
+        "-d",
+        "sendmail_path=/nonexistent/solidon-keine-post",
+        "-d",
+        "SMTP=127.0.0.1",
+        "-d",
+        "smtp_port=1",
+    ]
+    if prepend is not None:
+        command.extend(["-d", f"auto_prepend_file={prepend}"])
+    if error_log is not None:
+        command.extend(["-d", "log_errors=1", "-d", f"error_log={error_log}"])
+    for key, value in (ini or {}).items():
+        command.extend(["-d", f"{key}={value}"])
+    command.extend(["-S", f"127.0.0.1:{port}", "-t", str(docroot or "website")])
+    root = Path(__file__).parent.parent
+    process = subprocess.Popen(
+        command,
+        cwd=root,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    base = f"http://127.0.0.1:{port}/api"
+    try:
+        for _attempt in range(50):
+            try:
+                with urlopen(f"{base}/activation_common.php", timeout=5):
+                    break
+            except HTTPError as response:
+                response.close()
+                break
+            except URLError:
+                time.sleep(0.05)
+        else:
+            pytest.fail("der lokale PHP-Prüfserver ist nicht gestartet")
+        yield base
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+
+
+def product_tree(root: Path, monkeypatch: Any) -> Path:
+    """Baut einen kleinen Windows-Bau und schreibt die Signierübergabe."""
+    from tools import make_installer
+
+    app = make_installer.APP_NAME
+    source = root / "dist" / app
+    packaging = root / "packaging"
+    build = packaging / "build"
+    for path, content in (
+        (source / f"{app}.exe", b"Programm"),
+        (source / "_internal" / "python313.dll", b"Python-Laufzeit"),
+        (source / "_internal" / f"{app}.cdx.json", b"{}"),
+        (source / "THIRD-PARTY-NOTICES.md", b"Lizenzbeilage"),
+        (packaging / "solidon3d.iss", b"Skript"),
+        (packaging / "eula.txt", b"Vertrag"),
+        (packaging / "solidon3d.ico", b"Symbol"),
+        (build / "licence.manifest", b"Manifest"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    monkeypatch.setattr(make_installer, "ROOT", root)
+    monkeypatch.setattr(make_installer, "SOURCE_DIR", source)
+    monkeypatch.setattr(make_installer, "OUTPUT_DIR", root / "dist")
+    monkeypatch.setattr(make_installer, "SCRIPT", packaging / "solidon3d.iss")
+    monkeypatch.setattr(make_installer, "SIGNING_HANDOFF", build / "windows-signing.json")
+    monkeypatch.setattr(make_installer, "_licence_file", lambda: packaging / "eula.txt")
+    monkeypatch.setattr(make_installer, "stale_reason", lambda: "")
+    assert make_installer.write_signing_handoff() == 0
+    return root
+
+
+def pack_release(tree: Path, target_dir: Path) -> Path:
+    """Packt den Produktbaum wie der Paketjob und schreibt seine Prüfsumme."""
+    from tools import sign_release
+
+    archive = target_dir / sign_release.ARCHIVE_NAME
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for path in sorted(tree.rglob("*")):
+            if path.is_file():
+                zip_file.write(path, path.relative_to(tree).as_posix())
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    archive.with_name(archive.name + ".sha256").write_text(
+        f"{digest}  {archive.name}\n", encoding="ascii"
+    )
+    return archive
+
+
+def recipe_document_seed(width: float = 30.0) -> Document:
+    """Ein Quaderdokument, dessen Breite am Projektparameter ``w`` hängt."""
+    from app.core.scene.migrations import FORMAT_VERSION
+
+    return Document(
+        format_version=FORMAT_VERSION,
+        app_version="test",
+        parameters={"w": Parameter(name="w", value=width)},
+        ops=[
+            Operation(
+                id=1,
+                op="create_box",
+                outputs=("obj_1",),
+                params={
+                    "width": "@w",
+                    "depth": 20.0,
+                    "height": 8.0,
+                    "anchor": "corner",
+                    "name": "",
+                },
+            )
+        ],
+    )
+
+
+def clean_recipe_globals(*names: str) -> None:
+    """Entfernt ausschließlich die benannten Rezept- und Ops-Registrierungen."""
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    for name in names:
+        PARTS._parts.pop(name, None)
+        REGISTRY._ops.pop(part_ops.op_name(name), None)
+
+
+def recipe_with_halter(width_default: float, profile: Profile) -> Any:
+    """Ein Probehalter-Rezept mit der angegebenen Vorgabebreite."""
+    from app.core.knowledge.parts import recipe
+
+    return recipe.capture(
+        recipe_document_seed(),
+        {},
+        name="probe_halter",
+        title="Probehalter",
+        group="structure",
+        op_ids=(1,),
+        exposed=(
+            recipe.ExposedParam(
+                name="w", title="Breite", default=width_default, minimum=10.0, maximum=90.0
+            ),
+        ),
+        features={"top": "face_top"},
+        profile=profile,
+    )

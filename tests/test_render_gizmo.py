@@ -23,7 +23,8 @@ from app.ui.render.gizmo import (
     ray_plane_hit,
     rotation_matrix,
 )
-from tests.test_render_contract import GFX_MISSING, cube, make_renderer
+from tests.helpers import cube_surface as cube
+from tests.test_render_contract import GFX_MISSING, make_renderer
 
 SIZE = (600, 450)
 

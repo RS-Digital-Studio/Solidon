@@ -123,12 +123,10 @@ def window(qt_app: QApplication) -> MainWindow:
 
 
 def _needs_the_exact_kernel() -> None:
-    """Ein Test an einem exakten Körper braucht OpenCASCADE — Skip statt Importfehler
-    im Quellklon ohne das Extra ``brep`` (Review Tests-1 #4)."""
-    from app.core.registry import exact_kernel_present
+    """Ein Test an einem exakten Körper benutzt denselben Wächter wie die Kernprüfungen."""
+    from tests.helpers import exact_kernel
 
-    if not exact_kernel_present():
-        pytest.skip("ohne OpenCASCADE gibt es den exakten Kern nicht")
+    exact_kernel()
 
 
 def scripted(window: MainWindow, *answers: Reply) -> ScriptedBackend:

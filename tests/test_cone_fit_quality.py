@@ -10,6 +10,7 @@ import pytest
 from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect_cones, fit_cone
+from tests.helpers import partial_cone
 from tests.helpers import placed as _placed
 
 
@@ -60,41 +61,6 @@ def _freeform_patch() -> trimesh.Trimesh:
     return trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
 
 
-def _partial_cone(angular_sections: int, height_sections: int, *, reverse: bool) -> trimesh.Trimesh:
-    """Ein 45°-Teilbogen eines exakten 60°-Kegels ohne Deckflächen."""
-    angles = np.linspace(-math.radians(22.5), math.radians(22.5), angular_sections + 1)
-    heights = np.linspace(5.0, 15.0, height_sections + 1)
-    vertices = []
-    for height in heights:
-        radius = height * math.tan(math.radians(30.0))
-        vertices.extend(
-            (radius * math.cos(angle), radius * math.sin(angle), height) for angle in angles
-        )
-
-    faces: list[tuple[int, int, int]] = []
-    row = len(angles)
-    for height_index in range(height_sections):
-        for angle_index in range(angular_sections):
-            lower = height_index * row + angle_index
-            if (height_index + angle_index) % 2:
-                faces.extend(
-                    [
-                        (lower, lower + row, lower + 1),
-                        (lower + 1, lower + row, lower + row + 1),
-                    ]
-                )
-            else:
-                faces.extend(
-                    [
-                        (lower, lower + row, lower + row + 1),
-                        (lower, lower + row + 1, lower + 1),
-                    ]
-                )
-    if reverse:
-        faces = [(first, third, second) for first, second, third in faces]
-    return trimesh.Trimesh(vertices=np.asarray(vertices), faces=faces, process=False)
-
-
 @pytest.mark.parametrize(("scale", "angle"), [(1.0, 0.0), (3.7, 53.0), (0.5, -31.0)])
 def test_a_freeform_patch_with_a_good_point_fit_is_not_published_as_a_cone(
     scale: float, angle: float
@@ -124,7 +90,7 @@ def test_a_true_partial_cone_survives_role_pose_scale_and_triangulation(
     angle: float,
 ) -> None:
     """Ein enger Teilbogen bleibt in beiden Flächenrichtungen ein Kegel."""
-    body = _placed(_partial_cone(angular_sections, height_sections, reverse=reverse), scale, angle)
+    body = _placed(partial_cone(angular_sections, height_sections, reverse=reverse), scale, angle)
     patch = list(range(len(body.faces)))
     fit = fit_cone(body, patch)
 

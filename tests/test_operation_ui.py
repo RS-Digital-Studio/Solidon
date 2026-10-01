@@ -39,6 +39,7 @@ from app.ui.op_dialog import OperationDialog, ValueField
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from tests import ui_helpers
+from tests.helpers import exact_kernel
 from tests.ui_helpers import session as session
 
 
@@ -2377,7 +2378,7 @@ def test_the_edge_list_comes_from_the_body_in_the_window(window: MainWindow) -> 
     Der ``getattr`` gab immer ``None``, die Liste blieb immer leer, und im
     Dialog stand eine leere Auswahl, ohne dass etwas rot wurde.
     """
-    pytest.importorskip("OCP")
+    exact_kernel()
 
     window.session.start_new("centauri-carbon-2", "petg")
     window.session.history.apply(
@@ -4500,7 +4501,7 @@ def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
 @pytest.fixture
 def deferred_exact_preview(window: MainWindow, monkeypatch: pytest.MonkeyPatch):
     """Echter exakter Eingang, getrennt zustellbare Rechnung und Bildaufbereitung."""
-    pytest.importorskip("OCP")
+    exact_kernel()
     window.session.start_new()
     assert window.session.wait_for_idle()
     window.session.history.apply(
@@ -4749,7 +4750,7 @@ def test_real_exact_preview_is_released_by_the_actual_viewport_render(
     from app.ui import viewport as module
     from tests.render_fakes import RecordingRenderer
 
-    pytest.importorskip("OCP")
+    exact_kernel()
     # Offscreen baut die Ansicht keinen Renderer; der Test misst das Zeichnen,
     # also stellt er die Betriebslage her (``.claude/rules/tests.md``).
     if window.viewport.renderer is None:

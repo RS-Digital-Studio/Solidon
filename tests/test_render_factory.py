@@ -188,8 +188,8 @@ from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QLineEdit, QVBoxLayo
 from app.ui.render.factory import make_renderer
 from app.ui.render.api import SurfaceStyle
 from app.ui.render.navigator import Navigator, WHEEL_STEP
-from tests.test_navigator import _Log
-from tests.test_render_contract import cube, look_down
+from tests.helpers import NavigationLog, cube_surface as cube
+from tests.test_render_contract import look_down
 
 application = QApplication([])
 print("qt-app", flush=True)
@@ -221,7 +221,7 @@ assert view.screenshot().max() > 100
 print("bild geprüft", flush=True)
 # Die echten Qt-Radereignisse müssen bis zur Kamera reichen, auch unterhalb
 # einer Raste. Beide Projektionen behalten dabei den Weltpunkt am Zeiger.
-navigator = Navigator(view, "solidon", _Log().callbacks())
+navigator = Navigator(view, "solidon", NavigationLog().callbacks())
 token = view.add_pointer_listener(navigator.handle)
 pointer = QPointF(75, 45)
 ratio = view.widget.devicePixelRatioF()

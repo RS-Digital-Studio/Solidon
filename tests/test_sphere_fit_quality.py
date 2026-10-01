@@ -8,17 +8,11 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData
 from app.core.perceive.features import detect, detect_spheres, fit_sphere, forget_cache
+from tests.helpers import surface_mesh
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-
-
-def _surface(name: str) -> trimesh.Trimesh:
-    """Eine selbst erzeugte Prüffläche mit gemeinsam benutzten Ecken laden."""
-    body = read_mesh((MESHES / name).read_bytes(), ".stl").raw
-    body.merge_vertices()
-    return body
 
 
 def _recognised(body: trimesh.Trimesh) -> bool:
@@ -35,7 +29,7 @@ def _recognised(body: trimesh.Trimesh) -> bool:
 )
 def test_a_shallow_spherical_cap_survives_different_triangulations(name: str) -> None:
     """Eine echte 5°-Kalotte bleibt trotz ihres großen Radius eine Kugel."""
-    body = _surface(name)
+    body = surface_mesh(name)
 
     fitted = fit_sphere(body, list(range(len(body.faces))))
 
@@ -48,7 +42,7 @@ def test_a_shallow_spherical_cap_survives_different_triangulations(name: str) ->
 @pytest.mark.parametrize("scale", [0.1, 1.0, 10.0])
 def test_sphere_evidence_is_invariant_under_pose_and_scale(scale: float) -> None:
     """Einheitenlage, Drehung und Verschiebung ändern das Güteurteil nicht."""
-    original = _surface("shallow_sphere_cap_icosphere.stl")
+    original = surface_mesh("shallow_sphere_cap_icosphere.stl")
     before = fit_sphere(original, list(range(len(original.faces))))
     assert before is not None
 
@@ -71,7 +65,7 @@ def test_sphere_evidence_is_invariant_under_pose_and_scale(scale: float) -> None
 
 def test_a_narrow_spherical_ribbon_does_not_claim_an_editable_sphere() -> None:
     """Ein fast eindimensionaler Ausschnitt bestimmt keine sichere Kugel."""
-    body = _surface("ambiguous_sphere_ribbon.stl")
+    body = surface_mesh("ambiguous_sphere_ribbon.stl")
 
     fitted = fit_sphere(body, list(range(len(body.faces))))
 
@@ -82,7 +76,7 @@ def test_a_narrow_spherical_ribbon_does_not_claim_an_editable_sphere() -> None:
 
 def test_an_almost_flat_cap_does_not_claim_a_distant_sphere_centre() -> None:
     """Ein nur schlecht bestimmter Mittelpunkt wird nicht als Messwert ausgegeben."""
-    body = _surface("indeterminate_sphere_cap.stl")
+    body = surface_mesh("indeterminate_sphere_cap.stl")
 
     fitted = fit_sphere(body, list(range(len(body.faces))))
 
@@ -93,7 +87,7 @@ def test_an_almost_flat_cap_does_not_claim_a_distant_sphere_centre() -> None:
 
 def test_an_ellipsoid_does_not_pass_by_normalising_error_to_a_large_radius() -> None:
     """Der Rückstand wird an der sichtbaren Fläche statt am Fitradius gemessen."""
-    body = _surface("near_sphere_ellipsoid.stl")
+    body = surface_mesh("near_sphere_ellipsoid.stl")
 
     fitted = fit_sphere(body, list(range(len(body.faces))))
 
@@ -104,7 +98,7 @@ def test_an_ellipsoid_does_not_pass_by_normalising_error_to_a_large_radius() -> 
 
 def test_an_unsafe_sphere_does_not_fall_through_to_another_round_feature() -> None:
     """Die Formauswahl behält den Rohfit, veröffentlicht ihn aber nicht."""
-    body = _surface("near_sphere_ellipsoid.stl")
+    body = surface_mesh("near_sphere_ellipsoid.stl")
     forget_cache()
 
     found = detect(MeshData.of(body))

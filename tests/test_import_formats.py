@@ -18,8 +18,6 @@ import pytest
 import trimesh
 from PIL import Image
 
-from app.core.brep import edit, step
-from app.core.brep.kernel import available as brep_available
 from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData
@@ -31,6 +29,7 @@ from app.core.ingest.plan import MODEL_SUFFIXES, import_plan
 from app.core.scene import History, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Profile, Source
+from tests.helpers import exact_kernel
 
 
 def _box() -> trimesh.Trimesh:
@@ -137,8 +136,10 @@ def test_svg_defaults_do_not_resolve_external_entities(tmp_path: Path) -> None:
     assert refused.value.suggestions
 
 
-@pytest.mark.skipif(not brep_available(), reason="OpenCASCADE ist optional")
 def test_both_step_endings_read_the_same_exact_body() -> None:
+    edit = exact_kernel()
+    from app.core.brep import step
+
     solid = edit.box(20.0, 16.0, 12.0)
     payload = step.write(solid, "Prüfkörper")
 
@@ -150,6 +151,9 @@ def test_both_step_endings_read_the_same_exact_body() -> None:
 
 
 def test_the_one_format_list_is_exactly_what_the_decoders_cover() -> None:
+    exact_kernel()
+    from app.core.brep import step
+
     expected = (*READABLE_SUFFIXES, *step.SUFFIXES, *OUTLINE_SUFFIXES)
     assert tuple(dict.fromkeys(expected)) == MODEL_SUFFIXES
 

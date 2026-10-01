@@ -65,6 +65,7 @@ from app.core.types import (
 )
 from app.core.units import MAX_FACET_ANGLE, MAX_FACET_SAG
 from app.i18n import _ as message
+from tests.helpers import exact_kernel
 
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
 RADIUS = 10.0
@@ -132,9 +133,7 @@ def test_both_kernels_name_the_same_edge_the_same_way() -> None:
     die halbe Höhe angehoben. Was dann noch verschieden wäre, läge an der
     Rechnung und nicht an der Lage.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     exact = brep.box(WIDTH, DEPTH, HEIGHT)
     raw = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
@@ -171,9 +170,7 @@ def _tube_edges(backend: str, inner: float = 5.0) -> tuple[Any, list[Any]]:
         raw.apply_translation((0.0, 0.0, HEIGHT / 2.0))
         body = MeshData(raw)
         return body, edges_of(body)
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     body = brep.cylinder(2.0 * RADIUS, HEIGHT)
     if inner > 0.0:
         body = brep.boolean("difference", [body, brep.cylinder(2.0 * inner, HEIGHT)])
@@ -1046,9 +1043,7 @@ def test_both_kernels_round_the_same_edges_to_the_same_body() -> None:
     Kreisabschnitte unter den Sehnen, und die Schranke dafür ist
     :data:`MAX_FACET_SAG`.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     exact = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "vertical")
     raw = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))
@@ -1075,9 +1070,7 @@ def test_a_chamfer_on_a_mesh_is_not_an_approximation_at_all() -> None:
     Das ist die Zahl, an der man merkt, wofür der exakte Kern noch da ist —
     und wofür nicht.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     exact = brep.chamfer(brep.box(WIDTH, DEPTH, HEIGHT), BEVEL, "vertical")
     outcome = bevel_edges(block(), BEVEL, "vertical")
@@ -1353,9 +1346,7 @@ def test_the_same_entry_still_takes_an_exact_body() -> None:
     könnte die Verzweigung stillschweigend immer am Netz rechnen, und das
     Ergebnis sähe richtig aus.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     entry = SceneObject(id="obj_1", name="Block", mesh=brep.box(WIDTH, DEPTH, HEIGHT), kind="brep")
 
@@ -1432,9 +1423,7 @@ def test_a_partly_orphaned_selection_stops_the_whole_edge_operation(
 ) -> None:
     """Nach dem Verrunden einer von zwei Kanten bleibt keine stille Teilauswahl."""
     if backend == "brep":
-        brep = pytest.importorskip("app.core.brep.edit")
-        if not pytest.importorskip("app.core.brep.kernel").available():
-            pytest.skip("OpenCASCADE is an optional dependency")
+        brep = exact_kernel()
         body = brep.box(WIDTH, DEPTH, HEIGHT)
         original = brep.edges_of(body)
     else:
@@ -1707,9 +1696,7 @@ def test_both_kernels_take_the_same_fillet_away() -> None:
     legt den Zwickel dazu und trifft sie ebenso — hier bleibt kein Sehnenzug
     übrig, denn der Füllkörper hat gar keinen Bogen.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     exact = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "vertical")
     for spot in ((-17.0, -12.0, 0.0), (-17.0, 12.0, 0.0), (17.0, -12.0, 0.0), (17.0, 12.0, 0.0)):
@@ -1726,9 +1713,7 @@ def test_the_exact_kernel_changes_a_radius_without_becoming_a_mesh() -> None:
     der Kunde verlöre seine bearbeitbaren Flächen still, mitten in einer
     Handlung, die davon gar nicht spricht.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     exact = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "vertical")
     changed = brep.reround(exact, (-17.0, -12.0, 0.0), FILLET, 5.0)
@@ -1878,9 +1863,7 @@ def test_taking_one_radius_away_leaves_the_other_alone() -> None:
     richtige war. Erst zwei verschiedene Radien trennen die Auswahl von der
     Nähe.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
 
     solid = brep.box(WIDTH, DEPTH, HEIGHT)
     upright = [entry for entry in brep.edges_of(solid) if entry.upright]
@@ -1918,9 +1901,7 @@ def test_coaxial_fillets_are_edited_at_the_selected_height(height: float, operat
     angeklickte Rundung darf verschwinden oder ihren Radius ändern; die
     zweite liegt zwanzig Millimeter höher beziehungsweise tiefer.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     from app.core.brep.features import features_of
     from app.core.brep.kernel import Solid
 
@@ -1982,9 +1963,7 @@ def test_the_fillet_location_decides_and_not_its_parametric_origin() -> None:
     Ursprung misst, nimmt die falsche weg, und der Kunde sieht eine Kante
     verschwinden, die er nicht angeklickt hat.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     from app.core.brep.features import features_of
 
     solid = brep.fillet(brep.box(WIDTH, DEPTH, HEIGHT), FILLET, "top")
@@ -2170,7 +2149,7 @@ def test_both_kernels_leave_out_what_does_not_fit_on_a_thin_wall(
     Kante **einzeln** wählt, bekommt weiter die Absage.
     """
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         body: Any = edit.box(40.0, 3.0, 20.0)
@@ -2230,7 +2209,7 @@ def test_a_changed_fillet_keeps_its_name_for_the_next_step(kernel: str) -> None:
     from app.core.scene.project import ProjectSources, new_project
 
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         body: Any = edit.box(40.0, 30.0, 20.0)
@@ -2313,7 +2292,7 @@ def test_the_top_edges_of_a_hip_roof_house_are_its_eaves() -> None:
 def _chamfer_box(kernel: str) -> SceneObject:
     """Ein Quader 40 x 30 x 20 in beiden Kernen."""
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         body: Any = edit.box(40.0, 30.0, 20.0)
@@ -2420,7 +2399,7 @@ def test_a_second_distance_that_does_not_fit_says_which_number_is_too_large(
 ) -> None:
     """Eine 3 mm breite Wand, Seiten getauscht: Die zweite Breite gilt oben und ist zu groß."""
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import edit
 
         body: Any = edit.box(40.0, 3.0, 20.0)
@@ -2475,7 +2454,7 @@ def _prism(kernel: str, corners: int, diameter: float = 40.0, height: float = 10
     am Sechseck unter 120°, am Dreieck unter 60° (Innenwinkel des Körpers).
     """
     if kernel == "brep":
-        pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+        exact_kernel()
         from app.core.brep import profiles as exact_profiles
         from app.core.sketch import shapes
         from app.core.sketch.profile import profile_of
@@ -2657,7 +2636,7 @@ def test_an_asymmetric_chamfer_on_a_curved_sloped_edge_meets_the_construction(
     sich nicht bestimmen"): Er fragte die Flächen am Linienschwerpunkt der
     Kante, und der liegt bei einem Kreis auf der Achse.
     """
-    pytest.importorskip("OCP", reason="OpenCASCADE ist eine wahlweise Abhängigkeit")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.geom.mesh import as_mesh_data
 
@@ -2746,9 +2725,7 @@ def _lying_cylinder(backend: str) -> list[Any]:
         raw = trimesh.creation.cylinder(radius=RADIUS, height=HEIGHT, sections=64)
         raw.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (0, 1, 0)))
         return edges_of(MeshData(raw))
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     turn = (
         (0.0, 0.0, 1.0, 0.0),
         (0.0, 1.0, 0.0, 0.0),
@@ -2805,9 +2782,7 @@ def _cross_bored_block(backend: str) -> list[Any]:
         bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
         outcome = boolean("difference", [MeshData(box), MeshData(bore)])
         return edges_of(outcome.mesh)
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     solid = brep.bore(
         brep.box(WIDTH, DEPTH, HEIGHT),
         position=(0.0, -DEPTH / 2.0, HEIGHT / 2.0),
@@ -2864,9 +2839,7 @@ def _upright_bored_block(backend: str) -> list[Any]:
         bore.apply_translation((0.0, 0.0, HEIGHT / 2.0))
         outcome = boolean("difference", [MeshData(box), MeshData(bore)])
         return edges_of(outcome.mesh)
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     solid = brep.bore(
         brep.box(WIDTH, DEPTH, HEIGHT), position=(0.0, 0.0, HEIGHT), axis="z", diameter=6.0
     )
@@ -2946,9 +2919,7 @@ def test_a_radius_law_around_the_mouth_of_a_bore_is_not_too_flat() -> None:
     als der exakte Kern (41,78 gegen 47,83 mm³). Jetzt liegt es darüber, um
     höchstens, was der Sehnenzug über der Rundungsfläche ausmacht.
     """
-    brep = pytest.importorskip("app.core.brep.edit")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    brep = exact_kernel()
     from app.core.geom.edges import RadiusLaw
 
     box = trimesh.creation.box(extents=(WIDTH, DEPTH, HEIGHT))

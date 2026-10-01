@@ -11,8 +11,6 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.brep.features import features_of
-from app.core.brep.kernel import available
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.orient import (
     candidates,
@@ -34,6 +32,7 @@ from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Document, Profile, Source
 from app.core.units import EPS_DISPLAY
 from app.i18n import _
+from tests.helpers import exact_kernel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -941,7 +940,6 @@ def test_a_named_bore_is_carried_exactly_once_when_the_body_is_laid_down(
     assert np.all((low <= mouth) & (mouth <= high)), f"ihre Mündung auch: {mouth}"
 
 
-@pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 @pytest.mark.parametrize("arrange", [False, True])
 @pytest.mark.parametrize("count", [1, 2])
 def test_orienting_carries_the_features_of_an_exact_body(
@@ -966,6 +964,9 @@ def test_orienting_carries_the_features_of_an_exact_body(
     Merkmale entlang der Bewegung mitgenommen, die Topologie wird frisch
     abgelesen. Zwei Wege zu denselben Zahlen.
     """
+    exact_kernel()
+    from app.core.brep.features import features_of
+
     project = new_project("centauri-carbon-2", "pla")
     history = History(project.document)
     history.apply(

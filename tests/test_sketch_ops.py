@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.brep.kernel import Solid, available
+from app.core.brep.kernel import Solid
 from app.core.brep.profiles import _lift_frame
 from app.core.errors import AppError, ValidationError
 from app.core.export.writer import export_bytes
@@ -41,10 +41,10 @@ from app.core.types import (
     SketchElement,
     SolvedSketch,
 )
+from tests.helpers import exact_kernel, rectangle
 from tests.helpers import run_with_parameters as run
-from tests.test_sketch import rectangle
 
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+exact_kernel()
 
 
 def solid_of(result: OpResult) -> Solid:
@@ -1413,9 +1413,6 @@ def test_pushing_a_face_moves_the_wall_and_the_neighbours_follow() -> None:
     Gemessen an der Hüllbox: der Quader wird in genau einer Achse länger, und
     die Nachbarwände wachsen mit, statt eine Lücke zu lassen.
     """
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keine Flächen zum Greifen")
-
     entry = brep_box(width=40.0, depth=30.0, height=20.0)
     before = entry.mesh.bounds.size
 
@@ -1430,9 +1427,6 @@ def test_pushing_a_face_moves_the_wall_and_the_neighbours_follow() -> None:
 
 def test_pulling_a_face_inwards_removes_material() -> None:
     """Ein negativer Weg zieht die Wand hinein — dasselbe Werkzeug."""
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keine Flächen zum Greifen")
-
     entry = brep_box(width=40.0, depth=30.0, height=20.0)
 
     result = run("push_face", entry=entry, distance=-5.0, nx=1.0, ny=0.0, nz=0.0)
@@ -1443,9 +1437,6 @@ def test_pulling_a_face_inwards_removes_material() -> None:
 
 def test_pushing_a_face_by_nothing_is_a_user_error() -> None:
     """Null Weg ist keine Bewegung, sondern ein vergessener Wert."""
-    if not available():
-        pytest.skip("ohne B-Rep-Kern gibt es keine Flächen zum Greifen")
-
     with pytest.raises(ValidationError):
         run("push_face", entry=brep_box(), distance=0.0, nx=1.0, ny=0.0, nz=0.0)
 

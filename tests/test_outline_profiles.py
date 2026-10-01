@@ -11,12 +11,7 @@ import pytest
 from app.core.errors import ValidationError
 from app.core.ingest import outline
 from app.core.types import Profile
-
-SOURCE = b"""<svg xmlns="http://www.w3.org/2000/svg">
-<g transform="translate(7,11)">
-<path d="M0 0 H20 V10 H0 Z M5 2 H15 V8 H5 Z"/>
-<rect x="40" y="0" width="8" height="6"/>
-</g></svg>"""
+from tests.helpers import SOURCE
 
 
 def test_profile_selection_keeps_holes_and_transforms() -> None:

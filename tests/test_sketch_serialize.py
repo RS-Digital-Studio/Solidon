@@ -17,7 +17,7 @@ from app.core.sketch.serialize import (
     sketch_to_text,
 )
 from app.core.types import Sketch
-from tests.test_sketch import rectangle
+from tests.helpers import rectangle
 
 
 def test_a_sketch_survives_the_round_trip() -> None:

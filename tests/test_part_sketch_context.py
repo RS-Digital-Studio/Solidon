@@ -18,7 +18,7 @@ from app.core.sketch import serialize
 from app.core.sketch.profile import profile_of
 from app.core.sketch.solver import solve_sketch
 from app.core.types import BaseParams, OpContext, Parameter, PartResult, PlaneFrame, Scene
-from tests.test_sketch import rectangle
+from tests.helpers import rectangle
 
 
 @op_params

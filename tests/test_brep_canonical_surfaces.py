@@ -13,10 +13,11 @@ import trimesh
 
 from app.core.brep import edit, step
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, available
+from app.core.brep.kernel import Solid
 from app.core.units import EPS_GEOM
+from tests.helpers import exact_kernel
 
-pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
+exact_kernel()
 
 
 def _plate() -> Solid:

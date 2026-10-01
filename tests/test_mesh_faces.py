@@ -33,6 +33,7 @@ from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import Feature, OpContext, OpResult, Profile, Scene, SceneObject
 from app.core.units import EPS_GEOM
+from tests.helpers import exact_kernel
 
 CORPUS = pathlib.Path(__file__).parent / "data" / "meshes"
 WIDTH, DEPTH, HEIGHT = 40.0, 30.0, 20.0
@@ -275,9 +276,8 @@ def test_both_kernels_draft_to_the_same_body() -> None:
     nichts zu runden. Anders als bei der Verrundung (`test_mesh_edges.py`)
     bleibt deshalb kein Sehnenzug übrig.
     """
-    brep = pytest.importorskip("app.core.brep.profiles")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
+    from app.core.brep import profiles as brep
     from app.core.brep.edit import box
 
     exact = brep.draft_vertical(box(WIDTH, DEPTH, HEIGHT), DRAFT)
@@ -598,8 +598,7 @@ def test_a_loose_speck_the_wedge_eats_is_named() -> None:
 @pytest.mark.parametrize("bottom", [-30.0, -10.0, 0.0, 8.0])
 def test_drafting_keeps_the_actual_bottom_at_every_height(kind: str, bottom: float) -> None:
     """Ein verschobener Quader behält dieselben Maße und denselben analytischen Abtrag."""
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
     from app.core.geom.mesh import as_mesh_data
@@ -631,9 +630,8 @@ def test_both_kernels_push_the_same_single_face() -> None:
     (``profiles._nearest_face``). Ohne sie gibt derselbe Aufruf 24000,0 —
     beide Stufen.
     """
-    brep = pytest.importorskip("app.core.brep.profiles")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
+    from app.core.brep import profiles as brep
     from app.core.brep.edit import boolean as exact_boolean
     from app.core.brep.edit import box, moved
 
@@ -798,9 +796,7 @@ def test_a_face_that_is_gone_is_a_sentence_and_not_a_wrong_body() -> None:
 
 def test_the_exact_body_still_takes_the_exact_way() -> None:
     """Und der exakte Körper bleibt exakt — dieselbe Menüzeile, anderer Kern."""
-    pytest.importorskip("app.core.brep.profiles")
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
     from app.core.brep.edit import box
     from app.core.brep.features import features_of
 
@@ -836,8 +832,7 @@ def test_the_profile_decides_whether_a_move_is_worth_a_step(profile: Profile) ->
 
 def _exact_stairs_for_selection() -> tuple[SceneObject, Feature, Feature]:
     """Zwei echte Stufen mit unabhängigen Höhen und gegenläufigen Auswahlhilfen."""
-    if not pytest.importorskip("app.core.brep.kernel").available():
-        pytest.skip("OpenCASCADE is an optional dependency")
+    exact_kernel()
     from app.core.brep import edit
     from app.core.brep.features import features_of
 
@@ -925,9 +920,9 @@ def _pushed(kernel: str, profile: Profile, pick: str, distance: float):
     import importlib
 
     from app.core.types import Operation
-    from tests.test_bore_depth import _blind
+    from tests.helpers import blind_bore
 
-    source = _blind(kernel)
+    source = blind_bore(kernel)
     faces_by_side = {}
     for name, feature in source.features.items():
         if feature.kind != "face":

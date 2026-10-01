@@ -346,7 +346,7 @@ def test_php_issues_one_idempotent_device_certificate(
 
 
 def test_health_limits_requests_before_reading_the_signing_key(tmp_path: Path) -> None:
-    from tests.test_public_php_security import _php_server
+    from tests.helpers import php_server
 
     seed = tmp_path / "activation.seed"
     seed.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
@@ -359,7 +359,7 @@ def test_health_limits_requests_before_reading_the_signing_key(tmp_path: Path) -
         "SOLIDON_ACTIVATION_DB": str(database),
         "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": ed25519.public_key(ACTIVATION_SEED).hex(),
     }
-    with _php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
+    with php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
         for _attempt in range(60):
             status, answer = _get(f"{base}/activation-health.php")
             assert status == 200, answer
@@ -936,7 +936,7 @@ def test_rotating_the_rate_key_starts_fresh_pseudonyms_and_keeps_limiting(tmp_pa
     wertlos, und die Begrenzung greift unverändert. ``activation.seed`` bleibt
     dabei unberührt.
     """
-    from tests.test_public_php_security import _php_server
+    from tests.helpers import php_server
 
     seed = tmp_path / "activation.seed"
     seed.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
@@ -951,7 +951,7 @@ def test_rotating_the_rate_key_starts_fresh_pseudonyms_and_keeps_limiting(tmp_pa
         "SOLIDON_ACTIVATION_DB": str(database),
         "SOLIDON_ACTIVATION_TEST_PUBLIC_KEY": ed25519.public_key(ACTIVATION_SEED).hex(),
     }
-    with _php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
+    with php_server(tmp_path, environment, extensions=("sodium", "pdo_sqlite")) as base:
         for _attempt in range(60):
             status, answer = _get(f"{base}/activation-health.php")
             assert status == 200, answer

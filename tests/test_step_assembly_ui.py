@@ -12,17 +12,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog
 
-from app.core.brep.kernel import available
 from app.core.ingest import plan as ingest_plan
 from app.core.registry.params import body_keys
 from app.ui.session import Session
 from app.ui.step_dialog import StepBodiesDialog, StepBodiesField
+from tests.helpers import exact_kernel
 
-pytestmark = pytest.mark.skipif(not available(), reason="ohne OpenCASCADE gibt es kein STEP")
+exact_kernel()
 
 STEPS = Path(__file__).parent / "data" / "step"
 

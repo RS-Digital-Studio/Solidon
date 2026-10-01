@@ -19,8 +19,6 @@ from typing import Any
 
 import pytest
 
-from app.core.brep import step
-from app.core.brep.kernel import Solid, available
 from app.core.errors import OperationCancelled, ValidationError
 from app.core.ingest import plan as ingest_plan
 from app.core.registry.params import WHOLE_FILE, body_keys
@@ -29,8 +27,12 @@ from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import MAX_PROJECT_OBJECTS, ProjectSources, load, new_project, save
 from app.core.types import Profile, SceneObject, Source
 from tests.data import make_step_assembly_corpus as corpus
+from tests.helpers import exact_kernel
 
-pytestmark = pytest.mark.skipif(not available(), reason="ohne OpenCASCADE gibt es kein STEP")
+exact_kernel()
+
+from app.core.brep import step  # noqa: E402
+from app.core.brep.kernel import Solid  # noqa: E402
 
 STEPS = Path(__file__).parent / "data" / "step"
 PROJECTS = Path(__file__).parent / "data" / "projects"

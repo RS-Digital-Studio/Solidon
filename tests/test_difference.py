@@ -455,12 +455,12 @@ def test_an_exact_body_shows_its_difference_too() -> None:
     Dieselbe Auflösung wie dort: Der Weg von B-Rep zu Mesh steht jederzeit
     offen (§30), verglichen wird auf der Tessellation.
     """
-    from app.core.brep.kernel import Solid, available
+    from tests.helpers import exact_kernel
 
-    if not available():
-        pytest.skip("OpenCASCADE is an optional dependency")
-
+    exact_kernel()
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+
+    from app.core.brep.kernel import Solid
 
     def scene_of(mesh: object) -> Scene:
         return Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=mesh)})

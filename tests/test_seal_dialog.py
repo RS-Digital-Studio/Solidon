@@ -11,8 +11,8 @@ from app.core.sketch import shapes
 from app.core.sketch.serialize import sketch_to_text
 from app.core.types import FeatureRef
 from app.ui.seal_dialog import SealPathDialog, SealPathField, selection_status
-from tests.test_outline_dialog import _until
 from tests.test_seal_openings import plate
+from tests.ui_helpers import wait_until
 
 
 def test_field_never_shows_signature_as_text_input(qt_app):
@@ -48,10 +48,10 @@ def test_two_similar_openings_need_explicit_visible_choice(qt_app):
     dialog = SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
     dialog.show()
     try:
-        _until(qt_app, lambda: dialog.contours.count() == 2)
+        wait_until(qt_app, lambda: dialog.contours.count() == 2)
         assert not dialog.accept_button.isEnabled()
         dialog.contours.setCurrentRow(1)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         selected = dialog.values()
         assert set(selected) == {
             "path_sketch",
@@ -79,7 +79,7 @@ def test_picture_click_keyboard_and_stored_selection_have_one_identity(qt_app):
     )
     dialog.show()
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert dialog.contours.currentRow() == 1
         point = dialog.contour_view.mapFromScene(dialog._items[0].path().boundingRect().center())
         QTest.mouseClick(dialog.contour_view.viewport(), Qt.MouseButton.LeftButton, pos=point)
@@ -102,7 +102,7 @@ def test_unreadable_signature_offers_real_contours_for_recovery(qt_app):
         entry, [entry], {"support_feature": "plate:top", "opening_signature": "broken"}
     )
     try:
-        _until(qt_app, lambda: dialog.contours.count() == 2)
+        wait_until(qt_app, lambda: dialog.contours.count() == 2)
         assert not dialog.accept_button.isEnabled()
         dialog.contours.setCurrentRow(0)
         assert dialog.accept_button.isEnabled()
@@ -131,7 +131,7 @@ def test_analysis_is_off_thread_and_late_results_cannot_accept_after_cancel(qt_a
     monkeypatch.setattr(seal_dialog, "opening_choices", delayed)
     dialog = SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
     try:
-        _until(qt_app, entered.is_set)
+        wait_until(qt_app, entered.is_set)
         assert calls == [calls[0]] and calls[0] != threading.get_ident()
         dialog.reject()
         resume.set()
@@ -154,7 +154,7 @@ def test_drawing_uses_the_existing_editor_and_returns_only_selection_values(qt_a
     dialog = SealPathDialog(entry, [entry], {"path_sketch": drawing, "groove_depth": "=@depth"})
     visited = []
     try:
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
 
         def finish_editor():
             editor = qt_app.activeModalWidget()
@@ -168,7 +168,7 @@ def test_drawing_uses_the_existing_editor_and_returns_only_selection_values(qt_a
 
         QTimer.singleShot(0, finish_editor)
         QTest.mouseClick(dialog.sketch_button, Qt.MouseButton.LeftButton)
-        _until(qt_app, dialog.accept_button.isEnabled)
+        wait_until(qt_app, dialog.accept_button.isEnabled)
         assert visited == ["Skizze zeichnen"]
         assert dialog.values()["path_sketch"] == drawing
         assert dialog.values()["support_feature"] == ""
@@ -228,7 +228,7 @@ def test_a_crashed_check_ends_the_wait_and_says_so(qt_app, monkeypatch):
     dialog = SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
     try:
         # Der Wartebalken endet — vorher lief er bis zum Schließen.
-        _until(qt_app, dialog.progress.isHidden)
+        wait_until(qt_app, dialog.progress.isHidden)
         assert "geprüft" not in dialog.status.text(), dialog.status.text()
         assert dialog.status.text().strip()
     finally:
@@ -244,7 +244,7 @@ def test_the_resting_seal_button_says_why(qt_app):
     entry = plate()
     dialog = SealPathDialog(entry, [entry], {"support_feature": "plate:top"})
     try:
-        _until(qt_app, lambda: dialog.contours.count() == 2)
+        wait_until(qt_app, lambda: dialog.contours.count() == 2)
         button = dialog.accept_button
         assert not button.isEnabled()
         said = (button.toolTip(), button.statusTip(), button.accessibleDescription())
