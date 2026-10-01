@@ -588,7 +588,9 @@ def test_a_moving_mouse_is_not_work(qt_app: object, demo: None) -> None:
 # --- Die Karte im Fenster -----------------------------------------------------
 
 
-def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent() -> None:
+def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent(
+    qt_app: object,
+) -> None:
     """Die Karte trägt die Linienfarbe, ihr Knopf den Akzent.
 
     **B6 der Design-Durchsicht:** Ohne dass der Kunde etwas getan hat, trugen
@@ -605,14 +607,10 @@ def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent() -> None:
     die Absicht; wie sie aussieht, hängt am Thema.
     """
 
-    from PySide6.QtWidgets import QApplication
-
     from app.ui.survey import SurveyNotice
     from app.ui.theme import THEMES
 
-    if QApplication.instance() is None:
-        QApplication([])
-
+    assert qt_app is not None
     karte = SurveyNotice()
     karte.set_theme("dark")
     stil = karte.styleSheet()

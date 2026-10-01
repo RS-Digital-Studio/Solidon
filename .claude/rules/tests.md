@@ -16,7 +16,7 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
 ## Entwicklung und Release
 
 - **Je Schritt die betroffenen Tests, vor dem Commit das Entwicklungstor,
-  Fenster und Leistung ausschließlich beim Release** — auch nicht als gezielte
+  Fenster, Renderer und Leistung ausschließlich beim Release** — auch nicht als gezielte
   Teilmenge (`CLAUDE.md`, `/pruefen`). Ein grüner Entwicklungslauf ist kein
   Release-Nachweis.
 - **Wer ein Widget baut, fordert `qt_app` an.** Getrennt wird je Test, nicht je
@@ -24,6 +24,11 @@ denselben Überschriften in `konzepte/begruendungen/regel-tests.md`.
   gibt (wer ein Fenster im Unterprozess öffnet, setzt ihn selbst). Ohne die
   Fixture lief ein solcher Test nur, weil ein Nachbar die Anwendung schon
   erzeugt hatte — im Tor stürzt er ab.
+- **Wer echte Grafik abfragt oder aufbaut, fordert `require_graphics_adapter`
+  an.** Direkte Adapter- und Kindprozessprüfungen setzen `rendering` selbst.
+  Die Geräteabfrage läuft erst in der Fixture, nie beim Modulimport oder in der
+  Sammlung. Reine Rechenfälle bleiben im Entwicklungstor, auch in gemischten
+  Dateien.
 - **CI-Aufteilung** nach dem Vertrag CI-01 bis CI-08 (`AGENTS.md`; Wächter
   `test_packaging.py` für Jobs, Plattformen, Releasegrenze und Berichte,
   `test_ci_runner.py` für vollständige Partitionen und echte
@@ -119,6 +124,9 @@ QApplication.instance().setStyleSheet(before)   # ins finally
 - `performance` für Messungen gegen das Budget; Messwerte je Lauf festhalten,
   mehr als ein Viertel schlechter ist ein Fehler. Ein Marker, den kein Lauf
   wählt oder abwählt, steuert nichts und wird nicht angelegt.
+- `rendering` für Tests mit echter Adapterabfrage, Rendereraufbau, Zeichnen,
+  GPU-Picks oder Bildrücklesen. Entwicklungstor und normale CI wählen sie ab;
+  die Releasegruppe (CI-Gruppe `windowed`) fährt sie einmal mit.
 - `rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt (Handbuch,
   Referenz, Abbildungsstempel). CI und reguläres Tor fahren sie nicht
   (Entscheidung Robert): Eine neue Operation macht sie rot, und was dann fehlt,

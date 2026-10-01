@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Reguläres Tor ohne Fenstertests und Leistung; --release nimmt die Fenster dazu.
+# Reguläres Tor ohne Fenster, echte Renderer und Leistung; --release nimmt
+# Fenster und Renderer dazu.
 # Leistungsprüfungen bleiben dem getrennten Release-Lauf vorbehalten.
 #
 # In einem Prozess baut die Suite über siebenhundert Fenster mit Ansicht
@@ -7,15 +8,15 @@
 # irgendwann und selten reproduzierbar. Der CI-Workflow löst das seit dem
 # 12.08.2026 so; lokal auf Windows ging es bisher gut, bis es nicht mehr ging.
 #
-# Die Fenstergruppe kommt aus Pytests aufgelöstem Fixture-Graphen:
-# tools/list_windowed_tests.py findet auch mittelbare qt_app-Abhängigkeiten.
-# Neue Testdateien brauchen deshalb keinen handgepflegten Eintrag.
+# Die Releasegruppe kommt aus Pytests aufgelöstem Fixture-Graphen:
+# tools/list_windowed_tests.py findet mittelbare qt_app-Abhängigkeiten und die
+# zentrale Grafikfixture. Neue Testdateien brauchen keinen handgepflegten Eintrag.
 #
 # **Getrennt wird je Test, nicht je Datei** (22.09.2026). ``tests/conftest.py``
-# gibt jedem Test mit ``qt_app`` den Marker ``windowed``; das reguläre Tor
-# fährt alles mit ``not windowed``, das Release-Tor je Fensterdatei nur deren
-# Fenstertests. Vorher schloss ein einziger Fenstertest seine ganze Datei aus
-# dem regulären Tor aus — gemessen 1709 Tests ohne Fenster, darunter fast alle
+# gibt jedem Test mit ``qt_app`` den Marker ``windowed`` und Rendererfällen
+# ``rendering``; das reguläre Tor wählt beide ab, das Release-Tor fährt je Datei
+# nur deren Fenster- und Rendererfälle. Vorher schloss ein einzelner Fenstertest
+# seine ganze Datei aus dem regulären Tor aus — gemessen 1709 Tests ohne Fenster, darunter fast alle
 # aus test_translations, test_print_settings und test_toolchain.
 set -u
 
@@ -57,7 +58,8 @@ for option in "$@"; do
     --release) RELEASE=1 ;;
     --help|-h)
       echo "Aufruf: suite-getrennt.sh [--release]"
-      echo "Standard: alle Tests ohne Fenster und Leistung. --release: zusätzlich die Fenstertests."
+      echo "Standard: Entwicklungstests ohne Fenster, Renderer, Erzeugnisvergleiche und Leistung."
+      echo "--release ergänzt Fenster, Renderer und Erzeugnisvergleiche."
       exit 0 ;;
     *) echo "Unbekannte Option: $option. Verwende --help." >&2; exit 2 ;;
   esac
@@ -143,8 +145,8 @@ fi
 # Der Prüfstand will nur die Entscheidungsfunktionen (siehe den Ausstieg
 # weiter unten) und braucht die Dateiliste nicht — sie zu erheben kostet
 # einen Python-Start je Aufruf, und der Test ruft achtmal.
-# Gebraucht wird die Liste nur beim Release; das reguläre Tor wählt die
-# Fenstertests über den Marker ab und braucht keine Dateiliste.
+# Gebraucht wird die Liste nur beim Release; das reguläre Tor wählt Fenster-
+# und Rendererfälle über Marker ab und braucht keine Dateiliste.
 if [ -n "${SUITE_NUR_FUNKTIONEN:-}" ] || [ "$RELEASE" -eq 0 ]; then
   windowed=""
 else
@@ -152,7 +154,7 @@ else
     windowed=$(printf '%s' "$windowed" | tr -d '\r' | tr '\n' ' ')
   else
     status=$?
-    echo "Die Fensterdateien konnten nicht gesammelt werden (Exit $status)." >&2
+    echo "Die Fenster- und Rendererdateien konnten nicht gesammelt werden (Exit $status)." >&2
     exit 1
   fi
 fi
@@ -278,7 +280,7 @@ schlecht=""
 #:
 #: Gemessen am 22.08.2026 (i9-13900K, 24 Kerne): seriell 175 s, mit acht
 #: Prozessen 66 s. Die Gruppe darf das, weil kein Qt darin steckt — die
-#: Fenstergruppe unten bekommt es ausdrücklich **nicht**, dort ist jeder
+#: Releasegruppe unten bekommt es ausdrücklich **nicht**, dort ist jeder
 #: Prozess schon die Trennung.
 KERNE=${SUITE_KERNE:-8}
 
@@ -301,11 +303,11 @@ trap 'rm -f "$SUITE_KOPIE" "$protokoll"' EXIT
 # erwartbar rot; die CI wählt sie im Entwicklungslauf ebenso ab. Bis zur
 # Trennung je Test lagen sie als Teil ihrer Fensterdateien ohnehin draußen.
 if [ "$RELEASE" -eq 0 ]; then
-  echo "Reguläres Tor: Fenstertests, Erzeugnisvergleiche und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
-  auswahl="not performance and not windowed and not rendered"
+  echo "Reguläres Tor: Fenster-, Renderer-, Erzeugnis- und Leistungsprüfungen bleiben bis zum Release zurückgestellt."
+  auswahl="not performance and not windowed and not rendering and not rendered"
 else
-  echo "Release-Tor: die Fenstertests laufen je Datei mit, die Erzeugnisvergleiche im Zug; Leistungsprüfungen folgen getrennt."
-  auswahl="not performance and not windowed"
+  echo "Release-Tor: Fenster und Renderer laufen je Datei mit, Erzeugnisvergleiche im Zug; Leistungsprüfungen folgen getrennt."
+  auswahl="not performance and not windowed and not rendering"
 fi
 echo "=== alle Tests ohne Fenster in einem Zug (-n $KERNE) ==="
 # ``--dist worksteal`` wie in der CI: Ein Arbeiter, der fertig ist, nimmt
@@ -365,7 +367,7 @@ MINDEST=${SUITE_MIN_PORTION:-4}
 # nichts.
 namen_von() {
   local gesammelt
-  gesammelt=$("$PY" -m pytest --collect-only -q -m "windowed and not performance" "$1") || return $?
+  gesammelt=$("$PY" -m pytest --collect-only -q -m "(windowed or rendering) and not performance" "$1") || return $?
   printf '%s\n' "$gesammelt" | grep -E "^tests/" | tr -d "\r"
 }
 
@@ -390,7 +392,7 @@ for file in $windowed; do
   # Datei ursprünglich größer oder kleiner als diese Obergrenze war.
   if [ "$anzahl" -eq 0 ]; then
     echo "=== $file ==="
-    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "windowed and not performance" "$file" \
+    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "(windowed or rendering) and not performance" "$file" \
       > "$protokoll" 2>&1
     status=$?
     cat "$protokoll"
@@ -447,7 +449,7 @@ for file in $windowed; do
     while IFS= read -r name; do
       [ -n "$name" ] && portion+=("$name")
     done < <(printf '%s\n' "$namen" | sed -n "${von},${bis}p")
-    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "windowed and not performance" "${portion[@]}" \
+    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "(windowed or rendering) and not performance" "${portion[@]}" \
       > "$protokoll" 2>&1
     status=$?
     cat "$protokoll"

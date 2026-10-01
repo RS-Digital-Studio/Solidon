@@ -41,9 +41,9 @@ Kernjob frühestens fertig ist, gleich wie viele Worker er hat.
 
 | Kennung | Zusage | Dauerhafte Absicherung |
 |---|---|---|
-| CI-01 | Kein Test fällt durch die Aufteilung weg oder läuft in zwei Gruppen — weder bei den Fenstergruppen noch bei den Teilen der Kernsuite. Neue Dateien werden automatisch aufgenommen. | Partitionstests mit unbekannten Dateien, vollständiger Vereinigung und leeren Schnittmengen; `--ci-shard` gegen die echte Sammlung; Teilmatrix gleich `0 … N−1` |
-| CI-02 | Jeder Fensterdateilauf erhält einen frischen Prozess; Qt-Abbau und Garbage Collection bleiben erhalten. | Prüfung der gestarteten Befehle und Prozessausgänge |
-| CI-03 | Fenster laufen nur im bisherigen Release-Umfang; Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only` |
+| CI-01 | Kein Test fällt durch die Aufteilung weg oder läuft in zwei Gruppen — weder bei Fenster-/Renderergruppen noch bei den Teilen der Kernsuite. Neue Dateien werden automatisch aufgenommen. | Partitionstests mit unbekannten Dateien, vollständiger Vereinigung und leeren Schnittmengen; `--ci-shard` gegen die echte Sammlung; Teilmatrix gleich `0 … N−1` |
+| CI-02 | Jeder Fenster- oder Rendererdateilauf erhält einen frischen Prozess; Qt-Abbau und Garbage Collection bleiben erhalten. | Prüfung der gestarteten Befehle und Prozessausgänge |
+| CI-03 | Fenster und echte Renderer laufen nur im bisherigen Release-Umfang; Leistung bleibt lokal beim Release, `rendered` bleibt aus CI ausgeschlossen. | Workflow- und Marker-Verträge, einschließlich `tests_only` |
 | CI-04 | Kernmatrix und native Typprüfung bleiben auf den bisherigen Plattformen. Die zwei speziellen Fensterverträge bleiben auf Windows, Linux und macOS. | Prüfung der tatsächlichen Jobmatrix und Aufrufe |
 | CI-05 | Paketbau braucht sämtliche erforderlichen erfolgreichen Qualitäts-, Kern- und Fensterjobs. Abbruch, leere Auswahl, Sammlungsfehler oder fehlender Bericht ergeben kein Grün. | Negative Fälle des Runners und Prüfung der Paketabhängigkeiten |
 | CI-06 | Berichte nennen Auswahl, echte Prozessausgänge, Testzahlen und Zeiten; auch bei Fehlern werden vorhandene Berichte hochgeladen. | Berichtstests und `always()`-Artefaktschritte |
@@ -62,7 +62,7 @@ mypy bleibt auf jeder Plattform, weil es Plattformzweige unterschiedlich
 prüft — einmal je Plattform, nicht je Teil.
 
 Die zwei plattformübergreifenden Fensterverträge bekommen eine eigene Matrix.
-Die übrigen Windows-Dateien werden in drei Gruppen verteilt, jeweils seriell
+Die übrigen Windows-Dateien mit Fenstern oder echten Renderern werden in drei Gruppen verteilt, jeweils seriell
 mit einem Prozess je Datei. Die Kernsuite läuft je Plattform in drei Teilen:
 Jeder Teil sammelt die ganze Suite und behält mit `--ci-shard I/N` nach der
 Markerwahl seine Dateien; mypy läuft einmal je Plattform im Teil 0. Die
@@ -78,7 +78,12 @@ Hilfsprozess des Kerns aus dem Paket (`tools/check_frozen_helper.py`, RM-212);
 das ist ein Rauchtest am Artefakt, kein Testlauf, und `tests/test_packaging.py`
 hält ihn.
 
-Die Auswahl stammt weiterhin aus Pytests Fixture-Graphen und Markern.
+Die Auswahl stammt weiterhin aus Pytests Fixture-Graphen und Markern. `windowed`
+kennzeichnet Fenster; `rendering` kennzeichnet Adapterabfragen und echte
+Rendererwege, getrennt von `rendered`-Vergleichen gegen vorbereitete Dateien.
+Beide Releasemarker werden aus der normalen Kernsuite herausgehalten und in
+der Releasegruppe je Testdatei genau einmal gefahren. Adapterabfragen laufen
+erst beim ausgewählten Test, nie beim Modulimport oder beim Sammeln.
 Je eine versionierte Laufzeittabelle für Fenster und Kern beeinflusst
 ausschließlich die Reihenfolge und Verteilung, niemals die Mitgliedschaft;
 neu erzeugt wird sie aus den JUnit-Berichten eines abgeschlossenen Laufs. Neue oder umbenannte Dateien
@@ -172,12 +177,12 @@ Ergebnisse). Der Fall fiel lokal von 319 s auf 24 bis 34 s.
    Sammlung auf gleiche Fälle, Parameter, Marker und Fixture-Auflösung prüfen.
 6. Betroffene Kern-/Strukturtests, Ruff, Format und mypy prüfen; vor dem Commit
    das gemeinsame Entwicklungstor für den tatsächlich gemeldeten Stand.
-7. Beim nächsten autorisierten Release die gesamte Fenstergruppe und die
-   bisherige Plattformmatrix fahren. Erst deren erfolgreiche Berichte belegen
+7. Beim nächsten autorisierten Release die gesamte Fenster- und Renderergruppe
+   sowie die bisherige Plattformmatrix fahren. Erst deren erfolgreiche Berichte belegen
    die Release-Abnahme und den realen CI-Zeitgewinn.
 
 Ohne Releaseauftrag werden weder ein Release-Lauf noch Paketbau oder
-Veröffentlichung ausgelöst. Eine noch nicht gefahrene Fenster- oder
+Veröffentlichung ausgelöst. Eine noch nicht gefahrene Fenster-, Renderer- oder
 CI-Laufzeitabnahme bleibt ausdrücklich offen, auch wenn ihre Infrastruktur
 und die Entwicklungstests bereits fertig sind.
 

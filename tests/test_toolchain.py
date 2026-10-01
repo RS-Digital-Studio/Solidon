@@ -3344,7 +3344,7 @@ def test_no_generated_comparison_runs_in_the_ci() -> None:
     )
     from tools.run_suite_isolated import CI_MARKER
 
-    assert CI_MARKER == "windowed and not performance and not rendered"
+    assert CI_MARKER == "(windowed or rendering) and not performance and not rendered"
 
     marked = _marked_rendered()
     assert marked, "kein Test trägt den Marker — dann prüft die zweite Hälfte nichts"

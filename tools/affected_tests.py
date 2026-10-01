@@ -30,13 +30,14 @@ jeden Test.
 berührt; das Tor sagt, ob der Stand *insgesamt* trägt. Vor dem Commit läuft
 ``/pruefen``, hier läuft, was dazwischen schnell Auskunft gibt.
 
-**Fenster und Leistung nur beim Release.** Die reine Auswahl nennt weiter
-alle betroffenen Dateien. ``--run`` und ``--split`` fahren deren Tests ohne
-Fenster (``-m "not windowed"``) und stellen die Fenstertests zurück; erst
-``--release`` nimmt sie je Datei als eigene Prozesse dazu (``-m windowed``).
-Getrennt wird je Test, nicht je Datei — der Fixture-Graph entscheidet wie in
-``suite-getrennt.sh``. Leistungsprüfungen laufen auch beim Release separat und
-niemals über dieses Werkzeug.
+**Fenster, Renderer und Leistung nur beim Release.** Die reine Auswahl nennt
+weiter alle betroffenen Dateien. ``--run`` und ``--split`` fahren deren
+Entwicklungstests ohne Fenster, echte Renderer, Erzeugnisvergleiche oder
+Leistung und stellen die Releasefälle zurück. ``--release`` nimmt Fenster
+und Renderer je Datei als eigene Prozesse dazu und zusätzlich
+Erzeugnisvergleiche. Getrennt wird je Test, nicht je Datei — der Fixture-Graph
+entscheidet wie in ``suite-getrennt.sh``. Leistungsprüfungen laufen auch beim
+Release separat und niemals über dieses Werkzeug.
 """
 
 from __future__ import annotations
@@ -351,18 +352,21 @@ def affected(
     return set(reasons), reasons
 
 
-def split_windowed(files: Iterable[Path]) -> tuple[list[Path], list[Path]]:
-    """Dateien mit Fenstertests und Dateien mit Tests ohne Fenster, ohne sie auszuführen.
+def split_windowed(
+    files: Iterable[Path], *, release: bool = False
+) -> tuple[list[Path], list[Path]]:
+    """Releasefälle und reguläre Dateiläufe passend zum Modus trennen.
 
-    Eine Datei kann in beiden Listen stehen: Ihre Tests ohne Fenster laufen
-    im regulären Aufruf, ihre Fenstertests nur beim Release.
+    Eine Datei kann in beiden Listen stehen: Der reguläre Dateilauf enthält
+    keine Fenster oder Renderer. Im Release kommen Erzeugnisvergleiche dazu;
+    Fenster- und Rendererfälle laufen zusätzlich in der Releasegruppe.
     """
     from tools.list_windowed_tests import collect_test_groups
 
     ordered = sorted(files)
     if not ordered:
         return [], []
-    windowed, plain = collect_test_groups(ordered, confcutdir=ROOT)
+    windowed, plain = collect_test_groups(ordered, confcutdir=ROOT, include_rendered=release)
     return list(windowed), list(plain)
 
 
@@ -373,8 +377,8 @@ def commands(
     keyword: str | None = None,
     markexpr: str | None = None,
 ) -> list[list[str]]:
-    """Die regulären Aufrufe; nur beim Release kommt je Fensterdatei einer dazu."""
-    windowed, plain = split_windowed(files)
+    """Die regulären Aufrufe; nur beim Release kommt je Release-Datei einer dazu."""
+    windowed, plain = split_windowed(files, release=release)
     return _commands(windowed, plain, release=release, keyword=keyword, markexpr=markexpr)
 
 
@@ -465,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
         "-m", dest="markexpr", help="zusätzlicher Markerfilter im eigentlichen Lauf"
     )
     parser.add_argument(
-        "--release", action="store_true", help="beim Release auch Fensterdateien fahren"
+        "--release", action="store_true", help="beim Release auch Fenster- und Rendererfälle fahren"
     )
     arguments = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
@@ -495,16 +499,21 @@ def main(argv: list[str] | None = None) -> int:
     if not arguments.run and not arguments.split:
         return 0
     print()
-    windowed, plain = split_windowed(files)
+    windowed, plain = split_windowed(files, release=arguments.release)
     deferred = sorted(set(windowed) if not arguments.release else set())
-    only_performance = sorted(files - set(plain) - set(windowed))
+    files_without_group = sorted(files - set(plain) - set(windowed))
     if deferred:
-        print("Zurückgestellt: die Fenstertests dieser Dateien nur mit --release.")
+        print("Zurückgestellt: Fenster- und Rendererfälle dieser Dateien nur mit --release.")
         for path in deferred:
             print(f"  {path.relative_to(ROOT).as_posix()}")
-    if only_performance:
-        print("Nur Leistungsprüfungen — separat beim Release:")
-        for path in only_performance:
+    if files_without_group:
+        label = (
+            "Nur Leistungsprüfungen — separat beim Release:"
+            if arguments.release
+            else "Nur Erzeugnisvergleiche oder Leistungsprüfungen — beim Release:"
+        )
+        print(label)
+        for path in files_without_group:
             print(f"  {path.relative_to(ROOT).as_posix()}")
     lines = _commands(
         windowed,

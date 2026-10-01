@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -9,6 +10,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -200,20 +202,29 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
 ) -> None:
     """Die Sammlung nutzt echte vererbte Fixtures; die Testkörper werden nie ausgeführt."""
     (tmp_path / "pytest.ini").write_text(
-        "[pytest]\nmarkers =\n    windowed: probe\n    performance: probe\n    rendered: probe\n",
+        "[pytest]\nmarkers =\n    windowed: probe\n    rendering: probe\n"
+        "    performance: probe\n    rendered: probe\n",
         encoding="utf-8",
     )
     (tmp_path / "conftest.py").write_text(
         "import pytest\n@pytest.fixture\ndef qt_app():\n"
         "    raise AssertionError('collection only')\n"
-        "@pytest.fixture\ndef indirect(qt_app):\n    return qt_app\n",
+        "@pytest.fixture\ndef indirect(qt_app):\n    return qt_app\n"
+        "@pytest.fixture\ndef require_graphics_adapter():\n"
+        "    raise AssertionError('render fixture ran during collection')\n"
+        "@pytest.fixture\ndef indirect_renderer(require_graphics_adapter):\n"
+        "    return require_graphics_adapter\n",
         encoding="utf-8",
     )
-    mixed = tmp_path / "test_mixed.py"
+    mixed = tmp_path / "test_ci_collection_mixed.py"
     mixed.write_text(
         "import pytest\n"
+        "@pytest.mark.parametrize('value', [1, 2])\n"
+        "def test_renderer_via_fixture(indirect_renderer, value): pass\n"
+        "@pytest.mark.rendering\ndef test_direct_renderer(): pass\n"
         "@pytest.mark.parametrize('value', [1, 2])\ndef test_window(indirect, value): pass\n"
         "@pytest.mark.windowed\ndef test_external(): pass\n"
+        "@pytest.mark.windowed\n@pytest.mark.rendering\ndef test_window_and_renderer(): pass\n"
         "@pytest.mark.rendered\ndef test_generated(indirect): pass\n"
         "@pytest.mark.performance\ndef test_budget(indirect): pass\n"
         "def test_plain(): pass\n",
@@ -223,8 +234,251 @@ def test_ci_collection_excludes_generated_and_performance_cases_but_keeps_mixed_
         "import pytest\n@pytest.mark.rendered\ndef test_generated(qt_app): pass\n", encoding="utf-8"
     )
     assert list_windowed_tests.collect_ci_window_counts((tmp_path,), confcutdir=tmp_path) == {
-        mixed.resolve(): 3
+        mixed.resolve(): 7
     }
+
+
+def test_renderer_group_keeps_pure_cases_from_mixed_files(tmp_path: Path) -> None:
+    """Indirekte Grafik und Direktmarker gehen ins Release; reine Fälle bleiben regulär."""
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\nmarkers =\n    rendering: probe\n    windowed: probe\n    rendered: probe\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "conftest.py").write_text(
+        "import pytest\n@pytest.fixture\ndef require_graphics_adapter():\n"
+        "    raise AssertionError('collection only')\n"
+        "@pytest.fixture\ndef qt_app():\n"
+        "    raise AssertionError('collection only')\n"
+        "@pytest.fixture\ndef renderer(require_graphics_adapter):\n"
+        "    return require_graphics_adapter\n",
+        encoding="utf-8",
+    )
+    mixed = tmp_path / "test_renderer_group_mixed.py"
+    mixed.write_text(
+        "import pytest\ndef test_plain(): pass\n"
+        "def test_indirect(renderer): pass\n"
+        "@pytest.mark.rendering\ndef test_direct(): pass\n",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "test_renderer_group_generated.py"
+    generated.write_text(
+        "import pytest\n@pytest.mark.rendered\ndef test_generated(): pass\n",
+        encoding="utf-8",
+    )
+    combined = tmp_path / "test_renderer_group_rendered_combined.py"
+    combined.write_text(
+        "import pytest\n"
+        "@pytest.mark.rendered\ndef test_rendered_window(qt_app): pass\n"
+        "@pytest.mark.rendered\ndef test_rendered_renderer(require_graphics_adapter): pass\n",
+        encoding="utf-8",
+    )
+
+    release, plain = list_windowed_tests.collect_test_groups(
+        (mixed, generated, combined), confcutdir=tmp_path
+    )
+    release_with_generated, plain_with_generated = list_windowed_tests.collect_test_groups(
+        (mixed, generated, combined), confcutdir=tmp_path, include_rendered=True
+    )
+
+    assert release == (mixed.resolve(),)
+    assert plain == (mixed.resolve(),)
+    assert release_with_generated == (mixed.resolve(), combined.resolve())
+    assert plain_with_generated == (generated.resolve(), mixed.resolve())
+    assert (
+        list_windowed_tests.collect_windowed((mixed, generated, combined), confcutdir=tmp_path)
+        == release_with_generated
+    )
+    assert list_windowed_tests.collect_ci_window_counts(
+        (mixed, generated, combined), confcutdir=tmp_path
+    ) == {mixed.resolve(): 2}
+    assert list_windowed_tests.WINDOW_GROUPS == {
+        "plain": "not windowed and not rendering",
+        "windowed": "(windowed or rendering)",
+    }
+
+
+def test_an_empty_user_filter_keeps_pytests_nonzero_exit(tmp_path: Path) -> None:
+    """Die Gruppenlogik darf eine ausdrücklich leere ``-k``-Wahl nicht grün färben."""
+    config = tmp_path / "pytest.ini"
+    config.write_text(
+        "[pytest]\nmarkers =\n    rendering: probe\n    windowed: probe\n",
+        encoding="utf-8",
+    )
+    probe = tmp_path / "test_empty_user_filter.py"
+    probe.write_text("def test_plain(): pass\n", encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "tools.list_windowed_tests",
+            "--window-group",
+            "plain",
+            "-k",
+            "no_such_test",
+            "-c",
+            str(config),
+            "--confcutdir",
+            str(tmp_path),
+            str(probe),
+        ],
+        cwd=runner.ROOT,
+        env={**os.environ, "PYTEST_ADDOPTS": ""},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+
+    assert result.returncode == pytest.ExitCode.NO_TESTS_COLLECTED, result.stdout + result.stderr
+
+
+def test_graphics_adapter_probe_is_lazy_and_uses_the_selected_adapter(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> None:
+    """Die geteilte Fixture fragt das Gerät erst nach ihrer Anforderung ab."""
+    calls: list[str] = []
+    adapter = object()
+
+    def request_adapter_sync(*, power_preference: str) -> object:
+        calls.append(power_preference)
+        return adapter
+
+    monkeypatch.setitem(
+        sys.modules,
+        "wgpu",
+        SimpleNamespace(gpu=SimpleNamespace(request_adapter_sync=request_adapter_sync)),
+    )
+
+    conftest_path = Path(__file__).with_name("conftest.py").resolve()
+    shared_conftest = next(
+        plugin
+        for plugin in request.config.pluginmanager.get_plugins()
+        if getattr(plugin, "__file__", None) and Path(plugin.__file__).resolve() == conftest_path
+    )
+    assert shared_conftest._graphics_adapter_problem() is None
+    assert calls == ["high-performance"]
+
+
+def test_render_test_modules_do_not_query_a_device_during_import_or_collection() -> None:
+    """Nur die gewählte Adapterfixture darf die Treiberfrage ausführen."""
+    root = Path(__file__).resolve().parents[1]
+    renderer_files = (
+        "test_render_contract.py",
+        "test_render_factory.py",
+        "test_render_gizmo.py",
+        "test_render_gfx_regressions.py",
+        "test_feature_label_layout.py",
+    )
+    for name in renderer_files:
+        source = (root / "tests" / name).read_text(encoding="utf-8")
+        assert "request_adapter_sync" not in source, name
+        assert "GFX_MISSING" not in source, name
+
+    shared_source = (root / "tests" / "conftest.py").read_text(encoding="utf-8")
+    tree = ast.parse(shared_source)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "request_adapter_sync"
+    ]
+    assert len(calls) == 1
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    parent = parents[calls[0]]
+    while not isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        parent = parents[parent]
+    assert parent.name == "_graphics_adapter_problem"
+
+
+def test_renderer_collection_does_not_request_an_adapter() -> None:
+    """Frische Sammlung echter Rendererfälle bleibt ohne Geräteabfrage und Ausführung."""
+    root = Path(__file__).resolve().parents[1]
+    script = """
+import wgpu
+
+calls = []
+def request_adapter_sync(*, power_preference):
+    calls.append(power_preference)
+    return object()
+
+wgpu.gpu.request_adapter_sync = request_adapter_sync
+import pytest
+result = pytest.main([
+    "--collect-only", "-q", "-p", "no:cacheprovider", "-m", "rendering",
+    "tests/test_render_contract.py",
+])
+assert int(result) == 0, result
+assert calls == [], calls
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        env={**os.environ, "PYTEST_ADDOPTS": ""},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_real_renderer_entry_points_have_a_release_only_dependency() -> None:
+    """Fixturewege und direkte Rendereraufbauten bleiben aus dem Entwicklungstor."""
+    root = Path(__file__).resolve().parents[1] / "tests"
+    cases = {
+        "test_render_contract.py": {
+            "renderer": "fixture",
+            "test_labels_render_in_a_fresh_interpreter": "fixture",
+        },
+        "test_render_gizmo.py": {"scene": "fixture"},
+        "test_render_gfx_regressions.py": {
+            "renderer": "fixture",
+            "test_the_steady_light_draws_the_stock_image_without_turning_each_frame": "fixture",
+        },
+        "test_render_factory.py": {
+            "test_availability_is_a_plain_answer": "mark",
+            "test_ci_has_a_working_graphics_adapter": "mark",
+            "test_the_factory_builds_pygfx_without_a_window": "fixture",
+            "test_native_qt_canvas_draws_and_releases_its_renderer": "fixture",
+            "test_native_item_pick_slack_stays_constant_on_hidpi_screens": "fixture",
+        },
+        "test_feature_label_layout.py": {
+            "test_gfx_label_field_covers_its_leader_without_covering_picks": "fixture",
+        },
+    }
+    for filename, expected in cases.items():
+        tree = ast.parse((root / filename).read_text(encoding="utf-8"))
+        functions = {
+            node.name: node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        for name, kind in expected.items():
+            function = functions[name]
+            decorators = [ast.unparse(decorator) for decorator in function.decorator_list]
+            arguments = {
+                argument.arg
+                for argument in (
+                    *function.args.posonlyargs,
+                    *function.args.args,
+                    *function.args.kwonlyargs,
+                )
+            }
+            if kind == "fixture":
+                assert "require_graphics_adapter" in arguments or any(
+                    "usefixtures('require_graphics_adapter')" in decorator
+                    or 'usefixtures("require_graphics_adapter")' in decorator
+                    for decorator in decorators
+                ), f"{filename}::{name} braucht die Adapterfixture"
+            else:
+                assert any("pytest.mark.rendering" in decorator for decorator in decorators), (
+                    f"{filename}::{name} braucht den Marker rendering"
+                )
 
 
 def test_a_broken_collection_does_not_return_a_partial_plan(tmp_path: Path) -> None:
@@ -252,7 +506,10 @@ def test_each_real_pytest_command_preserves_the_fixed_ci_selection(tmp_path: Pat
     """Frische Python-Prozesse tragen Marker, JUnit, Dauerbericht und Hängerdiagnose."""
     command = runner.pytest_command(runner.PlannedFile("tests/test_x.py", 1, 3), tmp_path / "x.xml")
     assert command[:6] == [str(runner.PYTHON), "-u", "-X", "faulthandler", "-m", "pytest"]
-    assert command[command.index("-m", 6) + 1] == "windowed and not performance and not rendered"
+    assert (
+        command[command.index("-m", 6) + 1]
+        == "(windowed or rendering) and not performance and not rendered"
+    )
     assert "faulthandler_timeout=120" in command and "--durations=30" in command
     assert "-n" not in command and command[-1] == "tests/test_x.py"
     assert f"--junitxml={tmp_path / 'x.xml'}" in command
@@ -606,7 +863,9 @@ def test_the_local_run_keeps_the_time_limit_it_was_given(monkeypatch: pytest.Mon
         limits.append(options["timeout"])
         return subprocess.CompletedProcess(command, 0, "1 passed in 0.01s\n", "")
 
-    monkeypatch.setattr(affected_tests, "split_windowed", lambda files: ([], list(files)))
+    monkeypatch.setattr(
+        affected_tests, "split_windowed", lambda files, *, release=False: ([], list(files))
+    )
     monkeypatch.setattr(subprocess, "run", finished)
     assert runner.main(["--timeout", "42", "test_ci_runner"]) == 0
     assert limits == [42.0]
@@ -658,7 +917,12 @@ def _collected(*extra: str) -> list[str]:
         [
             sys.executable,
             *("-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"),
-            *("-m", "not windowed and not performance and not rendered", *extra, *files),
+            *(
+                "-m",
+                "not windowed and not performance and not rendered and not rendering",
+                *extra,
+                *files,
+            ),
         ],
         cwd=runner.ROOT,
         capture_output=True,

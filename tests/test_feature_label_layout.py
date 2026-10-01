@@ -261,14 +261,13 @@ def test_leaders_reach_the_visible_field_inside_the_collision_reserve(
 
 
 @pytest.mark.parametrize("line_first", [True, False])
-def test_gfx_label_field_covers_its_leader_without_covering_picks(line_first: bool) -> None:
+def test_gfx_label_field_covers_its_leader_without_covering_picks(
+    line_first: bool, require_graphics_adapter: None
+) -> None:
     """Die Verbindung erreicht das Textfeld; darin bleiben Feld und Schrift unverdeckt."""
     from app.ui.render.api import CameraPose, LabelStyle, SurfaceStyle
     from app.ui.render.gfx_renderer import GfxRenderer
-    from tests.test_render_contract import GFX_MISSING
 
-    if GFX_MISSING is not None:
-        pytest.skip(f"pygfx: {GFX_MISSING}")
     renderer = GfxRenderer(offscreen=True, size=(400, 300))
     try:
         body = renderer.add_surface(

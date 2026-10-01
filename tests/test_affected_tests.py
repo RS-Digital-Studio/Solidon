@@ -321,7 +321,8 @@ def selection_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
         tmp_path,
         "pytest.ini",
         "[pytest]\naddopts = --import-mode=importlib\nmarkers =\n"
-        "    performance: Messung\n    windowed: Fenster im Kindprozess\n",
+        "    performance: Messung\n    windowed: Fenster im Kindprozess\n"
+        "    rendering: echte Grafik\n",
     )
     _write(
         tmp_path,
@@ -330,7 +331,12 @@ def selection_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
         "@pytest.fixture\n"
         "def qt_app():\n    raise AssertionError('fixture ran')\n"
         "@pytest.fixture\n"
-        "def inherited(qt_app):\n    return qt_app\n",
+        "def inherited(qt_app):\n    return qt_app\n"
+        "@pytest.fixture\n"
+        "def require_graphics_adapter():\n    raise AssertionError('fixture ran')\n"
+        "@pytest.fixture\n"
+        "def inherited_renderer(require_graphics_adapter):\n"
+        "    return require_graphics_adapter\n",
     )
     files = {
         "plain": _write(tmp_path, "tests/test_plain.py", "def test_plain():\n    assert False\n"),
@@ -359,6 +365,13 @@ def selection_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
             "import pytest\ndef test_regular():\n    assert False\n"
             "@pytest.mark.performance\ndef test_measure(inherited):\n    assert False\n",
         ),
+        "renderer": _write(
+            tmp_path,
+            "tests/test_renderer.py",
+            "import pytest\ndef test_regular():\n    assert False\n"
+            "def test_renderer(inherited_renderer):\n    assert False\n"
+            "@pytest.mark.rendering\ndef test_direct_renderer():\n    assert False\n",
+        ),
     }
     monkeypatch.setattr(affected_tests, "ROOT", tmp_path)
     return files
@@ -368,8 +381,8 @@ def selection_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str,
 def test_commands_defer_windows_and_never_run_performance(
     selection_tree: dict[str, Path], release: bool
 ) -> None:
-    """Getrennt wird je Test: Die Tests ohne Fenster jeder Datei laufen immer,
-    die Fenstertests nur beim Release, Leistung nie.
+    """Getrennt wird je Test: Entwicklungstests laufen immer,
+    Fenster- und Rendererfälle nur beim Release, Leistung nie.
 
     Bis zum 22.09.2026 zog ein einziger Fenstertest seine ganze Datei ins
     Release — gemessen 1709 Tests ohne Fenster außerhalb jedes
@@ -379,17 +392,19 @@ def test_commands_defer_windows_and_never_run_performance(
 
     lines = commands(selection_tree.values(), release=release)
 
-    assert len(lines) == (3 if release else 1)
+    assert len(lines) == (4 if release else 1)
     assert lines[0][lines[0].index("--window-group") + 1] == "plain"
     assert [argument for argument in lines[0] if argument.startswith("tests/")] == [
         "tests/test_marked.py",
         "tests/test_mixed.py",
         "tests/test_plain.py",
+        "tests/test_renderer.py",
         "tests/test_window.py",
     ]
     if release:
         assert [line[-1] for line in lines[1:]] == [
             "tests/test_marked.py",
+            "tests/test_renderer.py",
             "tests/test_window.py",
         ]
         assert all(line[line.index("--window-group") + 1] == "windowed" for line in lines[1:])
@@ -403,8 +418,9 @@ def test_commands_defer_windows_and_never_run_performance(
         "-k test_regular",
         "-k no_such_test",
         '-m "not windowed"',
+        '-m "not rendering"',
         "-m performance",
-        '-k test_regular -m "not performance and not windowed"',
+        '-k test_regular -m "not performance and not windowed and not rendering"',
         "--deselect=tests/test_window.py",
     ],
 )
@@ -414,7 +430,7 @@ def test_file_groups_ignore_case_filters(
     filters: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Eine Abwahl ändert weder Fensterbedarf noch die vorhandenen Kerndateien."""
+    """Eine Abwahl ändert weder Releasebedarf noch die vorhandenen Kerndateien."""
     import os
 
     from tools.list_windowed_tests import collect_test_groups
@@ -435,8 +451,10 @@ def test_file_groups_ignore_case_filters(
     windowed, plain = collect_test_groups(tuple(selection_tree.values()), confcutdir=root)
 
     # „mixed“ hat nur als Leistungstest ein Fenster — kein Fenstertest also.
-    assert set(windowed) == {selection_tree[name] for name in ("window", "marked")}
-    assert set(plain) == {selection_tree[name] for name in ("plain", "window", "marked", "mixed")}
+    assert set(windowed) == {selection_tree[name] for name in ("window", "marked", "renderer")}
+    assert set(plain) == {
+        selection_tree[name] for name in ("plain", "window", "marked", "mixed", "renderer")
+    }
     assert os.environ.get("PYTEST_ADDOPTS") == before
 
 
@@ -610,6 +628,70 @@ def test_an_only_performance_selection_does_not_start_empty_pytest(
     assert "kein Testlauf gestartet" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("marker", "expected"),
+    [
+        ("rendering", "Zurückgestellt: Fenster- und Rendererfälle"),
+        ("rendered", "Nur Erzeugnisvergleiche oder Leistungsprüfungen"),
+    ],
+)
+def test_release_only_selection_does_not_start_an_empty_development_process(
+    selection_tree: dict[str, Path],
+    marker: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Renderer und Erzeugnisvergleiche bleiben sichtbar, ohne leere Kernläufe zu starten."""
+    from tools import affected_tests
+
+    path = _write(
+        selection_tree["plain"].parent,
+        "test_release_only.py",
+        f"import pytest\n@pytest.mark.{marker}\ndef test_release_only(): pass\n",
+    )
+    monkeypatch.setattr(affected_tests, "affected", lambda _: ({path}, {path: "selbst geändert"}))
+    monkeypatch.setattr(affected_tests, "run", lambda _: pytest.fail("leerer Lauf wurde gestartet"))
+
+    assert affected_tests.main([str(path), "--run"]) == 0
+    output = capsys.readouterr().out
+    assert expected in output
+    assert "tests/test_release_only.py" in output
+    assert "kein Testlauf gestartet" in output
+
+
+def test_isolated_runner_skips_files_without_development_cases(
+    selection_tree: dict[str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Der lokale Dateiläufer überspringt Renderer- und Erzeugnisdateien im Entwicklungstor."""
+    from tools import run_suite_isolated
+
+    renderer = _write(
+        selection_tree["plain"].parent,
+        "test_renderer_boundary_gfx_only.py",
+        "import pytest\n@pytest.mark.rendering\ndef test_graphics(): pass\n",
+    )
+    generated = _write(
+        selection_tree["plain"].parent,
+        "test_renderer_boundary_artifacts_only.py",
+        "import pytest\n@pytest.mark.rendered\ndef test_generated(): pass\n",
+    )
+    monkeypatch.setattr(run_suite_isolated, "chosen_files", lambda _: [renderer, generated])
+    monkeypatch.setattr(
+        run_suite_isolated.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("leerer Dateiprozess wurde gestartet"),
+    )
+
+    assert run_suite_isolated.run_local((), release=False) == 0
+    output = capsys.readouterr().out
+    assert "Zurückgestellt: Fenster- und Rendererfälle" in output
+    assert "Nur Erzeugnisvergleiche oder Leistungsprüfungen" in output
+    assert "Keine regulären Tests ausgewählt; kein Testlauf gestartet." in output
+
+
 def test_a_truly_empty_collection_stays_an_error(tmp_path: Path) -> None:
     """Eine Datei ohne Tests sammelt nichts, und das bleibt ein Fehler (Exit 5), kein grüner
     Lauf."""
@@ -644,7 +726,9 @@ def test_the_isolated_runner_uses_the_same_release_selection(
 
     plain, window, performance = [tmp_path / name for name in ("plain", "window", "performance")]
     monkeypatch.setattr(run_suite_isolated, "chosen_files", lambda _: [plain, window, performance])
-    monkeypatch.setattr(affected_tests, "split_windowed", lambda _: ([window], [plain]))
+    monkeypatch.setattr(
+        affected_tests, "split_windowed", lambda _, *, release=False: ([window], [plain])
+    )
     calls: list[list[str]] = []
 
     def finish(arguments: list[str], **_options: object) -> CompletedProcess[str]:
@@ -655,7 +739,11 @@ def test_the_isolated_runner_uses_the_same_release_selection(
 
     assert run_suite_isolated.main(["--release"] if release else []) == 0
     assert [line[-1] for line in calls] == [str(plain), *([str(window)] if release else [])]
-    expected = "not performance" if release else "not performance and not windowed and not rendered"
+    expected = (
+        "not performance"
+        if release
+        else "not performance and not windowed and not rendering and not rendered"
+    )
     assert all(line[4:6] == ["-m", expected] for line in calls)
 
 
@@ -683,6 +771,7 @@ def test_the_selection_leaves_out_generated_comparisons_like_the_gate(release: b
 
     assert ("not rendered" in config.option.markexpr) is not release
     assert "not performance" in config.option.markexpr
+    assert "not rendering" in config.option.markexpr
     lines = _commands([], [Path("tests/test_plain.py").resolve()], release=release)
     assert ("--with-rendered" in lines[0]) is release
 

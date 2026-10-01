@@ -55,9 +55,9 @@ bash .claude/scripts/suite-getrennt.sh
 .venv\Scripts\python.exe -m mypy
 ```
 
-**Fenstertests und Leistungsprüfungen nur beim Release** (`AGENTS.md`,
+**Fenster-, Renderer- und Leistungsprüfungen nur beim Release** (`AGENTS.md`,
 „Arbeitsweise“). `pytest -q` am Stück kommt nicht durch
-(nativer Abriss nach rund 700 Fenstern); das Tor trennt die Fenstergruppe ab:
+(nativer Abriss nach rund 700 Fenstern); das Tor trennt Fenster und Renderer ab:
 
 ```
 bash .claude/scripts/suite-getrennt.sh --release
@@ -66,7 +66,7 @@ bash .claude/scripts/suite-getrennt.sh --release
 
 **Das Ergebnis ist der Exit-Code**, direkt nach dem Befehl gelesen, dazu die
 Zahl gelaufener gegen gesammelter Tests. Jeder Nichtnull-Ausgang ist rot, auch
-nach „passed". Wie die Fenstergruppe abgetrennt wird und wie ein Lauf gelesen
+nach „passed". Wie Fenster und Renderer abgetrennt werden und wie ein Lauf gelesen
 wird, steht in `/pruefen` und `.claude/rules/tests.md`.
 
 Weiteres:

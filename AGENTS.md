@@ -156,10 +156,10 @@ Dialoge.
 
 - **Kleine Schritte, je Schritt nur die betroffenen Tests**
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab). Das
-  Entwicklungstor — alle Tests ohne Fenster und Leistung, ruff, format, mypy —
+  Entwicklungstor — alle Tests ohne Fenster, Renderer und Leistung, ruff, format, mypy —
   läuft **vor dem Commit**, nicht nach jedem Schritt (Entscheidung Robert). Ein
   Schritt, der seine Tests rot lässt, wird nicht auf den nächsten gestapelt.
-- **Fenstertests und Leistungsprüfungen laufen ausschließlich beim Release**,
+- **Fenster-, Renderer- und Leistungsprüfungen laufen ausschließlich beim Release**,
   auch nicht als betroffene Teilmenge. Ein grüner Entwicklungslauf ersetzt
   diesen Nachweis nicht.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat**

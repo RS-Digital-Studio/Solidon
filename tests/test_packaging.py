@@ -541,7 +541,7 @@ def _assert_ci_dependencies(workflow: str) -> None:
     windows = job_block(workflow, "windows")
     assert "runs-on: windows-latest" in windows
     count = re.search(r"--shard-index \$\{\{ matrix\.shard \}\} --shard-count (\d+) ", windows)
-    assert count is not None, "die Fenstergruppen nennen ihre Anzahl nicht"
+    assert count is not None, "die Releasegruppen nennen ihre Anzahl nicht"
     assert _shard_matrix(windows) == list(range(int(count.group(1))))
     suite = job_block(workflow, "suite")
     count = re.search(r"--ci-shard \$\{\{ matrix\.shard \}\}/(\d+) ", suite)
@@ -786,7 +786,9 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
         )
         if platform == "Windows":
             scripts.append(
-                step_script(step_block(job_block(workflow, "windows"), "Fensterdateien"))
+                step_script(
+                    step_block(job_block(workflow, "windows"), "Fenster- und Rendererdateien")
+                )
             )
     script = "\n".join(scripts).replace("${{ matrix.shard }}", "0")
     shell = _workflow_shell()
@@ -817,7 +819,7 @@ def test_each_ci_window_group_is_executed_only_at_release_and_once(
     core = [line for line in invoked if "-n auto" in line]
     assert len(core) == 1
     assert "--ignore" not in core[0]
-    assert "not performance and not rendered and not windowed" in core[0]
+    assert "not performance and not rendered and not windowed and not rendering" in core[0]
     assert "--durations=30" in core[0] and "--junitxml=" in core[0]
     windows = [line for line in invoked if "--ci-group" in line]
     expected = ["contracts"] if release else []
@@ -871,7 +873,11 @@ def test_window_failures_block_the_package_on_every_platform(
 ) -> None:
     """Jeder echte Fensteraufruf reicht den Ausgang des isolierten Läufers durch."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    name = "Fensterdateien" if job == "windows" else "Plattformübergreifende Fensterverträge"
+    name = (
+        "Fenster- und Rendererdateien"
+        if job == "windows"
+        else "Plattformübergreifende Fensterverträge"
+    )
     block = job_block(workflow, job)
     assert "continue-on-error" not in block
     script = step_script(step_block(block, name)).replace("${{ matrix.shard }}", "0")
@@ -1157,7 +1163,7 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
 
 
 def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
-    """Die CI gibt jeder Fensterdatei einen eigenen Prozess — sie muss sie finden.
+    """Die CI gibt jeder Fenster- und Rendererdatei einen eigenen Prozess.
 
     Der Absturz auf den Linux-Runnern hing an der Zahl der Renderfenster, die ein
     Prozess nacheinander aufbaut; deshalb laufen die Fensterdateien einzeln. Die
@@ -1168,9 +1174,9 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
 
     Seit dem 06.09.2026 sucht der Workflow nicht mehr mit einem Textmuster,
     sondern fragt ``tools/list_windowed_tests.py`` — denselben Fixture-Graphen,
-    aus dem die geteilte Suite ihre Fenstergruppe bildet. Geprüft wird deshalb
+    aus dem die geteilte Suite ihre Releasegruppe bildet. Geprüft wird deshalb
     zweierlei: Beide Stellen des Workflows rufen das Werkzeug, und das Werkzeug
-    nennt jede Datei, die ein Fenster wirklich **baut**. Erwähnungen zählen
+    nennt jede Datei, die ein Fenster wirklich **baut** oder echte Grafik nutzt. Erwähnungen zählen
     nicht — ein Docstring oder ein Import bekämen sonst einen eigenen Prozess
     für nichts; deshalb liest die Gegenprobe Namen, nicht Text.
     """
@@ -1198,7 +1204,16 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     windowed = {Path(entry).name for entry in listed}
     assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
     assert "test_render_factory.py" in windowed, (
-        "native Renderer-Kindprozesse fehlen trotz windowed-Marker in der Fenstergruppe"
+        "native Renderer-Kindprozesse fehlen in der Releasegruppe"
+    )
+    assert {
+        "test_render_contract.py",
+        "test_render_gizmo.py",
+        "test_render_gfx_regressions.py",
+        "test_feature_label_layout.py",
+    } <= windowed, "direkte und indirekte Rendererfälle fehlen in der Releasegruppe"
+    assert not {"test_render_shapes.py", "test_navigator.py"} & windowed, (
+        "Grafikdoubles oder reine Projektionslogik wurden als echte Renderer ausgewählt"
     )
 
     # ``Plotter`` stand hier bis zum 06.09.2026 mit: PyVistas Klasse, die der

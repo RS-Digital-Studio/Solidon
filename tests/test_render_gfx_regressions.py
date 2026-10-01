@@ -15,13 +15,11 @@ import pytest
 from app.ui.render.api import AxesMarkerStyle, CameraPose, CellColours, LabelStyle, SurfaceStyle
 from app.ui.render.gfx_renderer import GfxLabels, GfxRenderer
 from tests.helpers import cube_surface as cube
-from tests.test_render_contract import GFX_MISSING, look_down, plate
-
-pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
+from tests.test_render_contract import look_down, plate
 
 
 @pytest.fixture
-def renderer() -> Iterator[GfxRenderer]:
+def renderer(require_graphics_adapter: None) -> Iterator[GfxRenderer]:
     view = GfxRenderer(offscreen=True, size=(400, 300))
     try:
         yield view
@@ -932,7 +930,7 @@ def _lit_scene(view: GfxRenderer) -> None:
 
 
 def test_the_steady_light_draws_the_stock_image_without_turning_each_frame(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, require_graphics_adapter: None
 ) -> None:
     """Das eigene gerichtete Licht gibt dasselbe Bild und dreht sich nicht je Bild.
 

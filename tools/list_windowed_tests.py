@@ -1,14 +1,17 @@
-"""Testdateien nennen, die über Fixtures oder eigene Prozesse Qt-Fenster bauen.
+"""Testdateien für Qt-Fenster und echte Rendererläufe trennen.
 
     .venv\\Scripts\\python.exe tools/list_windowed_tests.py
 
-Die geteilte Suite muss Fenstertests in eigene Prozesse legen. Eine Suche
+Die geteilte Suite muss Fenster- und Rendererfälle in eigene Prozesse legen. Eine Suche
 nach Klassennamen im Quelltext war dafür kein Kriterium: Ein Docstring zog
 eine reine Kerndatei in die Fenstergruppe, während eine indirekt geerbte
 Fixture ohne den Namen unsichtbar blieb. Pytest kennt den vollständigen
 Fixture-Graphen bereits; dieses Werkzeug liest ihn nach der Sammlung aus.
 Fenster in eigenen Prozessen tragen ausdrücklich ``pytest.mark.windowed``,
-weil deren Aufbau nicht im Fixture-Graphen des aufrufenden Tests steht.
+weil deren Aufbau nicht im Fixture-Graphen des aufrufenden Tests steht. Echte
+Grafik trägt ``pytest.mark.rendering`` oder fordert die zentrale Fixture
+``require_graphics_adapter`` an. Erzeugnisvergleiche bleiben davon getrennt:
+``rendered`` bezeichnet nur vorbereitete Handbuch- und Website-Bilder.
 
 **Getrennt wird je Test, nicht je Datei** (22.09.2026). Bis dahin zog ein
 einziger Fenstertest seine ganze Datei in die Fenstergruppe, und die lief nur
@@ -17,8 +20,10 @@ Tests ohne Fenster lagen so außerhalb jedes Entwicklungstors, darunter 216
 von 217 in ``test_translations.py``, 307 von 313 in ``test_print_settings.py``
 und 101 von 103 in ``test_toolchain.py``. Sie liefen dabei zu drei Befunden
 auf, die niemand gesehen hatte. :func:`mark_windowed_items` gibt deshalb
-jedem Fenstertest den Marker ``windowed``; das reguläre Tor wählt ihn mit
-``-m "not windowed"`` ab, das Release-Tor fährt je Datei ``-m windowed``.
+jedem Fenstertest den Marker ``windowed``. Echte Rendererfälle tragen
+``rendering``. Das reguläre Tor wählt beide mit
+``-m "not windowed and not rendering"`` ab, das Release-Tor fährt beide
+Gruppen je Datei.
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
+_GRAPHICS_FIXTURES = frozenset({"graphics_adapter_problem", "require_graphics_adapter"})
 
 
 def needs_a_window(item: pytest.Item) -> bool:
@@ -40,6 +46,19 @@ def needs_a_window(item: pytest.Item) -> bool:
         "qt_app" in getattr(item, "fixturenames", ())
         or item.get_closest_marker("windowed") is not None
     )
+
+
+def needs_rendering(item: pytest.Item) -> bool:
+    """Ob ein Test echte Grafik nutzt: zentrale Adapterfixture oder Direktmarke."""
+    return (
+        bool(_GRAPHICS_FIXTURES.intersection(getattr(item, "fixturenames", ())))
+        or item.get_closest_marker("rendering") is not None
+    )
+
+
+def needs_release_isolation(item: pytest.Item) -> bool:
+    """Ob ein Test nur im Release-Tor laufen darf."""
+    return needs_a_window(item) or needs_rendering(item)
 
 
 def mark_windowed_items(items: list[pytest.Item]) -> None:
@@ -54,14 +73,21 @@ def mark_windowed_items(items: list[pytest.Item]) -> None:
             item.add_marker(pytest.mark.windowed)
 
 
-class WindowedCollector:
-    """Sammelt je Datei, ob sie Fenstertests und ob sie Tests ohne Fenster trägt."""
+def mark_rendering_items(items: list[pytest.Item]) -> None:
+    """Markiert Nutzer der zentralen Grafikfixture vor der Markerabwahl."""
+    for item in items:
+        if needs_rendering(item) and item.get_closest_marker("rendering") is None:
+            item.add_marker(pytest.mark.rendering)
 
-    def __init__(self, *, exclude_rendered: bool = False) -> None:
+
+class WindowedCollector:
+    """Sammelt je Datei Releasefälle und die reguläre Dateigruppe des angefragten Laufs."""
+
+    def __init__(self, *, include_rendered: bool = False) -> None:
         self.files: set[Path] = set()
         self.plain_files: set[Path] = set()
         self.window_counts: dict[Path, int] = {}
-        self.exclude_rendered = exclude_rendered
+        self.include_rendered = include_rendered
         self.collected_count = 0
 
     def pytest_itemcollected(self, item: pytest.Item) -> None:
@@ -69,10 +95,10 @@ class WindowedCollector:
         self.collected_count += 1
         if item.get_closest_marker("performance") is not None:
             return
-        if self.exclude_rendered and item.get_closest_marker("rendered") is not None:
+        if not self.include_rendered and item.get_closest_marker("rendered") is not None:
             return
         path = Path(str(item.path)).resolve()
-        if needs_a_window(item):
+        if needs_release_isolation(item):
             self.files.add(path)
             self.window_counts[path] = self.window_counts.get(path, 0) + 1
         else:
@@ -80,7 +106,10 @@ class WindowedCollector:
 
 
 #: Welche Tests ein Lauf mit ``--window-group`` nimmt.
-WINDOW_GROUPS = {"plain": "not windowed", "windowed": "windowed"}
+WINDOW_GROUPS = {
+    "plain": "not windowed and not rendering",
+    "windowed": "(windowed or rendering)",
+}
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -118,41 +147,43 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Als Laufplugin markieren, bevor ``-m`` abwählt — auch ohne Projekt-conftest."""
+    """Fenster und Renderer markieren, bevor ``-m`` abwählt."""
     mark_windowed_items(items)
+    mark_rendering_items(items)
 
 
 def collect_windowed(paths: Sequence[Path], *, confcutdir: Path | None = None) -> tuple[Path, ...]:
     """Sammelt ohne Testlauf und gibt die betroffenen Dateien sortiert zurück."""
-    windowed, _plain = collect_test_groups(paths, confcutdir=confcutdir)
+    windowed, _plain = collect_test_groups(paths, confcutdir=confcutdir, include_rendered=True)
     return windowed
 
 
 def collect_test_groups(
-    paths: Sequence[Path], *, confcutdir: Path | None = None
+    paths: Sequence[Path], *, confcutdir: Path | None = None, include_rendered: bool = False
 ) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
-    """Dateien mit Fenstertests und Dateien mit Tests ohne Fenster — eine kann beides sein.
+    """Dateien mit Fenster-/Rendererfällen und regulären Tests sammeln.
 
-    Leistungstests zählen zu keiner der beiden Gruppen; eine Datei, die nur
-    sie trägt, bleibt draußen.
+    Fenster- und Rendererfälle zählen zur Releasegruppe. Erzeugnisvergleiche
+    kommen nur mit ``include_rendered`` in die reguläre Dateigruppe. Leistung
+    zählt zu keiner Gruppe; Dateien ohne wählbare Fälle bleiben draußen.
     """
-    collector = _collect(paths, confcutdir=confcutdir)
+    collector = _collect(paths, confcutdir=confcutdir, include_rendered=include_rendered)
     return tuple(sorted(collector.files)), tuple(sorted(collector.plain_files))
 
 
 def collect_ci_window_counts(
     paths: Sequence[Path], *, confcutdir: Path | None = None
 ) -> dict[Path, int]:
-    """Zählt die ausführbaren CI-Fensterfälle ohne Leistung und Erzeugervergleiche."""
-    collector = _collect(paths, confcutdir=confcutdir, exclude_rendered=True)
+    """Zählt Fenster- und Rendererfälle ohne Leistung und Erzeugnisvergleiche."""
+    collector = _collect(paths, confcutdir=confcutdir)
     return dict(sorted(collector.window_counts.items()))
 
 
 def _collect(
-    paths: Sequence[Path], *, confcutdir: Path | None, exclude_rendered: bool = False
+    paths: Sequence[Path], *, confcutdir: Path | None, include_rendered: bool = False
 ) -> WindowedCollector:
     """Liest den ungefilterten Fixture-Graphen für lokale und CI-Gruppen einmal."""
-    collector = WindowedCollector(exclude_rendered=exclude_rendered)
+    collector = WindowedCollector(include_rendered=include_rendered)
     # Nur die Sammlung ist ungefiltert. Die Umgebung bleibt für den echten
     # Lauf erhalten; dort verknüpft das Plugin den wirksamen Marker mit dem
     # Leistungsausschluss, statt den Nutzerfilter zu überschreiben.
@@ -197,7 +228,10 @@ def main() -> int:
     for path in files:
         print(path.relative_to(ROOT).as_posix())
     if not files:
-        print("Keine Fensterdatei über Fixtures oder Marker gefunden.", file=sys.stderr)
+        print(
+            "Keine Fenster- oder Rendererdatei über Fixtures oder Marker gefunden.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

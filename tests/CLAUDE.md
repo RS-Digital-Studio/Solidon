@@ -58,14 +58,14 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Findet die vektorisierte Selbstdurchdringung dieselben Paare wie der skalare Weg? | `test_self_intersections.py` |
 | Analytische Geometriefälle an den registrierten Kundenwegen · Flächenplatzierung mit gleichem Werkzeugkörper in Vorschau und Operation | `test_geometry_review_regressions.py` · `test_surface_placement.py` |
 | Filamentlager, Buchungen und Verbrauch · im Fenster | `test_filament_inventory.py`, `test_filament_usage.py` · `test_filament_inventory_ui.py`, `test_filament_assignment.py`, `test_filament_usage_ui.py`, `test_filament_workflow.py` — isolierte Lagerdateien, nie der Nutzerbestand |
-| Zeichnet der Renderer, was der Vertrag verspricht? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py` ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py`; `test_render_shapes.py`, `test_navigator.py` ohne Renderer |
+| Zeichnet der Renderer, was der Vertrag verspricht? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py`, `test_render_factory.py`, `test_feature_label_layout.py` (`rendering`, nur beim Release; ohne Adapter ein Skip mit Grund); `test_render_shapes.py`, `test_navigator.py` ohne echten Renderer |
 | Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern, und teilen überlappende `undisturbed`-Aufrufe ihren GC-Schutz? | `test_leash.py` — Quellenprüfung und Mehrfaden-Gegenprobe |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
 | Bleiben Dialoginhalt, Klappen und Aktionsleisten erreichbar und Fenster im Bildschirm? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; die Abläufe der Einstellungen in `test_ui_settings.py` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server? Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_licence_admin.py`, `test_activation_server.py` · `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler (`php_probe.py`) |
 | Website: tote Verweise, Stempel, Paketgrößen, „nichts von außen“, Sprachfassungen | `test_website.py` — Außenlinks getrennt von eingebundenen Ressourcen |
-| CI: vollständige Partitionen, Sammlung mit und ohne `--ci-shard`, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` |
+| CI: vollständige Partitionen, Fenster-/Renderergrenze, adapterfreie Sammlung, Prozessisolation, Berichte · Workflowblöcke und Paketfreigabe | `test_ci_runner.py` · `test_packaging.py` mit `workflow_helpers.py` |
 | Wählt `tools/affected_tests.py` richtig? Findet `tools/twin_scan.py` seine Zwillinge? | `test_affected_tests.py` · `test_twin_scan.py` |
 | Hooks, Codex-Spiegel, Karten | `test_solidon3d_hooks.py` (echte Auslösung im Editor zusätzlich prüfen) · `test_agent_mirror.py` · `test_directory_docs.py` |
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |

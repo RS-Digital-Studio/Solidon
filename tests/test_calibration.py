@@ -852,29 +852,25 @@ def test_a_part_too_small_for_a_mark_says_so_instead_of_engraving_rubbish(
 # --- der Dialog (§28.3, zweiter Schritt) ----------------------------------------------
 
 
-def test_the_dialog_offers_exactly_the_fields_of_the_profile(own_profiles: Path) -> None:
+def test_the_dialog_offers_exactly_the_fields_of_the_profile(
+    own_profiles: Path, qt_app: object
+) -> None:
     """Was sich messen lässt, ist das, was das Materialprofil hält — sonst
     nichts.
     """
-    from PySide6.QtWidgets import QApplication
-
-    if QApplication.instance() is None:
-        QApplication([])
     from app.ui.dialogs import CalibrationDialog
 
+    assert qt_app is not None
     dialog = CalibrationDialog("petg")
 
     assert set(dialog.editors) == set(calibration.FIELDS)
     assert dialog.measured().material == "petg"
 
 
-def test_the_dialog_starts_from_the_current_values(own_profiles: Path) -> None:
-    from PySide6.QtWidgets import QApplication
-
-    if QApplication.instance() is None:
-        QApplication([])
+def test_the_dialog_starts_from_the_current_values(own_profiles: Path, qt_app: object) -> None:
     from app.ui.dialogs import CalibrationDialog
 
+    assert qt_app is not None
     current = profiles.material("petg")
     dialog = CalibrationDialog("petg")
 

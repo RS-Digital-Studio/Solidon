@@ -1,11 +1,11 @@
 # Automatische Bauläufe für alle Zielplattformen (Bauplan §37.2), Prüfvertrag
 # nach konzepte/konzept-ci-testlaufzeiten-2026-09.md.
 #
-# Qualität, Kernmatrix und Release-Fensterprüfungen rechnen unabhängig; die
+# Qualität, Kernmatrix und Release-Fenster-/Rendererprüfungen rechnen unabhängig; die
 # Paketierung wartet auf alle Pflichtjobs, und nur was grün ist, wird
 # veröffentlicht. Kern und Fenster laufen in Teilen: Die aktuelle
 # Pytest-Sammlung bestimmt die vollständige Menge, Laufzeittabellen verteilen
-# sie nur. Fenster laufen je Datei in einem frischen Prozess. Leistung wird
+# sie nur. Fenster und Renderer laufen je Datei in einem frischen Prozess. Leistung wird
 # beim Release lokal gemessen, erzeugte Vergleiche bleiben dort. Die
 # Baujobs arbeiten gegen `constraints.txt`; der Versionswächter daneben (Job
 # `latest`) löst frei auf und meldet, was eine neue Version bricht — bei
@@ -182,7 +182,7 @@ jobs:
           # worksteal: Ein Worker, der fertig ist, nimmt Arbeit aus fremden
           # Schlangen; `load` ließ ihn am Ende warten. Lokal, Teil 0/3 mit -n 4,
           # beide Reihenfolgen: 354 → 206 s und 213 → 160 s (24.09.2026).
-          run -n auto --dist worksteal --ci-shard ${{ matrix.shard }}/3 -m "not performance and not rendered and not windowed" --durations=30 --durations-min=1 --junitxml=reports/core/junit.xml
+          run -n auto --dist worksteal --ci-shard ${{ matrix.shard }}/3 -m "not performance and not rendered and not windowed and not rendering" --durations=30 --durations-min=1 --junitxml=reports/core/junit.xml
 
       - name: Kernprüfbericht sichern
         if: always()
@@ -274,7 +274,7 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Fensterdateien (Windows, Gruppe ${{ matrix.shard }})
+    name: Fenster- und Rendererdateien (Windows, Gruppe ${{ matrix.shard }})
     # Nur Windows (Entscheidung Robert, 08.09.2026): Unter jedem Unix misst
     # offscreen die Schriftmetrik von fontconfig, und acht Tests je Plattform
     # prüften damit Breiten, die kein Kunde sieht (ROADMAP-ARCHIV.md). Die
@@ -313,12 +313,12 @@ jobs:
         # Compiler sind auf allen Zielplattformen vorhanden.
         run: python tools/build_slice_core.py
 
-      - name: Fensterdateien
+      - name: Fenster- und Rendererdateien
         shell: bash
         run: |
           set -euo pipefail
           python tools/run_suite_isolated.py --release --ci-group windowed --shard-index ${{ matrix.shard }} --shard-count 3 --report-dir reports/windows-${{ matrix.shard }}
-      - name: Fensterberichte sichern
+      - name: Fenster- und Rendererberichte sichern
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -1503,16 +1503,16 @@ jobs:
       - name: Tests
         env:
           QT_QPA_PLATFORM: offscreen
-        # Der Versionswächter prüft reguläre Verträge. Fenstertests und
+        # Der Versionswächter prüft reguläre Verträge. Fenster-, Renderer- und
         # Leistungsprüfungen bleiben dem Release vorbehalten.
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p reports/latest
-          # Wie im Suite-Job: Die Fenstertests wählt der Marker ab, den
+          # Wie im Suite-Job: Fenster und Renderer wählt der Marker ab, den
           # conftest.py aus dem Fixture-Graphen setzt; alle übrigen laufen.
           run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
-          run -n auto -m "not performance and not rendered and not windowed" --durations=30 --durations-min=1 --junitxml=reports/latest/junit.xml
+          run -n auto -m "not performance and not rendered and not windowed and not rendering" --durations=30 --durations-min=1 --junitxml=reports/latest/junit.xml
 
       - name: Versionsprüfbericht sichern
         if: always()

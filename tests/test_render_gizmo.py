@@ -24,16 +24,13 @@ from app.ui.render.gizmo import (
     rotation_matrix,
 )
 from tests.helpers import cube_surface as cube
-from tests.test_render_contract import GFX_MISSING, make_renderer
+from tests.test_render_contract import make_renderer
 
 SIZE = (600, 450)
 
 
-pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
-
-
 @pytest.fixture
-def scene() -> Iterator[tuple[Renderer, object, Gizmo, list]]:
+def scene(require_graphics_adapter: None) -> Iterator[tuple[Renderer, object, Gizmo, list]]:
     renderer = make_renderer(SIZE)
     renderer.set_background("#101418")
     vertices, faces = cube(20.0)
@@ -401,6 +398,9 @@ def _dispatching_view(started: list[bool], navigated: list[object], **handles: o
         _scale_handle=None,
         _slot_handle=None,
         _slot_borrowed=False,
+        _blocked_cavity_slot_pull=False,
+        _pending_cavity_slot_pull=None,
+        _block_unsupported_cavity_slot_pull=lambda _event: False,
         _placement_pointer=lambda _event: False,
         _placement_resume=None,
         placementDragStarted=SimpleNamespace(emit=lambda: started.append(True)),

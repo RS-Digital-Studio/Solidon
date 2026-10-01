@@ -41,9 +41,9 @@ schweigt, und Schweigen sieht aus wie ein sauberes Ergebnis.
 
 | Werkzeug | Tut |
 |---|---|
-| `affected_tests.py` | Betroffene Testdateien aus dem Importgraphen über `app/`, `tools/`, `tests/`, einschließlich Paketinitialisierern und gelöschten Testhelfern. Git-Pfade werden NUL-getrennt gelesen; Umbenennungen zählen am alten und neuen Ort. Dazu Tests, die eine geänderte Textdatei nennen. `--why` nennt alle; `--split`/`--run` fahren ohne Fenster, Fenstertests nur mit `--release`, Leistung nie |
-| `list_windowed_tests.py` | Dateien mit Fenstertests aus dem aufgelösten Fixture-Graphen oder dem Marker `windowed` (Fenster außerhalb von `qt_app`, etwa im Kindprozess); als Laufplugin wählt `--window-group` je Test |
-| `run_suite_isolated.py` | Je Testdatei ein Prozess; Fenster nur mit `--release`, Leistung getrennt. CI: `--release --ci-group contracts\|windowed`, `--plan-only` plant ohne Lauf. Fehler, leere Auswahl und fehlende Berichte bleiben rot |
+| `affected_tests.py` | Betroffene Testdateien aus dem Importgraphen über `app/`, `tools/`, `tests/`, einschließlich Paketinitialisierern und gelöschten Testhelfern. Git-Pfade werden NUL-getrennt gelesen; Umbenennungen zählen am alten und neuen Ort. Dazu Tests, die eine geänderte Textdatei nennen. `--why` nennt alle; `--split`/`--run` fahren Entwicklungstests sofort, Fenster- und Rendererfälle sowie Erzeugnisvergleiche nur mit `--release`, Leistung nie |
+| `list_windowed_tests.py` | Dateien mit Fensterfällen aus dem aufgelösten `qt_app`-Fixture-Graphen oder `windowed` sowie echten Rendererfällen über `require_graphics_adapter` oder `rendering`; als Laufplugin wählt `--window-group` je Test. `rendered` bleibt davon getrennt |
+| `run_suite_isolated.py` | Je Testdatei ein Prozess; Fenster und Renderer nur mit `--release`, Erzeugnisvergleiche ebenfalls nur dort, Leistung getrennt. CI: `--release --ci-group contracts\|windowed`, `--plan-only` plant ohne Lauf. Die Dateiauswahl lässt Gruppen ohne passende Fälle aus; Fehler und fehlende Berichte bleiben rot |
 | `ci_shards.py` | Die Verteilung für Läufer und `tests/conftest.py` (`--ci-shard I/N`): je Datei, längste zuerst in die leichteste Gruppe; als Befehl schreibt es eine Laufzeittabelle (`core`/`windows`) aus JUnit-Berichten neu |
 | `qt_trace.py` | pytest-Erweiterung für die Jagd auf den Absturz beim Aufräumen |
 | `run_agent_suite.py` | 39 Referenzanfragen an den Agenten — **kostet Geld**, das Ergebnis ist eine Quote |

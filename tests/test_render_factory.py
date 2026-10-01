@@ -13,14 +13,15 @@ import pytest
 
 from app.ui.render import factory
 from app.ui.render.gfx_renderer import GfxRenderer
-from tests.test_render_contract import GFX_MISSING
 
 
-def test_availability_is_a_plain_answer() -> None:
+@pytest.mark.rendering
+def test_availability_is_a_plain_answer(graphics_adapter_problem: str | None) -> None:
     """Die Wache antwortet mit ja oder nein, nie mit einer Ausnahme."""
-    assert isinstance(factory.available(), bool)
-    if GFX_MISSING is None:
-        assert factory.available() is True
+    available = factory.available()
+    assert isinstance(available, bool)
+    if graphics_adapter_problem is None:
+        assert available is True
 
 
 def test_the_adapter_answer_is_remembered_for_the_whole_process(
@@ -151,14 +152,16 @@ def test_the_application_asks_for_the_adapter_before_it_loads_the_registry() -> 
     )
 
 
-def test_ci_has_a_working_graphics_adapter() -> None:
+@pytest.mark.rendering
+def test_ci_has_a_working_graphics_adapter(graphics_adapter_problem: str | None) -> None:
     """Eine CI ohne Renderer darf übersprungene Bildtests nicht als Abnahme melden."""
     if os.environ.get("CI"):
-        assert GFX_MISSING is None, f"Die CI kann den einzigen Renderer nicht prüfen: {GFX_MISSING}"
+        assert graphics_adapter_problem is None, (
+            f"Die CI kann den einzigen Renderer nicht prüfen: {graphics_adapter_problem}"
+        )
 
 
-@pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
-def test_the_factory_builds_pygfx_without_a_window() -> None:
+def test_the_factory_builds_pygfx_without_a_window(require_graphics_adapter: None) -> None:
     """Ohne Fenster entsteht derselbe Renderer, den die Ansicht zeichnet."""
     view = factory.make_renderer(offscreen=True, size=(64, 48))
     try:
@@ -168,8 +171,8 @@ def test_the_factory_builds_pygfx_without_a_window() -> None:
         view.close()
 
 
-@pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
 @pytest.mark.windowed
+@pytest.mark.usefixtures("require_graphics_adapter")
 def test_native_qt_canvas_draws_and_releases_its_renderer() -> None:
     """Ein eigener Prozess prüft den echten Qt-Fensterweg neben den Offscreen-Verträgen."""
     platform = {"win32": "windows", "darwin": "cocoa"}.get(sys.platform, "xcb")
@@ -321,8 +324,8 @@ _XVFB_TEARS = pytest.mark.xfail(
 )
 
 
-@pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
 @pytest.mark.windowed
+@pytest.mark.usefixtures("require_graphics_adapter")
 @pytest.mark.parametrize(
     "scale",
     [pytest.param(1, marks=_XVFB_TEARS), pytest.param(2, marks=_XVFB_TEARS)],

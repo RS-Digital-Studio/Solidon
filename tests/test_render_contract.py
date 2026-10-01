@@ -41,21 +41,6 @@ BACKGROUND_RGB = tuple(round(part * 255) for part in rgb(BACKGROUND))
 COLOUR_SLACK = 2
 
 
-def _gfx_missing() -> str | None:
-    """Warum der pygfx-Zweig hier nicht laufen kann — oder ``None``."""
-    try:
-        import wgpu
-
-        adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
-    except Exception as problem:  # kein Paket, kein Treiber, kein Adapter
-        return str(problem) or type(problem).__name__
-    return None if adapter is not None else "kein wgpu-Adapter"
-
-
-GFX_MISSING = _gfx_missing()
-pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
-
-
 def make_renderer(size: tuple[int, int] = SIZE) -> Renderer:
     """Der Renderer ohne Fenster, in dieser Größe."""
     return GfxRenderer(offscreen=True, size=size)
@@ -82,7 +67,7 @@ def bright(image: np.ndarray, threshold: int = 100) -> np.ndarray:
 
 
 @pytest.fixture
-def renderer() -> Iterator[Renderer]:
+def renderer(require_graphics_adapter: None) -> Iterator[Renderer]:
     view = make_renderer()
     view.set_background(BACKGROUND)
     try:
@@ -449,7 +434,7 @@ def test_colours_travel_as_hex_in_both_directions() -> None:
         rgb("#12345")
 
 
-def test_labels_render_in_a_fresh_interpreter() -> None:
+def test_labels_render_in_a_fresh_interpreter(require_graphics_adapter: None) -> None:
     """Beschriftungen zeichnen auch in einem Interpreter, der nur den Renderer
     holt — so, wie die Anwendung seit dem Ausbau von PyVista startet.
 

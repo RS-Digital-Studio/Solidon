@@ -8,9 +8,10 @@ Der CI-Weg plant aus der aktuellen Sammlung, schreibt je Datei JUnit und
 Protokoll und behält fehlende Berichte als Fehler. ``--plan-only`` sammelt
 und verteilt ohne Testausführung; dafür ist ``--release`` nicht nötig.
 
-Fenstertests laufen ausschließlich mit ``--release``; ohne das fährt jede
-Datei ihre Tests ohne Fenster (``-m "not windowed"``). Leistungsprüfungen
-bleiben auch dann dem getrennten Release-Lauf vorbehalten.
+Fenster- und Rendererfälle laufen ausschließlich mit ``--release``; ohne das
+fährt jede Datei ihre Entwicklungstests ohne Fenster, Renderer, Erzeugnisvergleiche
+oder Leistung. Mit ``--release`` kommen Fenster, Renderer und Erzeugnisvergleiche
+dazu; Leistungsprüfungen bleiben dem getrennten Release-Lauf vorbehalten.
 
 **Wofür das da ist.** Ein Absturz reißt die Suite seit Tagen sporadisch ab —
 eine Zugriffsverletzung ohne Traceback, die Roadmap führt ihn als offenen
@@ -72,7 +73,7 @@ from tools.ci_shards import WINDOW_DURATIONS, balanced, read_durations  # noqa: 
 BUDGET_SECONDS = 900
 
 CONTRACT_FILES = frozenset({"tests/test_print_settings_ui.py", "tests/test_render_factory.py"})
-CI_MARKER = "windowed and not performance and not rendered"
+CI_MARKER = "(windowed or rendering) and not performance and not rendered"
 
 #: Wie lange der Leser nach dem Prozessende noch auf den Rest der Ausgabe
 #: wartet. Hält ein entkommener Enkel die Leitung offen, endet der Bericht
@@ -355,7 +356,7 @@ def write_ci_summary(report_dir: Path, summary: dict[str, Any]) -> None:
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     lines = [
-        f"# CI-Fenstergruppe {summary['group']}",
+        f"# CI-Releasegruppe {summary['group']}",
         "",
         f"Stand: {summary['status']}; Shard {summary['shard_index'] + 1}/{summary['shard_count']}.",
         f"Commit: {summary['commit'] or 'lokal'}; Plattform: {summary['platform']}.",
@@ -530,7 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("patterns", nargs="*", help="Dateinamensmuster; leer: alle Testdateien")
     parser.add_argument(
-        "--release", action="store_true", help="beim Release auch Fensterdateien fahren"
+        "--release", action="store_true", help="beim Release auch Fenster- und Rendererfälle fahren"
     )
     parser.add_argument("--ci-group", choices=("windowed", "contracts"))
     parser.add_argument("--shard-index", type=int, default=0)
@@ -575,17 +576,26 @@ def run_local(patterns: tuple[str, ...], *, release: bool, timeout: float = BUDG
         print("Keine Testdatei passt auf das Muster.")
         return 1
 
-    windowed, plain = split_windowed(files)
+    windowed, plain = split_windowed(files, release=release)
     selected = sorted({*plain, *(windowed if release else [])})
-    markexpr = "not performance" if release else "not performance and not windowed and not rendered"
+    markexpr = (
+        "not performance"
+        if release
+        else "not performance and not windowed and not rendering and not rendered"
+    )
     if not release and windowed:
-        print("Zurückgestellt: die Fenstertests dieser Dateien nur mit --release.")
+        print("Zurückgestellt: Fenster- und Rendererfälle dieser Dateien nur mit --release.")
         for path in sorted(windowed):
             print(f"  {path.name}")
-    only_performance = sorted(set(files) - set(plain) - set(windowed))
-    if only_performance:
-        print("Nur Leistungsprüfungen — separat beim Release:")
-        for path in only_performance:
+    files_without_group = sorted(set(files) - set(plain) - set(windowed))
+    if files_without_group:
+        label = (
+            "Nur Leistungsprüfungen — separat beim Release:"
+            if release
+            else "Nur Erzeugnisvergleiche oder Leistungsprüfungen — beim Release:"
+        )
+        print(label)
+        for path in files_without_group:
             print(f"  {path.name}")
     if not selected:
         print("Keine regulären Tests ausgewählt; kein Testlauf gestartet.")

@@ -378,16 +378,16 @@ def test_a_clean_stub_suite_has_a_successful_process_exit(tmp_path: Path, releas
     assert "Läufe mit Fehler: 0" in result.stdout
     calls = (tmp_path / "calls.txt").read_text(encoding="utf-8")
     # Je Test getrennt: keine Datei fällt aus dem regulären Tor, und die
-    # Fensterprozesse fahren nur die Fenstertests ihrer Datei.
+    # Releaseprozesse fahren nur Fenster- und Rendererfälle ihrer Datei.
     assert "--ignore" not in calls
     # Erzeugnisvergleiche (``rendered``) nur beim Release — zwischen zwei
     # Paketbauten sind sie erwartbar rot (23.09.2026).
     if release:
-        assert "-m not performance and not windowed -n" in calls
+        assert "-m not performance and not windowed and not rendering -n" in calls
     else:
-        assert "-m not performance and not windowed and not rendered -n" in calls
+        assert "-m not performance and not windowed and not rendering and not rendered -n" in calls
     assert ("list_windowed_tests.py" in calls) is release
-    assert ("--collect-only -q -m windowed and not performance" in calls) is release
+    assert ("--collect-only -q -m (windowed or rendering) and not performance" in calls) is release
     assert ("tests/test_fake.py::test_0" in calls) is release
 
 

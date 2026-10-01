@@ -102,17 +102,43 @@ def pytest_configure(config: pytest.Config) -> None:
     register(config)
 
 
+def _graphics_adapter_problem() -> str | None:
+    """Erfragt, ob wgpu einen Adapter hat; wird erst von der Fixture aufgerufen."""
+    # Die Treiber-/Adapterabfrage ist auf Entwicklerrechnern optional.
+    try:
+        import wgpu
+
+        adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
+    except Exception as problem:
+        return str(problem) or type(problem).__name__
+    return None if adapter is not None else "kein wgpu-Adapter"
+
+
+@pytest.fixture(scope="session")
+def graphics_adapter_problem() -> str | None:
+    """Erfragt erst beim ausgewählten Rendererfall, ob wgpu einen Adapter hat."""
+    return _graphics_adapter_problem()
+
+
+@pytest.fixture
+def require_graphics_adapter(graphics_adapter_problem: str | None) -> None:
+    """Überspringt echte Grafikprüfungen lokal ohne Adapter, mit sichtbarem Grund."""
+    if graphics_adapter_problem is not None:
+        pytest.skip(f"pygfx: {graphics_adapter_problem}")
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Jeder Test mit ``qt_app`` trägt ``windowed`` — bevor ``-m`` abwählt.
+    """Fenster- und Rendererfälle werden vor der Markerabwahl klassifiziert.
 
-    Das reguläre Tor wählt Fenster je Test ab (``-m "not windowed"``), nicht
-    mehr je Datei; die Regel und ihr Anlass stehen in
+    Fenster und echte Grafik bleiben im Entwicklungstor draußen, während
+    reine Fälle in gemischten Dateien weiterlaufen. Die Regel steht in
     ``tools/list_windowed_tests.py``.
     """
-    from tools.list_windowed_tests import mark_windowed_items
+    from tools.list_windowed_tests import mark_rendering_items, mark_windowed_items
 
     mark_windowed_items(items)
+    mark_rendering_items(items)
 
 
 #: Der tatsächlich ausgelieferte Testbeginn. Die Suite aktiviert den
