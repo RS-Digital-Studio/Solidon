@@ -3245,19 +3245,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-286"></a>
 
-- [ ] **RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen.** Aus dem Release 0.5.1 (Oberflächenpaket,
-  Code-Review U-5, U-6, U-8). Seit 0.5.1 lehnen Parameterleiste und Operationsdialog eine
-  getippte Zahl jenseits der Grenzen ab, statt sie still zu kürzen (`labels.BoundedSpin`,
-  `.claude/rules/oberflaeche.md`). Still gekürzt wird weiter im Merkmalfenster
-  (`FeaturePanel`, `configure_feature_field`) und in den Druckeinstellungen
-  (`print_settings_dialog`). Zwei Ränder desselben Wegs: Schaltet man *fx* mit einem
-  Ausdruck jenseits der Grenze aus, klemmt `op_dialog._switch` den Wert still (`setValue`,
-  `_core` hält den Ausdruckswert; Beleg `konzepte/nachweise-release-0.5.1/laeufe/rev-code-u1.txt`) —
-  die Zahl als Text ins Feld setzen, damit `BoundedSpin` ablehnt; und die Kurzhilfe einer
-  Grenzänderung im Verlauf zeigt „40,00 mm → 40,00 mm“ (`panels._changed_parameters`
-  vergleicht nur den Wert, `edit_parameter` trägt denselben Titel). Abnahme: an allen vier
-  Orten wird eine Zahl jenseits der Grenze abgelehnt und die Grenze genannt; die Kurzhilfe
-  nennt die geänderte Grenze.
+- [~] **RM-286 — Grenzablehnung in allen Zahlenfeldern.** Aus dem Release 0.5.1
+  (Oberflächenpaket, Code-Review U-5, U-6, U-8). Erledigt: Merkmalfenster samt Maßgruppen,
+  `fx`-Rückweg aus Ausdrücken jenseits der Grenze und die Kurzhilfe bei geänderten
+  Parametergrenzen. Offen: Druckeinstellungen (`print_settings_dialog`). Abnahme: an allen
+  vier Orten wird eine Zahl jenseits der Grenze abgelehnt und die Grenze genannt; die
+  Kurzhilfe nennt die geänderte Grenze.
 
 <a id="rm-290"></a>
 

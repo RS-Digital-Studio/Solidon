@@ -507,7 +507,7 @@ def limit_sentence(value: str, limit: str, *, above: bool) -> str:
     return tr("{value} liegt unter der Untergrenze {limit}.").format(value=value, limit=limit)
 
 
-class BoundedSpin(NumberSpin):
+class _BoundedBehavior:
     """Ein Zahlenfeld, das eine Zahl jenseits seiner Grenzen **ablehnt**, statt sie zu kürzen.
 
     Ein ``QDoubleSpinBox`` mit Obergrenze 100 nimmt beim Tippen von „150“ die
@@ -529,14 +529,7 @@ class BoundedSpin(NumberSpin):
     sich an ihnen, und ``value()`` liegt nie außerhalb.
     """
 
-    valueRefused = Signal(float)
-    """Eine getippte Zahl liegt außerhalb der Grenzen und wurde nicht übernommen."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._named_limits: tuple[float | None, float | None] = (None, None)
-
-    def validate(self, text: str, pos: int) -> Any:
+    def validate(self: Any, text: str, pos: int) -> Any:
         """Wie :class:`NumberSpin` — nur ist eine Zahl jenseits der Grenzen ein
         Zwischenstand und kein Tippfehler.
 
@@ -546,7 +539,7 @@ class BoundedSpin(NumberSpin):
         Als Zwischenstand verwarf die Eingabetaste sonst die ganze Zahl und
         stellte still den alten Wert zurück (Code-Review 0.5.1, U-1).
         """
-        checked: Any = super().validate(text, pos)
+        checked: Any = NumberSpin.validate(self, text, pos)
         if checked[0] != QValidator.State.Invalid:
             return checked
         number = self._typed_number(text)
@@ -554,25 +547,25 @@ class BoundedSpin(NumberSpin):
             return QValidator.State.Intermediate, text, pos
         return checked
 
-    def _typed_number(self, text: str) -> float | None:
+    def _typed_number(self: Any, text: str) -> float | None:
         """Die getippte Zahl, gleich ob innerhalb der Grenzen — ``None`` ohne Zahl."""
         body = self._digits_only(self._as_shown(text))
         if not re.fullmatch(r"[+-]?\d+(?:[.,]\d*)?", body):
             return None
         return float(body.replace(",", "."))
 
-    def _places(self, text: str) -> int:
+    def _places(self: Any, text: str) -> int:
         """Wie viele Nachkommastellen getippt sind."""
         body = self._digits_only(self._as_shown(text))
         _whole, separator, fraction = body.replace(",", ".").partition(".")
         return len(fraction) if separator else 0
 
-    def _outside(self, number: float) -> bool:
+    def _outside(self: Any, number: float) -> bool:
         """Ob eine Zahl jenseits der Grenzen liegt — auf die halbe Anzeigestufe."""
         slack = 0.5 * 10.0 ** -self.decimals()
-        return number > self.maximum() + slack or number < self.minimum() - slack
+        return bool(number > self.maximum() + slack or number < self.minimum() - slack)
 
-    def name_limits(self, low: float | None, high: float | None) -> None:
+    def name_limits(self: Any, low: float | None, high: float | None) -> None:
         """Welche Grenzen der Satz nennt, wo sie von den Qt-Grenzen abweichen.
 
         Ein Feld mit „wie gemessen“ trägt seinen Sonderwert eine Stufe unter
@@ -582,14 +575,14 @@ class BoundedSpin(NumberSpin):
         """
         self._named_limits = (low, high)
 
-    def refused_value(self) -> float | None:
+    def refused_value(self: Any) -> float | None:
         """Die getippte Zahl, wenn sie außerhalb der Grenzen liegt — sonst ``None``."""
         number = self._typed_number(self.lineEdit().text())
         if number is None or not self._outside(number):
             return None
-        return number
+        return float(number)
 
-    def refusal(self, unit: str = "") -> str:
+    def refusal(self: Any, unit: str = "") -> str:
         """Der Satz zur abgelehnten Zahl, in der Schreibweise des Feldes — leer ohne Ablehnung.
 
         ``unit`` für ein Feld, dessen Einheit daneben steht statt im Feld (die
@@ -609,7 +602,7 @@ class BoundedSpin(NumberSpin):
             self.textFromValue(number) + suffix, self.textFromValue(limit) + suffix, above=above
         )
 
-    def interpretText(self) -> None:  # noqa: N802 - Qt-Name
+    def interpretText(self: Any) -> None:  # noqa: N802 - Qt-Name
         """Eine abgelehnte Zahl bleibt stehen, auch wenn jemand von außen auswertet.
 
         Der Operationsdialog wertet vor dem Übernehmen jedes Zahlenfeld aus
@@ -617,9 +610,9 @@ class BoundedSpin(NumberSpin):
         Ablehnung wäre still verschwunden.
         """
         if self.refused_value() is None:
-            super().interpretText()
+            NumberSpin.interpretText(self)
 
-    def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+    def keyPressEvent(self: Any, event: Any) -> None:  # noqa: N802 - Qt-Name
         """Die Eingabetaste übernimmt keine Zahl jenseits der Grenzen — und
         schickt sie auch nicht an den Hauptknopf des Dialogs weiter."""
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -629,9 +622,9 @@ class BoundedSpin(NumberSpin):
                 self.valueRefused.emit(refused)
                 event.accept()
                 return
-        super().keyPressEvent(event)
+        NumberSpin.keyPressEvent(self, event)
 
-    def focusOutEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+    def focusOutEvent(self: Any, event: Any) -> None:  # noqa: N802 - Qt-Name
         """Der Fokuswechsel verwirft die abgelehnte Zahl nicht still.
 
         Qt setzte sonst den alten Wert zurück; der Text bleibt stehen, und der
@@ -639,10 +632,21 @@ class BoundedSpin(NumberSpin):
         """
         refused = self.refused_value()
         typed = self.lineEdit().text()
-        super().focusOutEvent(event)
+        NumberSpin.focusOutEvent(self, event)
         if refused is not None:
             self.lineEdit().setText(typed)
             self.valueRefused.emit(refused)
+
+
+class BoundedSpin(_BoundedBehavior, NumberSpin):
+    """Ein Zahlenfeld, das eine Zahl jenseits ihrer Grenzen stehen lässt."""
+
+    valueRefused = Signal(float)
+    """Eine getippte Zahl liegt außerhalb der Grenzen und wurde nicht übernommen."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        NumberSpin.__init__(self, parent)
+        self._named_limits: tuple[float | None, float | None] = (None, None)
 
 
 class LengthSpin(NumberSpin):
@@ -779,6 +783,37 @@ class LengthSpin(NumberSpin):
         # Ein Einheitenzeichen ist keine Übersetzung — es kommt aus der
         # Einheitentabelle (§11.1).
         self.setSuffix(f" {self._unit}")
+
+
+class BoundedLengthSpin(_BoundedBehavior, LengthSpin):
+    """Ein Längenfeld, das Grenzablehnung und Anzeigeeinheiten zusammenhält."""
+
+    valueRefused = Signal(float)
+    """Eine getippte Zahl liegt außerhalb der Grenzen und wurde nicht übernommen."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        LengthSpin.__init__(self, parent)
+        self._named_limits: tuple[float | None, float | None] = (None, None)
+
+    def refresh_unit(self) -> None:
+        """Nimmt beim Einheitenwechsel auch eine noch abgelehnte Zahl mit."""
+        if display_unit() == self._unit:
+            return
+        refused = self.refused_value()
+        if refused is None:
+            LengthSpin.refresh_unit(self)
+            return
+        refused_mm = to_mm(refused, self._unit)
+        was_blocked = self.blockSignals(True)
+        try:
+            self._apply_unit()
+            if self._value_mm is not None:
+                self.set_value_mm(self._value_mm)
+            shown = from_mm(refused_mm, self._unit)
+            self.lineEdit().setText(self.textFromValue(shown))
+        finally:
+            self.blockSignals(was_blocked)
+        self.valueRefused.emit(shown)
 
 
 class RowCheckBox(QCheckBox):

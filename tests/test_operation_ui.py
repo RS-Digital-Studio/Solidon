@@ -4483,6 +4483,15 @@ def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
         assert not field.hint.isHidden()
         assert not dialog.can_accept(), "eine abgelehnte Zahl wird nicht übernommen"
         assert field.spin.lineEdit().text().startswith("1500"), "und bleibt stehen"
+
+        field.toggle.setChecked(True)
+        field.text.setText("=@breite*100")
+        QApplication.processEvents()
+        field.toggle.setChecked(False)
+        QApplication.processEvents()
+        assert field.spin.refused_value() == pytest.approx(4000.0)
+        assert "Obergrenze" in field.refusal()
+        assert not dialog.can_accept(), "auch der Rückweg aus fx hält die Grenzablehnung fest"
     finally:
         dialog.deleteLater()
         QApplication.processEvents()

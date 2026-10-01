@@ -282,6 +282,8 @@ from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
     BodyFacts,
+    BoundedLengthSpin,
+    BoundedSpin,
     LengthSpin,
     body_facts,
     body_requirement,
@@ -326,6 +328,7 @@ from app.ui.panels import (
     describe_selection,
     open_section,
     part_step_of,
+    refused_feature_field,
     texture_steps_of,
 )
 from app.ui.pose_bar import PoseBar
@@ -16670,6 +16673,19 @@ class MainWindow(QMainWindow):
             editors = current_editors()
             if len(editors) != len(editor_refs):
                 return False
+            refused = refused_feature_field(editors)
+            if refused is not None:
+                refusal, focus_target = refused
+                refusal_state["reason"] = refusal
+                host.block_apply(refusal)
+                if interpret:
+                    focus_target.setFocus()
+                    window.announce(refusal)
+                return False
+            previous_refusal = refusal_state["reason"]
+            if previous_refusal is not None and host.blocked_reason == previous_refusal:
+                host.block_apply(None)
+            refusal_state["reason"] = None
             if interpret:
                 for editor in editors.values():
                     spins = (
@@ -16792,6 +16808,7 @@ class MainWindow(QMainWindow):
                 for name, editor in current_editors().items()
                 if (focused is None or (focused is not editor and not editor.isAncestorOf(focused)))
                 and not any(line.isModified() for line in editor.findChildren(QLineEdit))
+                and refused_feature_field({name: editor}) is None
             }
             refresh_feature_fields(action.fields, untouched, values)
 
@@ -16814,6 +16831,7 @@ class MainWindow(QMainWindow):
         # Felder bindet, löst er deshalb bei der Rückgabe selbst — sonst
         # läse ein alter ``read_fields`` in den Träger eines alten Flusses.
         bound: list[QMetaObject.Connection] = []
+        refusal_state: dict[str, str | None] = {"reason": None}
         for editor in editors.values():
             if isinstance(editor, QCheckBox):
                 bound.append(editor.toggled.connect(read_fields))
@@ -16827,6 +16845,15 @@ class MainWindow(QMainWindow):
                     signal = getattr(editor, "changed", None)
                 if signal is not None:
                     bound.append(signal.connect(read_fields))
+            spins = (
+                [editor]
+                if isinstance(editor, QAbstractSpinBox)
+                else editor.findChildren(QAbstractSpinBox)
+            )
+            for spin in spins:
+                if isinstance(spin, (BoundedSpin, BoundedLengthSpin)):
+                    bound.append(spin.lineEdit().textEdited.connect(read_fields))
+                    bound.append(spin.valueRefused.connect(read_fields))
 
         def unbind() -> None:
             for connection in bound:

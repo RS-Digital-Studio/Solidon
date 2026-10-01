@@ -573,7 +573,7 @@ class ValueField(QWidget):
         except AppError, TypeError, ValueError:
             return None
 
-    def _show_refusal(self) -> None:
+    def _show_refusal(self, *, notify: bool = True) -> None:
         """Zeigt oder räumt den Satz einer abgelehnten Zahl unter dem Zahlenfeld."""
         if self.toggle.isChecked():
             return
@@ -589,7 +589,8 @@ class ValueField(QWidget):
         if bool(said) != self._refused_shown:
             self._refused_shown = bool(said)
             # Der Dialog fragt den Knopf neu (``_follow_source_pending``).
-            self.changed.emit()
+            if notify:
+                self.changed.emit()
 
     def _switch(self, to_expression: bool) -> None:
         if not to_expression:
@@ -598,9 +599,12 @@ class ValueField(QWidget):
             # Quader auf dem Mindestmaß 0,1 mm statt der 40 mm der Breite.
             value = self._expression_value()
             if value is not None:
+                shown = self._as_shown(value)
                 with QSignalBlocker(self.spin):
                     self._core = value
-                    self.spin.setValue(self._as_shown(value))
+                    self.spin.lineEdit().setText(self.spin.textFromValue(shown))
+                    if self.spin.refused_value() is None:
+                        self.spin.setValue(shown)
         self.spin.setVisible(not to_expression)
         self.text.setVisible(to_expression)
         self.parameter_button.setVisible(to_expression)
@@ -624,6 +628,8 @@ class ValueField(QWidget):
             self.text.setFocus()
             self.text.setCursorPosition(len(self.text.text()))
         self._describe()
+        if not to_expression:
+            self._show_refusal(notify=False)
         self.changed.emit()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen

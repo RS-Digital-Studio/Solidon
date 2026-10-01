@@ -1757,6 +1757,25 @@ def test_a_parameter_change_is_named_as_the_panel_names_it() -> None:
     assert tip.startswith("Breite: ") and "→" in tip, tip
     assert "40" in tip and "90" in tip, tip
 
+    begrenzt = Parameter(
+        name="breite", value=40.0, unit="mm", title=_("Breite"), minimum=0.0, maximum=100.0
+    )
+    grenze_geaendert = Transaction(
+        id="t3",
+        title=_parameter_title(begrenzt),
+        ops=(),
+        origin=Origin(by="user"),
+        changes=DocumentChange(
+            before=DocumentState(parameters={"breite": begrenzt}),
+            after=DocumentState(
+                parameters={"breite": dataclasses.replace(begrenzt, maximum=150.0)}
+            ),
+        ),
+    )
+    grenzhinweis = _changed_parameters(grenze_geaendert)
+    assert "Obergrenze" in grenzhinweis and "100" in grenzhinweis and "150" in grenzhinweis
+    assert "40" not in grenzhinweis, "der unveränderte Wert wird nicht als Änderung wiederholt"
+
 
 def test_the_history_row_of_a_parameter_change_carries_its_caption(window: MainWindow) -> None:
     """Am Fenster: Zeile „Parameter Breite“, Kurzhilfe mit dem Wert davor und danach."""
@@ -4332,6 +4351,122 @@ def _hole_fields_in_placement(window: MainWindow) -> tuple[str, str, Any, dict[s
     QTest.keyClick(next(iter(fields.values())).lineEdit(), Qt.Key.Key_End)
     QApplication.processEvents()
     return object_id, hole, flow, fields
+
+
+def test_a_refused_measure_stays_blocked_after_focus_moves(window: MainWindow) -> None:
+    """Ein zweites Maßfeld darf eine abgelehnte Zahl weder überschreiben noch übernehmen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    _object_id, _hole, flow, fields = _hole_fields_in_placement(window)
+    diameter = fields["Durchmesser"]
+    _minimum, _maximum = diameter._bounds_mm
+    limit = diameter.value_mm() + 1.0
+    diameter.set_range_mm(_minimum, limit)
+    line = diameter.lineEdit()
+    line.setFocus()
+    line.selectAll()
+    QTest.keyClicks(line, diameter.textFromValue(limit + 5.0))
+    refused_text = line.text()
+    refusal = diameter.refusal()
+    assert refusal and "Obergrenze" in refusal, refusal
+
+    other = fields["X"]
+    other.lineEdit().setFocus()
+    QTest.keyClick(other.lineEdit(), Qt.Key.Key_End)
+    QApplication.processEvents()
+    assert not line.isModified(), (
+        "Fokuswechsel stellt die ungültige Zahl ohne Änderungsmarke wieder her"
+    )
+    assert line.text() == refused_text, "der Wechsel zu einem zweiten Feld lässt den Text stehen"
+    assert flow.dialog.blocked_reason == refusal
+    assert not flow._measure_accept.isEnabled(), "der Grenzsatz sperrt Übernehmen sofort"
+
+    before = len(window.session.project.document.ops)
+    other.set_value_mm(other.value_mm() + 0.5)
+    QApplication.processEvents()
+    flow._measure_accept.click()
+    assert line.text() == refused_text
+    assert len(window.session.project.document.ops) == before, "die alte Zahl wird nicht übernommen"
+
+    line.setFocus()
+    line.selectAll()
+    QTest.keyClicks(line, diameter.textFromValue(limit))
+    QApplication.processEvents()
+    assert diameter.refused_value() is None
+    assert flow.dialog.blocked_reason is None
+
+
+def test_a_refused_measure_expression_blocks_accept_and_survives_refresh(
+    window: MainWindow,
+) -> None:
+    """Ein fx-Ausdruck in der Maßgruppe bleibt auch ohne Spinbox sichtbar gesperrt."""
+    from types import SimpleNamespace
+
+    from app.ui.labels import LengthSpin
+    from app.ui.op_dialog import ValueField
+    from tests.render_fakes import RecordingRenderer
+
+    window.viewport.renderer = RecordingRenderer(size=(900, 600))
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle(30_000)
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    window.object_tree.select_feature(object_id, hole)
+    for _ in range(40):
+        QApplication.processEvents()
+
+    spec = REGISTRY.get("drill_hole")
+    step = SimpleNamespace(id=17, op="drill_hole", params={"diameter": "=@bore"})
+    window.feature_panel.offer_bore_step(step, spec, {"bore": 6.0})
+    window._place_measures("drill_hole", {"diameter": "=@bore"}, editing=False)
+    for _ in range(40):
+        QApplication.processEvents()
+
+    flow = window._quiet_placement
+    assert flow is not None and flow.active and flow._measure_group is not None
+    diameter = next(
+        editor
+        for editor in flow._measure_group.findChildren(ValueField)
+        if editor._entry.name == "diameter"
+    )
+    other = next(
+        editor
+        for editor in flow._measure_group.findChildren(LengthSpin)
+        if editor.accessibleName().endswith("Tiefe")
+    )
+    window.show()
+    QApplication.processEvents()
+    line = diameter.text
+    line.setFocus()
+    line.setText("=@bore*100")
+    QApplication.processEvents()
+    refused_text = line.text()
+    refusal = diameter.refusal()
+    assert refusal and "Obergrenze" in refusal, refusal
+    assert flow.dialog.blocked_reason == refusal
+    assert not flow._measure_accept.isEnabled()
+
+    other.lineEdit().setFocus()
+    QApplication.processEvents()
+    assert not line.hasFocus()
+    before = len(window.session.project.document.ops)
+    flow.accept()
+    QApplication.processEvents()
+    assert line.hasFocus(), "Übernehmen führt zurück zum fx-Text, das die Grenze verletzt"
+    assert flow.dialog.values()["diameter"] == "=@bore", "der Ausdruck gelangt nicht in den Träger"
+    assert len(window.session.project.document.ops) == before
+
+    other.lineEdit().setFocus()
+    line.setModified(False)
+    flow.dialog.take_placement({"depth": other.value_mm() + 0.5})
+    QApplication.processEvents()
+    assert line.text() == refused_text, (
+        "ein Rückschreiben überschreibt den abgelehnten Ausdruck nicht"
+    )
+    assert flow.dialog.blocked_reason == refusal
+    window.end_quiet_placement()
 
 
 def test_the_measures_in_the_view_take_their_twins_out_of_the_panel(window: MainWindow) -> None:

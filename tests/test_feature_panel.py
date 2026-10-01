@@ -34,7 +34,7 @@ from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANTS, actions_fo
 from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
 from app.core.units import LengthUnit
-from app.ui.labels import LengthSpin, NumberSpin
+from app.ui.labels import BoundedSpin, LengthSpin, NumberSpin
 from app.ui.panels import FeaturePanel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -612,6 +612,71 @@ def test_changed_handling_arms_without_reporting_a_value_change(qt_app: QApplica
     assert armed[0][3] == "Merkmal verschieben"
     panel._arm(move)
     assert len(armed) == 1, "dieselbe Handlung noch einmal ist kein Wechsel"
+
+
+def test_a_feature_field_keeps_an_out_of_range_number_and_blocks_apply(
+    qt_app: QApplication,
+) -> None:
+    """Die Merkmalzeile nennt ihre Grenze, bevor sie einen Wert übernehmen kann."""
+    from PySide6.QtTest import QTest
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    row_box = row_of(panel, "Merkmal drehen")
+    row = panel._shown_rows[row_box]
+    panel._arm(row.key)
+    field = next(field for field in row.entries if field.maximum is not None)
+    name = str(field.name)
+    editor = row.widgets[name]
+    assert isinstance(editor, BoundedSpin)
+    line = editor.lineEdit()
+    line.setFocus()
+    line.selectAll()
+    QTest.keyClicks(line, editor.textFromValue(float(field.maximum) + 5.0))
+
+    refusal = row.refusals[name]
+    assert editor.refused_value() is not None
+    assert "Obergrenze" in refusal.text(), refusal.text()
+    assert editor.textFromValue(float(field.maximum)) in refusal.text(), refusal.text()
+    assert refusal.isVisibleTo(panel)
+    assert not panel._apply.isEnabled(), "eine abgelehnte Eingabe sperrt den gemeinsamen Knopf"
+    assert panel._lock_note.text() == refusal.text()
+    assert panel._lock_note.isVisibleTo(panel), "der Sperrgrund bleibt auch am Fußknopf sichtbar"
+    assert not panel.can_accept()
+    panel.block_apply("Die Vorschau wird berechnet.")
+    assert panel._lock_note.text() == refusal.text(), "die Grenzangabe bleibt vor dem Fußknopf"
+    line.selectAll()
+    QTest.keyClicks(line, editor.textFromValue(float(field.maximum)))
+    assert panel._lock_note.text() == "Die Vorschau wird berechnet."
+    assert not panel._apply.isEnabled(), "nach Eingabekorrektur gilt weiter die Vorschau-Sperre"
+
+
+def test_a_rejected_length_survives_a_display_unit_change(qt_app: QApplication) -> None:
+    """Eine Einheit umzurechnen darf den getippten Grenzverstoß nicht verlieren."""
+    from app.core.units import from_mm
+    from app.ui.labels import BoundedLengthSpin, display_unit, set_display_unit
+
+    previous_unit = display_unit()
+    editor = BoundedLengthSpin()
+    try:
+        set_display_unit("mm")
+        editor.set_range_mm(0.0, 100.0)
+        editor.set_value_mm(40.0)
+        editor.lineEdit().setText(editor.textFromValue(150.0))
+        assert editor.refused_value() == pytest.approx(150.0)
+
+        set_display_unit("in")
+        editor.refresh_unit()
+
+        refusal = editor.refusal()
+        assert editor.refused_value() == pytest.approx(from_mm(150.0, "in"))
+        assert "in" in refusal and "Obergrenze" in refusal, refusal
+        assert editor.textFromValue(editor.maximum()) in refusal, refusal
+    finally:
+        set_display_unit(previous_unit)
+        editor.refresh_unit()
+        editor.deleteLater()
 
 
 def test_return_rechecks_preview_permission_after_interpreting_text(qt_app: QApplication) -> None:
@@ -2413,8 +2478,6 @@ def test_a_count_is_a_whole_number_without_a_unit(qt_app: QApplication) -> None:
     """
     from types import SimpleNamespace
 
-    from PySide6.QtWidgets import QSpinBox
-
     from app.core.perceive.actions import part_actions
 
     load_operations()
@@ -2433,12 +2496,13 @@ def test_a_count_is_a_whole_number_without_a_unit(qt_app: QApplication) -> None:
         panel.show_part(step, spec)
         counts = [
             editor
-            for editor in panel.findChildren(QSpinBox)
+            for editor in panel.findChildren(BoundedSpin)
             if editor.accessibleName().startswith("Maße ändern — ")
         ]
         assert len(counts) == 2, [editor.accessibleName() for editor in counts]
         for editor in counts:
             assert editor.suffix() == "", "eine Anzahl trägt keine Einheit"
+            assert editor.decimals() == 0, "eine Anzahl bleibt ganzzahlig"
         counts[0].setValue(4)
         press(panel, "Maße ändern")
         assert len(changed) == 1
@@ -3497,7 +3561,7 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
     from types import SimpleNamespace
 
     from app.ui.op_dialog import ValueField
-    from app.ui.panels import feature_field_values, refresh_feature_fields
+    from app.ui.panels import feature_field_values, refresh_feature_fields, refused_feature_field
 
     load_operations()
     identifier, feature = a_hole()
@@ -3531,6 +3595,12 @@ def test_original_bore_fields_keep_expressions_through_depth_and_hidden_position
         changed = feature_field_values(action.fields, editors, action.fixed)
         assert changed["diameter"] == "=@bore"
         assert changed["depth"] == pytest.approx(4.0)
+        diameter = editors["diameter"]
+        diameter.toggle.setChecked(True)
+        diameter.text.setText("=@bore*100")
+        refusal = diameter.refusal()
+        assert refusal and "Obergrenze" in refusal
+        assert refused_feature_field(editors) == (refusal, diameter.text)
     finally:
         owner.close()
         owner.deleteLater()

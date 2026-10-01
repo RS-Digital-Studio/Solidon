@@ -178,7 +178,7 @@ danach im Feld. **Der getippte Text bleibt unangetastet:** `validate` prüft
 beide Lesarten und gibt ihn unverändert zurück, gelesen wird in
 `valueFromText`. Als Typprüfung bleibt `QDoubleSpinBox` richtig.
 
-**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an zwei Orten:** Qt verwirft
+**Eine Grenze lehnt ab, sie kürzt nicht — gebaut an drei Orten:** Qt verwirft
 an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
 übernimmt 15. Die **Parameterleiste** und die Zahlenfelder des
 **Operationsdialogs** (`op_dialog.ValueField`, auch die Stückzahl) tragen ein
@@ -187,11 +187,14 @@ an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
 (`limit_sentence`, `name_limits`) und, wo sie änderbar ist, den Weg dorthin;
 der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
 (`OperationDialog._field_refusal`). Eine Nachkommastelle zu viel wird wie
-überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. **Noch nicht
-umgestellt und still kürzend:** das Merkmalfenster (`FeaturePanel`,
-`configure_feature_field`) und die Druckeinstellungen
-(`print_settings_dialog`); die Ausweitung steht nach 0.5.1 im Register von
-`ROADMAP.md`.
+überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. Das
+**Merkmalfenster** nutzt denselben Validator für Zahlen, Anzahlen und Längen;
+Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
+direkt unter dem Feld, und der gemeinsame Knopf ist gesperrt, solange die
+scharfgestellte Handlung eine sichtbare abgelehnte Zahl enthält. Maßgruppen im
+Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann. **Noch
+nicht umgestellt und still kürzend:** die Druckeinstellungen
+(`print_settings_dialog`); sie bleiben im Register von `ROADMAP.md`.
 
 ## Gestufte Tiefe
 

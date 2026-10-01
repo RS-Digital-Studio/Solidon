@@ -141,14 +141,14 @@ from app.core.types import (
     SceneObject,
     Transaction,
 )
-from app.core.units import LengthUnit
+from app.core.units import LengthUnit, is_close
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import NEEDS_OP, handlers_of, unhandled_advice
 from app.ui.icons import icon, icon_name_for, svg_pixmap
 from app.ui.labels import (
+    BoundedLengthSpin,
     BoundedSpin,
     LengthSpin,
-    NumberSpin,
     RowCheckBox,
     caption_toggles,
     cavity_name,
@@ -1107,11 +1107,11 @@ def _parameter_value(parameter: Parameter) -> str:
 
 
 def _changed_parameters(transaction: Transaction) -> str:
-    """Was eine Parameteränderung im Verlauf geändert hat: „Breite: 40,00 mm → 90,00 mm“.
+    """Was eine Parameteränderung im Verlauf geändert hat.
 
     Die Zeile heißt nach der Beschriftung der Leiste (``Session._parameter_title``);
-    die Kurzhilfe nennt dazu den Wert davor und danach. Leer, wenn die
-    Transaktion keine Projektmaße trägt.
+    die Kurzhilfe nennt Wert und geänderte Grenzen davor und danach. Leer, wenn
+    die Transaktion keine Projektmaße trägt.
     """
     changes = transaction.changes
     after = changes.after.parameters if changes is not None else None
@@ -1130,7 +1130,33 @@ def _changed_parameters(transaction: Transaction) -> str:
         elif was is None:
             lines.append(f"{label}: {_parameter_value(now)}")
         else:
-            lines.append(f"{label}: {_parameter_value(was)} → {_parameter_value(now)}")
+            if not is_close(was.value, now.value):
+                lines.append(f"{label}: {_parameter_value(was)} → {_parameter_value(now)}")
+        if now is None:
+            continue
+        for bound, title in (
+            ("minimum", tr("Untergrenze")),
+            ("maximum", tr("Obergrenze")),
+        ):
+            previous = getattr(was, bound) if was is not None else None
+            current = getattr(now, bound)
+            changed = (previous is None) != (current is None) or (
+                previous is not None and current is not None and not is_close(previous, current)
+            )
+            if not changed:
+                continue
+            before_parameter = was if was is not None else now
+            before_text = (
+                _parameter_value(dataclasses.replace(before_parameter, value=previous))
+                if previous is not None
+                else "–"
+            )
+            after_text = (
+                _parameter_value(dataclasses.replace(now, value=current))
+                if current is not None
+                else "–"
+            )
+            lines.append(f"{label} · {title}: {before_text} → {after_text}")
     return "\n".join(lines)
 
 
@@ -3374,7 +3400,7 @@ class ParameterPanel(QWidget):
         unit = self._unit_editors.get(name)
         said = (
             editor.refusal(str(unit.currentData() or "") if unit is not None else "")
-            if isinstance(editor, BoundedSpin)
+            if isinstance(editor, (BoundedSpin, BoundedLengthSpin))
             else ""
         )
         if self._refusal is not None:
@@ -5997,14 +6023,16 @@ def feature_field(
             _show_patterns(combo, tuple(value for value, _text in field.choices or ()))
         editor = combo
     elif kind == "length":
-        editor = LengthSpin(parent)
+        editor = BoundedLengthSpin(parent)
     elif kind == "count":
         # Eine ganze Zahl ohne Einheit — die Haken eines Einhängers, die
         # Löcher einer Halterung. Kein Längenfeld: Das trüge „mm" und
         # rechnete in Zoll um (`_kind_of` in ``perceive.actions``).
-        editor = QSpinBox(parent)
+        editor = BoundedSpin(parent)
+        editor.setDecimals(0)
+        editor.setSingleStep(1.0)
     else:
-        editor = NumberSpin(parent)
+        editor = BoundedSpin(parent)
     configure_feature_field(editor, field)
     return editor
 
@@ -6045,24 +6073,36 @@ def configure_feature_field(editor: QWidget, field: Any) -> None:
             if index >= 0:
                 editor.setCurrentIndex(index)
         elif kind == "length" and isinstance(editor, LengthSpin):
+            minimum = float(field.minimum) if field.minimum is not None else -100000.0
+            maximum = float(field.maximum) if field.maximum is not None else 100000.0
             editor.set_range_mm(
-                float(field.minimum) if field.minimum is not None else -100000.0,
-                float(field.maximum) if field.maximum is not None else 100000.0,
+                minimum,
+                maximum,
             )
             editor.set_value_mm(float(field.value))
-        elif kind == "count" and isinstance(editor, QSpinBox):
-            editor.setRange(
-                int(field.minimum) if field.minimum is not None else 0,
-                int(field.maximum) if field.maximum is not None else 100000,
-            )
+            if float(field.value) < minimum or float(field.value) > maximum:
+                editor.lineEdit().setText(length(float(field.value), with_unit=False))
+        elif kind == "count" and isinstance(editor, BoundedSpin):
+            minimum = int(field.minimum) if field.minimum is not None else 0
+            maximum = int(field.maximum) if field.maximum is not None else 100000
+            editor.setRange(minimum, maximum)
+            editor.name_limits(field.minimum, field.maximum)
             editor.setValue(int(field.value))
+            if int(field.value) < minimum or int(field.value) > maximum:
+                editor.lineEdit().setText(editor.textFromValue(float(field.value)))
         elif isinstance(editor, QDoubleSpinBox):
+            minimum = float(field.minimum) if field.minimum is not None else -360.0
+            maximum = float(field.maximum) if field.maximum is not None else 360.0
             editor.setRange(
-                float(field.minimum) if field.minimum is not None else -360.0,
-                float(field.maximum) if field.maximum is not None else 360.0,
+                minimum,
+                maximum,
             )
+            if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
+                editor.name_limits(field.minimum, field.maximum)
             editor.setSuffix(f" {field.unit}" if field.unit else "")
             editor.setValue(float(field.value))
+            if float(field.value) < minimum or float(field.value) > maximum:
+                editor.lineEdit().setText(editor.textFromValue(float(field.value)))
     _explain_source(editor, field)
 
 
@@ -6129,11 +6169,39 @@ def feature_field_values(
             params[str(field.name)] = widget.isChecked()
         elif isinstance(widget, QComboBox):
             params[str(field.name)] = widget.currentData()
-        elif isinstance(widget, QSpinBox):
+        elif isinstance(widget, QSpinBox) or (
+            field.kind == "count" and isinstance(widget, QDoubleSpinBox)
+        ):
             params[str(field.name)] = int(widget.value())
         elif isinstance(widget, QDoubleSpinBox):
             params[str(field.name)] = float(widget.value())
     return params
+
+
+def refused_feature_field(widgets: Mapping[str, QWidget]) -> tuple[str, QWidget] | None:
+    """Das erste abgelehnte Maß und das Feld, das seine Korrektur annimmt."""
+    from app.ui.op_dialog import ValueField
+
+    for editor in widgets.values():
+        if isinstance(editor, ValueField):
+            refusal = editor.refusal()
+            if refusal:
+                target = editor.text if editor.toggle.isChecked() else editor.spin
+                return refusal, target
+            continue
+        spins = (
+            [editor]
+            if isinstance(editor, QAbstractSpinBox)
+            else editor.findChildren(QAbstractSpinBox)
+        )
+        for spin in spins:
+            if (
+                isinstance(spin, (BoundedSpin, BoundedLengthSpin))
+                and spin.isVisibleTo(editor)
+                and spin.refused_value() is not None
+            ):
+                return spin.refusal(), spin
+    return None
 
 
 def refresh_feature_fields(
@@ -6300,6 +6368,7 @@ class _ActionRow:
     button: QPushButton | None = None
     widgets: dict[str, QWidget] = dataclasses.field(default_factory=dict)
     labels: dict[str, QLabel] = dataclasses.field(default_factory=dict)
+    refusals: dict[str, QLabel] = dataclasses.field(default_factory=dict)
     inner: dict[str, tuple[QWidget, ...]] = dataclasses.field(default_factory=dict)
     key: str = ""
     op: str = ""
@@ -6336,6 +6405,7 @@ class _MeasureGroup:
     note: QLabel | None
     widgets: dict[str, QWidget]
     labels: dict[str, QLabel]
+    refusals: dict[str, QLabel]
     released: list[Callable[[], None]] = dataclasses.field(default_factory=list)
 
 
@@ -6374,6 +6444,7 @@ def _measure_group_alive(group: _MeasureGroup) -> bool:
         group.note,
         *group.widgets.values(),
         *group.labels.values(),
+        *group.refusals.values(),
     ]
     return all(part is None or isValid(part) for part in parts)
 
@@ -7597,22 +7668,86 @@ class FeaturePanel(QWidget):
             and self._apply_blocked_reason is None
             and self._apply_stands()
             and self._armed in self._runs
+            and not self._active_field_refusal()
         )
 
     def _settle_apply_block(self) -> None:
         """Hält Sperrgrund und Auskunft am gemeinsamen Übernehmen zusammen."""
         reason = self._locked or self._apply_blocked_reason
+        field_refusal = self._active_field_refusal()
+        control_reason = field_refusal or reason
         self._apply.setEnabled(self._apply_allowed())
-        self._lock_note.setText(reason or "")
-        _set_shown(self._lock_note, bool(reason) and bool(self._built))
-        if reason is not None:
-            self._apply.setToolTip(reason)
-            self._apply.setStatusTip(reason)
-            self._apply.setAccessibleDescription(reason)
+        self._lock_note.setText(control_reason or "")
+        _set_shown(self._lock_note, bool(control_reason) and bool(self._built))
+        if control_reason:
+            self._apply.setToolTip(control_reason)
+            self._apply.setStatusTip(control_reason)
+            self._apply.setAccessibleDescription(control_reason)
         elif (entry := self._runs.get(self._armed or "")) is not None:
             self._apply.setToolTip(entry.title)
             self._apply.setStatusTip(f"{entry.title} — {entry.reason}")
             self._apply.setAccessibleDescription(entry.reason)
+
+    def _active_field_refusal(self) -> str:
+        """Die erste sichtbare Grenzablehnung der scharfgestellten Handlung."""
+        row = next(
+            (row for row in self._shown_rows.values() if row.key == self._armed),
+            None,
+        )
+        if row is None:
+            return ""
+        from app.ui.op_dialog import ValueField
+
+        for field in row.entries:
+            editor = row.widgets.get(str(field.name))
+            if editor is None or editor.isHidden() or not editor.isEnabled():
+                continue
+            reason = (
+                editor.refusal()
+                if isinstance(editor, ValueField | BoundedSpin | BoundedLengthSpin)
+                else ""
+            )
+            if reason:
+                return reason
+        return ""
+
+    def _set_refusal_label(self, editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str:
+        """Zeigt die Grenzablehnung direkt am Feld und reicht sie an Vorleser weiter."""
+        reason = editor.refusal()
+        if label.text() != reason:
+            label.setText(reason)
+            if reason:
+                fit_wrapped(label)
+        label.setToolTip(reason)
+        label.setStatusTip(reason)
+        label.setAccessibleDescription(reason)
+        _set_shown(label, bool(reason))
+        editor.setStatusTip(reason or editor.toolTip())
+        description = (
+            f"{editor.toolTip()}\n{reason}"
+            if reason and editor.toolTip()
+            else (reason or editor.toolTip())
+        )
+        editor.setAccessibleDescription(description)
+        return reason
+
+    def _refresh_row_refusal(
+        self,
+        editor: BoundedSpin | BoundedLengthSpin,
+        label: QLabel,
+        row: _ActionRow,
+        *_ignored: object,
+    ) -> None:
+        """Aktualisiert Fehlertext und Freigabe schon während der Eingabe."""
+        self._set_refusal_label(editor, label)
+        self._arm(row.key)
+        self._settle_apply_block()
+
+    def _refresh_measure_refusal(
+        self, editor: BoundedSpin | BoundedLengthSpin, label: QLabel, *_ignored: object
+    ) -> None:
+        """Aktualisiert die Rückmeldung einer Maßgruppe im Bild."""
+        self._set_refusal_label(editor, label)
 
     def _settle_lock(self) -> None:
         """Sperrt oder gibt frei, was der gemeldete Grund gerade zulässt.
@@ -7914,7 +8049,6 @@ class FeaturePanel(QWidget):
                 editor = self._build_field(field, box)
                 row.widgets[name] = editor
                 row.inner[name] = tuple(editor.findChildren(QLineEdit))
-                self._watch(editor, row)
                 label = QLabel(str(field.label), box)
                 label.setWordWrap(True)
                 # **Die Beschriftung gehört an das Feld, nicht nur daneben.**
@@ -7932,6 +8066,20 @@ class FeaturePanel(QWidget):
                 label.setBuddy(editor)
                 row.labels[name] = label
                 form.addRow(label, editor)
+                if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
+                    refusal = QLabel(box)
+                    refusal.setObjectName(f"feature-field-refusal-{name}")
+                    refusal.setWordWrap(True)
+                    refusal.setVisible(False)
+                    row.refusals[name] = refusal
+                    form.addRow(refusal)
+                    editor.valueRefused.connect(
+                        partial(self._refresh_row_refusal, editor, refusal, row)
+                    )
+                    editor.lineEdit().textEdited.connect(
+                        partial(self._refresh_row_refusal, editor, refusal, row)
+                    )
+                self._watch(editor, row)
                 if isinstance(editor, RowCheckBox):
                     caption_toggles(label, editor)
             layout.addLayout(form)
@@ -7986,6 +8134,10 @@ class FeaturePanel(QWidget):
                 # stehen vier Handlungen mit je eigenen Feldern.
                 editor.setAccessibleName(f"{action.title} — {field.label}")
                 editor.setProperty(FIELD_PROPERTY, name)
+                if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
+                    refusal = row.refusals.get(name)
+                    if refusal is not None:
+                        self._set_refusal_label(editor, refusal)
                 for target in (editor, *row.inner[name]):
                     self._mark(target, row.key)
         if row.button is not None:
@@ -8408,7 +8560,7 @@ class FeaturePanel(QWidget):
                 self._every.setChecked(False)
         _set_shown(self._every, applies_to_all)
         self._settle_apply_block()
-        if changed and entry.op != NO_OPERATION:
+        if changed and entry.op != NO_OPERATION and not self._active_field_refusal():
             self.handlingArmed.emit(entry.op, entry.values())
 
     def take_values(self, op: str, values: Mapping[str, Any], *, arm: bool = True) -> bool:
@@ -8580,6 +8732,7 @@ class FeaturePanel(QWidget):
             form.addRow(note)
         widgets: dict[str, QWidget] = {}
         labels: dict[str, QLabel] = {}
+        refusals: dict[str, QLabel] = {}
         for field in action.fields:
             editor = self._build_field(field, box)
             label = QLabel(str(field.label), box)
@@ -8591,9 +8744,20 @@ class FeaturePanel(QWidget):
             elif isinstance(editor, QAbstractSpinBox | QComboBox):
                 wheel_needs_focus(editor)
             form.addRow(label, editor)
+            if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
+                refusal = QLabel(box)
+                refusal.setObjectName(f"feature-measure-refusal-{field.name}")
+                refusal.setWordWrap(True)
+                refusal.setVisible(False)
+                refusals[str(field.name)] = refusal
+                form.addRow(refusal)
+                editor.valueRefused.connect(partial(self._refresh_measure_refusal, editor, refusal))
+                editor.lineEdit().textEdited.connect(
+                    partial(self._refresh_measure_refusal, editor, refusal)
+                )
             widgets[str(field.name)] = editor
             labels[str(field.name)] = label
-        return _MeasureGroup(box, signature, title, current, note, widgets, labels)
+        return _MeasureGroup(box, signature, title, current, note, widgets, labels, refusals)
 
     def _fill_measure_group(
         self, group: _MeasureGroup, action: Any, feature: Feature | None
@@ -8629,6 +8793,10 @@ class FeaturePanel(QWidget):
             label.setAccessibleDescription(editor.accessibleDescription())
             editor.setAccessibleName(f"{action.title} — {field.label}")
             editor.setProperty(FIELD_PROPERTY, name)
+            if isinstance(editor, (BoundedSpin, BoundedLengthSpin)):
+                refusal = group.refusals.get(name)
+                if refusal is not None:
+                    self._set_refusal_label(editor, refusal)
 
     def bind_measure_group(self, box: QWidget, release: Callable[[], None]) -> None:
         """Hängt an eine ausgegebene Maßgruppe, was ihr Empfänger beim Zurückgeben löst."""
@@ -8664,7 +8832,10 @@ class FeaturePanel(QWidget):
         # beim nächsten Merkmal verwaist oben links in der Gruppe.
         own = {
             id(part) for part in (group.title, group.current, group.note) if part is not None
-        } | {id(part) for part in (*group.widgets.values(), *group.labels.values())}
+        } | {
+            id(part)
+            for part in (*group.widgets.values(), *group.labels.values(), *group.refusals.values())
+        }
         for child in box.findChildren(QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly):
             if id(child) not in own:
                 child.hide()
@@ -8816,7 +8987,9 @@ class FeaturePanel(QWidget):
             # Eine andere Art der Fase zeigt andere Felder — vor der Meldung,
             # damit die Vorschau schon zur sichtbaren Zeile gehört.
             self._follow_conditions(row)
-            self.valuesChanged.emit(row.op, self._row_values(row))
+            self._settle_apply_block()
+            if not self._active_field_refusal():
+                self.valuesChanged.emit(row.op, self._row_values(row))
 
         for target in (editor, *editor.findChildren(QLineEdit)):
             target.installEventFilter(self)
