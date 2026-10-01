@@ -122,6 +122,36 @@ def test_a_current_compiled_cut_does_not_hide_internal_type_errors(
         slice_body(mesh, 2.0, cancelled=CancelSignal())
 
 
+def test_compiled_plane_segments_make_readonly_inputs_writable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Cython-Kern bekommt auch bei schreibgeschützten Ansichten gültige Puffer."""
+    mesh = on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    vertices = mesh.raw.vertices
+    faces = mesh.raw.faces
+    heights = np.array([1.0], dtype=np.float64)
+    vertices.setflags(write=False)
+    faces.setflags(write=False)
+    heights.setflags(write=False)
+    received: list[np.ndarray] = []
+
+    def compiled(vertices_arg, faces_arg, heights_arg, _epsilon):
+        received.extend((vertices_arg, faces_arg, heights_arg))
+        return np.empty((0, 2, 2)), np.empty(0, dtype=np.int64), np.empty((0, 2), dtype=np.int64)
+
+    monkeypatch.setattr(
+        analysis, "_chain", SimpleNamespace(PLANE_SEGMENTS_API=2, plane_segments=compiled)
+    )
+
+    analysis._plane_segments(mesh, heights)
+
+    assert len(received) == 3
+    assert all(array.flags.writeable and array.flags.c_contiguous for array in received)
+    assert (
+        not vertices.flags.writeable and not faces.flags.writeable and not heights.flags.writeable
+    )
+
+
 def test_a_cylinder_matches_pi_r_squared() -> None:
     body = trimesh.creation.cylinder(radius=10.0, height=20.0, sections=256)
     result = slice_body(on_bed(body), 0.2)

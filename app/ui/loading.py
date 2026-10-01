@@ -130,8 +130,11 @@ def remaining_time(
     über zehn Sekunden verlangt, galt damit für genau den Fall nicht, für den
     sie geschrieben ist.
 
-    ``since`` ist der Anteil, bei dem ``started`` gemessen wurde: Hochgerechnet
-    wird, was seitdem dazukam (``ProgressTiming``).
+    ``since`` ist der Anteil, der zu ``started`` bereits erreicht war. Für die
+    Rate zählt nur der seither hinzugekommene Anteil
+    (``fraction - since``), nicht eine Spanne mit anderem Anfang. Die Uhr in
+    ``ProgressTiming`` verschiebt ``started`` um Antwortpausen; diese Zeit geht
+    nicht in die Restschätzung ein.
     """
     if started is None or fraction < ESTIMATE_FROM or fraction - since <= 0.0:
         return ""
@@ -263,10 +266,10 @@ class ProgressTiming(QObject):
         """Nur tatsächlich gerechnete Zeit wird auf den Rest hochgerechnet."""
         if self.started is None or self._waiting_since is not None:
             return ""
-        # **Steht der Anteil still, gibt es nichts hochzurechnen.** Eine lange
-        # Phase ohne Messung — die bestätigte Vollerkennung, die nur ihre
-        # Spanne nennt — schriebe sonst neben „geschätzt 2 bis 13 min“ ein
-        # „noch etwa 1 min“, das mit der Uhr wächst (Review 24.09.2026).
+        # **Pausen ohne Fortschrittsanteil zählen nicht als Rechenzeit.** Bei
+        # einer offenen Kernfrage wird die Antwortzeit separat gesammelt und
+        # aus der Hochrechnung herausgerechnet; steht der Anteil anderweitig,
+        # verwirft die Altersprüfung unten die veraltete Rate.
         moment = time.monotonic() if now is None else now
         if self._moved_at is not None and moment - self._moved_at > ESTIMATE_AFTER_S:
             return ""

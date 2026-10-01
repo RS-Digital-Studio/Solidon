@@ -1005,10 +1005,12 @@ def _plane_segments(
     # Vergleichstests klar, dass ``build_slice_core.py`` erneut laufen muss.
     # Version 2 bestätigt auch den optionalen Abbruchrückruf als fünftes Argument.
     if _chain is not None and getattr(_chain, "PLANE_SEGMENTS_API", None) == 2:
+        # ``ascontiguousarray`` kann einen schreibgeschützten Puffer unverändert
+        # zurückgeben; der übersetzte Kern braucht schreibbare Speicherbereiche.
         args = (
-            np.ascontiguousarray(mesh.raw.vertices, dtype=np.float64),
-            np.ascontiguousarray(mesh.raw.faces, dtype=np.int64),
-            np.ascontiguousarray(heights, dtype=np.float64),
+            np.require(mesh.raw.vertices, dtype=np.float64, requirements=["C", "W"]),
+            np.require(mesh.raw.faces, dtype=np.int64, requirements=["C", "W"]),
+            np.require(heights, dtype=np.float64, requirements=["C", "W"]),
             EPS_GEOM,
         )
         if cancelled is None:

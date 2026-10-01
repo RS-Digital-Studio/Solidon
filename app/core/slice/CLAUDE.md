@@ -59,8 +59,9 @@ gedruckten Werkstück ist eine Messung des Verbrauchs.
 ## Der Schnitt
 
 - **`PLANE_SEGMENTS_API = 2`** verlangt der Ebenenschnitt vom übersetzten
-  Teil, samt Abbruchrückruf; ein älterer Bau nimmt den NumPy-Weg, die nativen
-  Vergleichstests nennen den nötigen Neubau.
+  Teil, samt Abbruchrückruf und schreibbaren, zusammenhängenden Puffern;
+  schreibgeschützte Ansichten werden vorher kopiert. Ein älterer Bau nimmt den
+  NumPy-Weg, die nativen Vergleichstests nennen den nötigen Neubau.
 - **Eine ungültige geschlossene Kontur** (eine Ebene durch die auslaufende Ecke
   eines Verbinders) bekommt `polygonize` mit den **ursprünglichen losen
   Segmenten**, nie über einen daraus gebauten `LinearRing` — dem fehlen die

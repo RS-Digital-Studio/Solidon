@@ -91,7 +91,7 @@ Karte, dort das Gesetz.
 | Datei | Zweck |
 |---|---|
 | `session.py` | die Brücke (§7, §15.6): Stapel, Auswertung, Vorschau, Import, Einfügemarke, Fragen des Kerns (`AskRequest`); `evaluation_profile` ist das Profil der Auswertung samt wirksamer Stützschwelle des Fensters (Entscheidung L), `evaluation_follows` sagt, ob eine spät gelesene Grundlage neu auswerten lässt |
-| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; `stop_watching_the_dying` für Ereignisfilter, die ihr Objekt überleben; `configure_gil_switching` (Umschaltintervall beim Start), `Worker.run` mit 1 ms Zeitgeberauflösung unter Windows |
+| `leash.py` | die Halteleine: `Worker`, `WorkerLeash`, `wait_for_all`, `weak_slot`; GC-Zähler mit Zustandswahrung; `stop_watching_the_dying` für Ereignisfilter, die ihr Objekt überleben; `configure_gil_switching` (Umschaltintervall beim Start), `Worker.run` mit 1 ms Zeitgeberauflösung unter Windows |
 | `app_events.py` | der eine Ereignisfilter an der Anwendung; Zuhörer melden dort ihre Ereignisarten an (`listen`), wer es tut, sagt der Modul-Docstring |
 | `loading.py` | Ladeanzeige über der Ansicht (§2.8); `ProgressTiming` führt je Auswertung eine Uhr und einen Zeittext für Statuszeile und Schleier |
 

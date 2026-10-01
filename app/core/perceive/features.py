@@ -6958,7 +6958,7 @@ CACHE_LIMIT_PER_QUESTION = 4096
 #: wie die Stützpunktlesung. Die verschweißte Kopie und der Oberflächenindex,
 #: an denen die Mündungsprobe einer Bohrung jede Frage stellt
 #: (``prepare_ops.bore_entrance``), wiegen am Gartenschlauchhalter mit 392 532
-#: Dreiecken je rund 15 und 75 Megabyte; viertausend davon hielte kein Rechner.
+#: Dreiecken je rund 15 und gut 90 Megabyte; viertausend davon hielte kein Rechner.
 #: Die Facette je Dreieck der Wendelsuche (``helix._facet_of_face``), die nach
 #: Größe sortierten Facetten (``helix._facets_by_area``) und der
 #: Krümmungssprung je Nachbarschaft (:func:`curvature_jumps`) tragen eine Zahl

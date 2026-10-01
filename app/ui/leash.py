@@ -48,6 +48,7 @@ import sys
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from threading import Lock
 from typing import Any, Final
 
 from PySide6.QtCore import QEvent, QMetaMethod, QObject, QThread, QTimer, Signal
@@ -668,10 +669,24 @@ def undisturbed() -> Iterator[None]:
     aufgeräumt wird. Wer Qt-Objekte hält, gibt sie weiterhin selbst frei; hier
     wird nur verhindert, dass es *währenddessen* passiert.
     """
-    enabled = gc.isenabled()
-    gc.disable()
+    global _undisturbed_count, _undisturbed_was_enabled
+    with _undisturbed_lock:
+        if _undisturbed_count == 0:
+            _undisturbed_was_enabled = gc.isenabled()
+            if _undisturbed_was_enabled:
+                gc.disable()
+        _undisturbed_count += 1
     try:
         yield
     finally:
-        if enabled:
-            gc.enable()
+        with _undisturbed_lock:
+            _undisturbed_count -= 1
+            if _undisturbed_count == 0:
+                if _undisturbed_was_enabled:
+                    gc.enable()
+                _undisturbed_was_enabled = None
+
+
+_undisturbed_lock = Lock()
+_undisturbed_count = 0
+_undisturbed_was_enabled: bool | None = None

@@ -16,6 +16,7 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 from io import BytesIO
+from threading import Event, Thread
 
 import pytest
 import trimesh
@@ -112,6 +113,58 @@ def production_container(
                 threemf.SETTINGS_PATH, f'<?xml version="1.0"?><config>{parts}</config>'
             )
     return buffer.getvalue()
+
+
+def test_overlapping_3mf_reads_unfreeze_only_after_the_last_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Leser darf die vom anderen benötigte GC-Sperre nicht lösen."""
+    frozen: list[None] = []
+    thawed: list[None] = []
+    monkeypatch.setattr(threemf_reader.gc, "freeze", lambda: frozen.append(None))
+    monkeypatch.setattr(threemf_reader.gc, "unfreeze", lambda: thawed.append(None))
+
+    first_inside = Event()
+    second_inside = Event()
+    release_first = Event()
+    release_second = Event()
+    errors: list[BaseException] = []
+    xml = b"<model>" + b" " * (threemf_reader.XML_CHUNK * 2) + b"</model>"
+
+    def read(inside: Event, release: Event) -> None:
+        try:
+            with threemf_reader._reading_trees():
+                threemf_reader._parse_model(xml)
+                inside.set()
+                if not release.wait(10):
+                    raise TimeoutError("Der Test hat den Lesevorgang nicht freigegeben.")
+        except BaseException as problem:
+            errors.append(problem)
+
+    first = Thread(target=read, args=(first_inside, release_first))
+    second = Thread(target=read, args=(second_inside, release_second))
+    try:
+        first.start()
+        assert first_inside.wait(10), "der erste Leser hat den Kontext nicht erreicht"
+        second.start()
+        assert second_inside.wait(10), "der zweite Leser hat den Kontext nicht erreicht"
+        release_first.set()
+        first.join(10)
+
+        assert not first.is_alive(), "der erste Leser muss beendet sein"
+        assert thawed == [], "der zweite Leser braucht die eingefrorene Generation noch"
+    finally:
+        release_first.set()
+        release_second.set()
+        if first.ident is not None:
+            first.join(10)
+        if second.ident is not None:
+            second.join(10)
+
+    assert not first.is_alive() and not second.is_alive(), "beide Leser müssen beendet sein"
+    assert not errors, errors
+    assert frozen, "das Parsen muss die GC-Generation eingefroren haben"
+    assert thawed == [None], "erst der letzte Leser taut die Generation auf"
 
 
 # --- die Vervielfältigung -------------------------------------------------------

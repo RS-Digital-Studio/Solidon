@@ -130,7 +130,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen](#rm-234) | Tests und Entwicklungswerkzeuge | Gepinnter Ubuntu-Releasejob 107485122706 erreicht die Fensterverträge und besteht; „Neueste Versionen" enthält heute nur Kerntests. Der vollständige macOS-Taglauf 35982366247 ist grün; die unabhängige Ergebnismeldung der Fensterverträge bei rotem Kernschritt ist im Workflow gebaut (`0a0e4eef0`, `78e151e85`), offen ihr Nachweis an einem echten Lauf |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie; bis dahin Intel Default Settings, einmal MemTest86, Release-Pakete in der CI bauen oder doppelt bauen und bitweise vergleichen |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
-| [RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1](#rm-293) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: vier kleine Stellen |
 | [RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1](#rm-295) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: zwei Tests schärfen |
 | [RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts](#rm-313) | Tests und Entwicklungswerkzeuge | Einen Lauf gegen die neuesten Versionen schaffen, der ohne öffentliches Repository läuft |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Lizenz von `en_US-ljspeech-high` und seinem Datensatz belegen (`/legal-review`) |
@@ -3682,18 +3681,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   dort läuft der Sammler von selbst. Bis dahin wählen Sitzungen betroffene Tests gezielt
   oder fahren das Tor. Abnahme: der Einzelprozess läuft durch, oder die Ursache ist
   benannt und behoben.
-
-<a id="rm-293"></a>
-
-- [ ] **RM-293 — Kleine Härtungen und veraltete Kommentare aus der Durchsicht 0.5.1.** Aus der Durchsicht v0.5.1 (Inventar 1.10 bis 1.13).
-  (a) `analysis._plane_segments` reicht einen möglicherweise nur lesbaren Puffer an den
-  übersetzten Kern (`np.ascontiguousarray(...)` → `_chain.plane_segments`); eine Kopie bei
-  nicht schreibbarem Puffer finge jeden künftigen Erzeuger. (b) `threemf._reading_trees`
-  taut mit `gc.unfreeze()` den ganzen Prozess auf, `leash.undisturbed` verträgt keine
-  überlappende Nutzung aus zwei Fäden — zwei gleichzeitige 3MF-Lesevorgänge tauen einander
-  auf. (c) Veralteter Kommentar in `app/ui/loading.py` (`ProgressTiming.remaining` nennt
-  die Spanne statt des bleibenden Grunds, Pausen ohne Anteil). (d) Der Kommentar an
-  `features.WHOLE_BODY_ANSWERS` nennt 75 statt gut 90 MB. Abnahme: je Punkt behoben.
 
 <a id="rm-295"></a>
 

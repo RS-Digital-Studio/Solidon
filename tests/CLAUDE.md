@@ -35,6 +35,8 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Folgen Eigenschaften, Befunde, Material und Übergabe dem Verfahren eines Resin-Druckers? | `test_resin.py` — die acht Abnahmepunkte aus Konzept §9, Stufe 1 |
 | Öffnet jedes angebotene Modellformat dieselbe Referenzgeometrie? Prüft das Einlesen Dichtheit und Kennzahlen einmal? | `test_import_formats.py` · `test_ingest_figures.py` |
+| Bleibt der GC-Schutz eines 3MF-Baums bis zum Ende des letzten parallelen Lesers aktiv? | `test_threemf_assembly.py` |
+| Bekommt der übersetzte Ebenenschnitt schreibbare Puffer, auch wenn das Eingabenetz schreibgeschützt ist? | `test_slice.py` |
 | Schätzt die Frage vor einer großen Vollerkennung die Dauer, ohne halben Messwert nach einem Abbruch? | `test_recognition_time.py` — echte Rechenprobe, gesteuerte Uhr |
 | Verlauf umbauen — einfügen, verschieben, aus- und einschalten, Verweise folgen ihrem Merkmal, Strg+Z stellt die Folge her? | `test_history.py`, `test_revision.py` (beide Kerne, Beispielprojekte), `test_cli.py`; das Verlaufsfeld in `test_history_revision_ui.py` |
 | Hält die Merkmalszuordnung an 1056 wirklichen Flächen (STL, STEP) durch Import, Änderung, Cache, Speichern und Undo? | `test_matching_lifecycle.py` — nur die Merkmalszahlgrenze ist freigegeben; kein Leistungsbudget |
@@ -57,7 +59,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Analytische Geometriefälle an den registrierten Kundenwegen · Flächenplatzierung mit gleichem Werkzeugkörper in Vorschau und Operation | `test_geometry_review_regressions.py` · `test_surface_placement.py` |
 | Filamentlager, Buchungen und Verbrauch · im Fenster | `test_filament_inventory.py`, `test_filament_usage.py` · `test_filament_inventory_ui.py`, `test_filament_assignment.py`, `test_filament_usage_ui.py`, `test_filament_workflow.py` — isolierte Lagerdateien, nie der Nutzerbestand |
 | Zeichnet der Renderer, was der Vertrag verspricht? | `test_render_contract.py`, `test_render_gizmo.py`, `test_render_gfx_regressions.py` ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py`; `test_render_shapes.py`, `test_navigator.py` ohne Renderer |
-| Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern? | `test_leash.py` — nur die Verbindung des übergebenen Parameters zählt |
+| Deckt der Crash-Wächter auch Arbeiter aus Fabriken und Helfern, und teilen überlappende `undisturbed`-Aufrufe ihren GC-Schutz? | `test_leash.py` — Quellenprüfung und Mehrfaden-Gegenprobe |
 | Kundenwege im Fenster | `test_ui.py`; Teilbereiche in `test_ui_dialogs.py`, `test_ui_export.py`, `test_ui_licensing.py`, `test_ui_remote.py`; `test_operation_ui.py` mit leerem Fenster, wo keine Geometrie nötig ist |
 | Bleiben Dialoginhalt, Klappen und Aktionsleisten erreichbar und Fenster im Bildschirm? | `test_dialog_layout.py`, `test_dialog_layout_regressions.py`; die Abläufe der Einstellungen in `test_ui_settings.py` |
 | Steht im Register jeder Umschalter vor den Feldern, die er schaltet, und nie hinter der Klappe eines Vorderfelds? | `test_dependency_order.py`; die Folge des Druckdialogs in `test_print_settings_ui.py` |

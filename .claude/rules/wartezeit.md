@@ -334,6 +334,15 @@ gc.collect()  # erst nach der zugestellten nativen Löschung
   `leash._alive` über das `finished`-Lambda Leine und Dialog, und man liest ein
   Leck, wo keines ist.
 
+### `undisturbed()` teilt den GC-Zustand im Prozess
+
+`gc.disable()` wirkt prozessweit, nicht nur im aufrufenden Faden. Überlappende
+oder verschachtelte Aufrufe zählen deshalb gemeinsam: Der erste merkt, ob der
+Sammler an war, und schaltet ihn aus; erst der letzte stellt diesen
+Ausgangszustand wieder her. Ein früher endender Kontext darf den Schutz des
+anderen nicht aufheben. `tests/test_leash.py` hält den Mehrfadenfall für beide
+Ausgangszustände fest.
+
 ### Ein Rückruf an ein eigenes Kind hält schwach
 
 Ein Rückruf, der `self` stark fängt, an einem Sender, der **Kind von `self`**

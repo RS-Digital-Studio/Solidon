@@ -12,12 +12,78 @@ from __future__ import annotations
 
 import gc
 import weakref
+from threading import Event, Thread
 
 import pytest
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QApplication
 
 from app.ui.leash import Worker, WorkerLeash
+
+
+@pytest.mark.parametrize("initially_enabled", [True, False])
+def test_undisturbed_keeps_gc_disabled_until_the_last_overlapping_user_leaves(
+    monkeypatch: pytest.MonkeyPatch, initially_enabled: bool
+) -> None:
+    """Ein früher Aufrufer darf den GC-Schutz eines anderen nicht lösen."""
+    import app.ui.leash as leash_module
+
+    state = [initially_enabled]
+    changes: list[str] = []
+
+    def disable() -> None:
+        state[0] = False
+        changes.append("disable")
+
+    def enable() -> None:
+        state[0] = True
+        changes.append("enable")
+
+    monkeypatch.setattr(leash_module.gc, "isenabled", lambda: state[0])
+    monkeypatch.setattr(leash_module.gc, "disable", disable)
+    monkeypatch.setattr(leash_module.gc, "enable", enable)
+
+    first_inside = Event()
+    second_inside = Event()
+    release_first = Event()
+    release_second = Event()
+    errors: list[BaseException] = []
+
+    def protect(inside: Event, release: Event) -> None:
+        try:
+            with leash_module.undisturbed():
+                inside.set()
+                if not release.wait(10):
+                    raise TimeoutError("Der Test hat den GC-Schutz nicht freigegeben.")
+        except BaseException as problem:
+            errors.append(problem)
+
+    first = Thread(target=protect, args=(first_inside, release_first))
+    second = Thread(target=protect, args=(second_inside, release_second))
+    try:
+        first.start()
+        assert first_inside.wait(10), "der erste Aufrufer hat den Kontext nicht erreicht"
+        second.start()
+        assert second_inside.wait(10), "der zweite Aufrufer hat den Kontext nicht erreicht"
+        assert not state[0], "der Speicherbereiniger muss während beider Aufrufe ruhen"
+
+        release_first.set()
+        first.join(10)
+        assert not first.is_alive(), "der erste Aufrufer muss beendet sein"
+        assert not state[0], "der zweite Aufrufer benötigt den Schutz noch"
+        assert "enable" not in changes
+    finally:
+        release_first.set()
+        release_second.set()
+        if first.ident is not None:
+            first.join(10)
+        if second.ident is not None:
+            second.join(10)
+
+    assert not first.is_alive() and not second.is_alive(), "beide Aufrufer müssen beendet sein"
+    assert not errors, errors
+    assert state[0] is initially_enabled, "der ursprüngliche GC-Zustand muss wieder gelten"
+    assert changes == (["disable", "enable"] if initially_enabled else [])
 
 
 class _Schlaefer(QThread):

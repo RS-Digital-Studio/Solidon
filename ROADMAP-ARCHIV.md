@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
 | 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
 | 2026-10-01 | [RM-282: Profilwerte, die das Programm anders liest, als die Datei sie schreibt (01.10.2026)](#rm-282-profilwerte-die-das-programm-anders-liest-als-die-datei-sie-schreibt-01102026) |
 | 2026-09-29 | [CAD-Ausbau bis 0.5.1: der Weg von RM-188 (29.09.2026)](#cad-ausbau-bis-051-der-weg-von-rm-188-29092026) |
@@ -34108,3 +34109,33 @@ jeweils mit Exit 0. Das unabhängige Review wurde nach Beseitigung der letzten d
 Testhilfe fortgesetzt. Der AST-Wächter bestand; die Sammlung der betroffenen
 Viewport-Entscheidungstests ergab **306 Tests**. Fenster-, Render- und Leistungsprüfungen
 bleiben der Release-Abnahme vorbehalten.
+
+## RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)
+
+<a id="rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026"></a>
+
+Der Ebenenschnitt übergibt jetzt schreibbare und zusammenhängende Vertex-,
+Face- und Höhenpuffer an den übersetzten Kern. `np.ascontiguousarray` reichte
+schreibgeschützte Ansichten unverändert weiter; die neue Anforderung kopiert
+nur, wenn Schreibbarkeit oder Layout fehlen.
+
+`threemf._reading_trees` zählt parallele Leser. Jeder Leser gibt zuerst seine
+Elemente frei; die eingefrorene GC-Generation wird erst aufgetaut, wenn der
+letzte Leser fertig ist. `leash.undisturbed` schützt denselben
+prozessweiten GC-Zustand mit Sperre und Referenzzähler und stellt den Zustand
+wieder her, den es beim ersten Eintritt vorgefunden hat. Der Mehrfaden-Test
+prüft beide Anfangszustände.
+
+Außerdem beschreibt `ProgressTiming.remaining` jetzt die seit dem letzten
+Fortschrittsanteil verbleibende Strecke einschließlich pausenkorrigierter Zeit.
+Der Größenkommentar zum Merkmalsindex nennt gut 90 statt 75 MB.
+
+**Gezielte Verifikation:** `tests/test_slice.py` bestand mit 93 Tests,
+`tests/test_threemf_assembly.py` mit 56 und die neue GC-Gegenprobe in
+`tests/test_leash.py` mit 2. `tests/test_directory_docs.py` bestand mit 23
+Tests; Ruff, Formatprüfung und `git diff --check` waren grün.
+Das unabhängige Review fand zunächst eine ungenaue Aussage zu `gc.freeze`;
+der Kommentar wurde auf die tatsächlich beim Aufruf getrackten Objekte
+präzisiert. Das Follow-up-Review fand keine weiteren Befunde. Das vollständige
+Entwicklungstor bleibt vor dem Commit für den gebündelten Arbeitsstand offen;
+Fenster- und Leistungstests bleiben Release-Prüfungen.

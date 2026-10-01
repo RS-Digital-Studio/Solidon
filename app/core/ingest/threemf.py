@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from itertools import islice
 from math import ceil, sqrt
+from threading import Lock
 from typing import Final
 from xml.etree import ElementTree as ET
 from xml.parsers import expat
@@ -2216,6 +2217,8 @@ XML_CHUNK: Final = 32 * 1024
 
 _TREES: ContextVar[list[ET.Element] | None] = ContextVar("threemf_trees", default=None)
 """Die Bäume, die der laufende Lesevorgang gebaut hat (:func:`_reading_trees`)."""
+_TREE_GC_LOCK = Lock()
+_ACTIVE_TREE_READERS = 0
 _POINT_LISTS: Final = frozenset({f"{{{CORE_NAMESPACE}}}vertices", f"{{{CORE_NAMESPACE}}}triangles"})
 
 
@@ -2239,21 +2242,31 @@ def _reading_trees() -> Iterator[None]:
     4,6 s; stückweise mit Einfrieren 6,9 s, längste Lücke 0,7 s; dazu in
     Scheiben freigegeben längste Lücke 0,13 s.
 
-    ``gc.freeze`` gilt dem ganzen Prozess. Was ein anderer Faden in dieser Zeit
-    anlegt, bleibt ebenfalls bis zum Auftauen liegen — nur Zyklen, die
-    solange niemand einsammelt; freigegeben über den Referenzzähler wird
-    weiter alles sofort.
+    ``gc.freeze`` gilt dem ganzen Prozess und verschiebt je Aufruf nur die
+    dann bereits verfolgten Objekte. Später angelegte Objekte bleiben bis zu
+    einem weiteren Aufruf regulär sammelbar; über den Referenzzähler wird
+    weiter alles sofort freigegeben. Gleichzeitige Leser teilen diese
+    Prozessspanne; die Generation taut erst auf, wenn der letzte seinen Baum
+    freigegeben hat.
     """
+    global _ACTIVE_TREE_READERS
     roots: list[ET.Element] = []
     token = _TREES.set(roots)
+    with _TREE_GC_LOCK:
+        _ACTIVE_TREE_READERS += 1
     try:
         yield
     finally:
         _TREES.reset(token)
-        for root in roots:
-            _release(root)
-        roots.clear()
-        gc.unfreeze()
+        try:
+            for root in roots:
+                _release(root)
+            roots.clear()
+        finally:
+            with _TREE_GC_LOCK:
+                _ACTIVE_TREE_READERS -= 1
+                if _ACTIVE_TREE_READERS == 0:
+                    gc.unfreeze()
 
 
 def _parse_model(data: bytes) -> ET.Element:
