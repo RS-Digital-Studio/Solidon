@@ -2079,6 +2079,9 @@ class _PreviewApproval:
     pending_click: Callable[[], object] | None = None
     """Ein Klick auf *Übernehmen*, der vor dem Bild kam und auf es wartet
     (:meth:`MainWindow._apply_when_previewed`) — der letzte gilt."""
+    questioned: bool = False
+    """Die Vorschau hielt an einer Rückfrage: Ein Bild gibt es erst nach der
+    Antwort, und *Übernehmen* stellt sie (RM-389)."""
 
 
 def _candidate_token(entry: tuple[str, str] | EdgeTarget) -> str:
@@ -18253,7 +18256,11 @@ class MainWindow(QMainWindow):
             and previous.order == order
             and self._preview_is_current(previous)
         ):
-            if getattr(owner, "requires_displayed_preview", False) and previous.required is False:
+            if (
+                getattr(owner, "requires_displayed_preview", False)
+                and previous.required is False
+                and not previous.questioned
+            ):
                 previous.required = True
                 self._refresh_preview_block()
             return previous
@@ -18484,6 +18491,12 @@ class MainWindow(QMainWindow):
                     failed(None)
                 else:
                     self._show_preview(None)
+                    # Ein Klick, der vor der Antwort kam und auf ein Bild
+                    # wartete, das es nicht geben kann (:func:`asked`), läuft
+                    # jetzt — er stellt die Rückfrage.
+                    click, approval.pending_click = approval.pending_click, None
+                    if click is not None:
+                        click()
                 return
             # **Ein Satz zu einem Ergebnis ist kein Problem.** Der Arbeiter meldet
             # ``explained`` auch dann, wenn ein Bild kommt — „Flächenbearbeitung
@@ -18533,6 +18546,20 @@ class MainWindow(QMainWindow):
             """Die Absage mit ihren Werten — der Dialog zeigt, was er davon einlöst."""
             self._preview_refused(approval, problem)
 
+        def asked(_nothing: object) -> None:
+            """Eine anstehende Rückfrage ist keine Absage: *Übernehmen* stellt sie (RM-389).
+
+            Die stille Vorschau fragt nicht, sie hält an und sagt es im Band.
+            Wo das Bild Pflicht war — eine Zeichnung auf einer Fläche, ein
+            exakter Eingang —, galt dieser Satz als Problem: Der Knopf blieb
+            grau, der Klick tat nichts, und die Frage kam nie (Nachbau F7,
+            *Tasche schneiden* auf einem Drehdeckel). Ohne Antwort gibt es kein
+            Bild; der Schritt geht über den echten Weg, der fragt.
+            """
+            approval.questioned = True
+            approval.required = False
+            approval.problem = ""
+
         clear_refusal = getattr(approval.owner, "show_refusal", None)
         if clear_refusal is not None:
             clear_refusal(None)
@@ -18544,6 +18571,7 @@ class MainWindow(QMainWindow):
             "progressed": still(self._preview_progressed),
             "refused": still(refused),
             "counted": still(self._preview_counted),
+            "asked": still(asked),
         }
         if order.changes is not None:
             kwargs["changes"] = order.changes

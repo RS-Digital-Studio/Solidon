@@ -783,6 +783,11 @@ class _PreviewWorker(Worker):
     #: danach, Obergrenze, gezählt)``, wo die Operation die Form zusagt
     #: (``OperationSpec.retriangulates``). Das ist die Auskunft ihrer Vorschau.
     counted = Signal(int, object)
+    #: Die Vorschau hielt an einer Rückfrage (:class:`_QuestionPending`) — kommt
+    #: **vor** :attr:`explained`. Das ist keine Absage: Die Frage stellt erst
+    #: *Übernehmen*, und deshalb darf der Satz im Band den Knopf nicht sperren
+    #: (RM-389).
+    asked = Signal(int)
 
     def __init__(
         self, session: Session, generation: int, compute: Any, cancel: CancelSignal
@@ -797,6 +802,7 @@ class _PreviewWorker(Worker):
         try:
             _scene, difference, reason = self._compute()
         except _QuestionPending:
+            self.asked.emit(self._generation)
             self.explained.emit(
                 self._generation,
                 str(_("Eine Rückfrage steht an — sie kommt beim Übernehmen.")),
@@ -3753,6 +3759,7 @@ class Session(QObject):
         progressed: Any = None,
         refused: Any = None,
         counted: Any = None,
+        asked: Any = None,
     ) -> None:
         """Die Live-Vorschau des Operationsdialogs (§18.7).
 
@@ -3773,7 +3780,9 @@ class Session(QObject):
         (§2.8), und :meth:`cancel_preview` hält die Rechnung an.
         ``refused`` bekommt die Absage samt Werten und Handlungen (ein
         ``AppError`` oder den ``Finding`` des Halts), ``counted`` die
-        Dreieckszahlen eines Schritts, der nur das Netz ändert.
+        Dreieckszahlen eines Schritts, der nur das Netz ändert. ``asked``
+        bekommt ``None``, wenn die Vorschau an einer Rückfrage anhielt — vor
+        dem Satz dazu, der dann keine Absage ist (RM-389).
         """
         self._preview_generation += 1
         generation = self._preview_generation
@@ -3850,6 +3859,8 @@ class Session(QObject):
             worker.counted.connect(
                 lambda stamp, numbers: self._preview_done(stamp, numbers, counted)
             )
+        if asked is not None:
+            worker.asked.connect(lambda stamp: self._preview_done(stamp, None, asked))
         if progressed is not None:
             worker.progressed.connect(
                 lambda stamp, fraction, text: self._preview_done(
