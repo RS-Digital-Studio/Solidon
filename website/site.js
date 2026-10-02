@@ -19,7 +19,7 @@
   "use strict";
   try {
 
-    const list = document.querySelector("nav.feature-topics, nav.toc");
+    const list = document.querySelector("nav.feature-topics, body:not(.manual-page) nav.toc");
     if (!list || !("IntersectionObserver" in window)) return;
 
     /* Zu jedem Block sein Listeneintrag. Fehlt das Ziel, fällt der Eintrag
@@ -59,6 +59,91 @@
   } catch (problem) {
     /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
     console.warn("site.js: Block ab Zeile 16 ausgefallen —", problem);
+  }
+})();
+
+/* Das Handbuchregister folgt der Lesestelle, ohne den Seitenverlauf zu
+ * verändern. Auf schmalen Schirmen ist es ein nativer Aufklapper; ohne
+ * Skript bleiben sämtliche Sprunglinks erreichbar. */
+(() => {
+  "use strict";
+  try {
+    const panel = document.querySelector(".manual-index");
+    if (!panel) return;
+    const list = panel.querySelector("nav.toc");
+    const summary = panel.querySelector("summary");
+    const narrow = matchMedia("(max-width: 68rem)");
+    const chapters = [...list.querySelectorAll('a[href^="#"]')]
+      .map(link => ({link, target: document.getElementById(decodeURIComponent(link.hash.slice(1)))}))
+      .filter(chapter => chapter.target);
+    let current = null;
+    let scheduled = false;
+
+    const reveal = (link) => {
+      const box = list.getBoundingClientRect();
+      const item = link.getBoundingClientRect();
+      if (item.top < box.top) list.scrollTop += item.top - box.top - 12;
+      else if (item.bottom > box.bottom) list.scrollTop += item.bottom - box.bottom + 12;
+    };
+    const follow = () => {
+      scheduled = false;
+      // Eine Kapitelüberschrift kann viele Bildschirme oberhalb liegen.
+      // Deshalb zählt die letzte überschrittene Überschrift, nicht nur Sichtbarkeit.
+      const edge = narrow.matches ? panel.getBoundingClientRect().bottom + 32 : 140;
+      let selected = null;
+      for (const chapter of chapters) {
+        if (chapter.target.getBoundingClientRect().top > edge) break;
+        selected = chapter.link;
+      }
+      if (selected === current) return;
+      if (current) current.removeAttribute("aria-current");
+      current = selected;
+      if (current) {
+        current.setAttribute("aria-current", "location");
+        if (panel.open && !panel.contains(document.activeElement)) reveal(current);
+      }
+    };
+    const schedule = () => {
+      if (!scheduled) { scheduled = true; requestAnimationFrame(follow); }
+    };
+    const resize = () => { panel.open = !narrow.matches; schedule(); };
+    resize();
+    narrow.addEventListener("change", resize);
+    window.addEventListener("scroll", schedule, {passive: true});
+    window.addEventListener("resize", schedule);
+    window.addEventListener("hashchange", schedule);
+    window.addEventListener("load", schedule);
+    panel.addEventListener("toggle", () => { if (panel.open && current) reveal(current); });
+    list.addEventListener("click", event => {
+      const link = event.target.closest("a");
+      if (!link || !narrow.matches) return;
+      panel.open = false;
+      const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+      if (target) {
+        target.setAttribute("tabindex", "-1");
+        target.focus({preventScroll: true});
+      }
+    });
+    panel.addEventListener("keydown", event => {
+      if (event.key === "Escape" && narrow.matches && panel.open) {
+        panel.open = false;
+        summary.focus();
+      }
+    });
+    for (const link of document.querySelectorAll('header a[href="#toc"]')) {
+      link.addEventListener("click", event => {
+        event.preventDefault();
+        panel.open = true;
+        const target = current || chapters[0]?.link;
+        if (target) { target.focus({preventScroll: true}); reveal(target); }
+      });
+    }
+    // Der Ausdruck enthält das vollständige Register, auch nach mobiler Nutzung.
+    let wasOpen = true;
+    window.addEventListener("beforeprint", () => { wasOpen = panel.open; panel.open = true; });
+    window.addEventListener("afterprint", () => { panel.open = wasOpen; });
+  } catch (problem) {
+    console.warn("site.js: Handbuchregister ausgefallen —", problem);
   }
 })();
 

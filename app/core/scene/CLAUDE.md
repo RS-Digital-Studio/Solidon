@@ -33,7 +33,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan` |
 | `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
-| `evaluate.py` | Die Auswertung (§15.1) |
+| `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
@@ -41,7 +41,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 | `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
-| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule |
+| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule; `SIDE_NAMES` übernimmt die gemeinsamen Seitennamen aus `registry/surfaces.py` |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |
 | `variants.py` | Der Variantengenerator (§28.3): `_marked` graviert den Wert ein, wo Material für drei Schichten plus Mindestwand steht (`label_ops.too_thin_to_print`), sonst `variants.no_mark`; fein, mit geteiltem Cache; ein Druckauftrag, kein Dokumentzustand (Regel 2) |
 

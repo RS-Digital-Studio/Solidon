@@ -44,7 +44,10 @@ from PySide6.QtGui import (
     QPainter,
     QResizeEvent,
     QShortcut,
+    QTextCharFormat,
+    QTextCursor,
     QTextDocument,
+    QTextFormat,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -386,6 +389,7 @@ class ManualWindow(QMainWindow):
 
         self._visible: list[manual.Page] = []
         self._spots: list[str] = []
+        self._reference_cursors: dict[str, QTextCursor] = {}
         # Zerlegt wird beim ersten Suchwort und nicht beim Öffnen: Wer das
         # Handbuch nur liest, wartet nicht auf einen Index, den er nie braucht.
         self._index: manual_search.SearchIndex | None = None
@@ -503,9 +507,59 @@ class ManualWindow(QMainWindow):
         # an. Dieselbe Regel gilt für das erzeugte Handbuch; sie steht
         # deshalb im Kern und nicht zweimal.
         self.text.setMarkdown(manual.titled(page, self._with_figures(page)))
+        self._mark_reference_anchors(page.key)
         self.text.moveCursor(self.text.textCursor().MoveOperation.Start)
         if index < len(self._spots) and self._spots[index]:
             self._show_spot(self._spots[index])
+
+    def _mark_reference_anchors(self, key: str) -> None:
+        """Unsichtbare Ziele an echte Überschriften im sicher eingelesenen Text hängen.
+
+        Rohes HTML bleibt durch ``MarkdownNoHTML`` wirkungslos. Nur die
+        erwarteten Überschriftenblöcke auf oberster Ebene erhalten Namen aus
+        dem Register; Fließtext, Zitate und Listen können kein F1-Ziel übernehmen.
+        """
+        self._reference_cursors.clear()
+        anchors = manual.reference_anchors(key)
+        if not anchors:
+            return
+        headings: list[QTextCursor] = []
+        block = self.text.document().begin()
+        while block.isValid():
+            block_format = block.blockFormat()
+            if (
+                block_format.headingLevel() == 3
+                and block_format.indent() == 0
+                and block_format.intProperty(QTextFormat.Property.BlockQuoteLevel) == 0
+                and block.textList() is None
+            ):
+                cursor = QTextCursor(block)
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor
+                )
+                headings.append(cursor)
+            block = block.next()
+        if [cursor.selectedText() for cursor in headings] != [
+            markup.plain(title) for _anchor, title in anchors
+        ]:
+            _log.warning("manual reference headings do not match the registry for %r", key)
+            return
+        for (anchor, _title), cursor in zip(anchors, headings, strict=True):
+            named = QTextCharFormat()
+            named.setAnchor(True)
+            named.setAnchorNames([anchor])
+            cursor.mergeCharFormat(named)
+            self._reference_cursors[anchor] = cursor
+
+    def _show_anchor(self, anchor: str) -> None:
+        """Genau den Referenzeintrag markieren, auch bei gleichen Kundentiteln."""
+        cursor = self._reference_cursors.get(anchor)
+        if cursor is None:
+            _log.warning("manual operation anchor %r is not on the current page", anchor)
+            return
+        self.text.setTextCursor(cursor)
+        self.text.scrollToAnchor(anchor)
+        self._reveal_marked()
 
     def _show_spot(self, spot: str) -> None:
         """Die Seite an der Stelle aufschlagen, die zur Suche passt, und sie markieren.
@@ -520,6 +574,10 @@ class ManualWindow(QMainWindow):
         """
         if not self.text.find(spot, QTextDocument.FindFlag.FindWholeWords):
             return
+        self._reveal_marked()
+
+    def _reveal_marked(self) -> None:
+        """Die markierte Stelle ins obere Drittel der Textspalte rücken."""
         bar = self.text.verticalScrollBar()
         above = self.text.viewport().height() // 3
         bar.setValue(bar.value() + self.text.cursorRect().top() - above)
@@ -573,9 +631,8 @@ class ManualWindow(QMainWindow):
     def show_page(self, key: str, spot: str = "") -> None:
         """Eine bestimmte Seite zeigen — der Weg von einer Operation ins Kapitel.
 
-        ``spot`` schlägt sie an dieser Stelle auf, markiert: F1 im
-        Operationsdialog meint den Eintrag der Operation, nicht den Anfang
-        eines Referenzkapitels mit zwanzig anderen.
+        ``spot`` schlägt sie an dieser Stelle auf, markiert. Mit ``#`` nennt
+        F1 den eindeutigen Operationsanker; sonst bleibt es eine Textsuche.
 
         Ein Schlüssel ohne Seite lässt die gezeigte stehen und schreibt eine
         Warnung ins Protokoll: Jeder Aufrufer der Anwendung nennt eine Seite,
@@ -600,7 +657,10 @@ class ManualWindow(QMainWindow):
             else:
                 self.contents.setCurrentRow(row)
             if spot:
-                self._show_spot(spot)
+                if spot.startswith("#"):
+                    self._show_anchor(spot[1:])
+                else:
+                    self._show_spot(spot)
             return
         _log.warning("manual page %r is not among the pages shown", key)
 

@@ -9,8 +9,8 @@ das an drei Stellen gepflegt wird, sagt nach dem zweiten Monat dreierlei.
 Was entsteht:
 
 * ``website/handbuch.html`` und ``website/<sprache>/manual.html`` — je eine
-  Seite, passend zum vorhandenen ``style.css``, ohne JavaScript und ohne fremde
-  Ressourcen, wie der Rest der Seite auch. Verzeichnis und Text gliedern sich
+  Seite, passend zum vorhandenen ``style.css``, ohne fremde Ressourcen.
+  Das Kapitelregister bleibt auch ohne JavaScript bedienbar. Verzeichnis und Text gliedern sich
   nach den Teilen des Handbuchs (``Page.part``), wie das Handbuchfenster.
 * ``website/handbuch/`` mit den Abbildungen. Gezeichnetes und Gerendertes als
   SVG, weil es dann in jeder Größe scharf bleibt; die Bildschirmfotos als PNG,
@@ -26,6 +26,7 @@ Das PDF braucht Qt und damit die echte Plattform; zu den Schriften unter
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import struct
@@ -209,6 +210,54 @@ STYLE = """
                    min-width: 1.6rem; font-variant-numeric: tabular-nums; }
     @media (max-width: 40rem) { nav.toc ol { columns: 1; } }
 
+    /* Das Register bleibt am Lesefenster. Der Text behält eine lesbare
+       Zeilenlänge, Tabellen und Bilder nutzen die gemeinsame Inhaltsfläche. */
+    .manual-index > summary { display: none; }
+    @media screen {
+      .manual-page main { max-width: 90rem; padding: 2rem 2rem 5rem 21rem; }
+      .manual-page main > :not(figure) { margin-left: 0; margin-right: 0; }
+      .manual-page main > p, .manual-page main > ul, .manual-page main > ol,
+      .manual-page main > h3, .manual-page main > h4,
+      .manual-page main > h2.part { max-width: 44rem; }
+      .manual-page main > p, .manual-page main > li { line-height: 1.75; }
+      .manual-page figure { margin-left: 0; margin-right: 0; }
+      .manual-page .manual-index { position: fixed; top: 6rem; bottom: 1.25rem;
+        left: max(1.25rem, calc((100vw - 90rem) / 2 + 1.25rem));
+        width: 17rem; max-width: none; margin: 0; z-index: 15; }
+      .manual-index nav.toc { height: calc(100dvh - 7.25rem); overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable; margin: 0; padding: 1rem; border-radius: .75rem; }
+      .manual-index nav.toc ol { columns: 1; }
+      .manual-index nav.toc a { padding: .5rem .35rem; font-size: var(--t-sm);
+        min-height: 2.75rem; line-height: 1.45; border-left: 3px solid transparent; }
+      .manual-index nav.toc a[aria-current] { border-left-color: var(--accent);
+        background: var(--bg); color: var(--accent); font-weight: 700; }
+      .manual-index nav.toc .toc-part { line-height: 1.5; }
+      .manual-index a:focus-visible, .manual-index summary:focus-visible {
+        outline: 2px solid var(--accent); outline-offset: 2px; }
+    }
+    @media screen and (max-width: 68rem) {
+      .manual-page main { padding: 1rem 1.25rem 5rem; }
+      .manual-page main > :not(figure) { margin-left: auto; margin-right: auto; }
+      .manual-page figure { margin-left: auto; margin-right: auto; }
+      .manual-page .manual-index { position: sticky; top: 5rem; bottom: auto;
+        width: 100%; max-width: 52rem; margin: 1.5rem auto; }
+      .manual-index > summary { display: list-item; cursor: pointer;
+        background: var(--card); border: 1px solid var(--line); border-radius: .5rem;
+        padding: .8rem 1rem; font-weight: 700; }
+      .manual-index nav.toc { position: absolute; top: 100%; width: 100%;
+        height: auto; max-height: calc(100dvh - 12rem); box-shadow: 0 .6rem 2rem #0003; }
+      .manual-index nav.toc .toc-title { display: none; }
+      .manual-page main > h2[id], .manual-page main > h3[id] { scroll-margin-top: 4rem; }
+    }
+    @media screen and (min-width: 68.001rem) {
+      .manual-index::details-content { display: block; content-visibility: visible; }
+    }
+    @media screen and (max-width: 30rem) {
+      .manual-page .manual-index { top: 8.75rem; }
+      .manual-index nav.toc { max-height: calc(100dvh - 15.75rem); }
+    }
+
     /* Das Deckblatt gehört dem Papier. Auf der Website steht der Titel schon
        in der Kopfzeile, ein zweiter wäre eine Dopplung. */
     .cover { display: none; }
@@ -227,6 +276,7 @@ STYLE = """
       main { max-width: none; padding: 0; }
       main > :not(figure) { max-width: none; }
       .no-print { display: none !important; }
+      .manual-index::details-content { display: block; content-visibility: visible; }
 
       /* **Ohne diese Zeile trägt das PDF kein einziges Bild.** Die
          Abbildungen steigen am Bildschirm beim Lesen auf, und diese
@@ -551,6 +601,43 @@ def contents(language: str) -> str:
     return f'<nav class="toc" id="toc">{"".join(blocks)}</nav>'
 
 
+def _index(navigation: str, language: str) -> str:
+    """Dasselbe Register als Seitenleiste oder aufklappbare mobile Navigation."""
+    return (
+        '<details class="manual-index" open>'
+        f"<summary>{site_text('Inhalt', language)}</summary>{navigation}</details>"
+    )
+
+
+def refresh_layout(language: str) -> None:
+    """Nur den Seitenrahmen erneuern; der veröffentlichte Kapiteltext bleibt erhalten."""
+    target = WEBSITE / page_for(language)[0]
+    html = target.read_text(encoding="utf-8")
+    html, styles = re.subn(
+        r"<style>.*?</style>", lambda _: f"<style>{STYLE}</style>", html, flags=re.DOTALL
+    )
+    # Der Rahmen darf mehrfach aktualisiert werden, ohne Register zu verschachteln.
+    html = re.sub(
+        r'<details class="manual-index" open><summary>[^<]*</summary>'
+        r'(<nav class="toc" id="toc">.*?</nav>)</details>',
+        r"\1",
+        html,
+        flags=re.DOTALL,
+    )
+    html, registers = re.subn(
+        r'<nav class="toc" id="toc">.*?</nav>',
+        lambda match: _index(match.group(), language),
+        html,
+        flags=re.DOTALL,
+    )
+    html = html.replace("<body>", '<body class="manual-page">')
+    if styles != 1 or registers != 1:
+        raise ValueError(
+            f"{target}: Seitenrahmen nicht eindeutig. Vorlage vor dem Erzeugen prüfen."
+        )
+    _write_stubbornly(target, html)
+
+
 def anchored(html: str) -> str:
     """Jeder Kapitelüberschrift ihren Anker geben, damit das Verzeichnis trägt.
 
@@ -768,6 +855,36 @@ def _footer(language: str) -> str:
     return f'<footer class="site no-print"><div class="wrap">{COPYRIGHT} · {links}</div></footer>'
 
 
+def _reference_ids(html: str) -> str:
+    """Kennungen für den Vollständigkeitsnachweis, ohne API-Namen im Lesetext."""
+    from app.core.markup import inline
+    from app.core.registry.registry import REGISTRY
+
+    categories = REGISTRY.by_category()
+
+    def annotate(match: re.Match[str]) -> str:
+        section = match.group()
+        for spec in categories.get(match.group(1), ()):
+            title = inline(str(spec.title))
+            heading = f"<h4>{title}</h4>"
+            if heading not in section:
+                raise ValueError(f"Referenzeintrag {spec.name} fehlt. Handbuchquelle prüfen.")
+            section = section.replace(
+                heading,
+                f'<h4 data-operation="{spec.name}" '
+                f'id="{manual.operation_anchor(spec.name)}">{title}</h4>',
+                1,
+            )
+        return section
+
+    return re.sub(
+        r'<h3 id="ref-([^"]+)"[^>]*>.*?(?=<h[23]\b[^>]*id=|\Z)',
+        annotate,
+        html,
+        flags=re.DOTALL,
+    )
+
+
 def page_html(language: str, prefix: str) -> str:
     # Ein Verweis auf eine andere Seite springt zu ihrem Kapitel.
     anchors = {page.key: _anchor(page) for page in manual.pages()}
@@ -785,19 +902,12 @@ def page_html(language: str, prefix: str) -> str:
     body = re.sub(r'<figure><img (src="[^"]+\.(?:png|webp)"[^>]*)>', _staged, body)
     body = _defer_offscreen_pictures(body)
     title = f"{site_text('Handbuch: 3D-Modelle für den Druck vorbereiten', language)} — {APP_NAME}"
-    pages = len(manual.pages())
-    description = site_text(
-        "Das Handbuch zu Solidon3D: {pages} Kapitel von „Wo fange ich an?“ über "
-        "Anleitungen in Bildern bis zu jeder Operation mit ihren Werten und "
-        "Bereichen. Die Referenzhälfte kommt aus demselben Register wie die Menüs.",
-        language,
-    ).format(pages=pages)
     lede = site_text(
-        "{pages} Kapitel — von „Wo fange ich an?“ über Anleitungen in Bildern bis "
-        "zur Referenz jeder Operation, erzeugt aus derselben Quelle wie das "
-        "Handbuch in der Anwendung.",
+        "Schritt für Schritt vom ersten Modell bis zur Druckdatei. Mit Bildanleitungen, "
+        "Werkzeugen zum Nachschlagen und Hilfe bei Problemen.",
         language,
-    ).format(pages=pages)
+    )
+    description = lede
     canonical = f"{SITE}{page_for(language)[0]}"
     # Jede Sprache nennt jede — sechs Zeilen aus derselben Tabelle, die auch
     # die Seiten baut, statt zweier von Hand gepflegter.
@@ -827,15 +937,15 @@ def page_html(language: str, prefix: str) -> str:
         f'<link rel="icon" href="{"icon.svg" if language == "de" else "../icon.svg"}" '
         f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
-        f"<style>{STYLE}</style>\n</head>\n<body>\n"
+        f'<style>{STYLE}</style>\n</head>\n<body class="manual-page">\n'
         f'<a class="skip" href="#content">'
         f"{SKIP.get(language, site_text('Zum Inhalt springen', language))}</a>\n"
         f'{_header(language)}\n<main id="content">\n'
         f"{_cover_block(language)}\n"
         f'<h1 class="no-print">{site_text("Handbuch", language)}</h1>\n'
         f'<p class="lede no-print">{lede}</p>\n'
-        f"{contents(language)}\n"
-        f"{anchored(body)}\n"
+        f"{_index(contents(language), language)}\n"
+        f"{_reference_ids(anchored(body))}\n"
         # Der Zähler, wie auf jeder anderen Seite. Ohne ihn stand das
         # Handbuch in sechs Sprachen in keiner Statistik.
         f"</main>\n{_footer(language)}\n"
@@ -1419,6 +1529,25 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
+        "--layout-only",
+        action="store_true",
+        help="Nur den Webrahmen erneuern; veröffentlichte Texte, Bilder und PDFs behalten.",
+    )
+    output.add_argument(
+        "--web-only",
+        action="store_true",
+        help="Webseiten aus den Textquellen erneuern; vorhandene Bilder und PDFs behalten.",
+    )
+    options = parser.parse_args()
+    if options.layout_only:
+        for language in available_languages():
+            refresh_layout(language)
+            print(f"{language}: Seitenrahmen erneuert")
+        return 0
+
     # Zurückgesetzt hier und nicht beim Import: Das Modul stand als Falle für
     # jeden, der es importiert, statt es zu starten. `tests/test_translations.py`
     # führt es aus, um `page_for()` zu prüfen — danach galt für den ganzen
@@ -1444,18 +1573,19 @@ def main() -> int:
         # Je Sprache ein eigener Ordner: die Beschriftungen stecken in den
         # Zeichnungen, also ist ein deutsches Bild kein englisches.
         folder = WEBSITE / "handbuch" / language
-        sources, dark_sources = write_figures(folder, language)
-        print(
-            f"  {len(sources)} Abbildungen ({len(dark_sources)} auch dunkel) "
-            f"→ {folder.relative_to(ROOT)}"
-        )
+        if not options.web_only:
+            sources, dark_sources = write_figures(folder, language)
+            print(
+                f"  {len(sources)} Abbildungen ({len(dark_sources)} auch dunkel) "
+                f"→ {folder.relative_to(ROOT)}"
+            )
 
         target = WEBSITE / name
         target.parent.mkdir(parents=True, exist_ok=True)
         _write_stubbornly(target, page_html(language, prefix))
         print(f"  Seite → {target.relative_to(ROOT)}")
 
-        pdf = write_pdf(language, target)
+        pdf = None if options.web_only else write_pdf(language, target)
         if pdf is not None:
             size = pdf.stat().st_size / 1024
             print(f"  PDF → {pdf.relative_to(ROOT)} ({size:.0f} kB)")
