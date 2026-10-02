@@ -168,6 +168,95 @@ def test_settings_advanced_rows_fit_without_widening_the_dialog(
         set_language(spoken)
 
 
+def test_parameter_dialog_keeps_validation_and_actions_reachable_when_short(
+    qt_app: QApplication,
+) -> None:
+    """Der Formularinhalt rollt; Fehlermeldung und Aktionsknöpfe bleiben erreichbar."""
+    from PySide6.QtCore import QPoint, QSize
+
+    from app.ui.dialogs import ParameterDialog
+    from app.ui.settings import UiSettings
+    from app.ui.theme import apply_theme
+
+    apply_theme(qt_app, UiSettings().theme)
+    dialog = ParameterDialog({})
+    try:
+        dialog.show()
+        _settle(qt_app)
+        natural_height = dialog.height()
+        short_height = max(dialog.minimumSizeHint().height(), natural_height // 2)
+        assert short_height < natural_height
+        dialog.resize(dialog.width(), short_height)
+        _settle(qt_app)
+        assert dialog.height() == short_height
+        locked_size = QSize(dialog.size())
+        buttons = dialog.findChild(QDialogButtonBox)
+        assert buttons is not None
+        assert buttons.isVisible()
+        assert buttons.parentWidget() is dialog
+        assert dialog._scroll.verticalScrollBar().maximum() > 0
+
+        dialog.name_field.clear()
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert ok is not None
+        ok.click()
+        _settle(qt_app)
+        assert dialog.size() == locked_size
+        assert dialog.problem.isVisible()
+        assert dialog._scroll.verticalScrollBar().maximum() > 0
+        problem_position = dialog.problem.mapTo(dialog._scroll.viewport(), QPoint(0, 0))
+        problem_rect = dialog.problem.rect().translated(problem_position)
+        assert dialog._scroll.viewport().rect().contains(problem_rect)
+        assert buttons.isVisible()
+        assert buttons.geometry().bottom() < dialog.rect().bottom()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_expression_dialog_keeps_validation_and_actions_reachable_when_short(
+    qt_app: QApplication,
+) -> None:
+    """Ein ungültiger Ausdruck wird im Rollbereich sichtbar; die Knöpfe bleiben stehen."""
+    from PySide6.QtCore import QPoint, QSize
+
+    from app.ui.settings import UiSettings
+    from app.ui.sketch_editor import ExpressionDialog
+    from app.ui.theme import apply_theme
+
+    apply_theme(qt_app, UiSettings().theme)
+    dialog = ExpressionDialog({})
+    try:
+        dialog.hint.setText("Der Hinweistext bleibt beim Prüfen sichtbar. " * 32)
+        dialog.show()
+        _settle(qt_app)
+        natural_height = dialog.height()
+        short_height = max(dialog.minimumSizeHint().height(), natural_height // 2)
+        assert short_height < natural_height
+        dialog.resize(dialog.width(), short_height)
+        _settle(qt_app)
+        assert dialog.height() == short_height
+        locked_size = QSize(dialog.size())
+        assert dialog.scroll_area.horizontalScrollBar().maximum() == 0
+        assert dialog.buttons.isVisible()
+
+        dialog.field.clear()
+        ok = dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert ok is not None
+        ok.click()
+        _settle(qt_app)
+        assert dialog.size() == locked_size
+        assert dialog.problem.isVisible()
+        assert dialog.scroll_area.verticalScrollBar().maximum() > 0
+        problem_position = dialog.problem.mapTo(dialog.scroll_area.viewport(), QPoint(0, 0))
+        problem_rect = dialog.problem.rect().translated(problem_position)
+        assert dialog.scroll_area.viewport().rect().contains(problem_rect)
+        assert dialog.buttons.geometry().bottom() < dialog.rect().bottom()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 def test_dialog_button_rows_use_the_design_spacing(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

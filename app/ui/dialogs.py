@@ -108,6 +108,7 @@ from app.ui.style import (
     SPACE,
     TIGHT,
     WIDE,
+    ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
     fit_dialog_to_screen,
@@ -549,6 +550,7 @@ class ParameterDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._editing = existing is not None
+        self._height = ContentHeight()
         self.setWindowTitle(tr("Parameter ändern") if self._editing else tr("Parameter anlegen"))
         self.setMinimumWidth(420)
         # Der eigene Name ist beim Ändern kein vergebener — sonst weist der
@@ -563,22 +565,23 @@ class ParameterDialog(QDialog):
             self._values = {}
         self._value: float = 0.0
 
+        content = QWidget(self)
         explanation = QLabel(
             tr(
                 "Ein Parameter ist ein benanntes Maß. Operationen und Skizzen "
                 "verweisen mit @name darauf, und an der Zahl zu drehen baut "
                 "das Modell neu."
             ),
-            self,
+            content,
         )
         explanation.setWordWrap(True)
 
-        self.name_field = QLineEdit(self)
+        self.name_field = QLineEdit(content)
         self.name_field.setPlaceholderText(tr("zum Beispiel breite"))
-        self.value_field = _ParameterValueSpin(self)
+        self.value_field = _ParameterValueSpin(content)
         self.value_field.setDecimals(3)
         self.value_field.setRange(-100_000.0, 100_000.0)
-        self.unit_field = QComboBox(self)
+        self.unit_field = QComboBox(content)
         fill_parameter_units(
             self.unit_field,
             str(existing.unit or "") if existing is not None else "mm",
@@ -590,18 +593,18 @@ class ParameterDialog(QDialog):
         # Textfelder statt Spinboxen, weil „leer" hier ein Wert ist: keine
         # Grenze. Was aus Ausdrücken hinausläuft, meldet die Auswertung als
         # Befund — hier wird nur die Eingabe abgelehnt (§10).
-        self.minimum_field = QLineEdit(self)
+        self.minimum_field = QLineEdit(content)
         self.minimum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
-        self.maximum_field = QLineEdit(self)
+        self.maximum_field = QLineEdit(content)
         self.maximum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
-        self.expression_field = QLineEdit(self)
+        self.expression_field = QLineEdit(content)
         self.expression_field.setPlaceholderText(tr("zum Beispiel =@breite/2"))
 
         # Die zwei sichtbaren Werkzeuge entsprechen dem Operationsdialog:
         # ``fx`` schaltet eine Formel ein, ``@`` nimmt einen vorhandenen Namen.
         # Wer CAD und Ausdruckssyntax nicht kennt, muss dadurch weder das
         # Gleichheitszeichen noch einen internen Parameternamen erraten.
-        self.fx_button = QToolButton(self)
+        self.fx_button = QToolButton(content)
         self.fx_button.setText(FORMULA_MARKER)
         self.fx_button.setCheckable(True)
         self.fx_button.setAutoRaise(True)
@@ -610,7 +613,7 @@ class ParameterDialog(QDialog):
         )
         self.fx_button.setAccessibleName(tr("Parameterausdruck"))
 
-        self.parameter_button = QToolButton(self)
+        self.parameter_button = QToolButton(content)
         self.parameter_button.setText(PARAMETER_MARKER)
         self.parameter_button.setAutoRaise(True)
         self.parameter_button.setToolTip(tr("@name setzt einen Projektparameter ein."))
@@ -631,14 +634,14 @@ class ParameterDialog(QDialog):
         self.parameter_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.parameter_button.setEnabled(not parameter_menu.isEmpty())
 
-        value_row = QWidget(self)
+        value_row = QWidget(content)
         value_layout = QHBoxLayout(value_row)
         value_layout.setContentsMargins(0, 0, 0, 0)
         value_layout.setSpacing(NORMAL)
         value_layout.addWidget(self.value_field, 1)
         value_layout.addWidget(self.fx_button)
 
-        self.expression_row = QWidget(self)
+        self.expression_row = QWidget(content)
         expression_layout = QHBoxLayout(self.expression_row)
         expression_layout.setContentsMargins(0, 0, 0, 0)
         expression_layout.setSpacing(NORMAL)
@@ -701,9 +704,17 @@ class ParameterDialog(QDialog):
                 self.maximum_field.setText(localised_value(f"{float(existing.maximum):g}"))
             self.expression_field.setText(str(existing.expression or ""))
 
-        self.problem = QLabel("", self)
+        self.problem = QLabel("", content)
         self.problem.setWordWrap(True)
         self.problem.setVisible(False)
+
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(NORMAL)
+        content_layout.addWidget(explanation)
+        content_layout.addLayout(form)
+        content_layout.addWidget(self.problem)
+        content_layout.addStretch(1)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -719,14 +730,33 @@ class ParameterDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
+        self._scroll = DialogScrollArea(self)
+        self._scroll.setWidget(content)
+        self._scroll.contentSizeChanged.connect(self._fit_soon)
+        self.fx_button.toggled.connect(weak_slot(self, ParameterDialog._fit_soon, "explicit"))
+        wheel_needs_focus(self.value_field)
+        wheel_needs_focus(self.unit_field)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         layout.setSpacing(NORMAL)
-        layout.addWidget(explanation)
-        layout.addLayout(form)
-        layout.addWidget(self.problem)
-        layout.addStretch(1)
+        layout.addWidget(self._scroll, 1)
         layout.addWidget(buttons)
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
+        super().showEvent(event)
+        self._fit_soon("initial")
+
+    def _fit_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, ParameterDialog._fit_content, intent))
+
+    def _fit_content(self, intent: ContentFitIntent) -> None:
+        """Misst nach dem Auslöser; manuelle Breite und Höhe bleiben maßgeblich."""
+        self._height.fit(self, self._scroll, intent=intent)
+
+    def _reveal_problem(self) -> None:
+        """Rollt die nach der Eingabe sichtbare Fehlermeldung ins Sichtfeld."""
+        self._scroll.ensureWidgetVisible(self.problem, 0, NORMAL)
 
     def validation_problem(self) -> str | None:
         """Was dem Anlegen im Weg steht — oder None. Eigene Funktion, weil
@@ -846,6 +876,8 @@ class ParameterDialog(QDialog):
         if problem is not None:
             self.problem.setText(problem)
             self.problem.setVisible(True)
+            self._fit_soon()
+            QTimer.singleShot(0, self, self._reveal_problem)
             return
         self.accept()
 
@@ -1118,14 +1150,14 @@ class KeyDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._fit_key_content_soon()
+        self._fit_key_content_soon("initial")
 
-    def _fit_key_content_soon(self) -> None:
-        QTimer.singleShot(0, self, self._fit_key_content)
+    def _fit_key_content_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, KeyDialog._fit_key_content, intent))
 
-    def _fit_key_content(self) -> None:
+    def _fit_key_content(self, intent: ContentFitIntent) -> None:
         """Nachgereichte Statuszeilen bekommen Platz ohne verteilte Absatzlücken."""
-        self._height.fit(self, self._scroll)
+        self._height.fit(self, self._scroll, intent=intent)
 
     def _set_tab_order(self) -> None:
         """Die Tab-Taste folgt Cloud, lokalem Modell und erst dann den Aktionen."""
@@ -2365,7 +2397,7 @@ class ActivationDialog(QDialog):
                 "warning",
                 f"{self.state_label.text()}\n\n{problem.detail or problem.title}",
             )
-        QTimer.singleShot(0, self, self._fit_activation_content)
+        self._fit_activation_soon()
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         """Die Feldhöhe steht erst, wenn die Breite steht.
@@ -2376,9 +2408,9 @@ class ActivationDialog(QDialog):
         gelegt, und dann stimmt sie.
         """
         super().showEvent(event)
-        self._fit_key_field()
+        self._fit_key_field(intent="initial")
 
-    def _fit_key_field(self) -> None:
+    def _fit_key_field(self, intent: ContentFitIntent = "passive") -> None:
         """Das Feld zeigt, was darin steht — zwischen drei und neun Zeilen.
 
         Der Boden hält es als Mehrzeilenfeld erkennbar, solange es leer ist;
@@ -2403,14 +2435,16 @@ class ActivationDialog(QDialog):
         chrome = 2 * self.field.frameWidth() + room.top() + room.bottom() + NORMAL
         self.field.setFixedHeight(lines * self.field.fontMetrics().lineSpacing() + chrome)
         if self.isVisible():
-            QTimer.singleShot(0, self, self._fit_activation_content)
+            self._fit_activation_soon(intent)
 
-    def _fit_activation_content(self) -> None:
+    def _fit_activation_content(self, intent: ContentFitIntent) -> None:
         """Erst die umbrochene Feldhöhe bestimmt die natürliche Fensterhöhe."""
-        self._height.fit(self, self._scroll)
+        self._height.fit(self, self._scroll, intent=intent)
 
-    def _fit_activation_soon(self) -> None:
-        QTimer.singleShot(0, self, self._fit_activation_content)
+    def _fit_activation_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(
+            0, self, weak_slot(self, ActivationDialog._fit_activation_content, intent)
+        )
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
         """Nach einer Breitenänderung gilt der neue Umbruch auch für die Feldhöhe."""

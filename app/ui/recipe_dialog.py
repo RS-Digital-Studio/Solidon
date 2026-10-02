@@ -56,8 +56,16 @@ from app.core.types import Document, Feature, Profile
 from app.i18n import tr
 from app.ui.dialogs import problem_text
 from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised, wheel_needs_focus
-from app.ui.leash import Worker, WorkerLeash
-from app.ui.style import NORMAL, SPACE, WIDE, ContentHeight, DialogScrollArea, make_primary
+from app.ui.leash import Worker, WorkerLeash, weak_slot
+from app.ui.style import (
+    NORMAL,
+    SPACE,
+    WIDE,
+    ContentFitIntent,
+    ContentHeight,
+    DialogScrollArea,
+    make_primary,
+)
 
 _log = get_logger(__name__)
 
@@ -635,15 +643,14 @@ class RecipeDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._fit_soon()
+        self._fit_soon("initial")
 
-    def _fit_soon(self) -> None:
-        QTimer.singleShot(0, self, self._fit_content)
+    def _fit_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, RecipeDialog._fit_content, intent))
 
-    def _fit_content(self) -> None:
-        """Ein zusammenhängendes Formular wächst bis zur verfügbaren Bildschirmhöhe;
-        eine gezogene Höhe bleibt Untergrenze wie in jedem Dialog mit Rollbereich."""
-        self._height.fit(self, self._scroll)
+    def _fit_content(self, intent: ContentFitIntent) -> None:
+        """Passt an den Auslöser an; manuelle Breite und Höhe bleiben maßgeblich."""
+        self._height.fit(self, self._scroll, intent=intent)
 
     def _restore_origin(self) -> None:
         """Legt die Angaben des bearbeiteten Bausteins zurück in den Dialog (E6).
@@ -981,6 +988,8 @@ class RecipeDialog(QDialog):
         # danach wieder aufgehen, weil ``_update_enabled`` von der laufenden
         # Prüfung nichts wusste. Jetzt weiß es davon, und der Weg ist einer.
         self._update_enabled()
+        self._fit_soon()
+        QTimer.singleShot(0, self, self._reveal_report)
         worker = _CheckWorker(cut, self._profile)
         worker.step.connect(self._step)
         worker.failed.connect(self._failed)
@@ -994,6 +1003,10 @@ class RecipeDialog(QDialog):
         worker.finished.connect(lambda done=worker: self._worker_done(done))
         self._worker = worker
         self._leash.start(worker)
+
+    def _reveal_report(self) -> None:
+        """Macht den Prüfstatus im Rollbereich sichtbar, ohne das Fenster zu ändern."""
+        self._scroll.ensureWidgetVisible(self.report, 0, NORMAL)
 
     def reject(self) -> None:
         """Abbrechen heißt abbrechen — auch mitten im Bereichstest.

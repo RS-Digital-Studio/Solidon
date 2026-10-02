@@ -61,9 +61,17 @@ from app.core.support import (
 )
 from app.i18n import tr
 from app.ui.labels import localised, wheel_needs_focus
-from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, ROOMY, SPACE, ContentHeight, DialogScrollArea, make_primary
+from app.ui.style import (
+    NORMAL,
+    ROOMY,
+    SPACE,
+    ContentFitIntent,
+    ContentHeight,
+    DialogScrollArea,
+    make_primary,
+)
 from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
 if TYPE_CHECKING:
@@ -542,7 +550,7 @@ class SupportDialog(QDialog):
         wheel_needs_focus(self.kind)
         heading = self.previews.findChild(QToolButton)
         if heading is not None:
-            heading.toggled.connect(self._fit_soon)
+            heading.toggled.connect(weak_slot(self, SupportDialog._fit_soon, "explicit"))
 
         self.message.textChanged.connect(self._update_send)
         self.kind.currentIndexChanged.connect(self._refresh)
@@ -550,14 +558,14 @@ class SupportDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._fit_soon()
+        self._fit_soon("initial")
 
-    def _fit_soon(self) -> None:
-        QTimer.singleShot(0, self, self._fit_content)
+    def _fit_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, SupportDialog._fit_content, intent))
 
-    def _fit_content(self) -> None:
+    def _fit_content(self, intent: ContentFitIntent) -> None:
         """Die Vorschau bekommt Platz, ohne eine bewusst gezogene Höhe zu verwerfen."""
-        self._height.fit(self, self._scroll)
+        self._height.fit(self, self._scroll, intent=intent)
 
     # --- Zustand ----------------------------------------------------------------
 

@@ -51,6 +51,7 @@ from app.ui.style import (
     TARGET_SIZE,
     TIGHT,
     WIDE,
+    ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
     make_primary,
@@ -323,7 +324,7 @@ class UsageDialog(QDialog):
             split_layout = QVBoxLayout(panel)
             split_layout.setContentsMargins(0, 0, 0, 0)
             add = QPushButton(tr("Weitere Spule"), panel)
-            add.clicked.connect(lambda _checked=False, row=index: self._add_allocation(row))
+            add.clicked.connect(weak_slot(self, UsageDialog._add_allocation, index))
             split_layout.addWidget(add)
             panel.hide()
             for widget in (source, choice, suggestion, split, panel, cost):
@@ -341,7 +342,7 @@ class UsageDialog(QDialog):
             self.allocations.append([])
             amount.valueChanged.connect(lambda _value, row=index: self._amount_changed(row))
             choice.currentIndexChanged.connect(lambda _value, row=index: self._choice_changed(row))
-            split.toggled.connect(lambda checked, row=index: self._toggle_split(row, checked))
+            split.toggled.connect(weak_slot(self, UsageDialog._toggle_split, index, forward=True))
         self._scroll = DialogScrollArea(self)
         form.addStretch()
         self._scroll.setWidget(self.content)
@@ -378,19 +379,19 @@ class UsageDialog(QDialog):
         self.repeat_button.clicked.connect(self._repeat)
         buttons.rejected.connect(self._decline_booking)
         layout.addWidget(buttons)
-        self.operation.currentIndexChanged.connect(self._operation_changed)
+        self.operation.currentIndexChanged.connect(weak_slot(self, UsageDialog._operation_changed))
         self._load()
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._fit_soon()
+        self._fit_soon("initial")
 
-    def _fit_soon(self) -> None:
-        QTimer.singleShot(0, self, self._fit_content)
+    def _fit_soon(self, intent: ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, UsageDialog._fit_content, intent))
 
-    def _fit_content(self) -> None:
+    def _fit_content(self, intent: ContentFitIntent) -> None:
         """Kurze Spulenlisten vollständig zeigen, gezogene Höhen erhalten."""
-        self._height.fit(self, self._scroll)
+        self._height.fit(self, self._scroll, intent=intent)
 
     @staticmethod
     def _amount_widget(grams: float | None, parent: QWidget) -> NumberSpin:
@@ -517,7 +518,7 @@ class UsageDialog(QDialog):
             self.suggestions[index].setVisible(bool(self.suggestions[index].text()))
         return suggested
 
-    def _operation_changed(self) -> None:
+    def _operation_changed(self, intent: ContentFitIntent = "passive") -> None:
         if not self._loaded:
             return
         self._manual.clear()
@@ -558,9 +559,10 @@ class UsageDialog(QDialog):
             if len(matching) > 1:
                 self._clear_allocations(index)
                 for one in matching:
-                    self._add_allocation(index, one.spool_identifier, one.grams)
-            self._toggle_split(index, len(matching) > 1)
+                    self._add_allocation(index, one.spool_identifier, one.grams, intent=intent)
+            self._toggle_split(index, len(matching) > 1, intent=intent)
         self._validate()
+        self._fit_soon(intent)
 
     def _clear_allocations(self, index: int) -> None:
         for _choice, _amount, widget in self.allocations[index]:
@@ -568,15 +570,25 @@ class UsageDialog(QDialog):
             widget.deleteLater()
         self.allocations[index].clear()
 
-    def _toggle_split(self, index: int, checked: bool) -> None:
+    def _toggle_split(
+        self, index: int, checked: bool, *, intent: ContentFitIntent = "explicit"
+    ) -> None:
         self.split_panels[index].setVisible(checked)
         self.choices[index].setVisible(not checked)
         if checked and not self.allocations[index]:
-            self._add_allocation(index, self.choices[index].currentData() or "")
-            self._add_allocation(index)
+            self._add_allocation(index, self.choices[index].currentData() or "", intent=intent)
+            self._add_allocation(index, intent=intent)
         self._validate()
+        self._fit_soon(intent)
 
-    def _add_allocation(self, index: int, identifier: str = "", grams: float | None = None) -> None:
+    def _add_allocation(
+        self,
+        index: int,
+        identifier: str = "",
+        grams: float | None = None,
+        *,
+        intent: ContentFitIntent = "explicit",
+    ) -> None:
         panel = self.split_panels[index]
         widget = QWidget(panel)
         row = QHBoxLayout(widget)
@@ -601,6 +613,7 @@ class UsageDialog(QDialog):
         amount.valueChanged.connect(self._validate)
         remove.clicked.connect(lambda: self._remove_allocation(index, allocation))
         self._validate()
+        self._fit_soon(intent)
 
     def _remove_allocation(
         self, index: int, allocation: tuple[QComboBox, NumberSpin, QWidget]
@@ -609,6 +622,7 @@ class UsageDialog(QDialog):
         allocation[2].hide()
         allocation[2].deleteLater()
         self._validate()
+        self._fit_soon("explicit")
 
     def _amount_changed(self, index: int) -> None:
         self._manual.add(index)

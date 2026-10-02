@@ -5167,13 +5167,17 @@ class ExpressionDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt-Name
         super().showEvent(event)
-        self._fit_soon()
+        self._fit_soon("initial")
 
-    def _fit_soon(self) -> None:
-        QTimer.singleShot(0, self, self._fit_content)
+    def _fit_soon(self, intent: style.ContentFitIntent = "passive") -> None:
+        QTimer.singleShot(0, self, weak_slot(self, ExpressionDialog._fit_content, intent))
 
-    def _fit_content(self) -> None:
-        self._height.fit(self, self.scroll_area)
+    def _fit_content(self, intent: style.ContentFitIntent) -> None:
+        self._height.fit(self, self.scroll_area, intent=intent)
+
+    def _reveal_problem(self) -> None:
+        """Rollt die Prüfangabe ins Sichtfeld, ohne das Fenster zu vergrößern."""
+        self.scroll_area.ensureWidgetVisible(self.problem, 0, style.NORMAL)
 
     def _accept(self) -> None:
         from app.core import expressions
@@ -5182,12 +5186,16 @@ class ExpressionDialog(QDialog):
         if not text:
             self.problem.setText(tr("Ein Maß braucht einen Wert."))
             self.problem.setVisible(True)
+            self._fit_soon()
+            QTimer.singleShot(0, self, self._reveal_problem)
             return
         try:
             expressions.evaluate(expressions.canonical(text, self._values), self._values)
         except AppError as error:
             self.problem.setText(str(error.detail or error.title))
             self.problem.setVisible(True)
+            self._fit_soon()
+            QTimer.singleShot(0, self, self._reveal_problem)
             return
         self.accept()
 

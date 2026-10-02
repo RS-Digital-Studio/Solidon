@@ -346,7 +346,7 @@ def fit_dialog_to_screen(dialog: QWidget) -> None:
         dialog.move(x, y)
 
 
-ContentFitIntent = Literal["content", "initial", "explicit", "passive"]
+ContentFitIntent = Literal["initial", "explicit", "passive"]
 
 
 def _natural_item_width(item: QLayoutItem | None) -> int:
@@ -487,7 +487,7 @@ class ContentHeight:
         width: int,
         height: int,
         *,
-        intent: ContentFitIntent = "content",
+        intent: ContentFitIntent,
     ) -> None:
         """Setzt eine automatische Größe oder bewahrt eine manuelle vollständig."""
         self._observe_user_size(dialog)
@@ -517,17 +517,15 @@ class ContentHeight:
         dialog: QWidget,
         scroll: QScrollArea,
         *,
+        intent: ContentFitIntent,
         grow_width: bool = False,
-        intent: ContentFitIntent = "content",
         natural_width: int = 0,
         natural_size: QSize | None = None,
     ) -> None:
         """Misst Inhalt einmal, nach ausdrücklichem Klappen oder ohne Rahmenzug.
 
-        ``content`` erhält für noch nicht umgestellte Dialoge das bisherige
-        automatische Verhalten. ``initial`` darf zusätzlich bis zur natürlichen
-        Breite wachsen; ``explicit`` hält Breite und Anker; ``passive`` ändert
-        nur das Layout im Scrollbereich.
+        ``initial`` passt die Anfangsgröße an; ``explicit`` hält Breite und
+        Anker; ``passive`` ändert nur das Layout im Scrollbereich.
         """
         if isinstance(scroll, DialogScrollArea):
             scroll._content_height = self
