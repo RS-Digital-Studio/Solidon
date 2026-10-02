@@ -51,7 +51,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Duas placas que se tocam continuam um só corpo num furo e mantêm o material, quer o estique, altere, desloque ou feche. Um pino por cima fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
-- Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Eixo de inclinação», e «Na face» leva o corte paralelo a uma face plana.
