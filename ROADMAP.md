@@ -80,7 +80,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
-| [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Herkunft und vollständige Kurvenabdeckung korrigiert; 57 direkte und sechs Kundenfälle sowie 32 Dokumentprüfungen grün; zentrales Zweitreview, Tor und Übernahme offen |
+| [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Zweitreview und Entwicklungstor mit 19.464/62 grün; alle 17 Pfade in `0041000a0` übernommen und unabhängig abgeglichen; Pushbeleg offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
 | [RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert](#rm-327) | Geometrie, Erkennung und Druckvorbereitung | 155 gezielte Fachfälle grün; Code und Dokumentation unabhängig freigegeben; gemeinsames Tor und Hauptzweigübernahme offen |
 | [RM-365 — *Festschreiben* einer Formsitzung friert das Entwurfsnetz ein](#rm-365) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Weg 4): beim Festschreiben in feiner Qualität rechnen; Test Dreieckszahl und Volumen |
@@ -2623,9 +2623,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   erhalten den Körper und nennen alle zehn Stellen. Quelle und Dateihash bleiben gleich.
   Beleg: [Zuordnung, Gegenproben und Kundenmodell](konzepte/nachweise-release-0.5.1/reports/rm322-native-edge-binding-2026-10-02.md).
   Die gezielte Statikprüfung und alle 32 Dokumentwächter sind ebenfalls grün.
-  **Offen:** zentrales Zweitreview, Entwicklungstor und tatsächliche
-  Übernahme nach `main`/`origin/main`. Fenster-, Renderer- und Leistungsabnahme gehören
-  weiterhin zum Release.
+  **Zentrale Übernahme:** Zweitreview freigegeben; Entwicklungstor mit 19.464
+  bestandenen und 62 übersprungenen Tests, Ruff/Format/mypy je Exit 0, ohne
+  Quellenabweichung. Commit `0041000a0` enthält alle 17 Pfade; 38 unabhängige
+  Inhaltsvergleiche passen. Der Push nach `origin/main` ist noch nachzuweisen.
+  Fenster-, Renderer- und Leistungsabnahme gehören weiterhin zum Release.
 
 <a id="rm-326"></a>
 
@@ -4485,6 +4487,27 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Breite; bei angehaltener Kette entsteht keine Datei. Bauplan §29, §2.8, `wartezeit.md`.
   Belege: `F:\solidon-review-reports\gebiet-weg1.md`, `gebiet-weg2.md`, Sonden
   `w1_export_laufend.py`, `w2_export_luecke.py`.
+  **Zusätzlicher Anschluss B01, Review am festen Stand `48106c57a`:** Der neue
+  Befund `blend.draft` verspricht feine Ausgabe. Der bisherige Exportplan übernimmt
+  jedoch das vorhandene Entwurfsnetz unverändert: 9076 Dreiecke bei 0,8 mm Raster,
+  während derselbe Feinlauf 36684 Dreiecke bei 0,4 mm hat. Dies wurde an der echten
+  Kernplanung gemessen; es wurde dabei keine Datei geschrieben und kein Fenster bedient.
+  Der Schreibpfad ist älter, neu ist die dort uneingelöste Zusage aus RM-379.
+  **Gemeinsamer Abschluss:** Dokument, eingebettete Quellen, Basisverzeichnis,
+  wirksames Profil und ausgewählte Kennungen beim Auftragsstart zusammen binden.
+  Vor Export, Druckvorprüfung und Slicer-Übergabe ausdrücklich `fine` auswerten;
+  Vorprüfung, Bestätigung und Schreiben verwenden denselben vollständigen Stand.
+  Fehlende gewählte Körper, Kernhalt oder Abbruch ergeben keine Ausgabe. Mehrere
+  Platten teilen einen Feinlauf; der Druckrat merkt die tatsächlich analysierten
+  feinen Körper. Abbruch muss auch während einer wartenden Kernfrage greifen.
+  **Ergänzte Abnahme:** Ursprünglicher Sofortexport nach Parameteränderung und
+  Skalierung sowie Wiederholwege; wirklicher Exportarbeiter bis STL/3MF-Rücklesen,
+  beide Slicerarbeiter, Auswahl und mehrere Platten, eingebettete Quelldatei,
+  inzwischen geändertes Dokument, warmer Cache, Kernfrage und Abbruch. Reine
+  Arbeiterverträge im Entwicklungslauf, Fenster-/Rendererabnahme beim Release.
+  Bauplan §31 und §29. Der Anschluss ist mit den zuständigen Sitzungen abgegrenzt.
+  [Historischer B01-Review](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
+  [Messdaten B01](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie-proben.json).
 
   **Ergänzung R6C942-01, Quellenreview am festen Stand `6c9420b1f`:** Nach
   abgebrochener Auswertung kann `busy=False` bei `result_current=False` gelten.
@@ -5234,7 +5257,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 <a id="rm-134"></a>
 
 - [ ] **RM-134 — Zusammenführung duplizierter Testhilfen entscheiden.** Roberts Entscheidung zum
-  Umfang der Zusammenführung einholen. Belegt sind doppelte Freiformhilfen für Kegel/Torus und
+  Umfang der Zusammenführung einholen (genehmight, alles gründlich). Belegt sind doppelte Freiformhilfen für Kegel/Torus und
   Bohrungswand-Klickhilfen; die historische Zahl von 21 Gruppen ist kein aktueller Messwert. Bei
   Freigabe gemeinsame Verträge klären und die betroffenen Hilfen an einem Pflegeort führen. Abnahme:
   gleiche fachliche Testfälle ohne doppelte Pflege; eine vollständige Testdurchsicht bleibt eine
