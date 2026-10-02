@@ -1946,6 +1946,8 @@ def test_the_export_says_why_the_machine_side_is_missing(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
     settings = print_settings.resolve(profile, "standard")
 
@@ -1977,6 +1979,8 @@ def test_a_plain_export_hears_nothing_about_a_foreign_slicer(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     settings = print_settings.resolve(profile, "standard")
 
     _written, findings = write_assembly(

@@ -8883,24 +8883,125 @@ def test_opening_needs_no_machine_profile_but_slicing_does(
     assert dialog._current_setup(for_slicing=False) is not None
 
 
+def test_opening_without_a_machine_profile_reaches_the_window_and_keeps_its_receipt(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """RM-431: Der Klick auf *Im Slicer öffnen* ohne Druckerprofil kommt am
+    Fenster an, und die Quittung bleibt stehen. Danach überschrieb der Grund
+    des Rechen-Wegs („Dieser Slicer braucht ein Druckerprofil …“) die Zeile
+    „An … übergeben“, sobald der Arbeiter fertig war."""
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    monkeypatch.setattr(module.handover, "window_program", lambda found: found)
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+    dialog.machine_choice.clear()
+    dialog.machine_choice.addItem("— bitte wählen —", "")
+    dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle", "ecc2")
+    dialog.machine_choice.setEnabled(True)
+    dialog.machine_choice.setCurrentIndex(0)
+    written = tmp_path / "platte.3mf"
+    written.write_bytes(b"x")
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda _job, plate: module.PlateRun(
+            plate=plate,
+            model=written,
+            slots=(MaterialSlot(0, ""),),
+            keep_arrangement=False,
+            findings=(),
+        ),
+    )
+    opened: list[tuple[Path, object]] = []
+    monkeypatch.setattr(
+        module.handover, "open_in_slicer", lambda model, setup: opened.append((model, setup))
+    )
+
+    dialog._open_in_slicer()
+    assert dialog._worker is not None, dialog.state.text()
+    assert dialog._worker.wait(5_000)
+    QApplication.processEvents()
+
+    assert [model for model, _setup in opened] == [written], "der Klick kommt am Fenster an"
+    receipt = f"An {module._slicer_title(executable)} übergeben — das Fenster gehört jetzt Ihnen."
+    assert dialog.state.text() == receipt
+    assert not dialog.slice_button.isEnabled(), "rechnen braucht das Profil weiter"
+    assert dialog.slice_button.toolTip() == dialog._machine_missing_line()
+
+    # Auch der nächste Durchlauf der Zustandsprüfung lässt die Quittung stehen.
+    dialog._show_slicer_state()
+    assert dialog.state.text() == receipt
+
+
+def test_a_generic_printer_slices_with_prusaslicer_without_a_bundle_printer(
+    dialog: PrintSettingsDialog, session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-431: Allgemeiner Drucker, PrusaSlicer mit einem Bündel, das ihn nicht
+    kennt — das Druckerprofil bleibt von selbst leer, und Solidons Werte gehen
+    hinaus. *Slicen* war trotzdem gesperrt mit „Wählen Sie einen Drucker aus
+    der Liste.“ (Rückschritt gegenüber 0.5.1)."""
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _select_printer(dialog, "generic-220")
+    assert session.wait_for_idle()
+    dialog._slicer_path = executable
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+
+    dialog._profiles_found(
+        sp.find_profiles(executable, "prusa", kinds=("machine", "process", "filament"))
+    )
+    dialog._show_slicer_state()
+
+    assert not str(dialog.machine_choice.currentData() or ""), "kein Drucker des Bündels passt"
+    assert dialog.slice_button.isEnabled(), dialog.slice_button.toolTip()
+    assert not dialog.slice_button.toolTip()
+    setup = dialog._current_setup()
+    assert setup is not None and setup.machine_profile == ""
+
+
+#: Welche Haftungsmaße bei welcher Bettart wirken — von Hand, nicht aus dem
+#: Kern abgeleitet, damit der Test eine falsche Tabelle dort finden kann (RM-432).
+_SHOWN_FOR_KIND: dict[str, set[str]] = {
+    "none": set(),
+    "skirt": {"adhesion.skirt_loops", "adhesion.skirt_distance"},
+    "brim": {"adhesion.brim_width"},
+    "raft": {"adhesion.raft_layers"},
+}
+
+
 @pytest.mark.parametrize("kind", ["none", "skirt", "brim", "raft"])
 def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
     dialog: PrintSettingsDialog, kind: str
 ) -> None:
     """Nur die Maße der gewählten Bettart stehen da; ein abgelehnter Wert in
     einem ausgeblendeten Feld sperrt nicht (RM-341)."""
-    from app.core.knowledge import print_settings
-
     selector = dialog._editors["adhesion.kind"]
     assert isinstance(selector, QComboBox)
     selector.setCurrentIndex(selector.findData(kind))
     dialog._update_inactive_setting_rows()
     form = dialog._tab_forms["adhesion"]
-    inactive = print_settings.inactive_paths("auto", kind)
-    for path in print_settings.ADHESION_DETAILS:
-        assert form.isRowVisible(dialog._labels[path]) is (path not in inactive), path
+    every = set().union(*_SHOWN_FOR_KIND.values())
+    for path in every:
+        assert form.isRowVisible(dialog._labels[path]) is (path in _SHOWN_FOR_KIND[kind]), path
 
-    hidden = [path for path in print_settings.ADHESION_DETAILS if path in inactive]
+    hidden = sorted(every - _SHOWN_FOR_KIND[kind])
     if hidden:
         editor = dialog._editors[hidden[0]]
         assert isinstance(editor, BoundedSpin)

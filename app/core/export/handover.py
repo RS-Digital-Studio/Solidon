@@ -582,8 +582,14 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                 suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
             )
         ]
+    known = slicer_profiles.supports_printer(setup.flavour, setup.executable, profile.printer.title)
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
-    if chosen:
+    if chosen and known:
+        # **Nur, wenn es denselben Drucker dort gibt.** „Stellen Sie den Slicer
+        # auf denselben Drucker um" zeigt sonst ins Leere: Ein allgemeiner
+        # Drucker mit PrusaSlicer bekam diesen Satz, weil PrusaSlicer zuletzt
+        # auf irgendeinem Drucker stand (RM-431) — umstellen konnte der Kunde
+        # auf nichts. Dann gilt der Satz darunter.
         return [
             Finding(
                 code="slicer.machine_mismatch",
@@ -600,7 +606,7 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                 suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
             )
         ]
-    if not slicer_profiles.supports_printer(setup.flavour, setup.executable, profile.printer.title):
+    if not known:
         # **Der Rat darunter zeigte hier ins Leere.** „Wählen Sie das
         # Maschinenprofil in den Druckeinstellungen" setzt voraus, dass es
         # eines gibt; bringt der Slicer für diesen Drucker gar keines mit,

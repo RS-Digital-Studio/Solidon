@@ -4735,6 +4735,8 @@ def test_the_customer_hears_that_the_slicer_stands_on_another_printer(monkeypatc
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
@@ -4824,6 +4826,27 @@ def test_a_slicer_that_does_not_know_this_printer_says_so_instead(monkeypatch) -
 
     assert [finding.code for finding in findings] == ["slicer.printer_unknown"]
     assert findings[0].suggestions, "Regel 17: auch dieser Fall nennt den nächsten Schritt"
+
+
+def test_a_slicer_set_to_another_printer_it_cannot_swap_for_ours_says_it_does_not_know_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-431: Allgemeiner Drucker mit PrusaSlicer, das zuletzt auf einem
+    anderen Drucker stand. „Stellen Sie den Slicer auf denselben Drucker um“
+    zeigte ins Leere — das Bündel kennt keinen allgemeinen Drucker."""
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Original Prusa MK4S")
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: False)
+    profile = profiles.make_profile("generic-220", "pla")
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer-console.exe"), flavour="prusa")
+
+    findings = handover.machine_missing(setup, profile)
+
+    assert [finding.code for finding in findings] == ["slicer.printer_unknown"]
+    assert findings[0].values["printer"] == profile.printer.title
 
 
 def test_a_chosen_printer_is_never_second_guessed(monkeypatch) -> None:
@@ -6252,6 +6275,8 @@ def test_the_orca_family_is_still_warned(monkeypatch) -> None:
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
 
@@ -6279,6 +6304,8 @@ def test_the_slicing_run_says_it_too_when_the_machine_side_is_missing(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     model, setup = _slicer_writing(
