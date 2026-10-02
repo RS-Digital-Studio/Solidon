@@ -63,7 +63,7 @@ from app.i18n import tr
 from app.ui.labels import localised, wheel_needs_focus
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, ROOMY, ContentHeight, DialogScrollArea, make_primary
+from app.ui.style import NORMAL, ROOMY, SPACE, ContentHeight, DialogScrollArea, make_primary
 from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
 if TYPE_CHECKING:
@@ -493,6 +493,9 @@ class SupportDialog(QDialog):
         self.progress.setVisible(False)
 
         self.buttons = QDialogButtonBox(self)
+        button_layout = self.buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.send = self.buttons.addButton(tr("Senden"), QDialogButtonBox.ButtonRole.AcceptRole)
         make_primary(self.send)
         # Der Weg von §37.2 bleibt ein Weg und wird kein Notausgang: Wer ohne

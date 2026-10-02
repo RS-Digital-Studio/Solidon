@@ -176,6 +176,7 @@ from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     TARGET_SIZE,
     TIGHT,
     make_danger,
@@ -4649,6 +4650,9 @@ class BodyChoiceDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.ok_button.setText(title or tr("Übernehmen"))
         make_primary(self.ok_button)

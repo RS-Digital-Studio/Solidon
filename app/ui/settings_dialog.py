@@ -71,6 +71,7 @@ from app.ui.shortcut_schemes import SCHEMES
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     WIDE,
     ContentHeight,
     DialogScrollArea,
@@ -370,6 +371,9 @@ class SettingsDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # Speichern ist die Handlung dieses Fensters, also trägt sie den
         # Akzent — ausdrücklich. Qt gab ihn beim ersten ``show()`` ohnehin an
         # denselben Knopf, aber ohne die halbfette Schrift daneben, und Farbe

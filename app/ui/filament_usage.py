@@ -47,6 +47,7 @@ from app.ui.settings import UiSettings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     TARGET_SIZE,
     TIGHT,
     WIDE,
@@ -363,6 +364,9 @@ class UsageDialog(QDialog):
         utilities.addStretch()
         layout.addLayout(utilities)
         buttons = QDialogButtonBox(self)
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.book_button = buttons.addButton(tr("Abziehen"), QDialogButtonBox.ButtonRole.AcceptRole)
         self.correct_button = buttons.addButton(
             tr("Mengenaufteilung korrigieren"), QDialogButtonBox.ButtonRole.ActionRole

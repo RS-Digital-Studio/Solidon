@@ -44,6 +44,7 @@ from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_tim
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     TIGHT,
     WIDE,
     DialogScrollArea,
@@ -478,6 +479,9 @@ class AiDisclosureDialog(QDialog):
         )
 
         self.buttons = QDialogButtonBox(self)
+        button_layout = self.buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.buttons.setContentsMargins(WIDE, 0, WIDE, 0)
         self.buttons.addButton(self.back_button, QDialogButtonBox.ButtonRole.RejectRole)
         self.buttons.addButton(self.continue_button, QDialogButtonBox.ButtonRole.AcceptRole)

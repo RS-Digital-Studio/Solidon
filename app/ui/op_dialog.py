@@ -71,6 +71,7 @@ from app.ui.panels import align_forms
 from app.ui.seal_dialog import SealPathField
 from app.ui.style import (
     NORMAL,
+    SPACE,
     TIGHT,
     WIDE,
     ContentFitIntent,
@@ -1994,6 +1995,9 @@ class OperationDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # Der Knopf benennt die Handlung: „Bohrung setzen" statt „OK". Was
         # gleich passiert, steht damit dort, wo entschieden wird — der
         # Fenstertitel ist beim Klicken nicht mehr im Blick. Für die

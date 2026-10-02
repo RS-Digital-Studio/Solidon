@@ -45,7 +45,7 @@ from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin, localised_value
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.session import Session
-from app.ui.style import NORMAL, WIDE, make_primary
+from app.ui.style import NORMAL, SPACE, WIDE, make_primary
 
 _log = get_logger(__name__)
 
@@ -200,6 +200,9 @@ class VariantsDialog(QDialog):
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = self.buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
         make_primary(self.buttons.button(QDialogButtonBox.StandardButton.Ok))
         self.buttons.accepted.connect(self._build)

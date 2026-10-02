@@ -65,7 +65,7 @@ from app.ui.labels import feature_label
 from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.op_dialog import OperationDialog, ValueField
 from app.ui.session import AskRequest
-from app.ui.style import NORMAL, ROOMY, make_primary, no_primary
+from app.ui.style import NORMAL, ROOMY, SPACE, make_primary, no_primary
 
 #: Die Wege je Fehlergrund, in der Reihenfolge, in der sein Satz sie nennt
 #: (``perceive.local.local_error``). Bis zum 24.09.2026 bot jeder Grund einen
@@ -429,6 +429,9 @@ class LocalRecognitionDialog(QDialog):
         make_primary(self.edit_button)
         layout.addWidget(self.edit_button)
         buttons = QDialogButtonBox(self)
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.save_button = buttons.addButton(
             tr("Nur Merkmale übernehmen"), QDialogButtonBox.ButtonRole.ActionRole
         )

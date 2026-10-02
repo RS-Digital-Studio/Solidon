@@ -57,6 +57,7 @@ from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
@@ -408,6 +409,9 @@ class GenerateDialog(QDialog):
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = self.buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
         # „Erzeugen" trug den Akzent schon, nur hatte ihn niemand gesetzt: Qt
         # vergibt beim ersten ``show()`` den Default an den ersten

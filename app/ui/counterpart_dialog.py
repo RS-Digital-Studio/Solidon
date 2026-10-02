@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from app.core.counterpart import PAIRS, Pair
 from app.i18n import tr
 from app.ui.labels import LengthSpin, NumberSpin, choice_label
-from app.ui.style import NORMAL, WIDE, make_primary, set_level
+from app.ui.style import NORMAL, SPACE, WIDE, make_primary, set_level
 
 
 class CounterpartDialog(QDialog):
@@ -77,6 +77,9 @@ class CounterpartDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._accept = accept
         accept.setText(tr("Gegenstücke setzen"))

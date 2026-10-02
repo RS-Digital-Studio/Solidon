@@ -105,6 +105,7 @@ from app.ui.settings import UiSettings, load_settings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     TIGHT,
     WIDE,
     ContentHeight,
@@ -185,6 +186,9 @@ class AskDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # Der Knopf trägt die Antwort, nicht „OK". Auf die Frage „Welchen soll
         # ich abziehen?" ist „OK" keine Antwort — es ist die Aufforderung, sie
         # sich aus der Liste danebenzudenken. Derselbe Grundsatz wie im Dialog
@@ -437,6 +441,9 @@ class CalibrationDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # Die gemessenen Werte zu übernehmen ist die Handlung dieses Fensters.
         # Den Akzent trug der Knopf schon — Qt vergibt ihn beim ersten
         # ``show()`` an den ersten autoDefault-Knopf —, aber ohne die
@@ -701,6 +708,9 @@ class ParameterDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             # Der Knopf sagt, was er tut — wie in jedem Operationsdialog.
@@ -1067,6 +1077,9 @@ class KeyDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         # Speichern ist die Handlung, also trägt sie den Akzent — und zwar
         # ausdrücklich. Qt gab ihn beim ersten ``show()`` ohnehin an denselben
         # Knopf, aber ohne die halbfette Schrift; Farbe allein ist keine
@@ -2217,6 +2230,9 @@ class ActivationDialog(QDialog):
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.addButton(self.forget_button, QDialogButtonBox.ButtonRole.DestructiveRole)
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         buttons.rejected.connect(self.reject)
 
         content = QWidget(self)
@@ -2985,6 +3001,9 @@ class StepValuesDialog(QDialog):
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=self)
         copy = buttons.addButton(tr("Kopieren"), QDialogButtonBox.ButtonRole.ActionRole)
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         make_primary(copy)
         copy.clicked.connect(self._copy)
         buttons.rejected.connect(self.reject)

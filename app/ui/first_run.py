@@ -84,6 +84,7 @@ from app.ui.settings import UiSettings
 from app.ui.style import (
     NORMAL,
     ROOMY,
+    SPACE,
     TIGHT,
     WIDE,
     ContentFitIntent,
@@ -641,6 +642,9 @@ class FirstRunDialog(QDialog):
         # wieder, und nur einer merkt sich die getroffene Auswahl. Wer sie
         # geändert und dann „Überspringen" gedrückt hätte, hätte sie verloren.
         buttons = QDialogButtonBox(self)
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         buttons.addButton(self.open_button, QDialogButtonBox.ButtonRole.ActionRole)
         self.start = buttons.addButton(
             tr("Speichern und starten"), QDialogButtonBox.ButtonRole.AcceptRole

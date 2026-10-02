@@ -3,7 +3,7 @@
 import pytest
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QApplication, QDialog, QMenuBar, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenuBar, QWidget
 
 from app.ui.counterpart_dialog import CounterpartDialog
 from app.ui.shortcuts_window import ShortcutsWindow
@@ -166,6 +166,40 @@ def test_settings_advanced_rows_fit_without_widening_the_dialog(
             dialog.close()
         install_language(spoken)
         set_language(spoken)
+
+
+def test_dialog_button_rows_use_the_design_spacing(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Parameter-, Filament- und Einstellungsdialog halten denselben Knopfabstand ein."""
+    from app.ui import settings_dialog as settings_module
+    from app.ui.dialogs import ParameterDialog
+    from app.ui.filament_picker import NewFilamentDialog
+    from app.ui.settings import UiSettings
+    from app.ui.style import SPACE
+
+    for dialog in (ParameterDialog({}), NewFilamentDialog()):
+        try:
+            buttons = dialog.findChild(QDialogButtonBox)
+            assert buttons is not None
+            button_layout = buttons.layout()
+            assert button_layout is not None
+            assert button_layout.spacing() == SPACE
+        finally:
+            dialog.deleteLater()
+
+    monkeypatch.setattr(settings_module.discover, "remembered_path", lambda _key: "")
+    monkeypatch.setattr(settings_module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
+    settings = settings_module.SettingsDialog(UiSettings(), slicer_path="")
+    try:
+        buttons = settings.findChild(QDialogButtonBox)
+        assert buttons is not None
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        assert button_layout.spacing() == SPACE
+    finally:
+        settings.release()
+        settings.deleteLater()
 
 
 def test_dialog_rechecks_reachability_when_screen_metrics_change(

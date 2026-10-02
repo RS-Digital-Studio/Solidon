@@ -40,7 +40,7 @@ from app.i18n import get_language, tr
 from app.ui.changes_dialog import groups_html
 from app.ui.dialogs import open_link
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import NORMAL, WIDE, make_primary
+from app.ui.style import NORMAL, SPACE, WIDE, make_primary
 
 #: Wie viel Liste beim Öffnen sichtbar ist, bevor sie rollt — eine
 #: **Anfangshöhe**, kein Deckel. Kurze Texte behalten ihre natürliche Höhe;
@@ -220,6 +220,9 @@ class UpdateDialog(QDialog):
         self.page_button.clicked.connect(self.open_page)
 
         self.buttons = QDialogButtonBox(self)
+        button_layout = self.buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.buttons.addButton(self.get_button, QDialogButtonBox.ButtonRole.AcceptRole)
         self.buttons.addButton(self.page_button, QDialogButtonBox.ButtonRole.ActionRole)
         self.later_button = self.buttons.addButton(

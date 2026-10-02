@@ -5136,6 +5136,9 @@ class ExpressionDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(style.SPACE)
         self.buttons = buttons
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
@@ -5273,6 +5276,9 @@ class PointDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(style.SPACE)
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Punkt setzen"))
@@ -5494,6 +5500,9 @@ class NewPlaneDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(style.SPACE)
         self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if self.accept_button is not None:
             self.accept_button.setText(tr("Ebene übernehmen"))
@@ -8210,6 +8219,9 @@ class SketchEditorDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(style.SPACE)
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Übernehmen"))

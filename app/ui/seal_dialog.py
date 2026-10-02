@@ -35,7 +35,7 @@ from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash, w
 from app.ui.outline_dialog import _ProfileView
 from app.ui.panels import align_forms
 from app.ui.sketch_editor import SketchEditorDialog, Surroundings
-from app.ui.style import NORMAL, WIDE, make_primary, no_primary
+from app.ui.style import NORMAL, SPACE, WIDE, make_primary, no_primary
 
 _FIELDS = ("path_sketch", "support_feature", "opening_signature", "counterface")
 
@@ -350,6 +350,9 @@ class SealPathDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
+        button_layout = buttons.layout()
+        assert button_layout is not None
+        button_layout.setSpacing(SPACE)
         self.accept_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self.accept_button.setText(tr("Dichtweg übernehmen"))
         self._lock_accept(str(tr("Dichtweg wird geprüft …")))
