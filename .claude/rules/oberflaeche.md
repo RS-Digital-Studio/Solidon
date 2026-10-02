@@ -200,6 +200,10 @@ Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
 direkt unter dem Feld, und der gemeinsame Knopf ist gesperrt, solange die
 scharfgestellte Handlung eine sichtbare abgelehnte Zahl enthält. Maßgruppen im
 Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann.
+Die Parameterleiste behält ihre Felder samt Fokus nur innerhalb eines
+Dokuments (`ParameterPanel.show_document` vergleicht das Dokumentobjekt): Ein
+anderes Projekt mit gleichen Zeilen wird neu gebaut und erbt keine abgelehnte
+Zahl (RM-452).
 
 **Auch die Druckeinstellungen lehnen ab statt zu kürzen.** Ihre Zahlenfelder
 verwenden `BoundedSpin`, der Düsendurchmesser `BoundedLengthSpin`. Der Hinweis

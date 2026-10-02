@@ -13658,6 +13658,54 @@ def test_the_parameter_card_survives_getting_parameters(qt_app: QApplication) ->
     assert "breite" in panel._editors
 
 
+def test_another_project_does_not_inherit_a_refused_number(qt_app: QApplication) -> None:
+    """Gleiche Zeilen sind nicht dasselbe Projekt (RM-452).
+
+    A und B tragen *Breite* 60 mit Obergrenze 100. Die in A abgelehnte 150
+    stand nach dem Öffnen von B weiter im Feld, samt Grenzsatz, weil die
+    Leiste gleiche Zeilen ohne Blick auf das Dokument weiterverwendete. In A
+    selbst bleibt das Feld dasselbe Widget (RM-355).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.core.types import Document, Parameter
+    from app.ui.panels import ParameterPanel
+
+    def project() -> Document:
+        document = Document(format_version=1, app_version="0.0.1")
+        document.parameters["breite"] = Parameter(
+            name="breite", value=60.0, unit="mm", title="Breite", maximum=100.0
+        )
+        return document
+
+    first, second = project(), project()
+    panel = ParameterPanel()
+    panel.show_document(first)
+    panel.show()
+    QApplication.processEvents()
+    editor = panel._editors["breite"]
+
+    panel.show_document(first)
+    assert panel._editors["breite"] is editor, "dasselbe Projekt behält sein Feld"
+
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), "150")
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    QApplication.processEvents()
+    assert panel.refusal_text(), "A lehnt 150 ab"
+
+    panel.show_document(second)
+    QApplication.processEvents()
+
+    shown = panel._editors["breite"]
+    assert panel.refusal_text() == "", "B kennt die Ablehnung aus A nicht"
+    assert shown.refused_value() is None
+    assert shown.lineEdit().text().startswith("60"), shown.lineEdit().text()
+    panel.close()
+
+
 def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> None:
     """Neue Zeilen dürfen nicht in der Höhe des leeren Zustands landen.
 

@@ -3222,6 +3222,8 @@ class ParameterPanel(QWidget):
         die Werte gesetzt und kein Feld verliert den Fokus (RM-355)."""
         self._refused_name = ""
         """Zu welchem Maß die Ablehnungszeile gehört — leer ohne."""
+        self._document: Document | None = None
+        """Das Dokument, dessen Maße die Zeilen zeigen — Werte setzen nur in ihm (RM-452)."""
         self._refusal: QWidget | None = None
         """Die Zeile unter einem Feld, das eine getippte Zahl abgelehnt hat — oder nichts.
 
@@ -3596,9 +3598,22 @@ class ParameterPanel(QWidget):
         Bleibt die Gestalt der Zeilen gleich (:meth:`_layout_of`), werden nur
         Werte und Hinweise gesetzt; sonst wird neu gebaut, und der Fokus geht
         an dasselbe Maß zurück.
+
+        **Nur innerhalb eines Dokuments** (RM-452): Gleiche Zeilen in einem
+        anderen Projekt sind andere Maße. Mit gleichem Wert setzte die Leiste
+        dort nichts neu, und die in A abgelehnte Zahl stand samt Grenzsatz in
+        B. Ein anderes Dokument wird neu gebaut, ohne Fokus mitzunehmen.
         """
         self._usage_result = result
         self._usage_operations = {operation.id: operation for operation in document.ops}
+        same = document is self._document
+        # Die Sitzung tauscht ``project.document`` nur bei einem Projektwechsel
+        # aus; innerhalb eines Projekts ändert sie dasselbe Objekt. Die
+        # Referenz hält es am Leben, damit kein neues Dokument seine Kennung erbt.
+        self._document = document
+        if not same:
+            self._rebuild(document)
+            return
         if self._refresh_in_place(document):
             return
         focus = QApplication.focusWidget()
