@@ -3213,6 +3213,10 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                 )
             ],
         )
+    if source.kind == "brep" and feature.kind in EXACT_CAVITY_KINDS and len(geometry.related) <= 1:
+        return _exact_place_oriented_cavity(
+            ctx, source, feature, target, delta_rotation, duplicate=duplicate
+        )
     tool = geometry.mesh.raw.copy()
     transform.moved(tool, to_world)
     body = as_mesh_data(source.mesh)
@@ -3343,6 +3347,12 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
+                # Gerechnet wurde am Netz, also ist es eins — auch wenn der
+                # Körper exakt hereinkam. Unter der Bauart ``brep`` trafen die
+                # Folgeschritte des exakten Kerns ein Netz; so meldet die
+                # Auswertung die Umwandlung (``evaluate.exact_became_mesh``,
+                # RM-423).
+                kind="mesh",
                 features=features,
                 reserved_feature_ids=tuple(sorted(reserved)),
             )
@@ -3350,6 +3360,69 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
         solver=deepest((closed_solver, placed.solver)),
         findings=findings,
     )
+
+
+def _exact_place_oriented_cavity(
+    ctx: OpContext,
+    source: SceneObject,
+    feature: Feature,
+    target: NDArray[np.float64],
+    delta_rotation: NDArray[np.float64],
+    *,
+    duplicate: bool,
+) -> OpResult:
+    """Bohrung oder Langloch am exakten Körper an einen Ort mit neuer Richtung (RM-423).
+
+    Dieselbe Bauart wie :func:`_exact_move_cavity` und
+    :func:`_exact_duplicate_cavity`, nur mit gedrehtem Werkzeug: die alte
+    Stelle schließen (beim Versetzen), am Ziel aus den Kennzahlen neu
+    schneiden. Am Netz gerechnet kam der Körper als Netz unter der Bauart
+    ``brep`` zurück, und Folgeschritte des exakten Kerns trafen ein Netz.
+    """
+    turned: dict[str, Any] = dict(feature.params)
+    for name in ("axis", "normal", "direction"):
+        if name in feature.params:
+            vector = delta_rotation @ np.asarray(feature.params[name], dtype=np.float64)
+            turned[name] = tuple(float(value) for value in vector)
+    centre: Vec3 = (float(target[0]), float(target[1]), float(target[2]))
+    expected = dataclasses.replace(
+        feature, params={**turned, "centre": centre}, provenance="generated"
+    )
+    axis = _bore_vector(expected, "axis")
+    travel = target - np.asarray(feature.params["centre"], dtype=np.float64)
+    operation = "duplicate_feature" if duplicate else "move_feature"
+    closing: list[Finding] = []
+    if duplicate:
+        base = _exact_body(source)
+    else:
+        solid, closing = _exact_closing_base(ctx, source)
+        ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+        base = _exact_own_filled(source, solid, feature)
+    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+    placed, tool = _exact_chain_cut_holding(
+        base,
+        lambda overlap: _exact_cavity_tool(base, expected, centre, axis, reach=overlap),
+        overlaps=CUT_OVERLAPS if feature.params.get("through") else (1.0,),
+        unify=feature.kind == "slot",
+    )
+    findings = [*closing, *_edge_findings(as_mesh_data(base), [expected])]
+    findings += _without_opened_twice(
+        _neighbour_bore_findings(
+            source, feature, as_mesh_data(tool), ctx, moved=True, copy=duplicate
+        ),
+        findings,
+    )
+    if duplicate:
+        copy = dataclasses.replace(expected, id=_free_feature_id(source, feature.kind))
+        nothing = without_effect(base, placed, "difference", ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
+        result = _exact_copy_result(ctx, source, placed, [copy], findings)
+    else:
+        result = _exact_cavity_result(
+            ctx, source, placed, op="move_feature", expected=expected, findings=findings
+        )
+    return _exact_mouth_checked(result, operation, source, feature, travel)
 
 
 @op_params
@@ -3935,7 +4008,7 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper zuerst verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
-    cache_version="9",
+    cache_version="10",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4304,7 +4377,7 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
     # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="6",
+    cache_version="7",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,

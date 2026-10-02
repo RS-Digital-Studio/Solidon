@@ -211,6 +211,24 @@ def test_description_heading_levels_keep_their_order_and_leave_code_alone() -> N
     assert markup.below_heading("Ein Absatz.\n\n---", 3) == "Ein Absatz.\n\n---"
 
 
+def test_headings_in_quotes_and_lists_stay_below_the_operation_title() -> None:
+    """Qt liest eine Überschrift im Zitat oder Listenpunkt ohne Zitatebene.
+
+    Bliebe sie auf Ebene 3, stünde sie für das Handbuchfenster neben dem
+    Operationstitel, und die Sprungziele der Referenz fielen aus.
+    """
+    from app.core import markup
+
+    shown = markup.below_heading("### Eins\n\n> ### Zitat\n\n- ### Punkt\n\n1. ## Zahl", 3)
+    assert shown.split("\n\n") == [
+        "##### Eins",
+        "> ##### Zitat",
+        "- ##### Punkt",
+        "1. #### Zahl",
+    ]
+    assert markup.below_heading("    ### eingerückter Code", 3) == "    ### eingerückter Code"
+
+
 def test_customer_parameter_table_names_choices_and_their_conditions() -> None:
     """Vorgabe, Auswahl und abhängige Felder sprechen wie derselbe Dialog."""
     from app.core.registry.surfaces import parameter_table

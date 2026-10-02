@@ -17804,6 +17804,8 @@ class MainWindow(QMainWindow):
                 # Projektparameter an — `_named_dimensions` baut sie beim
                 # Übernehmen, in derselben Transaktion wie den Schritt.
                 offer_naming=offers_naming(spec),
+                # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
+                naming_default=self.settings.name_dimensions,
             )
             dialog.spoolChosen.connect(remember_spool)
             if seat is not None:
@@ -17893,6 +17895,14 @@ class MainWindow(QMainWindow):
                         )
                 count_before = len(self.session.project.document.ops)
                 self._commit_preview_order(order)
+                if dialog.offers_naming() and (
+                    dialog.names_dimensions() != self.settings.name_dimensions
+                ):
+                    # **Gemerkt wird beim Übernehmen**, nicht beim Klick auf
+                    # den Haken: Wer ihn nur ausprobiert und abbricht, hat
+                    # nichts entschieden (RM-369).
+                    self.settings.name_dimensions = dialog.names_dimensions()
+                    self._store_settings()
                 operations = self.session.project.document.ops
                 if picked.name == "split_pinned" and len(operations) > count_before:
                     self._queue_split_reveal(operations[-1].outputs)
@@ -22105,25 +22115,26 @@ class MainWindow(QMainWindow):
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
         field = str(error.values.get("field", ""))
-        # **Liest das Feld ein Maß, wird das Maß korrigiert** (RM-354). Der
-        # Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl trennte
-        # still die Bindung; der Wert gehört in die Zeile der Parameterleiste.
+        # **Ist das Feld an ein Maß gebunden, wird das Maß korrigiert** (RM-354).
+        # Der Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl
+        # trennte still die Bindung; der Wert gehört in die Zeile der
+        # Parameterleiste. **Nur die nackte Bindung** (RM-453): Bei
+        # „=max(@breite, 2000)“ behebt keine Breite den Fehler, korrigierbar
+        # ist der Ausdruck im Schritt.
         from app.core import expressions
 
         try:
             raw = self.session.history.operation(error.op_id).params.get(field)
         except AppError:
             raw = None
-        read = expressions.references(raw) if expressions.is_expression(raw) else frozenset()
-        if len(read) == 1:
-            (name,) = read
-            if self.parameters.focus_parameter(name):
-                self.announce(
-                    tr(
-                        "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
-                    ).format(name=name)
-                )
-                return
+        name = expressions.bound_name(raw)
+        if name is not None and self.parameters.focus_parameter(name):
+            self.announce(
+                tr(
+                    "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
+                ).format(name=name)
+            )
+            return
         self.edit_operation(error.op_id, field)
 
     def _show_feature_after_error(self, error: AppError) -> None:

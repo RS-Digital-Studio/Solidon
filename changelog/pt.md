@@ -102,7 +102,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
 - O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
 - Os espaços chegam a todos os campos de texto, também ao questionário de opinião e ao chat, enquanto uma caixa de diálogo mostra a pré-visualização.
-- Uma constatação que se refere a um passo abre-o para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
+- Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
 - A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.
 

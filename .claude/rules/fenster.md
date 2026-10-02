@@ -202,7 +202,8 @@ nötig:
   Schrittkennung braucht, steht in `dialogs.NEEDS_OP`, was den lebenden Körper
   braucht, in `panels.NEEDS_LIVE_BODY`; wer einen Handler baut, der
   `_object_of`, `_entry_of` oder `error.object_id` liest, trägt ihn dort ein
-  (`test_finding_actions`).
+  (`test_finding_actions`). Nur eine nackte Bindung (`=@breite`,
+  `expressions.bound_name`) führt in die Parameterleiste.
 - **Eine Befundzeile aus einer Operation steht nie ohne Knopf da:** Bleibt nach
   dem Abgleich mit `error_handlers` nichts, bietet `panels.handled_actions`
   *Eingabe korrigieren* an, mit dem Rat in dessen Kurzhilfe (der Fehlerdialog
