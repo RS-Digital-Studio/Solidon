@@ -28,6 +28,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import (
+    CHANGE_THIS_STEP,
     CORRECT_INPUT,
     PROGRAMMING_ERRORS,
     BooleanFailedError,
@@ -757,7 +758,11 @@ def _raster_findings(
                 "eroded_mm": round(steps * pitch, 3),
                 "tolerance_mm": round(pitch / 2.0, 3),
                 **values,
+                "field": "wall",
             },
+            # Ob die Wand trägt, entscheidet der Kunde an diesem Befund: Der
+            # Weg ist die Wandstärke in diesem Schritt (RM-441, wie RM-374).
+            suggestions=(CHANGE_THIS_STEP,),
         )
     ]
     worst = abs(steps * pitch - wall) + pitch / 2.0
@@ -946,7 +951,12 @@ def hollowed(wall: float, removed_mm3: float) -> Finding:
         code="hollow.done",
         severity="info",
         message=_("Ausgehöhlt."),
-        values={"wall_mm": round(wall, 2), "removed_cm3": round(removed_mm3 / 1000.0, 1)},
+        values={
+            "wall_mm": round(wall, 2),
+            "removed_cm3": round(removed_mm3 / 1000.0, 1),
+            "field": "wall",
+        },
+        suggestions=(CHANGE_THIS_STEP,),
     )
 
 

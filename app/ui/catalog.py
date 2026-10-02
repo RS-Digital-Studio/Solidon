@@ -265,8 +265,8 @@ class PartCatalog(QDialog):
         self._feature_chosen = True
         """Ob im Objektbaum eine Fläche oder Bohrung gewählt ist.
 
-        Die meisten Bausteine werden an eine solche Stelle gesetzt (gezählt
-        am 02.10.2026: 25 von 35); ohne sie wissen sie weder wohin noch in welche
+        Die meisten Bausteine werden an eine solche Stelle gesetzt (alle ohne
+        ``standalone``); ohne sie wissen sie weder wohin noch in welche
         Richtung, und die Operation bricht mit „Für diesen Baustein fehlt die
         Stelle, an die er soll" ab. Vorgabe ``True``: Wer die Auskunft nicht
         gibt, bekommt den Katalog wie zuvor."""

@@ -53,11 +53,15 @@ it into `website/version.json`.
 - Two plates that touch stay one body at a hole and keep their material, whether you pull, change, move or close the hole. A pin above it stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
+- In the history of a STEP body you can reorder steps or insert one before, even when a later step refers to a hole. The reference follows the hole.
+- A hole moved or duplicated with a new direction stays exact on a STEP body.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt about*, and *At face* runs the cut parallel to a flat face.
 - A STEP body stays a STEP body when you crop it, with its faces, edges and names.
 - A freshly created screw lid is no longer reported as too tight for its neck.
+- If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
+- If you chose “Load now”, the pieces from *Split the model* no longer start minutes of recognition either; “Recognise all features” catches up on it.
 
 ### Sculpting, text and sketching
 
@@ -70,7 +74,7 @@ it into `website/version.json`.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
-- The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
+- The target of *Align to feature* starts out empty, and the first click in the view fills it. *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
 
@@ -86,6 +90,7 @@ it into `website/version.json`.
 
 ### Operation and system
 
+- The *Create the dimensions as parameters* tick is set the first time and then remembers your last choice, even across a restart.
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
 - Export, *Slice* and *Open in slicer …* always get the fine calculation, not the coarser view of the window. Fillets and cones reach the file at full resolution.
 - An export during a running calculation waits for the new result. Until now the file could still carry the old size.
@@ -100,7 +105,8 @@ it into `website/version.json`.
 - In the example project for the second way, the screw holes follow width and thickness.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
-- Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
+- While a dialog shows its preview, spaces reach every text field, including the feedback questionnaire and the chat, and ticks and buttons accept the space bar.
+- With *Scale*, a body stays standing on the bed instead of sinking below the plate, and the view reframes it when it grows.
 - Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.

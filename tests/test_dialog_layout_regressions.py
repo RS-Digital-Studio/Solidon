@@ -96,8 +96,9 @@ def test_palette_detail_has_its_own_line_without_horizontal_scrolling(qt_app: QA
         assert row.width() <= dialog.list.viewport().width()
         assert dialog.list.horizontalScrollBar().maximum() == 0
         assert dialog.list.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        assert reason in item.toolTip()
-        assert str(entry.title) in item.toolTip()
+        # Die Palette schneidet Ränder ab und entdoppelt die Zeilen (C-N2).
+        assert reason.strip() in item.toolTip()
+        assert str(entry.title).strip() in item.toolTip()
     finally:
         dialog.close()
         dialog.deleteLater()

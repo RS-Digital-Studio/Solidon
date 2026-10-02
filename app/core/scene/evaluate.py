@@ -1084,6 +1084,7 @@ def _evaluate(
                 findings.append(_finding_from(error, operation))
                 stopped_at = operation.id
                 break
+        _inherit_recognition(recognition_of, inputs, operation.outputs)
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
             # §30: ob ein Körper Mesh oder B-Rep ist, folgt aus dem Körper,
@@ -3257,6 +3258,46 @@ class _BodyRecognition:
     allowed: bool | None
     declined_at: int | None = None
     answer: tuple[OpId, str, str] | None = None
+    inherited: bool = False
+    """Die Wahl stammt vom Körper, aus dem dieser entstand (:func:`_inherit_recognition`)."""
+
+
+def _inherit_recognition(
+    recognition_of: dict[ObjectId, _BodyRecognition],
+    inputs: Sequence[SceneObject],
+    outputs: Sequence[ObjectId],
+) -> None:
+    """Die Absage der Vollerkennung geht auf die Körper über, die aus dem abgelehnten entstehen.
+
+    Entscheidung Robert 02.10.2026 (RM-406, „Vererben“): Nach „Sofort laden“
+    teilte *Auto Split* ein Modell mit 1,95 Mio. Dreiecken in zwölf Stücke,
+    jedes unter der automatischen Grenze und darum voll erkannt — 570 s und
+    9,9 GB, wo der Kunde die lange Erkennung gerade abgelehnt hatte. Neue
+    Körper eines teilenden Schritts (mehr Ausgänge als Eingänge) erben die
+    Absage ihres Eingangs, auch die Hälfte, die seinen Namen behält; ein Schritt,
+    der den Körper nur verändert, lässt seine Wahl, wie sie ist. *Alle Merkmale erkennen*
+    nimmt die Wahl am Ladeschritt des Ursprungs zurück
+    (``History.reopen_recognition``).
+    """
+    declined = next(
+        (
+            state
+            for entry in inputs
+            if (state := recognition_of.get(entry.id)) is not None and state.allowed is False
+        ),
+        None,
+    )
+    if declined is None or len(outputs) <= len(inputs):
+        return
+    for object_id in outputs:
+        state = recognition_of.get(object_id)
+        if state is not None and state.allowed is not False:
+            continue
+        recognition_of[object_id] = (
+            dataclasses.replace(state, inherited=True)
+            if state is not None
+            else _BodyRecognition(allowed=False, answer=declined.answer, inherited=True)
+        )
 
 
 def _recognition_choice(
@@ -3477,7 +3518,12 @@ def _measured_locally(
 
 
 def _skipped_recognition(
-    entry: SceneObject, operation: Operation, *, reopenable: bool, out_of_memory: bool
+    entry: SceneObject,
+    operation: Operation,
+    *,
+    reopenable: bool,
+    out_of_memory: bool,
+    inherited: bool = False,
 ) -> Finding:
     """Der Befund, dass die Vollerkennung eines großen Körpers ausgelassen wurde.
 
@@ -3506,6 +3552,14 @@ def _skipped_recognition(
                 "nicht. Einzelne Merkmale erkennen Sie an einer Stelle; "
                 "„Dreiecke verringern“ hilft."
             )
+        )
+    elif inherited and reopenable:
+        # Ein Stück eines Modells, dessen lange Erkennung beim Laden abgelehnt
+        # wurde (RM-406): nicht „groß“, sondern abgeleitet.
+        message = _(
+            "Die vollständige Merkmalserkennung wurde für dieses Stück ausgelassen, wie für "
+            "das Modell, aus dem es stammt. „Alle Merkmale erkennen“ holt sie nach; einzelne "
+            "Merkmale erkennen Sie auch an einer Stelle."
         )
     else:
         message = (
@@ -3955,13 +4009,21 @@ def _with_features(
             # Die Zustimmung galt dem Körper, nicht dem einen Netz: Ein
             # Folgeschritt erkennt vollständig nach, ohne neue Frage.
             local_only = False
+        elif state.inherited:
+            # Ein Stück eines abgelehnten Körpers (RM-406): Die Absage gilt
+            # ihm, auch wenn es unter der automatischen Grenze liegt.
+            local_only = True
     elif not within:
         state = None
     reopenable = state is not None and state.answer is not None
     if local_only and not pending:
         findings.append(
             _skipped_recognition(
-                entry, operation, reopenable=reopenable, out_of_memory=out_of_memory
+                entry,
+                operation,
+                reopenable=reopenable,
+                out_of_memory=out_of_memory,
+                inherited=state is not None and state.inherited,
             )
         )
         if not previous and not entry.features:

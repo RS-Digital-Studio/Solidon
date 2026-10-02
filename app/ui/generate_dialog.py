@@ -945,7 +945,20 @@ class GenerateDialog(QDialog):
         self._busy = running
         self._lock_make(not running)
         self.again.setEnabled(not running)
-        self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
+        self._lock_cancel(None)
+
+    def _lock_cancel(self, why: str | None) -> None:
+        """*Abbrechen* sperren, solange ein abgebrochener Versuch ausläuft (RM-418).
+
+        In dieser Zeit schloss ein zweiter Klick den Dialog und verwarf die
+        fertigen Versuche — gemeint war, den laufenden zu beenden, und das
+        geschieht schon. ``None`` gibt frei.
+        """
+        cancel = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel.setEnabled(why is None)
+        cancel.setToolTip(why or "")
+        cancel.setStatusTip(why or "")
+        cancel.setAccessibleDescription(why or "")
 
     def _lock_make(self, free: bool) -> None:
         """*Erzeugen* freigeben oder sperren — und im zweiten Fall sagen, warum.
@@ -1277,9 +1290,16 @@ class GenerateDialog(QDialog):
         zweites *Abbrechen* schließt.
         """
         worker = self._worker
-        if self.tries and worker is not None and worker.isRunning() and not worker.cancelled():
-            worker.cancel()
-            self.state.setText(tr("Wird abgebrochen — der laufende Schritt läuft aus."))
+        if self.tries and worker is not None and self._busy:
+            # Ein zweites Abbrechen, während der erste noch ausläuft — auch über
+            # Esc oder das Fensterkreuz —, verwirft nichts (RM-418). Gefragt
+            # wird ``_busy``: Der Faden kann schon zurück sein, während seine
+            # Meldung noch in der Warteschlange steht.
+            if not worker.cancelled():
+                worker.cancel()
+                why = tr("Wird abgebrochen — der laufende Schritt läuft aus.")
+                self.state.setText(why)
+                self._lock_cancel(why)
             return
         self._stop_worker()
         self.wait_for_workers()

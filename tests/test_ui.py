@@ -13409,6 +13409,53 @@ def test_the_survey_takes_spaces_while_a_preview_runs(window: MainWindow) -> Non
         dialog.deleteLater()
 
 
+def test_controls_keep_the_space_key_while_a_preview_runs(window: MainWindow) -> None:
+    """Haken, Auswahlpunkte und Knöpfe nahmen in keinem Fenster die Leertaste
+    an, solange eine Vorschau mit Differenz lief (RM-448): Der Vergleich an der
+    Anwendung hielt nur Textfelder für Abnehmer. Geprüft mit echten Tasten über
+    den Filter der Anwendung — an der Skala des Rückmeldebogens, an Haken und
+    Knopf eines Dialogs; auf der Ansicht bleibt die Taste der Vergleich."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QCheckBox, QDialog, QPushButton, QRadioButton
+
+    window.show()
+    window._show_preview(object())
+    assert window.viewport._comparing, "sonst prüft dieser Test den Filter nicht"
+    window._open_survey()
+    survey = window._survey_dialog
+    assert survey is not None
+    other = QDialog(window)
+    try:
+        rating = next(button for button in survey.findChildren(QRadioButton))
+        survey.show()
+        rating.setFocus()
+        QTest.keyClick(rating, Qt.Key.Key_Space)
+        assert rating.isChecked(), "die Skala des Rückmeldebogens"
+
+        tick = QCheckBox("Haken", other)
+        pressed: list[bool] = []
+        button = QPushButton("Knopf", other)
+        button.clicked.connect(lambda: pressed.append(True))
+        other.show()
+        tick.setFocus()
+        QTest.keyClick(tick, Qt.Key.Key_Space)
+        assert tick.isChecked(), "ein Haken im Dialog"
+        button.setFocus()
+        QTest.keyClick(button, Qt.Key.Key_Space)
+        assert pressed == [True], "ein Knopf im Dialog"
+        assert not window.viewport.difference_held, "der Vergleich blieb aus"
+
+        QTest.keyPress(window.viewport, Qt.Key.Key_Space)
+        assert window.viewport.difference_held, "auf der Ansicht bleibt es der Vergleich"
+        QTest.keyRelease(window.viewport, Qt.Key.Key_Space)
+        assert not window.viewport.difference_held
+    finally:
+        other.close()
+        other.deleteLater()
+        survey.close()
+        survey.deleteLater()
+
+
 def test_a_held_key_is_not_a_flicker(window: MainWindow) -> None:
     """Eine gehaltene Taste schickt eine Folge aus Press und Release, nicht
     einen langen Druck. Ohne diese Prüfung flackerte die Vorschau im Takt der
@@ -20677,3 +20724,65 @@ def test_an_empty_scene_invites_to_start_and_steps_aside_for_the_first_body(
     window.session.wait_for_idle()
     QApplication.processEvents()
     assert invitation.isVisibleTo(window), "alles gelöscht: sie ist wieder da"
+
+
+def test_every_entry_of_the_invitation_does_what_the_menu_does(window: MainWindow) -> None:
+    """Gleich beschriftet heißt gleich gemacht (RM-448).
+
+    *Quader anlegen* aus der Einladung legte ein Netz an, derselbe Eintrag im
+    Menü einen exakten Körper; *Im Chat beschreiben* setzte den Cursor in ein
+    verborgenes Chatfeld, wenn rechts der Prüfbericht vorn stand. Geklickt
+    werden alle fünf Einstiege.
+    """
+    window.show()
+    window.activateWindow()
+    window.session._dirty = False
+    window.start_screen.new_button.click()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    invitation = window.viewport.invitation
+
+    def menu_entry(title: str) -> Any:
+        found: list[Any] = []
+        waiting = list(window.menuBar().actions())
+        while waiting:
+            action = waiting.pop()
+            if action.menu() is not None:
+                waiting.extend(action.menu().actions())
+            elif action.text().replace("&", "").rstrip(" …") == title:
+                found.append(action)
+        assert len(found) == 1, (title, found)
+        return found[0]
+
+    for key in ("create_box", "create_cylinder"):
+        title = invitation.buttons[key].text()
+        menu_entry(title).trigger()
+        QApplication.processEvents()
+        assert window._op_dialog is not None, title
+        from_menu = window._op_dialog.spec.name
+        window._op_dialog.reject()
+        QApplication.processEvents()
+        invitation.buttons[key].click()
+        QApplication.processEvents()
+        assert window._op_dialog is not None, title
+        assert window._op_dialog.spec.name == from_menu, title
+        window._op_dialog.reject()
+        QApplication.processEvents()
+
+    taken: list[str] = []
+    window.action_sketch_free = lambda: taken.append("draw")  # type: ignore[method-assign]
+    window.action_catalog = lambda: taken.append("parts")  # type: ignore[method-assign]
+    invitation.buttons["draw"].click()
+    invitation.buttons["parts"].click()
+    assert taken == ["draw", "parts"], "dieselben Handlungen wie Menü und Werkzeugzeile"
+
+    window._focus_report(force=True)
+    window.right_column.setVisible(False)
+    invitation.set_chat_available(True)
+    window.chat.set_available(True, "Testmodell")
+    invitation.buttons["chat"].click()
+    QApplication.processEvents()
+    assert window.right_column.isVisible(), "die Spalte kommt zurück"
+    assert window.right.currentWidget() is window.chat, "der Chat steht vorn"
+    assert window.chat.input.isVisible()
+    assert window.focusWidget() is window.chat.input, "der Cursor steht im sichtbaren Feld"

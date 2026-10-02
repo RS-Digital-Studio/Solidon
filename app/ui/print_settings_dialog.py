@@ -1622,12 +1622,16 @@ class FilamentOverrideDialog(QDialog):
         self._refit_later()
 
     def _first_refusal(self) -> str:
-        """Die erste Ablehnung in einem eingeschalteten Spulenbereich."""
+        """Die erste Ablehnung in einem eingeschalteten Spulenbereich — mit dem Feld.
+
+        Derselbe Satz wie am Knopf *Slicen* (:meth:`PrintSettingsDialog._first_numeric_refusal`,
+        RM-342 D-N2): Er steht am Übernehmen-Knopf, nicht am Feld.
+        """
         for path, editor in self.editors.items():
             if not self.groups[path.partition(".")[0]].isChecked():
                 continue
             if isinstance(editor, BoundedSpin) and (reason := editor.refusal()):
-                return reason
+                return str(tr("{name}: {value}", name=setting_title(path), value=reason))
         return ""
 
     def _settle_refusal_state(self) -> None:
@@ -6594,9 +6598,9 @@ class PrintSettingsDialog(QDialog):
         Dialog bot keinen zweiten an, obwohl zwei danebenstanden.
         """
         remembered = discover.remembered_path("slicer")
-        return next((entry for entry in found if str(entry) == remembered), None) or (
-            found[0] if found else None
-        )
+        return next(
+            (entry for entry in found if discover.same_program(str(entry), remembered)), None
+        ) or (found[0] if found else None)
 
     def _start_slicer_search(self) -> None:
         """Nachsehen, welche Slicer da sind — im Arbeiter, nicht im Fenster.

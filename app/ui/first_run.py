@@ -1216,7 +1216,7 @@ class FirstRunDialog(QDialog):
                 self.slicer.setItemData(
                     self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
                 )
-            select_data(self.slicer, chosen)
+            select_program(self.slicer, chosen)
         # Nur ein Slicer, dessen Drucker noch niemand gesucht hat: Den
         # gemerkten sucht der Aufbau schon, und eine zweite Suche sperrte die
         # Auswahl ein weiteres Mal, womöglich während jemand darin wählt.
@@ -1357,10 +1357,26 @@ def choose_slicer_file(parent: QWidget, box: QComboBox) -> None:
     if not filename:
         return
     filename = discover.program_path(filename)
-    if box.findData(filename) < 0:
+    if not select_program(box, filename):
         box.addItem(slicer_title(Path(filename)), filename)
         box.setItemData(box.count() - 1, filename, Qt.ItemDataRole.ToolTipRole)
-    select_data(box, filename)
+        select_program(box, filename)
+
+
+def select_program(box: QComboBox, path: str) -> bool:
+    """Wählt den Eintrag, der dieses Programm meint, gleich in welcher Schreibweise.
+
+    Die Liste fasst Schreibweisen über ``Path`` zusammen (unter Windows ist
+    ``c:/Programme`` dasselbe wie ``C:/Programme``), ``findData`` sucht den exakten Text: Ein
+    gemerkter Pfad in anderer Groß- und Kleinschreibung sprang auf „Später
+    auswählen“ (RM-418). Gibt zurück, ob es einen solchen Eintrag gab; sonst
+    bleibt die Wahl stehen.
+    """
+    for index in range(box.count()):
+        if discover.same_program(str(box.itemData(index) or ""), path):
+            box.setCurrentIndex(index)
+            return True
+    return False
 
 
 def group_printer_choices(box: QComboBox) -> None:
