@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -3325,6 +3326,100 @@ class ViewBar(QFrame):
         self.raise_()
 
 
+#: Die Grundkörper, mit denen die leere Szene einlädt — Namen aus dem Register,
+#: ihre Beschriftung ist der Registertitel (RM-370).
+INVITED_PRIMITIVES: Final = ("create_box", "create_cylinder")
+
+
+class EmptySceneInvitation(QFrame):
+    """Die Einladung über der leeren Szene: womit man anfängt (RM-370, §2.3, §2.6).
+
+    Nach *Neues Projekt* zeigte die Ansicht nur den Bauraum, und die Wege
+    zum ersten Körper lagen in Menüs, Werkzeugzeile und einem Katalog, der
+    ohne Körper gesperrt war. Hier stehen sie ruhig über dem Bild: zwei
+    Grundkörper aus dem Register, *Zeichnen*, *Bausteine* und — mit
+    KI-Zugang — *Im Chat beschreiben*, dazu der Hinweis auf das Hineinziehen
+    einer Datei. Nichts Modales: Die Einladung verschwindet mit dem ersten
+    Körper und kommt bei jeder leeren Szene wieder (neues Projekt, alles
+    gelöscht, Strg+Z bis zum Anfang).
+    """
+
+    chosen = Signal(str)
+    """Welcher Einstieg gewählt wurde: ein Operationsname oder ``draw``, ``parts``, ``chat``."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("emptySceneInvitation")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(TIGHT)
+        self.title = QLabel(tr("Womit fangen Sie an?"), self)
+        self.title.setObjectName("invitationTitle")
+        outer.addWidget(self.title)
+        row = QHBoxLayout()
+        row.setSpacing(TIGHT)
+        self.buttons: dict[str, QPushButton] = {}
+        entries: list[tuple[str, str]] = []
+        from app.core.registry import REGISTRY
+
+        for name in INVITED_PRIMITIVES:
+            if REGISTRY.has(name):
+                entries.append((name, str(REGISTRY.get(name).title)))
+        entries += [
+            ("draw", tr("Zeichnen")),
+            ("parts", tr("Bausteine")),
+            ("chat", tr("Im Chat beschreiben")),
+        ]
+        for key, text in entries:
+            button = QPushButton(text, self)
+            button.setAccessibleName(text)
+            button.clicked.connect(lambda _checked=False, chosen=key: self.chosen.emit(chosen))
+            row.addWidget(button)
+            self.buttons[key] = button
+        outer.addLayout(row)
+        self.drop_hint = QLabel(tr("Oder ziehen Sie eine Datei hierher."), self)
+        self.drop_hint.setObjectName("invitationHint")
+        outer.addWidget(self.drop_hint)
+        self.set_theme("dark")
+        self.hide()
+
+    def set_chat_available(self, available: bool) -> None:
+        """Ohne KI-Zugang kein Chatknopf — dann spricht der Hinweis an der Chatleiste (§2.3)."""
+        self.buttons["chat"].setVisible(available)
+
+    def set_theme(self, theme: str) -> None:
+        """Ruhig wie das Vorschauband, aber durchgezogen: Das ist kein Zwischenstand."""
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#emptySceneInvitation {{ background: {colours['window']};"
+            f" border: 1px solid {colours['disabled']}; border-radius: 6px; }}"
+            f"#emptySceneInvitation QLabel {{ color: {colours['text']};"
+            " background: transparent; }"
+            f"#emptySceneInvitation #invitationHint {{ color: {colours['muted']}; }}"
+        )
+
+    def place(self) -> None:
+        """Mittig über dem Bild — die leere Szene hat dort nichts, was es verdeckte."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        available = parent.width() - 2 * ROOMY
+        if available > 0:
+            self.setMaximumWidth(available)
+        self.adjustSize()
+        self.move(
+            max((parent.width() - self.width()) // 2, 0),
+            max((parent.height() - self.height()) // 2, 0),
+        )
+        self.raise_()
+
+    def show_for(self, empty: bool) -> None:
+        """Sichtbar genau dann, wenn die Szene leer ist."""
+        self.setVisible(empty)
+        if empty:
+            self.place()
+
+
 class PreviewBanner(QFrame):
     """Ein Band über dem Bild: was hier steht, ist noch nicht übernommen.
 
@@ -5595,6 +5690,8 @@ class Viewport(QWidget):
 
         self.banner = PreviewBanner(self)
         """Das Band über dem Bild, wenn eine Vorschau läuft."""
+        self.invitation = EmptySceneInvitation(self)
+        """Die Einladung über der leeren Szene (RM-370)."""
         self.view_bar = ViewBar(self)
         """Die sieben Kameravorgaben, unten rechts (D4). Vor ihr lagen sie
         allein im Menü — der Würfel, der sie einmal abdeckte, ist am 12.08.2026
@@ -8859,6 +8956,7 @@ class Viewport(QWidget):
         self._sketch_label_colour = exact["text"]
         self._sketch_label_background = exact["window"]
         self.banner.set_theme(theme)
+        self.invitation.set_theme(theme)
         self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
         self.plane_picker.set_theme(theme)
@@ -13278,6 +13376,8 @@ class Viewport(QWidget):
         super().resizeEvent(event)
         self._place_surface_picker()
         self.banner.place()
+        if self.invitation.isVisible():
+            self.invitation.place()
         self.view_bar.place()
         self.drag_bar.place()
         self.plane_picker.place()

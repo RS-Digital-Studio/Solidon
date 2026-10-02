@@ -20079,3 +20079,58 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
 
     assert window._export_waiting is None
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
+
+
+def test_an_empty_scene_invites_to_start_and_steps_aside_for_the_first_body(
+    window: MainWindow,
+) -> None:
+    """Die leere Szene lädt zum Anfangen ein — auf drei Wegen dorthin (RM-370).
+
+    Nach *Neues Projekt* zeigte die Ansicht nur den Bauraum. Jetzt stehen dort
+    die Einstiege, über die Tastatur erreichbar und mit Namen; sie gehen mit
+    dem ersten Körper und kommen bei jeder leeren Szene wieder: neues
+    Projekt, Strg+Z bis zum Anfang, alle Körper gelöscht.
+    """
+    from PySide6.QtCore import Qt as QtCore_Qt
+
+    from app.core.scene import OperationDraft
+
+    window.show()
+    window.session._dirty = False
+    window.start_screen.new_button.click()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    invitation = window.viewport.invitation
+    assert invitation.isVisibleTo(window), "neues Projekt: die Einladung steht"
+    shown = {key for key, button in invitation.buttons.items() if button.isVisibleTo(window)}
+    assert {"create_box", "create_cylinder", "draw", "parts"} <= shown, shown
+    for key in shown:
+        button = invitation.buttons[key]
+        assert button.accessibleName(), key
+        assert button.focusPolicy() & QtCore_Qt.FocusPolicy.TabFocus, key
+
+    invitation.buttons["create_box"].click()
+    QApplication.processEvents()
+    assert window._op_dialog is not None, "der Einstieg öffnet den Schritt wie das Menü"
+    window._op_dialog.accept()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert window.session.last_result.scene.objects, "ein Quader steht"
+    assert not invitation.isVisibleTo(window), "mit dem ersten Körper tritt sie zur Seite"
+
+    window.action_undo()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert not window.session.last_result.scene.objects
+    assert invitation.isVisibleTo(window), "Strg+Z bis zum Anfang: sie ist wieder da"
+
+    window.session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert not invitation.isVisibleTo(window)
+    (body,) = window.session.last_result.scene.objects
+    window.session.apply("Löschen", [OperationDraft(op="delete_object", inputs=(body,))])
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert invitation.isVisibleTo(window), "alles gelöscht: sie ist wieder da"

@@ -2321,6 +2321,8 @@ class MainWindow(QMainWindow):
         self._announcement = ""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._on_start_screen = True
+        """Ob der Startbildschirm steht — dort lädt die leere Szene nicht ein (RM-370)."""
         self._last_complete: tuple[Any, EvaluationResult] | None = None
         """Das letzte durchgerechnete Ergebnis und sein Projekt — das Bild, das
         bei einem Halt am ersten Schritt stehen bleibt (§15.3, RM-354)."""
@@ -2683,6 +2685,7 @@ class MainWindow(QMainWindow):
         self.viewport.differenceApplied.connect(self._preview_rendered)
         self.viewport.differenceFailed.connect(self._preview_render_failed)
         self.viewport.sceneApplied.connect(self._preview_base_ready)
+        self.viewport.invitation.chosen.connect(self._on_invitation)
         # Die 3D-Maus fährt dieselbe Kamera — eine zweite Hand, kein Modus
         # (Konzept 3D-Maus). Gesucht wird das Gerät ab dem ersten Anzeigen —
         # vorher gibt es keine Kamera, die es fahren könnte.
@@ -19796,6 +19799,28 @@ class MainWindow(QMainWindow):
             return kept[1]
         return result
 
+    def _show_invitation(self) -> None:
+        """Die Einladung über der leeren Szene — sichtbar, solange nichts da ist und nichts läuft.
+
+        Während eine Datei lädt, ist die Szene auch leer; dann gehört das
+        Bild der Ladeanzeige und nicht der Frage, womit man anfängt (RM-370).
+        """
+        result = self.session.last_result
+        empty = result is not None and not result.scene.objects and not self.session.busy
+        self.viewport.invitation.set_chat_available(self.session.agent_backend is not None)
+        self.viewport.invitation.show_for(empty and not self._on_start_screen)
+
+    def _on_invitation(self, chosen: str) -> None:
+        """Ein Einstieg aus der leeren Szene — derselbe Weg wie Menü und Werkzeugzeile."""
+        if chosen == "draw":
+            self.action_sketch_free()
+        elif chosen == "parts":
+            self.action_catalog()
+        elif chosen == "chat":
+            self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
+        elif REGISTRY.has(chosen):
+            self.run_operation(REGISTRY.get(chosen))
+
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
         eingefügten Modells (Review F14).
@@ -19914,6 +19939,7 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self.viewport.show_scene(self._picture_for(result))
+        self._show_invitation()
         self._reveal_split_result(result)
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone
@@ -20529,6 +20555,7 @@ class MainWindow(QMainWindow):
         )
         self._update_waiting_state()
         self._update_veil(busy)
+        self._show_invitation()
         if not busy:
             self._resume_preview_after_idle()
             self._resume_map_after_idle()
@@ -22521,6 +22548,11 @@ class MainWindow(QMainWindow):
             # erreichbar.
             self._drop_feature_preview()
         switch(self.stack, self.start_screen if show else self.overlay)
+        self._on_start_screen = show
+        if self.__dict__.get("viewport") is not None:
+            # Die Einladung gehört der Arbeitsfläche; der Startbildschirm hat
+            # seine eigenen Einstiege (RM-370).
+            self._show_invitation()
         # Projektname, Drucker und Bearbeitungswerkzeuge gehören zum offenen
         # Arbeitsbereich. Auf der Startfläche stehen Neu, Öffnen und Import
         # bereits als beschriftete Einstiege bereit.
