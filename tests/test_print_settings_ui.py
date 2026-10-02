@@ -2862,7 +2862,14 @@ def test_a_part_that_fits_no_bed_is_named_before_slicing(
     monkeypatch.setattr(module, "handlers_of", lambda _widget: window_handlers)
 
     scene = types_module.SimpleNamespace(objects={"obj_1": big})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     # Ein Slicer ist da — ohne ihn nennt *Slicen* zu Recht zuerst den fehlenden
     # Slicer, und die Suite fragt die Maschine nicht (``_machine_stays_out_of_it``).
     dialog._slicer_path = Path("prusa-slicer-console")
@@ -2947,7 +2954,14 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
     # ``last_result`` ist ein schlichtes Instanzattribut — direkt setzen,
     # wie es die Auswertung selbst tut.
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     # ``with_settings`` wird mitgelesen und nicht nur geschluckt: Der
@@ -3025,7 +3039,14 @@ def test_an_error_in_the_report_is_named_before_the_model_leaves(
         objects={"obj_1": cube, "obj_2": other},
         report=Report((broken, elsewhere, warning)),
     )
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     asked: list[list[str]] = []
@@ -3096,7 +3117,14 @@ def test_several_plates_open_as_one_project_where_the_slicer_knows_plates(
     first = _cube_object()
     second = replace(_cube_object(), id="obj_2", plate=1)
     scene = types_module.SimpleNamespace(objects={"obj_1": first, "obj_2": second})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0, 1])
     monkeypatch.setattr(dialog, "_plate_slots", list)
 
@@ -3149,7 +3177,14 @@ def test_plate_files_are_prepared_outside_the_qt_thread(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3196,7 +3231,14 @@ def test_closing_does_not_wait_in_the_qt_thread_for_plate_preparation(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3279,7 +3321,14 @@ def test_only_a_finished_slicer_start_counts_as_handed_over(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3327,7 +3376,14 @@ def test_opening_in_the_slicer_counts_as_handed_over(
     written = tmp_path / "platte.3mf"
     written.write_bytes(b"x")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     monkeypatch.setattr(
@@ -3362,7 +3418,14 @@ def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -8914,7 +8977,14 @@ def test_opening_without_a_machine_profile_reaches_the_window_and_keeps_its_rece
     written = tmp_path / "platte.3mf"
     written.write_bytes(b"x")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     monkeypatch.setattr(
