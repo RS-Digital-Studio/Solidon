@@ -114,6 +114,7 @@ def param(
     feature_kinds: tuple[str, ...] = (),
     optional: bool = False,
     sketch_planes: tuple[str, ...] = (),
+    internal: bool = False,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -139,6 +140,9 @@ def param(
 
     ``sketch_planes`` nennt die Ebenen, auf denen die Zeichnung eines
     Skizzenfelds liegen darf — siehe :attr:`app.core.types.ParamSpec.sketch_planes`.
+
+    ``internal`` markiert einen Migrationsmarker ohne Feld — siehe
+    :attr:`app.core.types.ParamSpec.internal`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -159,6 +163,7 @@ def param(
             "feature_kinds": tuple(feature_kinds),
             "optional": optional,
             "sketch_planes": tuple(sketch_planes),
+            "internal": internal,
         }
     }
     if default is MISSING:
@@ -253,6 +258,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 feature_kinds=metadata["feature_kinds"],
                 optional=metadata["optional"],
                 sketch_planes=metadata["sketch_planes"],
+                internal=metadata["internal"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]
@@ -689,6 +695,9 @@ def json_schema(
     schema = params_class.spec()
     defaults = {spec.name: spec.default for spec in schema}
     for spec in schema:
+        if spec.internal:
+            # Ein Migrationsmarker ist keine Wahl (RM-332, N5).
+            continue
         if spec.kind in GATHERED_KINDS:
             # §26, Leitprinzip 5: der Agent erzeugt Skizzen ausschließlich über
             # benannte Grundformen und Maße, nie über rohe Punktlisten — den

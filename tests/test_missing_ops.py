@@ -3155,3 +3155,35 @@ def test_thickening_a_sheet_beside_a_closed_part_leaves_the_part_alone(profile: 
     pieces = face_components(body.raw)
     assert len(pieces) == 2, "ein Würfel und ein Blatt mit Wand — keine dritte Schale"
     assert body.volume == pytest.approx(8000.0 + 12.0 * 12.0 * 0.8, rel=1e-9)
+
+
+def test_both_sides_on_a_hollow_body_put_the_back_outside(profile: Profile) -> None:
+    """Die Rückseite stand im eingeschlossenen Hohlraum: Der erste Austritt war
+    seine Wand, 5 mm hinter der Vorderseite, außen blieb es leer (RM-332, N3)."""
+    outer = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    cavity = trimesh.creation.box(extents=(30.0, 20.0, 10.0))
+    cavity.invert()
+    hollow = trimesh.util.concatenate([outer, cavity])
+    hollow.apply_translation((0.0, 0.0, 10.0))
+    entry = SceneObject(id="obj_1", name="Kasten", mesh=MeshData.of(hollow))
+
+    result = run(
+        "label_text",
+        entry,
+        profile,
+        text="L",
+        size=8.0,
+        depth=0.6,
+        x=20.0,
+        y=0.0,
+        z=10.0,
+        nx=1.0,
+        ny=0.0,
+        nz=0.0,
+        both_sides=True,
+    )
+
+    body = as_mesh_data(result.outputs[0].mesh)
+    assert body.bounds.minimum[0] == pytest.approx(-20.6, abs=0.01), "die Rückseite steht außen"
+    assert body.bounds.maximum[0] == pytest.approx(20.6, abs=0.01)
+    assert "label.no_back_side" not in {entry.code for entry in result.findings}

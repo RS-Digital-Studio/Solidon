@@ -5878,3 +5878,18 @@ def test_the_rim_switch_sits_at_the_back_and_follows_the_group(
         assert stored.values()["rings_by_plane"] is False
     finally:
         stored.deleteLater()
+
+
+def test_the_migration_marker_has_no_row_in_the_dialog(qt_app: QApplication) -> None:
+    """Unter jeder neuen Langlochbohrung stand der Haken „Richtung aus einem
+    älteren Projekt“, auch wenn kein Projekt alt war (RM-332, N5). Der Wert
+    reist weiter mit dem Schritt."""
+    dialog = OperationDialog(
+        REGISTRY.get("drill_hole"), {}, values={"slotted": True, "measured_frame": True}
+    )
+    try:
+        editor = dialog._editors["measured_frame"]
+        assert not dialog._rows["measured_frame"].isRowVisible(editor)
+        assert dialog.values()["measured_frame"] is True
+    finally:
+        dialog.deleteLater()

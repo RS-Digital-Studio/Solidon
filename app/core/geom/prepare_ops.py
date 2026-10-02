@@ -500,6 +500,7 @@ class DrillParams(BaseParams):
         title=_("Richtung aus einem älteren Projekt"),
         default=False,
         placement="advanced",
+        internal=True,
         depends_on=("slotted", (True,)),
         doc=_(
             "Liest die gespeicherte Richtung im alten Rahmen und rechnet sie bei jeder "
@@ -8361,6 +8362,7 @@ class SlotHoleParams(BaseParams):
         title=_("Richtung aus einem älteren Projekt"),
         default=False,
         placement="advanced",
+        internal=True,
         doc=_(
             "Liest die gespeicherte Richtung im alten Rahmen und rechnet sie bei jeder "
             "Auswertung in den neuen Rahmen um. Neue Langlöcher brauchen den Haken nicht."

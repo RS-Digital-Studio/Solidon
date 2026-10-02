@@ -3997,10 +3997,33 @@ def test_migrated_drill_preview_keeps_parameter_bound_axis_through_request(profi
         axes = PlacementFlow._tool_axes(flow, surface)
         assert axes[2] == pytest.approx((1.0, 0.0, 0.0))
         assert PlacementFlow._set_values(flow)
-        assert (dialog_values["nx"], dialog_values["ny"], dialog_values["nz"]) == (
-            1.0,
-            0.0,
-            0.0,
+        # Eine Fläche mit anderer Normale ist eine neue Lage: Die Bohrung folgt
+        # ihr wie jede neue, und der Altrahmen fällt (RM-332, N6). Hier blieb
+        # (1, 0, 0) stehen, und die Bohrung lief quer zur angeklickten Fläche.
+        assert (dialog_values["nx"], dialog_values["ny"], dialog_values["nz"]) == pytest.approx(
+            (0.0, 0.0, 1.0)
         )
+        assert dialog_values["measured_frame"] is False
 
     assert checked == {("drill_hole", "mesh"), ("drill_hole", "brep")}
+
+
+@pytest.mark.parametrize(
+    ("stored", "placed", "same"),
+    [
+        ({"nx": 0.0, "ny": 0.0, "nz": 1.0}, {"nx": 0.0, "ny": 0.0, "nz": 1.0}, True),
+        ({"nx": 0.0005, "ny": 0.0, "nz": 1.0}, {"nx": 0.0, "ny": 0.0, "nz": 1.0}, True),
+        ({"nx": 0.0, "ny": 0.0, "nz": 1.0}, {"nx": 1.0, "ny": 0.0, "nz": 0.0}, False),
+        ({"nx": "=@kipp", "ny": 0.0, "nz": 1.0}, {"nx": 1.0, "ny": 0.0, "nz": 0.0}, True),
+    ],
+)
+def test_an_old_slot_direction_only_stays_on_the_same_face(
+    stored: dict[str, object], placed: dict[str, object], same: bool
+) -> None:
+    """Eine migrierte Langlochbohrung behielt beim Umsetzen auf eine andere
+    Fläche die alte Bohrrichtung (RM-332, N6). Die alte Richtung bleibt nur auf
+    einer Fläche mit derselben Normalen; ein Ausdruck ist eine Bindung und
+    bleibt."""
+    from app.ui.placement_flow import _same_direction
+
+    assert _same_direction(stored, placed, ("nx", "ny", "nz")) is same

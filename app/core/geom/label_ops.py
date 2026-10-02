@@ -832,6 +832,11 @@ def opposite_side(mesh: MeshData, position: Vec3, normal: Vec3) -> Vec3 | None:
     normals, _areas = stable_normals(mesh.raw)
     outward = normals[hit]
     leaving = outward[:, 0] * way[0] + outward[:, 1] * way[1] + outward[:, 2] * way[2] > 0.0
+    # **Nicht in einen eingeschlossenen Hohlraum** (RM-332, N3): Dessen Wand
+    # ist eine eigene, nach innen gewendete Schale. Ihr erster Austritt lag
+    # an einem hohlen Quader 5 mm hinter der Vorderseite, und die Rückseite
+    # der Schrift stand im Hohlraum statt außen.
+    leaving &= ~_cavity_faces(mesh)[hit]
     if not np.any(leaving):
         return None
     distance = float(np.min(travel[leaving]))
@@ -840,6 +845,31 @@ def opposite_side(mesh: MeshData, position: Vec3, normal: Vec3) -> Vec3 | None:
         float(position[1]) + float(way[1]) * distance,
         float(position[2]) + float(way[2]) * distance,
     )
+
+
+def _cavity_faces(mesh: MeshData) -> np.ndarray:
+    """Welche Dreiecke zu einer nach innen gewendeten Schale gehören — der Wand
+    eines eingeschlossenen Hohlraums, erkannt am negativen Volumen der Schale."""
+    from trimesh.graph import connected_component_labels
+
+    body = mesh.raw
+    faces = np.asarray(body.faces, dtype=np.int64)
+    labels = connected_component_labels(body.face_adjacency, node_count=len(faces))
+    corners = np.asarray(body.vertices, dtype=float)[faces]
+    first, second, third = corners[:, 0], corners[:, 1], corners[:, 2]
+    # Spatprodukt elementweise, plattformgleich (RM-187).
+    cross = np.stack(
+        (
+            second[:, 1] * third[:, 2] - second[:, 2] * third[:, 1],
+            second[:, 2] * third[:, 0] - second[:, 0] * third[:, 2],
+            second[:, 0] * third[:, 1] - second[:, 1] * third[:, 0],
+        ),
+        axis=1,
+    )
+    signed = first[:, 0] * cross[:, 0] + first[:, 1] * cross[:, 1] + first[:, 2] * cross[:, 2]
+    volume = np.zeros(int(labels.max()) + 1 if len(labels) else 0)
+    np.add.at(volume, labels, signed)
+    return np.asarray(volume[labels] < 0.0)
 
 
 def _no_back_side() -> Finding:

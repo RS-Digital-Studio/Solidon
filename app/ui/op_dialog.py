@@ -2037,6 +2037,7 @@ class OperationDialog(QDialog):
         self._couple_dependent_fields()
         self._link_sketch_planes()
         self._hide_legacy_feature_field()
+        self._hide_internal_fields()
         # Auch eine Zeichnung, die erst eine Wahl verlangt (``depends_on``,
         # siehe :meth:`_missing_sketch`): Der Knopf folgt ihr, sobald die Wahl
         # sie zur Eingabe macht.
@@ -2342,6 +2343,15 @@ class OperationDialog(QDialog):
                 return True
         return False
 
+    def _hide_internal_fields(self) -> None:
+        """Ein Migrationsmarker reist mit dem Schritt, steht aber nicht im
+        Dialog (:attr:`app.core.types.ParamSpec.internal`, RM-332 N5)."""
+        for entry in self.spec.params.spec():
+            editor = self._editors.get(entry.name)
+            form = self._rows.get(entry.name)
+            if entry.internal and editor is not None and form is not None:
+                form.setRowVisible(editor, False)
+
     def _hide_legacy_feature_field(self) -> None:
         """Alte Einzelwerte reisen über denselben sichtbaren Mehrfachwähler weiter."""
         if isinstance(self._editors.get("at_features"), FeatureSetField):
@@ -2421,7 +2431,8 @@ class OperationDialog(QDialog):
                 if label is not None:
                     label.setEnabled(active)
                 if shown.get(entry.name) is not active:
-                    self._rows[entry.name].setRowVisible(editor, active)
+                    # Ein Migrationsmarker bleibt auch aktiv unsichtbar (RM-332).
+                    self._rows[entry.name].setRowVisible(editor, active and not entry.internal)
                     shown[entry.name] = active
                     changed = True
                 # Beide Hälften sagen dasselbe — bei einer ausgegrauten Zeile
@@ -3207,6 +3218,8 @@ class OperationDialog(QDialog):
                         editor.setCurrentIndex(index)
                 elif isinstance(editor, QLineEdit):
                     editor.setText(str(value))
+                elif isinstance(editor, QCheckBox) and isinstance(value, bool):
+                    editor.setChecked(value)
         self.valuesChanged.emit()
 
     def switch_variant(self, spec: OperationSpec) -> None:
@@ -3313,6 +3326,7 @@ class OperationDialog(QDialog):
             self._caveat.setVisible(bool(warning))
         self._follow_source_pending()
         self._hide_legacy_feature_field()
+        self._hide_internal_fields()
         align_forms(self)
         self._even_number_fields()
         self._resize_to_content("passive")
