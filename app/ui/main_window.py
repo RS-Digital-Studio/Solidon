@@ -5976,6 +5976,7 @@ class MainWindow(QMainWindow):
         self.session.importFinished.connect(self._on_import_finished)
         self.session.importRejected.connect(self._on_import_rejected)
         self.session.importConfirmed.connect(self._on_import_confirmed)
+        self.session.modelPlaced.connect(self._on_model_placed)
         #: Die eingelesene Datei, bis ihre Auswertung zeigt, dass sie ein
         #: Modell enthält — erst dann kommt sie nach „Zuletzt geöffnet“ (KUNDE-12).
         self._recent_candidate: Path | None = None
@@ -20683,15 +20684,22 @@ class MainWindow(QMainWindow):
         else:
             self.status_message.setText(self._announcement)
 
+    def _on_model_placed(self, body: str) -> None:
+        """Ein weiteres Modell steht im Stapel — seine Platte kommt ins Bild,
+        sobald ein Ergebnis es trägt (RM-303).
+
+        Derselbe Weg für Datei, Download und erzeugtes Modell. Bis 0.5.1
+        wechselte nur eine Datei vom Pfad die Platte, und das über den
+        letzten Schritt des Stapels — an der Einfügemarke ist das ein fremder.
+        """
+        self._plate_of_import = body
+        self._show_the_plate_of_the_import()
+
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
         imported, self._recent_candidate = self._recent_candidate, None
         if imported is None:
             return
-        operations = self.session.project.document.ops
-        if operations and operations[-1].outputs:
-            self._plate_of_import = operations[-1].outputs[0]
-            self._show_the_plate_of_the_import()
         self.settings.remember(imported)
         self._store_settings()
         self._show_recent()
@@ -20706,6 +20714,7 @@ class MainWindow(QMainWindow):
         Kette hält an“ abgewiesen.
         """
         self._recent_candidate = None
+        self._plate_of_import = None
         if not self.session.project.document.ops and self.session.path is None:
             self._show_start_screen(True)
         self.status_message.setText(self._announcement)

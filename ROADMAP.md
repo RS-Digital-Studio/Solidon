@@ -152,7 +152,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
-| [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
@@ -4539,23 +4538,6 @@ m463_regression.md`.
   und Archivierung folgen nach bestandenem Tor. RM-283 bleibt zuständig für
   Feldabnahme und Nummernplatzierung auf Text in zwei Anleitungsbildern.
   Registerabgleich 02.10. (Stand `4449e3370`): offen — „`GuidePart` sind entfernt“ ist irreführend, im Code steht es noch (`app/core/guides.py:37`, `:184`); die Änderung liegt nur ungesichert im Arbeitsbaum.
-
-<a id="rm-303"></a>
-
-- [ ] **RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
-  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F14, N8;
-  Text der Gesamtprüfung). Der Zweig hat die Fenstertests
-  `test_ui.py` (sechs Tests mit `keep_the_files_place`),
-  `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
-  `test_generate_ui.py` (Schrittliste mit `place_on_bed`) angepasst; sie gelten mit dem
-  Release-Tor. Der Plattenwechsel nach dem Import (`_show_the_plate_of_the_import`) hat
-  keinen Fenstertest und gilt nur für Dateien vom Pfad: gesetzt in `_on_import_confirmed`,
-  das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
-  erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
-  mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
-  auf Platte 2 kommt. Dazu aus der dritten Nachprüfung (Nachtrag
-  `e85c77ed0`, schon ab `bc901772c`): Ein abgebrochener Import an der Einfügemarke lässt
-  seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
 
 <a id="rm-306"></a>
 

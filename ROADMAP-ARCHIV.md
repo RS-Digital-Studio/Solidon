@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-03 | [RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)](#rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026) |
 | 2026-10-02 | [RM-467: Erster Bibliothekslauf, achtzehn Bibliotheken und die Bauplattform (02.10.2026)](#rm-467-erster-bibliothekslauf-achtzehn-bibliotheken-und-die-bauplattform-02102026) |
 | 2026-10-02 | [RM-470: Marching Cubes bleibt bei scikit-image (02.10.2026)](#rm-470-marching-cubes-bleibt-bei-scikit-image-02102026) |
 | 2026-10-02 | [RM-472: Zeichnungsimport ohne lxml (02.10.2026)](#rm-472-zeichnungsimport-ohne-lxml-02102026) |
@@ -37272,3 +37273,25 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   (Repository und Druckprojekte) gaben 171 dieselben Ringe wie trimesh mit lxml, die 150 übrigen
   trugen genau diese Merkmale; keine Datei wurde lesbar oder unlesbar. `tests/test_svg_drawing.py`
   rechnet jede Fläche von Hand.
+
+## RM-303: Freie Stelle: Plattenwechsel auf allen drei Wegen, Quelle an der Einfügemarke (03.10.2026)
+
+<a id="rm-303-freie-stelle-plattenwechsel-auf-allen-drei-wegen-quelle-an-der-einfügemarke-03102026"></a>
+<a id="rm-303"></a>
+
+**RM-303 — Freie Stelle: Fenstertests und Abnahme.** Aus dem Release 0.5.1 (Review von
+  `einfuegen-freier-platz`, `konzepte/nachweise-release-0.5.1/reports/review-einfuegen.md`, F14, N8;
+  Text der Gesamtprüfung). Der Zweig hat die Fenstertests
+  `test_ui.py` (sechs Tests mit `keep_the_files_place`),
+  `test_ingest.py::test_a_second_model_is_not_dragged_into_the_first` und
+  `test_generate_ui.py` (Schrittliste mit `place_on_bed`) angepasst; sie gelten mit dem
+  Release-Tor. Der Plattenwechsel nach dem Import (`_show_the_plate_of_the_import`) hat
+  keinen Fenstertest und gilt nur für Dateien vom Pfad: gesetzt in `_on_import_confirmed`,
+  das nur mit `_recent_candidate` läuft. Ein Download (`_pending_download`) und ein
+  erzeugtes Modell wechseln die Platte nicht. Abnahme: Plattenwechsel auf allen drei Wegen
+  mit Test, dazu einmal im Fenster bei gewählter Platte 1 ein zweites Modell einfügen, das
+  auf Platte 2 kommt. Dazu aus der dritten Nachprüfung (Nachtrag
+  `e85c77ed0`, schon ab `bc901772c`): Ein abgebrochener Import an der Einfügemarke lässt
+  seine Datei als Quelle im Projekt zurück, und sie würde mitgespeichert.
+
+**Abschluss:** Ein weiteres Modell meldet seinen Körper auf allen drei Wegen mit demselben Signal (`Session.modelPlaced`): Datei und Download beim Annehmen des Imports, das erzeugte Modell in `add_generated`, ein Import an der Einfügemarke erst, wenn sein Umbau übernommen ist. Das Fenster zeigt daraufhin die Platte des neuen Körpers, sobald ein Ergebnis ihn trägt (`MainWindow._on_model_placed`); bisher wechselte nur eine Datei vom Pfad, und das über den letzten Schritt des Stapels, der an der Einfügemarke ein fremder ist. Ein Import an der Einfügemarke, dessen Umbau abgebrochen wird oder scheitert, nimmt seine Quelle wieder aus Dokument und Projekt (`Session._settle_revision_import`), statt sie mit dem nächsten Speichern mitreisen zu lassen. Tests: `test_ui.py::test_a_further_model_brings_its_plate_into_view` (Datei, Download, erzeugt; Platte 1 gewählt, das neue Modell kommt auf Platte 2 und die Kopfzeile zeigt sie) und `test_history_revision_ui.py::test_an_import_at_the_marker_takes_its_source_along_when_it_does_not_land` (abgebrochen, gescheitert, übernommen). Gegenprobe: ohne den Anschluss im Fenster und ohne die Rücknahme an der Marke 5 von 6 Fällen rot, nur „übernommen“ grün. Fenstersonde am echten Fenster: Brett 200 × 200 mm, Platte 1 gewählt, dann Datei, Download und erzeugtes Modell — jedes auf einer neuen Platte, die Kopfzeile zeigt jeweils dessen Platte; 10 von 10 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).
