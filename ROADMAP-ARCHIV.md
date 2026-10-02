@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)](#rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026) |
+| 2026-10-02 | [RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)](#rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
@@ -36733,3 +36735,36 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
 
 **Abschluss:** Fensterabnahme am echten Fenster (Fenstersonde auf dem zweiten Monitor, getippte Zahlen mit `QTest`), Stand nach RM-342 D-N2: Operationsdialog *Quader anlegen* lehnt 1100 mm ab, Übernehmen gesperrt, der Knopf nennt „Breite: …“; Parameterleiste lehnt 1100 ab, das Dokument bleibt, 70 + Enter kommt an; Merkmalfenster an Bohrung 1 von `plate_holes.stl`, *Merkmal drehen* 365° zeigt den Satz an der Zeile und „Merkmal drehen — Winkel: …“ am Fuß; Druckeinstellungen, Schichthöhe 1,5 mm abgelehnt, *Slicen* gesperrt mit „Schichthöhe: …“. 16 von 16 Prüfungen, Bilder im Scratchpad des Threads. Der im Review genannte rote Test `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am HEAD grün. Abgenommen von Claude (Thread „Bedienung und KI“).
+
+## RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)
+
+<a id="rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026"></a>
+<a id="rm-280"></a>
+
+**RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild
+  wächst.** Aus der Durchsicht v0.5.1 (rest-kunde, Registersatz 2). Am Organizer stehen
+  nach *Skalieren* ×2,3 noch 52 % des Körpers im Bild
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-kunde/out/teilen-vorher-organizer.txt`, Zeile „vor
+  dem Teilen“). `Viewport._fit_once_for` rahmt nach dem ersten Bild nur, wenn `outgrown` es
+  verlangt (das Fünffache oder kein Überlapp); „jeder weitere Aufbau lässt die Kamera in
+  Ruhe“ ist eine ausdrückliche Regel (Robert, 23.08.2026, beim Verschieben). Nach *Modell
+  teilen* rahmt seit `9f821c70c` `frame_next_scene` einmal auf alle Teile. Ob Skalieren
+  unter die Regel fällt, ist eine Bedienfrage für `bedienlogik`; Vorschlag:
+  `frame_next_scene` auch nach einem Skalieren, das über den Rahmen hinauswächst. Abnahme:
+  die Frage entschieden und begründet; wird gebaut, steht der Organizer nach ×2,3 ganz im
+  Bild, und ein Verschieben lässt die Kamera weiter in Ruhe.
+
+**Abschluss:** Entschieden (Robert, „alles ja“, 02.10.2026) und gebaut: Ein neuer Größenschritt (`scale_object`, `fit_to_size`, `RESIZING_OPERATIONS`) meldet sich über `MainWindow._frame_after_resizing` einmal bei `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die Körper gewachsen sind und über den eingepassten Rahmen hinausreichen (`reaches_beyond`). Verkleinern, Verschieben, Undo und Themenwechsel lassen die Kamera in Ruhe; Roberts Regel vom 23.08.2026 gilt weiter. Tests: `test_analysis_ui.py::test_a_body_beyond_the_frame_is_framed_only_when_asked`, `::test_scaling_beyond_the_frame_frames_once_and_moving_does_not` (ohne den Aufruf rot). Fenstersonde am echten Fenster: Würfel ×2,3 über den Dialog *Skalieren* → Rahmen (−23…23, 0…46), Körper ganz im Bild, danach *Verschieben* lässt den Rahmen; 7 von 7 Prüfungen. Regel in `.claude/rules/kamera.md`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)
+
+<a id="rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026"></a>
+<a id="rm-473"></a>
+
+**RM-473 — Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus.**
+Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) bei der Fensterabnahme von RM-280: *Skalieren*
+  skaliert um die Mitte. Ein Würfel, der auf dem Bett steht, sank beim Faktor 2,3 um 13 mm unter
+  die Platte; der Prüfbericht meldete „Ein Objekt steckt unter dem Druckbett“ und bot *Auf das Bett
+  setzen* an. So schon in 0.5.1, kein Rückschritt. Bauplan §2.4 (gute Vorgabe), §29.
+
+**Abschluss:** Für einen Körper, der auf dem Bett steht, belegt der Dialog den Bezugspunkt „Druckbett“ vor (`MainWindow._from_selection`, `_stands_on_the_bed`, `_offers_the_bed_anchor`); was schwebt, behält die Mitte. Die Vorgabe der Operation bleibt die Mitte, gespeicherte Schritte, Rezepte und Agent rechnen unverändert. Test `test_analysis_ui.py::test_a_body_on_the_bed_grows_from_the_bed_when_scaled`; Fenstersonde: Dialog zeigt „Druckbett“, der Würfel wächst von z = 0 auf 46 mm. Umgesetzt von Claude (Thread „Bedienung und KI“).

@@ -2786,6 +2786,26 @@ def outgrown(
     )
 
 
+def reaches_beyond(
+    fitted: tuple[float, float, float, float, float, float] | None,
+    current: tuple[float, float, float, float, float, float] | None,
+) -> bool:
+    """Ob die Körper über den eingepassten Rahmen hinausreichen (RM-280).
+
+    Eine Toleranz von einem Hundertstel der Rahmendiagonale, damit ein
+    Rundungsrest am Rand keinen Kamerasprung auslöst. Als reine Funktion,
+    aus demselben Grund wie :func:`outgrown`.
+    """
+    if fitted is None or current is None:
+        return False
+    slack = 0.01 * diagonal_of(fitted)
+    return any(
+        current[axis * 2] < fitted[axis * 2] - slack
+        or current[axis * 2 + 1] > fitted[axis * 2 + 1] + slack
+        for axis in range(3)
+    )
+
+
 def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, float], str]]:
     """Die Maßzahlen an der vorderen und linken Plattenkante (§18.6).
 
@@ -4984,6 +5004,12 @@ class Viewport(QWidget):
         #: Ob der letzte Aufbau nur ein Verschieben war. Gesetzt und gelesen
         #: in :meth:`_fit_once_for` (für :func:`outgrown`).
         self._moved_only: bool = False
+        #: Ob der nächste Aufbau einmal nachrahmt, sobald die Körper über den
+        #: eingepassten Rahmen hinausreichen (:meth:`frame_if_beyond`).
+        self._frame_beyond: bool = False
+        #: Die Diagonale der Körper beim letzten Aufbau — ob ein Größenschritt
+        #: sie hat wachsen lassen (:meth:`frame_if_beyond`).
+        self._shown_extent: float | None = None
         self._scheme: NavigationScheme = "solidon"
         self._theme: str | None = None
         """Welches Thema gerade gilt — damit :meth:`set_theme` prüfen kann.
@@ -15980,6 +16006,18 @@ class Viewport(QWidget):
         """
         self._fitted_to = ""
 
+    def frame_if_beyond(self) -> None:
+        """Rahmt den nächsten Aufbau einmal, **wenn** er über den Rahmen hinausreicht.
+
+        Für einen Schritt, der die Größe eines Körpers ausdrücklich ändert
+        (*Skalieren*, *Auf Maß bringen*): Am Organizer standen nach dem Faktor 2,3 nur
+        52 % im Bild (RM-280), weil :func:`outgrown` erst ab dem Fünffachen
+        greift — eine Grenze, die das Nachbessern schützt und hier nicht passt.
+        Wer vergrößert, will das Ergebnis sehen; was im Rahmen bleibt oder
+        kleiner wird, lässt die Kamera in Ruhe.
+        """
+        self._frame_beyond = True
+
     def _fit_once_for(self, result: EvaluationResult | None) -> None:
         """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.
 
@@ -16024,8 +16062,24 @@ class Viewport(QWidget):
         # dieselben Objekte da wie beim letzten Einpassen, war es ein
         # Verschieben und kein neuer Inhalt — dann zählt nur noch, ob die Szene
         # gewachsen ist. Ohne das rahmte jedes Loslassen neu.
-        if wanted != self._fitted_to or outgrown(
-            self._fitted_bounds, self._object_bounds(), moved_only=self._moved_only
+        beyond, self._frame_beyond = self._frame_beyond, False
+        current = self._object_bounds()
+        before, self._shown_extent = (
+            self._shown_extent,
+            diagonal_of(current) if current is not None else None,
+        )
+        # Nur, was gewachsen ist: Wer verkleinert, sieht das Ergebnis in
+        # seinem Rahmen, und ein vorher verschobener Körper bleibt, wo die
+        # Kamera ihn ließ.
+        grew = (
+            before is not None
+            and self._shown_extent is not None
+            and (self._shown_extent > before * 1.01)
+        )
+        if (
+            wanted != self._fitted_to
+            or outgrown(self._fitted_bounds, current, moved_only=self._moved_only)
+            or (beyond and grew and reaches_beyond(self._fitted_bounds, current))
         ):
             self._fit_camera(follow_selection=False)
             self._fitted_to = wanted  # type: ignore[assignment]

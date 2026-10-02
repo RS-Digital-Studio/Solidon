@@ -238,6 +238,7 @@ from app.core.types import (
     PrintSettings,
     Profile,
     QualityPreset,
+    SceneObject,
     SliceResult,
     SolvedSketch,
     SourceOrigin,
@@ -1687,6 +1688,23 @@ def _names_a_dimension(entry: ParamSpec) -> bool:
     return entry.placement == "front" and entry.kind == "float" and entry.unit == "mm"
 
 
+#: Schritte, die die Größe eines Körpers ausdrücklich ändern: Danach rahmt die
+#: Ansicht einmal nach, wenn er über den Rahmen hinausreicht (RM-280).
+RESIZING_OPERATIONS: Final[frozenset[str]] = frozenset({"scale_object", "fit_to_size"})
+
+
+def _stands_on_the_bed(entry: SceneObject) -> bool:
+    """Ob ein Körper mit seiner Unterseite auf der Druckfläche steht (RM-473)."""
+    return abs(float(entry.mesh.bounds.minimum[2])) <= EPS_DISPLAY
+
+
+def _offers_the_bed_anchor(spec: OperationSpec) -> bool:
+    """Ob die Operation einen Bezugspunkt „Druckbett“ zur Wahl stellt."""
+    return any(
+        entry.name == "about" and "bed" in (entry.choices or ()) for entry in spec.params.spec()
+    )
+
+
 def offers_naming(spec: OperationSpec) -> bool:
     """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
 
@@ -2804,6 +2822,9 @@ class MainWindow(QMainWindow):
         die alte Szene. Gemerkt werden deshalb die Ausgaben der Operation und
         nicht ein Zeitpunkt.
         """
+        self._resized_seen: set[str] = set()
+        """Transaktionen, nach denen die Ansicht schon gefragt hat, ob sie
+        nachrahmt (:meth:`_frame_after_resizing`) — jede nur einmal."""
         self._created_to_choose: tuple[ObjectId, ...] = ()
         """Neue Körper eines Erzeugerschritts, die nach ihrer Auswertung gewählt werden.
 
@@ -15012,6 +15033,23 @@ class MainWindow(QMainWindow):
         if result is not None:
             self._reveal_split_result(result)
 
+    def _frame_after_resizing(self) -> None:
+        """Nach einem neuen Größenschritt rahmt die Ansicht einmal, wenn nötig (RM-280).
+
+        Gemeint ist die jüngste Transaktion, und nur einmal: Ein Undo, ein
+        Themenwechsel oder eine weitere Auswertung desselben Stands rahmen
+        nicht nach. Wer verschiebt oder bohrt, behält seinen Zoom
+        (:meth:`Viewport.frame_if_beyond`).
+        """
+        transactions = self.session.history.transactions
+        newest = transactions[-1] if transactions else None
+        if newest is None or newest.id in self._resized_seen:
+            return
+        self._resized_seen.update(entry.id for entry in transactions)
+        operations = {entry.id: entry.op for entry in self.session.project.document.ops}
+        if any(operations.get(op_id) in RESIZING_OPERATIONS for op_id in newest.ops):
+            self.viewport.frame_if_beyond()
+
     def _reveal_split_result(self, result: EvaluationResult) -> None:
         """Macht Naht, Stifte und Löcher ohne gesuchten zweiten Griff sichtbar."""
         wanted = self._pending_split_reveal
@@ -20016,7 +20054,15 @@ class MainWindow(QMainWindow):
                 for name in (*POSITION_FIELDS, *NORMAL_FIELDS):
                     found.pop(name, None)
             return found
-        return dict(values_for_object(spec, entry.features))
+        values = dict(values_for_object(spec, entry.features))
+        if _stands_on_the_bed(entry) and _offers_the_bed_anchor(spec):
+            # **Was auf dem Bett steht, wächst vom Bett aus** (RM-473): Um die
+            # Mitte skaliert, sank ein Würfel auf dem Bett beim Faktor 2,3 um
+            # 13 mm unter die Platte, und der Bericht bot danach *Auf das Bett
+            # setzen* an. Die Vorgabe der Operation bleibt die Mitte; Rezepte
+            # und Agent rechnen weiter so, wie sie gespeichert sind.
+            values.setdefault("about", "bed")
+        return values
 
     def _seat_for(
         self, spec: OperationSpec, selected: ObjectId | None, entered: Mapping[str, Any]
@@ -20304,6 +20350,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
+        self._frame_after_resizing()
         self.viewport.show_scene(self._picture_for(result))
         self._show_invitation()
         self._reveal_split_result(result)
