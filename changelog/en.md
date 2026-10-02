@@ -73,7 +73,7 @@ it into `website/version.json`.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
-- The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
+- The target of *Align to feature* starts out empty, and the first click in the view fills it. *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
 
