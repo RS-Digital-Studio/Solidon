@@ -92,6 +92,7 @@ from app.core.types import (
     Finding,
     HandoverKind,
     MaterialSlot,
+    PrinterProfile,
     PrintSettings,
     Profile,
     QualityPreset,
@@ -2684,6 +2685,53 @@ class _ProfileWorker(Worker):
             self.done.emit([])
 
 
+@dataclass(frozen=True, slots=True)
+class _CuraPrinterSuggestion:
+    """Ein bekannter Drucker oder ein noch nicht gespeicherter Cura-Kandidat."""
+
+    printer_id: str
+    candidate: PrinterProfile | None = None
+    unreadable: bool = False
+
+
+class _CuraPrinterWorker(Worker):
+    """Die aktive Cura-Maschine zuordnen, ohne den Druckdialog aufzuhalten."""
+
+    done = Signal(object)
+
+    def __init__(self, executable: Path, known: Mapping[str, PrinterProfile]) -> None:
+        super().__init__()
+        self._executable = executable
+        self._known = dict(known)
+
+    def work(self) -> None:
+        printer_id = slicer_profiles.chosen_printer("cura", self._executable, self._known)
+        if printer_id:
+            self.done.emit(_CuraPrinterSuggestion(printer_id))
+            return
+        chosen = slicer_profiles.chosen_machine("cura", self._executable)
+        if not chosen:
+            self.done.emit(_CuraPrinterSuggestion(""))
+            return
+        entry = slicer_profiles.profile_by_name(self._executable, "cura", chosen, "machine")
+        if entry is None:
+            self.done.emit(_CuraPrinterSuggestion("", unreadable=True))
+            return
+        candidate = next(
+            (
+                printer
+                for printer in slicer_profiles.discover_printers(self._executable, "cura")
+                if printer.id == entry.printer_id
+            ),
+            None,
+        )
+        self.done.emit(
+            _CuraPrinterSuggestion(candidate.id, candidate)
+            if candidate is not None
+            else _CuraPrinterSuggestion("", unreadable=True)
+        )
+
+
 class _SlicerWorker(Worker):
     """Nachsehen, welche Slicer installiert sind — ohne den Dialog aufzuhalten.
 
@@ -2844,6 +2892,10 @@ class PrintSettingsDialog(QDialog):
         self._advice_timer.timeout.connect(self._start_advice)
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
+        self._cura_printer_worker: _CuraPrinterWorker | None = None
+        self._cura_printer_pending = False
+        self._cura_printer_id = ""
+        self._cura_printer_candidate: PrinterProfile | None = None
         self._slicer_worker: _SlicerWorker | None = None
         self._slicers: tuple[Path, ...] = ()
         """Die installierten Slicer. Vor der Suche höchstens der gemerkte."""
@@ -3840,6 +3892,11 @@ class PrintSettingsDialog(QDialog):
         self._refresh_advice()
         self._refill_slicer_profiles()
         # Ein anderer Drucker hat einen anderen Bauraum.
+        if (
+            self._slicer_path is not None
+            and slicer_keys.flavour_of(self._slicer_path.name) == "cura"
+        ):
+            self._offer_the_slicers_printer(self._cura_printer_id)
         self._show_slicer_state()
 
     def _printer_picked(self, _index: int) -> None:
@@ -4527,8 +4584,13 @@ class PrintSettingsDialog(QDialog):
             known["save_elsewhere"] = lambda _error: self._save_gcode()
         known["show_output"] = self._show_slicer_output
         known["check_profile"] = lambda _error: self._open_slicer_section()
+        known["choose_printer"] = self._open_printer_choice
         known["choose_slicer"] = lambda _error: self._open_slicer_section()
         return known
+
+    def _open_printer_choice(self, _error: AppError) -> None:
+        """Die Druckerwahl dieses Dialogs öffnen, statt einen zweiten anzulegen."""
+        self.printer_choice.showPopup()
 
     def _show_slicer_output(self, error: AppError) -> None:
         """Was der Slicer geschrieben hat — als Text, nicht als Wertzeile.
@@ -4639,12 +4701,18 @@ class PrintSettingsDialog(QDialog):
             box.clear()
             box.setEnabled(False)
         self.profile_note.setText(tr("Der Profilbestand wird durchgesehen …"))
+        self._cura_printer_id = ""
+        self._cura_printer_candidate = None
         self._offer_the_slicers_printer("")
 
     def _start_profile_search(self) -> None:
         # Die Halteleine hält ältere Arbeiter bis zum Ende. Ihre Signale
         # gehören ab jetzt nicht mehr zur aktuellen Slicerwahl.
         self._profile_worker = None
+        self._cura_printer_worker = None
+        self._cura_printer_pending = False
+        self._cura_printer_id = ""
+        self._cura_printer_candidate = None
         self._clear_profile_choices()
         self._needs_profiles = False
         self._profiles_pending = False
@@ -4681,6 +4749,15 @@ class PrintSettingsDialog(QDialog):
             self.profile_note.setText(
                 tr("Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.")
             )
+            known = dict(profiles.printer_profiles())
+            known[self.session.profile.printer.id] = self.session.profile.printer
+            cura_worker = _CuraPrinterWorker(found, known)
+            cura_worker.done.connect(self._cura_printer_found)
+            cura_worker.crashed.connect(self._cura_printer_failed)
+            cura_worker.finished.connect(self._cura_printer_search_finished)
+            self._cura_printer_worker = cura_worker
+            self._cura_printer_pending = True
+            self._leash.start(cura_worker)
             self._show_slicer_state()
             return
 
@@ -4718,6 +4795,73 @@ class PrintSettingsDialog(QDialog):
         )
         self._open_slicer_section(intent="passive")
         self._show_slicer_state()
+
+    def _cura_printer_found(self, result: object) -> None:
+        """Den bekannten oder vollständig gelesenen Cura-Drucker anbieten."""
+        if self._settling:
+            return
+        if (
+            isinstance(self.sender(), _CuraPrinterWorker)
+            and self.sender() is not self._cura_printer_worker
+        ):
+            return
+        self._cura_printer_pending = False
+        suggestion = cast(_CuraPrinterSuggestion, result)
+        candidate = suggestion.candidate
+        printer_id = suggestion.printer_id
+        known_in_list = self.printer_choice.findData(printer_id) >= 0
+        if candidate is not None and candidate.id == printer_id:
+            self._cura_printer_candidate = candidate
+        else:
+            self._cura_printer_candidate = None
+        if known_in_list or self._cura_printer_candidate is not None:
+            self._cura_printer_id = printer_id
+        else:
+            self._cura_printer_id = ""
+        if suggestion.unreadable:
+            self.profile_note.setText(
+                tr(
+                    "Der aktive Cura-Drucker ließ sich nicht übernehmen. Prüfen Sie die "
+                    "Druckereinstellung in Cura oder wählen Sie oben einen passenden Drucker."
+                )
+            )
+            self._open_slicer_section(intent="passive")
+        self._offer_the_slicers_printer(self._cura_printer_id)
+        self._show_slicer_state()
+
+    def _cura_printer_failed(self, detail: str) -> None:
+        """Der optionale Cura-Vorschlag bleibt leer, wenn seine Suche abbricht."""
+        if self._settling:
+            return
+        if (
+            isinstance(self.sender(), _CuraPrinterWorker)
+            and self.sender() is not self._cura_printer_worker
+        ):
+            return
+        _log.warning("could not identify Cura's active printer: %s", detail)
+        self._cura_printer_pending = False
+        self._cura_printer_id = ""
+        self._cura_printer_candidate = None
+        self.profile_note.setText(
+            tr(
+                "Der aktive Cura-Drucker ließ sich nicht übernehmen. Prüfen Sie die "
+                "Druckereinstellung in Cura oder wählen Sie oben einen passenden Drucker."
+            )
+        )
+        self._open_slicer_section(intent="passive")
+        self._offer_the_slicers_printer("")
+        self._show_slicer_state()
+
+    def _cura_printer_search_finished(self) -> None:
+        if (
+            isinstance(self.sender(), _CuraPrinterWorker)
+            and self.sender() is not self._cura_printer_worker
+        ):
+            return
+        worker = self._cura_printer_worker
+        self._cura_printer_worker = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
 
     def _slicer_machine_for_project(
         self, found: list[slicer_profiles.SlicerProfile]
@@ -4990,6 +5134,10 @@ class PrintSettingsDialog(QDialog):
         if self._slicer_path is None:
             return ""
         flavour = slicer_keys.flavour_of(self._slicer_path.name)
+        if flavour == "cura":
+            return slicer_profiles.chosen_printer(
+                flavour, self._slicer_path, profiles.printer_profiles()
+            )
         if flavour not in ("orca", "prusa"):
             return ""
         machine = slicer_profiles.chosen_machine(flavour, self._slicer_path)
@@ -5008,11 +5156,27 @@ class PrintSettingsDialog(QDialog):
         wechseln (Robert, 27.09.2026: allgemeiner Drucker im Projekt, der
         ElegooSlicer auf dem Centauri Carbon 2).
         """
-        self._slicers_printer = printer_id
-        if not printer_id:
+        if (
+            not printer_id
+            or printer_id == self.session.profile.printer.id
+            or (
+                self.printer_choice.findData(printer_id) < 0
+                and not (
+                    self._cura_printer_candidate is not None
+                    and self._cura_printer_candidate.id == printer_id
+                )
+            )
+        ):
+            self._slicers_printer = ""
             self._show_adopt_printer(False)
             return
-        title = str(profiles.printer(printer_id).title)
+        self._slicers_printer = printer_id
+        candidate = self._cura_printer_candidate
+        title = str(
+            candidate.title
+            if candidate is not None and candidate.id == printer_id
+            else profiles.printer(printer_id).title
+        )
         self.adopt_printer.setText(str(tr("{printer} übernehmen")).replace("{printer}", title))
         why = str(
             tr("{slicer} ist auf {printer} eingestellt. Mit diesem Drucker passen die Profile.")
@@ -5032,6 +5196,20 @@ class PrintSettingsDialog(QDialog):
 
     def _adopt_the_slicers_printer(self) -> None:
         """Den Drucker des Slicers wählen, als hätte der Kunde ihn oben gewählt."""
+        candidate = self._cura_printer_candidate
+        if candidate is not None and candidate.id == self._slicers_printer:
+            if not self._saved_printer(candidate):
+                return
+            current_id = str(self.printer_choice.currentData() or "")
+            known = dict(profiles.printer_profiles())
+            known[self.session.profile.printer.id] = self.session.profile.printer
+            search = self.printer_choice.search_field.text()
+            with QSignalBlocker(self.printer_choice):
+                self.printer_choice.clear()
+                add_printer_choices(self.printer_choice, known)
+                _select_data(self.printer_choice, current_id)
+                self.printer_choice.search_field.setText(search)
+            self._cura_printer_candidate = None
         index = self.printer_choice.findData(self._slicers_printer)
         if index < 0:
             return
@@ -6438,6 +6616,14 @@ class PrintSettingsDialog(QDialog):
             worker.wait(timeout_ms)
         QCoreApplication.processEvents()
         return not self._profiles_pending
+
+    def wait_for_cura_printer(self, timeout_ms: int = 30_000) -> bool:
+        """Auf die optionale Erkennung von Curas aktiver Maschine warten."""
+        worker = self._cura_printer_worker
+        if worker is not None and worker.isRunning():
+            worker.wait(timeout_ms)
+        QCoreApplication.processEvents()
+        return not self._cura_printer_pending
 
     def _fill_slicer_choice(self) -> None:
         """Die Auswahl füllen — als Auswahl nur, wenn es etwas zu wählen gibt.
@@ -8429,6 +8615,7 @@ class PrintSettingsDialog(QDialog):
         pending = (
             self._worker,
             self._profile_worker,
+            self._cura_printer_worker,
             self._stock_worker,
             self._advice_worker,
             *self._leash.pending(),
@@ -8448,7 +8635,7 @@ class PrintSettingsDialog(QDialog):
         workers = {
             id(worker): worker
             for worker in pending
-            if worker is not None and not isinstance(worker, _SlicerWorker)
+            if worker is not None and not isinstance(worker, (_SlicerWorker, _CuraPrinterWorker))
         }
         deadline = monotonic() + max(timeout_ms, 0) / 1000.0
         for worker in workers.values():

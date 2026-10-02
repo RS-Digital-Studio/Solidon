@@ -3856,11 +3856,22 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
             source=discover.program_mark(setup.executable.name),
         )
         if source is None and profile.printer.id.startswith("slicer-cura-"):
-            raise slicer_profiles._incomplete_profile(Path(profile.printer.title))
+            raise _cura_instance_error(
+                setup,
+                profile.printer.title,
+                missing=not slicer_profiles.cura_instance_is_present(
+                    setup.executable, profile.printer
+                ),
+            )
     if isinstance(source, slicer_profiles.SlicerProfile):
         definition = source.path
         own = str(definition)
-        chain = slicer_profiles.resolve_profile(source, roots)
+        try:
+            chain = slicer_profiles.resolve_profile(source, roots)
+        except ExternalToolError as problem:
+            if source.cura_instance is None:
+                raise
+            raise _cura_instance_error(setup, profile.printer.title, missing=False) from problem
     else:
         chain = slicer_profiles.resolve_values(definition, roots)
     hardware = (
@@ -3888,6 +3899,34 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
         settings=hardware,
         name=str(chain.get("machine_name") or ""),
+    )
+
+
+def _cura_instance_error(setup: SlicerSetup, printer: str, *, missing: bool) -> ExternalToolError:
+    """Den fehlenden Cura-Stapel vom vorhandenen, unvollständigen trennen."""
+    if missing:
+        return ExternalToolError(
+            tool=setup.name,
+            title=_("Der Drucker ist in Cura nicht eingerichtet."),
+            detail=_(
+                "Die Druckerinstanz „{printer}“ ist in Cura nicht eingerichtet. Richten Sie sie "
+                "in Cura ein oder wählen Sie in Solidon einen anderen Drucker.",
+                printer=printer,
+            ),
+            suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER),
+            values={"printer": printer},
+        )
+    return ExternalToolError(
+        tool=setup.name,
+        title=_("Solidon kann das Cura-Druckerprofil nicht vollständig auswerten."),
+        detail=_(
+            "Solidon kann das Cura-Druckerprofil „{printer}“ nicht vollständig auswerten. "
+            "Prüfen Sie seine Profilwerte und Vorlagen in Cura oder wählen Sie in Solidon "
+            "einen anderen Drucker.",
+            printer=printer,
+        ),
+        suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER),
+        values={"printer": printer},
     )
 
 

@@ -3340,6 +3340,66 @@ def test_every_way_out_waits_for_the_profile_search(dialog: PrintSettingsDialog)
         second.deleteLater()
 
 
+def test_cura_printer_suggestion_does_not_hold_the_dialog_open(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Der optionale Cura-Abgleich läuft nach dem Schließen sicher weiter."""
+    from app.ui import print_settings_dialog as module
+
+    entered, released = threading.Event(), threading.Event()
+
+    class WaitingCuraPrinterWorker(module._CuraPrinterWorker):
+        def work(self) -> None:
+            entered.set()
+            assert released.wait(3)
+
+    worker = WaitingCuraPrinterWorker(Path("Cura.exe"), profiles.printer_profiles())
+    dialog._cura_printer_worker = worker
+    dialog._leash.start(worker)
+    try:
+        assert entered.wait(1)
+        assert dialog._settle(0)
+        assert worker.isRunning(), "die optionale Profilprüfung darf den Schluss nicht halten"
+    finally:
+        released.set()
+        assert worker.wait(2_000)
+        dialog._leash.wait_all(2_000)
+
+
+def test_cura_without_an_active_machine_is_not_reported_as_failed_adoption(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.ui import print_settings_dialog as module
+
+    monkeypatch.setattr(module.slicer_profiles, "chosen_printer", lambda *_args: "")
+    monkeypatch.setattr(module.slicer_profiles, "chosen_machine", lambda *_args: "")
+    result: list[module._CuraPrinterSuggestion] = []
+    worker = module._CuraPrinterWorker(Path("CuraEngine.exe"), profiles.printer_profiles())
+    worker.done.connect(result.append)
+    worker.work()
+
+    assert len(result) == 1
+    assert result[0].printer_id == ""
+    assert not result[0].unreadable
+    dialog._cura_printer_found(result[0])
+    assert not dialog.profile_note.text()
+    assert dialog._cura_printer_id == ""
+    assert dialog.adopt_printer.isHidden()
+
+    monkeypatch.setattr(
+        module.slicer_profiles, "chosen_machine", lambda *_args: "cura-instance:broken"
+    )
+    monkeypatch.setattr(module.slicer_profiles, "profile_by_name", lambda *_args: None)
+    unreadable: list[module._CuraPrinterSuggestion] = []
+    worker = module._CuraPrinterWorker(Path("CuraEngine.exe"), profiles.printer_profiles())
+    worker.done.connect(unreadable.append)
+    worker.work()
+
+    assert len(unreadable) == 1 and unreadable[0].unreadable
+    dialog._cura_printer_found(unreadable[0])
+    assert "ließ sich nicht übernehmen" in dialog.profile_note.text()
+
+
 def test_a_slicer_without_profiles_gets_a_way_out(dialog: PrintSettingsDialog) -> None:
     """Regel 17: „Keine Profile gefunden — ohne sie lehnt dieser Slicer den
     Auftrag ab." war die ganze Auskunft.
@@ -4640,6 +4700,97 @@ def test_the_printer_the_slicer_is_set_to_can_be_adopted(
         dialog.deleteLater()
 
 
+def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    from app.core.export import slicer_profiles
+    from app.core.knowledge import print_settings
+    from app.core.types import PrinterProfile
+
+    original_profiles_dir = profiles.user_profiles_dir
+
+    def restore_profile_cache() -> None:
+        profiles.user_profiles_dir = original_profiles_dir
+        profiles.reload()
+
+    request.addfinalizer(restore_profile_cache)
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path / "user-profiles")
+    profiles.reload()
+
+    candidate = PrinterProfile(
+        id="slicer-cura-active-instance",
+        title="Ender-3 V3 SE",
+        build_volume=(220.0, 200.0, 250.0),
+        cura_definition="creality_ender3v3se",
+    )
+    active = slicer_profiles.SlicerProfile(
+        path=tmp_path / "creality_ender3v3se.def.json",
+        name=candidate.title,
+        kind="machine",
+        printer_model=candidate.cura_definition,
+        printer_id=candidate.id,
+        cura_instance=tmp_path / "machine_instances" / "active.global.cfg",
+    )
+
+    monkeypatch.setattr(
+        slicer_profiles,
+        "chosen_printer",
+        lambda _flavour, _executable, _known: "",
+    )
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda _flavour, _executable: "cura-instance:active"
+    )
+    monkeypatch.setattr(slicer_profiles, "profile_by_name", lambda *_args: active)
+    monkeypatch.setattr(slicer_profiles, "discover_printers", lambda *_args: (candidate,))
+    session = Session()
+    session.change_scene_profile("generic-220", "petg")
+    assert session.wait_for_idle()
+    settings = UiSettings()
+    dialog = PrintSettingsDialog(session, settings)
+    own_temperature = replace(dialog.settings.temperature, nozzle=210)
+    override = SlotOverride(
+        name="PLA Weiß",
+        colour=(1.0, 1.0, 1.0),
+        temperature=own_temperature,
+    )
+    dialog.settings = replace(
+        dialog.settings,
+        slot_profiles=("Haus PETG", "Haus PLA weiß"),
+        slot_overrides=(override,),
+    )
+    dialog.settings = print_settings.with_choice(dialog.settings, "infill.density", 0.62)
+    try:
+        dialog._slicer_path = Path("Cura.exe")
+        dialog._start_profile_search()
+        assert dialog.wait_for_cura_printer()
+
+        assert candidate.id not in profiles.printer_profiles(), "der Suchlauf speichert nichts"
+        assert dialog._cura_printer_candidate == candidate
+        assert not dialog.adopt_printer.isHidden()
+        title = str(candidate.title)
+        assert dialog.adopt_printer.text() == f"{title} übernehmen"
+        assert dialog.adopt_printer.accessibleDescription() == dialog.adopt_printer.toolTip()
+
+        dialog.adopt_printer.click()
+
+        assert candidate.id in profiles.printer_profiles(), "erst der Klick speichert das Profil"
+        assert profiles.printer(candidate.id) == candidate
+        assert session.profile.printer.id == candidate.id
+        assert settings.printer == candidate.id
+        assert session.project.document.material == "petg"
+        assert dialog.settings.infill.density == pytest.approx(0.62)
+        assert dialog.settings.slot_profiles == ("Haus PETG", "Haus PLA weiß")
+        assert dialog.settings.slot_overrides == (override,)
+        assert dialog.nozzle.value_mm() == pytest.approx(candidate.nozzle_diameter)
+        assert dialog.adopt_printer.isHidden()
+    finally:
+        session.wait_for_idle()
+        dialog.deleteLater()
+
+
 def test_only_a_picked_printer_becomes_the_next_projects_printer(
     qt_app: QApplication,
 ) -> None:
@@ -5255,6 +5406,31 @@ def test_the_dialog_wires_the_three_slicer_actions(qt_app: QApplication, session
     for name in ("show_output", "check_profile", "choose_slicer"):
         assert name in known, f"{name} wurde angeboten und nicht eingelöst"
         assert callable(known[name])
+
+
+def test_choose_printer_error_action_uses_the_open_dialog_selector(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Rückweg aus der Fehlerkarte öffnet keinen zweiten Druckdialog."""
+    from app.core.errors import ExternalToolError
+
+    parent = _WindowWithHandlers()
+    parent_calls: list[object] = []
+    monkeypatch.setattr(
+        parent,
+        "error_handlers",
+        lambda: {"choose_printer": parent_calls.append},
+    )
+    dialog = PrintSettingsDialog(session, UiSettings(), parent=parent)
+    opened: list[bool] = []
+    monkeypatch.setattr(dialog.printer_choice, "showPopup", lambda: opened.append(True))
+
+    known = dialog.error_handlers()
+    handler = known["choose_printer"]
+    handler(ExternalToolError(tool="cura", detail="Drucker wählen."))
+
+    assert opened == [True]
+    assert not parent_calls, "der Hauptfenster-Handler öffnete sonst einen zweiten Dialog"
 
 
 def test_the_dialog_keeps_the_handlers_of_its_window(
