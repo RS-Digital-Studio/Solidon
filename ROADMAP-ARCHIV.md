@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)](#rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026) |
 | 2026-10-02 | [RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)](#rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026) |
 | 2026-10-02 | [RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)](#rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026) |
@@ -36525,7 +36526,7 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
 
 ## RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)
 
-<a id="rm-416--an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02-10-2026"></a>
+<a id="rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026"></a>
 <a id="rm-416"></a>
 
 **RM-416 — *An Merkmal ausrichten*: der erste Bildklick wird am Hauptfenster weiter nicht angenommen.**
