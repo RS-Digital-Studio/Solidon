@@ -282,10 +282,18 @@ def _beyond(
         "result": reached,
         "limit": allowed,
     }
+    if low:
+        return ValidationError(
+            field=f"ops.{operation.id}.{entry.name}",
+            detail=detail,
+            value=value,
+            constraint="minimum",
+            values={"minimum": limit, **detail_values},
+        )
     return ValidationError(
         field=f"ops.{operation.id}.{entry.name}",
         detail=detail,
         value=value,
-        constraint="minimum" if low else "maximum",
-        values={"minimum" if low else "maximum": limit, **detail_values},
+        constraint="maximum",
+        values={"maximum": limit, **detail_values},
     )

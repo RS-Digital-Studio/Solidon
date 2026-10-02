@@ -139,6 +139,7 @@ from app.core.types import (
     Quality,
     SceneObject,
     SolverInfo,
+    Transform,
     Vec3,
     is_a_cavity,
     thread_is_left_handed,
@@ -17686,9 +17687,11 @@ def _cut_away_exact(
             constraint="no_split",
         )
     checked = _exact_body_checked(solid)
+    kept, _dropped = _features_after_split(source.features, plane, as_mesh_data(body))
     features, continued, _lost = _exact_features_after(
-        source, checked, expected=None, cancelled=ctx.cancelled
+        dataclasses.replace(source, features=kept), checked, expected=None, cancelled=ctx.cancelled
     )
+    features, continued = _cut_faces_continued(kept, features, continued)
     return OpResult(
         outputs=[dataclasses.replace(exact, mesh=checked, kind="brep", features=features)],
         feature_continuations=(
@@ -17700,6 +17703,52 @@ def _cut_away_exact(
     )
 
 
+def _cut_faces_continued(
+    kept: Mapping[str, Feature],
+    features: dict[str, Feature],
+    continued: tuple[tuple[str, str], ...],
+) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...]]:
+    """Eine ebene Fläche heißt am verbliebenen Stück in ihrer Ebene weiter.
+
+    Dieselbe Zusage wie am Netz (R4, ``evaluate._divided_partners``): Quert
+    die Schnittebene eine Fläche, behält das größte Stück in derselben Ebene
+    ihren Namen. Am exakten Kern fand die allgemeine Zuordnung die beschnittene
+    Deckfläche nicht wieder — Fläche und Mitte hatten sich geändert —, und eine
+    bündige Passung an ihr hielt die Kette mit „Welches Merkmal entspricht
+    face_6?“ an. Belegt wird jede Fortführung, damit die Auswertung den Bezug
+    als getragen sieht.
+    """
+    result = dict(features)
+    pairs = list(continued)
+    for name, old in kept.items():
+        normal = vec3_or_none(old.params.get("normal")) if old.kind == "face" else None
+        centre = vec3_or_none(old.params.get("centre")) if old.kind == "face" else None
+        if normal is None or centre is None or name in result:
+            continue
+        offset = units.dot3(normal, centre)
+        best: tuple[str, float] | None = None
+        for key, candidate in result.items():
+            if candidate.kind != "face" or key in kept:
+                continue
+            other = vec3_or_none(candidate.params.get("normal"))
+            middle = vec3_or_none(candidate.params.get("centre"))
+            if other is None or middle is None or units.dot3(normal, other) < 1.0 - EPS_GEOM:
+                continue
+            if abs(units.dot3(normal, middle) - offset) > EPS_DISPLAY:
+                continue
+            area = float(candidate.params.get("area", 0.0) or 0.0)
+            if best is None or area > best[1]:
+                best = (key, area)
+        if best is None:
+            continue
+        key = best[0]
+        result[name] = dataclasses.replace(result.pop(key), id=name)
+        pairs = [(old_id, name if new_id == key else new_id) for old_id, new_id in pairs]
+        if (name, name) not in pairs:
+            pairs.append((name, name))
+    return result, tuple(pairs)
+
+
 def _half_space_box(body: Any, plane: SectionPlane) -> Any:
     """Ein Würfel, der größer ist als alles, was auf einer Seite der Ebene liegen kann."""
     from app.core.brep import edit
@@ -17708,7 +17757,7 @@ def _half_space_box(body: Any, plane: SectionPlane) -> Any:
     return edit.box(size, size, size)
 
 
-def _half_space_frame(body: Any, plane: SectionPlane) -> tuple[tuple[float, ...], ...]:
+def _half_space_frame(body: Any, plane: SectionPlane) -> Transform:
     """Legt den Würfel aus :func:`_half_space_box` mit der Unterseite in die Ebene.
 
     Der Würfel steht auf dem Bett, in X und Y zentriert; seine Z-Achse wird

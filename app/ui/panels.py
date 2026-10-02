@@ -3681,15 +3681,13 @@ class ParameterPanel(QWidget):
                 editor = self._editors[name]
                 low, high = self._bounds(document, name)
                 if editor.minimum() != low or editor.maximum() != high:
-                    blocked = editor.blockSignals(True)
-                    editor.setRange(low, high)
-                    editor.blockSignals(blocked)
+                    with QSignalBlocker(editor):
+                        editor.setRange(low, high)
                 if not is_close(editor.value(), parameter.value):
                     # Ohne Signal: Der Wert kommt aus dem Dokument und ist keine
                     # neue Eingabe. Eine abgelehnte Zahl darunter gilt nicht mehr.
-                    blocked = editor.blockSignals(True)
-                    editor.setValue(parameter.value)
-                    editor.blockSignals(blocked)
+                    with QSignalBlocker(editor):
+                        editor.setValue(parameter.value)
                     editor.setMinimumWidth(least_number_width(editor))
                     if self._refused_name == name and self._refusal is not None:
                         self._form.removeRow(self._refusal)
