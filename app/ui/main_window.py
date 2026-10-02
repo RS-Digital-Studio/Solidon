@@ -20327,11 +20327,11 @@ class MainWindow(QMainWindow):
         mehr tut, ist die Liste der Weg zurück. Die Liste selbst heißt
         „Zuletzt geöffnet" und nicht „Projekte"; sie stimmt also weiter.
         """
-        geladen, self._pending_download = self._pending_download, ""
-        eingelesen, self._pending_import = self._pending_import, None
+        downloaded, self._pending_download = self._pending_download, ""
+        imported, self._pending_import = self._pending_import, None
         if accepted:
             self._show_start_screen(False)
-            if eingelesen is not None:
+            if imported is not None:
                 # **Erst wenn das Modell steht** (KUNDE-12): Eine Datei, die
                 # den Plan passiert und am Ladeschritt scheitert, stand sonst
                 # in der Liste. ``importConfirmed`` trägt sie nach. Eine Datei
@@ -20339,24 +20339,24 @@ class MainWindow(QMainWindow):
                 # die Sitzung merkt sich nur den letzten Import.
                 if self._recent_candidate is not None:
                     self._on_import_confirmed()
-                self._recent_candidate = eingelesen
+                self._recent_candidate = imported
                 if not self.session.import_unconfirmed:
                     self._on_import_confirmed()
-            if geladen:
-                self.announce(tr("Geladen: {name}", name=geladen))
+            if downloaded:
+                self.announce(tr("Geladen: {name}", name=downloaded))
         else:
             self.status_message.setText(self._announcement)
 
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
-        eingelesen, self._recent_candidate = self._recent_candidate, None
-        if eingelesen is None:
+        imported, self._recent_candidate = self._recent_candidate, None
+        if imported is None:
             return
         operations = self.session.project.document.ops
         if operations and operations[-1].outputs:
             self._plate_of_import = operations[-1].outputs[0]
             self._show_the_plate_of_the_import()
-        self.settings.remember(eingelesen)
+        self.settings.remember(imported)
         self._store_settings()
         self._show_recent()
 
