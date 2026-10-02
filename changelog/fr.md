@@ -23,7 +23,7 @@ dans `website/version.json`.
 - Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
 - Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
 - Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
-- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, trous de vis, crochet de panneau ou pince.
+- Quatre supports se créent en une étape avec de vraies faces et arêtes : en U, rond, à fourche et à tablette, fixés par trou de serrure, trous de vis, crochet de panneau ou pince.
 - Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
 - Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
 
@@ -37,9 +37,10 @@ dans `website/version.json`.
 - Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
 - Les imprimantes dont l'origine n'est pas dans le coin du plateau, comme delta, BIBO ou Dremel, reçoivent les pièces là où Solidon les pose. Avant, elles étaient au bord ou réorganisées.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
-- Si vous choisissez brim, skirt ou raft dans les réglages d'impression, seules les cotes de ce type de plateau s'affichent, sans champs sans effet.
+- Si vous choisissez brim, skirt, raft ou *Automatique* dans les réglages d'impression, seules les cotes que reçoit votre slicer s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
 - Les pièces hautes et fines sur une petite base reçoivent des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
+- Avec Cura, le rapport de contrôle nomme les pièces qui reçoivent ces valeurs par ricochet, car Cura ne les prend que pour tout le plateau.
 - Solidon ne propose « Paroi extérieure d'abord » que pour la pièce qui en a besoin, et jamais pour une pièce avec supports.
 - Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
@@ -54,11 +55,12 @@ dans `website/version.json`.
 - Deux plaques qui se touchent restent un seul corps autour d'un perçage et gardent leur matière, que vous l'étiriez, le modifiiez, le déplaciez ou le fermiez. Une goupille au-dessus reste en place.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
+- Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
 - Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
-- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Incliner autour de », et « Sur une face » mène la coupe parallèlement à une face plane.
+- Découper coupe maintenant aussi en biais : en haut, vous choisissez le « Plan » — sur un axe avec inclinaison, parallèle à une face, par une arête ou par trois points cliqués dans la vue.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 - Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.

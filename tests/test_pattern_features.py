@@ -1326,6 +1326,29 @@ def test_a_regular_polygon_gets_back_the_facets_a_pattern_cut_away() -> None:
     np.testing.assert_array_equal(same, uneven)
 
 
+def test_a_regular_polygon_keeps_the_facets_it_has_measured() -> None:
+    """Ergänzt werden nur die fehlenden Facetten; die gefundenen behalten Winkel und Abstand.
+
+    Der Mantel wird vor dem Schließen auf seine gemessenen Facetten gelegt
+    (``prepare_ops._aligned_facets``). Legte sich der Stopfen auf das ideale
+    Vieleck, läge er um das Rauschen der STL daneben, und die Vereinigung
+    schnitte Splitter in den Mantel (RM-404).
+    """
+    angles = np.radians(np.arange(96) * 3.75 - 180.0 + 1.875)
+    kept = np.delete(np.arange(96), np.arange(0, 96, 4))
+    measured = angles[kept] + 1e-7 * np.sin(np.arange(len(kept)))
+    distances = 19.99 + 1e-6 * np.cos(np.arange(len(kept)))
+    completed, offsets = patterns._regular_polygon(measured, distances)
+    assert len(completed) == 96
+    found = np.isin(completed, measured)
+    assert int(found.sum()) == len(kept)
+    np.testing.assert_array_equal(completed[found], measured)
+    np.testing.assert_array_equal(offsets[found], distances)
+    # Die fehlenden kommen auf das Raster, mit dem Median der Abstände.
+    np.testing.assert_allclose(np.sort(completed[~found]), np.sort(angles[::4]), atol=1e-6)
+    assert np.all(offsets[~found] == float(np.median(distances)))
+
+
 def _folded_edges(body: trimesh.Trimesh) -> int:
     """Kanten, an denen zwei Dreiecke fast aufeinanderliegen — eine Finne."""
     normals = np.asarray(body.face_normals)
@@ -1350,13 +1373,14 @@ def _read_volume(body: trimesh.Trimesh) -> float:
 def test_aligning_pattern_facets_keeps_untouched_refinement_and_slots() -> None:
     """Eine Korrektur am Mantel darf den fernen verfeinerten Quader nicht entkernen."""
     from app.core.geom.mesh import refined_units
-    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from app.core.geom.prepare_ops import _aligned_facets
     from tests.helpers import rounded_pattern_carrier
 
     source = rounded_pattern_carrier()
     before = as_mesh_data(source.mesh)
     coordinates = before.raw.vertices.copy()
-    changed = _pattern_source_on_measured_facets(source, source.features["pattern_1"])
+    changed, refused = _aligned_facets(source, source.features["pattern_1"])
+    assert not refused
     assert changed is not source, "die Herkunftsprobe muss den Ausrichtungspfad erreichen"
     after = as_mesh_data(changed.mesh)
     untouched = np.all(before.raw.triangles[:, :, 0] > 40.0, axis=1)
@@ -1382,7 +1406,7 @@ def test_three_noisy_pattern_facets_cannot_move_a_vertex_along_the_carrier_axis(
     die gemeinsame Ecke trotzdem um 5 mm, weil sie einen Rang drei vermutete.
     """
     from app.core import units
-    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from app.core.geom.prepare_ops import _aligned_facets
 
     origin = np.array([20.0, 0.0, 0.0])
     vertices = [origin]
@@ -1425,7 +1449,8 @@ def test_three_noisy_pattern_facets_cannot_move_a_vertex_along_the_carrier_axis(
         mesh=MeshData.of(trimesh.Trimesh(vertices, faces, process=False)),
         features={carrier.id: carrier, pattern.id: pattern},
     )
-    changed = _pattern_source_on_measured_facets(source, pattern)
+    changed, refused = _aligned_facets(source, pattern)
+    assert not refused
     assert changed is not source, "die Ausrichtung findet statt"
     assert np.allclose(
         changed.mesh.raw.vertices[:, 2], np.asarray(vertices)[:, 2], rtol=0.0, atol=EPS_GEOM
@@ -1438,22 +1463,23 @@ def test_three_noisy_pattern_facets_cannot_move_a_vertex_along_the_carrier_axis(
 
 def test_pattern_facet_alignment_invalidates_previous_cavity_geometry() -> None:
     """Ein Innenraumbeleg der alten Koordinaten gilt nach der Ausrichtung nicht weiter."""
-    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from app.core.geom.prepare_ops import _aligned_facets
     from tests.helpers import rounded_pattern_carrier
 
     source = rounded_pattern_carrier()
     mesh = as_mesh_data(source.mesh)
     inner = MeshData.of(trimesh.creation.box(extents=(2.0, 2.0, 2.0)))
     source = dataclasses.replace(source, mesh=dataclasses.replace(mesh, cavity=inner))
-    changed = _pattern_source_on_measured_facets(source, source.features["pattern_1"])
+    changed, refused = _aligned_facets(source, source.features["pattern_1"])
+    assert not refused
     assert changed is not source
     assert as_mesh_data(changed.mesh).cavity is None
     assert as_mesh_data(source.mesh).cavity is inner
 
 
 def test_pattern_facet_alignment_does_not_flatten_a_nonplanar_carrier() -> None:
-    """Eine echte Beule am Träger ist keine zu korrigierende STL-Rundung."""
-    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    """Eine echte Beule am Träger ist keine zu korrigierende STL-Rundung — und das wird gesagt."""
+    from app.core.geom.prepare_ops import _aligned_facets
     from tests.helpers import rounded_pattern_carrier
 
     source = rounded_pattern_carrier()
@@ -1467,7 +1493,9 @@ def test_pattern_facet_alignment_does_not_flatten_a_nonplanar_carrier() -> None:
     vertices[candidate, 0] += 0.01
     body.vertices = vertices
     source = dataclasses.replace(source, mesh=MeshData.of(body))
-    assert _pattern_source_on_measured_facets(source, source.features["pattern_1"]) is source
+    aligned, refused = _aligned_facets(source, source.features["pattern_1"])
+    assert aligned is source
+    assert refused, "eine Ablehnung trägt ihren Befund (pattern.facets_unaligned)"
 
 
 def test_pattern_facets_join_the_same_plane_across_the_angle_seam() -> None:
@@ -1508,42 +1536,40 @@ def test_pattern_facet_alignment_can_cancel_without_changing_the_source(
     """Abbrechen greift während beider Ausrichtungsschleifen vor der Booleschen Rechnung."""
     from app.core import units
     from app.core.errors import OperationCancelled
-    from app.core.geom.prepare_ops import _pattern_source_on_measured_facets
+    from app.core.geom.prepare_ops import _aligned_facets
     from app.core.scene.cancel import CancelSignal
     from tests.helpers import rounded_pattern_carrier
 
     source = rounded_pattern_carrier()
     original = source.mesh.raw.vertices.copy()
     cancelled = CancelSignal()
-    method = "plane_fit" if phase == "facets" else "symmetric_eigen3"
-    calculate = getattr(units, method)
-    calls = 0
+    # Je Facette eine Gerade, je Gruppe gemeinsamer Ecken eine Eigenzerlegung —
+    # abgebrochen wird nach der ersten von beiden.
+    owner, method = (patterns, "_facet_line") if phase == "facets" else (units, "symmetric_eigen3")
+    calculate = getattr(owner, method)
 
     def stop_during_alignment(*args: object, **kwargs: object) -> object:
-        nonlocal calls
         answer = calculate(*args, **kwargs)
-        calls += 1
-        # Jede Facette braucht eine Eigenzerlegung; erst danach beginnt die
-        # Ausgleichsrechnung an den gemeinsamen Ecken der 96 Facetten.
-        if calls == (1 if phase == "facets" else 97):
-            cancelled.cancel()
+        cancelled.cancel()
         return answer
 
-    monkeypatch.setattr(units, method, stop_during_alignment)
+    monkeypatch.setattr(owner, method, stop_during_alignment)
     with pytest.raises(OperationCancelled):
-        _pattern_source_on_measured_facets(
-            source, source.features["pattern_1"], cancelled=cancelled
-        )
+        _aligned_facets(source, source.features["pattern_1"], cancelled=cancelled)
     assert np.array_equal(source.mesh.raw.vertices, original)
 
 
 def _stl_rounded_fluted_lid(
-    offset: tuple[float, float] = (0.0, 0.0), radius: float = 20.0, sections: int = 96
+    offset: tuple[float, float] = (0.0, 0.0),
+    radius: float = 20.0,
+    sections: int = 96,
+    count: int = 24,
 ) -> tuple[SceneObject, float]:
-    """Ein facettierter Deckel mit 24 Randrillen nach dem binären STL-Weg.
+    """Ein facettierter Deckel mit ``count`` Randrillen nach dem binären STL-Weg.
 
     ``offset`` legt ihn dorthin, wo er in der Datei steht — die Rundung auf
-    ``float32`` geschieht dort (RM-404).
+    ``float32`` geschieht dort (RM-404). Die Rillen laufen durch die Unterseite
+    und enden 3,1 mm unter der Oberseite.
     """
     from app.core.ingest.loader import normalise, read_model
 
@@ -1551,8 +1577,8 @@ def _stl_rounded_fluted_lid(
     body = trimesh.creation.cylinder(radius=radius, height=16.0, sections=sections)
     body.apply_translation((offset[0], offset[1], 8.0))
     smooth_carrier_volume = float(body.volume)
-    for index in range(24):
-        angle = math.radians(index * 15.0)
+    for index in range(count):
+        angle = math.radians(index * 360.0 / count)
         groove = trimesh.creation.cylinder(radius=1.1, height=13.0, sections=14)
         groove.apply_translation(
             (offset[0] + radius * math.cos(angle), offset[1] + radius * math.sin(angle), 6.4)
@@ -1579,57 +1605,328 @@ def _stl_rounded_fluted_lid(
     )
 
 
+@pytest.mark.parametrize("quality", ["draft", "fine"])
 @pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])
 @pytest.mark.parametrize(
-    ("offset", "radius", "sections"),
+    ("offset", "radius", "sections", "count"),
     [
-        # Mitte bei x = y = 110 mm: Das float32-Raster misst dort 7,6 nm. Die
-        # Facetten liegen danach eben (2,8·10⁻¹⁴ mm), an den Rillen bei 15° und
-        # 165° bleiben trotzdem vier Selbstschnitte — die Ursache liegt hinter
-        # der Ausrichtung, im Stopfen oder der Vereinigung (RM-404, offen).
-        pytest.param(
-            (110.0, 110.0),
-            20.0,
-            96,
-            marks=pytest.mark.xfail(
-                strict=True, reason="RM-404: Selbstschnitte am Stopfen fern vom Ursprung"
-            ),
-        ),
-        # Ø 80 am Ursprung — der Stift ging verloren.
-        ((0.0, 0.0), 40.0, 96),
+        # Mitte bei x = y = 110 mm: Das float32-Raster misst dort 7,6 nm, und
+        # die gemessene Achse steht 1,9·10⁻⁸ rad schräg. Vier Selbstschnitte an
+        # den Rillen bei 15° und 165°, und die Unterseite zerfiel in 25 Flächen.
+        ((110.0, 110.0), 20.0, 96, 24),
+        # Ø 80 mit 48 Rillen am Ursprung (Review-Fall C): zwei Selbstschnitte
+        # an der Unterseite, obwohl die Ausrichtung gelang — still.
+        ((0.0, 0.0), 40.0, 96, 48),
         # CAD-Nullpunkt in der Ecke.
-        ((20.0, 20.0), 20.0, 96),
-        # Fein vernetzter Träger.
-        ((0.0, 0.0), 20.0, 384),
+        ((20.0, 20.0), 20.0, 96, 24),
+        # Ein feiner geteilter Mantel: 384 Facetten unter denselben Rillen.
+        # Er braucht die Ausrichtung nicht — er hält den Stopfen an einem
+        # feinen Vieleck fest, nicht die Grenze der Ausrichtung (die hält
+        # ``test_a_finely_meshed_carrier_is_aligned_onto_the_facets_the_plug_reads``).
+        ((0.0, 0.0), 20.0, 384, 24),
     ],
+    ids=["bett-110", "d80-48-rillen", "cad-ecke", "384-facetten"],
 )
 def test_stl_rounded_lids_anywhere_keep_pattern_edits_free_of_self_intersections(
-    operation: str, offset: tuple[float, float], radius: float, sections: int
+    operation: str,
+    quality: Quality,
+    offset: tuple[float, float],
+    radius: float,
+    sections: int,
+    count: int,
 ) -> None:
-    """Die Ausrichtung aus RM-225 griff an verschobenen, größeren oder feinen STL nicht (RM-404).
+    """Muster an verschobenen und größeren STL-Deckeln schließen ohne Selbstschnitt (RM-404).
 
-    Die Grenze war fest 1 nm; das float32-Raster einer binären STL ist ab 16 mm
-    schon größer, und die Funktion gab still die Quelle zurück — mit 3 bis 15
-    Selbstschnittdreiecken und verlorenem Stift. Jetzt gilt die Auflösung der
-    Koordinaten, an allen vier Varianten aus dem Review.
+    Zwei Ursachen lagen hinter der Ausrichtung. Mantel und Stopfen lasen ihre
+    Facetten verschieden — die Ausrichtung als Ebene durch alle Ecken, um
+    10⁻⁷ rad gegen die Achse geneigt, der Stopfen achsparallel aus einem
+    Dreieck, mit den Grenzen auf der Winkelhalbierenden statt am Schnitt der
+    Facetten —, und sie lagen bis 1,5·10⁻⁶ mm auseinander. Und die Stirnenden
+    des Stopfens standen quer zur gemessenen Achse statt in der Stirnfläche:
+    Bei (110, 110) blieb unter jeder Rille eine eigene Fläche stehen.
     """
     from app.core.geom.repair import self_intersection_check
 
-    source, carrier_volume = _stl_rounded_fluted_lid(offset, radius, sections)
+    source, carrier_volume = _stl_rounded_fluted_lid(offset, radius, sections, count)
     pattern = only_pattern(source.features)
+    assert pattern.params["count"] == count
     params: dict[str, object] = {"at_feature": pattern.id}
     if operation == "resize_feature":
         params["pitch"] = 5.9
-    changed, findings = run_op(operation, source, quality="fine", **params)
+    changed, findings = run_op(operation, source, quality=quality, **params)
 
     assert "pattern.facets_unaligned" not in {finding.code for finding in findings}
     assert changed.mesh.raw.is_watertight
+    assert changed.mesh.component_count == 1
     assert self_intersection_check(as_mesh_data(changed.mesh), NeverCancelled()) == ((), True)
+    # Unter- und Oberseite bleiben je eine ganze Fläche.
+    assert np.allclose(
+        _lid_end_face_centres(changed.features), [0.0, 16.0], rtol=0.0, atol=EPS_GEOM
+    )
     pin = next(feature for feature in changed.features.values() if feature.kind == "pin")
     assert math.isclose(float(pin.params["diameter"]), 2.0 * radius, abs_tol=1e-3)
     if operation == "remove_feature":
         assert kinds(changed.features) == {"pin": 1, "face": 2}
+        # Bis auf die float32-Rundung des Mantels das Vieleck ohne Rillen.
         assert math.isclose(changed.mesh.raw.volume, carrier_volume, abs_tol=0.02)
+    else:
+        assert kinds(changed.features) == {"pin": 1, "face": 2, "pattern": 1}
+        after = only_pattern(changed.features)
+        assert after.params["style"] == pattern.params["style"]
+        # Einmal ganz herum, die Teilung auf den Umfang gerückt.
+        assert after.params["partial"] == 0
+        assert math.isclose(
+            after.params["count"] * after.params["pitch"], 2.0 * math.pi * radius, rel_tol=1e-3
+        )
+
+
+def _subdivided_pattern_carrier(subdivisions: int) -> SceneObject:
+    """96 Mantelfacetten, ``subdivisions``-mal geteilt und auf float32 gerundet wie in einer STL.
+
+    Fünfmal geteilt trägt der Mantel 101 376 Ecken — so viele, wie ein fein
+    exportierter oder nach *Kanten verfeinern* geteilter Mantel hat. Das Muster
+    nennt nur seine Lage; die Ausrichtung braucht keine Zellen.
+    """
+    from app.core.geom import lathe
+    from app.core.geom.mesh import stable_normals
+
+    cylinder = lathe.cylinder(radius=20.0, height=16.0, sections=96)
+    vertices = np.asarray(cylinder.vertices) + np.array([0.0, 0.0, 8.0])
+    faces = np.asarray(cylinder.faces)
+    for _ in range(subdivisions):
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+    body = trimesh.Trimesh(vertices.astype(np.float32).astype(np.float64), faces, process=False)
+    side = np.flatnonzero(np.abs(stable_normals(body)[0][:, 2]) < 0.5)
+    pin = Feature(
+        id="pin_1",
+        kind="pin",
+        provenance="detected",
+        face_indices=tuple(int(index) for index in side),
+        params={"axis": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 8.0), "diameter": 40.0},
+    )
+    pattern = Feature(
+        id="pattern_1",
+        kind="pattern",
+        provenance="detected",
+        params={
+            "carrier": "cylinder",
+            "carrier_axis": (0.0, 0.0, 1.0),
+            "carrier_diameter": 40.0,
+            "normal": (1.0, 0.0, 0.0),
+            "centre": (20.0, 0.0, 8.0),
+        },
+    )
+    return SceneObject(
+        id="obj_1",
+        name="Träger",
+        mesh=MeshData.of(body),
+        features={pin.id: pin, pattern.id: pattern},
+    )
+
+
+def _off_the_plug_facets(body: SceneObject) -> float:
+    """Wie weit eine Trägerecke höchstens neben der Facette liegt, auf die der Stopfen sich legt."""
+    mesh = as_mesh_data(body.mesh)
+    pattern = body.features["pattern_1"]
+    frame = patterns.frame_for(pattern, mesh, body.features)
+    carrier = patterns.carrier_of(pattern, body.features)
+    assert carrier is not None and frame.facets is not None
+    corners = np.unique(np.asarray(mesh.raw.faces)[np.asarray(carrier.face_indices)])
+    developed, heights = frame.developed(np.asarray(mesh.raw.vertices)[corners])
+    # Je Ecke einzeln: ``developed`` wickelt um das Mittel der Punkte ab.
+    theta = (developed[:, 0] / frame.radius + math.pi) % (2.0 * math.pi) - math.pi
+    reach = heights + frame.radius
+    return float(np.max(np.abs(reach - frame._facet_radius(theta))))
+
+
+@pytest.mark.parametrize("subdivisions", [1, 5])
+def test_a_finely_meshed_carrier_is_aligned_onto_the_facets_the_plug_reads(
+    subdivisions: int,
+) -> None:
+    """Auch am fein geteilten Mantel liegt jede Ecke danach auf der Facette des Stopfens (RM-404).
+
+    Mit der festen Grenze von 1 nm lehnte die Ausrichtung den fünfmal geteilten
+    Träger ab — eine seiner 101 376 Ecken lag 1,01·10⁻⁶ mm neben ihrer Ebene.
+    Und die Ebenen, auf die sie ausrichtete, waren nicht die, auf die sich der
+    Stopfen legt: Ohne Ausrichtung liegen die Ecken einige 10⁻⁶ mm daneben,
+    nach ihr innerhalb der Rundung der Koordinaten.
+    """
+    from app.core.geom.prepare_ops import _aligned_facets
+
+    source = _subdivided_pattern_carrier(subdivisions)
+    before = _off_the_plug_facets(source)
+    aligned, refused = _aligned_facets(source, source.features["pattern_1"])
+
+    assert not refused
+    assert aligned is not source
+    after = _off_the_plug_facets(aligned)
+    # Was die Rundung in doppelter Genauigkeit übrig lässt: tausend Schritte
+    # der Zahl 24 (größte Koordinate) sind 3,6·10⁻¹² mm — sechs Größenordnungen
+    # unter dem float32-Raster, das der Eingang trägt.
+    reach = float(np.max(np.abs(np.asarray(source.mesh.raw.vertices))))
+    assert before > 1e3 * float(np.spacing(reach)), "der Eingang muss das Raster tragen"
+    assert after <= 1e3 * float(np.spacing(reach))
+
+
+def test_a_plug_ends_in_an_end_face_only_where_the_shell_ends_in_it() -> None:
+    """Die Stirnfläche, in der ein Stopfen endet, muss den Mantel abschließen (RM-404).
+
+    Ein Stopfen durch eine Stirnfläche endet in deren gemessener Ebene
+    (``Frame.ends``). Unter einer Fase von 0,02 mm liegt die Unterseite noch
+    innerhalb der Grenze, mit der das Muster fragt, was am Ende des Stifts
+    liegt (``MAX_FACET_SAG``) — aber der Mantel endet nicht in ihr, und ein
+    Stopfen bis dorthin legte Material über die Fase. Oben ohne Fase gilt die
+    Deckfläche.
+    """
+    from app.core import units
+
+    sections = 96
+    ring = np.array([units.circle_point(sections, index) for index in range(sections)])
+    rows = [(19.98, 0.0), (20.0, 0.02), (20.0, 16.0)]
+    vertices = np.vstack(
+        [np.column_stack((ring * radius, np.full(sections, z))) for radius, z in rows]
+        + [np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 16.0]])]
+    )
+    bottom, top = 3 * sections, 3 * sections + 1
+    bands = [
+        (row * sections + index, row * sections + nxt, (row + 1) * sections + nxt)
+        for row in range(2)
+        for index in range(sections)
+        for nxt in [(index + 1) % sections]
+    ] + [
+        (row * sections + index, (row + 1) * sections + nxt, (row + 1) * sections + index)
+        for row in range(2)
+        for index in range(sections)
+        for nxt in [(index + 1) % sections]
+    ]
+    caps = [(bottom, (index + 1) % sections, index) for index in range(sections)] + [
+        (top, 2 * sections + index, 2 * sections + (index + 1) % sections)
+        for index in range(sections)
+    ]
+    body = trimesh.Trimesh(vertices, bands + caps, process=False)
+    assert body.is_watertight and body.is_winding_consistent and body.volume > 0.0
+    mantle = [
+        number
+        for number, face in enumerate(bands)
+        if min(vertices[corner][2] for corner in face) >= 0.02
+    ]
+    first_cap = len(bands)
+    carrier = Feature(
+        id="pin_1",
+        kind="pin",
+        provenance="detected",
+        face_indices=tuple(mantle),
+        params={"axis": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 8.0), "diameter": 40.0},
+    )
+    underside = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        face_indices=tuple(range(first_cap, first_cap + sections)),
+        params={"normal": (0.0, 0.0, -1.0), "centre": (0.0, 0.0, 0.0), "area": 1254.0},
+    )
+    lid = Feature(
+        id="face_2",
+        kind="face",
+        provenance="detected",
+        face_indices=tuple(range(first_cap + sections, first_cap + 2 * sections)),
+        params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 16.0), "area": 1255.7},
+    )
+    pattern = Feature(
+        id="pattern_1",
+        kind="pattern",
+        provenance="detected",
+        params={
+            "carrier": "cylinder",
+            "carrier_axis": (0.0, 0.0, 1.0),
+            "carrier_diameter": 40.0,
+            "normal": (1.0, 0.0, 0.0),
+            "centre": (20.0, 0.0, 8.0),
+        },
+    )
+    features = {item.id: item for item in (carrier, underside, lid, pattern)}
+    frame = patterns.frame_for(pattern, MeshData.of(body), features)
+
+    assert frame.span is not None and frame.ends is not None
+    below, above = frame.ends
+    assert below is None, "die Unterseite liegt 0,02 mm unter dem Ende des Mantels"
+    assert above is not None and math.isclose(above.offset, 16.0)
+    # Und ohne Fase gilt auch die Unterseite.
+    flush = dataclasses.replace(
+        carrier, face_indices=tuple(range(len(bands))), params={**carrier.params}
+    )
+    frame = patterns.frame_for(pattern, MeshData.of(body), {**features, flush.id: flush})
+    assert frame.ends is not None and frame.ends[0] is not None
+    assert math.isclose(frame.ends[0].offset, 0.0, abs_tol=EPS_GEOM)
+
+
+def test_the_plug_turns_from_facet_to_facet_where_the_facets_meet() -> None:
+    """Die Grenze zwischen zwei Facetten liegt an ihrem Schnitt, nicht auf der Winkelhalbierenden.
+
+    Ein Vieleck aus einer STL hat Facetten verschiedenen Abstands von der
+    Achse. Auf der Winkelhalbierenden springt der Stopfen dann um den
+    Unterschied der Abstände von einer Facette auf die andere, und seine
+    Ecke dort liegt neben der Ecke des Mantels (RM-404). Zwölf Facetten mit
+    Abständen, die um bis zu 0,01 mm auseinanderliegen.
+    """
+    from app.core import units
+
+    sections = 12
+    offsets = 10.0 + 0.01 * np.array([0, 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]) / 9.0
+    normals = [units.circle_point(sections, index) for index in range(sections)]
+    corners = []
+    for index in range(sections):
+        (x1, y1), (x2, y2) = normals[index], normals[(index + 1) % sections]
+        o1, o2 = offsets[index], offsets[(index + 1) % sections]
+        det = x1 * y2 - y1 * x2
+        corners.append(((o1 * y2 - o2 * y1) / det, (x1 * o2 - x2 * o1) / det))
+    ring = np.array(corners)
+    body = trimesh.Trimesh(
+        np.vstack(
+            [
+                np.column_stack((ring, np.zeros(sections))),
+                np.column_stack((ring, np.full(sections, 6.0))),
+            ]
+        ),
+        [
+            face
+            for index in range(sections)
+            for face in (
+                (index, (index + 1) % sections, sections + (index + 1) % sections),
+                (index, sections + (index + 1) % sections, sections + index),
+            )
+        ],
+        process=False,
+    )
+    carrier = Feature(
+        id="pin_1",
+        kind="pin",
+        provenance="detected",
+        face_indices=tuple(range(2 * sections)),
+        params={"axis": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 3.0), "diameter": 20.0},
+    )
+    pattern = Feature(
+        id="pattern_1",
+        kind="pattern",
+        provenance="detected",
+        params={
+            "carrier": "cylinder",
+            "carrier_axis": (0.0, 0.0, 1.0),
+            "carrier_diameter": 20.0,
+            "normal": (1.0, 0.0, 0.0),
+            "centre": (10.0, 0.0, 3.0),
+        },
+    )
+    frame = patterns.frame_for(
+        pattern, MeshData.of(body), {carrier.id: carrier, pattern.id: pattern}
+    )
+    assert frame.facets is not None and len(frame.facets[0]) == sections
+    borders = frame._facet_borders(np.array([-math.pi * frame.radius, math.pi * frame.radius]))
+    assert len(borders) == sections
+    placed = frame.world(np.column_stack((borders, np.zeros(sections))), 0.0, faceted=True)
+    # Jede Grenze trifft eine Ecke des Vielecks, auf ein paar Rundungsschritte genau.
+    nearest = np.min(np.linalg.norm(placed[:, None, :2] - ring[None, :, :], axis=2), axis=1)
+    assert float(np.max(nearest)) <= 1e3 * float(np.spacing(10.0))
 
 
 def test_a_refused_facet_alignment_is_said_with_repair(

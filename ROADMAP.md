@@ -95,10 +95,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Neigung, Ebene parallel zu einer Fläche und exakte Körper gebaut (Claude, in main mit `52cc9fd66`); offen: Ebene durch drei Punkte — braucht die Stellenwahl im Bild |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
-| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-m`). Grenze aus dem float32-Raster, Befund `pattern.facets_unaligned` mit *Reparieren*, Rechnung je Ebenengruppe (Claude, in main mit `c117720b3`); Ø 80, CAD-Nullpunkt in der Ecke und feiner Träger frei von Selbstschnitten. Offen: fern vom Ursprung (110, 110) liegen die Facetten danach eben, an den Rillen bei 15° und 165° bleiben vier Selbstschnitte — Ursache im Stopfen oder der Vereinigung, festgehalten als strenges xfail |
-| [RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Review 02.10.: Nachbau Modell 1 wird 24,7 statt 20 mm breit; Korpusabnahme an drei Haltern, Kundenweg zum exakten Halter |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-z`). Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-z`). Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
@@ -108,25 +105,34 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
 | [RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung](#rm-434) | Geometrie, Erkennung und Druckvorbereitung | Eingangsprüfung vor Bounds/Budget korrigiert; 24 Fachfälle und gezieltes Mypy grün, Code unabhängig freigegeben; Tor und Übernahme offen |
 | [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 aus dem Review von `48106c57a`: Spiegelrichtungen gemeinsam begrenzen; alle Achsen/Pinsel, drei Körper und alter gespeicherter Verlauf |
-| [RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot](#rm-417) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10. (`4cf460e87`): Definition zusätzlich vergleichen; Testwettlauf und zu strenge Zusicherung berichtigen |
 | [RM-419 — Die neue Durchstichprüfung macht den Formschritt bis 130-mal langsamer](#rm-419) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-364 (archiviert); Schnittsuche nur um die bewegten Ecken, mit Fortschritt |
 | [RM-421 — Randprüfung der Bausteine übersieht Mündungsweite und Material hinter dem Rand](#rm-421) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-392 (archiviert); Senkung/Fase mitprüfen, Seitenwände prüfen, beide Kerne gleich |
 | [RM-422 — Reste aus RM-325 und RM-332: Drehtest an ±X, gespeicherte Lagen, Aushöhlen mit Entlüftung, `measured_frame` in Handbuch und CLI](#rm-422) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-325/RM-332 (archiviert); Test, Migration statt stiller Lageänderung, Rückseite außen, Feld ausblenden |
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
-| [RM-429 — Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück](#rm-429) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-333 (archiviert), Regression aus `88bd58c2a`; leere Variante meldet wieder |
-| [RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit](#rm-430) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Tests auf Wirkung schärfen, falsche Zahl berichtigen, Cura-Fall mit Befund |
 | [RM-435 — Exakte Gruppenrundungen sind seit `0041000a0` 27- bis 125-mal langsamer, und Absagen verlieren den Maßhinweis](#rm-435) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Auslass-Suche nur bei zu schmalen Kanten, größtes passendes Maß wieder nennen, teilweise belegte Züge nicht verwerfen |
 | [RM-436 — Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch](#rm-436) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Kunde erfährt ENOSPC, `edges.unmapped` mit gangbarem Weg, stabile Zahl, Wortwahl |
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-459 — SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt](#rm-459) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `NOT_TAKEN_BY` je Programm statt je Familie, Beilage gegen den Optionsbestand des Programms filtern |
-| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
-| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
-| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
-| [RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht](#rm-463) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `small_perimeter_speed` als Folger der Außenwand deckeln, Rollen je Familie |
+| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 9 von 16. G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
+| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 10 von 16. G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
+| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
+| [RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht](#rm-463) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 11 von 16. G-Code-Prüfung 02.10.: `small_perimeter_speed` als Folger der Außenwand deckeln, Rollen je Familie |
 | [RM-464 — Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen](#rm-464) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `default_materials` auch bei Orca lesen, Marke aus dem Unterordner, Generic vor Fremdmarke |
-| [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
-| [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
+| [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
+| [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
+| [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
+| [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 2 von 16. G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
+| [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
+| [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
+| [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
+| [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 4 von 16. G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
+| [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 7 von 16. G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
+| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
+| [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
+| [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
+| [RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material](#rm-485) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: Material über die Umlaufrichtung (Clipper2 in manifold3d, `Manifold.slice`), nicht über die Tiefe |
+| [RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung](#rm-486) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: schwebende Säulenkontur als `CrossSection` führen; ersetzt den Fix von RM-405 b |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -152,9 +158,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
-| [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
@@ -166,8 +170,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
-| [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
-| [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -2823,6 +2825,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_besenhalter_zeit.txt`,
   `r_besenhalter_paare.txt`, `r_korpus_vorfrage.txt`.
   Review 02.10. (`e3dff1907`): Der neue Trennbeleg (`prepare_ops.py:3716–3724`) ruft die ungebremste Berührungssuche bei jedem Merkmalklick (`app/core/perceive/actions.py:740–748`) und vor `slot_hole` ein zweites Mal — Besenhalter, Bohrung `hole_5`: Merkmalklick 4,75–5,50 s statt 0,01–0,07 s, `slot_hole` 15,2–16,6 s statt 10,8–12,5 s; so lange zeigt das Merkmalfenster keine Handlung. Bis zum Fix den Beleg erst bei *Zum Langloch ziehen* rechnen und das Kontaktergebnis je Netz merken (`sonden\r3_besenhalter_*.txt`).
+  Ergänzung Bibliotheksprüfung 02.10.2026: Ein übersetzter Hüllquader-Sweep braucht am Besenhalter 0,5–0,8 s statt 8,6–19,2 s, an Mini Golf v17 0,3–0,4 statt 8–13 s, bei gleichem Ergebnis; manifold3d (Schnittvolumen je Paar) 0,06–0,47 s, aber nur für gültige Teile und ohne bloße Flächenberührung — als Vorweg, der Sweep als allgemeiner Weg. Beleg `bibliotheken\befunde.md`.
 
 <a id="rm-382"></a>
 
@@ -2907,22 +2910,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\nachbau\bericht.md`, Sonden `f1_flaeche_nach_bohrung.py`,
   `f1_kern.txt`, `f3_im_lauf.txt`, `f3_drehdeckel_ui.py`. Verwandt: RM-218, RM-226.
 
-<a id="rm-400"></a>
-
-- [ ] **RM-400 — Schräg abschneiden.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 5).
-  *Abschneiden* (`cut_away`, `app/core/geom/prepare_ops.py:16944`) kennt nur Achsebenen
-  (`axis ∈ {x, y, z}`); Schale, Wedge-Lock und viele Organizer haben eine schräge Front, heute nur
-  über ein gezeichnetes Seitenprofil mit unpassenden Feldnamen (RM-391).
-  **Ablauf:** *Abschneiden* bekommt hinten eine Neigung (Winkel um eine Kante bzw. Achse) oder eine
-  Ebene durch eine gewählte Fläche/Kante; vorn bleibt Achse und Lage. Schnittfläche geschlossen,
-  beide Kerne, Parameter migriert (`format_version`/Migration, alte Projekte unverändert).
-  **Abnahme:** Geometrietest: Quader 30° schräg abgeschnitten → Volumen analytisch, dicht, an
-  beiden Kernen gleich; alte Projekte öffnen unverändert. Bauplan §21, §25, Regel 4.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Schräg abschneiden an jeder Ebene (Winkel, Fläche, drei Punkte), an jedem Körper (Netz, exakt, Mehrschaler); dient Fronten, Fasen ganzer Seiten und dem Kürzen auf Druckhöhe. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 12 Teile mit schräger Front (Wedge-Lock, Laptop-Ständer, Handyständer, Schaber, Organizer). Abnahme an mindestens drei unterschiedlichen Korpusmodellen.
-  Nachprüfung am Stand `0041000a0` (nach `3006acb62`, `8401b2c64`, `bf829b68d`): unvollständig. Gut: Neigung und Fläche analytisch richtig an beiden Kernen und Güten, außermittig und an Mehrschalern; sechs Korpusmodelle aus `F:\3D Dateien` (zwei STEP) vollständig und geschlossen; alte Projekte rechnen bitgleich. Offen: Ebene durch drei Punkte bzw. eine Kante; Test am exakten Kern und für `no_plane`; die Gegenprobe „Kippachse durch den Ursprung“ bleibt grün. Neu: Mit gewählter Fläche belegt der Dialog „An Fläche“ und die Position aus der Körpermitte vor — *Abschneiden* öffnet mit „Diese Ebene schneidet nichts vom Objekt ab.“ (vorher gültiger Schnitt); Achse, Neigung und „Neigen um“ wirken neben „An Fläche“ nicht, bleiben aber bedienbar (kein `depends_on`) — 30° um die eigene Achse wird still übergangen; „Kleinere Seite — bei Z unten“ stimmt an einer Unterseite nicht; mit Vorgabe Kippachse x wird jede Neigung an Achse x abgewiesen. Belege `F:\solidon-review-reports\review-0041000a0.md`, Sonden `v6_rm400_*`.
-  Nachprüfung am Stand `4373b5f12` (nach `1c55ac1cb`, `c2ed098ec`): exaktes Abschneiden behoben (exakt bleibt exakt, analytische Volumina, STEP-Modelle exakt, Altprojekt bitgleich). Weiter offen wie vermerkt: Ebene durch drei Punkte, M3/M4. Niedrig: die neuen exakten Neigungstests hängen nicht vom Winkel ab — eine achsparallele Mutante bleibt in 7 von 8 Fällen grün.
-
 <a id="rm-402"></a>
 
 - [ ] **RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung.**
@@ -2936,49 +2923,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: Körper versetzt, Kreismuster mit *Drehmitte Körper* → Kopien um dessen Achse;
   altes Projekt unverändert. Bauplan §2.4, Regel 2.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Drehmitte für alle Muster (Kreis an Körper und Merkmal, Spiegeln) aus Körper, Merkmal oder Punkt, überall dieselbe Auswahl. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 15 Teile mit Lochkreisen oder Rundmustern (Deckel mit Streulöchern, Filterball, Sieb, Düsen, Wabenhalter). Abnahme an mindestens drei unterschiedlichen Fällen.
-
-<a id="rm-404"></a>
-
-- [ ] **RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still.**
-  Review 02.10.2026 der Commits `4449e3370..7f0de659d`, Funde F1–F4; Folgepunkt zu RM-225, das
-  `d0a3657e2` archiviert hat.
-  **Fehlerfall:** Die neue Facettenausrichtung (`app/core/geom/prepare_ops.py:14258–14259`,
-  `:14282–14283`, `:14322–14329`, `:14333–14334`) prüft gegen die feste Grenze `EPS_GEOM` (1 nm);
-  das float32-Raster einer binären STL ist ab 16 mm schon 1,9 nm, ab 64 mm 7,6 nm. Wird die Grenze
-  gerissen, gibt die Funktion still die Quelle zurück, und der alte RM-225-Fehler ist wieder da.
-  Belegt: Riffeldeckel mit Mitte bei x = y = 110 mm — Entfernen 15 Selbstschnittdreiecke und Stift
-  weg, Ändern 13 Selbstschnittdreiecke, 63 Flächen, kein Muster; Ø 80 am Ursprung — Stift verloren;
-  Ø 40 mit CAD-Nullpunkt in der Ecke — 5 bzw. 3 Selbstschnittdreiecke; echter `deckel_basis.stl`
-  um (110, 110, 0) verschoben — 60 statt 37 Flächen, 9 Selbstschnittdreiecke; fein vernetzter
-  Träger (101 376 Ecken, 1,01e-6 mm) wird nicht ausgerichtet. Befunde jeweils nur
-  `remove_feature.gone` bzw. `resize_feature.pattern`. Der Testfall (Ø 40 am Ursprung) liegt mit
-  0,69 nm knapp unter der Grenze.
-  **Weitere Reste:** (F2) 13 `return source` ohne Spur (`:14207–14334`, Aufrufer `:14395`,
-  `:14548`) — eine Ablehnung erzeugt Selbstschnitte ohne Befund; der Docstring verspricht eine
-  Auswahl je Gruppe, tatsächlich gilt alles oder nichts. (F3) `tests/test_pattern_features.py:1376`
-  (Achsfall) läuft nur durch „nichts geändert“ — die Identitätsmutante bleibt grün. (F4) rund
-  45 µs Python je Trägerecke, bei 26 112 Ecken 1,2–1,6 s ohne Fortschritt.
-  **Fix:** Grenze aus dem float32-Raster der Koordinaten beim Lesen ableiten (vor Aufsetzen oder
-  Zentrieren); bei Ablehnung Grund zurückgeben und Befund mit *Reparieren*; Docstring berichtigen;
-  Achsfall auf die Axiallage zusichern; in Feldern rechnen oder `ctx.progress` melden.
-  **Abnahme:** verschobene Variante, Ø 80, CAD-Nullpunkt und feiner Träger je *Entfernen* und
-  *Ändern* in beiden Güten ohne Selbstschnitt, Merkmale erhalten; Identitätsmutante des Achsfalls
-  rot. Bauplan §21, §25, Regeln 6, 17.
-  Belege: `F:\solidon-review-reports\review-7f0de659d.md`, Sonden `r2_rm225_*.txt`,
-  `r2_gegenprobe_axial.txt`, `r2_ausrichtung_laufzeit.txt`.
-  Nachprüfung am Stand `4373b5f12` (nach `fa7780785`): unvollständig. Verbessert: verschobener `deckel_basis.stl` 0 statt 9 Selbstschnitte, 37 Flächen; CAD-Nullpunkt frei; 26 112 Trägerecken 0,26 statt 1,60 s; feiner Träger (101 376 Ecken) wird ausgerichtet; Rest (110, 110) als strenges xfail registriert. Offen (mittel): Ø 80 mit 48 Rillen behält 2 Selbstschnitte ohne Befund, in Entwurf und fein, bei *Entfernen* und *Ändern*. Tests: der Test nimmt Ø 80 mit 24 Rillen; die Fälle mit feinem Träger sind am Elterncommit, mit Identitätsmutante und alter 1-nm-Grenze grün (stellen den Fehler nicht nach); nur Güte „fein“. Belege `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`, Sonden `v7g_rm404_*`.
-
-<a id="rm-443"></a>
-
-- [ ] **RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test.**
-  Nachprüfung des Reviews am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben
-  (Bereichstest aller vier Halter). Offen: Der Nachbau von Modell 1 gelingt, die Rückwand wird
-  aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; die
-  Korpusabnahme an drei Haltern ist nicht belegt; der Fünf-Klick-Weg steht nur im Archivtext;
-  exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
-  **Abnahme:** Nachbau Modell 1 mit 20 mm Rückwand; drei Halter aus dem Korpus nachgebaut;
-  Fünf-Klick-Weg am echten Fenster; exakter Halter über den Kundenweg. Bauplan §24, §2.2.
-  Belege: `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`.
 
 <a id="rm-405"></a>
 
@@ -3005,6 +2949,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zweimal): Ergebnisse bitgleich bzw. Stützraum gleich, Zeiten mindestens um die gemessenen Faktoren
   besser; zweiter `print_findings`-Aufruf aus dem Merker. Bauplan §31, §22.
   Belege: `F:\solidon-review-reports\modelle\diagnose.md` (Befund 1), Sonden `d1_*`.
+  Ergänzung Bibliotheksprüfung 02.10.2026: Für a ist `_cuts_along` als Cython-Schleife neben `_chain.pyx` 3,4–3,9-mal schneller als die vektorisierte NumPy-Fassung und bitgleich (Screen-Cover 1,8 s statt 6,7 s, CC2-Box 5,7 statt 19,8 s). Den Fix für b ersetzt RM-486 (Clipper2, 0,06 s ohne Toleranz). Beleg `bibliotheken\befunde.md`.
 
 <a id="rm-406"></a>
 
@@ -3174,26 +3119,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   [Historischer Review](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
   [maßgeblicher Radius-16-Nachlauf](konzepte/nachweise-release-0.5.1/reports/remote-48106-spiegel-probe.json).
 
-<a id="rm-417"></a>
-
-- [ ] **RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot.**
-  Review 02.10.2026 von `29ff469b5`/`4cf460e87`.
-  - **Falsche Warnung (mittel, neu mit `4cf460e87`):** Ist in Cura dasselbe Modell aktiv wie in
-    Solidon, kommt „In Cura ist „Creality K1 Max“ aktiv, in Solidon „Creality K1 Max“ …“ — das
-    trifft jeden *Im Slicer öffnen*-Lauf mit dem eingebauten Drucker. Ursache: `chosen_printer`
-    gibt für eine nicht übernommene Cura-Instanz `""` zurück. Fix: zusätzlich die Definition mit
-    `cura_definition` vergleichen.
-  - **Zwei neue Fenstertests aus `29ff469b5` rot** (fällt erst im Release-Tor auf):
-    `…can_be_adopted…` hat einen Wettlauf (`_slicer_path` gesetzt, ohne die Slicersuche abzuwarten;
-    mit `wait_for_slicers()` grün); `…not_reported_as_failed_adoption…` sichert eine leere
-    Hinweiszeile zu streng zu.
-  - **Niedrig:** Das neue `if setup.flavour == "cura"` in `machine_missing` doppelt nur
-    `machine_from_definition`.
-  **Abnahme:** Test mit gleichem Drucker in Cura und Solidon → keine Warnung, mit anderem →
-  Warnung; beide Fenstertests grün ohne Lockerung der Wirkung. Bauplan §29, §2.7.
-  Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`, Sonden
-  `v4u_test_cura_mismatch.py`, `v4u_test_cura_ui_diag.py`.
-
 <a id="rm-419"></a>
 
 - [ ] **RM-419 — Die neue Durchstichprüfung macht den Formschritt bis 130-mal langsamer.**
@@ -3272,36 +3197,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Zug 1 mm und 2 mm neben der Ebene ohne Kerbe (Profil stetig); Ecken auf der Ebene
   bleiben auf der Ebene; Laufzeit nicht über dem Stand vor `a3213c72c` + 25 %; Tests für alle Pinsel.
   Belege: `verif-70e9b3145-geometrie.md`, Sonden `v5g_rm378_*`.
-
-<a id="rm-429"></a>
-
-- [ ] **RM-429 — Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück.**
-  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-333 (archiviert), Regression aus
-  `88bd58c2a`. Lesbare Mehrdeutigkeiten und unbekannte Varianten melden jetzt
-  `slicer.process_variant_unresolved`.
-  **Fehlerfall:** Bei `nozzle_volume_type` = `"nil"`, `""`, `["", ""]` oder einer Zahl fällt die
-  Druckgrundlage ohne jeden Befund auf Solidons Tabelle zurück; am Stand `4cf460e87` kam dafür
-  `process_unreadable`. Ursache: `_wanted_variant` (`app/core/knowledge/manufacturer.py:273–280`)
-  gibt `""` zurück, und die Befundprüfung fragt nur `if foundation.unresolved_variant:` (`:1818`).
-  **Fix:** leere/unlesbare Variante als eigener Fall mit Befund (Herkunft „Solidon-Tabelle statt
-  Slicerprofil“ ausweisen, Regel 14).
-  **Abnahme:** Test je Wert (`nil`, leer, Liste leerer Werte, Zahl): Befund mit Handlung. Bauplan §28,
-  Regel 14, Regel 21. Beleg: Sonden `v5g_t_rm333_varianten.txt`, `v5g_t_rm333_varianten_alt.txt`.
-
-<a id="rm-430"></a>
-
-- [ ] **RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit.**
-  Review 02.10.2026 am Stand `70e9b3145`; beide Ursprungspunkte sind archiviert und im Verhalten
-  behoben.
-  - **RM-376, Tests:** `plate[smooth]` kann nicht rot werden (Glätten bewegt an der Testplatte auch
-    ohne Filter nichts); Aufblasen und Flachziehen zeigen den Fehler, fehlen aber; ein Filter, der
-    nichts durchlässt, lässt 14 neue Tests grün; „keine Selbstdurchdringung“ ist nicht zugesichert;
-    die Figur nur von vorn. Die Zahl „Unterseite 3,7 mm“ (Register, `sculpt.py:255–256`,
-    `tests/test_sculpt.py:890–891`) war schon damals falsch — es ist die Oberseite.
-  - **RM-328, Cura (älter):** Innenwand und Grundbeschleunigung bleiben plattenweit auf 60/2000, also
-    auch am Block, ohne `part_setting_unavailable` (`app/core/export/handover.py:1092–1098`).
-  **Abnahme:** Gegenproben (ohne Filter, Filter lässt nichts durch) machen die Tests rot; Cura-Fall
-  mit Befund. Beleg: `verif-70e9b3145-geometrie.md`, Sonden `v5g_rm376_*`, `v5g_rm328_cura.txt`.
 
 <a id="rm-435"></a>
 
@@ -3403,6 +3298,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Wächter je Programm × Tabellenzeile gegen den Optionsbestand; `prusa-mini` mit
   Schrägnaht in SuperSlicer liefert eine Druckdatei. Bauplan §28, §29.
   Belege: `F:\solidon-review-reports\gcode\befunde_teil1.md` (B1), `gcode\lauf1\`.
+  Nachtrag 02.10.2026 (Stand `09d8e9485`): **Regression gegenüber v0.5.0** — die Schrägnaht kam mit v0.5.1; dort derselbe Absturz (`prusa-mini` Würfel A/B, Pilz, Siebhalter). Schon die eigene Wahl „Schrägnaht aus“ reicht am Bündeldrucker (`scarf_seam_placement = nowhere` plus `external_fill_pattern`), am allgemeinen Drucker die Schrägnaht allein. Mit RM-479 und RM-480 sind alle 108 SuperSlicer-Abstürze der Codex-Matrix zugeordnet (41 Schrägnaht, 64 Bauraum, 3 Baumstütze). Beleg `gcode\befunde.md` (CP-5).
 
 <a id="rm-460"></a>
 
@@ -3422,6 +3318,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ausweisen.
   **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
   Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
+  Regression 02.10.2026: nein — v0.5.1 und v0.5.0 gleich (CC2 35 → `0`, P1S Schlüssel fehlt, kein `M141`/`M191`).
 
 <a id="rm-461"></a>
 
@@ -3437,6 +3334,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   gegen dessen Profilbestand prüfen.
   **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
   Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
+  Regression 02.10.2026: nein — Wert und Tabelle in v0.5.0, v0.5.1 und `09d8e9485` gleich (`slicer_keys.py:335`).
 
 <a id="rm-462"></a>
 
@@ -3453,6 +3351,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   wieder vergleichen.
   **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
   Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
+  Regression 02.10.2026: nein — Code in v0.5.0, v0.5.1 und `09d8e9485` gleich.
 
 <a id="rm-463"></a>
 
@@ -3470,6 +3369,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   je Familie (kleine Umfänge, Überhänge mit festem Tempo, erste Schicht über Raft).
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
+  Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcodeestm463_regression.md`.
 
 <a id="rm-464"></a>
 
@@ -3487,6 +3388,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Namenslänge.
   **Abnahme:** Wächter je erkanntem Drucker × Material gegen eine Positivliste. Bauplan §29.
   Beleg: `gcode\befunde_teil1.md` (B7).
+  Regression 02.10.2026: nein — v0.5.0, v0.5.1 und `09d8e9485` wählen dieselben Fremdmarken.
 
 <a id="rm-465"></a>
 
@@ -3505,6 +3407,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aus dem Materialvergleich nehmen.
   **Abnahme:** Würfel und Pilz an vier Slicern ohne Fehlalarm bei Standardwerten; Mehrfarbdruck mit
   getrennter Spülmenge. Beleg: `gcode\befunde_teil1.md` (B8), `gcode\matrix.md`.
+  Regression 02.10.2026: nein — `estimate.py` seit v0.5.0 unverändert, Abweichungen in v0.5.1 identisch.
 
 <a id="rm-466"></a>
 
@@ -3520,6 +3423,239 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Schichtzahl mit dem Raster der Analyse (erste Schichthöhe); Befunde mit Herkunft.
   **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
   Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
+  Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
+
+<a id="rm-475"></a>
+
+- [ ] **RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2,
+  PrusaSlicer 2.9.6, Weg Bibliothek (Vorwahl wie der Druckdialog). Orca und PrusaSlicer führen den
+  Stützabstand als **Lücke** zwischen zwei Linien, Solidon schreibt `Bahnbreite / Dichte` als
+  Teilung. Gemessen am Pilz (CC2, Schicht z = 10 mm): 15 % → 12 %, 50 % → 31 %, und 0 % ergibt
+  die dichteste Stütze (28 922 mm³, 42,4 g statt 13,5 g, 62,7 statt 23,2 min), während Solidons
+  Schätzung 0 mm³ nennt. Die Rücklesung des Herstellerwerts irrt ebenso (Orca Kobra 2:
+  `support_base_pattern_spacing = 0.2` als 100 % statt 66 %). Trifft jeden Drucker der Familien
+  `orca` und `prusa` mit Stützen; am Kobra 2 gleich gemessen. Keine Regression gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:1175–1197` (`_support_spacing`),
+  `app/core/export/manufacturer.py:783–797` und `:1285–1290` (Rücklesung),
+  `app/core/slice/estimate.py:100–134`, Feld `app/ui/print_settings_dialog.py:807–817`.
+  **Fix (allgemein):** `spacing = s / d − s` und zurück `d = s / (spacing + s)` mit `s` =
+  Linienabstand der Stützbahn; 0 % ist als Abstand nicht darstellbar — keine Stützfüllung
+  schreiben oder das Feld auf den kleinsten darstellbaren Wert begrenzen und es im Dialog sagen.
+  **Abnahme:** je Familie ein Lauf mit 15 % und 50 %, gemessene Teilung gegen Bahnbreite / Dichte
+  (drei Drucker: CC2, Kobra 2, MK4S); Test `_support_spacing` gegen `_support_density` und die
+  Formel. Bauplan §28, §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G1), `gcode\rest\`.
+
+<a id="rm-476"></a>
+
+- [ ] **RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, OrcaSlicer 2.4.2, ElegooSlicer 1.5.3.5,
+  Bambu Studio 02.08.02.61, Modell `tests/data/meshes/colored.3mf` (zwei Farben). Ohne
+  `wipe_tower_x/y` bleibt die Konsolenvorgabe 15/220 stehen: Kobra 2 (220 mm) Turm bis y 236,3
+  (Orca) bzw. 258,3 (Elegoo), A1 mini (180 mm) bis y 246,8 (Orca) bzw. 242,6 (Bambu). Solidon
+  meldet danach `gcode.off_the_bed`, die Druckdatei ist unbrauchbar. Auf 256-mm-Betten passt es
+  zufällig. Für Creality Print setzt Solidon die Position bereits selbst. Keine Regression
+  gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:4892–4975` (`_creality_cli_tower_position`, nur
+  `crealityprint`), `:170–171`; `slicer_keys.py` schreibt `wipe_tower_x/y` für keine Familie.
+  **Fix (allgemein):** Startposition des Turms als Regel je Programm der Orca-Familie, immer so,
+  dass Turmfläche plus Rand im nutzbaren Bett liegt.
+  **Abnahme:** je Programm (Orca, Elegoo, Bambu, Creality) zwei Farben auf einem 180- und einem
+  220-mm-Bett, Turm im Bett, kein `gcode.off_the_bed`. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G2), `gcode\rest\`.
+
+<a id="rm-477"></a>
+
+- [ ] **RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0 (Windows, Codepage 1252), jeder
+  Drucker. Teilnetze heißen `<Projektname>-part-<n>.stl`; bei Namen wie „obj_4_Bayrak Direği uzun“
+  oder „埃菲尔铁塔18cm“ meldet CuraEngine `Failed to load model … (error number 2/22)`, Solidon sagt
+  nur „Der Slicer hat keine Druckdatei geschrieben“ mit „Maschinenprofil prüfen“. In der
+  Codex-Matrix trifft es alle 12 Korpusmodelle mit solchen Namen in allen 29 Varianten; Namen mit
+  Zeichen aus cp1252 laufen. Abgeleitet: ebenso jeder Lauf, wenn schon der Benutzerordner solche
+  Zeichen trägt. Keine Regression.
+  **Stellen:** `app/core/export/writer.py:2048–2056` (`_cura_meshes`),
+  `app/core/export/handover.py:3838` (`-l`), `:5193–5199` (Rückfallsatz ohne Ursache).
+  **Fix (allgemein):** Dateien, die ein Fremdprogramm über die Kommandozeile öffnet, ASCII und
+  technisch benennen (`platte-1-teil-1.stl`), den Projektnamen nur für Anzeige und Druckdatei;
+  liegt der Arbeitsordner außerhalb der Codepage, einen kurzen ASCII-Ordner verwenden; „Failed to
+  load model“ als eigene Ursache übersetzen.
+  **Abnahme:** je Familie ein Lauf mit türkischem, chinesischem und deutschem Namen, alle mit
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-1), `gcode\rest\`.
+
+<a id="rm-478"></a>
+
+- [ ] **RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` und jedes Prusa-Bündelprofil.
+  `arrangement_holds` verwirft die Anordnung schon bei überlappenden Hüllquadern in der Aufsicht
+  (Siebhalter umgreift ein Sieb); dann liegen die Teile um (0,0). Die Orca-Familie ordnet selbst
+  an, PrusaSlicers Konsole nicht: „All objects are outside of the print volume“, keine Druckdatei,
+  obwohl die sieben Teile (198 × 178 mm) auf 250 × 210 mm passen. Ein Teil der 56
+  Bauraum-Absagen der Codex-Matrix gehört dazu. Keine Regression.
+  **Stellen:** `app/core/export/writer.py:580–626` (`arrangement_holds`), `:1807`,
+  `app/core/export/handover.py:3727–3736`, `:5038–5080`.
+  **Fix (allgemein):** „Der Slicer ordnet selbst an“ als Prädikat je Programm neben
+  `wants_bed_coordinates`; wo nicht, ordnet Solidon vorher an (wie *Auf dem Bett anordnen*) und
+  meldet einen eigenen Bauraumbefund, wenn es nicht passt.
+  **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
+  weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
+
+<a id="rm-479"></a>
+
+- [ ] **RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` (180 × 180 mm).
+  Besteckeinsatz (231 × 231 mm) und Siebhalter (sieben Teile, zusammen zu groß): Rückgabe
+  `0xC0000409`, Solidon: „abgestürzt … prüfen Sie Drucker- und Filamentprofile“, obwohl der
+  Export vorher `arrange.out_of_build_volume` bzw. `arrange.off_the_plate` meldet. Erklärt 64 der
+  108 SuperSlicer-Abstürze der Codex-Matrix (u. a. Filament-Regal, Bohrerhalter, Küchenhalter).
+  **Stellen:** `app/core/export/handover.py:5136–5154` (Absturzsatz vor jeder Ursache),
+  `:5751–5783` (`_outside_the_volume` kennt nur die Höhe), Anordnungsprüfung in
+  `app/core/export/writer.py`.
+  **Fix (allgemein):** Passt ein Teil in keiner Drehung um Z, hält die Übergabe mit derselben
+  Meldung wie für die Höhe an (Teilen, Verkleinern, anderer Drucker); nach einem Absturz zuerst
+  Solidons bekannte Ursache nennen, „Profile prüfen“ nur ohne.
+  **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
+  Lauf, kein Slicerstart. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
+
+<a id="rm-480"></a>
+
+- [ ] **RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` und `generic-220`.
+  `support_material_style = organic` (Baumstütze) lässt SuperSlicer mit `0xC0000005` abstürzen —
+  isoliert gemessen, `snug` und `grid` rechnen; 3 der 108 Abstürze der Codex-Matrix (übernommener
+  Baumstützen-Vorschlag). `seam_position = nearest` wird dort zu `cost`, Solidon meldet
+  `slicer.setting_ignored`. Ursache wie RM-459: SuperSlicer läuft als Familie `prusa` mit
+  PrusaSlicers Wertebestand.
+  **Stellen:** `app/core/export/slicer_keys.py:233` (`_PRUSA_SUPPORT_STYLE`), `:244`
+  (`seam_position`), `:294`, `:915`, `:965–987` (`NOT_TAKEN_BY` nur je Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm aus dem gemessenen Bestand der installierten
+  Version (`discover.program_mark`); Baumstütze für SuperSlicer nicht anbieten, ein übernommener
+  Vorschlag wird „Gitter“ mit Hinweis; `nearest` → `cost` ohne Warnung.
+  **Abnahme:** Wächter jede Aufzählungszeile der Prusa-Tabelle gegen den Bestand jedes
+  erkannten Programms; Pilz, Würfel und ein Korpusmodell mit Baumstütze an SuperSlicer →
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-4, CP-9), `gcode\rest\`.
+
+<a id="rm-481"></a>
+
+- [ ] **RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, SuperSlicer 2.5.59.13, alle
+  Bündeldrucker (`prusa-mk4s`, `prusa-mini`, `prusa-xl`, `sovol-sv06`). Solidon schreibt
+  `filament_type = TPU`, die Bündel führen Flex als `FLEX`: `filament_settings_id` bleibt leer,
+  kein Befund. Folge im G-Code des MK4S: Vermessen bei 170 statt 210 °C, Einzug `E-2` statt
+  `E-4`, kein Startcode des Herstellerfilaments. Keine Regression.
+  **Stellen:** `app/core/export/slicer_keys.py:841–846` (`FILAMENT_TYPES`),
+  `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
+  `app/ui/print_settings_dialog.py:5605–5625`, `app/core/export/handover.py:2357–2382`.
+  **Fix (allgemein):** Materialart je Familie an einer Stelle in Lese- und Schreibrichtung
+  übersetzen; fehlt ein Herstellerfilament, Befund mit Herkunft „Solidon-Tabelle statt
+  Slicerprofil“ (Regel 14).
+  **Abnahme:** je erkanntem Drucker und Material (PLA, PETG, ABS, ASA, TPU) eine nicht leere
+  Vorwahl, an mindestens drei Bündeldruckern gemessen. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-6), `gcode\rest\`.
+
+<a id="rm-482"></a>
+
+- [ ] **RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0, `sovol-sv06` und `generic-220`.
+  `printers.toml` führt dort keine Beschleunigung, also gilt die Stufe (8000/5000 mm/s²); der
+  G-Code trägt 99 × `M204 S8000` hinter Curas eigenem `M201 X500 Y500`. Die Firmware deckelt auf
+  500, Curas Zeit und Solidons `gcode.print_time` rechnen mit 8000. Die Grenzen der Definition
+  (`machine_max_acceleration_*` als `value`) erreichen CuraEngine nicht. Trifft jeden Drucker
+  ohne Beschleunigung in `printers.toml`.
+  **Stellen:** `app/core/knowledge/data/printers.toml:492–511`,
+  `app/core/knowledge/data/print_settings.toml:65–66`, `app/core/export/slicer_keys.py`
+  (`CURA`, `CURA_MIRRORED`), `app/core/export/handover.py` (`_cura_machine`).
+  **Fix (allgemein):** Maschinenwerte aus dem Herstellerprofil in `printers.toml` (SV06: 1000
+  Druck, 500 Leerfahrt); ohne Maschinenwert keine Stufenbeschleunigung an Cura; Grenzen der
+  Definitionskette als Zahl an CuraEngine.
+  **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
+  Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
+
+<a id="rm-483"></a>
+
+- [ ] **RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13 (PrusaSlicer schreibt denselben Satz),
+  `prusa-mini`. `Cat_2.stp` endet mit „There is an object with no extrusions in the first layer.
+  Object name: …“; Solidon sagt nur „Der Slicer hat keine Druckdatei geschrieben“ mit
+  „Maschinenprofil prüfen“. Codex' Matrix führt den Fall zweimal.
+  **Stellen:** `app/core/export/handover.py:5717–5722` (nur `OUTSIDE_THE_VOLUME`, `NO_LAYERS`
+  erkannt), `:5193–5199`.
+  **Fix (allgemein):** Jeder Absagesatz der Prusa-Familie, der eine Ursache nennt, wird übersetzt
+  — hier „Die erste Schicht des Teils ist leer“ mit *Stelle zeigen*, *Auf das Bett legen*,
+  *Brim/Raft* und dem Teilnamen aus der Ausgabe.
+  **Abnahme:** `Cat_2.stp` und zwei weitere Teile mit leerer erster Schicht an PrusaSlicer und
+  SuperSlicer → eigene Meldung mit Handlungen. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-8), `gcode\rest\`.
+
+<a id="rm-484"></a>
+
+- [ ] **RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, alle Bündeldrucker. 25 Läufe der Matrix
+  melden auf der Konsole `print warning: Detected print stability issues … Consider enabling
+  supports`, `prusa__sovol-sv06__wuerfel__B` sogar „Empty layer between 0.48 and 0.92“ (erste
+  Objektschicht 0,44 mm über dem Raft) — im Bericht steht nichts davon. Solidon liest Warnungen nur
+  aus `; WARNING:`-Kommentaren.
+  **Stellen:** `app/core/slice/gcode.py:532`, `:1588–1599`, `app/core/export/handover.py:5228–5291`.
+  **Fix (allgemein):** Konsolenausgabe gelungener Läufe nach den Warnmarken der Familie lesen
+  (`print warning:` samt Folgezeilen) und als `gcode.warning` mit Herkunft Slicer melden, „Empty
+  layer“ als Fehlerstufe; Raft-Abstand (`raft_contact_distance`) zu `support.z_gap` oder als
+  eigener Pfad.
+  **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
+  ohne leere Schicht. Bauplan §29, Regel 14.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
+
+<a id="rm-485"></a>
+
+- [ ] **RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_polygon_with_contours`/`_nested`
+  entscheiden Material und Loch nach der Verschachtelungstiefe der Ringe und werfen die
+  Umlaufrichtung weg. Bei mehreren sich überlappenden Schalen (Tinkercad- und viele
+  Thingiverse-Exporte, Baugruppen als eine STL) wird eine Fläche, die nur von Ringen
+  verschiedener Teile umschlossen ist, als Material gezählt. Gemessen: Rahmen aus vier
+  überlappenden Balken 1600 statt 1200 mm² in allen Schichten, Ring aus acht Zylindern 1195,6
+  statt 892,9 mm², `parametric-laptop-riser.stl` 46 von 460 Schichten über 1 %, 5 über 10 %
+  falsch (z 65,10: 2694 statt 2146 mm²). Kontrollfälle ohne eingeschlossene Luft (Kreuz, Mini
+  Golf v17, Piratenschiff) stimmen. Falsch werden damit Schichtfläche, Inseln, Überhänge,
+  Stützraum, Brücken und Materialschätzung im Prüfbericht.
+  **Stellen:** `app/core/slice/analysis.py:1251–1362`, Einzelringweg `:1264–1275`.
+  **Fix (allgemein):** Richtung jedes Schnittsegments aus dem Dreieck übernehmen, gerichtete
+  Ringe mit Füllregel Positive vereinigen (Clipper2 in `manifold3d.CrossSection`, schon im
+  Paket, ganzzahlig und plattformgleich); für gültige Körper direkt `Manifold.slice(z)` (am
+  Laptop-Ständer 0,33–0,50 statt 3,4–4,1 s). Clipper2 auf den heutigen Ringen ohne Richtung
+  ist ebenfalls falsch.
+  **Abnahme:** Geometrietests zuerst: Rahmen (1200 mm², Fenster ohne Insel/Überhang), Ring
+  aus acht Zylindern, Laptop-Ständer oder ein kleiner Korpuszwilling (je Schicht gleich
+  `Manifold.slice` bis 1e-6 relativ); Kreuz, Mini Golf v17, Piratenschiff, Hohlkugel und
+  `aushoehlen-und-teilen.p3d` unverändert. Bauplan §22, §31; Regel 6.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-1), `bibliotheken\sonden\b9_*`, `b3_*`.
+
+<a id="rm-486"></a>
+
+- [ ] **RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_support_volume`/`_above_material`
+  vereinigen und ziehen die schwebende Säulenkontur Schicht für Schicht mit GEOS ab; über
+  Hohlräumen wächst sie auf Hunderttausende Punkte. Gemessen (F0FF, je zweimal):
+  `aushoehlen-und-teilen.p3d` 37,4–43,3 s mit GEOS, 0,062–0,068 s mit Clipper2, Stützraum
+  gleich auf 1,5e-12; CC2-Box und Screen-Cover gleich bis 2,4e-10, dort 0,01–0,17 s langsamer.
+  RM-405 b maß mit Vereinfachung 0,46 s und braucht dafür eine Toleranz; Clipper2 braucht
+  keine. Für RM-201: Clipper2 reist schon in manifold3d mit (BSL-1.0 in `licences.toml`), für
+  die Öffnung mit Gehrung ist es aber 2–7-mal langsamer als GEOS — dort bleibt die eigene
+  native Öffnung der Weg.
+  **Stellen:** `app/core/slice/analysis.py:481–645`, gleiche Bauart `:2991`,
+  `app/core/slice/findings.py:257`.
+  **Fix (allgemein):** Säulenkontur als `CrossSection` (Überhang `+`, Schicht darunter `-`,
+  Fläche über `area()`), Umwandlung einmal je Schicht, gerichtete Ringe aus RM-485
+  wiederverwenden; GEOS bleibt für die Öffnung.
+  **Abnahme:** `aushoehlen-und-teilen.p3d`, CC2-Box, Screen-Cover: Stützraum gleich auf 1e-9
+  relativ, Aushöhlbeispiel unter 0,5 s für `slice_body(detail="support")`, die einfachen
+  Modelle höchstens 0,2 s schlechter; neuer Weg in `test_platform_identity`. Bauplan §31.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
 
 ## Bedienung und Darstellung
 
@@ -4556,42 +4692,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und Schnitt teilen den Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei einer
   leicht geneigten Mündung. Die native Viewport-Abnahme bleibt dem Release vorbehalten.
 
-<a id="rm-342"></a>
-
-- [ ] **RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1.**
-  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-C.md`, `bericht-D.md`), je einzeln abnehmbar:
-  - **C-N1/D-N3, `42253ae03` (Claude), `b1d5381ce` (Codex):** *Gegenstücke setzen* zeigt „Paar“
-    ohne und „Durchmesser:“, „Länge:“, „Form:“, „Spiel:“, „Fase:“ mit Doppelpunkt
-    (`app/ui/counterpart_dialog.py:95` gegen `:137` `tr("{name}:", …)`; `fenster.md:387`). Fix:
-    `self.form.addRow(str(entry.title), field)`, Katalogschlüssel `"{name}:"` entfernen, wenn
-    unbenutzt. Abnahme: Test der Beschriftungen ohne Doppelpunkt.
-  - **D-N1, `ae17a2c70` (Codex):** Im Merkmalfenster bleibt der Ablehnungssatz stehen, wenn sein
-    Feld ausgeblendet wird (`app/ui/panels.py:8101–8104`, `_follow_conditions` `:8181–8224`
-    schaltet nur Feld und Beschriftung). Fehlerfall: *Zum Langloch ziehen* X = 1500 mm → Satz,
-    dann Maßgruppe von *Bohrung ändern* → Satz ohne Feld. Fix: `row.refusals[name]` mitschalten.
-  - **D-N2, `d8e37581a` (Codex):** Der Sperrgrund an *Slicen*/*Im Slicer öffnen* nennt das Feld
-    nicht („95 °C liegt über der Obergrenze 90 °C.“; `_first_numeric_refusal`
-    `print_settings_dialog.py:6803`, `labels.py:503–507`). Fix: `tr("{name}: {value}", …)` mit
-    `setting_title(path)`, optional `_lift(path)` beim Klick.
-  - **D-N5, `88bb41ed8`, `c59ed62ca` (Codex):** Die natürliche Breite samt zugeklappter Zeilen
-    wird in vier Fassungen gerechnet (`settings_dialog._reserve_advanced_width`,
-    `first_run._grow_to_content`, `op_dialog` mit `form_natural_width`, Druckdialog
-    `_room_for_tabs`; `fenster.md:379–380` nennt `form_natural_width`). Fix: eine gemeinsame
-    Funktion in `style.py`.
-  - **D-N6, `ba8c08b14` (Claude):** fr „l’imprimante“, „n’a pas pu … l’attente“, it
-    „nell’elenco“ mit typografischem Apostroph (`uebersetzung.md`: neue Einträge gerade). Fix:
-    gerade schreiben; der Test prüft heute nur das Mischen innerhalb eines Eintrags.
-  - **C-N2, `0edb9cf3e` (Codex):** Das Entdoppeln der Paletten-Tooltips
-    (`app/ui/command_palette.py:503–512`) hat keinen Test. Fix: Eintrag mit `doc == title` und
-    mit `reason == doc`, Tooltip zeilengenau.
-  - **D-N7, `e969f88ce` (Claude):** Listenhaken (`style.check_files`, `_check_rules`) und runde
-    Farbpunkte (`swatch(..., ring_when_empty=…)`) haben keinen Test.
-  **Stand 02.10.2026:** C-N1, D-N2, C-N2 und D-N7 sind mit `7c8bd7892` in main (Claude); offen D-N1 und D-N5.
-  Bauplan §19, §4.1, §2.7.
-  Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
-  Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
-  **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
-
 <a id="rm-358"></a>
 
 - [ ] **RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
@@ -4620,32 +4720,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
   `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
   Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
-
-<a id="rm-359"></a>
-
-- [ ] **RM-359 — Weg 2: Reste aus der Gebietsprüfung.**
-  Review 02.10.2026, Gebietsprüfung Weg 2, am HEAD `6ce767031`.
-  - **F5 — Zwei Grundkörper mit benannten Maßen ergeben doppelte Leistenzeilen** („Breite, Tiefe,
-    Höhe“ zweimal, ohne Körperbezug). `main_window.py:17973–17990`, Anzeige `panels.py:3596`,
-    `:3630`. Fix: bei Doppelung trägt der Titel den Körpernamen. Sonde `w2_fenster1.py` (3).
-  - **F6 — *Maße als Parameter anlegen* fehlt beim Ändern eines Grundkörpers** (`edit_operation`,
-    `main_window.py:17875–17900`, ohne `offer_naming`); `grenzen.md` verlangt den Haken in jedem
-    Dialog der Kategorie `primitive`. Fix: durchreichen, Parameter und Schritt als eine
-    Transaktion. Sonde `w2_nachtraeglich.py`.
-  - **F7 — Der Tooltip der Befundzeile nennt Codeadressen** („Feld: width · Bedingung: maximum ·
-    Höchstwert: 1000,0“, ohne Einheit). `_value_lines` (`panels.py:1301–1310`) filtert nicht, der
-    Zwilling `spoken_values` (`dialogs.py:3174–3193`, `_ADDRESSES`) schon. Sonde `w2_fenster4.py`.
-  - **F8 — Kein Schieberegler bei begrenztem Bereich**, den §13 verlangt (`panels.py:3601–3630`);
-    eine Gegenentscheidung ist nicht belegt. Ein Zug ist genau eine Transaktion.
-  - **F9 — Die Felder der Parameterleiste haben keinen Namen**: leerer `accessibleName`, kein
-    Buddy; Einheitenkästen dreimal „Einheit“, „…“ dreimal „Parameter ändern“
-    (`panels.py:3399–3409`, `:3480–3516`). Sonde `w2_namen.py`.
-  - **F11 — *Parameter anlegen* zeigt fünf Felder vorn** ohne *Weitere Einstellungen*
-    (`dialogs.py:654–662`), §2.4; die leer vorbelegten Grenzen machen RM-354 erst möglich.
-  **Abnahme:** je Rest ein Test (sechs verschiedene Titel bei zwei Quadern; Haken beim Ändern und
-  ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
-  doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
-  Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
 
 <a id="rm-366"></a>
 
@@ -4847,48 +4921,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: zwei ausgelassene Kanten → zwei auffindbare Orte; Satz ohne „OpenCASCADE“;
   Laufzeit am pegboard-goot im Budget. Bauplan §2.7, §2.8, §31.
   Belege: `review-e3dff1907.md`, Sonde `r3_rundungsgruppe.py`.
+  Ergänzung Bibliotheksprüfung 02.10.2026: Bisektion über Konturen (`NbContours`) statt über Kanten braucht an `pegboard-10inch-crimper-v5.step` 5,6–6,2 s statt 100–151 s und rundet 54 statt 43 Kanten, an `pegboard-gs-100-v2.step` 1,8–2,2 s statt 226–286 s; `NbFaultyContours` allein taugt nicht. Beleg `bibliotheken\befunde.md`.
 
-<a id="rm-431"></a>
-
-- [ ] **RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten.**
-  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-336 (archiviert). *Im Slicer öffnen* ohne
-  Druckerprofil ist jetzt frei und ausführbar.
-  - **PrusaSlicer gesperrt (mittel, Rückschritt gegenüber 0.5.1, seit `48ffcf145`):** Allgemeiner
-    Drucker mit PrusaSlicer-Bündel — das Profil bleibt von selbst leer, der Hinweis sagt „… es gelten
-    Solidons Werte …“, *Slicen* ist trotzdem gesperrt mit „Wählen Sie einen Drucker aus der Liste.“
-    Ursache: Rückfallsatz in `_machine_selection_issue` (`app/ui/print_settings_dialog.py:6328`) —
-    `_profile_gap()` ist leer, die Funktion meldet trotzdem.
-  - **Quittung überschrieben:** Nach dem Öffnen steht „An … übergeben — das Fenster gehört jetzt
-    Ihnen.“, danach „Dieser Slicer braucht ein Druckerprofil …“ (`_slice_finished` →
-    `_show_slicer_state`, Zweig `elif reason:`, `:6469–6482`).
-  - **Testlücke:** Der Test ruft `_open_in_slicer` nie auf; die Mutation „nur das Öffnen fragt das
-    Profil“ bleibt grün.
-  **Fix:** Auf dem Rechen-Weg nur `_profile_gap()` fragen; Quittung stehen lassen; Test über
-  `_open_in_slicer`.
-  **Abnahme:** Allgemeiner Drucker mit PrusaSlicer → *Slicen* frei; nach dem Öffnen bleibt die
-  Quittung; Mutation rot. Bauplan §29, §2.1. Belege:
-  `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`, Sonden `v5u_test_rm336.py`.
-
-<a id="rm-432"></a>
-
-- [ ] **RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder.**
-  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-341 (archiviert). Brim, Skirt, Raft und
-  „keine“ zeigen jetzt die richtigen Zeilen; Orca ist richtig.
-  - **„Automatisch“ (mittel):** `handover._adhesion_for` (`app/core/export/handover.py:863–889`)
-    macht daraus die Art aus Solidons Materialtabelle (PLA, PETG, TPU → Skirt). Gemessen mit PLA:
-    PrusaSlicer bekommt `skirts 2`, `brim_width 0`, Cura `skirt_line_count 2`, `brim_width 0`; der
-    Dialog zeigt nur die wirkungslose Brim-Breite und versteckt die wirksamen Skirt-Felder; die
-    Suche schickt zu „Ändern Sie die Auswahl …“.
-  - **Alter Test rot (Release-Tor):** `test_disabled_support_and_bed_adhesion_hide_their_detail_rows`
-    (`tests/test_print_settings_ui.py:2094`) verlangt bei Brim alle vier Zeilen.
-  - **Zweite Tabelle (niedrig):** `ADHESION_DETAILS` steht handgeschrieben neben
-    `ADHESION_MEASURES`, `slicer_keys.ADHESION_KEYS` und der Auto-Brim-Ausnahme in
-    `handover._only_chosen_adhesion`. Der UI-Test bezieht seinen Sollwert aus `inactive_paths` selbst.
-  **Fix:** Sichtbarkeit aus der Art, die tatsächlich übergeben wird (je Slicer); eine Quelle für alle
-  Tabellen; alten Test an die Entscheidung anpassen; Sollwert im Test von außen.
-  **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
-  die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
-  `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
 <a id="rm-451"></a>
 
 - [ ] **RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
