@@ -32971,7 +32971,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   [RM-279](#rm-279). (4) `Viewport.frame_next_scene` rahmt nach *Modell teilen*
   einmal auf alle Teile; am Organizer ×2,3 mit sechs Teilen stehen 100 statt 29 % im Bild,
   über alle fünf Teilungswege (`9f821c70c`). Nach *Skalieren* bleibt die Kamera weiter
-  stehen; das steht als [RM-280](ROADMAP.md#rm-280). **KUNDE-08, entschieden: nein.** Der
+  stehen; das steht als [RM-280](#rm-280). **KUNDE-08, entschieden: nein.** Der
   Hinweis „Nicht jedes Maß der Zeichnung ist festgelegt …“ kommt nur noch an einer
   Zeichnung, die mindestens ein Maß trägt und trotzdem wandern kann. Wer ganz ohne Maß
   zeichnet, druckt, was er sieht, und las den Satz im Prüfbericht wie einen Mangel ohne
