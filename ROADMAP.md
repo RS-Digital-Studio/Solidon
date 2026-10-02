@@ -88,9 +88,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | Neigung, Ebene parallel zu einer Fläche und exakte Körper gebaut (Claude, in main mit `52cc9fd66`); offen: Ebene durch drei Punkte — braucht die Stellenwahl im Bild |
+| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Neigung, Ebene parallel zu einer Fläche und exakte Körper gebaut (Claude, in main mit `52cc9fd66`); offen: Ebene durch drei Punkte — braucht die Stellenwahl im Bild |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
-| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | Grenze aus dem float32-Raster, Befund `pattern.facets_unaligned` mit *Reparieren*, Rechnung je Ebenengruppe (Claude, in main mit `c117720b3`); Ø 80, CAD-Nullpunkt in der Ecke und feiner Träger frei von Selbstschnitten. Offen: fern vom Ursprung (110, 110) liegen die Facetten danach eben, an den Rillen bei 15° und 165° bleiben vier Selbstschnitte — Ursache im Stopfen oder der Vereinigung, festgehalten als strenges xfail |
+| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-m`). Grenze aus dem float32-Raster, Befund `pattern.facets_unaligned` mit *Reparieren*, Rechnung je Ebenengruppe (Claude, in main mit `c117720b3`); Ø 80, CAD-Nullpunkt in der Ecke und feiner Träger frei von Selbstschnitten. Offen: fern vom Ursprung (110, 110) liegen die Facetten danach eben, an den Rillen bei 15° und 165° bleiben vier Selbstschnitte — Ursache im Stopfen oder der Vereinigung, festgehalten als strenges xfail |
+| [RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Review 02.10.: Nachbau Modell 1 wird 24,7 statt 20 mm breit; Korpusabnahme an drei Haltern, Kundenweg zum exakten Halter |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
@@ -2766,6 +2767,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   rot. Bauplan §21, §25, Regeln 6, 17.
   Belege: `F:\solidon-review-reports\review-7f0de659d.md`, Sonden `r2_rm225_*.txt`,
   `r2_gegenprobe_axial.txt`, `r2_ausrichtung_laufzeit.txt`.
+
+<a id="rm-443"></a>
+
+- [ ] **RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test.**
+  Nachprüfung des Reviews am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben
+  (Bereichstest aller vier Halter). Offen: Der Nachbau von Modell 1 gelingt, die Rückwand wird
+  aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; die
+  Korpusabnahme an drei Haltern ist nicht belegt; der Fünf-Klick-Weg steht nur im Archivtext;
+  exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
+  **Abnahme:** Nachbau Modell 1 mit 20 mm Rückwand; drei Halter aus dem Korpus nachgebaut;
+  Fünf-Klick-Weg am echten Fenster; exakter Halter über den Kundenweg. Bauplan §24, §2.2.
+  Belege: `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`.
 
 <a id="rm-405"></a>
 
