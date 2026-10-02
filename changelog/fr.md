@@ -35,6 +35,7 @@ dans `website/version.json`.
 - Vous pouvez désormais générer le fichier d'impression directement depuis Solidon avec Creality Print 7.2 et 7.3.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
 - Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
+- Les imprimantes dont l'origine n'est pas dans le coin du plateau, comme delta, BIBO ou Dremel, reçoivent les pièces là où Solidon les pose. Avant, elles étaient au bord ou réorganisées.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
 - Si vous choisissez brim, skirt ou raft dans les réglages d'impression, seules les cotes de ce type de plateau s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
@@ -45,6 +46,7 @@ dans `website/version.json`.
 - Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
+- L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
 
 ### Perçages, trous oblongs et découpe
 
@@ -86,6 +88,9 @@ dans `website/version.json`.
 ### Utilisation et système
 
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
+- L'export, « Trancher » et « Ouvrir dans le slicer … » reçoivent toujours le calcul fin, pas la vue plus grossière de la fenêtre. Congés et cônes arrivent ainsi en pleine résolution.
+- Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
+- La barre des paramètres refuse une cote hors de sa limite au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
 - Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
