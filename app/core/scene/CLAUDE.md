@@ -132,6 +132,9 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   Das ist Datenidentität ohne geometrische Näherung oder Rundung.
   Rohe Operationsbefunde bleiben unverändert,
   auch beim erneuten Abschluss aus dem Cache.
+  `_finding_from` übernimmt `location` und `outline` aus einer Ausnahme als
+  räumliche Felder und lässt sie aus den Anzeigewerten heraus. So führt
+  `as_error` beim Rückweg zu den tatsächlichen Punkten statt zu deren Text.
 - **Darstellungswechsel** melden sich erst nach vollständig vorbereiteten
   Ausgaben; unveränderte Eingangskennungen belegen Nachfolger (ein neuer Deckel
   ist kein Verlust seines Trägers); ganz vernetzt bekommt jedes verbrauchte

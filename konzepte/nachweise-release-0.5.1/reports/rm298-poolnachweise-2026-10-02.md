@@ -2,6 +2,13 @@
 
 Stand: 02.10.2026. Dieser Bericht hält die tatsächlich integrierte Teilkorrektur fest. Die Ausgangsbefunde stehen in [review-hilfsprozess.md](review-hilfsprozess.md), der verbleibende Auftrag in [RM-298](../../../ROADMAP.md#rm-298).
 
+**Historischer Umfang:** Dieser Bericht beschreibt die Teilkorrektur unter
+`a45730c79`. In diesem Stand konnte ein erst nach der Stoppfrist beendeter Helfer
+den Pool weiter sperren; erst `shutdown` hob die Sperre auf. Der datierte
+RM384-Anschluss am Ende dieses Berichts beschreibt die später integrierte
+Korrektur. Die ursprünglichen 80 Fälle und das damalige Tor belegen diesen
+späteren Anschluss nicht.
+
 ## Integration
 
 | Nachweis | Tatsächlicher Stand |
@@ -61,3 +68,33 @@ Ruff, Formatprüfung und Diffcheck waren im Nachgang jeweils Exit 0. Das zentral
 Dieser Nachweis schließt **RM-298(a)**. Er schließt nicht den Gesamtpunkt. POSIX-Speicherbesitz/ENOSPC/SIGBUS (b), die restlichen breiten Ausnahmefänge (c), aktive Elternbindung/OS-Priorität und wirkliche Release-Leistungsmessungen (d), `evaluate_now`-Abbruch (e) sowie die Paketrauchtestfrist (f) brauchen ihre eigenen Nachweise.
 
 Insbesondere bestätigt der alte Eltern-Endetest nur ein untätiges Kind. Er belegt keinen Jobobjekt-Abbau während laufender Arbeit. Die bestehenden Hauptfaden-Leistungsmarken belegen keine Auslagerung. Linux, macOS und das gebaute Paket wurden in dieser Entwicklungsprüfung nicht ausgeführt.
+
+## RM384-Anschlussnachtrag 02.10.2026
+
+Die spätere Korrektur `686abf9e63ed8708d15fdc642add170cb1d2c14f` ist auf dem tatsächlichen
+`origin/main` bestätigt (`4cf460e87f8d93e2d950602c9fe25ce34e6b5eb9`; getrennte Abfragen von `HEAD`, `origin/main` und `git ls-remote origin refs/heads/main` ergaben am 02.10.2026 um 11:52:21 UTC denselben vollständigen Stand; `git merge-base --is-ancestor` für den Fixcommit gegen alle drei Ziele jeweils Exit 0).
+Nach einem fehlgeschlagenen Stopversuch bleibt ein lebender Helfer weiterhin
+im Besitz und sperrt. Endet er danach, sammelt die nächste öffentliche
+`run`-/`take`-Anfrage den Rest über den echten Stopweg ein, ohne dass zuvor
+`shutdown` aufgerufen werden muss. Dauerhafte Absagegründe und die
+Generationsgrenze bleiben erhalten; der Konstruktoranschluss bewahrt Ursache,
+Startkontingent und einmalige Freigabe.
+
+Der [portable RM384-Bericht](rm384-spaetes-helferende-2026-10-02.md) enthält die
+getrennten Vorher-/Nachher-/Fehlvariantenbelege und die verifizierte Integration.
+Der [Archivabschluss](../../../ROADMAP-ARCHIV.md#rm-384) bewahrt den fremden
+Vorherbefund am Stand `7f0de659d`. Das endgültige Wiederholungstor am Stand
+`commit-tor-abschlussrunde-47-v2-final` bestand mit 19.269 bestandenen Fällen und
+62 Überspringungen; Suite/Ruff/Format/mypy:
+Exit 0 / Exit 0 / Exit 0 /
+Exit 0. Belege: `bash .claude/scripts/suite-getrennt.sh`: 19.269 bestanden, 62 übersprungen, 412,39 s, Exit 0; `python -m ruff check .`, `python -m ruff format --check .` und `python -m mypy` jeweils Exit 0. Zentraler Rohlog und die vier Exit-JSONs sind lokal unter `tmp/review-seit-0.5.1-2026-10-01/commit-tor-abschlussrunde-47-v2-final/` erhalten. Dieser zentrale Torlauf erzeugt kein JUnit; die lokalen JUnit-Belege `kernel-file-constructor-final.xml`, `new-cases-constructor-final.xml`, `constructor-cause-before.xml`/`constructor-cause-after.xml` und `counter-final-*.xml` gehören getrennt zu den im Bericht ausgewiesenen Kontrollfällen;
+Prüfstandszusicherung: zentraler Vorher-/Nachhervergleich `changed_during_gate: []`; bei der getrennten Integrationsprüfung um 11:52:21 UTC stimmten übernommener Git-Blob und Arbeitsbaum für `kernel_process.py` und `test_kernel_process.py` bytegleich zu den im portablen RM384-Bericht vollständig genannten finalen lokalen SHA256.
+Unabhängiger Dokumentabschlussreview: 02.10.2026: unabhängig freigegeben nach Abgleich der tatsächlichen Git-/Tor-/JUnit-Belege und aller neun eigenen Hunks; beide Dokumentnachgänge korrigiert, Nachprüfung ohne weitere Befunde.
+
+Die ursprünglichen Hashes `9a265c6d...` und `6c4d432f...` sowie die 80 Fälle
+und 19.033/62 aus diesem Bericht bleiben historische Nachweise von RM298(a).
+Sie werden nicht durch die späteren RM384-Werte überschrieben und beweisen
+keine echte OS-Killlatenz. Native Windows-Fristüberschreitung und tatsächlich
+verspätetes OS-Kindende, POSIX-/ENOSPC-/SIGBUS-/Crashbereinigung, Linux/macOS,
+Paket- und Rauchtestfrist, Fenster-/Renderer- sowie §31-Leistungsabnahmen
+bleiben ausdrücklich offen. RM298 als Gesamtpunkt bleibt offen.
