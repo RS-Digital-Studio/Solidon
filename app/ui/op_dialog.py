@@ -1690,6 +1690,7 @@ class OperationDialog(QDialog):
         source_objects: Sequence[str] = (),
         edges: Mapping[str, str] | None = None,
         offer_naming: bool = False,
+        naming_default: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1702,7 +1703,8 @@ class OperationDialog(QDialog):
         :meth:`names_dimensions` liest ihn. Der Dialog bietet ihn nur an, wo
         das Fenster es verlangt — bei den Grundkörpern, deren Maße eine
         Vorlage ausmachen, nicht bei einer Bohrung, die ein Maß *am* Körper
-        ist.
+        ist. ``naming_default`` ist sein Anfangszustand — das Fenster reicht
+        die letzte Wahl des Kunden durch (RM-369).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1728,6 +1730,7 @@ class OperationDialog(QDialog):
         QShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents), self, self._ask_manual)
         self._editors: dict[str, QWidget] = {}
         self._feature_focus = ""
+        self._first_focus_given = False
         self.source_objects = tuple(source_objects)
         self._target_features = dict(target_features or {})
         self._couplings: list[Callable[[], None]] = []
@@ -2039,6 +2042,7 @@ class OperationDialog(QDialog):
             # vorn, direkt unter den Maßen, die er benennt (Entscheidung
             # Robert, 14.09.2026).
             naming = RowCheckBox(self)
+            naming.setChecked(naming_default)
             front.addRow(str(tr("Maße als Parameter anlegen")), naming)
             caption = front.labelForField(naming)
             caption_toggles(caption, naming)
@@ -2172,9 +2176,11 @@ class OperationDialog(QDialog):
         self._hide_internal_fields()
         # Auch eine Zeichnung, die erst eine Wahl verlangt (``depends_on``,
         # siehe :meth:`_missing_sketch`): Der Knopf folgt ihr, sobald die Wahl
-        # sie zur Eingabe macht.
+        # sie zur Eingabe macht. Und ein Pflicht-Ziel: Der Knopf gibt frei,
+        # sobald es gewählt ist, nicht erst mit dem nächsten Vorschaubild.
         if self.spec.name == "apply_texture" or any(
             (entry.kind == "material" and entry.required)
+            or (entry.targets_feature and entry.required)
             or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
             for entry in self.spec.params.spec()
         ):
@@ -2277,7 +2283,7 @@ class OperationDialog(QDialog):
             or no_count
             or missing_sketch
             or missing_material
-            or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
+            or (self._target_reason() if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (blocked or "")
         )
@@ -2578,6 +2584,47 @@ class OperationDialog(QDialog):
             if isinstance(editor, QComboBox) and not editor.currentData():
                 return True
         return False
+
+    def _target_reason(self) -> str:
+        """Warum ein leeres Pflicht-Ziel *Übernehmen* sperrt (RM-416).
+
+        Gibt es keinen zweiten Körper mit Merkmalen, fehlt das Ziel wirklich.
+        Gibt es ihn, fehlt nur der Klick — dann sagt der Satz, wohin.
+        """
+        offered = any(
+            isinstance(editor, QComboBox)
+            and any(editor.itemData(index) for index in range(editor.count()))
+            for entry in self.spec.params.spec()
+            if entry.targets_feature and entry.required
+            for editor in (self._editors.get(entry.name),)
+        )
+        if not offered:
+            return tr("Dafür braucht es ein Merkmal an einem zweiten Körper.")
+        names = {self._object_names.get(source, "") for source in self.source_objects}
+        if len(names) == 1 and (name := names.pop()):
+            return tr("Klicken Sie im Bild auf die Fläche, an die {name} soll.", name=name)
+        return tr("Klicken Sie im Bild auf die Fläche, an die der Körper soll.")
+
+    def _focus_first_empty_feature(self) -> None:
+        """Der Erstfokus gehört dem ersten leeren Pflichtfeld für ein Merkmal.
+
+        Ohne das gibt Qt beim Anzeigen dem ersten Feld der Kette den Fokus —
+        bei *An Merkmal ausrichten* dem schon gefüllten Quellmerkmal —, und
+        der erste Bildklick überschrieb dieses statt das leere Ziel zu füllen
+        (RM-416). Gilt erst am gezeigten Dialog; ungezeigt füllt
+        :meth:`take_feature` ohnehin das erste leere Pflichtfeld.
+        """
+        for entry in self.spec.params.spec():
+            if not entry.required or not (
+                entry.kind in ("feature", "features") or entry.targets_feature
+            ):
+                continue
+            editor = self._editors.get(entry.name)
+            if editor is None or editor.isHidden() or not self._feature_field_empty(entry.name):
+                continue
+            editor.setFocus(Qt.FocusReason.OtherFocusReason)
+            self._feature_focus = entry.name
+            return
 
     def _hide_internal_fields(self) -> None:
         """Ein Migrationsmarker reist mit dem Schritt, steht aber nicht im
@@ -3589,6 +3636,9 @@ class OperationDialog(QDialog):
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         super().showEvent(event)
+        if not event.spontaneous() and not self._first_focus_given:
+            self._first_focus_given = True
+            self._focus_first_empty_feature()
         self._queue_refit("initial")
 
     def place_beside(self, anchor: QWidget | None) -> None:
@@ -3762,6 +3812,10 @@ class OperationDialog(QDialog):
         nichts zu benennen, und der Aufrufer braucht keinen zweiten Fall.
         """
         return self._naming is not None and self._naming.isChecked()
+
+    def offers_naming(self) -> bool:
+        """Ob der Dialog den Haken *Maße als Parameter anlegen* trägt."""
+        return self._naming is not None
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""

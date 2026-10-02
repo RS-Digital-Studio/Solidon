@@ -17814,6 +17814,8 @@ class MainWindow(QMainWindow):
                 # Projektparameter an — `_named_dimensions` baut sie beim
                 # Übernehmen, in derselben Transaktion wie den Schritt.
                 offer_naming=offers_naming(spec),
+                # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
+                naming_default=self.settings.name_dimensions,
             )
             dialog.spoolChosen.connect(remember_spool)
             if seat is not None:
@@ -17903,6 +17905,14 @@ class MainWindow(QMainWindow):
                         )
                 count_before = len(self.session.project.document.ops)
                 self._commit_preview_order(order)
+                if dialog.offers_naming() and (
+                    dialog.names_dimensions() != self.settings.name_dimensions
+                ):
+                    # **Gemerkt wird beim Übernehmen**, nicht beim Klick auf
+                    # den Haken: Wer ihn nur ausprobiert und abbricht, hat
+                    # nichts entschieden (RM-369).
+                    self.settings.name_dimensions = dialog.names_dimensions()
+                    self._store_settings()
                 operations = self.session.project.document.ops
                 if picked.name == "split_pinned" and len(operations) > count_before:
                     self._queue_split_reveal(operations[-1].outputs)

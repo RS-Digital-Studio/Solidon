@@ -54,11 +54,14 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Dos placas que se tocan siguen siendo un cuerpo en un taladro y conservan su material, al estirarlo, cambiarlo, desplazarlo o cerrarlo. Un pasador encima se queda en su sitio.
 - Estirar un taladro que atraviesa dos cuerpos ya no informa de que el cuerpo se rompe cuando no ocurre.
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
+- En el historial de un cuerpo STEP se pueden reordenar pasos o insertar uno antes, aunque un paso posterior se refiera a un taladro. La referencia sigue al taladro.
+- Un taladro desplazado o duplicado con una dirección nueva sigue exacto en un cuerpo STEP.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
 - Recortar corta ahora también en ángulo: arriba elige el «Plano»: en un eje con inclinación, paralelo a una cara, por una arista o por tres puntos que marca en la vista.
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
+- Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.
 
 ### Modelar, texto y dibujo
 
@@ -87,6 +90,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- La casilla «Crear las medidas como parámetros» viene marcada la primera vez y luego recuerda su última elección, también tras reiniciar.
 - Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
 - La exportación, «Laminar» y «Abrir en el slicer …» reciben siempre el cálculo fino, no la vista más gruesa de la ventana. Redondeos y conos llegan al archivo con resolución completa.
 - Una exportación durante un cálculo en curso espera al resultado nuevo. Antes el archivo podía llevar todavía la medida antigua.
@@ -102,7 +106,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La ventana «Novedades» y el sitio web muestran el resaltado como texto destacado en vez de asteriscos.
 - El inglés y el español usan una sola palabra para la holgura de ajuste, y los mensajes ponen la puntuación que pide cada idioma.
 - Los espacios llegan a todos los campos de texto, también al cuestionario de opinión y al chat, mientras un diálogo muestra su vista previa.
-- Un aviso que se refiere a un paso lo abre para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
+- Algunos avisos que se refieren a un paso lo abren para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
 - La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
 

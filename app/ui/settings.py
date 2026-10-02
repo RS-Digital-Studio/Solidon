@@ -244,6 +244,12 @@ class UiSettings:
     spacemouse_seen: bool = False
     """Ob je ein Gerät gemeldet hat. Die Einstellungszeile erscheint ab dann
     und bleibt — wer das Gerät abzieht, findet sie sonst nicht wieder."""
+    name_dimensions: bool = True
+    """Wie der Haken *Maße als Parameter anlegen* zuletzt stand (§13, RM-369).
+
+    Beim ersten Start an, danach die letzte Wahl beim Übernehmen: Wer Weg 2
+    geht, will seine Maße jedes Mal benannt haben und musste den Haken bisher
+    bei jedem Grundkörper neu finden (Entscheidung Robert, 02.10.2026)."""
 
     def remember(self, path: Path) -> None:
         text = str(path)

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QApplication, QDialogButtonBox, QListView, QListWi
 
 from app.core.knowledge.parts import PARTS
 from app.ui.catalog import TILE_WIDTH, PartCatalog
+from app.ui.panels import open_section
 
 
 def catalog_names(catalog: PartCatalog) -> set[str]:
@@ -373,6 +374,9 @@ def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication)
     """
     catalog = PartCatalog()
     try:
+        # Knopf und Grund stehen im Abschnitt *Bausteine verwalten*, der seit
+        # 48ffcf145 zugeklappt beginnt; wer den Knopf sucht, öffnet ihn.
+        open_section(catalog._management)
         catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
         assert catalog.save_hint.isVisibleTo(catalog), "der Grund steht sichtbar da"
         assert "gerechnet" in catalog.save_hint.text()
@@ -592,6 +596,8 @@ def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     catalog = PartCatalog()
     try:
         catalog.show()
+        # Der Knopf steht im zugeklappten Abschnitt *Bausteine verwalten*.
+        open_section(catalog._management)
         QApplication.processEvents()
         assert not catalog.share_part.isEnabled(), "ohne Auswahl gibt es keine Datei zu exportieren"
         leer = catalog.share_part.toolTip()

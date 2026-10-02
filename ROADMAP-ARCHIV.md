@@ -31,14 +31,19 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
+| 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
+| 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
 | 2026-10-02 | [RM-453: *Eingabe korrigieren* führt einen zusammengesetzten Ausdruck in den Schritt (02.10.2026)](#rm-453-eingabe-korrigieren-führt-einen-zusammengesetzten-ausdruck-in-den-schritt-02102026) |
+| 2026-10-02 | [RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)](#rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026) |
 | 2026-10-02 | [RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)](#rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026) |
 | 2026-10-02 | [RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)](#rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026) |
 | 2026-10-02 | [RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)](#rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026) |
 | 2026-10-02 | [RM-447: Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren (02.10.2026)](#rm-447-regression-gegenüber-051-ein-hauptmaß-über-der-feldgrenze-aus-einer-datei-lässt-sich-in-der-leiste-nicht-mehr-korrigieren-02102026) |
+| 2026-10-02 | [RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)](#rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -36601,3 +36606,111 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Ausnahme im RM-386-Test entfernt. Bauplan §21.
 
 **Abschluss:** Eine einzelne Bohrung oder ein Langloch rechnet beim Versetzen und Verdoppeln mit Richtung am exakten Körper exakt (`_exact_place_oriented_cavity`: alte Stelle schließen, am Ziel mit gedrehtem Werkzeug schneiden), die um 10° gekippte Bohrung genau π r² · 20 / cos 10°; was weiter am Netz rechnet (Senkbohrungen, Zapfen), ist danach als Netz ausgewiesen, und die Auswertung meldet `evaluate.exact_became_mesh`. Ausnahme im RM-386-Test entfernt; vier Fälle vor dem Fix rot. Umgesetzt von Claude, in main mit `a6bcd4652`; Entwicklungstor auf dem zusammengeführten Stand grün.
+## RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)
+
+<a id="rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026"></a>
+<a id="rm-455"></a>
+
+**RM-455 — Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen.**
+Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenstertests am Stand
+  `origin/main`: Seit `48ffcf145` (29.09.2026) stehen *Zum Bearbeiten öffnen …*, *Baustein als Datei
+  weitergeben …* und *Aus Bibliothek entfernen* im Abschnitt *Bausteine verwalten*, der zugeklappt
+  beginnt. Wer seinen eigenen Baustein wählt, sieht keinen dieser Knöpfe; in 0.5.1 lagen sie offen
+  (Rückschritt gegenüber 0.5.1). Vier Fenstertests waren deshalb rot, auch am Ausgangsstand:
+  `test_catalog_ui.py::test_opening_a_part_for_editing_puts_its_steps_into_the_window`,
+  `::test_the_locked_save_button_shows_its_reason_beside_it`,
+  `::test_part_file_export_stays_shut_and_says_why` und
+  `test_shared_hosting_removed.py::test_local_part_file_runs_through_the_ui_buttons`.
+  Bauplan §24.3, §2.6.
+
+**Abschluss:** Wählt der Kunde einen eigenen Baustein (Rezept oder eingelesen), klappt *Bausteine verwalten* auf (`PartCatalog` über `open_section`); ein eingebauter lässt den Abschnitt, wie er ist. Die beiden Hinweistests öffnen den Abschnitt jetzt selbst, weil Knopf und Grund dort stehen. `test_catalog_ui.py` und `test_shared_hosting_removed.py` mit Fensterfällen: 45 bestanden. Fenstersonde am echten Fenster (Katalog über *Bausteine*, Klicks mit `QTest` auf die Kacheln): eingebauter Baustein lässt die Verwaltung zu, eigener zeigt Bearbeiten, Weitergeben und Entfernen, 9 von 9 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).
+## RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)
+
+<a id="rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026"></a>
+<a id="rm-369"></a>
+
+**RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 2).
+  Heute steht der Haken bei jedem Grundkörper aus (`app/ui/op_dialog.py:1916–1927`, angeboten
+  über `offers_naming`, `main_window.py:1671`, `:17494`; Entscheidung Robert 14.09.2026 zur Lage
+  vorn); wer Weg 2 geht, muss ihn jedes Mal finden.
+  **Ablauf:** Der Haken übernimmt den zuletzt gesetzten Zustand (Nutzereinstellung, §38-Ort), beim
+  ersten Start an. Ändern ist eine Nutzergeste, keine Rückfrage.
+  **Stellen:** `op_dialog.py:1916ff.` (Vorgabe setzen, Zustand beim Übernehmen speichern),
+  Einstellungen (`app/ui/settings_dialog.py` bzw. QSettings-Schlüssel), der bestehende Test, der
+  „aus“ zusichert (in `tests/test_ui.py`/`tests/test_op_dialog*.py` suchen), Handbuchstelle
+  `app/core/guides.py:520–526` („haken Sie … an“) an die neue Vorgabe anpassen; Kataloge.
+  **Abnahme:** Test: erster Grundkörper → Haken an; abgewählt und übernommen → nächster
+  Grundkörper → Haken aus; Neustart behält die Wahl. Bauplan §13, §2.4 („gute Vorgabe“).
+  **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
+
+**Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)
+
+<a id="rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026"></a>
+<a id="rm-427"></a>
+
+**RM-427 — Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-379 (archiviert). Unter dem Budget ist
+  *Weich verschmelzen* jetzt hashgleich, darüber gröber mit `blend.draft`.
+  - **Vorgabe „jede Op mit Entwurfsfaktor“ nicht erfüllt:** `primitive_ops._round_segments`
+    (`app/core/geom/primitive_ops.py:79–88`) halbiert im Entwurf weiter die Segmente von Kegel und
+    Torus, ohne Befund — Kegel mit 64 Segmenten 128 statt 256 Dreiecke, Torus 2 048 statt 8 192.
+    Docstring `blend.py:271–272` („heute hat ihn nur diese“) ist falsch.
+  - **§31 verfehlt:** Mit einem Eingangskörper von 327 680 Dreiecken knapp unter dem Budget dauert
+    der Entwurf 3,777 s (vorher 0,918 s); das Budget zählt nur Rasterpunkte, nicht die
+    Oberflächenwolke.
+  - **Regel:** Die Budgetregel steht nicht in `.claude/rules/operationen.md`.
+  **Abnahme:** Kegel und Torus unter dem Budget gleich fein, darüber mit Befund; schwerer Eingang
+  im Budget §31; Regel nachgezogen; Abnahme an mindestens drei unterschiedlichen Ops/Modellen.
+  Belege: `verif-70e9b3145-geometrie.md`, Sonde `v5g_rm379_schwer.txt`.
+
+**Abschluss:** Kegel und Ring haben keine Entwurfsstufe mehr (Entwurf = fein, `cache_version` 2); das Budget des weichen Verschmelzens wiegt Rasterpunkte über 100 000 Dreiecken mit der Oberfläche (`DRAFT_SURFACE`), darüber greift der Entwurfsfaktor mit `blend.draft`. Tests: Kegel und Ring gleich fein, schwere Oberfläche zählt im Budget (vor dem Fix drei Fälle rot); der überholte Test „im Entwurf leichter“ ersetzt. Regel in `operationen.md`, Begründung in `regel-operationen.md`. Umgesetzt von Claude, in main mit `ca2944c16`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)
+
+<a id="rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026"></a>
+<a id="rm-408"></a>
+
+**RM-408 — Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern.**
+  Review 02.10.2026, Modelltest, am HEAD `4449e3370`.
+  **Fehlerfall:** `pegboard-gs-100-v2.step`, Bohrung Ø 5 an der Stelle aus dem Lauf (|x| ≤ 1 mm,
+  neben einer vorhandenen Bohrungskette R 3/R 5 auf derselben Achsrichtung, 3,14 mm Achsabstand):
+  Ergebnis ungültig, zwei Schalen, Netzvolumen +670,8 mm³, nicht wasserdicht
+  (`bore.splits_the_body`). Bei x = 2 oder z = 20/30 trägt die Bohrung richtig ab.
+  **Stelle:** `app/core/brep/edit.py:1356–1393` prüft nach der exakten Booleschen nur `IsDone()` —
+  keine Gültigkeit (`BRepCheck_Analyzer`), keine Schalenzahl, keine Volumenabnahme.
+  **Fix:** Ergebnis prüfen (gültig, Schalenzahl wie erwartet, Volumen nimmt bei einer Bohrung ab);
+  sonst Rückfall auf den Netzkern bzw. Absage mit Grund und Handlung — nie ein ungültiger Körper
+  still weiter.
+  **Abnahme:** Test am kleinen Zwilling (Bohrung 3,14 mm neben einer Senkbohrungskette): gültig,
+  eine Schale, Volumen nimmt ab — oder Absage mit Satz. Bauplan §25, §17.2, Regel 17. Abgrenzung:
+  RM-385 nennt nur den fehlenden Rat. Belege: `modelle\diagnose.md` (Befund 4), Sonden `d4_*`.
+
+**Abschluss:** Jede exakte Boolesche prüft ihr Ergebnis, wo es mehr Schalen trägt als der Körper davor (`edit._holds`, `BRepCheck_Analyzer`), rechnet bei Ungültigkeit mit Unschärfe 1e-5 und 1e-4 mm nach (`_fuzzy_retry`) und sagt sonst ab; die Bohrung fällt dann auf das Dreiecksmodell zurück und die Auswertung meldet `evaluate.exact_became_mesh`. Am echten `pegboard-gs-100-v2.step` (x = 0 bis 1 mm, z = 24,393): gültig, dicht, eine Schale, Volumen −38 mm³ statt +670 mm³ und ungültig. Zwei Tests (Prüfweg mit Unschärfe, Rückweg der Bohrung), Changelog 0.5.2 in sechs Sprachen. Umgesetzt von Claude, in main mit `ca2944c16`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)
+
+<a id="rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026"></a>
+<a id="rm-416"></a>
+
+**RM-416 — *An Merkmal ausrichten*: der erste Bildklick wird am Hauptfenster weiter nicht angenommen.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-394, das im Arbeitsbaum archiviert ist.
+  Seit `eac0fd506` beginnt das Ziel leer und *Übernehmen* ist gesperrt — der stille Fehlgriff ist weg.
+  **Offen:** Am echten Hauptfenster nimmt der erste Bildklick ohne Fokus aufs Feld nichts an
+  („Dialog nahm face_2 nicht an“, `target: ''`): Beim Öffnen setzt der Erstfokus
+  `_feature_focus='feature'`, deshalb erreicht `take_feature` den neuen Zweig nie. Der Commit-Test
+  prüft den Dialog ungezeigt (ungezeigt grün, gezeigt rot). Regression:
+  `tests/test_operation_ui.py::test_an_alignment_target_is_never_left_empty` ist jetzt rot (an
+  `e3dff1907` grün), der alte Test wurde nicht nachgezogen. Am gesperrten Knopf steht „Dafür braucht
+  es ein Merkmal an einem zweiten Körper.“, obwohl der zweite Körper da ist.
+  **Fix:** Erstfokus auf das erste leere Pflichtfeld; Test am gezeigten Dialog; alten Test an die
+  neue Entscheidung anpassen; Sperrsatz „Klicken Sie im Bild auf die Fläche, an die … soll.“
+  **Abnahme:** am gezeigten Hauptfenster: Dialog öffnen, ein Bildklick auf die rechte Seite von A
+  füllt „Ziel“, B sitzt bündig rechts; beide Tests grün. Bauplan §2.6, Regel 21.
+  Belege: `verif-4cf460e87-oberflaeche.md`, Sonden `v4u_nachbau\v4u_a1_ausrichten.py`,
+  `v4u_test_rm394.py`.
+  Nachprüfung am Stand `4373b5f12` über die Oberfläche: nicht behoben — `46e6113ed` ändert nur Handbuch und Changelog; der erste Bildklick am Hauptfenster wird weiter nicht angenommen (`take_feature`), der alte Test bleibt rot.
+
+**Abschluss:** Der gezeigte Dialog gibt den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal (`OperationDialog._focus_first_empty_feature` im ersten `showEvent`); bis dahin nahm Qt das schon gefüllte Quellmerkmal, und `take_feature` erreichte das leere Ziel nie. Der Knopf folgt einem Pflichtziel jetzt sofort (`valuesChanged` → `_follow_source_pending`), nicht erst mit dem nächsten Vorschaubild. Der Sperrsatz unterscheidet: mit zweitem Körper „Klicken Sie im Bild auf die Fläche, an die ‹Körper› soll.“, ohne ihn weiter „Dafür braucht es ein Merkmal an einem zweiten Körper.“ (`_target_reason`, fünf Kataloge). Neuer Fenstertest `test_the_shown_alignment_dialog_takes_the_first_click_as_its_target` (Gegenprobe ohne den Erstfokus rot), `test_an_alignment_target_is_never_left_empty` auf die Entscheidung aus RM-394 gestellt; beide grün. Sonde am echten Hauptfenster mit echtem Mausklick in die Ansicht: am Stand `ba5a76365` 7 von 12 (Feldfokus `feature`, Ziel leer, B bleibt bei x = −50,4), danach 12 von 12 (Ziel `obj_1:face_4`, B bündig an A bei x = 6,5). Regel in `grenzen.md`. Umgesetzt von Claude, in main mit (Commit folgt).
