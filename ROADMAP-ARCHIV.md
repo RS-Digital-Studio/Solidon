@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)](#rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026) |
+| 2026-10-02 | [RM-341: Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen* (02.10.2026)](#rm-341-druckeinstellungen-maße-nicht-gewählter-haftungsarten-bleiben-sichtbar-und-sperren-slicen-02102026) |
 | 2026-10-02 | [RM-334: Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht (02.10.2026)](#rm-334-enter-löst-in-rückfragen-den-hauptknopf-aus-auch-wenn-der-fokus-per-tab-auf-abbrechen-steht-02102026) |
 | 2026-10-02 | [RM-335: Ein über „Benutzerdefiniert …“ gewählter Slicer lässt Erststart und Einstellungen in „wird gesucht“ hängen (02.10.2026)](#rm-335-ein-über-benutzerdefiniert--gewählter-slicer-lässt-erststart-und-einstellungen-in-wird-gesucht-hängen-02102026) |
 | 2026-10-02 | [RM-337: „Speichern“ in den Einstellungen löscht die Profilwahl des Slicers, ohne dass der Slicer wechselte (02.10.2026)](#rm-337-speichern-in-den-einstellungen-löscht-die-profilwahl-des-slicers-ohne-dass-der-slicer-wechselte-02102026) |
@@ -35576,3 +35578,55 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Nachprüfung am Stand `6ce767031`: besteht noch, die Mutation bleibt grün (7 passed). Folgevermerk zum Fix: Das genannte Szenario `[9]*3+[1]*5` trennt nicht (Median ohne Zuschnitt 1,0, nicht 5,0); trennscharf ist `[9]*5+[1]*3`, damit wird der Kontrollfall unter der Mutation rot.
 
 **Abschluss:** Test des Zuschnitts beim Lesen über `measure`; Mutation `_runs_of` ohne Zuschnitt macht ihn rot. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)
+
+<a id="rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026"></a>
+<a id="rm-336"></a>
+
+**RM-336 — „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist.**
+  Review seit 0.5.1, Befund C-H3, Commit `48ffcf145` (Codex).
+  `app/ui/print_settings_dialog.py:6124–6132` (`_printer_selection_issue` prüft auch
+  `machine_choice`), verwendet für den Öffnen-Knopf (`:6226–6227`) und in `_current_setup`
+  (`:7745–7747`), den `_open_in_slicer` ruft (`:7792`). Widerspricht dem eigenen Kommentar
+  `:6219–6222` („Profile braucht er nie“); der leere Zustand ist gewollt (`:4903–4914`).
+  **Fehlerfall:** Neues Projekt auf „Allgemeiner FDM-Drucker 220 mm“, ElegooSlicer, OrcaSlicer
+  oder Bambu Studio, kein Maschinenprofil passt → „Im Slicer öffnen“ gesperrt mit „Wählen Sie
+  einen Drucker aus der Liste.“, obwohl oben ein Drucker gewählt ist; dieselbe Zeile ersetzt bei
+  *Slicen* den treffenden Satz „Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.“
+  Vor `48ffcf145` war Öffnen frei. Die Übergabe an den Slicer ist der Hauptweg.
+  **Fix:** `machine_choice` nur auf dem Rechenweg prüfen (Satz aus `_profile_gap`), für Öffnen
+  nur `printer_choice`.
+  **Abnahme:** Test leeres Maschinenprofil: Öffnen frei und ausführbar, *Slicen* gesperrt mit
+  „Dieser Slicer braucht ein Druckerprofil …“. Bauplan §29, §2.2. Beleg: `bericht-C.md` (H3),
+  Sonde `c_oeffnen_ohne_profil.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch. `c_oeffnen_ohne_profil.py` (Exit 0): „Im Slicer öffnen“ gesperrt mit „Wählen Sie einen Drucker aus der Liste.“ (`print_settings_dialog.py:6124–6132`).
+
+**Abschluss:** Das Druckerprofil des Slicers zählt nur auf dem Rechen-Weg; Fenstertest rot/grün, Slicen sagt seinen eigenen Satz. Umgesetzt von Claude, in main mit `7df4794a7`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-341: Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen* (02.10.2026)
+
+<a id="rm-341-druckeinstellungen-maße-nicht-gewählter-haftungsarten-bleiben-sichtbar-und-sperren-slicen-02102026"></a>
+<a id="rm-341"></a>
+
+**RM-341 — Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen*.**
+  Review seit 0.5.1, Befund D-M2. Drei handgeschriebene Fassungen derselben Bedingung:
+  `ba8c08b14` (Claude) `_update_inactive_setting_rows`, `d8e37581a` (Codex)
+  `_first_numeric_refusal`, `b837a73f8` (Codex) `_inactive_search_control` —
+  `app/ui/print_settings_dialog.py:6872–6912`, `:6803–6826`, `:4168–4180`. Der Kern weiß es
+  genauer: `app/core/knowledge/print_settings.py:572` (`ADHESION_MEASURES`),
+  `app/core/export/handover.py:1062` (`_only_chosen_adhesion` nullt die Maße der nicht gewählten
+  Arten).
+  **Fehlerfall:** Bettart *Brim* → *Skirt-Runden*, *Skirt-Abstand* und *Raft-Schichten* bleiben
+  sichtbar und bedienbar, obwohl die Übergabe sie nullt; 99 in *Raft-Schichten* sperrt *Slicen*
+  mit „99 liegt über der Obergrenze 20.“ für ein Feld ohne Wirkung; die Suche führt ins
+  wirkungslose Feld statt zur Bettart (`oberflaeche.md`: „Was gerade nichts tut, steht nicht da“,
+  „eine Sichtbarkeit oder Sperre setzt eine Stelle“).
+  **Fix:** eine Kernfunktion (etwa `print_settings.inactive_paths(settings)` aus
+  `ADHESION_MEASURES`), gefragt von allen drei Stellen.
+  **Abnahme:** Test je Bettart (keine, Skirt, Brim, Raft): nur die wirksamen Maße sichtbar, ein
+  abgelehnter Wert in einem ausgeblendeten Feld sperrt nicht. Bauplan §29, §2.4.
+  Beleg: `bericht-D.md` (M2), Sonde d5.
+  Nachprüfung am Stand `6ce767031`: besteht noch. Sonde d5: bei *Brim* bleiben Skirt- und Raft-Maße sichtbar; 99 in *Raft-Schichten* sperrt *Slicen* mit „99 liegt über der Obergrenze 20.“
+
+**Abschluss:** `print_settings.inactive_paths` als eine Quelle für Sichtbarkeit, Sperre und Suche; Test je Bettart. Umgesetzt von Claude, in main mit `7df4794a7`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.

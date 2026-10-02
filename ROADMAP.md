@@ -135,8 +135,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Code mit 8374885ae integriert; Düsen-/Herstelleridentität und tatsächliche 3MF-Ausgabe eigen-/zweitgeprüft, Entwicklungstor grün. Funktionale Sieben-Slicer-Matrix und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-336 — „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist](#rm-336) | Bedienung und Darstellung | **In Arbeit: Claude (Worktree `F:/solidon-claude-c`)** — Review seit 0.5.1: für Öffnen nur `printer_choice` prüfen, `machine_choice` nur fürs Slicen; Test leeres Maschinenprofil |
-| [RM-341 — Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen*](#rm-341) | Bedienung und Darstellung | **In Arbeit: Claude (Worktree `F:/solidon-claude-c`)** — Review seit 0.5.1: eine Kernfunktion aus `ADHESION_MEASURES` für Sichtbarkeit, Sperre und Suche; Test je Bettart |
 | [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Review seit 0.5.1: Doppelpunkt im Gegenstück-Dialog, Ablehnung ohne Feld, Sperrgrund ohne Feldnamen, Breitenrechnung, Apostrophe, fehlende Wächter |
 | [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | Review 02.10. (Weg 1/2): Export an das nächste aktuelle, vollständige Ergebnis binden; Test Änderung + sofortiger Export |
 | [RM-354 — Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden](#rm-354) | Bedienung und Darstellung | Review 02.10. (Weg 2): wirksame Grenzen in Leiste und `change_parameter` ablehnen, Bild beim Halt stehen lassen |
@@ -4139,48 +4137,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   von unten bei 45° auf 0,5° gleich. **Umsetzung und Geometrieprüfungen erledigt:** Vorschau
   und Schnitt teilen den Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei einer
   leicht geneigten Mündung. Die native Viewport-Abnahme bleibt dem Release vorbehalten.
-
-<a id="rm-336"></a>
-
-- [ ] **RM-336 — „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist.**
-  Review seit 0.5.1, Befund C-H3, Commit `48ffcf145` (Codex).
-  `app/ui/print_settings_dialog.py:6124–6132` (`_printer_selection_issue` prüft auch
-  `machine_choice`), verwendet für den Öffnen-Knopf (`:6226–6227`) und in `_current_setup`
-  (`:7745–7747`), den `_open_in_slicer` ruft (`:7792`). Widerspricht dem eigenen Kommentar
-  `:6219–6222` („Profile braucht er nie“); der leere Zustand ist gewollt (`:4903–4914`).
-  **Fehlerfall:** Neues Projekt auf „Allgemeiner FDM-Drucker 220 mm“, ElegooSlicer, OrcaSlicer
-  oder Bambu Studio, kein Maschinenprofil passt → „Im Slicer öffnen“ gesperrt mit „Wählen Sie
-  einen Drucker aus der Liste.“, obwohl oben ein Drucker gewählt ist; dieselbe Zeile ersetzt bei
-  *Slicen* den treffenden Satz „Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.“
-  Vor `48ffcf145` war Öffnen frei. Die Übergabe an den Slicer ist der Hauptweg.
-  **Fix:** `machine_choice` nur auf dem Rechenweg prüfen (Satz aus `_profile_gap`), für Öffnen
-  nur `printer_choice`.
-  **Abnahme:** Test leeres Maschinenprofil: Öffnen frei und ausführbar, *Slicen* gesperrt mit
-  „Dieser Slicer braucht ein Druckerprofil …“. Bauplan §29, §2.2. Beleg: `bericht-C.md` (H3),
-  Sonde `c_oeffnen_ohne_profil.py`.
-  Nachprüfung am Stand `6ce767031`: besteht noch. `c_oeffnen_ohne_profil.py` (Exit 0): „Im Slicer öffnen“ gesperrt mit „Wählen Sie einen Drucker aus der Liste.“ (`print_settings_dialog.py:6124–6132`).
-
-<a id="rm-341"></a>
-
-- [ ] **RM-341 — Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen*.**
-  Review seit 0.5.1, Befund D-M2. Drei handgeschriebene Fassungen derselben Bedingung:
-  `ba8c08b14` (Claude) `_update_inactive_setting_rows`, `d8e37581a` (Codex)
-  `_first_numeric_refusal`, `b837a73f8` (Codex) `_inactive_search_control` —
-  `app/ui/print_settings_dialog.py:6872–6912`, `:6803–6826`, `:4168–4180`. Der Kern weiß es
-  genauer: `app/core/knowledge/print_settings.py:572` (`ADHESION_MEASURES`),
-  `app/core/export/handover.py:1062` (`_only_chosen_adhesion` nullt die Maße der nicht gewählten
-  Arten).
-  **Fehlerfall:** Bettart *Brim* → *Skirt-Runden*, *Skirt-Abstand* und *Raft-Schichten* bleiben
-  sichtbar und bedienbar, obwohl die Übergabe sie nullt; 99 in *Raft-Schichten* sperrt *Slicen*
-  mit „99 liegt über der Obergrenze 20.“ für ein Feld ohne Wirkung; die Suche führt ins
-  wirkungslose Feld statt zur Bettart (`oberflaeche.md`: „Was gerade nichts tut, steht nicht da“,
-  „eine Sichtbarkeit oder Sperre setzt eine Stelle“).
-  **Fix:** eine Kernfunktion (etwa `print_settings.inactive_paths(settings)` aus
-  `ADHESION_MEASURES`), gefragt von allen drei Stellen.
-  **Abnahme:** Test je Bettart (keine, Skirt, Brim, Raft): nur die wirksamen Maße sichtbar, ein
-  abgelehnter Wert in einem ausgeblendeten Feld sperrt nicht. Bauplan §29, §2.4.
-  Beleg: `bericht-D.md` (M2), Sonde d5.
-  Nachprüfung am Stand `6ce767031`: besteht noch. Sonde d5: bei *Brim* bleiben Skirt- und Raft-Maße sichtbar; 99 in *Raft-Schichten* sperrt *Slicen* mit „99 liegt über der Obergrenze 20.“
 
 <a id="rm-342"></a>
 
