@@ -75,6 +75,7 @@ einem neuen Lauf anzupassen.
 | [`reports/3mf-schluss.md`](reports/3mf-schluss.md) | Schlussbericht Paket 3mf: Qt-Takt beim Import großer 3MF | RM-258 |
 | [`reports/rm392-bausteinabbruch-2026-10-02.md`](reports/rm392-bausteinabbruch-2026-10-02.md) | Randvergleich beider Bausteinkerne abbrechen; echte Gegenläufe, finale RM327-Basis und unabhängige Freigaben | RM-392 / P2G03 |
 | [`reports/ast-flake.md`](reports/ast-flake.md) | Bericht zu den sporadischen Abrissen, Befund an der Maschine | RM-272 |
+| [`reports/rm346-aufrufvarianten-2026-10-02.md`](reports/rm346-aufrufvarianten-2026-10-02.md) | Tatsächliche Werkzeugstarts, behobene Parser- und Parameterbindungslücken, stabile Gegenläufe und offene Clientfreigabe | RM-346 |
 | [`reports/bohren-schluss.md`](reports/bohren-schluss.md) | Schlussbericht Paket bohren, §6–7 Vorschlag zu `_without_scars` | RM-187 |
 | [`reports/fenster.md`](reports/fenster.md) | Bericht Paket fenster der Durchsicht, Empfehlung zum Fadenkreuz | RM-291 |
 | [`reports/kanten-schluss.md`](reports/kanten-schluss.md) | Schlussbericht Paket kanten, §6–7 Registertext und Nicht behoben | RM-284 |

@@ -35788,6 +35788,33 @@ stehen aus; die Fenster-/Leistungsabnahme bleibt beim Release offen.
 
 **Abschluss:** Der PreToolUse-Hook erkennt die sechs Geld- und Veröffentlichungswerkzeuge in jeder Schreibweise (ask für Claude, deny für Codex ohne Marker `SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja`); 143 Hooktests. Codex erneuert die Hookfreigabe über `/hooks`. Umgesetzt von Claude, in main mit `457dc09d4`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
+**Nachprüfung 02.10.2026 — Aufrufvarianten und sechs Reviewlücken:**
+Die kumulative Korrektur bindet tatsächliche Skript-/Modulstarts und
+literale `Start-Process`-Argumente an den bestehenden Werkzeugschutz.
+Der unabhängige erste Review fand danach sechs weitere konkrete
+Lücken: Semikolon vor Kommentar, freie Cmdletpositionen, native
+Windows-Quotes, Großschreibung im Bash-Vorfilter, native Kommas und
+mehrzeilige Cmdletarrays. Diese sind vorwärts behoben; die Freigabe-,
+Marker- und Triggerwerte sowie die generierte Codex-Konfiguration
+bleiben erhalten. Tatsächlich 44 neue Testkörperfehler bei 19 Kontrollen
+vor dem Reviewfix; final 63 und ursprüngliche 98 Fälle grün, Exit 0,
+fünf stabile Prüflingshashes je Lauf, Ruff/Format grün. Die 241 Fälle
+sind ausschließlich der frühere f28-Modullauf. Neuer unabhängiger
+Finalreview: JA für genau 9/9/1 eigene Quell-/Test-/Konfigurationshunks.
+[Portabler Aufruf-/Reviewbeleg](konzepte/nachweise-release-0.5.1/reports/rm346-aufrufvarianten-2026-10-02.md).
+Ein vollständiges neues Tor und tatsächliche Integration dieses Nachgangs
+stehen aus. Die erneuerte `/hooks`-Freigabe und tatsächliche Auslösung
+im Codex-/Claude-Client sind unbestätigt; kein Client-/Releaseabschluss.
+
+**Weiterer Nachreview derselben Einheit:** Der übersehene per Doppelpunkt
+gebundene `-ArgumentList:...`-Wert ist korrigiert, ebenso der unmittelbar
+betroffene Python-Kindparser für zitierte Parameternennungen. Die allein
+gebundene FilePath-Form bleibt eine schon vorher grüne Kontrolle.
+Tatsächlich 44 Assertions rot und 21 Kontrollen grün vor dem Fix;
+final 65 neue sowie 63 und 98 bestehende Fälle grün, Exit 0,
+fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
+Übergabe umfasst jetzt 10/9/1 Quell-/Test-/Konfigurationshunks.
+
 ## RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)
 
 <a id="rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026"></a>
