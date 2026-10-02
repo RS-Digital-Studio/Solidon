@@ -152,7 +152,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
@@ -4557,43 +4556,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   von unten bei 45° auf 0,5° gleich. **Umsetzung und Geometrieprüfungen erledigt:** Vorschau
   und Schnitt teilen den Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei einer
   leicht geneigten Mündung. Die native Viewport-Abnahme bleibt dem Release vorbehalten.
-
-<a id="rm-342"></a>
-
-- [ ] **RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1.**
-  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-C.md`, `bericht-D.md`), je einzeln abnehmbar:
-  - **C-N1/D-N3, `42253ae03` (Claude), `b1d5381ce` (Codex):** *Gegenstücke setzen* zeigt „Paar“
-    ohne und „Durchmesser:“, „Länge:“, „Form:“, „Spiel:“, „Fase:“ mit Doppelpunkt
-    (`app/ui/counterpart_dialog.py:95` gegen `:137` `tr("{name}:", …)`; `fenster.md:387`). Fix:
-    `self.form.addRow(str(entry.title), field)`, Katalogschlüssel `"{name}:"` entfernen, wenn
-    unbenutzt. Abnahme: Test der Beschriftungen ohne Doppelpunkt.
-  - **D-N1, `ae17a2c70` (Codex):** Im Merkmalfenster bleibt der Ablehnungssatz stehen, wenn sein
-    Feld ausgeblendet wird (`app/ui/panels.py:8101–8104`, `_follow_conditions` `:8181–8224`
-    schaltet nur Feld und Beschriftung). Fehlerfall: *Zum Langloch ziehen* X = 1500 mm → Satz,
-    dann Maßgruppe von *Bohrung ändern* → Satz ohne Feld. Fix: `row.refusals[name]` mitschalten.
-  - **D-N2, `d8e37581a` (Codex):** Der Sperrgrund an *Slicen*/*Im Slicer öffnen* nennt das Feld
-    nicht („95 °C liegt über der Obergrenze 90 °C.“; `_first_numeric_refusal`
-    `print_settings_dialog.py:6803`, `labels.py:503–507`). Fix: `tr("{name}: {value}", …)` mit
-    `setting_title(path)`, optional `_lift(path)` beim Klick.
-  - **D-N5, `88bb41ed8`, `c59ed62ca` (Codex):** Die natürliche Breite samt zugeklappter Zeilen
-    wird in vier Fassungen gerechnet (`settings_dialog._reserve_advanced_width`,
-    `first_run._grow_to_content`, `op_dialog` mit `form_natural_width`, Druckdialog
-    `_room_for_tabs`; `fenster.md:379–380` nennt `form_natural_width`). Fix: eine gemeinsame
-    Funktion in `style.py`.
-  - **D-N6, `ba8c08b14` (Claude):** fr „l’imprimante“, „n’a pas pu … l’attente“, it
-    „nell’elenco“ mit typografischem Apostroph (`uebersetzung.md`: neue Einträge gerade). Fix:
-    gerade schreiben; der Test prüft heute nur das Mischen innerhalb eines Eintrags.
-  - **C-N2, `0edb9cf3e` (Codex):** Das Entdoppeln der Paletten-Tooltips
-    (`app/ui/command_palette.py:503–512`) hat keinen Test. Fix: Eintrag mit `doc == title` und
-    mit `reason == doc`, Tooltip zeilengenau.
-  - **D-N7, `e969f88ce` (Claude):** Listenhaken (`style.check_files`, `_check_rules`) und runde
-    Farbpunkte (`swatch(..., ring_when_empty=…)`) haben keinen Test.
-  **Stand 02.10.2026:** C-N1, D-N2, C-N2 und D-N7 sind mit `7c8bd7892` in main (Claude); offen D-N1.
-  **D-N5 erledigt:** `style.expanded_width` rechnet die Anfangsbreite samt zugeklappter Formulare und Reiter, Rändern und Rollbalken für Einstellungen, Ersteinrichtung, Operationsdialog und Druckdialog (dort neben der Reiterleiste); `test_dialog_layout_regressions.py` prüft Einstellungen und Druckdialog in sechs Sprachen und die Rechnung gegen den aufgeklappten Zustand. Fenstersonde in sechs Sprachen: nach dem Aufklappen nichts quer, Breite unverändert (42 von 42).
-  Bauplan §19, §4.1, §2.7.
-  Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
-  Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
-  **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
 
 <a id="rm-358"></a>
 

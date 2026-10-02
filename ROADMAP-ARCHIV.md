@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-342: Oberfläche: Reste aus dem Review seit 0.5.1 (02.10.2026)](#rm-342-oberfläche-reste-aus-dem-review-seit-051-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -36896,3 +36897,45 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   Kunden an den Anfang statt an den Schritt. Bauplan §2.7, §15.3.
 
 **Abschluss:** Hält die Kette, bevor ein Körper im Bild ist (kein letzter vollständiger Stand nach RM-354), zeigt die Karte über der Ansicht „Das Projekt hält an Schritt 1: Quader anlegen“, darunter „Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht.“ und die Knöpfe *Schritt korrigieren* (öffnet den Schritt, `edit_operation`) und *Prüfbericht zeigen* (`EmptySceneInvitation.show_halted`, `MainWindow._halted_before_a_body`); der Baum sagt „Noch kein Körper: Das Projekt hält an Schritt 1. Ein Doppelklick im Verlauf öffnet ihn.“ (`ObjectTree.say_why_empty`). Rechnet die Kette wieder, tritt die Karte zur Seite; ein wirklich leeres Projekt lädt weiter ein. Texte in allen fünf Katalogen. Test: `test_ui.py::test_a_project_halting_at_its_first_step_says_so_instead_of_inviting` (Datei speichern und öffnen wie der Kunde; rot am Ausgangsstand), Nachbarn `test_a_halt_at_the_first_step_keeps_the_last_picture`, `test_correcting_a_composed_expression_opens_the_step_and_not_the_parameter` und die vier Einladungstests grün. Fenstersonde am echten Fenster (`a453` öffnen, Knopf mit `QTest` geklickt, Ausdruck korrigiert, übernommen): vorher 4 Prüfungen offen, nachher erfüllt, Karte nach der Korrektur weg; Bilder `458-01-geoeffnet.png`, `458-02-karte.png`, `458-03-korrigiert.png`. Regel in `fenster.md` („Hinter einen Halt kommt kein Schritt“). Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-342: Oberfläche: Reste aus dem Review seit 0.5.1 (02.10.2026)
+
+<a id="rm-342-oberfläche-reste-aus-dem-review-seit-051-02102026"></a>
+<a id="rm-342"></a>
+
+**RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1.**
+  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-C.md`, `bericht-D.md`), je einzeln abnehmbar:
+  - **C-N1/D-N3, `42253ae03` (Claude), `b1d5381ce` (Codex):** *Gegenstücke setzen* zeigt „Paar“
+    ohne und „Durchmesser:“, „Länge:“, „Form:“, „Spiel:“, „Fase:“ mit Doppelpunkt
+    (`app/ui/counterpart_dialog.py:95` gegen `:137` `tr("{name}:", …)`; `fenster.md:387`). Fix:
+    `self.form.addRow(str(entry.title), field)`, Katalogschlüssel `"{name}:"` entfernen, wenn
+    unbenutzt. Abnahme: Test der Beschriftungen ohne Doppelpunkt.
+  - **D-N1, `ae17a2c70` (Codex):** Im Merkmalfenster bleibt der Ablehnungssatz stehen, wenn sein
+    Feld ausgeblendet wird (`app/ui/panels.py:8101–8104`, `_follow_conditions` `:8181–8224`
+    schaltet nur Feld und Beschriftung). Fehlerfall: *Zum Langloch ziehen* X = 1500 mm → Satz,
+    dann Maßgruppe von *Bohrung ändern* → Satz ohne Feld. Fix: `row.refusals[name]` mitschalten.
+  - **D-N2, `d8e37581a` (Codex):** Der Sperrgrund an *Slicen*/*Im Slicer öffnen* nennt das Feld
+    nicht („95 °C liegt über der Obergrenze 90 °C.“; `_first_numeric_refusal`
+    `print_settings_dialog.py:6803`, `labels.py:503–507`). Fix: `tr("{name}: {value}", …)` mit
+    `setting_title(path)`, optional `_lift(path)` beim Klick.
+  - **D-N5, `88bb41ed8`, `c59ed62ca` (Codex):** Die natürliche Breite samt zugeklappter Zeilen
+    wird in vier Fassungen gerechnet (`settings_dialog._reserve_advanced_width`,
+    `first_run._grow_to_content`, `op_dialog` mit `form_natural_width`, Druckdialog
+    `_room_for_tabs`; `fenster.md:379–380` nennt `form_natural_width`). Fix: eine gemeinsame
+    Funktion in `style.py`.
+  - **D-N6, `ba8c08b14` (Claude):** fr „l’imprimante“, „n’a pas pu … l’attente“, it
+    „nell’elenco“ mit typografischem Apostroph (`uebersetzung.md`: neue Einträge gerade). Fix:
+    gerade schreiben; der Test prüft heute nur das Mischen innerhalb eines Eintrags.
+  - **C-N2, `0edb9cf3e` (Codex):** Das Entdoppeln der Paletten-Tooltips
+    (`app/ui/command_palette.py:503–512`) hat keinen Test. Fix: Eintrag mit `doc == title` und
+    mit `reason == doc`, Tooltip zeilengenau.
+  - **D-N7, `e969f88ce` (Claude):** Listenhaken (`style.check_files`, `_check_rules`) und runde
+    Farbpunkte (`swatch(..., ring_when_empty=…)`) haben keinen Test.
+  **Stand 02.10.2026:** C-N1, D-N2, C-N2 und D-N7 sind mit `7c8bd7892` in main (Claude); offen D-N1.
+  **D-N5 erledigt:** `style.expanded_width` rechnet die Anfangsbreite samt zugeklappter Formulare und Reiter, Rändern und Rollbalken für Einstellungen, Ersteinrichtung, Operationsdialog und Druckdialog (dort neben der Reiterleiste); `test_dialog_layout_regressions.py` prüft Einstellungen und Druckdialog in sechs Sprachen und die Rechnung gegen den aufgeklappten Zustand. Fenstersonde in sechs Sprachen: nach dem Aufklappen nichts quer, Breite unverändert (42 von 42).
+  Bauplan §19, §4.1, §2.7.
+  Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
+  Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
+  **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
+
+**Abschluss:** Alle Befunde erledigt. C-N1, D-N2, C-N2, D-N6, D-N7 und D-N1 wie oben beschrieben (Claude, Thread „Bedienung und KI“). D-N5: `style.expanded_width` ist die eine Rechnung der Anfangsbreite samt zugeklappter Formulare und Reiter, Ränder und Rollbalken — für Einstellungen, Ersteinrichtung, Operationsdialog und Druckdialog (dort neben der Reiterleiste); `_reserve_advanced_width`, die feste Randliste in `first_run` und die Rechnung in `op_dialog` sind ihr gewichen. Tests in `test_dialog_layout_regressions.py`: Einstellungen und Druckdialog in sechs Sprachen (Anfangsbreite = min(natürlich, Bildschirm), quer nur, was der Bildschirm abschneidet), die zugeklappte Rechnung gleich der aufgeklappten Messung. Fenstersonde am echten Fenster in sechs Sprachen: Einstellungen, Druckdialog über alle Reiter und *Quader anlegen* rollen nach dem Aufklappen nicht quer, die Breite bleibt.
