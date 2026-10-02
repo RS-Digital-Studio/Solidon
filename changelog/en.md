@@ -71,6 +71,7 @@ it into `website/version.json`.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
 - The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
+- Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
 
 ### Generating with AI
 

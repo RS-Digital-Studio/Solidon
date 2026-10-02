@@ -210,7 +210,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
 | [RM-064 — Slicerübergabe zwischen zwei echten Flatpaks abnehmen](#rm-064) | Kundenrückmeldungen | Modell zwischen installiertem Solidon- und Slicer-Flatpak übergeben |
 | [RM-072 — Zusagen an den Dental-Kunden zum Verkaufsstart erfüllen](#rm-072) | Kundenrückmeldungen | Kaufweg und belastbare 3D-Maus-Unterstützung zum zugesagten Anlass mitteilen |
-| [RM-438 — Formzüge an derselben Stelle gelten als verfehlt](#rm-438) | Kundenrückmeldungen | Züge einer Etappe gegen die schon geformte Fläche greifen lassen oder die Stärke an den Radius binden; Warnsatz nennt die wirkliche Ursache |
 
 ## Filamentlager
 
@@ -5624,21 +5623,3 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bereits versandte Nachrichten bei der Bearbeitung zuerst prüfen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#eine-kundenanfrage-aus-dem-dentalbereich-30082026).
-
-<a id="rm-438"></a>
-
-- [ ] **RM-438 — Formzüge an derselben Stelle gelten als verfehlt.**
-  Kundenrückmeldung 02.10.2026 (0.5.1, Vorgang S-20261002-ddbaa9): Nach *Formen* meldet der
-  Prüfbericht „Ein Teil der Züge hat den Körper nicht erreicht und trägt nichts ab“, und der Satz
-  nennt als Ursache eine nachträglich verschobene Form; im Verlauf des Kunden folgt auf *Formen*
-  nichts mehr. Ursache: Alle Züge einer Etappe werden gegen das Netz vor der Etappe gemessen
-  (`app/core/geom/sculpt.py`, Sammlung `missed`), der Klick sitzt aber auf der schon geformten
-  Vorschaufläche. Ist die Stärke größer als der Radius (die Leiste erlaubt Stärke bis 10 mm,
-  Radius ab 0,1 mm, `app/ui/sculpt_bar.py`), verfehlt jeder weitere Zug an derselben Stelle.
-  Sonde am 20-mm-Würfel, Radius 3, Abtragen an einer Stelle: Stärke 1 und 2 ohne Fehlzug, Stärke 4
-  bleibt bei 4,0 mm Tiefe und zählt ab dem zweiten Zug jeden als verfehlt.
-  **Fix:** Züge einer Etappe nacheinander gegen die geformte Fläche greifen lassen oder die Stärke
-  an den Radius binden; der Warnsatz nennt die wirkliche Ursache.
-  **Abnahme:** Test mit wiederholtem Abtragen bei Stärke größer als Radius: Tiefe wächst oder die
-  Grenze steht an der Leiste, kein Fehlzug gemeldet; ein Zug wirklich neben dem Körper meldet
-  weiter. Bauplan §2.7, §2.6.

@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-438: Ein Formzug in die eben gegrabene Mulde galt als verfehlt (02.10.2026)](#rm-438-ein-formzug-in-die-eben-gegrabene-mulde-galt-als-verfehlt-02102026) |
 | 2026-10-02 | [RM-437: Im Rückmeldebogen ließ sich kein Leerzeichen tippen (02.10.2026)](#rm-437-im-rückmeldebogen-ließ-sich-kein-leerzeichen-tippen-02102026) |
 | 2026-10-02 | [RM-399: Vorlage „Halter/Bügel“ (02.10.2026)](#rm-399-vorlage-halterbügel-02102026) |
 | 2026-10-02 | [RM-390: Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen (02.10.2026)](#rm-390-ein-neuer-grundkörper-entsteht-auf-dem-zuletzt-gewählten-körper-oder-merkmal-ohne-es-zu-sagen-02102026) |
@@ -36179,4 +36180,30 @@ Pos1/Ende in `QTextEdit` geprüft und ohne Befund. Fenstertest
 `test_the_survey_takes_spaces_while_a_preview_runs` und eine Zusicherung in
 `test_the_banner_names_the_reason_and_the_empty_difference` für das Release-Tor. Changelog 0.5.2 in allen
 sechs Sprachen. Umgesetzt von Claude, in main mit `ff6b1a359`; Entwicklungstor grün
-(19645 bestanden, mypy ohne Befund). Aus derselben Rückmeldung offen: [RM-438](ROADMAP.md#rm-438).
+(19645 bestanden, mypy ohne Befund). Aus derselben Rückmeldung: [RM-438](ROADMAP-ARCHIV.md#rm-438).
+
+## RM-438: Ein Formzug in die eben gegrabene Mulde galt als verfehlt (02.10.2026)
+
+<a id="rm-438-ein-formzug-in-die-eben-gegrabene-mulde-galt-als-verfehlt-02102026"></a>
+<a id="rm-438"></a>
+
+**RM-438 — Formzüge an derselben Stelle gelten als verfehlt.**
+  Kundenrückmeldung 02.10.2026 (0.5.1, Vorgang S-20261002-ddbaa9, dieselbe wie RM-437): Nach
+  *Formen* meldete der Prüfbericht „Ein Teil der Züge hat den Körper nicht erreicht“, und der Satz
+  nannte eine nachträglich verschobene Form als Ursache, die es im Verlauf des Kunden nicht gab.
+  **Ursache:** Geklickt wird auf die Vorschau, also nach den Zügen davor; ein Zug derselben Etappe
+  misst aber gegen die Fläche vor der Etappe (Entscheidung C, `_offsets`). Liegt die Stärke über
+  dem Radius (die Leiste erlaubt bis 10 mm Stärke ab 0,1 mm Radius), greift ein zweiter Zug in die
+  Mulde keinen Eckpunkt. Er wirkte nicht und hieß verfehlt. Sonde am 20-mm-Würfel und an der Kugel
+  mit Radius 3, Stärke 4: Tiefe blieb bei 4,0 mm, jeder weitere Zug verfehlt.
+
+**Abschluss:** `stroke_at(..., before=…)` kennt die Züge davor (`_surface_for`). Erreicht ein
+neuer Zug die Fläche seiner Etappe nicht, beginnt er eine eigene (`cut`) und nimmt seine Richtung
+von der Fläche, auf der er wirkt; die Entscheidung reist im Zug mit, alte Projekte rechnen
+unverändert. Die abgeschlossenen Etappen merkt `_completed` über Klicks (20 Etappen auf 40 962
+Eckpunkten: 12 ms statt 615 ms je Klick). Tests in `test_sculpt.py`: zweiter Zug gräbt auf 8 mm,
+Operation ohne `sculpt.strokes_missed` und gleich der Vorschau; ein Zug neben der Mulde bleibt in
+seiner Etappe; das Gedächtnis gegen frische Rechnung nach Rückgängig und mitten in einer Etappe
+(beide Gegenproben per Mutation rot). Der Warnsatz nennt die wirklichen Ursachen in allen
+Katalogen; Changelog 0.5.2 in sechs Sprachen. Umgesetzt von Claude, in main mit `6f64f7ed1`;
+Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
