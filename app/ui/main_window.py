@@ -2324,6 +2324,9 @@ class MainWindow(QMainWindow):
         self._last_complete: tuple[Any, EvaluationResult] | None = None
         """Das letzte durchgerechnete Ergebnis und sein Projekt — das Bild, das
         bei einem Halt am ersten Schritt stehen bleibt (§15.3, RM-354)."""
+        self._export_waiting: tuple[Path, ExportFormat, Any] | None = None
+        """Ein Export, der auf das nächste aktuelle Ergebnis wartet — Ziel,
+        Format und das Projekt, für das er gemeint war (RM-352)."""
         self._halted = False
         """Ob die stehende Meldung von einer angehaltenen Kette stammt.
 
@@ -7823,6 +7826,27 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
+        if self.session.busy or not self.session.result_current:
+            # **Erst das Ergebnis, dann die Datei** (RM-352). Geschrieben
+            # wurde das vorige Ergebnis mit dem neuen Dokument: Bild und
+            # Verlauf zeigten 100 mm, die Datei war 80 mm breit, und die
+            # Quittung meldete Erfolg. Der Auftrag wartet wie ein Klick vor
+            # der Vorschau, die Statuszeile sagt es, *Abbrechen* nimmt ihn
+            # zurück.
+            self._export_waiting = (target, export_format, self.session.project)
+            text = tr("Export wartet auf die laufende Berechnung … {name}").format(name=target.name)
+            self._set_progress_state(
+                "export",
+                active=True,
+                text=text,
+                minimum=0,
+                maximum=0,
+                value=0,
+                accessible_description=text,
+                cancellable=True,
+                cancel_enabled=True,
+            )
+            return
         self._end_inserting_for_output()
         result = self.session.last_result
         if result is None or not result.scene.objects:
@@ -7918,8 +7942,37 @@ class MainWindow(QMainWindow):
         self._update_actions()
         self._leash.start(worker)
 
+    def _export_when_current(self) -> None:
+        """Den wartenden Export schreiben, sobald das Ergebnis zum Dokument gehört (RM-352).
+
+        Hält die Kette an, wird nichts geschrieben: Die Datei entstünde aus
+        dem Stand vor dem Halt und sähe aus wie das Bild, wäre es aber nicht.
+        """
+        waiting = self._export_waiting
+        if waiting is None or self.session.busy or not self.session.result_current:
+            return
+        self._export_waiting = None
+        self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
+        target, export_format, project = waiting
+        if self._close_requested or project is not self.session.project:
+            return
+        result = self.session.last_result
+        if result is None or result.stopped_at is not None:
+            self.announce(tr("Nicht exportiert: Die Kette hält an — siehe Prüfbericht."))
+            return
+        self._start_export(target, export_format)
+
     def _cancel_export(self) -> None:
         """Der bestehende Abbrechenknopf hält nur eine noch laufende Vorprüfung an."""
+        if self._export_waiting is not None:
+            # Ein wartender Export hat noch nichts geschrieben; zurückgenommen
+            # ist er mit dem Klick.
+            self._export_waiting = None
+            self._set_progress_state(
+                "export", active=False, cancellable=False, cancel_enabled=False
+            )
+            self.announce(tr("Export abgebrochen."))
+            return
         if self._close_requested:
             self._export_attempt = None
             self._write_failure = None
@@ -19716,6 +19769,7 @@ class MainWindow(QMainWindow):
             self._showing_scene = False
             self._pending_scene = None
         self._show_the_plate_of_the_import()
+        self._export_when_current()
 
     def _picture_for(self, result: EvaluationResult) -> EvaluationResult:
         """Was die Ansicht zeigt: das Ergebnis — oder bei einem Halt ohne Körper das letzte Bild.
@@ -20478,6 +20532,7 @@ class MainWindow(QMainWindow):
         if not busy:
             self._resume_preview_after_idle()
             self._resume_map_after_idle()
+            self._export_when_current()
 
     def _resume_map_after_idle(self) -> None:
         """Die gewählte Analysekarte kommt nach der Rechnung wieder.
