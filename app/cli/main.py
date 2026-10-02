@@ -42,7 +42,12 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import detect_unit, read_local_payload, read_model
+from app.core.ingest.loader import (
+    detect_unit,
+    plausible_reach,
+    read_local_payload,
+    read_model,
+)
 from app.core.ingest.plan import import_plan, names_in_use
 from app.core.knowledge import profiles
 from app.core.log import configure
@@ -480,7 +485,12 @@ def command_import(args: argparse.Namespace) -> int:
             source_id,
             name,
             payload,
-            _chosen_unit(payload, name, args.unit),
+            _chosen_unit(
+                payload,
+                name,
+                args.unit,
+                plausible_reach(profile_of(project).printer.build_volume),
+            ),
             first_model=first_model,
             taken=taken,
         )
@@ -495,13 +505,17 @@ def command_import(args: argparse.Namespace) -> int:
     return 0
 
 
-def _chosen_unit(payload: bytes, name: str, requested: str) -> str:
+def _chosen_unit(payload: bytes, name: str, requested: str, reach: float) -> str:
     """Fragt, bevor die Operation geschrieben wird, damit die Antwort mit ihr
     gespeichert wird (§17.1).
+
+    ``reach`` aus dem Drucker des Projekts, wie in der Operation
+    (:func:`plausible_reach`). Ohne ihn nahm die Kommandozeile einen Helm in
+    Metern still als Zoll, wo Fenster und Operation fragen (RM-420).
     """
     if requested != "auto":
         return requested
-    guess = detect_unit(read_model(payload, Path(name).suffix).bounds.diagonal)
+    guess = detect_unit(read_model(payload, Path(name).suffix).bounds.diagonal, reach)
     if guess.unit is not None:
         return guess.unit
     return terminal_ask(

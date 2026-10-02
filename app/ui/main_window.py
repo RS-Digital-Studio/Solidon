@@ -198,6 +198,7 @@ from app.core.scene import (
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import change_for, repair_is_available
+from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
 from app.core.scene.placement import seat_on_face, seats_on
@@ -237,6 +238,7 @@ from app.core.types import (
     PrintSettings,
     Profile,
     QualityPreset,
+    SceneObject,
     SliceResult,
     SolvedSketch,
     SourceOrigin,
@@ -1686,6 +1688,23 @@ def _names_a_dimension(entry: ParamSpec) -> bool:
     return entry.placement == "front" and entry.kind == "float" and entry.unit == "mm"
 
 
+#: Schritte, die die Größe eines Körpers ausdrücklich ändern: Danach rahmt die
+#: Ansicht einmal nach, wenn er über den Rahmen hinausreicht (RM-280).
+RESIZING_OPERATIONS: Final[frozenset[str]] = frozenset({"scale_object", "fit_to_size"})
+
+
+def _stands_on_the_bed(entry: SceneObject) -> bool:
+    """Ob ein Körper mit seiner Unterseite auf der Druckfläche steht (RM-473)."""
+    return abs(float(entry.mesh.bounds.minimum[2])) <= EPS_DISPLAY
+
+
+def _offers_the_bed_anchor(spec: OperationSpec) -> bool:
+    """Ob die Operation einen Bezugspunkt „Druckbett“ zur Wahl stellt."""
+    return any(
+        entry.name == "about" and "bed" in (entry.choices or ()) for entry in spec.params.spec()
+    )
+
+
 def offers_naming(spec: OperationSpec) -> bool:
     """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
 
@@ -2803,6 +2822,9 @@ class MainWindow(QMainWindow):
         die alte Szene. Gemerkt werden deshalb die Ausgaben der Operation und
         nicht ein Zeitpunkt.
         """
+        self._resized_seen: set[str] = set()
+        """Transaktionen, nach denen die Ansicht schon gefragt hat, ob sie
+        nachrahmt (:meth:`_frame_after_resizing`) — jede nur einmal."""
         self._created_to_choose: tuple[ObjectId, ...] = ()
         """Neue Körper eines Erzeugerschritts, die nach ihrer Auswertung gewählt werden.
 
@@ -2913,7 +2935,7 @@ class MainWindow(QMainWindow):
         # die gezeichnete Linie; ein getrenntes Teil bleibt getrennt und geht
         # über Strg+Z zurück. (Das Bemalen stand mit demselben Argument
         # daneben, bis der Punkt-Radius-Pinsel fiel — Färben läuft seither
-        # über das Kontextmenü am Merkmal, als Operation wie jede andere.)
+        # über das Auswahlfenster am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
             tr("Trennen"),
@@ -7463,6 +7485,9 @@ class MainWindow(QMainWindow):
         deshalb nicht in die gemeinsamen Druckempfehlungen.
         """
         self._end_inserting_for_output()
+        # Der Slicer bekommt die feine Rechnung (RM-426). Bestellt wird sie
+        # schon beim Öffnen, damit ein Klick auf *Slicen* selten warten muss.
+        self.session.request_fine()
         # §29: Was Solidon hier rechnet, reist mit einer gespeicherten 3MF und
         # mit der Übergabe an den Slicer. Der Hinweis sagt das einmal je
         # Textfassung und lässt dabei wählen, ob es so sein soll; danach steht
@@ -7810,6 +7835,9 @@ class MainWindow(QMainWindow):
         landen im Prüfbericht. „Wer trotzdem exportieren will, kann das — er
         weiß dann nur, was er tut", sagt §29.
 
+        Geschrieben wird die feine Rechnung, nicht der Entwurf des Fensters
+        (§31, RM-426); :meth:`_start_export` wartet auf sie.
+
         Gerechnet und geschrieben wird im Arbeiter (§2.8): Prüfung, Aufbau der
         Baugruppe und das Schreiben zusammen sind bei mehreren großen Körpern
         mehr als zwei Sekunden. Hier bleiben der Dateidialog und das
@@ -7936,14 +7964,19 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
-        if self.session.busy or not self.session.result_current:
+        if not self.session.fine_current:
             # **Erst das Ergebnis, dann die Datei** (RM-352). Geschrieben
             # wurde das vorige Ergebnis mit dem neuen Dokument: Bild und
             # Verlauf zeigten 100 mm, die Datei war 80 mm breit, und die
             # Quittung meldete Erfolg. Der Auftrag wartet wie ein Klick vor
             # der Vorschau, die Statuszeile sagt es, *Abbrechen* nimmt ihn
             # zurück.
+            #
+            # **Und das feine Ergebnis** (RM-426): Das Fenster rechnet im
+            # Entwurf, die Datei braucht die feine Rechnung mit der vollen
+            # Rückfallkette (§31). Bestellt wird sie hier, gewartet wie oben.
             self._export_waiting = (target, export_format, self.session.project)
+            self.session.request_fine()
             text = tr("Export wartet auf die laufende Berechnung … {name}").format(name=target.name)
             self._set_progress_state(
                 "export",
@@ -8059,12 +8092,18 @@ class MainWindow(QMainWindow):
         dem Stand vor dem Halt und sähe aus wie das Bild, wäre es aber nicht.
         """
         waiting = self._export_waiting
-        if waiting is None or self.session.busy or not self.session.result_current:
+        if waiting is None or self.session.busy:
             return
         self._export_waiting = None
         self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
         target, export_format, project = waiting
         if self._close_requested or project is not self.session.project:
+            return
+        if not self.session.fine_current:
+            # Die feine Rechnung kam nicht zu Ende — abgebrochen oder
+            # gescheitert, beides steht schon im Fenster. Geschrieben wird
+            # nicht der Entwurf an ihrer Stelle (RM-426).
+            self.announce(tr("Export abgebrochen."))
             return
         result = self.session.last_result
         if result is None or result.stopped_at is not None:
@@ -14994,6 +15033,23 @@ class MainWindow(QMainWindow):
         if result is not None:
             self._reveal_split_result(result)
 
+    def _frame_after_resizing(self) -> None:
+        """Nach einem neuen Größenschritt rahmt die Ansicht einmal, wenn nötig (RM-280).
+
+        Gemeint ist die jüngste Transaktion, und nur einmal: Ein Undo, ein
+        Themenwechsel oder eine weitere Auswertung desselben Stands rahmen
+        nicht nach. Wer verschiebt oder bohrt, behält seinen Zoom
+        (:meth:`Viewport.frame_if_beyond`).
+        """
+        transactions = self.session.history.transactions
+        newest = transactions[-1] if transactions else None
+        if newest is None or newest.id in self._resized_seen:
+            return
+        self._resized_seen.update(entry.id for entry in transactions)
+        operations = {entry.id: entry.op for entry in self.session.project.document.ops}
+        if any(operations.get(op_id) in RESIZING_OPERATIONS for op_id in newest.ops):
+            self.viewport.frame_if_beyond()
+
     def _reveal_split_result(self, result: EvaluationResult) -> None:
         """Macht Naht, Stifte und Löcher ohne gesuchten zweiten Griff sichtbar."""
         wanted = self._pending_split_reveal
@@ -17758,7 +17814,7 @@ class MainWindow(QMainWindow):
                 # Auswahl aus dem *Wert*, den er mitbekommt: Aus „hole_1"
                 # wurde ein Eintrag „hole_1", und die übrigen Flächen des
                 # Körpers kannte die Liste nicht. Das ist der Hauptweg — das
-                # Kontextmenü am Merkmal (Weg 1) und die Menüs *Erzeugen* und
+                # Auswahlfenster am Merkmal (Weg 1) und die Menüs *Erzeugen* und
                 # *Ändern* laufen hier durch —, und der Docstring des
                 # Parameters verspricht die lesbare Bezeichnung. Gemessen:
                 # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
@@ -17786,6 +17842,8 @@ class MainWindow(QMainWindow):
                 # Projektparameter an — `_named_dimensions` baut sie beim
                 # Übernehmen, in derselben Transaktion wie den Schritt.
                 offer_naming=offers_naming(spec),
+                # Die letzte Wahl des Kunden, beim ersten Start an (RM-369).
+                naming_default=self.settings.name_dimensions,
             )
             dialog.spoolChosen.connect(remember_spool)
             if seat is not None:
@@ -17875,6 +17933,14 @@ class MainWindow(QMainWindow):
                         )
                 count_before = len(self.session.project.document.ops)
                 self._commit_preview_order(order)
+                if dialog.offers_naming() and (
+                    dialog.names_dimensions() != self.settings.name_dimensions
+                ):
+                    # **Gemerkt wird beim Übernehmen**, nicht beim Klick auf
+                    # den Haken: Wer ihn nur ausprobiert und abbricht, hat
+                    # nichts entschieden (RM-369).
+                    self.settings.name_dimensions = dialog.names_dimensions()
+                    self._store_settings()
                 operations = self.session.project.document.ops
                 if picked.name == "split_pinned" and len(operations) > count_before:
                     self._queue_split_reveal(operations[-1].outputs)
@@ -18085,17 +18151,44 @@ class MainWindow(QMainWindow):
             return str(error)
         remote = Origin(by="agent", model=REMOTE_ORIGIN)
         if tool == ADD_PARAMETER:
+            # Titel und Grenzen bietet das Werkzeugschema an, also kommen sie
+            # an — wie im Chat (RM-447). Sie gingen hier verloren.
+            limits: dict[str, float] = {}
+            for limit in ("minimum", "maximum"):
+                if values.get(limit) is None:
+                    continue
+                try:
+                    limits[limit] = parse_number(values[limit])
+                except ValueError as error:
+                    return str(error)
+            title = values.get("title")
             made = self.session.add_parameter(
-                Parameter(name=name, value=number, unit=str(values.get("unit", "mm"))),
+                Parameter(
+                    name=name,
+                    value=number,
+                    unit=str(values.get("unit", "mm")),
+                    title=str(title) if title else None,
+                    minimum=limits.get("minimum"),
+                    maximum=limits.get("maximum"),
+                ),
                 origin=remote,
             )
             if not made:
                 return tr("Der Parameter wurde nicht angelegt — den Grund zeigt das Fenster.")
             return tr("Parameter angelegt: {name} = {value}", name=name, value=number)
-        if name not in self.session.project.document.parameters:
+        document = self.session.project.document
+        existing = document.parameters.get(name)
+        if existing is None:
             return tr("Diesen Parameter gibt es nicht: {name}", name=name)
-        if not self.session.change_parameter(name, number, origin=remote):
+        if is_close(existing.value, number):
             return tr("Der Wert ist schon so eingestellt.")
+        # Die Grenze steht in der Antwort, nicht nur im Fenster, das der
+        # Aufrufer nicht sieht (RM-447).
+        beyond = bounds_refusal(document, name, number)
+        if not self.session.change_parameter(name, number, origin=remote):
+            if beyond is not None:
+                return str(beyond)
+            return tr("Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.")
         return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
 
     def _draw_sketch_in_space(
@@ -19709,7 +19802,7 @@ class MainWindow(QMainWindow):
 
         ``spec`` verengt die Liste auf die Merkmalsarten, mit denen diese
         Operation etwas anfangen kann (``applies_to``) — dieselbe Zuordnung,
-        über die das Kontextmenü am Merkmal die Operation findet (§18.5, §10).
+        über die das Auswahlfenster am Merkmal die Operation findet (§18.5, §10).
 
         **Ohne sie war die Auswahl eines Dialogs die aller Merkmale.** An einer
         eingelesenen STEP-Datei mit 302 erkannten Merkmalen bot *Bohrung
@@ -19961,7 +20054,15 @@ class MainWindow(QMainWindow):
                 for name in (*POSITION_FIELDS, *NORMAL_FIELDS):
                     found.pop(name, None)
             return found
-        return dict(values_for_object(spec, entry.features))
+        values = dict(values_for_object(spec, entry.features))
+        if _stands_on_the_bed(entry) and _offers_the_bed_anchor(spec):
+            # **Was auf dem Bett steht, wächst vom Bett aus** (RM-473): Um die
+            # Mitte skaliert, sank ein Würfel auf dem Bett beim Faktor 2,3 um
+            # 13 mm unter die Platte, und der Bericht bot danach *Auf das Bett
+            # setzen* an. Die Vorgabe der Operation bleibt die Mitte; Rezepte
+            # und Agent rechnen weiter so, wie sie gespeichert sind.
+            values.setdefault("about", "bed")
+        return values
 
     def _seat_for(
         self, spec: OperationSpec, selected: ObjectId | None, entered: Mapping[str, Any]
@@ -20128,9 +20229,23 @@ class MainWindow(QMainWindow):
         elif chosen == "parts":
             self.action_catalog()
         elif chosen == "chat":
+            # **Der Chat kommt nach vorn, dann bekommt er den Cursor** (RM-448):
+            # Stand der Reiter auf dem Prüfbericht oder war die Spalte
+            # ausgeblendet, landete der Fokus in einem verborgenen Feld, und
+            # wer zu tippen begann, schrieb ins Nichts.
+            if not self.right_column.isVisible():
+                self.right_column.setVisible(True)
+                self.settings.right_panel_visible = True
+                self._store_settings()
+                self._mark_status_alerts()
+            switch(self.right, self.chat)
             self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
         elif REGISTRY.has(chosen):
-            self.run_operation(REGISTRY.get(chosen))
+            # Gleich beschriftet heißt gleich gemacht: *Quader anlegen* aus der
+            # Einladung ist der Quader des Menüs — exakt, wo der Kern da ist
+            # (``menu_twins``, RM-448), sonst entstand hier ein Netz und im
+            # Menü ein Körper mit echten Kanten.
+            self.run_operation(REGISTRY.get(menu_twins().get(chosen, chosen)))
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
@@ -20249,6 +20364,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
+        self._frame_after_resizing()
         self.viewport.show_scene(self._picture_for(result))
         self._show_invitation()
         self._reveal_split_result(result)
@@ -20327,11 +20443,11 @@ class MainWindow(QMainWindow):
         mehr tut, ist die Liste der Weg zurück. Die Liste selbst heißt
         „Zuletzt geöffnet" und nicht „Projekte"; sie stimmt also weiter.
         """
-        geladen, self._pending_download = self._pending_download, ""
-        eingelesen, self._pending_import = self._pending_import, None
+        downloaded, self._pending_download = self._pending_download, ""
+        imported, self._pending_import = self._pending_import, None
         if accepted:
             self._show_start_screen(False)
-            if eingelesen is not None:
+            if imported is not None:
                 # **Erst wenn das Modell steht** (KUNDE-12): Eine Datei, die
                 # den Plan passiert und am Ladeschritt scheitert, stand sonst
                 # in der Liste. ``importConfirmed`` trägt sie nach. Eine Datei
@@ -20339,24 +20455,24 @@ class MainWindow(QMainWindow):
                 # die Sitzung merkt sich nur den letzten Import.
                 if self._recent_candidate is not None:
                     self._on_import_confirmed()
-                self._recent_candidate = eingelesen
+                self._recent_candidate = imported
                 if not self.session.import_unconfirmed:
                     self._on_import_confirmed()
-            if geladen:
-                self.announce(tr("Geladen: {name}", name=geladen))
+            if downloaded:
+                self.announce(tr("Geladen: {name}", name=downloaded))
         else:
             self.status_message.setText(self._announcement)
 
     def _on_import_confirmed(self) -> None:
         """Das eingelesene Modell steht — die Datei kommt nach „Zuletzt geöffnet“."""
-        eingelesen, self._recent_candidate = self._recent_candidate, None
-        if eingelesen is None:
+        imported, self._recent_candidate = self._recent_candidate, None
+        if imported is None:
             return
         operations = self.session.project.document.ops
         if operations and operations[-1].outputs:
             self._plate_of_import = operations[-1].outputs[0]
             self._show_the_plate_of_the_import()
-        self.settings.remember(eingelesen)
+        self.settings.remember(imported)
         self._store_settings()
         self._show_recent()
 
@@ -22074,25 +22190,26 @@ class MainWindow(QMainWindow):
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
         field = str(error.values.get("field", ""))
-        # **Liest das Feld ein Maß, wird das Maß korrigiert** (RM-354). Der
-        # Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl trennte
-        # still die Bindung; der Wert gehört in die Zeile der Parameterleiste.
+        # **Ist das Feld an ein Maß gebunden, wird das Maß korrigiert** (RM-354).
+        # Der Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl
+        # trennte still die Bindung; der Wert gehört in die Zeile der
+        # Parameterleiste. **Nur die nackte Bindung** (RM-453): Bei
+        # „=max(@breite, 2000)“ behebt keine Breite den Fehler, korrigierbar
+        # ist der Ausdruck im Schritt.
         from app.core import expressions
 
         try:
             raw = self.session.history.operation(error.op_id).params.get(field)
         except AppError:
             raw = None
-        read = expressions.references(raw) if expressions.is_expression(raw) else frozenset()
-        if len(read) == 1:
-            (name,) = read
-            if self.parameters.focus_parameter(name):
-                self.announce(
-                    tr(
-                        "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
-                    ).format(name=name)
-                )
-                return
+        name = expressions.bound_name(raw)
+        if name is not None and self.parameters.focus_parameter(name):
+            self.announce(
+                tr(
+                    "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
+                ).format(name=name)
+            )
+            return
         self.edit_operation(error.op_id, field)
 
     def _show_feature_after_error(self, error: AppError) -> None:
@@ -22394,7 +22511,11 @@ class MainWindow(QMainWindow):
         ):
             self._refresh_parameters()
             return
-        self.session.change_parameter(name, value)
+        if not self.session.change_parameter(name, value):
+            # Abgelehnt — etwa weil ein abgeleitetes Maß ein Feld über seine
+            # Grenze triebe: Die Leiste zeigt wieder, was gilt, statt der
+            # getippten Zahl, die nie ins Dokument kam (RM-447).
+            self._refresh_parameters()
 
     def _on_parameter_unit_edited(self, name: str, unit: str) -> None:
         """Die feste Einheitenauswahl als rücknehmbare Dokumentänderung.

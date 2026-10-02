@@ -774,6 +774,17 @@ class PrinterProfile:
     """
     printable_height: float | None = None
     """Z-Obergrenze ab Bett; ohne Angabe gilt die nominelle Bauraumhöhe."""
+    bed_origin: tuple[float, float] | None = None
+    """Wo der Nullpunkt der Maschine liegt, in denselben zentrierten
+    XY-Koordinaten wie ``printable_area`` (§9, §29).
+
+    Ohne Angabe die vordere linke Ecke des Bauraums, ``(-Breite/2, -Tiefe/2)``
+    — so misst der übliche Drucker, und so blieb jedes vor dem 02.10.2026
+    angelegte Profil, ohne Migration. ``(0, 0)`` ist ein Bett um den Ursprung
+    (Deltas, BIBO); der Dremel 3D45 hat ``(15, 0)``, weil sein Bett von
+    -127,5 bis 97,5 reicht. Jede Stelle, die Maschinenkoordinaten schreibt
+    oder liest, rechnet über :func:`app.core.build_area.machine_shift`.
+    """
     nozzles: int = 1
     """Wie viele Düsen der Drucker zugleich führt.
 

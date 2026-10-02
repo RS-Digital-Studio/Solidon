@@ -82,16 +82,22 @@ FLAT_ENOUGH = 0.9998
 MAX_SPHERE_SUBDIVISIONS = 5
 
 
-def _round_segments(segments: int, quality: Quality) -> int:
-    """Im Entwurf gröber, aber immer mit Punkten auf den vier Hauptachsen.
+def _round_segments(segments: int) -> int:
+    """Die Segmentzahl, immer mit Punkten auf den vier Hauptachsen.
 
     Ohne das Viererraster unterschreitet ein Ring bei etwa 31 Segmenten sein
     eingetragenes Außenmaß und schwebt knapp über dem Druckbett: keine Stützstelle
     liegt dann auf X, Y oder unten. Die Obergrenzen der beiden Schemata sind durch
     vier teilbar, daher bleibt das Aufrunden innerhalb ihres Bereichs.
+
+    **Im Entwurf nicht gröber** (RM-427). Halbiert wurde hier ohne Befund —
+    ein Kegel mit 64 Segmenten stand mit 128 statt 256 Dreiecken im Bild, ein
+    Ring mit 2 048 statt 8 192 —, und gespart war nichts, was zählt: Auch der
+    feinste Ring der Grenzen bleibt bei 32 768 Dreiecken. Eine Entwurfsstufe
+    gilt nur, wo das Budget es verlangt, und dann mit Befund (wie
+    :func:`app.core.geom.blend.draft_grid`).
     """
-    wanted = segments if quality == "fine" else max(8, segments // 2)
-    return ((wanted + 3) // 4) * 4
+    return ((segments + 3) // 4) * 4
 
 
 def tube_fits_the_ring(outer_diameter: float, tube_diameter: float) -> None:
@@ -185,7 +191,7 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
                 bottom_diameter,
                 top_diameter,
                 float(values["height"]),
-                segments=_round_segments(int(values["segments"]), quality),
+                segments=_round_segments(int(values["segments"])),
             )
         )
     if name == "create_sphere":
@@ -208,7 +214,7 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
         tube_diameter = float(values["tube_diameter"])
         tube_fits_the_ring(outer_diameter, tube_diameter)
         minor_radius = tube_diameter / 2.0
-        segments = _round_segments(int(values["segments"]), quality)
+        segments = _round_segments(int(values["segments"]))
         # Dieselben Ecken auf jeder Maschine (RM-187): ``trimesh.creation.torus``
         # rechnet sie mit ``np.cos``.
         body = ring_of_revolution(
@@ -467,6 +473,8 @@ class ConeParams(PositionedPrimitiveParams):
     params=ConeParams,
     consumes=0,
     produces=1,
+    # Im Entwurf nicht mehr gröber (RM-427): gespeicherte Entwurfsnetze gelten nicht.
+    cache_version="2",
     doc=_("Legt einen Kegel oder Kegelstumpf stehend auf dem Druckbett an."),
 )
 def create_cone(ctx: OpContext) -> OpResult:
@@ -564,6 +572,8 @@ class TorusParams(PositionedPrimitiveParams):
     params=TorusParams,
     consumes=0,
     produces=1,
+    # Im Entwurf nicht mehr gröber (RM-427): gespeicherte Entwurfsnetze gelten nicht.
+    cache_version="2",
     doc=_("Legt einen geschlossenen runden Ring aufsitzend auf dem Druckbett an."),
 )
 def create_torus(ctx: OpContext) -> OpResult:

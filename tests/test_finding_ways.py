@@ -189,6 +189,7 @@ MEINT_DEN_SCHRITT: dict[str, str | None] = {
     "transform.without_effect": None,
     "lattice.filled": "cell",
     "displace.applied": "strength",
+    "hollow.done": "wall",
 }
 
 

@@ -165,6 +165,9 @@ def test_the_reported_transform_produces_the_exact_chosen_placement():
         {"printable_area": [[0, 0], [10, 0], [5, float("nan")]]},
         {"printable_area": [[0, 0, 4], [10, 0], [5, 5]]},
         {"bed_exclusions": [[[0, 0], [10, 0]]]},
+        {"bed_origin": [0.0, float("nan")]},
+        {"bed_origin": [0.0, 0.0, 0.0]},
+        {"bed_origin": "Mitte"},
     ],
 )
 def test_invalid_optional_printer_geometry_is_rejected(extra):

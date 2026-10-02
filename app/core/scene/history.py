@@ -218,12 +218,43 @@ def recognition_reopenable(
     ``evaluate._BodyRecognition.answer``. ``declined_only`` fragt nur nach
     einer Absage — nachzuholen gibt es nur, was ausgelassen wurde.
     """
-    key = recognition_answer_key(object_id)
-    for index in _answering_load_steps(document, {key}):
-        record = document.ops[index].matches[key]
-        if not declined_only or (isinstance(record, Mapping) and record.get("allowed") is False):
-            return True
+    for owner in recognition_owners(document, (object_id,)):
+        key = recognition_answer_key(owner)
+        for index in _answering_load_steps(document, {key}):
+            record = document.ops[index].matches[key]
+            if not declined_only or (
+                isinstance(record, Mapping) and record.get("allowed") is False
+            ):
+                return True
     return False
+
+
+def recognition_owners(document: Document, object_ids: Collection[ObjectId]) -> set[ObjectId]:
+    """Die geladenen Körper, deren Erkennungswahl für diese Körper gilt (RM-406).
+
+    Ein geladener Körper trägt seine Wahl selbst. Ein Körper, den ein späterer
+    Schritt aus ihm machte — die Stücke von *Auto Split*, *Teilen* —, erbt sie
+    (``evaluate._inherit_recognition``); gefunden wird die Wahl dann am Ursprung,
+    über die Eingänge der Schritte zurück.
+    """
+    loaded = {output for entry in document.ops if entry.op == "load" for output in entry.outputs}
+    owners: set[ObjectId] = set()
+    seen: set[ObjectId] = set()
+    pending = list(object_ids)
+    while pending:
+        object_id = pending.pop()
+        if object_id in seen:
+            continue
+        seen.add(object_id)
+        if object_id in loaded:
+            owners.add(object_id)
+            continue
+        maker = next(
+            (entry for entry in reversed(document.ops) if object_id in entry.outputs), None
+        )
+        if maker is not None:
+            pending.extend(maker.inputs)
+    return owners
 
 
 def _answering_load_steps(document: Document, keys: Collection[str]) -> list[int]:
@@ -1394,7 +1425,9 @@ class History:
         sondern die Antwort auf eine Frage der Auswertung, und die Geometrie
         ändert sich nicht. Gibt zurück, ob eine Wahl dastand.
         """
-        wanted = {recognition_answer_key(object_id) for object_id in object_ids}
+        wanted = {
+            recognition_answer_key(owner) for owner in recognition_owners(self.document, object_ids)
+        }
         changed = False
         for index in _answering_load_steps(self.document, wanted):
             entry = self.document.ops[index]

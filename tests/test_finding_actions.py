@@ -437,6 +437,8 @@ def _change_step(finding: Finding) -> list[str]:
         ("fit_to_size", {"largest": 50.0}, "transform.fitted", "Größe ändern", "largest"),
         # Die Vorgabe des Dialogs übernommen: Der Körper steht, wo er stand.
         ("translate_object", {}, "transform.without_effect", "Diesen Schritt ändern", None),
+        # Ob die Wand trägt, entscheidet der Kunde am Befund (RM-441).
+        ("hollow_object", {"wall": 3.0}, "hollow.done", "Diesen Schritt ändern", "wall"),
     ],
 )
 def test_a_finding_about_what_a_step_did_opens_that_step(
