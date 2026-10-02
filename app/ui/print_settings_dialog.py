@@ -7006,19 +7006,24 @@ class PrintSettingsDialog(QDialog):
             self._show_slicer_state()
 
     def _first_numeric_refusal(self) -> str:
-        """Die erste Grenzablehnung an einem aktiven Druckwert."""
+        """Die erste Grenzablehnung an einem aktiven Druckwert — mit dem Feld davor.
+
+        Am Knopf *Slicen* stand nur „95 °C liegt über der Obergrenze 90 °C.“,
+        und welches der dreißig Felder gemeint war, musste man suchen
+        (RM-342, D-N2).
+        """
         if self.session.profile.printer.is_resin:
             return ""
         for editor in (self.nozzle, self.nozzle_count):
             if reason := editor.refusal():
-                return reason
+                return str(tr("{name}: {value}", name=editor.accessibleName(), value=reason))
         inactive = self._inactive_paths()
         for field in FIELDS:
             if field.path in inactive:
                 continue
             field_editor = self._editors.get(field.path)
             if isinstance(field_editor, BoundedSpin) and (reason := field_editor.refusal()):
-                return reason
+                return str(tr("{name}: {value}", name=setting_title(field.path), value=reason))
         return ""
 
     def _refresh_header_refusal(self, path: str, *_args: object) -> None:
