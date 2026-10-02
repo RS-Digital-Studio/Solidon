@@ -476,7 +476,22 @@ def detect_unit(diagonal: float, largest_mm: float = PLAUSIBLE_MAX_MM) -> UnitGu
         # Drucker nicht um mehr als das Doppelte überragt.
         return UnitGuess(unit="mm", candidates=("mm",), diagonal=diagonal)
     if len(plausible) == 1:
-        return UnitGuess(unit=plausible[0], candidates=plausible, diagonal=diagonal)
+        # **Eine Lesart allein ist nur sicher, wenn keine zweite den Drucker
+        # erreicht.** Die feste Grenze von 300 mm ließ bei 0,39 bis 0,89
+        # Einheiten allein „in“ übrig, obwohl dieselbe Datei in Metern unter
+        # der doppelten Bauraumdiagonale blieb — ein Blender-Helm kam so ohne
+        # Frage mit 7,6 mm an (RM-353, Regel 21). Millimeter behalten ihren
+        # Vorrang aus demselben Grund wie oben: Sonst fragte jedes Teil bis
+        # 88 mm, weil es als Zentimeter auch noch in die Reichweite passte.
+        only = plausible[0]
+        rivals = tuple(
+            unit
+            for unit in CANDIDATE_UNITS
+            if unit != only and PLAUSIBLE_MIN_MM <= to_mm(diagonal, unit) <= largest_mm
+        )
+        if only == MEASURED_UNIT or not rivals:
+            return UnitGuess(unit=only, candidates=plausible, diagonal=diagonal)
+        plausible = tuple(unit for unit in CANDIDATE_UNITS if unit == only or unit in rivals)
     if not plausible:
         return UnitGuess(unit=None, candidates=CANDIDATE_UNITS, diagonal=diagonal)
     # **Die gemessene Einheit steht immer zur Wahl.** Plausibel heißt hier

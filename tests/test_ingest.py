@@ -1749,6 +1749,90 @@ def test_a_part_that_fills_the_bed_is_plausible_in_millimetres() -> None:
     assert detect_unit(2 * reach, reach).unit is None, "größer als der doppelte Drucker fragt"
 
 
+def test_a_metre_file_within_reach_of_the_printer_is_asked_about() -> None:
+    """Eine zweite Lesart innerhalb der Reichweite macht die erste unsicher (§17.1).
+
+    Ein Blender-Helm von 0,30 × 0,25 × 0,30 Metern misst 0,49 Einheiten über
+    alles. Bis zur festen Grenze von 300 mm war nur „in“ plausibel (12,5 mm),
+    und das galt als sicher — obwohl 492 mm in Metern unter der doppelten
+    Bauraumdiagonale liegen, die dieselbe Heuristik für Millimeter gelten
+    lässt. Der Helm kam ohne Frage mit 7,62 × 6,35 × 7,62 mm an (Regel 21).
+    """
+    from app.core.ingest.loader import plausible_reach
+
+    reach = plausible_reach((256.0, 256.0, 256.0))
+
+    guess = detect_unit(0.52, reach)
+    assert not guess.certain
+    assert guess.candidates[0] == "mm", "die gemessene Einheit steht zuerst"
+    assert {"in", "m"} <= set(guess.candidates)
+
+    # Die Ränder des Bandes: darunter war nie etwas sicher, darüber liegt
+    # die Meter-Lesart hinter dem Doppelten des Druckers.
+    assert not detect_unit(0.40, reach).certain
+    assert not detect_unit(0.88, reach).certain
+    assert detect_unit(0.89, reach).unit == "in", "890 mm sind mehr als der doppelte Drucker"
+    assert not detect_unit(0.39, reach).certain, "nichts plausibel bleibt eine Frage"
+    # Ohne Drucker reicht keine Lesart über 300 mm; dann bleibt Zoll allein.
+    assert detect_unit(0.52).unit == "in"
+    # Ein größerer Drucker zieht die Grenze mit.
+    assert not detect_unit(0.95, plausible_reach((350.0, 350.0, 350.0))).certain
+
+
+def test_only_millimetres_outrank_a_second_reading_within_reach() -> None:
+    """Die Ausnahme für Millimeter bleibt; jede andere Einheit fragt (§17.1).
+
+    Geprüft wird jede Bandgrenze, an der genau eine Lesart unter 300 mm
+    plausibel ist. Ist das Millimeter, entscheidet es weiter allein — sonst
+    würde jedes Teil bis 88 mm wieder zur Frage, weil es in Zentimetern unter
+    dem doppelten Drucker bliebe. Ist es eine andere Einheit, fragt jede
+    zweite Lesart, die den Drucker nicht um mehr als das Doppelte überragt.
+    """
+    from app.core.ingest.loader import plausible_reach
+
+    reach = plausible_reach((256.0, 256.0, 256.0))
+
+    # Millimeter allein: cm (bis 88 mm Teil) und in (bis 34 mm) wären in
+    # Reichweite — und fragen trotzdem nicht.
+    assert detect_unit(31.0, reach).unit == "mm", "31 Zoll wären 787 mm"
+    assert detect_unit(50.0, reach).unit == "mm", "50 cm wären 500 mm"
+    assert detect_unit(88.0, reach).unit == "mm"
+    assert detect_unit(150.0, reach).unit == "mm"
+    assert detect_unit(500.0, reach).unit == "mm", "nur Millimeter dürfen über 300 mm"
+    # Meter allein: Zoll läge unter zehn Millimetern, nicht plausibel.
+    assert detect_unit(0.30, reach).unit == "m"
+    assert detect_unit(0.05, reach).unit == "m"
+    # Wo schon zwei Lesarten plausibel sind, bleibt es eine Frage.
+    for diagonal in (1.0, 5.0, 10.0, 20.0, 30.0):
+        assert not detect_unit(diagonal, reach).certain, diagonal
+
+
+def test_a_helmet_in_metres_is_asked_about_with_metres_among_the_answers(
+    profile: Profile,
+) -> None:
+    """Der Helm aus RM-353 am ganzen Ladeweg, nicht nur an der Heuristik."""
+    helmet = trimesh.creation.box((0.30, 0.25, 0.30))
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/helm.stl", sha256=""
+    )
+    project.sources["src_1"] = helmet.export(file_type="stl")
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1"})])
+    asked: list[list[str]] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(choices)
+        return "m"
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=ask)
+
+    assert asked, "Meter oder Zoll — das ist eine Frage"
+    assert "m" in asked[0]
+    assert "in" in asked[0]
+    assert result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((300.0, 250.0, 300.0))
+
+
 # ---------------------------------------------------------------------
 # Was ein Kunde wirklich auf der Platte hat: der abgebrochene Download,
 # die umbenannte Datei, die Fehlerseite des Servers (03.09.2026).
