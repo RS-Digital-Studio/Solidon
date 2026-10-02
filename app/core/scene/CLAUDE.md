@@ -235,6 +235,9 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 
 ### Verweise
 
+- **Passungsschlüssel** bleiben `fit:<Name>:a/b`; der freie Name darf selbst
+  Doppelpunkte tragen. `orphans.fit_name_from_key` liest bis zum letzten
+  Seitenmarker, auch für Abhängigkeiten und Ruhevermerke beim Umbau.
 - **`kind="features"`**: jeder fehlende Verweis einzeln, auch nach einem
   Treffer; heißt leer „ganzer Körper", vergrößert „Verweis streichen" den
   Bereich nie; Abbrechen behält. Ausgeblendete Felder lösen sich nur aktiv auf

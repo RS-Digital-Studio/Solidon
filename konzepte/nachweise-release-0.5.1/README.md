@@ -54,6 +54,7 @@ einem neuen Lauf anzupassen.
 | [`reports/rm384-spaetes-helferende-2026-10-02.md`](reports/rm384-spaetes-helferende-2026-10-02.md) | Späteres Helferende am öffentlichen Kernweg, erhaltene Startursache, Startkontingent, Generation und tatsächliche Gegenläufe | RM-384 |
 | [`reports/rm320-baugruppen-2026-10-02.md`](reports/rm320-baugruppen-2026-10-02.md) | Begrenzter Langlochzug mit freien Stiften und Innenkammern, tatsächlicher Arbeiterabbruch sowie analytische und reale Modellbelege | RM-320 |
 | [`reports/rm284-rundungsgruppen-2026-10-02.md`](reports/rm284-rundungsgruppen-2026-10-02.md) | Rundungsgruppen, belegte Merkmalsfortführung und ausdrückliche Neuwahl; analytische Gegenfälle, Kundenmodelle und Schlussreview | RM-284, notwendiger RM-218-Anschluss |
+| [`reports/rm218-kundenpassung-2026-10-02.md`](reports/rm218-kundenpassung-2026-10-02.md) | Vollständige Passungsnamen und sechs echte STEP-Umbauten mit Pin, Warmcache, direktem Undo und unverändertem Quellstand | RM-218 |
 | [`reports/rm298-hilfsprozessmarken-2026-10-02.md`](reports/rm298-hilfsprozessmarken-2026-10-02.md) | Vorbereitete öffentliche Helfer-Messwege, unverfälschte Marken und Entwicklungskontrollen | RM-298(d) |
 | [`reports/rm298-lifecycle-2026-10-02.md`](reports/rm298-lifecycle-2026-10-02.md) | Aktiver Windows-Elternabbruch, tatsächliche OS-Priorität und Gegenproben | RM-298(d) |
 | [`reports/rm298-poolnachweise-2026-10-02.md`](reports/rm298-poolnachweise-2026-10-02.md) | Integrierte Besitzgrenze, vier lokale Fehleranschlüsse, echte Gegenläufe und Entwicklungstor | RM-298(a) |

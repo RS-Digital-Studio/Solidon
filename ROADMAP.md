@@ -57,7 +57,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-193 — Die Erkennung an einer glatten Generator-Freiform kostet Minuten für null Merkmale](#rm-193) | Geometrie, Erkennung und Druckvorbereitung | Stapelumbau gebaut (0.5.1), am Drachen im Rauschen (12 von 98 Läufen vergeblich, Gruppen zu klein); offen: anderer Hebel oder neu gefasstes Ziel |
 | [RM-201 — Ein hohler Körper hält die 300 ms der Schichtanalyse nicht](#rm-201) | Geometrie, Erkennung und Druckvorbereitung | Native Breitensuche als eigener Bauauftrag (C++ freigegeben 23.09.); womit — eigene Mitre-Offsetfunktion in `_chain.pyx` oder Clipper2 über Cython —, entscheidet Robert |
 | [RM-217 — Die Zuordnungsfrage zeigt das alte Merkmal nicht im Bild](#rm-217) | Geometrie, Erkennung und Druckvorbereitung | Altmerkmal und Kandidat werden gemeinsam markiert; Kern-, Ansichts- und Regressionstests grün. Offen: echter Fensterbeleg im Release unter RM-213 |
-| [RM-218 — Bohrungskennungen beim Umbau des exakten Verlaufs erhalten](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Begrenzter Anschluss mit RM284 auf origin/main; die Gesamtfreigabe und der vollständige Passungsnachweis am Kundenteil bleiben offen, Fensterabnahme im Release |
+| [RM-218 — Bohrungskennungen beim Umbau des exakten Verlaufs erhalten](#rm-218) | Geometrie, Erkennung und Druckvorbereitung | Namensparser und alle sechs echten Passungs-/Umbau-/Undo-Fälle unabhängig freigegeben; zentrales Tor und Übernahme offen, Fensterabnahme im Release |
 | [RM-226 — Netz und exakter Kern nennen dieselbe Fläche verschieden](#rm-226) | Geometrie, Erkennung und Druckvorbereitung | Gewölbte Oberseite exakt Verrundung, am Netz gekrümmte Fläche; Fläche versetzen lässt exakt eine koplanare Scheibe stehen — replaces_an_edge an den exakten Kern, gleiche Domäne vereinigen; dazu am Langloch die Tiefe mit oder ohne Fase und der zweite Satz einer Kopie über die Kante (Durchsicht 0.5.1) |
 | [RM-228 — Die Slicer-Übergabe lässt Lüfter und Spulen beim Hersteller](#rm-228) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: PLA-Vorgabe 50…100 % je Drucker und Curas Schichtzeitschwelle (80 s aus der Kurve heben den Lüfter in Schicht 1); der Hilfslüfter des Centauri (`M106 P2 S0`) ist Elegoos eigener Wert. Offen außerdem Kammerlüfter und unbemalte Spulen aus alten Projekten — merge_slots nur benutzte, je Lüfterschlüssel entscheiden |
 | [RM-230 — Variable Verrundung und Formschräge: fünf Grenzen, die der Kunde merkt](#rm-230) | Geometrie, Erkennung und Druckvorbereitung | Anfang auf Ringen fest, gemischte Ecken exakt ungeprüft, Zwischenstellen nicht bindbar, Schräge an allen Wänden des Trays abgesagt — je Grenze bauen oder benennen |
@@ -1695,8 +1695,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   nennt dessen Entwicklungsprüfung und schließt RM218 insgesamt ausdrücklich nicht ab.
   Die vorstehende Nachprüfung beschreibt ihren früheren Hauptzweigstand; ihre offene
   Gegenprobe zur Passung am echten Kundenteil wird dadurch nicht nachträglich grün.
-  **Offen:** vollständiger Passungsnachweis am Kundenteil für die drei Umbauten und die
-  Gesamtfreigabe von RM218. Die Fensterabnahme bleibt beim Release unter RM-213.
+  **Weiterer Abschlussstand 02.10.:** Die unveränderte Kundensonde mit echtem Pin und
+  gültigem Passungsnamen `RM218: Bohrung B und Prüfpin` besteht alle sechs Fälle
+  (drei Umbauten × Entwurf/Fein, 96,79 s, Exit 0). Ein gemeinsamer Parser erhält
+  jetzt den vollständigen Namen zwischen Präfix und letztem Seitenmarker, auch
+  in Abhängigkeiten und beiden Revisionsvergleichen. Code-/Test-/Kartenreview
+  und unabhängiger Kundenbelegreview sind ohne Befund freigegeben. 36 neue
+  Gegenfälle und der überlappende Nachgang mit 531 Fällen sind grün, ebenso
+  Ruff, Format und mypy auf den betroffenen Pfaden.
+  Der Kundenlauf belegt echte Passungsbezüge, die angeforderte Operationsfolge,
+  Warmcachetreffer je Schritt und genau ein Undo mit direkter Wiederherstellung
+  aller sechs Körper, eingebetteter Quellen und Projektinhalte ohne monotonen Zähler.
+  Alle 260 erfassten Quellen und das Original bleiben unverändert.
+  [Fachnachweis und tatsächliche Grenzen](konzepte/nachweise-release-0.5.1/reports/rm218-kundenpassung-2026-10-02.md).
+  **Offen:** zentrales Entwicklungstor und Übernahme. Die Fensterabnahme bleibt
+  beim Release unter RM-213.
 
 <a id="rm-226"></a>
 
