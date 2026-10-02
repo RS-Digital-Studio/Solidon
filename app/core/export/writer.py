@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 import numpy as np
 
-from app.core import activation
+from app.core import activation, build_area
 from app.core.deferred import trimesh
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -1135,6 +1135,9 @@ class _PartValues:
     """Der Rat, den dieser Slicer je Teil nicht annimmt."""
     effective: PrintSettings | None
     """Womit dieses Teil gedruckt wird — für seine Stützsperre."""
+    asked: tuple[SettingAdvice, ...] = ()
+    """Der Rat dieses Teils zu Pfaden, die der Slicer nur plattenweit annimmt —
+    gleich ob die Platte ihn schon trägt (:func:`_plate_wide_findings`)."""
 
 
 def part_advice(
@@ -1292,8 +1295,13 @@ def _part_values(
         accepted=split.accepted_per_part(),
     )
     applied = [item for item in advice if item.path in split.per_part]
-    unavailable = [item for item in advice if item.path in split.unavailable]
-    return _values_for(split, applied, unavailable, flavour)
+    asked = tuple(item for item in advice if item.path in split.unavailable)
+    # Was die Platte schon mit diesem Wert trägt, bekommt das Teil auch —
+    # nicht erfüllt ist nur ein anderer Wert.
+    unavailable = [
+        item for item in asked if not same_value(item.value, read_path(split.plate, item.path))
+    ]
+    return replace(_values_for(split, applied, unavailable, flavour), asked=asked)
 
 
 def _values_for(
@@ -1538,6 +1546,56 @@ def _part_setting_findings(
     ]
 
 
+def _plate_wide_findings(
+    chosen: Sequence[SceneObject],
+    asked: Mapping[ObjectId, Sequence[SettingAdvice]],
+    split: PartSplit | None,
+) -> list[Finding]:
+    """Wer eine Übernahme mitbekommt, die nur ein anderes Teil verlangt (RM-430).
+
+    Nimmt der Slicer einen Pfad nicht je Teil an — bei CuraEngine Innenwand
+    und Grundbeschleunigung —, bleibt die Übernahme plattenweit. Das Teil, das
+    sie verlangt, ist bedient; die übrigen bekommen sie trotzdem, und das
+    sagt dieser Befund an ihnen, mit dem Grund des verlangenden Teils. Verlangt
+    hier kein Teil den Wert, bleibt es still wie bisher.
+    """
+    if split is None or not split.unavailable:
+        return []
+    findings: list[Finding] = []
+    for path in sorted(split.unavailable):
+        value = read_path(split.plate, path)
+        if same_value(value, read_path(split.base, path)):
+            continue
+        askers = {
+            entry.id: item
+            for entry in chosen
+            for item in asked.get(entry.id, ())
+            if item.path == path
+        }
+        if not askers:
+            continue
+        reason = next(iter(askers.values())).reason
+        findings += [
+            Finding(
+                code="export.part_setting_unavailable",
+                severity="warning",
+                message=_(
+                    "Gilt auch für dieses Teil: Dieser Slicer übernimmt die Einstellung nur "
+                    "für die ganze Platte, nicht für einzelne Teile."
+                ),
+                values={
+                    "setting": path,
+                    "value": _finding_value(value),
+                    "reason": reason,
+                },
+                object_id=entry.id,
+            )
+            for entry in chosen
+            if entry.id not in askers
+        ]
+    return findings
+
+
 #: Um so viel greift die Stützsperre über den Grundriss einer Kanaldecke
 #: hinaus, in mm: eine Bahnbreite der 0,4er Düse, damit auch der Rand, den der
 #: Slicer mit seinem eigenen Winkel noch als Überhang liest, darunter liegt.
@@ -1757,6 +1815,7 @@ def write_assembly(
         )
         for entry in chosen
     }
+    asked = {key: values.asked for key, values in part_values.items()}
     # **Was kein Teil für sich verlangt, gilt allen** (:func:`_unserved`) —
     # als Objektwert an jedem Teil, und der Bericht sagt es. „Kein Teil" heißt
     # keines des ganzen Auftrags: Verlangt es ein Teil auf einer anderen
@@ -1809,6 +1868,7 @@ def write_assembly(
         [(entry.id, advice) for entry in chosen for advice in part_values[entry.id].unavailable],
         applied=False,
     )
+    findings += _plate_wide_findings(chosen, asked, split)
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag — je Teil mit
@@ -1826,7 +1886,14 @@ def write_assembly(
         )
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume
-    bed = (width, depth) if place_on_bed and needs_bed_translation(flavour) else None
+    # Solidons Bettmitte in den Koordinaten der Maschine — nicht immer das
+    # halbe Bett: Am Dremel 3D45 und an jedem Delta liegt der Nullpunkt
+    # woanders (``build_area.machine_shift``, RM-424).
+    bed_centre = (
+        build_area.machine_shift(profile.printer)
+        if place_on_bed and needs_bed_translation(flavour)
+        else None
+    )
 
     as_stl = for_slicer and not reads_assembly_file(flavour)
 
@@ -1868,10 +1935,12 @@ def write_assembly(
             return target, findings + noted
         target = _written(
             directory / (given_name(project_name, "projekt") + ".stl"),
-            _cura_assembly([exported[entry.id] for entry in chosen], bed),
+            _cura_assembly([exported[entry.id] for entry in chosen], bed_centre),
         )
         if takes_mesh_settings(flavour):
-            findings += _cura_meshes(chosen, exported, target, part_values, profile, bed, cancelled)
+            findings += _cura_meshes(
+                chosen, exported, target, part_values, profile, bed_centre, cancelled
+            )
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
@@ -1951,7 +2020,7 @@ def write_assembly(
             parts,
             project_name,
             across=whole_job,
-            bed=bed,
+            bed_centre=bed_centre,
             project_settings=_plate_settings(
                 settings,
                 profile,
@@ -2046,7 +2115,7 @@ def _cura_meshes(
     target: Path,
     part_values: Mapping[str, _PartValues],
     profile: Profile,
-    bed: tuple[float, float] | None,
+    bed_centre: tuple[float, float] | None,
     cancelled: CancelToken | None,
 ) -> list[Finding]:
     """Für CuraEngine je Teil ein Netz und jede Stützsperre als eigenes (§29).
@@ -2070,14 +2139,14 @@ def _cura_meshes(
     for number, entry in enumerate(chosen, start=1):
         part = _written(
             target.with_name(f"{target.stem}-part-{number}.stl"),
-            _cura_assembly([exported[entry.id]], bed),
+            _cura_assembly([exported[entry.id]], bed_centre),
         )
         meshes.append(handover.CuraMesh(part, part_values[entry.id].keys))
         blocker = blockers.get(entry.id)
         if blocker is not None:
             barrier = _written(
                 target.with_name(f"{target.stem}-blocker-{number}.stl"),
-                _cura_assembly([blocker], bed),
+                _cura_assembly([blocker], bed_centre),
             )
             meshes.append(handover.CuraMesh(barrier, {CURA_SUPPORT_BLOCKER: "true"}))
     handover.write_cura_meshes(target, meshes)
@@ -2150,12 +2219,17 @@ def _cura_window(
         )
         for entry in chosen
     ]
-    written = _written(target, threemf.write_assembly(parts, project_name, bed=bed, cura=True))
+    # Curas Leser zieht beim Öffnen das halbe Bett ab, gleich wo die Maschine
+    # ihren Nullpunkt hat (``ThreeMFReader.py``): Die 3MF misst von der Ecke.
+    centre = (bed[0] / 2.0, bed[1] / 2.0)
+    written = _written(
+        target, threemf.write_assembly(parts, project_name, bed_centre=centre, cura=True)
+    )
     _log.info("exported %d object(s) as a 3MF for Cura's window to %s", len(chosen), target.name)
     return written, findings
 
 
-def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) -> bytes:
+def _cura_assembly(meshes: Sequence[MeshData], bed_centre: tuple[float, float] | None) -> bytes:
     """Dieselbe Platte als ein STL — der einzige Weg zu ``CuraEngine``.
 
     Die 3MF-Seite von Cura sitzt in seiner Oberfläche, nicht in der Maschine
@@ -2169,17 +2243,19 @@ def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) 
     Namen und Materialslots liest ``CuraEngine`` ohnehin nicht, und die
     Einstellungen kommen bei ihm über die Kommandozeile.
 
-    ``bed`` sind die Bettmaße, wenn die Teile in Maschinenkoordinaten gehen
-    (:func:`needs_bed_translation`): Verschoben wird über die Punkte, denn ein
-    STL hat keine Platzierungsmatrix. Der aktuelle Cura-Weg übergibt jedoch
-    ``bed=None``, weil CuraEngine die mittig gelieferten Teile selbst auf dem
-    Bett platziert; ``needs_bed_translation("cura")`` ist daher falsch.
+    ``bed_centre`` ist Solidons Bettmitte in Maschinenkoordinaten, wenn die
+    Teile darin gehen (:func:`needs_bed_translation`): Verschoben wird über
+    die Punkte, denn ein STL hat keine Platzierungsmatrix. Der aktuelle
+    Cura-Weg übergibt jedoch ``None``, weil CuraEngine die mittig gelieferten
+    Teile selbst auf dem Bett platziert (``machine_center_is_zero``,
+    ``mesh_position_*`` aus ``handover._machine_keys``);
+    ``needs_bed_translation("cura")`` ist daher falsch.
     """
     bodies = []
     for entry in meshes:
         body = entry.raw.copy()
-        if bed is not None:
-            body.apply_translation((bed[0] / 2.0, bed[1] / 2.0, 0.0))
+        if bed_centre is not None:
+            body.apply_translation((bed_centre[0], bed_centre[1], 0.0))
         bodies.append(body)
     joined = concatenated(bodies) if len(bodies) > 1 else bodies[0]
     return MeshData.of(joined).to_stl()

@@ -250,6 +250,53 @@ def test_a_forced_cut_applies_to_one_stroke_only(window: MainWindow) -> None:
     assert window._sculpt_strokes[1].cut is False
 
 
+def test_a_second_carve_into_the_shown_pit_starts_its_own_stage(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """RM-456 (Testlücke zu RM-438): Das Fenster reicht die Züge der Sitzung an
+    den neuen Zug weiter (``before=self._sculpt_shown()``).
+
+    Ohne sie misst der zweite Zug in die eben gegrabene Mulde gegen die Fläche
+    vor der Etappe, greift nichts und heißt verfehlt. Der Kerntest prüft
+    ``stroke_at``; dieser prüft den Anschluss im Fenster — bisher blieben alle
+    Fenstertests grün, wenn ``before`` fehlte.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.sculpt import apply_strokes
+
+    # Eine fein vernetzte Kugel wie im Kerntest: An der Figur liegt unter einer
+    # 4 mm tiefen Mulde schnell die Gegenseite eines Arms im Pinselradius.
+    ball = tmp_path / "kugel.stl"
+    trimesh.creation.icosphere(subdivisions=4, radius=20.0).export(ball)
+    window.open_path(ball)
+    window.session.wait_for_idle()
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+    object_id = window.object_tree.selected()
+    assert object_id
+    window.start_sculpt(str(object_id))
+    bar = window.sculpt_bar
+    bar.tool.setCurrentIndex(bar.tool.findData("carve"))
+    bar.radius.set_value_mm(3.0)
+    bar.strength.set_value_mm(4.0)
+    mesh = window._sculpt_mesh(window._sculpt_target)
+    assert mesh is not None
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    index = int(np.argmax(points[:, 0]))
+
+    window._on_sculpt(tuple(points[index]))
+    shown = apply_strokes(mesh, window._sculpt_shown())
+    bottom = tuple(float(value) for value in np.asarray(shown.raw.vertices)[index])
+    window._on_sculpt(bottom)
+
+    first, second = window._sculpt_strokes
+    assert not first.cut
+    assert second.cut, "der Zug in die gezeigte Mulde beginnt eine eigene Etappe"
+
+
 def test_undo_takes_back_a_stroke_not_the_operation(window: MainWindow) -> None:
     """Das Rückgängig des Editors läuft auf der Strichliste.
 

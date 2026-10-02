@@ -774,6 +774,17 @@ class PrinterProfile:
     """
     printable_height: float | None = None
     """Z-Obergrenze ab Bett; ohne Angabe gilt die nominelle Bauraumhöhe."""
+    bed_origin: tuple[float, float] | None = None
+    """Wo der Nullpunkt der Maschine liegt, in denselben zentrierten
+    XY-Koordinaten wie ``printable_area`` (§9, §29).
+
+    Ohne Angabe die vordere linke Ecke des Bauraums, ``(-Breite/2, -Tiefe/2)``
+    — so misst der übliche Drucker, und so blieb jedes vor dem 02.10.2026
+    angelegte Profil, ohne Migration. ``(0, 0)`` ist ein Bett um den Ursprung
+    (Deltas, BIBO); der Dremel 3D45 hat ``(15, 0)``, weil sein Bett von
+    -127,5 bis 97,5 reicht. Jede Stelle, die Maschinenkoordinaten schreibt
+    oder liest, rechnet über :func:`app.core.build_area.machine_shift`.
+    """
     nozzles: int = 1
     """Wie viele Düsen der Drucker zugleich führt.
 
@@ -1755,6 +1766,7 @@ ParamKind = Literal[
     "contours",
     "organizer",
     "step_bodies",
+    "points",
 ]
 """``image`` ist eine Quelle, die ein Bild sein muss: Der Dialog listet nur
 Bildquellen und bietet daneben an, eine von der Platte zu holen — ein
@@ -1782,8 +1794,10 @@ bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26).
 ``strokes`` trägt eine Liste von Pinselstrichen, ebenfalls als JSON-Text und
 aus demselben Grund ohne den Agenten: Ein Strich *ist* eine Koordinate, und
 die KI erzeugt keine (Leitprinzip 5). ``armature`` trägt ein Skelett, dessen
-Knochen ebenfalls Koordinaten sind. Alle drei unterliegen den fünf Prüfungen
-aus :mod:`tests.test_gesture_ops`.
+Knochen ebenfalls Koordinaten sind. ``points`` trägt Punkte im Raum als Text
+``x,y,z;x,y,z;x,y,z`` — die drei einer Schnittebene (RM-400), im Bild
+angeklickt. Sie alle unterliegen den fünf Prüfungen aus
+:mod:`tests.test_gesture_ops`.
 
 ``filament`` ist die Nummer eines Materialslots — im Kern eine Zahl wie
 zuvor, in der Oberfläche der Filamentwähler mit Farbfeld, Namen und der

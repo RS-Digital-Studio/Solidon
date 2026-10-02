@@ -311,6 +311,41 @@ def test_a_required_target_starts_empty_and_takes_the_first_click(qt_app: QAppli
         dialog.deleteLater()
 
 
+def test_the_shown_alignment_dialog_takes_the_first_click_as_its_target(
+    qt_app: QApplication,
+) -> None:
+    """Am gezeigten Dialog gab Qt dem gefüllten Quellmerkmal den Erstfokus, und
+    der erste Bildklick erreichte das leere Ziel nie (RM-416): ungezeigt grün,
+    gezeigt rot. Der Erstfokus gehört dem ersten leeren Pflichtfeld."""
+    dialog = OperationDialog(
+        REGISTRY.get("align_to_feature"),
+        {"obj_1": "B", "obj_2": "A"},
+        values={"feature": "face_1"},
+        features={"face_1": "Linke Seite"},
+        target_features={"obj_2:face_1": "A · Linke Seite", "obj_2:face_2": "A · Rechte Seite"},
+        source_objects=("obj_1",),
+    )
+    try:
+        dialog.show()
+        dialog.activateWindow()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert dialog.isVisible(), "sonst prüft dieser Test den ungezeigten Weg"
+        assert dialog.focusWidget() is dialog._editors["target"], "Erstfokus auf das leere Ziel"
+        button = dialog._accept_button
+        assert not button.isEnabled()
+        assert button.toolTip() == tr(
+            "Klicken Sie im Bild auf die Fläche, an die {name} soll.", name="B"
+        ), "der Satz nennt den Klick, nicht einen fehlenden Körper"
+        assert dialog.take_feature("face_2", "Rechte Seite", "obj_2"), "der erste Bildklick"
+        assert dialog.values()["target"] == "obj_2:face_2"
+        assert dialog.values()["feature"] == "face_1", "das Quellmerkmal bleibt"
+        assert button.isEnabled()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 def test_up_to_click_and_reopened_target_have_readable_body_names(qt_app: QApplication) -> None:
     """Flächen werden gezeigt und gespeichert, ohne interne Kennungen abzutippen."""
     dialog = OperationDialog(
@@ -977,7 +1012,7 @@ def test_the_feature_list_only_offers_what_the_operation_takes(window: MainWindo
     Eine Pflicht-Auswahl trägt keinen Leereintrag und steht damit auf ihrem
     ersten. Das liest sich als Vorschlag der Anwendung und ist keiner.
 
-    ``applies_to`` ist dieselbe Zuordnung, über die das Kontextmenü am Merkmal
+    ``applies_to`` ist dieselbe Zuordnung, über die das Auswahlfenster am Merkmal
     die Operation findet (§10) — hier nur andersherum gelesen. Wo sie fehlt,
     wird nicht gefiltert: Raten wäre schlechter als Anbieten.
     """
@@ -3881,9 +3916,10 @@ def test_an_alignment_target_is_never_left_empty(qt_app: QApplication) -> None:
     Band antwortete mit dem Formatfehler des Kerns („obj_2:hole_1"), einer
     Zeichenkette, die in keiner Oberfläche vorkommt; der Knopf war dabei
     bedienbar und führte sicher in den Fehler (Bedienweg-Durchsicht
-    14.09.2026). Das Ziel ist Pflicht: Der Wähler beginnt auf dem ersten
-    Merkmal eines anderen Körpers, und ohne ein solches ist der Knopf grau
-    und sagt warum.
+    14.09.2026). Das Ziel ist Pflicht: Der Wähler beginnt leer und bietet die
+    Merkmale anderer Körper an — still vorgewählt saß der Körper an der
+    falschen Seite (RM-394). Bis zum Klick ist der Knopf grau und sagt, wohin
+    geklickt wird; ohne zweiten Körper sagt er, dass einer fehlt (RM-416).
     """
     spec = REGISTRY.get("align_to_feature")
     target = next(entry for entry in spec.params.spec() if entry.name == "target")
@@ -3898,9 +3934,18 @@ def test_an_alignment_target_is_never_left_empty(qt_app: QApplication) -> None:
     )
     combo = dialog._editors["target"]
     assert isinstance(combo, QComboBox)
-    assert [combo.itemText(i) for i in range(combo.count())] == ["Klotz · Bohrung 1"]
-    assert dialog.values()["target"] == "obj_2:hole_1", "das erste Ziel steht vorausgewählt"
-    assert dialog._accept_button.isEnabled()
+    assert [combo.itemText(i) for i in range(combo.count())] == [
+        tr("— im Bild wählen —"),
+        "Klotz · Bohrung 1",
+    ]
+    assert dialog.values()["target"] in ("", None), "kein still vorgewähltes Ziel"
+    assert not dialog._accept_button.isEnabled()
+    assert dialog._accept_button.toolTip() == tr(
+        "Klicken Sie im Bild auf die Fläche, an die der Körper soll."
+    )
+    combo.setCurrentIndex(1)
+    assert dialog.values()["target"] == "obj_2:hole_1"
+    assert dialog._accept_button.isEnabled(), "ein gewähltes Ziel gibt frei"
 
     alone = OperationDialog(spec, [], None, features={"hole_1": "Bohrung 1"}, target_features={})
     assert not alone._accept_button.isEnabled(), "ohne Ziel kein Übernehmen"
@@ -4725,7 +4770,9 @@ def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QAppl
         said = field.refusal()
         assert "Obergrenze" in said, said
         assert not dialog._accept_button.isEnabled(), "der Knopf ist gesperrt"
-        assert dialog._accept_button.toolTip() == said
+        # Am Knopf steht das Feld davor (RM-342, D-N2).
+        named = tr("{name}: {value}", name=count.title, value=said)
+        assert dialog._accept_button.toolTip() == named
         assert not dialog.can_accept(), "und Knopf und Klick sagen dasselbe"
     finally:
         dialog.deleteLater()
@@ -5696,6 +5743,321 @@ def test_catalog_standalone_choice_creates_one_undoable_object(
     assert not window.session.last_result.scene.objects
 
 
+def test_model_1_is_rebuilt_in_five_clicks_as_an_exact_holder_with_named_dimensions(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Fünf-Klick-Weg des Nachbaus von Modell 1, am Fenster belegt (RM-443, §2.2).
+
+    Katalog → Suche „Halter“ → Kachel *Halter U-Form* → Maße → Einfügen. Heraus
+    kommt der Halter 20 mm breit mit einem Schlüsselloch in der Mitte, wie
+    ``grenuttags_hallare_modell_40x47.stl`` aus dem Korpus, exakt (der Kern ist
+    in dieser Umgebung da), und seine Maße stehen als Projektparameter in der
+    Leiste — in einer Transaktion mit dem Schritt.
+    """
+    exact_kernel()
+    from app.core.geom.mesh import as_mesh_data
+
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    # 1: Katalog
+    catalog = window._make_catalog()
+    catalog.release()
+    # 2: Suche „Halter“
+    catalog.search.setText("Halter")
+    shown = {
+        catalog.list.item(index).data(Qt.ItemDataRole.UserRole)
+        for index in range(catalog.list.count())
+        if not catalog.list.item(index).isHidden()
+    } - {None}
+    assert {"holder_u", "holder_ring", "holder_fork", "holder_shelf"} <= shown
+    # 3: Kachel *Halter U-Form*
+    item = next(
+        catalog.list.item(index)
+        for index in range(catalog.list.count())
+        if catalog.list.item(index).data(Qt.ItemDataRole.UserRole) == "holder_u"
+    )
+    catalog.list.setCurrentItem(item)
+    catalog._insert.click()
+    monkeypatch.setattr(catalog, "exec", lambda: catalog.result())
+    window._exec_catalog(catalog)
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.spec.name == "create_holder_u"
+    # 4: Maße — Modell 1 ist außen 20 mm breit, 47 mm tief, 53 mm hoch.
+    play = window.session.profile.material.clearance
+    wall = 3.0
+    for name, value in (("width", 20.0 - 2.0 * wall - play), ("depth", 41.0), ("height", 53.0)):
+        editor = dialog._editors[name]
+        assert isinstance(editor, ValueField)
+        editor.set_value(value)
+    assert dialog._naming is not None, "eine Vorlage bietet an, ihre Maße zu benennen"
+    dialog._naming.setChecked(True)
+    # 5: Einfügen
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and result.complete
+    (body,) = result.scene.objects.values()
+    assert body.kind == "brep", "der Kundenweg baut den exakten Halter"
+    assert as_mesh_data(body.mesh).bounds.size[0] == pytest.approx(20.0)
+    assert "holder_u_keyhole_1" in body.features
+    assert "holder_u_keyhole_2" not in body.features
+    assert {"breite", "tiefe", "hoehe"} <= set(window.session.project.document.parameters)
+    window.session.undo()
+    assert window.session.wait_for_idle()
+    assert not window.session.last_result.scene.objects
+    assert not window.session.project.document.parameters, "Schritt und Maße, ein Undo"
+
+
+def _window_with_a_box(monkeypatch: pytest.MonkeyPatch) -> tuple[MainWindow, str]:
+    """Ein Fenster mit einem Quader 40 × 30 × 20 (Netz), gewählt — der Körper von RM-400."""
+    window = MainWindow(Session(), UiSettings())
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    window.session.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0})],
+    )
+    assert window.session.wait_for_idle()
+    made = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(made)
+    return window, made
+
+
+def _cut_volume(window: MainWindow, made: str) -> float:
+    """Den offenen Dialog von *Abschneiden* übernehmen und das Volumen danach messen."""
+    from app.core.geom.mesh import as_mesh_data
+
+    dialog = window._op_dialog
+    assert dialog is not None
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    return float(as_mesh_data(result.scene.objects[made].mesh).volume)
+
+
+def _rows_shown(dialog: OperationDialog) -> set[str]:
+    return {
+        name
+        for name in ("axis", "tilt", "tilt_axis", "at_feature", "edge", "points")
+        if not dialog._editors[name].isHidden()
+    }
+
+
+def test_cut_away_at_a_chosen_face_opens_with_a_cut_through_the_middle(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine gewählte Fläche: *Abschneiden* öffnet mit einem Schnitt, nicht mit einer Absage (M3).
+
+    Seit *An Fläche* (RM-400) belegte der Dialog die Fläche vor und die
+    Position aus der Körpermitte entlang Z — gezählt von der Fläche aus lag die
+    Ebene 10 mm außerhalb, und der Dialog öffnete mit „Diese Ebene schneidet
+    nichts vom Objekt ab.“. Jetzt geht die Ebene parallel zur Oberseite durch
+    die Mitte, und Übernehmen lässt die Hälfte stehen. Achse und Neigung
+    stehen dabei nicht da (M4).
+    """
+    window, made = _window_with_a_box(monkeypatch)
+    top = next(
+        name
+        for name, feature in window.session.last_result.scene.objects[made].features.items()
+        if feature.kind == "face" and float(feature.params["normal"][2]) > 0.99
+    )
+    window.object_tree.select_feature(made, top)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.spec.name == "cut_away"
+    values = dialog.values()
+    assert values["plane"] == "at_face"
+    assert values["at_feature"] == top
+    assert values["offset"] == pytest.approx(-10.0)
+    assert _rows_shown(dialog) == {"at_feature"}, "Achse und Neigung wirken an einer Fläche nicht"
+    assert _cut_volume(window, made) == pytest.approx(12000.0, rel=1e-9)
+
+
+def test_cut_away_shows_only_the_fields_of_its_plane(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was gerade nichts tut, steht nicht da (M4, ``oberflaeche.md``).
+
+    Achse und Neigung wirkten neben *An Fläche* nicht und blieben bedienbar —
+    30° um die eigene Achse wurden still übergangen. Jetzt wählt *Ebene*, und
+    der Dialog zeigt genau die Felder dieser Ebene.
+    """
+    window, _made = _window_with_a_box(monkeypatch)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    combo = dialog._editors["plane"]
+    assert isinstance(combo, QComboBox)
+    shown = {}
+    for plane in ("along_axis", "at_face", "through_edge", "through_points"):
+        combo.setCurrentIndex(combo.findData(plane))
+        shown[plane] = _rows_shown(dialog)
+    assert shown == {
+        "along_axis": {"axis", "tilt", "tilt_axis"},
+        "at_face": {"at_feature"},
+        "through_edge": {"axis", "tilt", "edge"},
+        "through_points": {"points"},
+    }
+    dialog.reject()
+
+
+def test_the_tilt_axis_starts_automatic_and_tilts_a_cut_at_axis_x(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Achse X mit Neigung wird geschnitten statt abgewiesen (N3).
+
+    Die Vorgabe *Neigen um* war X, und an Achse X wies sie jede Neigung ab,
+    bis man hinter der Klappe umstellte. Sie steht jetzt auf *Automatisch* —
+    an Achse X kippt sie um Y. Durch die Mitte geneigt bleibt die Hälfte.
+    """
+    window, made = _window_with_a_box(monkeypatch)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    tilt_axis = dialog._editors["tilt_axis"]
+    assert isinstance(tilt_axis, QComboBox)
+    assert tilt_axis.currentData() == "auto"
+    assert tilt_axis.currentText() == str(tr("Automatisch"))
+    axis = dialog._editors["axis"]
+    assert isinstance(axis, QComboBox)
+    axis.setCurrentIndex(axis.findData("x"))
+    position = dialog._editors["position"]
+    tilt = dialog._editors["tilt"]
+    assert isinstance(position, ValueField) and isinstance(tilt, ValueField)
+    position.set_value(0.0)
+    tilt.set_value(20.0)
+    assert _cut_volume(window, made) == pytest.approx(12000.0, rel=1e-9)
+
+
+def test_the_keep_choice_says_which_side_stays_at_a_face(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Kleinere Seite — bei Z unten“ stimmte an einer Unterseite nicht (N2).
+
+    Der Satz am Eintrag sagt jetzt beides: an einer Achse die kleineren Werte,
+    an einer Fläche die Seite hinter ihr — im Tooltip und für den
+    Bildschirmleser.
+    """
+    window, _made = _window_with_a_box(monkeypatch)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    keep = dialog._editors["keep"]
+    assert isinstance(keep, QComboBox)
+    index = keep.findData("below")
+    for role in (Qt.ItemDataRole.ToolTipRole, Qt.ItemDataRole.AccessibleDescriptionRole):
+        note = str(keep.itemData(index, role))
+        assert note == str(
+            tr(
+                "Die Seite unter der Ebene bleibt: an einer Achse die mit den kleineren "
+                "Werten, bei Z unten; an einer Fläche die Seite hinter ihr, im Körper."
+            )
+        )
+    dialog.reject()
+
+
+def test_three_points_are_picked_on_the_body_and_cut_through(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Durch drei Punkte*: *Im Bild wählen*, drei Klicks auf den Körper, Übernehmen (RM-400).
+
+    Die Stellenwahl ist dieselbe wie bei *Merkmale hier erkennen*: Die linke
+    Taste nimmt die Stelle, die die Ansicht trifft (``placement_hit``).
+    Offscreen gibt es kein Bild; der Treffer wird deshalb an genau dieser
+    Stelle eingesetzt, und die drei Klicks laufen durch den echten Zeiger.
+    Die Punkte steigen von z = 2 vorn auf z = 8 hinten: 6000 mm³ bleiben.
+    """
+    from app.ui.render.api import PointerEvent
+
+    window, made = _window_with_a_box(monkeypatch)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    combo = dialog._editors["plane"]
+    assert isinstance(combo, QComboBox)
+    combo.setCurrentIndex(combo.findData("through_points"))
+    points = dialog._editors["points"]
+    clicks = iter([(-20.0, -15.0, 2.0), (20.0, -15.0, 2.0), (-20.0, 15.0, 8.0)])
+    monkeypatch.setattr(
+        window.viewport, "placement_hit", lambda x, y: (made, next(clicks), -1, None)
+    )
+    points.pick.click()
+    assert window._plane_points_armed
+    for _ in range(3):
+        for kind in ("press", "release"):
+            assert window._plane_point_pointer(PointerEvent(kind=kind, x=10, y=10, button="left"))
+    assert not window._plane_points_armed, "nach dem dritten Punkt ist die Auswahl vorbei"
+    assert dialog.values()["points"] == "-20.0,-15.0,2.0;20.0,-15.0,2.0;-20.0,15.0,8.0"
+    assert _cut_volume(window, made) == pytest.approx(6000.0, rel=1e-9)
+
+
+def test_escape_ends_the_point_picking_and_keeps_the_points(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Esc beendet die Punktwahl, der Dialog und was eingetragen ist bleiben."""
+    window, made = _window_with_a_box(monkeypatch)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    combo = dialog._editors["plane"]
+    combo.setCurrentIndex(combo.findData("through_points"))
+    monkeypatch.setattr(
+        window.viewport, "placement_hit", lambda x, y: (made, (1.0, 2.0, 3.0), -1, None)
+    )
+    dialog._editors["points"].pick.click()
+    window._pick_plane_point(10, 10)
+    window._escape()
+    assert not window._plane_points_armed
+    assert window._op_dialog is dialog
+    assert dialog.values()["points"].startswith("1.0,2.0,3.0;")
+    dialog.reject()
+
+
+def test_a_chosen_edge_opens_cut_away_through_that_edge(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine im Bild gewählte Kante: *Abschneiden* legt die Ebene durch sie und die Mitte.
+
+    Die obere vordere Kante des Quaders, im Bild hervorgehoben wie nach einem
+    Klick. Der Dialog öffnet mit *Durch eine Kante*, der Kante mit ihrer
+    Beschriftung und der Neigung, die die Ebene durch die Körpermitte führt —
+    atan(10/15) nach unten; Übernehmen lässt die Hälfte stehen.
+    """
+    import math
+
+    from app.core.geom.edges import edge_key, edges_of
+    from app.core.geom.mesh import as_mesh_data
+
+    window, made = _window_with_a_box(monkeypatch)
+    body = as_mesh_data(window.session.last_result.scene.objects[made].mesh)
+    key = next(
+        edge_key(edge)
+        for edge in edges_of(body)
+        if abs(edge.points[0][1] + 15.0) < 1e-6
+        and abs(edge.points[0][2] - 20.0) < 1e-6
+        and abs(edge.points[-1][1] + 15.0) < 1e-6
+        and abs(edge.points[-1][2] - 20.0) < 1e-6
+    )
+    window.viewport.select_edge(made, key)
+    window.run_operation(REGISTRY.get("cut_away"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    values = dialog.values()
+    assert values["plane"] == "through_edge"
+    assert values["edge"] == key
+    assert values["axis"] == "z"
+    assert values["tilt"] == pytest.approx(-math.degrees(math.atan(10.0 / 15.0)), abs=1e-6)
+    edges = dialog._editors["edge"]
+    assert edges.list.item(0).text() == window.viewport.edge_title(made, key), (
+        "die Kante steht mit Lage und Länge da, nicht als Schlüssel"
+    )
+    assert _rows_shown(dialog) == {"axis", "tilt", "edge"}
+    assert _cut_volume(window, made) == pytest.approx(12000.0, rel=1e-6)
+
+
 @pytest.mark.parametrize("field_name", ["top_sketch", "path"])
 def test_space_editor_returns_the_named_sketch_parameter(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, field_name: str
@@ -6027,6 +6389,14 @@ def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) ->
         assert "Projektparameter" in offered._naming.toolTip()
         offered._naming.setChecked(True)
         assert offered.names_dimensions()
+        remembered = OperationDialog(
+            REGISTRY.get("create_box"), {}, offer_naming=True, naming_default=True
+        )
+        try:
+            assert remembered.names_dimensions(), "das Fenster reicht die letzte Wahl durch"
+            assert remembered.offers_naming() and not plain.offers_naming()
+        finally:
+            remembered.deleteLater()
     finally:
         plain.deleteLater()
         offered.deleteLater()

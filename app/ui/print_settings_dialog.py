@@ -1621,12 +1621,16 @@ class FilamentOverrideDialog(QDialog):
         self._refit_later()
 
     def _first_refusal(self) -> str:
-        """Die erste Ablehnung in einem eingeschalteten Spulenbereich."""
+        """Die erste Ablehnung in einem eingeschalteten Spulenbereich — mit dem Feld.
+
+        Derselbe Satz wie am Knopf *Slicen* (:meth:`PrintSettingsDialog._first_numeric_refusal`,
+        RM-342 D-N2): Er steht am Übernehmen-Knopf, nicht am Feld.
+        """
         for path, editor in self.editors.items():
             if not self.groups[path.partition(".")[0]].isChecked():
                 continue
             if isinstance(editor, BoundedSpin) and (reason := editor.refusal()):
-                return reason
+                return str(tr("{name}: {value}", name=setting_title(path), value=reason))
         return ""
 
     def _settle_refusal_state(self) -> None:
@@ -2892,6 +2896,10 @@ class PrintSettingsDialog(QDialog):
         self._advice_timer.setInterval(200)
         self._advice_timer.timeout.connect(self._start_advice)
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
+        self._waiting_for_fine: Callable[[], None] | None = None
+        """Der Klick auf *Slicen* oder *Im Slicer öffnen*, der auf die feine
+        Rechnung wartet (RM-426). Warten ist keine Sperre: Der Knopf bleibt
+        frei, der Klick bindet sich an das Ergebnis."""
         self._profile_worker: _ProfileWorker | None = None
         self._cura_printer_worker: _CuraPrinterWorker | None = None
         self._cura_printer_pending = False
@@ -3085,6 +3093,7 @@ class PrintSettingsDialog(QDialog):
         session.sceneChanged.connect(self._advice_scene_changed)
         session.projectChanged.connect(self._advice_scene_changed)
         session.busyChanged.connect(self._advice_scene_changed)
+        session.busyChanged.connect(self._fine_arrived)
         self.machine_choice.currentIndexChanged.connect(self._advice_scene_changed)
         self.process_choice.currentIndexChanged.connect(self._advice_scene_changed)
         # Zuletzt, wenn jede Zeile steht: eine Beschriftungsspalte für den
@@ -4279,9 +4288,13 @@ class PrintSettingsDialog(QDialog):
                 ),
             ),
         )
+        # Sichtbar ist, was die Übergabe an diesen Slicer schreibt (RM-432):
+        # „Automatisch“ heißt bei PrusaSlicer und Cura die Art des Materials.
+        kind: str = settings.adhesion.kind
+        also: frozenset[str] = frozenset()
         flavour = self._current_flavour()
         if flavour is not None:
-            settings = handover.effective_adhesion(
+            kind, also = handover.handed_over_adhesion_kinds(
                 settings,
                 self.session.profile,
                 flavour,
@@ -4291,7 +4304,8 @@ class PrintSettingsDialog(QDialog):
             str(
                 _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
             ),
-            settings.adhesion.kind,
+            kind,
+            also=also,
         )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
@@ -6370,13 +6384,26 @@ class PrintSettingsDialog(QDialog):
         return ""
 
     def _machine_selection_issue(self) -> str:
-        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts."""
+        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts.
+
+        **Ein leeres Profil entscheidet** :meth:`_profile_gap` **allein**: Die
+        Orca-Familie verlangt eines, PrusaSlicer nimmt ohne Drucker seines
+        Bündels Solidons Werte. Der Rückfallsatz „Wählen Sie einen Drucker aus
+        der Liste.“ sperrte dort *Slicen*, obwohl der Hinweis darüber sagte,
+        dass Solidons Werte gelten (RM-431). Gesperrt wird nur noch ein Eintrag,
+        der keine Wahl ist, aber einen Wert trüge — ihn bekäme sonst der Slicer.
+        """
+        gap = self._profile_gap()
+        if gap:
+            return gap
+        box = self.machine_choice
         if (
-            self.machine_choice.isEnabled()
-            and self.machine_choice.count() > 0
-            and not valid_printer_choice(self.machine_choice)
+            box.isEnabled()
+            and box.count() > 0
+            and str(box.currentData() or "")
+            and not valid_printer_choice(box)
         ):
-            return self._profile_gap() or str(tr("Wählen Sie einen Drucker aus der Liste."))
+            return str(tr("Wählen Sie ein Druckerprofil aus der Liste."))
         return ""
 
     def _show_slicer_state(self) -> None:
@@ -6517,7 +6544,7 @@ class PrintSettingsDialog(QDialog):
             # haben kann — sonst wischte der nächste Aufruf ein Ergebnis weg,
             # obwohl zwischendurch nie ein Grund dastand.
             self._state_shows_reason = False
-        elif reason:
+        elif reason and not (self.settings.handover == "open" and not open_reason):
             # **Der Grund gehört auf den Bildschirm, nicht in einen Tooltip.**
             # Er stand bis hierhin nur an ``slice_button`` — und ein Tooltip
             # erscheint erst, wenn jemand mit der Maus darauf wartet. Wer den
@@ -6529,6 +6556,11 @@ class PrintSettingsDialog(QDialog):
             # Nur wenn es einen Grund gibt: Ohne einen trägt die Zeile das
             # Ergebnis des letzten Laufs, und das wäre hier nicht zu
             # überschreiben, sondern stehen zu lassen.
+            #
+            # **Und nur, wenn Rechnen der Hauptweg ist.** Ist es das Öffnen und
+            # steht dieser Weg frei, ist *Slicen* der Nebenknopf: Sein Grund
+            # steht an ihm, die Zeile behält die Quittung „An … übergeben“
+            # (RM-431) — dieselbe Regel wie im Zweig darunter.
             self.state.setText(str(reason))
             self._state_shows_reason = True
         elif open_reason and self.settings.handover == "open":
@@ -6577,9 +6609,9 @@ class PrintSettingsDialog(QDialog):
         Dialog bot keinen zweiten an, obwohl zwei danebenstanden.
         """
         remembered = discover.remembered_path("slicer")
-        return next((entry for entry in found if str(entry) == remembered), None) or (
-            found[0] if found else None
-        )
+        return next(
+            (entry for entry in found if discover.same_program(str(entry), remembered)), None
+        ) or (found[0] if found else None)
 
     def _start_slicer_search(self) -> None:
         """Nachsehen, welche Slicer da sind — im Arbeiter, nicht im Fenster.
@@ -6948,8 +6980,7 @@ class PrintSettingsDialog(QDialog):
         was_loading = self._loading
         self._loading = True
         try:
-            for name in ("skirt_loops", "brim_width", "raft_layers"):
-                path = f"adhesion.{name}"
+            for path in print_settings.ADHESION_MEASURES.values():
                 editor = self._editors[path]
                 if isinstance(editor, BoundedSpin) and editor.refusal():
                     continue
@@ -7218,11 +7249,10 @@ class PrintSettingsDialog(QDialog):
         field = self._fields[path]
         value = _setting_editor_value(self._editors[path], field)
         current_value = print_settings.read_path(self.settings, path)
-        if self.settings.adhesion.kind == "auto" and path in {
-            "adhesion.skirt_loops",
-            "adhesion.brim_width",
-            "adhesion.raft_layers",
-        }:
+        if (
+            self.settings.adhesion.kind == "auto"
+            and path in print_settings.ADHESION_MEASURES.values()
+        ):
             current_value = print_settings.read_path(self._effective_adhesion(self.settings), path)
         if not print_settings.same_value(value, current_value):
             before = self.settings.explicit
@@ -8097,6 +8127,8 @@ class PrintSettingsDialog(QDialog):
         if self._first_numeric_refusal():
             self._show_slicer_state()
             return
+        if self._wait_for_fine(self._open_in_slicer):
+            return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
         if not objects:
@@ -8147,9 +8179,40 @@ class PrintSettingsDialog(QDialog):
         self._worker = worker
         self._leash.start(worker)
 
+    def _wait_for_fine(self, action: Callable[[], None]) -> bool:
+        """Ob der Auftrag auf die feine Rechnung warten muss — dann wartet er.
+
+        Das Fenster rechnet im Entwurf, der Slicer bekommt die feine Rechnung
+        mit der vollen Rückfallkette (§31, RM-426). Bis 0.5.1 bekam er den
+        Entwurf: ein weich verschmolzenes Teil mit einem Viertel der Dreiecke.
+        """
+        if self.session.fine_current:
+            return False
+        self._waiting_for_fine = action
+        self.session.request_fine()
+        self.state.setText(tr("Wartet auf die feine Berechnung des Modells …"))
+        self._state_shows_reason = True
+        return True
+
+    def _fine_arrived(self, *_args: object) -> None:
+        """Ein wartender Klick läuft, sobald die feine Rechnung steht."""
+        action = self._waiting_for_fine
+        if action is None or self.session.busy:
+            return
+        self._waiting_for_fine = None
+        if self.session.fine_current:
+            action()
+            return
+        # Abgebrochen oder gescheitert: Das Fenster sagt schon, warum. Der
+        # Entwurf geht nicht an seiner Stelle hinaus.
+        self.state.setText(tr("Abgebrochen."))
+        self._state_shows_reason = False
+
     def _slice(self) -> None:
         if self._first_numeric_refusal():
             self._show_slicer_state()
+            return
+        if self._wait_for_fine(self._slice):
             return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []

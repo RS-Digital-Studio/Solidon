@@ -2287,6 +2287,78 @@ def test_cancelling_a_further_try_keeps_the_finished_ones(qt_app: QApplication) 
     qt_app.processEvents()
 
 
+class SlowStopBackend(WaitingBackend):
+    """Ein Generator, dessen Abbruch ausläuft: Er sieht den Merker und braucht
+    bis zum Ende, bis ``stop`` gesetzt ist — wie ein Diffusionsschritt, der
+    noch fertig rechnet."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen = threading.Event()
+        self.stop = threading.Event()
+
+    def _poll(self, cancelled: object) -> None:
+        self.started.set()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if callable(cancelled) and cancelled():
+                self.seen.set()
+                self.stop.wait(5.0)
+                raise OperationCancelled
+            time.sleep(0.005)
+        raise AssertionError("niemand hat abgebrochen — der Merker kam nie an")
+
+
+def test_a_second_cancel_while_the_first_runs_out_discards_nothing(qt_app: QApplication) -> None:
+    """Solange der Abbruch eines weiteren Versuchs noch auslief, schloss ein
+    zweiter Klick auf *Abbrechen* den Dialog und verwarf Versuch 1 (RM-418).
+    Der Knopf ist in dieser Zeit gesperrt und sagt warum; auch Esc verwirft
+    nichts. Danach schließt *Abbrechen* wie gewohnt."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    dialog = GenerateDialog(backend=SlowStopBackend())
+    cancel = dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+    closed: list[int] = []
+    dialog.finished.connect(closed.append)
+    backend = dialog.backend
+    assert isinstance(backend, SlowStopBackend)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.show()
+        dialog.prompt.setText("eine Figur")
+        dialog.tries = [_generated((1.0, 2.0, 0.5))]
+        dialog._show_tries()
+        dialog._try_again()
+        worker = dialog._worker
+        assert worker is not None
+        assert backend.started.wait(5.0), "der weitere Wurf läuft"
+
+        QTest.mouseClick(cancel, Qt.MouseButton.LeftButton)
+        assert backend.seen.wait(5.0), "der Abbruch ist angekommen und läuft aus"
+        _settle(qt_app)
+        assert not cancel.isEnabled(), "während des Auslaufens ist Abbrechen gesperrt"
+        assert cancel.toolTip(), "und sagt warum"
+        QTest.mouseClick(cancel, Qt.MouseButton.LeftButton)
+        QTest.keyClick(dialog, Qt.Key.Key_Escape)
+        _settle(qt_app)
+        assert not closed, "ein zweites Abbrechen verwirft nichts"
+        assert len(dialog.tries) == 1
+
+        backend.stop.set()
+        assert worker.wait(5000), "der laufende Wurf endet"
+        _settle(qt_app)
+        assert not closed and len(dialog.tries) == 1, "der fertige Versuch bleibt"
+        assert cancel.isEnabled() and not cancel.toolTip(), "danach ist Abbrechen wieder frei"
+        QTest.mouseClick(cancel, Qt.MouseButton.LeftButton)
+        assert closed == [GenerateDialog.DialogCode.Rejected.value], "und schließt"
+    finally:
+        backend.stop.set()
+        dialog.release()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
 def test_a_failure_that_names_the_setup_offers_it_as_a_button(qt_app: QApplication) -> None:
     """Der Ausweg stand nur als Text da; die Bereitschaft meldete weiter
     „bereit“, und die Menüs lagen hinter dem Dialog (RM-362, W3-3)."""

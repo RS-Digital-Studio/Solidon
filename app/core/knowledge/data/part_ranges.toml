@@ -120,8 +120,8 @@ date = "2026-10-02"
 
 [[parts]]
 name = "holder_fork"
-version = "1"
-fingerprint = "b5323d12eaffaa6fd327c2244a98dffc460054a8bbb99cdc8477dd51f3ecf292"
+version = "22"
+fingerprint = "4ec8f63a0e1fd2e78ada78f77acd2aea3518c5910d8a62a351f90b285da16439"
 corners = 256
 checked = 256
 excluded = 64
@@ -131,8 +131,8 @@ date = "2026-10-02"
 
 [[parts]]
 name = "holder_ring"
-version = "1"
-fingerprint = "cd56cba85e9f0cb21a358a8021e15bb7a658684c5bc6f9ec14e4346ad34cb8e9"
+version = "22"
+fingerprint = "614bd8a78bb77ed9c202df1c04f4c2e074a81388756d4190531792fc00c14767"
 corners = 256
 checked = 256
 excluded = 0
@@ -142,8 +142,8 @@ date = "2026-10-02"
 
 [[parts]]
 name = "holder_shelf"
-version = "1"
-fingerprint = "845f814e3551617362f774e4e27daa9f5673845dc9ec0e3ea777c94db52ddbbd"
+version = "22"
+fingerprint = "3f16692b189d1d90308371117a743460a367de37a5f46e623ec46cfc1d140228"
 corners = 512
 checked = 512
 excluded = 0
@@ -153,8 +153,8 @@ date = "2026-10-02"
 
 [[parts]]
 name = "holder_u"
-version = "1"
-fingerprint = "9f5e6e8c768bf568af9dfea1dd5e1b811dd0c809af784201e11d3c8548021722"
+version = "22"
+fingerprint = "6fd6119d074815d6e7c390e401fc80a3801df0445a23caef28cc252f3125e7aa"
 corners = 512
 checked = 512
 excluded = 0

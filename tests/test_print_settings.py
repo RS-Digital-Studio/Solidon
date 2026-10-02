@@ -4735,6 +4735,8 @@ def test_the_customer_hears_that_the_slicer_stands_on_another_printer(monkeypatc
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
@@ -4824,6 +4826,27 @@ def test_a_slicer_that_does_not_know_this_printer_says_so_instead(monkeypatch) -
 
     assert [finding.code for finding in findings] == ["slicer.printer_unknown"]
     assert findings[0].suggestions, "Regel 17: auch dieser Fall nennt den nächsten Schritt"
+
+
+def test_a_slicer_set_to_another_printer_it_cannot_swap_for_ours_says_it_does_not_know_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-431: Allgemeiner Drucker mit PrusaSlicer, das zuletzt auf einem
+    anderen Drucker stand. „Stellen Sie den Slicer auf denselben Drucker um“
+    zeigte ins Leere — das Bündel kennt keinen allgemeinen Drucker."""
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Original Prusa MK4S")
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: False)
+    profile = profiles.make_profile("generic-220", "pla")
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer-console.exe"), flavour="prusa")
+
+    findings = handover.machine_missing(setup, profile)
+
+    assert [finding.code for finding in findings] == ["slicer.printer_unknown"]
+    assert findings[0].values["printer"] == profile.printer.title
 
 
 def test_a_chosen_printer_is_never_second_guessed(monkeypatch) -> None:
@@ -6252,6 +6275,8 @@ def test_the_orca_family_is_still_warned(monkeypatch) -> None:
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
 
@@ -6279,6 +6304,8 @@ def test_the_slicing_run_says_it_too_when_the_machine_side_is_missing(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     model, setup = _slicer_writing(
@@ -6411,6 +6438,36 @@ def test_prusa_and_cura_get_the_bed_of_the_machine_not_of_the_document(tmp_path:
     assert cura["machine_center_is_zero"] == "false"
     assert cura["z_seam_x"] == f"{width / 2.0:g}", "hinten in der Mitte, in Bettkoordinaten"
     assert cura["z_seam_y"] == f"{depth:g}"
+    assert "mesh_position_x" not in cura and "mesh_position_y" not in cura
+
+
+def test_prusa_and_cura_get_a_bed_around_the_machines_own_origin() -> None:
+    """RM-424: Ohne Druckerprofil des Bündels beschreibt Solidon die Maschine
+    selbst — und schrieb jedem Drucker ein Bett ab der Ecke, auch dem BIBO
+    (``bed_shape = -107x-93,…``) oder einem Delta. Die Teile kommen um dessen
+    Nullpunkt (``build_area.machine_shift``), also muss die Bettform es auch."""
+    base = profiles.make_profile("prusa-mk4s", "pla")
+    bibo = replace(base.printer, build_volume=(214.0, 186.0, 160.0), bed_origin=(0.0, 0.0))
+    centred = replace(base, printer=bibo)
+
+    prusa = handover._machine_keys(centred, "prusa")
+    assert prusa["bed_shape"] == "-107x-93,107x-93,107x93,-107x93"
+    cura = handover._machine_keys(centred, "cura")
+    assert cura["machine_center_is_zero"] == "true"
+    assert (cura["z_seam_x"], cura["z_seam_y"]) == ("0", "93"), "hinten in der Mitte"
+    assert "mesh_position_x" not in cura
+
+    # Der Dremel 3D45: weder Ecke noch Mitte. Cura kennt dafür keinen
+    # Schalter; ``mesh_position`` verschiebt jedes Netz um den Rest — von
+    # CuraEngines halbem Bett (112,5 / 77,5) zurück auf (-15 / 0).
+    dremel = replace(base.printer, build_volume=(225.0, 155.0, 170.0), bed_origin=(15.0, 0.0))
+    offset = replace(base, printer=dremel)
+    prusa = handover._machine_keys(offset, "prusa")
+    assert prusa["bed_shape"] == "-127.5x-77.5,97.5x-77.5,97.5x77.5,-127.5x77.5"
+    cura = handover._machine_keys(offset, "cura")
+    assert cura["machine_center_is_zero"] == "false"
+    assert (cura["mesh_position_x"], cura["mesh_position_y"]) == ("-127.5", "-77.5")
+    assert (cura["z_seam_x"], cura["z_seam_y"]) == ("-15", "77.5")
 
 
 def test_slot_advice_uses_inherited_values_and_the_adopted_group_reaches_both_outputs(

@@ -19,6 +19,7 @@ import trimesh
 
 from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.knowledge.parts import builtin
 from app.core.registry import REGISTRY, OperationSpec, Registry
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
@@ -884,6 +885,8 @@ for _part, (_dimensions, _effect, _height) in PART_CASES.items():
             100000.0,
         )
     )
+# Eine Vorlage entsteht wie ein Grundkörper exakt (RM-443, ``ops._creates_exactly``);
+# die übrigen Erzeuger bleiben beim Netz, wie ihre gespeicherten Schritte rechnen.
 for _part in STANDALONE:
     _dimensions, _effect, _height = PART_CASES[_part]
     CASES.append(
@@ -891,7 +894,7 @@ for _part in STANDALONE:
             f"create_{_part}",
             "none",
             dict(_dimensions),
-            CREATE_MESH,
+            CREATE_EXACT if builtin.load().get(_part).template else CREATE_MESH,
             "height" if _height is not None else "overhang",
             _height,
         )

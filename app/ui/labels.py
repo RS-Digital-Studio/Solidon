@@ -1207,8 +1207,20 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "ellipse": _("Elliptischer Querschnitt aus Breite und Höhe."),
     "lower": _("Die untere Schale nimmt die Schraubenköpfe auf."),
     "upper": _("Die obere Schale nimmt die Muttern auf."),
-    "below": _("Die Seite mit den kleineren Werten auf der Achse bleibt — bei Z unten."),
-    "above": _("Die Seite mit den größeren Werten auf der Achse bleibt — bei Z oben."),
+    # Gilt für jede Ebene von *Abschneiden*, nicht nur für die Achse (N2 der
+    # Nachprüfung RM-400): An einer Unterseite stimmte „bei Z unten“ nicht.
+    "below": _(
+        "Die Seite unter der Ebene bleibt: an einer Achse die mit den kleineren Werten, "
+        "bei Z unten; an einer Fläche die Seite hinter ihr, im Körper."
+    ),
+    "above": _(
+        "Die Seite über der Ebene bleibt: an einer Achse die mit den größeren Werten, "
+        "bei Z oben; an einer Fläche die Seite, zu der sie zeigt."
+    ),
+    "along_axis": _("Senkrecht zu X, Y oder Z, auf Wunsch geneigt."),
+    "at_face": _("Parallel zu einer ebenen Fläche, um den Abstand versetzt."),
+    "through_edge": _("Die Ebene enthält eine gerade Kante und kippt um sie."),
+    "through_points": _("Die Ebene geht durch drei Stellen, im Bild angeklickt."),
     "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
     "dovetail": _(
         "Schwalbenschwanz: die Teile schieben sich ein und halten quer zur Fuge ohne Kleber."
@@ -2027,7 +2039,7 @@ def feature_requirement(spec: Any, feature_kinds: Collection[str]) -> str | None
     ``_reason_locked`` an Menü, Kontextmenü, Palette und Zwillingshaken geht.
 
     Welche Art passt, sagt ``applies_to`` — die Zuordnung, über die auch das
-    Kontextmenü am Merkmal die Operation findet (§18.5). Eine Operation ohne
+    Auswahlfenster am Merkmal die Operation findet (§18.5). Eine Operation ohne
     diese Angabe wird nicht gesperrt: Raten wäre schlechter als Anbieten.
     """
     needs_feature = any(entry.required and entry.kind == "feature" for entry in spec.params.spec())

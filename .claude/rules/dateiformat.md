@@ -243,11 +243,11 @@ Körper mit Weltlage, Namen und Flächenfarben über XCAF
   und Cura bekommen je Platte eine Datei, der Konsolenlauf (*Slicen*) je
   Platte eine Druckdatei. Solidons Anordnung reist nur mit, wenn sie auf
   **jeder** gewählten Platte hält (`arrangement_holds`).
-- **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`): Teile um den
-  halben Bauraum verschoben **und** ein Bett ab der Ecke, in derselben
-  Übergabe. Wer das eine ändert, ändert das andere mit — beides fragt dasselbe
-  Prädikat. Cura mit `machine_center_is_zero` behält den Ursprung in der Mitte
-  (`CuraMachine.origin_at_centre`).
+- **Bettkoordinaten für jede Familie** (`wants_bed_coordinates`): Teile um
+  `build_area.machine_shift` verschoben **und** ein Bett um denselben
+  Nullpunkt (`PrinterProfile.bed_origin`, sonst die Ecke), in derselben
+  Übergabe — beides fragt dasselbe Prädikat. Eine Cura-Definition behält
+  ihren Ursprung (`CuraMachine.shift`).
 - **Ohne Familie STL um den Ursprung** (`other`): nichts übersetzt, nichts
   gerechnet; der Konsolenweg sagt ab, das Öffnen läuft.
 - **Ein exakter Körper geht so fein hinaus, wie der Drucker es braucht**:
@@ -289,14 +289,13 @@ Herstellers, Solidon schreibt darüber nur die Abweichung.
   Ein übernommener Pfad aus `advise.PART_PATHS` ohne plattenweiten Grund
   (`advise.plate_paths`) fällt auf der Platte auf die Grundlage zurück, und
   der Rat je Körper schreibt ihn als Objektwert (`writer._part_values`).
-  Export und Druckdialog fragen diesen Rat an einer Stelle
-  (`writer.part_advice`, je Spule über `handover.slot_processes`), sonst nennt
-  die Zeile im Dialog ein Teil, das die Datei nicht bekommt. Der Rat je Teil
-  fragt bis zum Fixpunkt, mit den übernommenen Werten, die das Teil verlangt
-  (`PartSplit.accepted_per_part`). CuraEngine nimmt
-  nur `CURA_PER_MESH` je Netz: Dort behält die Platte die Übernahme, ein Teil
-  ohne Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was
-  ein Slicer nicht je Teil annimmt, bleibt plattenweit
+  Export und Dialog fragen diesen Rat an einer Stelle (`writer.part_advice`,
+  je Spule `handover.slot_processes`), bis zum Fixpunkt mit den Übernahmen,
+  die das Teil verlangt (`PartSplit.accepted_per_part`). CuraEngine nimmt nur
+  `CURA_PER_MESH` je Netz: Die Platte behält die Übernahme, ein Teil ohne
+  Bedarf bekommt je Netz die Grundlage zurück (`PartSplit.revert`). Was ein
+  Slicer nicht je Teil annimmt, bleibt plattenweit; gefragt wird ohne die
+  Übernahme (`PartSplit.base`), und wer sie nur mitbekommt, erfährt es
   (`export.part_setting_unavailable`). `write_assembly` und `slice_model`
   fragen dieselbe Trennung; Haftungsprüfung und Stützsperre fragen den Wert,
   den das Teil bekommt. Eine eigene Wahl gilt der Platte. Ein Objektwert

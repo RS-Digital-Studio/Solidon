@@ -53,6 +53,7 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.labels import (
     BoundedSpin,
+    LengthSpin,
     RowCheckBox,
     caption_toggles,
     choice_label,
@@ -1379,6 +1380,93 @@ class EdgeSetField(QWidget):
         self.validityChanged.emit()
 
 
+def _three_points(text: str) -> list[list[float]]:
+    """Drei Punkte aus ``x,y,z;x,y,z;x,y,z`` — oder dreimal der Ursprung, wo nichts lesbar ist."""
+    rows: list[list[float]] = []
+    for part in str(text or "").split(";")[:3]:
+        try:
+            values = [float(value) for value in part.split(",")]
+        except ValueError:
+            values = []
+        rows.append(values if len(values) == 3 else [0.0, 0.0, 0.0])
+    while len(rows) < 3:
+        rows.append([0.0, 0.0, 0.0])
+    return rows
+
+
+class PointsField(QWidget):
+    """Drei Punkte einer Ebene — eingetragen oder im Bild angeklickt (RM-400).
+
+    Der Wert ist der Text ``x,y,z;x,y,z;x,y,z``, wie ihn der Kern als
+    ``kind="points"`` ablegt; was der Kunde sieht, sind drei Zeilen mit je
+    drei Längenfeldern in seiner Einheit. *Im Bild wählen* bittet das Fenster,
+    die nächsten drei Klicks auf den Körper anzunehmen (:meth:`take_point`):
+    Jeder füllt den nächsten Punkt, wie die Bohrung ihre Position aus einem
+    Klick bekommt. Die Zahl bleibt die Wahrheit, der Klick die bequeme Eingabe.
+    """
+
+    changed = Signal()
+    pickRequested = Signal()
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        self.spins: list[tuple[LengthSpin, LengthSpin, LengthSpin]] = []
+        for number, values in enumerate(_three_points(text), start=1):
+            line = QHBoxLayout()
+            line.setSpacing(TIGHT)
+            caption = QLabel(tr("Punkt {number}").format(number=number), self)
+            line.addWidget(caption)
+            row: list[LengthSpin] = []
+            for axis_name, value in zip(("X", "Y", "Z"), values, strict=True):
+                spin = LengthSpin(self)
+                spin.set_range_mm(-10_000.0, 10_000.0)
+                spin.set_value_mm(value)
+                # Ein Name je Feld für den Bildschirmleser — „Punkt 2, Y“ und
+                # nicht neunmal „Drehfeld“, wie im Dialog *Neue Ebene*.
+                spin.setAccessibleName(
+                    tr("Punkt {number}, {axis}").format(number=number, axis=axis_name)
+                )
+                spin.valueChanged.connect(self._edited)
+                line.addWidget(spin)
+                row.append(spin)
+            self.spins.append((row[0], row[1], row[2]))
+            layout.addLayout(line)
+        self.pick = QPushButton(tr("Im Bild wählen"), self)
+        self.pick.setToolTip(
+            tr("Danach füllen drei Klicks auf den Körper die drei Punkte, der Reihe nach.")
+        )
+        self.pick.clicked.connect(self._start_pick)
+        layout.addWidget(self.pick)
+        self._next = 0
+
+    def value(self) -> str:
+        """Die drei Punkte als ``x,y,z;x,y,z;x,y,z`` in Millimetern."""
+        return ";".join(
+            ",".join(repr(float(spin.value_mm())) for spin in row) for row in self.spins
+        )
+
+    def take_point(self, point: Sequence[float]) -> int:
+        """Den nächsten Punkt setzen — gibt seine Nummer zurück, 1 bis 3."""
+        row = self.spins[self._next]
+        for spin, value in zip(row, point, strict=True):
+            with QSignalBlocker(spin):
+                spin.set_value_mm(float(value))
+        number = self._next + 1
+        self._next = number % 3
+        self.changed.emit()
+        return number
+
+    def _start_pick(self) -> None:
+        self._next = 0
+        self.pickRequested.emit()
+
+    def _edited(self, *_args: object) -> None:
+        self.changed.emit()
+
+
 class FeatureSetField(QWidget):
     """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag.
 
@@ -1565,6 +1653,9 @@ class OperationDialog(QDialog):
     """F1: Seite und Stelle des Handbuchs, die diese Operation erklären
     (``manual.help_for``). Das Fenster, das den Dialog öffnet, schlägt sie auf."""
 
+    pointsPickRequested = Signal()
+    """*Im Bild wählen* an den drei Punkten: Das Fenster nimmt die nächsten Klicks an."""
+
     placement_flow: PlacementFlow | None = None
     seal_flow: SealFlow | None = None
     preview_required = False
@@ -1599,6 +1690,7 @@ class OperationDialog(QDialog):
         source_objects: Sequence[str] = (),
         edges: Mapping[str, str] | None = None,
         offer_naming: bool = False,
+        naming_default: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1611,7 +1703,8 @@ class OperationDialog(QDialog):
         :meth:`names_dimensions` liest ihn. Der Dialog bietet ihn nur an, wo
         das Fenster es verlangt — bei den Grundkörpern, deren Maße eine
         Vorlage ausmachen, nicht bei einer Bohrung, die ein Maß *am* Körper
-        ist.
+        ist. ``naming_default`` ist sein Anfangszustand — das Fenster reicht
+        die letzte Wahl des Kunden durch (RM-369).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1637,6 +1730,7 @@ class OperationDialog(QDialog):
         QShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents), self, self._ask_manual)
         self._editors: dict[str, QWidget] = {}
         self._feature_focus = ""
+        self._first_focus_given = False
         self.source_objects = tuple(source_objects)
         self._target_features = dict(target_features or {})
         self._couplings: list[Callable[[], None]] = []
@@ -1948,6 +2042,7 @@ class OperationDialog(QDialog):
             # vorn, direkt unter den Maßen, die er benennt (Entscheidung
             # Robert, 14.09.2026).
             naming = RowCheckBox(self)
+            naming.setChecked(naming_default)
             front.addRow(str(tr("Maße als Parameter anlegen")), naming)
             caption = front.labelForField(naming)
             caption_toggles(caption, naming)
@@ -2081,9 +2176,11 @@ class OperationDialog(QDialog):
         self._hide_internal_fields()
         # Auch eine Zeichnung, die erst eine Wahl verlangt (``depends_on``,
         # siehe :meth:`_missing_sketch`): Der Knopf folgt ihr, sobald die Wahl
-        # sie zur Eingabe macht.
+        # sie zur Eingabe macht. Und ein Pflicht-Ziel: Der Knopf gibt frei,
+        # sobald es gewählt ist, nicht erst mit dem nächsten Vorschaubild.
         if self.spec.name == "apply_texture" or any(
             (entry.kind == "material" and entry.required)
+            or (entry.targets_feature and entry.required)
             or (entry.kind == "sketch" and (entry.required or entry.depends_on is not None))
             for entry in self.spec.params.spec()
         ):
@@ -2186,7 +2283,7 @@ class OperationDialog(QDialog):
             or no_count
             or missing_sketch
             or missing_material
-            or (tr("Dafür braucht es ein Merkmal an einem zweiten Körper.") if no_target else "")
+            or (self._target_reason() if no_target else "")
             or (tr("Wählen Sie eine ebene Fläche für das Muster.") if no_texture_face else "")
             or (blocked or "")
         )
@@ -2271,7 +2368,10 @@ class OperationDialog(QDialog):
                             ).format(name=entry.title, problem=said, condition=condition)
                             return notice, controller_name
                         break
-                return said, ""
+                # Mit dem Feld davor, wie am Knopf *Slicen* (RM-342, D-N2): Der
+                # Satz steht am Übernehmen-Knopf, weit weg vom Feld.
+                title = entry.title if (entry := entries.get(name)) is not None else name
+                return str(tr("{name}: {value}", name=str(title), value=said)), ""
         return "", ""
 
     def _open_hidden_expression_controller(self) -> None:
@@ -2487,6 +2587,47 @@ class OperationDialog(QDialog):
             if isinstance(editor, QComboBox) and not editor.currentData():
                 return True
         return False
+
+    def _target_reason(self) -> str:
+        """Warum ein leeres Pflicht-Ziel *Übernehmen* sperrt (RM-416).
+
+        Gibt es keinen zweiten Körper mit Merkmalen, fehlt das Ziel wirklich.
+        Gibt es ihn, fehlt nur der Klick — dann sagt der Satz, wohin.
+        """
+        offered = any(
+            isinstance(editor, QComboBox)
+            and any(editor.itemData(index) for index in range(editor.count()))
+            for entry in self.spec.params.spec()
+            if entry.targets_feature and entry.required
+            for editor in (self._editors.get(entry.name),)
+        )
+        if not offered:
+            return tr("Dafür braucht es ein Merkmal an einem zweiten Körper.")
+        names = {self._object_names.get(source, "") for source in self.source_objects}
+        if len(names) == 1 and (name := names.pop()):
+            return tr("Klicken Sie im Bild auf die Fläche, an die {name} soll.", name=name)
+        return tr("Klicken Sie im Bild auf die Fläche, an die der Körper soll.")
+
+    def _focus_first_empty_feature(self) -> None:
+        """Der Erstfokus gehört dem ersten leeren Pflichtfeld für ein Merkmal.
+
+        Ohne das gibt Qt beim Anzeigen dem ersten Feld der Kette den Fokus —
+        bei *An Merkmal ausrichten* dem schon gefüllten Quellmerkmal —, und
+        der erste Bildklick überschrieb dieses statt das leere Ziel zu füllen
+        (RM-416). Gilt erst am gezeigten Dialog; ungezeigt füllt
+        :meth:`take_feature` ohnehin das erste leere Pflichtfeld.
+        """
+        for entry in self.spec.params.spec():
+            if not entry.required or not (
+                entry.kind in ("feature", "features") or entry.targets_feature
+            ):
+                continue
+            editor = self._editors.get(entry.name)
+            if editor is None or editor.isHidden() or not self._feature_field_empty(entry.name):
+                continue
+            editor.setFocus(Qt.FocusReason.OtherFocusReason)
+            self._feature_focus = entry.name
+            return
 
     def _hide_internal_fields(self) -> None:
         """Ein Migrationsmarker reist mit dem Schritt, steht aber nicht im
@@ -2978,6 +3119,8 @@ class OperationDialog(QDialog):
         if isinstance(editor, FeatureSetField | EdgeSetField):
             editor.changed.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
+        elif isinstance(editor, PointsField):
+            editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, ContourField | OrganizerLayoutField | SealPathField):
             editor.valueChanged.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
@@ -3035,6 +3178,10 @@ class OperationDialog(QDialog):
             return FeatureSetField(self._features, tuple(start or ()), self)
         if entry.kind == "edges":
             return EdgeSetField(self._edges, str(start or ""), self)
+        if entry.kind == "points":
+            points = PointsField(str(start or ""), self)
+            points.pickRequested.connect(self.pointsPickRequested)
+            return points
         if entry.kind == "bool":
             # Die ganze Zeile antwortet, nicht nur das Kästchen (``RowCheckBox``).
             editor = RowCheckBox(self)
@@ -3350,6 +3497,18 @@ class OperationDialog(QDialog):
                 editor.set_value(float(value))
         return True
 
+    def take_plane_point(self, point: Sequence[float]) -> int | None:
+        """Einen im Bild angeklickten Punkt in das Punktefeld eintragen (RM-400).
+
+        Gibt die Nummer des gesetzten Punkts zurück, 1 bis 3 — oder ``None``,
+        wenn der Dialog gerade kein wirksames Punktefeld trägt: Wer die Ebene
+        inzwischen auf eine Achse gestellt hat, dessen Klick ist keine Antwort.
+        """
+        for editor in self._editors.values():
+            if isinstance(editor, PointsField) and editor.isEnabled():
+                return editor.take_point(point)
+        return None
+
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Übernimmt eine vollständige Raumlage ohne gerundete Zwischenwerte."""
         with QSignalBlocker(self):
@@ -3480,6 +3639,9 @@ class OperationDialog(QDialog):
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
         super().showEvent(event)
+        if not event.spontaneous() and not self._first_focus_given:
+            self._first_focus_given = True
+            self._focus_first_empty_feature()
         self._queue_refit("initial")
 
     def place_beside(self, anchor: QWidget | None) -> None:
@@ -3654,6 +3816,10 @@ class OperationDialog(QDialog):
         """
         return self._naming is not None and self._naming.isChecked()
 
+    def offers_naming(self) -> bool:
+        """Ob der Dialog den Haken *Maße als Parameter anlegen* trägt."""
+        return self._naming is not None
+
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
         from app.ui.filament_picker import FilamentField
@@ -3667,7 +3833,8 @@ class OperationDialog(QDialog):
             if isinstance(editor, SealPathField):
                 collected.update(editor.selection())
             elif isinstance(
-                editor, FeatureSetField | EdgeSetField | ContourField | OrganizerLayoutField
+                editor,
+                FeatureSetField | EdgeSetField | ContourField | OrganizerLayoutField | PointsField,
             ):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, MaterialField):

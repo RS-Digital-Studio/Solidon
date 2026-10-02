@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 41
+FORMAT_VERSION: Final = 42
 
 
 @dataclass(frozen=True, slots=True)
@@ -1155,6 +1155,40 @@ def _keep_sculpt_brushes_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _name_the_cut_plane(data: dict[str, Any]) -> dict[str, Any]:
+    """Format 41 → 42: Ein Schnitt *An Fläche* sagt, dass er an einer Fläche hängt.
+
+    *Abschneiden* trägt seit RM-400 ein Feld ``plane``: an einer Achse, an einer
+    Fläche, durch eine Kante oder durch drei Punkte. Bis Format 41 hieß ein
+    gesetztes ``at_feature`` „parallel zu dieser Fläche“, und Achse und Neigung
+    standen wirkungslos daneben (M4 der Nachprüfung). Jeder solche Schritt
+    bekommt ``plane = "at_face"`` und trägt seine Position als ``offset`` weiter,
+    auch in den gespeicherten Fassungen jeder Änderung; ein Schritt ohne
+    Fläche schneidet an der Achse wie bisher, die Vorgabe von ``plane``.
+    Festgehalten an ``tests/data/projects/cut_away_face_v41.p3d``, geschrieben
+    vom Stand davor.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "cut_away":
+            continue
+        params = operation.get("params")
+        if isinstance(params, dict) and params.get("at_feature"):
+            params.setdefault("plane", "at_face")
+            # Die Position zählte dort von der Fläche aus; das tut jetzt der Abstand.
+            if "position" in params:
+                params.setdefault("offset", params["position"])
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1197,6 +1231,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=38, to_version=39, apply=_keep_slot_directions_as_they_were),
     Step(from_version=39, to_version=40, apply=_keep_sculpt_mirrors_as_they_were),
     Step(from_version=40, to_version=41, apply=_keep_sculpt_brushes_as_they_were),
+    Step(from_version=41, to_version=42, apply=_name_the_cut_plane),
 )
 
 

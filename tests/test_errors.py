@@ -405,6 +405,11 @@ _NOT_A_RANGE = frozenset(
         # Schräg abschneiden (RM-400): eine Kippachse gleich der Schnittachse
         # und eine Stelle ohne ebene Fläche — Wahl und Ort, keine Zahl im Feld.
         "tilt_about_axis", "no_plane",
+        # Ebene durch Punkte oder Kante: fehlende oder auf einer Geraden
+        # liegende Punkte, keine, mehrere, eine runde oder eine Kante entlang
+        # der Achse — Wahl und Ort, keine Zahl im Feld.
+        "no_points", "points_on_one_line", "no_edge", "one_edge",
+        "edge_not_straight", "edge_along_axis",
         # Flächenkontur und Projizieren (RM-188 P3.4): keine Fläche unter der
         # Zeichnung, eine gegen die Fläche gekippte Ebene, ein Netzrand ohne
         # eindeutigen Umlauf, Kanten, die schon in der Zeichnung stehen — Lagen

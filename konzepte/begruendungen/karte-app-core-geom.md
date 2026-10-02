@@ -1538,6 +1538,31 @@ Sacklochboden `FEATURE_OVERLAP` Spiel, nicht zehn Nanometer, und
   Schnitt: Er fehlte in `scene/placement.py`, und die Vorschau zeigte den
   normalen, während die Operation den fetten baute.
 
+**Muster am importierten Zylinder: Mantel und Stopfen lesen dieselben
+Facetten** (RM-225, RM-404). Eine binäre STL rundet die Mantelecken auf
+float32; der Stopfen, der die Zellen füllt, liegt bündig auf den gemessenen
+Facetten, und schon die Rundung ließ die Vereinigung Selbstschnitte in den
+Mantel triangulieren. RM-225 richtete die Ecken deshalb auf die Ebene durch
+alle Ecken einer Facette aus, RM-404 machte die Grenze zum float32-Raster.
+Danach blieben am Deckel Ø 80 mit 48 Rillen zwei und fern vom Ursprung
+(110, 110) vier Selbstschnittdreiecke, ohne Befund: Die Ausrichtung legte auf
+Ebenen, die bis 10⁻⁷ rad gegen die Achse geneigt standen, der Stopfen las
+achsparallel aus einem Dreieck je Facette und wechselte die Facette auf der
+Winkelhalbierenden statt an ihrem Schnitt — Mantel und Stopfen lagen bis
+1,5·10⁻⁶ mm auseinander. Und die Stirnenden des Stopfens standen quer zur
+gemessenen Achse, die bei (110, 110) 1,9·10⁻⁸ rad schräg steht; unter jeder
+Rille blieb eine eigene Fläche von 2,6 mm² stehen, und nach dem Ändern war
+das Muster nicht mehr zu lesen. Seither liest `patterns.cylinder_facet_lines`
+die Facette als Ausgleichsgerade aller Ecken quer zur Achse, für Ausrichtung
+und Stopfen; `FacetPolygon.corners` legt den Wechsel an den Schnitt,
+`Frame.ends` das Stirnende in die gemessene Stirnfläche — nur, wo die
+äußerste Mantelecke in ihr liegt, denn hinter einer schmalen Fase legte der
+Stopfen sonst Material über sie. `_regular_polygon` ergänzt nur fehlende
+Facetten und behält die gemessenen. An zwei Fassungen des echten
+Gewürzdeckels aus dem lokalen Korpus fielen damit die Selbstschnitte und
+Flächenreste in den Lagen „auf dem Bett“ und „CAD-Nullpunkt in der Ecke“ weg;
+die Ausrichtung von 26 112 Trägerecken braucht 0,12 statt 0,2 s.
+
 ### Reparatur
 
 *Früher im Kopf der Karte.*

@@ -62,7 +62,7 @@ er:** `skirt`, `brim`, `raft` mit „Skirt-Runden“, „Brim-Breite“,
 anders heißt als sein Feld, ist eine Fährte ins Nichts.
 
 **Jedes Feld sagt, was es tut — und zwar alle**, sonst lernt niemand, dass es
-hier Sätze gibt: die Druckeinstellungen über `note`, die 1574 Parameter der 155
+hier Sätze gibt: die Druckeinstellungen über `note`, die 1578 Parameter der 155
 Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
@@ -199,7 +199,13 @@ der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
 direkt unter dem Feld, und der gemeinsame Knopf ist gesperrt, solange die
 scharfgestellte Handlung eine sichtbare abgelehnte Zahl enthält. Maßgruppen im
-Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann.
+Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann. **Eine
+gespeicherte Zahl jenseits der Grenze wird nicht geklemmt:** Die Leiste weitet
+das Qt-Feld bis zu ihr (`ParameterPanel._set_limits`), nennt die wirksame
+Grenze darunter und nimmt jede Korrektur an — sonst zeigt sie die Grenze, und
+die Korrektur auf genau diese Zahl ist keine Änderung.
+Felder und Fokus bleiben nur im selben Dokument (`show_document`); ein
+anderes Projekt erbt keine abgelehnte Zahl.
 
 **Auch die Druckeinstellungen lehnen ab statt zu kürzen.** Ihre Zahlenfelder
 verwenden `BoundedSpin`, der Düsendurchmesser `BoundedLengthSpin`. Der Hinweis

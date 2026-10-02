@@ -25,6 +25,9 @@ _CODE: Final = re.compile(r"`([^`]+)`")
 _STRONG: Final = re.compile(r"\*\*([^*]+)\*\*")
 _EMPHASIS: Final = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _HEADING: Final = re.compile(r"^(#{1,6})\s+(.*)$")
+_NESTED_HEADING: Final = re.compile(r"^((?:\s*>)+\s*|\s*(?:[*+-]|\d+[.)])\s+)(#{1,6})\s+(.*)$")
+"""Eine Überschrift in einem Zitat oder Listenpunkt. Qt liest sie als Überschrift
+ohne Zitatebene; nicht eingeordnet, stünde sie neben dem Operationstitel."""
 _SETEXT: Final = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
 _FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _BULLET: Final = re.compile(r"^[*-]\s+(.*)$")
@@ -149,6 +152,7 @@ def below_heading(markdown: str, level: int) -> str:
     """
     lines: list[str] = []
     headings: list[tuple[int, int, str]] = []
+    prefixes: dict[int, str] = {}
     paragraph: int | None = None
     fence = ""
     for line in markdown.split("\n"):
@@ -165,9 +169,14 @@ def below_heading(markdown: str, level: int) -> str:
             continue
         candidate = line.lstrip(" ") if not line.startswith("    ") else line
         heading = _HEADING.match(candidate)
+        nested = None if heading or line.startswith(("    ", "\t")) else _NESTED_HEADING.match(line)
         underlined = _SETEXT.match(line)
         if heading:
             headings.append((len(lines), len(heading[1]), heading[2]))
+            paragraph = None
+        elif nested:
+            prefixes[len(lines)] = nested[1]
+            headings.append((len(lines), len(nested[2]), nested[3]))
             paragraph = None
         elif underlined and paragraph is not None:
             title = " ".join(part.strip() for part in lines[paragraph:])
@@ -190,7 +199,7 @@ def below_heading(markdown: str, level: int) -> str:
         0, level + 1 - min((depth for _index, depth, _title in headings), default=level + 1)
     )
     for index, depth, title in headings:
-        lines[index] = f"{'#' * min(depth + shift, 6)} {title}"
+        lines[index] = f"{prefixes.get(index, '')}{'#' * min(depth + shift, 6)} {title}"
     return "\n".join(lines)
 
 

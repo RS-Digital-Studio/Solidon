@@ -76,6 +76,30 @@ def printable_area(printer: PrinterProfile, *, margin: float = 0.0) -> BaseGeome
     return area.buffer(-max(0.0, margin), join_style="mitre") if margin > 0.0 else area
 
 
+def machine_shift(printer: PrinterProfile) -> tuple[float, float]:
+    """Wohin Solidons Bettmitte in den Koordinaten der Maschine fällt (§29).
+
+    Die eine Umrechnung für alles, was Maschinenkoordinaten schreibt oder
+    liest — Platzierung in der 3MF, Bettform und Ursprung der Übergabe,
+    Gegenprobe an der Druckdatei: ``Maschine = Solidon + machine_shift``.
+    Ohne ``bed_origin`` misst die Maschine von der vorderen linken Ecke, und
+    die Verschiebung ist das halbe Bett; an einem Bett um den Ursprung ist sie
+    null. Bis RM-424 stand an jeder dieser Stellen das halbe Bett, und am
+    Dremel 3D45 lag ein Würfel aus der Bettmitte am hinteren Rand.
+    """
+    if printer.bed_origin is None:
+        width, depth, _height = printer.build_volume
+        return width / 2.0, depth / 2.0
+    across, along = printer.bed_origin
+    if not (math.isfinite(across) and math.isfinite(along)):
+        raise ValidationError(
+            field="bed_origin",
+            detail=_("Der Nullpunkt des Betts ist ungültig. Prüfen Sie das Druckerprofil."),
+            suggestions=(CHOOSE_PRINTER,),
+        )
+    return 0.0 - across, 0.0 - along
+
+
 def footprint(mesh: Mesh) -> BaseGeometry:
     """Die tatsächliche XY-Projektion, einschließlich ausgesparter Bereiche.
 
