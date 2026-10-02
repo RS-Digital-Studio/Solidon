@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Final, cast, overload
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
+    SHOW_LOCATION,
     Action,
     AppError,
     GeometryError,
@@ -964,7 +965,9 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     body = as_mesh_data(source.mesh)
     original_body = body
     lip = None
+    rim = None
     if subtractive:
+        rim = _over_the_rim(body, placed, anchor, direction)
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     addition = spec.host_add(part_params) if spec.host_add is not None else None
@@ -1076,6 +1079,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
             *produced.findings,
             *([nothing] if nothing else []),
             *([lip] if lip else []),
+            *([rim] if rim else []),
             *([loose] if loose else []),
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),
@@ -1110,6 +1114,72 @@ SPRING_ARMS: Final[dict[str, tuple[str, str, str]]] = {
     # Baustein: (Armlänge, Armdicke, Federweg beim Einrasten)
     "snap_fit": ("length", "thickness", "hook"),
 }
+
+
+def _over_the_rim(body: Mesh, tool: Mesh, anchor: Vec3, direction: Vec3 | None) -> Finding | None:
+    """Reicht ein abtragender Baustein seitlich über den Rand seiner Fläche?
+
+    Gefunden im Nachbau-Test (RM-392): Ein Schlüsselloch an der Vorderseite
+    eines 10 mm hohen Quaders setzte den Kopf in die Flächenmitte, und der
+    Einhängeweg endete 3 mm über der Oberkante — die Oberseite verlor 26 mm²,
+    die Schraube rutscht oben heraus, und der Prüfbericht war leer. Für
+    Bohrungen sagt das ``bore.over_the_edge``; hier fragt dieselbe Stelle für
+    jeden abtragenden Baustein.
+
+    **Gefragt wird am Umriss, nicht am Hüllquader.** Jeder Punkt des
+    Werkzeugs unter der Mündung wird auf die Mündungsebene gelegt und von
+    außen entlang der Flächennormalen beschossen: Trifft der Strahl den Körper
+    nicht, liegt unter diesem Teil des Umrisses keine Fläche — er reicht über
+    den Rand. Eine gewölbte Fläche, etwa eine Zylinderwand, trifft der Strahl
+    weiter, solange der Umriss über ihr liegt; ein Durchgangsloch tritt nach
+    hinten aus und nicht seitlich, sein Umriss liegt ganz über der Fläche.
+    """
+    if direction is None:
+        return None
+    import numpy as np
+
+    from app.core.geom.mesh import ray_hits_batch
+
+    normal = np.asarray(direction, dtype=float)
+    length = float(np.sqrt(np.sum(normal * normal)))
+    if length <= EPS_GEOM:
+        return None
+    normal = normal / length
+    origin = np.asarray(anchor, dtype=float)
+    points = np.asarray(as_mesh_data(tool).raw.vertices, dtype=float)
+    depth = np.sum((points - origin) * normal, axis=1)
+    below = depth < -100.0 * EPS_GEOM
+    if not below.any():
+        return None
+    footprint = points[below] - depth[below][:, None] * normal
+    host = as_mesh_data(body)
+    low, high = host.bounds.minimum, host.bounds.maximum
+    reach = float(np.sqrt(np.sum((np.asarray(high) - np.asarray(low)) ** 2))) + float(
+        np.max(-depth[below])
+    )
+    starts = footprint + reach * normal
+    distances, _hit = ray_hits_batch(
+        np.asarray(host.raw.triangles, dtype=float),
+        starts,
+        np.broadcast_to(-normal, starts.shape).copy(),
+    )
+    missed = ~np.isfinite(distances)
+    if not missed.any():
+        return None
+    outside = footprint[missed]
+    farthest = outside[int(np.argmax(np.sum((outside - origin) ** 2, axis=1)))]
+    return Finding(
+        code="part.over_the_edge",
+        severity="warning",
+        message=_(
+            "Der Baustein reicht über den Rand der Fläche hinaus und schneidet die "
+            "Nachbarfläche an. Setzen Sie ihn weiter in die Fläche oder wählen Sie "
+            "kleinere Maße."
+        ),
+        location=(float(farthest[0]), float(farthest[1]), float(farthest[2])),
+        # Regel 17: Die Lage steht im Schritt; die Stelle zeigt, wo er hinausragt.
+        suggestions=(CORRECT_INPUT, SHOW_LOCATION),
+    )
 
 
 def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> Finding | None:
@@ -1356,7 +1426,9 @@ def _insert_at_exact(
         raise InternalError(detail="the exact part path needs an exact host")
     original_body = body
     lip = None
+    rim = None
     if subtractive:
+        rim = _over_the_rim(body, placed, anchor, direction)
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     added_features: dict[str, Feature] = {}
@@ -1444,6 +1516,7 @@ def _insert_at_exact(
             *produced.findings,
             *([nothing] if nothing else []),
             *([lip] if lip else []),
+            *([rim] if rim else []),
             *([loose] if loose else []),
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),

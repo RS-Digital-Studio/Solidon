@@ -1147,6 +1147,7 @@
   "Der Baustein konnte nicht wiederhergestellt werden. Prüfen Sie den Ordnerzugriff und versuchen Sie es erneut.": "Le bloc n'a pas pu être restauré. Vérifiez l'accès au dossier et réessayez.",
   "Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft stand — die Position ist zu prüfen.": "Le bloc se trouve plus bas de sa propre profondeur. Les anciens projets le reçoivent là où il se trouvait auparavant en l'air, sans effet — vérifiez sa position.",
   "Der Baustein ließ sich nicht anlegen.": "Le bloc n'a pas pu être créé.",
+  "Der Baustein reicht über den Rand der Fläche hinaus und schneidet die Nachbarfläche an. Setzen Sie ihn weiter in die Fläche oder wählen Sie kleinere Maße.": "Le bloc dépasse le bord de la face et entame la face voisine. Placez-le plus à l'intérieur de la face ou choisissez des dimensions plus petites.",
   "Der Baustein steht im Katalog — aber an den Grenzen kam kein brauchbarer Körper heraus. Der Katalog zeigt das an; engere Grenzen beheben es.": "Le bloc est dans le catalogue — mais aux limites, aucun corps utilisable n'est sorti. Le catalogue l'indique ; des limites plus étroites y remédient.",
   "Der Baustein steht im Katalog. Er gehört Ihnen und bleibt auf diesem Rechner.": "Le bloc se trouve dans le catalogue. Il vous appartient et reste sur cet ordinateur.",
   "Der Baustein wird gerade geprüft — einen Augenblick.": "Le bloc est en cours de vérification — un instant.",

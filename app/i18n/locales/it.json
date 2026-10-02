@@ -1147,6 +1147,7 @@
   "Der Baustein konnte nicht wiederhergestellt werden. Prüfen Sie den Ordnerzugriff und versuchen Sie es erneut.": "Non è stato possibile ripristinare il blocco. Verifica l'accesso alla cartella e riprova.",
   "Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft stand — die Position ist zu prüfen.": "Il blocco si trova più in basso della sua stessa profondità. I progetti vecchi lo ricevono dove prima stava in aria senza effetto: verifica la posizione.",
   "Der Baustein ließ sich nicht anlegen.": "Non è stato possibile creare il blocco.",
+  "Der Baustein reicht über den Rand der Fläche hinaus und schneidet die Nachbarfläche an. Setzen Sie ihn weiter in die Fläche oder wählen Sie kleinere Maße.": "Il blocco supera il bordo della faccia e intacca la faccia vicina. Posizionalo più all'interno della faccia o scegli misure più piccole.",
   "Der Baustein steht im Katalog — aber an den Grenzen kam kein brauchbarer Körper heraus. Der Katalog zeigt das an; engere Grenzen beheben es.": "Il blocco è nel catalogo, ma ai limiti non è uscito alcun corpo utilizzabile. Il catalogo lo segnala; limiti più stretti lo risolvono.",
   "Der Baustein steht im Katalog. Er gehört Ihnen und bleibt auf diesem Rechner.": "Il blocco è nel catalogo. È tuo e resta su questo computer.",
   "Der Baustein wird gerade geprüft — einen Augenblick.": "Il blocco è in verifica: un attimo.",

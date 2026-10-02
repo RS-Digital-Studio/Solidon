@@ -714,3 +714,53 @@ def test_cable_addition_keeps_the_deepest_solver(profile, monkeypatch, stage):
     assert result.complete
     assert calls == ["union", "difference"]
     assert result.solvers[project.document.ops[-1].id].strategy == stage
+
+
+def _keyhole_on_a_box(profile, box_op: str, at_feature: str, **keyhole: object):
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader", [OperationDraft(op=box_op, params={"width": 40.0, "depth": 30.0, "height": 10.0})]
+    )
+    history.apply(
+        "Schlüsselloch",
+        [
+            OperationDraft(
+                op="insert_keyhole",
+                inputs=("obj_1",),
+                params={"at_feature": at_feature, **keyhole},
+            )
+        ],
+    )
+    return evaluate(project.document, profile, sources=ProjectSources(project))
+
+
+@pytest.mark.parametrize("box_op", ["create_box", "create_brep_box"])
+def test_a_cutting_part_over_the_rim_of_its_face_says_so(profile, box_op: str) -> None:
+    """Ein Schlüsselloch an der Vorderseite eines 10 mm hohen Quaders lief mit
+    seinem Einhängeweg 3 mm über die Oberkante: Die Oberseite verlor 26 mm²,
+    die Schraube rutscht oben heraus, und der Prüfbericht war leer (RM-392).
+    Für Bohrungen gab es ``bore.over_the_edge`` längst."""
+    from app.core.errors import CORRECT_INPUT
+
+    result = _keyhole_on_a_box(profile, box_op, "face_3")
+
+    assert result.complete
+    over = [entry for entry in result.scene.report.findings if entry.code == "part.over_the_edge"]
+    assert len(over) == 1, [entry.code for entry in result.scene.report.findings]
+    assert over[0].severity == "warning"
+    assert CORRECT_INPUT in over[0].suggestions
+    assert over[0].location is not None
+    assert over[0].location[2] > 10.0 - 1e-6, "die Stelle liegt über der Oberkante"
+
+
+@pytest.mark.parametrize(
+    ("box_op", "top"), [("create_box", "face_top"), ("create_brep_box", "face_6")]
+)
+def test_a_cutting_part_within_its_face_stays_quiet(profile, box_op: str, top: str) -> None:
+    """Die Gegenprobe: Auf der Oberseite hat das Schlüsselloch Platz."""
+    result = _keyhole_on_a_box(profile, box_op, top)
+
+    assert result.complete
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "part.over_the_edge" not in codes
