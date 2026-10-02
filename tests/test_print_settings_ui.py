@@ -1859,6 +1859,57 @@ def test_disabling_a_settings_group_clears_its_refusal_gate(
     assert refusal in dialog.open_button.toolTip()
 
 
+def test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere(
+    dialog: PrintSettingsDialog,
+    qt_app: QApplication,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Raft bringt seine Schichtzahl mit und lässt eine abgelehnte Schichthöhe stehen.
+
+    Elegoos Standardprozess führt null Raft-Schichten; die Wahl „Raft“ trägt
+    dann Solidons Vorgabe nach (``print_settings._with_a_measure``). Dafür
+    lud der Dialog alle Felder neu, und eine abgelehnte Zahl in einem anderen
+    Feld verschwand still samt Sperre.
+    """
+    from PySide6.QtTest import QTest
+
+    dialog.show()
+    qt_app.processEvents()
+
+    def close_dialog() -> None:
+        dialog.reject()
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+        qt_app.processEvents()
+
+    request.addfinalizer(close_dialog)
+    dialog.settings = print_settings.with_path(dialog.settings, "adhesion.raft_layers", 0)
+    path = "layers.layer_height"
+    dialog._lift(path)
+    editor = dialog._editors[path]
+    assert isinstance(editor, BoundedSpin)
+    line = editor.lineEdit()
+    line.setFocus()
+    line.selectAll()
+    invalid = editor.maximum() + 0.3
+    QTest.keyClicks(line, editor.locale().toString(invalid, "f", editor.decimals()))
+    refusal = editor.refusal()
+    assert refusal
+
+    selector = dialog._editors["adhesion.kind"]
+    selector.setCurrentIndex(selector.findData("raft"))
+    qt_app.processEvents()
+
+    layers = print_settings.read_path(dialog.settings, "adhesion.raft_layers")
+    assert layers > 0, "die Haftungsart hat ihr Maß mitgebracht"
+    raft_editor = dialog._editors["adhesion.raft_layers"]
+    assert isinstance(raft_editor, BoundedSpin)
+    assert raft_editor.value() == pytest.approx(layers), "und ihr Feld zeigt es"
+    assert editor.refusal() == refusal
+    assert dialog._first_numeric_refusal() == refusal
+    assert refusal in dialog.slice_button.toolTip()
+
+
 def test_advice_values_read_like_the_field_beside_them(dialog: PrintSettingsDialog) -> None:
     """Die Spalte „Vorschlag" schreibt jeden Wert, wie ihn das Feld zeigt.
 

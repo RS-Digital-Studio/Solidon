@@ -637,6 +637,30 @@ class _BoundedBehavior:
             self.lineEdit().setText(typed)
             self.valueRefused.emit(refused)
 
+    def hideEvent(self: Any, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Auch Aus- und Einblenden verwerfen die abgelehnte Zahl nicht still.
+
+        Qt wertet beim Verbergen eine offene Eingabe aus und schreibt beim
+        Einblenden den Wert neu ins Feld — beides an :meth:`interpretText`
+        vorbei. Ein Feld, das einer Wahl folgt oder auf einem anderen Reiter
+        steht, kam so mit dem alten Wert und ohne Ablehnung zurück. Ob eine
+        verborgene Ablehnung etwas sperrt, entscheidet der Anzeigende — meist
+        nicht, denn das Feld wirkt gerade nicht.
+        """
+        refused = self.refused_value()
+        typed = self.lineEdit().text()
+        NumberSpin.hideEvent(self, event)
+        if refused is not None:
+            self.lineEdit().setText(typed)
+
+    def showEvent(self: Any, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Siehe :meth:`hideEvent`."""
+        refused = self.refused_value()
+        typed = self.lineEdit().text()
+        NumberSpin.showEvent(self, event)
+        if refused is not None:
+            self.lineEdit().setText(typed)
+
 
 class BoundedSpin(_BoundedBehavior, NumberSpin):
     """Ein Zahlenfeld, das eine Zahl jenseits ihrer Grenzen stehen lässt."""
@@ -814,6 +838,15 @@ class BoundedLengthSpin(_BoundedBehavior, LengthSpin):
         finally:
             self.blockSignals(was_blocked)
         self.valueRefused.emit(shown)
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        """Erst die Einheit nachziehen, dann die abgelehnte Zahl halten.
+
+        Wie :meth:`LengthSpin.showEvent`, nur in dieser Reihenfolge: Bewahrt
+        wird der Text, den :meth:`refresh_unit` schon umgerechnet hat.
+        """
+        self.refresh_unit()
+        _BoundedBehavior.showEvent(self, event)
 
 
 class RowCheckBox(QCheckBox):

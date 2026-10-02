@@ -193,7 +193,10 @@ an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
 `valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas
 (`limit_sentence`, `name_limits`) und, wo sie änderbar ist, den Weg dorthin;
 der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
-(`OperationDialog._field_refusal`). Eine Nachkommastelle zu viel wird wie
+(`OperationDialog._field_refusal`). Fokuswechsel, Aus- und Einblenden lassen die
+abgelehnte Zahl stehen, weil Qt sonst still den alten Wert zurückschreibt; ein
+ausgeblendetes Feld sperrt dafür nichts, es wirkt gerade nicht. Eine
+Nachkommastelle zu viel wird wie
 überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. Das
 **Merkmalfenster** nutzt denselben Validator für Zahlen, Anzahlen und Längen;
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
