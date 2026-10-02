@@ -576,6 +576,40 @@ ADHESION_MEASURES: Final = {
 }
 
 
+#: Die Detailwerte der Stützen — sie wirken nur, wenn Stützen gedruckt werden.
+SUPPORT_DETAILS: Final = (
+    "support.placement",
+    "support.threshold_angle",
+    "support.z_gap",
+    "support.xy_gap",
+    "support.density",
+    "support.interface_layers",
+    "support.block_channels",
+)
+
+#: Welche Haftungsart jedes Haftungsmaß braucht. Der Auto-Brim misst mit der
+#: Brimbreite — dieselbe Ausnahme wie in ``handover._only_chosen_adhesion``.
+ADHESION_DETAILS: Final[dict[str, tuple[str, ...]]] = {
+    "adhesion.skirt_loops": ("skirt",),
+    "adhesion.skirt_distance": ("skirt",),
+    "adhesion.brim_width": ("brim", "auto"),
+    "adhesion.raft_layers": ("raft",),
+}
+
+
+def inactive_paths(support_style: str, adhesion_kind: str) -> frozenset[str]:
+    """Welche Einstellungen bei dieser Wahl nichts tun (RM-341).
+
+    Die eine Stelle für Sichtbarkeit, Sperre und Suche im Dialog — vorher drei
+    Fassungen, und alle kannten nur „aus“: Bei *Brim* blieben Skirt- und
+    Raft-Maße sichtbar, obwohl die Übergabe sie nullt, und ein Wert über der
+    Grenze in einem wirkungslosen Feld sperrte *Slicen*.
+    """
+    inactive = set(SUPPORT_DETAILS) if support_style == "none" else set()
+    inactive.update(path for path, kinds in ADHESION_DETAILS.items() if adhesion_kind not in kinds)
+    return frozenset(inactive)
+
+
 def _with_a_measure(
     settings: PrintSettings,
     path: str,

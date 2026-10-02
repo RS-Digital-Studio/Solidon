@@ -1837,7 +1837,11 @@ def test_disabling_a_settings_group_clears_its_refusal_gate(
 
     refusal = editor.refusal()
     assert refusal
-    assert dialog._first_numeric_refusal() == refusal
+    from app.ui.print_settings_dialog import setting_title
+
+    # Der Sperrgrund nennt das Feld (RM-342, D-N2).
+    named = f"{setting_title(number_path)}: {refusal}"
+    assert dialog._first_numeric_refusal() == named
     assert dialog._refusals[number_path].isVisibleTo(dialog)
 
     selector.setCurrentIndex(selector.findData("none"))
@@ -1853,9 +1857,9 @@ def test_disabling_a_settings_group_clears_its_refusal_gate(
     qt_app.processEvents()
 
     assert editor.refusal() == refusal
-    assert dialog._first_numeric_refusal() == refusal
+    assert dialog._first_numeric_refusal() == named
     assert dialog._refusals[number_path].isVisibleTo(dialog)
-    assert refusal in dialog.slice_button.toolTip()
+    assert named in dialog.slice_button.toolTip()
     assert refusal in dialog.open_button.toolTip()
 
 
@@ -8641,3 +8645,76 @@ def test_a_stock_problem_reads_as_two_lines_not_as_title_colon_detail(
         "Die Datei bleibt unverändert.",
     ]
     assert ".:" not in said[0] and "catalogue" not in said[0]
+
+
+def test_opening_needs_no_machine_profile_but_slicing_does(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """*Im Slicer öffnen* war gesperrt, solange im Slicerprofil kein Drucker
+    gewählt war — „Wählen Sie einen Drucker aus der Liste.“, obwohl oben einer
+    stand. Das Fenster des Slicers bringt seine Profile selbst mit (RM-336).
+    *Slicen* braucht das Profil weiter und sagt es mit seinem eigenen Satz."""
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    monkeypatch.setattr(module.handover, "window_program", lambda found: found)
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+    dialog.machine_choice.clear()
+    dialog.machine_choice.addItem("— bitte wählen —", "")
+    dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle", "ecc2")
+    dialog.machine_choice.setEnabled(True)
+    dialog.machine_choice.setCurrentIndex(0)
+
+    dialog._show_slicer_state()
+
+    assert dialog.open_button.isEnabled(), dialog.open_button.toolTip()
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == dialog._profile_gap()
+    assert dialog.slice_button.toolTip() != "Wählen Sie einen Drucker aus der Liste."
+    assert dialog._current_setup(for_slicing=False) is not None
+
+
+@pytest.mark.parametrize("kind", ["none", "skirt", "brim", "raft"])
+def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
+    dialog: PrintSettingsDialog, kind: str
+) -> None:
+    """Nur die Maße der gewählten Bettart stehen da; ein abgelehnter Wert in
+    einem ausgeblendeten Feld sperrt nicht (RM-341)."""
+    from app.core.knowledge import print_settings
+
+    selector = dialog._editors["adhesion.kind"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData(kind))
+    dialog._update_inactive_setting_rows()
+    form = dialog._tab_forms["adhesion"]
+    inactive = print_settings.inactive_paths("auto", kind)
+    for path in print_settings.ADHESION_DETAILS:
+        assert form.isRowVisible(dialog._labels[path]) is (path not in inactive), path
+
+    hidden = [path for path in print_settings.ADHESION_DETAILS if path in inactive]
+    if hidden:
+        editor = dialog._editors[hidden[0]]
+        assert isinstance(editor, BoundedSpin)
+        editor.lineEdit().setText("99999")
+        assert not editor.refusal() or dialog._first_numeric_refusal() == ""
+
+
+def test_the_refusal_at_the_slice_button_names_its_field(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Am Knopf stand nur „95 °C liegt über der Obergrenze 90 °C.“ — welches der
+    dreißig Felder gemeint war, musste man suchen (RM-342, D-N2)."""
+    from app.ui.print_settings_dialog import setting_title
+
+    selector = dialog._editors["support.style"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData("grid"))
+    editor = dialog._editors["support.density"]
+    monkeypatch.setattr(editor, "refusal", lambda: "95 liegt über der Obergrenze 90.")
+
+    assert dialog._first_numeric_refusal() == (
+        f"{setting_title('support.density')}: 95 liegt über der Obergrenze 90."
+    )

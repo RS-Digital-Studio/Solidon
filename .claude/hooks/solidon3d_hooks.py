@@ -17,10 +17,12 @@ Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
                      erkannten Testaufruf; Erfolg und Abdeckung prüft der Agent.
     abschluss        Stop: erinnert daran, wenn seit der letzten Änderung an
                      app/, tests/ oder tools/ kein Testaufruf erfasst ist.
-    vor-bash         PreToolUse (Bash): fragt nach, bevor ein Befehl Arbeit
-                     verwirft (Regel „niemals reverten"). Codex blockiert den
-                     ersten Versuch, weil es die Entscheidung „ask" noch
-                     nicht unterstützt.
+    vor-bash         PreToolUse (Bash, PowerShell): fragt nach, bevor ein
+                     Befehl Arbeit verwirft (Regel „niemals reverten") oder
+                     ein Werkzeug startet, das Geld kostet oder etwas
+                     veröffentlicht — in jeder Schreibweise des Aufrufs.
+                     Codex blockiert den ersten Versuch, weil es die
+                     Entscheidung „ask" noch nicht unterstützt.
 
 Codex-Aufrufe tragen zusätzlich das zweite Argument ``--codex``. Die
 Kennzeichnung kommt aus der jeweiligen Hook-Konfiguration und hängt damit
@@ -55,7 +57,8 @@ SESSION_START = WURZEL / ".claude" / ".state" / "sitzungsstart"
 #
 # Vor `vor-bash` und `testlauf` steht in `.claude/settings.json` ein
 # `case`-Vorfilter: Python startet nur, wenn die Nutzlast ein Wort trägt, auf
-# das VERWIRFT, SCHREIBT_DATEI oder `_test_command` reagieren können. Wer einen
+# das VERWIRFT, RUECKFRAGE_WERKZEUGE, SCHREIBT_DATEI oder `_test_command`
+# reagieren können. Wer einen
 # Auslöser ergänzt, zieht die Muster dort nach;
 # `tests/test_solidon3d_hooks.py` prüft die Obermenge.
 QT_IMPORT = re.compile(r"^\s*(?:from|import)\s+(?:PySide6|PyQt\d|shiboken\d?)\b", re.MULTILINE)
@@ -82,6 +85,21 @@ CODEX_APPROVAL_MARKER = re.compile(
     r"SOLIDON3D_REVERT_FREIGEGEBEN\s*(?:=|:)\s*['\"]?ja\b", re.IGNORECASE
 )
 CODEX_ARGUMENT = "--codex"
+#: Werkzeuge, die Geld kosten oder etwas veröffentlichen. Dieselbe Liste steht
+#: als `ask` in `.claude/settings.json`; jene Regeln sind Präfixregeln und
+#: treffen nur eine Schreibweise, hier wird am Werkzeugnamen gefragt.
+#: `tests/test_solidon3d_hooks.py` hält beide Listen gleich.
+RUECKFRAGE_WERKZEUGE = (
+    "run_agent_suite",
+    "upload_website",
+    "deploy_activation_server",
+    "check_support",
+    "sign_release",
+    "make_licence_keys",
+)
+CODEX_WERKZEUG_MARKER = re.compile(
+    r"SOLIDON3D_WERKZEUG_FREIGEGEBEN\s*(?:=|:)\s*['\"]?ja\b", re.IGNORECASE
+)
 #: Befehle, die eine Datei geschrieben haben können, ohne dass Write oder Edit
 #: es gesehen hätte — ein Skript über die Shell, ein `sed -i`, eine Umleitung.
 SCHREIBT_DATEI = re.compile(
@@ -655,43 +673,143 @@ def abschluss() -> None:
         )
 
 
-def vor_bash() -> None:
-    daten = eingabe()
-    befehl = (daten.get("tool_input") or {}).get("command") or ""
-    if not VERWIRFT.search(befehl):
-        return
-    if is_codex():
-        if CODEX_APPROVAL_MARKER.search(befehl):
-            return
-        json.dump(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": (
-                        "Dieser Befehl verwirft Arbeit. Frage Robert ausdrücklich. "
-                        "Nach seiner Freigabe darf derselbe Befehl mit dem Marker "
-                        "SOLIDON3D_REVERT_FREIGEGEBEN=ja erneut ausgeführt werden."
-                    ),
-                }
-            },
-            sys.stdout,
-        )
-        return
+#: Ein Python-Interpreter als erstes Wort: `python`, `python3.14`, `py`,
+#: `python.exe` unter jedem Pfad — oder eine Variable, die ihn trägt
+#: (`"$SUITE_PYTHON"`, `$env:SUITE_PYTHON`).
+_INTERPRETER = re.compile(r"(?:pythonw?[\d.]*|py)(?:\.exe)?", re.IGNORECASE)
+_HUELLEN = {"bash", "bash.exe", "sh", "zsh", "pwsh", "pwsh.exe", "powershell", "powershell.exe"}
+
+
+def _werkzeug_im_wort(wort: str) -> str | None:
+    """`…/tools/upload_website.py`, `upload_website.py` oder `tools.upload_website`."""
+    for name in RUECKFRAGE_WERKZEUGE:
+        if wort.rsplit("/", 1)[-1] == f"{name}.py" or wort in (f"tools.{name}", f"tools/{name}"):
+            return name
+    return None
+
+
+def rueckfrage_werkzeug(command: str, *, depth: int = 0) -> str | None:
+    """Welches Geld- oder Veröffentlichungswerkzeug der Befehl startet — sonst ``None``.
+
+    Entscheidend ist das gestartete Skript, nicht der Pfad des Interpreters:
+    relativ, absolut, über `"$SUITE_PYTHON"`, als `-m tools.x`, direkt als
+    `./tools/x.py`, in PowerShell-Form oder in einer `bash -c`-Hülle. Wer die
+    Datei nur liest, prüft oder nennt (`cat`, `ruff check`, `git log --`),
+    startet sie nicht und wird nicht gefragt.
+    """
+    if depth > 8:
+        return None
+    try:
+        lexer = shlex.shlex(command.replace("\\", "/"), posix=True, punctuation_chars=";&|\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        # Nicht zerlegbar: lieber einmal zu oft fragen als ein Werkzeug laufen lassen.
+        return next((name for name in RUECKFRAGE_WERKZEUGE if name in command), None)
+    statement: list[str] = []
+    for token in [*tokens, ";"]:
+        if token and set(token) <= set(";&|\n"):
+            found = _werkzeug_aufruf(statement, depth)
+            if found:
+                return found
+            statement = []
+        else:
+            statement.append(token)
+    return None
+
+
+def _werkzeug_aufruf(tokens: list[str], depth: int) -> str | None:
+    while tokens and re.match(r"(?:\$env:)?[A-Za-z_][A-Za-z_0-9]*=", tokens[0]):
+        tokens = tokens[1:]
+    if tokens and tokens[0] == "env":
+        return _werkzeug_aufruf(tokens[1:], depth)
+    if not tokens:
+        return None
+    runner = tokens[0].rsplit("/", 1)[-1].lower()
+    arguments = tokens[1:]
+    if runner in _HUELLEN:
+        for index, argument in enumerate(arguments):
+            if argument.lower() in {"-c", "-lc", "-command"} and index + 1 < len(arguments):
+                return rueckfrage_werkzeug(arguments[index + 1], depth=depth + 1)
+        return _werkzeug_im_wort(arguments[0]) if arguments else None
+    if runner in {"start-process", "start"}:
+        # Programm und Argumente stehen hier in benannten Parametern.
+        return next(filter(None, map(_werkzeug_im_wort, arguments)), None)
+    direct = _werkzeug_im_wort(tokens[0])
+    if direct:
+        return direct
+    if not (tokens[0].startswith("$") or _INTERPRETER.fullmatch(runner)):
+        return None
+    while arguments:
+        if arguments[0] in {"-u", "-B", "-I", "-S", "-E", "-O", "-OO", "-s", "-q"} or (
+            re.fullmatch(r"-3(?:\.\d+)*", arguments[0])
+        ):
+            arguments = arguments[1:]
+        elif arguments[0] in {"-X", "-W"} and len(arguments) > 1:
+            arguments = arguments[2:]
+        else:
+            break
+    if not arguments:
+        return None
+    if arguments[0] == "-m":
+        return _werkzeug_im_wort(arguments[1]) if len(arguments) > 1 else None
+    return _werkzeug_im_wort(arguments[0])
+
+
+def _entscheidung(entscheidung: str, grund: str) -> None:
     json.dump(
         {
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
-                "permissionDecision": "ask",
-                "permissionDecisionReason": (
-                    "Dieser Befehl verwirft Arbeit. In diesem Projekt gilt: niemals "
-                    "reverten, immer vorwärts fixen. Nur nach ausdrücklicher "
-                    "Freigabe ausführen."
-                ),
+                "permissionDecision": entscheidung,
+                "permissionDecisionReason": grund,
             }
         },
         sys.stdout,
     )
+
+
+def vor_bash() -> None:
+    """Fragt vor verwerfenden Git-Befehlen und vor Geld- und Veröffentlichungswerkzeugen.
+
+    Codex unterstützt die Entscheidung „ask" nicht und blockiert deshalb, bis
+    Roberts Freigabe als Marker im Befehl steht.
+    """
+    daten = eingabe()
+    befehl = (daten.get("tool_input") or {}).get("command") or ""
+    if VERWIRFT.search(befehl):
+        if not is_codex():
+            _entscheidung(
+                "ask",
+                "Dieser Befehl verwirft Arbeit. In diesem Projekt gilt: niemals "
+                "reverten, immer vorwärts fixen. Nur nach ausdrücklicher "
+                "Freigabe ausführen.",
+            )
+        elif not CODEX_APPROVAL_MARKER.search(befehl):
+            _entscheidung(
+                "deny",
+                "Dieser Befehl verwirft Arbeit. Frage Robert ausdrücklich. "
+                "Nach seiner Freigabe darf derselbe Befehl mit dem Marker "
+                "SOLIDON3D_REVERT_FREIGEGEBEN=ja erneut ausgeführt werden.",
+            )
+        return
+    werkzeug = rueckfrage_werkzeug(befehl)
+    if werkzeug is None:
+        return
+    if not is_codex():
+        _entscheidung(
+            "ask",
+            f"tools/{werkzeug}.py kostet Geld oder veröffentlicht etwas. "
+            "Nur ausführen, wenn Robert es ausdrücklich beauftragt hat.",
+        )
+    elif not CODEX_WERKZEUG_MARKER.search(befehl):
+        _entscheidung(
+            "deny",
+            f"tools/{werkzeug}.py kostet Geld oder veröffentlicht etwas. Frage "
+            "Robert ausdrücklich. Nach seiner Freigabe darf derselbe Befehl mit "
+            "dem Marker SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja erneut ausgeführt werden.",
+        )
 
 
 AUFGABEN = {

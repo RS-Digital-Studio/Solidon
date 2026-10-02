@@ -4230,11 +4230,18 @@ class PrintSettingsDialog(QDialog):
         control = {"support": "support.style", "adhesion": "adhesion.kind"}.get(field.group)
         if control is None or path == control:
             return None
-        editor = self._editors.get(control)
-        selector = self._fields.get(control)
-        if editor is None or selector is None:
-            return None
-        return control if _setting_editor_value(editor, selector) == "none" else None
+        return control if path in self._inactive_paths() else None
+
+    def _inactive_paths(self) -> frozenset[str]:
+        """Was bei der sichtbaren Wahl nichts tut — gefragt im Kern (RM-341)."""
+        return print_settings.inactive_paths(
+            str(
+                _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
+            ),
+            str(
+                _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
+            ),
+        )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
         """Zeigt und benennt die Wahl, die ein bedingtes Trefferfeld freigibt."""
@@ -6300,13 +6307,25 @@ class PrintSettingsDialog(QDialog):
                     widget.setProperty(_OWN_TIP, None)
 
     def _printer_selection_issue(self) -> str:
-        """Tippsuche ist noch keine Wahl, weder am Projekt noch am Slicerprofil."""
-        if not valid_printer_choice(self.printer_choice) or (
+        """Tippsuche ist noch keine Wahl — am Drucker des Projekts.
+
+        Das Druckerprofil des Slicers fragt :meth:`_machine_selection_issue`,
+        und nur auf dem Rechen-Weg: *Im Slicer öffnen* war gesperrt, solange
+        dort keiner gewählt war, obwohl das Fenster seine Profile selbst
+        mitbringt (RM-336).
+        """
+        if not valid_printer_choice(self.printer_choice):
+            return str(tr("Wählen Sie einen Drucker aus der Liste."))
+        return ""
+
+    def _machine_selection_issue(self) -> str:
+        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts."""
+        if (
             self.machine_choice.isEnabled()
             and self.machine_choice.count() > 0
             and not valid_printer_choice(self.machine_choice)
         ):
-            return str(tr("Wählen Sie einen Drucker aus der Liste."))
+            return self._profile_gap() or str(tr("Wählen Sie einen Drucker aus der Liste."))
         return ""
 
     def _show_slicer_state(self) -> None:
@@ -6385,7 +6404,7 @@ class PrintSettingsDialog(QDialog):
             # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
             # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher
             # erst nach dem Klick in der Statuszeile (Fund ce, 26.08.2026).
-            reason = self._profile_gap()
+            reason = self._profile_gap() or self._machine_selection_issue()
         # Ein laufender Auftrag hält den Knopf zu, gleich was die drei
         # Bedingungen sagen — sonst schaltete eine nachgereichte
         # Profilantwort ihn mitten im Lauf wieder frei.
@@ -6987,29 +7006,24 @@ class PrintSettingsDialog(QDialog):
             self._show_slicer_state()
 
     def _first_numeric_refusal(self) -> str:
-        """Die erste Grenzablehnung an einem aktiven Druckwert."""
+        """Die erste Grenzablehnung an einem aktiven Druckwert — mit dem Feld davor.
+
+        Am Knopf *Slicen* stand nur „95 °C liegt über der Obergrenze 90 °C.“,
+        und welches der dreißig Felder gemeint war, musste man suchen
+        (RM-342, D-N2).
+        """
         if self.session.profile.printer.is_resin:
             return ""
         for editor in (self.nozzle, self.nozzle_count):
             if reason := editor.refusal():
-                return reason
-        inactive = {
-            "support": (
-                _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
-                == "none"
-            ),
-            "adhesion": (
-                _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
-                == "none"
-            ),
-        }
+                return str(tr("{name}: {value}", name=editor.accessibleName(), value=reason))
+        inactive = self._inactive_paths()
         for field in FIELDS:
-            group = field.path.partition(".")[0]
-            if inactive.get(group, False):
+            if field.path in inactive:
                 continue
             field_editor = self._editors.get(field.path)
             if isinstance(field_editor, BoundedSpin) and (reason := field_editor.refusal()):
-                return reason
+                return str(tr("{name}: {value}", name=setting_title(field.path), value=reason))
         return ""
 
     def _refresh_header_refusal(self, path: str, *_args: object) -> None:
@@ -7057,42 +7071,19 @@ class PrintSettingsDialog(QDialog):
 
     def _update_inactive_setting_rows(self) -> None:
         """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
-        support_enabled = (
-            _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
-            != "none"
-        )
-        for path in (
-            "support.placement",
-            "support.threshold_angle",
-            "support.z_gap",
-            "support.xy_gap",
-            "support.density",
-            "support.interface_layers",
-            "support.block_channels",
+        inactive = self._inactive_paths()
+        for tab, paths in (
+            ("support", print_settings.SUPPORT_DETAILS),
+            ("adhesion", tuple(print_settings.ADHESION_DETAILS)),
         ):
-            form = self._tab_forms["support"]
-            form.setRowVisible(self._labels[path], support_enabled)
-            editor = self._editors[path]
-            refusal = self._refusals.get(path)
-            if isinstance(editor, BoundedSpin) and refusal is not None:
-                form.setRowVisible(refusal, support_enabled and bool(editor.refusal()))
-
-        adhesion_enabled = (
-            _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
-            != "none"
-        )
-        for path in (
-            "adhesion.skirt_loops",
-            "adhesion.skirt_distance",
-            "adhesion.brim_width",
-            "adhesion.raft_layers",
-        ):
-            form = self._tab_forms["adhesion"]
-            form.setRowVisible(self._labels[path], adhesion_enabled)
-            editor = self._editors[path]
-            refusal = self._refusals.get(path)
-            if isinstance(editor, BoundedSpin) and refusal is not None:
-                form.setRowVisible(refusal, adhesion_enabled and bool(editor.refusal()))
+            form = self._tab_forms[tab]
+            for path in paths:
+                active = path not in inactive
+                form.setRowVisible(self._labels[path], active)
+                editor = self._editors[path]
+                refusal = self._refusals.get(path)
+                if isinstance(editor, BoundedSpin) and refusal is not None:
+                    form.setRowVisible(refusal, active and bool(editor.refusal()))
         self._queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
@@ -7920,7 +7911,7 @@ class PrintSettingsDialog(QDialog):
                 filament
             )
 
-    def _current_setup(self) -> handover.SlicerSetup | None:
+    def _current_setup(self, *, for_slicing: bool = True) -> handover.SlicerSetup | None:
         """Der eingestellte Slicer mit der Profilwahl aus den Feldern (§29).
 
         Was in der Auswahl steht, gilt — sie ist automatisch vorbelegt, aber
@@ -7928,7 +7919,10 @@ class PrintSettingsDialog(QDialog):
         beide Übergabearten: Der Rechen-Weg und der Öffnen-Weg lesen dieselben
         Felder, und zwei Abschriften davon drifteten auseinander.
         """
-        if problem := self._printer_selection_issue():
+        problem = self._printer_selection_issue() or (
+            self._machine_selection_issue() if for_slicing else ""
+        )
+        if problem:
             self.state.setText(problem)
             return None
         found = self._slicer_path
@@ -7975,7 +7969,7 @@ class PrintSettingsDialog(QDialog):
         if not objects:
             self.state.setText(tr("Es ist nichts da, was sich öffnen ließe."))
             return
-        setup = self._current_setup()
+        setup = self._current_setup(for_slicing=False)
         if setup is None:
             return
         if not self._may_hand_over(objects):

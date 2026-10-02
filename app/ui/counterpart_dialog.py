@@ -134,7 +134,8 @@ class CounterpartDialog(QDialog):
                 continue
             field = self._field_for(entry)
             self._fields[name] = field
-            self.form.addRow(tr("{name}:", name=entry.title), field)
+            # Wie jede andere Formularzeile ohne Doppelpunkt (`fenster.md`, RM-342 C-N1).
+            self.form.addRow(str(entry.title), field)
             caption = self.form.labelForField(field)
             if isinstance(caption, QLabel):
                 caption.setBuddy(field)

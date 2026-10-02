@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 40
+FORMAT_VERSION: Final = 41
 
 
 @dataclass(frozen=True, slots=True)
@@ -1126,6 +1126,35 @@ def _keep_sculpt_mirrors_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_sculpt_brushes_as_they_were(data: dict[str, Any]) -> dict[str, Any]:
+    """Format 40 → 41: Formsitzungen behalten den Pinsel, mit dem sie gemalt wurden.
+
+    Seit RM-376 bewegt ein Zug nur dem Pinsel zugewandte Punkte
+    (``front_only``), seit RM-378 wirkt ein Zug auf der Symmetrieebene nur
+    einmal (``mirror_once``). Ein altes Projekt sähe damit anders aus; jeder
+    vorhandene Formschritt bekommt beide Schalter aus, auch in den
+    gespeicherten Fassungen jeder Änderung. Festgehalten an
+    ``tests/data/projects/sculpt_brush_v40.p3d``, geschrieben vom Stand davor.
+    """
+    operations = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        changes = transaction.get("changes")
+        if not isinstance(changes, dict):
+            continue
+        for side in ("before", "after"):
+            state = changes.get(side)
+            if isinstance(state, dict) and isinstance(state.get("edited_ops"), dict):
+                operations.extend(state["edited_ops"].values())
+    for operation in operations:
+        if not isinstance(operation, dict) or operation.get("op") != "sculpt_strokes":
+            continue
+        params = operation.setdefault("params", {})
+        if isinstance(params, dict):
+            params.setdefault("front_only", False)
+            params.setdefault("mirror_once", False)
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -1167,6 +1196,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=37, to_version=38, apply=_place_further_models_freely),
     Step(from_version=38, to_version=39, apply=_keep_slot_directions_as_they_were),
     Step(from_version=39, to_version=40, apply=_keep_sculpt_mirrors_as_they_were),
+    Step(from_version=40, to_version=41, apply=_keep_sculpt_brushes_as_they_were),
 )
 
 
