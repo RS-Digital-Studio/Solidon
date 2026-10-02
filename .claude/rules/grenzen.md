@@ -167,13 +167,17 @@ Robert).
   Obergrenze.
 - **Ein Grundkörper bietet an, seine Maße zu benennen** (§13, Entscheidung
   Robert): *Maße als Parameter anlegen* steht vorn in jedem Dialog der
-  Kategorie `primitive` (`offers_naming`). Gesetzt, wird jedes Millimetermaß der
-  Vorderseite ein Projektparameter nach seiner Beschriftung (*Breite* →
-  `breite`, vergeben → `breite_2`) mit übersetzbarem Titel und den Grenzen des
-  Feldes, der Schritt verweist mit `=@breite` darauf, beides in **einer**
-  Transaktion (`changes` an `Session.apply`); ein Feld mit Ausdruck bleibt
+  Kategorie `primitive` und im Erzeuger jedes Bausteins, der sich als Vorlage
+  erklärt (`PartSpec.template`, die Halter; `offers_naming`). Gesetzt, wird
+  jedes wirksame Millimetermaß der Vorderseite ein Projektparameter nach
+  seiner Beschriftung (*Breite* → `breite`, vergeben → `breite_2`) mit
+  übersetzbarem Titel und den Grenzen des Feldes, der Schritt verweist mit
+  `=@breite` darauf, beides in **einer** Transaktion (`changes` an
+  `Session.apply`); ein Feld mit Ausdruck bleibt, ein Feld, dessen
+  `depends_on` gerade nicht gilt, wird keiner — es steht ja nicht da
   (`test_naming_the_dimensions_makes_them_project_parameters`,
-  `test_only_a_primitive_offers_to_name_its_dimensions`).
+  `test_only_a_primitive_offers_to_name_its_dimensions`,
+  `test_a_holder_template_names_its_dimensions_but_not_an_idle_field`).
 - **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat:**
   `ArmatureField` baut je Knochen drei Winkel (`ValueField`, §13), sobald der
   Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten
@@ -299,7 +303,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Einundvierzig von hundertzweiundvierzig Operationen tragen einen (die Zahl prüft
+Neunundvierzig von hundertfünfzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),

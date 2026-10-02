@@ -119,6 +119,50 @@ passed = true
 date = "2026-10-02"
 
 [[parts]]
+name = "holder_fork"
+version = "1"
+fingerprint = "93f961692e52a3e3b2876f0d3f3c8302c2a70074c7f9b991b6722385cea6d374"
+corners = 256
+checked = 256
+excluded = 64
+failures = 0
+passed = true
+date = "2026-10-02"
+
+[[parts]]
+name = "holder_ring"
+version = "1"
+fingerprint = "57f93afe0046da1bbecefbcccd539406f751ceedea1d98efe01d223e1baeb947"
+corners = 256
+checked = 256
+excluded = 0
+failures = 0
+passed = true
+date = "2026-10-02"
+
+[[parts]]
+name = "holder_shelf"
+version = "1"
+fingerprint = "c474dc9a1b4e60aad2793fd5a534f07d9a91044d4d48eac4a4954b32fcd0b9f9"
+corners = 512
+checked = 512
+excluded = 0
+failures = 0
+passed = true
+date = "2026-10-02"
+
+[[parts]]
+name = "holder_u"
+version = "1"
+fingerprint = "ce97ba99b569d3e9cb4d7a0435d6fb8d971b1037a72877a8b5225d95beaca227"
+corners = 512
+checked = 512
+excluded = 0
+failures = 0
+passed = true
+date = "2026-10-02"
+
+[[parts]]
 name = "keyhole"
 version = "15"
 fingerprint = "c300f8c748553541f26571d42b2224bc1394d1dbee2b590ec1c914c68cf90b1f"

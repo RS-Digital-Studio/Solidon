@@ -139,6 +139,11 @@ Abdruck des gefahrenen Stands (`parts/range_proof.py`).
   `test_self_intersections.py`).
 - **Der Bereichstest läuft auch in der Anwendung**: `range_check.check` hängt
   am Rezeptdialog, ein Kunde sieht ihn für eigene Rezepte.
+- **Mehr Wahl heißt mehr Bausteine, nicht mehr Ecken**: Über
+  `range_check.MAX_CORNERS` (512) lehnt der Bereichstest ab, bevor er rechnet.
+  Eine Vorlage mit vielen Formen wird ein Baustein je Form mit gemeinsamem
+  Unterbau (`holders.py`: vier Halter, je 256 oder 512 Ecken), keine
+  Formwahl, die das Produkt sprengt.
 - **Ein Maß ohne Obergrenze ist ein Bereich ohne Rand**: Ohne `maximum` fährt
   der Test nur die Untergrenze. Jedes Längenmaß eines Bausteins trägt beide
   Grenzen; ausgenommen Winkel und Versatz der Trennebene an den Profilklemmen —

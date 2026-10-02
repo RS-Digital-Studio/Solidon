@@ -382,7 +382,7 @@ def test_the_local_window_fits_on_a_sixteen_gigabyte_card_with_room_for_the_scen
     Prozessor — 11 statt 41 Token je Sekunde, 18 s je warmem Zug statt 6,3
     (gemessen am 16.09.2026). Das größere Fenster war der Preis eines
     Werkzeugschemas von 36 731 Token. Seit dem Werkzeugangebot zählt die
-    Grundlast 7 276 (25.09.2026); ein Zug mit zehn ausführlichen Werkzeugen,
+    Grundlast 7 522 (02.10.2026); ein Zug mit zehn ausführlichen Werkzeugen,
     Steckbrief und Verlauf kam in der Suite auf 14 215. Wer eine Operation
     dazulegt und neu zählt, sieht hier, ob das Fenster noch trägt — statt es
     still wieder zu heben.

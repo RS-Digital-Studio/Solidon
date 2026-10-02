@@ -1329,6 +1329,11 @@ EXACT_PARTS: Final = frozenset(
         "wall_mount",
         "profile_clamp_liner",
         "profile_clamp_shell",
+        # Halter
+        "holder_u",
+        "holder_ring",
+        "holder_fork",
+        "holder_shelf",
         # Struktur und Kabel
         "rib",
         "gusset",

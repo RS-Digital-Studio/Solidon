@@ -1270,6 +1270,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Die zwei Wege von *Dreiecke verringern* (``mesh_ops.DECIMATE_METHODS``).
     "measured": _("Gemessen"),
     "fast": _("Schnell"),
+    # Die vier Befestigungen der Halter (``parts/holders.py``, RM-399).
+    "keyhole": _("Schlüsselloch"),
+    "screws": _("Schraublöcher"),
+    "pegboard": _("Lochwand-Haken"),
+    "clamp": _("Klemme"),
 }
 
 
@@ -1468,6 +1473,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     ),
     "measured": _("Misst die Abweichung und meldet sie — genau, an großen Netzen langsam."),
     "fast": _("Vereinfacht wie die Anzeige, ohne Messung — auch große Netze in Sekunden."),
+    "keyhole": _("Zwei Schlüssellöcher auf der Rückseite: unsichtbar auf Schrauben gehängt."),
+    "screws": _("Zwei Laschen neben dem Halter mit gesenkten Löchern zum Anschrauben."),
+    "pegboard": _("Zwei Haken mit Rastzunge für die Lochwand."),
+    "clamp": _("Ein Bügel, der über die Kante einer Platte greift — ohne Bohren."),
 }
 
 

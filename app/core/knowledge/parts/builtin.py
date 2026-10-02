@@ -13,6 +13,7 @@ SHIPPED_MODULES: Final[tuple[str, ...]] = (
     "fasteners",
     "mechanics",
     "mounting",
+    "holders",
     "structure",
     "containers",
     "profile_clamps",
