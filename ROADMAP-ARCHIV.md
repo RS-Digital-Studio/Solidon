@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
@@ -36690,3 +36691,24 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
 
 **Abschluss:** Der Vergleich an der Anwendung lässt die Leertaste jedem Bedienelement, das sie selbst braucht (`viewport.answers_space`: Textfelder wie bisher, dazu Knöpfe, Haken, Auswahlpunkte, Auswahllisten, Listen und ankreuzbare Rahmen); auf der Ansicht, einem Dialoghintergrund oder einer Beschriftung bleibt sie der Vergleich, und ein Loslassen auf einem Bedienelement beendet einen gehaltenen Vergleich. Entschieden statt „nur mit Fokus auf der Ansicht“: Der Vergleich soll auch während eines offenen Operationsdialogs gehen, dessen Hintergrund den Fokus hält; nur die Bedienelemente bekommen ihre Taste zurück. *Im Chat beschreiben* holt die rechte Spalte zurück, stellt den Chat nach vorn und setzt dann den Cursor. *Quader*/*Zylinder anlegen* aus der Einladung starten den Zwilling des Menüs (`menu_twins`, mit exaktem Kern `create_brep_box`/`create_brep_cylinder`): Gleich beschriftet heißt gleich gemacht, und der exakte Körper ist der, den der Kunde über das Menü kennt und mit echten Kanten weiterbearbeitet; ohne exakten Kern bleibt es das Netz, wie im Menü. Die Zählkommentare in `selection_operations.py` und `catalog.py` nennen keine Zahl mehr, sondern `standalone` (gemessen 15 von 41 frei). Fenstertests `test_controls_keep_the_space_key_while_a_preview_runs` und `test_every_entry_of_the_invitation_does_what_the_menu_does` (beide am Stand `ba5a76365` rot, danach grün; die bisherigen Leertasten- und Einladungstests grün). Sonde am echten Hauptfenster mit echten Tasten und Klicks: am Stand `ba5a76365` 7 von 13 (Chat nicht vorn, Einladung `create_box` gegen Menü `create_brep_box`, Haken und Skala ohne Leertaste), danach 13 von 13. Regel in `ansicht.md`. Umgesetzt von Claude, in main mit (Commit folgt).
+
+## RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)
+
+<a id="rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026"></a>
+<a id="rm-415"></a>
+
+**RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-334, das im Arbeitsbaum archiviert ist.
+  Tab + Enter folgt seit `2dc4ce0ce` dem Fokus in allen Rückfragen.
+  **Fehlerfall:** Rückfrage öffnen, Tab auf „Abbrechen“, zu einem anderen Fenster und zurück
+  wechseln, Enter → `confirm_discard` gibt `True`, `confirm_unsaved` `'save'`; die Leertaste löst
+  „Abbrechen“ aus, und ohne Solidons Zuhörer klickt Qt selbst „Abbrechen“.
+  **Ursache:** `app/ui/style.py` — `FocusOut` setzt `_typed_to` zurück, und
+  `ActiveWindowFocusReason` gilt nicht als Tastaturwahl.
+  **Fix:** `_typed_to` über den Fensterwechsel behalten (bzw. beim Zurückkehren den Fokusknopf als
+  Tastaturwahl werten).
+  **Abnahme:** Test je Rückfrage mit Fensterwechsel: Enter löst den fokussierten Knopf aus.
+  Bauplan §19.2, Regel 19. Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`,
+  Sonden `v4u_rm334_fensterwechsel.py`, `v4u_rm334_qt_nativ.py`.
+
+**Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit (Commit folgt).
