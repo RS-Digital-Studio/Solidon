@@ -78,6 +78,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
+| [RM-474 — Unter Volllast verhungert der Hilfsprozess: Stopp und Abbruch kommen nicht an](#rm-474) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-t`) |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -2601,6 +2602,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   erhalten. Zentrales Tor und tatsächliche Integration dieser Einheit
   stehen aus; native Qt-/Fenster-/Abbruchlatenz bleibt Releaseabnahme.
   B01-Export-/Sliceranschlüsse sind separat abgestimmt; RM298 bleibt `[~]`.
+
+<a id="rm-474"></a>
+
+- [ ] **RM-474 — Unter Volllast verhungert der Hilfsprozess: Stopp und Abbruch kommen nicht an.**
+  Fund 02.10.2026 (Thread „Umsetzung Bedienung, Darstellung, KI“): `tests/test_kernel_process.py`
+  fällt bei voller Prozessorlast auch einzeln (3 failed, 1 error, „Das Ende des Hilfsprozesses ist
+  noch nicht bestätigt“; der Abbruch der Bisektion kommt nicht an), bei 25 GB freiem Speicher.
+  **Vermutung:** Der Hilfsprozess rechnet seit RM-212 eine Stufe unter der Anwendung
+  (`kernel_jobs._yield_to_the_window`, `BELOW_NORMAL_PRIORITY_CLASS`). Auf einem ausgelasteten
+  Rechner bekommen dann auch seine Steuerwege keine Zeit: `TerminateProcess` braucht einen
+  geplanten Faden je Prozessfaden, die Frist in `_Helper.stop` ist 5 s, und das Lesen der
+  Abbruchnachricht läuft in derselben gesenkten Klasse. Beim Kunden heißt das „Starten Sie
+  Solidon neu“, wo nur ein anderes Programm rechnet.
+  **Fix:** Nur die Rechenarbeit zurückstellen, nicht die Steuerwege — vor Stopp und Abbruch die
+  Klasse des Kindes wieder anheben bzw. den Steuerfaden im Kind höher stellen; Fristen, die
+  unter Last tragen. Nachstellen unter erzeugter Volllast vorher und nachher, alle drei Plattformen
+  bedenken (`nice` lässt sich unter POSIX nicht zurücknehmen).
+  **Abnahme:** `test_kernel_process.py` unter erzeugter Volllast grün; ein Test, der den Stopp
+  eines gesenkten Kindes unter Last belegt; das Fenster bleibt bedienbar wie nach RM-212.
+  Bauplan §31, Regel 17.
 
 <a id="rm-301"></a>
 
