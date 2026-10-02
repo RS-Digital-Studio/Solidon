@@ -7397,5 +7397,10 @@
   "Einfügen beenden und übernehmen": "Terminar a inserção e aplicar",
   "Größe ändern": "Alterar tamanho",
   "Reliefhöhe ändern": "Alterar altura do relevo",
-  "Zellgröße ändern": "Alterar tamanho da célula"
+  "Zellgröße ändern": "Alterar tamanho da célula",
+  "{title} {number}": "{title} {number}",
+  "{name} ändern": "Alterar {name}",
+  "Einheit von {name}": "Unidade de {name}",
+  "{name} als Regler": "{name} como controlo deslizante",
+  "Von {low} bis {high}": "De {low} a {high}"
 }

@@ -154,7 +154,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
 | [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
-| [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
@@ -4617,32 +4616,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** je Fund ein Test — Quittung nennt den Umfang; Differenzkörper tragen ein Muster;
   `"7.00" not in unit_question(...)` bei Deutsch; Ablegen einer `.blend` zeigt einen Satz.
   Beleg: `F:\solidon-review-reports\gebiet-weg1.md`.
-
-<a id="rm-359"></a>
-
-- [ ] **RM-359 — Weg 2: Reste aus der Gebietsprüfung.**
-  Review 02.10.2026, Gebietsprüfung Weg 2, am HEAD `6ce767031`.
-  - **F5 — Zwei Grundkörper mit benannten Maßen ergeben doppelte Leistenzeilen** („Breite, Tiefe,
-    Höhe“ zweimal, ohne Körperbezug). `main_window.py:17973–17990`, Anzeige `panels.py:3596`,
-    `:3630`. Fix: bei Doppelung trägt der Titel den Körpernamen. Sonde `w2_fenster1.py` (3).
-  - **F6 — *Maße als Parameter anlegen* fehlt beim Ändern eines Grundkörpers** (`edit_operation`,
-    `main_window.py:17875–17900`, ohne `offer_naming`); `grenzen.md` verlangt den Haken in jedem
-    Dialog der Kategorie `primitive`. Fix: durchreichen, Parameter und Schritt als eine
-    Transaktion. Sonde `w2_nachtraeglich.py`.
-  - **F7 — Der Tooltip der Befundzeile nennt Codeadressen** („Feld: width · Bedingung: maximum ·
-    Höchstwert: 1000,0“, ohne Einheit). `_value_lines` (`panels.py:1301–1310`) filtert nicht, der
-    Zwilling `spoken_values` (`dialogs.py:3174–3193`, `_ADDRESSES`) schon. Sonde `w2_fenster4.py`.
-  - **F8 — Kein Schieberegler bei begrenztem Bereich**, den §13 verlangt (`panels.py:3601–3630`);
-    eine Gegenentscheidung ist nicht belegt. Ein Zug ist genau eine Transaktion.
-  - **F9 — Die Felder der Parameterleiste haben keinen Namen**: leerer `accessibleName`, kein
-    Buddy; Einheitenkästen dreimal „Einheit“, „…“ dreimal „Parameter ändern“
-    (`panels.py:3399–3409`, `:3480–3516`). Sonde `w2_namen.py`.
-  - **F11 — *Parameter anlegen* zeigt fünf Felder vorn** ohne *Weitere Einstellungen*
-    (`dialogs.py:654–662`), §2.4; die leer vorbelegten Grenzen machen RM-354 erst möglich.
-  **Abnahme:** je Rest ein Test (sechs verschiedene Titel bei zwei Quadern; Haken beim Ändern und
-  ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
-  doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
-  Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
 
 <a id="rm-366"></a>
 

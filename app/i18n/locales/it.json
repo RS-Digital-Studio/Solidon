@@ -7397,5 +7397,10 @@
   "Einfügen beenden und übernehmen": "Termina l'inserimento e applica",
   "Größe ändern": "Cambia dimensione",
   "Reliefhöhe ändern": "Cambia altezza del rilievo",
-  "Zellgröße ändern": "Cambia dimensione della cella"
+  "Zellgröße ändern": "Cambia dimensione della cella",
+  "{title} {number}": "{title} {number}",
+  "{name} ändern": "Modifica {name}",
+  "Einheit von {name}": "Unità di {name}",
+  "{name} als Regler": "{name} come cursore",
+  "Von {low} bis {high}": "Da {low} a {high}"
 }

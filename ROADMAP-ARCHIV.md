@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-359: Weg 2: Leiste, Haken beim Ändern, Grenzen mit Einheit, Regler, Namen und Parameterdialog (02.10.2026)](#rm-359-weg-2-leiste-haken-beim-ändern-grenzen-mit-einheit-regler-namen-und-parameterdialog-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -36810,7 +36811,7 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
   Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
 
-**Abschluss:** Bauplan §2.2 (Weg 1) nennt jetzt „rechts im Auswahlfenster am Merkmal die passende Operation wählen“, abgestimmt mit Robert (Ansage 02.10.2026). Nachgezogen in `.claude/rules/ansicht.md`, `konzepte/begruendungen/regel-ansicht.md`, den Docstrings und Kommentaren in `app/ui/viewport.py`, `panels.py`, `main_window.py`, `labels.py`, `selection_operations.py` und in `tests/test_analysis_ui.py`, `test_selection.py`, `test_way_one.py`, `test_operation_ui.py`. `git grep "Kontextmenü am Merkmal"` findet nur noch Sätze über *Diesen Schritt ändern* im Menü (richtig nach §18.5) und datierte Archivtexte. Die App bleibt unverändert. Umgesetzt von Claude (Thread „Bedienung und KI“).
+**Abschluss:** Bauplan §2.2 (Weg 1) nennt jetzt „rechts im Auswahlfenster am Merkmal die passende Operation wählen“, abgestimmt mit Robert (Ansage 02.10.2026). Nachgezogen in `.claude/rules/ansicht.md`, `konzepte/begruendungen/regel-ansicht.md`, den Docstrings und Kommentaren in `app/ui/viewport.py`, `panels.py`, `main_window.py`, `labels.py`, `selection_operations.py` und in `tests/test_analysis_ui.py`, `test_selection.py`, `test_way_one.py`, `test_operation_ui.py`. `git grep "Kontextmenü am Merkmal"` findet nur noch Sätze über *Diesen Schritt ändern* im Menü (richtig nach §18.5) und datierte Archivtexte. Die App bleibt unverändert. Umgesetzt von Claude (Thread „Bedienung und KI“), in main mit `8ab25c2f2`, gepusht von Robert nach seiner Freigabe im Thread.
 
 **Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit `c06c4d3b6` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
 
@@ -36831,3 +36832,34 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
 
 **Abschluss:** Erststart, Einstellungen und Dateiwahl suchen den gewählten Slicer über `first_run.select_program` (Vergleich mit `discover.same_program`, also über `Path`) statt über den exakten Text; `PrintSettingsDialog._choose_slicer` und `filament_picker.slicer_filaments` vergleichen den gemerkten Pfad ebenso. *Abbrechen* im Erzeugen-Dialog ist gesperrt, solange der Abbruch eines weiteren Versuchs ausläuft, und trägt dabei den Satz „Wird abgebrochen — der laufende Schritt läuft aus.“; auch Esc und das Fensterkreuz verwerfen in dieser Zeit nichts (gefragt wird `_busy`, nicht `isRunning`, weil der Faden schon zurück sein kann, bevor seine Meldung ankommt). Tests: `test_a_slicer_in_another_case_stays_chosen_in_the_first_run`, `test_a_remembered_slicer_in_another_case_is_the_one_used` (Druckdialog und Filamentwähler), `test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings` (nur unter Windows, wo Pfade nicht nach Groß und Klein unterscheiden) und `test_a_second_cancel_while_the_first_runs_out_discards_nothing`; alle vier am Stand `ba5a76365` rot, danach grün. Sonde am echten Fenster: Erststart mit einer als `c:\…` gewählten Datei und anschließender Programmsuche, Erzeugen mit einem Abbruch, der zwei Sekunden ausläuft, echte Klicks und Esc: vorher 5 von 9, danach 9 von 9. In den Einstellungen trat der Fehler am echten Rechner nicht auf, weil die Programmsuche den gemerkten Pfad in seiner eigenen Schreibweise mitliefert; der Test stellt die Lage aus dem Review nach. Umgesetzt von Claude, in main mit `db87b3815` (Merge `db0f5ef13`); Entwicklungstor grün (20215 bestanden, ruff, format und mypy ohne Befund).
+
+## RM-359: Weg 2: Leiste, Haken beim Ändern, Grenzen mit Einheit, Regler, Namen und Parameterdialog (02.10.2026)
+
+<a id="rm-359-weg-2-leiste-haken-beim-ändern-grenzen-mit-einheit-regler-namen-und-parameterdialog-02102026"></a>
+<a id="rm-359"></a>
+
+**RM-359 — Weg 2: Reste aus der Gebietsprüfung.**
+  Review 02.10.2026, Gebietsprüfung Weg 2, am HEAD `6ce767031`.
+  - **F5 — Zwei Grundkörper mit benannten Maßen ergeben doppelte Leistenzeilen** („Breite, Tiefe,
+    Höhe“ zweimal, ohne Körperbezug). `main_window.py:17973–17990`, Anzeige `panels.py:3596`,
+    `:3630`. Fix: bei Doppelung trägt der Titel den Körpernamen. Sonde `w2_fenster1.py` (3).
+  - **F6 — *Maße als Parameter anlegen* fehlt beim Ändern eines Grundkörpers** (`edit_operation`,
+    `main_window.py:17875–17900`, ohne `offer_naming`); `grenzen.md` verlangt den Haken in jedem
+    Dialog der Kategorie `primitive`. Fix: durchreichen, Parameter und Schritt als eine
+    Transaktion. Sonde `w2_nachtraeglich.py`.
+  - **F7 — Der Tooltip der Befundzeile nennt Codeadressen** („Feld: width · Bedingung: maximum ·
+    Höchstwert: 1000,0“, ohne Einheit). `_value_lines` (`panels.py:1301–1310`) filtert nicht, der
+    Zwilling `spoken_values` (`dialogs.py:3174–3193`, `_ADDRESSES`) schon. Sonde `w2_fenster4.py`.
+  - **F8 — Kein Schieberegler bei begrenztem Bereich**, den §13 verlangt (`panels.py:3601–3630`);
+    eine Gegenentscheidung ist nicht belegt. Ein Zug ist genau eine Transaktion.
+  - **F9 — Die Felder der Parameterleiste haben keinen Namen**: leerer `accessibleName`, kein
+    Buddy; Einheitenkästen dreimal „Einheit“, „…“ dreimal „Parameter ändern“
+    (`panels.py:3399–3409`, `:3480–3516`). Sonde `w2_namen.py`.
+  - **F11 — *Parameter anlegen* zeigt fünf Felder vorn** ohne *Weitere Einstellungen*
+    (`dialogs.py:654–662`), §2.4; die leer vorbelegten Grenzen machen RM-354 erst möglich.
+  **Abnahme:** je Rest ein Test (sechs verschiedene Titel bei zwei Quadern; Haken beim Ändern und
+  ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
+  doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
+  Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
+
+**Abschluss:** Alle sechs Reste gebaut. F5: Ein vergebener Titel bekommt die Nummer seines Namens (*Breite 2* zu `breite_2`, `MainWindow._named_dimensions`). F6: *Diesen Schritt ändern* an einem Grundkörper trägt den Haken; Schritt und Maße gehen in einer Transaktion (`History.change_params(..., changes)`, `_swap_operations(along=…)`), Strg+Z nimmt beides zurück. F7: Der Kern legt die Einheit des Feldes zu Mindest- und Höchstwert (`registry.params`), Bericht und Fehlerdialog hängen sie an (`labels.value_line(…, unit)`, `unit_of`), Adressen bleiben draußen. F8: Ein Maß mit eigener Unter- und Obergrenze hat einen Regler, wenn der Bereich ein Arbeitsbereich ist (bis zum 20-Fachen seines Werts, `SLIDER_SPAN`); ein Zug ist eine Änderung, eine Pfeiltaste eine. F9: Feld, Einheit und Knopf jeder Zeile heißen nach ihrem Maß, die Beschriftung zeigt auf ihr Feld. F11: *Parameter anlegen* zeigt vorn Name, Wert, Einheit; die Grenzen stehen hinter *Weitere Einstellungen*, offen bei vorhandenen Grenzen und sobald ein Satz eine Grenze meint. Tests: `test_ui.py::test_two_named_boxes_get_distinct_rows_with_names`, `::test_editing_a_box_offers_to_name_its_dimensions_in_one_step`, `::test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change`, `test_parameter_dialog.py::test_only_name_value_and_unit_stand_in_front`, `test_value_labels.py::test_a_limit_names_its_unit_and_no_code_address`. Fenstersonde am echten Fenster: zwei Quader über das Menü, sechs verschiedene Zeilen und Namen, Regler erst mit Bereich 30 bis 80, ein Zug am Regler ein Schritt, Parameterdialog mit Grenzen hinten, Ändern mit Haken; 7 von 7. Neue Texte in allen fünf Katalogen. Umgesetzt von Claude (Thread „Bedienung und KI“).
