@@ -1684,7 +1684,9 @@ def test_the_printer_header_refuses_out_of_range_numbers(
             assert "Obergrenze" in reason
             assert editor.textFromValue(boundary) in reason
             assert dialog._header_refusals[path].isVisibleTo(dialog)
-            assert dialog._first_numeric_refusal() == reason
+            assert dialog._first_numeric_refusal() == tr(
+                "{name}: {value}", name=editor.accessibleName(), value=reason
+            )
 
             line.selectAll()
             corrected = (
@@ -2143,14 +2145,159 @@ def test_disabled_support_and_bed_adhesion_hide_their_detail_rows(
     assert isinstance(brim_width, QDoubleSpinBox)
     brim_width.setValue(9.5)
     saved_brim_width = dialog.settings.adhesion.brim_width
-    assert all(not dialog._labels[path].isHidden() for path in adhesion_paths)
+    assert {path for path in adhesion_paths if not dialog._labels[path].isHidden()} == {
+        "adhesion.brim_width"
+    }
     adhesion.setCurrentIndex(adhesion.findData("none"))
     assert all(dialog._labels[path].isHidden() for path in adhesion_paths)
     assert dialog.settings.adhesion.brim_width == saved_brim_width
 
     adhesion.setCurrentIndex(adhesion.findData("brim"))
-    assert all(not dialog._labels[path].isHidden() for path in adhesion_paths)
+    assert {path for path in adhesion_paths if not dialog._labels[path].isHidden()} == {
+        "adhesion.brim_width"
+    }
     assert brim_width.value() == saved_brim_width
+
+
+def test_automatic_adhesion_rows_follow_the_selected_slicer_family(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-341: Slicer-Erkennung und Wahl aktualisieren die sichtbare Haftungsart."""
+    from app.ui import print_settings_dialog as module
+
+    dialog.session.start_new("centauri-carbon-2", "pla")
+    automatic = print_settings.with_path(
+        print_settings.with_path(
+            print_settings.resolve(dialog.session.profile), "adhesion.kind", "auto"
+        ),
+        "adhesion.skirt_loops",
+        0,
+    )
+    dialog.settings = automatic
+    dialog._foundation = None
+    dialog._foundation_key = None
+    dialog._slicers = ()
+    dialog._slicer_path = None
+    dialog._load_into_editors()
+    adhesion_paths = tuple(print_settings.ADHESION_DETAILS)
+    skirt_loops = dialog._editors["adhesion.skirt_loops"]
+
+    def visible_paths() -> set[str]:
+        return {path for path in adhesion_paths if not dialog._labels[path].isHidden()}
+
+    assert visible_paths() == {"adhesion.brim_width"}
+    assert dialog.settings.adhesion.skirt_loops == 0
+    assert skirt_loops.value() == 0
+
+    target = "adhesion.skirt_loops"
+    term = str(dialog._fields[target].title)
+    assert dialog.search_hits(term) == [target]
+    dialog.jump_to(term)
+    assert dialog._search_requirement_target == target
+
+    prusa = Path("PrusaSlicer.exe")
+    orca = Path("OrcaSlicer.exe")
+    dialog._slicers = (prusa, orca)
+    monkeypatch.setattr(dialog, "_choose_slicer", lambda _found: prusa)
+    monkeypatch.setattr(dialog, "_forget_result", lambda: None)
+    monkeypatch.setattr(dialog, "_clear_profile_choices", lambda: None)
+    monkeypatch.setattr(dialog, "_show_slicer_state", lambda: None)
+    monkeypatch.setattr(dialog, "_start_profile_search", lambda: None)
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: None)
+    monkeypatch.setattr(module.discover, "remember_path", lambda *_args: None)
+
+    dialog._slicers_found((prusa, orca))
+    assert visible_paths() == {"adhesion.skirt_loops", "adhesion.skirt_distance"}
+    assert dialog._search_requirement_target == ""
+    assert (
+        skirt_loops.value() == print_settings.resolve(dialog.session.profile).adhesion.skirt_loops
+    )
+
+    skirt_loops.setValue(0)
+    assert "adhesion.skirt_loops" in dialog.settings.explicit
+    assert handover.values_for(dialog.settings, dialog.session.profile, "prusa")["skirts"] == "0"
+
+    dialog._slicer_chosen(1)
+    assert visible_paths() == {"adhesion.brim_width"}
+    assert dialog._search_requirement_target == target
+    assert not dialog.search_requirement.isHidden()
+
+    brim_width = dialog._editors["adhesion.brim_width"]
+    assert isinstance(brim_width, BoundedSpin)
+    invalid_width = brim_width.maximum() + 1
+    brim_width.lineEdit().setText(brim_width.textFromValue(invalid_width))
+    refusal = brim_width.refusal()
+    assert refusal
+
+    dialog._slicer_chosen(0)
+    assert brim_width.refusal() == refusal
+    dialog._slicer_chosen(1)
+    assert brim_width.refusal() == refusal
+    dialog._slicer_chosen(0)
+    assert brim_width.refusal() == refusal
+    assert visible_paths() == {"adhesion.skirt_loops", "adhesion.skirt_distance"}
+    assert dialog._search_requirement_target == ""
+    assert dialog.highlighted() == target
+    assert skirt_loops.value() == 0
+
+
+def test_late_slicer_detection_does_not_take_the_user_back_to_a_search_hit(
+    dialog: PrintSettingsDialog, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-341: Passive Erkennung lässt einen manuell gewählten Reiter stehen."""
+    from app.ui import print_settings_dialog as module
+
+    dialog.session.start_new("centauri-carbon-2", "pla")
+    dialog.settings = print_settings.with_path(
+        print_settings.resolve(dialog.session.profile), "adhesion.kind", "auto"
+    )
+    dialog._foundation = None
+    dialog._foundation_key = None
+    dialog._slicers = ()
+    dialog._slicer_path = None
+    dialog._load_into_editors()
+
+    target = "adhesion.skirt_loops"
+    dialog.jump_to(str(dialog._fields[target].title))
+    qt_app.processEvents()
+    assert dialog._search_requirement_target == target
+    assert dialog.tabs.currentIndex() == module.GROUPS.index("adhesion")
+
+    retraction_index = module.GROUPS.index("retraction")
+    dialog.tabs.setCurrentIndex(retraction_index)
+    qt_app.processEvents()
+    retraction = dialog._editors["retraction.length"]
+    initial = retraction.value()
+    retraction.setValue(initial + 0.1)
+    qt_app.processEvents()
+    chosen_length = retraction.value()
+    assert print_settings.read_path(dialog.settings, "retraction.length") == pytest.approx(
+        chosen_length
+    )
+    assert "retraction.length" in dialog.settings.explicit
+
+    prusa = Path("PrusaSlicer.exe")
+    orca = Path("OrcaSlicer.exe")
+    dialog._slicers = (prusa, orca)
+    monkeypatch.setattr(dialog, "_choose_slicer", lambda _found: prusa)
+    monkeypatch.setattr(dialog, "_forget_result", lambda: None)
+    monkeypatch.setattr(dialog, "_clear_profile_choices", lambda: None)
+    monkeypatch.setattr(dialog, "_show_slicer_state", lambda: None)
+    monkeypatch.setattr(dialog, "_start_profile_search", lambda: None)
+    monkeypatch.setattr(dialog, "_refresh_advice", lambda: None)
+    monkeypatch.setattr(module.discover, "remember_path", lambda *_args: None)
+
+    dialog._slicers_found((prusa, orca))
+    qt_app.processEvents()
+
+    assert dialog.tabs.currentIndex() == retraction_index
+    assert retraction.value() == pytest.approx(chosen_length)
+    assert print_settings.read_path(dialog.settings, "retraction.length") == pytest.approx(
+        chosen_length
+    )
+    assert dialog.highlighted() == target
+    assert dialog._search_requirement_target == ""
+    assert dialog.search_requirement.isHidden()
 
 
 def test_an_enum_shows_words_and_stores_the_english_value(dialog: PrintSettingsDialog) -> None:

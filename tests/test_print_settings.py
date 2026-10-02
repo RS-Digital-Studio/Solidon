@@ -7066,3 +7066,49 @@ def test_only_the_measures_of_the_chosen_bed_type_are_active(kind: str, active: 
     assert set(print_settings.ADHESION_DETAILS) - inactive == active
     assert not inactive & set(print_settings.SUPPORT_DETAILS), "Stützen sind an"
     assert set(print_settings.SUPPORT_DETAILS) <= print_settings.inactive_paths("none", kind)
+
+
+@pytest.mark.parametrize(
+    ("material_id", "flavour", "effective_kind", "active"),
+    [
+        ("pla", "orca", "auto", {"adhesion.brim_width"}),
+        ("petg", "orca", "auto", {"adhesion.brim_width"}),
+        ("pla", "prusa", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("petg", "prusa", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("pla", "cura", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("petg", "cura", "skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("pla", "other", "auto", {"adhesion.brim_width"}),
+    ],
+)
+def test_auto_adhesion_uses_the_slicer_effective_type_for_active_measures(
+    material_id: str,
+    flavour: slicer_keys.SlicerFlavour,
+    effective_kind: str,
+    active: set[str],
+) -> None:
+    """RM-341: Auto-Brim und Materialrückfall zeigen nur wirksame Maße."""
+    profile = profiles.make_profile("centauri-carbon-2", material_id)
+    automatic = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+
+    effective = handover.effective_adhesion(automatic, profile, flavour)
+    inactive = print_settings.inactive_paths("auto", effective.adhesion.kind)
+
+    assert effective.adhesion.kind == effective_kind
+    assert set(print_settings.ADHESION_DETAILS) - inactive == active
+
+
+@pytest.mark.parametrize(("flavour", "key"), [("prusa", "skirts"), ("cura", "skirt_line_count")])
+def test_auto_adhesion_preserves_an_explicit_zero_measure(
+    flavour: slicer_keys.SlicerFlavour, key: str
+) -> None:
+    """RM-341: Ein ausdrücklich gewählter Nullwert gilt auch bei Auto-Rückfall."""
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    automatic = print_settings.with_path(print_settings.resolve(profile), "adhesion.kind", "auto")
+    chosen = print_settings.with_choice(automatic, "adhesion.skirt_loops", 0)
+
+    effective = handover.effective_adhesion(chosen, profile, flavour)
+    values = handover.values_for(chosen, profile, flavour)
+
+    assert effective.adhesion.kind == "skirt"
+    assert effective.adhesion.skirt_loops == 0
+    assert values[key] == "0"
