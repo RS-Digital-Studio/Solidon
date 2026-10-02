@@ -42,6 +42,15 @@ Nutzen da und sonst nichts.
 
 ## 0.5.2
 
+### Neue Formen und Bausteine
+
+- Neu ist die Grundform *Rohr anlegen*: Außendurchmesser und Höhe, dazu wahlweise Wandstärke oder Innendurchmesser, in einem Schritt.
+- Neu ist der Baustein *Lasche mit Loch*: eine flache Lasche an jeder Fläche, Loch und Maße passend zur Schraube von M3 bis M8.
+- Neu ist die *Rohrschelle* für gängige Rohre von 15 bis 40 mm oder jedes eigene Maß bis 110 mm, mit Klemmschraube M3 bis M6 und dem Spiel aus Ihrem Material.
+- Vier Halter entstehen in einem Schritt: U-Form, rund, Gabel und Ablage, befestigt mit Schlüsselloch, Schraublaschen, Lochwand-Haken oder Klemme.
+- Eine leere Szene zeigt, wie Sie anfangen: Quader, Zylinder, Zeichnen, Bausteine oder eine Datei, die Sie hineinziehen.
+- Neue Körper entstehen auf dem Bett oder auf der gewählten ebenen Fläche, nicht mehr an der Stelle eines zuvor gewählten Körpers, und sind danach gewählt.
+
 ### Drucken und Übergabe an den Slicer
 
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
@@ -84,7 +93,7 @@ Nutzen da und sonst nichts.
 - Im Fenster rechnet *Weich verschmelzen* jetzt so fein wie beim Export, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
-- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. *Übernehmen* wartet, bis es gewählt ist, und setzt den Körper nicht mehr still an die falsche Seite.
+- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. Sie wählen es über das Feld *Ziel*, und *Übernehmen* wartet bis dahin, statt den Körper still an die falsche Seite zu setzen.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 
 ### Erzeugen mit KI

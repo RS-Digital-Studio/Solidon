@@ -18,6 +18,15 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.5.2
 
+### Formas y bloques nuevos
+
+- Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.
+- Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.
+- Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.
+- Cuatro soportes se crean en un paso: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, pestañas, gancho de panel o pinza.
+- Una escena vacía muestra cómo empezar: caja, cilindro, dibujo, bloques o un archivo que arrastre dentro.
+- Los cuerpos nuevos aparecen sobre la cama o sobre la cara plana elegida, ya no donde estaba un cuerpo seleccionado antes, y quedan seleccionados.
+
 ### Imprimir y entregar al slicer
 
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
@@ -60,7 +69,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la ventana, «Fusionar suavemente» calcula ahora tan fino como en la exportación, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
-- El destino de «Alinear a la característica» empieza vacío. «Aplicar» espera hasta que esté elegido y ya no coloca el cuerpo sin aviso en el lado equivocado.
+- El destino de «Alinear a la característica» empieza vacío. Se elige en el campo «Destino», y «Aplicar» espera hasta entonces en vez de poner el cuerpo sin aviso en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 
 ### Generar con IA

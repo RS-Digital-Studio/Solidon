@@ -120,26 +120,24 @@ neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
 der Aufrufer)
 
-**Der Netzkern im Hilfsprozess** (RM-212) — `kernel_jobs.py` (jeder lange
-Aufruf, der an ganzen Körpern den GIL hält — `manifold3d`, der Zusammenhang
-über `csgraph` —, als reine Rechnung, Felder hinein, Felder heraus; `JOBS`
-ist der einzige Weg in den Hilfsprozess; dazu seine Seite `serve` und der
-gemeinsame Speicher `pack`/`copied`) · `kernel_process.py` (`run` wählt: hier
-oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
-`shutdown`; `NOT_A_KERNEL_FAILURE` für breite Fänge). Ein Start belegt unter
-dem Poolschloss einen Platz; der gesamte Helferbestand behält seinen Platz
-bis zum bestätigten Prozessende. Ein Stopfehler lässt den Helfer sichtbar und
-erneut aufräumbar. Die nächste Anfrage sammelt sein inzwischen bestätigtes
-Ende über den regulären Stopweg ein; solange er lebt, bleiben neue Starts
-und lokale Rückfälle gesperrt. Auch nach einem Vorabstart meldet die nächste
-`run`-Anfrage diesen Zustand mit dem bestehenden Fehlerbericht-Ausweg.
-Dauerhafte Start-/Helferabsagen bleiben beim Einsammeln erhalten.
-Die ursprüngliche Konstruktorursache bleibt auch nach einem Stopfehler
-auswertbar. Erwartete Fehlstarts verbrauchen ihr Kontingent; unerwartete
-Fehler werden nicht als gewöhnliche Startabsage behandelt.
-`shutdown` gibt auch beim Fehler seine Wartenden frei, nimmt offene Starts mit
-und trennt alte Reservierungen, Rückgaben und Absagen vom neuen Bestand. Die Regel steht in
-`kern.md`.
+**Der Netzkern im Hilfsprozess** — `kernel_jobs.py` führt lange GIL-haltende
+Aufrufe (`manifold3d`, `csgraph`) als reine Rechnung mit Feldern hinein/heraus;
+`JOBS` ist der einzige Auftragseinstieg, `serve` die Helferseite,
+`pack`/`copied` der gemeinsame Speicher. `_opened` ordnet nur ENOMEM und
+die Windows-Speichercodes 8/14/1450/1455 als `MemoryError` ein; ENOSPC bleibt
+ein Transfer-`OSError` für den bestehenden Absage-/lokalen Rückfallweg.
+`kernel_process.py`: bitgleiches `run` hier/im Helfer, Vorrat, Abbruch, Tod,
+Rückfall, `warm_up`, `shutdown`; `NOT_A_KERNEL_FAILURE` schützt breite Fänge.
+Ein Start reserviert unter dem Poolschloss einen Platz; der gesamte Bestand
+behält ihn bis zum bestätigten Prozessende. Stoppreste bleiben sichtbar und erneut
+aufräumbar; die nächste Anfrage sammelt einen inzwischen toten Rest regulär
+ein. Lebende Reste sperren Starts und lokale Rückfälle, auch beim nächsten
+`run` nach Vorabstart, mit dem vorhandenen Fehlerbericht-Ausweg. Bleibende
+Start-/Helferabsagen überstehen das Einsammeln. Die ursprüngliche
+Konstruktorursache bleibt auswertbar: erwartete Fehlstarts verbrauchen ihr
+Kontingent, unerwartete gelten nicht als gewöhnliche Startabsage. `shutdown`
+gibt auch bei Fehler seine Wartenden frei, nimmt offene Starts mit und trennt
+alte Reservierungen/Rückgaben/Absagen vom neuen Bestand; Regel: `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
 Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen
@@ -357,6 +355,10 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
 - Fehlt eine genannte Kante oder trifft ein Schlüssel mehrere, hält der ganze
   Schritt an; eine Gruppe überspringt, was nicht `workable` ist. Ob eine
   Rundung passt, fragen beide Kerne vorher gleich (`contact_band_limit`).
+- Exakte Gruppen: `brep.edit.native_edges_of_chains` (BRep-Karte).
+  Nach Breitenfilter neu belegen; ohne Kante absagen. „Zu schmal“ nur gemessen.
+  Alle Auslassungen auch bei Fehlern als `Finding.outline` mit Konturpunkt
+  `location` erhalten.
 - `_arc_steps` folgt `MAX_FACET_SAG` und `MAX_FACET_ANGLE` wie OpenCASCADE.
   Eckknoten aus `MeshEdge.node_indices`, ein Knoten ohne Körper bekommt keine
   Haube (`_corner_hull`). Den Überstand bekommt, was abgezogen wird, nicht was

@@ -17,6 +17,15 @@ scrive in `website/version.json`.
 
 ## 0.5.2
 
+### Nuove forme e nuovi blocchi
+
+- Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.
+- Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.
+- Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.
+- Quattro supporti nascono in un passo: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, alette a vite, gancio per pannello o morsetto.
+- Una scena vuota mostra come iniziare: parallelepipedo, cilindro, disegno, blocchi o un file che trascini dentro.
+- I nuovi corpi nascono sul piano o sulla faccia piana scelta, non più dove stava un corpo selezionato prima, e restano selezionati.
+
 ### Stampare e passare allo slicer
 
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
@@ -59,7 +68,7 @@ scrive in `website/version.json`.
 - Nella finestra, «Fondi dolcemente» calcola ora fine come nell'esportazione, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
-- Il bersaglio di «Allinea alla caratteristica» parte vuoto. «Applica» aspetta che sia scelto e non mette più il corpo in silenzio dal lato sbagliato.
+- La destinazione di «Allinea alla caratteristica» parte vuota. La scegli nel campo «Destinazione», e «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 
 ### Generare con l'IA

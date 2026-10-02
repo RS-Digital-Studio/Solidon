@@ -17,6 +17,15 @@ it into `website/version.json`.
 
 ## 0.5.2
 
+### New shapes and parts
+
+- New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.
+- New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.
+- New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
+- Four holders are made in one step: U-shaped, round, fork and shelf, fixed with a keyhole, screw tabs, a pegboard hook or a clamp.
+- An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
+- New bodies appear on the bed or on the chosen flat face, no longer where a previously selected body was, and are selected afterwards.
+
 ### Printing and slicer handover
 
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
@@ -59,7 +68,7 @@ it into `website/version.json`.
 - In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
-- The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
+- The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 
 ### Generating with AI

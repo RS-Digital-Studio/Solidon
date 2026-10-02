@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-399: Vorlage „Halter/Bügel“ (02.10.2026)](#rm-399-vorlage-halterbügel-02102026) |
+| 2026-10-02 | [RM-390: Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen (02.10.2026)](#rm-390-ein-neuer-grundkörper-entsteht-auf-dem-zuletzt-gewählten-körper-oder-merkmal-ohne-es-zu-sagen-02102026) |
+| 2026-10-02 | [RM-356: Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog (02.10.2026)](#rm-356-nach-quader-anlegen-ist-nichts-gewählt-und-bausteine-führt-in-einen-gesperrten-katalog-02102026) |
 | 2026-10-02 | [RM-398: Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“ (02.10.2026)](#rm-398-grundform-rohrring-und-bausteine-lasche-mit-loch-und-rohrschelle-02102026) |
 | 2026-10-02 | [RM-370: Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein (02.10.2026)](#rm-370-die-leere-szene-nach-neues-projekt-lädt-zum-anfangen-ein-02102026) |
 | 2026-10-02 | [RM-354: Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden (02.10.2026)](#rm-354-ein-hauptmaß-jenseits-der-grenze-der-operation-lässt-das-modell-verschwinden-02102026) |
@@ -46,6 +49,7 @@ entfernt hat.
 | 2026-10-02 | [RM-333: Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“ (02.10.2026)](#rm-333-eine-nicht-eindeutige-bambu-düsenvariante-meldet-prozessprofil-ließ-sich-nicht-lesen-02102026) |
 | 2026-10-02 | [RM-331: Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer (02.10.2026)](#rm-331-creality-print-73-platten-deren-anordnung-nicht-hält-gehen-ohne-anordnung-an-den-slicer-02102026) |
 | 2026-10-02 | [RM-346: Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs (02.10.2026)](#rm-346-die-rückfrage-vor-geld--und-veröffentlichungswerkzeugen-greift-nur-bei-einer-schreibweise-des-aufrufs-02102026) |
+| 2026-10-02 | [RM-384: Die nächste Rechnung sammelt einen inzwischen beendeten Helfer ein (02.10.2026)](#rm-384-die-nächste-rechnung-sammelt-einen-inzwischen-beendeten-helfer-ein-02102026) |
 | 2026-10-02 | [RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)](#rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026) |
 | 2026-10-02 | [RM-341: Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen* (02.10.2026)](#rm-341-druckeinstellungen-maße-nicht-gewählter-haftungsarten-bleiben-sichtbar-und-sperren-slicen-02102026) |
 | 2026-10-02 | [RM-334: Enter löst in Rückfragen den Hauptknopf aus, auch wenn der Fokus per Tab auf „Abbrechen“ steht (02.10.2026)](#rm-334-enter-löst-in-rückfragen-den-hauptknopf-aus-auch-wenn-der-fokus-per-tab-auf-abbrechen-steht-02102026) |
@@ -35594,6 +35598,87 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
 
 **Abschluss:** Test des Zuschnitts beim Lesen über `measure`; Mutation `_runs_of` ohne Zuschnitt macht ihn rot. Umgesetzt von Claude, in main mit `55a165dc3`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
+## RM-384: Die nächste Rechnung sammelt einen inzwischen beendeten Helfer ein (02.10.2026)
+
+<a id="rm-384"></a>
+
+- [x] **RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart.**
+  Review 02.10.2026 von `a45730c79`, Fund 6. `raise_if_stop_failed`
+  (`app/core/geom/kernel_process.py:615–619`) prüft nie, ob das Kind nach der 5-s-Frist doch noch
+  beendet ist; der Pool bleibt gesperrt, jede weitere Rechnung — auch `face_components` und die
+  Anzeigeausdünnung — meldet `KernelHelperStopError` („Speichern Sie Ihr Projekt, starten Sie
+  Solidon neu …“), bis `shutdown` läuft.
+  **Fehlerfall (Attrappe, nicht am echten Prozess):** Kind endet nach der Frist → `discard` →
+  `KernelHelperStopError`, `disabled: True`, „Kind lebt noch: False“; drei weitere `run` scheitern
+  gleich; erst `shutdown` hebt die Sperre.
+  **Fix:** Vor dem Sperren und bei jedem `run` prüfen, ob der Prozess inzwischen fort ist, und die
+  Sperre dann aufheben.
+  **Abnahme:** Test für das späte Prozessende: nach dem Ende des Kinds rechnet der nächste `run`
+  wieder. Bauplan §2.7, §2.8. Beleg: Sonde `r_kernel_spaetes_ende.txt`, `review-3fd3b1ace.md`.
+
+  **Historischer lokaler Teilstand 02.10.2026, vor der Integration:** Die nächste öffentliche Rechnung beziehungsweise
+  Reservierung sammelt einen inzwischen toten Stopprest über den bestehenden
+  Stopweg ein. Ein noch lebender Rest sperrt weiter; dauerhafte Start-/Helferabsagen
+  bleiben erhalten. Reservierung und Shutdown behalten ihre Generationsgrenze.
+  Der zentrale Zweitreview fand nach der ersten lokalen Freigabe einen weiteren
+  Konstruktoranschluss: Die ursprüngliche Startursache bleibt nun über beide
+  Stopfehlertypen erhalten. Erwartete Fehlstarts verbrauchen ihr Kontingent trotz
+  spätem Ende; unerwartete Ursachen zählen nicht als gewöhnliche Startabsage.
+  14 erweiterte Ressourcen-/Anschlussfälle waren zuvor 10 rot und 4 grün, ohne
+  Setup-/Teardownfehler oder Skips, danach alle grün. Sie führen jeweils bis
+  zum nächsten echten Arbeiter-/take-Auftrag und prüfen den Shutdown-Reset.
+  Alle 27 neuen Attrappenfälle und der verstärkte bestehende Generationsfall
+  bestehen im vollständigen Entwicklungsmodul: 106 grün, 1 Fenstertest abgewählt,
+  Exit 0; Quell-/Testhashes während des Laufs stabil. Die sechs isolierten
+  Fehlvarianten wurden am Nachgangstand erneut gefahren: 16 erwartete
+  Testfehlschläge und 4 passende Kontrollen grün, keine Setup-/Teardownfehler/Skips.
+  Ruff, Format und Diffcheck jeweils Exit 0. Auch der Konstruktor-P2 ist im
+  unabhängigen Nachreview ohne weitere Befunde geschlossen.
+  [Portabler Endstands- und Gegenlaufbeleg](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md).
+  Zentrales vollständiges Entwicklungstor und Integration stehen noch aus.
+  Kein echter Fristüberschreitungs-, Fenster-, Leistungs- oder Plattformnachweis.
+
+  **Fremder datierter Vorherbefund vom 02.10.2026:** Die folgende Schlusszeile
+  wurde unverändert aus dem offenen RM384-Punkt übernommen. Sie beschreibt
+  den geprüften älteren Stand `7f0de659d` und den damaligen Abzug nach
+  `d9f830aec`, nicht den nachfolgend dokumentierten Integrationsstand.
+  Nachprüfung am Stand `7f0de659d`: besteht noch — `d9f830aec` ändert keine Produktdatei; Sonde am Abzug zeigt unverändert dreimal `KernelHelperStopError` und `disabled: True`, erst `shutdown` hebt die Sperre (`sonden\r2_kernel_spaetes_ende.txt`). Die neuen Tests laufen mit eigenem Pool und können den Fall nicht finden. Eine Behebung liegt ungesichert im Arbeitsbaum.
+
+  **Abschluss 02.10.2026:** Die Korrektur ist mit
+  `686abf9e63ed8708d15fdc642add170cb1d2c14f` auf `main` und dem tatsächlichen Remote-
+  Hauptzweig enthalten. Der tatsächliche Remote-Stand
+  `4cf460e87f8d93e2d950602c9fe25ce34e6b5eb9` und die Commit-Abstammung wurden getrennt geprüft:
+  getrennte Abfragen von `HEAD`, `origin/main` und `git ls-remote origin refs/heads/main` ergaben am 02.10.2026 um 11:52:21 UTC denselben vollständigen Stand; `git merge-base --is-ancestor` für den Fixcommit gegen alle drei Ziele jeweils Exit 0.
+  Die nächste öffentliche `run`-/`take`-Anfrage sammelt einen inzwischen
+  tatsächlich als tot bestätigten Stopprest ein, ohne vorheriges `shutdown`.
+  Noch lebende Reste sperren weiter; dauerhafte Start-/Helferabsagen und die
+  Generationsgrenze bleiben erhalten. Der Konstruktoranschluss hält die
+  ursprüngliche Ursache, das Startkontingent und die einmalige Ressourcenfreigabe.
+  Dies ist der Entwicklungsabschluss des nachgestellten Kontrollflussfehlers.
+
+  Das wiederholte zentrale Entwicklungstor am ausgewählten Stand
+  `commit-tor-abschlussrunde-47-v2-final` bestand mit 19.269 bestandenen Fällen und
+  62 Überspringungen;
+  Suite/Ruff/Format/mypy: Exit 0 / Exit 0 /
+  Exit 0 / Exit 0.
+  Vollständige Roh-/JUnit-/Exit-Belege: `bash .claude/scripts/suite-getrennt.sh`: 19.269 bestanden, 62 übersprungen, 412,39 s, Exit 0; `python -m ruff check .`, `python -m ruff format --check .` und `python -m mypy` jeweils Exit 0. Zentraler Rohlog und die vier Exit-JSONs sind lokal unter `tmp/review-seit-0.5.1-2026-10-01/commit-tor-abschlussrunde-47-v2-final/` erhalten. Dieser zentrale Torlauf erzeugt kein JUnit; die lokalen JUnit-Belege `kernel-file-constructor-final.xml`, `new-cases-constructor-final.xml`, `constructor-cause-before.xml`/`constructor-cause-after.xml` und `counter-final-*.xml` gehören getrennt zu den im Bericht ausgewiesenen Kontrollfällen.
+  Prüfstand und Hashzuordnung blieben erhalten: zentraler Vorher-/Nachhervergleich `changed_during_gate: []`; bei der getrennten Integrationsprüfung um 11:52:21 UTC stimmten übernommener Git-Blob und Arbeitsbaum für `kernel_process.py` und `test_kernel_process.py` bytegleich zu den im portablen RM384-Bericht vollständig genannten finalen lokalen SHA256.
+  Unabhängiger Dokumentabschlussreview: 02.10.2026: unabhängig freigegeben nach Abgleich der tatsächlichen Git-/Tor-/JUnit-Belege und aller neun eigenen Hunks; beide Dokumentnachgänge korrigiert, Nachprüfung ohne weitere Befunde.
+  Der [portable Bericht](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md)
+  trägt den endgültigen Integrationsnachtrag. Der ursprüngliche Poolnachweis
+  von RM298(a) erhält einen datierten Anschluss; seine früheren 80 Fälle und
+  das damalige Tor werden nicht nachträglich zum RM384-Nachweis umgedeutet.
+
+  **Abnahmegrenzen:** Tatsächliche native Windows-Killlatenz, wirkliche
+  Überschreitung der Stoppfrist beziehungsweise erst späteres Ende eines
+  echten Betriebssystemkinds sind nicht nachgewiesen. Die Windows-Prozess-/
+  Prioritätsfälle aus RM298(d) belegen andere Eigenschaften.
+  POSIX-Speicherbesitz, ENOSPC/SIGBUS und Crashbereinigung, Linux/macOS,
+  Paketwege und Paketrauchtestfrist, der Fensternachweis zu RM380 sowie
+  Fenster-/Renderer-/§31-Leistungsabnahmen bleiben offen und in
+  [RM-298](ROADMAP.md#rm-298) beziehungsweise ihren eigenen Punkten geführt.
+  RM298 als Gesamtpunkt bleibt offen; es wurde kein Release nachgewiesen.
+
 ## RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)
 
 <a id="rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026"></a>
@@ -36001,3 +36086,69 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   **Vorgabe Robert 02.10.2026 — allgemein:** Einladung für jede leere Szene (neues Projekt, nach Löschen aller Körper, nach Strg+Z), Einstiege aus dem Register statt fest verdrahtet; Abnahme an drei Wegen in die leere Szene.
 
 **Abschluss:** Über jeder leeren Szene steht die Einladung `EmptySceneInvitation` mit Quader und Zylinder aus dem Register, *Zeichnen*, *Bausteine* und mit KI-Zugang *Im Chat beschreiben*, dazu „Oder ziehen Sie eine Datei hierher.“ Nicht modal, weicht dem ersten Körper und kehrt bei leerer Szene zurück; Fenstertest an neuem Projekt, Strg+Z bis zum Anfang und gelöschten Körpern. Umgesetzt von Claude, in main mit `c117720b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-399: Vorlage „Halter/Bügel“ (02.10.2026)
+
+<a id="rm-399-vorlage-halterbügel-02102026"></a>
+<a id="rm-399"></a>
+
+**RM-399 — Vorlage „Halter/Bügel“.**
+  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 4).
+  Der U-Halter gelang im Nachbau (17 Klicks), aber nur über *Aushöhlen* mit drei offenen Flächen
+  (`hollow_object`, `app/core/geom/prepare_ops.py:15626`) — ein Kunde sucht „Halter“. *Wandhalter*
+  (`wall_mount`, `app/core/knowledge/parts/mounting.py:431`) gibt es nur als Anbauteil.
+  **Ablauf:** *Halter/Bügel …* im Katalog bzw. als Einstieg: Form U oder L, Innenmaß, Wandstärke,
+  Breite; Befestigung *Schlüsselloch*, *Schraublöcher* oder *keine*. Ergebnis als ein parametrisches
+  Teil mit Projektparametern; Lochgrößen aus der Normteiltabelle.
+  **Abnahme:** Test: U-Halter mit Schlüsselloch in einem Schritt, Maße stimmen, Leiste dreht
+  Innenmaß; Nachbau Modell 1 in höchstens fünf Klicks. Bauplan §2.2 (Weg 2), §24, §37.
+  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird eine parametrische **Halter-Vorlage** für verschiedene Gegenstände und Befestigungen: Profil U, L, Z oder Gabel, mit/ohne Boden, Gegenstand als Maß (Breite × Tiefe oder Durchmesser), Befestigung Schlüsselloch, Schraublöcher, Lochwand-Haken oder Klemme. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 30 Halter (Besen-, Filament-, Flaschen-, Schlauch-, Werkzeughalter, Lochwand-Teile, Wandhalterungen). Abnahme an mindestens drei unterschiedlichen Haltern.
+
+**Abschluss:** Vier Bausteine statt einer Vorlage (Bereichstest höchstens 512 Ecken): *Halter U-Form*, *Halter rund*, *Halter Gabel*, *Halter Ablage* (L oder Z) mit Befestigung Schlüsselloch, Schraublöcher (M4), Lochwand-Haken oder Klemme, Maße aus Normteiltabelle und vorhandenen Bausteinen; im Katalog über „Halter“, „Maße als Parameter anlegen“ legt Schritt und Parameter in einer Transaktion an (`PartSpec.template`). Beide Kerne, Bereichsnachweise aller 41 Bausteine, Prompt neu gezählt (7 729 Token bei 166 Werkzeugen). Offen bleibt der Fünf-Klick-Weg am echten Fenster (Release). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-390: Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen (02.10.2026)
+
+<a id="rm-390-ein-neuer-grundkörper-entsteht-auf-dem-zuletzt-gewählten-körper-oder-merkmal-ohne-es-zu-sagen-02102026"></a>
+<a id="rm-390"></a>
+
+**RM-390 — Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen.**
+  Review 02.10.2026, Nachbau-Test F4, am HEAD `4449e3370`.
+  **Fehlerfall:** Zylinder Ø 40 × 20 anlegen, anklicken, *Quader anlegen* → Position Z steht auf 20,
+  der Quader entsteht auf dem Zylinder; ohne Auswahl Z = 0. Mit gewählter Fläche übernimmt der
+  Quader deren Richtung (nx = 1, gedreht auf die Seitenfläche, z = −4,5, halb unter dem Bett,
+  Richtung hinter *Weitere Einstellungen*). In fünf von zwölf Nachbauten entstand ein Körper an
+  einer Stelle, die der Kunde nicht gewählt hatte.
+  **Stellen:** `app/ui/main_window.py:17254` (`run_operation`) → `_from_selection` (`:19575`) →
+  `app/core/scene/placement.py:805` (`values_for_object`) — auch für Erzeuger ohne Eingang
+  (`consumes == 0`).
+  **Fix:** Erzeuger nur vorbelegen, wenn eine Fläche ausdrücklich gewählt ist, und dann vorn sagen
+  „Wird auf ‹Fläche› von ‹Körper› gesetzt“ mit Knopf *auf das Bett*. Vor RM-356 (Erzeuger wählt
+  seinen Körper) umsetzen, sonst entstünde jeder weitere Grundkörper auf dem vorigen.
+  **Abnahme:** Test: Körper gewählt, *Quader anlegen* → Z = 0; Fläche gewählt → Satz sichtbar,
+  Körper steht auf der Fläche, nicht unter dem Bett. Bauplan §2.4, §18.5, Regel 21.
+  Beleg: `nachbau\bericht.md`, Sonde `f4_stapeln.py`.
+
+**Abschluss:** Ein gewählter Körper, eine Bohrung oder Kante setzen keinen Erzeuger mehr; nur eine ebene Fläche (`placement.seats_on`, `seat_on_face`), mit dem Satz „Wird auf „…“ von „…“ gesetzt.“ und dem Knopf *Auf das Bett*; reicht der Körper unter das Bett, rückt er in der Ebene hoch oder entsteht auf dem Bett, mit Satz. Fensterlose und Fenstertests an allen fünf Zwillingspaaren, rot vor dem Fix. Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-356: Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog (02.10.2026)
+
+<a id="rm-356-nach-quader-anlegen-ist-nichts-gewählt-und-bausteine-führt-in-einen-gesperrten-katalog-02102026"></a>
+<a id="rm-356"></a>
+
+**RM-356 — Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog.**
+  Review 02.10.2026, Gebietsprüfung Weg 2 (F4), am HEAD `6ce767031`.
+  `app/ui/main_window.py:8225–8243`, `catalog.py:503–528`, `selection_operations.py:920–922`.
+  **Fehlerfall:** *Quader anlegen* → *Übernehmen*: nichts gewählt; das Auswahlfenster bietet
+  *Bausteine*, im modalen Katalog sind alle 25 Flächenbausteine gesperrt mit „Wählen Sie zuerst
+  ein Objekt im Objektbaum.“ — im Katalog nicht befolgbar, obwohl es genau einen Körper gibt.
+  Nach Strg+Z auf die leere Szene sagt die Karte „Bausteine gehen auch so“, der Katalog sperrt
+  25 von 35 und nennt „legen Sie einen Grundkörper an“ ohne Knopf.
+  **Fix:** Ein Erzeugerschritt wählt seinen neuen Körper; bei genau einem Körper nimmt der
+  Katalog diesen; in der leeren Szene trägt der Katalog *Quader anlegen*.
+  **Abnahme:** nach *Quader anlegen* `selected_objects() == ('obj_1',)` und ein Flächenbaustein
+  ist frei. Bauplan §2.1 (keine Sackgassen), §2.6.
+  Belege: `gebiet-weg2.md`, Sonden `w2_katalog.py`, `w2_leere_karte.py`. Nebenbei veraltet: die
+  Kommentare „drei der siebenundzwanzig Bausteine stehen frei“ (`selection_operations.py:772`,
+  `catalog.py:487`), gemessen 10 von 35.
+
+**Abschluss:** Ein Erzeugerschritt wählt seinen neuen Körper; bei genau einem Körper nimmt der Katalog diesen; in der leeren Szene trägt der Katalog *Quader anlegen* und *Modell einfügen …*. Die Zählkommentare sind berichtigt (25 von 35 Bausteinen brauchen eine Stelle). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.

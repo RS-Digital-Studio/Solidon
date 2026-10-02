@@ -18,6 +18,15 @@ dans `website/version.json`.
 
 ## 0.5.2
 
+### Nouvelles formes et nouveaux blocs
+
+- Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
+- Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
+- Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
+- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, pattes à vis, crochet de panneau ou pince.
+- Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
+- Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
+
 ### Imprimer et transmettre au slicer
 
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
@@ -60,7 +69,7 @@ dans `website/version.json`.
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
-- La cible d'« Aligner sur une caractéristique » est d'abord vide. « Appliquer » attend qu'elle soit choisie et ne pose plus le corps sans rien dire du mauvais côté.
+- La cible d'« Aligner sur une caractéristique » est d'abord vide. Vous la choisissez dans le champ « Cible », et « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 
 ### Générer avec l'IA

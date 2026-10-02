@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib
 import math
 from collections.abc import Callable
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -826,6 +827,688 @@ def test_a_narrow_solid_span_keeps_its_volume_and_centre() -> None:
     assert solid._properties("volume").centre == pytest.approx(
         (0.5, expected_y, expected_z), abs=1e-9
     )
+
+
+def _wide_ridged_prism(*, native_ridges: bool = False) -> Solid:
+    """40 mm tiefes Prisma: 40 × 20 mm Rechteck plus Dreieck 20 × 10 mm.
+
+    Drei Dachknicke gehören wahlweise einer einzigen C0-Fläche oder drei
+    echten Flächengrenzen. Keine Dachstrecke ist kürzer als 10 mm.
+    """
+    from OCP.BRepBuilderAPI import (
+        BRepBuilderAPI_MakeEdge,
+        BRepBuilderAPI_MakeFace,
+        BRepBuilderAPI_MakePolygon,
+        BRepBuilderAPI_MakeSolid,
+        BRepBuilderAPI_MakeWire,
+        BRepBuilderAPI_Sewing,
+    )
+    from OCP.collections import Array1_double, Array1_int, Array2_gp_Pnt
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.gp import gp_Pnt
+    from OCP.TopoDS import TopoDS
+
+    def polygon(points):
+        """Eine ebene Fläche aus unabhängig vorgegebenen Ecken."""
+        builder = BRepBuilderAPI_MakePolygon()
+        for point in points:
+            builder.Add(gp_Pnt(*point))
+        builder.Close()
+        return BRepBuilderAPI_MakeFace(builder.Wire()).Face()
+
+    section = [(0, 0), (40, 0), (40, 20), (30, 20), (20, 30), (10, 20), (0, 20)]
+    if native_ridges:
+        return profiles.prism(polygon([(x, y, 0.0) for x, y in section]), 40.0)
+
+    poles = Array2_gp_Pnt(1, 2, 1, 5)
+    u_knots, u_mults = Array1_double(1, 2), Array1_int(1, 2)
+    v_knots, v_mults = Array1_double(1, 5), Array1_int(1, 5)
+    for row, z in enumerate((0.0, 40.0), 1):
+        u_knots.SetValue(row, z)
+        u_mults.SetValue(row, 2)
+        for column, (x, y) in enumerate(reversed(section[2:]), 1):
+            poles.SetValue(row, column, gp_Pnt(x, y, z))
+    for column in range(1, 6):
+        v_knots.SetValue(column, float(column - 1) * 10.0)
+        v_mults.SetValue(column, 2 if column in (1, 5) else 1)
+    surface = Geom_BSplineSurface(poles, u_knots, v_knots, u_mults, v_mults, 1, 1, False, False)
+
+    def end(z: float):
+        """Die gesamte Dachlinie bleibt eine Kurve der Seitenwand."""
+        builder = BRepBuilderAPI_MakeWire()
+        builder.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(0, 0, z), gp_Pnt(0, 20, z)).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(surface.UIso(z)).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(40, 20, z), gp_Pnt(40, 0, z)).Edge())
+        builder.Add(BRepBuilderAPI_MakeEdge(gp_Pnt(40, 0, z), gp_Pnt(0, 0, z)).Edge())
+        return BRepBuilderAPI_MakeFace(builder.Wire()).Face()
+
+    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
+    sewing.Add(BRepBuilderAPI_MakeFace(surface, EPS_GEOM).Face())
+    sewing.Add(end(0.0))
+    sewing.Add(end(40.0).Reversed())
+    sewing.Add(polygon([(0, 0, 0), (40, 0, 0), (40, 0, 40), (0, 0, 40)]))
+    sewing.Add(polygon([(0, 0, 0), (0, 0, 40), (0, 20, 40), (0, 20, 0)]))
+    sewing.Add(polygon([(40, 0, 40), (40, 0, 0), (40, 20, 0), (40, 20, 40)]))
+    sewing.Perform()
+    return Solid(BRepBuilderAPI_MakeSolid(TopoDS.Shell(sewing.SewedShape())).Shape())
+
+
+@pytest.mark.parametrize("native_ridges", [False, True], ids=["one_c0_face", "separate_faces"])
+@pytest.mark.parametrize("radius", [1.0, 2.0])
+@pytest.mark.parametrize("deflection", [0.05, 0.01])
+def test_a_native_group_keeps_only_proven_partners_without_a_narrow_band(
+    native_ridges: bool, radius: float, deflection: float
+) -> None:
+    """Vier Außenkanten bleiben; drei echte Knicke brauchen eigene native Kanten."""
+    from dataclasses import replace
+
+    import numpy as np
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from app.core.geom import edge_ops
+    from app.core.geom.edges import contact_band_limits, edges_of, wanted
+    from app.core.units import weld_tolerance
+
+    solid = replace(_wide_ridged_prism(native_ridges=native_ridges), deflection=deflection)
+    assert BRepCheck_Analyzer(solid.shape).IsValid()
+    assert solid.is_closed and solid.is_watertight and solid.solid_count == 1
+    assert solid.volume == pytest.approx(
+        (40.0 * 20.0 + 20.0 * 10.0 / 2.0) * 40.0, abs=EPS_GEOM, rel=0.0
+    )
+    mesh = as_mesh_data(solid)
+    all_edges = edges_of(mesh)
+    chosen = wanted(all_edges, "vertical", ())
+    # Die C0-Fläche tesselliert zusätzlich in kurze Facettenzüge. Ihre Zahl
+    # ist keine Topologieaussage; die vier Außenkanten sind analytisch fest.
+    assert len(chosen) == 7 if native_ridges else len(chosen) >= 7
+    outer = [
+        entry for entry in chosen if entry.length == pytest.approx(40.0, abs=EPS_GEOM, rel=0.0)
+    ]
+    assert len(outer) == 7 if native_ridges else len(outer) == 4
+    assert (
+        contact_band_limits(
+            all_edges, outer, radius, rounded=True, tolerance=weld_tolerance(mesh.bounds.diagonal)
+        )
+        == {}
+    )
+    result = edge_ops._group_that_fits(
+        SceneObject("obj_1", "Dach", solid, kind="brep"),
+        radius,
+        "vertical",
+        rounded=True,
+        narrowest=edge_ops.narrowest_face(None),
+        shape=None,
+        law=None,
+        rings_by_plane=True,
+    )
+    assert result is not None, "Eine belegte Teilgruppe darf nicht auf alle Kanten zurückfallen."
+    indices, findings = result
+    expected = [(0, 0, 20), (40, 0, 20), (40, 20, 20), (0, 20, 20)]
+    if native_ridges:
+        expected.extend([(10, 20, 20), (20, 30, 20), (30, 20, 20)])
+    selected = edit._edges_at(solid, indices)
+    assert np.asarray(sorted(entry.middle for entry in selected)) == pytest.approx(
+        np.asarray(sorted(expected)), abs=EPS_GEOM, rel=0.0
+    )
+    missing = [entry for entry in findings if entry.code == "edges.unmapped"]
+    if native_ridges:
+        assert missing == []
+    else:
+        assert len(missing) == 1
+        assert missing[0].values["skipped"] == len(chosen) - 4
+        assert missing[0].values["worked"] == 4
+        assert len(missing[0].outline) == sum(len(entry.points) - 1 for entry in chosen) - 4
+        assert missing[0].location in {point for segment in missing[0].outline for point in segment}
+        assert "glatt" not in str(missing[0].message)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_native_partners_need_the_curve_besides_the_same_two_faces(reverse: bool) -> None:
+    """Die zwei Mantelflächen einer Linse teilen zwei verschiedene senkrechte Kanten."""
+    import numpy as np
+
+    from app.core.geom.edges import edges_of, wanted
+
+    solid = edit.boolean(
+        "intersection",
+        [
+            edit.moved(edit.cylinder(20.0, 20.0), (-5.0, 0.0, 0.0)),
+            edit.moved(edit.cylinder(20.0, 20.0), (5.0, 0.0, 0.0)),
+        ],
+    )
+    assert solid.volume == pytest.approx(
+        (200.0 * math.pi / 3.0 - 50.0 * math.sqrt(3.0)) * 20.0, abs=EPS_GEOM, rel=0.0
+    )
+    mesh = as_mesh_data(solid)
+    chains = wanted(edges_of(mesh), "vertical", ())
+    assert len(chains) == 2
+    if reverse:
+        chains.reverse()
+    bindings = edit.native_edges_of_chains(solid, mesh, chains)
+    assert [len(binding) for binding in bindings] == [1, 1]
+    assert bindings[0] != bindings[1]
+    expected = [(0.0, -math.sqrt(75.0), 10.0), (0.0, math.sqrt(75.0), 10.0)]
+    found = [edit._edges_at(solid, binding)[0] for binding in bindings]
+    assert np.asarray(sorted(entry.middle for entry in found)) == pytest.approx(
+        np.asarray(expected), abs=EPS_GEOM, rel=0.0
+    )
+    for chain, entry in zip(chains, found, strict=True):
+        assert entry.middle == pytest.approx(chain.middle, abs=EPS_GEOM, rel=0.0)
+
+
+def test_a_smooth_mantle_segment_has_no_native_partner_but_its_rim_does() -> None:
+    """Zwei Dreiecke derselben Zylinderfläche erzeugen keine native Kante."""
+    import numpy as np
+
+    from app.core.brep.kernel import face_sources
+    from app.core.geom.edges import MeshEdge, edges_of, wanted
+
+    solid = edit.cylinder(20.0, 20.0)
+    mesh = as_mesh_data(solid)
+    sources = face_sources(mesh)
+    adjacency = np.asarray(mesh.raw.face_adjacency)
+    nodes = np.asarray(mesh.raw.face_adjacency_edges)
+    vertices = np.asarray(mesh.raw.vertices)
+    internal = [
+        tuple(map(int, edge))
+        for edge, faces in zip(nodes, adjacency, strict=True)
+        if sources[faces[0]] == sources[faces[1]]
+        and abs(vertices[edge[0], 2] - vertices[edge[1], 2]) > 10.0
+    ]
+    assert internal
+    first, second = internal[0]
+    points = (tuple(vertices[first]), tuple(vertices[second]))
+    length = math.dist(*points)
+    segment = MeshEdge(
+        points,
+        length,
+        tuple((b - a) / length for a, b in zip(*points, strict=True)),
+        tuple((a + b) / 2.0 for a, b in zip(*points, strict=True)),
+        False,
+        node_indices=(first, second),
+    )
+    rim = wanted(edges_of(mesh), "top", ())
+    assert len(rim) == 1
+    bindings = edit.native_edges_of_chains(solid, mesh, [segment, *rim])
+    assert bindings[0] == ()
+    assert len(bindings[1]) == 1
+    assert edit._edges_at(solid, bindings[1])[0].middle[2] == pytest.approx(
+        20.0, abs=EPS_GEOM, rel=0.0
+    )
+
+
+def test_a_native_curve_requires_the_whole_selected_mesh_run() -> None:
+    """Eine halbe Kreislinie ist keine Auswahl des ganzen nativen Kreisrandes."""
+    from dataclasses import replace
+
+    from app.core.geom.edges import edges_of, wanted
+
+    solid = edit.cylinder(20.0, 20.0)
+    mesh = as_mesh_data(solid)
+    rings = wanted(edges_of(mesh), "top", ())
+    assert len(rings) == 1
+    ring = rings[0]
+    assert len(ring.points) > 6
+    stop = len(ring.points) // 2
+    partial = replace(ring, points=ring.points[:stop], node_indices=ring.node_indices[:stop])
+    assert edit.native_edges_of_chains(solid, mesh, [partial]) == ((),)
+    assert len(edit.native_edges_of_chains(solid, mesh, rings)[0]) == 1
+
+
+def _subdivided_native_box():
+    """Acht echte Teilsegmente je Quaderkante, mit unveränderter Flächenherkunft."""
+    import numpy as np
+
+    solid = edit.box(10.0, 10.0, 10.0)
+    raw = solid.mesh.raw.copy()
+    for _level in range(3):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(
+            vertices=vertices,
+            faces=faces,
+            face_attributes={
+                key: np.repeat(value, 4, axis=0) for key, value in raw.face_attributes.items()
+            },
+            process=False,
+        )
+    mesh = MeshData.of(raw)
+    assert mesh.is_watertight and mesh.volume == pytest.approx(1000.0, abs=EPS_GEOM, rel=0.0)
+    return solid, mesh
+
+
+def _chain_piece(chain, start: int, stop: int):
+    """Schneidet an vorhandenen Netzknoten; Normale und Lage gehören weiter zum Stück."""
+    from dataclasses import replace
+
+    points = chain.points[start:stop]
+    return replace(
+        chain,
+        points=points,
+        node_indices=chain.node_indices[start:stop],
+        normals=chain.normals[start : stop - 1],
+        length=sum(math.dist(a, b) for a, b in pairwise(points)),
+        middle=tuple((a + b) / 2.0 for a, b in zip(points[0], points[-1], strict=True)),
+    )
+
+
+@pytest.mark.parametrize("gapped", [False, True])
+def test_three_native_edge_pieces_must_cover_the_gaps_between_sample_points(gapped: bool) -> None:
+    """0/5/10 sind gedeckt; Lücken von 1,25 bis 3,75 und 6,25 bis 8,75 bleiben trotzdem Lücken."""
+    from app.core.geom.edges import edges_of, wanted
+
+    solid, mesh = _subdivided_native_box()
+    whole = wanted(edges_of(mesh), "vertical", ())[0]
+    assert len(whole.points) == 9
+    intervals = ((0, 2), (3, 6), (7, 9)) if gapped else ((0, 3), (2, 7), (6, 9))
+    pieces = [_chain_piece(whole, start, stop) for start, stop in intervals]
+    assert sum(piece.length for piece in pieces) == pytest.approx(5.0 if gapped else 10.0)
+    result = edit.native_edges_of_chains(solid, mesh, pieces)
+    if gapped:
+        assert result == ((), (), ())
+    else:
+        assert all(len(binding) == 1 for binding in result)
+        assert result[0] == result[1] == result[2]
+
+
+@pytest.mark.parametrize("offset", [0.0, 10.0])
+def test_a_short_curve_still_needs_a_real_covering_interval(offset: float) -> None:
+    """Die Schweißgrenze ersetzt auch an kurzen Sehnen keinen räumlichen Beleg."""
+    from app.core.brep.kernel import DEFLECTION
+    from app.core.units import weld_tolerance
+
+    join = weld_tolerance(100.0)
+    length = join / 2.0
+    assert length > EPS_GEOM
+    points = ((0.0, 0.0, 0.0), (length, 0.0, 0.0))
+    segments = (((offset, 0.0, 0.0), (offset + length, 0.0, 0.0)),)
+    assert edit._curve_is_covered(points, segments, 2.0 * DEFLECTION + join, join, None) is (
+        offset < length
+    )
+
+
+def test_a_narrow_piece_cannot_leave_an_indirectly_incomplete_native_edge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A trägt e0, B e0/e1 und C e1: A gesperrt darf über B nicht die ganze e1 freigeben."""
+    from dataclasses import replace
+
+    from app.core.geom import edge_ops, edges
+
+    solid, mesh = _subdivided_native_box()
+    rim = edges.wanted(edges.edges_of(mesh), "top", ())
+    assert len(rim) == 4 and all(len(entry.points) == 9 for entry in rim)
+    first = rim[0]
+    second = next(
+        entry
+        for entry in rim[1:]
+        if first.node_indices[-1] in (entry.node_indices[0], entry.node_indices[-1])
+    )
+    if first.node_indices[-1] == second.node_indices[-1]:
+        second = replace(
+            second,
+            points=second.points[::-1],
+            node_indices=second.node_indices[::-1],
+            normals=second.normals[::-1],
+            direction=tuple(-value for value in second.direction),
+        )
+    a = _chain_piece(first, 0, 5)
+    tail = _chain_piece(first, 4, 9)
+    head = _chain_piece(second, 0, 5)
+    b = replace(
+        tail,
+        points=tail.points + head.points[1:],
+        node_indices=tail.node_indices + head.node_indices[1:],
+        normals=tail.normals + head.normals,
+        length=tail.length + head.length,
+    )
+    c = _chain_piece(second, 4, 9)
+    independent = next(
+        entry for entry in rim if not set(entry.node_indices).intersection(b.node_indices)
+    )
+    chosen = [a, b, c, independent]
+    bindings = edit.native_edges_of_chains(solid, mesh, chosen)
+    assert [len(binding) for binding in bindings] == [1, 2, 1, 1]
+    assert bindings[0][0] in bindings[1] and bindings[2][0] in bindings[1]
+    assert bindings[0] != bindings[2]
+    # Nur die Breitenmessung wird gezielt gestört. Netzherkunft, vollständige
+    # Kurvenzuordnung und die anschließende erneute Abdeckung bleiben echt.
+    monkeypatch.setattr(edge_ops, "as_mesh_data", lambda source: mesh)
+    monkeypatch.setattr(edges, "edges_of", lambda source: chosen)
+    monkeypatch.setattr(edges, "contact_band_limits", lambda *args, **kwargs: {id(a): 0.5})
+    selected, findings = edge_ops._group_that_fits(
+        SceneObject("body", "Quader", solid, kind="brep"),
+        1.0,
+        "all",
+        rounded=True,
+        narrowest=0.01,
+        shape=None,
+        law=None,
+        rings_by_plane=True,
+    )
+    assert selected == bindings[3]
+    narrow = [entry for entry in findings if entry.code == "edges.too_narrow"]
+    unmapped = [entry for entry in findings if entry.code == "edges.unmapped"]
+    assert len(narrow) == len(unmapped) == 1
+    assert narrow[0].values["skipped"] == 1
+    assert unmapped[0].values["skipped"] == 2
+    assert narrow[0].outline == tuple(pairwise(a.points))
+    assert unmapped[0].outline == tuple(
+        segment for entry in (b, c) for segment in pairwise(entry.points)
+    )
+
+
+def test_missing_native_face_sources_never_expand_to_all_edges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Herkunft bleibt die ganze Auswahl ausdrücklich ungebunden."""
+    from app.core.geom import edge_ops
+    from app.core.geom.edges import edges_of, wanted
+
+    solid = block()
+    mesh = MeshData.of(solid.mesh.raw.copy())
+    mesh.raw.face_attributes.clear()
+    chains = wanted(edges_of(mesh), "vertical", ())
+    assert len(chains) == 4
+    assert edit.native_edges_of_chains(solid, mesh, chains) == ((), (), (), ())
+    assert len(edit.choose(solid, "vertical")) == 4
+    monkeypatch.setattr(edge_ops, "as_mesh_data", lambda source: mesh)
+    with pytest.raises(GeometryError) as failure:
+        edge_ops._group_that_fits(
+            SceneObject("body", "Quader", solid, kind="brep"),
+            1.0,
+            "vertical",
+            rounded=True,
+            narrowest=0.01,
+            shape=None,
+            law=None,
+            rings_by_plane=True,
+        )
+    assert "An keiner der 4" in str(failure.value.detail)
+    assert failure.value.values["outline"] == tuple(
+        segment for chain in chains for segment in pairwise(chain.points)
+    )
+    assert failure.value.values["location"] == chains[0].points[0]
+    assert failure.value.values["worked"] == 0
+
+
+def test_an_unavailable_native_sampler_does_not_bind_only_its_endpoints(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der alte Anzeige-Rückfall bleibt nutzbar, ist aber kein voller Kurvennachweis."""
+    from types import SimpleNamespace
+
+    from app.core.geom.edges import edges_of, wanted
+
+    solid = block()
+    mesh = solid.mesh
+    chains = wanted(edges_of(mesh), "vertical", ())
+    native = edit.choose(solid, "vertical")
+    assert len(chains) == len(native) == 4
+
+    def unavailable_sampler(*args):
+        return SimpleNamespace(IsDone=lambda: False)
+
+    # Genau die von edit importierte Modulansicht, nicht OCPs anderes
+    # GCPnts-Attribut: Ein Patch vor dem ersten Aliasimport bliebe sonst dort.
+    module = importlib.import_module("OCP.GCPnts")
+    with monkeypatch.context() as patch:
+        patch.setattr(module, "GCPnts_QuasiUniformDeflection", unavailable_sampler)
+        assert len(edit.edge_points(native[0])) == 2
+        assert edit.native_edges_of_chains(solid, mesh, chains) == ((), (), (), ())
+    assert all(len(binding) == 1 for binding in edit.native_edges_of_chains(solid, mesh, chains))
+
+
+@pytest.mark.parametrize("pattern", [0, 1, 2])
+def test_platform_noise_keeps_native_chain_binding_identical(pattern: int) -> None:
+    """Flächenherkunft und Zuordnung bleiben an einem frisch vernetzten Körper gleich."""
+    from app.core.geom.edges import edges_of, wanted
+    from tests.test_platform_identity import platform_noise
+
+    def bind():
+        solid = edit.cylinder(20.0, 20.0)
+        mesh = solid.mesh
+        selected = wanted(edges_of(mesh), "top", ())
+        assert len(selected) == 1
+        return edit.native_edges_of_chains(solid, mesh, selected)
+
+    expected = bind()
+    assert len(expected[0]) == 1
+    with platform_noise(pattern):
+        assert bind() == expected
+
+
+@pytest.mark.parametrize("phase", ["entry", "sampling", "coverage"])
+@pytest.mark.parametrize("route", ["binding", "fillet_edges", "chamfer_edges"])
+def test_native_edge_binding_passes_cancellation_through_every_stage(
+    monkeypatch: pytest.MonkeyPatch, profile: Profile, phase: str, route: str
+) -> None:
+    """Ein abgebrochener Herkunftsbeleg wird weder Auswahl noch Rückfall."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom.edges import edges_of, wanted
+    from app.core.scene.cancel import CancelSignal
+
+    solid = block()
+    mesh = as_mesh_data(solid)
+    chosen = wanted(edges_of(mesh), "vertical", ())
+    token = CancelSignal()
+    if phase == "entry":
+        token.cancel()
+    else:
+        name = "_sampled_edge_points" if phase == "sampling" else "_curve_is_covered"
+        original = getattr(edit, name)
+        calls = []
+
+        def cancel_here(*args, **kwargs):
+            result = original(*args, **kwargs)
+            calls.append(result)
+            # Vier Strecken werden zuerst zugeordnet; danach folgt die
+            # vollständige Gegenrichtung an der ersten nativen Kante.
+            if phase == "sampling" or len(calls) == 5:
+                token.cancel()
+            return result
+
+        monkeypatch.setattr(edit, name, cancel_here)
+    with pytest.raises(OperationCancelled):
+        if route == "binding":
+            edit.native_edges_of_chains(solid, mesh, chosen, cancelled=token)
+        else:
+            source = SceneObject("body", "Quader", solid, kind="brep")
+            spec = REGISTRY.get(route)
+            field = "radius" if route == "fillet_edges" else "distance"
+            ctx = OpContext(
+                scene=Scene(objects={source.id: source}),
+                inputs=[source],
+                params=spec.params(**{field: 1.0, "edges": "vertical"}),
+                profile=profile,
+                quality="fine",
+                seed=None,
+                progress=lambda *args: None,
+                ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+                cancelled=token,
+            )
+            spec.fn(ctx)
+    assert token.is_cancelled
+
+
+def _edge_group_project(solid: Solid, operation: str, size: float):
+    """Ein echter registrierter Gruppenweg über einen analytischen Eingang."""
+    from dataclasses import replace
+
+    from app.core.registry import Registry
+    from app.core.types import OpResult
+
+    own = Registry()
+    calls = []
+    raw_results = []
+
+    def seed(_ctx):
+        calls.append("source")
+        return OpResult([SceneObject("", "Dach", solid, kind="brep")])
+
+    own.register(replace(REGISTRY.get("create_brep_box"), name="edge_group_source", fn=seed))
+    spec = REGISTRY.get(operation)
+
+    def recorded(ctx):
+        calls.append(operation)
+        result = spec.fn(ctx)
+        raw_results.append(result)
+        return result
+
+    own.register(replace(spec, fn=recorded))
+    own.register(REGISTRY.get("drill_brep_hole"))
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document, registry=own)
+    history.apply("Quelle", [OperationDraft(op="edge_group_source")])
+    target = project.document.ops[-1].outputs[0]
+    name = "radius" if operation == "fillet_edges" else "distance"
+    history.apply(
+        "Kantengruppe",
+        [OperationDraft(op=operation, inputs=(target,), params={name: size, "edges": "vertical"})],
+    )
+    return project, history, own, calls, raw_results, target
+
+
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges"])
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_partial_native_group_survives_evaluation_cache_and_a_real_following_step(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch, operation: str, quality: str
+) -> None:
+    """Zwei echte Außenkanten plus ein Dachzug als kontrollierte Teilgruppe, danach Ø4.
+
+    Die Auswahl wird ausdrücklich auf vorhandene Netzzüge begrenzt; Herkunft,
+    Builder, Folgeschritt und warmer Cache bleiben echt. Die automatische
+    Gesamtgruppe dieses C0-Dachs wird getrennt auf ihre sichere Absage geprüft.
+    """
+    from app.core.geom import edges
+    from app.core.scene.cache import ResultCache
+
+    source = _wide_ridged_prism()
+    candidates = edges.wanted(edges.edges_of(source.mesh), "vertical", ())
+    bindings = edit.native_edges_of_chains(source, source.mesh, candidates)
+    corners = [
+        entry
+        for entry, binding in zip(candidates, bindings, strict=True)
+        if binding and abs(entry.middle[1]) <= EPS_GEOM
+    ]
+    roof = max(
+        (entry for entry, binding in zip(candidates, bindings, strict=True) if not binding),
+        key=lambda entry: entry.length,
+    )
+    assert len(corners) == 2 and roof.length > EPS_GEOM
+    selected = [*corners, roof]
+    original_wanted = edges.wanted
+
+    def limited_group(entries, choice, keys, **kwargs):
+        if choice == "vertical" and not keys:
+            return selected
+        return original_wanted(entries, choice, keys, **kwargs)
+
+    monkeypatch.setattr(edges, "wanted", limited_group)
+    project, history, own, calls, raw_results, target = _edge_group_project(source, operation, 1.0)
+    history.apply(
+        "Bohrung danach",
+        [
+            OperationDraft(
+                op="drill_brep_hole",
+                inputs=(target,),
+                params={"diameter": 4.0, "x": 20.0, "y": 10.0, "compensate": False},
+            )
+        ],
+    )
+    cache = ResultCache()
+    removed_corner = 1.0 - math.pi / 4.0 if operation == "fillet_edges" else 0.5
+    expected = 36_000.0 - 2.0 * 40.0 * removed_corner - math.pi * 2.0 * 2.0 * 40.0
+    original_vertices = source.mesh.raw.vertices.tobytes()
+    for _pass in range(2):
+        result = evaluate(
+            project.document,
+            profile,
+            registry=own,
+            cache=cache,
+            quality=quality,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+        )
+        assert result.complete, [str(entry.message) for entry in result.scene.report.findings]
+        assert calls == ["source", operation]
+        assert cache.statistics.hits == 3 * _pass
+        body = result.scene.objects[target]
+        assert body.kind == "brep" and isinstance(body.mesh, Solid)
+        assert body.mesh.is_closed and body.mesh.is_watertight and body.mesh.solid_count == 1
+        assert body.mesh.volume == pytest.approx(expected, abs=EPS_GEOM, rel=0.0)
+        assert source.volume == pytest.approx(36_000.0, abs=EPS_GEOM, rel=0.0)
+        assert source.mesh.raw.vertices.tobytes() == original_vertices
+        raw = [entry for entry in raw_results[0].findings if entry.code == "edges.unmapped"]
+        reported = [
+            entry for entry in result.scene.report.findings if entry.code == "edges.unmapped"
+        ]
+        assert len(raw) == len(reported) == 1
+        assert raw[0].outline and reported[0].outline == raw[0].outline
+        assert reported[0].location == raw[0].location
+        assert reported[0].values["worked"] == 2
+        assert reported[0].values["skipped"] == 1
+        assert reported[0].op_id == 2 and reported[0].object_id == target
+        assert raw[0].op_id is None
+
+
+@pytest.mark.parametrize("operation", ["fillet_edges", "chamfer_edges"])
+@pytest.mark.parametrize("size", [1.0, 100.0])
+def test_an_empty_proven_native_group_stops_with_every_place(
+    profile: Profile, operation: str, size: float
+) -> None:
+    """Gesamtgruppe: Bei Maß 100 sperrt die Breite, bei Maß 1 erst der native Bau."""
+    import numpy as np
+
+    from app.core.geom.edges import edges_of, wanted
+    from app.core.scene.cache import ResultCache
+
+    source = _wide_ridged_prism()
+    selected = wanted(edges_of(source.mesh), "vertical", ())
+    expected_outline = tuple(segment for edge in selected for segment in pairwise(edge.points))
+    assert len(selected) > 4 and expected_outline
+    project, history, own, calls, raw_results, target = _edge_group_project(source, operation, size)
+    cache = ResultCache()
+    # Ein abgebrochener Lauf schreibt bewusst keinen Teilcache. Daher wird
+    # der vollständige Quellschritt vor der zurückgestellten Kanten-Op gewärmt.
+    history.undo()
+    assert evaluate(project.document, profile, registry=own, cache=cache).complete
+    history.redo()
+    for number in range(2):
+        result = evaluate(
+            project.document,
+            profile,
+            registry=own,
+            cache=cache,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+        )
+        assert result.stopped_at == 2
+        assert calls.count("source") == 1 and calls.count(operation) == number + 1
+        assert raw_results == []
+        assert result.scene.objects[target].mesh.volume == pytest.approx(
+            36_000.0, abs=EPS_GEOM, rel=0.0
+        )
+        refused = [
+            entry
+            for entry in result.scene.report.findings
+            if entry.op_id == 2 and entry.severity == "error"
+        ]
+        assert len(refused) == 1
+        assert np.asarray(
+            sorted(tuple(sorted(segment)) for segment in refused[0].outline)
+        ) == pytest.approx(
+            np.asarray(sorted(tuple(sorted(segment)) for segment in expected_outline)),
+            abs=EPS_GEOM,
+            rel=0.0,
+        )
+        assert refused[0].location in {point for segment in refused[0].outline for point in segment}
+        assert refused[0].object_id == target
+        if size > 10.0:
+            assert "4 Kanten" in str(refused[0].message)
+            assert str(len(selected) - 4) in str(refused[0].message)
+        assert {action.id for action in refused[0].suggestions} >= {
+            "show_location",
+            "correct_input",
+        }
+        assert "location" not in refused[0].values and "outline" not in refused[0].values
 
 
 def test_an_exhausted_surface_integral_stops_without_a_cached_guess(

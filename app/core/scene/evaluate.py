@@ -5682,7 +5682,11 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
     Seite roher Ausgabe — während der lesbare Satz beide Male in ``values``
     versteckt lag.
     """
-    values = {key: str(value) for key, value in error.values.items()}
+    # Orte und Konturen bleiben Geometrie. Als Text in ``values`` würden sie
+    # beim Rückweg über ``panels.as_error`` die tatsächlichen Tupel verdrängen.
+    values = {
+        key: str(value) for key, value in error.values.items() if key not in ("location", "outline")
+    }
     detail = error.detail
     message: TranslatableText | str
     if isinstance(detail, TranslatableText):
@@ -5699,5 +5703,7 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
         object_id=error.object_id,
         op_id=operation.id,
         values=values,
+        location=error.values.get("location"),
+        outline=error.values.get("outline", ()),
         suggestions=tuple(error.suggestions),
     )
