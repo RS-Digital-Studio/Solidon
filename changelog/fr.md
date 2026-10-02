@@ -60,7 +60,7 @@ dans `website/version.json`.
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
-- La cible d'« Aligner sur une caractéristique » est d'abord vide. « Appliquer » attend qu'elle soit choisie et ne pose plus le corps sans rien dire du mauvais côté.
+- La cible d'« Aligner sur une caractéristique » est d'abord vide. Vous la choisissez dans le champ « Cible », et « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 
 ### Générer avec l'IA

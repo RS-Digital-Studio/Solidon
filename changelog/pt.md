@@ -59,7 +59,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Na janela, «Fundir suavemente» calcula agora tão fino como na exportação, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
-- O destino de «Alinhar à característica» começa vazio. «Aplicar» espera até estar escolhido e já não põe o corpo sem aviso do lado errado.
+- O destino de «Alinhar à característica» começa vazio. Escolhe-o no campo «Destino», e «Aplicar» espera até lá em vez de pôr o corpo sem aviso do lado errado.
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 
 ### Gerar com IA

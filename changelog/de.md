@@ -84,7 +84,7 @@ Nutzen da und sonst nichts.
 - Im Fenster rechnet *Weich verschmelzen* jetzt so fein wie beim Export, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
-- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. *Übernehmen* wartet, bis es gewählt ist, und setzt den Körper nicht mehr still an die falsche Seite.
+- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. Sie wählen es über das Feld *Ziel*, und *Übernehmen* wartet bis dahin, statt den Körper still an die falsche Seite zu setzen.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 
 ### Erzeugen mit KI

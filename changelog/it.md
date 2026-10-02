@@ -59,7 +59,7 @@ scrive in `website/version.json`.
 - Nella finestra, «Fondi dolcemente» calcola ora fine come nell'esportazione, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
-- Il bersaglio di «Allinea alla caratteristica» parte vuoto. «Applica» aspetta che sia scelto e non mette più il corpo in silenzio dal lato sbagliato.
+- La destinazione di «Allinea alla caratteristica» parte vuota. La scegli nel campo «Destinazione», e «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 
 ### Generare con l'IA
