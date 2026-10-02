@@ -979,6 +979,7 @@
   "Das Paket ist unvollständig angekommen.": "O pacote chegou incompleto.",
   "Das Paket liegt nicht mehr da, wo es geladen wurde.": "O pacote já não está onde foi transferido.",
   "Das Pflichtfeld „{field}“ fehlt.": "Falta o campo obrigatório «{field}».",
+  "Das Profil „{profile}“ ordnet die Düsenvariante „{variant}“ nicht eindeutig zu. Bis Sie Düse und Profile im Druckdialog wählen, gelten Solidons Werte.": "O perfil «{profile}» não associa de forma inequívoca a variante de bico «{variant}». Até escolher o bico e os perfis na janela de impressão, aplicam-se os valores do Solidon.",
   "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut.": "O programa foi iniciado, mas o serviço ainda não responde. Verifique a aplicação local e tente novamente.",
   "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf die Bahnmitte ist genau dafür da.": "O projeto tem ajustes. Calcular a parede exterior à cota nominal, em vez de ao centro do cordão, existe exatamente para isso.",
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "O projeto tem ajustes. Uma parede exterior impressa devagar mantém a cota para a qual eles foram calculados.",

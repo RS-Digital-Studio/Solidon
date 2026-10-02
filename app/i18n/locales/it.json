@@ -979,6 +979,7 @@
   "Das Paket ist unvollständig angekommen.": "Il pacchetto è arrivato incompleto.",
   "Das Paket liegt nicht mehr da, wo es geladen wurde.": "Il pacchetto non è più dove è stato scaricato.",
   "Das Pflichtfeld „{field}“ fehlt.": "Manca il campo obbligatorio «{field}».",
+  "Das Profil „{profile}“ ordnet die Düsenvariante „{variant}“ nicht eindeutig zu. Bis Sie Düse und Profile im Druckdialog wählen, gelten Solidons Werte.": "Il profilo «{profile}» non associa in modo univoco la variante dell'ugello «{variant}». Finché non scegli ugello e profili nella finestra di stampa, si applicano i valori di Solidon.",
   "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut.": "Il programma è stato avviato, ma il servizio non risponde ancora. Verifica l'applicazione locale e riprova.",
   "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf die Bahnmitte ist genau dafür da.": "Il progetto ha accoppiamenti. Calcolare la parete esterna sulla quota nominale invece che sul centro del cordone serve esattamente a questo.",
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "Il progetto ha accoppiamenti. Una parete esterna percorsa lentamente tiene la quota per cui sono calcolati.",
