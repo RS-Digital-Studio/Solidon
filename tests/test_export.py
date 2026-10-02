@@ -3955,6 +3955,106 @@ def test_curas_window_centres_the_job_on_the_bed_cura_has_active(
     ]
 
 
+def test_cura_window_names_both_printers_and_keeps_solidon_settings(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.export import slicer_profiles
+
+    active = slicer_profiles.CuraActiveMachine(
+        name="Ender-3 V3 SE",
+        definition=Path("creality_ender3v3se.def.json"),
+        bed=(220.0, 200.0),
+    )
+    actual_active_machine = slicer_profiles.cura_active_machine
+    monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _executable: active)
+    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        temperature=replace(settings.temperature, nozzle=223),
+        speed=replace(settings.speed, outer_wall=37.5),
+    )
+    settings = print_settings.with_choice(settings, "temperature.nozzle", 223)
+    settings = print_settings.with_choice(settings, "speed.outer_wall", 37.5)
+
+    window, findings = write_assembly(
+        [scene_object("obj_1", "Klotz")],
+        tmp_path,
+        project_name="t",
+        profile=profile,
+        settings=settings,
+        flavour="cura",
+        setup=handover.SlicerSetup(executable=Path("CuraEngine.exe"), flavour="cura"),
+        for_window=True,
+    )
+
+    [finding] = [entry for entry in findings if entry.code == "slicer.machine_mismatch"]
+    message = str(finding.message)
+    assert "Ender-3 V3 SE" in message
+    assert str(profile.printer.title) in message
+    assert (
+        "Temperaturen und Druckgeschwindigkeiten stammen weiter aus Solidons Druckerprofil."
+        in message
+    )
+    assert "open_print_settings" in {action.id for action in finding.suggestions}
+    with zipfile.ZipFile(window) as archive:
+        model = ET.fromstring(archive.read(threemf.MODEL_PATH))
+    core = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    assert {item.get("transform") for item in model.iter(f"{core}item")} == {
+        "1 0 0 0 1 0 0 0 1 110 100 0"
+    }
+
+    engine = _cura_install(tmp_path)
+    _cura_active(tmp_path, monkeypatch)
+    monkeypatch.setattr(slicer_profiles, "cura_active_machine", actual_active_machine)
+    setup = handover.SlicerSetup(executable=engine, flavour="cura")
+    handover.cura_profile_beside(window, settings, profile, setup)
+    values = _cura_containers(window.with_suffix(".curaprofile"))["solidon"]["values"]
+    assert values["material_print_temperature"] == str(settings.temperature.nozzle)
+    assert values["speed_wall_0"] == str(settings.speed.outer_wall)
+
+
+def test_cura_window_without_print_settings_still_reports_the_active_printer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.export import slicer_profiles
+
+    engine = _cura_install(tmp_path)
+    _cura_active(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        slicer_profiles,
+        "cura_active_machine",
+        lambda _executable: slicer_profiles.CuraActiveMachine(
+            name="K1 Max in der Werkstatt",
+            definition=Path("creality_k1max.def.json"),
+            bed=(300.0, 300.0),
+        ),
+    )
+    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
+
+    window, findings = write_assembly(
+        [scene_object("obj_1", "Klotz")],
+        tmp_path,
+        project_name="t",
+        profile=profiles.make_profile("centauri-carbon-2", "pla"),
+        settings=None,
+        flavour="cura",
+        setup=handover.SlicerSetup(executable=engine, flavour="cura"),
+        for_window=True,
+    )
+
+    assert window.is_file()
+    [finding] = [entry for entry in findings if entry.code == "slicer.machine_mismatch"]
+    message = str(finding.message)
+    assert "K1 Max in der Werkstatt" in message
+    assert "Druckwerte werden nicht mitgegeben" in message
+    assert (
+        "Temperaturen und Druckgeschwindigkeiten stammen weiter aus Solidons Druckerprofil."
+        not in message
+    )
+    assert "slicer.cura_printer_unknown" not in {entry.code for entry in findings}
+
+
 def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
     tmp_path: Path, profile: Profile
 ) -> None:

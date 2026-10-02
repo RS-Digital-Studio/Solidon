@@ -1823,9 +1823,10 @@ def write_assembly(
     as_stl = for_slicer and not reads_assembly_file(flavour)
 
     if as_stl:
-        if settings is not None:
+        if settings is not None or (for_window and takes_mesh_settings(flavour)):
             from app.core.export import handover
 
+        if settings is not None:
             slots = threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
@@ -1838,6 +1839,14 @@ def write_assembly(
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
         if for_window and takes_mesh_settings(flavour):
+            if setup is not None and setup.flavour == "cura":
+                mismatch = handover.cura_active_printer_mismatch(
+                    setup,
+                    profile,
+                    solidon_settings_included=settings is not None,
+                )
+                if mismatch is not None:
+                    findings.append(mismatch)
             target, noted = _cura_window(
                 chosen,
                 exported,

@@ -1781,6 +1781,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "possible": _("Möglich"),
     "printed": _("Gedruckt"),
     "printer": _("Drucker"),
+    # ``slicer.machine_mismatch`` trennt Curas Wahl vom Profil in Solidon.
+    "cura_printer": _("Cura-Drucker"),
+    "solidon_printer": _("Solidon-Drucker"),
     "produced": _("Erzeugt"),
     "profile": _("Profil"),
     "variant": _("Variante"),

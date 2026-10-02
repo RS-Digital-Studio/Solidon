@@ -555,6 +555,8 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     Druckerdefinition (:func:`_cura_machine`); fehlt sie, sagt es dieser
     Befund.
     """
+    if setup.flavour == "cura":
+        return _cura_printer_unknown(setup, profile)
     if machine_from_definition(setup.flavour):
         return _cura_printer_unknown(setup, profile)
     if not takes_a_machine_profile(setup.flavour) and setup.flavour != "prusa":
@@ -637,6 +639,56 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
             suggestions=(CHECK_SLICER_PROFILE, EXPORT_ONLY),
         )
     ]
+
+
+def cura_active_printer_mismatch(
+    setup: SlicerSetup,
+    profile: Profile,
+    *,
+    solidon_settings_included: bool = True,
+) -> Finding | None:
+    """Nennt beide Drucker, wenn Curas aktive Maschine eine andere ist."""
+    active = slicer_profiles.cura_active_machine(setup.executable)
+    if active is None:
+        return None
+    known = dict(profiles.printer_profiles())
+    known[profile.printer.id] = profile.printer
+    active_id = slicer_profiles.chosen_printer("cura", setup.executable, known)
+    if active_id == profile.printer.id:
+        return None
+    cura_printer = active.name or (
+        known[active_id].title
+        if active_id in known
+        else slicer_profiles.cura_definition_id(active.definition)
+    )
+    if solidon_settings_included:
+        message = _(
+            "In Cura ist „{cura_printer}“ aktiv, in Solidon „{solidon_printer}“. Das "
+            "Cura-Fenster richtet das Modell nach Curas Druckbett aus; Temperaturen "
+            "und Druckgeschwindigkeiten stammen weiter aus Solidons Druckerprofil. "
+            "Öffnen Sie die Druckeinstellungen. Ist Curas Profil vollständig lesbar, "
+            "können Sie den Drucker dort mit einem Klick übernehmen.",
+            cura_printer=cura_printer,
+            solidon_printer=profile.printer.title,
+        )
+    else:
+        message = _(
+            "In Cura ist „{cura_printer}“ aktiv, in Solidon „{solidon_printer}“. Das "
+            "Cura-Fenster richtet das Modell nach Curas Druckbett aus. Druckwerte "
+            "werden nicht mitgegeben; schalten Sie „Werte mitgeben“ in den "
+            "Druckeinstellungen ein, wenn Solidons Werte in Cura gelten sollen. Ist "
+            "Curas Profil vollständig lesbar, können Sie den Drucker dort mit einem "
+            "Klick übernehmen.",
+            cura_printer=cura_printer,
+            solidon_printer=profile.printer.title,
+        )
+    return Finding(
+        code="slicer.machine_mismatch",
+        severity="warning",
+        message=message,
+        values={"cura_printer": cura_printer, "solidon_printer": profile.printer.title},
+        suggestions=(OPEN_PRINT_SETTINGS, EXPORT_ONLY),
+    )
 
 
 def _cura_printer_unknown(setup: SlicerSetup, profile: Profile) -> list[Finding]:
