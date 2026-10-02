@@ -185,6 +185,28 @@ def _settings_with_slicer(
     return module
 
 
+@pytest.mark.skipif(Path("A") != Path("a"), reason="Pfade unterscheiden Groß und Klein")
+def test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings(
+    qt_app, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Gemerkt auf ``c:``, gefunden auf ``C:``: Die Liste fasst beide zusammen, die
+    Wahl sprang auf „Später auswählen“ (RM-418)."""
+    from app.ui.settings import UiSettings
+
+    found = tmp_path / "orca-slicer.exe"
+    text = str(found)
+    module = _settings_with_slicer(monkeypatch, text[0].swapcase() + text[1:], (found,))
+    dialog = module.SettingsDialog(UiSettings())
+    try:
+        assert dialog.wait_for_survey(5000)
+        assert dialog.slicer.currentIndex() != 0, "nicht „Später auswählen“"
+        assert Path(dialog.slicer_path) == found
+        assert dialog.slicer.count() == 2, "eine Zeile je Programm"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_a_slicer_chosen_with_forward_slashes_frees_save_in_the_settings(
     qt_app, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -31,8 +31,11 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
+| 2026-10-02 | [RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)](#rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026) |
+| 2026-10-02 | [RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)](#rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
@@ -32968,7 +32971,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   [RM-279](#rm-279). (4) `Viewport.frame_next_scene` rahmt nach *Modell teilen*
   einmal auf alle Teile; am Organizer ×2,3 mit sechs Teilen stehen 100 statt 29 % im Bild,
   über alle fünf Teilungswege (`9f821c70c`). Nach *Skalieren* bleibt die Kamera weiter
-  stehen; das steht als [RM-280](ROADMAP.md#rm-280). **KUNDE-08, entschieden: nein.** Der
+  stehen; das steht als [RM-280](#rm-280). **KUNDE-08, entschieden: nein.** Der
   Hinweis „Nicht jedes Maß der Zeichnung ist festgelegt …“ kommt nur noch an einer
   Zeichnung, die mindestens ein Maß trägt und trotzdem wandern kann. Wer ganz ohne Maß
   zeichnet, druckt, was er sieht, und las den Satz im Prüfbericht wie einen Mangel ohne
@@ -36758,7 +36761,7 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
   Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
 
-**Abschluss:** Der Vergleich an der Anwendung lässt die Leertaste jedem Bedienelement, das sie selbst braucht (`viewport.answers_space`: Textfelder wie bisher, dazu Knöpfe, Haken, Auswahlpunkte, Auswahllisten, Listen und ankreuzbare Rahmen); auf der Ansicht, einem Dialoghintergrund oder einer Beschriftung bleibt sie der Vergleich, und ein Loslassen auf einem Bedienelement beendet einen gehaltenen Vergleich. Entschieden statt „nur mit Fokus auf der Ansicht“: Der Vergleich soll auch während eines offenen Operationsdialogs gehen, dessen Hintergrund den Fokus hält; nur die Bedienelemente bekommen ihre Taste zurück. *Im Chat beschreiben* holt die rechte Spalte zurück, stellt den Chat nach vorn und setzt dann den Cursor. *Quader*/*Zylinder anlegen* aus der Einladung starten den Zwilling des Menüs (`menu_twins`, mit exaktem Kern `create_brep_box`/`create_brep_cylinder`): Gleich beschriftet heißt gleich gemacht, und der exakte Körper ist der, den der Kunde über das Menü kennt und mit echten Kanten weiterbearbeitet; ohne exakten Kern bleibt es das Netz, wie im Menü. Die Zählkommentare in `selection_operations.py` und `catalog.py` nennen keine Zahl mehr, sondern `standalone` (gemessen 15 von 41 frei). Fenstertests `test_controls_keep_the_space_key_while_a_preview_runs` und `test_every_entry_of_the_invitation_does_what_the_menu_does` (beide am Stand `ba5a76365` rot, danach grün; die bisherigen Leertasten- und Einladungstests grün). Sonde am echten Hauptfenster mit echten Tasten und Klicks: am Stand `ba5a76365` 7 von 13 (Chat nicht vorn, Einladung `create_box` gegen Menü `create_brep_box`, Haken und Skala ohne Leertaste), danach 13 von 13. Regel in `ansicht.md`. Umgesetzt von Claude, in main mit (Commit folgt).
+**Abschluss:** Der Vergleich an der Anwendung lässt die Leertaste jedem Bedienelement, das sie selbst braucht (`viewport.answers_space`: Textfelder wie bisher, dazu Knöpfe, Haken, Auswahlpunkte, Auswahllisten, Listen und ankreuzbare Rahmen); auf der Ansicht, einem Dialoghintergrund oder einer Beschriftung bleibt sie der Vergleich, und ein Loslassen auf einem Bedienelement beendet einen gehaltenen Vergleich. Entschieden statt „nur mit Fokus auf der Ansicht“: Der Vergleich soll auch während eines offenen Operationsdialogs gehen, dessen Hintergrund den Fokus hält; nur die Bedienelemente bekommen ihre Taste zurück. *Im Chat beschreiben* holt die rechte Spalte zurück, stellt den Chat nach vorn und setzt dann den Cursor. *Quader*/*Zylinder anlegen* aus der Einladung starten den Zwilling des Menüs (`menu_twins`, mit exaktem Kern `create_brep_box`/`create_brep_cylinder`): Gleich beschriftet heißt gleich gemacht, und der exakte Körper ist der, den der Kunde über das Menü kennt und mit echten Kanten weiterbearbeitet; ohne exakten Kern bleibt es das Netz, wie im Menü. Die Zählkommentare in `selection_operations.py` und `catalog.py` nennen keine Zahl mehr, sondern `standalone` (gemessen 15 von 41 frei). Fenstertests `test_controls_keep_the_space_key_while_a_preview_runs` und `test_every_entry_of_the_invitation_does_what_the_menu_does` (beide am Stand `ba5a76365` rot, danach grün; die bisherigen Leertasten- und Einladungstests grün). Sonde am echten Hauptfenster mit echten Tasten und Klicks: am Stand `ba5a76365` 7 von 13 (Chat nicht vorn, Einladung `create_box` gegen Menü `create_brep_box`, Haken und Skala ohne Leertaste), danach 13 von 13. Regel in `ansicht.md`. Umgesetzt von Claude, in main mit `40d3c8e36` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
 
 ## RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)
 
@@ -36810,3 +36813,55 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
 
 **Abschluss:** Bauplan §2.2 (Weg 1) nennt jetzt „rechts im Auswahlfenster am Merkmal die passende Operation wählen“, abgestimmt mit Robert (Ansage 02.10.2026). Nachgezogen in `.claude/rules/ansicht.md`, `konzepte/begruendungen/regel-ansicht.md`, den Docstrings und Kommentaren in `app/ui/viewport.py`, `panels.py`, `main_window.py`, `labels.py`, `selection_operations.py` und in `tests/test_analysis_ui.py`, `test_selection.py`, `test_way_one.py`, `test_operation_ui.py`. `git grep "Kontextmenü am Merkmal"` findet nur noch Sätze über *Diesen Schritt ändern* im Menü (richtig nach §18.5) und datierte Archivtexte. Die App bleibt unverändert. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+**Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit `c06c4d3b6` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
+
+## RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)
+
+<a id="rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026"></a>
+<a id="rm-418"></a>
+
+**RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen.**
+  Review 02.10.2026 am Stand `4cf460e87`; beide Ursprungspunkte sind im Arbeitsbaum archiviert.
+  - **Slicerpfad nur in Groß-/Kleinschreibung verschieden:** Die Wahl springt in Erststart und
+    Einstellungen auf „Später auswählen“ — die Liste fasst Schreibweisen über `Path` zusammen,
+    `select_data`/`findData` sucht den exakten Text. Dieselben Textvergleiche in
+    `app/ui/print_settings_dialog.py` (`_choose_slicer`) und `app/ui/filament_picker.py:538`.
+  - **Zweites „Abbrechen“ beim Erzeugen:** Solange der Abbruch von Versuch 2 noch ausläuft, schließt
+    ein zweiter Klick den Dialog und verwirft Versuch 1; der Knopf bleibt in dieser Zeit frei.
+  **Abnahme:** je Rest ein Test (Pfad `c:\…` gegen `C:\…` bleibt gewählt; zweiter Klick während des
+  Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
+
+**Abschluss:** Erststart, Einstellungen und Dateiwahl suchen den gewählten Slicer über `first_run.select_program` (Vergleich mit `discover.same_program`, also über `Path`) statt über den exakten Text; `PrintSettingsDialog._choose_slicer` und `filament_picker.slicer_filaments` vergleichen den gemerkten Pfad ebenso. *Abbrechen* im Erzeugen-Dialog ist gesperrt, solange der Abbruch eines weiteren Versuchs ausläuft, und trägt dabei den Satz „Wird abgebrochen — der laufende Schritt läuft aus.“; auch Esc und das Fensterkreuz verwerfen in dieser Zeit nichts (gefragt wird `_busy`, nicht `isRunning`, weil der Faden schon zurück sein kann, bevor seine Meldung ankommt). Tests: `test_a_slicer_in_another_case_stays_chosen_in_the_first_run`, `test_a_remembered_slicer_in_another_case_is_the_one_used` (Druckdialog und Filamentwähler), `test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings` (nur unter Windows, wo Pfade nicht nach Groß und Klein unterscheiden) und `test_a_second_cancel_while_the_first_runs_out_discards_nothing`; alle vier am Stand `ba5a76365` rot, danach grün. Sonde am echten Fenster: Erststart mit einer als `c:\…` gewählten Datei und anschließender Programmsuche, Erzeugen mit einem Abbruch, der zwei Sekunden ausläuft, echte Klicks und Esc: vorher 5 von 9, danach 9 von 9. In den Einstellungen trat der Fehler am echten Rechner nicht auf, weil die Programmsuche den gemerkten Pfad in seiner eigenen Schreibweise mitliefert; der Test stellt die Lage aus dem Review nach. Umgesetzt von Claude, in main mit `db87b3815` (Merge `db0f5ef13`); Entwicklungstor grün (20215 bestanden, ruff, format und mypy ohne Befund).
+## RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)
+
+<a id="rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026"></a>
+<a id="rm-280"></a>
+
+**RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild
+  wächst.** Aus der Durchsicht v0.5.1 (rest-kunde, Registersatz 2). Am Organizer stehen
+  nach *Skalieren* ×2,3 noch 52 % des Körpers im Bild
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-kunde/out/teilen-vorher-organizer.txt`, Zeile „vor
+  dem Teilen“). `Viewport._fit_once_for` rahmt nach dem ersten Bild nur, wenn `outgrown` es
+  verlangt (das Fünffache oder kein Überlapp); „jeder weitere Aufbau lässt die Kamera in
+  Ruhe“ ist eine ausdrückliche Regel (Robert, 23.08.2026, beim Verschieben). Nach *Modell
+  teilen* rahmt seit `9f821c70c` `frame_next_scene` einmal auf alle Teile. Ob Skalieren
+  unter die Regel fällt, ist eine Bedienfrage für `bedienlogik`; Vorschlag:
+  `frame_next_scene` auch nach einem Skalieren, das über den Rahmen hinauswächst. Abnahme:
+  die Frage entschieden und begründet; wird gebaut, steht der Organizer nach ×2,3 ganz im
+  Bild, und ein Verschieben lässt die Kamera weiter in Ruhe.
+
+**Abschluss:** Entschieden (Robert, „alles ja“, 02.10.2026) und gebaut: Ein neuer Größenschritt (`scale_object`, `fit_to_size`, `RESIZING_OPERATIONS`) meldet sich über `MainWindow._frame_after_resizing` einmal bei `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die Körper gewachsen sind und über den eingepassten Rahmen hinausreichen (`reaches_beyond`). Verkleinern, Verschieben, Undo und Themenwechsel lassen die Kamera in Ruhe; Roberts Regel vom 23.08.2026 gilt weiter. Tests: `test_analysis_ui.py::test_a_body_beyond_the_frame_is_framed_only_when_asked`, `::test_scaling_beyond_the_frame_frames_once_and_moving_does_not` (ohne den Aufruf rot). Fenstersonde am echten Fenster: Würfel ×2,3 über den Dialog *Skalieren* → Rahmen (−23…23, 0…46), Körper ganz im Bild, danach *Verschieben* lässt den Rahmen; 7 von 7 Prüfungen. Regel in `.claude/rules/kamera.md`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)
+
+<a id="rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026"></a>
+<a id="rm-473"></a>
+
+**RM-473 — Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus.**
+Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) bei der Fensterabnahme von RM-280: *Skalieren*
+  skaliert um die Mitte. Ein Würfel, der auf dem Bett steht, sank beim Faktor 2,3 um 13 mm unter
+  die Platte; der Prüfbericht meldete „Ein Objekt steckt unter dem Druckbett“ und bot *Auf das Bett
+  setzen* an. So schon in 0.5.1, kein Rückschritt. Bauplan §2.4 (gute Vorgabe), §29.
+
+**Abschluss:** Für einen Körper, der auf dem Bett steht, belegt der Dialog den Bezugspunkt „Druckbett“ vor (`MainWindow._from_selection`, `_stands_on_the_bed`, `_offers_the_bed_anchor`); was schwebt, behält die Mitte. Die Vorgabe der Operation bleibt die Mitte, gespeicherte Schritte, Rezepte und Agent rechnen unverändert. Test `test_analysis_ui.py::test_a_body_on_the_bed_grows_from_the_bed_when_scaled`; Fenstersonde: Dialog zeigt „Druckbett“, der Würfel wächst von z = 0 auf 46 mm. Umgesetzt von Claude (Thread „Bedienung und KI“).
