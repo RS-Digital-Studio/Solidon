@@ -8641,3 +8641,33 @@ def test_a_stock_problem_reads_as_two_lines_not_as_title_colon_detail(
         "Die Datei bleibt unverändert.",
     ]
     assert ".:" not in said[0] and "catalogue" not in said[0]
+
+
+def test_opening_needs_no_machine_profile_but_slicing_does(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """*Im Slicer öffnen* war gesperrt, solange im Slicerprofil kein Drucker
+    gewählt war — „Wählen Sie einen Drucker aus der Liste.“, obwohl oben einer
+    stand. Das Fenster des Slicers bringt seine Profile selbst mit (RM-336).
+    *Slicen* braucht das Profil weiter und sagt es mit seinem eigenen Satz."""
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    monkeypatch.setattr(module.handover, "window_program", lambda found: found)
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+    dialog.machine_choice.clear()
+    dialog.machine_choice.addItem("— bitte wählen —", "")
+    dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle", "ecc2")
+    dialog.machine_choice.setEnabled(True)
+    dialog.machine_choice.setCurrentIndex(0)
+
+    dialog._show_slicer_state()
+
+    assert dialog.open_button.isEnabled(), dialog.open_button.toolTip()
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == dialog._profile_gap()
+    assert dialog.slice_button.toolTip() != "Wählen Sie einen Drucker aus der Liste."
+    assert dialog._current_setup(for_slicing=False) is not None

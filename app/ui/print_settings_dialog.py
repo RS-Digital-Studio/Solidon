@@ -6300,13 +6300,25 @@ class PrintSettingsDialog(QDialog):
                     widget.setProperty(_OWN_TIP, None)
 
     def _printer_selection_issue(self) -> str:
-        """Tippsuche ist noch keine Wahl, weder am Projekt noch am Slicerprofil."""
-        if not valid_printer_choice(self.printer_choice) or (
+        """Tippsuche ist noch keine Wahl — am Drucker des Projekts.
+
+        Das Druckerprofil des Slicers fragt :meth:`_machine_selection_issue`,
+        und nur auf dem Rechen-Weg: *Im Slicer öffnen* war gesperrt, solange
+        dort keiner gewählt war, obwohl das Fenster seine Profile selbst
+        mitbringt (RM-336).
+        """
+        if not valid_printer_choice(self.printer_choice):
+            return str(tr("Wählen Sie einen Drucker aus der Liste."))
+        return ""
+
+    def _machine_selection_issue(self) -> str:
+        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts."""
+        if (
             self.machine_choice.isEnabled()
             and self.machine_choice.count() > 0
             and not valid_printer_choice(self.machine_choice)
         ):
-            return str(tr("Wählen Sie einen Drucker aus der Liste."))
+            return self._profile_gap() or str(tr("Wählen Sie einen Drucker aus der Liste."))
         return ""
 
     def _show_slicer_state(self) -> None:
@@ -6385,7 +6397,7 @@ class PrintSettingsDialog(QDialog):
             # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
             # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher
             # erst nach dem Klick in der Statuszeile (Fund ce, 26.08.2026).
-            reason = self._profile_gap()
+            reason = self._profile_gap() or self._machine_selection_issue()
         # Ein laufender Auftrag hält den Knopf zu, gleich was die drei
         # Bedingungen sagen — sonst schaltete eine nachgereichte
         # Profilantwort ihn mitten im Lauf wieder frei.
@@ -7920,7 +7932,7 @@ class PrintSettingsDialog(QDialog):
                 filament
             )
 
-    def _current_setup(self) -> handover.SlicerSetup | None:
+    def _current_setup(self, *, for_slicing: bool = True) -> handover.SlicerSetup | None:
         """Der eingestellte Slicer mit der Profilwahl aus den Feldern (§29).
 
         Was in der Auswahl steht, gilt — sie ist automatisch vorbelegt, aber
@@ -7928,7 +7940,10 @@ class PrintSettingsDialog(QDialog):
         beide Übergabearten: Der Rechen-Weg und der Öffnen-Weg lesen dieselben
         Felder, und zwei Abschriften davon drifteten auseinander.
         """
-        if problem := self._printer_selection_issue():
+        problem = self._printer_selection_issue() or (
+            self._machine_selection_issue() if for_slicing else ""
+        )
+        if problem:
             self.state.setText(problem)
             return None
         found = self._slicer_path
@@ -7975,7 +7990,7 @@ class PrintSettingsDialog(QDialog):
         if not objects:
             self.state.setText(tr("Es ist nichts da, was sich öffnen ließe."))
             return
-        setup = self._current_setup()
+        setup = self._current_setup(for_slicing=False)
         if setup is None:
             return
         if not self._may_hand_over(objects):
