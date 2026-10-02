@@ -224,6 +224,12 @@ REACTING_COMMANDS = [
     "git worktree remove --force ../x",
     'git -C "F:/3D Druck" restore app/x.py',
     "git filter-repo --path x",
+    '"F:/3D Druck/.venv/Scripts/python.exe" tools/upload_website.py',
+    '"$SUITE_PYTHON" tools/run_agent_suite.py',
+    ".venv/Scripts/python.exe -m tools.deploy_activation_server",
+    "./tools/sign_release.py",
+    "& $env:SUITE_PYTHON tools\\check_support.py",
+    "cd tools && python make_licence_keys.py",
     "python -m pytest tests/test_example.py -q",
     "& '.venv\\Scripts\\python.exe' -m pytest -q",
     ".venv/Scripts/python.exe tools/affected_tests.py --run",
@@ -269,7 +275,12 @@ def test_shell_prefilter_never_hides_a_command_the_hook_reacts_to(
     patterns = _claude_filter(event, group)
     assert patterns, "kein Vorfilter gefunden"
     if event == "PreToolUse":
-        reacting = [c for c in REACTING_COMMANDS if hook.VERWIRFT.search(c)]
+        reacting = [
+            c for c in REACTING_COMMANDS if hook.VERWIRFT.search(c) or hook.rueckfrage_werkzeug(c)
+        ]
+        assert any(hook.rueckfrage_werkzeug(c) for c in reacting), (
+            "kein Beispiel für ein Werkzeug, das Geld kostet oder veröffentlicht"
+        )
     else:
         reacting = [
             c for c in REACTING_COMMANDS if hook._test_command(c) or hook.SCHREIBT_DATEI.search(c)
@@ -323,6 +334,125 @@ def test_revert_guard_catches_every_discarding_form(
     Zurücknehmen der Vormerkung verwirft nichts und fragt nicht.
     """
     assert bool(hook.VERWIRFT.search(command)) is discards
+
+
+#: Die Werkzeuge, vor denen auch unter `bypassPermissions` gefragt wird, weil sie
+#: Geld kosten oder etwas veröffentlichen (`.claude/README.md`, „settings.json“).
+GUARDED_TOOLS = ("run_agent_suite", "upload_website", "deploy_activation_server")
+
+#: Jede Schreibweise, in der ein Werkzeug gestartet wird — die `ask`-Regeln in
+#: `.claude/settings.json` sind Präfixregeln und kennen nur die erste.
+TOOL_NOTATIONS = {
+    "relativ": ".venv/Scripts/python.exe tools/{tool}.py",
+    "absolut": '"F:/3D Druck/.venv/Scripts/python.exe" tools/{tool}.py --dry-run',
+    "absolutes Skript": '"F:/3D Druck/.venv/Scripts/python.exe" "F:/3D Druck/tools/{tool}.py"',
+    "Variable": '"$SUITE_PYTHON" tools/{tool}.py',
+    "Variable in Klammern": '"${{SUITE_PYTHON}}" -X utf8 tools/{tool}.py',
+    "Modul": ".venv/Scripts/python.exe -m tools.{tool}",
+    "Modul mit Variable": '"$SUITE_PYTHON" -u -m tools.{tool} --help',
+    "direkt": "./tools/{tool}.py",
+    "direkt ohne Punkt": "tools/{tool}.py --site all",
+    "PowerShell": ".venv\\Scripts\\python.exe tools/{tool}.py",
+    "PowerShell rückwärts": ".venv\\Scripts\\python.exe tools\\{tool}.py",
+    "PowerShell absolut": '& "F:\\3D Druck\\.venv\\Scripts\\python.exe" tools\\{tool}.py',
+    "PowerShell Variable": "& $env:SUITE_PYTHON -m tools.{tool}",
+    "Start-Process": (
+        "Start-Process -FilePath .venv\\Scripts\\python.exe -ArgumentList 'tools\\{tool}.py'"
+    ),
+    "Umgebung davor": "PYTHONUTF8=1 python tools/{tool}.py",
+    "nach cd": "cd tools && python {tool}.py",
+    "in einer Kette": "git status && py -3.14 tools/{tool}.py",
+    "bash -c": "bash -lc '.venv/Scripts/python.exe tools/{tool}.py'",
+    "pwsh -Command": 'pwsh -NoProfile -Command "& .venv\\Scripts\\python.exe tools\\{tool}.py"',
+}
+
+
+@pytest.mark.parametrize("notation", sorted(TOOL_NOTATIONS))
+@pytest.mark.parametrize("tool", GUARDED_TOOLS)
+def test_a_guarded_tool_asks_in_every_notation(hook: ModuleType, tool: str, notation: str) -> None:
+    """Gefragt wird am Werkzeugnamen, nicht an der Schreibweise des Interpreters."""
+    command = TOOL_NOTATIONS[notation].format(tool=tool)
+
+    assert hook.rueckfrage_werkzeug(command) == tool, command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git log -- tools/upload_website.py",
+        "cat tools/upload_website.py",
+        "grep -n upload tools/run_agent_suite.py",
+        '"$SUITE_PYTHON" -m pytest tests/test_upload_website.py -q',
+        "python -m ruff check tools/deploy_activation_server.py",
+        ".venv/Scripts/python.exe tools/affected_tests.py tools/upload_website.py --why",
+        "python -c \"print('tools/upload_website.py')\"",
+        'echo ".venv/Scripts/python.exe tools/upload_website.py"',
+        "python tools/upload_website_notes.py",
+    ],
+)
+def test_reading_or_naming_a_guarded_tool_does_not_ask(hook: ModuleType, command: str) -> None:
+    """Lesen, Prüfen und Nennen startet das Werkzeug nicht und fragt nicht."""
+    assert hook.rueckfrage_werkzeug(command) is None
+
+
+def test_the_hook_guards_the_same_tools_as_the_ask_list() -> None:
+    """Hook und `ask`-Liste nennen dieselben Werkzeuge — eine Liste allein altert still."""
+    spec = importlib.util.spec_from_file_location("solidon_hooks_tool_list", HOOK)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    rules = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))["permissions"]["ask"]
+    named = {match for rule in rules for match in re.findall(r"tools/(\w+)\.py", rule)}
+
+    assert set(GUARDED_TOOLS) <= named
+    assert set(module.RUECKFRAGE_WERKZEUGE) == named
+
+
+def _vor_bash(command: str, *extra: str) -> str:
+    payload = {
+        "session_id": "test-session",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+    }
+    environment = os.environ.copy()
+    environment.pop("SOLIDON3D_HOOKS", None)
+    result = subprocess.run(
+        [sys.executable, str(HOOK), "vor-bash", *extra],
+        input=json.dumps(payload),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=ROOT,
+        env=environment,
+    )
+    assert result.returncode == 0
+    return result.stdout
+
+
+def test_claude_is_asked_before_a_guarded_tool() -> None:
+    """Unter Claude wird gefragt — auch im Modus `bypassPermissions`."""
+    output = json.loads(_vor_bash('"F:/3D Druck/.venv/Scripts/python.exe" -m tools.upload_website'))
+
+    specific = output["hookSpecificOutput"]
+    assert specific["permissionDecision"] == "ask"
+    assert "upload_website" in specific["permissionDecisionReason"]
+
+
+def test_codex_is_stopped_before_a_guarded_tool_until_robert_agrees() -> None:
+    """Codex kennt `ask` nicht: Es blockiert, bis der Freigabemarker im Befehl steht."""
+    output = json.loads(_vor_bash("./tools/run_agent_suite.py", "--codex"))
+
+    specific = output["hookSpecificOutput"]
+    assert specific["permissionDecision"] == "deny"
+    assert "SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja" in specific["permissionDecisionReason"]
+    assert (
+        _vor_bash("SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja ./tools/run_agent_suite.py", "--codex") == ""
+    )
+
+
+def test_an_ordinary_command_passes_the_hook_silently() -> None:
+    assert _vor_bash('"$SUITE_PYTHON" tools/affected_tests.py --run') == ""
 
 
 def test_write_prefilter_lets_python_and_memory_through() -> None:
