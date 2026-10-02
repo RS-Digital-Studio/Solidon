@@ -1388,24 +1388,53 @@ def test_a_stretched_circle_stays_where_it_was_drawn() -> None:
     assert math.dist(centre, rim) == pytest.approx(20.0)
 
 
-def test_a_stretched_arc_keeps_the_middle_of_its_bulge() -> None:
-    """Auch ein Bogen misst an seinem Scheitel und nicht an seinen drei Punkten:
-    Ein Halbkreis über der Achse reicht von y = 0 bis zum Radius, und seine
-    Mitte liegt dazwischen — nicht bei einem Drittel."""
+def test_a_stretched_arc_is_measured_at_its_bulge() -> None:
+    """Auch ein Bogen misst an seinem Scheitel und nicht an seinen drei Punkten.
+
+    Ein Halbkreis um (0 | −5) mit Radius 10 reicht bis y = 5 und schließt den
+    Nullpunkt ein; seine drei Punkte liegen alle auf y = −5. Der Bezugspunkt
+    ist der Punkt der Hülle, der dem Nullpunkt am nächsten liegt (RM-391) —
+    an der Geometrie gemessen also der Nullpunkt selbst, an den Punkten
+    gemessen (0 | −5). Verdoppelt wandert die Mitte deshalb nach (0 | −10).
+    """
     arc = Sketch(
         plane="plane:xy",
         elements=(
-            SketchElement(kind="arc", points=((0.0, 0.0), (10.0, 0.0), (-10.0, 0.0))),
-            SketchElement(kind="line", points=((-10.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="arc", points=((0.0, -5.0), (10.0, -5.0), (-10.0, -5.0))),
+            SketchElement(kind="line", points=((-10.0, -5.0), (10.0, -5.0))),
         ),
     )
 
     bigger, _kept = edit.scaled(arc, 2.0)
 
     centre = bigger.elements[0].points[0]
-    assert centre == pytest.approx((0.0, -5.0), abs=1e-12), (
-        "gestreckt um (0 | 5), die Mitte der Hülle"
+    assert centre == pytest.approx((0.0, -10.0), abs=1e-12), (
+        "gestreckt um den Nullpunkt, der in der Hülle des Bogens liegt"
     )
+
+
+def test_a_drawing_beside_the_origin_grows_away_from_it() -> None:
+    """Liegt die Zeichnung ganz neben dem Nullpunkt, bleibt ihre zugewandte
+    Ecke stehen — ein Rechteck von (10 | 20) bis (30 | 30) wächst nach rechts
+    oben und rückt nicht über den Nullpunkt (RM-391)."""
+    from app.core.sketch import shapes
+
+    plate = shapes.rectangle(20.0, 10.0)
+    moved = replace(
+        plate,
+        elements=tuple(
+            replace(element, points=tuple((x + 20.0, y + 25.0) for x, y in element.points))
+            for element in plate.elements
+        ),
+    )
+
+    bigger, _kept = edit.scaled(moved, 1.5)
+
+    corners = [point for element in bigger.elements for point in element.points]
+    assert min(x for x, _y in corners) == pytest.approx(10.0)
+    assert min(y for _x, y in corners) == pytest.approx(20.0)
+    assert max(x for x, _y in corners) == pytest.approx(40.0)
+    assert max(y for _x, y in corners) == pytest.approx(35.0)
 
 
 # --- Flächenkontur (RM-188 P3.4) ---------------------------------------------------

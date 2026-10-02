@@ -37,7 +37,10 @@ _JOIN_TOL = 1e-4
 #: Umrisse. ``holes-in-place-1`` (Durchsicht P6.6): Ein Loch in einer Platte,
 #: die nicht um den Ursprung lag, ging bis dahin verloren — ein Ergebnis ohne
 #: Loch darf danach nicht mehr aus dem Speicher- oder Dateicache kommen.
-PROFILE_REVISION: Final = "holes-in-place-1"
+#: ``snapped-ends-2`` (RM-391): Kettenenden rasten aufeinander ein
+#: (:func:`_starting_at`); ein undichter Körper aus einer Lücke unter der
+#: Fangtoleranz darf nicht aus dem Cache zurückkommen.
+PROFILE_REVISION: Final = "snapped-ends-2"
 
 #: Die Elementarten, die sich zu einer Kette verbinden — alles mit zwei Enden.
 #: Kreis und volle Ellipse sind je ein Umriss für sich, ein Punkt ist keiner.
@@ -248,7 +251,7 @@ def path_of(solved: SolvedSketch) -> Profile:
             raise _broken(_("Die Bahn zerfällt in mehrere Stücke — sie muss zusammenhängen."))
         index, candidate = matches[0]
         segments.pop(index)
-        chain.append(candidate if _joins(tail, candidate.start) else _flipped(candidate))
+        chain.append(_starting_at(candidate, tail))
     return Profile(segments=tuple(chain))
 
 
@@ -275,7 +278,10 @@ def _one_loop(segments: list[ProfileSegment]) -> tuple[ProfileSegment, ...]:
             )
         index, candidate = matches[0]
         segments.pop(index)
-        chain.append(candidate if _joins(tail, candidate.start) else _flipped(candidate))
+        chain.append(_starting_at(candidate, tail))
+    # Der Ring schließt auf den Anfang, nicht bloß in seine Nähe — siehe
+    # :func:`_starting_at`.
+    chain[0] = _starting_at(chain[0], chain[-1].end)
     return tuple(chain)
 
 
@@ -906,6 +912,26 @@ def _flipped(segment: ProfileSegment) -> ProfileSegment:
 
 def _joins(a: Point2, b: Point2) -> bool:
     return math.dist(a, b) <= _JOIN_TOL
+
+
+def _starting_at(segment: ProfileSegment, point: Point2) -> ProfileSegment:
+    """Das Stück, das an *point* anschließt — in dieser Richtung und mit genau
+    diesem Anfang.
+
+    **Eingerastet, nicht bloß nah.** Verkettet wird über :func:`_joins` auf
+    ``_JOIN_TOL``; der exakte Kern verbindet zwei Kanten aber nur, wenn ihre
+    Ecken auf seine eigene Toleranz (10⁻⁷) zusammenfallen. Ein Linienzug, dessen
+    letztes Ende nur über die Fangtoleranz am Anfang liegt, ergab dazwischen
+    einen Draht mit zwei Ecken an einer Stelle und einen undichten Körper
+    (RM-391: nach dem Strecken schloss er auf 4,5·10⁻⁷). Die Abweichung liegt
+    unter ``_JOIN_TOL`` und damit unter jedem druckbaren Maß; ein Bogen behält
+    seinen Stützpunkt, ein Spline seine inneren Punkte.
+    """
+    oriented = segment if _joins(point, segment.start) else _flipped(segment)
+    if oriented.start == point:
+        return oriented
+    through = (point, *oriented.through[1:]) if oriented.through else ()
+    return replace(oriented, start=point, through=through)
 
 
 def _broken(detail: TranslatableText | str) -> GeometryError:
