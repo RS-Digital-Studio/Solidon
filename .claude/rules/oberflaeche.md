@@ -204,6 +204,8 @@ gespeicherte Zahl jenseits der Grenze wird nicht geklemmt:** Die Leiste weitet
 das Qt-Feld bis zu ihr (`ParameterPanel._set_limits`), nennt die wirksame
 Grenze darunter und nimmt jede Korrektur an — sonst zeigt sie die Grenze, und
 die Korrektur auf genau diese Zahl ist keine Änderung.
+Felder und Fokus bleiben nur im selben Dokument (`show_document`); ein
+anderes Projekt erbt keine abgelehnte Zahl.
 
 **Auch die Druckeinstellungen lehnen ab statt zu kürzen.** Ihre Zahlenfelder
 verwenden `BoundedSpin`, der Düsendurchmesser `BoundedLengthSpin`. Der Hinweis
