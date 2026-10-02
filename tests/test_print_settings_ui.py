@@ -1913,7 +1913,9 @@ def test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere(
     assert isinstance(raft_editor, BoundedSpin)
     assert raft_editor.value() == pytest.approx(layers), "und ihr Feld zeigt es"
     assert editor.refusal() == refusal
-    assert dialog._first_numeric_refusal() == refusal
+    assert dialog._first_numeric_refusal() == tr(
+        "{name}: {value}", name=editor.accessibleName(), value=refusal
+    )
     assert refusal in dialog.slice_button.toolTip()
 
 
