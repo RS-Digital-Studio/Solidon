@@ -57,6 +57,7 @@ it into `website/version.json`.
 - Patterns on cylindrical faces of imported models stay closed when you change them.
 - In the history of a STEP body you can reorder steps or insert one before, even when a later step refers to a hole. The reference follows the hole.
 - A hole moved or duplicated with a new direction stays exact on a STEP body.
+- A detected feature more than a metre from the origin keeps its place when you change it. Until now the field quietly clipped the number, and the hole moved.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: at the top you choose the *Plane* — along an axis with a tilt, parallel to a face, through an edge, or through three points you click in the view.
@@ -76,6 +77,7 @@ it into `website/version.json`.
 - In the window, *Blend together* now computes finely, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
+- SVG drawings arrive correctly: rotations, shears, rounded corners, ellipses and elliptical arcs are right, and hidden layers stay out.
 - The target of *Align to feature* starts out empty, and the first click in the view fills it. *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 - Another stroke into a freshly dug pit digs deeper, even with a small brush. Until now it had no effect and counted as missed.
@@ -98,6 +100,7 @@ it into `website/version.json`.
 - An export during a running calculation waits for the new result. Until now the file could still carry the old size.
 - The parameter bar rejects a dimension beyond its limit instead of leaving the view empty.
 - In the parameter bar every arrow step counts, and the focus stays in the field.
+- In the parameter bar the dimensions of two boxes carry their number, and a dimension with its own working range has a slider.
 - If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
 - Checkmarks in lists are readable in every row, and colours appear as a round dot next to them.
