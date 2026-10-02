@@ -131,6 +131,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
 | [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
 | [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
+| [RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material](#rm-485) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: Material über die Umlaufrichtung (Clipper2 in manifold3d, `Manifold.slice`), nicht über die Tiefe |
+| [RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung](#rm-486) | Geometrie, Erkennung und Druckvorbereitung | Bibliotheksprüfung 02.10.: schwebende Säulenkontur als `CrossSection` führen; ersetzt den Fix von RM-405 b |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -2825,6 +2827,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_besenhalter_zeit.txt`,
   `r_besenhalter_paare.txt`, `r_korpus_vorfrage.txt`.
   Review 02.10. (`e3dff1907`): Der neue Trennbeleg (`prepare_ops.py:3716–3724`) ruft die ungebremste Berührungssuche bei jedem Merkmalklick (`app/core/perceive/actions.py:740–748`) und vor `slot_hole` ein zweites Mal — Besenhalter, Bohrung `hole_5`: Merkmalklick 4,75–5,50 s statt 0,01–0,07 s, `slot_hole` 15,2–16,6 s statt 10,8–12,5 s; so lange zeigt das Merkmalfenster keine Handlung. Bis zum Fix den Beleg erst bei *Zum Langloch ziehen* rechnen und das Kontaktergebnis je Netz merken (`sonden\r3_besenhalter_*.txt`).
+  Ergänzung Bibliotheksprüfung 02.10.2026: Ein übersetzter Hüllquader-Sweep braucht am Besenhalter 0,5–0,8 s statt 8,6–19,2 s, an Mini Golf v17 0,3–0,4 statt 8–13 s, bei gleichem Ergebnis; manifold3d (Schnittvolumen je Paar) 0,06–0,47 s, aber nur für gültige Teile und ohne bloße Flächenberührung — als Vorweg, der Sweep als allgemeiner Weg. Beleg `bibliotheken\befunde.md`.
 
 <a id="rm-382"></a>
 
@@ -2948,6 +2951,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zweimal): Ergebnisse bitgleich bzw. Stützraum gleich, Zeiten mindestens um die gemessenen Faktoren
   besser; zweiter `print_findings`-Aufruf aus dem Merker. Bauplan §31, §22.
   Belege: `F:\solidon-review-reports\modelle\diagnose.md` (Befund 1), Sonden `d1_*`.
+  Ergänzung Bibliotheksprüfung 02.10.2026: Für a ist `_cuts_along` als Cython-Schleife neben `_chain.pyx` 3,4–3,9-mal schneller als die vektorisierte NumPy-Fassung und bitgleich (Screen-Cover 1,8 s statt 6,7 s, CC2-Box 5,7 statt 19,8 s). Den Fix für b ersetzt RM-486 (Clipper2, 0,06 s ohne Toleranz). Beleg `bibliotheken\befunde.md`.
 
 <a id="rm-406"></a>
 
@@ -3368,6 +3372,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
   Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
+  Regression nachgemessen 02.10.2026: **ja gegenüber v0.5.0**, nein gegenüber v0.5.1. v0.5.1 misst Zahl für Zahl wie `09d8e9485` (MK4S Pilz A 160 → 170, XL Pilz A 136 → 170, MINI Pilz B 126 → 131,75 mm/s; `small_perimeter_speed` 170/170/140 aus dem Herstellerbündel). v0.5.0 hatte keine Herstellergrundlage: Dort stand PrusaSlicers Grundwert 15 mm/s, kleine Umfänge liefen langsamer als die Außenwand, und die Außenwand erreichte ihren Wert (XL 136, MINI 126, MK4S durch den Volumenstrom auf 147 mm/s gedeckelt). Der Fehler kam mit der Herstellergrundlage. Beleg `gcodeestm463_regression.md`.
 
 <a id="rm-464"></a>
 
@@ -3606,6 +3611,53 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
   ohne leere Schicht. Bauplan §29, Regel 14.
   Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
+
+<a id="rm-485"></a>
+
+- [ ] **RM-485 — Ineinandersteckende Teile: Die Schichtanalyse zählt eingeschlossene Luft als Material.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_polygon_with_contours`/`_nested`
+  entscheiden Material und Loch nach der Verschachtelungstiefe der Ringe und werfen die
+  Umlaufrichtung weg. Bei mehreren sich überlappenden Schalen (Tinkercad- und viele
+  Thingiverse-Exporte, Baugruppen als eine STL) wird eine Fläche, die nur von Ringen
+  verschiedener Teile umschlossen ist, als Material gezählt. Gemessen: Rahmen aus vier
+  überlappenden Balken 1600 statt 1200 mm² in allen Schichten, Ring aus acht Zylindern 1195,6
+  statt 892,9 mm², `parametric-laptop-riser.stl` 46 von 460 Schichten über 1 %, 5 über 10 %
+  falsch (z 65,10: 2694 statt 2146 mm²). Kontrollfälle ohne eingeschlossene Luft (Kreuz, Mini
+  Golf v17, Piratenschiff) stimmen. Falsch werden damit Schichtfläche, Inseln, Überhänge,
+  Stützraum, Brücken und Materialschätzung im Prüfbericht.
+  **Stellen:** `app/core/slice/analysis.py:1251–1362`, Einzelringweg `:1264–1275`.
+  **Fix (allgemein):** Richtung jedes Schnittsegments aus dem Dreieck übernehmen, gerichtete
+  Ringe mit Füllregel Positive vereinigen (Clipper2 in `manifold3d.CrossSection`, schon im
+  Paket, ganzzahlig und plattformgleich); für gültige Körper direkt `Manifold.slice(z)` (am
+  Laptop-Ständer 0,33–0,50 statt 3,4–4,1 s). Clipper2 auf den heutigen Ringen ohne Richtung
+  ist ebenfalls falsch.
+  **Abnahme:** Geometrietests zuerst: Rahmen (1200 mm², Fenster ohne Insel/Überhang), Ring
+  aus acht Zylindern, Laptop-Ständer oder ein kleiner Korpuszwilling (je Schicht gleich
+  `Manifold.slice` bis 1e-6 relativ); Kreuz, Mini Golf v17, Piratenschiff, Hohlkugel und
+  `aushoehlen-und-teilen.p3d` unverändert. Bauplan §22, §31; Regel 6.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-1), `bibliotheken\sonden\b9_*`, `b3_*`.
+
+<a id="rm-486"></a>
+
+- [ ] **RM-486 — Stützraum über Clipper2 statt GEOS: am Aushöhlbeispiel 0,06 statt 40 s, ohne Vereinfachung.**
+  Bibliotheksprüfung 02.10.2026 am Stand `09d8e9485`. `_support_volume`/`_above_material`
+  vereinigen und ziehen die schwebende Säulenkontur Schicht für Schicht mit GEOS ab; über
+  Hohlräumen wächst sie auf Hunderttausende Punkte. Gemessen (F0FF, je zweimal):
+  `aushoehlen-und-teilen.p3d` 37,4–43,3 s mit GEOS, 0,062–0,068 s mit Clipper2, Stützraum
+  gleich auf 1,5e-12; CC2-Box und Screen-Cover gleich bis 2,4e-10, dort 0,01–0,17 s langsamer.
+  RM-405 b maß mit Vereinfachung 0,46 s und braucht dafür eine Toleranz; Clipper2 braucht
+  keine. Für RM-201: Clipper2 reist schon in manifold3d mit (BSL-1.0 in `licences.toml`), für
+  die Öffnung mit Gehrung ist es aber 2–7-mal langsamer als GEOS — dort bleibt die eigene
+  native Öffnung der Weg.
+  **Stellen:** `app/core/slice/analysis.py:481–645`, gleiche Bauart `:2991`,
+  `app/core/slice/findings.py:257`.
+  **Fix (allgemein):** Säulenkontur als `CrossSection` (Überhang `+`, Schicht darunter `-`,
+  Fläche über `area()`), Umwandlung einmal je Schicht, gerichtete Ringe aus RM-485
+  wiederverwenden; GEOS bleibt für die Öffnung.
+  **Abnahme:** `aushoehlen-und-teilen.p3d`, CC2-Box, Screen-Cover: Stützraum gleich auf 1e-9
+  relativ, Aushöhlbeispiel unter 0,5 s für `slice_body(detail="support")`, die einfachen
+  Modelle höchstens 0,2 s schlechter; neuer Weg in `test_platform_identity`. Bauplan §31.
+  Belege: `F:\solidon-review-reports\bibliotheken\befunde.md` (BIB-2), `bibliotheken\sonden\b8_*`, `b2_*`.
 
 ## Bedienung und Darstellung
 
@@ -4871,6 +4923,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: zwei ausgelassene Kanten → zwei auffindbare Orte; Satz ohne „OpenCASCADE“;
   Laufzeit am pegboard-goot im Budget. Bauplan §2.7, §2.8, §31.
   Belege: `review-e3dff1907.md`, Sonde `r3_rundungsgruppe.py`.
+  Ergänzung Bibliotheksprüfung 02.10.2026: Bisektion über Konturen (`NbContours`) statt über Kanten braucht an `pegboard-10inch-crimper-v5.step` 5,6–6,2 s statt 100–151 s und rundet 54 statt 43 Kanten, an `pegboard-gs-100-v2.step` 1,8–2,2 s statt 226–286 s; `NbFaultyContours` allein taugt nicht. Beleg `bibliotheken\befunde.md`.
 
 <a id="rm-451"></a>
 
