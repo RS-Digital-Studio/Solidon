@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)](#rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026) |
 | 2026-10-02 | [RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)](#rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026) |
@@ -36548,3 +36549,24 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Nachprüfung am Stand `4373b5f12` über die Oberfläche: nicht behoben — `46e6113ed` ändert nur Handbuch und Changelog; der erste Bildklick am Hauptfenster wird weiter nicht angenommen (`take_feature`), der alte Test bleibt rot.
 
 **Abschluss:** Der gezeigte Dialog gibt den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal (`OperationDialog._focus_first_empty_feature` im ersten `showEvent`); bis dahin nahm Qt das schon gefüllte Quellmerkmal, und `take_feature` erreichte das leere Ziel nie. Der Knopf folgt einem Pflichtziel jetzt sofort (`valuesChanged` → `_follow_source_pending`), nicht erst mit dem nächsten Vorschaubild. Der Sperrsatz unterscheidet: mit zweitem Körper „Klicken Sie im Bild auf die Fläche, an die ‹Körper› soll.“, ohne ihn weiter „Dafür braucht es ein Merkmal an einem zweiten Körper.“ (`_target_reason`, fünf Kataloge). Neuer Fenstertest `test_the_shown_alignment_dialog_takes_the_first_click_as_its_target` (Gegenprobe ohne den Erstfokus rot), `test_an_alignment_target_is_never_left_empty` auf die Entscheidung aus RM-394 gestellt; beide grün. Sonde am echten Hauptfenster mit echtem Mausklick in die Ansicht: am Stand `ba5a76365` 7 von 12 (Feldfokus `feature`, Ziel leer, B bleibt bei x = −50,4), danach 12 von 12 (Ziel `obj_1:face_4`, B bündig an A bei x = 6,5). Regel in `grenzen.md`. Umgesetzt von Claude, in main mit (Commit folgt).
+
+## RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)
+
+<a id="rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026"></a>
+<a id="rm-448"></a>
+
+**RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**
+  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (echter Filterweg); Folgepunkt zu
+  RM-437 (archiviert; Leerzeichen in Rückmeldebogen und Chat sind behoben). Besteht schon in 0.5.1,
+  keine Regression.
+  **Fehlerfall:** Solange eine Vorschau mit Differenz läuft, nehmen Haken, Auswahlpunkte und Knöpfe in
+  jedem Fenster die Leertaste nicht an, auch die Skala des Rückmeldebogens
+  (`app/ui/viewport.py:3714–3727`, anwendungsweiter Tastenfilter).
+  **Fix:** Der Filter der Ansicht greift nur, wenn die Ansicht den Fokus hat.
+  **Abnahme:** Test über die Oberfläche: Vorschau offen, Leertaste auf einem Haken im Dialog und im
+  Rückmeldebogen schaltet. Bauplan §19.2 (Tastaturbedienung). Nebenbei: Die Zählkommentare der
+  Bausteine in `selection_operations.py`/`catalog.py` sind seit RM-398/399 wieder falsch (gemessen
+  26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
+  Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
+
+**Abschluss:** Der Vergleich an der Anwendung lässt die Leertaste jedem Bedienelement, das sie selbst braucht (`viewport.answers_space`: Textfelder wie bisher, dazu Knöpfe, Haken, Auswahlpunkte, Auswahllisten, Listen und ankreuzbare Rahmen); auf der Ansicht, einem Dialoghintergrund oder einer Beschriftung bleibt sie der Vergleich, und ein Loslassen auf einem Bedienelement beendet einen gehaltenen Vergleich. Entschieden statt „nur mit Fokus auf der Ansicht“: Der Vergleich soll auch während eines offenen Operationsdialogs gehen, dessen Hintergrund den Fokus hält; nur die Bedienelemente bekommen ihre Taste zurück. *Im Chat beschreiben* holt die rechte Spalte zurück, stellt den Chat nach vorn und setzt dann den Cursor. *Quader*/*Zylinder anlegen* aus der Einladung starten den Zwilling des Menüs (`menu_twins`, mit exaktem Kern `create_brep_box`/`create_brep_cylinder`): Gleich beschriftet heißt gleich gemacht, und der exakte Körper ist der, den der Kunde über das Menü kennt und mit echten Kanten weiterbearbeitet; ohne exakten Kern bleibt es das Netz, wie im Menü. Die Zählkommentare in `selection_operations.py` und `catalog.py` nennen keine Zahl mehr, sondern `standalone` (gemessen 15 von 41 frei). Fenstertests `test_controls_keep_the_space_key_while_a_preview_runs` und `test_every_entry_of_the_invitation_does_what_the_menu_does` (beide am Stand `ba5a76365` rot, danach grün; die bisherigen Leertasten- und Einladungstests grün). Sonde am echten Hauptfenster mit echten Tasten und Klicks: am Stand `ba5a76365` 7 von 13 (Chat nicht vorn, Einladung `create_box` gegen Menü `create_brep_box`, Haken und Skala ohne Leertaste), danach 13 von 13. Regel in `ansicht.md`. Umgesetzt von Claude, in main mit (Commit folgt).

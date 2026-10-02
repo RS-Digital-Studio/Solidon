@@ -122,6 +122,13 @@ Nur wenn sonst nichts traf, je Körper einmal (`_object_hulls`), als Stichprobe
 (4096 Punkte plus die äußersten je Achsenrichtung), über Halbräume statt
 Hüllnetz.
 
+## Die Leertaste gehört dem, der sie braucht
+
+Der Vergleich der Vorschau (`HoldToCompare`) hängt an der Anwendung und
+nimmt die Taste nur, wo der Fokus kein Bedienelement trifft, das sie selbst
+braucht (`answers_space`: Text, Haken, Knopf, Auswahlliste, Liste) — sonst
+schaltete während jeder Vorschau in keinem Fenster ein Haken (RM-448).
+
 ## Messen
 
 **Messen ist orthografisch, und zwar von selbst** (§18.1 — perspektivisch zielt
