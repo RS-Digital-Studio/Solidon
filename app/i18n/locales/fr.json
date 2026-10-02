@@ -825,6 +825,8 @@
   "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige Geräteaktivierung (Hilfe → Solidon freischalten …).": "Solidon a besoin pour cela d'une clé de licence et de l'activation unique de l'appareil (Aide → Déverrouiller Solidon …).",
   "Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet: {program}. {action}": "Pour cela, Solidon a besoin ici d'un gestionnaire de paquets, et aucun n'est en place : {program}. {action}",
   "Dafür braucht es ein Merkmal an einem zweiten Körper.": "Il faut pour cela une caractéristique sur un second corps.",
+  "Klicken Sie im Bild auf die Fläche, an die {name} soll.": "Cliquez dans la vue sur la face contre laquelle {name} doit venir.",
+  "Klicken Sie im Bild auf die Fläche, an die der Körper soll.": "Cliquez dans la vue sur la face contre laquelle le corps doit venir.",
   "Dafür braucht es ein erkanntes Merkmal am gewählten Teil.": "Il faut pour cela une caractéristique détectée sur la pièce choisie.",
   "Dafür braucht es ein sichtbares Dreiecksmodell in der Ansicht.": "Il faut pour cela un modèle triangulé visible dans la vue.",
   "Dafür braucht es eine erkannte Bohrung am gewählten Teil.": "Il faut pour cela un trou détecté sur la pièce choisie.",
