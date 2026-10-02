@@ -45,9 +45,11 @@ Ineinandersteckende Teile eines Szeneneingangs gehen vereinigt hinein
 (`_parts_united_first`). Bei Vereinigungen werden weitere Szeneneingänge mit
 Objektkennung geprüft; ausdrücklich interne Werkzeuge (`None`) gehen
 unverändert an den Solver, weil ihre Teilstücke konstruktionsbedingt
-überlappen können. Nur beim vorübergehenden Schließen einer alten Bohrung
-vereinigt `merge_face_contacts=True` zusätzlich flächig berührende Schalen;
-Kanten- und Eckkontakt bleiben getrennt. Der Vereinigungsmodus gehört zum
+überlappen können. Nur beim Schließen einer alten Höhlung vereinigt
+`merge_face_contacts=True` zusätzlich flächig berührende Schalen — an jeder
+schließenden Vereinigung, auch für Ketten, Abschnitte, Wulst und Musterzellen;
+am exakten Kern dasselbe über `prepare_ops._exact_closing_base` (Ketten:
+`_exact_closing_chain`). Kanten- und Eckkontakt bleiben getrennt. Der Vereinigungsmodus gehört zum
 Booleschen Cache-Schlüssel. Für die Vorfrage erkennt
 `parts_that_cross(include_face_contacts=True)` Flächenkontakt auch bei
 unterschiedlich unterteilten Netzen; eine gemeinsame Kante zählt nur innerhalb
@@ -66,7 +68,7 @@ Vektorprodukte unabhängig von der Weltlage bleiben; die separate ULP-Grenze
   bildet die Genauigkeit der gespeicherten Koordinaten ab.
 
 Das Paarbudget von `parts_that_cross` begrenzt nur optionale Befunde. Vor
-`boolean()` und beim BRep-Langlochschließen verlangt der Aufrufer mit
+`boolean()` und beim exakten Schließen verlangt der Aufrufer mit
 `max_pairs=None, require_complete=True` die vollständige Prüfung; die
 Teilegrenze bleibt ein sicherer Abbruch. Die Suche prüft den Abbruch während
 der Achsenauswahl und nach jedem Kandidatenblock.

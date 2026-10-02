@@ -20,7 +20,7 @@ import math
 from collections.abc import Sequence
 from itertools import pairwise
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 import pytest
@@ -2198,3 +2198,265 @@ def test_a_magnet_pocket_tilts_only_without_its_lip(
             assert removed == pytest.approx(cavity, abs=0.01), box
         else:
             assert removed == pytest.approx(cavity * sides, abs=0.05), box
+
+
+# --- RM-386: berührende Platten an jedem schließenden Weg ---------------------------
+#
+# Zwei Platten zu 40 x 20 x 10 mm berühren sich bei z = 10 mm, eine Bohrung Ø 6
+# geht durch beide, wahlweise mit einer 90°-Senkung Ø 12 von oben. RM-319 heilte
+# nur den Langlochzug; die Zwillinge rechneten still falsch: am Netz verlor die
+# versetzte Senkbohrung 2 516,3 mm³, am exakten Kern ließ *Bohrung ändern* mit
+# Versatz einen losen Zylinder von 502,7 mm³ stehen, und Versetzen und Kippen
+# sagten mit dem Rat ab, die Stelle anders zu setzen.
+#
+# Die Kontrolle ist dieselbe Handlung an einer 20 mm starken Platte aus einem
+# Stück; wo sich das Ergebnis rechnen lässt, steht der Sollwert daneben.
+
+#: Grundfläche der Platten und ihre gemeinsame Stärke.
+_PLATES = 40.0 * 20.0 * 20.0
+#: Die Bohrung Ø 6 durch beide Platten.
+_BORE = 9.0 * math.pi * 20.0
+#: Was die Senkung Ø 12 / 90° über den Schaft hinaus wegnimmt: Kegelstumpf
+#: π·h/3·(R² + Rr + r²) mit h = 3, R = 6, r = 3, abzüglich des Schafts darin.
+_SINK = math.pi * (36.0 + 18.0 + 9.0) - 9.0 * math.pi * 3.0
+
+
+def _touching_plates(kernel: str, *, sunk: bool, one_piece: bool = False) -> SceneObject:
+    """Die zwei Berührplatten (oder die Kontrolle aus einem Stück), von oben gebohrt."""
+    from app.core.perceive.features import detect
+
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
+
+        edit = exact_kernel()
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+
+        from app.core.brep.features import features_of
+        from app.core.brep.kernel import Solid
+
+        if one_piece:
+            solid = edit.box(40.0, 20.0, 20.0)
+        else:
+            compound = TopoDS_Compound()
+            builder = BRep_Builder()
+            builder.MakeCompound(compound)
+            builder.Add(compound, edit.box(40.0, 20.0, 10.0).shape)
+            builder.Add(compound, edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, 10.0)).shape)
+            solid = Solid(compound)
+        plates = SceneObject("obj_1", "Platten", solid, kind="brep", features=features_of(solid))
+    else:
+        import trimesh
+
+        if one_piece:
+            whole = trimesh.creation.box(extents=(40.0, 20.0, 20.0))
+            whole.apply_translation((0.0, 0.0, 10.0))
+            shells = MeshData.of(whole)
+        else:
+            lower = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+            lower.apply_translation((0.0, 0.0, 5.0))
+            upper = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+            upper.apply_translation((0.0, 0.0, 15.0))
+            shells = MeshData.of(trimesh.util.concatenate([lower, upper]))
+        plates = SceneObject("obj_1", "Platten", shells, features=detect(shells))
+    widening = (
+        {"widening_diameter": 12.0, "widening_depth": 0.0, "transition_angle": 90.0} if sunk else {}
+    )
+    drilled = _raw(
+        "drill_hole",
+        plates,
+        _plates_profile(),
+        x=0.0,
+        y=0.0,
+        z=20.0,
+        axis="z",
+        nx=0.0,
+        ny=0.0,
+        nz=1.0,
+        diameter=6.0,
+        depth=0.0,
+        anchor="mouth",
+        compensate=False,
+        **widening,
+    ).outputs[0]
+    return _redetected(kernel, drilled)
+
+
+def _plates_profile() -> Profile:
+    from app.core.knowledge import profiles
+
+    load_operations()
+    return profiles.make_profile("centauri-carbon-2", "petg")
+
+
+def _redetected(kernel: str, entry: SceneObject) -> SceneObject:
+    """Das Ergebnis neu erkannt, wie die Auswertung es nach jedem Schritt tut."""
+    import dataclasses
+
+    from app.core.perceive.features import detect
+
+    if entry.kind == "brep":
+        from app.core.brep.features import features_of
+
+        return dataclasses.replace(entry, features=features_of(entry.mesh))
+    return dataclasses.replace(entry, features=detect(as_mesh_data(entry.mesh)))
+
+
+def _cavities(entry: SceneObject) -> list[tuple[str, float, tuple[float, ...]]]:
+    """Art, Durchmesser und Mitte jeder Bohrung und Senkung — gerundet zum Vergleich."""
+    return sorted(
+        (
+            feature.kind,
+            round(float(feature.params["diameter"]), 1),
+            tuple(round(float(value), 1) + 0.0 for value in feature.params["centre"]),
+        )
+        for feature in entry.features.values()
+        if feature.kind in ("hole", "cone", "slot")
+    )
+
+
+def _closing_values(entry: SceneObject, op: str) -> dict[str, object]:
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    x, y, z = (float(value) for value in entry.features[hole].params["centre"])
+    if op == "move_feature":
+        return {"at_feature": hole, "x": x + 8.0, "y": y, "z": z}
+    if op == "place_feature":
+        # Der freie Platzierungsweg (``_place_oriented_feature``): mit Richtung.
+        return {"at_feature": hole, "x": x + 8.0, "y": y, "z": z, "nx": 0.0, "ny": 0.0, "nz": 1.0}
+    if op == "rotate_feature":
+        return {"at_feature": hole, "axis": "x", "angle": 10.0}
+    if op == "resize_hole":
+        return {
+            "at_feature": hole,
+            "diameter": 8.0,
+            "compensate": False,
+            "x": x + 8.0,
+            "y": y,
+            "z": z,
+        }
+    return {"at_feature": hole}
+
+
+#: Der exakte Sollwert je Handlung, wo er sich rechnen lässt (ohne / mit Senkung).
+_EXACT_AFTER: dict[str, tuple[float | None, float | None]] = {
+    "move_feature": (_PLATES - _BORE, _PLATES - _BORE - _SINK),
+    "place_feature": (_PLATES - _BORE, _PLATES - _BORE - _SINK),
+    # Die schräge Bohrung endet an den alten Randebenen: ein schiefer Zylinder
+    # zwischen zwei Ebenen im Abstand 20, Querschnitt π r² / cos 10°.
+    "rotate_feature": (_PLATES - _BORE / math.cos(math.radians(10.0)), None),
+    "resize_hole": (_PLATES - 16.0 * math.pi * 20.0, None),
+    "remove_feature": (_PLATES, _PLATES),
+    "plug_hole": (_PLATES, _PLATES - _SINK - 9.0 * math.pi * 3.0),
+}
+
+
+#: Die schließenden Wege je Kern. Den freien Platzierungsweg mit Richtung
+#: (``_place_oriented_feature``) rechnet nur das Netz: An einem exakten Körper
+#: gibt er heute ein Netz unter der Bauart ``brep`` zurück — ein eigener Fund,
+#: nicht dieser.
+_CLOSING_WAYS: Final = [
+    (kernel, op)
+    for kernel in ("mesh", "brep")
+    for op in (
+        "move_feature",
+        "place_feature",
+        "rotate_feature",
+        "resize_hole",
+        "remove_feature",
+        "plug_hole",
+    )
+    if (kernel, op) != ("brep", "place_feature")
+]
+
+
+@pytest.mark.parametrize("sunk", [False, True], ids=["Bohrung", "Senkbohrung"])
+@pytest.mark.parametrize(("kernel", "op"), _CLOSING_WAYS)
+def test_every_closing_way_treats_touching_plates_as_one_printed_body(
+    kernel: str, sunk: bool, op: str
+) -> None:
+    """Jeder schließende Weg verbindet berührende Schalen vorher, an beiden Kernen (RM-386).
+
+    Das Ergebnis an den zwei Berührplatten ist das an der Platte aus einem
+    Stück: ein dichter Körper, dasselbe Volumen, dieselben Hohlräume an
+    derselben Stelle — und der Bericht sagt, dass vereinigt wurde. Vorher
+    verlor am Netz die versetzte Senkbohrung 2 516,3 mm³ und zerfiel in zwei
+    halbe Bohrungen, am exakten Kern stand nach *Bohrung ändern* mit Versatz ein
+    loser Zylinder von 502,7 mm³ in der neuen Bohrung, Versetzen und Kippen
+    sagten ab, und *Merkmal entfernen* und *Bohrung verschließen* hinterließen
+    einen Körper, dessen Netz nicht dicht war.
+    """
+    profile = _plates_profile()
+    plates = _touching_plates(kernel, sunk=sunk)
+    control = _touching_plates(kernel, sunk=sunk, one_piece=True)
+    assert _cavities(plates) == _cavities(control), "die Vorbedingung: dieselbe Bohrung"
+    if kernel == "brep":
+        assert plates.mesh.solid_count == 2, "die Vorbedingung: zwei Volumenkörper"
+    else:
+        assert plates.mesh.component_count == 2, "die Vorbedingung: zwei Schalen"
+
+    registered = "move_feature" if op == "place_feature" else op
+    result = _raw(registered, plates, profile, **_closing_values(plates, op))
+    wanted = _raw(registered, control, profile, **_closing_values(control, op))
+    after = _redetected(kernel, result.outputs[0])
+    expected = _redetected(kernel, wanted.outputs[0])
+
+    twin = as_mesh_data(after.mesh)
+    pieces = after.mesh.solid_count if after.kind == "brep" else twin.component_count
+    assert pieces == 1, f"{op}: ein Körper erwartet, {pieces} gefunden"
+    assert twin.is_watertight, f"{op}: das Netz des Ergebnisses ist nicht dicht"
+    assert float(after.mesh.volume) == pytest.approx(float(expected.mesh.volume), abs=0.05), op
+    assert _cavities(after) == _cavities(expected), op
+    reference = _EXACT_AFTER[op][1 if sunk else 0]
+    if after.kind == "brep" and reference is not None:
+        assert float(after.mesh.volume) == pytest.approx(reference, abs=0.05), op
+    codes = [finding.code for finding in result.findings]
+    assert codes.count("boolean.parts_united") == 1, codes
+    assert not [finding for finding in result.findings if finding.severity == "warning"], codes
+
+
+#: Die schließenden Wege, die nur eine Senkbohrung hat: Abschnitte einzeln,
+#: Senkung ändern, Einlauf mitnehmen — je Operation und Werte ab ihren Merkmalen.
+_SECTION_WAYS: Final = {
+    "Senkung ändern": ("resize_feature", "cone", {"diameter": 14.0}),
+    "Einlauf mitnehmen": (
+        "resize_hole",
+        "hole",
+        {"diameter": 8.0, "compensate": False, "entrance_mode": "follow"},
+    ),
+    "nur die Senkung entfernen": ("remove_feature", "cone", {"sections": "single"}),
+    "nur die Bohrung entfernen": ("remove_feature", "hole", {"sections": "single"}),
+}
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("way", list(_SECTION_WAYS))
+def test_every_section_of_a_countersunk_bore_closes_touching_plates_as_one_body(
+    kernel: str, way: str
+) -> None:
+    """Auch die Kettenwege lesen und schließen am verbundenen Körper (RM-386).
+
+    Am exakten Kern lasen diese vier Wege den Einlauf am Compound, an dem die
+    Grenzfläche die Bohrungswand in zwei Abschnitte teilt, und sagten ab: der
+    Hohlraum lasse sich nicht als eine Bohrung lesen, der Einlauf nicht
+    gemeinsam ändern, aus den Flächen entstehe kein Körper. Das Netz rechnete
+    sie richtig. Soll ist die Platte aus einem Stück.
+    """
+    op, kind, values = _SECTION_WAYS[way]
+    profile = _plates_profile()
+    results = []
+    for one_piece in (False, True):
+        entry = _touching_plates(kernel, sunk=True, one_piece=one_piece)
+        chosen = next(name for name, feature in entry.features.items() if feature.kind == kind)
+        result = _raw(op, entry, profile, at_feature=chosen, **values)
+        results.append((result, _redetected(kernel, result.outputs[0])))
+    (result, after), (_wanted, expected) = results
+
+    twin = as_mesh_data(after.mesh)
+    pieces = after.mesh.solid_count if after.kind == "brep" else twin.component_count
+    assert pieces == 1, f"{way}: ein Körper erwartet, {pieces} gefunden"
+    assert twin.is_watertight, way
+    assert float(after.mesh.volume) == pytest.approx(float(expected.mesh.volume), abs=0.05), way
+    assert _cavities(after) == _cavities(expected), way
+    codes = [finding.code for finding in result.findings]
+    assert codes.count("boolean.parts_united") == 1, codes
+    assert not [finding for finding in result.findings if finding.severity == "warning"], codes

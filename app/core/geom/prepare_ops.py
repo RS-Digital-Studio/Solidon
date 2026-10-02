@@ -1672,7 +1672,14 @@ def _section_closed(
             return None
         tools.append(tool)
 
-    shut = boolean("union", [mesh, filled], quality=quality, seed=seed, cancelled=cancelled)
+    shut = boolean(
+        "union",
+        [mesh, filled],
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+        merge_face_contacts=True,
+    )
     body = shut.mesh
     findings = list(shut.findings)
     stages: list[SolverInfo | None] = [shut.solver]
@@ -3234,6 +3241,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                     seed=ctx.seed,
                     cancelled=ctx.cancelled,
                     object_ids=(source.id, None),
+                    merge_face_contacts=geometry.cavity,
                 )
             )
         else:
@@ -3916,7 +3924,8 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # Stelle eine Mulde und an der neuen eine Haut zu lassen (RM-259).
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper zuerst verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="8",
+    # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    cache_version="9",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -4037,6 +4046,7 @@ def move_feature(ctx: OpContext) -> OpResult:
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
                 object_ids=(source.id, None),
+                merge_face_contacts=True,
             )
         )
         # **Mit Zugabe an den Mündungen, nicht bündig** (§39). Der exakte
@@ -5431,7 +5441,8 @@ class RemoveFeatureParams(BaseParams):
     # 12: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 13: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 14: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
-    cache_version="14",
+    # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    cache_version="15",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -5526,6 +5537,8 @@ def remove_feature(ctx: OpContext) -> OpResult:
                 quality=ctx.quality,
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
+                object_ids=(source.id, None),
+                merge_face_contacts=True,
             )
         )
         gone = tuple(section.id for section in chain)
@@ -5654,7 +5667,8 @@ class RotateFeatureParams(BaseParams):
     # der tiefen Seite eine Haut stehen zu lassen (RM-263, Durchsicht 0.5.1).
     # 7: beim Schließen einer Bohrung werden flächig berührende Körper verbunden (RM-319).
     # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="8",
+    # 9: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    cache_version="9",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -5930,6 +5944,8 @@ def _rotate_cavity_chain(
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_ids=(source.id, None),
+            merge_face_contacts=True,
         )
     )
     turned = tool.raw.copy()
@@ -6882,7 +6898,8 @@ class ResizeFeatureParams(BaseParams):
     # 12: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 13: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
     # 14: exakte Rundungen führen ihre Kennung nur mit eindeutigem Flächenbeleg fort (RM-284).
-    cache_version="14",
+    # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    cache_version="15",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -7085,6 +7102,11 @@ def _resize_chain_countersink(
     Senkung an einer schrägen Mündung reicht, rechnet derselbe Kegel wie in
     :func:`_resize_bore_entrance`: Ihr Durchmesser ist der weiteste Rand.
     """
+    closing_findings: list[Finding] = []
+    if source.kind == "brep":
+        # Den Einlauf am verbundenen Körper lesen (:func:`_exact_closing_chain`).
+        source, chain, closing_findings = _exact_closing_chain(ctx, source, chain)
+        feature = next(section for section in chain if section.id == feature.id)
     side = _countersink_side(source.mesh, feature, source.features, chain)
     if not isinstance(side, tuple):
         raise ValidationError(
@@ -7148,7 +7170,7 @@ def _resize_chain_countersink(
     if source.kind == "brep":
         from app.core.sketch.planes import frame_of
 
-        filled = _exact_chain_filled(source, entrance)
+        filled = _exact_chain_filled(source, entrance, source.mesh)
         frame = frame_of(entrance.axis, entrance.origin)
         ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
         placed, tool = _exact_chain_cut_holding(
@@ -7163,7 +7185,7 @@ def _resize_chain_countersink(
                 mouths=mouths,
             ),
         )
-        findings = _edge_findings(as_mesh_data(filled), [changed])
+        findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [changed])]
         findings += _without_opened_twice(
             _neighbour_bore_findings(source, chain[0], as_mesh_data(tool), ctx), findings
         )
@@ -7186,7 +7208,15 @@ def _resize_chain_countersink(
             constraint="not_movable",
         )
     closed = _without_scars(
-        boolean("union", [body, plug], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled)
+        boolean(
+            "union",
+            [body, plug],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            object_ids=(source.id, None),
+            merge_face_contacts=True,
+        )
     )
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
     cutting = _entrance_mesh_tool(
@@ -7713,7 +7743,8 @@ OPEN_BODY_DETAIL: Final = _(
     # 12: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
     # 13: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="14",
+    # 15: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    cache_version="15",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -7773,25 +7804,30 @@ def resize_hole(ctx: OpContext) -> OpResult:
             outputs=[source], findings=[_unchanged_bore(cut, with_depth=params.depth is not None)]
         )
     if params.entrance_mode == "follow" and not (same_diameter and not moved_hole):
-        entrance = bore_entrance(source.mesh, feature, source.features)
+        reading, read, united_first = _exact_entrance_context(ctx, feature)
+        reader = reading.inputs[0]
+        entrance = bore_entrance(reader.mesh, read, reader.features)
         if entrance is not None:
-            resized = _resize_bore_entrance(ctx, feature, entrance, cut)
+            resized = _resize_bore_entrance(reading, read, entrance, cut)
             if moved_hole:
                 resized = _moved_after_resizing(
-                    ctx, resized, feature, entrance, centre, measured_centre
+                    reading, resized, read, entrance, centre, measured_centre
                 )
-            if wish is None:
-                return resized
-            return _deepened_after_resizing(ctx, resized, feature)
+            if wish is not None:
+                resized = _deepened_after_resizing(reading, resized, read)
+            return _with_findings_first(resized, united_first)
     if params.entrance_mode == "keep" and not same_diameter and not moved_hole and wish is None:
         # **Nur die Tasche, die Haltelippe bleibt** (Durchsicht 0.5.1,
         # rest-lippe): Die Kerne rechneten hier verschieden — das Netz schnitt
         # die Bohrung bis zur Mündung durch die Lippe, der exakte Kern bis zur
         # erklärten Tiefe, die die Lippe mit einschließt. Beide gehen an einer
         # Verengung über dieselben Profile wie der Einlauf (``keep``).
-        lip = _entrance_with_a_narrowing(source, feature)
+        reading, read, united_first = _exact_entrance_context(ctx, feature)
+        lip = _entrance_with_a_narrowing(reading.inputs[0], read)
         if lip is not None:
-            return _resize_bore_entrance(ctx, feature, lip, cut, keep=True)
+            return _with_findings_first(
+                _resize_bore_entrance(reading, read, lip, cut, keep=True), united_first
+            )
     # **Am Langloch ist der Durchmesser die Breite, und die Länge folgt daraus**
     # (RM-156). Gerechnet wird über den **Weg** und nicht über die Länge: Er ist
     # der Grund, aus dem es Langlöcher gibt, und wer ihn beim Verbreitern
@@ -7834,11 +7870,15 @@ def resize_hole(ctx: OpContext) -> OpResult:
         # **Und an der neuen Stelle wird gebohrt, nicht geändert.** Dort ist
         # nichts, was ein neues Maß bekommen könnte; `resize_bore` ließe ein
         # unverändertes Maß ohnehin liegen und gäbe den gefüllten Körper zurück.
-        filled = (
-            _exact_cavity_filled(source.mesh, feature)
-            if redrilled or feature.kind == "slot"
-            else None
-        )
+        #
+        # Gefüllt wird der Körper mit verbundenen Berührflächen
+        # (:func:`_exact_closing_base`, RM-386), gemessen am unverbundenen.
+        closing_findings: list[Finding] = []
+        filled = None
+        if redrilled or feature.kind == "slot":
+            rims = _rim_planes(source.mesh, feature)
+            closing_body, closing_findings = _exact_closing_base(ctx, source)
+            filled = _exact_cavity_filled(closing_body, feature, planes=rims)
         if wish is not None and filled is not None:
             plan = _depth_plan(as_mesh_data(filled), wish, ctx.profile, cut / 2.0)
             centre, depth, through = plan.centre, plan.depth, plan.through
@@ -7901,7 +7941,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 detail=OPEN_BODY_DETAIL,
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
-        findings: list[Finding] = list(depth_findings)
+        findings: list[Finding] = [*closing_findings, *depth_findings]
         if not redrilled:
             # **Beim Versetzen sagt das Volumen nichts.** Eine Bohrung, die
             # ihre Stelle wechselt und ihr Maß behält, lässt genau so viel
@@ -8636,49 +8676,14 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # Derselbe Stopfen wie beim Versetzen (:func:`_exact_cavity_filled`):
             # an den Randebenen begrenzt, damit eine schräge Mündung keine
             # Beule über der Fläche zurücklässt.
-            from app.core.geom.repair import parts_that_cross
-
-            contact = (
-                parts_that_cross(
-                    body.raw,
-                    cancelled=ctx.cancelled,
-                    max_pairs=None,
-                    include_face_contacts=True,
-                    require_complete=True,
-                )
-                if source.mesh.solid_count > 1
-                else None
-            )
-            if contact is not None:
-                # **Erst die gemeinsame Grenzfläche entfernen, dann den Stopfen
-                # setzen** (RM-319). Sonst verbindet der Stopfen beide Schalen
-                # über der alten Bohrung; der neue Schnitt trifft danach ihre
-                # doppelte Innenfläche und verliert Material. Die Randebenen
-                # gehören zur ursprünglichen Merkmalskarte und werden vor dem
-                # Fusen festgehalten.
-                planes = _rim_planes(started, feature)
-                united = edit.fuse_solids(started, cancelled=ctx.cancelled)
-                if united.solid_count >= started.solid_count:
-                    raise GeometryError(
-                        detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
-                        suggestions=(SHOW_LOCATIONS, CORRECT_INPUT, CANCEL),
-                        object_id=source.id,
-                    )
-                started = united
-                started = _exact_cavity_filled(started, feature, planes=planes)
-                merge_findings.append(
-                    Finding(
-                        code="boolean.parts_united",
-                        severity="info",
-                        message=_(
-                            "Teile des Modells wurden vor diesem Schritt zu einem Körper vereinigt."
-                        ),
-                        location=contact,
-                        suggestions=(SHOW_LOCATION,),
-                    )
-                )
-            else:
-                started = _exact_cavity_filled(started, feature)
+            #
+            # **Erst die gemeinsame Grenzfläche entfernen, dann den Stopfen
+            # setzen** (RM-319, :func:`_exact_closing_base`). Die Randebenen
+            # gehören zur ursprünglichen Merkmalskarte und werden am
+            # unverbundenen Körper gemessen.
+            planes = _rim_planes(started, feature)
+            started, merge_findings = _exact_closing_base(ctx, source)
+            started = _exact_cavity_filled(started, feature, planes=planes)
         # ``through`` beschreibt die Bohrung im Körper, der sie trägt. Bei
         # mehreren Körpern in einer Baugruppe darf der Hüllquader den Zug nicht
         # über die gemessene Bohrung hinaus durch weitere Teile verlängern
@@ -10207,6 +10212,33 @@ def _continued_through(
     return (tuple(continued),)
 
 
+def _exact_entrance_context(
+    ctx: OpContext, feature: Feature
+) -> tuple[OpContext, Feature, list[Finding]]:
+    """Der Lauf, in dem *Bohrung ändern* einen Einlauf liest und neu schneidet —
+    am exakten Körper mit verbundenen Berührflächen (:func:`_exact_closing_chain`).
+
+    Der Einlauf wird an den Flächen gelesen, und die Helfer danach nehmen den
+    Körper aus ``ctx.inputs``; deshalb geht der verbundene Körper als Eingang
+    eines eigenen Laufs weiter. Am Netz und ohne Berührung bleibt es der Lauf,
+    wie er war; das Netz verbindet beim Schließen selbst (``merge_face_contacts``).
+    """
+    source = ctx.inputs[0]
+    if source.kind != "brep":
+        return ctx, feature, []
+    united, (found,), closing = _exact_closing_chain(ctx, source, (feature,))
+    if united is source:
+        return ctx, feature, closing
+    return dataclasses.replace(ctx, inputs=[united, *ctx.inputs[1:]]), found, closing
+
+
+def _with_findings_first(result: OpResult, findings: Sequence[Finding]) -> OpResult:
+    """``result`` mit ``findings`` vor seinen eigenen Befunden."""
+    if not findings:
+        return result
+    return dataclasses.replace(result, findings=[*findings, *result.findings])
+
+
 def _resize_bore_entrance(
     ctx: OpContext,
     feature: Feature,
@@ -10283,7 +10315,8 @@ def _resize_bore_entrance(
             for outline, planes in _entrance_tools(entrance, diameter, reach, keep=keep)
         ]
         tool_solid = edit.boolean("union", exact_tools) if len(exact_tools) > 1 else exact_tools[0]
-        filled_body = _exact_chain_filled(source, entrance)
+        # Verbunden hat schon, wer den Einlauf las (:func:`_exact_entrance_context`).
+        filled_body = _exact_chain_filled(source, entrance, source.mesh)
         exact_changed = edit.boolean("difference", [filled_body, tool_solid])
         if not exact_changed.is_closed:
             raise GeometryError(detail=OPEN_BODY_DETAIL, suggestions=(CORRECT_INPUT, CANCEL))
@@ -10322,7 +10355,13 @@ def _resize_bore_entrance(
         if plug is None:
             raise _entrance_error()
         filled_mesh = boolean(
-            "union", [original, plug], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+            "union",
+            [original, plug],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            object_ids=(source.id, None),
+            merge_face_contacts=True,
         )
         cut_mesh = boolean(
             "difference",
@@ -11378,6 +11417,59 @@ def _exact_body(source: SceneObject) -> Any:
     return source.mesh
 
 
+def _exact_closing_base(ctx: OpContext, source: SceneObject) -> tuple[Any, list[Finding]]:
+    """Der exakte Körper, in den eine Merkmalshandlung ihre alte Stelle füllt —
+    berührende Volumenkörper zuerst verbunden (RM-319, RM-386).
+
+    **Jeder schließende Weg fragt hier**, wie am Netz ``merge_face_contacts``
+    an jeder schließenden Vereinigung. Ein Stopfen, der in einen Compound aus
+    zwei an einer Fläche berührenden Platten gesetzt wird, verbindet beide über
+    der alten Bohrung, und ihre gemeinsame Grenzfläche bleibt im Körper stehen:
+    Der neue Schnitt ließ danach einen losen Zylinder in der Bohrung stehen
+    (*Bohrung ändern* mit Versatz, +502,7 mm³ ohne Befund), oder das Versetzen
+    sagte mit einem falschen Rat ab. Getrennte Körper bleiben getrennt.
+
+    Merkmale und ihre Dreiecksbezüge gehören weiter zu ``source``: Wer am
+    Netz-Zwilling misst (Randebenen, Flächenkörper), misst dort und füllt erst
+    das Ergebnis hiervon. Zurück kommen der Körper und, wenn verbunden wurde,
+    der Befund ``boolean.parts_united``.
+    """
+    from app.core.brep import edit
+    from app.core.geom.repair import parts_that_cross
+
+    solid = _exact_body(source)
+    if solid.solid_count < 2:
+        return solid, []
+    contact = parts_that_cross(
+        as_mesh_data(solid).raw,
+        cancelled=ctx.cancelled,
+        max_pairs=None,
+        include_face_contacts=True,
+        require_complete=True,
+    )
+    if contact is None:
+        return solid, []
+    united = edit.fuse_solids(solid, cancelled=ctx.cancelled)
+    if united.solid_count >= solid.solid_count:
+        raise GeometryError(
+            detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+            suggestions=(SHOW_LOCATIONS, CORRECT_INPUT, CANCEL),
+            object_id=source.id,
+        )
+    # Die Grenzfläche ist fort, ihre Nähte nicht: Die Wand einer Bohrung durch
+    # beide Platten bliebe zwei Zylinderflächen, und eine Kette läse daran zwei
+    # Abschnitte, wo einer ist (:func:`_exact_closing_chain`).
+    return edit.unified(united), [
+        Finding(
+            code="boolean.parts_united",
+            severity="info",
+            message=_("Teile des Modells wurden vor diesem Schritt zu einem Körper vereinigt."),
+            location=contact,
+            suggestions=(SHOW_LOCATION,),
+        )
+    ]
+
+
 def _exact_cavity_filled(
     solid: Any, feature: Feature, *, planes: Sequence[SectionPlane] | None = None
 ) -> Any:
@@ -11783,7 +11875,7 @@ def _exact_move_cavity(
     ``edit.slot_bore``, und die Kennung reist belegt mit
     (``FeatureContinuation``), wie die Auswertung es verlangt (P1.4c.2).
     """
-    solid = _exact_body(source)
+    solid, closing_findings = _exact_closing_base(ctx, source)
     axis = _bore_vector(feature, "axis")
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
@@ -11793,7 +11885,7 @@ def _exact_move_cavity(
     expected = dataclasses.replace(
         feature, params={**feature.params, "centre": target}, provenance="generated"
     )
-    findings = _edge_findings(as_mesh_data(filled), [expected])
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [expected])]
     findings += _without_opened_twice(
         _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
     )
@@ -11960,7 +12052,7 @@ def _exact_rotate_cavity(
     """
     from app.core.brep import edit
 
-    solid = _exact_body(source)
+    solid, closing_findings = _exact_closing_base(ctx, source)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     filled = _exact_own_filled(source, solid, feature)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
@@ -11972,7 +12064,7 @@ def _exact_rotate_cavity(
     # Kante" nur aus dem, was schon in der Liste steht. Stand der Kantenbefund
     # erst danach darin, meldete der exakte Körper eine in die Nachbarin
     # gekippte Bohrung zweimal (Durchsicht seit 0.5.0, 25.09.2026).
-    findings = _edge_findings(as_mesh_data(filled), [expected])
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), [expected])]
     # **Bohrung und Langloch gleich** (Durchsicht 0.5.1, BOHRUNG-08): Das
     # Langloch schnitt gekippt über die ganze Zielhülle ohne Kappe — am
     # ``build_tray_v3.step`` fehlten danach 8 012 mm³ vor seiner Mündung, quer
@@ -12008,10 +12100,11 @@ def _exact_rotate_cavity(
 
 def _exact_remove_cavity(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
     """Bohrung oder Langloch am exakten Körper schließen — und die Kennung geht mit (P2.4)."""
-    solid = _exact_body(source)
+    solid, closing_findings = _exact_closing_base(ctx, source)
     ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
     filled = _exact_own_filled(source, solid, feature)
     findings = [
+        *closing_findings,
         Finding(
             code="remove_feature.gone",
             severity="info",
@@ -12021,7 +12114,7 @@ def _exact_remove_cavity(ctx: OpContext, source: SceneObject, feature: Feature) 
             ),
             feature_ids=(feature.id,),
             values={"feature": feature.id, "kind": feature.kind, "removed": 1},
-        )
+        ),
     ]
     return _exact_cavity_result(
         ctx,
@@ -12050,6 +12143,36 @@ def _chain_mouths(chain: Sequence[Feature]) -> frozenset[str]:
     return frozenset(
         side[-1].id for side in cavity_sides(chain) if len(side) > 1 and side[-1].kind == "hole"
     )
+
+
+def _exact_closing_chain(
+    ctx: OpContext, source: SceneObject, chain: Sequence[Feature]
+) -> tuple[SceneObject, tuple[Feature, ...], list[Finding]]:
+    """Wie :func:`_exact_closing_base`, für eine ganze Kette — samt ihren Merkmalen.
+
+    Eine Kette liest ihren Einlauf an ihren Flächen (``bore_entrance``), und am
+    Compound zerteilt die gemeinsame Grenzfläche die Wand der Bohrung in zwei
+    Abschnitte: Versetzen, Kippen und Entfernen einer Senkbohrung durch zwei
+    berührende Platten sagten deshalb ab, der Hohlraum lasse sich nicht als
+    eine Bohrung lesen (RM-386). Hier wird die Kette am verbundenen Körper
+    wiedergefunden (:func:`_exact_features_after`) und unter ihren Namen
+    weitergegeben; findet sie sich nicht, sagt die Handlung mit dem Satz der
+    Kette ab. Ohne Berührung bleibt alles, wie es war.
+    """
+    base, findings = _exact_closing_base(ctx, source)
+    if base is source.mesh:
+        return source, tuple(chain), findings
+    features, _continued, lost = _exact_features_after(
+        source,
+        base,
+        expected=chain,
+        cancelled=ctx.cancelled,
+        mouths=_chain_mouths(chain),
+    )
+    if lost:
+        raise _chain_not_readable(chain)
+    united = dataclasses.replace(source, mesh=base, features=features)
+    return united, tuple(features[section.id] for section in chain), findings
 
 
 def _exact_chain_entrance(source: SceneObject, chain: Sequence[Feature]) -> _BoreEntrance:
@@ -12140,11 +12263,13 @@ def _exact_chain_solid(
     return edit.boolean("union", parts) if len(parts) > 1 else parts[0]
 
 
-def _exact_chain_filled(source: SceneObject, entrance: _BoreEntrance) -> Any:
-    """Die ganze Kette am exakten Körper schließen — mit :func:`_exact_chain_plug`."""
+def _exact_chain_filled(source: SceneObject, entrance: _BoreEntrance, solid: Any) -> Any:
+    """Die ganze Kette am exakten Körper schließen — mit :func:`_exact_chain_plug`.
+
+    Gefüllt wird ``solid``, der Körper aus :func:`_exact_closing_base`; der
+    Stopfen kommt aus den Merkmalen von ``source``."""
     from app.core.brep import edit
 
-    solid = _exact_body(source)
     plug = _exact_chain_plug(source, entrance)
     filled = edit.unified(edit.boolean("union", [solid, plug]))
     # Ein Stopfen aus den eigenen Flächen des Körpers teilt mit ihm jede
@@ -12441,16 +12566,18 @@ def _exact_move_chain(
     """Bohrung samt Senkung am exakten Körper versetzen (P2.4) — eine Kette,
     die nach außen enger wird, ganz über ihre eigenen Flächen
     (:func:`_exact_chain_own_cavity`), ohne je ein Einlaufprofil zu bauen."""
+    source, chain, closing_findings = _exact_closing_chain(ctx, source, chain)
+    feature = next(section for section in chain if section.id == feature.id)
     travel = np.asarray(target, dtype=float) - np.asarray(feature.params["centre"], dtype=float)
     own = _exact_chain_own_cavity(source, chain)
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
     if own is not None:
-        filled = _exact_own_chain_filled(source, chain, own)
+        filled = _exact_own_chain_filled(source, chain, own, source.mesh)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed, tool = _exact_own_cut(filled, own, travel)
     else:
         entrance = _exact_chain_entrance(source, chain)
-        filled = _exact_chain_filled(source, entrance)
+        filled = _exact_chain_filled(source, entrance, source.mesh)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed, tool = _exact_chain_cut_moved(filled, entrance, travel)
     expected = [
@@ -12466,7 +12593,7 @@ def _exact_move_chain(
         )
         for related in chain
     ]
-    findings = _edge_findings(as_mesh_data(filled), expected)
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), expected)]
     findings += _without_opened_twice(
         _neighbour_bore_findings(source, feature, as_mesh_data(tool), ctx, moved=True), findings
     )
@@ -12549,6 +12676,8 @@ def _exact_rotate_chain(
     """Bohrung samt Senkung am exakten Körper kippen — um die Mitte des gewählten
     Abschnitts (P2.4)."""
 
+    source, chain, closing_findings = _exact_closing_chain(ctx, source, chain)
+    feature = next(section for section in chain if section.id == feature.id)
     entrance = _exact_chain_entrance(source, chain)
     pivot = np.asarray(feature.params["centre"], dtype=float)
     matrix = np.asarray(
@@ -12560,7 +12689,7 @@ def _exact_rotate_chain(
     tilt = math.degrees(math.acos(min(1.0, abs(float(old_axis @ new_axis)))))
     _sinks_must_close(chain, tilt, angle)
     ctx.progress(0.1, str(_("Der ganze Hohlraum wird geschlossen …")))
-    filled = _exact_chain_filled(source, entrance)
+    filled = _exact_chain_filled(source, entrance, source.mesh)
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     caps = _old_rim_caps(as_mesh_data(source.mesh), chain[0], source.features, chain)
     placed, tool = _exact_chain_cut_holding(
@@ -12579,7 +12708,7 @@ def _exact_rotate_chain(
             "axis": _turned(related, axis, angle),
         }
         expected.append(dataclasses.replace(related, params=params, provenance="generated"))
-    findings = _edge_findings(as_mesh_data(filled), expected)
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(filled), expected)]
     # Dieselbe Nachbarwandprüfung wie am Netz (``_rotate_cavity_chain``) —
     # am exakten Körper fehlte sie (RM-220), und der Bericht schwieg, wo die
     # gekippte Senkung in die Bohrung daneben lief.
@@ -12778,7 +12907,12 @@ def _exact_own_filled(source: SceneObject, solid: Any, feature: Feature) -> Any:
         air = _exact_air_of_the_bore(source, feature)
         body = air.body if air is not None else None
     filled = _exact_body_filled(solid, body) if body is not None else None
-    return filled if filled is not None else _exact_cavity_filled(solid, feature)
+    if filled is not None:
+        return filled
+    # Gemessen am Körper, dem das Merkmal gehört: ``solid`` kann schon
+    # verbunden sein (:func:`_exact_closing_base`), und dann zeigten die
+    # Dreiecksbezüge des Merkmals auf fremde Dreiecke.
+    return _exact_cavity_filled(solid, feature, planes=_rim_planes(source.mesh, feature))
 
 
 def _exact_body_filled(solid: Any, body: Any) -> Any | None:
@@ -12896,11 +13030,14 @@ def _carries_a_blend(source: SceneObject, chain: Sequence[Feature]) -> bool:
     return bool(cavity_blend_indices(as_mesh_data(source.mesh), tuple(chain)))
 
 
-def _exact_own_chain_filled(source: SceneObject, chain: Sequence[Feature], own: _OwnCavity) -> Any:
+def _exact_own_chain_filled(
+    source: SceneObject, chain: Sequence[Feature], own: _OwnCavity, solid: Any
+) -> Any:
     """Die Kette aus :func:`_exact_chain_own_cavity` geschlossen — mit ihrem
     Körper aus den eigenen Flächen, samt Lippe; kommt er nicht an, sagt die
-    Handlung mit dem Satz der Kette ab (``CHAIN_NOT_READABLE``)."""
-    filled = _exact_body_filled(_exact_body(source), own.body)
+    Handlung mit dem Satz der Kette ab (``CHAIN_NOT_READABLE``). Gefüllt wird
+    ``solid`` aus :func:`_exact_closing_base`."""
+    filled = _exact_body_filled(solid, own.body)
     if filled is None:
         raise _chain_not_readable(chain)
     return filled
@@ -12949,14 +13086,16 @@ def _exact_remove_chain(
     """Die ganze Kette am exakten Körper schließen (P2.4) — eine Kette, die
     nach außen enger wird, mit ihrem Körper aus den eigenen Flächen."""
     ctx.progress(0.2, str(_("Der ganze Hohlraum wird geschlossen …")))
+    source, chain, closing_findings = _exact_closing_chain(ctx, source, chain)
     own = _exact_chain_own_cavity(source, chain)
     filled = (
-        _exact_own_chain_filled(source, chain, own)
+        _exact_own_chain_filled(source, chain, own, source.mesh)
         if own is not None
-        else _exact_chain_filled(source, _exact_chain_entrance(source, chain))
+        else _exact_chain_filled(source, _exact_chain_entrance(source, chain), source.mesh)
     )
     gone = tuple(section.id for section in chain)
     findings = [
+        *closing_findings,
         Finding(
             code="remove_feature.gone",
             severity="info",
@@ -12966,7 +13105,7 @@ def _exact_remove_chain(
             ),
             feature_ids=gone,
             values={"feature": feature.id, "kind": feature.kind, "removed": len(gone)},
-        )
+        ),
     ]
     return _exact_cavity_result(
         ctx,
@@ -13060,6 +13199,8 @@ def _exact_remove_section(
     """
     from app.core.brep import edit
 
+    source, chain, closing_findings = _exact_closing_chain(ctx, source, chain)
+    feature = next(section for section in chain if section.id == feature.id)
     solid = _exact_body(source)
     inner = _inner_sections(chain, feature)
     ctx.progress(0.2, str(_("Der Abschnitt wird geschlossen …")))
@@ -13084,7 +13225,7 @@ def _exact_remove_section(
         )
     else:
         entrance = _exact_chain_entrance(source, chain)
-        filled = _exact_chain_filled(source, entrance)
+        filled = _exact_chain_filled(source, entrance, solid)
         closed = _exact_chain_cut_kept(filled, entrance, feature)
         # Die Seite des entfernten Abschnitts (RM-245); die Abschnitte der
         # anderen stehen danach, wie sie standen.
@@ -13125,6 +13266,7 @@ def _exact_remove_section(
                 )
             expected.append(dataclasses.replace(kept, provenance="generated"))
     findings = [
+        *closing_findings,
         Finding(
             code="remove_feature.gone",
             severity="info",
@@ -13134,7 +13276,7 @@ def _exact_remove_section(
             ),
             feature_ids=(feature.id,),
             values={"feature": feature.id, "kind": feature.kind, "removed": 1},
-        )
+        ),
     ]
     return _exact_cavity_result(
         ctx,
@@ -13241,7 +13383,10 @@ def _exact_move_by_faces(
         if cavity
         else str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")),
     )
-    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [solid, body]))
+    # Eine Senkung füllt in den Körper mit verbundenen Berührflächen
+    # (:func:`_exact_closing_base`); ein Zapfen wird nur abgetragen.
+    base, closing_findings = _exact_closing_base(ctx, source) if cavity else (solid, [])
+    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [base, body]))
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
     placed = edit.unified(
         edit.boolean("difference" if cavity else "union", [cleared, edit.moved(body, travel)])
@@ -13252,7 +13397,7 @@ def _exact_move_by_faces(
     # Dieselbe Frage wie am Netz (``move_feature`` mit ``_edge_findings``): Eine
     # Senkung, die über die Kante wandert, sagt es — bis zum 22.09.2026 gab der
     # Weg aus den Flächen hier keinen Befund zurück.
-    findings = _edge_findings(as_mesh_data(cleared), [expected])
+    findings = [*closing_findings, *_edge_findings(as_mesh_data(cleared), [expected])]
     return _exact_cavity_result(
         ctx, source, placed, op="move_feature", expected=expected, findings=findings
     )
@@ -13323,7 +13468,10 @@ def _exact_resize_by_faces(
         else str(_("Das Merkmal wird an seiner alten Stelle abgetragen …")),
     )
     ctx.cancelled.raise_if_cancelled()
-    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [solid, body]))
+    # Eine Senkung füllt in den Körper mit verbundenen Berührflächen
+    # (:func:`_exact_closing_base`); ein Zapfen wird nur abgetragen.
+    base, closing_findings = _exact_closing_base(ctx, source) if cavity else (solid, [])
+    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [base, body]))
     ctx.cancelled.raise_if_cancelled()
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
     if feature.kind == "pin":
@@ -13352,6 +13500,7 @@ def _exact_resize_by_faces(
         feature, params={**feature.params, "diameter": diameter}, provenance="generated"
     )
     findings = [
+        *closing_findings,
         *_widening_findings(source, feature, diameter),
         *_edge_findings(as_mesh_data(cleared), [changed]),
     ]
@@ -13375,8 +13524,12 @@ def _exact_remove_by_faces(
         if cavity
         else str(_("Das Merkmal wird abgetragen …")),
     )
-    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [solid, body]))
+    # Eine Senkung füllt in den Körper mit verbundenen Berührflächen
+    # (:func:`_exact_closing_base`); ein Zapfen wird nur abgetragen.
+    base, closing_findings = _exact_closing_base(ctx, source) if cavity else (solid, [])
+    cleared = edit.unified(edit.boolean("union" if cavity else "difference", [base, body]))
     findings = [
+        *closing_findings,
         Finding(
             code="remove_feature.gone",
             severity="info",
@@ -13386,7 +13539,7 @@ def _exact_remove_by_faces(
             ),
             feature_ids=(feature.id,),
             values={"feature": feature.id, "kind": feature.kind, "removed": 1},
-        )
+        ),
     ]
     return _exact_cavity_result(
         ctx,
@@ -13677,6 +13830,8 @@ def _torus_closed_mesh(ctx: OpContext, source: SceneObject, feature: Feature) ->
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        object_ids=(source.id, None),
+        merge_face_contacts=is_a_cavity(feature),
     )
 
 
@@ -14586,6 +14741,7 @@ def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> B
             seed=ctx.seed,
             cancelled=ctx.cancelled,
             object_ids=(source.id, None),
+            merge_face_contacts=engraved,
         )
     )
 
@@ -15678,7 +15834,8 @@ class PlugParams(BaseParams):
     # 0.5.1).
     # 4: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 5: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="5",
+    # 6: beim Schließen verbinden auch Ketten und der exakte Kern berührende Körper (RM-386).
+    cache_version="6",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -15832,13 +15989,13 @@ def _exact_plug(ctx: OpContext, source: SceneObject, params: PlugParams) -> OpRe
     from app.core.brep import edit
     from app.core.brep.edit import _oriented_cylinder
 
-    solid = _exact_body(source)
+    solid, closing_findings = _exact_closing_base(ctx, source)
     if params.at_feature:
         feature = _movable_feature(source, params.at_feature, "plug_hole")
         ctx.progress(0.3, str(_("Das Merkmal wird geschlossen …")))
         # Ein Langloch ganz, samt Fasen, wie am Netz (``whole``, BOHRUNG-05).
         filled = edit.unified(_exact_own_filled(source, solid, feature))
-        findings: list[Finding] = []
+        findings: list[Finding] = list(closing_findings)
         nothing = without_effect(solid, filled, "union", ctx.profile)
         if nothing is not None:
             findings.append(nothing)
@@ -15872,7 +16029,7 @@ def _exact_plug(ctx: OpContext, source: SceneObject, params: PlugParams) -> OpRe
     ctx.progress(0.3, str(_("Die Bohrung wird verschlossen …")))
     inside = edit.boolean("intersection", [cylinder, edit.convex_hull(solid)])
     plugged = edit.unified(edit.boolean("union", [solid, inside]))
-    findings = []
+    findings = list(closing_findings)
     nothing = without_effect(solid, plugged, "union", ctx.profile)
     if nothing is not None:
         findings.append(nothing)
