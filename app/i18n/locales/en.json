@@ -3862,6 +3862,7 @@
   "Ihre gespeicherten Projekte bleiben erhalten.": "Your saved projects are kept.",
   "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den aktuellen Stand und danach die Installation von 1.0.": "Your saved projects are kept. At {url} you will find the latest news and then the 1.0 installation.",
   "Im Bild einstellen": "Set in the view",
+  "Im Fenster rechnet der Übergang in Entwurfsauflösung, damit das Formen flüssig bleibt. Export und Druckvorbereitung rechnen fein.": "In the window the blend is computed at draft resolution so that shaping stays smooth. Export and print preparation compute it finely.",
   "Im Geräte-Zertifikat fehlt eine signierte Angabe.": "The device certificate lacks a signed entry.",
   "Im Kreis um einen Mittelpunkt verteilt.": "Spread in a circle around a centre point.",
   "Im Modell wählen": "Choose on the model",

@@ -3862,6 +3862,7 @@
   "Ihre gespeicherten Projekte bleiben erhalten.": "Vos projets enregistrés sont conservés.",
   "Ihre gespeicherten Projekte bleiben erhalten. Auf {url} finden Sie den aktuellen Stand und danach die Installation von 1.0.": "Vos projets enregistrés sont conservés. Sur {url}, vous trouverez l'état actuel, puis l'installation de la 1.0.",
   "Im Bild einstellen": "Régler dans la vue",
+  "Im Fenster rechnet der Übergang in Entwurfsauflösung, damit das Formen flüssig bleibt. Export und Druckvorbereitung rechnen fein.": "Dans la fenêtre, la transition est calculée en résolution d'ébauche pour que le modelage reste fluide. L'export et la préparation de l'impression la calculent finement.",
   "Im Geräte-Zertifikat fehlt eine signierte Angabe.": "Une information signée manque dans le certificat de l'appareil.",
   "Im Kreis um einen Mittelpunkt verteilt.": "Réparti en cercle autour d'un centre.",
   "Im Modell wählen": "Choisir sur le modèle",
