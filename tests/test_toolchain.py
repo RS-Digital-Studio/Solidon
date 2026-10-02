@@ -1389,8 +1389,9 @@ def test_a_written_package_is_one_the_application_would_take(
 # vergisst, bekommt andere Versionen als die, gegen die die Suite grün ist.
 # `tools/check_env.py` sieht nach, der Sitzungsstart-Hook ruft es auf. Was hier
 # geprüft wird, ist das Werkzeug — nicht die Umgebung dieses Laufs: Der
-# wöchentliche Frühwarnlauf der CI installiert **absichtlich** ohne
-# `constraints.txt`, und ein Test, der ihn rot färbt, entwertet ihn.
+# Job „Neueste Versionen" installiert **absichtlich** ohne `constraints.txt`
+# und prüft diesen freien Stand bei öffentlichen v*-Tag-Pushes oder auf
+# Handstart mit gesetztem check_latest im öffentlichen Repository.
 
 
 def test_the_pinned_set_is_read_completely() -> None:
@@ -1517,10 +1518,12 @@ def test_the_rebuild_command_pins_the_versions() -> None:
 
 # --- aktuell bleiben, ohne die Grenzen zu reißen ---------------------------------
 #
-# Festgenagelt ist nicht dasselbe wie gepflegt. Der wöchentliche CI-Lauf meldet
-# eine Version, die *bricht*; dass es überhaupt eine neuere *gäbe*, sagt er
-# niemandem. `--outdated` beantwortet das — und muss dabei die Grenzen kennen,
-# die absichtlich gesetzt sind.
+# Festgenagelt ist nicht dasselbe wie gepflegt. Der Job „Neueste Versionen"
+# meldet bei öffentlichen v*-Tag-Pushes oder Handstarts mit gesetztem
+# check_latest im öffentlichen Repository, wenn der freie Stand *bricht*.
+# Ob es eine neuere Version gibt, zeigt
+# `--outdated` — und muss dabei die Grenzen kennen, die absichtlich gesetzt
+# sind.
 
 
 def test_a_deliberate_upper_bound_is_read_from_the_project(tmp_path, monkeypatch) -> None:
