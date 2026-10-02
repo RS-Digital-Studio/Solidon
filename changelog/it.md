@@ -24,10 +24,11 @@ scrive in `website/version.json`.
 - Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.
 - Con Creality Print 7.2 e 7.3, «Affetta» calcola ora da sé il file di stampa. Finora funzionava solo nella finestra di Creality Print. Se 7.3 riordina il piatto, Solidon lo dice.
 - Con Cura, Solidon riprende su richiesta la stampante che Cura sta usando, con il suo ugello. Una stampante rinominata in Cura viene riconosciuta.
+- Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
-- Le impostazioni di stampa mostrano solo le misure di adesione del tipo di piano scelto. Con il brim spariscono i campi skirt e raft, che non avrebbero effetto.
+- Se scegli brim, skirt o raft nelle impostazioni di stampa, compaiono solo le misure di quel tipo di piano, senza campi che non avrebbero effetto.
 - Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.
-- I pezzi alti e sottili su una base piccola ricevono, solo per sé, pareti più tranquille, a 60 mm/s e con meno accelerazione. Sulla Centauri Carbon 2 queste aste si staccavano.
+- I pezzi alti e sottili su una base piccola ricevono pareti più tranquille, a 60 mm/s e con meno accelerazione. Sulla Centauri Carbon 2 queste aste si staccavano.
 - Solidon propone «Prima la parete esterna» solo per il pezzo che ne ha bisogno, e mai per uno con supporti.
 - Anche nella ricerca rapida, «Orienta per la stampa» controlla che un pezzo stia in piedi in modo sicuro.
 - Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.
@@ -45,6 +46,7 @@ scrive in `website/version.json`.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Asse di inclinazione», e «Su faccia» porta il taglio parallelo a una faccia piana.
+- Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 
 ### Modellare, testo e schizzo
@@ -54,7 +56,7 @@ scrive in `website/version.json`.
 - Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
 - Un tratto sul piano di simmetria agisce una volta invece di due.
 - Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
-- Nella finestra, «Fondi dolcemente» mostra la stessa forma dell'esportazione. Solo con corpi molto grandi l'anteprima calcola più grossolana e lo dice.
+- Nella finestra, «Fondi dolcemente» calcola ora fine come nell'esportazione, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
 - Il bersaglio di «Allinea alla caratteristica» parte vuoto. «Applica» aspetta che sia scelto e non mette più il corpo in silenzio dal lato sbagliato.
@@ -71,6 +73,10 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
+- Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
+- La barra dei parametri rifiuta una misura oltre il suo limite e nomina il limite, invece di lasciare la vista vuota.
+- Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
+- Se un passo attende una domanda, «Applica» resta disponibile e la domanda compare.
 - Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.
 - Le spunte negli elenchi si leggono in ogni riga, e i colori compaiono come un pallino rotondo accanto.
 - La tavolozza dei comandi spiega strumenti e azioni sui file in una frase.

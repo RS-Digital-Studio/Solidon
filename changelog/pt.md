@@ -24,10 +24,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As definições de impressão perguntam pela ordem em que uma coisa depende da outra: slicer, impressora, bico, placa, filamentos e qualidade, e depois os valores.
 - Com o Creality Print 7.2 e 7.3, «Fatiar» calcula agora sozinho o ficheiro de impressão. Até agora só a janela do Creality Print o fazia. Se o 7.3 reorganizar a placa, o Solidon di-lo.
 - Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
+- O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
-- As definições de impressão mostram só as medidas de aderência do tipo de mesa escolhido. Com brim desaparecem os campos de skirt e raft, que não teriam efeito.
+- Se escolher brim, skirt ou raft nas definições de impressão, só aparecem as medidas desse tipo de mesa, sem campos que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
-- Peças altas e finas sobre uma base pequena recebem, só para si, paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
+- Peças altas e finas sobre uma base pequena recebem paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
 - O Solidon só sugere «Parede exterior primeiro» para a peça que precisa dela, e nunca para uma com suportes.
 - Também na pesquisa rápida, «Orientar para impressão» verifica se uma peça fica de pé com segurança.
 - Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.
@@ -45,6 +46,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Eixo de inclinação», e «Na face» leva o corte paralelo a uma face plana.
+- Um corpo STEP continua um corpo STEP ao cortá-lo, com as suas faces, arestas e nomes.
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 
 ### Modelar, texto e esboço
@@ -54,7 +56,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.
 - Um traço sobre o plano de simetria atua uma vez em vez de duas.
 - Se um traço de modelação fura a parede ou a deixa fina demais, o relatório indica-o, com «Mostrar o ponto».
-- Na janela, «Fundir suavemente» mostra a mesma forma que na exportação. Só em corpos muito grandes a pré-visualização calcula mais grossa e di-lo.
+- Na janela, «Fundir suavemente» calcula agora tão fino como na exportação, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
 - O destino de «Alinhar à característica» começa vazio. «Aplicar» espera até estar escolhido e já não põe o corpo sem aviso do lado errado.
@@ -71,6 +73,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Utilização e sistema
 
 - Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
+- Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
+- A barra de parâmetros recusa uma medida fora do seu limite e indica o limite, em vez de deixar a vista vazia.
+- Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
+- Se um passo espera uma pergunta, «Aplicar» continua disponível e a pergunta aparece.
 - No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
 - As marcas nas listas leem-se em todas as linhas, e as cores aparecem como um ponto redondo ao lado.
 - A paleta de comandos explica ferramentas e ações de ficheiro numa frase.

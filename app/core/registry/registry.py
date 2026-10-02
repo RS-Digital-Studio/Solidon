@@ -247,13 +247,14 @@ def exact_kernel_present() -> bool:
     return _kernel_is_installed()
 
 
-#: Die fünf Grundkörper, je als Netz und exakt — dieselbe Handlung in zwei Rechenkernen.
+#: Die sechs Grundkörper, je als Netz und exakt — dieselbe Handlung in zwei Rechenkernen.
 PRIMITIVE_TWINS: Final[tuple[tuple[str, str], ...]] = (
     ("create_box", "create_brep_box"),
     ("create_cylinder", "create_brep_cylinder"),
     ("create_cone", "create_brep_cone"),
     ("create_sphere", "create_brep_sphere"),
     ("create_torus", "create_brep_torus"),
+    ("create_tube", "create_brep_tube"),
 )
 
 

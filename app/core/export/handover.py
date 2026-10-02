@@ -1531,14 +1531,10 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             # bis zum 05.09.2026 und erklärte dem Slicer eine Maschine, die
             # es nicht gibt — die Bahnen lagen um den halben Bauraum neben
             # der Platte (Gesamtreview, CORE-17).
+            # Eine Druckerdefinition mit Ursprung in der Mitte behält ihren
+            # (:func:`_cura_machine`), und die Naht folgt ihm.
             "machine_center_is_zero": "false",
-            # Wo „hinten" liegt, wenn die Naht dorthin soll: hinten in der
-            # Mitte, in Bettkoordinaten. Cura sucht den Konturpunkt, der diesem
-            # hier am nächsten liegt; ohne die Angabe stünde er bei (100, 100)
-            # und damit irgendwo. Gelesen wird er nur bei ``z_seam_type=back``,
-            # geschrieben immer: ein Punkt, den niemand abfragt, kostet nichts.
-            "z_seam_x": f"{width / 2.0:g}",
-            "z_seam_y": f"{depth:g}",
+            **_cura_seam(width, depth, centred=False),
             "machine_heated_build_volume": "true" if profile.printer.enclosed else "false",
             # Einstellungen, die `CuraEngine` abfragt und in keiner Definition
             # findet, die es geladen hat — das Fenster füllt sie aus Qualitäts-
@@ -1585,6 +1581,22 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         # Werten, die Solidon verlangt.
         "machine_limits_usage": "ignore",
     }
+
+
+def _cura_seam(width: float, depth: float, *, centred: bool) -> dict[str, str]:
+    """Wo „hinten“ liegt, wenn die Naht dorthin soll: hinten in der Mitte.
+
+    Cura sucht den Konturpunkt, der diesem am nächsten liegt; ohne die Angabe
+    stünde er bei (100, 100) und damit irgendwo. Gelesen wird er nur bei
+    ``z_seam_type=back``, geschrieben immer: ein Punkt, den niemand abfragt,
+    kostet nichts. Gerechnet wie Curas Formel in ``fdmprinter.def.json`` für
+    ``z_seam_position = back`` — in Maschinenkoordinaten, also an einer
+    Maschine mit Ursprung in der Mitte um das halbe Bett verschoben.
+    """
+    x, y = width / 2.0, depth
+    if centred:
+        x, y = x - width / 2.0, y - depth / 2.0
+    return {"z_seam_x": f"{x:g}", "z_seam_y": f"{y:g}"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1703,6 +1715,10 @@ class CuraMachine:
     name: str = ""
     """``machine_name`` der Definition — CuraEngine schreibt ihn als
     ``;TARGET_MACHINE.NAME`` in den Kopf (:func:`cura_machine_differences`)."""
+    origin_at_centre: bool = False
+    """Liegt der Ursprung dieser Maschine in der Bettmitte
+    (``machine_center_is_zero``)? Dann verschiebt CuraEngine das Modell nicht,
+    und die Druckdatei misst von der Mitte (:func:`off_the_bed`, RM-330)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1732,6 +1748,15 @@ class SlicerConfig:
     def filament(self) -> Path | None:
         """Das erste Filament. Für alles, was nur eines kennt."""
         return self.filaments[0] if self.filaments else None
+
+    @property
+    def origin_at_centre(self) -> bool:
+        """Misst die Druckdatei dieses Laufs von der Bettmitte statt von der Ecke?
+
+        Nur eine Cura-Maschine kann das sagen; die übrigen Familien schreiben
+        ihr Bett in die Druckdatei, und die Gegenprobe nimmt dann dieses.
+        """
+        return self.cura_machine is not None and self.cura_machine.origin_at_centre
 
 
 @dataclass(frozen=True, slots=True)
@@ -2542,6 +2567,9 @@ def write_config(
     flat = flat_values()
     machine = _cura_machine(setup, profile, flat)
     flat |= machine.settings
+    if machine.origin_at_centre:
+        width, depth, _height = profile.printer.build_volume
+        flat |= _cura_seam(width, depth, centred=True)
     flat |= machine.switches
     _without_line_break(flat, setup.name)
     target.write_text(
@@ -3931,6 +3959,15 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         if (isinstance(source, slicer_profiles.SlicerProfile) and source.cura_instance is not None)
         else {}
     )
+    # **Der Ursprung gehört der Maschine** (RM-330). Eine Druckerdefinition
+    # oder Instanz mit ``machine_center_is_zero`` misst von der Bettmitte —
+    # Curas Deltas etwa —, und CuraEngine verschiebt das Modell dann nicht.
+    # Solidons ``false`` aus :func:`_machine_keys` gilt nur ohne Definition.
+    # Geschrieben wird der Wert ausdrücklich, auch wo die Definition ihn als
+    # Formel führt, denn die Konsole liest nur ``default_value``.
+    centred = bool(own) and str(chain.get("machine_center_is_zero", "")).strip().lower() == "true"
+    if own:
+        hardware["machine_center_is_zero"] = "true" if centred else "false"
     known = _placeholder_values(chain, {**values, **hardware})
     codes = {
         key: _filled(str(chain.get(key) or ""), known, key, setup.name) for key in MACHINE_CODES
@@ -3951,6 +3988,7 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
         settings=hardware,
         name=str(chain.get("machine_name") or ""),
+        origin_at_centre=centred,
     )
 
 
@@ -4001,9 +4039,6 @@ def _cura_hardware_values(
         and not (key in dimensions and key in written)
         and isinstance(value, (str, int, float, bool))
     }
-    # Curas Ursprung ist eine Eigenschaft der Maschine, nicht immer vorn links.
-    if hardware.get("machine_center_is_zero", "").lower() == "true":
-        hardware.update({key: "0" for key in ("z_seam_x", "z_seam_y") if key in written})
     return hardware
 
 
@@ -4253,6 +4288,7 @@ def off_the_bed(
     *,
     replay: Callable[[], Iterable[str]] | None = None,
     cancelled: CancelToken | None = None,
+    origin_at_centre: bool = False,
 ) -> Finding | None:
     """Druckt die geschriebene Datei über den Bauraum hinaus? (§29, Regel 14)
 
@@ -4279,6 +4315,10 @@ def off_the_bed(
     angegebene Bett aus ``gcode.analyze(...).bed``. Sonst gilt die wirksame
     Druckfläche des Druckerprofils einschließlich seiner Sperrflächen. Das
     trifft insbesondere CuraEngine, dem Solidon die Maße selbst gegeben hat.
+    Dessen Bett beginnt an der Ecke, außer an einer Maschine mit Ursprung in
+    der Mitte (``origin_at_centre``, aus :attr:`SlicerConfig.origin_at_centre`):
+    Dort schrieb CuraEngine richtig um 0, und die Prüfung gegen 0 bis Breite
+    meldete jedes Teil links oder vor der Mitte (RM-330).
     Der erste Anlauf maß
     immer gegen den eigenen Bauraum,
     und der ElegooSlicer bekam damit bei einem Würfel in der Bettmitte einen
@@ -4328,7 +4368,7 @@ def off_the_bed(
                 )
             )
         area = build_area.printable_area(profile.printer)
-        if wants_bed_coordinates(flavour):
+        if wants_bed_coordinates(flavour) and not origin_at_centre:
             width, depth, _height = profile.printer.build_volume
             area = translate(area, xoff=width / 2.0, yoff=depth / 2.0)
     excluded_invalid = False
@@ -5143,7 +5183,12 @@ def slice_model(
                 yield from stream
 
         beyond = off_the_bed(
-            analysis, profile, setup.flavour, replay=replay_gcode, cancelled=cancelled
+            analysis,
+            profile,
+            setup.flavour,
+            replay=replay_gcode,
+            cancelled=cancelled,
+            origin_at_centre=config.origin_at_centre,
         )
         # Die dritte: Ist überhaupt das ganze Modell darin? ``None`` heißt
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,

@@ -24,10 +24,11 @@ it into `website/version.json`.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
 - With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
+- Cura now slices with the nozzle you chose, also for printers from Cura's own list, and printers with their origin in the middle of the bed keep it.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
-- The print dialog shows only the adhesion settings of the chosen bed type. With a brim, the skirt and raft fields that would do nothing are gone.
+- If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
-- Tall, slender parts on a small footprint get calmer walls suggested for themselves alone, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
+- Tall, slender parts on a small footprint get calmer walls suggested, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
 - Solidon now suggests *Outer wall first* only for the part that needs it, and never for one with supports.
 - In the quick search too, *Orient for printing* checks whether a part stands securely.
 - Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.
@@ -45,6 +46,7 @@ it into `website/version.json`.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt axis*, and *At face* runs the cut parallel to a flat face.
+- A STEP body stays a STEP body when you crop it, with its faces, edges and names.
 - A freshly created screw lid is no longer reported as too tight for its neck.
 
 ### Sculpting, text and sketching
@@ -54,7 +56,7 @@ it into `website/version.json`.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
-- In the window, *Blend together* shows the same shape as in the export. Only for very large bodies does the preview work more coarsely, and it says so.
+- In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
 - The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
@@ -71,6 +73,10 @@ it into `website/version.json`.
 ### Operation and system
 
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
+- An export during a running calculation waits for the new result. Until now the file could still carry the old size.
+- The parameter bar rejects a dimension beyond its limit and names the limit, instead of leaving the view empty.
+- In the parameter bar every arrow step counts, and the focus stays in the field.
+- If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
 - Checkmarks in lists are readable in every row, and colours appear as a round dot next to them.
 - The command palette explains tools and file actions in a sentence.

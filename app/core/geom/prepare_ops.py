@@ -139,6 +139,7 @@ from app.core.types import (
     Quality,
     SceneObject,
     SolverInfo,
+    Transform,
     Vec3,
     is_a_cavity,
     thread_is_left_handed,
@@ -14549,19 +14550,58 @@ PATTERN_NOT_READABLE: Final = _(
 def _pattern_source_on_measured_facets(
     source: SceneObject, feature: Feature, *, cancelled: CancelToken | None = None
 ) -> SceneObject:
+    """Der Körper mit ausgerichteten Mantelfacetten — oder unverändert (:func:`_aligned_facets`)."""
+    return _aligned_facets(source, feature, cancelled=cancelled)[0]
+
+
+#: Wie genau eine Mantelfacette aus einer STL eben ist, relativ zur größten
+#: Koordinate des Körpers: das Achtfache der Rundung eines ``float32``, in dem
+#: jede binäre STL ihre Ecken speichert (2⁻²³). Dieselbe Zahl wie
+#: ``brep.from_mesh.PLANAR_SPAN``. Die feste Grenze ``EPS_GEOM`` (1 nm) riss
+#: schon ab 16 mm Koordinate, wo das Raster 1,9 nm misst (RM-404).
+_FACET_RASTER_SHARE: Final = 8.0 * 2.0**-23
+
+
+def _facet_tolerance(points: np.ndarray) -> float:
+    """Die Auflösung, in der die Ecken dieses Körpers gespeichert sein können.
+
+    Aus den heutigen Koordinaten und nicht aus der Datei: Ein späteres
+    Aufsetzen verschiebt die Ecken in doppelter Genauigkeit, ihre Rundung von
+    damals bleibt. Der Faktor acht deckt dabei auch einen Körper, der vorher
+    deutlich weiter vom Ursprung lag.
+    """
+    reach = float(np.max(np.abs(points))) if len(points) else 0.0
+    return max(EPS_GEOM, _FACET_RASTER_SHARE * reach)
+
+
+def _aligned_facets(
+    source: SceneObject, feature: Feature, *, cancelled: CancelToken | None = None
+) -> tuple[SceneObject, bool]:
     """Richtet rundungsnahe Trägerpunkte vor dem Schließen eines Zylindermusters aus.
 
     Binäre STL-Koordinaten liegen nach dem Lesen nur näherungsweise auf den
     ebenen Mantelfacetten. Der Musterstopfen wird aus den gemessenen Facetten
     rekonstruiert; bereits der Rundungsabstand ließ die Vereinigung danach
-    Selbstschnitte in den Träger eintriangulieren (RM-225). Nur vollständig
-    belegte, innerhalb ``EPS_GEOM`` ebene Facettengruppen werden angepasst.
-    Gemeinsame Eckpunkte landen auf dem kleinsten Ausgleich der gemessenen
-    Ebenen quer zur Zylinderachse; die Axiallage bleibt erhalten. Dreiecke
-    und Vertex-IDs bleiben gleich.
+    Selbstschnitte in den Träger eintriangulieren (RM-225).
+
+    **Alles oder nichts.** Ausgerichtet wird nur, wenn jede Facettengruppe des
+    Trägers innerhalb der Rasterauflösung der Koordinaten eben ist
+    (:func:`_facet_tolerance`) und jede gemeinsame Ecke sich quer zur
+    Zylinderachse auf den kleinsten Ausgleich ihrer Ebenen legen lässt; die
+    Axiallage bleibt. Dreiecke und Vertex-IDs bleiben gleich.
+
+    Zurück kommt der Körper und ob die Ausrichtung **abgelehnt** wurde — dann
+    entstehen womöglich Selbstschnitte, und der Aufrufer sagt es mit
+    *Reparieren* (RM-404). Kein Zylinderträger oder nichts zu korrigieren ist
+    keine Ablehnung.
+
+    Gerechnet wird je Gruppe von Ecken, die dieselben Ebenen tragen: Matrix,
+    Grammatrix und Eigenbasis einmal, die Ecken dann in Feldern — bei 26 112
+    Trägerecken waren es 1,2 bis 1,6 s Python je Ecke ohne Fortschritt.
+    Elementweise, ohne BLAS und LAPACK (RM-187).
     """
     if feature.params.get("carrier") != "cylinder":
-        return source
+        return source, False
 
     from app.core.geom.attributes import carry_refined_units
     from app.core.geom.mesh import stable_normals
@@ -14573,21 +14613,22 @@ def _pattern_source_on_measured_facets(
     mesh = as_mesh_data(source.mesh)
     carrier = patterns.carrier_of(feature, source.features)
     if carrier is None or not carrier.face_indices:
-        return source
+        return source, False
     body = mesh.raw
     face_ids = np.asarray(carrier.face_indices, dtype=np.int64)
     if len(face_ids) == 0 or (face_ids < 0).any() or (face_ids >= len(body.faces)).any():
-        return source
+        return source, True
     face_ids = np.unique(face_ids)
 
     frame = patterns.frame_for(feature)
     points = np.asarray(body.vertices, dtype=np.float64)
+    tolerance = _facet_tolerance(points)
     normals = stable_normals(body)[0][face_ids]
     _angles, groups = patterns.cylinder_facet_groups(
         frame, normals, check_cancelled=check_cancelled
     )
     if len(groups) < 3:
-        return source
+        return source, False
 
     planes_by_vertex: dict[int, list[int]] = {}
     plane_normals: list[np.ndarray] = []
@@ -14598,22 +14639,22 @@ def _pattern_source_on_measured_facets(
         vertex_ids = np.unique(np.asarray(body.faces, dtype=np.int64)[group_faces].ravel())
         facet_points = points[vertex_ids]
         if len(facet_points) < 3:
-            return source
+            return source, True
         middle, direction, _spread = units.plane_fit(facet_points)
         centre, normal = np.asarray(middle), np.asarray(direction)
         relative = facet_points - centre
         lengths = np.linalg.norm(relative, axis=1)
         longest = int(np.argmax(lengths))
-        if lengths[longest] <= EPS_GEOM:
-            return source
+        if lengths[longest] <= tolerance:
+            return source, True
         # Drei Punkte auf einer Linie belegen keine Ebene. Die quer zur
         # längsten Strecke gemessene Breite braucht dieselbe Auflösung.
         across = np.cross(relative, relative[longest] / lengths[longest])
-        if float(np.max(np.linalg.norm(across, axis=1))) <= EPS_GEOM:
-            return source
+        if float(np.max(np.linalg.norm(across, axis=1))) <= tolerance:
+            return source, True
         residual = transform.along(relative, normal)
-        if float(np.max(np.abs(residual))) > EPS_GEOM:
-            return source
+        if float(np.max(np.abs(residual))) > tolerance:
+            return source, True
         outward = centre - frame.origin
         outward -= frame.normal * units.dot3(outward, frame.normal)
         if units.dot3(normal, outward) < 0.0:
@@ -14625,19 +14666,28 @@ def _pattern_source_on_measured_facets(
         for vertex_id in vertex_ids:
             planes_by_vertex.setdefault(int(vertex_id), []).append(plane_index)
 
+    by_planes: dict[tuple[int, ...], list[int]] = {}
+    for vertex_id, memberships in planes_by_vertex.items():
+        by_planes.setdefault(tuple(sorted(set(memberships))), []).append(vertex_id)
+
     aligned = points.copy()
     maximum_correction = 0.0
     all_normals = np.asarray(plane_normals, dtype=np.float64)
     all_offsets = np.asarray(plane_offsets, dtype=np.float64)
-    for vertex_id, memberships in planes_by_vertex.items():
+    for signature, members in by_planes.items():
         check_cancelled()
-        indices = np.asarray(sorted(set(memberships)), dtype=np.int64)
+        indices = np.asarray(signature, dtype=np.int64)
         matrix = all_normals[indices]
         offsets = all_offsets[indices]
-        relative = points[vertex_id] - frame.origin
-        distances = transform.along(matrix, relative) - offsets
-        if float(np.max(np.abs(distances))) > EPS_GEOM:
-            return source
+        ids = np.asarray(members, dtype=np.int64)
+        relative = points[ids] - frame.origin
+        # Abstand jeder Ecke zu jeder ihrer Ebenen, je Ebene eine Spalte.
+        distances = np.stack(
+            [transform.along(relative, matrix[row]) - offsets[row] for row in range(len(indices))],
+            axis=1,
+        )
+        if float(np.max(np.abs(distances))) > tolerance:
+            return source, True
         # Nur quer zur belegten Zylinderachse korrigieren. Drei durch
         # Rundungsreste leicht geneigte Mantelfacetten tragen keinen dritten
         # Freiheitsgrad: Der volle Raumausgleich könnte aus Mikrometerrauschen
@@ -14651,8 +14701,8 @@ def _pattern_source_on_measured_facets(
         )
         expected_rank = min(len(indices), 2)
         # Der kleinste Ausgleich über die Eigenbasis der eingebetteten
-        # 2x2-Grammatrix, ohne LAPACK. Verworfen wird, was neben deren
-        # Rundungsgrenze ranglos ist.
+        # 2x2-Grammatrix, ohne LAPACK — je Ebenengruppe einmal. Verworfen
+        # wird, was neben deren Rundungsgrenze ranglos ist.
         gram = [
             [math.fsum(float(row[i]) * float(row[j]) for row in radial_rows) for j in range(3)]
             for i in range(3)
@@ -14660,41 +14710,70 @@ def _pattern_source_on_measured_facets(
         eigenvalues, eigenvectors = units.symmetric_eigen3(gram)
         least = eigenvalues[-expected_rank]
         if least <= max(len(indices), 3) * np.finfo(np.float64).eps * eigenvalues[-1]:
-            return source
-        right = [
-            -math.fsum(
-                float(row[i]) * float(distance)
-                for row, distance in zip(radial_rows, distances, strict=True)
-            )
-            for i in range(3)
-        ]
-        radial_correction = np.zeros(3)
+            return source, True
+        # ``right[i] = -Σ_Ebenen radial[i] · Abstand`` je Ecke, in fester Folge.
+        right = [np.zeros(len(ids)) for _axis in range(3)]
+        for row in range(len(indices)):
+            for axis in range(3):
+                right[axis] = right[axis] - float(radial_rows[row, axis]) * distances[:, row]
+        first = np.zeros(len(ids))
+        second = np.zeros(len(ids))
         for value, vector in zip(
             eigenvalues[-expected_rank:], eigenvectors[-expected_rank:], strict=True
         ):
-            radial_correction += np.asarray(vector) * (units.dot3(vector, right) / value)
-        correction = radial_correction[0] * frame.x_axis + radial_correction[1] * frame.y_axis
-        correction_length = math.hypot(*correction)
-        conditioning = math.sqrt(least)
-        maximum_move = EPS_GEOM * math.sqrt(len(indices)) / conditioning
-        if correction_length > maximum_move + EPS_GEOM:
-            return source
-        if (
-            float(np.max(np.abs(transform.along(matrix, relative + correction) - offsets)))
-            > EPS_GEOM
-        ):
-            return source
-        aligned[vertex_id] = points[vertex_id] + correction
-        maximum_correction = max(maximum_correction, correction_length)
+            x, y, z = (float(entry) for entry in vector)
+            along_vector = (x * right[0] + y * right[1] + z * right[2]) / value
+            first = first + float(vector[0]) * along_vector
+            second = second + float(vector[1]) * along_vector
+        correction = (
+            first[:, None] * np.asarray(frame.x_axis, dtype=np.float64)[None, :]
+            + second[:, None] * np.asarray(frame.y_axis, dtype=np.float64)[None, :]
+        )
+        lengths = np.sqrt(
+            correction[:, 0] * correction[:, 0]
+            + correction[:, 1] * correction[:, 1]
+            + correction[:, 2] * correction[:, 2]
+        )
+        maximum_move = tolerance * math.sqrt(len(indices)) / math.sqrt(least)
+        if float(np.max(lengths)) > maximum_move + tolerance:
+            return source, True
+        moved = relative + correction
+        after = np.stack(
+            [transform.along(moved, matrix[row]) - offsets[row] for row in range(len(indices))],
+            axis=1,
+        )
+        if float(np.max(np.abs(after))) > tolerance:
+            return source, True
+        aligned[ids] = points[ids] + correction
+        maximum_correction = max(maximum_correction, float(np.max(lengths)))
 
-    if maximum_correction <= EPS_GEOM:
-        return source
+    if maximum_correction <= 0.0:
+        return source, False
     adjusted = body.copy()
     adjusted.vertices = aligned
     changed = MeshData(raw=adjusted, slots=mesh.slots)
     carry_refined_units(changed, [mesh])
     check_cancelled()
-    return dataclasses.replace(source, mesh=changed)
+    return dataclasses.replace(source, mesh=changed), False
+
+
+def _facets_refused(source: SceneObject) -> Finding:
+    """Der Befund, wenn der Mantel unter einem Muster nicht ausgerichtet werden konnte (RM-404).
+
+    Still blieb sonst der alte Fehler aus RM-225: Selbstschnitte im Träger nach
+    dem Schließen, und im Bericht stand nur „entfernt“ oder „geändert“.
+    """
+    return Finding(
+        code="pattern.facets_unaligned",
+        severity="warning",
+        message=_(
+            "Die Mantelfläche unter diesem Muster ließ sich nicht genau ausrichten; im "
+            "Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen "
+            "Sie es dann noch einmal."
+        ),
+        object_id=source.id,
+        suggestions=(REPAIR_AND_RETRY,),
+    )
 
 
 def _pattern_plug(source: SceneObject, feature: Feature) -> MeshData:
@@ -14750,11 +14829,12 @@ def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> B
 
 def _remove_pattern(ctx: OpContext, source: SceneObject, feature: Feature) -> OpResult:
     """Ein Muster entfernen: jede Zelle an ihrer Mündung schließen (§21.1, RM-207)."""
-    source = _pattern_source_on_measured_facets(source, feature, cancelled=ctx.cancelled)
+    source, refused = _aligned_facets(source, feature, cancelled=ctx.cancelled)
     cleared = _pattern_cleared(ctx, source, feature)
     count = int(feature.params.get("count", 0)) + int(feature.params.get("partial", 0))
     findings = [
         *cleared.findings,
+        *([_facets_refused(source)] if refused else []),
         Finding(
             code="remove_feature.gone",
             severity="info",
@@ -14903,8 +14983,12 @@ def _resize_pattern(
     # Steg oder Rille, je nachdem, was an diesem Stil schmaler ist.
     check_printable(generator, new_pitch, new_depth, ctx.profile.printer, cell=drawn_width)
 
-    source = _pattern_source_on_measured_facets(source, feature, cancelled=ctx.cancelled)
+    source, refused = _aligned_facets(source, feature, cancelled=ctx.cancelled)
     cleared = _pattern_cleared(ctx, source, feature)
+    if refused:
+        cleared = dataclasses.replace(
+            cleared, findings=[*cleared.findings, _facets_refused(source)]
+        )
     ctx.progress(0.6, str(_("Das Muster wird mit dem neuen Maß gesetzt …")))
     field = field_outline(as_mesh_data(source.mesh), feature, source.features)
     if field.around > 0.0:
@@ -17574,9 +17658,9 @@ def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> Secti
 
 @register_op(
     name="cut_away",
-    result_kind="mesh",
     # Eine neu entstandene Berührlinie wird nicht als Modell übernommen.
-    cache_version="3",
+    # 4: Ein exakter Körper bleibt exakt (RM-400).
+    cache_version="4",
     title=_("Abschneiden"),
     category="prepare",
     params=CutAwayParams,
@@ -17608,6 +17692,8 @@ def cut_away(ctx: OpContext) -> OpResult:
     plane = _cut_away_plane(params, mesh, source.features)
     if params.keep == "above":
         plane = plane.flipped()
+    if source.kind == "brep":
+        return _cut_away_exact(ctx, source, plane, params.position)
     kept = cut(mesh, plane)
     check_cut_contact(kept, params.position)
     if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:
@@ -17647,6 +17733,147 @@ def cut_away(ctx: OpContext) -> OpResult:
             dataclasses.replace(source, mesh=kept.mesh, features=_without_old_triangles(features))
         ],
         findings=findings,
+    )
+
+
+def _cut_away_exact(
+    ctx: OpContext, source: SceneObject, plane: SectionPlane, position: float
+) -> OpResult:
+    """*Abschneiden* am exakten Körper: Er bleibt exakt (RM-400).
+
+    Bis hierher machte die Operation aus jedem exakten Körper ein Netz — auch
+    für einen geraden Schnitt, und mit ihm gingen Flächen, Kanten und der
+    STEP-Export. Weggenommen wird jetzt ein Quader, dessen Unterseite in der
+    Schnittebene liegt und der den Körper auf der anderen Seite ganz
+    überdeckt; die Schnittfläche ist damit eine echte Ebene. Die Merkmale
+    behalten ihre Namen, soweit sie bleiben (:func:`_exact_features_after`).
+    """
+    from app.core.brep import edit
+    from app.core.brep.ops import brep_input
+
+    exact, body = brep_input(ctx)
+    tool = edit.transformed(
+        _half_space_box(body, plane), _half_space_frame(body, plane), cancelled=ctx.cancelled
+    )
+    ctx.cancelled.raise_if_cancelled()
+    solid = edit.unified(edit.boolean("difference", [body, tool]))
+    ctx.cancelled.raise_if_cancelled()
+    before = as_mesh_data(body).volume
+    after = as_mesh_data(solid).volume if solid.face_count else 0.0
+    if after <= EPS_GEOM or abs(before - after) <= EPS_GEOM:
+        # Dieselbe Absage wie am Netz: Eine Ebene, die nichts oder alles
+        # nimmt, trifft das Objekt nicht.
+        raise ValidationError(
+            field="position",
+            detail=_("Diese Ebene schneidet nichts vom Objekt ab."),
+            value=position,
+            constraint="no_split",
+        )
+    checked = _exact_body_checked(solid)
+    kept, _dropped = _features_after_split(source.features, plane, as_mesh_data(body))
+    features, continued, _lost = _exact_features_after(
+        dataclasses.replace(source, features=kept), checked, expected=None, cancelled=ctx.cancelled
+    )
+    features, continued = _cut_faces_continued(kept, features, continued)
+    return OpResult(
+        outputs=[dataclasses.replace(exact, mesh=checked, kind="brep", features=features)],
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
+    )
+
+
+def _cut_faces_continued(
+    kept: Mapping[str, Feature],
+    features: dict[str, Feature],
+    continued: tuple[tuple[str, str], ...],
+) -> tuple[dict[str, Feature], tuple[tuple[str, str], ...]]:
+    """Eine ebene Fläche heißt am verbliebenen Stück in ihrer Ebene weiter.
+
+    Dieselbe Zusage wie am Netz (R4, ``evaluate._divided_partners``): Quert
+    die Schnittebene eine Fläche, behält das größte Stück in derselben Ebene
+    ihren Namen. Am exakten Kern fand die allgemeine Zuordnung die beschnittene
+    Deckfläche nicht wieder — Fläche und Mitte hatten sich geändert —, und eine
+    bündige Passung an ihr hielt die Kette mit „Welches Merkmal entspricht
+    face_6?“ an. Belegt wird jede Fortführung, damit die Auswertung den Bezug
+    als getragen sieht.
+    """
+    result = dict(features)
+    pairs = list(continued)
+    for name, old in kept.items():
+        normal = vec3_or_none(old.params.get("normal")) if old.kind == "face" else None
+        centre = vec3_or_none(old.params.get("centre")) if old.kind == "face" else None
+        if normal is None or centre is None or name in result:
+            continue
+        offset = units.dot3(normal, centre)
+        best: tuple[str, float] | None = None
+        for key, candidate in result.items():
+            if candidate.kind != "face" or key in kept:
+                continue
+            other = vec3_or_none(candidate.params.get("normal"))
+            middle = vec3_or_none(candidate.params.get("centre"))
+            if other is None or middle is None or units.dot3(normal, other) < 1.0 - EPS_GEOM:
+                continue
+            if abs(units.dot3(normal, middle) - offset) > EPS_DISPLAY:
+                continue
+            area = float(candidate.params.get("area", 0.0) or 0.0)
+            if best is None or area > best[1]:
+                best = (key, area)
+        if best is None:
+            continue
+        key = best[0]
+        result[name] = dataclasses.replace(result.pop(key), id=name)
+        pairs = [(old_id, name if new_id == key else new_id) for old_id, new_id in pairs]
+        if (name, name) not in pairs:
+            pairs.append((name, name))
+    return result, tuple(pairs)
+
+
+def _half_space_box(body: Any, plane: SectionPlane) -> Any:
+    """Ein Würfel, der größer ist als alles, was auf einer Seite der Ebene liegen kann."""
+    from app.core.brep import edit
+
+    size = 4.0 * max(float(body.bounds.diagonal), 1.0)
+    return edit.box(size, size, size)
+
+
+def _half_space_frame(body: Any, plane: SectionPlane) -> Transform:
+    """Legt den Würfel aus :func:`_half_space_box` mit der Unterseite in die Ebene.
+
+    Der Würfel steht auf dem Bett, in X und Y zentriert; seine Z-Achse wird
+    zur Normalen, die Mitte der Unterseite zum Fußpunkt der Körpermitte auf
+    der Ebene. Er reicht damit auf die Seite, die wegfällt — die Normale
+    zeigt aus dem Teil, das bleibt (``SectionPlane``). Elementweise gerechnet
+    (RM-187).
+    """
+    normal = plane.normal
+    centre = [float(value) for value in body.bounds.centre]
+    offset = sum(normal[index] * centre[index] for index in range(3)) - plane.position
+    foot = [centre[index] - offset * normal[index] for index in range(3)]
+    # Eine Hilfsachse quer zur Normalen: die Weltachse, zu der sie am wenigsten zeigt.
+    smallest = min(range(3), key=lambda index: abs(normal[index]))
+    helper = [0.0, 0.0, 0.0]
+    helper[smallest] = 1.0
+    first = [
+        helper[1] * normal[2] - helper[2] * normal[1],
+        helper[2] * normal[0] - helper[0] * normal[2],
+        helper[0] * normal[1] - helper[1] * normal[0],
+    ]
+    length = math.sqrt(first[0] * first[0] + first[1] * first[1] + first[2] * first[2])
+    first = [value / length for value in first]
+    second = [
+        normal[1] * first[2] - normal[2] * first[1],
+        normal[2] * first[0] - normal[0] * first[2],
+        normal[0] * first[1] - normal[1] * first[0],
+    ]
+    return (
+        (first[0], second[0], normal[0], foot[0]),
+        (first[1], second[1], normal[1], foot[1]),
+        (first[2], second[2], normal[2], foot[2]),
+        (0.0, 0.0, 0.0, 1.0),
     )
 
 

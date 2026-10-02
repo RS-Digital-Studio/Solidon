@@ -606,7 +606,7 @@ def test_parts_loader_keeps_a_parallel_completed_group_when_the_next_group_fails
         complete = loader.load()
         modules = {spec.fn.__module__ for spec in complete.all()}
 
-        assert len(complete.all()) == 39
+        assert len(complete.all()) == 41
         assert {
             spec.name for spec in complete.all() if spec.fn.__module__ == fasteners
         } == expected_fasteners

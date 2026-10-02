@@ -2180,6 +2180,19 @@ def test_cura_definition_matches_a_renamed_solidon_printer(cura: Path) -> None:
     assert machine is not None and machine.printer_model == "abax_pri3"
 
 
+def _cura_seam_back(width: float, depth: float, *, centre_is_zero: bool) -> tuple[float, float]:
+    """Curas eigene Formel für die Naht „hinten“ (``fdmprinter.def.json``, Cura 5.13).
+
+    ``z_seam_x`` ist bei ``z_seam_position = back`` ``machine_width / 2``,
+    ``z_seam_y`` ``machine_depth``; beide abzüglich der halben Bettgröße, wenn
+    ``z_seam_relative`` oder ``machine_center_is_zero`` gilt. Solidon schreibt
+    ``z_seam_relative`` nicht, es bleibt bei Curas ``false``.
+    """
+    x = width / 2.0 - (width / 2.0 if centre_is_zero else 0.0)
+    y = depth - (depth / 2.0 if centre_is_zero else 0.0)
+    return x, y
+
+
 def test_cura_instance_hardware_and_codes_reach_the_engine(
     cura: Path, cura_configured_printers: Path, tmp_path: Path
 ) -> None:
@@ -2208,7 +2221,10 @@ def test_cura_instance_hardware_and_codes_reach_the_engine(
     assert written.written["machine_height"] == "260"
     assert written.written["machine_nozzle_size"] == "0.6"
     assert written.written["machine_center_is_zero"] == "true"
-    assert written.written["z_seam_x"] == written.written["z_seam_y"] == "0"
+    assert written.origin_at_centre
+    seam = (float(written.written["z_seam_x"]), float(written.written["z_seam_y"]))
+    assert seam == pytest.approx(_cura_seam_back(240.0, 230.0, centre_is_zero=True))
+    assert seam == pytest.approx((0.0, 115.0)), "hinten in der Mitte, um die Bettmitte gemessen"
     assert (
         f"machine_start_gcode=G28\nM117 Werkstatt\nM109 S{settings.temperature.nozzle}" in command
     )
@@ -2242,6 +2258,168 @@ def test_cura_instance_stays_usable_when_solidon_nozzle_changes(
 
     assert written.cura_machine is not None and written.cura_machine.from_printer
     assert written.written["machine_nozzle_size"] == "0.4"
+
+
+def test_cura_factory_definition_stays_the_machine_when_solidon_nozzle_changes(
+    cura: Path, cura_configured_printers: Path, tmp_path: Path
+) -> None:
+    """In Cura ist die Düse ein Wert der Maschine, keine eigene Maschinendatei.
+
+    Die Familienregel aus :func:`sp.match` („ohne passende Variante bleibt die
+    Auswahl leer“) gilt Slicern, deren Maschinenprofile je Düse getrennt
+    liegen. Eine Cura-Definition hat keine solchen Geschwister — bei anderer
+    Düse sagte die Übergabe sonst, der Drucker sei in Cura nicht eingerichtet.
+    """
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    found = {printer.title: printer for printer in sp.discover_printers(cura, "cura")}
+    assert found["Abax PRi3"].nozzle_diameter == pytest.approx(0.4)
+    printer = replace(found["Abax PRi3"], nozzle_diameter=0.6)
+
+    machine, _process = sp.match(sp.find_profiles(cura, "cura"), printer)
+    assert machine is not None and machine.cura_instance is None
+    assert machine.printer_model == "abax_pri3"
+
+    profile = Profile(printer=printer, material=profiles.material("pla"))
+    written = handover.write_config(
+        print_settings.resolve(profile), profile, handover.SlicerSetup(cura, "cura"), tmp_path
+    )
+    assert written.cura_machine is not None and written.cura_machine.from_printer
+    assert written.cura_machine.definition.name == "abax_pri3.def.json"
+    assert written.written["machine_nozzle_size"] == "0.6"
+
+
+@pytest.mark.parametrize(
+    ("file_name", "shown"),
+    [
+        ("Snapmaker+2.0+A350.global.cfg", "Snapmaker 2.0 A350"),
+        ("Snapmaker+2.0+A350_settings.inst.cfg", "Snapmaker 2.0 A350_settings"),
+        ("snapmaker_2.0_a350.def.json", "snapmaker_2.0_a350"),
+        ("Snapmaker 2.0 A350.json", "Snapmaker 2.0 A350"),
+        ("Snapmaker 2.0 A350.ini", "Snapmaker 2.0 A350"),
+    ],
+)
+def test_an_incomplete_profile_keeps_its_whole_name(file_name: str, shown: str) -> None:
+    """Der Name im Satz ist der Name des Profils, ohne Curas Doppelendung und Kodierung."""
+    error = sp._incomplete_profile(Path("bestand") / file_name)
+
+    assert f"„{shown}“" in str(error.detail)
+
+
+def _centred_cura_definition(cura_bestand: Path) -> None:
+    """Eine Werksdefinition mit dem Ursprung in der Bettmitte, wie Curas Deltas.
+
+    Die Düse erbt sie, wie die Malyan M180 oder die Kossel Mini in Cura 5.13:
+    Die eigene Datei nennt keine, und ihr Eintrag trägt deshalb ``nozzle`` 0.
+    """
+    _write(
+        cura_bestand / "definitions" / "zentrum_basis.def.json",
+        {
+            "version": 2,
+            "name": "Zentrum Basis",
+            "inherits": "fdmprinter",
+            "metadata": {"visible": False},
+            "overrides": {"machine_nozzle_size": {"default_value": 0.4}},
+        },
+    )
+    _write(
+        cura_bestand / "definitions" / "zentriert.def.json",
+        {
+            "version": 2,
+            "name": "Zentriert Delta",
+            "inherits": "zentrum_basis",
+            "metadata": {"visible": True, "manufacturer": "Zentrum"},
+            "overrides": {"machine_center_is_zero": {"default_value": True}},
+        },
+    )
+
+
+def test_cura_definition_with_its_origin_in_the_middle_keeps_it(
+    cura: Path, cura_bestand: Path, cura_configured_printers: Path, tmp_path: Path
+) -> None:
+    """Der Ursprung gehört der Maschine (RM-330): Eine Definition mit
+    ``machine_center_is_zero`` behält ihn, die Naht folgt Curas Formel, und eine
+    Definition mit Ursprung an der Ecke bleibt an der Ecke."""
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    _centred_cura_definition(cura_bestand)
+    found = {printer.title: printer for printer in sp.discover_printers(cura, "cura")}
+    for title, centred in (("Zentriert Delta", True), ("Abax PRi3", False)):
+        # Auch bei eigener, nur geerbter Düse bleibt die Definition die
+        # Maschine. Vor RM-329 fiel so fast jede Cura-Werksdefinition heraus.
+        machine, _process = sp.match(sp.find_profiles(cura, "cura"), found[title])
+        assert machine is not None and machine.name == title
+        profile = Profile(printer=found[title], material=profiles.material("pla"))
+        width, depth, _height = profile.printer.build_volume
+        directory = tmp_path / title
+        directory.mkdir()
+        written = handover.write_config(
+            print_settings.resolve(profile), profile, handover.SlicerSetup(cura, "cura"), directory
+        )
+
+        assert written.origin_at_centre is centred, title
+        assert written.written["machine_center_is_zero"] == ("true" if centred else "false")
+        seam = (float(written.written["z_seam_x"]), float(written.written["z_seam_y"]))
+        assert seam == pytest.approx(_cura_seam_back(width, depth, centre_is_zero=centred)), title
+
+
+def test_centred_cura_machine_measures_the_print_around_its_origin(
+    cura: Path, cura_configured_printers: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CuraEngine verschiebt das Modell nur ohne ``machine_center_is_zero`` um
+    das halbe Bett (``MeshGroup::finalize``). Ein Quadrat von 20 mm um die
+    Mitte liegt an einer zentrierten Maschine bei -10..10 — und das ist auf
+    dem Bett. Die Gegenprobe maß bis RM-330 trotzdem gegen 0..Breite."""
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    user = cura_configured_printers / "user" / "Meine+Werkstatt_user.inst.cfg"
+    user.write_text(
+        "[general]\nname = Meine Werkstatt\n[values]\nmachine_center_is_zero = True\n",
+        encoding="utf-8",
+    )
+    found = {printer.id: printer for printer in sp.discover_printers(cura, "cura")}
+    printer = found[sp.chosen_printer("cura", cura, found)]
+    profile = Profile(printer=printer, material=profiles.material("pla"))
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    square = "G90\nM82\nG1 Z0.2 F300\nG0 X-10 Y-10\n" + "".join(
+        f"G1 X{x:g} Y{y:g} E{index + 1}\n"
+        for index, (x, y) in enumerate(((10, -10), (10, 10), (-10, 10), (-10, -10)))
+    )
+
+    def slices(*_args: object, **_kwargs: object) -> object:
+        (output / "quadrat.gcode").write_text(square, encoding="utf-8")
+        return type("Finished", (), {"returncode": 0, "stdout": b"", "stderr": b""})()
+
+    monkeypatch.setattr(handover, "_run_slicer", slices)
+    output = tmp_path / "zentriert"
+    output.mkdir()
+    outcome = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(cura, "cura"),
+        output_dir=output,
+    )
+    assert not [entry for entry in outcome.findings if entry.code == "gcode.off_the_bed"]
+
+    # Gegenprobe: Dieselbe Datei an einer Maschine mit Ursprung an der Ecke
+    # liegt halb vor und links neben dem Bett.
+    user.write_text("[general]\nname = Meine Werkstatt\n[values]\n", encoding="utf-8")
+    output = tmp_path / "ecke"
+    output.mkdir()
+    outcome = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        handover.SlicerSetup(cura, "cura"),
+        output_dir=output,
+    )
+    beyond = [entry for entry in outcome.findings if entry.code == "gcode.off_the_bed"]
+    assert beyond and beyond[0].values["excess_mm"] == pytest.approx(10.0)
 
 
 def test_missing_cura_instance_has_its_own_error_and_keeps_the_full_printer_name(

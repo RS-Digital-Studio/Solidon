@@ -1426,9 +1426,14 @@ def test_three_noisy_pattern_facets_cannot_move_a_vertex_along_the_carrier_axis(
         features={carrier.id: carrier, pattern.id: pattern},
     )
     changed = _pattern_source_on_measured_facets(source, pattern)
+    assert changed is not source, "die Ausrichtung findet statt"
     assert np.allclose(
         changed.mesh.raw.vertices[:, 2], np.asarray(vertices)[:, 2], rtol=0.0, atol=EPS_GEOM
     )
+    # Und sie wirkt quer zur Achse: Ecken bewegen sich in der Ebene senkrecht
+    # zu ihr (RM-404: die Identität wäre hier grün geblieben).
+    moved = np.asarray(changed.mesh.raw.vertices) - np.asarray(vertices)
+    assert float(np.max(np.hypot(moved[:, 0], moved[:, 1]))) > 0.0
 
 
 def test_pattern_facet_alignment_invalidates_previous_cavity_geometry() -> None:
@@ -1532,18 +1537,26 @@ def test_pattern_facet_alignment_can_cancel_without_changing_the_source(
     assert np.array_equal(source.mesh.raw.vertices, original)
 
 
-def _stl_rounded_fluted_lid() -> tuple[SceneObject, float]:
-    """Ein facettierter Deckel mit 24 Randrillen nach dem binären STL-Weg."""
+def _stl_rounded_fluted_lid(
+    offset: tuple[float, float] = (0.0, 0.0), radius: float = 20.0, sections: int = 96
+) -> tuple[SceneObject, float]:
+    """Ein facettierter Deckel mit 24 Randrillen nach dem binären STL-Weg.
+
+    ``offset`` legt ihn dorthin, wo er in der Datei steht — die Rundung auf
+    ``float32`` geschieht dort (RM-404).
+    """
     from app.core.ingest.loader import normalise, read_model
 
     cancel = NeverCancelled()
-    body = trimesh.creation.cylinder(radius=20.0, height=16.0, sections=96)
-    body.apply_translation((0.0, 0.0, 8.0))
+    body = trimesh.creation.cylinder(radius=radius, height=16.0, sections=sections)
+    body.apply_translation((offset[0], offset[1], 8.0))
     smooth_carrier_volume = float(body.volume)
     for index in range(24):
         angle = math.radians(index * 15.0)
         groove = trimesh.creation.cylinder(radius=1.1, height=13.0, sections=14)
-        groove.apply_translation((20.0 * math.cos(angle), 20.0 * math.sin(angle), 6.4))
+        groove.apply_translation(
+            (offset[0] + radius * math.cos(angle), offset[1] + radius * math.sin(angle), 6.4)
+        )
         body = boolean(
             "difference",
             [MeshData.of(body), MeshData.of(groove)],
@@ -1564,6 +1577,83 @@ def _stl_rounded_fluted_lid() -> tuple[SceneObject, float]:
         SceneObject(id="obj_1", name="Deckel", mesh=mesh, features=detect(mesh)),
         smooth_carrier_volume,
     )
+
+
+@pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])
+@pytest.mark.parametrize(
+    ("offset", "radius", "sections"),
+    [
+        # Mitte bei x = y = 110 mm: Das float32-Raster misst dort 7,6 nm. Die
+        # Facetten liegen danach eben (2,8·10⁻¹⁴ mm), an den Rillen bei 15° und
+        # 165° bleiben trotzdem vier Selbstschnitte — die Ursache liegt hinter
+        # der Ausrichtung, im Stopfen oder der Vereinigung (RM-404, offen).
+        pytest.param(
+            (110.0, 110.0),
+            20.0,
+            96,
+            marks=pytest.mark.xfail(
+                strict=True, reason="RM-404: Selbstschnitte am Stopfen fern vom Ursprung"
+            ),
+        ),
+        # Ø 80 am Ursprung — der Stift ging verloren.
+        ((0.0, 0.0), 40.0, 96),
+        # CAD-Nullpunkt in der Ecke.
+        ((20.0, 20.0), 20.0, 96),
+        # Fein vernetzter Träger.
+        ((0.0, 0.0), 20.0, 384),
+    ],
+)
+def test_stl_rounded_lids_anywhere_keep_pattern_edits_free_of_self_intersections(
+    operation: str, offset: tuple[float, float], radius: float, sections: int
+) -> None:
+    """Die Ausrichtung aus RM-225 griff an verschobenen, größeren oder feinen STL nicht (RM-404).
+
+    Die Grenze war fest 1 nm; das float32-Raster einer binären STL ist ab 16 mm
+    schon größer, und die Funktion gab still die Quelle zurück — mit 3 bis 15
+    Selbstschnittdreiecken und verlorenem Stift. Jetzt gilt die Auflösung der
+    Koordinaten, an allen vier Varianten aus dem Review.
+    """
+    from app.core.geom.repair import self_intersection_check
+
+    source, carrier_volume = _stl_rounded_fluted_lid(offset, radius, sections)
+    pattern = only_pattern(source.features)
+    params: dict[str, object] = {"at_feature": pattern.id}
+    if operation == "resize_feature":
+        params["pitch"] = 5.9
+    changed, findings = run_op(operation, source, quality="fine", **params)
+
+    assert "pattern.facets_unaligned" not in {finding.code for finding in findings}
+    assert changed.mesh.raw.is_watertight
+    assert self_intersection_check(as_mesh_data(changed.mesh), NeverCancelled()) == ((), True)
+    pin = next(feature for feature in changed.features.values() if feature.kind == "pin")
+    assert math.isclose(float(pin.params["diameter"]), 2.0 * radius, abs_tol=1e-3)
+    if operation == "remove_feature":
+        assert kinds(changed.features) == {"pin": 1, "face": 2}
+        assert math.isclose(changed.mesh.raw.volume, carrier_volume, abs_tol=0.02)
+
+
+def test_a_refused_facet_alignment_is_said_with_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lehnt die Ausrichtung ab, steht es im Bericht — mit *Reparieren* (RM-404).
+
+    Dreizehn Wege führten still zur Quelle zurück, und die Selbstschnitte danach
+    standen ohne Satz da; im Bericht stand nur „entfernt“.
+    """
+    from app.core.geom import prepare_ops
+
+    source, _carrier_volume = _stl_rounded_fluted_lid()
+    pattern = only_pattern(source.features)
+    monkeypatch.setattr(
+        prepare_ops, "_aligned_facets", lambda body, feature, cancelled=None: (body, True)
+    )
+
+    _changed, findings = run_op("remove_feature", source, quality="fine", at_feature=pattern.id)
+
+    refused = [finding for finding in findings if finding.code == "pattern.facets_unaligned"]
+    assert len(refused) == 1
+    assert refused[0].severity == "warning"
+    assert "repair_and_retry" in {action.id for action in refused[0].suggestions}
 
 
 @pytest.mark.parametrize("operation", ["remove_feature", "resize_feature"])

@@ -12214,14 +12214,19 @@ def test_a_preview_that_stops_at_a_question_says_so(session: Session) -> None:
 
     reasons: list[str] = []
     shown: list[object] = []
+    asked: list[object] = []
     session.preview_async(
         shown.append,
         [OperationDraft(op="remove_feature", inputs=("obj_1",), params={"at_feature": hole})],
         explained=reasons.append,
+        asked=asked.append,
     )
     session.wait_for_idle()
     assert shown == [None]
     assert reasons == [tr("Eine Rückfrage steht an — sie kommt beim Übernehmen.")]
+    # Und es eigens gesagt, damit das Fenster den Satz nicht als Absage liest
+    # und *Übernehmen* sperrt (RM-389).
+    assert asked == [None]
 
 
 def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow) -> None:
@@ -19831,3 +19836,301 @@ def test_changing_a_migrated_slot_angle_returns_it_to_the_current_frame() -> Non
     assert changed_angle.change_values == {"slot_angle": 0.0, "measured_frame": False}
     assert changed_length is not None
     assert changed_length.change_values == {"slot_length": 25.0}
+
+
+def test_three_arrow_steps_in_the_parameter_bar_turn_the_number_by_three(
+    window: MainWindow,
+) -> None:
+    """Dreimal ↑ in *Breite* sind drei Millimeter, und der Fokus bleibt im Feld (RM-355).
+
+    Die Leiste baute nach jeder Änderung alle Zeilen neu, und das bediente
+    Feld ging unter: Nach dem ersten ↑ war der Fokus weg, ein zweites traf
+    nichts mehr — 61 statt 62. Jetzt bleibt das Feld dasselbe Widget.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.i18n import _
+
+    session = window.session
+    window.show()
+    window.open_path(MESHES / "cube_clean.stl")
+    assert session.wait_for_idle(30_000)
+    assert session.add_parameter(Parameter(name="breite", value=60.0, unit="mm", title=_("Breite")))
+    session.wait_for_idle()
+    QApplication.processEvents()
+    editor = window.parameters._editors["breite"]
+    editor.setSingleStep(1.0)
+    window.activateWindow()
+    editor.setFocus()
+    QApplication.processEvents()
+    assert editor.hasFocus(), "das Feld empfängt die Taste"
+
+    for _step in range(3):
+        focused = QApplication.focusWidget()
+        assert focused is not None, "der Fokus ist noch da"
+        QTest.keyClick(focused, Qt.Key.Key_Up)
+        for _round in range(3):
+            QApplication.processEvents()
+        session.wait_for_idle()
+        QApplication.processEvents()
+
+    assert session.project.document.parameters["breite"].value == pytest.approx(63.0)
+    assert window.parameters._editors["breite"] is editor, "dieselbe Zeile, kein Neubau"
+    focus = QApplication.focusWidget()
+    assert focus is editor or editor.isAncestorOf(focus), "der Fokus bleibt in Breite"
+
+
+def _bound_width_project(session: Session) -> float:
+    """Ein Quader, dessen Breite das Maß *breite* liest — zurück kommt die Obergrenze des Felds."""
+    from app.core.registry import REGISTRY
+    from app.core.scene import OperationDraft
+    from app.i18n import _
+
+    assert session.add_parameter(Parameter(name="breite", value=60.0, unit="mm", title=_("Breite")))
+    session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@breite"})])
+    assert session.wait_for_idle(30_000)
+    entry = {item.name: item for item in REGISTRY.get("create_box").params.spec()}["width"]
+    assert entry.maximum is not None
+    return float(entry.maximum)
+
+
+def test_a_parameter_beyond_its_field_is_refused_and_the_body_stays(session: Session) -> None:
+    """Breite 5000 lief durch, die Kette hielt am Quader an, und die Szene war leer (RM-354).
+
+    Jetzt sagt ``change_parameter`` die Grenze des Felds samt Schritt, das
+    Dokument bleibt, und der Körper steht weiter da.
+    """
+    high = _bound_width_project(session)
+    refused: list[errors.AppError] = []
+    session.failed.connect(refused.append)
+
+    assert not session.change_parameter("breite", high + 4000.0)
+    session.wait_for_idle()
+
+    assert session.project.document.parameters["breite"].value == pytest.approx(60.0)
+    assert refused and isinstance(refused[-1], errors.ValidationError)
+    assert refused[-1].constraint == "maximum"
+    assert refused[-1].values["maximum"] == pytest.approx(high)
+    assert session.last_result is not None and "obj_1" in session.last_result.scene.objects
+    assert session.change_parameter("breite", high), "die Grenze selbst geht"
+
+
+def test_the_parameter_bar_knows_the_limit_of_the_field_it_feeds(window: MainWindow) -> None:
+    """Die Zeile *Breite* nimmt die Grenze des Quaderfelds und lehnt 5000 mit ihr ab (RM-354)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window.show()
+    high = _bound_width_project(window.session)
+    QApplication.processEvents()
+    editor = window.parameters._editors["breite"]
+    assert editor.maximum() == pytest.approx(high)
+
+    window.activateWindow()
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), str(int(high + 4000.0)))
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    for _round in range(3):
+        QApplication.processEvents()
+    window.session.wait_for_idle()
+
+    assert window.session.project.document.parameters["breite"].value == pytest.approx(60.0)
+    said = window.parameters.refusal_text()
+    assert str(int(high)) in said.replace(".", "").replace(",", ""), said
+
+
+def test_correcting_a_field_that_reads_a_parameter_goes_to_the_parameter_bar(
+    window: MainWindow,
+) -> None:
+    """*Eingabe korrigieren* an „=@breite“ führt in die Zeile der Leiste (RM-354).
+
+    Im Schrittdialog stand „=@breite“, und wer dort eine Zahl tippte, trennte
+    still die Bindung. Der Halt wird hier am Dokument erzwungen, an Leiste
+    und Sitzung vorbei — so, wie eine ältere Datei ihn mitbringt.
+    """
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    result = window.session.evaluate_now()
+    assert result.stopped_at == 1
+    QApplication.processEvents()
+    window.activateWindow()
+
+    error = errors.ValidationError(
+        field="width", detail="zu breit", constraint="maximum", values={"maximum": high}
+    )
+    error.op_id = 1
+    window._correct_after_error(error)
+    QApplication.processEvents()
+
+    editor = window.parameters._editors["breite"]
+    assert editor.hasFocus(), "der Fokus steht in der Zeile des Maßes"
+    assert window._op_dialog is None, "kein Schrittdialog mit „=@breite“"
+
+
+def test_a_new_expression_beyond_its_field_is_refused_too(session: Session) -> None:
+    """*Parameter ändern …* mit einem Ausdruck über der Feldgrenze: dieselbe Absage (RM-354)."""
+    import dataclasses
+
+    high = _bound_width_project(session)
+    refused: list[errors.AppError] = []
+    session.failed.connect(refused.append)
+    existing = session.project.document.parameters["breite"]
+
+    assert not session.edit_parameter(
+        "breite", dataclasses.replace(existing, expression=f"={high + 4000.0:g}")
+    )
+
+    assert session.project.document.parameters["breite"] == existing
+    assert refused and getattr(refused[-1], "constraint", None) == "maximum"
+
+
+def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> None:
+    """§15.3: nie ein leeres Fenster — auch nicht, wenn schon der erste Schritt anhält (RM-354).
+
+    Ein Halt weiter hinten zeigt den Stand davor; am ersten Schritt ist der
+    leer, und die Ansicht stand ohne Körper da. Erzwungen wird der Halt am
+    Dokument, an Leiste und Sitzung vorbei.
+    """
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    QApplication.processEvents()
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    halted = window.session.evaluate_now()
+    assert halted.stopped_at == 1 and not halted.scene.objects
+
+    window._on_scene(halted)
+    QApplication.processEvents()
+
+    shown = window.viewport._requested_result
+    assert shown is not None and "obj_1" in shown.scene.objects, "der Körper bleibt im Bild"
+    assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
+
+
+def _width_bound_box(session: Session) -> None:
+    """Ein Quader, dessen Breite das Maß *breite* (80 mm) liest."""
+    from app.core.scene import OperationDraft
+    from app.i18n import _
+
+    assert session.add_parameter(Parameter(name="breite", value=80.0, unit="mm", title=_("Breite")))
+    session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@breite"})])
+    assert session.wait_for_idle(30_000)
+
+
+def test_an_export_during_the_recalculation_writes_the_new_state(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Breite 80 → 100, sofort exportieren: Die Datei ist 100 mm breit (RM-352).
+
+    Geschrieben wurde das vorige Ergebnis mit dem neuen Dokument — Bild und
+    Verlauf zeigten 100 mm, die Datei 80 mm, und die Quittung meldete Erfolg.
+    Jetzt wartet der Export auf das Ergebnis, das zum Dokument gehört.
+    """
+    import trimesh
+
+    _width_bound_box(window.session)
+    QApplication.processEvents()
+    assert window.session.change_parameter("breite", 100.0)
+    target = tmp_path / "quader.stl"
+
+    window._start_export(target, "stl")
+    assert window._export_waiting is not None or window._export_worker is not None
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+
+    assert target.exists(), "die Datei entsteht, sobald das Ergebnis steht"
+    extents = trimesh.load(target, force="mesh").extents
+    assert max(extents) == pytest.approx(100.0, abs=1e-3), extents
+
+
+def test_a_waiting_export_writes_nothing_when_the_chain_halts(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Hält die Kette an, entsteht keine Datei — sie zeigte den Stand davor (RM-352)."""
+    import dataclasses
+
+    _width_bound_box(window.session)
+    QApplication.processEvents()
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=1_000_000.0
+    )
+    window.session.result_current = False
+    target = tmp_path / "quader.stl"
+
+    window._start_export(target, "stl")
+    assert window._export_waiting is not None, "der Export wartet"
+    window._on_scene(window.session.evaluate_now())
+    QApplication.processEvents()
+    wait_for_export(window)
+
+    assert window._export_waiting is None
+    assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
+
+
+def test_an_empty_scene_invites_to_start_and_steps_aside_for_the_first_body(
+    window: MainWindow,
+) -> None:
+    """Die leere Szene lädt zum Anfangen ein — auf drei Wegen dorthin (RM-370).
+
+    Nach *Neues Projekt* zeigte die Ansicht nur den Bauraum. Jetzt stehen dort
+    die Einstiege, über die Tastatur erreichbar und mit Namen; sie gehen mit
+    dem ersten Körper und kommen bei jeder leeren Szene wieder: neues
+    Projekt, Strg+Z bis zum Anfang, alle Körper gelöscht.
+    """
+    from PySide6.QtCore import Qt as QtCore_Qt
+
+    from app.core.scene import OperationDraft
+
+    window.show()
+    window.session._dirty = False
+    window.start_screen.new_button.click()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    invitation = window.viewport.invitation
+    assert invitation.isVisibleTo(window), "neues Projekt: die Einladung steht"
+    shown = {key for key, button in invitation.buttons.items() if button.isVisibleTo(window)}
+    assert {"create_box", "create_cylinder", "draw", "parts"} <= shown, shown
+    for key in shown:
+        button = invitation.buttons[key]
+        assert button.accessibleName(), key
+        assert button.focusPolicy() & QtCore_Qt.FocusPolicy.TabFocus, key
+
+    invitation.buttons["create_box"].click()
+    QApplication.processEvents()
+    assert window._op_dialog is not None, "der Einstieg öffnet den Schritt wie das Menü"
+    window._op_dialog.accept()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert window.session.last_result.scene.objects, "ein Quader steht"
+    assert not invitation.isVisibleTo(window), "mit dem ersten Körper tritt sie zur Seite"
+
+    window.action_undo()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert not window.session.last_result.scene.objects
+    assert invitation.isVisibleTo(window), "Strg+Z bis zum Anfang: sie ist wieder da"
+
+    window.session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert not invitation.isVisibleTo(window)
+    (body,) = window.session.last_result.scene.objects
+    window.session.apply("Löschen", [OperationDraft(op="delete_object", inputs=(body,))])
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert invitation.isVisibleTo(window), "alles gelöscht: sie ist wieder da"
