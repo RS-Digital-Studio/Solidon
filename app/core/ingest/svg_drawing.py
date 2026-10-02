@@ -92,7 +92,7 @@ def path_arguments(payload: bytes) -> dict[str, Any]:
 
 
 def parse_transform(text: str) -> np.ndarray:
-    """Eine SVG-Transformationsliste als homogene 3x3-Matrix (SVG 1.1, §7.6)."""
+    """Eine SVG-Transformationsliste als homogene 3x3-Matrix (SVG 1.1, Abschnitt 7.6)."""
     result = np.eye(3)
     position = 0
     text = text.strip()
@@ -156,7 +156,7 @@ def _drawn(
     """Jede gezeichnete Grundform mit ihrer Gesamttransformation, in Dokumentreihenfolge.
 
     ``chain`` hält die Kennungen, über die ``use`` gerade hierher geführt hat; ein
-    Verweis auf eine davon ist eine Schleife und zeichnet nichts (SVG 1.1, §5.6).
+    Verweis auf eine davon ist eine Schleife und zeichnet nichts (SVG 1.1, Abschnitt 5.6).
     """
     tag = _local(element.tag)
     if tag is None or tag in NOT_RENDERED or _hidden(element):
@@ -325,7 +325,7 @@ class _Drawing:
             self._add("Line", points, matrix)
 
     def _add_rect(self, attrib: Mapping[str, str], matrix: np.ndarray) -> None:
-        """Ein Rechteck; mit ``rx``/``ry`` über seine Bögen (SVG 1.1, §9.2)."""
+        """Ein Rechteck; mit ``rx``/``ry`` über seine Bögen (SVG 1.1, Abschnitt 9.2)."""
         x, y = _length(attrib, "x"), _length(attrib, "y")
         width, height = _length(attrib, "width"), _length(attrib, "height")
         if width <= 0 or height <= 0:
