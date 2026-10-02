@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-399: Vorlage „Halter/Bügel“ (02.10.2026)](#rm-399-vorlage-halterbügel-02102026) |
+| 2026-10-02 | [RM-390: Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen (02.10.2026)](#rm-390-ein-neuer-grundkörper-entsteht-auf-dem-zuletzt-gewählten-körper-oder-merkmal-ohne-es-zu-sagen-02102026) |
+| 2026-10-02 | [RM-356: Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog (02.10.2026)](#rm-356-nach-quader-anlegen-ist-nichts-gewählt-und-bausteine-führt-in-einen-gesperrten-katalog-02102026) |
 | 2026-10-02 | [RM-398: Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“ (02.10.2026)](#rm-398-grundform-rohrring-und-bausteine-lasche-mit-loch-und-rohrschelle-02102026) |
 | 2026-10-02 | [RM-370: Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein (02.10.2026)](#rm-370-die-leere-szene-nach-neues-projekt-lädt-zum-anfangen-ein-02102026) |
 | 2026-10-02 | [RM-354: Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden (02.10.2026)](#rm-354-ein-hauptmaß-jenseits-der-grenze-der-operation-lässt-das-modell-verschwinden-02102026) |
@@ -36001,3 +36004,69 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   **Vorgabe Robert 02.10.2026 — allgemein:** Einladung für jede leere Szene (neues Projekt, nach Löschen aller Körper, nach Strg+Z), Einstiege aus dem Register statt fest verdrahtet; Abnahme an drei Wegen in die leere Szene.
 
 **Abschluss:** Über jeder leeren Szene steht die Einladung `EmptySceneInvitation` mit Quader und Zylinder aus dem Register, *Zeichnen*, *Bausteine* und mit KI-Zugang *Im Chat beschreiben*, dazu „Oder ziehen Sie eine Datei hierher.“ Nicht modal, weicht dem ersten Körper und kehrt bei leerer Szene zurück; Fenstertest an neuem Projekt, Strg+Z bis zum Anfang und gelöschten Körpern. Umgesetzt von Claude, in main mit `c117720b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-399: Vorlage „Halter/Bügel“ (02.10.2026)
+
+<a id="rm-399-vorlage-halterbügel-02102026"></a>
+<a id="rm-399"></a>
+
+**RM-399 — Vorlage „Halter/Bügel“.**
+  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 4).
+  Der U-Halter gelang im Nachbau (17 Klicks), aber nur über *Aushöhlen* mit drei offenen Flächen
+  (`hollow_object`, `app/core/geom/prepare_ops.py:15626`) — ein Kunde sucht „Halter“. *Wandhalter*
+  (`wall_mount`, `app/core/knowledge/parts/mounting.py:431`) gibt es nur als Anbauteil.
+  **Ablauf:** *Halter/Bügel …* im Katalog bzw. als Einstieg: Form U oder L, Innenmaß, Wandstärke,
+  Breite; Befestigung *Schlüsselloch*, *Schraublöcher* oder *keine*. Ergebnis als ein parametrisches
+  Teil mit Projektparametern; Lochgrößen aus der Normteiltabelle.
+  **Abnahme:** Test: U-Halter mit Schlüsselloch in einem Schritt, Maße stimmen, Leiste dreht
+  Innenmaß; Nachbau Modell 1 in höchstens fünf Klicks. Bauplan §2.2 (Weg 2), §24, §37.
+  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird eine parametrische **Halter-Vorlage** für verschiedene Gegenstände und Befestigungen: Profil U, L, Z oder Gabel, mit/ohne Boden, Gegenstand als Maß (Breite × Tiefe oder Durchmesser), Befestigung Schlüsselloch, Schraublöcher, Lochwand-Haken oder Klemme. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 30 Halter (Besen-, Filament-, Flaschen-, Schlauch-, Werkzeughalter, Lochwand-Teile, Wandhalterungen). Abnahme an mindestens drei unterschiedlichen Haltern.
+
+**Abschluss:** Vier Bausteine statt einer Vorlage (Bereichstest höchstens 512 Ecken): *Halter U-Form*, *Halter rund*, *Halter Gabel*, *Halter Ablage* (L oder Z) mit Befestigung Schlüsselloch, Schraublöcher (M4), Lochwand-Haken oder Klemme, Maße aus Normteiltabelle und vorhandenen Bausteinen; im Katalog über „Halter“, „Maße als Parameter anlegen“ legt Schritt und Parameter in einer Transaktion an (`PartSpec.template`). Beide Kerne, Bereichsnachweise aller 41 Bausteine, Prompt neu gezählt (7 729 Token bei 166 Werkzeugen). Offen bleibt der Fünf-Klick-Weg am echten Fenster (Release). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-390: Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen (02.10.2026)
+
+<a id="rm-390-ein-neuer-grundkörper-entsteht-auf-dem-zuletzt-gewählten-körper-oder-merkmal-ohne-es-zu-sagen-02102026"></a>
+<a id="rm-390"></a>
+
+**RM-390 — Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen.**
+  Review 02.10.2026, Nachbau-Test F4, am HEAD `4449e3370`.
+  **Fehlerfall:** Zylinder Ø 40 × 20 anlegen, anklicken, *Quader anlegen* → Position Z steht auf 20,
+  der Quader entsteht auf dem Zylinder; ohne Auswahl Z = 0. Mit gewählter Fläche übernimmt der
+  Quader deren Richtung (nx = 1, gedreht auf die Seitenfläche, z = −4,5, halb unter dem Bett,
+  Richtung hinter *Weitere Einstellungen*). In fünf von zwölf Nachbauten entstand ein Körper an
+  einer Stelle, die der Kunde nicht gewählt hatte.
+  **Stellen:** `app/ui/main_window.py:17254` (`run_operation`) → `_from_selection` (`:19575`) →
+  `app/core/scene/placement.py:805` (`values_for_object`) — auch für Erzeuger ohne Eingang
+  (`consumes == 0`).
+  **Fix:** Erzeuger nur vorbelegen, wenn eine Fläche ausdrücklich gewählt ist, und dann vorn sagen
+  „Wird auf ‹Fläche› von ‹Körper› gesetzt“ mit Knopf *auf das Bett*. Vor RM-356 (Erzeuger wählt
+  seinen Körper) umsetzen, sonst entstünde jeder weitere Grundkörper auf dem vorigen.
+  **Abnahme:** Test: Körper gewählt, *Quader anlegen* → Z = 0; Fläche gewählt → Satz sichtbar,
+  Körper steht auf der Fläche, nicht unter dem Bett. Bauplan §2.4, §18.5, Regel 21.
+  Beleg: `nachbau\bericht.md`, Sonde `f4_stapeln.py`.
+
+**Abschluss:** Ein gewählter Körper, eine Bohrung oder Kante setzen keinen Erzeuger mehr; nur eine ebene Fläche (`placement.seats_on`, `seat_on_face`), mit dem Satz „Wird auf „…“ von „…“ gesetzt.“ und dem Knopf *Auf das Bett*; reicht der Körper unter das Bett, rückt er in der Ebene hoch oder entsteht auf dem Bett, mit Satz. Fensterlose und Fenstertests an allen fünf Zwillingspaaren, rot vor dem Fix. Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-356: Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog (02.10.2026)
+
+<a id="rm-356-nach-quader-anlegen-ist-nichts-gewählt-und-bausteine-führt-in-einen-gesperrten-katalog-02102026"></a>
+<a id="rm-356"></a>
+
+**RM-356 — Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog.**
+  Review 02.10.2026, Gebietsprüfung Weg 2 (F4), am HEAD `6ce767031`.
+  `app/ui/main_window.py:8225–8243`, `catalog.py:503–528`, `selection_operations.py:920–922`.
+  **Fehlerfall:** *Quader anlegen* → *Übernehmen*: nichts gewählt; das Auswahlfenster bietet
+  *Bausteine*, im modalen Katalog sind alle 25 Flächenbausteine gesperrt mit „Wählen Sie zuerst
+  ein Objekt im Objektbaum.“ — im Katalog nicht befolgbar, obwohl es genau einen Körper gibt.
+  Nach Strg+Z auf die leere Szene sagt die Karte „Bausteine gehen auch so“, der Katalog sperrt
+  25 von 35 und nennt „legen Sie einen Grundkörper an“ ohne Knopf.
+  **Fix:** Ein Erzeugerschritt wählt seinen neuen Körper; bei genau einem Körper nimmt der
+  Katalog diesen; in der leeren Szene trägt der Katalog *Quader anlegen*.
+  **Abnahme:** nach *Quader anlegen* `selected_objects() == ('obj_1',)` und ein Flächenbaustein
+  ist frei. Bauplan §2.1 (keine Sackgassen), §2.6.
+  Belege: `gebiet-weg2.md`, Sonden `w2_katalog.py`, `w2_leere_karte.py`. Nebenbei veraltet: die
+  Kommentare „drei der siebenundzwanzig Bausteine stehen frei“ (`selection_operations.py:772`,
+  `catalog.py:487`), gemessen 10 von 35.
+
+**Abschluss:** Ein Erzeugerschritt wählt seinen neuen Körper; bei genau einem Körper nimmt der Katalog diesen; in der leeren Szene trägt der Katalog *Quader anlegen* und *Modell einfügen …*. Die Zählkommentare sind berichtigt (25 von 35 Bausteinen brauchen eine Stelle). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.

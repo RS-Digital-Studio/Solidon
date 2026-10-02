@@ -131,7 +131,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
 | [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | Export wartet auf das aktuelle Ergebnis, schreibt nach einem Halt nichts (Claude, in main mit `52cc9fd66`); offen der gemeinsame Abschluss B01: vor Export, Druckvorprüfung und Übergabe fein auswerten (der Export schreibt heute das Entwurfsnetz, `blend.draft`) |
-| [RM-356 — Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog](#rm-356) | Bedienung und Darstellung | **In Arbeit: Claude (Worktree `F:/solidon-claude-h`)** — Review 02.10. (Weg 2): Erzeugerschritt wählt seinen Körper, Katalog nimmt den einzigen Körper |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
@@ -141,11 +140,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl](#rm-369) | Bedienung und Darstellung | Entscheidung Robert 02.10.: Vorgabe aus der letzten Wahl, Test und Handbuch nachziehen |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
 | [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Konzept §12/§7.5 einlösen, Befund nach dem Posieren |
-| [RM-390 — Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen](#rm-390) | Bedienung und Darstellung | **In Arbeit: Claude (Worktree `F:/solidon-claude-h`)** — Review 02.10. (Nachbau): Erzeuger nur bei ausdrücklicher Flächenwahl vorbelegen und es vorn sagen; vor RM-356 umsetzen |
 | [RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD](#rm-395) | Bedienung und Darstellung | Review 02.10. (Nachbau): Sperrgrund im Dialog, Materialvorgabe Profilklemme, Menü *Aus Skizze erzeugen*, Hinweis beim Zudecken, Bezugsachse Langloch, Skizzenursprung sichtbar |
 | [RM-396 — Grundkörper „an die gewählte Fläche ansetzen und verbinden“ in einem Schritt](#rm-396) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Wahl „frei auf dem Bett“/„an Fläche, bündig, mittig, verbinden“ im Grundkörper-Dialog; zusammen mit RM-390 |
 | [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
-| [RM-399 — Vorlage „Halter/Bügel“](#rm-399) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: U-/L-Profil mit Wandstärke und Befestigung als eine Vorlage mit Parametern |
 | [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
 | [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
@@ -4046,24 +4043,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\gebiet-weg1.md`, `gebiet-weg2.md`, Sonden
   `w1_export_laufend.py`, `w2_export_luecke.py`.
 
-<a id="rm-356"></a>
-
-- [ ] **RM-356 — Nach *Quader anlegen* ist nichts gewählt, und *Bausteine* führt in einen gesperrten Katalog.**
-  Review 02.10.2026, Gebietsprüfung Weg 2 (F4), am HEAD `6ce767031`.
-  `app/ui/main_window.py:8225–8243`, `catalog.py:503–528`, `selection_operations.py:920–922`.
-  **Fehlerfall:** *Quader anlegen* → *Übernehmen*: nichts gewählt; das Auswahlfenster bietet
-  *Bausteine*, im modalen Katalog sind alle 25 Flächenbausteine gesperrt mit „Wählen Sie zuerst
-  ein Objekt im Objektbaum.“ — im Katalog nicht befolgbar, obwohl es genau einen Körper gibt.
-  Nach Strg+Z auf die leere Szene sagt die Karte „Bausteine gehen auch so“, der Katalog sperrt
-  25 von 35 und nennt „legen Sie einen Grundkörper an“ ohne Knopf.
-  **Fix:** Ein Erzeugerschritt wählt seinen neuen Körper; bei genau einem Körper nimmt der
-  Katalog diesen; in der leeren Szene trägt der Katalog *Quader anlegen*.
-  **Abnahme:** nach *Quader anlegen* `selected_objects() == ('obj_1',)` und ein Flächenbaustein
-  ist frei. Bauplan §2.1 (keine Sackgassen), §2.6.
-  Belege: `gebiet-weg2.md`, Sonden `w2_katalog.py`, `w2_leere_karte.py`. Nebenbei veraltet: die
-  Kommentare „drei der siebenundzwanzig Bausteine stehen frei“ (`selection_operations.py:772`,
-  `catalog.py:487`), gemessen 10 von 35.
-
 <a id="rm-358"></a>
 
 - [ ] **RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
@@ -4259,25 +4238,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   §2.8.
   **Vorgabe Robert 02.10.2026 — allgemein:** dieselben Karten und Befunde in jeder Gestensitzung (Formen, Skelett); Abnahme an mindestens drei unterschiedlichen organischen Modellen aus `F:\3D Dateien`.
 
-<a id="rm-390"></a>
-
-- [ ] **RM-390 — Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen.**
-  Review 02.10.2026, Nachbau-Test F4, am HEAD `4449e3370`.
-  **Fehlerfall:** Zylinder Ø 40 × 20 anlegen, anklicken, *Quader anlegen* → Position Z steht auf 20,
-  der Quader entsteht auf dem Zylinder; ohne Auswahl Z = 0. Mit gewählter Fläche übernimmt der
-  Quader deren Richtung (nx = 1, gedreht auf die Seitenfläche, z = −4,5, halb unter dem Bett,
-  Richtung hinter *Weitere Einstellungen*). In fünf von zwölf Nachbauten entstand ein Körper an
-  einer Stelle, die der Kunde nicht gewählt hatte.
-  **Stellen:** `app/ui/main_window.py:17254` (`run_operation`) → `_from_selection` (`:19575`) →
-  `app/core/scene/placement.py:805` (`values_for_object`) — auch für Erzeuger ohne Eingang
-  (`consumes == 0`).
-  **Fix:** Erzeuger nur vorbelegen, wenn eine Fläche ausdrücklich gewählt ist, und dann vorn sagen
-  „Wird auf ‹Fläche› von ‹Körper› gesetzt“ mit Knopf *auf das Bett*. Vor RM-356 (Erzeuger wählt
-  seinen Körper) umsetzen, sonst entstünde jeder weitere Grundkörper auf dem vorigen.
-  **Abnahme:** Test: Körper gewählt, *Quader anlegen* → Z = 0; Fläche gewählt → Satz sichtbar,
-  Körper steht auf der Fläche, nicht unter dem Bett. Bauplan §2.4, §18.5, Regel 21.
-  Beleg: `nachbau\bericht.md`, Sonde `f4_stapeln.py`.
-
 <a id="rm-395"></a>
 
 - [ ] **RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD.**
@@ -4334,20 +4294,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   dem Materialprofil (Regel 7); Durchmesser in der Leiste ändern → Deckel folgt. Nach RM-388 und
   RM-393 umsetzen. Bauplan §2.2, §13, §25.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird ein parametrischer Assistent **„Behälter mit Deckel“**: Grundform rund oder eckig, Deckel als Schraub-, Steck- oder Klappdeckel, optional Fächer/Einsätze und Streulöcher, jede Größe im Bauraum; Gewinde- und Passungsmaße aus Normteiltabelle und Materialprofil, alle Hauptmaße als Projektparameter. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 35 Dateien (Deckel rund/eckig, Gewürzset, Filterball, Wasserfall, Nozzle-Box, Kartusche, Mini-Pot, Taschentuchbox, Werkzeugbox). Abnahme an mindestens drei unterschiedlichen Behältern (rund mit Schraubdeckel, eckig mit Steckdeckel, mit Klappdeckel).
-
-<a id="rm-399"></a>
-
-- [ ] **RM-399 — Vorlage „Halter/Bügel“.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 4).
-  Der U-Halter gelang im Nachbau (17 Klicks), aber nur über *Aushöhlen* mit drei offenen Flächen
-  (`hollow_object`, `app/core/geom/prepare_ops.py:15626`) — ein Kunde sucht „Halter“. *Wandhalter*
-  (`wall_mount`, `app/core/knowledge/parts/mounting.py:431`) gibt es nur als Anbauteil.
-  **Ablauf:** *Halter/Bügel …* im Katalog bzw. als Einstieg: Form U oder L, Innenmaß, Wandstärke,
-  Breite; Befestigung *Schlüsselloch*, *Schraublöcher* oder *keine*. Ergebnis als ein parametrisches
-  Teil mit Projektparametern; Lochgrößen aus der Normteiltabelle.
-  **Abnahme:** Test: U-Halter mit Schlüsselloch in einem Schritt, Maße stimmen, Leiste dreht
-  Innenmaß; Nachbau Modell 1 in höchstens fünf Klicks. Bauplan §2.2 (Weg 2), §24, §37.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird eine parametrische **Halter-Vorlage** für verschiedene Gegenstände und Befestigungen: Profil U, L, Z oder Gabel, mit/ohne Boden, Gegenstand als Maß (Breite × Tiefe oder Durchmesser), Befestigung Schlüsselloch, Schraublöcher, Lochwand-Haken oder Klemme. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 30 Halter (Besen-, Filament-, Flaschen-, Schlauch-, Werkzeughalter, Lochwand-Teile, Wandhalterungen). Abnahme an mindestens drei unterschiedlichen Haltern.
 
 <a id="rm-401"></a>
 
