@@ -199,9 +199,15 @@ der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
 direkt unter dem Feld, und der gemeinsame Knopf ist gesperrt, solange die
 scharfgestellte Handlung eine sichtbare abgelehnte Zahl enthält. Maßgruppen im
-Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann. **Noch
-nicht umgestellt und still kürzend:** die Druckeinstellungen
-(`print_settings_dialog`); sie bleiben im Register von `ROADMAP.md`.
+Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann.
+
+**Auch die Druckeinstellungen lehnen ab statt zu kürzen.** Ihre Zahlenfelder
+verwenden `BoundedSpin`, der Düsendurchmesser `BoundedLengthSpin`. Der Hinweis
+steht am Feld. Solange ein wirksames Feld eine Zahl ablehnt, sind *Slicen* und
+*Im Slicer öffnen* gesperrt und nennen dieselbe Grenze; ein ausgeblendetes Feld
+einer ausgeschalteten Gruppe hält die Übergabe nicht an. Der Dialog zum
+Überschreiben von Spulenwerten sperrt *Übernehmen* nur für eingeschaltete
+Gruppen.
 
 ## Gestufte Tiefe
 

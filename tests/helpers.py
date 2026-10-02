@@ -920,7 +920,11 @@ def cube_surface(
 
 
 def rectangle(width_value: str = "@width", height_value: str = "@height") -> Sketch:
-    """Eine leicht verzogene Rechteckskizze mit Maßen aus Projektparametern."""
+    """Ein leicht verzogenes Rechteck mit Maßen aus Projektparametern.
+
+    Die flachen Punktindizes liegen unten (0, 1), rechts (2, 3), oben (4, 5)
+    und links (6, 7).
+    """
     return Sketch(
         plane="plane:xy",
         elements=(

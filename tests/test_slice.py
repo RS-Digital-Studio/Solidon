@@ -553,7 +553,7 @@ def test_the_support_volume_stops_at_the_material_below() -> None:
 #: Was PrusaSlicer 2.9.6 für denselben Pilz an Stützmaterial gemessen hat, in
 #: mm³ — Lauf vom 25.08.2026, 0,2 mm, Stützen an, sonst Vorgaben.
 #: (``prusa-slicer-console --export-gcode --support-material``, Typkommentare
-#: über ``gcode.parse`` ausgezählt.)
+#: über ``gcode.analyze(...).metrics`` ausgezählt.)
 MEASURED_SUPPORT = 3990.6
 
 

@@ -61,9 +61,6 @@ def _layers(
     )
 
 
-# --- die drei Ebenen (§29) ----------------------------------------------------------
-
-
 def _elegoo_nozzle_profile(root: Path, nozzle: float) -> slicer_profiles.SlicerProfile:
     """Eine installierte Elegoo-Maschine mit Herstellerbeleg aus ihrem Pfad."""
     name = f"Elegoo Centauri Carbon 2 {nozzle:.1f} nozzle"
@@ -88,6 +85,9 @@ def _elegoo_nozzle_profile(root: Path, nozzle: float) -> slicer_profiles.SlicerP
     profile = slicer_profiles._read(path, "machine", False)
     assert profile is not None
     return profile
+
+
+# --- die drei Ebenen (§29) ----------------------------------------------------------
 
 
 def test_the_stage_names_speak_the_language_of_the_window() -> None:
@@ -553,7 +553,7 @@ CALM_WALLS: Final = {
 
 @pytest.mark.parametrize("flavour", ["orca", "prusa", "cura"])
 def test_a_slender_part_on_a_small_foot_is_slowed_down_even_under_an_auto_brim(
-    flavour: str,
+    flavour: slicer_keys.SlicerFlavour,
 ) -> None:
     """Roberts Fahnenstangen (29.09.2026): Ø 7,7 × 122 mm auf 46,5 mm². Elegoos
     Auto-Brim lag fest, die Stangen rissen bei 200 mm/s und 5000 bis
