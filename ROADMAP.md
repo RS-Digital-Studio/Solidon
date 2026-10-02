@@ -163,7 +163,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug](#rm-442) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-k`). Fund 02.10. beim Zusammenführen: Fenstertest seit `6f64f7ed1` rot; klären, ob `stroke_at` den zweiten Zug zu Recht als eigene Etappe einordnet, dann Code oder Test |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -4668,19 +4667,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
-
-<a id="rm-442"></a>
-
-- [ ] **RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug.**
-  Fund 02.10.2026 beim Zusammenführen von RM-361/372/374 (Claude): Der Fenstertest
-  `tests/test_sculpt_session.py::test_a_forced_cut_applies_to_one_stroke_only` ist seit
-  `6f64f7ed1` (RM-438, `stroke_at` kennt die Züge davor) rot, am Elternstand `4373b5f12` und
-  an `910acb1ee` grün. Nach einem erzwungenen Schnitt bei (20, 0, 0) trägt auch der zweite
-  Zug bei (0, 20, 0) `cut=True`. Das reguläre Tor fährt Fenstertests nicht und sah es nicht.
-  **Fix:** klären, ob der zweite Zug die Fläche seiner Etappe wirklich verfehlt (dann den
-  Test auf den neuen Vertrag stellen) oder `stroke_at` ihn fälschlich neu einordnet (dann
-  den Code). **Abnahme:** Test grün ohne Lockerung der Aussage „der Schalter gilt für einen
-  Zug“. Bauplan §17.3, §2.6.
 
 ## KI und Generatoren
 
