@@ -31,7 +31,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
 - O bico escolhe-se nas definições de impressão entre os tamanhos que a sua impressora conhece, e o slicer recebe o perfil correspondente.
 - As definições de impressão perguntam pela ordem em que uma coisa depende da outra: slicer, impressora, bico, placa, filamentos e qualidade, e depois os valores.
-- Com o Creality Print 7.2 e 7.3, «Fatiar» calcula agora sozinho o ficheiro de impressão. Até agora só a janela do Creality Print o fazia. Se o 7.3 reorganizar a placa, o Solidon di-lo.
+- Agora pode gerar ficheiros de impressão diretamente a partir do Solidon com o Creality Print 7.2 e 7.3.
 - Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
 - O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.

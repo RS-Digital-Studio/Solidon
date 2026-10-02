@@ -7,9 +7,11 @@ from __future__ import annotations
 import dataclasses
 import logging
 import math
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -5630,3 +5632,539 @@ def test_a_placement_the_end_state_undid_is_not_reported(profile: Profile) -> No
     left = {finding.code for finding in loose.scene.report.findings}
     assert {entry.plate for entry in loose.scene.objects.values()} == {0, 1}
     assert not left & (placement | {"arrange.needs_more_plates"}), left
+
+
+def _a_bore_report_with_an_added_island(document: Document):
+    """Echter Bohrungsbefund und gewollter dritter Würfel ohne zweite Berichtszeile."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.prepare import split_findings
+
+    cubes = []
+    for x in (0.0, 20.0, 40.0):
+        cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        cube.apply_translation((x, 0.0, 5.0))
+        cubes.append(cube)
+    one = MeshData.of(cubes[0])
+    two = MeshData.of(trimesh.util.concatenate(cubes[:2]))
+    three = MeshData.of(trimesh.util.concatenate(cubes))
+    assert (one.component_count, two.component_count, three.component_count) == (1, 2, 3)
+    raw = split_findings(one, two)
+    assert len(raw) == 1 and raw[0].values == {"count": 2}
+    own = Registry()
+    calls = []
+
+    @register_op(
+        name="split_source",
+        title=_("Prüfkörper"),
+        category="primitive",
+        params=EmptyParams,
+        consumes=0,
+        registry=own,
+    )
+    def source(ctx: OpContext) -> OpResult:
+        calls.append("source")
+        return OpResult(outputs=[SceneObject(id="", name="Zwei Teile", mesh=two)], findings=raw)
+
+    @register_op(
+        name="separate_island",
+        title=_("Loser Prüfkörper"),
+        category="scene",
+        params=EmptyParams,
+        consumes=1,
+        keeps_inputs=1,
+        leaves_separate_parts=True,
+        registry=own,
+    )
+    def add_island(ctx: OpContext) -> OpResult:
+        calls.append("island")
+        return OpResult(outputs=[dataclasses.replace(ctx.inputs[0], mesh=three)])
+
+    history = History(document, registry=own)
+    history.apply("Zwei Teile", [OperationDraft(op="split_source")])
+    history.apply(
+        "Ein gewollt loser dritter Teil", [OperationDraft(op="separate_island", inputs=("obj_1",))]
+    )
+    return own, raw, calls
+
+
+def test_the_final_report_replaces_a_count_without_changing_the_number_of_findings(
+    document: Document, profile: Profile
+) -> None:
+    """Ein echter Bohrungsbefund wird ersetzt, auch wenn keine Zeile hinzukommt oder fällt."""
+    own, raw, calls = _a_bore_report_with_an_added_island(document)
+    cache = ResultCache()
+    for pass_number in range(2):
+        result = evaluate(
+            document,
+            profile,
+            registry=own,
+            cache=cache,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+        )
+        assert result.complete
+        assert len(result.scene.report.findings) == 1, "keine Entdopplung darf den Fehler verdecken"
+        reported = result.scene.report.findings[0]
+        assert reported.code == "bore.splits_the_body" and reported.values == {"count": 3}
+        assert reported.op_id == 1 and reported.object_id == "obj_1"
+        assert reported is not raw[0]
+        assert raw[0].values == {"count": 2} and raw[0].op_id is None
+        assert calls == ["source", "island"]
+        assert cache.statistics.hits == 2 * pass_number
+
+
+@pytest.mark.parametrize("warm", [False, True])
+def test_cancelling_the_material_count_does_not_publish_a_report_or_pending_cache(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch, warm: bool
+) -> None:
+    """Der tatsächliche Endabschluss trägt sein Token bis zum Materialbeleg, auch aus dem Cache."""
+    from app.core.geom import repair as repair_module
+
+    own, raw, calls = _a_bore_report_with_an_added_island(document)
+    cache = ResultCache()
+    if warm:
+        assert evaluate(document, profile, registry=own, cache=cache).complete
+    cached = len(cache)
+    signal = CancelSignal()
+    original = repair_module.material_part_count
+    counted = []
+    progress = []
+
+    def stop_at_the_final_count(body, *, cancelled=None):
+        counted.append(body)
+        assert cancelled is signal
+        count = original(body, cancelled=cancelled)
+        assert count == 3
+        signal.cancel()
+        return count
+
+    monkeypatch.setattr(repair_module, "material_part_count", stop_at_the_final_count)
+    with pytest.raises(OperationCancelled):
+        evaluate(
+            document,
+            profile,
+            registry=own,
+            cache=cache,
+            cancelled=signal,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+            progress=lambda fraction, text: progress.append((fraction, text)),
+        )
+    assert len(counted) == 1 and calls == ["source", "island"]
+    assert len(cache) == cached == (2 if warm else 0)
+    assert cache.statistics.hits == (2 if warm else 0)
+    assert (1.0, "") not in progress, "keine Fertigmeldung nach dem angeforderten Abbruch"
+    assert raw[0].values == {"count": 2} and raw[0].op_id is None
+
+
+# Ausschließlich Schutz des Testaufbaus, keine Produkt- oder Leistungsfrist.
+_SYNC_TEST_WAIT_SECONDS = 5.0
+
+
+class _SyncSignal:
+    """Beobachtet Signale ohne Qt und hat höchstens einen gesteuerten Empfänger."""
+
+    def __init__(self, name: str, trace: list[str]) -> None:
+        self.name = name
+        self.trace = trace
+        self.calls: list[tuple[Any, ...]] = []
+        self.receiver: Callable[..., None] | None = None
+
+    def emit(self, *values: Any) -> None:
+        self.calls.append(values)
+        self.trace.append(self.name)
+        if self.receiver is not None:
+            self.receiver(*values)
+
+
+class _SyncWorker:
+    """Nur der bestätigte Rückgabewert von wait beendet diese Arbeiterattrappe."""
+
+    def __init__(self, record: Callable[[str], None]) -> None:
+        self.record = record
+        self.running = True
+        self.waits: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+        self.on_wait: Callable[[], bool] | None = None
+
+    def wait(self, *args: Any, **kwargs: Any) -> bool:
+        self.waits.append((args, kwargs))
+        self.record("wait")
+        if self.on_wait is not None:
+            return self.on_wait()
+        self.running = False
+        self.record("ended")
+        return True
+
+
+class _SyncSessionState(SimpleNamespace):
+    """Der Slot darf seinen Busy-Zustand lesen, ohne eine Oberfläche zu bauen."""
+
+    @property
+    def busy(self) -> bool:
+        return self._worker is not None
+
+
+def _sync_cancel_case() -> SimpleNamespace:
+    """Bindet die geprüften Methoden echt; Ergebnisbau und Signale bleiben gestellt."""
+    from app.core.scene.cancel import CancelSignal
+    from app.ui.session import Session
+
+    trace: list[str] = []
+    observed: dict[str, list[dict[str, Any]]] = {}
+    held: list[Any] = []
+    async_calls: list[bool] = []
+    history_calls: list[tuple[str, Any]] = []
+    finishers: list[Any] = []
+    old_result = SimpleNamespace(solvers={"stand": "alt"}, answers={}, matches={})
+    fresh_result = SimpleNamespace(solvers={"stand": "neu"}, answers={}, matches={})
+    host = _SyncSessionState(
+        _worker=None,
+        _superseded=None,
+        _rerun_pending=False,
+        _cancel_by_user=False,
+        _project_generation=17,
+        _pending=threading.local(),
+        _recognition_answers=[("vorher",)],
+        _coarse_scene=object(),
+        _evaluation_settings=None,
+        _backend=None,
+        picture=object(),
+        last_result=old_result,
+        result_generation=7,
+        result_current=False,
+    )
+
+    def record(name: str) -> None:
+        trace.append(name)
+        observed.setdefault(name, []).append(
+            {
+                "old_running": worker.running,
+                "superseded": host._superseded is worker,
+                "cancelled": host.cancel_signal.is_cancelled,
+                "rerun": host._rerun_pending,
+                "user_cancel": host._cancel_by_user,
+            }
+        )
+
+    worker = _SyncWorker(record)
+    host._worker = worker
+
+    class RecordedCancel(CancelSignal):
+        def cancel(self) -> None:
+            super().cancel()
+            record("cancel")
+
+        def reset(self) -> None:
+            super().reset()
+            record("reset")
+
+    host.cancel_signal = RecordedCancel()
+
+    def forbidden_wait(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Nur der alte Auswertungsarbeiter darf abgewartet werden.")
+
+    host._leash = SimpleNamespace(hold_until_done=held.append, wait_all=forbidden_wait)
+    host.wait_for_idle = forbidden_wait
+    # Andere Arbeitertypen dienen nur als Wächter gegen einen globalen Warteweg.
+    for name in ("_plan", "_agent", "_split", "_revision", "_coarse_preparation"):
+        setattr(host, name, SimpleNamespace(wait=forbidden_wait, isRunning=lambda: True))
+
+    for name in (
+        "askRequested",
+        "questionInvalidated",
+        "sceneChanged",
+        "busyChanged",
+        "evaluationCancelled",
+        "failed",
+        "projectChanged",
+        "backendChanged",
+    ):
+        setattr(host, name, _SyncSignal(name, trace))
+
+    for name in (
+        "_outdated",
+        "_stale",
+        "question_is_current",
+        "ask_from_worker",
+        "_on_finished",
+        "_on_failed",
+        "_on_cancelled",
+        "_on_thread_done",
+    ):
+        setattr(host, name, getattr(Session, name).__get__(host))
+
+    settings = object()
+    host._current_effective_settings = lambda: settings
+    host._stop_coarse_preparation = lambda: trace.append("coarse_stopped")
+    host._bind_filament_profiles = lambda: trace.append("profiles_bound")
+    host._run_finishers = finishers.append
+    host._settle_import = lambda _result: False
+    host.evaluate_async = lambda: async_calls.append(True)
+    host.history = SimpleNamespace(
+        record_solvers=lambda values: history_calls.append(("solvers", values)),
+        record_answers=lambda values: history_calls.append(("answers", values)) or False,
+        record_matches=lambda values: history_calls.append(("matches", values)) or False,
+    )
+
+    def run_evaluation(quality: str) -> Any:
+        assert quality == "fine", "Der synchrone Weg behält seine volle Güte."
+        record("sync")
+        return fresh_result
+
+    host.run_evaluation = run_evaluation
+    return SimpleNamespace(
+        host=host,
+        worker=worker,
+        trace=trace,
+        observed=observed,
+        held=held,
+        async_calls=async_calls,
+        history_calls=history_calls,
+        finishers=finishers,
+        old_result=old_result,
+        fresh_result=fresh_result,
+        settings=settings,
+    )
+
+
+def test_evaluate_now_confirms_the_old_end_before_reset_and_sync() -> None:
+    """Abbruch, bestätigtes Ende, Reset und neuer Lauf dürfen sich nicht überholen."""
+    from app.ui.session import Session
+
+    case = _sync_cancel_case()
+    host = case.host
+    result = Session.evaluate_now(host)
+
+    control = {"cancel", "questionInvalidated", "wait", "ended", "reset", "sync"}
+    assert [step for step in case.trace if step in control] == [
+        "cancel",
+        "questionInvalidated",
+        "wait",
+        "ended",
+        "reset",
+        "sync",
+    ]
+    assert case.observed["wait"] == [
+        {
+            "old_running": True,
+            "superseded": True,
+            "cancelled": True,
+            "rerun": False,
+            "user_cancel": False,
+        }
+    ]
+    assert not case.observed["reset"][0]["old_running"]
+    assert not case.observed["sync"][0]["old_running"]
+    assert not case.observed["sync"][0]["cancelled"]
+    assert len(case.worker.waits) == 1 and not case.worker.running
+    assert result is case.fresh_result and host.last_result is result
+    assert host.result_current and host.result_generation == 8
+    assert host._evaluation_settings is case.settings
+    assert host.sceneChanged.calls == [(result,)] and case.finishers == [result]
+
+
+def test_evaluate_now_releases_an_unanswered_old_question_without_a_receiver() -> None:
+    """Ein alter Fragender beendet sich ohne Antwort und ohne Qt-Ereignisschleife."""
+    from app.core.errors import OperationCancelled
+    from app.ui.session import Session
+
+    case = _sync_cancel_case()
+    host, worker = case.host, case.worker
+    seen, finished, cleanup = threading.Event(), threading.Event(), threading.Event()
+    requests: list[Any] = []
+    outcomes: dict[str, Any] = {}
+    remembered: dict[Any, Any] = {}
+
+    def observe(request: Any) -> None:
+        requests.append(request)
+        if cleanup.is_set():
+            request.reply(None)
+        seen.set()
+
+    # Dieser Beobachter antwortet nicht. questionInvalidated hat keinen Empfänger.
+    host.askRequested.receiver = observe
+
+    def ask() -> None:
+        host._pending.worker = worker
+        host._pending.project_generation = host._project_generation
+        host._pending.asked = remembered
+        try:
+            outcomes["answer"] = host.ask_from_worker("Welche Seite?", ["oben", "unten"])
+        except BaseException as problem:
+            outcomes["error"] = problem
+        finally:
+            worker.running = False
+            finished.set()
+
+    thread = threading.Thread(target=ask, name="rm298-unanswered-question", daemon=True)
+
+    def wait_for_the_question_thread() -> bool:
+        thread.join(_SYNC_TEST_WAIT_SECONDS)
+        if thread.is_alive():
+            return False
+        case.trace.append("ended")
+        return True
+
+    worker.on_wait = wait_for_the_question_thread
+    thread.start()
+    try:
+        assert seen.wait(_SYNC_TEST_WAIT_SECONDS), "Die echte Frage wurde abgegeben."
+        assert len(requests) == 1 and not requests[0].answered.is_set()
+        assert Session.evaluate_now(host) is case.fresh_result
+        assert finished.is_set() and not thread.is_alive()
+        assert type(outcomes.get("error")) is OperationCancelled, outcomes
+        assert "answer" not in outcomes and remembered == {}
+        assert not requests[0].answered.is_set(), "Kein Empfänger hat eine Antwort erfunden."
+        assert host.questionInvalidated.calls == [()]
+        assert case.trace.index("ended") < case.trace.index("reset") < case.trace.index("sync")
+    finally:
+        # Nur der rote Altstand hängt noch. Erst nach den Zusicherungen löst eine
+        # echte reply-Methode den Testfaden für den sicheren Abbau aus dem wait.
+        cleanup.set()
+        for request in requests:
+            request.reply(None)
+        thread.join(_SYNC_TEST_WAIT_SECONDS)
+        assert not thread.is_alive(), "Der Test hinterlässt keinen wartenden Faden."
+
+
+def test_an_old_question_stays_invalid_after_the_sync_reset() -> None:
+    """Eine verspätet zugestellte Frage wird durch das Reset nicht wieder aktuell."""
+    from app.ui.session import AskRequest, Session
+
+    case = _sync_cancel_case()
+    host = case.host
+    request = AskRequest(
+        question="Welche Seite?",
+        choices=["oben", "unten"],
+        project_generation=host._project_generation,
+        worker=case.worker,
+    )
+    assert host.question_is_current(request), "Vor dem Ersetzen gehört die Frage zum Lauf."
+    assert Session.evaluate_now(host) is case.fresh_result
+    assert not host.cancel_signal.is_cancelled, "Der neue synchrone Lauf hat seinen Reset."
+    assert not host.question_is_current(request)
+    request.reply("oben")
+    assert not host.question_is_current(request), "Eine späte Antwort erneuert den Auftrag nicht."
+    assert host.last_result is case.fresh_result
+    current = AskRequest(
+        question="Neue Frage", choices=["ja"], project_generation=host._project_generation
+    )
+    assert host.question_is_current(current), "Aktuelle Fragen bleiben erlaubt."
+
+
+def test_sync_replacement_suppresses_reruns_and_late_old_slots() -> None:
+    """Ersetzen löst weder den Nachlauf noch einen Nutzerabbruch des Nachfolgers aus."""
+    from app.ui.session import Session
+
+    case = _sync_cancel_case()
+    host, worker = case.host, case.worker
+    host._rerun_pending = True
+    host._cancel_by_user = True
+
+    def deliver_old_slots() -> bool:
+        assert not host._rerun_pending and not host._cancel_by_user
+        worker.running = False
+        case.trace.append("ended")
+        host._on_finished(case.old_result, worker)
+        host._on_cancelled(worker)
+        host._on_thread_done(worker)
+        return True
+
+    worker.on_wait = deliver_old_slots
+    assert Session.evaluate_now(host) is case.fresh_result
+    # Auch ohne den vorgesehenen wait-Anschluss müssen späte echte Slots den
+    # Fehler sichtbar machen; die Gegenprobe darf nicht am ungerufenen Stub vorbeigehen.
+    host._on_finished(case.old_result, worker)
+    host._on_cancelled(worker)
+    host._on_thread_done(worker)
+    assert len(worker.waits) == 1 and not worker.running
+    assert not host._rerun_pending and not host._cancel_by_user
+    assert case.async_calls == [] and case.trace.count("sync") == 1
+    assert host.evaluationCancelled.calls == []
+    assert host.last_result is case.fresh_result and host.result_generation == 8
+    assert host.sceneChanged.calls == [(case.fresh_result,)]
+    assert case.finishers == [case.fresh_result] and case.history_calls == []
+
+    successor = _SyncWorker(lambda _step: None)
+    host._worker = successor
+    host._cancel_by_user = True
+    host._recognition_answers = [("neue Zustimmung",)]
+    busy_before = list(host.busyChanged.calls)
+    host._on_finished(case.old_result, worker)
+    host._on_failed(RuntimeError("Veraltete Fehlerattrappe"), worker)
+    host._on_cancelled(worker)
+    host._on_thread_done(worker)
+    assert host._worker is successor and host._cancel_by_user
+    assert host._recognition_answers == [("neue Zustimmung",)]
+    assert host.last_result is case.fresh_result and host.result_generation == 8
+    assert host.busyChanged.calls == busy_before and host.failed.calls == []
+    assert host.evaluationCancelled.calls == [] and case.async_calls == []
+    assert case.held and all(held is worker for held in case.held)
+    # Positivkontrolle: Der tatsächlich aktuelle Nutzerabbruch wird weiter gemeldet.
+    host._on_cancelled(successor)
+    assert host.evaluationCancelled.calls == [()] and not host._cancel_by_user
+
+
+def test_an_unconfirmed_old_end_prevents_reset_and_sync() -> None:
+    """Ein erfolgloses wait erhält Besitz und Abbruch; ein neuer Lauf beginnt nicht."""
+    from app.core.errors import AppError
+    from app.ui.session import Session
+
+    case = _sync_cancel_case()
+    host = case.host
+    case.worker.on_wait = lambda: False
+    before_picture = host.picture
+    before_answers = list(host._recognition_answers)
+    # Auch ein unbestätigtes Ende behält den bestehenden AppError-Vertrag
+    # mit einem Handlungsvorschlag; kein Reset darf eine Zweitrechnung starten.
+    with pytest.raises(AppError) as caught:
+        Session.evaluate_now(host)
+    assert caught.value.suggestions
+    assert len(case.worker.waits) == 1 and case.worker.running
+    assert host._worker is case.worker and host._superseded is case.worker
+    assert host.cancel_signal.is_cancelled
+    assert "reset" not in case.trace and "sync" not in case.trace
+    assert host.last_result is case.old_result and host.picture is before_picture
+    assert host._recognition_answers == before_answers
+    assert host.result_generation == 7 and not host.result_current
+    assert host.sceneChanged.calls == [] and case.finishers == []
+    assert case.held == [] and case.async_calls == []
+
+
+def test_reply_none_distinguishes_a_current_question_from_a_superseded_one() -> None:
+    """Nach reply wird erneut geprüft: aktuelle Absage oder überholter Auftrag."""
+    from app.core.errors import OperationCancelled, QuestionDeclined
+
+    for superseded in (False, True):
+        case = _sync_cancel_case()
+        host = case.host
+        remembered: dict[Any, Any] = {}
+        requests: list[Any] = []
+        host._pending.worker = case.worker
+        host._pending.project_generation = host._project_generation
+        host._pending.asked = remembered
+
+        def reply(
+            request: Any,
+            current_case: SimpleNamespace = case,
+            was_superseded: bool = superseded,
+            captured_requests: list[Any] = requests,
+        ) -> None:
+            captured_requests.append(request)
+            current_host = current_case.host
+            assert current_host.question_is_current(request)
+            if was_superseded:
+                current_host._superseded = current_case.worker
+                current_host.cancel_signal.cancel()
+                current_host.cancel_signal.reset()
+                # Der alte Endslot wurde noch nicht zugestellt: _outdated allein
+                # erkennt diesen Fall nicht. Die Frage braucht den _stale-Vertrag.
+                assert current_host._worker is current_case.worker
+            request.reply(None)
+
+        host.askRequested.receiver = reply
+        with pytest.raises(OperationCancelled) as caught:
+            host.ask_from_worker("Welche Seite?", ["oben", "unten"])
+        assert type(caught.value) is (OperationCancelled if superseded else QuestionDeclined)
+        assert len(requests) == 1 and requests[0].answered.is_set()
+        assert remembered == ({} if superseded else {("Welche Seite?", ("oben", "unten")): None})

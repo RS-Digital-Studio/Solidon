@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -244,21 +245,24 @@ REACTING_COMMANDS = [
 ]
 
 
-def _claude_filter(event: str, group: int) -> list[list[str]]:
+def _claude_filter(event: str, group: int) -> tuple[list[list[str]], bool]:
     """Die `case`-Muster vor einem Claude-Hook: alle Gruppen müssen treffen."""
     handlers = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))["hooks"][event]
     command = handlers[group]["hooks"][0]["command"]
     groups = re.findall(r'case "\$in" in (.*?)\) ;;', command)
-    return [[pattern.replace("'", "") for pattern in found.split("|")] for found in groups]
+    patterns = [[pattern.replace("'", "") for pattern in found.split("|")] for found in groups]
+    return patterns, "shopt -s nocasematch;" in command.partition('case "$in" in ')[0]
 
 
-def _passes(patterns: list[list[str]], command: str) -> bool:
+def _passes(patterns: list[list[str]], command: str, *, ignore_case: bool = False) -> bool:
     """Wie die Shell die Nutzlast gegen die Muster hält — nach JSON-Kodierung."""
     payload = json.dumps(
         {"session_id": "s", "tool_input": {"command": command}},
         ensure_ascii=False,
         separators=(",", ":"),
     )
+    if ignore_case:
+        payload = payload.casefold()
     return all(any(fnmatch.fnmatchcase(payload, p) for p in group) for group in patterns)
 
 
@@ -272,7 +276,7 @@ def test_shell_prefilter_never_hides_a_command_the_hook_reacts_to(
     `SCHREIBT_DATEI` oder `_test_command` erweitert, zieht die Muster nach —
     sonst schweigt der Hook genau bei dem neuen Befehl.
     """
-    patterns = _claude_filter(event, group)
+    patterns, ignore_case = _claude_filter(event, group)
     assert patterns, "kein Vorfilter gefunden"
     if event == "PreToolUse":
         reacting = [
@@ -281,13 +285,16 @@ def test_shell_prefilter_never_hides_a_command_the_hook_reacts_to(
         assert any(hook.rueckfrage_werkzeug(c) for c in reacting), (
             "kein Beispiel für ein Werkzeug, das Geld kostet oder veröffentlicht"
         )
+        reacting += [f"PYTHON TOOLS/{tool.upper()}.PY" for tool in hook.RUECKFRAGE_WERKZEUGE]
     else:
         reacting = [
             c for c in REACTING_COMMANDS if hook._test_command(c) or hook.SCHREIBT_DATEI.search(c)
         ]
     assert len(reacting) >= 5, "zu wenige Beispiele, die der Hook meldet"
-    assert [c for c in reacting if not _passes(patterns, c)] == []
-    assert not _passes(patterns, "ls -la"), "der Vorfilter lässt alles durch"
+    assert [c for c in reacting if not _passes(patterns, c, ignore_case=ignore_case)] == []
+    assert not _passes(patterns, "ls -la", ignore_case=ignore_case), (
+        "der Vorfilter lässt alles durch"
+    )
 
 
 @pytest.mark.parametrize(
@@ -457,11 +464,13 @@ def test_an_ordinary_command_passes_the_hook_silently() -> None:
 
 def test_write_prefilter_lets_python_and_memory_through() -> None:
     """Der Vorfilter vor `nach-aenderung` spart den Python-Start bei Markdown und Co."""
-    patterns = _claude_filter("PostToolUse", 0)
+    patterns, ignore_case = _claude_filter("PostToolUse", 0)
     assert patterns, "kein Vorfilter gefunden"
 
     def passes(path: str) -> bool:
         payload = json.dumps({"tool_input": {"file_path": path, "content": "x"}})
+        if ignore_case:
+            payload = payload.casefold()
         return all(any(fnmatch.fnmatchcase(payload, p) for p in group) for group in patterns)
 
     assert passes("F:\\3D Druck\\app\\core\\units.py")
@@ -597,3 +606,428 @@ def test_stop_warns_again_after_the_same_file_changes(
     os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 1))
     hook.abschluss()
     assert "systemMessage" in json.loads(capsys.readouterr().out)
+
+
+# Nur Aufrufformen; die Werkzeugnamen kommen aus der vorhandenen Hookquelle.
+RM346_NOTATIONS = {
+    "ganze Argumentzeichenkette": (
+        "Start-Process -FilePath python -ArgumentList 'tools/{tool}.py --help'"
+    ),
+    "Kommaliste ohne Leerzeichen": (
+        "Start-Process -FilePath python -ArgumentList 'tools/{tool}.py','--help'"
+    ),
+    "Kommaliste mit Leerzeichen": (
+        'Start-Process -FilePath python -ArgumentList "tools/{tool}.py", "--help"'
+    ),
+    "gewöhnliches Array": (
+        "Start-Process -FilePath python -ArgumentList @('tools/{tool}.py', '--help')"
+    ),
+    "Array vor weiterem Befehl": (
+        "Start-Process -FilePath python -ArgumentList @('tools/{tool}.py', '--help'); echo fertig"
+    ),
+    "Array mit inneren Pfadquotes": (
+        "Start-Process -FilePath python -ArgumentList "
+        "@('\"F:/3D Druck/tools/{tool}.py\"', '--site', 'all')"
+    ),
+    "Zeichenkette mit inneren Pfadquotes": (
+        "Start-Process -FilePath python -ArgumentList '\"F:/3D Druck/tools/{tool}.py\" --help'"
+    ),
+    "Backtickquotes": (
+        'Start-Process -FilePath python -ArgumentList "-Xutf8 '
+        '`"F:/3D Druck/tools/{tool}.py`" --help"'
+    ),
+    "benannte Parameter umgekehrt": (
+        "Start-Process -ArgumentList '-m','tools.{tool}','--help' -FilePath python"
+    ),
+    "Array mit Interpreteroptionen": (
+        "Start-Process -WindowStyle Hidden -ArgumentList "
+        "@('-Xutf8', '-Wignore', 'tools/{tool}.py', '--dry-run') "
+        "-FilePath 'F:/3D Druck/.venv/Scripts/PYTHON.EXE'"
+    ),
+    "positionale Argumentliste": "Start-Process python 'tools/{tool}.py --help'",
+    "Argumentalias": "start python -Args 'tools/{tool}.py','--help'",
+    "kompaktes X": "python -Xutf8 tools/{tool}.py --help",
+    "kompaktes W": "python -Wignore tools/{tool}.py --help",
+    "kompakte Optionen vor Modul": "python -Xutf8 -Werror -m tools.{tool} --help",
+    "Windows Dateigroßschreibung": "python tools/{upper}.PY --help",
+    "Windows Pfadgroßschreibung": (
+        '& "F:/3D Druck/.venv/Scripts/PYTHON.EXE" "F:/3D Druck/TOOLS/{upper}.PY" --help'
+    ),
+    "Komma und Klammern im Pfad": (
+        "Start-Process -FilePath python -ArgumentList "
+        '\'"F:/3D Druck (alt), Neu/tools/{tool}.py" --label "a,b"\''
+    ),
+    "getrennte Optionen als Kontrolle": "python -X utf8 -W ignore tools/{tool}.py --help",
+    "nacktes Argument als Kontrolle": (
+        "Start-Process -WindowStyle Hidden -FilePath python -ArgumentList 'tools/{tool}.py'"
+    ),
+}
+
+
+def _rm346_hook_output(
+    hook: ModuleType,
+    command: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    *,
+    codex: bool,
+) -> str:
+    """Reicht ausschließlich Text an den echten PreToolUse-Einstieg, ohne Shellstart."""
+    monkeypatch.setattr(hook, "eingabe", lambda: {"tool_input": {"command": command}})
+    monkeypatch.setattr(hook.sys, "argv", ["hook.py", "vor-bash", *(["--codex"] if codex else [])])
+    hook.vor_bash()
+    return capsys.readouterr().out
+
+
+@pytest.mark.parametrize("notation", sorted(RM346_NOTATIONS))
+def test_rm346_parser_recognizes_the_actual_argument_list(hook: ModuleType, notation: str) -> None:
+    """Jede Form trifft alle sechs Namen aus der gemeinsamen Quelle."""
+    assert len(hook.RUECKFRAGE_WERKZEUGE) == 6
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = RM346_NOTATIONS[notation].format(tool=tool, upper=tool.upper())
+        assert hook.rueckfrage_werkzeug(command) == tool, command
+
+
+@pytest.mark.parametrize("notation", sorted(RM346_NOTATIONS))
+@pytest.mark.parametrize("permission", ("ask", "deny", "allowed"))
+def test_rm346_argument_forms_reach_the_real_hook_decision(
+    hook: ModuleType,
+    notation: str,
+    permission: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Erkennung schließt an ask, deny und die vorhandene explizite Freigabe an."""
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = RM346_NOTATIONS[notation].format(tool=tool, upper=tool.upper())
+        # Die stille Freigabe darf nicht durch eine fehlende Erkennung grün werden.
+        assert hook.rueckfrage_werkzeug(command) == tool, command
+        if permission == "allowed":
+            command += " # SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja"
+        output = _rm346_hook_output(hook, command, monkeypatch, capsys, codex=permission != "ask")
+        if permission == "allowed":
+            assert output == ""
+        else:
+            specific = json.loads(output)["hookSpecificOutput"]
+            assert specific["hookEventName"] == "PreToolUse"
+            assert specific["permissionDecision"] == permission
+            assert f"tools/{tool}.py" in specific["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize(
+    "command_template",
+    [
+        "Start-Process -FilePath notepad -ArgumentList 'tools/{tool}.py'",
+        "Start-Process -FilePath notepad -ArgumentList 'tools/{tool}.py','--help'",
+        "Start-Process -FilePath python -WorkingDirectory 'tools/{tool}.py'",
+        "Start-Process -WorkingDirectory 'tools/{tool}.py' -FilePath notepad",
+        "Start-Process -WorkingDirectory 'tools/{tool}.py' -FilePath python "
+        "-ArgumentList '-m ruff check ordinary.py'",
+        "Start-Process -FilePath python -ArgumentList '-m ruff check tools/{tool}.py'",
+        "Start-Process -FilePath python -ArgumentList @('-m', 'pytest', 'tools/{tool}.py')",
+        "Start-Process -FilePath python -ArgumentList '-c \"print(0)\" tools/{tool}.py'",
+        "Start-Process -FilePath python -ArgumentList '-c \"print(0)\" ; python tools/{tool}.py'",
+        "Start-Process -FilePath python -ArgumentList "
+        "@('-c', '\"print(0)\"', ';', 'python', 'tools/{tool}.py')",
+        "Start-Process -FilePath python -ArgumentList "
+        "'-c','\"print(0)\"',';','python','tools/{tool}.py'",
+        "Start-Process -FilePath python -ArgumentList "
+        "'tools/affected_tests.py','tools/{tool}.py','--why'",
+        "python -Xutf8 -m ruff check tools/{tool}.py",
+        "python -Wignore -c \"print('tools/{tool}.py')\"",
+        'echo "Start-Process -FilePath python -ArgumentList tools/{tool}.py"',
+    ],
+)
+def test_rm346_program_and_mentions_are_not_interchanged(
+    hook: ModuleType,
+    command_template: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Notepad, Arbeitsordner, Prüfer und c-Text starten kein geschütztes Werkzeug."""
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = command_template.format(tool=tool)
+        assert hook.rueckfrage_werkzeug(command) is None, command
+        for codex in (False, True):
+            assert _rm346_hook_output(hook, command, monkeypatch, capsys, codex=codex) == ""
+
+
+@pytest.mark.parametrize("depth", (8, 9))
+def test_rm346_shell_recursion_keeps_the_existing_boundary(hook: ModuleType, depth: int) -> None:
+    """Acht Hüllen werden entpackt; die neunte übersteigt den bisherigen Schutz."""
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = f"python tools/{tool}.py"
+        for _ in range(depth):
+            command = "bash -c " + shlex.quote(command)
+        assert hook.rueckfrage_werkzeug(command) == (tool if depth == 8 else None)
+
+
+def test_rm346_unclosed_command_keeps_the_existing_conservative_guard(hook: ModuleType) -> None:
+    """Eine nicht zerlegbare Zeile behält den vorhandenen Schutz am Werkzeugnamen."""
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        assert hook.rueckfrage_werkzeug(f"python tools/{tool}.py 'offen") == tool
+
+
+# Konkrete unabhängige Funde am ersten gehaltenen RM346-Stand.
+RM346_REVIEW_NOTATIONS = {
+    "Trenner unmittelbar vor Kommentar": "echo fertig;# Kommentar\npython tools/{tool}.py",
+    "erster Trenner nach Kommentar": "# Kommentar\n; python tools/{tool}.py",
+    "Argumentposition nach benanntem Programm": (
+        "Start-Process -FilePath python 'tools/{tool}.py --help'"
+    ),
+    "Programmposition nach Schalter": (
+        "Start-Process -NoNewWindow python -ArgumentList 'tools/{tool}.py --help'"
+    ),
+    "beide Positionen nach benannten Werten": (
+        "Start-Process -WorkingDirectory 'F:/3D Druck' -Wait -WindowStyle Hidden "
+        "python 'tools/{tool}.py --help'"
+    ),
+    "Argumentposition nach Arbeitsordner": (
+        "Start-Process -FilePath python -WorkingDirectory 'F:/3D Druck' 'tools/{tool}.py --help'"
+    ),
+    "Apostroph im nativen Argument": (
+        'Start-Process -FilePath python -ArgumentList "tools/{tool}.py O\'Brien"'
+    ),
+    "Apostroph im nativen Skriptpfad": (
+        'Start-Process -FilePath python -ArgumentList "`"F:/O\'Brien/tools/{tool}.py`" --help"'
+    ),
+    "nativer Kommapfad": "python F:/alt,neu/tools/{tool}.py --help",
+    "nativer mehrfacher Kommapfad": "python F:/alt,,neu/tools/{tool}.py --help",
+    "relativer Kommapfad": "python ./alt,neu/tools/{tool}.py --help",
+    "mehrzeiliges Pythonarray": (
+        "Start-Process -FilePath python -ArgumentList @(\n 'tools/{tool}.py',\n '--help'\n)"
+    ),
+    "Array vor nativem Kommapfad": (
+        "Start-Process -FilePath notepad -ArgumentList @('gewöhnlich', '--help'); "
+        "python F:/alt,neu/tools/{tool}.py"
+    ),
+}
+
+
+@pytest.mark.parametrize("notation", sorted(RM346_REVIEW_NOTATIONS))
+@pytest.mark.parametrize("permission", ("ask", "deny", "allowed"))
+def test_rm346_review_reproduced_forms_reach_the_real_hook(
+    hook: ModuleType,
+    notation: str,
+    permission: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Jeder belegte Start trifft alle sechs Namen und den tatsächlichen Ausgang."""
+    assert len(hook.RUECKFRAGE_WERKZEUGE) == 6
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = RM346_REVIEW_NOTATIONS[notation].format(tool=tool)
+        assert hook.rueckfrage_werkzeug(command) == tool, command
+        if permission == "allowed":
+            command += " # SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja"
+        output = _rm346_hook_output(hook, command, monkeypatch, capsys, codex=permission != "ask")
+        if permission == "allowed":
+            assert output == ""
+        else:
+            specific = json.loads(output)["hookSpecificOutput"]
+            assert specific["hookEventName"] == "PreToolUse"
+            assert specific["permissionDecision"] == permission
+            assert f"tools/{tool}.py" in specific["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize(
+    "command_template",
+    [
+        "Start-Process -FilePath notepad -ArgumentList @('gewöhnlich',\n 'tools/{tool}.py')",
+        "Start-Process -FilePath notepad -ArgumentList @(\n 'tools/{tool}.py',\n '--help'\n)",
+        "Start-Process -FilePath python -ArgumentList "
+        "@(\n '-c',\n '\"print(0)\"',\n 'tools/{tool}.py'\n)",
+        "Start-Process -FilePath python -ArgumentList @('-m',\n 'ruff',\n 'tools/{tool}.py')",
+        "Start-Process -NoNewWindow notepad 'tools/{tool}.py --help'",
+        "Start-Process -WorkingDirectory 'tools/{tool}.py' python -ArgumentList '-m ruff'",
+        "Start-Process -FilePath python -WorkingDirectory "
+        "'tools/{tool}.py' '-m pytest ordinary.py'",
+        'Start-Process -FilePath python -ArgumentList "-c `"print(0)`" O\'Brien tools/{tool}.py"',
+        "Start-Process -FilePath python -ArgumentList "
+        "@('-c', '\"print(0)\"',\n ';', 'python', 'tools/{tool}.py')",
+        "echo ';' '# Kommentar' 'tools/{tool}.py'",
+        "echo '`;' 'tools/{tool}.py'",
+        "echo '\n;' 'tools/{tool}.py'",
+        "python -c \"print('gewöhnlich')\" F:/alt,neu/tools/{tool}.py",
+        "python -m ruff check F:/alt,neu/tools/{tool}.py",
+        "cat F:/alt,neu/tools/{tool}.py",
+    ],
+)
+def test_rm346_review_native_values_and_multiline_arrays_are_not_commands(
+    hook: ModuleType,
+    command_template: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Native Daten, Zeilen und Arbeitsordner erzeugen keinen zweiten Start."""
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = command_template.format(tool=tool)
+        assert hook.rueckfrage_werkzeug(command) is None, command
+        for codex in (False, True):
+            assert _rm346_hook_output(hook, command, monkeypatch, capsys, codex=codex) == ""
+
+
+@pytest.mark.parametrize(
+    ("argument_line", "expected"),
+    [
+        ('"alpha beta" gamma delta', ["alpha beta", "gamma", "delta"]),
+        (r'"ab\"c" "\\" d', ['ab"c', "\\", "d"]),
+        (r'a\\\b d"e f"g h', [r"a\\\b", "de fg", "h"]),
+        (r"a\\\"b c d", ['a\\"b', "c", "d"]),
+        (r'a\\\\"b c" d e', [r"a\\b c", "d", "e"]),
+        ('a"b"" c d', ['ab" c d']),
+        ('"" O\'Brien "zweiter Wert"', ["", "O'Brien", "zweiter Wert"]),
+    ],
+)
+def test_rm346_review_native_argument_line_reaches_the_actual_child_parser(
+    hook: ModuleType,
+    argument_line: str,
+    expected: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Beobachtet die echten Kindargumente nach den Microsoft-C-Argumentregeln."""
+    original = hook._werkzeug_aufruf
+    native_calls: list[list[str]] = []
+
+    def observed(tokens: list[str], depth: int) -> str | None:
+        if depth == 1:
+            native_calls.append(list(tokens))
+        return original(tokens, depth)
+
+    monkeypatch.setattr(hook, "_werkzeug_aufruf", observed)
+    # PowerShells äußere Zeichenkette erhält die inneren nativen Quotes.
+    outer = '"' + argument_line.replace("`", "``").replace('"', '`"') + '"'
+    assert hook.rueckfrage_werkzeug("Start-Process -FilePath python -ArgumentList " + outer) is None
+    assert native_calls == [["python", *expected]]
+
+
+# Gebundene PowerShell-Parameter verwenden dieselbe begrenzte Literalgrammatik.
+RM346_BOUND_NOTATIONS = {
+    "gebundene ArgumentList": "Start-Process -FilePath python -ArgumentList:tools/{tool}.py",
+    "gebundener Programmwert als vorhandene Kontrolle": (
+        "Start-Process -FilePath:python -ArgumentList tools/{tool}.py"
+    ),
+    "beide Werte gebunden": "Start-Process -FilePath:python -ArgumentList:tools/{tool}.py",
+    "beide Werte gebunden in umgekehrter Reihenfolge": (
+        "Start-Process -ArgumentList:tools/{tool}.py -FilePath:python"
+    ),
+    "gebundene Argumente vor freiem Programm": (
+        "Start-Process -ArgumentList:'tools/{tool}.py --help' python"
+    ),
+    "gebundenes Programm vor freien Argumenten": (
+        "Start-Process -FilePath:python 'tools/{tool}.py --help'"
+    ),
+    "gebundene Argumente nach Schalter und Arbeitsordner": (
+        "Start-Process -NoNewWindow -WorkingDirectory:'F:/3D Druck' "
+        "python -ArgumentList:'tools/{tool}.py --help'"
+    ),
+    "einfach zitierte Argumente": (
+        "Start-Process -FilePath:python -ArgumentList:'tools/{tool}.py --help'"
+    ),
+    "doppelt zitierte Argumente": (
+        'Start-Process -FilePath:python -ArgumentList:"tools/{tool}.py --help"'
+    ),
+    "zitierter Programmpfad und innere Pfadquotes": (
+        "Start-Process -FilePath:'F:/3D Druck/.venv/Scripts/PYTHON.EXE' "
+        "-ArgumentList:'\"F:/3D Druck/tools/{tool}.py\" --help'"
+    ),
+    "gebundene Kommaliste": (
+        "Start-Process -FilePath:python -ArgumentList:'tools/{tool}.py','--help'"
+    ),
+    "gebundenes mehrzeiliges Array": (
+        "Start-Process -FilePath:python -ArgumentList:@(\n 'tools/{tool}.py',\n '--help'\n)"
+    ),
+    "gebundene geklammerte Modulliste": (
+        "Start-Process -FilePath:python -ArgumentList:('-m', 'tools.{tool}', '--help')"
+    ),
+    "gebundene Aliase und Großschreibung": (
+        "START-PROCESS -PATH:PYTHON.EXE -ARGS:'TOOLS/{upper}.PY --help'"
+    ),
+    "getrennte Werte als vorhandene Kontrolle": (
+        "Start-Process -FilePath python -ArgumentList 'tools/{tool}.py --help'"
+    ),
+}
+
+
+@pytest.mark.parametrize("notation", sorted(RM346_BOUND_NOTATIONS))
+@pytest.mark.parametrize("permission", ("ask", "deny", "allowed"))
+def test_rm346_bound_parameters_reach_the_actual_hook(
+    hook: ModuleType,
+    notation: str,
+    permission: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Gebundene und gemischte Werte treffen alle sechs Namen und echten Entscheidungen."""
+    assert len(hook.RUECKFRAGE_WERKZEUGE) == 6
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        plain = RM346_BOUND_NOTATIONS[notation].format(tool=tool, upper=tool.upper())
+        command = plain
+        if permission == "allowed":
+            command += " # SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja"
+        output = _rm346_hook_output(hook, command, monkeypatch, capsys, codex=permission != "ask")
+        # Auch die stille Markerfreigabe braucht eine tatsächlich erkannte Vorlage.
+        assert hook.rueckfrage_werkzeug(plain) == tool, plain
+        if permission == "allowed":
+            assert output == ""
+        else:
+            specific = json.loads(output)["hookSpecificOutput"]
+            assert specific["hookEventName"] == "PreToolUse"
+            assert specific["permissionDecision"] == permission
+            assert f"tools/{tool}.py" in specific["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize(
+    "command_template",
+    [
+        "Start-Process -FilePath:notepad -ArgumentList:tools/{tool}.py",
+        "Start-Process -FilePath notepad -ArgumentList:'tools/{tool}.py --help'",
+        "Start-Process -FilePath:python -ArgumentList:'-m ruff check tools/{tool}.py'",
+        "Start-Process -FilePath:python -ArgumentList:@('-m', 'ruff', 'tools/{tool}.py')",
+        "Start-Process -FilePath:python -ArgumentList:'-c \"print(0)\" tools/{tool}.py'",
+        "Start-Process -FilePath:python -ArgumentList:"
+        "@('-c', '\"print(0)\"', ';', 'python', 'tools/{tool}.py')",
+        "Start-Process -FilePath:python -WorkingDirectory:'tools/{tool}.py' "
+        "-ArgumentList:'-m ruff'",
+        "Start-Process -WorkingDirectory:'tools/{tool}.py' python -ArgumentList:'-m ruff'",
+        "Start-Process -WorkingDirectory:'tools/{tool}.py' -FilePath:notepad "
+        "-ArgumentList:'gewöhnlich'",
+        "Start-Process -FilePath:python '-ArgumentList:tools/{tool}.py'",
+        "Start-Process '-FilePath:python' -ArgumentList:tools/{tool}.py",
+        'echo "Start-Process -FilePath:python -ArgumentList:tools/{tool}.py"',
+        'python -c "print(0)" -ArgumentList:tools/{tool}.py',
+        "python -m ruff check tools/{tool}.py",
+        "Start-Process -FilePath:notepad -ArgumentList:@('gewöhnlich',\n 'tools/{tool}.py')",
+    ],
+)
+def test_rm346_bound_mentions_and_quoted_parameter_names_are_not_starts(
+    hook: ModuleType,
+    command_template: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Bindung erfindet keine Programme aus Arbeitsordnern, Nennungen oder Prüferargumenten."""
+    for tool in hook.RUECKFRAGE_WERKZEUGE:
+        command = command_template.format(tool=tool)
+        assert hook.rueckfrage_werkzeug(command) is None, command
+        for codex in (False, True):
+            assert _rm346_hook_output(hook, command, monkeypatch, capsys, codex=codex) == ""
+
+
+@pytest.mark.parametrize("literal", ("(", ")", ",", ";", "-FilePath:python"))
+def test_rm346_bound_quoted_values_keep_their_literal_metadata(
+    hook: ModuleType, literal: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zitierte Trenner bleiben Werte am echten nativen Kindparseranschluss."""
+    original = hook._werkzeug_aufruf
+    native_calls: list[list[str]] = []
+
+    def observed(tokens: list[str], depth: int) -> str | None:
+        if depth == 1:
+            native_calls.append(list(tokens))
+        return original(tokens, depth)
+
+    monkeypatch.setattr(hook, "_werkzeug_aufruf", observed)
+    command = "Start-Process -FilePath:python -ArgumentList:'" + literal + "'"
+    assert hook.rueckfrage_werkzeug(command) is None
+    assert native_calls == [["python", literal]]

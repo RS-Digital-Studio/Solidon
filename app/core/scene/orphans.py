@@ -37,6 +37,11 @@ from app.i18n import _, tr
 _log = get_logger(__name__)
 
 
+def fit_name_from_key(key: str) -> str:
+    """Der freie Passungsname zwischen ``fit:`` und dem letzten Seitenmarker."""
+    return key.split(":", 1)[1].rsplit(":", 1)[0]
+
+
 @dataclass(slots=True)
 class Reference:
     """Eine Stelle im Dokument, die ein Merkmal benennt."""
@@ -56,11 +61,11 @@ class Reference:
 
     @property
     def fit_name(self) -> str:
-        return self.where.split(":")[1]
+        return fit_name_from_key(self.where)
 
     @property
     def side(self) -> str:
-        return self.where.split(":")[2]
+        return self.where.rsplit(":", 1)[1]
 
     @property
     def op_id(self) -> int:

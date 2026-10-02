@@ -1096,11 +1096,12 @@ def _carved(
     # Erst hier geholt: ``boolean`` zieht ``manifold3d`` nach, und der
     # Leser soll ohne Rechenkern importierbar bleiben, solange keine Datei
     # eine Aussparung trägt.
+    from app.core.geom import kernel_process
     from app.core.geom.boolean import boolean, without_effect
 
     try:
         outcome = boolean("difference", [mesh, MeshData.of(cutter)], allow_empty=True)
-    except PROGRAMMING_ERRORS:
+    except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
         raise
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten
         _log.warning(

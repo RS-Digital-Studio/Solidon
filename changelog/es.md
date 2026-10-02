@@ -32,7 +32,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
 - La boquilla se elige en los ajustes de impresión entre los tamaños que conoce su impresora, y el slicer recibe el perfil que le corresponde.
 - Los ajustes de impresión preguntan en el orden en que una cosa depende de otra: slicer, impresora, boquilla, placa, filamentos y calidad, y después los valores.
-- Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Antes solo se podía en la ventana de Creality Print. Si 7.3 reordena la placa, Solidon lo dice.
+- Ahora puede generar archivos de impresión directamente desde Solidon con Creality Print 7.2 y 7.3.
 - Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
 - Cura lamina ahora con la boquilla que usted eligió, también en impresoras de la lista de Cura, y las impresoras con el origen en el centro de la cama lo conservan.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.

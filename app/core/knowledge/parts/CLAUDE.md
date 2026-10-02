@@ -163,6 +163,9 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   `axis`; `at_feature` geht vor), Rahmen aus `sketch.planes.frame_of`;
   `placement_tool` liefert gedreht, eingesenkt, gespiegelt, mit dem Material
   des Ziels.
+- **Randprüfung**: `ops._over_the_rim` nimmt in beiden Kernen
+  `ctx.cancelled`; `ray_hits_batch` kann einen Teilstand liefern. Direkt
+  danach folgt `raise_if_cancelled`, bevor daraus ein Befund wird.
 - **Namensräume**: Trägt ein eigener Baustein `nx`, `ny` oder `nz` als Maß,
   verschiebt `build_params` alle drei nach `surface_` (`normal_fields`);
   Ortsfelder kollidierender Rezeptmaße bekommen `placement_`

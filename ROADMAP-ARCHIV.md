@@ -34212,6 +34212,17 @@ Format bestanden; mypy auf `app/core/scene/evaluate.py` ohne Befund. Die
 Fensterabnahme bleibt Release-Sache. Der vollständige Entwicklungslauf ist
 nicht Teil dieses Nachweises.
 
+**Abgrenzung vom 02.10.2026:** Dieser historische Fachnachweis ist keine
+Gesamtfreigabe von RM218. Der notwendige begrenzte Anschluss und seine
+Regressionen wurden im RM284-Produktcommit
+`57848fa72c4ca229f5dc9bcdd2cca2baf6945987` nach `origin/main` übernommen;
+der [RM284-Abschluss](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md#abschluss-auf-dem-hauptzweig)
+grenzt RM218 ausdrücklich aus. Die spätere unabhängige Nachprüfung des
+Kundenteils bestätigt die drei Umbauten und Undo, hat den Passungsbezug am
+echten Modell jedoch nicht nachgeprüft. Dieser vollständige Passungsnachweis
+und die Gesamtfreigabe bleiben unter [RM218 in der Roadmap](ROADMAP.md#rm-218)
+offen; die Fensterabnahme gehört zum Release.
+
 ## RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)
 
 <a id="rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026"></a>
@@ -35381,6 +35392,21 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
 
 **Abschluss:** Befund `part.over_the_edge` für jeden abtragenden Baustein an beiden Kernen; rund 2 000 Bausteintests ohne Fehlalarm. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
+**Nachprüfung 02.10.2026, P2G03 — Abbruch im Randvergleich:** Beide
+Kernelwege übergeben jetzt den Kontexttoken an die Strahlenrechnung und
+prüfen ihn unmittelbar danach, bevor ein Teilstand zum Randbefund wird.
+Vier tatsächliche Testkörperfehler vor der Korrektur, danach acht neue
+und fünf bestehende Fälle grün. Die beiden isolierten Fehlvarianten
+ohne Tokenweitergabe bzw. Nachtest scheitern jeweils in allen vier
+Abbruchfällen. Frischer gemeinsamer Nachlauf mit RM327: 13 bestanden,
+Exit 0, fünf stabile Quell-/Testdateien, keine Fehler oder Skips. Ruff,
+eigene Formatbereiche und unabhängiger Produkt-/Laufreview sind grün.
+Maße, Schema und vollständige Ergebnisse bleiben gleich; kein neuer
+Bereichslauf oder Bibliotheks-/Cacheversionssprung.
+[Portabler Nachprüfungsbeleg](konzepte/nachweise-release-0.5.1/reports/rm392-bausteinabbruch-2026-10-02.md).
+Das vollständige Tor und die tatsächliche Integration dieses Nachgangs
+stehen aus; die Fenster-/Leistungsabnahme bleibt beim Release offen.
+
 ## RM-394: *An Merkmal ausrichten* wählt das Ziel still vor und nimmt den ersten Bildklick nicht an (02.10.2026)
 
 <a id="rm-394-an-merkmal-ausrichten-wählt-das-ziel-still-vor-und-nimmt-den-ersten-bildklick-nicht-an-02102026"></a>
@@ -35762,6 +35788,33 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Nachprüfung am Stand `6ce767031`: besteht noch. Absoluter Interpreterpfad, `-m tools.…` und `./tools/…` laufen ohne Rückfrage durch den Hook (leere Ausgabe, Exit 0).
 
 **Abschluss:** Der PreToolUse-Hook erkennt die sechs Geld- und Veröffentlichungswerkzeuge in jeder Schreibweise (ask für Claude, deny für Codex ohne Marker `SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja`); 143 Hooktests. Codex erneuert die Hookfreigabe über `/hooks`. Umgesetzt von Claude, in main mit `457dc09d4`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+**Nachprüfung 02.10.2026 — Aufrufvarianten und sechs Reviewlücken:**
+Die kumulative Korrektur bindet tatsächliche Skript-/Modulstarts und
+literale `Start-Process`-Argumente an den bestehenden Werkzeugschutz.
+Der unabhängige erste Review fand danach sechs weitere konkrete
+Lücken: Semikolon vor Kommentar, freie Cmdletpositionen, native
+Windows-Quotes, Großschreibung im Bash-Vorfilter, native Kommas und
+mehrzeilige Cmdletarrays. Diese sind vorwärts behoben; die Freigabe-,
+Marker- und Triggerwerte sowie die generierte Codex-Konfiguration
+bleiben erhalten. Tatsächlich 44 neue Testkörperfehler bei 19 Kontrollen
+vor dem Reviewfix; final 63 und ursprüngliche 98 Fälle grün, Exit 0,
+fünf stabile Prüflingshashes je Lauf, Ruff/Format grün. Die 241 Fälle
+sind ausschließlich der frühere f28-Modullauf. Neuer unabhängiger
+Finalreview: JA für genau 9/9/1 eigene Quell-/Test-/Konfigurationshunks.
+[Portabler Aufruf-/Reviewbeleg](konzepte/nachweise-release-0.5.1/reports/rm346-aufrufvarianten-2026-10-02.md).
+Ein vollständiges neues Tor und tatsächliche Integration dieses Nachgangs
+stehen aus. Die erneuerte `/hooks`-Freigabe und tatsächliche Auslösung
+im Codex-/Claude-Client sind unbestätigt; kein Client-/Releaseabschluss.
+
+**Weiterer Nachreview derselben Einheit:** Der übersehene per Doppelpunkt
+gebundene `-ArgumentList:...`-Wert ist korrigiert, ebenso der unmittelbar
+betroffene Python-Kindparser für zitierte Parameternennungen. Die allein
+gebundene FilePath-Form bleibt eine schon vorher grüne Kontrolle.
+Tatsächlich 44 Assertions rot und 21 Kontrollen grün vor dem Fix;
+final 65 neue sowie 63 und 98 bestehende Fälle grün, Exit 0,
+fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
+Übergabe umfasst jetzt 10/9/1 Quell-/Test-/Konfigurationshunks.
 
 ## RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)
 

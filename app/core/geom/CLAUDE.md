@@ -306,7 +306,9 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   befragt auch negative Häute und verlangt vollständig entschiedene,
   alternierende Elternketten mit positiven Wurzeln. Eine positive Insel im
   Hohlraum bleibt eine eigene Familie. Dichtheit und Kontaktfreiheit belegt
-  der Aufrufer; `None` gibt keine Familie frei. Beide optionalen Abbruchtoken
+  der Aufrufer; `None` gibt keine Familie frei.
+  `material_part_count` zählt Familien nach vollständigem Vorbeleg.
+  Beide optionalen Abbruchtoken
   reichen durch `_Shells` bis in Gitterzertifikat und genaue Kreuzungssuche;
   Diagnose und boolesche Familien behalten ihre Standardschnittstelle.
 

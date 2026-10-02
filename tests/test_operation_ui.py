@@ -4742,6 +4742,114 @@ def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
         QApplication.processEvents()
 
 
+def test_hidden_expression_refusal_keeps_acceptance_locked_with_a_recovery_path(
+    qt_app: QApplication,
+) -> None:
+    """Ein verborgener fx-Ausdruck nennt die Wahl, mit der er sich korrigieren lässt."""
+    dialog = OperationDialog(REGISTRY.get("pattern"), {}, values={"kind": "linear"})
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        angle = dialog._editors["angle"]
+        kind = dialog._editors["kind"]
+        assert isinstance(angle, ValueField)
+        assert angle.isHidden(), "der lineare Zweig blendet den Winkel aus"
+
+        angle.spin.lineEdit().setText("400")
+        assert angle.refusal(), "der verborgene Zahlenwert ist abgelehnt"
+        dialog._follow_source_pending()
+        assert dialog._field_refusal() == "", "verborgene Zahlenwerte tragen nicht"
+        assert dialog._accept_button.isEnabled()
+
+        angle.toggle.setChecked(True)
+        angle.text.setText("=400")
+        QApplication.processEvents()
+        assert angle.refusal(), "der verborgene Ausdruck liegt über 360 Grad"
+        assert not dialog._accept_button.isEnabled()
+        assert not dialog.can_accept()
+        assert dialog._hidden_expression_notice.isVisibleTo(dialog)
+        assert "Winkel" in dialog._hidden_expression_notice.text()
+        assert "Art" in dialog._hidden_expression_notice.text()
+        assert "Kreisförmig" in dialog._hidden_expression_notice.text()
+
+        dialog._hidden_expression_open.click()
+        assert kind.hasFocus(), "der Rückweg setzt den Fokus auf die sichtbare Wahl"
+        assert kind.currentData() == "linear", "der Rückweg ändert die Wahl nicht selbst"
+        kind.setCurrentIndex(kind.findData("circular"))
+        QApplication.processEvents()
+        assert not angle.isHidden()
+        assert angle.refusal()
+        angle.text.setText("=360")
+        QApplication.processEvents()
+        assert not angle.refusal()
+        assert dialog._hidden_expression_notice.isHidden()
+        assert dialog.can_accept()
+
+        angle.text.setText("=400")
+        QApplication.processEvents()
+        assert not angle.isHidden()
+        assert angle.refusal()
+        assert dialog._hidden_expression_notice.isHidden()
+
+        kind.setCurrentIndex(kind.findData("linear"))
+        QApplication.processEvents()
+        assert angle.isHidden()
+        assert not dialog._accept_button.isEnabled()
+        assert dialog._hidden_expression_notice.isVisibleTo(dialog)
+        assert "Kreisförmig" in dialog._hidden_expression_notice.text()
+        dialog._hidden_expression_open.click()
+        assert kind.hasFocus(), "der Wechsel zum sichtbaren Feld wird ohne Tabsprung erklärt"
+        assert kind.currentData() == "linear", "der Hinweis ändert die Wahl nicht selbst"
+
+        kind.setCurrentIndex(kind.findData("circular"))
+        QApplication.processEvents()
+        assert not angle.isHidden()
+        assert angle.refusal()
+        assert dialog._hidden_expression_notice.isHidden()
+        angle.text.setText("=360")
+        QApplication.processEvents()
+        assert dialog.can_accept()
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
+def test_nested_hidden_expression_points_to_a_visible_dependency(
+    qt_app: QApplication,
+) -> None:
+    """Ein fx-Feld führt über verborgene Bedingungen zur sichtbaren Auswahl."""
+    dialog = OperationDialog(
+        REGISTRY.get("insert_screw_hole"),
+        {},
+        values={"countersink": True, "washer": False},
+    )
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        play = dialog._editors["play"]
+        countersink = dialog._editors["countersink"]
+        assert isinstance(play, ValueField)
+        assert play.isHidden()
+
+        play.toggle.setChecked(True)
+        play.text.setText("=3")
+        QApplication.processEvents()
+
+        assert play.refusal()
+        assert not dialog._accept_button.isEnabled()
+        assert dialog._hidden_expression_controller == "countersink"
+        assert dialog._hidden_expression_notice.isVisibleTo(dialog)
+        assert "Senkkopf" in dialog._hidden_expression_notice.text()
+        assert "Unterlegscheibe einlassen" not in dialog._hidden_expression_notice.text()
+
+        dialog._hidden_expression_open.click()
+        assert countersink.hasFocus(), "der Rückweg endet beim sichtbaren Steuerfeld"
+        assert countersink.isChecked(), "der Rückweg ändert die Auswahl nicht selbst"
+    finally:
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
 @pytest.fixture
 def deferred_exact_preview(window: MainWindow, monkeypatch: pytest.MonkeyPatch):
     """Echter exakter Eingang, getrennt zustellbare Rechnung und Bildaufbereitung."""

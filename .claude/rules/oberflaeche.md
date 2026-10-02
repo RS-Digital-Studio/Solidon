@@ -193,10 +193,7 @@ an einem Feld mit Obergrenze 100 die Null von „150“, und die Eingabetaste
 `valueRefused` meldet sie, der Anzeigende nennt die Grenze des Schemas
 (`limit_sentence`, `name_limits`) und, wo sie änderbar ist, den Weg dorthin;
 der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
-(`OperationDialog._field_refusal`). Fokuswechsel, Aus- und Einblenden lassen die
-abgelehnte Zahl stehen, weil Qt sonst still den alten Wert zurückschreibt; ein
-ausgeblendetes Feld sperrt dafür nichts, es wirkt gerade nicht. Eine
-Nachkommastelle zu viel wird wie
+(`OperationDialog._field_refusal`). Eine Nachkommastelle zu viel wird wie
 überall gerundet, nicht abgelehnt; Pfeile und Rad klemmen. Das
 **Merkmalfenster** nutzt denselben Validator für Zahlen, Anzahlen und Längen;
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
@@ -220,6 +217,13 @@ Bedingung nicht gilt, und kommt mit ihr wieder — im Operationsdialog, im
 Merkmalfenster und überall, wo Felder einer Wahl folgen. Was vorn steht und wie
 `depends_on` deklariert, gezeigt und geprüft wird: `grenzen.md` („Die
 Vorderseite eines Dialogs“, „Bedingte Felder“).
+
+Ein abgelehnter fx-Ausdruck in einem verborgenen bedingten Feld hält den
+Operationsdialog an, weil `values()` ihn weiterhin an den Kern reicht. Eine
+verborgene abgelehnte Zahl hält ihn nicht an: `ValueField.value()` liefert
+weiter den letzten gültigen Wert. Der Hinweis führt über verborgene Steuerfelder
+bis zur sichtbaren Wahl, ohne diese selbst zu ändern, und wird nach jeder
+Änderung der Abhängigkeiten neu berechnet.
 
 ## Was eine Vorschau nicht zeigen kann, sagt sie
 

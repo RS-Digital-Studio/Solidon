@@ -682,10 +682,18 @@ _HUELLEN = {"bash", "bash.exe", "sh", "zsh", "pwsh", "pwsh.exe", "powershell", "
 
 def _werkzeug_im_wort(wort: str) -> str | None:
     """`…/tools/upload_website.py`, `upload_website.py` oder `tools.upload_website`."""
+    wort = wort.replace("\\", "/").casefold()
     for name in RUECKFRAGE_WERKZEUGE:
         if wort.rsplit("/", 1)[-1] == f"{name}.py" or wort in (f"tools.{name}", f"tools/{name}"):
             return name
     return None
+
+
+class _ShellWord(str):
+    """Behält bei einem zerlegten Wort, ob es tatsächlich ein Shelltrenner war."""
+
+    punctuation = False
+    quoted = False
 
 
 def rueckfrage_werkzeug(command: str, *, depth: int = 0) -> str | None:
@@ -700,16 +708,56 @@ def rueckfrage_werkzeug(command: str, *, depth: int = 0) -> str | None:
     if depth > 8:
         return None
     try:
-        lexer = shlex.shlex(command.replace("\\", "/"), posix=True, punctuation_chars=";&|\n")
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n,()")
         lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
-        tokens = list(lexer)
+        lexer.escape = "`"
+        lexer.wordchars += ","
+        command_head = True
+        cmdlet = False
+        array_depth = 0
+        tokens: list[_ShellWord] = []
+        while True:
+            # shlex kann ein Zeichen des nächsten Worts schon gelesen haben.
+            start = lexer.instream.tell() - len(lexer._pushback_chars)
+            value = lexer.get_token()
+            end = lexer.instream.tell() - len(lexer._pushback_chars)
+            if value is None:
+                break
+            raw = command[start:end].strip(" \t\r")
+            while raw.startswith("#") and "\n" in raw:
+                raw = raw.split("\n", 1)[1].lstrip(" \t\r")
+            # Im c-Zustand kann shlex den nachfolgenden Kommentar mitlesen.
+            punctuation = bool(value) and set(value) <= set(";&|\n,()") and raw.startswith(value)
+            # Auch ");" wird getrennt: Das Array schließt vor dem nächsten Befehl.
+            for text in value if punctuation else (value,):
+                if punctuation and cmdlet and text == "(":
+                    array_depth += 1
+                elif punctuation and cmdlet and text == ")" and array_depth:
+                    array_depth -= 1
+                elif punctuation and text == "\n" and array_depth:
+                    continue
+                word = _ShellWord(text)
+                word.punctuation = punctuation
+                word.quoted = raw.startswith(("'", '"', "`"))
+                tokens.append(word)
+                if punctuation and text in ";&|\n" and not array_depth:
+                    command_head = True
+                    cmdlet = False
+                    lexer.wordchars += "," if "," not in lexer.wordchars else ""
+                elif command_head and not punctuation:
+                    if text == "env" or re.match(r"(?:\$env:)?[A-Za-z_][A-Za-z_0-9]*=", text):
+                        continue
+                    command_head = False
+                    cmdlet = text.casefold() in {"start-process", "start"}
+                    if cmdlet:
+                        lexer.wordchars = lexer.wordchars.replace(",", "")
     except ValueError:
         # Nicht zerlegbar: lieber einmal zu oft fragen als ein Werkzeug laufen lassen.
         return next((name for name in RUECKFRAGE_WERKZEUGE if name in command), None)
     statement: list[str] = []
     for token in [*tokens, ";"]:
-        if token and set(token) <= set(";&|\n"):
+        if getattr(token, "punctuation", True) and token and set(token) <= set(";&|\n"):
             found = _werkzeug_aufruf(statement, depth)
             if found:
                 return found
@@ -719,6 +767,153 @@ def rueckfrage_werkzeug(command: str, *, depth: int = 0) -> str | None:
     return None
 
 
+def _start_process_values(arguments: list[str], index: int) -> tuple[list[str], int] | None:
+    """Liest einen literalen Cmdletwert, eine Kommaliste oder ein gewöhnliches Array."""
+    values: list[str] = []
+    if index >= len(arguments):
+        return None
+    if (
+        arguments[index] == "@"
+        and index + 1 < len(arguments)
+        and arguments[index + 1] == "("
+        and getattr(arguments[index + 1], "punctuation", True)
+    ):
+        index += 1
+    if arguments[index] == "(" and getattr(arguments[index], "punctuation", True):
+        index += 1
+        while index < len(arguments) and not (
+            arguments[index] == ")" and getattr(arguments[index], "punctuation", True)
+        ):
+            if arguments[index] != "," or not getattr(arguments[index], "punctuation", True):
+                values.append(arguments[index])
+            index += 1
+        if index == len(arguments):
+            return None
+        return values, index + 1
+    values.append(arguments[index])
+    index += 1
+    while (
+        index < len(arguments)
+        and arguments[index] == ","
+        and getattr(arguments[index], "punctuation", True)
+    ):
+        if index + 1 == len(arguments):
+            return None
+        values.append(arguments[index + 1])
+        index += 2
+    return values, index
+
+
+def _windows_arguments(argument_line: str) -> list[str]:
+    """Zerlegt ausschließlich native Argumente nach Microsofts C-Startregeln."""
+    arguments: list[str] = []
+    word: list[str] = []
+    quoted = False
+    started = False
+    index = 0
+    while index < len(argument_line):
+        char = argument_line[index]
+        if char in " \t" and not quoted:
+            if started:
+                arguments.append("".join(word))
+                word = []
+                started = False
+            index += 1
+            continue
+        started = True
+        if char == "\\":
+            end = index
+            while end < len(argument_line) and argument_line[end] == "\\":
+                end += 1
+            count = end - index
+            if end == len(argument_line) or argument_line[end] != '"':
+                word.append("\\" * count)
+                index = end
+                continue
+            word.append("\\" * (count // 2))
+            if count % 2:
+                word.append('"')
+                index = end + 1
+                continue
+            index = end
+            char = '"'
+        if char == '"':
+            if quoted and index + 1 < len(argument_line) and argument_line[index + 1] == '"':
+                word.append('"')
+                index += 2
+            else:
+                quoted = not quoted
+                index += 1
+        else:
+            word.append(char)
+            index += 1
+    if started:
+        arguments.append("".join(word))
+    return arguments
+
+
+def _start_process_invocation(arguments: list[str], depth: int) -> str | None:
+    """Bindet benannte Werte zuerst; nur freie Werte belegen Programm und ArgumentList."""
+    if depth >= 8:
+        return None
+    program: str | None = None
+    values: list[str] | None = None
+    positional: list[list[str]] = []
+    switches = {
+        "-loaduserprofile",
+        "-nonewwindow",
+        "-passthru",
+        "-wait",
+        "-usenewenvironment",
+        "-whatif",
+        "-confirm",
+        "-verbose",
+        "-debug",
+    }
+    index = 0
+    while index < len(arguments):
+        option = arguments[index].casefold()
+        named = option.startswith("-") and not getattr(arguments[index], "quoted", False)
+        if named:
+            option, separator, bound_value = arguments[index].partition(":")
+            option = option.casefold()
+        if named and option.split(":", 1)[0] in switches:
+            index += 1
+            continue
+        if named and separator and bound_value:
+            # Nur der erste Doppelpunkt bindet; der Wert bleibt ein Literal.
+            bound_word = _ShellWord(bound_value)
+            bound_word.quoted = True
+            arguments = [*arguments[: index + 1], bound_word, *arguments[index + 1 :]]
+        parsed = _start_process_values(arguments, index + 1 if named else index)
+        if parsed is None:
+            return None
+        value, index = parsed
+        if named:
+            if option in {"-filepath", "-pspath", "-path"}:
+                if len(value) != 1:
+                    return None
+                program = value[0]
+            elif option in {"-argumentlist", "-args"}:
+                values = value
+            # Andere benannte Parameter bleiben Werte ihres Parameters.
+        else:
+            positional.append(value)
+    if program is None and positional:
+        first = positional.pop(0)
+        if len(first) != 1:
+            return None
+        program = first[0]
+    if values is None and positional:
+        values = positional.pop(0)
+    if not program or positional:
+        return None
+    # Start-Process verbindet Arraywerte mit Leerzeichen. Deren Argumente
+    # bleiben Daten: Ein Semikolon darin startet keinen zweiten Shellbefehl.
+    native_arguments = _windows_arguments(" ".join(values or []))
+    return _werkzeug_aufruf([program, *native_arguments], depth + 1)
+
+
 def _werkzeug_aufruf(tokens: list[str], depth: int) -> str | None:
     while tokens and re.match(r"(?:\$env:)?[A-Za-z_][A-Za-z_0-9]*=", tokens[0]):
         tokens = tokens[1:]
@@ -726,7 +921,7 @@ def _werkzeug_aufruf(tokens: list[str], depth: int) -> str | None:
         return _werkzeug_aufruf(tokens[1:], depth)
     if not tokens:
         return None
-    runner = tokens[0].rsplit("/", 1)[-1].lower()
+    runner = tokens[0].replace("\\", "/").rsplit("/", 1)[-1].lower()
     arguments = tokens[1:]
     if runner in _HUELLEN:
         for index, argument in enumerate(arguments):
@@ -734,8 +929,7 @@ def _werkzeug_aufruf(tokens: list[str], depth: int) -> str | None:
                 return rueckfrage_werkzeug(arguments[index + 1], depth=depth + 1)
         return _werkzeug_im_wort(arguments[0]) if arguments else None
     if runner in {"start-process", "start"}:
-        # Programm und Argumente stehen hier in benannten Parametern.
-        return next(filter(None, map(_werkzeug_im_wort, arguments)), None)
+        return _start_process_invocation(arguments, depth)
     direct = _werkzeug_im_wort(tokens[0])
     if direct:
         return direct
@@ -748,12 +942,16 @@ def _werkzeug_aufruf(tokens: list[str], depth: int) -> str | None:
             arguments = arguments[1:]
         elif arguments[0] in {"-X", "-W"} and len(arguments) > 1:
             arguments = arguments[2:]
+        elif arguments[0].startswith(("-X", "-W")) and len(arguments[0]) > 2:
+            arguments = arguments[1:]
         else:
             break
     if not arguments:
         return None
     if arguments[0] == "-m":
         return _werkzeug_im_wort(arguments[1]) if len(arguments) > 1 else None
+    if arguments[0].startswith("-"):
+        return None
     return _werkzeug_im_wort(arguments[0])
 
 

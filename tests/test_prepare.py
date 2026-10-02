@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.geom import kernel_process
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface, read_mesh
 from app.core.geom.prepare import (
@@ -1065,6 +1066,65 @@ def test_too_close_counts_as_a_collision_when_a_clearance_is_asked_for() -> None
     """
     assert not check_collisions([bracket(), bar(9.0)], clearance=0.2), "half a millimetre apart"
     assert check_collisions([bracket(), bar(9.8)], clearance=0.5), "a tenth apart, half asked for"
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_a_clearance_check_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Abstandsfang gibt Prozessfehler nach erfolgreicher Volumenprüfung weiter."""
+    from importlib import import_module
+
+    prepare_module = import_module("app.core.geom.prepare")
+    bodies = [bracket(), bar(9.8)]
+    original_arrays = [(body.raw.vertices.copy(), body.raw.faces.copy()) for body in bodies]
+    original_run = kernel_process.run
+    original_shared_volume = prepare_module.shared_volume
+    injected_error = failure_type()
+    shared_volumes = []
+    target_requests = []
+    following = []
+    returned = []
+
+    def counted_shared_volume(*args, **kwargs):
+        if target_requests:
+            following.append("shared_volume")
+            raise TypeError("RM298: weitere Volumenprüfung nach dem Prozessfehler")
+        volume = original_shared_volume(*args, **kwargs)
+        shared_volumes.append(volume)
+        return volume
+
+    def failing_gap(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(job)
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if job == "min_gap":
+            target_requests.append((job, values["search"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(prepare_module, "shared_volume", counted_shared_volume)
+    monkeypatch.setattr(kernel_process, "run", failing_gap)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(check_collisions(bodies, clearance=0.5))
+    finally:
+        # Ein Aufbaufehler vor dem Abstandsfang ist kein gültiger Gegenbeweis.
+        assert len(shared_volumes) == 1, "die echte Volumenprüfung muss erfolgreich sein"
+        assert abs(shared_volumes[0]) <= EPS_GEOM, "die Körper überlappen nicht"
+        assert len(target_requests) == 1, "der öffentliche Weg muss min_gap erreichen"
+
+    assert caught.value is injected_error
+    assert target_requests[0][1] == pytest.approx(0.5)
+    assert following == [], "kein weiterer Versuch nach dem Prozessfehler"
+    assert returned == [], "keine Ersatzwarnung anhand des Hüllquaders"
+    for body, (vertices, faces) in zip(bodies, original_arrays, strict=True):
+        np.testing.assert_array_equal(body.raw.vertices, vertices)
+        np.testing.assert_array_equal(body.raw.faces, faces)
 
 
 def test_an_open_body_falls_back_to_the_box_and_says_so() -> None:
@@ -7343,3 +7403,280 @@ def test_cutting_away_parallel_to_a_face_takes_off_a_layer(
     assert body.is_watertight
     assert body.volume == pytest.approx(7200.0, rel=1e-6)
     assert body.bounds.maximum[2] == pytest.approx(8.0, abs=1e-6)
+
+
+def _an_operation_with_loose_parts(profile: Profile, code: str):
+    """Die fünf echten Ausgeber, auf kleinen Körpern; keine nachgebaute Befundtabelle."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.sketch import edit as sketch_edit
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    load_operations()
+    raw = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    raw.apply_translation((0.0, 0.0, 10.0))
+    source = SceneObject(id="obj_1", name="Würfel", mesh=MeshData.of(raw))
+    inputs = [source]
+    if code == "label.fell_apart":
+        operation, params = (
+            "label_text",
+            {"text": "AB", "size": 6.0, "depth": 0.6, "x": 200.0, "z": 20.0},
+        )
+    elif code == "texture.fell_apart":
+        operation, params = (
+            "apply_texture",
+            {
+                "pattern": "rib",
+                "width": 6.0,
+                "height": 6.0,
+                "pitch": 3.0,
+                "depth": 0.6,
+                "x": 30.0,
+                "z": 20.0,
+            },
+        )
+    elif code == "parts.hanging_loose":
+        operation, params = "insert_rib", {"x": 100.0}
+    elif code == "blend.still_apart":
+        other = raw.copy()
+        other.apply_translation((30.0, 0.0, 0.0))
+        inputs.append(SceneObject(id="obj_2", name="Zweiter Würfel", mesh=MeshData.of(other)))
+        operation, params = "blend_union", {"radius": 0.0, "grid": 2.0}
+    else:
+        assert code == "sketch.join_apart"
+        circle = sketch_edit.move(shapes.circle(6.0), (0,), 40.0, 0.0)
+        operation, params = "sketch_join", {"sketch": sketch_to_text(circle), "height": 5.0}
+    spec = REGISTRY.get(operation)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={body.id: body for body in inputs}),
+            inputs=inputs,
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=0,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+            cancelled=NeverCancelled(),
+        )
+    )
+    found = [finding for finding in result.findings if finding.code == code]
+    assert len(found) == 1 and result.outputs[0].mesh.component_count > 1
+    return found[0], result.outputs[0], inputs[0], spec
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "label.fell_apart",
+        "texture.fell_apart",
+        "parts.hanging_loose",
+        "blend.still_apart",
+        "sketch.join_apart",
+    ],
+)
+def test_actual_loose_part_findings_only_fall_at_a_proven_one_piece_end(
+    profile: Profile, code: str
+) -> None:
+    """Echte Ausgeber: mehrteilig und unbekannt bleiben, einteilig wird geheilt."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.evaluate import _split_findings, _without_outdated
+    from app.core.types import Operation
+
+    original, output, before, operation_spec = _an_operation_with_loose_parts(profile, code)
+    assert not operation_spec.leaves_separate_parts
+    operation = Operation(id=7, op=operation_spec.name)
+    assert _split_findings(before, output, operation, operation_spec, ())
+    assert _split_findings(before, output, operation, operation_spec, [original]) == []
+    said = dataclasses.replace(original, object_id="obj_1", op_id=7)
+    values = dict(said.values)
+    for body in (output.mesh, object()):
+        scene = Scene(objects={"obj_1": dataclasses.replace(output, id="obj_1", mesh=body)})
+        kept = _without_outdated([said], scene)
+        assert len(kept) == 1 and kept[0] is said
+        assert dict(kept[0].values) == values
+    # Ein Quader umfasst die wirkliche Ausgabe vollständig. Die registrierte
+    # Vereinigung verbindet damit genau ihre losen Teile zu einem Körper.
+    low, high = np.asarray(output.mesh.raw.bounds)
+    covering = trimesh.creation.box(extents=high - low + 2.0)
+    covering.apply_translation((low + high) / 2.0)
+    inputs = [
+        dataclasses.replace(output, id="obj_1"),
+        SceneObject(id="obj_2", name="Verbindung", mesh=MeshData.of(covering)),
+    ]
+    spec = REGISTRY.get("union_objects")
+    united = spec.fn(
+        OpContext(
+            scene=Scene(objects={body.id: body for body in inputs}),
+            inputs=inputs,
+            params=spec.params(),
+            profile=profile,
+            quality="fine",
+            seed=0,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+            cancelled=NeverCancelled(),
+        )
+    )
+    one = united.outputs[0].mesh
+    assert one.component_count == 1
+    assert one.volume == pytest.approx(float(np.prod(high - low + 2.0)), abs=EPS_GEOM, rel=0.0)
+    scene = Scene(objects={"obj_1": dataclasses.replace(output, id="obj_1", mesh=one)})
+    assert _without_outdated([said], scene) == []
+    assert dict(original.values) == values and original.op_id is None
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("island", [False, True])
+def test_inner_cavity_shells_are_not_counted_as_loose_bore_parts(kernel: str, island: bool) -> None:
+    """20³ minus 10³, optional ein freier 4³-Würfel: ein bzw. zwei Materialteile."""
+    from app.core.brep import edit
+    from app.core.geom.prepare import split_findings
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.units import EPS_GEOM
+    from tests.helpers import exact_kernel
+
+    exact_kernel()
+    outside = edit.box(20.0, 20.0, 20.0)
+    cavity = edit.moved(edit.box(10.0, 10.0, 10.0), (0.0, 0.0, 5.0))
+    hollow = edit.boolean("difference", [outside, cavity])
+    body = (
+        edit.boolean("union", [hollow, edit.moved(edit.box(4.0, 4.0, 4.0), (0.0, 0.0, 8.0))])
+        if island
+        else hollow
+    )
+    assert body.solid_count == (2 if island else 1)
+    assert body.volume == pytest.approx(
+        20.0**3 - 10.0**3 + (4.0**3 if island else 0.0), abs=EPS_GEOM, rel=0.0
+    )
+    selected = body if kernel == "brep" else as_mesh_data(body)
+    assert selected.component_count == (3 if island else 2), (
+        "Schalen sind hier mehr als Materialteile"
+    )
+    source = MeshData.of(trimesh.creation.box())
+    apart = source.raw.copy()
+    apart.apply_translation((3.0, 0.0, 0.0))
+    divided = MeshData.of(trimesh.util.concatenate([source.raw, apart]))
+    old_count = 3 if island else 2
+    said = dataclasses.replace(
+        split_findings(source, divided)[0], object_id="obj_1", values={"count": old_count}
+    )
+    scene = Scene(
+        objects={"obj_1": SceneObject(id="obj_1", name="Hohlkörper", mesh=selected, kind=kernel)}
+    )
+    kept = _without_outdated([said], scene)
+    if island:
+        assert len(kept) == 1 and kept[0].values == {"count": 2}
+    else:
+        assert kept == []
+    assert said.values == {"count": old_count}
+
+
+@pytest.mark.parametrize(
+    "code,key",
+    [
+        ("ingest.multiple_components", "components"),
+        ("mesh.components_split", "after_components"),
+        ("repair.part_inside", "components"),
+    ],
+)
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_old_component_counts_keep_their_shell_meaning_at_two_hollow_bodies(
+    code: str, key: str, kernel: str
+) -> None:
+    """Vier Schalen bleiben vier: Nur der aktuelle Bohrungszähler zählt Materialteile."""
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding
+
+    outside = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    cavity = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    cavity.invert()
+    first = trimesh.util.concatenate([outside, cavity])
+    second = first.copy()
+    second.apply_translation((40.0, 0.0, 0.0))
+    body = MeshData.of(trimesh.util.concatenate([first, second]))
+    if kernel == "brep":
+        exact_kernel()
+        from app.core.brep import edit
+
+        outer = edit.box(20.0, 20.0, 20.0)
+        cavity = edit.moved(edit.box(10.0, 10.0, 10.0), (0.0, 0.0, 5.0))
+        hollow = edit.boolean("difference", [outer, cavity])
+        body = edit.boolean("union", [hollow, edit.moved(hollow, (40.0, 0.0, 0.0))])
+        assert body.solid_count == 2
+    assert body.component_count == 4
+    said = Finding(
+        code=code, severity="warning", message="Prüfbefund", object_id="obj_1", values={key: 4}
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Zwei Hohlkörper", mesh=body)})
+    kept = _without_outdated([said], scene)
+    assert len(kept) == 1 and kept[0] is said and kept[0].values == {key: 4}
+
+
+def test_the_older_split_finding_keeps_its_native_shell_contract() -> None:
+    """feature.body_split behält auch nativ seine bisherige Schalenfrage."""
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding
+
+    exact_kernel()
+    from app.core.brep import edit
+
+    body = edit.boolean(
+        "difference",
+        [
+            edit.box(20.0, 20.0, 20.0),
+            edit.moved(edit.box(10.0, 10.0, 10.0), (0.0, 0.0, 5.0)),
+        ],
+    )
+    assert body.solid_count == 1 and body.component_count == 2
+    said = Finding(
+        code="feature.body_split",
+        severity="warning",
+        message="Prüfbefund",
+        object_id="obj_1",
+        values={"before": 1, "after": 2},
+    )
+    scene = Scene(
+        objects={"obj_1": SceneObject(id="obj_1", name="Hohlkörper", mesh=body, kind="brep")}
+    )
+    kept = _without_outdated([said], scene)
+    assert len(kept) == 1 and kept[0] is said
+
+
+@pytest.mark.parametrize("case", ["face", "closed_shell", "open_solid"])
+def test_a_native_shape_without_a_proven_closed_solid_keeps_its_bore_warning(case: str) -> None:
+    """Null Körper und eine offene Solid-Hülle werden nicht als geheilter Einteilfall gezählt."""
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding
+
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeSolid
+    from OCP.TopAbs import TopAbs_FACE, TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    from app.core.brep import edit
+    from app.core.brep.kernel import Solid
+    from tests.helpers import open_box
+
+    if case == "open_solid":
+        body = Solid(BRepBuilderAPI_MakeSolid(TopoDS.Shell(open_box().shape)).Solid())
+        assert body.solid_count == 1 and not body.is_closed
+    else:
+        block = edit.box(20.0, 20.0, 20.0)
+        kind = TopAbs_FACE if case == "face" else TopAbs_SHELL
+        body = Solid(TopExp_Explorer(block.shape, kind).Current())
+        assert body.solid_count == 0
+        assert body.is_closed is (case == "closed_shell")
+    assert body.component_count == 1
+    said = Finding(
+        code="bore.splits_the_body",
+        severity="warning",
+        message="Prüfbefund",
+        object_id="obj_1",
+        values={"count": 2},
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Schale", mesh=body, kind="brep")})
+    kept = _without_outdated([said], scene)
+    assert len(kept) == 1 and kept[0] is said and said.values == {"count": 2}

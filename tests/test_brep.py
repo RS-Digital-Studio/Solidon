@@ -33,7 +33,7 @@ from app.core.sketch.profile import Profile as Outline
 from app.core.sketch.profile import ProfileSegment as Segment
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
 from app.core.units import EPS_DISPLAY, EPS_GEOM
-from tests.helpers import CountingToken, exact_kernel
+from tests.helpers import CountingToken, exact_kernel, open_box
 
 exact_kernel()
 
@@ -1772,24 +1772,6 @@ def _nurbs(solid: Solid) -> Solid:
     return Solid(BRepBuilderAPI_NurbsConvert(solid.shape, True).Shape())
 
 
-def _open_box() -> Solid:
-    """Ein Quader ohne Deckel: fünf Flächen, genäht, vier freie Kanten am Rand."""
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
-    from OCP.TopAbs import TopAbs_FACE
-    from OCP.TopExp import TopExp_Explorer
-
-    sewing = BRepBuilderAPI_Sewing(EPS_GEOM)
-    faces = TopExp_Explorer(block().shape, TopAbs_FACE)
-    kept = 0
-    while faces.More():
-        if kept < 5:
-            sewing.Add(faces.Current())
-        kept += 1
-        faces.Next()
-    sewing.Perform()
-    return Solid(sewing.SewedShape())
-
-
 def test_an_open_shell_or_a_lone_face_is_not_closed() -> None:
     """``is_closed`` fragt nach freien Kanten — und fand bis zum 22.09.2026 nie eine.
 
@@ -1808,7 +1790,7 @@ def test_an_open_shell_or_a_lone_face_is_not_closed() -> None:
     assert edit.cylinder(10.0, 5.0).is_closed
     assert edit.sphere(8.0).is_closed
     assert edit.cone(10.0, 0.0, 5.0).is_closed, "die Spitze ist eine entartete Kante, keine freie"
-    assert not _open_box().is_closed
+    assert not open_box().is_closed
     lone = Solid(TopoDS.Face(TopExp_Explorer(block().shape, TopAbs_FACE).Current()))
     assert not lone.is_closed
 
@@ -1872,7 +1854,7 @@ def test_closedness_is_asked_once_per_body() -> None:
     assert solid.is_closed
     assert solid._cache["closed"] is True
     assert solid.is_closed
-    shell = _open_box()
+    shell = open_box()
     assert not shell.is_closed
     assert shell._cache["closed"] is False
     assert not shell.is_closed

@@ -32,7 +32,7 @@ dans `website/version.json`.
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
 - Vous choisissez la buse dans les réglages d'impression parmi les tailles que connaît votre imprimante, et le slicer reçoit le profil correspondant.
 - Les réglages d'impression demandent dans l'ordre où l'un dépend de l'autre : slicer, imprimante, buse, plateau, filaments et qualité, puis les valeurs.
-- Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Avant, seule la fenêtre de Creality Print le pouvait. Si 7.3 réarrange le plateau, Solidon le dit.
+- Vous pouvez désormais générer le fichier d'impression directement depuis Solidon avec Creality Print 7.2 et 7.3.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
 - Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.

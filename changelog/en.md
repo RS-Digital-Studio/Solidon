@@ -31,7 +31,7 @@ it into `website/version.json`.
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
 - You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
-- With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
+- You can now create print files directly from Solidon with Creality Print 7.2 and 7.3.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
 - Cura now slices with the nozzle you chose, also for printers from Cura's own list, and printers with their origin in the middle of the bed keep it.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.

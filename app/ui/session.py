@@ -253,6 +253,12 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
 #: Baum, Bericht und Ansicht Unruhe ohne Gewinn.
 PICTURE_FIRST_TRIANGLES: Final = 50_000
 
+#: Wie beim Sitzungsabbau muss ein alter Auswertungsarbeiter sein Ende bestätigen.
+SYNC_EVALUATION_END_WAIT_MS: Final = 10_000
+
+#: Eine überholte Frage bemerkt den Abbruch auch ohne Qt-Zustellung einer Antwort.
+QUESTION_CANCEL_POLL_S: Final = 0.05
+
 
 def _recognition_follows(picture: EvaluationResult) -> bool:
     """Ob nach diesem Bild eine Erkennung von Sekunden läuft.
@@ -4684,8 +4690,23 @@ class Session(QObject):
         Bausteinschritt und diesem Lauf stand im Objektbaum die Szene ohne den
         Baustein, und das Fenster hielt eine markierte Zeile für nicht gewählt.
         """
+        worker = self._worker
+        self._rerun_pending = False
+        self._cancel_by_user = False
+        self._superseded = worker
+        if worker is not None:
+            self.cancel_signal.cancel()
+            self.questionInvalidated.emit()
+            if not worker.wait(SYNC_EVALUATION_END_WAIT_MS):
+                raise UserError(
+                    title=_("Die neue Berechnung kann noch nicht starten."),
+                    detail=_(
+                        "Die vorherige Berechnung wurde nicht rechtzeitig beendet. "
+                        "Die neue Berechnung wurde deshalb nicht gestartet."
+                    ),
+                    suggestions=(CANCEL,),
+                )
         self.cancel_signal.reset()
-        self._superseded = self._worker
         self._evaluation_settings = self._current_effective_settings()
         result = self.run_evaluation("fine")
         self.picture = None
@@ -5487,7 +5508,7 @@ class Session(QObject):
         """Überholte Projekt- oder Arbeiterfragen dürfen keine Antwort übernehmen."""
         return (
             request.project_generation in (None, self._project_generation)
-            and not self._outdated(request.worker)
+            and not self._stale(request.worker)
             and not (
                 request.worker is not None
                 and (self._rerun_pending or self.cancel_signal.is_cancelled)
@@ -5585,7 +5606,9 @@ class Session(QObject):
         if not self.question_is_current(request):
             raise OperationCancelled
         self.askRequested.emit(request)
-        request.answered.wait()
+        while not request.answered.wait(QUESTION_CANCEL_POLL_S):
+            if not self.question_is_current(request):
+                raise OperationCancelled
         if not self.question_is_current(request):
             raise OperationCancelled
         asked = getattr(self._pending, "asked", None)
