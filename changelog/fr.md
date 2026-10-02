@@ -55,6 +55,7 @@ dans `website/version.json`.
 - Deux plaques qui se touchent restent un seul corps autour d'un perçage et gardent leur matière, que vous l'étiriez, le modifiiez, le déplaciez ou le fermiez. Une goupille au-dessus reste en place.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
+- Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Dans l'historique d'un corps STEP, on peut réordonner les étapes ou en insérer une avant, même si une étape ultérieure vise un perçage. La référence suit le perçage.
 - Un perçage déplacé ou dupliqué avec une nouvelle direction reste exact sur un corps STEP.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.

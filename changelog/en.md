@@ -54,6 +54,7 @@ it into `website/version.json`.
 - Two plates that touch stay one body at a hole and keep their material, whether you pull, change, move or close the hole. A pin above it stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
+- Patterns on cylindrical faces of imported models stay closed when you change them.
 - In the history of a STEP body you can reorder steps or insert one before, even when a later step refers to a hole. The reference follows the hole.
 - A hole moved or duplicated with a new direction stays exact on a STEP body.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.

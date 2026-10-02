@@ -54,6 +54,7 @@ scrive in `website/version.json`.
 - Due piastre che si toccano restano un solo corpo attorno a un foro e conservano il materiale, che tu lo allunghi, lo modifichi, lo sposti o lo chiuda. Una spina sopra resta al suo posto.
 - Allungare un foro che attraversa due corpi non segnala più che il corpo si spezza quando non succede.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
+- I motivi sulle facce cilindriche dei modelli importati restano chiusi quando li modifichi.
 - Nella cronologia di un corpo STEP puoi riordinare i passi o inserirne uno prima, anche se un passo successivo riguarda un foro. Il riferimento segue il foro.
 - Un foro spostato o duplicato con una nuova direzione resta esatto su un corpo STEP.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
