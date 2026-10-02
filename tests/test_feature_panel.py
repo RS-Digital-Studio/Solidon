@@ -34,7 +34,8 @@ from app.core.perceive.actions import EDGE_OPERATIONS, EDGE_VARIANTS, actions_fo
 from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
 from app.core.units import LengthUnit
-from app.ui.labels import BoundedSpin, LengthSpin, NumberSpin
+from app.i18n import tr
+from app.ui.labels import BoundedLengthSpin, BoundedSpin, LengthSpin, NumberSpin
 from app.ui.panels import FeaturePanel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -641,15 +642,67 @@ def test_a_feature_field_keeps_an_out_of_range_number_and_blocks_apply(
     assert editor.textFromValue(float(field.maximum)) in refusal.text(), refusal.text()
     assert refusal.isVisibleTo(panel)
     assert not panel._apply.isEnabled(), "eine abgelehnte Eingabe sperrt den gemeinsamen Knopf"
-    assert panel._lock_note.text() == refusal.text()
+    # Am Fußknopf steht das Feld davor, weit weg von der Zeile (RM-342, D-N2).
+    named = tr("{name}: {value}", name=editor.accessibleName(), value=refusal.text())
+    assert panel._lock_note.text() == named
+    assert editor.accessibleName() and str(field.label) in editor.accessibleName()
     assert panel._lock_note.isVisibleTo(panel), "der Sperrgrund bleibt auch am Fußknopf sichtbar"
     assert not panel.can_accept()
     panel.block_apply("Die Vorschau wird berechnet.")
-    assert panel._lock_note.text() == refusal.text(), "die Grenzangabe bleibt vor dem Fußknopf"
+    assert panel._lock_note.text() == named, "die Grenzangabe bleibt vor dem Fußknopf"
     line.selectAll()
     QTest.keyClicks(line, editor.textFromValue(float(field.maximum)))
     assert panel._lock_note.text() == "Die Vorschau wird berechnet."
     assert not panel._apply.isEnabled(), "nach Eingabekorrektur gilt weiter die Vorschau-Sperre"
+
+
+def test_a_refusal_hides_with_its_field_and_returns_with_it(qt_app: QApplication) -> None:
+    """RM-342 D-N1: Verschwindet ein Feld mit abgelehnter Zahl, geht sein Satz mit.
+
+    Der gemeldete Weg: *Zum Langloch ziehen* X = 1500 mm, dann trägt die
+    Maßgruppe von *Bohrung ändern* die gemeinsamen Felder im Bild, und unter
+    der Zeile stand der Satz ohne Feld. Geprüft wird jedes Paar aus
+    ``LEADS_INTO_THE_VIEW`` und jedes gemeinsame begrenzte Feld, nicht nur X.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui.panels import LEADS_INTO_THE_VIEW
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    mesh = plate()
+    panel.show_feature(identifier, feature, features=features.detect(mesh), mesh=mesh)
+    panel.show()
+    QApplication.processEvents()
+    rows = {row.op: row for row in panel._shown_rows.values()}
+    checked = 0
+    for op in sorted(LEADS_INTO_THE_VIEW & set(rows)):
+        row = rows[op]
+        for other in sorted(LEADS_INTO_THE_VIEW & set(rows) - {op}):
+            shared = set(row.widgets) & set(rows[other].widgets)
+            for name in sorted(shared):
+                editor = row.widgets[name]
+                field = next(entry for entry in row.entries if str(entry.name) == name)
+                bounded = isinstance(editor, (BoundedSpin, BoundedLengthSpin))
+                if not bounded or field.maximum is None:
+                    continue
+                panel._arm(row.key)
+                line = editor.lineEdit()
+                line.setFocus()
+                line.selectAll()
+                QTest.keyClicks(line, editor.textFromValue(float(field.maximum) + 5.0))
+                refusal = row.refusals[name]
+                assert refusal.isVisibleTo(panel), (op, name)
+                panel.set_measuring(True, op=other)
+                assert not editor.isVisibleTo(panel), (op, name, "die Maßgruppe trägt das Feld")
+                assert not refusal.isVisibleTo(panel), f"{op}.{name}: Satz ohne Feld"
+                panel.set_measuring(False)
+                assert editor.isVisibleTo(panel)
+                assert refusal.isVisibleTo(panel), f"{op}.{name}: der Satz kommt mit dem Feld"
+                line.selectAll()
+                QTest.keyClicks(line, editor.textFromValue(float(field.maximum)))
+                checked += 1
+    assert checked, "kein gemeinsames begrenztes Feld zwischen Zeile und Maßgruppe gefunden"
 
 
 def test_a_rejected_length_survives_a_display_unit_change(qt_app: QApplication) -> None:

@@ -4725,7 +4725,9 @@ def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QAppl
         said = field.refusal()
         assert "Obergrenze" in said, said
         assert not dialog._accept_button.isEnabled(), "der Knopf ist gesperrt"
-        assert dialog._accept_button.toolTip() == said
+        # Am Knopf steht das Feld davor (RM-342, D-N2).
+        named = tr("{name}: {value}", name=count.title, value=said)
+        assert dialog._accept_button.toolTip() == named
         assert not dialog.can_accept(), "und Knopf und Klick sagen dasselbe"
     finally:
         dialog.deleteLater()

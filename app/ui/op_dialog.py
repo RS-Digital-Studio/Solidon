@@ -2271,7 +2271,10 @@ class OperationDialog(QDialog):
                             ).format(name=entry.title, problem=said, condition=condition)
                             return notice, controller_name
                         break
-                return said, ""
+                # Mit dem Feld davor, wie am Knopf *Slicen* (RM-342, D-N2): Der
+                # Satz steht am Übernehmen-Knopf, weit weg vom Feld.
+                title = entry.title if (entry := entries.get(name)) is not None else name
+                return str(tr("{name}: {value}", name=str(title), value=said)), ""
         return "", ""
 
     def _open_hidden_expression_controller(self) -> None:
