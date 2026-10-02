@@ -105,7 +105,7 @@ class SculptBar(QWidget):
         self.strength.set_step_mm(0.1)
         self.strength.set_value_mm(1.0)
         self.strength.setToolTip(tr("Wie weit ein einzelner Zug die Fläche verschiebt."))
-        self.strength.setAccessibleName(tr("Stärke"))
+        self.strength.setAccessibleName(tr("Stärke", context="Pinsel"))
 
         self.symmetry = QComboBox(self)
         self.symmetry.setAccessibleName(tr("Symmetrie"))
@@ -160,7 +160,7 @@ class SculptBar(QWidget):
         layout.addWidget(self.tool)
         layout.addWidget(QLabel(tr("Radius"), self))
         layout.addWidget(self.radius)
-        layout.addWidget(QLabel(tr("Stärke"), self))
+        layout.addWidget(QLabel(tr("Stärke", context="Pinsel"), self))
         layout.addWidget(self.strength)
         layout.addWidget(QLabel(tr("Symmetrie"), self))
         layout.addWidget(self.symmetry)

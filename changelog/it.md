@@ -64,6 +64,7 @@ scrive in `website/version.json`.
 - La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.
 - Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
 - Un tratto sul piano di simmetria agisce una volta invece di due.
+- La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
 - Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
 - Nella finestra, «Fondi dolcemente» calcola ora fine come nell'esportazione, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.

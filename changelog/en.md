@@ -64,6 +64,7 @@ it into `website/version.json`.
 - Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.
 - The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
 - A sculpting stroke on the mirror plane now acts once instead of twice.
+- The sculpting bar now calls the brush value *Strength* instead of *Thickness*, which read like a wall thickness.
 - If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
 - In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
