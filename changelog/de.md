@@ -130,7 +130,8 @@ Nutzen da und sonst nichts.
 - Im Beispielprojekt zum zweiten Weg folgen die Schraubenlöcher Breite und Stärke.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
-- Leerzeichen kommen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, während ein Dialog seine Vorschau zeigt.
+- Während ein Dialog seine Vorschau zeigt, kommen Leerzeichen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, und Haken und Knöpfe nehmen die Leertaste an.
+- Beim *Skalieren* bleibt ein Körper auf dem Bett stehen, statt unter die Platte zu sinken, und die Ansicht rahmt ihn nach, wenn er größer wird.
 - Einige Befunde, die einen Schritt meinen, öffnen ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
 - Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 - Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.

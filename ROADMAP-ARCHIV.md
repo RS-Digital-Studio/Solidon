@@ -35,6 +35,8 @@ entfernt hat.
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
+| 2026-10-02 | [RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)](#rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026) |
+| 2026-10-02 | [RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)](#rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
@@ -32971,7 +32973,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   [RM-279](#rm-279). (4) `Viewport.frame_next_scene` rahmt nach *Modell teilen*
   einmal auf alle Teile; am Organizer ×2,3 mit sechs Teilen stehen 100 statt 29 % im Bild,
   über alle fünf Teilungswege (`9f821c70c`). Nach *Skalieren* bleibt die Kamera weiter
-  stehen; das steht als [RM-280](ROADMAP.md#rm-280). **KUNDE-08, entschieden: nein.** Der
+  stehen; das steht als [RM-280](#rm-280). **KUNDE-08, entschieden: nein.** Der
   Hinweis „Nicht jedes Maß der Zeichnung ist festgelegt …“ kommt nur noch an einer
   Zeichnung, die mindestens ein Maß trägt und trotzdem wandern kann. Wer ganz ohne Maß
   zeichnet, druckt, was er sieht, und las den Satz im Prüfbericht wie einen Mangel ohne
@@ -36833,6 +36835,38 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
 
 **Abschluss:** Erststart, Einstellungen und Dateiwahl suchen den gewählten Slicer über `first_run.select_program` (Vergleich mit `discover.same_program`, also über `Path`) statt über den exakten Text; `PrintSettingsDialog._choose_slicer` und `filament_picker.slicer_filaments` vergleichen den gemerkten Pfad ebenso. *Abbrechen* im Erzeugen-Dialog ist gesperrt, solange der Abbruch eines weiteren Versuchs ausläuft, und trägt dabei den Satz „Wird abgebrochen — der laufende Schritt läuft aus.“; auch Esc und das Fensterkreuz verwerfen in dieser Zeit nichts (gefragt wird `_busy`, nicht `isRunning`, weil der Faden schon zurück sein kann, bevor seine Meldung ankommt). Tests: `test_a_slicer_in_another_case_stays_chosen_in_the_first_run`, `test_a_remembered_slicer_in_another_case_is_the_one_used` (Druckdialog und Filamentwähler), `test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings` (nur unter Windows, wo Pfade nicht nach Groß und Klein unterscheiden) und `test_a_second_cancel_while_the_first_runs_out_discards_nothing`; alle vier am Stand `ba5a76365` rot, danach grün. Sonde am echten Fenster: Erststart mit einer als `c:\…` gewählten Datei und anschließender Programmsuche, Erzeugen mit einem Abbruch, der zwei Sekunden ausläuft, echte Klicks und Esc: vorher 5 von 9, danach 9 von 9. In den Einstellungen trat der Fehler am echten Rechner nicht auf, weil die Programmsuche den gemerkten Pfad in seiner eigenen Schreibweise mitliefert; der Test stellt die Lage aus dem Review nach. Umgesetzt von Claude, in main mit `db87b3815` (Merge `db0f5ef13`); Entwicklungstor grün (20215 bestanden, ruff, format und mypy ohne Befund).
+## RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)
+
+<a id="rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026"></a>
+<a id="rm-280"></a>
+
+**RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild
+  wächst.** Aus der Durchsicht v0.5.1 (rest-kunde, Registersatz 2). Am Organizer stehen
+  nach *Skalieren* ×2,3 noch 52 % des Körpers im Bild
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-kunde/out/teilen-vorher-organizer.txt`, Zeile „vor
+  dem Teilen“). `Viewport._fit_once_for` rahmt nach dem ersten Bild nur, wenn `outgrown` es
+  verlangt (das Fünffache oder kein Überlapp); „jeder weitere Aufbau lässt die Kamera in
+  Ruhe“ ist eine ausdrückliche Regel (Robert, 23.08.2026, beim Verschieben). Nach *Modell
+  teilen* rahmt seit `9f821c70c` `frame_next_scene` einmal auf alle Teile. Ob Skalieren
+  unter die Regel fällt, ist eine Bedienfrage für `bedienlogik`; Vorschlag:
+  `frame_next_scene` auch nach einem Skalieren, das über den Rahmen hinauswächst. Abnahme:
+  die Frage entschieden und begründet; wird gebaut, steht der Organizer nach ×2,3 ganz im
+  Bild, und ein Verschieben lässt die Kamera weiter in Ruhe.
+
+**Abschluss:** Entschieden (Robert, „alles ja“, 02.10.2026) und gebaut: Ein neuer Größenschritt (`scale_object`, `fit_to_size`, `RESIZING_OPERATIONS`) meldet sich über `MainWindow._frame_after_resizing` einmal bei `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die Körper gewachsen sind und über den eingepassten Rahmen hinausreichen (`reaches_beyond`). Verkleinern, Verschieben, Undo und Themenwechsel lassen die Kamera in Ruhe; Roberts Regel vom 23.08.2026 gilt weiter. Tests: `test_analysis_ui.py::test_a_body_beyond_the_frame_is_framed_only_when_asked`, `::test_scaling_beyond_the_frame_frames_once_and_moving_does_not` (ohne den Aufruf rot). Fenstersonde am echten Fenster: Würfel ×2,3 über den Dialog *Skalieren* → Rahmen (−23…23, 0…46), Körper ganz im Bild, danach *Verschieben* lässt den Rahmen; 7 von 7 Prüfungen. Regel in `.claude/rules/kamera.md`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)
+
+<a id="rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026"></a>
+<a id="rm-473"></a>
+
+**RM-473 — Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus.**
+Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) bei der Fensterabnahme von RM-280: *Skalieren*
+  skaliert um die Mitte. Ein Würfel, der auf dem Bett steht, sank beim Faktor 2,3 um 13 mm unter
+  die Platte; der Prüfbericht meldete „Ein Objekt steckt unter dem Druckbett“ und bot *Auf das Bett
+  setzen* an. So schon in 0.5.1, kein Rückschritt. Bauplan §2.4 (gute Vorgabe), §29.
+
+**Abschluss:** Für einen Körper, der auf dem Bett steht, belegt der Dialog den Bezugspunkt „Druckbett“ vor (`MainWindow._from_selection`, `_stands_on_the_bed`, `_offers_the_bed_anchor`); was schwebt, behält die Mitte. Die Vorgabe der Operation bleibt die Mitte, gespeicherte Schritte, Rezepte und Agent rechnen unverändert. Test `test_analysis_ui.py::test_a_body_on_the_bed_grows_from_the_bed_when_scaled`; Fenstersonde: Dialog zeigt „Druckbett“, der Würfel wächst von z = 0 auf 46 mm. Umgesetzt von Claude (Thread „Bedienung und KI“).
 ## RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)
 
 <a id="rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026"></a>
