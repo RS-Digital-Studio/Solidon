@@ -20226,9 +20226,7 @@ class MainWindow(QMainWindow):
             # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
             number, step = halted
             invitation.show_halted(
-                tr("Das Projekt hält an Schritt {number}: {step}").format(
-                    number=number, step=step
-                ),
+                tr("Das Projekt hält an Schritt {number}: {step}").format(number=number, step=step),
                 tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht."),
             )
             self.object_tree.say_why_empty(
