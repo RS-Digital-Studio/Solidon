@@ -2638,6 +2638,17 @@ class MainWindow(QMainWindow):
         self._split_findings: tuple[int, list[Finding]] = (-1, [])
         """Was *Automatisch teilen* über seinen Plan zu sagen hatte, und bei
         welcher Zahl von Verlaufsschritten das galt — siehe :meth:`_split_done`."""
+        self._split_queue: list[ObjectId] = []
+        """Die Körper, die eine Reihe von Teilungen noch vor sich hat (RM-440)."""
+        self._split_turn: tuple[int, int] | None = None
+        """Der wievielte Körper einer Reihe gerade geteilt wird, und von wie
+        vielen — ``None`` außerhalb einer Reihe (:meth:`split_in_turn`)."""
+        self._split_turn_done = 0
+        """Wie viele Körper der laufenden Reihe schon geteilt sind."""
+        self._split_turn_stopped = False
+        """Die Reihe wurde abgebrochen — der Rest bleibt ungeteilt."""
+        self._split_next_due = False
+        """Der nächste Körper der Reihe ist schon bestellt (ein Zeitgeber steht aus)."""
         self._body_facts: tuple[int, dict[ObjectId, BodyFacts]] = (-1, {})
         """Geschlossen, Stücke, Hohlraum — je Körper, für die Auswertung, die
         gerade gilt. ``_update_actions`` fragt bei jeder Auswahl für drei
@@ -6744,6 +6755,100 @@ class MainWindow(QMainWindow):
         self._split_protected = len(self.session.protected_features(object_id))
         self.session.split_async(object_id, self._split_done)
 
+    def split_in_turn(self, object_ids: Sequence[ObjectId]) -> None:
+        """Mehrere Körper teilen, einen nach dem anderen (RM-440).
+
+        Der Weg der Sammelzeile im Prüfbericht: *Modell teilen* für sechs zu
+        große Teile. Die Suche läuft im Arbeiter und immer nur einmal zugleich
+        (``Session.split_async``); je Körper gestartet traf die zweite die
+        erste und endete mit „Die Teilung läuft schon“. Die Reihe startet den
+        nächsten Körper, sobald der vorige Arbeiter ausgelaufen ist
+        (:meth:`_on_split_busy`). Fortschritt und *Abbrechen* sind dieselben
+        wie bei einer Teilung; der Balken nennt dazu den Körper der Reihe, und
+        *Abbrechen* hält auch den Rest an. Jede Teilung bleibt ein eigener
+        Rückgängig-Schritt, wie beim einzelnen *Modell teilen*.
+        """
+        if self.session.split_running:
+            self.announce(tr("Die Teilung läuft schon — der Abbrechen-Knopf hält sie an."))
+            return
+        wanted = list(dict.fromkeys(object_ids))
+        if not wanted:
+            return
+        self._split_queue = wanted
+        self._split_turn = (0, len(wanted))
+        self._split_turn_done = 0
+        self._split_turn_stopped = False
+        self._split_next_due = False
+        self._split_next()
+
+    def _split_next(self) -> None:
+        """Den nächsten Körper der Reihe teilen — oder die Reihe abschließen.
+
+        ``_split_next_due`` bleibt gesetzt, bis der nächste Arbeiter läuft:
+        ``split_async`` wartet auf die Auswertung der vorigen Teilung und
+        stellt dabei Ereignisse zu, darunter das Auslaufen des vorigen
+        Arbeiters — ohne die Sperre bestellte es einen zweiten Start.
+        """
+        self._split_next_due = True
+        try:
+            turn = self._split_turn
+            if turn is None:
+                return
+            while self._split_queue and not self._split_turn_stopped:
+                object_id = self._split_queue.pop(0)
+                turn = (turn[0] + 1, turn[1])
+                self._split_turn = turn
+                living = self.session.last_result
+                if living is None or object_id not in living.scene.objects:
+                    # Ein Körper, den es inzwischen nicht mehr gibt (Undo,
+                    # Löschen), hat nichts mehr zu teilen.
+                    continue
+                self.action_auto_split(object_id)
+                if self.session.split_running:
+                    return
+                # Die Sitzung hat abgesagt (Halt, laufende Rechnung) und es
+                # gesagt; mit dem Rest käme dieselbe Absage noch einmal.
+                self._split_turn_stopped = True
+            self._finish_split_turn()
+        finally:
+            self._split_next_due = False
+
+    def _finish_split_turn(self) -> None:
+        """Die Reihe ist zu Ende: sagen, wie viele Körper geteilt sind."""
+        turn = self._split_turn
+        done = self._split_turn_done
+        stopped = self._split_turn_stopped
+        self._split_turn = None
+        self._split_queue = []
+        self._split_turn_done = 0
+        self._split_turn_stopped = False
+        if turn is None or turn[1] < 2:
+            return
+        if stopped and done:
+            self.announce(
+                tr(
+                    "Teilung abgebrochen. {done} von {count} Körpern sind geteilt. "
+                    "Strg+Z nimmt jede Teilung einzeln zurück.",
+                    done=done,
+                    count=turn[1],
+                )
+            )
+        elif not stopped:
+            self.announce(
+                tr(
+                    "{done} von {count} Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.",
+                    done=done,
+                    count=turn[1],
+                )
+            )
+
+    def _split_phase(self, text: str) -> str:
+        """Der Fortschrittstext einer Teilung — in einer Reihe mit dem Körper davor."""
+        turn = self._split_turn
+        if turn is None or turn[1] < 2 or not text:
+            return text
+        return tr("Körper {index} von {count} · {phase}", index=turn[0], count=turn[1], phase=text)
+
     def _split_done(self, applied: Any) -> None:
         """Die Teilung ist angewandt: Befunde in den Bericht, Ergebnis in die Statuszeile.
 
@@ -6755,10 +6860,15 @@ class MainWindow(QMainWindow):
         """
         self.report.add_findings(applied.findings)
         if applied.transaction is not None:
+            # In einer Reihe gelten die Sätze der früheren Teilungen weiter;
+            # die nächste Auswertung hängt sie alle wieder an (RM-440).
+            earlier = self._split_findings[1] if self._split_turn_done else []
             self._split_findings = (
                 len(self.session.project.document.ops),
-                list(applied.findings),
+                [*earlier, *applied.findings],
             )
+            if self._split_turn is not None:
+                self._split_turn_done += 1
         if applied.transaction is None:
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
@@ -14549,7 +14659,7 @@ class MainWindow(QMainWindow):
             self._split_patience.start()
             self._split_bar_delay.start()
             self._split_fraction = 0.0
-            self._split_progress_text = tr("Die Trennebenen werden gesucht …")
+            self._split_progress_text = self._split_phase(tr("Die Trennebenen werden gesucht …"))
             self._split_determinate = False
             self._split_started = time.monotonic()
             self._set_progress_state(
@@ -14569,6 +14679,16 @@ class MainWindow(QMainWindow):
             self._split_bar_released = False
             self._split_started = None
             self._set_progress_state("split", active=False, cancel_enabled=True)
+            if (
+                self._split_turn is not None
+                and not self._split_next_due
+                and not self.session.split_running
+            ):
+                # Der nächste Körper einer Reihe (RM-440) — erst wenn der
+                # Arbeiter ausgelaufen ist, und über den Zeitgeber, damit die
+                # angewandte Teilung vorher ihre Ansage und Befunde setzt.
+                self._split_next_due = True
+                QTimer.singleShot(0, self, self._split_next)
         self._update_waiting_state()
 
     def _release_split_status(self) -> None:
@@ -14620,8 +14740,8 @@ class MainWindow(QMainWindow):
             self._split_determinate = False
             self._split_fraction = max(self._split_fraction, fraction)
             minimum, maximum = 0, 0
-        self._split_progress_text = text
-        parts = [text]
+        self._split_progress_text = self._split_phase(text)
+        parts = [self._split_progress_text]
         if self._split_determinate:
             parts.append(f"{round(self._split_fraction * 100)} %")
             if left_over := remaining_time(self._split_started, self._split_fraction):
@@ -14645,7 +14765,13 @@ class MainWindow(QMainWindow):
         return "  ·  ".join(part for part in parts if part)
 
     def _on_split_cancel_requested(self) -> None:
-        """Der Knopf wirkt sofort; der Arbeiter bestätigt das Ende später."""
+        """Der Knopf wirkt sofort; der Arbeiter bestätigt das Ende später.
+
+        In einer Reihe (RM-440) hält er auch die Körper an, die noch warten.
+        """
+        if self._split_turn is not None:
+            self._split_turn_stopped = True
+            self._split_queue = []
         self._set_progress_state(
             "split",
             text=tr("Teilung wird abgebrochen …"),
@@ -21910,7 +22036,15 @@ class MainWindow(QMainWindow):
         )
 
     def _split_after_error(self, error: AppError) -> None:
-        """Zu groß für das Bett: teilen, bis jedes Stück passt (§25)."""
+        """Zu groß für das Bett: teilen, bis jedes Stück passt (§25).
+
+        Aus einer Sammelzeile kommen alle gewählten Körper mit
+        (``split_objects``) und werden der Reihe nach geteilt (RM-440).
+        """
+        several = error.values.get("split_objects")
+        if isinstance(several, (tuple, list)) and len(several) > 1:
+            self.split_in_turn([str(entry) for entry in several])
+            return
         object_id = self._object_of(error)
         if object_id is not None:
             self.action_auto_split(object_id)

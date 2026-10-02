@@ -166,7 +166,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
-| [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
 | [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“ (Teil 1 und 3 mit RM-371). Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -4850,17 +4849,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
   die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
   `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
-<a id="rm-440"></a>
-
-- [ ] **RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
-  Fund 02.10.2026 bei RM-372 (Claude, Unteragent), am Code gelesen, nicht im Fenster
-  nachgestellt: Wählt der Kunde in der Sammelzeile des Prüfberichts *Modell teilen* für
-  mehrere Körper, startet die Handlung je Körper eine Teilungssuche; die zweite trifft die
-  laufende erste und endet mit „Die Teilung läuft schon“. Geteilt wird nur der erste Körper.
-  **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
-  zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
-  geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
-
 <a id="rm-448"></a>
 
 - [ ] **RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**

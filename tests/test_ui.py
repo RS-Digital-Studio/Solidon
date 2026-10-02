@@ -9662,6 +9662,124 @@ def test_a_bundle_row_acting_on_each_body_is_one_undo_step(
     assert longest() == pytest.approx([300.0, 300.0]), "ein Strg+Z stellt beide wieder her"
 
 
+def test_a_bundle_row_splits_every_chosen_body_in_turn(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-440: *Modell teilen* an einer Sammelzeile teilte nur den ersten Körper.
+
+    Die Handlung lief je Körper an; die zweite Suche traf die laufende erste
+    und endete mit „Die Teilung läuft schon“. Jetzt teilt das Fenster die
+    gewählten Körper nacheinander, jede Teilung ein eigener Rückgängig-Schritt
+    wie beim einzelnen *Modell teilen*.
+    """
+    import time
+
+    import trimesh
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.export import threemf
+    from app.core.geom.mesh import MeshData
+    from app.ui import panels
+
+    monkeypatch.setattr(
+        panels.BodyChoiceDialog, "ask", lambda parent, title, ids, names: tuple(ids)
+    )
+    parts = []
+    for index in range(2):
+        mesh = trimesh.creation.box((300.0, 20.0, 20.0))
+        mesh.apply_translation((0.0, 40.0 * index, 10.0))
+        parts.append(threemf.AssemblyPart(mesh=MeshData.of(mesh), name=f"Leiste {index + 1}"))
+    assert window.session.import_payload("leisten.3mf", threemf.write_assembly(parts))
+    assert window.session.wait_for_idle()
+    document = window.session.project.document
+    bodies = document.ops[-1].outputs
+    assert len(bodies) == 2
+    window.report.show_result(window.session.last_result, document)
+
+    listing = window.report.list
+    item = next(
+        listing.item(row)
+        for row in range(listing.count())
+        if listing.item(row).data(Qt.ItemDataRole.UserRole).code == "arrange.out_of_build_volume"
+    )
+    assert set(item.data(panels._BODIES_ROLE) or ()) == set(bodies), "eine Zeile für beide"
+    listing.setCurrentItem(item)
+    QApplication.processEvents()
+    button = next(
+        child
+        for child in window.report._offers.findChildren(QPushButton)
+        if child.text() == str(errors.SPLIT_MODEL.label)
+    )
+    said: list[str] = []
+    monkeypatch.setattr(window, "announce", lambda text, *args, **kwargs: said.append(str(text)))
+    transactions = len(document.transactions)
+    button.click()
+
+    deadline = time.monotonic() + 120.0
+    while time.monotonic() < deadline and (
+        getattr(window, "_split_turn", None) is not None
+        or window.session.split_running
+        or window.session.busy
+    ):
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    living = window.session.last_result.scene.objects
+    assert not set(bodies) & set(living), "jeder gewählte Körper ist geteilt"
+    assert len(document.transactions) == transactions + 2, "eine Teilung, ein Rückgängig-Schritt"
+    assert not any("läuft schon" in text for text in said), said
+    assert said[-1] == tr(
+        "{done} von {count} Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.",
+        done=2,
+        count=2,
+    )
+
+    window.action_undo()
+    assert window.session.wait_for_idle()
+    living = window.session.last_result.scene.objects
+    assert len(set(bodies) & set(living)) == 1, "ein Strg+Z nimmt eine Teilung zurück"
+
+
+def test_cancelling_a_turn_of_splits_leaves_the_rest_whole(window: MainWindow) -> None:
+    """*Abbrechen* hält in einer Reihe von Teilungen auch die wartenden Körper an (RM-440)."""
+    import time
+
+    for _index in range(2):
+        window.session.apply(
+            "Anlegen",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 300.0, "depth": 20.0, "height": 20.0}
+                )
+            ],
+        )
+        assert window.session.wait_for_idle()
+    document = window.session.project.document
+    bodies = list(window.session.last_result.scene.objects)
+    assert len(bodies) == 2
+    transactions = len(document.transactions)
+
+    window.split_in_turn(bodies)
+    assert window.session.split_running
+    assert window._split_progress_text.startswith(
+        tr("Körper {index} von {count} · {phase}", index=1, count=2, phase="")
+    ), window._split_progress_text
+    window.session.cancel_split()
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline and (
+        window._split_turn is not None or window.session.split_running
+    ):
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert window.session.wait_for_idle()
+
+    assert window._split_turn is None and not window._split_queue
+    assert len(document.transactions) == transactions, "nichts geteilt, nichts angefangen"
+    assert set(bodies) <= set(window.session.last_result.scene.objects)
+
+
 @pytest.mark.parametrize("count", [2, 8])
 @pytest.mark.parametrize("changed", [False, True])
 def test_import_bed_action_keeps_the_import_group_and_ignores_selection(

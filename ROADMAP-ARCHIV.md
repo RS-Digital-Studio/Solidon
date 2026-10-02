@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-440: Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten (02.10.2026)](#rm-440-sammelzeile-modell-teilen-über-mehrere-körper-teilt-nur-den-ersten-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
@@ -36752,3 +36753,19 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
 
 **Abschluss:** `_show_scene` bestimmt zuerst das gezeigte Bild (`_picture_for`) und misst daran Ausblendungen und Plattenzahl; ein Halt am ersten Schritt behält so die ausgeblendeten Körper und die gewählte Platte des erhaltenen Bilds, eine echte Löschung räumt weiter auf. Mitgefunden am Fenster: Über dem erhaltenen Bild stand die Einladung „Womit fangen Sie an?“, weil `_show_invitation` das leere Haltergebnis fragte; sie fragt jetzt ebenfalls das gezeigte Bild. Test: `test_ui.py::test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid` (zwei Platten, eine Ausblendung, Platte 2, Halt am ersten Schritt; Gegenfall Löschung), am Ausgangsstand rot, einzeln grün; die Nachbarn zu Halt und Einladung (9 Fälle) grün. Fenstersonde am echten Fenster (Plattenwahl per Tastatur, Ausblenden über das Signal des Kontextmenüs, Halt über eine gespeicherte Breite jenseits der Feldgrenze): am Stand `origin/main` 3 von 6 (Ausblendung leer, „Alle Platten“, Wähler verborgen), danach 7 von 7. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-440: Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten (02.10.2026)
+
+<a id="rm-440-sammelzeile-modell-teilen-über-mehrere-körper-teilt-nur-den-ersten-02102026"></a>
+<a id="rm-440"></a>
+
+**RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
+  Fund 02.10.2026 bei RM-372 (Claude, Unteragent), am Code gelesen, nicht im Fenster
+  nachgestellt: Wählt der Kunde in der Sammelzeile des Prüfberichts *Modell teilen* für
+  mehrere Körper, startet die Handlung je Körper eine Teilungssuche; die zweite trifft die
+  laufende erste und endet mit „Die Teilung läuft schon“. Geteilt wird nur der erste Körper.
+  **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
+  zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
+  geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
+
+**Abschluss:** Am Fenster nachgestellt (drei 300-mm-Leisten aus einer 3MF, Sammelzeile „(3) Ein Objekt steht über den Bauraum hinaus.“, *Modell teilen*, Körperwahl mit allen): am Stand `origin/main` geteilt nur die erste, eine Transaktion. Jetzt reicht die Sammelzeile alle gewählten Körper an das Fenster (`split_objects`), und `MainWindow.split_in_turn` teilt sie nacheinander: Der nächste startet, wenn der Arbeiter des vorigen ausgelaufen ist (`_on_split_busy`, Sperre `_split_next_due` gegen einen Doppelstart während `wait_for_idle`). Der Fortschritt nennt „Körper 2 von 3 · …“, *Abbrechen* hält auch die wartenden Körper an, jede Teilung bleibt ein eigener Rückgängig-Schritt wie beim einzelnen *Modell teilen*, die Befunde der Suchen sammeln sich über die Reihe, am Ende steht „3 von 3 Körpern geteilt. Strg+Z nimmt jede Teilung einzeln zurück.“ (Abbruch nach geteilten Körpern: eigener Satz). Tests: `test_ui.py::test_a_bundle_row_splits_every_chosen_body_in_turn` (Knopf der Sammelzeile, beide geteilt, zwei Transaktionen, kein „läuft schon“, ein Strg+Z nimmt eine Teilung zurück; am Ausgangsstand rot), `test_cancelling_a_turn_of_splits_leaves_the_rest_whole`, Nachbar `test_a_bundle_row_acting_on_each_body_is_one_undo_step` grün. Fenstersonde am echten Fenster (Klick auf *Modell teilen*, Körperwahl mit Klick auf den Hauptknopf): am Stand `origin/main` 3 von 5, danach 7 von 7. Drei neue Texte in allen Katalogen. Umgesetzt von Claude (Thread „Bedienung und KI“).
