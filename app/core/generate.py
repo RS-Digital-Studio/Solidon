@@ -357,8 +357,28 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     )
 
 
+#: Zeichen, die in keinem Dateinamen stehen dürfen — unter Windows nicht und
+#: im Container nicht, wo ``/`` einen Ordner anfängt. Schräg- und Rückstrich
+#: werden zum Bruchstrich U+2044.
+_FRACTION_SLASH: Final = "\u2044"
+_NOT_IN_A_FILENAME: Final = str.maketrans(
+    dict.fromkeys('<>:"|?*', " ") | {"/": _FRACTION_SLASH, "\\": _FRACTION_SLASH}
+)
+
+
 def _short(name: str) -> str:
     """Ein Prompt ist ein Satz; ein Objektname nicht. Die ersten paar Wörter,
-    mehr nicht."""
-    words = name.strip().split()
-    return " ".join(words[:5]) if words else str(_("Erzeugt"))
+    mehr nicht.
+
+    Aus dem Ergebnis wird der Dateiname der Quelle, und aus dessen Stamm der
+    Objektname. Ein Schrägstrich machte daraus einen Ordner, ein Name nur aus
+    Punkten verschluckte die Endung — `load` hielt dann mit „Dieses
+    Dateiformat kann nicht gelesen werden.“ (RM-362). Schrägstriche werden
+    zum Bruchstrich, damit „1/2 Zoll“ lesbar bleibt.
+    """
+    cleaned = "".join(
+        letter for letter in name.translate(_NOT_IN_A_FILENAME) if letter.isprintable()
+    )
+    words = cleaned.split()
+    short = " ".join(words[:5]).rstrip(". ")
+    return short if short.strip(".") else str(_("Erzeugt"))

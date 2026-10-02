@@ -2246,3 +2246,142 @@ def test_a_chosen_image_can_be_taken_back_and_rests_the_description(
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+def test_cancelling_a_further_try_keeps_the_finished_ones(qt_app: QApplication) -> None:
+    """Abbrechen während „Noch ein Versuch“ nahm den ganzen Dialog mit, und der
+    fertige erste Versuch war verloren (RM-362, W3-2). Jetzt endet nur der
+    laufende Wurf; ein zweites Abbrechen schließt."""
+    dialog = GenerateDialog(backend=WaitingBackend())
+    cancel = dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+    closed: list[int] = []
+    dialog.finished.connect(closed.append)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("eine Figur")
+        dialog.tries = [_generated((1.0, 2.0, 0.5))]
+        dialog._show_tries()
+        backend = dialog.backend
+        assert isinstance(backend, WaitingBackend)
+        dialog._try_again()
+        worker = dialog._worker
+        assert worker is not None
+        assert backend.started.wait(5.0), "der weitere Wurf läuft"
+
+        cancel.click()
+        assert worker.wait(5000), "der laufende Wurf endet"
+        _settle(qt_app)
+
+        assert not closed, "der Dialog bleibt offen"
+        assert len(dialog.tries) == 1, "der fertige Versuch bleibt"
+        assert ok(dialog).isEnabled(), "und lässt sich übernehmen"
+        assert ok(dialog).text() == "Übernehmen"
+
+        cancel.click()
+        assert closed == [GenerateDialog.DialogCode.Rejected.value], (
+            "das zweite Abbrechen schließt"
+        )
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_a_failure_that_names_the_setup_offers_it_as_a_button(qt_app: QApplication) -> None:
+    """Der Ausweg stand nur als Text da; die Bereitschaft meldete weiter
+    „bereit“, und die Menüs lagen hinter dem Dialog (RM-362, W3-3)."""
+    from app.core.backends.mesh import GenerationFailed
+    from app.core.errors import CANCEL, INSTALL_MISSING, RETRY
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
+    asked: list[bool] = []
+    dialog.setupRequested.connect(lambda: asked.append(True))
+    try:
+        wait_for_readiness(dialog, qt_app)
+        assert not dialog.setup.isVisibleTo(dialog), "bereit: kein Einrichten-Knopf"
+        dialog._on_failed(
+            GenerationFailed(
+                title="Die 3D-Modell-Erzeugung konnte nicht starten.",
+                detail="ComfyUI antwortet nicht.",
+                suggestions=(INSTALL_MISSING, CANCEL),
+            )
+        )
+        assert dialog.setup.isVisibleTo(dialog), "der Ausweg ist ein Knopf"
+        assert dialog.setup.text() == str(INSTALL_MISSING.label)
+        dialog.prompt.setText("weiter getippt")
+        assert dialog.setup.isVisibleTo(dialog), "Tippen nimmt den Ausweg nicht weg"
+        dialog.setup.click()
+        assert asked == [True], "der Knopf führt zur Einrichtung"
+
+        dialog._on_failed(
+            GenerationFailed(
+                title="Die 3D-Modell-Erzeugung ist gescheitert.",
+                detail="Speicher voll.",
+                suggestions=(RETRY, CANCEL),
+            )
+        )
+        assert not dialog.setup.isVisibleTo(dialog), "ohne Einrichtung als Rat kein Knopf"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_after_a_run_the_tries_and_the_next_button_are_in_view(qt_app: QApplication) -> None:
+    """Nach dem Lauf lagen Versuchsliste und „Noch ein Versuch“ unter dem
+    sichtbaren Bereich, neben dem Satz, der auf den Knopf verweist (RM-340)."""
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        dialog.show()
+        wait_for_readiness(dialog, qt_app)
+        _settle(qt_app)
+        dialog.tries = [_generated((1.0, 2.0, 0.5))]
+        dialog._show_tries()
+        _settle(qt_app)
+
+        viewport = dialog._scroll.viewport()
+        for widget in (dialog.attempts, dialog.again):
+            top_left = widget.mapTo(viewport, widget.rect().topLeft())
+            bottom = widget.mapTo(viewport, widget.rect().bottomLeft()).y()
+            assert top_left.y() >= 0 and bottom <= viewport.rect().bottom(), (
+                f"{widget.objectName() or type(widget).__name__} liegt außerhalb "
+                f"({top_left.y()}…{bottom} in {viewport.height()})"
+            )
+    finally:
+        dialog.wait_for_workers()
+        dialog.close()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_a_long_setup_failure_stays_in_the_scroll_area(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gescheiterter pip- oder git-Schritt meldet jede Ausgabezeile. Der
+    Status stand außerhalb des Rollbereichs, das Fenster wuchs über den
+    Bildschirm, und *Schließen* war nicht mehr erreichbar (RM-339)."""
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("nirgendwo"))
+    dialog = ComfySetupDialog()
+    try:
+        dialog.show()
+        _wait_for_comfy_probe(dialog, qt_app)
+        _settle(qt_app)
+        before = dialog.size()
+
+        dialog._refused("Ein Paket ließ sich nicht installieren.\n" + "pip: Zeile\n" * 200)
+        _settle(qt_app)
+
+        assert dialog.size() == before, "die Meldung bewegt den Außenrahmen nicht"
+        assert dialog.content_scroll.isAncestorOf(dialog.state), "der Status rollt mit"
+        assert dialog.content_scroll.verticalScrollBar().maximum() > 0
+        close = dialog.findChild(QDialogButtonBox)
+        assert close is not None
+        assert dialog.rect().contains(close.geometry()), "Schließen bleibt im Fenster"
+        assert dialog.rect().contains(dialog.start_button.geometry())
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+    qt_app.processEvents()

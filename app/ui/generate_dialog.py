@@ -44,7 +44,13 @@ from PySide6.QtWidgets import (
 
 from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
-from app.core.errors import CANCEL, AppError, InternalError, OperationCancelled
+from app.core.errors import (
+    CANCEL,
+    INSTALL_MISSING,
+    AppError,
+    InternalError,
+    OperationCancelled,
+)
 from app.core.generate import working_volume
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
@@ -308,6 +314,8 @@ class GenerateDialog(QDialog):
         """Der Ablauf wechselte, während die vorige Frage noch lief."""
         self.result_mesh: GeneratedMesh | None = None
         self._busy = False
+        # Der letzte Fehlschlag nannte die Einrichtung als Ausweg (RM-362, W3-3).
+        self._failure_offers_setup = False
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
         self._height = ContentHeight()
@@ -762,10 +770,7 @@ class GenerateDialog(QDialog):
         # Regel 17: Der Satz sagte, was fehlt, und bot nichts an. Derselbe Weg
         # wie im Chat, wo „Chat einrichten …" neben dem Hinweis steht.
         # Sichtbar nur, solange etwas zu beheben ist.
-        self.setup.setVisible(
-            self._readiness
-            in (mesh.Readiness.ABSENT, mesh.Readiness.NO_NODES, mesh.Readiness.NO_MODEL)
-        )
+        self._show_setup_way()
         # ``_busy`` gehört hierher und nicht nur in ``_running``: Diese Methode
         # hängt am Textfeld, und das bleibt während des Laufs bedienbar. Wer
         # weitertippte, machte *Erzeugen* wieder klickbar und startete einen
@@ -934,6 +939,8 @@ class GenerateDialog(QDialog):
         elif self.backend is not backend:
             return
         self._remember_models()
+        self._failure_offers_setup = False
+        self._show_setup_way()
         self._running(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
@@ -999,16 +1006,22 @@ class GenerateDialog(QDialog):
         # Hinweis: Der Hinweis steht über der Liste, von der er spricht, und
         # „Noch ein Versuch“ direkt darunter.
         self._content_layout.setStretch(self._content_layout.indexOf(self._room), 0)
-        # Neue Zeilen, neue Höhe. Nachgemessen wurde nur, wenn der Hinweis
-        # seine Höhe änderte; sonst schob Qt das Fenster bloß auf seine
-        # Mindesthöhe, und die Liste stand auf ihrem Minimum statt auf
-        # ihrem Wunsch.
-        self._grow_soon()
         self.again.setVisible(True)
+        # **Neue Zeilen sind eine ausdrückliche Folge, keine Statusmeldung.**
+        # Passiv nachgemessen blieb der Rahmen stehen, und Liste und „Noch ein
+        # Versuch“ lagen unter dem sichtbaren Bereich — neben dem Satz, der auf
+        # den Knopf verweist (RM-340). Danach dorthin rollen, falls der
+        # Bildschirm das Wachsen begrenzt hat.
+        self._grow_explicit_soon()
+        QTimer.singleShot(0, self, self._show_the_tries_in_view)
         self.state.setText(
             tr("Der Zufall spielt mit — ein weiterer Versuch kostet nichts als Zeit.")
         )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Übernehmen"))
+
+    def _show_the_tries_in_view(self) -> None:
+        self._scroll.ensureWidgetVisible(self.attempts)
+        self._scroll.ensureWidgetVisible(self.again)
 
     def _try_again(self) -> None:
         """Noch einen Wurf, mit dem nächsten Startwert.
@@ -1066,6 +1079,24 @@ class GenerateDialog(QDialog):
         if ways:
             lines.append(" · ".join(ways))
         self.state.setText("\n".join(lines))
+        # **Der Ausweg als Knopf, nicht nur als Wort** (RM-362, W3-3). Die
+        # Bereitschaft meldete weiter „bereit“ — etwa wenn ComfyUI mitten im
+        # Lauf verstummt —, und die Menüs liegen hinter diesem Dialog.
+        self._failure_offers_setup = any(
+            action.id == INSTALL_MISSING.id for action in problem.suggestions
+        )
+        if self._failure_offers_setup:
+            self.setup.setText(str(INSTALL_MISSING.label))
+        self._show_setup_way()
+
+    def _show_setup_way(self) -> None:
+        """Der Knopf zur Einrichtung steht, solange etwas zu beheben ist —
+        nach der Bereitschaft oder nach dem letzten Fehlschlag."""
+        self.setup.setVisible(
+            self._failure_offers_setup
+            or self._readiness
+            in (mesh.Readiness.ABSENT, mesh.Readiness.NO_NODES, mesh.Readiness.NO_MODEL)
+        )
 
     def _on_thread_done(self) -> None:
         # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
@@ -1074,6 +1105,12 @@ class GenerateDialog(QDialog):
         self._worker = None
         if worker is not None:
             self._leash.hold_until_done(worker)
+        if self._busy and self.tries:
+            # Weder fertig noch gescheitert: abgebrochen, und der Dialog ist
+            # noch da, weil fertige Versuche zur Wahl stehen (:meth:`reject`).
+            self.progress.setVisible(False)
+            self._running(False)
+            self._show_tries()
 
     def _stop_worker(self) -> None:
         """Dem laufenden Wurf sagen, dass niemand mehr auf ihn wartet (§15.6).
@@ -1093,7 +1130,18 @@ class GenerateDialog(QDialog):
 
         ComfyUI erhält dabei die konkrete Auftrags-ID. Das ist ein gezielter
         Abbruch und kein globales „alles anhalten".
+
+        **Ein weiterer Versuch bricht nur sich selbst ab** (RM-362). Liegen
+        fertige Versuche vor, nahm *Abbrechen* während „Noch ein Versuch“ den
+        ganzen Dialog mit, und die minutenlang erzeugten Netze waren verloren.
+        Jetzt endet der laufende Wurf, die fertigen bleiben zur Wahl; ein
+        zweites *Abbrechen* schließt.
         """
+        worker = self._worker
+        if self.tries and worker is not None and worker.isRunning() and not worker.cancelled():
+            worker.cancel()
+            self.state.setText(tr("Wird abgebrochen — der laufende Schritt läuft aus."))
+            return
         self._stop_worker()
         self.wait_for_workers()
         super().reject()

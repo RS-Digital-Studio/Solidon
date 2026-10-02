@@ -122,6 +122,33 @@ def test_the_generated_file_is_a_source_and_not_an_operation(project: Project) -
     ]
 
 
+@pytest.mark.parametrize(
+    ("prompt", "title"),
+    [
+        ("Rohrhalter für 20/", "Rohrhalter für 20⁄"),
+        ("Halter für 1/2 Zoll Rohr", "Halter für 1⁄2 Zoll Rohr"),
+        ("..", "Erzeugt"),
+        ("...", "Erzeugt"),
+        ('Deckel: "rund"?', "Deckel rund"),
+    ],
+)
+def test_any_prompt_gives_a_source_that_loads(
+    project: Project, profile: Profile, prompt: str, title: str
+) -> None:
+    """Der Quellname kommt aus dem Prompt; ein Schrägstrich machte daraus einen
+    Ordner, Punkte nahmen die Endung mit, und `load` hielt mit „Dieses
+    Dateiformat kann nicht gelesen werden.“ (RM-362, W3-5)."""
+    result = from_text(project, backend(), prompt, seed=7)
+
+    source = project.document.sources[result.source_id]
+    assert Path(source.path).suffix == ".ply"
+    assert source.origin is not None and source.origin.title == title
+    assert source.origin.prompt == prompt
+    scene = evaluated(project, profile)
+    assert scene.complete
+    assert scene.scene.objects[result.object_id].mesh.triangle_count > 0
+
+
 def test_the_repair_chain_runs_without_being_asked(project: Project, profile: Profile) -> None:
     """§2.2: „Reparaturkette läuft automatisch" — und es ist im Prüfbericht zu
     sehen.

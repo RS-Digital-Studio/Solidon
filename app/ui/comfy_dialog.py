@@ -267,6 +267,12 @@ class ComfySetupDialog(QDialog):
         content_layout.addLayout(row)
         content_layout.addWidget(self.weights)
         content_layout.addWidget(self.image_model)
+        # **Zustand und Balken im Rollbereich** (RM-339): Eine gescheiterte
+        # Einrichtung meldet jede Ausgabezeile des Prozesses. Außerhalb ließ
+        # sie das Fenster über den Bildschirm wachsen, und *Einrichten* und
+        # *Schließen* lagen unerreichbar darunter.
+        content_layout.addWidget(self.progress)
+        content_layout.addWidget(self.state)
         scroll = DialogScrollArea(self)
         scroll.setWidget(content)
         self.content_scroll = scroll
@@ -277,8 +283,6 @@ class ComfySetupDialog(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(scroll, 1)
         layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        layout.addWidget(self.progress)
-        layout.addWidget(self.state)
         layout.addWidget(buttons)
         self.folder.editingFinished.connect(self._refresh_folder_state)
         self.folder.textEdited.connect(self._folder_edited)
@@ -685,6 +689,9 @@ class ComfySetupDialog(QDialog):
     def _refused(self, reason: str) -> None:
         self._idle()
         set_role(self.state, "warning", reason)
+        # Die Meldung beginnt mit dem Satz, der sagt, was hilft — dorthin
+        # rollen, nicht ans Ende der Prozessausgabe (RM-339).
+        QTimer.singleShot(0, self, lambda: self.content_scroll.ensureWidgetVisible(self.state))
 
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
