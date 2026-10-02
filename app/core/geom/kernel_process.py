@@ -376,6 +376,9 @@ class _Helper:
         """
         with suppress(OSError):
             self.connection.close()
+        # Vor dem Warten: Auch ein Ende braucht Rechenzeit (RM-474).
+        with suppress(OSError, ValueError):
+            process_boundary.hurry_helper(self.process)
         try:
             if graceful and self.ready:
                 self.process.join(timeout=GRACEFUL_SECONDS)

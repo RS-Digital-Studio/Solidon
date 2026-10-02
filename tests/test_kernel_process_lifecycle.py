@@ -342,7 +342,7 @@ def _current_priority() -> int:
 
 
 def _priority_job(_arrays: Any, _values: Any, _check: Any) -> tuple[dict, dict]:
-    return {}, {"pid": os.getpid(), "before": _PRIORITY_BEFORE}
+    return {}, {"pid": os.getpid(), "before": _PRIORITY_BEFORE, "during": _current_priority()}
 
 
 def _serve_priority_probe(connection: Any) -> None:
@@ -362,7 +362,11 @@ def _serve_priority_probe(connection: Any) -> None:
 def test_helper_has_lower_os_priority_after_serve(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Der normale Helferdienst stellt den tatsächlichen Rechenprozess zurück."""
+    """Der normale Helferdienst stellt den tatsächlichen Rechenprozess zurück.
+
+    Unter Windows nur, während er rechnet (RM-474): Untätig antwortet er in
+    normaler Klasse, sonst verhungern Annahme und Ende unter fremder Volllast.
+    """
     parent_priority = _current_priority()
     if os.name == "nt" and parent_priority in (0x00000040, 0x00004000):
         pytest.skip("Der Testprozess läuft selbst schon unter normaler Windows-Priorität.")
@@ -396,8 +400,8 @@ def test_helper_has_lower_os_priority_after_serve(
         assert not arrays and reported["pid"] != os.getpid(), "run muss wirklich auslagern."
         (helper,) = kernel_process.processes()
         assert helper.pid == reported["pid"] and helper.is_alive()
-        before = reported["before"]
-        assert isinstance(before, int)
+        before, during = reported["before"], reported["during"]
+        assert isinstance(before, int) and isinstance(during, int)
         if os.name == "nt":
             actual = _priority_class(_windows_api(), helper.sentinel)
         else:
@@ -409,13 +413,15 @@ def test_helper_has_lower_os_priority_after_serve(
                 "parent_pid": os.getpid(),
                 "parent_priority": parent_priority,
                 "before": before,
+                "during": during,
                 "actual": actual,
             },
         )
         if os.name == "nt":
-            assert actual == 0x00004000, (
-                "Der echte Helfer muss BELOW_NORMAL_PRIORITY_CLASS besitzen."
+            assert during == 0x00004000, (
+                "Der rechnende Helfer muss BELOW_NORMAL_PRIORITY_CLASS besitzen."
             )
+            assert actual == 0x00000020, "Der untätige Helfer antwortet in normaler Klasse."
             assert parent_priority in (0x00000020, 0x00008000, 0x00000080, 0x00000100)
         else:
             assert actual > before and actual > parent_priority, (

@@ -115,6 +115,7 @@ it into `website/version.json`.
 - Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.
+- When other programs keep the computer busy, *Cancel* stops a long calculation in under a second instead of asking for a restart after several seconds.
 
 ## 0.5.1
 

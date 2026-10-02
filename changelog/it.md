@@ -115,6 +115,7 @@ scrive in `website/version.json`.
 - Alcuni rilievi che riguardano un passo lo aprono per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
 - Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
 - L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
+- Quando altri programmi tengono occupato il computer, *Annulla* ferma un calcolo lungo in meno di un secondo invece di chiedere un riavvio dopo alcuni secondi.
 
 ## 0.5.1
 
