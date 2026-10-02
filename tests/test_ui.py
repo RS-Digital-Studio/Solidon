@@ -19831,3 +19831,65 @@ def test_changing_a_migrated_slot_angle_returns_it_to_the_current_frame() -> Non
     assert changed_angle.change_values == {"slot_angle": 0.0, "measured_frame": False}
     assert changed_length is not None
     assert changed_length.change_values == {"slot_length": 25.0}
+
+
+def _width_bound_box(session: Session) -> None:
+    """Ein Quader, dessen Breite das Maß *breite* (80 mm) liest."""
+    from app.core.scene import OperationDraft
+    from app.i18n import _
+
+    assert session.add_parameter(Parameter(name="breite", value=80.0, unit="mm", title=_("Breite")))
+    session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@breite"})])
+    assert session.wait_for_idle(30_000)
+
+
+def test_an_export_during_the_recalculation_writes_the_new_state(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Breite 80 → 100, sofort exportieren: Die Datei ist 100 mm breit (RM-352).
+
+    Geschrieben wurde das vorige Ergebnis mit dem neuen Dokument — Bild und
+    Verlauf zeigten 100 mm, die Datei 80 mm, und die Quittung meldete Erfolg.
+    Jetzt wartet der Export auf das Ergebnis, das zum Dokument gehört.
+    """
+    import trimesh
+
+    _width_bound_box(window.session)
+    QApplication.processEvents()
+    assert window.session.change_parameter("breite", 100.0)
+    target = tmp_path / "quader.stl"
+
+    window._start_export(target, "stl")
+    assert window._export_waiting is not None or window._export_worker is not None
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+
+    assert target.exists(), "die Datei entsteht, sobald das Ergebnis steht"
+    extents = trimesh.load(target, force="mesh").extents
+    assert max(extents) == pytest.approx(100.0, abs=1e-3), extents
+
+
+def test_a_waiting_export_writes_nothing_when_the_chain_halts(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Hält die Kette an, entsteht keine Datei — sie zeigte den Stand davor (RM-352)."""
+    import dataclasses
+
+    _width_bound_box(window.session)
+    QApplication.processEvents()
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=1_000_000.0
+    )
+    window.session.result_current = False
+    target = tmp_path / "quader.stl"
+
+    window._start_export(target, "stl")
+    assert window._export_waiting is not None, "der Export wartet"
+    window._on_scene(window.session.evaluate_now())
+    QApplication.processEvents()
+    wait_for_export(window)
+
+    assert window._export_waiting is None
+    assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
