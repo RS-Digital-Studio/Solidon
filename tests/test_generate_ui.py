@@ -20,6 +20,8 @@ from app.ui.generate_dialog import GenerateDialog
 from app.ui.session import Session
 from tests.helpers import FakeMesh
 from tests.scripted_backend import ScriptedMeshBackend
+from tests.ui_helpers import session as session
+from tests.ui_helpers import window as window
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -2517,3 +2519,210 @@ def test_variants_of_one_sentence_differ_by_their_seed(
         dialog.wait_for_workers()
         dialog.deleteLater()
     qt_app.processEvents()
+
+
+# --- Übernehmen an einer Einfügemarke oder hinter der Lizenzsperre (RM-361) ---
+
+
+def _two_steps(window: Any) -> None:
+    """Zwei Quader — davor lässt sich eine Einfügemarke setzen."""
+    from app.core.scene import OperationDraft
+
+    session = window.session
+    assert session.apply("Quader", [OperationDraft(op="create_box")])
+    assert session.wait_for_idle()
+    assert session.apply("Quader", [OperationDraft(op="create_box", params={"width": 30.0})])
+    assert session.wait_for_idle()
+
+
+def _insert_before_the_last(window: Any) -> None:
+    """Die Einfügemarke vor den letzten Schritt — wie ein Klick auf *Einfügen*."""
+    session = window.session
+    assert session.start_inserting(session.history.operations[-1].id)
+    assert session.wait_for_idle()
+
+
+def _generated_sources(window: Any) -> list[str]:
+    return [
+        key
+        for key, source in window.session.project.document.sources.items()
+        if source.kind == "generated"
+    ]
+
+
+@pytest.mark.parametrize("answer", ["way", "cancel"])
+@pytest.mark.parametrize("cause", ["insertion", "licence"])
+def test_taking_a_generation_that_is_refused_keeps_the_mesh_and_names_the_way(
+    qt_app: QApplication,
+    window: Any,
+    generator: ScriptedMeshBackend,
+    monkeypatch: pytest.MonkeyPatch,
+    cause: str,
+    answer: str,
+) -> None:
+    """RM-361: *Übernehmen* bei gesetzter Einfügemarke oder Lizenzsperre.
+
+    ``add_generated`` sagte ab, ``_generate`` fing es nicht, und die Absage
+    landete bei ``sys.excepthook``: kein Satz, der Dialog zu, das minutenlang
+    erzeugte Netz verloren. Jetzt steht die Absage als Vorschlag über dem
+    Dialog, der Dialog bleibt mit seinen Versuchen offen, und an der
+    Einfügemarke führt *Einfügen beenden und übernehmen* in einem Klick weiter.
+
+    Marke und Sperre kommen hier **während** des Laufs: Vorher fragt schon der
+    Start (der Test darunter), und die Absage beim Übernehmen ist der Fall,
+    der danach noch bleibt — eine Marke über den Verlauf oder die Fernsteuerung,
+    ein Testzeitraum, der während der Minuten abläuft.
+    """
+    import sys
+
+    from app.core import activation
+    from app.core.errors import STOP_INSERTING
+    from app.ui import main_window as main_window_module
+    from tests.ui_helpers import expire_trial
+
+    if cause == "insertion":
+        _two_steps(window)
+    unlocked = activation._cached
+    hooked: list[object] = []
+    monkeypatch.setattr(sys, "excepthook", lambda *args: hooked.append(args))
+    shown: list[tuple[str, dict[str, str], object]] = []
+
+    def fake_show_error(error: Any, parent: Any = None, handlers: Any = None) -> None:
+        shown.append((str(error.title), {a.id: str(a.label) for a in error.suggestions}, parent))
+        if answer == "way" and STOP_INSERTING.id in {a.id for a in error.suggestions}:
+            handlers[STOP_INSERTING.id](error)
+
+    monkeypatch.setattr(main_window_module, "show_error", fake_show_error)
+    seen: dict[str, object] = {}
+
+    class Scripted(GenerateDialog):
+        def __init__(self, parent: Any = None, settings: Any = None) -> None:
+            super().__init__(backend=generator, parent=parent, settings=settings)
+
+        def exec(self) -> int:
+            finish(self, qt_app)
+            if cause == "licence":
+                expire_trial(monkeypatch)
+            else:
+                _insert_before_the_last(window)
+            ok(self).click()
+            seen["parent"] = self
+            seen["accepted"] = self.result() == GenerateDialog.DialogCode.Accepted
+            seen["tries"] = len(self.tries)
+            seen["sources"] = _generated_sources(window)
+            if not seen["accepted"]:
+                # Der Weg danach: Marke ans Ende oder Schlüssel eingetragen,
+                # und derselbe Versuch geht ohne neuen Lauf hinein.
+                monkeypatch.setattr(activation, "_cached", unlocked)
+                window.session.stop_inserting()
+                assert window.session.wait_for_idle()
+                ok(self).click()
+                seen["later"] = self.result() == GenerateDialog.DialogCode.Accepted
+            self.release()
+            return int(self.result())
+
+    monkeypatch.setattr(main_window_module, "GenerateDialog", Scripted)
+    window.action_generate()
+    assert window.session.wait_for_idle()
+
+    assert not hooked, "eine Absage gehört in einen Satz, nicht an sys.excepthook"
+    assert len(shown) == 1, shown
+    title, labels, parent = shown[0]
+    assert parent is seen["parent"], "die Absage steht über dem Dialog, der offen bleibt"
+    if cause == "insertion":
+        assert title == "Das geht nicht mitten im Verlauf."
+        assert labels[STOP_INSERTING.id] == "Einfügen beenden und übernehmen"
+    else:
+        assert labels, "die Lizenzsperre nennt ihren Weg"
+    if cause == "insertion" and answer == "way":
+        assert seen["accepted"], "ein Klick: Marke ans Ende, Modell übernommen"
+    else:
+        assert not seen["accepted"], "die Absage schließt den Dialog nicht"
+        assert seen["tries"] == 1, "das erzeugte Netz bleibt übernehmbar"
+        assert seen["sources"] == [], "eine Absage schreibt nichts ins Projekt"
+        assert seen["later"], "derselbe Versuch geht danach hinein"
+    assert window.session.inserting is None
+    assert len(_generated_sources(window)) == 1
+    transaction = window.session.project.document.transactions[-1]
+    assert str(transaction.title) == "Modell erzeugen"
+
+
+@pytest.mark.parametrize("entry", ["menu", "chat"])
+@pytest.mark.parametrize("cause", ["insertion", "licence"])
+def test_generating_is_checked_before_the_dialog_opens(
+    qt_app: QApplication,
+    window: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    cause: str,
+    entry: str,
+) -> None:
+    """RM-361, vor dem Start — über das Menü und über das Chatfenster.
+
+    *Modell erzeugen* blieb bei gesetzter Einfügemarke frei, und ein ins
+    Chatfenster gezogenes Bild prüfte weder Marke noch Lizenz: Beide liefen
+    nach Minuten in dieselbe Absage. Jetzt fragt das Fenster vorher, wie beim
+    Import, und an der Einfügemarke öffnet *Einfügen beenden und Modell
+    erzeugen* den Dialog — mit dem Bild, wenn eines abgelegt wurde."""
+    from PySide6.QtGui import QImage
+
+    from app.core.errors import STOP_INSERTING
+    from app.ui import main_window as main_window_module
+    from tests.ui_helpers import expire_trial
+
+    picture = tmp_path / "skizze.png"
+    image = QImage(16, 16, QImage.Format.Format_RGB32)
+    image.fill(0x808080)
+    assert image.save(str(picture))
+    if cause == "insertion":
+        _two_steps(window)
+        _insert_before_the_last(window)
+    else:
+        expire_trial(monkeypatch)
+    opened: list[bool] = []
+
+    class Recorded(GenerateDialog):
+        def __init__(self, parent: Any = None, settings: Any = None) -> None:
+            super().__init__(backend=ScriptedMeshBackend(), parent=parent, settings=settings)
+
+        def exec(self) -> int:
+            opened.append(self._image is not None)
+            self.release()
+            return int(GenerateDialog.DialogCode.Rejected)
+
+    shown: list[tuple[str, dict[str, str], int]] = []
+
+    def fake_show_error(error: Any, parent: Any = None, handlers: Any = None) -> None:
+        shown.append(
+            (str(error.title), {a.id: str(a.label) for a in error.suggestions}, len(opened))
+        )
+        if STOP_INSERTING.id in {a.id for a in error.suggestions}:
+            handlers[STOP_INSERTING.id](error)
+
+    monkeypatch.setattr(main_window_module, "GenerateDialog", Recorded)
+    monkeypatch.setattr(main_window_module, "show_error", fake_show_error)
+    if entry == "chat":
+        window.chat.imageDropped.emit(str(picture))
+    elif cause == "licence":
+        # Am Menü steht die Sperre schon am Eintrag, mit Grund; der Weg an
+        # ihm vorbei sagt trotzdem ab, statt den Dialog zu öffnen.
+        window._update_actions()
+        assert not window.generate_action.isEnabled()
+        assert window.generate_action.toolTip()
+        window.action_generate()
+    else:
+        window._update_actions()
+        assert window.generate_action.isEnabled(), "die Marke sagt ihren Weg erst beim Klick"
+        window.generate_action.trigger()
+
+    assert len(shown) == 1, shown
+    title, labels, dialogs_before = shown[0]
+    assert dialogs_before == 0, "gefragt wird, bevor der Dialog aufgeht"
+    if cause == "insertion":
+        assert title == "Das geht nicht mitten im Verlauf."
+        assert labels[STOP_INSERTING.id] == "Einfügen beenden und Modell erzeugen"
+        assert opened == [entry == "chat"], "danach geht der Dialog auf, mit dem Bild"
+        assert window.session.inserting is None
+    else:
+        assert labels, "die Lizenzsperre nennt ihren Weg"
+        assert opened == [], "gesperrt öffnet kein Dialog, der erst nach Minuten absagt"

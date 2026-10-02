@@ -15,6 +15,7 @@ sieht aus wie ein Fehler; eine, die sich erklärt, nicht.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
@@ -357,6 +358,13 @@ class GenerateDialog(QDialog):
         self._readiness_pending = False
         """Der Ablauf wechselte, während die vorige Frage noch lief."""
         self.result_mesh: GeneratedMesh | None = None
+        self.take: Callable[[GeneratedMesh], bool] | None = None
+        """Wer den gewählten Versuch übernimmt — ``False`` heißt abgesagt (RM-361).
+
+        Gesetzt vom Fenster: Sagt die Sitzung beim Übernehmen ab (Einfügemarke,
+        Halt, Lizenz), bleibt der Dialog mit allen Versuchen offen, statt mit
+        dem minutenlang erzeugten Netz zu schließen. Ohne ihn gibt der Dialog
+        den Versuch nur über :attr:`result_mesh` heraus."""
         self._busy = False
         # Der letzte Fehlschlag nannte die Einrichtung als Ausweg (RM-362, W3-3).
         self._failure_offers_setup = False
@@ -914,7 +922,12 @@ class GenerateDialog(QDialog):
         Benutzer.
         """
         if self.tries:
-            self.result_mesh = self.chosen()
+            chosen = self.chosen()
+            if chosen is not None and self.take is not None and not self.take(chosen):
+                # Abgesagt: Der Satz dazu steht schon da, und die Versuche
+                # bleiben, bis der Weg gegangen ist.
+                return
+            self.result_mesh = chosen
             self.accept()
             return
         self._start()

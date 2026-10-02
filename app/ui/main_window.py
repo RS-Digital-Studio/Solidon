@@ -111,12 +111,14 @@ from app.core.agent.tools import (
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
+from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL,
     CHOOSE,
     DECIMATE_AND_RETRY,
     REMESH_AND_RETRY,
     REPAIR_AND_RETRY,
+    STOP_INSERTING,
     AppError,
     ExternalToolError,
     InternalError,
@@ -6579,11 +6581,28 @@ class MainWindow(QMainWindow):
         self._generate(Path(path))
 
     def _generate(self, image: Path | None) -> None:
+        # **Gefragt wird vor dem Start, wie beim Import** (RM-361). Der Lauf
+        # dauert Minuten, und erst danach sagte *Übernehmen* ab — an einer
+        # Einfügemarke, hinter einem Halt, nach dem Testzeitraum. Der
+        # Menüeintrag trägt Sperre und Halt schon mit Grund; ein ins Chatfenster
+        # gezogenes Bild kommt an ihm vorbei und wird hier gefragt.
+        refusal = self._generation_refusal()
+        if refusal is not None:
+            self._say_generation_refusal(
+                refusal,
+                self,
+                tr("Einfügen beenden und Modell erzeugen"),
+                partial(self._generate, image),
+            )
+            return
         # Der Aufbau fragt einmal, ob ein Generator läuft, und das ist ein
         # Socket mit Zeitlimit — gemessen eine halbe Sekunde. Damit gehört er
         # in die mittlere Zeile der Wartezeit-Tabelle (§2.8).
         with waiting():
             dialog = GenerateDialog(parent=self, settings=self.settings)
+        # *Übernehmen* geht über das Fenster: Sagt die Sitzung ab, bleibt der
+        # Dialog mit seinen Versuchen offen (:meth:`_take_generated`).
+        dialog.take = partial(self._take_generated, dialog)
         # Regel 17: „Es läuft kein Generator" bot nichts an. Von hier führt der
         # Weg in die Liste der zusätzlichen Programme, und danach sieht der
         # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll
@@ -6596,14 +6615,78 @@ class MainWindow(QMainWindow):
         if image is not None:
             dialog.set_image(image)
         try:
-            if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
-                return
-            self.session.add_generated(dialog.result_mesh)
+            dialog.exec()
         finally:
             # Die zwei Lambdas darüber fangen das Fenster, und der Dialog ist
             # sein Kind — ohne Freigeben überlebt beides den Aufruf
             # (dieselbe Stelle wie in :meth:`_exec_catalog`).
+            dialog.take = None
             dialog.deleteLater()
+
+    def _generation_refusal(self) -> AppError | None:
+        """Warum gerade kein erzeugtes Modell ins Projekt käme — oder ``None``.
+
+        Dieselben zwei Fragen, die die Sitzung beim Übernehmen stellt
+        (``Session.add_generated``, ``generate.into_project``): Freischaltung,
+        dann Halt und Einfügemarke. Gefragt wird hier, damit niemand Minuten
+        auf ein Ergebnis wartet, das danach abgesagt wird.
+        """
+        try:
+            activation.require(activation.CHANGE)
+        except AppError as error:
+            return error
+        return self.session.halt_in_the_way()
+
+    def _take_generated(self, dialog: GenerateDialog, mesh: GeneratedMesh) -> bool:
+        """Den gewählten Versuch ins Projekt legen — oder absagen und ihn behalten.
+
+        **Die Absage ging an ``sys.excepthook``** (RM-361): Kein Satz, der
+        Dialog zu, das minutenlang erzeugte Netz verloren. Jetzt steht sie als
+        Vorschlag über dem Dialog (Regel 17), und der Dialog bleibt mit allen
+        Versuchen offen, bis der Weg gegangen ist. An der Einfügemarke führt
+        *Einfügen beenden und übernehmen* in einem Klick hinein.
+        """
+        try:
+            self.session.add_generated(mesh)
+        except AppError as error:
+            taken: list[bool] = []
+
+            def take_again() -> None:
+                taken.append(self._take_generated(dialog, mesh))
+
+            self._say_generation_refusal(
+                error, dialog, tr("Einfügen beenden und übernehmen"), take_again
+            )
+            return any(taken)
+        return True
+
+    def _say_generation_refusal(
+        self,
+        error: AppError,
+        parent: QWidget,
+        way: str,
+        then: Callable[[], None],
+    ) -> None:
+        """Die Absage mit ihren Wegen zeigen; *Einfügen beenden* geht gleich weiter.
+
+        Die Sitzung bietet an der Einfügemarke *Einfügen beenden* an. Hier
+        folgt darauf sofort, was der Kunde wollte — erzeugen oder übernehmen —,
+        also sagt der Knopf beides (``way``): Ein Knopf, der mehr tut, als er
+        sagt, wäre der nächste Fehler.
+        """
+
+        def stop_inserting_then(_error: AppError) -> None:
+            self.session.stop_inserting()
+            # Ob die Kette am Ende hält, weiß erst die Auswertung ohne Marke;
+            # die nächste Frage soll sie kennen.
+            self.session.wait_for_idle()
+            then()
+
+        error.suggestions = tuple(
+            replace(action, label=way) if action.id == STOP_INSERTING.id else action
+            for action in error.suggestions
+        )
+        show_error(error, parent, {**self.error_handlers(), STOP_INSERTING.id: stop_inserting_then})
 
     def action_auto_split(self, object_id: ObjectId | None = None) -> None:
         """§25: das gewählte Teil teilen, bis es passt, und die Nähte

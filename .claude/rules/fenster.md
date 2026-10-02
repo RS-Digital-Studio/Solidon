@@ -144,7 +144,9 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
   dort. Abläufe mit eigener Buchführung (Teilen mit Stiften, Deckel, Gegenstück,
   Auto Split, Erzeugen, Agentenvorschlag) sagen ab, mit *Einfügen beenden* als
   Weg; Export und Druckeinstellungen beenden das Einfügen zuerst — hinaus geht
-  das fertige Teil, nicht der Zwischenstand.
+  das fertige Teil, nicht der Zwischenstand. Erzeugen fragt vor dem Start
+  (`_generation_refusal`); sagt *Übernehmen* ab, bleibt der Dialog mit seinen
+  Versuchen offen (`GenerateDialog.take`).
 
 ## Hinter einen Halt kommt kein Schritt
 
