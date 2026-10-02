@@ -814,7 +814,15 @@ def values_for_object(spec: OperationSpec, features: Mapping[str, Feature]) -> d
     ``at_feature``, das niemand gewählt hat, wäre eine Behauptung über eine
     Absicht; eine Position ist ein Vorschlag, den man im Feld sieht und
     ändern kann.
+
+    **Ein Erzeuger bekommt hier nichts** (RM-390). Er verbraucht keinen
+    Körper, und ein gewählter Körper sagt ihm nicht, wohin: Zylinder anlegen,
+    anklicken, *Quader anlegen* — der Quader saß auf dem Zylinder, ohne dass
+    jemand eine Fläche gezeigt hatte. Er entsteht auf dem Bett; auf eine Fläche
+    kommt er nur, wenn eine gewählt ist (:func:`seat_on_face`).
     """
+    if spec.consumes == 0:
+        return {}
     face = top_face(features)
     if face is None:
         return {}
@@ -829,6 +837,114 @@ def values_for_object(spec: OperationSpec, features: Mapping[str, Feature]) -> d
     if target:
         values.pop(target, None)
     return values
+
+
+def seats_on(spec: OperationSpec, feature: Feature) -> bool:
+    """Ob dieser Erzeuger auf diese gewählte Fläche gesetzt wird (RM-390).
+
+    Ein Erzeuger ohne Eingang, mit eigener Position und Richtung und ohne
+    Merkmalsfeld — die freistehenden Bausteine benennen ihre Stelle über
+    ``at_features`` und gehen den Weg der Platzierung —, auf einer ebenen
+    Fläche mit Mitte und Richtung. Eine Bohrung oder Kante trägt keinen
+    Körper; an ihr entsteht er auf dem Bett, wie ohne Auswahl.
+    """
+    entries = spec.params.spec()
+    names = {entry.name for entry in entries}
+    normal = vec3_or_none(feature.params.get("normal"))
+    return (
+        spec.consumes == 0
+        and not spec.takes_whole_scene
+        and set(POSITION) <= names
+        and set(NORMAL) <= names
+        and not any(entry.kind in {"feature", "features"} for entry in entries)
+        and feature.kind == "face"
+        and vec3_or_none(feature.params.get("centre")) is not None
+        and normal is not None
+        and math.hypot(*normal) > EPS_GEOM
+    )
+
+
+def seat_on_face(
+    spec: OperationSpec, feature: Feature, entered: Mapping[str, Any], profile: Profile
+) -> dict[str, float] | None:
+    """Position und Richtung eines Erzeugers auf einer ausdrücklich gewählten Fläche.
+
+    Die Grundfläche des Körpers liegt in der Ebene der Fläche, seine Hochachse
+    zeigt in ihre Richtung, sein Bezugspunkt sitzt auf ihrer Mitte. **Und
+    nichts liegt unter dem Bett** (RM-390): An einer Seitenfläche dehnt sich
+    ein Körper um die Mitte der Fläche nach oben und unten aus, und ein Quader
+    stand mit z = -4,5 halb darunter. Reicht er unter das Bett, rückt er in der
+    Ebene der Fläche nach oben, bis sein tiefster Punkt auf dem Bett steht — er
+    bleibt auf der Fläche, nur höher.
+
+    Gemessen wird am Werkzeug, das Vorschau und Platzierung zeigen
+    (:func:`prepare_tool`), in der Lage, die die Operation selbst baut, mit den
+    Maßen aus ``entered``; was dort fehlt, nimmt die Vorgabe.
+
+    ``None``, wenn der Körper unter das Bett reichte und in der Ebene nicht
+    steigen kann: Eine Fläche, die vor allem nach oben oder unten schaut, hat
+    keine Steigung, auf der er wandern könnte — etwa die Unterseite eines Teils
+    auf dem Bett. Ohne Werkzeug (``thread_exact``) bleibt es bei Mitte und
+    Richtung; einen Rest unter dem Bett meldet dann der Endstand
+    (``arrange.below_bed``). Leer, wo :func:`seats_on` nein sagt.
+    """
+    if not seats_on(spec, feature):
+        return {}
+    centre = vec3_or_none(feature.params.get("centre"))
+    raw = vec3_or_none(feature.params.get("normal"))
+    assert centre is not None and raw is not None  # von seats_on belegt
+    length = math.hypot(*raw)
+    normal = tuple(float(value) / length for value in raw)
+    seated: dict[str, float] = {
+        **{name: float(value) for name, value in zip(POSITION, centre, strict=True)},
+        **dict(zip(NORMAL, normal, strict=True)),
+    }
+    lowest = _lowest_point(spec, {**entered, **seated}, profile)
+    if lowest is None or lowest >= -EPS_GEOM:
+        return seated
+    if dominant_axis((normal[0], normal[1], normal[2])) == "z":
+        return None
+    # Die Steigung der Ebene: die Hochachse ohne ihren Anteil längs der
+    # Richtung. Ihr z-Anteil ist ihr Längenquadrat, und um ``-lowest`` zu
+    # steigen, braucht es genau ``-lowest / |up|²`` von ihr.
+    up = np.array((0.0, 0.0, 1.0)) - normal[2] * np.asarray(normal)
+    shift = up * (-lowest / float(up @ up))
+    for index, name in enumerate(POSITION):
+        seated[name] += float(shift[index])
+    return seated
+
+
+def _lowest_point(spec: OperationSpec, values: Mapping[str, Any], profile: Profile) -> float | None:
+    """Die Höhe des tiefsten Punkts, den die Operation mit diesen Werten baut.
+
+    ``None``, wo es kein Werkzeug gibt oder die Werte es nicht zulassen — ein
+    Feld außerhalb seiner Grenzen sagt der Dialog selbst.
+    """
+    from app.core.errors import AppError
+    from app.core.registry.params import validate
+
+    try:
+        tool = prepare_tool(spec, values, profile)
+        checked: Any = validate(spec.params, values)
+    except AppError:
+        return None
+    if spec.name in _surface_primitives():
+        from app.core.geom.primitive_ops import placement_transform
+        from app.core.geom.transform import apply
+
+        placed = apply(tool.mesh, np.asarray(placement_transform(checked)))
+    elif spec.name == "create_label":
+        from app.core.geom.label_ops import place
+
+        placed = place(
+            tool.mesh,
+            (float(checked.x), float(checked.y), float(checked.z)),
+            (float(checked.nx), float(checked.ny), float(checked.nz)),
+        )
+    else:
+        return None
+    vertices = np.asarray(placed.raw.vertices)
+    return float(vertices[:, 2].min()) if len(vertices) else None
 
 
 def faces_up(feature: Feature) -> bool:

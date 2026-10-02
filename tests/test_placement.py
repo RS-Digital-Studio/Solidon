@@ -23,7 +23,7 @@ from app.core.scene.placement import (
     values_for,
     values_for_object,
 )
-from app.core.types import Feature, MeasureSource, MeasureStatus, measure_status
+from app.core.types import Feature, MeasureSource, MeasureStatus, Profile, measure_status
 from app.i18n.catalog import available_languages
 
 load_operations()
@@ -298,6 +298,127 @@ def test_the_body_never_claims_a_feature_was_picked() -> None:
             if entry.kind in {"feature", "features"}:
                 assert entry.name not in values, f"{spec.name}: {entry.name}"
         assert "up_to" not in values, spec.name
+
+
+# --- Erzeuger: nur eine gezeigte Fläche trägt ihn (RM-390) ----------------------
+
+
+def test_a_creator_takes_no_place_from_a_body_nobody_pointed_at() -> None:
+    """Ein neuer Körper entstand auf dem zuletzt gewählten (RM-390).
+
+    Zylinder Ø 40 × 20 anlegen, anklicken, *Quader anlegen* — Position Z stand
+    auf 20, und der Quader saß auf dem Zylinder, ohne dass jemand eine Fläche
+    gezeigt hatte. In fünf von zwölf Nachbauten entstand so ein Körper an einer
+    Stelle, die der Kunde nicht gewählt hatte. Gefragt wird nach ``consumes``,
+    also für jeden Erzeuger und nicht nur für den Quader.
+    """
+    features = {"face_top": face(centre=(0.0, 0.0, 20.0))}
+    creators = [spec for spec in REGISTRY.all() if spec.consumes == 0]
+    positioned = [
+        spec.name
+        for spec in creators
+        if {"x", "y", "z"} <= {entry.name for entry in spec.params.spec()}
+    ]
+    assert "create_box" in positioned, "ohne einen Erzeuger mit Position prüft das nichts"
+
+    placed = {
+        spec.name: values for spec in creators if (values := values_for_object(spec, features))
+    }
+
+    assert placed == {}
+    # Gegenprobe: Wer einen Körper bearbeitet, bekommt weiter dessen Oberseite.
+    assert values_for_object(REGISTRY.get("drill_hole"), features)["z"] == pytest.approx(20.0)
+
+
+def _lowest_and_base(
+    mesh: object, centre: tuple[float, ...], normal: tuple[float, ...]
+) -> tuple[float, float]:
+    """Tiefster Punkt über dem Bett und Abstand der Grundfläche zur Flächenebene."""
+    import numpy as np
+
+    vertices = np.asarray(mesh.raw.vertices)  # type: ignore[attr-defined]
+    along = (vertices - np.asarray(centre)) @ np.asarray(normal)
+    return float(vertices[:, 2].min()), float(along.min())
+
+
+@pytest.mark.parametrize(
+    "normal",
+    [(1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.6, 0.0, -0.8)],
+    ids=["right", "front", "slanted_down"],
+)
+def test_a_creator_on_a_chosen_side_face_stands_on_it_above_the_bed(
+    profile: Profile, normal: tuple[float, float, float]
+) -> None:
+    """Der Fehlerfall aus RM-390: Seitenfläche gewählt, Quader halb unter dem Bett.
+
+    Der Quader übernahm die Richtung der Fläche und ihre Mitte — gedreht auf
+    die Seite, mit z = −4,5. Er gehört **auf** die Fläche: Grundfläche in ihrer
+    Ebene, und so weit in ihr nach oben gerückt, dass nichts unter dem Bett
+    liegt. Für jeden Grundkörper in beiden Kernen, gemessen am Körper, den die
+    Operation tatsächlich baut.
+    """
+    from app.core.registry import PRIMITIVE_TWINS
+    from app.core.scene.placement import seat_on_face
+    from app.core.units import EPS_DISPLAY
+    from tests.helpers import primitive_operation
+
+    centre = (20.0, 0.0, 5.0)
+    side = face(centre=centre, normal=normal)
+    for mesh_name, brep_name in PRIMITIVE_TWINS:
+        seated = seat_on_face(REGISTRY.get(brep_name), side, {}, profile)
+        assert seated is not None, brep_name
+        assert seat_on_face(REGISTRY.get(mesh_name), side, {}, profile) == seated, (
+            "beide Kerne stehen gleich"
+        )
+        assert (seated["nx"], seated["ny"], seated["nz"]) == pytest.approx(normal)
+        body = primitive_operation(mesh_name, dict(seated), profile).outputs[0].mesh
+        lowest, base = _lowest_and_base(body, centre, normal)
+        assert lowest == pytest.approx(0.0, abs=EPS_DISPLAY), f"{mesh_name}: auf dem Bett"
+        assert base == pytest.approx(0.0, abs=EPS_DISPLAY), f"{mesh_name}: auf der Fläche"
+
+
+def test_lettering_on_a_side_face_rises_like_a_primitive(profile: Profile) -> None:
+    """Die freistehende Beschriftung ist auch ein Erzeuger mit Position und Richtung."""
+    from app.core.scene.placement import seat_on_face
+    from app.core.units import EPS_DISPLAY
+    from tests.helpers import primitive_operation
+
+    centre, normal = (20.0, 0.0, 2.0), (1.0, 0.0, 0.0)
+    entered = {"text": "SOLIDON", "size": 20.0}
+    seated = seat_on_face(REGISTRY.get("create_label"), face(centre, normal), entered, profile)
+
+    assert seated is not None
+    body = primitive_operation("create_label", {**entered, **seated}, profile).outputs[0].mesh
+    lowest, base = _lowest_and_base(body, centre, normal)
+    assert lowest == pytest.approx(0.0, abs=EPS_DISPLAY)
+    assert base == pytest.approx(0.0, abs=EPS_DISPLAY)
+
+
+def test_a_creator_on_a_top_face_sits_at_its_centre(profile: Profile) -> None:
+    """Gegenprobe: Auf einer Oberseite gibt es nichts zu heben."""
+    from app.core.scene.placement import seat_on_face
+
+    seated = seat_on_face(REGISTRY.get("create_box"), face(centre=(1.0, 2.0, 20.0)), {}, profile)
+
+    assert seated == pytest.approx({"x": 1.0, "y": 2.0, "z": 20.0, "nx": 0.0, "ny": 0.0, "nz": 1.0})
+
+
+def test_a_creator_that_would_reach_under_the_bed_takes_no_seat(profile: Profile) -> None:
+    """Unter einer Unterseite auf dem Bett ist kein Platz, und in ihrer Ebene steigt nichts.
+
+    Dann sitzt er nicht dort — :func:`seat_on_face` sagt es mit ``None``, und
+    der Dialog sagt es dem Kunden. Gegenprobe: Unter einer Decke in 50 mm Höhe
+    hängt ein 10 mm hoher Quader frei.
+    """
+    from app.core.scene.placement import seat_on_face
+
+    spec = REGISTRY.get("create_box")
+    down = (0.0, 0.0, -1.0)
+
+    assert seat_on_face(spec, face(centre=(0.0, 0.0, 0.0), normal=down), {}, profile) is None
+    hanging = seat_on_face(spec, face(centre=(0.0, 0.0, 50.0), normal=down), {}, profile)
+    assert hanging is not None
+    assert hanging["z"] == pytest.approx(50.0)
 
 
 # --- Größe aus der Bohrung ------------------------------------------------------

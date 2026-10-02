@@ -1411,7 +1411,7 @@ def part_step_of(
     Sonst ``None``. Gefragt wird über die Kategorie ``parts`` und nicht über
     den Namen der Operation: ``drill_hole`` erzeugt ebenfalls Merkmale mit
     Provenienz und ist kein Baustein, und ein Namensmuster wie ``insert_*``
-    schwiege beim nächsten der siebenundzwanzig.
+    schwiege beim nächsten Baustein, der anders heißt.
 
     **Dazu die Ausnahme** :data:`SPEAKS_FOR_ITS_FEATURES`, und sie braucht das
     **Merkmal**: Sie gilt einer Rolle, nicht dem ganzen Schritt. Ohne
