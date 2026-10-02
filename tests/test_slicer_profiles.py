@@ -80,6 +80,51 @@ def test_discovery_imports_unknown_printer_geometry_and_source_nozzle(
     assert printer.printable_area[0] == pytest.approx((-100, -100))
     assert build_area.printable_area(printer).area == pytest.approx(35000 - 400)
     assert printer.vendor == "Acme"
+    # Die Kontur beginnt bei (10, 20), nicht an der Ecke: Der Nullpunkt der
+    # Maschine liegt 110 mm links und 120 mm vor der Bettmitte (RM-424).
+    assert printer.bed_origin == pytest.approx((-110.0, -120.0))
+    assert build_area.machine_shift(printer) == pytest.approx((110.0, 120.0))
+
+
+@pytest.mark.parametrize(
+    ("area", "origin"),
+    [
+        # Dremel 3D45 in OrcaSlicer und ElegooSlicer: links weiter als rechts.
+        (["-127.5x-77.5", "97.5x-77.5", "97.5x77.5", "-127.5x77.5"], (15.0, 0.0)),
+        # Flashforge Guider 2s, die Deltas: das Bett um den Ursprung.
+        (["-140x-125", "140x-125", "140x125", "-140x125"], (0.0, 0.0)),
+        # Das übliche Bett ab der Ecke behält sein Verhalten ohne Angabe.
+        (["0x0", "220x0", "220x220", "0x220"], None),
+    ],
+)
+def test_discovery_keeps_where_the_machine_has_its_origin(
+    unknown_printers: Path, area: list[str], origin: tuple[float, float] | None
+) -> None:
+    """RM-424: ``discover_printers`` zentrierte die Kontur und verlor dabei den
+    Ursprung — die Übergabe legte einen Würfel für den Dremel 3D45 auf
+    (112,5 / 77,5), am hinteren Rand eines Betts von -127,5 bis 97,5."""
+    from app.core import build_area
+
+    base = unknown_printers / "Acme" / "machine" / "base.json"
+    document = json.loads(base.read_text(encoding="utf-8"))
+    document["printable_area"] = area
+    document.pop("bed_exclude_area")
+    _write(base, document)
+    printer = sp.discover_printers(unknown_printers / "slicer.exe", "orca")[0]
+
+    xs = [float(point.split("x")[0]) for point in area]
+    ys = [float(point.split("x")[1]) for point in area]
+    width, depth = max(xs) - min(xs), max(ys) - min(ys)
+    assert printer.build_volume[:2] == pytest.approx((width, depth))
+    assert printer.printable_area[0] == pytest.approx((-width / 2.0, -depth / 2.0))
+    if origin is None:
+        assert printer.bed_origin is None
+    else:
+        assert printer.bed_origin == pytest.approx(origin)
+    # Solidons Bettmitte liegt in Maschinenkoordinaten in der Mitte der Kontur.
+    assert build_area.machine_shift(printer) == pytest.approx(
+        ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
+    )
 
 
 @pytest.mark.parametrize(
@@ -193,6 +238,8 @@ def test_discovery_resolves_prusa_bundle_sections(
         assert printer.build_volume == pytest.approx((180, 180, 180))
         assert printer.nozzle_diameter == pytest.approx(0.4)
         assert printer.prusaslicer_printer == printer.title
+        # BIBO, die Deltas: Das Bett liegt um den Ursprung (RM-424).
+        assert printer.bed_origin == pytest.approx((0.0, 0.0))
 
 
 def test_discovery_resolves_cura_bed_shape_and_exclusions(
@@ -2210,6 +2257,7 @@ def test_cura_instance_hardware_and_codes_reach_the_engine(
     )
     found = {p.id: p for p in sp.discover_printers(cura, "cura")}
     printer = found[sp.chosen_printer("cura", cura, found)]
+    assert printer.bed_origin == (0.0, 0.0), "der Nutzercontainer legt den Ursprung in die Mitte"
     profile = Profile(printer=printer, material=profiles.material("pla"))
     settings = print_settings.resolve(profile)
     setup = handover.SlicerSetup(cura, "cura", machine_profile=sp.chosen_machine("cura", cura))
@@ -2351,6 +2399,8 @@ def test_cura_definition_with_its_origin_in_the_middle_keeps_it(
         # Maschine. Vor RM-329 fiel so fast jede Cura-Werksdefinition heraus.
         machine, _process = sp.match(sp.find_profiles(cura, "cura"), found[title])
         assert machine is not None and machine.name == title
+        # Der Drucker trägt denselben Ursprung wie seine Definition (RM-424).
+        assert found[title].bed_origin == ((0.0, 0.0) if centred else None), title
         profile = Profile(printer=found[title], material=profiles.material("pla"))
         width, depth, _height = profile.printer.build_volume
         directory = tmp_path / title

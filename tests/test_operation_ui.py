@@ -311,6 +311,41 @@ def test_a_required_target_starts_empty_and_takes_the_first_click(qt_app: QAppli
         dialog.deleteLater()
 
 
+def test_the_shown_alignment_dialog_takes_the_first_click_as_its_target(
+    qt_app: QApplication,
+) -> None:
+    """Am gezeigten Dialog gab Qt dem gefüllten Quellmerkmal den Erstfokus, und
+    der erste Bildklick erreichte das leere Ziel nie (RM-416): ungezeigt grün,
+    gezeigt rot. Der Erstfokus gehört dem ersten leeren Pflichtfeld."""
+    dialog = OperationDialog(
+        REGISTRY.get("align_to_feature"),
+        {"obj_1": "B", "obj_2": "A"},
+        values={"feature": "face_1"},
+        features={"face_1": "Linke Seite"},
+        target_features={"obj_2:face_1": "A · Linke Seite", "obj_2:face_2": "A · Rechte Seite"},
+        source_objects=("obj_1",),
+    )
+    try:
+        dialog.show()
+        dialog.activateWindow()
+        for _ in range(5):
+            qt_app.processEvents()
+        assert dialog.isVisible(), "sonst prüft dieser Test den ungezeigten Weg"
+        assert dialog.focusWidget() is dialog._editors["target"], "Erstfokus auf das leere Ziel"
+        button = dialog._accept_button
+        assert not button.isEnabled()
+        assert button.toolTip() == tr(
+            "Klicken Sie im Bild auf die Fläche, an die {name} soll.", name="B"
+        ), "der Satz nennt den Klick, nicht einen fehlenden Körper"
+        assert dialog.take_feature("face_2", "Rechte Seite", "obj_2"), "der erste Bildklick"
+        assert dialog.values()["target"] == "obj_2:face_2"
+        assert dialog.values()["feature"] == "face_1", "das Quellmerkmal bleibt"
+        assert button.isEnabled()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 def test_up_to_click_and_reopened_target_have_readable_body_names(qt_app: QApplication) -> None:
     """Flächen werden gezeigt und gespeichert, ohne interne Kennungen abzutippen."""
     dialog = OperationDialog(
@@ -3881,9 +3916,10 @@ def test_an_alignment_target_is_never_left_empty(qt_app: QApplication) -> None:
     Band antwortete mit dem Formatfehler des Kerns („obj_2:hole_1"), einer
     Zeichenkette, die in keiner Oberfläche vorkommt; der Knopf war dabei
     bedienbar und führte sicher in den Fehler (Bedienweg-Durchsicht
-    14.09.2026). Das Ziel ist Pflicht: Der Wähler beginnt auf dem ersten
-    Merkmal eines anderen Körpers, und ohne ein solches ist der Knopf grau
-    und sagt warum.
+    14.09.2026). Das Ziel ist Pflicht: Der Wähler beginnt leer und bietet die
+    Merkmale anderer Körper an — still vorgewählt saß der Körper an der
+    falschen Seite (RM-394). Bis zum Klick ist der Knopf grau und sagt, wohin
+    geklickt wird; ohne zweiten Körper sagt er, dass einer fehlt (RM-416).
     """
     spec = REGISTRY.get("align_to_feature")
     target = next(entry for entry in spec.params.spec() if entry.name == "target")
@@ -3898,9 +3934,18 @@ def test_an_alignment_target_is_never_left_empty(qt_app: QApplication) -> None:
     )
     combo = dialog._editors["target"]
     assert isinstance(combo, QComboBox)
-    assert [combo.itemText(i) for i in range(combo.count())] == ["Klotz · Bohrung 1"]
-    assert dialog.values()["target"] == "obj_2:hole_1", "das erste Ziel steht vorausgewählt"
-    assert dialog._accept_button.isEnabled()
+    assert [combo.itemText(i) for i in range(combo.count())] == [
+        tr("— im Bild wählen —"),
+        "Klotz · Bohrung 1",
+    ]
+    assert dialog.values()["target"] in ("", None), "kein still vorgewähltes Ziel"
+    assert not dialog._accept_button.isEnabled()
+    assert dialog._accept_button.toolTip() == tr(
+        "Klicken Sie im Bild auf die Fläche, an die der Körper soll."
+    )
+    combo.setCurrentIndex(1)
+    assert dialog.values()["target"] == "obj_2:hole_1"
+    assert dialog._accept_button.isEnabled(), "ein gewähltes Ziel gibt frei"
 
     alone = OperationDialog(spec, [], None, features={"hole_1": "Bohrung 1"}, target_features={})
     assert not alone._accept_button.isEnabled(), "ohne Ziel kein Übernehmen"
@@ -4725,7 +4770,9 @@ def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QAppl
         said = field.refusal()
         assert "Obergrenze" in said, said
         assert not dialog._accept_button.isEnabled(), "der Knopf ist gesperrt"
-        assert dialog._accept_button.toolTip() == said
+        # Am Knopf steht das Feld davor (RM-342, D-N2).
+        named = tr("{name}: {value}", name=count.title, value=said)
+        assert dialog._accept_button.toolTip() == named
         assert not dialog.can_accept(), "und Knopf und Klick sagen dasselbe"
     finally:
         dialog.deleteLater()
@@ -6027,6 +6074,14 @@ def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) ->
         assert "Projektparameter" in offered._naming.toolTip()
         offered._naming.setChecked(True)
         assert offered.names_dimensions()
+        remembered = OperationDialog(
+            REGISTRY.get("create_box"), {}, offer_naming=True, naming_default=True
+        )
+        try:
+            assert remembered.names_dimensions(), "das Fenster reicht die letzte Wahl durch"
+            assert remembered.offers_naming() and not plain.offers_naming()
+        finally:
+            remembered.deleteLater()
     finally:
         plain.deleteLater()
         offered.deleteLater()

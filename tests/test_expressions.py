@@ -325,3 +325,29 @@ def test_a_completed_expression_travels_through_the_project_file(tmp_path) -> No
     assert result.complete, result.scene.report.findings
     size = result.scene.objects["obj_1"].mesh.bounds.size
     assert float(size[0]) == pytest.approx(40.3)
+
+
+@pytest.mark.parametrize(
+    ("text", "bound"),
+    [
+        ("=@breite", "breite"),
+        ("= @breite ", "breite"),
+        ("@breite", "breite"),
+        ("=@breite*2", None),
+        ("=max(@breite, 2000)", None),
+        ("=@breite + @tiefe", None),
+        ("=2*@breite", None),
+        ("=40", None),
+        (40.0, None),
+        ("=@", None),
+    ],
+)
+def test_only_a_bare_reference_binds_a_field_to_a_parameter(
+    text: object, bound: str | None
+) -> None:
+    """Nur „=@breite“ reicht den Wert ungerechnet durch (RM-453).
+
+    *Eingabe korrigieren* führt nur dann in die Parameterleiste; bei einem
+    zusammengesetzten Ausdruck behebt keine Zahl im Maß den Fehler.
+    """
+    assert expressions.bound_name(text) == bound

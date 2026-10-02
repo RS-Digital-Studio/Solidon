@@ -50,7 +50,11 @@ def _alpha(icon_size: int, colour: object, x: int, y: int, **kwargs: object) -> 
 def test_a_swatch_is_round_and_split_into_its_colours(qt_app: QApplication) -> None:
     """Der Punkt ist rund — die Ecke bleibt leer —, und zwei Farben teilen ihn."""
     size = 24
-    assert _alpha(size, "#ff0000", 0, 0).alpha() == 0, "die Ecke eines Kreises ist leer"
+    # Nicht der Pixel (0, 0): Den lässt auch ein eckiger Punkt frei, weil die
+    # Scheibe einen Bildpunkt Rand hat (D-N7). (2, 2) liegt im Quadrat der
+    # Scheibe, aber außerhalb des Kreises; die Mitte der Oberkante liegt in beiden.
+    assert _alpha(size, "#ff0000", 2, 2).alpha() == 0, "die Ecke eines Kreises ist leer"
+    assert _alpha(size, "#ff0000", size // 2, 2).alpha() > 200, "die Oberkante ist gefüllt"
     left = _alpha(size, "#ff0000 #0000ff", size // 4, size // 2)
     right = _alpha(size, "#ff0000 #0000ff", 3 * size // 4, size // 2)
     assert left.red() > 200 and left.blue() < 60

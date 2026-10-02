@@ -287,7 +287,7 @@ def by_extruder(slots: Sequence[MaterialSlot]) -> list[MaterialSlot | None]:
 def write_assembly(
     parts: Sequence[AssemblyPart],
     name: str = "",
-    bed: tuple[float, float] | None = None,
+    bed_centre: tuple[float, float] | None = None,
     project_settings: Mapping[str, object] | None = None,
     layout: tuple[float, float] | None = None,
     prusa_config: Mapping[str, str] | None = None,
@@ -306,21 +306,23 @@ def write_assembly(
     Die Materialien sind über alle Teile zusammengelegt (:func:`merge_slots`),
     denn genau diese Liste liest der Slicer als seine Extruderbelegung.
 
-    ``bed`` ist die Breite und Tiefe des Bauraums. Mit dieser Angabe bekommt
-    jedes Teil eine Platzierung auf der Platte — Solidon rechnet um den
-    Nullpunkt, ein Slicer misst von der Ecke. Ohne die Umrechnung liegt die
-    ganze Szene im negativen Bereich, also außerhalb des Betts, und der Slicer
-    ordnet notgedrungen selbst an: was `arrange_bed` errechnet hat, ist dann
-    weg, samt Haftungsrand und Plattenzuordnung.
+    ``bed_centre`` ist Solidons Bettmitte in den Koordinaten des Slicers
+    (``build_area.machine_shift``). Mit dieser Angabe bekommt jedes Teil eine
+    Platzierung auf der Platte — Solidon rechnet um die Bettmitte, ein Slicer
+    um den Nullpunkt seiner Maschine, meist die Ecke, an einem Delta oder am
+    Dremel 3D45 nicht (RM-424). Ohne die Umrechnung liegt die ganze Szene
+    neben dem Bett, und der Slicer ordnet notgedrungen selbst an: was
+    `arrange_bed` errechnet hat, ist dann weg, samt Haftungsrand und
+    Plattenzuordnung.
 
     Verschoben wird über die Platzierungsmatrix des Standards, nicht über die
     Punkte. Die Geometrie bleibt damit die, die im Dokument steht — dieselbe
     Datei taugt weiter als Modell und nicht nur als Druckauftrag.
 
-    ``layout`` ist dasselbe Bettmaß für die zweite Verschiebung: Liegen die
-    Teile auf mehreren Platten, rückt jede Platte an ihren Platz im Raster
-    der Orca-Familie (:func:`plate_origin`) — auch ohne ``bed``, denn sonst
-    stünde die zweite Platte auf der ersten.
+    ``layout`` ist Breite und Tiefe des Betts für die zweite Verschiebung:
+    Liegen die Teile auf mehreren Platten, rückt jede Platte an ihren Platz im
+    Raster der Orca-Familie (:func:`plate_origin`) — auch ohne ``bed_centre``,
+    denn sonst stünde die zweite Platte auf der ersten.
 
     ``project_settings`` sind die Druckeinstellungen der Platte, wie die
     Orca-Familie sie in einer Projektdatei führt (:data:`PROJECT_SETTINGS_PATH`).
@@ -345,7 +347,7 @@ def write_assembly(
         raise ValueError("an assembly needs at least one part")
 
     materials = merge_slots(parts, across=across)
-    model = _assembly_xml(parts, materials, name, bed, layout, blocker_as_part or cura, cura)
+    model = _assembly_xml(parts, materials, name, bed_centre, layout, blocker_as_part or cura, cura)
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
@@ -698,7 +700,7 @@ def _assembly_xml(
     parts: Sequence[AssemblyPart],
     materials: list[MaterialSlot],
     name: str,
-    bed: tuple[float, float] | None = None,
+    bed_centre: tuple[float, float] | None = None,
     layout: tuple[float, float] | None = None,
     blocker_as_part: bool = True,
     cura: bool = False,
@@ -830,7 +832,7 @@ def _assembly_xml(
                 ET.SubElement(components, "component", {"objectid": str(child)})
         item = {"objectid": str(number)}
         placement = _placement(
-            bed,
+            bed_centre,
             plate_origin(plates.index(part.plate), len(plates), layout)
             if layout is not None and len(plates) > 1
             else (0.0, 0.0),
@@ -871,18 +873,20 @@ def _helper_ids(parts: Sequence[AssemblyPart]) -> dict[int, tuple[int, int]]:
     return ids
 
 
-def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> str | None:
+def _placement(bed_centre: tuple[float, float] | None, origin: tuple[float, float]) -> str | None:
     """Die Platzierungsmatrix des Standards: neun Werte Drehung, drei
     Verschiebung. ``None``, wenn nichts zu verschieben ist.
 
     Gedreht wird nichts. Verschoben wird aus zwei voneinander unabhängigen
     Gründen, und beide landen in derselben Matrix:
 
-    ``bed`` verschiebt um den halben Bauraum, denn dort liegt Solidons
-    Nullpunkt und ein Slicer misst von der Ecke. Das gilt nur für die Übergabe
-    an den Slicer und nur für die Orca-Familie. Dass diese Matrix dort wirklich
-    gelesen wird, ist gemessen: mit ihr und ``--arrange 0`` stehen die Teile im
-    G-Code auf ein Zehntel dort, wo das Dokument sie hat.
+    ``bed_centre`` verschiebt Solidons Bettmitte dorthin, wo sie in den
+    Koordinaten der Maschine liegt — an einer Maschine mit Nullpunkt in der
+    Ecke um das halbe Bett, an einem Bett um den Ursprung gar nicht
+    (``build_area.machine_shift``, RM-424). Das gilt nur für die Übergabe an
+    den Slicer. Dass diese Matrix dort wirklich gelesen wird, ist gemessen:
+    mit ihr und ``--arrange 0`` stehen die Teile im G-Code auf ein Zehntel
+    dort, wo das Dokument sie hat.
 
     ``origin`` verschiebt auf die eigene Druckplatte (:func:`plate_origin`).
     Die Orca-Familie legt ihre Platten in **einem** Koordinatenraum
@@ -891,8 +895,8 @@ def _placement(bed: tuple[float, float] | None, origin: tuple[float, float]) -> 
     Platte gibt — auch beim Export ohne Bettkoordinaten. Sonst stünde die
     zweite Platte auf der ersten.
     """
-    across = (bed[0] / 2.0 if bed else 0.0) + origin[0]
-    along = (bed[1] / 2.0 if bed else 0.0) + origin[1]
+    across = (bed_centre[0] if bed_centre else 0.0) + origin[0]
+    along = (bed_centre[1] if bed_centre else 0.0) + origin[1]
     if is_zero(across) and is_zero(along):
         return None
     return f"1 0 0 0 1 0 0 0 1 {across:g} {along:g} 0"

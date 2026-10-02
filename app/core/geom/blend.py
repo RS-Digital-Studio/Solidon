@@ -91,6 +91,15 @@ DRAFT_FACTOR: Final = 2.0
 #: Entwurfsfaktor, und der Befund ``blend.draft`` sagt es.
 DRAFT_SAMPLES: Final = 250_000
 
+#: Ab wie vielen Dreiecken beider Eingänge die Oberfläche im Budget mitzählt
+#: (RM-427). Die Abstandsfelder kosten nicht nur je Rasterpunkt, sondern mit
+#: der Oberfläche: gemessen (Review 02.10., ``v5g_rm379_schwer``) bei 241 200
+#: Punkten an 81 920 Dreiecken 0,75 s, bei 244 800 Punkten an 327 680
+#: Dreiecken 3,8 s — gegen 0,9 s mit dem Entwurfsfaktor. Bis hierher zählen
+#: nur die Rasterpunkte; darüber wiegt jeder Punkt so viel mehr, wie die
+#: Oberfläche größer ist.
+DRAFT_SURFACE: Final = 100_000
+
 #: Wie viele Rasterpunkte auf einmal gegen den Baum gefragt werden. Groß genug,
 #: dass der Aufruf sich lohnt, klein genug, dass ein Abbruch in einem
 #: Sekundenbruchteil ankommt — gemessen rund 0,3 s je Portion.
@@ -278,12 +287,15 @@ def _grid(
 def draft_grid(first: MeshData, second: MeshData, radius: float, grid: float) -> float:
     """Die Rasterweite für den Entwurf: die feine, solange sie im Budget bleibt.
 
-    Gröber nur, wo die feine Weite :data:`DRAFT_SAMPLES` übersteigt (RM-379).
+    Gröber nur, wo die feine Weite :data:`DRAFT_SAMPLES` übersteigt (RM-379),
+    die Punkte gewogen mit der Oberfläche über :data:`DRAFT_SURFACE` (RM-427).
     Dieselbe Regel gilt für jede Operation mit Entwurfsfaktor; heute hat ihn
-    nur diese.
+    nur diese — Kegel und Ring rechnen im Entwurf so fein wie beim Export.
     """
     _low, shape = _grid(first, second, radius, grid)
-    if int(np.prod(shape)) <= DRAFT_SAMPLES:
+    surface = first.triangle_count + second.triangle_count
+    weight = max(1.0, surface / DRAFT_SURFACE)
+    if int(np.prod(shape)) * weight <= DRAFT_SAMPLES:
         return grid
     return grid * DRAFT_FACTOR
 
@@ -381,7 +393,7 @@ class BlendParams(BaseParams):
     # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände. 3 seit dem
     # 22.09.2026: Die Filamente beider Körper kommen mit (:func:`_with_filaments`).
     # 4: Auch die Entwurfsplanung prüft die Eingänge vor Bounds und Punktbudget.
-    cache_version="4",
+    cache_version="5",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,
