@@ -32,8 +32,9 @@ Stufen: nichts, Körper, Merkmal oder Kante (`Viewport.selection_depth`).
 * **Links geht eine Stufe**: erst der Körper, dann das Merkmal — sonst ist ein
   Körper mit Bohrungen per Klick nicht wählbar. Nur der Klick wandert, nicht der
   Zug (`kamera.md`).
-* **Rechts meint immer das Genaueste** (`_select_at(..., direct=True)`): Das
-  Kontextmenü am Merkmal ist Weg 1 (§18.5), ohne Vorbedingung.
+* **Rechts meint immer das Genaueste** (`_select_at(..., direct=True)`): Wer
+  auf die störende Stelle zeigt, hängt an keiner Vorbedingung (§18.5). Die
+  Operationen von Weg 1 stehen im Auswahlfenster; das Menü führt keine aus.
 * **Ein offener Operationsdialog schaltet die Stufen ab**
   (`set_direct_picking`) — dort ist ein Klick eine Antwort.
 * **Escape geht eine Stufe je Druck zurück**, in `MainWindow._escape` nach dem

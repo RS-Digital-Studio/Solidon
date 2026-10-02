@@ -1012,7 +1012,7 @@ def test_the_feature_list_only_offers_what_the_operation_takes(window: MainWindo
     Eine Pflicht-Auswahl trägt keinen Leereintrag und steht damit auf ihrem
     ersten. Das liest sich als Vorschlag der Anwendung und ist keiner.
 
-    ``applies_to`` ist dieselbe Zuordnung, über die das Kontextmenü am Merkmal
+    ``applies_to`` ist dieselbe Zuordnung, über die das Auswahlfenster am Merkmal
     die Operation findet (§10) — hier nur andersherum gelesen. Wo sie fehlt,
     wird nicht gefiltert: Raten wäre schlechter als Anbieten.
     """

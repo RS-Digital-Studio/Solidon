@@ -46,6 +46,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-107 — Ubuntu-Workerabbruch mit aktuellem Testbestand zuordnen](#rm-107) | Plattformen, Pakete und Grafik | Auslöser mit aktueller Testreihenfolge und Widget-/Worker-Lebensdauer eingrenzen |
 | [RM-114 — Vereinfachungsziele auf Apple Silicon vermessen](#rm-114) | Plattformen, Pakete und Grafik | Der Test überspringt nicht mehr, ein sicher offener Ausgang löst die Warnung auf jeder Plattform aus (`a559e947`); offen bleibt die Zielreihe der Hohlkugel auf einem Mac |
 | [RM-187 — Dieselbe Geometrie auf jeder Plattform](#rm-187) | Plattformen, Pakete und Grafik | Fingerabdrücke auf den drei Runnern; plattformgleich machen: Einpassungen in `perceive`, `shapes.thread_body`, den Teilungsweg über BLAS, die Drehwege von *Merkmal drehen* und das Einsetzen eines Bausteins (Liste am Punkt) |
+| [RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit](#rm-468) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Workflow-Pins und Lizenzbeilage auf 3.14.8, Lauf auf allen vier Paketplattformen, danach die Arbeitsplätze |
+| [RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf](#rm-469) | Plattformen, Pakete und Grafik | Aus RM-467, nach 0.5.2: Pin heben und beide Mac-Jobs mit Fenster- und Rendererfällen fahren |
+| [RM-470 — Marching Cubes ohne scikit-image](#rm-470) | Plattformen, Pakete und Grafik | Aus RM-467: `Manifold.level_set` statt `skimage.measure.marching_cubes` an vier Stellen, zuerst am größten Voxelfall messen |
+| [RM-471 — Schriftzüge ohne matplotlib](#rm-471) | Plattformen, Pakete und Grafik | Aus RM-467: Satz über uharfbuzz, Konturen über fontTools, eigene Schriftsuche je Plattform |
+| [RM-472 — Zeichnungsimport ohne lxml](#rm-472) | Plattformen, Pakete und Grafik | Aus RM-467: SVG über `xml.etree` und svg.path selbst lesen |
 | [RM-017 — Nutfedermaße an realen Aluminiumprofilen prüfen](#rm-017) | Geometrie, Erkennung und Druckvorbereitung | Zwei benannte Aluminiumprofile nachmessen und Passung prüfen; dabei die Zeile „Nut 8 wie 3030“ gegen den dickeren Steg vieler 4040-Profile (4,3 statt 2,0–2,2 mm) prüfen |
 | [RM-022 — Nachbau als Operationsfolge](#rm-022) | Geometrie, Erkennung und Druckvorbereitung | P4.0 steht (`596bcb64`, „In Flächen und Kanten umwandeln“); P4.1–P4.3 folgen in 0.5.x: Nachbaukandidaten aus Grundvolumen, Aufträgen und Abzügen, dann der geprüfte Nachbau hinter dem Import (CAD-Konzept §§8, 13.5) |
 | [RM-188 — CAD-Ausbau, Bedienung und Resin für 0.5.x](#rm-188) | Geometrie, Erkennung und Druckvorbereitung | Nächster Schritt P0.8: die vier Konzepte je Anforderung dem Code oder einem Paket zuordnen; daneben P4.1 unter RM-022, P8.1, P9.1 und Zeichnen Z2. Reste der gebauten Pakete und Fragen an Robert stehen am Punkt; Abschluss mit P5.3 |
@@ -150,7 +155,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
-| [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
@@ -666,6 +670,94 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     wieder herausgenommen; laut Übergabe der Durchsicht hängt schon das gerade Einsetzen an
     der Plattform. Weg: die Platzierung über `transform.composed`, danach den Weg einchecken.
   Review 02.10. (`7f0de659d`): Restposten plattformabhängiger Rechnung neben der neuen Ausrichtung: `app/core/geom/patterns.py:1405` (`np.linalg.norm` ohne Achse), `:1491` und `:1534` (`np.cos`/`np.sin`).
+
+<a id="rm-468"></a>
+
+- [ ] **RM-468 — CPython 3.14.8 bringt Sicherheitskorrekturen in die ausgelieferte Laufzeit.**
+  Aus RM-467, erster Lauf 02.10.2026. 3.14.8 erschien am 30.09.2026, `actions/python-versions`
+  führt es. Jedes Paket trägt den Interpreter seines CI-Baus, und alle drei Workflows nennen
+  `python-version: "3.14.7"`. Für Solidon zählen: `zipfile` begrenzt das Entpacken je Lesevorgang
+  jetzt auch für bzip2, LZMA und Zstandard (eine fremde 3MF ist ein ZIP-Archiv), `tarfile` schließt
+  einen Pfadausbruch beim Entpacken, der Windows-Bau bringt OpenSSL 3.5.9 für Update-Abfrage und
+  Support über HTTPS, dazu libexpat 2.8.5 und CVE-2026-15806 (`HTTPPasswordMgr`). Zurückgestellt bis
+  nach 0.5.2: Der Wechsel berührt die Tabellen der Lizenzbeilage (CPython- und OpenSSL-Fassungen in
+  `third_party_licenses.toml`, `make_sbom.WINDOWS_LIBFFI_VERSIONS`, `tests/test_sbom.py`), belegt
+  wird er erst von einem Lauf auf allen vier Paketplattformen, und auf den Arbeitsplätzen ersetzt
+  die Installation `python314.dll` unter jeder laufenden Umgebung.
+  **Umbau:** alle `python-version`-Pins; die drei Tabellen mit den Fassungen von OpenSSL, libffi und
+  Expat aus den CPython-Quellen zum Tag `v3.14.8`; `CLAUDE.md`, `README.md` und Kopf von
+  `constraints.txt`; danach die drei Arbeitsplätze, wenn keine Sitzung rechnet.
+  **Abnahme:** Taglauf oder Handstart mit allen Paketen grün, die Releaseakte nennt 3.14.8.
+
+<a id="rm-469"></a>
+
+- [ ] **RM-469 — rubicon-objc 0.5.7 wartet auf einen Mac-Lauf.** Aus RM-467, erster Lauf
+  02.10.2026. rubicon-objc kommt nur auf macOS über wgpu in den Baum, für die Metal-Oberfläche der
+  Ansicht. 0.5.7 (30.09.2026) wirft für unbekannte C-Typen `ValueError` statt `AttributeError` und
+  verlangt ein funktionierendes `platform.processor()`, was im gefrorenen Mac-Paket nicht belegt
+  ist. Weder das lokale Tor noch die Push-CI (nur Ubuntu) fahren macOS. Zurückgestellt bis nach
+  0.5.2, damit der Mac-Renderer im Release nicht ungeprüft wechselt (vgl. RM-051).
+  **Umbau:** den Plattformpin in `constraints.txt` heben (`check_env --freeze` auf Windows behält
+  ihn, also von Hand) und einen Lauf mit beiden Mac-Jobs samt Fenster- und Rendererfällen fahren.
+  **Abnahme:** beide Mac-Jobs grün, die Ansicht des gebauten Mac-Pakets zeichnet.
+
+<a id="rm-470"></a>
+
+- [ ] **RM-470 — Marching Cubes ohne scikit-image.** Aus RM-467 (Auftrag Robert: Was eigener Code
+  oder eine andere Bibliothek besser kann, wird ersetzt). scikit-image dient allein
+  `measure.marching_cubes`: direkt in `geom/blend.py` und `geom/lattice.py`, mittelbar über
+  `trimesh.voxel.ops.matrix_to_marching_cubes` in `geom/boolean.py` (Voxelstufe, §17.2) und
+  `geom/hollow.py`. Dafür reisen scikit-image (22 MB installiert), tifffile und lazy-loader in
+  jedem Paket mit, und `pyproject.toml` klammert seinetwegen eine numpy-Warnung aus. Der bessere
+  Weg ist `manifold3d.Manifold.level_set`, schon Abhängigkeit: Marching Tetrahedra auf einem
+  raumzentrierten Gitter liefert garantiert mannigfaltige Netze, Marching Cubes an mehrdeutigen
+  Zellen nicht zwingend, und jede folgende Boolesche Op braucht die Mannigfaltigkeit. Gitter und
+  Verblendung haben eine geschlossene Feldfunktion, die Voxelstufen werten ihr Raster dreilinear
+  aus. Der Rückruf läuft je Gitterpunkt durch Python, darum zuerst am größten Voxelfall messen; ist
+  er zu langsam, ein eigenes vektorisiertes Marching Cubes neben `slice/_chain.pyx`.
+  `geom/displace.py` liest das Höhenbild dann über Pillow, das ohnehin mitkommt, und imageio
+  entfällt mit.
+  **Plattformfolgen:** vier Pakete weniger auf allen drei Plattformen und keine Abhängigkeit von
+  scikit-image-Rädern bei der nächsten Python-Fassung; `level_set` steckt in allen Zielrädern von
+  manifold3d. Lizenzliste, Lizenzbeilage und SBOM werden kürzer.
+  **Abnahme:** Geometrietests der vier Stellen mit Kennzahlen gegen den heutigen Stand (Volumen,
+  wasserdicht, Komponenten), Laufzeit am größten Voxelfall nicht schlechter; scikit-image, imageio,
+  tifffile und lazy-loader fehlen in `pyproject.toml`, `constraints.txt` und im Paket.
+
+<a id="rm-471"></a>
+
+- [ ] **RM-471 — Schriftzüge ohne matplotlib.** Aus RM-467. matplotlib dient allein den
+  Schriftzügen: Schriftsuche (`font_manager.findfont`, `addfont`) und Glyphenkonturen
+  (`textpath.TextPath`) in `geom/label_ops.py`, dazu die Pfadcodes in `brep/lettering.py`. Dafür
+  reisen matplotlib (23 MB installiert, eigene Lizenz `LicenseRef-Matplotlib`) sowie contourpy,
+  kiwisolver, cycler, pyparsing, python-dateutil und six mit. TextPath setzt ohne Shaping: keine
+  Ligaturen, keine kontextabhängigen Formen, Kerning nur aus der alten `kern`-Tabelle. Der bessere
+  Weg: uharfbuzz für den Satz (kommt mit pygfx ohnehin ins Paket) und fontTools für die
+  Glyphenkonturen über einen Pen (kommt heute über matplotlib mit), dazu eine eigene Schriftsuche
+  über die Namenstabellen.
+  **Plattformfolgen:** Die Schriftsuche braucht je Plattform ihre Ordner: Windows
+  `%WINDIR%\Fonts` und den Nutzerordner, macOS `/System/Library/Fonts`, `/Library/Fonts` und
+  `~/Library/Fonts`, Linux fontconfig oder die XDG-Ordner, im Flatpak zusätzlich `/run/host/fonts`;
+  die mitgelieferten DejaVu-Schriften bleiben der Rückfall. uharfbuzz und fontTools wandern in die
+  Gruppe `geom`, weil der Kern sie ohne Oberfläche braucht. Sieben Pakete weniger.
+  **Abnahme:** Schriftzugtests an Netz und exaktem Kern mit unveränderten Kennzahlen für
+  lateinischen Text, ein Test mit Ligatur, je Plattform ein Fall der Schriftsuche nach Familie und
+  Schnitt; matplotlib fehlt in allen Abhängigkeitsdateien und im Paket.
+
+<a id="rm-472"></a>
+
+- [ ] **RM-472 — Zeichnungsimport ohne lxml.** Aus RM-467. lxml wird nur noch für den SVG-Import
+  gebraucht: `ingest/outline.py` ruft `trimesh.load_path`, und trimeshs SVG-Leser parst mit lxml.
+  Solidons 3MF-Leser und -Schreiber nutzen `xml.etree`. lxml bündelt libxml2 und libxslt, zwei
+  C-Bibliotheken mit regelmäßigen Sicherheitsmeldungen, für eine Datei, die `outline.py` vorher
+  ohnehin mit `xml.etree` öffnet (`_svg_defaults`). Der bessere Weg: die SVG-Elemente (`path`,
+  `rect`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, verschachtelte `transform`) selbst
+  über `xml.etree` lesen, die Pfaddaten wie heute über svg.path, und daraus den `Path2D` bauen.
+  **Plattformfolgen:** ein natives Paket weniger auf allen drei Plattformen und weniger fremder
+  C-Code beim Öffnen einer fremden Datei; `xml.etree` kommt mit CPython und dessen Expat. DXF
+  bleibt bei trimesh.
+  **Abnahme:** die SVG-Fälle aus `tests/data/` ergeben dieselben Konturen (Anzahl, Fläche, Löcher);
+  lxml fehlt in allen Abhängigkeitsdateien und im Paket.
 
 ## Geometrie, Erkennung und Druckvorbereitung
 
@@ -4551,32 +4643,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
   doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
   Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
-
-<a id="rm-360"></a>
-
-- [ ] **RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters.**
-  Review 02.10.2026, Gebietsprüfung Weg 1 (I-4); Entscheidung Robert 02.10.2026: „§2.2 anpassen“.
-  `3d-agent-bauplan.md:124` (§2.2, Weg 1) sagt „im Chat sagen, was werden soll, oder aus dem
-  Kontextmenü wählen“. §2.6 und §18.5 legen fest: Die passenden Ops stehen rechts im
-  Auswahlfenster am Merkmal, der Rechtsklick führt keine Operation aus und zeigt nur, was es dort
-  gibt (Ursprungsschritt, Zeichnen auf der Fläche, Ausblenden).
-  **Umfang (nur Wortlaut, die App bleibt unverändert):**
-  - `3d-agent-bauplan.md:124` — „oder aus dem Kontextmenü wählen“ durch die Wahl im
-    Auswahlfenster am Merkmal ersetzen (etwa „oder im Auswahlfenster am Merkmal die passende
-    Operation wählen“).
-  - Folgestellen mit demselben veralteten Satz „das Kontextmenü am Merkmal ist der Ort für
-    Weg 1 (§18.5)“: `.claude/rules/ansicht.md:35–36`, `konzepte/begruendungen/regel-ansicht.md:38–40`,
-    Docstrings und Kommentare `app/ui/viewport.py:17061–17063`, `app/ui/panels.py:2873–2875`,
-    `app/ui/main_window.py:17476–17478`, `tests/test_analysis_ui.py:2293`,
-    `tests/test_selection.py:1453–1457`, `tests/test_way_one.py:7–8` („hier kommt die Operation
-    aus dem Kontextmenü“). Die Aussage über den ungestuften Rechtsklick bleibt richtig, nur der
-    Ort der Operationen wird berichtigt.
-  - Handbuch (`app/core/manual.py`, `website/handbuch.html`) und README: geprüft, kein Satz nennt
-    das Kontextmenü als Ort der Operationen von Weg 1; die Treffer dort betreffen *Diesen Schritt
-    ändern*, *Löschen* im Verlauf und die STEP-Umstellung und bleiben.
-  **Abnahme:** `git grep -n "Kontextmenü"` findet keinen Satz mehr, der Operationen für Weg 1 im
-  Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
-  Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
 
 <a id="rm-366"></a>
 
