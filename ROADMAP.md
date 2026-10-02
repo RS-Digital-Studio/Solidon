@@ -116,6 +116,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit](#rm-430) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Tests auf Wirkung schärfen, falsche Zahl berichtigen, Cura-Fall mit Befund |
 | [RM-435 — Exakte Gruppenrundungen sind seit `0041000a0` 27- bis 125-mal langsamer, und Absagen verlieren den Maßhinweis](#rm-435) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Auslass-Suche nur bei zu schmalen Kanten, größtes passendes Maß wieder nennen, teilweise belegte Züge nicht verwerfen |
 | [RM-436 — Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch](#rm-436) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Kunde erfährt ENOSPC, `edges.unmapped` mit gangbarem Weg, stabile Zahl, Wortwahl |
+| [RM-443 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -141,10 +142,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Code mit 8374885ae integriert; Düsen-/Herstelleridentität und tatsächliche 3MF-Ausgabe eigen-/zweitgeprüft, Entwicklungstor grün. Funktionale Sieben-Slicer-Matrix und Release-Fensterabnahme offen |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
 | [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
-| [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | Export wartet auf das aktuelle Ergebnis, schreibt nach einem Halt nichts (Claude, in main mit `52cc9fd66`); offen der gemeinsame Abschluss B01: vor Export, Druckvorprüfung und Übergabe fein auswerten (der Export schreibt heute das Entwurfsnetz, `blend.draft`) |
+| [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | Warten auf aktuelles Ergebnis integriert; offen B01: vor Export/Druckübergabe fein auswerten, sowie R6C942-01: nach Abbruch kein Warten ohne laufenden Auftrag |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
@@ -165,6 +166,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
+| [RM-444 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-444) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
+| [RM-445 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung](#rm-445) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-03: gleiche Parameterzeilen ersetzen keine Dokumentidentität; Gegenfall noch auszuführen |
+| [RM-446 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld](#rm-446) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-04: direkte Bindung zum Maß, zusammengesetzter Ausdruck zur Formel; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug](#rm-442) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-k`). Fund 02.10. beim Zusammenführen: Fenstertest seit `6f64f7ed1` rot; klären, ob `stroke_at` den zweiten Zug zu Recht als eigene Etappe einordnet, dann Code oder Test |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
@@ -2140,7 +2144,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Anteil der ersten Schicht oder nach Fläche: Der Rumpf der Platte trägt 195 mm² Stege,
   aber nur 8,6 % — gegen den Anteil allein blieb die Regel dort stumm. Die Fläche ist an
   186 Körpern des Korpus geeicht (`NARROW_WEB_AREA`).
-  Registerabgleich 02.10.: Der Offen-Block beginnt mit „Danach“; es fehlen der Zwischenstand der Slicer-Matrix (`konzepte/nachweise-release-0.5.1/reports/rm312-slicer-matrix-2026-10-02.md`, 52 von 125 Modellen) und die Reste unter D (SV06-Startcode, Tempi des MINI+).
+  Registerabgleich 02.10.: Der Offen-Block beginnt mit „Danach“; es fehlen die offenen Befunde der abgeschlossenen Slicer-Matrix (`konzepte/nachweise-release-0.5.1/reports/rm312-slicer-matrix-2026-10-02.md`, 125 Aufträge, 124 Modelle mit Varianten; Restarbeit RM-312) und die Reste unter D (SV06-Startcode, Tempi des MINI+).
 
 <a id="rm-259"></a>
 
@@ -3312,6 +3316,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     obwohl der Commit in main ist.
   **Abnahme:** je Rest Test bzw. berichtigte Unterlage. Beleg: `review-0041000a0.md`.
 
+<a id="rm-443"></a>
+
+- [ ] **RM-443 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger.**
+  Quellenreview am festen Stand `6c9420b1f`, G-CUT-01:
+  `_cut_faces_continued` (`app/core/geom/prepare_ops.py:17740–17748` am
+  geprüften Stand) wählt koplanare parallele Flächen nur nach Fläche; bei
+  Gleichstand entscheidet die Kandidatenreihenfolge. Räumliche Herkunft
+  fehlt. Die bestätigte Fortführung kann die nötige Rückfrage unterdrücken.
+  **Fix:** Vorhandene R4-Zuordnung mit Lage und Gleichstandsbehandlung nutzen
+  oder eindeutige Herkunft durch native Builderhistorie belegen.
+  **Abnahme:** Registriertes Abschneiden eines U-Körpers mit zwei gleich
+  großen Restflächen und echter nachfolgender Flächenreferenz; umgekehrte
+  Kandidatenreihenfolge und fremde koplanare Fläche einbeziehen. Mehrdeutigkeit
+  bleibt eine Rückfrage. Bauplan §21.2, harte Regel 21.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-geometrie.md`.
+  Der Gegenfall ist aus den Quellen abgeleitet, noch nicht ausgeführt;
+  vor dem Fix gegen den aktuellen Hauptzweig prüfen.
+
 ## Bedienung und Darstellung
 
 <a id="rm-283"></a>
@@ -4310,15 +4332,43 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   83 gezielte Kernfälle und prüft die tatsächlich geschriebene 3MF sowie die
   alte falsche Profilkennung als Gegenprobe. Das vollständige zentrale
   Entwicklungstor bestand 18.771 Tests, 62 übersprungen; Suite/Ruff/Format/mypy
-  jeweils Exit 0. Dauerhafter unabhängig geprüfter Zwischenbericht:
+  jeweils Exit 0. Dauerhafter Bericht mit unabhängig nachgezähltem Laufabschluss:
   `konzepte/nachweise-release-0.5.1/reports/rm312-slicer-matrix-2026-10-02.md`
-  (SHA-256 `7a4fd24dc59c15d93fa47f201c968d89b0c6912bcd931da5b994ee1fe1c85de8`).
-  Er belegt am Stichtag 52/125 vollständige Matrixläufe und 839 Varianten
-  samt Profilidentitäten, Messmethoden und Grenzen. Der historische erste rote
-  Torlauf bleibt ein Altbefund und ist kein Abschlussnachweis.
-  Offen bleiben die funktionale Sieben-Slicer-Matrix der Dialog-Sitzung und
-  die native Fensterabnahme beim Release. Kein endgültiger Registerabschluss.
-  Registerabgleich 02.10. (Stand `4449e3370`): Kern erledigt — Sonde zeigt für den Elegoo CC2 aus ElegooSlicer und OrcaSlicer die Auswahl 0,2/0,4/0,6/0,8, Tests grün, SHA-256 des Berichts stimmt. Offen: Sieben-Slicer-Matrix und Fensterabnahme. Beleg `F:\solidon-review-reports\register-bedienung.md`.
+  (SHA-256 `2df035122e4419d434ddbf9cf7350d85aa1d971214280f7fbfae6b4388326c86`).
+  Abschluss 02.10., 17:21 CEST: 125 beendete Modellaufträge, aber nur 124
+  Modelle mit Varianten; 2.296 Ergebniszeilen, davon 1.870 mit Druckdateipfad
+  und 426 fehlgeschlagen. 149 technisch erfolgreiche Zeilen tragen zusätzlich
+  Fehlerbefunde. Der Lauf prüft den eingefrorenen Stand `129f8ca11`, keine
+  späteren Korrekturen. Laufabschluss ist keine fachliche Freigabe.
+
+  **Verbleibende Arbeit:**
+  - Die 426 Variantenfehler am aktuellen Hauptzweig einordnen und bestätigte
+    Produktfehler beheben: 184 ohne Druckdatei, 110 als Absturz gemeldet
+    (108 SuperSlicer, 2 Orca), 74 nicht vollständig auf der Druckplatte,
+    56 außerhalb des Slicerbauraums, 2 zu hoch. Eingabe, tatsächlich gewähltes
+    Profil, Übergabe und Slicerantwort unterscheiden; danach gezielt nachprüfen.
+  - `image_00001_.glb`: Lade-Mehrdeutigkeit, null Körper und sieben leere
+    Variantenlisten klären; leere Ergebnisse nicht als fachlich geprüft zählen.
+    `carpet-corner-clip.step`: Ausrichtungsfehler vor weiterlaufenden Varianten
+    prüfen und die Fortsetzungsentscheidung korrekt behandeln.
+  - Die 149 Ausgaben mit Fehlerbefund prüfen: 103-mal `gcode.off_the_bed`,
+    52-mal `gcode.shorter_than_model`, 5-mal `gcode.spool_left_out`
+    (Überschneidungen). 52 dieser Zeilen fehlen im Markierungsfilter;
+    vollständige Befunde müssen neben den Markierungen in die Abnahme eingehen.
+  - Die 770 technisch erfolgreichen Zeilen mit bedeutsamen Markierungen
+    fachlich einordnen: Herstellerabweichung, Stützen in Schicht 1,
+    unterbrochener Rand, Zeitabweichung, Lage und Tempo schmaler Stege.
+    Hinweise am Kundenweg prüfen; sie sind nicht pauschal Produktfehler.
+  - Die verbleibenden 1.353,128 s der Creality-Zeitabweichung mit identischen
+    Profilen zuordnen; die tatsächliche Druckdauer ist noch nicht gemessen.
+    Der isolierte Ladezeitanteil von 11.900 s erklärt bereits 89,8 % der
+    historischen Differenz, nicht den gesamten Versionsunterschied.
+  - Native Fensterabnahme der Düsenwahl beim Release durchführen.
+
+  Historischer Registerabgleich am Stand `4449e3370`: Kern erledigt, CC2-Auswahl
+  0,2/0,4/0,6/0,8 aus ElegooSlicer und OrcaSlicer belegt
+  (`F:\solidon-review-reports\register-bedienung.md`). Der erste rote Torlauf
+  bleibt ein Altbefund. Die obigen Restarbeiten halten RM-312 offen.
 
 <a id="rm-321"></a>
 
@@ -4401,6 +4451,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Breite; bei angehaltener Kette entsteht keine Datei. Bauplan §29, §2.8, `wartezeit.md`.
   Belege: `F:\solidon-review-reports\gebiet-weg1.md`, `gebiet-weg2.md`, Sonden
   `w1_export_laufend.py`, `w2_export_luecke.py`.
+
+  **Ergänzung R6C942-01, Quellenreview am festen Stand `6c9420b1f`:** Nach
+  abgebrochener Auswertung kann `busy=False` bei `result_current=False` gelten.
+  `_start_export` reiht den Export ein, startet aber keinen Arbeiter; die
+  Fortsetzung wartet auf ein Ergebnis, das ohne weitere Änderung nie kommt.
+  **Fix und Abnahme:** Laufenden und ruhenden veralteten Stand unterscheiden.
+  Im zweiten Fall neu auswerten oder einen konkreten Neustart anbieten;
+  Auswertungsfehler und Abbruch beenden einen wartenden Export eindeutig.
+  Keine alte Geometrie schreiben und kein Warten ohne Auftrag. Den Abbruch
+  einer echten Auswertung und den anschließenden Export prüfen.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`,
+  R6C942-01 (`main_window.py:7829`, feste Quellzeile). Quellenbefund;
+  Gegenfall im Abschlussabgleich nicht ausgeführt. Bauplan §2.7, §2.8, §29.
 
 <a id="rm-358"></a>
 
@@ -4790,6 +4853,49 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
   die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
   `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
+<a id="rm-444"></a>
+
+- [ ] **RM-444 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
+  Quellenreview `6c9420b1f`, R6C942-02; Folge zum archivierten RM-354.
+  `_show_scene` bereinigt `_hidden` und Plattenzahl aus dem leeren aktuellen
+  Haltergebnis, bevor `_picture_for` das letzte vollständige Bild wählt
+  (`app/ui/main_window.py:19852–19916` am geprüften Stand).
+  **Fix:** Zuerst das gezeigte Bild bestimmen, dessen Ansichtsfilter erhalten.
+  **Abnahme:** Halt am ersten Schritt lässt ausgeblendete Körper und gewählte
+  Platte des erhaltenen Bilds unverändert; echte spätere Körperlöschung
+  bereinigt Filter weiterhin. Bauplan §15.3, §18.8, §25.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+<a id="rm-445"></a>
+
+- [ ] **RM-445 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung.**
+  Quellenreview `6c9420b1f`, R6C942-03; Folge zum archivierten RM-355.
+  `ParameterPanel.show_document` (`app/ui/panels.py:3639–3695` am geprüften
+  Stand) verwendet gleiche Parameterzeilen ohne Dokumentidentität weiter;
+  abgelehnter Eingabetext bleibt trotz neuem Projekt stehen.
+  **Fix:** Wiederverwendung innerhalb eines Dokuments von Projektwechsel
+  trennen und beim Wechsel Text sowie Ablehnung an das neue Dokument binden.
+  **Abnahme:** A und B mit Wert 60, Obergrenze 100 und gleichen Metadaten:
+  abgelehnte 150 aus A erscheint nach Öffnen von B nicht mehr. In A behalten
+  wiederholte Pfeiltasteneingaben Widget und Fokus. Bauplan §2.1, §13.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+<a id="rm-446"></a>
+
+- [ ] **RM-446 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld.**
+  Quellenreview `6c9420b1f`, R6C942-04; Folge zum archivierten RM-354.
+  `main_window.py:21709–21718` am geprüften Stand leitet bei genau einer
+  Parameterreferenz automatisch zum Projektmaß statt zum Ausdruck um.
+  Bei `create_box.width = "=max(@breite,2000)"` und Maximum 1000 kann keine
+  Änderung von `breite` den Fehler beheben.
+  **Fix und Abnahme:** Direkte Bindung `=@breite` führt weiterhin zum Maß;
+  zusammengesetzte Ausdrücke führen zum tatsächlich korrigierbaren
+  Operationsausdruck. Beide Wege prüfen. Bauplan §2.1, §2.7, §13, Regel 17.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
 
 <a id="rm-440"></a>
 

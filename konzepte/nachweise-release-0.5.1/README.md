@@ -45,6 +45,8 @@ einem neuen Lauf anzupassen.
 |---|---|---|
 | [`reports/rm298-rauchtest-2026-10-02.md`](reports/rm298-rauchtest-2026-10-02.md) | Eigenes Rauchtest-Endebudget am echten Werkzeug-/Poolanschluss; verzögert sauberes Ende, Killfehler und Rückbudgetkontrolle | RM-298(f) |
 | [`reports/remote-48106-geometrie.md`](reports/remote-48106-geometrie.md) | Unveränderter historischer Review am festen Stand `48106c57a`: feine Ausgabe, Eingangsprüfung vor Entwurfsbudget und Spiegelsymmetrie | RM-352, RM-434, RM-425 |
+| [`reports/remote-6c942-geometrie.md`](reports/remote-6c942-geometrie.md) | Unveränderter Quellenreview am festen Stand `6c9420b1f`: mehrdeutige Restfläche beim exakten Abschneiden; Gegenfall nicht ausgeführt | G-CUT-01 im Register |
+| [`reports/remote-6c942-oberflaeche.md`](reports/remote-6c942-oberflaeche.md) | Unveränderter Quellenreview am festen Stand `6c9420b1f`: Export nach Abbruch, Ansichtsfilter, Projektwechsel und Ausdruckskorrektur; Gegenfälle nicht ausgeführt | RM-352; R6C942-01–04 im Register |
 | [`reports/remote-48106-geometrie-proben.json`](reports/remote-48106-geometrie-proben.json), [`reports/remote-48106-spiegel-probe.json`](reports/remote-48106-spiegel-probe.json) | Unveränderte Messdaten und Quellenhashes dieses Reviews; für die Symmetrie ist der getrennte Radius-16-Nachlauf maßgeblich | RM-352, RM-434, RM-425 |
 | [`reports/rm298-sitzungsabbruch-2026-10-02.md`](reports/rm298-sitzungsabbruch-2026-10-02.md) | Bestätigtes Ende vor synchronem Ersetzen, ungültige alte Kernfragen und korrigierter Fehlervertrag mit allen Katalogen | RM-298(e) |
 | [`reports/rm298-enospc-2026-10-02.md`](reports/rm298-enospc-2026-10-02.md) | ENOSPC gegen echte Speicherabsage am direkten und öffentlichen Transferanschluss; Ursachen, Rückfall und Ressourcenzähler | RM-298(b) |
@@ -61,7 +63,7 @@ einem neuen Lauf anzupassen.
 | [`reports/rm285-textnachweise-2026-10-02.md`](reports/rm285-textnachweise-2026-10-02.md) | Integrierte UI-/CLI-/Bereichsprüfertexte, tatsächliche Tore und Abnahmegrenze | RM-285, RM-347 |
 | [`reports/rm285-modelltexte-2026-10-02.md`](reports/rm285-modelltexte-2026-10-02.md) | Fortsetzbare Liste der 42 Modelltextausdrücke mit 43 Texttrennern, Wirkung und Quellenhashes | RM-285, RM-347 |
 | [`reports/rm290-textnachweise-2026-10-02.md`](reports/rm290-textnachweise-2026-10-02.md) | Abschluss a–h, wirkliche Wächter/Altgegenproben und Commit-/Tor-Nachweis | RM-290, RM-347 |
-| [`reports/rm312-slicer-matrix-2026-10-02.md`](reports/rm312-slicer-matrix-2026-10-02.md) | Unabhängig geprüfter Zwischenbericht: 52/125 Matrixläufe, Messmethoden, Profile und offene Grenzen | RM-312, RM-347 |
+| [`reports/rm312-slicer-matrix-2026-10-02.md`](reports/rm312-slicer-matrix-2026-10-02.md) | Unabhängig nachgezählter Abschluss: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund; Abnahme offen | RM-312, RM-347 |
 | [`RESTE-INVENTAR.md`](RESTE-INVENTAR.md) | Inventar der Reste der Durchsicht, Quelle jedes „Inventar 1.x“ im Register | RM-292 und die Punkte „Aus der Durchsicht v0.5.1 (Inventar …)“ |
 | [`laeufe/kanten-dicht.txt`](laeufe/kanten-dicht.txt) | Messlauf des Pakets kanten (Ausgabe der gleichnamigen Sonde) | RM-284 |
 | [`laeufe/kanten-gruppe-brep.txt`](laeufe/kanten-gruppe-brep.txt) | Messlauf des Pakets kanten (Ausgabe der gleichnamigen Sonde) | RM-284 |
