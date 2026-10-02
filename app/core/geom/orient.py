@@ -265,7 +265,11 @@ def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
 def evaluate_direction(
     mesh: MeshData, direction: Vec3, *, overhang_limit: float = OVERHANG_LIMIT_DEGREES
 ) -> Orientation:
-    """Wie der Körper aussähe, stünde er auf dieser Fläche."""
+    """Referenzweg für eine einzelne Lage und ihre Tests.
+
+    Die produktive Suche bewertet Richtungen gesammelt über
+    :func:`evaluate_directions`.
+    """
     return evaluate_directions(mesh, [direction], overhang_limit=overhang_limit)[0]
 
 
@@ -421,10 +425,13 @@ def ranked_orientations(
     Liste als auch unter den größten Flächennormalen; sie ein zweites Mal zu
     prüfen ändert kein Urteil und kostet auf einem dichten Netz spürbar Zeit.
 
-    ``standing`` sagt, ob eine Lage steht. Mit ihm geht der letzte Platz
-    einer begrenzten Vorauswahl, wenn keine der vorderen steht, an die Lage
-    mit dem kleinsten geschätzten Stützraum (:attr:`Orientation.support`), die
-    steht. Die Heuristik wiegt Auflage gegen Überhang, das Endurteil fragt
+    ``standing`` sagt, ob eine Lage steht. Ein Platz der begrenzten Vorauswahl
+    kann an die Lage mit dem kleinsten geschätzten Stützraum
+    (:attr:`Orientation.support`) gehen, die steht. Bereits stehende Kandidaten
+    bleiben erhalten: Die Schätzung ist nur eine obere Schranke, das echte
+    Stützvolumen kennt erst der Schnitt. Wenn alle gewählten Lagen stehen,
+    bleibt die Vorauswahl unverändert. Die Heuristik wiegt Auflage gegen
+    Überhang, das Endurteil fragt
     zuerst, ob eine Lage steht (``slice.orientation.best_of``). Mit 60 Grad
     reihte sie an einer Auto-Split-Hälfte mit Stift 62 Lagen vor die Lage auf
     dem Stift — Kippungen auf eine Kante und liegende Lagen, die rollen —, und
@@ -467,21 +474,64 @@ def ranked_orientations(
         ):
             continue
         selected.append(entry)
-    if standing is None or not rest or any(standing(entry) for entry in selected):
+    if standing is None or not rest:
         return selected
-    # Der freie Platz: die Lage mit dem kleinsten geschätzten Stützraum, die
-    # steht. Nach der Heuristik stünde oft eine davor, deren Überhänge sie
-    # nicht sieht, weil sie nicht weiß, wie hoch sie hängen (RM-190).
-    for entry in sorted(rest, key=lambda entry: (entry.support, entry.direction)):
+
+    # Eine geschätzte Stütze ist nur eine obere Schranke. Bestehende stehende
+    # Kandidaten dürfen deshalb nicht für eine billigere Schätzung verloren
+    # gehen: Ihr echtes Stützvolumen kennt erst der spätere Schnitt.
+    standing_by_index: dict[int, bool] = {}
+
+    def selected_stands(index: int) -> bool:
+        if index not in standing_by_index:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            standing_by_index[index] = standing(selected[index])
+        return standing_by_index[index]
+
+    best_standing = None
+    for index in sorted(
+        range(len(selected)), key=lambda item: (selected[item].support, selected[item].direction)
+    ):
+        if selected_stands(index):
+            best_standing = selected[index]
+            break
+
+    replace_index = len(selected) - 1
+    if best_standing is not None:
+        for index in range(len(selected) - 1, -1, -1):
+            if not selected_stands(index):
+                replace_index = index
+                break
+        else:
+            # Alle knappen Plätze enthalten bereits brauchbare Lagen; eine
+            # Schätzung kann nicht belegen, welche davon der echte Schnitt schlägt.
+            return selected
+
+    for entry in sorted(rest, key=lambda item: (item.support, item.direction)):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
+        if best_standing is not None and (entry.support, entry.direction) >= (
+            best_standing.support,
+            best_standing.direction,
+        ):
+            break
         if (
             printer is not None
             and fitting_transform(mesh, entry.direction, printer, margin=margin) is None
         ):
             continue
         if standing(entry):
-            selected[-1] = entry
+            selected[replace_index] = entry
+            selected.sort(
+                key=lambda item: (
+                    -item.score,
+                    -item.footprint,
+                    item.overhang,
+                    item.height,
+                    item.direction,
+                )
+            )
             break
     return selected
 

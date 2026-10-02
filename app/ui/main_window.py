@@ -17365,7 +17365,16 @@ class MainWindow(QMainWindow):
         self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
         if self._ask_candidates:
-            self.viewport.show_candidates(self._ask_candidates)
+            request = self._ask_request
+            previous = (
+                request.preview.question_reference
+                if request is not None and request.preview is not None
+                else None
+            )
+            if previous is None:
+                self.viewport.show_candidates(self._ask_candidates)
+            else:
+                self.viewport.show_candidates(self._ask_candidates, previous_reference=previous)
 
     def action_theme(self, theme: str) -> None:
         application = QApplication.instance()
@@ -21094,7 +21103,7 @@ class MainWindow(QMainWindow):
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3).
 
-        **Und die Kandidaten stehen dabei hervorgehoben in der Ansicht.** Der
+        **Kandidaten und bisheriger Bezug stehen dabei hervorgehoben in der Ansicht.** Der
         Bauplan verlangt es wörtlich, gebaut war es bis zum 03.09.2026 nicht:
         Wer eine Projektdatei öffnete, deren Verweis mehrdeutig geworden war,
         bekam ``hole_1``, ``hole_2``, ``hole_3`` zur Wahl und sollte zwischen
@@ -21145,7 +21154,15 @@ class MainWindow(QMainWindow):
             if ready:
                 self._ask_candidates = tuple(request.candidates)
                 if self._ask_candidates:
-                    self.viewport.show_candidates(self._ask_candidates)
+                    previous = (
+                        request.preview.question_reference if request.preview is not None else None
+                    )
+                    if previous is None:
+                        self.viewport.show_candidates(self._ask_candidates)
+                    else:
+                        self.viewport.show_candidates(
+                            self._ask_candidates, previous_reference=previous
+                        )
                     self._emphasise_candidate(dialog.list.currentItem(), None)
 
         def scene_failed(detail: str) -> None:
@@ -21275,9 +21292,19 @@ class MainWindow(QMainWindow):
         if isinstance(current, QListWidgetItem):
             chosen = str(current.data(Qt.ItemDataRole.UserRole) or "")
         matching = [entry for entry in self._ask_candidates if _candidate_token(entry) == chosen]
-        self.viewport.show_candidates(
-            self._ask_candidates, matching[0] if len(matching) == 1 else None
+        request = self._ask_request
+        previous = (
+            request.preview.question_reference
+            if request is not None and request.preview is not None
+            else None
         )
+        emphasis = matching[0] if len(matching) == 1 else None
+        if previous is None:
+            self.viewport.show_candidates(self._ask_candidates, emphasis)
+        else:
+            self.viewport.show_candidates(
+                self._ask_candidates, emphasis, previous_reference=previous
+            )
 
     def _on_error(self, error: AppError) -> None:
         """§33.1: ein Fehler des Nutzers sieht anders aus als ein Fehler im

@@ -203,9 +203,15 @@ Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann. **Eine
 gespeicherte Zahl jenseits der Grenze wird nicht geklemmt:** Die Leiste weitet
 das Qt-Feld bis zu ihr (`ParameterPanel._set_limits`), nennt die wirksame
 Grenze darunter und nimmt jede Korrektur an — sonst zeigt sie die Grenze, und
-die Korrektur auf genau diese Zahl ist keine Änderung. **Noch
-nicht umgestellt und still kürzend:** die Druckeinstellungen
-(`print_settings_dialog`); sie bleiben im Register von `ROADMAP.md`.
+die Korrektur auf genau diese Zahl ist keine Änderung.
+
+**Auch die Druckeinstellungen lehnen ab statt zu kürzen.** Ihre Zahlenfelder
+verwenden `BoundedSpin`, der Düsendurchmesser `BoundedLengthSpin`. Der Hinweis
+steht am Feld. Solange ein wirksames Feld eine Zahl ablehnt, sind *Slicen* und
+*Im Slicer öffnen* gesperrt und nennen dieselbe Grenze; ein ausgeblendetes Feld
+einer ausgeschalteten Gruppe hält die Übergabe nicht an. Der Dialog zum
+Überschreiben von Spulenwerten sperrt *Übernehmen* nur für eingeschaltete
+Gruppen.
 
 ## Gestufte Tiefe
 

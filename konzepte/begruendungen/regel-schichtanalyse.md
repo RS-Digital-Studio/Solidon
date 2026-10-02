@@ -80,7 +80,7 @@ die Datei selbst: die E-Achse für das Material, die letzte `TIME_ELAPSED` für
 die Zeit. Ein Kopfwert gilt weiter, wo er einen trägt — er kennt Vorgänge, die
 keine Bahn zeigt.
 
-**Und der Bauraum wird an den Bahnen nachgemessen.** `gcode.printed_extent`
+**Und der Bauraum wird an den Bahnen nachgemessen.** `gcode.analyze(...).extent`
 liest, wohin die Datei wirklich druckt, `handover.off_the_bed` beurteilt es.
 Der Anlass ist derselbe Slicer: CuraEngine prüft seinen Bauraum **nicht** — ein
 Würfel 150 mm neben der Mitte auf einem Bett von 220 mm kam als Druckdatei

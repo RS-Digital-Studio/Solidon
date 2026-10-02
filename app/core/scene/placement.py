@@ -37,6 +37,7 @@ from app.core.errors import CORRECT_INPUT, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, edge_table, unique_edges
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
+from app.core.registry.surfaces import SIDE_NAMES as SIDE_NAMES
 from app.core.types import (
     Document,
     Feature,
@@ -54,7 +55,7 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_GEOM, MAX_FACET_SAG, dot3, format_length, round_display
-from app.i18n import TranslatableText, _, tr
+from app.i18n import TranslatableText, tr
 
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
@@ -729,19 +730,6 @@ def values_for(
     _log.info("feature %s suggests %d parameter(s) for %s", feature.id, len(values), spec.name)
     return values
 
-
-#: Wie eine Seite heißt, in die eine Richtung zeigt — je Achse positiv, negativ.
-#:
-#: Eine Quelle für zwei Stellen: den Namen einer ebenen Fläche im Baum
-#: (``app.ui.labels.feature_name``) und die Frage von *Bohrung ändern*, welche
-#: Seite einer Durchgangsbohrung offen bleibt. Bis zum 23.09.2026 standen die
-#: sechs Namen nur in der Oberfläche; der Kern hätte sie ein zweites Mal
-#: gebraucht.
-SIDE_NAMES: Final[tuple[tuple[TranslatableText, TranslatableText], ...]] = (
-    (_("Rechte Seite"), _("Linke Seite")),
-    (_("Rückseite"), _("Vorderseite")),
-    (_("Oberseite"), _("Unterseite")),
-)
 
 #: Die Registerwerte zu :data:`SIDE_NAMES`, in derselben Ordnung.
 SIDE_KEYS: Final[tuple[tuple[str, str], ...]] = (

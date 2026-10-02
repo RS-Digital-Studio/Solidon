@@ -104,9 +104,10 @@ Gruppe, eine rote Datei als Anmerkung am Lauf, die Übersicht im
 Schrittbericht: Ein Bericht, der nur als Artefakt existiert, fehlt genau
 dann, wenn der Job an seiner Frist endet.
 
-Der Versionswächter ohne Constraints läuft weiter wöchentlich. Handstarts
-können ihn ausdrücklich zuschalten; standardmäßig wird er nicht zusätzlich
-zum eigentlichen Auftrag gestartet. Die Beschreibung von `tests_only` nennt
+Der Versionswächter ohne Constraints läuft nur bei öffentlichen `v*`-Tag-Pushes
+oder beim ausdrücklichen Handstart mit `check_latest` im öffentlichen
+Repository. Ein Wochenplan besteht nicht; normale Pushes und Pull Requests
+starten ihn nicht. Die Beschreibung von `tests_only` nennt
 die tatsächlichen drei Prüfplattformen und verspricht keinen Intel-Mac-Lauf,
 den die bisherige Kernmatrix nicht enthält.
 

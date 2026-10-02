@@ -100,6 +100,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los espacios llegan a todos los campos de texto, también al cuestionario de opinión y al chat, mientras un diálogo muestra su vista previa.
 - Un aviso que se refiere a un paso lo abre para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
+- La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
 
 ## 0.5.1
 

@@ -1939,6 +1939,45 @@ def test_whole_face_texture_preview_matches_apply_and_edit(
     assert np.allclose(edited_preview.mesh.raw.vertices, edited.mesh.raw.vertices)
 
 
+def test_move_feature_acceptance_hits_the_dialog_preview_cache(window: MainWindow) -> None:
+    """Übernehmen rechnet den unveränderten Auftrag aus der Vorschau nicht neu."""
+    from PySide6.QtTest import QTest
+
+    window.open_path(MESHES / "plate_holes.stl")
+    assert window.session.wait_for_idle()
+    object_id = select(window)
+    body = window.session.last_result.scene.objects[object_id]
+    bore = next(
+        feature
+        for feature in body.features.values()
+        if feature.kind == "hole" and feature.recognised
+    )
+    centre = tuple(float(value) for value in bore.params["centre"])
+    window.run_operation(
+        REGISTRY.get("move_feature"),
+        {"at_feature": bore.id, "x": centre[0] + 1.0, "y": centre[1], "z": centre[2]},
+    )
+    dialog = window._op_dialog
+    assert dialog is not None
+    QTest.qWait(350)
+    assert window.session.wait_for_idle()
+    QTest.qWait(50)
+    assert dialog.can_accept()
+    approval = window._preview_approval
+    assert approval is not None and approval.order.drafts
+    preview_draft = approval.order.drafts[0]
+    cache = window.session.cache.statistics
+    misses_before_acceptance = cache.misses
+    hits_before_acceptance = cache.hits
+
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    assert window.session.result_current
+    assert cache.misses == misses_before_acceptance, "Übernehmen rechnete die Operation neu"
+    assert cache.hits > hits_before_acceptance, "Übernehmen verwendete keinen Vorschau-Treffer"
+    assert window.session.project.document.ops[-1].seed == preview_draft.seed
+
+
 def test_texture_panel_changes_existing_step_with_live_preview(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2152,7 +2191,7 @@ def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path)
     before = len(window.session.project.document.ops)
 
     def pick() -> tuple[str, str]:
-        source_id = window.session.import_image(picture)
+        source_id = window.session.import_image_payload(picture.name, picture.read_bytes())
         return source_id, picture.name
 
     spec = REGISTRY.get("displace_image")
@@ -2356,12 +2395,16 @@ def test_cancelling_rejects_a_source_already_waiting_in_qt(
 
 
 @pytest.mark.parametrize(
-    ("method", "filename"),
-    [("import_image", "bild.png"), ("embed_model", "teil.stl")],
+    ("reader", "method", "filename"),
+    [
+        ("read_bounded_payload", "import_image_payload", "bild.png"),
+        ("read_local_payload", "embed_model_payload", "teil.stl"),
+    ],
 )
-def test_a_picker_source_is_bounded_before_it_enters_the_document(
+def test_picker_sources_are_bounded_before_they_enter_the_document(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    reader: str,
     method: str,
     filename: str,
 ) -> None:
@@ -2373,7 +2416,8 @@ def test_a_picker_source_is_bounded_before_it_enters_the_document(
     session = Session()
 
     with pytest.raises(ValidationError) as caught:
-        getattr(session, method)(path)
+        payload = getattr(loader, reader)(path)
+        getattr(session, method)(path.name, payload)
 
     assert caught.value.constraint == "file_too_large"
     assert not session.project.document.sources

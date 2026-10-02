@@ -64,7 +64,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import read_bounded_payload, read_local_payload, unreadable_file
+from app.core.ingest.loader import read_local_payload, unreadable_file
 from app.core.ingest.plan import (
     ImportPlan,
     import_plan,
@@ -3526,26 +3526,6 @@ class Session(QObject):
         self.project.document.sources.pop(source_id, None)
         self.project.sources.pop(source_id, None)
 
-    def embed_model(self, path: Path) -> str:
-        """Eine Modelldatei ins Projekt holen, ohne sie auf den Stapel zu legen.
-
-        **Der Gegenpart zum Quellenfeld im Operationsdialog.** Wer *Modell
-        laden* aus dem Menü öffnet, sieht dort eine Auswahl der Quellen, die
-        das Projekt schon hat — und in einem frischen Projekt ist die leer.
-        Die Liste klappte auf und zeigte nichts; das liest sich nicht als „hier
-        fehlt etwas", sondern als kaputt (Regel 19: keine Sackgassen).
-
-        Anders als :meth:`import_payload` legt diese Methode **keine**
-        Operation an: Der Dialog, der sie ruft, ist ja gerade dabei, eine zu
-        bauen. Zwei ``load``-Schritte für eine Datei wären das Gegenteil dessen,
-        was der Kunde wollte.
-
-        Dieselbe Bauart wie :meth:`import_image`, und aus demselben Grund an
-        derselben Grenze: Der Weg ändert das Dokument, also gilt Konzept §2 C.
-        """
-        activation.require(activation.CHANGE)
-        return self.embed_model_payload(path.name, read_local_payload(path))
-
     def embed_model_payload(self, name: str, payload: bytes) -> str:
         """Bettet einen bereits begrenzt gelesenen Modellinhalt ein.
 
@@ -3559,25 +3539,6 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
         return source_id
-
-    def import_image(self, path: Path) -> str:
-        """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).
-
-        Eingebettet wie ein Modell, aber ohne load-Operation: ein Bild wird
-        kein Körper, es gehört einer Operation als Wert. Ohne diesen Weg
-        führte kein Bildformat in die Quellen — das Feld „Bild" bot STLs an,
-        und der Befund schlug eine Handlung vor, die es nicht gab.
-
-        **Die Grenze steht hier ausdrücklich**, obwohl keine Operation folgt.
-        Der Weg ändert das Dokument, also gilt Konzept §2 C — und dass er
-        praktisch nur aus einem Operationsdialog erreichbar ist, der ohnehin
-        gesperrt ist, ist ein Zufall der Oberfläche und keine Grenze. Wer sich
-        darauf verlässt, hat eine Zusage, die beim nächsten neuen Aufrufer
-        still verschwindet (`kern.md`: jede Stelle holt den Zustand selbst und
-        wirft selbst).
-        """
-        activation.require(activation.CHANGE)
-        return self.import_image_payload(path.name, read_bounded_payload(path))
 
     def import_image_payload(self, name: str, payload: bytes) -> str:
         """Bettet einen bereits begrenzt gelesenen Bildinhalt ein.

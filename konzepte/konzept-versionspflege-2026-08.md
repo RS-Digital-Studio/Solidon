@@ -118,8 +118,9 @@ Version grün, die niemand ausliefert.**
 > und P5 bleibt eine Entscheidung zwischen 3.13 und 3.14, nicht zwischen 3.13
 > und dem Neuesten.
 
-**Was schon läuft.** Der wöchentliche CI-Job „Neueste Versionen" (montags 5 Uhr,
-ohne `constraints.txt`) meldet eine Version, die etwas bricht. Der
+**Was schon läuft.** Der CI-Job „Neueste Versionen" löst ohne `constraints.txt`
+auf öffentlichen `v*`-Tag-Pushes oder nach ausdrücklichem Handstart mit
+`check_latest` im öffentlichen Repository auf. Einen Wochenlauf gibt es nicht. Der
 Sitzungsstart-Hook meldet Abweichungen der lokalen Umgebung und erinnert nach
 90 Tagen an die Pflege.
 

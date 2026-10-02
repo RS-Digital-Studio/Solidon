@@ -237,6 +237,39 @@ def test_the_about_dialog_does_not_call_an_unactivated_key_licensed(
     assert "noch einmal aktiviert" in texts
 
 
+def test_a_licensed_state_uses_the_success_mark_without_a_leading_dot(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date
+
+    from app.core import activation
+    from app.core.activation import certificate, key
+    from app.ui.dialogs import ActivationDialog
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-77",
+        holder="kaeufer@beispiel.de",
+    )
+    active = certificate.ActivationCertificate(
+        licence_digest=certificate.licence_digest(licence),
+        device_public=b"x" * 32,
+        device_name="Werkstatt-PC",
+        activation_id="0" * 32,
+        issued_on=date(2026, 8, 28),
+    )
+    monkeypatch.setattr(
+        activation, "_cached", activation.Activation(licence=licence, certificate=active)
+    )
+
+    dialog = ActivationDialog()
+
+    assert dialog.state_label.property("role") == "ok"
+    assert "✓" in dialog.state_label.text()
+    assert not dialog.state_label.text().startswith("·")
+
+
 def test_the_about_dialog_does_not_invent_a_trial_for_the_sale_version(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

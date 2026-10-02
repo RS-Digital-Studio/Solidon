@@ -18,7 +18,7 @@ from app.core.knowledge import filaments, profiles
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.project import PROJECT_ENTRY, load, save
 from app.core.scene.serialise import print_settings_from_data, print_settings_to_data
-from app.core.slice.gcode import GcodeMetrics, parse
+from app.core.slice.gcode import GcodeMetrics, analyze
 from app.core.types import FilamentSettings, MaterialSlot, PrintSettings, SceneObject, SlotOverride
 from app.i18n import TranslatableText
 
@@ -254,7 +254,7 @@ def test_gcode_booking_offer_includes_stationary_consumption(moves: str) -> None
     request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
     request = replace(request, lines=(replace(request.lines[0], diameter=1.75, density=1.24),))
 
-    line = from_gcode(request, parse(moves)).lines[0]
+    line = from_gcode(request, analyze(moves).metrics).lines[0]
 
     assert line.grams == pytest.approx(0.059650990510036195)
     assert line.source == "gcode"
@@ -347,7 +347,7 @@ def test_additional_tools_preserve_gaps_and_explicit_zero_without_inventing_usag
 def test_tool_changes_without_comments_never_charge_the_total_to_the_model_spool() -> None:
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
-    metrics = parse("M83\nT0\nG1 X10 E100\nT2\nG1 X20 E200\n")
+    metrics = analyze("M83\nT0\nG1 X10 E100\nT2\nG1 X20 E200\n").metrics
     result = from_gcode(request, metrics)
     assert [line.slot.index for line in result.lines] == [0, 2]
     # Relative Extrusion belegt 100 mm für T0; die fremden 200 mm von T2

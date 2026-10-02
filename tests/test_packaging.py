@@ -680,7 +680,8 @@ def test_the_orchestration_guard_rejects_tests_after_the_build() -> None:
 
 
 def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() -> None:
-    """Der freie Versionswächter läuft beim Release oder auf ausdrücklichen Handstart."""
+    """Nur öffentliche v*-Tags und öffentliche Handstarts mit
+    check_latest lösen den Wächter aus."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     triggers = workflow.split("\non:", 1)[1].split("\n# **Ein Stand", 1)[0]
     assert "\n  schedule:" not in triggers
@@ -690,10 +691,33 @@ def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() 
     latest_input = inputs.split("      check_latest:\n", 1)[1].split("\n#", 1)[0]
     assert "type: boolean" in latest_input and "default: false" in latest_input
     latest = job_block(workflow, "latest")
-    assert (
-        "    if: startsWith(github.ref, 'refs/tags/') || "
-        "(github.event_name == 'workflow_dispatch' && inputs.check_latest == true)"
-    ) in latest
+    expected = (
+        "github.event.repository.private == false && ( "
+        "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || "
+        "(github.event_name == 'workflow_dispatch' && inputs.check_latest == true) )"
+    )
+
+    def latest_condition(block: str) -> str:
+        match = re.search(
+            r"(?ms)^    if: >-\n(?P<condition>(?:      [^\n]*\n)+?)^    runs-on:",
+            block,
+        )
+        assert match is not None
+        return " ".join(match.group("condition").split())
+
+    condition = latest_condition(latest)
+    assert condition == expected
+    for old, new in (
+        ("github.event.repository.private == false &&", ""),
+        ("startsWith(github.ref, 'refs/tags/v')", "startsWith(github.ref, 'refs/tags/')"),
+        ("github.event_name == 'push' &&", ""),
+    ):
+        changed_latest = latest.replace(old, new, 1)
+        assert changed_latest != latest
+        changed = workflow.replace(latest, changed_latest, 1)
+        assert changed != workflow
+        with pytest.raises(AssertionError):
+            assert latest_condition(job_block(changed, "latest")) == expected
     assert "python -m ruff check ." in job_block(workflow, "quality")
     suite = job_block(workflow, "suite")
     assert "python -m ruff" not in suite
@@ -757,7 +781,7 @@ def test_ci_report_guard_rejects_always_on_a_different_step(job: str) -> None:
 
 
 def test_ci_window_steps_use_the_package_release_condition() -> None:
-    """main, PR, Zeitplan und tests_only geben keine Fensterprüfungen frei."""
+    """main, PR und tests_only-Handstarts geben keine Fensterprüfungen frei."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     expected = (
         "inputs.tests_only != true && "

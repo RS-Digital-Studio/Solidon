@@ -278,6 +278,13 @@ class EvaluationResult:
     ``progress`` und ``cancelled`` sie im Hintergrund nach — die Schritte
     selbst treffen dort den Cache, es rechnet nur die Erkennung. Leer heißt:
     Der Merker kannte alles, oder es gab nichts zu erkennen."""
+    question_reference: tuple[SceneObject, FeatureId] | None = None
+    """Das bisherige Merkmal einer offenen Zuordnungsfrage samt seinem Körper.
+
+    Nur vorübergehend für die Ansicht; es gehört weder zur Szene noch zum
+    gespeicherten Projekt. Bei exakten Körpern liegen die Ansichtsdreiecke
+    bereits aus dem Auswertungsarbeiter vor. Die Vorschau zeigt damit alte und
+    mögliche neue Fläche gleichzeitig (§21.3, RM-217)."""
 
     @property
     def complete(self) -> bool:
@@ -290,7 +297,9 @@ oder eine Kante als :class:`EdgeTarget` (P1.4c), das statt einer Kennung ein
 Antworttoken und seinen Zug trägt."""
 
 type QuestionContext = Callable[[EvaluationResult | None, tuple[QuestionCandidate, ...]], None]
-type FeatureQuestionContext = Callable[[SceneObject | None, tuple[FeatureId, ...]], None]
+type FeatureQuestionContext = Callable[
+    [SceneObject | None, tuple[FeatureId, ...], FeatureId | None], None
+]
 #: Wer die Antwort auf die Frage vor der langen Vollerkennung sofort erfährt:
 #: Ladeschritt, Schlüssel und Eintrag, wie ``record_matches`` sie nimmt.
 type RecognitionAnswered = Callable[[OpId, str, Mapping[str, Any]], None]
@@ -989,12 +998,13 @@ def _evaluate(
         def announce_candidates(
             current: SceneObject | None,
             candidates: tuple[FeatureId, ...],
+            previous_feature: FeatureId | None = None,
             *,
             operation: Operation = operation,
             result: CachedResult = result,
             prepared_objects: dict[ObjectId, SceneObject] = prepared_objects,
         ) -> None:
-            """Zeigt echte Ausgabegeometrie ausschließlich als vergänglichen Fragekontext."""
+            """Zeigt Ausgabe und bisherigen Bezug nur als vergänglichen Fragekontext."""
             if question_context is None:
                 return
             if current is None:
@@ -1010,6 +1020,20 @@ def _evaluate(
                 )
             preview_objects.update(prepared_objects)
             preview_objects[current.id] = current
+            previous_reference: tuple[SceneObject, FeatureId] | None = None
+            previous_body = objects.get(current.id)
+            if (
+                previous_feature is not None
+                and previous_body is not None
+                and previous_feature in previous_body.features
+            ):
+                previous_mesh = previous_body.mesh
+                to_mesh = getattr(previous_mesh, "to_mesh", None)
+                if callable(to_mesh):
+                    previous_mesh = to_mesh()
+                if previous_mesh is not previous_body.mesh:
+                    previous_body = dataclasses.replace(previous_body, mesh=previous_mesh)
+                previous_reference = (previous_body, previous_feature)
             question_context(
                 EvaluationResult(
                     scene=Scene(
@@ -1029,6 +1053,7 @@ def _evaluate(
                         if name in preview_objects and name not in operation.outputs
                     },
                     object_names={name: str(body.name) for name, body in preview_objects.items()},
+                    question_reference=previous_reference,
                 ),
                 tuple((current.id, candidate) for candidate in candidates),
             )
@@ -3157,12 +3182,12 @@ def _answer_matches(
                 )
                 try:
                     if question_context is not None:
-                        question_context(entry, available)
+                        question_context(entry, available, old_id)
                     chosen = ask(question, [*available, noncontinuation])
                     watch.raise_if_cancelled()
                 finally:
                     if question_context is not None:
-                        question_context(None, ())
+                        question_context(None, (), None)
                 if chosen == noncontinuation:
                     decisions[old_id] = None
                 elif chosen in available:

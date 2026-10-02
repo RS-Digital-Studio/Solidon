@@ -101,7 +101,7 @@ Karte, dort das Gesetz.
 
 | Datei | Zweck |
 |---|---|
-| `viewport.py` | der Viewport (§18, §2.9): Szene, Picks, Merkmalsanzeige, Griffe und ihre Vorfahrt (`_dispatch_pointer`), Vorschau und Differenz (`_cover_body`), Analysekarten, Schnitt, Band `PreviewBanner` |
+| `viewport.py` | Viewport: Szene/Picks/Merkmale; Griffe (`_dispatch_pointer`), Vorschau/Differenz (`_cover_body`), Analyse, Schnitt, `PreviewBanner`; Zuordnung mit Kandidat und Vorbezug |
 | `render/` | der Renderer hinter der Ansicht — eigene Karte |
 | `overlay.py` | Zonen über der Ansicht statt neben ihr (§2.5): `OverlayHost`, `CardColumn`, Raumvertrag `is_room_taker`; ein natives Fenster nur für direkte Kinder (`keep_widgets_alien`, `hold_above_the_view`) |
 | `cursors.py` | Mauszeiger (§19.3, Regel 18) |
@@ -216,13 +216,13 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 | `palette.py` | Farbe, die nie allein Bedeutung trägt (§19.1); `category_colours` färbt Bild und Legende |
 | `icons.py` | Symbole als themenabhängige SVGs (§19.3, Regel 18) |
 | `motion.py` | Bewegung an einer Stelle, nicht an zwanzig |
-| `labels.py` | kurze Texte, auf die sich mehrere Teile einigen (`slicer_title`, `feature_measure`, `cavity_name`, `body_requirement`, `DateField`); `wheel_needs_focus` |
+| `labels.py` | Kurztexte (`slicer_title`, `feature_measure`, `cavity_name`, `body_requirement`, `DateField`); `choice_label` mit Wert/Einheit aus `core/registry/surfaces.py`; `wheel_needs_focus` |
 
 ### Hilfe und Bedienung
 
 | Datei | Zweck |
 |---|---|
-| `manual_window.py` | das Handbuchfenster (§2.7, §19.2); Rangfolge und Fundstelle aus `core/manual_search.py` |
+| `manual_window.py` | Suche in `core/manual_search.py`; F1-Anker nur für geprüfte `MarkdownNoHTML`-Überschriften (`core/manual.py`) |
 | `guide_targets.py` | was ein Name der Bildanleitungen meint (`widget_for`, `area_for`, `action_for`), für Tour und `tools/make_guides.py`; fehlt es: `MissingTargetError` |
 | `tour.py` | die Tour durch ein Beispielprojekt (§37.2) |
 | `shortcuts_window.py` | die Kürzelübersicht |

@@ -36071,6 +36071,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   Beleg: `bericht-B.md` (B-1), Sonden `test_probe_cura_nozzle.py` (+ `out_cura_nozzle.txt`),
   `old_sp_before_8374885ae.py`, `probe_incomplete_name.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch, alle drei Teile. Instanz 0,6 bei Düse 0,4 meldet „Meine Werkstatt ist unvollständig“; eine fehlende Instanz bekommt denselben Satz; „Snapmaker 2.0 A350“ wird zu „Snapmaker 2“ gekürzt.
+  Nachprüfung am Stand `4cf460e87` (nach `29ff469b5`): behoben, alle drei Teile (Düse 0,4 wird geschrieben, gelöschte Instanz mit eigenem Satz und `choose_printer`, „Snapmaker 2.0 A350“ bleibt ganz); Tests wirken. Neu dabei: RM-417.
 
 **Abschluss:** Die Familienregel in `slicer_profiles.match` gilt nur noch Profilen mit Datei je Düse; Cura-Instanzen und Werksdefinitionen (`_nozzle_is_a_value`) gewinnen unabhängig von der Düse — mit Cura 5.13 fanden vorher 595 von 634 übernommenen Druckern keine Maschine, jetzt 0. Namen bleiben ganz (`_shown_name`, „Snapmaker 2.0 A350“). „Fehlt“ und „unvollständig“ hatte Codex in `29ff469b5` getrennt. Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
 
@@ -36100,6 +36101,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   Beleg: `bericht-B.md` (B-2), Sonden `test_probe_cura_center_zero.py` (+ `out_cura_center_zero.txt`),
   `cura_center_zero.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
+  Nachprüfung am Stand `4cf460e87`: nicht behoben, Code unverändert (`gcode.off_the_bed` mit `excess_mm 10.0`).
 
 **Abschluss:** Der wirksame Ursprung reist als `CuraMachine.origin_at_centre`/`SlicerConfig.origin_at_centre`; `off_the_bed` und die Naht (`_cura_seam`, Curas Formel) rechnen danach. Am echten CuraEngine 5.13 belegt (Malyan M180, Kossel Mini, Snapmaker-Instanz). Derselbe Fehler bei Orca und PrusaSlicer steht unter [RM-424](ROADMAP.md#rm-424). Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
 
@@ -36121,6 +36123,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   **Abnahme:** je Form Geometrietest und Bereichsnachweis; Nachbau Rohrschelle in unter zehn
   Klicks. Bauplan §24, §2.6, Regeln 4, 7, 22.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Rohr, Lasche und Schelle mit **Maßreihen** statt Einzelmaßen (Rohr-Ø-Reihe, Lochgrößen M3–M8 aus der Normteiltabelle, Wand nach Materialprofil); Lasche und Schelle an jeder Fläche ansetzbar (RM-396). Nutzen: in `F:\3D Dateien` nach Dateinamen rund 18 Teile (Verbinder 01–07, Rankenclip, Kartuschendeckel, Ring, Torschloss-Adapter, Rohrhalter, Klemmen). Abnahme an mindestens drei unterschiedlichen Korpusteilen.
+  Nachprüfung am Stand `4373b5f12` (nach `8bf7e140e`, `6d4eb21bc`, `aa273d444`): behoben im Testumfang — 85 Tests grün, Bereichsnachweis Lasche 40/40, Rohrschelle 512/512 (192 erklärte Ausschlüsse) passt zu `part_ranges.toml`, Testmaße stimmen mit den Korpusteilen. Offen bis Release: Klickzahl am Fenster.
 
 **Abschluss:** Grundform *Rohr anlegen* (`create_tube`/`create_brep_tube`, Wand oder Innendurchmesser), Bausteine *Lasche mit Loch* (`lug`, M3–M8, Maße nach ISO 7089) und *Rohrschelle* (`pipe_clamp`, Rohrreihe 15–40 mm als Tabellenart `pipes` in `standards.toml` v10, eigener Durchmesser bis 110 mm, M3–M6) an beiden Kernen; je drei Fälle aus Nachbau und Korpus, Bereichsnachweise aller Bausteine neu gefahren. `LIBRARY_VERSION` bleibt (Entscheidung Robert 02.10.: nur neue Bausteine, kein geändertes Maß). Umgesetzt von Claude, in main mit `c117720b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
@@ -36163,6 +36166,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   **Abnahme:** Test: U-Halter mit Schlüsselloch in einem Schritt, Maße stimmen, Leiste dreht
   Innenmaß; Nachbau Modell 1 in höchstens fünf Klicks. Bauplan §2.2 (Weg 2), §24, §37.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird eine parametrische **Halter-Vorlage** für verschiedene Gegenstände und Befestigungen: Profil U, L, Z oder Gabel, mit/ohne Boden, Gegenstand als Maß (Breite × Tiefe oder Durchmesser), Befestigung Schlüsselloch, Schraublöcher, Lochwand-Haken oder Klemme. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 30 Halter (Besen-, Filament-, Flaschen-, Schlauch-, Werkzeughalter, Lochwand-Teile, Wandhalterungen). Abnahme an mindestens drei unterschiedlichen Haltern.
+  Nachprüfung am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben (Bereichstest aller vier Halter). Offen: Korpusabnahme an drei Haltern nicht belegt; Nachbau Modell 1 gelingt, die Rückwand wird aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; der Fünf-Klick-Rest steht nur im Archivtext; exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
 
 **Abschluss:** Vier Bausteine statt einer Vorlage (Bereichstest höchstens 512 Ecken): *Halter U-Form*, *Halter rund*, *Halter Gabel*, *Halter Ablage* (L oder Z) mit Befestigung Schlüsselloch, Schraublöcher (M4), Lochwand-Haken oder Klemme, Maße aus Normteiltabelle und vorhandenen Bausteinen; im Katalog über „Halter“, „Maße als Parameter anlegen“ legt Schritt und Parameter in einer Transaktion an (`PartSpec.template`). Beide Kerne, Bereichsnachweise aller 41 Bausteine, Prompt neu gezählt (7 729 Token bei 166 Werkzeugen). Offen bleibt der Fünf-Klick-Weg am echten Fenster (Release). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
@@ -36187,6 +36191,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   **Abnahme:** Test: Körper gewählt, *Quader anlegen* → Z = 0; Fläche gewählt → Satz sichtbar,
   Körper steht auf der Fläche, nicht unter dem Bett. Bauplan §2.4, §18.5, Regel 21.
   Beleg: `nachbau\bericht.md`, Sonde `f4_stapeln.py`.
+  Nachprüfung am Stand `4373b5f12` (nach `cb72af460`): behoben — Körper gewählt → z 0; Deckfläche → z 20 mit „Wird auf … gesetzt“; Seitenfläche, Zylinder Ø 30 → z 0…30; *Auf das Bett* setzt zurück; der neue Körper ist danach gewählt; 7 neue Kerntests am Elterncommit rot. RM-396 (Ansetzen und Verbinden) bleibt offen.
 
 **Abschluss:** Ein gewählter Körper, eine Bohrung oder Kante setzen keinen Erzeuger mehr; nur eine ebene Fläche (`placement.seats_on`, `seat_on_face`), mit dem Satz „Wird auf „…“ von „…“ gesetzt.“ und dem Knopf *Auf das Bett*; reicht der Körper unter das Bett, rückt er in der Ebene hoch oder entsteht auf dem Bett, mit Satz. Fensterlose und Fenstertests an allen fünf Zwillingspaaren, rot vor dem Fix. Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
 

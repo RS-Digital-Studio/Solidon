@@ -25,6 +25,8 @@ _CODE: Final = re.compile(r"`([^`]+)`")
 _STRONG: Final = re.compile(r"\*\*([^*]+)\*\*")
 _EMPHASIS: Final = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 _HEADING: Final = re.compile(r"^(#{1,6})\s+(.*)$")
+_SETEXT: Final = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
+_FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _BULLET: Final = re.compile(r"^[*-]\s+(.*)$")
 """Beide Markdown-Schreibweisen: Die geschriebenen Kapitel nutzen ``* ``,
 die erzeugten Referenzlisten ``- `` — wer nur eine kennt, klebt die andere
@@ -127,6 +129,71 @@ def plain(text: str) -> str:
     return _EMPHASIS.sub(r"\1", _STRONG.sub(r"\1", text))
 
 
+def _closes_fence(delimiter: re.Match[str] | None, fence: str) -> bool:
+    """Ob derselbe Markdown-Codezaun ohne Zusatztext endet."""
+    return bool(
+        delimiter
+        and delimiter[1][0] == fence[0]
+        and len(delimiter[1]) >= len(fence)
+        and not delimiter[2].strip()
+    )
+
+
+def below_heading(markdown: str, level: int) -> str:
+    """Beschreibungsüberschriften unter ihre umgebende Überschrift einordnen.
+
+    ATX nutzt dasselbe Muster wie der HTML-Export. Setext wird zuerst in
+    ATX umgewandelt, damit Qt und Website dieselbe Hierarchie lesen. Die
+    relativen Ebenen bleiben bis zur Markdown-Grenze H6 erhalten; eingezogene
+    und eingezäunte Codebeispiele bleiben unverändert.
+    """
+    lines: list[str] = []
+    headings: list[tuple[int, int, str]] = []
+    paragraph: int | None = None
+    fence = ""
+    for line in markdown.split("\n"):
+        delimiter = _FENCE.match(line)
+        if fence:
+            if _closes_fence(delimiter, fence):
+                fence = ""
+            lines.append(line)
+            continue
+        if delimiter:
+            fence = delimiter[1]
+            paragraph = None
+            lines.append(line)
+            continue
+        candidate = line.lstrip(" ") if not line.startswith("    ") else line
+        heading = _HEADING.match(candidate)
+        underlined = _SETEXT.match(line)
+        if heading:
+            headings.append((len(lines), len(heading[1]), heading[2]))
+            paragraph = None
+        elif underlined and paragraph is not None:
+            title = " ".join(part.strip() for part in lines[paragraph:])
+            del lines[paragraph:]
+            headings.append((len(lines), 1 if underlined[1][0] == "=" else 2, title))
+            paragraph = None
+        elif (
+            not line.strip()
+            or line.startswith(("    ", "\t"))
+            or candidate.startswith(">")
+            or _BULLET.match(candidate)
+            or _NUMBERED.match(candidate)
+            or _ROW.match(candidate)
+        ):
+            paragraph = None
+        elif paragraph is None:
+            paragraph = len(lines)
+        lines.append(line)
+    shift = max(
+        0, level + 1 - min((depth for _index, depth, _title in headings), default=level + 1)
+    )
+    for index, depth, title in headings:
+        lines[index] = f"{'#' * min(depth + shift, 6)} {title}"
+    return "\n".join(lines)
+
+
 def to_html(
     markdown: str, figure: FigureResolver | None = None, link: LinkResolver | None = None
 ) -> str:
@@ -143,6 +210,13 @@ def to_html(
     numbered: list[str] = []
     first_number = [1]
     paragraph: list[str] = []
+    fence = ""
+    code: list[str] = []
+
+    def flush_code() -> None:
+        content = "\n".join(code)
+        out.append(f"<pre><code>{escape(content)}</code></pre>")
+        code.clear()
 
     def flush_paragraph() -> None:
         if paragraph:
@@ -179,6 +253,21 @@ def to_html(
 
     for raw in markdown.splitlines():
         line = raw.rstrip()
+
+        # Ein Beispiel aus einer Rezeptbeschreibung ist keine Überschrift;
+        # sonst könnte sein „### Titel“ einen fremden Operationsanker erben.
+        delimiter = _FENCE.match(line)
+        if fence:
+            if _closes_fence(delimiter, fence):
+                flush_code()
+                fence = ""
+            else:
+                code.append(raw)
+            continue
+        if delimiter:
+            flush_all()
+            fence = delimiter[1]
+            continue
 
         if not line.strip():
             flush_all()
@@ -229,6 +318,8 @@ def to_html(
 
         paragraph.append(line.strip())
 
+    if fence:
+        flush_code()
     flush_all()
     return "\n".join(out)
 

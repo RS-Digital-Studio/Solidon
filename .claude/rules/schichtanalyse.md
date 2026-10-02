@@ -68,7 +68,7 @@ G-Code zurück.
   `TIME_ELAPSED`; ein Kopfwert gilt weiter, wo er einen Vorgang trägt, den
   keine Bahn zeigt.
 
-**Der Bauraum wird an den Bahnen nachgemessen** (`gcode.printed_extent`,
+**Der Bauraum wird an den Bahnen nachgemessen** (`gcode.analyze(...).extent`,
 `handover.off_the_bed`), denn CuraEngine prüft ihn nicht. `G2`/`G3` zählen
 mit; die Stelle wird über alle Bewegungen nachgeführt. Geprüft wird in
 Maschinenkoordinaten, Ursprung wie die Maschine, getrennt von der Verschiebung

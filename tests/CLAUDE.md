@@ -32,7 +32,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
-| Bleiben Tutorialreihenfolge, echte Gestendauer, native Ausschnitte, Dialogzustand und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
+| Bleiben Tutorialreihenfolge, echte Gestendauer, Hook-Manifest, skalierte Dialogausschnitte und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
 | Sind G-Code-Auswertung, Startcodevergleich und Vorschlagsbefunde der Slicer-Matrix vollständig belegt? | `test_delivery_matrix_review.py` — fehlende Werte, unvollständige Vorschläge und G2/G3-Bögen |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |

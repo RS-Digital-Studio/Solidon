@@ -241,6 +241,9 @@ def test_the_outline_holds_every_written_page_and_guide_exactly_once() -> None:
         *(guide.key for guide in guides.GUIDES),
     ]
     assert sorted(placed) == sorted(expected)
+    assert "part" not in guides.Guide.__dataclass_fields__
+    parts = {key: part for part, keys in manual.OUTLINE for key in keys}
+    assert all(manual.guide_page(guide).part == parts[guide.key] for guide in guides.GUIDES)
 
 
 def test_the_manual_begins_where_to_start() -> None:
@@ -288,27 +291,25 @@ def test_the_pages_follow_the_outline_and_the_generated_ones_close_the_reference
 
 def test_a_guide_page_shows_each_step_with_its_number_and_its_picture() -> None:
     guide = guides.Guide(
-        key="probe",
+        key="two-colours",
         title="Probe",
         summary="Zwei Schritte.",
-        part="tasks",
         steps=(guides.step("Erst das.", "report"), guides.step("Dann das.", "history")),
     )
     page = manual.guide_page(guide)
     body = str(page.body)
 
     assert page.part == "tasks"
-    assert body.index("**1.** Erst das.") < body.index("![](figure:guide-probe-1)")
-    assert body.index("![](figure:guide-probe-1)") < body.index("**2.** Dann das.")
-    assert page.figures() == ("guide-probe-1", "guide-probe-2")
+    assert body.index("**1.** Erst das.") < body.index("![](figure:guide-two-colours-1)")
+    assert body.index("![](figure:guide-two-colours-1)") < body.index("**2.** Dann das.")
+    assert page.figures() == ("guide-two-colours-1", "guide-two-colours-2")
 
 
 def test_a_legend_lists_what_its_numbers_stand_for() -> None:
     guide = guides.Guide(
-        key="probe",
+        key="window-overview",
         title="Probe",
         summary="Eine Legende.",
-        part="start",
         steps=(guides.legend("Die Bereiche.", ("tree", "Links."), ("report", "Rechts.")),),
     )
     body = str(manual.guide_page(guide).body)
@@ -350,16 +351,30 @@ def test_every_guide_has_its_story_and_no_story_is_left_over() -> None:
     assert set(make_guides.STORIES) == {guide.key for guide in guides.GUIDES}
 
 
+@pytest.mark.parametrize("language", available_languages())
+def test_spool_names_follow_the_active_catalog(language: str) -> None:
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from tools import make_guides
+
+    install_language(language)
+    set_language(language)
+    try:
+        expected = (f"PLA {tr('Weiß').lower()}", f"PLA {tr('Rot').lower()}")
+        assert make_guides._spool_names() == expected
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+
 def test_the_fingerprint_follows_what_the_pictures_show() -> None:
     """Ein neuer Schritt oder ein anderes Ziel verlangt neue Bilder; ein Tippfehler im
     Satz eines anderen Schritts ändert den Abdruck auch — der Satz steht im Alt-Text."""
-    base = guides.Guide("probe", "Probe", "Kurz.", "tasks", (guides.step("Eins.", "report"),))
-    other_target = guides.Guide("probe", "Probe", "Kurz.", "tasks", (guides.step("Eins.", "tree"),))
+    base = guides.Guide("probe", "Probe", "Kurz.", (guides.step("Eins.", "report"),))
+    other_target = guides.Guide("probe", "Probe", "Kurz.", (guides.step("Eins.", "tree"),))
     more = guides.Guide(
         "probe",
         "Probe",
         "Kurz.",
-        "tasks",
         (guides.step("Eins.", "report"), guides.step("Zwei.", "tree")),
     )
     assert guides.fingerprint(base) == guides.fingerprint(base)
@@ -406,10 +421,16 @@ def test_the_films_follow_where_to_start_and_hold_every_guide_once() -> None:
 
     films = make_guide_video.films([])
     assert [film.name for film in films] == ["start", "tasks"]
+    outline = dict(manual.OUTLINE)
+    guide_by_key = {guide.key: guide for guide in guides.GUIDES}
     for film in films:
-        assert [guide.part for guide in film.chapters] == [film.name] * len(film.chapters)
+        assert [guide.key for guide in film.chapters] == [
+            key for key in outline[film.name] if key in guide_by_key
+        ]
     shown = [guide.key for film in films for guide in film.chapters]
-    assert shown == [guide.key for guide in guides.GUIDES if guide.part in ("start", "tasks")]
+    assert shown == [
+        key for _part, keys in manual.OUTLINE[:2] for key in keys if key in guide_by_key
+    ]
     assert sorted(shown) == sorted(guide.key for guide in guides.GUIDES)
     single = make_guide_video.films(["drill-a-hole"])
     assert [(film.name, len(film.chapters)) for film in single] == [("drill-a-hole", 1)]
