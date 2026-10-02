@@ -289,6 +289,28 @@ def test_target_click_keeps_source_and_carries_both_identifiers(qt_app: QApplica
         dialog.deleteLater()
 
 
+def test_a_required_target_starts_empty_and_takes_the_first_click(qt_app: QApplication) -> None:
+    """*An Merkmal ausrichten* stand schon auf dem ersten Listeneintrag, und der
+    Bildklick landete im Quellmerkmal: Ohne vorheriges Anklicken des Felds
+    *Ziel* saß der Körper an der falschen Seite, still (RM-394, Regel 21)."""
+    dialog = OperationDialog(
+        REGISTRY.get("align_to_feature"),
+        {"obj_1": "B", "obj_2": "A"},
+        values={"feature": "face_1"},
+        features={"face_1": "Linke Seite"},
+        target_features={"obj_2:face_1": "A · Linke Seite", "obj_2:face_2": "A · Rechte Seite"},
+        source_objects=("obj_1",),
+    )
+    try:
+        assert dialog.values()["target"] in ("", None), "kein still vorgewähltes Ziel"
+        assert not dialog.can_accept(), "ohne Ziel bleibt Übernehmen gesperrt"
+        assert dialog.take_feature("face_2", "Rechte Seite", "obj_2"), "ohne Fokus aufs Feld"
+        assert dialog.values()["target"] == "obj_2:face_2"
+        assert dialog.values()["feature"] == "face_1", "das Quellmerkmal bleibt"
+    finally:
+        dialog.deleteLater()
+
+
 def test_up_to_click_and_reopened_target_have_readable_body_names(qt_app: QApplication) -> None:
     """Flächen werden gezeigt und gespeichert, ohne interne Kennungen abzutippen."""
     dialog = OperationDialog(

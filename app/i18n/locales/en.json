@@ -7224,6 +7224,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "überzählige Fläche": "surplus face",
   "—": "—",
+  "— im Bild wählen —": "— pick in the view —",
   "— keines —": "— none —",
   "„Automatisch teilen“ legt keine Naht durch diese Stelle. Die Sperre wird mit dem Projekt gespeichert; das Bild zeigt sie schraffiert.": "“Split automatically” places no seam through this spot. The protection is saved with the project; the view shows it hatched.",
   "„Skelett“ steht in derselben Werkzeugleiste und gehört zum selben Weg: zwei Klicks setzen einen Knochen, Fertig fragt danach nach den Winkeln. So bekommt eine Figur ihre Haltung, ohne dass sie neu gebaut wird.": "“Armature” is in the same toolbar and follows the same workflow: two clicks place a bone, then Done asks for the angles. This gives a figure its pose without rebuilding it.",

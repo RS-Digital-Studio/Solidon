@@ -2915,6 +2915,14 @@ class OperationDialog(QDialog):
             # behalten den Eintrag.
             if not entry.required:
                 combo.addItem(tr("— keines —"), "")
+            elif entry.targets_feature and not start:
+                # **Ein Pflichtziel beginnt leer** (RM-394, Regel 21). Ohne
+                # diesen Eintrag wählte die Liste ihren ersten — bei *An
+                # Merkmal ausrichten* die linke Seite des anderen Körpers —, und
+                # wer sein Ziel im Bild anklickte, traf damit das Quellmerkmal:
+                # Der Körper saß still an der falschen Seite. Leer sperrt
+                # *Übernehmen* mit Grund (:meth:`_target_missing`).
+                combo.addItem(tr("— im Bild wählen —"), "")
             choices = self._target_features if entry.targets_feature else self._features
             for identifier, label in choices.items():
                 combo.addItem(label, identifier)
@@ -3011,6 +3019,20 @@ class OperationDialog(QDialog):
         ]
         entry = next((item for item in fields if item.name == self._feature_focus), None)
         if entry is None:
+            # Ohne Fokus füllt der Klick das erste noch leere Pflichtfeld, das
+            # dieses Merkmal annimmt — ein Quellmerkmal nur auf dem eigenen
+            # Körper, ein Ziel auf jedem (RM-394).
+            entry = next(
+                (
+                    item
+                    for item in fields
+                    if item.required
+                    and self._feature_field_empty(item.name)
+                    and self._takes_feature_of(item, object_id)
+                ),
+                None,
+            )
+        if entry is None:
             entry = next((item for item in fields if not item.targets_feature), None)
         if entry is None:
             return False
@@ -3039,6 +3061,16 @@ class OperationDialog(QDialog):
             index = editor.count() - 1
         editor.setCurrentIndex(index)
         return True
+
+    def _feature_field_empty(self, name: str) -> bool:
+        editor = self._editors.get(name)
+        return isinstance(editor, QComboBox) and not editor.currentData()
+
+    def _takes_feature_of(self, entry: Any, object_id: str | None) -> bool:
+        """Ob ein Merkmalsfeld ein Merkmal dieses Körpers annehmen kann."""
+        if entry.targets_feature:
+            return object_id is not None
+        return object_id is None or not self.source_objects or object_id in self.source_objects
 
     def focus_field(self, name: str) -> bool:
         """Den Cursor in ein bestimmtes Feld setzen — und es aufklappen, wenn es
