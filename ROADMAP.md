@@ -81,7 +81,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
 | [RM-305 — Hinter der zwölften Platte eine Regel](#rm-305) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Grenze in Plattenaufteilung und `first_free_spot` gleich ziehen |
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
-| [RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode](#rm-311) | Geometrie, Erkennung und Druckvorbereitung | Gegenprobe vergleicht die Schreibweise der Anführungszeichen statt des Werts; entmaskiert vergleichen |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
 | [RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an einer Bohrung durch beide Material](#rm-319) | Geometrie, Erkennung und Druckvorbereitung | Klassifikationsgrundlage, Cacheformat 35, Übersetzungen und alle 35 Baustein-Bereichsnachweise im isolierten Kandidaten geprüft; offen: strikter Boolean-/B-Rep-Anschluss, beide Ringfälle und der vollständige Langloch-Kundenweg |
@@ -2284,20 +2283,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Review-Sonde). (c) Ohne übersetzten Schnittkern (`_chain`) braucht der Leistungstest
   23,6 s statt 20; das Paket liefert den Kern aus, der Test misst dann den Rückfallweg.
   Abnahme: je Punkt behoben oder begründet belassen.
-
-<a id="rm-311"></a>
-
-- [ ] **RM-311 — SuperSlicer meldet bei jedem Prusa-Drucker einen übergangenen Startcode.**
-  Aus dem Rauchtest nach der Einrichtung von SuperSlicer 2.5.59.13 (29.09.2026,
-  `.claude/.state/uebergabe-gesamt-2026-09-27/einheit.py`, Wedge-Lock am Prusa MINI und
-  MK4S): Alle Läufe haben eine Druckdatei, aber jeder meldet `slicer.setting_ignored` für
-  `start_gcode` — geschrieben steht `M862.3 P \"[printer_model]\"`, im G-Code
-  `M862.3 P "[printer_model]"`. Der Wert ist derselbe, nur die Anführungszeichen stehen in
-  der Konfigurationszeile einmal maskiert und einmal nicht; die Gegenprobe vergleicht die
-  Schreibweise statt des Werts. Ein Fehlalarm bei jedem Druck nimmt dem echten Befund die
-  Wirkung. Weg: den Vergleich in `verify_settings` über die entmaskierte Fassung beider
-  Seiten führen, PrusaSlicer als Gegenfall. Abnahme: SuperSlicer am MINI ohne
-  `slicer.setting_ignored`, ein wirklich übergangener Wert meldet weiter.
 
 <a id="rm-317"></a>
 

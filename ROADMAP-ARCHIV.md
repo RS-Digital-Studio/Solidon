@@ -35,6 +35,7 @@ entfernt hat.
 | 2026-10-02 | [RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)](#rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
 | 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
+| 2026-10-01 | [RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)](#rm-311-superslicer-vergleicht-g-code-werte-semantisch-01102026) |
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
 | 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
 | 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
@@ -34342,3 +34343,44 @@ auf `main` und `origin/main`. Belege: `commit-langlochbezug.json`,
 `commit-tor-kernpakete-final/` unter
 `tmp/review-seit-0.5.1-2026-10-01/`. Die native Viewport-Abnahme der
 Gegenseitenvorschau bleibt separat unter RM-321 für den Release offen.
+
+## RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)
+
+<a id="rm-311"></a>
+
+SuperSlicer 2.5.59.13 schrieb den Startcode mit maskierten Anführungszeichen in die
+Konfiguration und gab ihn mit gewöhnlichen Anführungszeichen im G-Code zurück. Die
+Gegenprobe meldete dadurch fälschlich `slicer.setting_ignored`. Die Normalisierung gilt
+jetzt nur für Schlüssel, die auf `_gcode` enden, sowohl in `verify_settings` als auch in
+`profile_differences`. Ein tatsächlich abweichender G-Code bleibt ein Befund; ein
+Nicht-G-Code-Wert mit wörtlichem Backslash wird ebenfalls nicht versehentlich verborgen.
+
+Die reale Gegenprobe verwendete `Wedge-Lock (Base).stl`, SuperSlicer 2.5.59.13 und
+PrusaSlicer 2.9.6 mit `Original Prusa MINI & MINI+`, Prozess `0.15mm QUALITY @MINI`
+und Filament `Prusament PLA`. Die konfigurierte Anweisung `M862.3 P "[printer_model]"`
+kam in beiden G-Code-Dateien als `M862.3 P "MINI"` an. Keiner meldete
+`slicer.setting_ignored`; beide meldeten außerdem `slicer.handover` als Information. Die
+Laufzeiten nach der Zeitmessungskorrektur waren 1,324 s und 1,508 s. Ein separater negativer
+Test prüft, dass ein geänderter Startcode weiter als ignoriert gemeldet wird.
+
+Die echte Gegenprobe machte außerdem eine falsche Laufzeitangabe sichtbar: Der Aufruf
+überschrieb den monotonen Startwert der Laufzeitmessung mit einem Epoch-Zeitstempel, so dass
+`SliceOutcome.seconds` negativ wurde. Beide Uhrwerte sind jetzt getrennt. Eine Regression
+setzt die monotone Uhr auf 12,000 s und 12,375 s, während die Ergebnisuhr 1 800 000 000 s
+meldet; ausgegeben werden 0,375 s.
+
+**Gezielte Verifikation (01.10.2026):** `tests/test_print_settings.py` bestand mit 509
+Tests, 4 übersprungen; `tests/test_roadmap.py` und `tests/test_directory_docs.py` bestanden
+mit 23 Tests. Ruff und Format für die geänderten Python-Dateien, `git diff --check` sowie
+mypy für 333 Quelldateien waren grün. Das unabhängige Code-Review fand keine bestätigten
+Funktionsfehler.
+
+**Abschluss am 02.10.2026:** Der unabhängige Review fand keine bestätigten Funktionsfehler.
+Die gezielten Regressionen und die reale Gegenprobe sind oben dokumentiert. Die logischen
+Commits `8b0078fac` und `1ca91baa6` sind auf `main` und `origin/main`.
+Das vollständige Tor `commit-tor-slicer-tooltip-final` bestand mit 18.869 Tests und
+62 übersprungenen Tests; Suite, Ruff, Format und mypy endeten jeweils mit Exit 0, ohne
+Quellabweichung. Die funktionale Sieben-Slicer-Matrix bleibt eine getrennte offene
+Abnahme unter RM-312; sie hält die Gesamtprüfung der Slicerübergabe offen, nicht RM-311.
+
+Fenster- und Leistungsläufe bleiben Release-Abnahmen.
