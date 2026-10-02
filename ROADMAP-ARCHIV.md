@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)](#rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
@@ -36642,3 +36643,52 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
 
 **Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-371: Die Oberfläche bleibt während der Erzeugung bedienbar (02.10.2026)
+
+<a id="rm-371-die-oberfläche-bleibt-während-der-erzeugung-bedienbar-02102026"></a>
+<a id="rm-371"></a>
+
+**RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3, W3-4).
+  Der Erzeugen-Dialog läuft mit `dialog.exec()` (`app/ui/main_window.py:6577`) und ist
+  anwendungsmodal, solange der Generator rechnet (40 s bis viele Minuten); der Fortschritt steht
+  nur im Dialog. §2.8: „Oberfläche bedienbar“, „nie ein blockierendes Fenster“. Beleg
+  `F:\solidon-review-reports\sonden\w3_modal.txt` (`ApplicationModal`).
+  **Ablauf:** Nach *Erzeugen* schließt bzw. verkleinert sich der Dialog nicht modal; der Lauf geht
+  im Arbeiter weiter, die Statusleiste zeigt Fortschritt, verstrichene Zeit und *Abbrechen*
+  (§2.8), die Anwendung bleibt bedienbar. Ist der Lauf fertig, erscheint die Versuchsliste wieder
+  (nichtmodal) mit *Übernehmen*; ein Wechsel des Projekts oder eine gesetzte Einfügemarke
+  wird beim Übernehmen behandelt (RM-361).
+  **Stellen:** `main_window.py:6575–6579` (`_generate`), `app/ui/generate_dialog.py` (Lauf,
+  `_on_failed` `:1060–1068`, Abbrechen `:1091–1099`), Statusleisten-Fortschritt wie beim Laden.
+  **Abnahme:** Test mit gestelltem langsamen Backend: während des Laufs ist kein modales Fenster
+  aktiv, ein Menüeintrag lässt sich auslösen, die Statusleiste zeigt Fortschritt und *Abbrechen*
+  bricht den Lauf; danach ist das Ergebnis übernehmbar. Bauplan §2.8, §15.3.
+  **Vorgabe Robert 02.10.2026 — allgemein:** gleiches nichtmodales Verhalten für jede lange Erzeugung (Text, Bild, später weitere Generatoren); Abnahme mit mindestens drei unterschiedlichen Läufen (Text, Bild, Abbruch).
+
+**Abschluss:** **Abschluss 02.10.2026 (Claude, Thread „Bedienung und KI“):** Der Erzeugen-Dialog ist nichtmodal
+und einer zur Zeit (`MainWindow._generator`, ein zweiter Aufruf holt ihn nach vorn). Nach
+*Erzeugen* tritt er zur Seite; der neue Besitzer `"generate"` zeigt in der Statusleiste Satz,
+Anteil und verstrichene Zeit (eigene `ProgressTiming`, ab 10 s mit Schätzung) samt *Abbrechen*
+(`GenerateDialog.cancel_run`), ohne Wartezeiger (`_BACKGROUND_PROGRESS`), und steht zuletzt in
+`_PROGRESS_PRIORITY`. Ergebnis oder Fehler holen den Dialog ohne Fokusraub zurück
+(`runEnded`, `WA_ShowWithoutActivating`); ein Abbruch ohne fertigen Versuch schließt ihn mit
+Ansage, mit fertigen Versuchen bleiben sie übernehmbar. *Übernehmen* gilt dem jetzt offenen
+Projekt; ein Wechsel steht vorher über dem Knopf (`_say_generation_destination`), vom
+Startbildschirm aus beginnt es ein neues Projekt (`_begin_from_the_start_screen`). Die
+RM-361-Absagen (Einfügemarke, Lizenz) bleiben unverändert. Schließen des Fensters bricht den
+Wurf ab. Text und Bild teilen den Weg; ein weiterer Generator nimmt ihn mit
+(`wartezeit.md`, „Eine Erzeugung läuft im Hintergrund“). Die Aufnahme des KI-Workshops
+(`tools/workshop_ai_capture.py`) bedient den Dialog nichtmodal und filmt die Wartezeit am Fenster.
+**Nachweis:** Fenstertests `tests/test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated[text|image]`,
+`::test_cancel_in_the_status_bar_stops_the_generation[False|True]`,
+`::test_a_project_opened_during_the_run_is_named_before_taking`, Wächter ohne Fenster
+`::test_generating_never_holds_the_window_in_a_modal_loop`; angepasst die RM-361-Tests,
+`test_ai_disclosure.py::test_main_window_keeps_the_generation_record_in_its_live_settings` und
+`test_widget_lifetime.py::test_a_window_that_opened_a_dialog_still_lets_go`. Fenstersonde am
+echten Fenster (zweiter Monitor, gestellter langsamer Generator), Läufe Text, Bild, Abbruch:
+43 von 43 Prüfungen — kein modales Fenster während des Laufs, Menüeintrag wirkt, Statusleiste
+„Modell wird erzeugt (2 s) · 14 % · Verstrichen: 2 s“ mit *Abbrechen*, Abbruch beendet den
+Arbeiter, Übernehmen und Strg+Z als ein Schritt. Ausgangsstand gegengeprüft: Dialog während des
+Laufs `ApplicationModal`. Commit: wird nachgetragen.

@@ -223,8 +223,9 @@ class _Worker(Worker):
             # (``tests/test_errors.py``) — ungefangen liefe sie also in
             # ``Worker.run`` und käme beim Kunden als „Dabei ist etwas
             # schiefgegangen, womit hier niemand gerechnet hat" an, für etwas,
-            # das er selbst ausgelöst hat. Gemeldet wird nichts: Der Dialog,
-            # der abbricht, geht im selben Zug zu.
+            # das er selbst ausgelöst hat. Gemeldet wird hier nichts: Was nach
+            # dem Abbruch gilt, sagt der Dialog am Ende des Fadens
+            # (``GenerateDialog._on_thread_done``).
             _log.info("generation cancelled")
             return
         except AppError as problem:
@@ -334,6 +335,18 @@ class GenerateDialog(QDialog):
     nodesRequested = Signal()
     """ComfyUI läuft, kennt aber die Knoten nicht — der Weg dorthin ist ein
     anderer als der zur Liste der Programme."""
+    runStarted = Signal()
+    """Ein Wurf läuft an — das Fenster übernimmt Fortschritt und *Abbrechen*.
+
+    **Der Dialog hält das Fenster nicht an** (§2.8, RM-371). Er lief mit
+    ``exec()`` anwendungsmodal, solange der Generator rechnete — vierzig
+    Sekunden bis viele Minuten, in denen nichts anderes ging. Jetzt tritt er
+    während des Laufs zur Seite, die Statusleiste zeigt den Lauf, und mit dem
+    Ergebnis kommt er wieder."""
+    runStepped = Signal(float, str)
+    """Fortschritt des laufenden Wurfs: Anteil und Satz des Generators."""
+    runEnded = Signal(str)
+    """Der Wurf ist zu Ende: ``"done"``, ``"failed"`` oder ``"cancelled"``."""
 
     def __init__(
         self,
@@ -502,6 +515,11 @@ class GenerateDialog(QDialog):
         self.taken.setWordWrap(True)
         self.taken.setVisible(False)
         self.attempts.currentRowChanged.connect(self._show_what_is_taken)
+        # Wohin *Übernehmen* das Modell legt, wenn das nicht mehr das Projekt
+        # vom Start ist — gesetzt vom Fenster (:meth:`set_destination`).
+        self.destination = QLabel(self)
+        self.destination.setWordWrap(True)
+        self.destination.setVisible(False)
 
         # Der Weg zu dem, was fehlt — siehe :meth:`_update_state`. Welcher
         # von beiden, entscheidet die Lage: Wo nichts läuft, hilft die Liste
@@ -537,6 +555,7 @@ class GenerateDialog(QDialog):
         outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
         outer.addWidget(self.taken)
+        outer.addWidget(self.destination)
         outer.addWidget(self.buttons)
         heading = self.advanced.findChild(QToolButton)
         if heading is not None:
@@ -1035,11 +1054,42 @@ class GenerateDialog(QDialog):
         worker.finished.connect(self._on_thread_done)
         self._worker = worker
         self._leash.start(worker)
+        self.runStarted.emit()
 
     def _on_step(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(max(0.0, min(1.0, fraction)) * 100))
         if text:
             self.state.setText(text)
+        if not self._stopping():
+            self.runStepped.emit(fraction, text)
+
+    def _stopping(self) -> bool:
+        """Ob der laufende Wurf schon abgebrochen wird — dann gilt dessen Satz."""
+        worker = self._worker
+        return worker is not None and worker.cancelled()
+
+    @property
+    def running(self) -> bool:
+        """Ob gerade ein Wurf läuft."""
+        return self._busy
+
+    def cancel_run(self) -> None:
+        """Den laufenden Wurf abbrechen, ohne den Dialog zu schließen.
+
+        Der Weg für *Abbrechen* in der Statusleiste (§2.8): Fertige Versuche
+        bleiben, wie beim *Abbrechen* hier während „Noch ein Versuch“; was
+        danach gilt, meldet :attr:`runEnded`.
+        """
+        worker = self._worker
+        if worker is None or not worker.isRunning() or worker.cancelled():
+            return
+        worker.cancel()
+        self.state.setText(tr("Wird abgebrochen — der laufende Schritt läuft aus."))
+
+    def set_destination(self, text: str) -> None:
+        """Über *Übernehmen* sagen, wohin das Modell kommt — leer blendet aus."""
+        self.destination.setText(text)
+        self.destination.setVisible(bool(text))
 
     def _on_done(self, result: object) -> None:
         assert isinstance(result, GeneratedMesh)
@@ -1050,6 +1100,7 @@ class GenerateDialog(QDialog):
         self.progress.setVisible(False)
         self._running(False)
         self._show_tries()
+        self.runEnded.emit("done")
 
     def _show_tries(self) -> None:
         """Die Versuche mit den Zahlen, an denen man sie unterscheidet.
@@ -1205,6 +1256,13 @@ class GenerateDialog(QDialog):
         """
         self.progress.setVisible(False)
         self._running(False)
+        self._say_failure(problem)
+        # Erst jetzt, wo der Satz steht: Das Fenster holt den Dialog damit
+        # wieder hervor, und er soll mit seiner Auskunft erscheinen.
+        self.runEnded.emit("failed")
+
+    def _say_failure(self, problem: object) -> None:
+        """Den Fehlschlag in die Zustandszeile schreiben, samt Ausweg."""
         if not isinstance(problem, AppError):
             self.state.setText(str(problem))
             return
@@ -1244,12 +1302,19 @@ class GenerateDialog(QDialog):
         self._worker = None
         if worker is not None:
             self._leash.hold_until_done(worker)
-        if self._busy and self.tries:
-            # Weder fertig noch gescheitert: abgebrochen, und der Dialog ist
-            # noch da, weil fertige Versuche zur Wahl stehen (:meth:`reject`).
-            self.progress.setVisible(False)
-            self._running(False)
+        if not self._busy:
+            return
+        # Weder fertig noch gescheitert: abgebrochen — hier über *Abbrechen*
+        # bei fertigen Versuchen (:meth:`reject`) oder aus der Statusleiste
+        # (:meth:`cancel_run`). Fertige Versuche bleiben zur Wahl.
+        self.progress.setVisible(False)
+        self._running(False)
+        if self.tries:
             self._show_tries()
+        else:
+            self._update_state()
+            self.state.setText(tr("Die Erzeugung wurde abgebrochen."))
+        self.runEnded.emit("cancelled")
 
     def _stop_worker(self) -> None:
         """Dem laufenden Wurf sagen, dass niemand mehr auf ihn wartet (§15.6).

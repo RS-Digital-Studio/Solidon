@@ -165,13 +165,12 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
-| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
+| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Review 02.10. (`73d83b55b`). Teile 1 und 3 erledigt (Claude, Thread „Bedienung und KI“); offen: Teil 2, Test für `before=self._sculpt_shown()` (Koordinator) |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
-| [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
 | [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10.: Befund des Aushöhlens bekommt *Diesen Schritt ändern*; `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -4829,6 +4828,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
   macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
   Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Stand 02.10.2026 (Claude, Thread „Bedienung und KI“): Teile 1 und 3 erledigt.** Teil 1:
+  `_take_generated` öffnet die Gruppe der neuen Transaktion (`HistoryPanel.open_group`);
+  Fenstertest `test_generate_ui.py::test_the_window_stays_usable_while_a_model_is_generated`
+  (Mutation ohne den Aufruf: rot). Teil 3: `action` steht in `dialogs.ADDRESS_VALUES`, keine
+  Freischaltungsabsage nennt mehr ihre Kennung; Test ohne Fenster
+  `test_an_activation_refusal_names_no_internal_action` (vier Fehlerarten, Mutation rot), dazu
+  die RM-361-Fenstertests. Fenstersonde am echten Fenster: Gruppe nach Text- und Bildlauf offen
+  (`3 Modell einfügen` bis `6 Auf das Bett setzen`), Lizenzabsage ohne „Handlung: change“;
+  am Ausgangsstand beides nachgestellt (vier Kindzeilen verborgen, Zeile vorhanden). Commit wird
+  nachgetragen. **Offen: Teil 2** (Koordinator).
 
 ## KI und Generatoren
 
@@ -4942,26 +4951,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-konzepte-nachrecherchiert-19082026).
   Registerabgleich 02.10.: Statuszeichen wäre nach der Legende `[~]`.
-
-<a id="rm-371"></a>
-
-- [ ] **RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3, W3-4).
-  Der Erzeugen-Dialog läuft mit `dialog.exec()` (`app/ui/main_window.py:6577`) und ist
-  anwendungsmodal, solange der Generator rechnet (40 s bis viele Minuten); der Fortschritt steht
-  nur im Dialog. §2.8: „Oberfläche bedienbar“, „nie ein blockierendes Fenster“. Beleg
-  `F:\solidon-review-reports\sonden\w3_modal.txt` (`ApplicationModal`).
-  **Ablauf:** Nach *Erzeugen* schließt bzw. verkleinert sich der Dialog nicht modal; der Lauf geht
-  im Arbeiter weiter, die Statusleiste zeigt Fortschritt, verstrichene Zeit und *Abbrechen*
-  (§2.8), die Anwendung bleibt bedienbar. Ist der Lauf fertig, erscheint die Versuchsliste wieder
-  (nichtmodal) mit *Übernehmen*; ein Wechsel des Projekts oder eine gesetzte Einfügemarke
-  wird beim Übernehmen behandelt (RM-361).
-  **Stellen:** `main_window.py:6575–6579` (`_generate`), `app/ui/generate_dialog.py` (Lauf,
-  `_on_failed` `:1060–1068`, Abbrechen `:1091–1099`), Statusleisten-Fortschritt wie beim Laden.
-  **Abnahme:** Test mit gestelltem langsamen Backend: während des Laufs ist kein modales Fenster
-  aktiv, ein Menüeintrag lässt sich auslösen, die Statusleiste zeigt Fortschritt und *Abbrechen*
-  bricht den Lauf; danach ist das Ergebnis übernehmbar. Bauplan §2.8, §15.3.
-  **Vorgabe Robert 02.10.2026 — allgemein:** gleiches nichtmodales Verhalten für jede lange Erzeugung (Text, Bild, später weitere Generatoren); Abnahme mit mindestens drei unterschiedlichen Läufen (Text, Bild, Abbruch).
 
 <a id="rm-441"></a>
 
