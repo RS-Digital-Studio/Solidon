@@ -31,6 +31,10 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)](#rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026) |
+| 2026-10-02 | [RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)](#rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026) |
+| 2026-10-02 | [RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)](#rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026) |
+| 2026-10-02 | [RM-447: Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren (02.10.2026)](#rm-447-regression-gegenüber-051-ein-hauptmaß-über-der-feldgrenze-aus-einer-datei-lässt-sich-in-der-leiste-nicht-mehr-korrigieren-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -36103,7 +36107,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
   Nachprüfung am Stand `4cf460e87`: nicht behoben, Code unverändert (`gcode.off_the_bed` mit `excess_mm 10.0`).
 
-**Abschluss:** Der wirksame Ursprung reist als `CuraMachine.origin_at_centre`/`SlicerConfig.origin_at_centre`; `off_the_bed` und die Naht (`_cura_seam`, Curas Formel) rechnen danach. Am echten CuraEngine 5.13 belegt (Malyan M180, Kossel Mini, Snapmaker-Instanz). Derselbe Fehler bei Orca und PrusaSlicer steht unter [RM-424](ROADMAP.md#rm-424). Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
+**Abschluss:** Der wirksame Ursprung reist als `CuraMachine.origin_at_centre`/`SlicerConfig.origin_at_centre`; `off_the_bed` und die Naht (`_cura_seam`, Curas Formel) rechnen danach. Am echten CuraEngine 5.13 belegt (Malyan M180, Kossel Mini, Snapmaker-Instanz). Derselbe Fehler bei Orca und PrusaSlicer steht unter [RM-424](#rm-424). Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
 
 ## RM-398: Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“ (02.10.2026)
 
@@ -36383,6 +36387,141 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Zug“. Bauplan §17.3, §2.6.
 
 **Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.
+
+## RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)
+
+<a id="rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026"></a>
+<a id="rm-424"></a>
+
+**RM-424 — Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben.**
+  Fund 02.10.2026 bei RM-330 (Claude, Unteragent): Rund 45 sichtbare Maschinenprofile in OrcaSlicer
+  und ElegooSlicer haben ein Bett um den Ursprung (Dremel 3D40/45, DeltaMaker u. a.), in PrusaSlicer
+  z. B. BIBO (`bed_shape -107x-93…`). `discover_printers` zentriert die Kontur und verliert dabei den
+  Ursprung (`slicer_profiles.py`, `cx, cy`), `threemf._placement` verschiebt Teile immer um das halbe
+  Bett. Gemessen: Die 3MF für den Dremel 3D45 setzt einen Würfel auf (112,5 / 77,5), das Bett reicht
+  von −127,5 bis 127,5 und −77,5 bis 77,5 — der Würfel liegt am hinteren Rand statt mittig. Betroffen
+  sind gehaltene Anordnungen; die Gegenprobe liest das Bett aus der Druckdatei und würde es melden.
+  **Fix:** Bettursprung in `PrinterProfile` (Vertrag §9, Profilformat) und alle Bettkoordinaten der
+  Familien danach — Vertragsänderung, entscheidet Robert. Nebenbefund: OrcaSlicer schreibt für den
+  Dremel 3D45 keine Druckdatei („G92 E0 … incompatible with absolute extruder addressing“), ungeklärt.
+  **Abnahme:** Würfel mittig auf Dremel 3D45 (Orca) und BIBO (Prusa) liegt im G-Code mittig. Bauplan §29.
+  **Entscheidung Robert 02.10.2026: bauen** („1 ja“) — die Vertragsänderung an `PrinterProfile` ist freigegeben.
+
+**Abschluss:** `PrinterProfile.bed_origin` trägt den Nullpunkt der Maschine in Solidons Bettkoordinaten (ohne Angabe die Ecke, ohne Migration), `build_area.machine_shift` ist die einzige Umrechnung; 3MF-Platzierung, Prusas Bettform, Curas Ursprung (`machine_center_is_zero`, `mesh_position`) und die Gegenprobe `off_the_bed` rechnen damit. Abnahme im Slicer: Würfel mittig bei DeltaMaker 2 (Orca, Elegoo), FLSun Q5, BIBO2 Touch und Ditto (Prusa), Artillery M1 Pro, Creality CR-6 SE (Bambu Studio), Dremel 3D45 über Prusa und CuraEngine. OrcaSlicer, ElegooSlicer und Creality Print schreiben für den Dremel 3D45 keine Druckdatei (`G92 E0` im Herstellerprofil), vor wie nach dem Fix. Bauplan §9 und §29 nachgezogen. Umgesetzt von Claude, in main mit `76ca8d57b`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)
+
+<a id="rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026"></a>
+<a id="rm-426"></a>
+
+**RM-426 — Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung.**
+  Review 02.10.2026 am Stand `70e9b3145` (Verifikation RM-379); älter als RM-379, nicht im Register.
+  Das Fenster rechnet immer im Entwurf (`app/ui/session.py:1596`); Export und Slicen nehmen
+  `session.last_result` (`app/ui/main_window.py:7821`, `app/ui/print_settings_dialog.py:7967`,
+  `:8021`); `evaluate_now` rechnet fein, hat in `app/` aber keinen Aufrufer.
+  **Fehlerfall (Ende zu Ende über `_start_export`):** Ein weich verschmolzenes Teil wird mit 12 448
+  Dreiecken geschrieben (fein 50 108), ein Kegel mit 128 (fein 256). Der neue Befund `blend.draft`
+  sagt dabei „Export und Druckvorbereitung rechnen fein“ (`app/core/geom/blend.py:432–444`) — eine
+  falsche Zusage. Betroffen ist jede Op mit Entwurfsstufe (Verschmelzen, Kegel/Torus, siehe RM-427).
+  **Fix:** Vor Export und Slicen das Dokument fein auswerten (bzw. an das feine Ergebnis binden,
+  zusammen mit RM-352: Export wartet auf das aktuelle, vollständige, feine Ergebnis), mit Fortschritt
+  und *Abbrechen*.
+  **Abnahme:** Test über den echten Exportweg: verschmolzenes Teil und Kegel werden mit der feinen
+  Dreieckszahl geschrieben; Slicen ebenso; der Satz von `blend.draft` stimmt. Bauplan §29, §31,
+  §15.3. Belege: `F:\solidon-review-reports\verif-70e9b3145-geometrie.md`, Sonde
+  `v5g_rm379_export_fenster.py`.
+
+**Abschluss:** Die Sitzung kennt die Güte des gezeigten Ergebnisses (`last_quality`, `fine_current`) und bestellt über `request_fine` die feine Rechnung; Export, *Slicen* und *Im Slicer öffnen* binden ihren Klick an sie, der Druckdialog bestellt sie beim Öffnen. Die Güte legt `evaluate_async` beim Start des Arbeiters fest. Test über den echten Exportweg: Kegel 256 statt 128 Dreiecke (vor dem Fix rot); Slicen wartet und läuft einmal auf der feinen Rechnung. Umgesetzt von Claude, in main mit `76ca8d57b`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)
+
+<a id="rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026"></a>
+<a id="rm-352"></a>
+
+**RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung.**
+  Review 02.10.2026, Gebietsprüfung Weg 1 (W1-5) und Weg 2 (F1), am HEAD `6ce767031`.
+  `export_action` wird ohne Blick auf `busy` oder `result_current` freigegeben
+  (`app/ui/main_window.py:4965`); `action_export` und `_start_export` lesen `session.last_result`
+  (`:7690`, `:7808`), kopieren aber das neue Dokument (`:7828`) — Geometrie und Druckeinstellungen
+  kommen aus zwei Ständen. Der Druckdialog wartet in derselben Lage schon
+  (`print_settings_dialog.py:7229`).
+  **Fehlerfall:** Beispiel *Dose mit Deckel*, in der Parameterleiste Breite 80 → 100, Enter,
+  sofort Strg+E, im Dateidialog Enter: Bild und Verlauf zeigen 100 mm, die Dateien sind
+  85 × 55,6 und 80 × 55 mm breit, die Quittung meldet Erfolg. Ebenso nach *Skalieren* an einer
+  geladenen STL (Datei 5 × 5 × 40, Bild 10 × 10 × 80) und immer auf den Wiederholwegen
+  *Erneut versuchen* (`:8087–8090`) und `:8141`.
+  **Fix:** Der Export bindet sich an das nächste aktuelle und vollständige Ergebnis (wie
+  `_apply_when_previewed`), die Statuszeile sagt „wartet“ und bietet *Abbrechen*; hält die
+  Kette an, wird nichts geschrieben.
+  **Abnahme:** Test `change_parameter` und sofort `_start_export` → die Datei trägt die neue
+  Breite; bei angehaltener Kette entsteht keine Datei. Bauplan §29, §2.8, `wartezeit.md`.
+  Belege: `F:\solidon-review-reports\gebiet-weg1.md`, `gebiet-weg2.md`, Sonden
+  `w1_export_laufend.py`, `w2_export_luecke.py`.
+  **Zusätzlicher Anschluss B01, Review am festen Stand `48106c57a`:** Der neue
+  Befund `blend.draft` verspricht feine Ausgabe. Der bisherige Exportplan übernimmt
+  jedoch das vorhandene Entwurfsnetz unverändert: 9076 Dreiecke bei 0,8 mm Raster,
+  während derselbe Feinlauf 36684 Dreiecke bei 0,4 mm hat. Dies wurde an der echten
+  Kernplanung gemessen; es wurde dabei keine Datei geschrieben und kein Fenster bedient.
+  Der Schreibpfad ist älter, neu ist die dort uneingelöste Zusage aus RM-379.
+  **Gemeinsamer Abschluss:** Dokument, eingebettete Quellen, Basisverzeichnis,
+  wirksames Profil und ausgewählte Kennungen beim Auftragsstart zusammen binden.
+  Vor Export, Druckvorprüfung und Slicer-Übergabe ausdrücklich `fine` auswerten;
+  Vorprüfung, Bestätigung und Schreiben verwenden denselben vollständigen Stand.
+  Fehlende gewählte Körper, Kernhalt oder Abbruch ergeben keine Ausgabe. Mehrere
+  Platten teilen einen Feinlauf; der Druckrat merkt die tatsächlich analysierten
+  feinen Körper. Abbruch muss auch während einer wartenden Kernfrage greifen.
+  **Ergänzte Abnahme:** Ursprünglicher Sofortexport nach Parameteränderung und
+  Skalierung sowie Wiederholwege; wirklicher Exportarbeiter bis STL/3MF-Rücklesen,
+  beide Slicerarbeiter, Auswahl und mehrere Platten, eingebettete Quelldatei,
+  inzwischen geändertes Dokument, warmer Cache, Kernfrage und Abbruch. Reine
+  Arbeiterverträge im Entwicklungslauf, Fenster-/Rendererabnahme beim Release.
+  Bauplan §31 und §29. Der Anschluss ist mit den zuständigen Sitzungen abgegrenzt.
+  [Historischer B01-Review](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
+  [Messdaten B01](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie-proben.json).
+
+  **Ergänzung R6C942-01, Quellenreview am festen Stand `6c9420b1f`:** Nach
+  abgebrochener Auswertung kann `busy=False` bei `result_current=False` gelten.
+  `_start_export` reiht den Export ein, startet aber keinen Arbeiter; die
+  Fortsetzung wartet auf ein Ergebnis, das ohne weitere Änderung nie kommt.
+  **Fix und Abnahme:** Laufenden und ruhenden veralteten Stand unterscheiden.
+  Im zweiten Fall neu auswerten oder einen konkreten Neustart anbieten;
+  Auswertungsfehler und Abbruch beenden einen wartenden Export eindeutig.
+  Keine alte Geometrie schreiben und kein Warten ohne Auftrag. Den Abbruch
+  einer echten Auswertung und den anschließenden Export prüfen.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`,
+  R6C942-01 (`main_window.py:7829`, feste Quellzeile). Quellenbefund;
+  Gegenfall im Abschlussabgleich nicht ausgeführt. Bauplan §2.7, §2.8, §29.
+  Nachprüfung am Stand `4373b5f12` über die Oberfläche (nach `18ec6d38e`): unvollständig. Der Abnahmefall ist erfüllt (Export wartet auf das neue Ergebnis). **Regression gegenüber 0.5.1:** Export nach einer abgebrochenen Rechnung — in 0.5.1 entstand sofort eine Datei (der gezeigte Stand), jetzt entsteht keine, und die Statuszeile sagt „Export wartet auf die laufende Berechnung …“, obwohl nichts rechnet (`app/ui/main_window.py:7856`, `:7979`); der Fix darf nicht zurück zum gemischten Stand, sondern muss nach einem Abbruch den gezeigten, vollständigen Stand schreiben oder mit Satz absagen. Zwilling offen: *Slicen* und *Im Slicer öffnen* übergeben während einer Neuberechnung den alten Stand (Auftrag 140 mm bei Dokument 150; `app/ui/print_settings_dialog.py:8031`, `:7977`). Test: `test_a_waiting_export_writes_nothing_when_the_chain_halts` bleibt grün ohne die Haltprüfung (mit Halt an Schritt 2 schreibt der Code dann „Exportiert: teil.stl“). RM-426 (Entwurfsnetz) nicht berührt. Belege `F:\solidon-review-reports\verif-4373b5f12-oberflaeche.md`, Sonden `v7u_rm352_*`.
+
+**Abschluss:** Abschluss B01 mit RM-426: Der Export wartet auf das aktuelle und feine Ergebnis und bestellt es selbst — auch nach einer abgebrochenen Rechnung schreibt er wieder, statt auf einen Lauf zu warten, der nicht kommt. Umgesetzt von Claude, in main mit `76ca8d57b`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-447: Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren (02.10.2026)
+
+<a id="rm-447-regression-gegenüber-051-ein-hauptmaß-über-der-feldgrenze-aus-einer-datei-lässt-sich-in-der-leiste-nicht-mehr-korrigieren-02102026"></a>
+<a id="rm-447"></a>
+
+**RM-447 — Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren.**
+  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (Hauptfenster offscreen); Folgepunkt zu
+  RM-354 (archiviert, Abnahme dort erfüllt).
+  - **Regression gegenüber 0.5.1:** Datei mit Breite 5000 (Halt an Schritt 1): in 0.5.1 zeigte die
+    Leiste „5000,00“, 1000 + Enter löste den Halt; jetzt zeigt sie „1000,00“, weil Qt auf die
+    Feldgrenze klemmt (`app/ui/panels.py:3682–3690`, `:3766–3767`) — 1000 + Enter bewirkt nichts,
+    das Dokument bleibt 5000, der Halt bleibt; *Eingabe korrigieren* führt genau in dieses Feld.
+  - **Abgeleitetes Maß** (`=@breite*2`): die Sitzung lehnt ab, die Leiste zeigt weiter „600,00“
+    (`app/ui/main_window.py:22258`).
+  - **Fernsteuerung:** `set_parameter` 5000 antwortet „Der Wert ist schon so eingestellt.“;
+    `add_parameter` verliert `minimum`, `maximum` und `title`, obwohl das MCP-Schema sie anbietet
+    (`main_window.py:17984–17995`).
+  **Fix:** Die Leiste zeigt den gespeicherten Wert (auch außerhalb der Grenze, markiert) und nimmt
+  jede gültige Korrektur an; abgeleitete Maße zeigen den Rückweg; Fernsteuerung meldet die Grenze
+  und übernimmt die angebotenen Felder.
+  **Abnahme (über die Oberfläche):** Datei mit Breite 5000 öffnen → Leiste zeigt 5000, 1000 + Enter
+  löst den Halt; abgeleitetes Maß zeigt nach Ablehnung den alten Wert; `set_parameter` 5000 →
+  Ablehnung mit Grenze; `add_parameter` mit Grenzen speichert sie. Bauplan §13, §2.7, §15.3.
+  Belege: `F:\solidon-review-reports\verif-4373b5f12-oberflaeche.md`, Sonde
+  `v7u_vergleich_051.py`.
+
+**Abschluss:** Die Leiste weitet das Feld bis zur gespeicherten Zahl (`ParameterPanel._set_limits`), nennt die wirksame Grenze darunter und nimmt die Korrektur an; nach einer Ablehnung der Sitzung zeigt sie wieder den gültigen Wert; die Fernsteuerung nennt bei `set_parameter` die Grenze und übernimmt bei `add_parameter` Titel und Grenzen. Drei Fenstertests, alle vor dem Fix rot. Umgesetzt von Claude, in main mit `76ca8d57b`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
 ## RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)
 

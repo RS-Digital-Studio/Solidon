@@ -33,6 +33,33 @@ def test_saving_a_custom_printer_preserves_existing_profiles_and_exact_values(
     assert set(profiles.user_printer_profiles()) == {first.id, second.id}
 
 
+def test_the_bed_origin_survives_saving_and_its_absence_stays_the_corner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-424: Ein Bett um den Ursprung (Dremel 3D45, Deltas) reist mit dem
+    eigenen Profil; ein Profil ohne Angabe — jedes vor dem 02.10.2026
+    gespeicherte — misst weiter von der vorderen linken Ecke, ohne Migration."""
+    from app.core import build_area
+
+    monkeypatch.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+    template = profiles.printer(profiles.DEFAULT_PRINTER)
+    dremel = replace(
+        template,
+        id="user-dremel",
+        title="Dremel",
+        build_volume=(225.0, 155.0, 170.0),
+        bed_origin=(15.0, 0.0),
+    )
+    profiles.save_printer(dremel)
+    profiles.reload()
+    assert profiles.printer(dremel.id) == dremel
+    assert build_area.machine_shift(profiles.printer(dremel.id)) == pytest.approx((-15.0, 0.0))
+
+    assert template.bed_origin is None
+    width, depth, _height = template.build_volume
+    assert build_area.machine_shift(template) == pytest.approx((width / 2.0, depth / 2.0))
+
+
 @pytest.mark.parametrize("value", (0, -1, float("nan"), float("inf")))
 def test_custom_printer_rejects_invalid_dimensions_without_writing(
     value: float, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

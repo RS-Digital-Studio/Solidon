@@ -199,7 +199,11 @@ der Dialog sperrt *Übernehmen* mit demselben Satz aus **einer** Quelle
 Längen behalten dabei die Umrechnung von `LengthSpin`. Die Ablehnung steht
 direkt unter dem Feld, und der gemeinsame Knopf ist gesperrt, solange die
 scharfgestellte Handlung eine sichtbare abgelehnte Zahl enthält. Maßgruppen im
-Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann.
+Bild zeigen denselben Hinweis, bevor `read_fields` sie übernehmen kann. **Eine
+gespeicherte Zahl jenseits der Grenze wird nicht geklemmt:** Die Leiste weitet
+das Qt-Feld bis zu ihr (`ParameterPanel._set_limits`), nennt die wirksame
+Grenze darunter und nimmt jede Korrektur an — sonst zeigt sie die Grenze, und
+die Korrektur auf genau diese Zahl ist keine Änderung.
 
 **Auch die Druckeinstellungen lehnen ab statt zu kürzen.** Ihre Zahlenfelder
 verwenden `BoundedSpin`, der Düsendurchmesser `BoundedLengthSpin`. Der Hinweis
