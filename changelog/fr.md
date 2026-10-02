@@ -26,9 +26,9 @@ dans `website/version.json`.
 - Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Avant, seule la fenêtre de Creality Print le pouvait. Si 7.3 réarrange le plateau, Solidon le dit.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
-- Les réglages d'impression ne montrent que les cotes d'adhérence du type de plateau choisi. Avec un brim, les champs skirt et raft, sans effet, disparaissent.
+- Si vous choisissez brim, skirt ou raft dans les réglages d'impression, seules les cotes de ce type de plateau s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
-- Les pièces hautes et fines sur une petite base reçoivent, pour elles seules, des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
+- Les pièces hautes et fines sur une petite base reçoivent des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
 - Solidon ne propose « Paroi extérieure d'abord » que pour la pièce qui en a besoin, et jamais pour une pièce avec supports.
 - Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
@@ -55,7 +55,7 @@ dans `website/version.json`.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
-- Dans la fenêtre, « Fusionner en douceur » montre la même forme qu'à l'export. Seuls les très grands corps sont prévisualisés plus grossièrement, et l'aperçu le dit.
+- Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide. « Appliquer » attend qu'elle soit choisie et ne pose plus le corps sans rien dire du mauvais côté.
