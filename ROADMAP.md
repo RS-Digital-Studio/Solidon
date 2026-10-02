@@ -74,7 +74,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
-| [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pooldeckel/Anschluss auf origin/main; aktive Windows-Bindung und OS-Priorität eigen-/zweitgeprüft; Budget-/Plattformnachweise und b–f offen |
+| [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pool/aktive Windows-Bindung und OS-Priorität auf origin/main; Messmarken vorbereitet und mechanisch geprüft; Release-/Plattformnachweise und b–f offen |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -2250,9 +2250,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Python-Elternprozess; der äußere Aufräumjob bleibt bis nach der Zusicherung
   geöffnet. Eigenprüfung und unabhängiger Quell-/Nachweisreview ohne Befunde.
   [Dauerhafter Prozess-/Prioritätsbeleg](konzepte/nachweise-release-0.5.1/reports/rm298-lifecycle-2026-10-02.md).
-  Zentrales Tor und Übernahme dieser neuen Testeinheit stehen noch aus. Der
-  bestehende untätige Test bleibt erhalten. Tatsächliche §31-Hilfsprozessmarken,
-  Linux/macOS und Paketnachweise sind damit weiterhin nicht abgenommen.
+  Diese getrennte Testeinheit ist mit d9f830aec41ae0531784406b75ad4a0fb549b4a6
+  auf dem tatsächlichen origin/main. Das unveränderte zentrale Entwicklungstor
+  bestand mit 19.059 Tests, 62 Überspringungen und Suite/Ruff/Format/mypy jeweils
+  Exit 0. Der bestehende untätige Test bleibt erhalten. Tatsächliche
+  §31-Hilfsprozessmarken, Linux/macOS und Paketnachweise bleiben offen.
+
+  **Teilstand 02.10.2026, (d), Vergleichsmarken:** Zwei zusätzliche öffentliche
+  Arbeiterwege für Boolesche Rechnung und Anzeigeausdünnung sind vorbereitet:
+  warmer Helfer, Produktionsschwelle, API samt Übertragung/Nacharbeit und
+  getrennte Eingangscaches. Pfad-, Ergebnis- und Eingangsprüfung erfolgt
+  außerhalb der Uhr und vor jedem Markenzugriff. Der Abbruch erreicht vor
+  dem Executor-Beitritt den Helfer; danach werden verspätete Starts gesammelt.
+  Frisch bestehen 14 reine Markenmechanikfälle. Sieben Gegenfälle mit
+  nachgestellten Prüfablehnungen scheitern bei absichtlich verspäteter
+  Prüfung an denselben Marken-Zusicherungen
+  (jeweils keine Setupfehler/Skips, Exit 0 beziehungsweise 1). Der damalige
+  Importgraph-Nachlauf hatte neun fremde RM-320-Gegenfälle rot; er wird nicht
+  als grüner Gesamtlauf ausgegeben. Eigenreview und unabhängiges Quell-/
+  Mechanikreview sind abgeschlossen; der unabhängige Dokumentnachgang
+  präzisierte die nachgestellten Prüfablehnungen ohne weitere Funde.
+  Zentrales Tor und Integration stehen aus. [Fortsetzbarer Messanschluss](konzepte/nachweise-release-0.5.1/reports/rm298-hilfsprozessmarken-2026-10-02.md).
+  Keine performance-Fälle gesammelt/ausgeführt, keine Laufzeitabnahme.
+  Referenzmaschine, übrige §31-Marken, farbige Slots und Plattform-/Paketwege
+  bleiben im Release zu prüfen; RM-298 bleibt offen.
 
 <a id="rm-301"></a>
 

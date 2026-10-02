@@ -19,6 +19,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from statistics import median
 from types import SimpleNamespace
@@ -38,6 +39,7 @@ from app.core.knowledge.parts.range_check import has_self_intersections
 from app.core.perceive.features import detect, forget_cache, freeform_dropped
 from app.core.perceive.maps import wall_thickness_map
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
+from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import ProjectSources, new_project
 from app.core.scene.project import load as load_project
 from app.core.slice import analysis as slice_analysis
@@ -221,7 +223,9 @@ def dense_mesh() -> MeshData:
     return read_mesh(path.read_bytes(), ".stl")
 
 
-def measure(name: str, work: Callable[[], Any]) -> float:
+def measure(
+    name: str, work: Callable[[], Any], *, verify: Callable[[], None] | None = None
+) -> float:
     """Einmal laufen lassen, die Sekunden festhalten, mit dem **Median der
     letzten Läufe** desselben Aufrufkontexts auf dieser Maschine vergleichen.
 
@@ -287,6 +291,10 @@ def measure(name: str, work: Callable[[], Any]) -> float:
     started = time.perf_counter()
     work()
     taken = time.perf_counter() - started
+    # Ein ungültiger Rechenweg oder Inhalt darf keine Vergleichsmarke hinterlassen.
+    # Die Nachprüfung liegt nach der Uhr und vor jedem Zugriff auf die Marken.
+    if verify is not None:
+        verify()
 
     context = _context or "alone"
     marks = _read_marks()
@@ -1464,6 +1472,134 @@ def test_building_the_display_version_of_a_million_triangles() -> None:
     )
     assert 0 < outcome[0].triangle_count <= DISPLAY_MAX_TRIANGLES < mesh.triangle_count
     assert mesh.raw.vertices.tobytes() == vertices and mesh.raw.faces.tobytes() == faces
+    assert taken < 30.0, "the target is four seconds (§31); thirty catches an order of magnitude"
+
+
+def _measure_with_helper(
+    name: str,
+    job: str,
+    work: Callable[[CancelSignal], MeshData],
+    verify: Callable[[MeshData], None],
+) -> float:
+    """Derselbe öffentliche Aufruf, warm im Hilfsprozess und einschließlich Übertragung.
+
+    Der echte Schwellenwert bleibt unverändert. Start, Abbau und Nachprüfung
+    stehen außerhalb der Uhr. Nur ein gültiger Hilfsprozessweg mit gültigem
+    Ergebnis darf seine eigene Vergleichsmarke schreiben.
+    """
+    from app.core.geom import kernel_process
+
+    cancelled = CancelSignal()
+    kernel_process.shutdown()
+    try:
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="kernel-budget") as worker:
+            try:
+                assert worker.submit(kernel_process.warm_up).result(), "the helper must be ready"
+                before = kernel_process.statistics()
+                result: list[MeshData] = []
+
+                def check_result() -> None:
+                    after = kernel_process.statistics()
+                    assert after.get(f"helper:{job}", 0) > before.get(f"helper:{job}", 0), (
+                        "the public call must actually use its helper job"
+                    )
+                    for counter in ("started", "fallback", "lost", "cancelled"):
+                        assert after[counter] == before[counter], (counter, before, after)
+                    assert len(result) == 1
+                    verify(result[0])
+
+                return worker.submit(
+                    measure,
+                    name,
+                    lambda: result.append(work(cancelled)),
+                    verify=check_result,
+                ).result()
+            finally:
+                # Vor dem Executor-Join abbrechen: Auch ein Worker, der noch die
+                # Eingaben prüft, darf danach keine neue Helferrechnung beginnen.
+                cancelled.cancel()
+                kernel_process.shutdown()
+    finally:
+        # Erst der beigetretene Arbeiter schließt auch verspätete Starts aus.
+        kernel_process.shutdown()
+
+
+def _assert_same_mesh_bytes(here: MeshData, there: MeshData) -> None:
+    """Puffer und Slots des öffentlichen Wegs müssen bitgleich sein."""
+    for name in ("vertices", "faces"):
+        expected = getattr(here.raw, name)
+        actual = getattr(there.raw, name)
+        assert actual.dtype == expected.dtype, name
+        assert actual.shape == expected.shape, name
+        assert actual.tobytes() == expected.tobytes(), name
+    assert tuple(there.slots) == tuple(here.slots)
+
+
+def test_the_boolean_budget_includes_a_warm_helper() -> None:
+    """§31 und RM-298(d): die großen Kugeln auch über den wirklichen Arbeiterweg.
+
+    Wie bei ``boolean_medium`` liegen die Mitten der beiden Korpuskörper
+    30 mm auseinander. Eigene Referenznetze vermeiden Vorwärmen der gemessenen
+    Eingangscaches; ``boolean_medium_helper_warm`` misst mit warmem Helfer.
+    """
+    from app.core.geom.boolean import boolean
+
+    first = medium_mesh()
+    moved = medium_mesh().raw.copy()
+    moved.apply_translation((30.0, 0.0, 0.0))
+    second = MeshData.of(moved)
+    inputs = [
+        (one.raw.vertices.tobytes(), one.raw.faces.tobytes(), tuple(one.slots))
+        for one in (first, second)
+    ]
+    references = [MeshData.of(one.raw.copy(), one.slots) for one in (first, second)]
+    expected = boolean("difference", references).mesh
+
+    def verify(actual: MeshData) -> None:
+        assert actual.triangle_count > 0, "an empty result would only measure a failed chain"
+        _assert_same_mesh_bytes(expected, actual)
+        assert [
+            (one.raw.vertices.tobytes(), one.raw.faces.tobytes(), tuple(one.slots))
+            for one in (first, second)
+        ] == inputs
+
+    taken = _measure_with_helper(
+        "boolean_medium_helper_warm",
+        "boolean",
+        lambda cancelled: boolean("difference", [first, second], cancelled=cancelled).mesh,
+        verify,
+    )
+    assert taken < 20.0, "the target is two seconds; twenty catches an order of magnitude"
+
+
+def test_the_display_budget_includes_a_warm_helper() -> None:
+    """§31 und RM-298(d): Anzeigeaufbau samt Übertragung, ohne den Prozessstart.
+
+    Derselbe Millionen-Korpuskörper und dasselbe Anzeigeziel wie im
+    Hauptfadenfall; die Referenz hat eigene Netzcaches. Die Marke heißt
+    ``display_decimate_1m_helper_warm``. Bildrate und kalter Start fehlen hier.
+    """
+    from app.core.geom.mesh_ops import decimate_for_display
+
+    mesh = dense_mesh()
+    vertices = mesh.raw.vertices.tobytes()
+    faces = mesh.raw.faces.tobytes()
+    slots = tuple(mesh.slots)
+    reference = MeshData.of(mesh.raw.copy(), mesh.slots)
+    expected = decimate_for_display(reference, DISPLAY_TRIANGLES)
+
+    def verify(actual: MeshData) -> None:
+        assert 0 < actual.triangle_count <= DISPLAY_MAX_TRIANGLES < mesh.triangle_count
+        _assert_same_mesh_bytes(expected, actual)
+        assert mesh.raw.vertices.tobytes() == vertices and mesh.raw.faces.tobytes() == faces
+        assert tuple(mesh.slots) == slots
+
+    taken = _measure_with_helper(
+        "display_decimate_1m_helper_warm",
+        "display_simplify",
+        lambda cancelled: decimate_for_display(mesh, DISPLAY_TRIANGLES, cancelled=cancelled),
+        verify,
+    )
     assert taken < 30.0, "the target is four seconds (§31); thirty catches an order of magnitude"
 
 

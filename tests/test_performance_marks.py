@@ -209,3 +209,61 @@ def test_measure_obeys_a_window_of_one(
     marks.measure("probe", lambda: None)
 
     assert _entry(baseline)["runs"] == [0.15]
+
+
+# --- Ergebnisprüfung vor dem Markenschreiben ----------------------------------------
+
+
+@pytest.mark.parametrize("existing", [False, True], ids=["new-mark", "existing-mark"])
+@pytest.mark.parametrize(
+    "problem",
+    [AssertionError("helper not used"), ValueError("result bytes differ"), KeyboardInterrupt()],
+    ids=["wrong-helper-path", "wrong-result", "interrupted"],
+)
+def test_rejected_work_never_creates_or_changes_a_mark(
+    baseline: Path, clock: list[float], existing: bool, problem: BaseException
+) -> None:
+    """Kein gültiger Weg oder Inhalt: Auch eine alte Vergleichsreihe bleibt unangetastet.
+
+    Die Nachprüfung kommt nach der gestellten Uhr, aber vor jedem Markenzugriff.
+    Ein Rückfall, veränderte Ergebnisbytes oder eine Unterbrechung dürfen weder
+    eine neue Hilfsprozessmarke anlegen noch eine vorhandene Reihe verschieben.
+    """
+    if existing:
+        _store_entry(baseline, {"runs": [0.10, 0.11, 0.12], "strikes": 0})
+    previous = baseline.read_bytes() if baseline.exists() else None
+    calls: list[str] = []
+
+    def verify() -> None:
+        calls.append("verify")
+        raise problem
+
+    clock.append(0.25)
+    with pytest.raises(type(problem), match=str(problem) or None):
+        marks.measure("probe", lambda: calls.append("work"), verify=verify)
+
+    assert calls == ["work", "verify"]
+    current = baseline.read_bytes() if baseline.exists() else None
+    assert current == previous, "die abgewiesene Arbeit hat die Vergleichsmarke verändert"
+
+
+def test_verification_is_outside_the_clock_and_before_the_first_mark(
+    baseline: Path, clock: list[float]
+) -> None:
+    """Die Prüfung zählt nicht zur API-Zeit; erst gültige Arbeit schreibt eine Marke."""
+    calls: list[str] = []
+    clock.extend([0.25, 99.0])
+
+    def verify() -> None:
+        calls.append("verify")
+        assert not baseline.exists(), "die Marke wurde schon vor ihrer Prüfung gespeichert"
+        # Die 99 gestellten Sekunden gehören nur zur Nachprüfung.
+        time.perf_counter()
+        time.perf_counter()
+
+    taken = marks.measure("probe", lambda: calls.append("work"), verify=verify)
+
+    assert calls == ["work", "verify"]
+    assert taken == pytest.approx(0.25)
+    assert _entry(baseline)["runs"] == pytest.approx([0.25])
+    assert not clock, "die Nachprüfung wurde nicht vollständig ausgeführt"
