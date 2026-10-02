@@ -594,7 +594,17 @@ def test_colouring_preserves_the_hollow_space(review_run) -> None:
     assert painted.mesh.cavity is hollow.mesh.cavity
     filled = fill_feature(hollow.mesh, (0, 1), 1).mesh
     assert filled.cavity is hollow.mesh.cavity
-    assert run("lattice_fill", painted, structure="cubic", cell=5.0, wall=1.0).outputs
+    result = run("lattice_fill", painted, structure="cubic", cell=5.0, wall=1.0)
+    assert len(result.outputs) == 1
+    output = result.outputs[0].mesh
+    assert output.volume > painted.mesh.volume
+    assert output.bounds.minimum == pytest.approx(painted.mesh.bounds.minimum)
+    assert output.bounds.maximum == pytest.approx(painted.mesh.bounds.maximum)
+    from app.core.geom.boolean import boolean
+
+    missing_shell = boolean("difference", [painted.mesh, output], allow_empty=True)
+    assert missing_shell.mesh.volume < 1e-6
+    assert "boolean.parts_not_united" not in [finding.code for finding in result.findings]
 
 
 def test_inner_floor_sketch_grows_into_the_cavity(review_run) -> None:

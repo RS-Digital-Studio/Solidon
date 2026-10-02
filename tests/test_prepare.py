@@ -2414,6 +2414,59 @@ def test_a_recognised_bore_can_be_moved(profile: Profile) -> None:
     assert ringe[0][0] == pytest.approx(15.0, abs=0.5), f"und es liegt rechts: {ringe[0]}"
 
 
+def test_moving_a_bore_passes_the_source_id_to_its_closing_step(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Verschiebung reicht ihr Szenenobjekt bis zur Booleschen Vorprüfung."""
+    from app.core.geom import prepare_ops
+
+    entry, hole = _block_with_a_bore(profile)
+    original = prepare_ops._closed_at
+    seen: list[str | None] = []
+
+    def record(*args: object, **kwargs: object):
+        seen.append(kwargs.get("object_id"))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(prepare_ops, "_closed_at", record)
+
+    _run_op("move_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=0.0)
+
+    assert seen == [entry.id]
+
+
+def test_moving_a_countersunk_bore_passes_the_source_id_to_its_chain_union(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der Kettenzweig bindet einen Vorprüfungsfehler an den Szenenkörper."""
+    from app.core.geom import prepare_ops
+
+    entry, bore, _countersink = _plate_with_a_countersunk_bore()
+    original = prepare_ops.boolean
+    seen: list[object] = []
+
+    def record(kind: str, meshes: list[MeshData], **kwargs: object):
+        if kind == "union" and isinstance(meshes, list) and len(meshes) == 2:
+            seen.append(kwargs.get("object_ids"))
+        return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(prepare_ops, "boolean", record)
+    feature = entry.features[bore]
+    centre = feature.params["centre"]
+
+    _run_op(
+        "move_feature",
+        entry,
+        profile,
+        at_feature=bore,
+        x=float(centre[0]) + 8.0,
+        y=float(centre[1]),
+        z=float(centre[2]),
+    )
+
+    assert (entry.id, None) in seen
+
+
 def test_the_moved_bore_keeps_its_identity(profile: Profile) -> None:
     """Die Kennung überlebt — sonst bricht jede Passung, die auf sie zeigt.
 

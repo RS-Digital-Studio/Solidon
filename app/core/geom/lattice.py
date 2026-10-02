@@ -381,9 +381,9 @@ NO_CAVITY: Final = _(
 @register_op(
     name="lattice_fill",
     result_kind="mesh",
-    # 2 seit dem 22.09.2026: Die Wabe teilt ihre Wände (``_honeycomb``) —
-    # dieselben Werte zeichnen ein anderes Gitter als die losen Röhren davor.
-    cache_version="2",
+    # 2: Die Wabe teilt ihre Wände (``_honeycomb``); 3: interne Gitterwerkzeuge
+    # umgehen die Vorprüfung überlappender Szenenteile (RM-319).
+    cache_version="3",
     title=_("Gitter füllen"),
     category="surface",
     params=LatticeParams,
@@ -463,7 +463,13 @@ def lattice_fill(ctx: OpContext) -> OpResult:
         )
     if ctx.progress is not None:
         ctx.progress(0.85, str(_("Gitter anfügen")))
-    filled = boolean("union", [body, inside.mesh], quality=ctx.quality, cancelled=ctx.cancelled)
+    filled = boolean(
+        "union",
+        [body, inside.mesh],
+        quality=ctx.quality,
+        cancelled=ctx.cancelled,
+        object_ids=(source.id, None),
+    )
 
     _log.info("filled with %r, cell %.1f", params.structure, params.cell)
     return OpResult(

@@ -1380,10 +1380,9 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
     with pytest.raises(GeometryError) as caught:
         edit.boolean("difference", [part, part])
 
-    text = str(caught.value.detail)
-    assert "Bearbeitung" in text
-    assert "Verschieben Sie" in text
-    assert "verbinden" not in text.casefold()
+    from app.core.errors import BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+
+    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
 
 
 def test_a_radius_that_does_not_fit_is_an_error_not_a_guess() -> None:
@@ -3876,3 +3875,32 @@ def test_only_the_face_that_breaks_the_ladder_takes_the_slow_integral(
     assert measured.mass == pytest.approx(6000.0, rel=properties.INTEGRAL_RELATIVE_ERROR)
     assert measured.mass == pytest.approx(slow.mass, rel=properties.INTEGRAL_RELATIVE_ERROR)
     assert measured.centre == pytest.approx((18.0, 14.0, 10.0), abs=1e-6)
+
+
+def test_fusing_touching_solids_removes_the_shared_face_and_keeps_filament_slots() -> None:
+    """Das Entfernen einer Kontaktfläche behält die Farben der Außenflächen."""
+    from collections import Counter
+
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    lower = edit.box(40.0, 20.0, 10.0)
+    lower = Solid(lower.shape, face_slots=(1,) * lower.face_count)
+    upper = edit.moved(edit.box(40.0, 20.0, 10.0), (0.0, 0.0, 10.0))
+    upper = Solid(upper.shape, face_slots=(2,) * upper.face_count)
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    builder.Add(compound, lower.shape)
+    builder.Add(compound, upper.shape)
+    source = Solid(
+        compound,
+        face_slots=(1,) * lower.face_count + (2,) * upper.face_count,
+    )
+
+    result = edit.fuse_solids(source)
+
+    assert source.solid_count == 2
+    assert result.solid_count == 1
+    assert result.volume == pytest.approx(16_000.0)
+    assert Counter(result.face_slots) == {1: 5, 2: 5}

@@ -960,6 +960,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
         seed=seed,
         allow_empty=kind in ("intersection", "difference"),
         cancelled=ctx.cancelled,
+        object_ids=tuple(entry.id for entry in ctx.inputs),
     )
     findings = list(outcome.findings)
     if outcome.mesh.triangle_count == 0:

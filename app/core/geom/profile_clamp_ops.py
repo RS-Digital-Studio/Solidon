@@ -599,9 +599,13 @@ def _check_liner_frame(
     actual = moved_mesh(as_mesh_data(source.mesh), np.linalg.inv(frame))
     budget = EPS_GEOM * (expected.area + actual.area)
     solvers = []
-    for first, second in ((expected, actual), (actual, expected)):
+    for index, (first, second) in enumerate(((expected, actual), (actual, expected))):
         difference = boolean(
-            "difference", [first, second], allow_empty=True, cancelled=ctx.cancelled
+            "difference",
+            [first, second],
+            allow_empty=True,
+            cancelled=ctx.cancelled,
+            object_ids=(None, source.id) if index == 0 else (source.id, None),
         )
         if (
             difference.solver.strategy not in {"direct", "welded"}

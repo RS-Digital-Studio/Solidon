@@ -83,7 +83,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
-| [RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an einer Bohrung durch beide Material](#rm-319) | Geometrie, Erkennung und Druckvorbereitung | Klassifikationsgrundlage, Cacheformat 35, Übersetzungen und alle 35 Baustein-Bereichsnachweise im isolierten Kandidaten geprüft; offen: strikter Boolean-/B-Rep-Anschluss, beide Ringfälle und der vollständige Langloch-Kundenweg |
+| [RM-319 — Zwei Körper, die sich nur berühren, verlieren beim Zug an einer Bohrung durch beide Material](#rm-319) | Geometrie, Erkennung und Druckvorbereitung | Berührungssuche, strikter Boolean-/B-Rep-Anschluss, beide Ringfälle und Langloch an beiden Kernen belegt; zentrales Entwicklungstor und Übernahme auf `origin/main` offen |
 | [RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am Netz bleibt sein Überstand](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Beide Kerne schneiden die gemessene Länge der Bohrung, wie das Netz |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
@@ -2330,16 +2330,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ΔV -138,2 vernetzt gegen -138,1 exakt). Vorschlag: Berührung in der Vorfrage
   wie Durchdringung behandeln, oder nach dem Stopfen innere Flächen entfernen.
   Abnahme: die zwei Platten mit 14 714,6 ± 1 mm³ und erkanntem Langloch, an
-  beiden Kernen. **Teilabschluss:** Die Kontaktklassifikation, Cacheformat 35
-  und die übersetzten Meldungen wurden im isolierten Kandidaten geprüft. 207
-  fokussierte Tests und 11 gezielte Anschlussprüfungen bestanden. Alle 35
-  Baustein-Bereichsnachweise bestanden; `--check` meldet 35 von 35 und der
-  Wächtertest besteht. **Offen:** Der strikte Boolean-Anschluss mit
-  `require_complete=True` kann beide Ringfälle vor dem Entlüftungssolver
-  abbrechen; sie enden mit `hollow.no_vent`. Der geprüfte
-  Klassifikationskandidat enthält diesen Boolean-/B-Rep-Anschluss nicht und
-  belegt deshalb weder die Ring-Abnahme im Endstand noch den vollständigen
-  Langloch-Kundenweg. Das bleibt Teil von RM-319.
+  beiden Kernen. **Teilabschluss:** Die Kontaktklassifikation, Cacheformat 35, Übersetzungen und
+  alle 35 Baustein-Bereichsnachweise sind im isolierten Kandidaten geprüft. Im
+  aktuellen Stand sind auch die paarbudgetfreie Berührungssuche (bis 256
+  Komponenten), der strikte Boolean-Anschluss und die Langloch-Vorprüfung beider
+  Kerne enthalten. Ein fokussierter Lauf im gemeinsamen Arbeitsbaum bestand
+  1 625 Tests. Die getrennte Übersetzungs-/Fehler-/Dokuauswahl bestand 565 Tests;
+  ein Dokumentkarten-Budgettest war abgewählt (Lauf vor dem RM-298-Warmup-Nachgang).
+  Anschließend bestanden alle 14 Dokumentationsprüfungen einschließlich des
+  Budgettests (Exit 0).
+  Die Ringmatrix mit null, einer und zwei Entlüftungen in `fine` und `draft` blieb
+  wasserdicht; bei einer und zwei Entlüftungen entstand je ein zusammenhängender
+  Körper ohne `hollow.no_vent`. Der Langlochzug an den berührenden Platten erhält
+  das erwartete Material und erkennt das Merkmal an Netz und B-Rep. Der zentrale
+  Quellreview meldet keine offenen P1/P2-Funde.
+  **Offen:** Das abschließende zentrale Entwicklungstor sowie Commit und Push auf
+  `origin/main` sind noch nicht belegt. RM-253, die Reparatur des Originalmodells,
+  beliebige Kundenmodelle und native Release-Abnahme sind dadurch nicht abgeschlossen.
 
 <a id="rm-320"></a>
 

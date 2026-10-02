@@ -640,6 +640,11 @@ class GeometryError(AppError):
     default_suggestions: ClassVar[tuple[Action, ...]] = (REPAIR_AND_RETRY, SHOW_LOCATIONS, CANCEL)
 
 
+BOOLEAN_GEOMETRY_UNSAFE_DETAIL: Final = _(
+    "Dieser Schritt ließ sich mit diesen Körpern nicht zuverlässig berechnen."
+)
+
+
 class NotManifoldError(GeometryError):
     """Offene Kanten oder nicht-mannigfaltige Geometrie, wo ein Volumenkörper
     gebraucht wurde."""

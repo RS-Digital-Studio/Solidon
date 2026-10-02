@@ -14,7 +14,7 @@ ist das ein Befund, kein zweiter Wahrheitsbegriff. Regeln:
 | `kernel.py` | `Solid` und sein Weg ins Netz, `available()`, `boolean_builder` (`SetRunParallel`, bitgleich), Merker je Körper (Volumen, Hüllquader, `is_closed`, `face_neighbours`), `nearest_distance`, `untrimmed_surface` |
 | `profiles.py` | Vom Skizzenumriss zum Körper (§30.1): Gewinde, Formschräge, Bahn, Übergang, Querschnitte für Profilklemmen und Dichtnuten (`face_of`, `offset_face`, `face_boolean`, `prism`), `round_cord`, `shell_open_at`, `top_faces_of` |
 | `ops.py` | Die Operationen (§25, §10): `mesh_to_exact`, `brep_to_mesh`, `thread_exact`, `create_brep_box` …; `drill_brep_hole`, `shell_exact` versteckt, `prepare_ops.drill_hole` und `hollow_object` rufen sie |
-| `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
+| `edit.py` | Einen Körper formen: Kanten, Bohrungen, Rundungen, Flächen, Lage; `fuse_solids` vereinigt berührende Volumenkörper mit nativer Flächenhistorie; `fillet`/`chamfer` als exakte Hälfte von `geom/edge_ops.py` |
 | `features.py` | Merkmale aus der Topologie (§21), `features_of`; „durchgehend?" erst nach dem Gewinde (`_ThroughQuestion`) |
 | `canonical.py` | Geprüfte Träger mit wirklichen Grenzen (`surface_sample`, `horizontal_area`); Kegel bis in die Spitze (`_apart_from_the_apex`), gespiegelte Ebene über die Pole (`_pole_plane`) |
 | `thread.py` | Gewinde an importierter Geometrie (§21.1) |
@@ -58,7 +58,10 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Dreiecksnummern: `ModifiedShape`; `_copied_faces`/`_copied_edges` aus
   **einer** Kopierprimitive, bijektiv, sofort gebaut; `faces_of_triangles`
   kehrt `triangles_of_face` geprüft um. Verschweißt wird je Körper
-  (`_welded_per_solid`): Berührende Körper bleiben zwei Schalen.
+  (`_welded_per_solid`): Berührende Körper bleiben zwei Schalen. Nur wo eine
+  Operation flächigen Kontakt ausdrücklich auflösen muss, vereinigt
+  `fuse_solids` die nativen Körper vorübergehend und erhält dabei belegte
+  Flächen- und Filamenthistorie.
 - **`transformed_with_faces`** bleibt bei Maßstab, Spiegelung, Scherung exakt
   (`gp_GTrsf`; `gp_Trsf.SetValues` orthogonalisiert); Matrix endlich, affin,
   umkehrbar; Körperzahl, Geschlossenheit, Gültigkeit halten. Starr belegt

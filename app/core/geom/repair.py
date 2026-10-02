@@ -1322,7 +1322,7 @@ def parts_that_cross(
     pieces: Sequence[np.ndarray] | None = None,
     cancelled: CancelToken | None = None,
     *,
-    max_pairs: int = CROSSING_PARTS_PAIRS,
+    max_pairs: int | None = CROSSING_PARTS_PAIRS,
     include_face_contacts: bool = False,
     require_complete: bool = False,
 ) -> tuple[float, float, float] | None:
@@ -1345,10 +1345,13 @@ def parts_that_cross(
     am Piratenschiff eine Sekunde je Körper, fast alles für Paare innerhalb
     eines Teils. Reicht das Budget (:data:`CROSSING_PARTS_PAIRS`) nicht, gibt
     die Vorfrage ohne ``require_complete`` ``None`` zurück — kein Satz, der mehr
-    behauptet, als gesucht wurde. Wer ``require_complete`` setzt, lässt bei
-    unvollständiger Suche mit Handlungsvorschlag anhalten, weil ein nicht
-    geprüfter Kontakt sonst einen unsicheren Solverlauf erlauben könnte. Die
-    Vorfrage wählt nur Satz und Knöpfe, sie rechnet keine Geometrie.
+    behauptet, als gesucht wurde. ``max_pairs=None`` hebt nur dieses Paarbudget
+    auf; die Teilegrenze bleibt bestehen. Wer ``require_complete`` setzt,
+    lässt bei unvollständiger Suche mit Handlungsvorschlag anhalten, weil ein
+    nicht geprüfter Kontakt sonst einen unsicheren Solverlauf erlauben könnte.
+    Boolesche Vorprüfungen suchen deshalb ohne Paarbudget und bleiben je
+    Achsenlauf und Kandidatenblock abbrechbar. Die Vorfrage wählt nur Satz und
+    Knöpfe, sie rechnet keine Geometrie.
 
     ``include_face_contacts`` nimmt für eine Vereinigung auch positive
     koplanare Flächenüberdeckung auf. Kanten- und Eckkontakt bleiben außen vor;
@@ -1398,6 +1401,7 @@ def parts_that_cross(
             near[0],
             near[1],
             budget,
+            cancelled=cancelled,
             include_face_contacts=include_face_contacts,
         )
         if found is not None:
@@ -1410,7 +1414,8 @@ def parts_that_cross(
                     suggestions=(CORRECT_INPUT, CANCEL),
                 )
             return None
-        budget -= spent
+        if budget is not None:
+            budget -= spent
     return None
 
 
@@ -1421,8 +1426,9 @@ def _first_crossing_between(
     high: np.ndarray,
     one: np.ndarray,
     other: np.ndarray,
-    budget: int,
+    budget: int | None,
     *,
+    cancelled: CancelToken | None = None,
     include_face_contacts: bool = False,
 ) -> tuple[tuple[int, int] | None, int, bool]:
     """Das erste Paar aus ``one`` und ``other``, das quer durchdringt, und wie viele geprüft wurden.
@@ -1436,6 +1442,8 @@ def _first_crossing_between(
 
     best: tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None = None
     for axis in range(3):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         axis_order = other[np.argsort(low[other, axis], kind="stable")]
         starts = low[axis_order, axis]
         back = float((high[other, axis] - low[other, axis]).max()) + EPS_GEOM
@@ -1448,39 +1456,40 @@ def _first_crossing_between(
     if best is None:
         return None, 0, True
     best_count, order, begin, _, counts = best
-    if best_count > 20 * budget:
+    if budget is not None and best_count > 20 * budget:
         # Auch die beste Achse liefert zu viele Grobkandidaten; der Lauf bleibt
         # ausdrücklich unvollständig, statt die Sicherheitsgrenze zu lockern.
         return None, budget, False
     total = np.cumsum(counts)
     spent = 0
-    position = 0
-    while position < len(one):
-        before = int(total[position - 1]) if position else 0
-        stop = int(np.searchsorted(total, before + CROSSING_BLOCK, side="right"))
-        stop = min(max(stop, position + 1), len(one))
-        size = counts[position:stop]
-        amount = int(size.sum())
-        rows = np.arange(position, stop)
-        position = stop
-        if not amount:
-            continue
-        left = np.repeat(rows, size)
-        steps = np.arange(amount) - np.repeat(np.cumsum(size) - size, size)
-        first = one[left]
-        second = order[begin[left] + steps]
+    candidate_start = 0
+    while candidate_start < best_count:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        candidate_stop = min(candidate_start + CROSSING_BLOCK, best_count)
+        candidates = np.arange(candidate_start, candidate_stop, dtype=np.int64)
+        rows = np.searchsorted(total, candidates, side="right")
+        row_starts = np.zeros(len(candidates), dtype=np.int64)
+        has_previous = rows > 0
+        row_starts[has_previous] = total[rows[has_previous] - 1]
+        steps = candidates - row_starts
+        first = one[rows]
+        second = order[begin[rows] + steps]
+        candidate_start = candidate_stop
         overlap = np.all(low[first] <= high[second] + EPS_GEOM, axis=1) & np.all(
             low[second] <= high[first] + EPS_GEOM, axis=1
         )
         first, second = first[overlap], second[overlap]
         spent += len(first)
-        if spent > budget:
+        if budget is not None and spent > budget:
             return None, spent, False
         if not len(first):
             continue
         hit, flat = crossing_pairs(
             triangles[first], triangles[second], faces[first], faces[second], with_coplanar=True
         )
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         eligible = np.ones(len(hit), dtype=bool) if include_face_contacts else ~np.asarray(flat)
         across = np.flatnonzero(np.asarray(hit) & eligible)
         if len(across):

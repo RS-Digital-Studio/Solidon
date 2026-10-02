@@ -33,6 +33,7 @@ from app.core.brep.kernel import (
     require,
 )
 from app.core.errors import (
+    BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
     CHANGE_SELECTION,
     CORRECT_INPUT,
@@ -1382,12 +1383,7 @@ def boolean(
             # ohne Überlappung — und die behebt eine Bewegung, keine
             # Reparatur.
             raise GeometryError(
-                detail=_(
-                    "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer "
-                    "jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche "
-                    "oder Kante. Verschieben Sie einen der beiden so weit, dass sich die "
-                    "Körper wirklich überlappen."
-                ),
+                detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         result = operation.Shape()
@@ -1399,6 +1395,57 @@ def boolean(
         slots = carried_face_slots(result, sources, history=operation)
         shape = result
     return Solid(shape, deflection=parts[0].deflection, face_slots=slots)
+
+
+def fuse_solids(solid: Solid, *, cancelled: CancelToken | None = None) -> Solid:
+    """Vereinigt die Volumenkörper einer Form, wenn sie sich berühren oder überlagern.
+
+    Getrennte Teile bleiben als Compound erhalten. Die native Historie ordnet
+    durchgereichte Flächen und ihre Filamentslots dem Ergebnis zu.
+    """
+    if solid.solid_count < 2:
+        return solid
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
+    from OCP.collections import List_TopoDS_Shape
+    from OCP.TopAbs import TopAbs_SOLID
+    from OCP.TopExp import TopExp_Explorer
+
+    solids = []
+    explorer = TopExp_Explorer(solid.shape, TopAbs_SOLID)
+    while explorer.More():
+        solids.append(explorer.Current())
+        explorer.Next()
+    if len(solids) < 2:
+        return solid
+
+    arguments = List_TopoDS_Shape()
+    arguments.Append(solids[0])
+    tools = List_TopoDS_Shape()
+    for part in solids[1:]:
+        tools.Append(part)
+    operation = BRepAlgoAPI_Fuse()
+    operation.SetNonDestructive(True)
+    operation.SetRunParallel(True)
+    operation.SetToFillHistory(True)
+    operation.SetArguments(arguments)
+    operation.SetTools(tools)
+    operation.Build()
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if not operation.IsDone():
+        raise GeometryError(
+            detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    result = solid.replacing(operation.Shape(), history=operation, cancelled=cancelled)
+    if not result.is_closed or result.solid_count < 1 or result.volume <= EPS_GEOM:
+        raise GeometryError(
+            detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return result if result.solid_count < solid.solid_count else solid
 
 
 def bore(

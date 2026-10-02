@@ -1329,6 +1329,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         cut_slot=0,
         cancelled=ctx.cancelled,
+        object_ids=(source.id, None),
     )
 
     # Ein Muster, das den Körper nicht erreicht hat, sagt das (§2.7) — dieselbe

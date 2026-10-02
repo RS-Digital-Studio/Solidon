@@ -19,6 +19,7 @@ from numpy.typing import NDArray
 from app.core import units
 from app.core.deferred import trimesh
 from app.core.errors import (
+    BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
     CANCEL,
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
@@ -28,6 +29,7 @@ from app.core.errors import (
     RESIZE_THE_WIDENING,
     SHOW_FEATURE,
     SHOW_LOCATION,
+    SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
     SPLIT_MODEL,
     BooleanFailedError,
@@ -128,6 +130,7 @@ from app.core.types import (
     FeatureRef,
     Finding,
     Mesh,
+    ObjectId,
     OpContext,
     OpResult,
     PlaneFrame,
@@ -2162,6 +2165,7 @@ def _closed_at(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    object_id: ObjectId,
     alone: bool = False,
     whole: bool = False,
 ) -> BooleanOutcome:
@@ -2201,12 +2205,23 @@ def _closed_at(
     Entfernen und Verschließen; wer das Langloch nur kürzer, breiter oder
     anders gerichtet neu schneidet, behält die Fasen an den Seiten, die
     bleiben. Wo die Flächen keinen Körper hergeben, gilt der Stopfen wie bisher.
+
+    ``object_id`` bezeichnet den Szenenkörper bei der Vorprüfung. Das Werkzeug
+    bleibt intern und wird nicht als Kundenobjekt ausgegeben.
     """
     if whole and cavity and feature.kind == "slot":
         own = _body_from_faces(mesh, feature.face_indices, allowed_rings=(2,))
         if own is not None:
             return _without_scars(
-                boolean("union", [mesh, own], quality=quality, seed=seed, cancelled=cancelled)
+                boolean(
+                    "union",
+                    [mesh, own],
+                    quality=quality,
+                    seed=seed,
+                    cancelled=cancelled,
+                    object_ids=(object_id, None),
+                    merge_face_contacts=True,
+                )
             )
     tool = _tool_for(
         mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
@@ -2295,6 +2310,8 @@ def _closed_at(
         quality=quality,
         seed=seed,
         cancelled=cancelled,
+        object_ids=(object_id, None),
+        merge_face_contacts=cavity,
     )
     return _without_scars(outcome) if cavity else outcome
 
@@ -3195,6 +3212,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                     quality=ctx.quality,
                     seed=ctx.seed,
                     cancelled=ctx.cancelled,
+                    object_ids=(source.id, None),
                 )
             )
         else:
@@ -3206,6 +3224,7 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
                 quality=ctx.quality,
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
+                object_id=source.id,
                 alone=True,
                 whole=True,
             )
@@ -3223,7 +3242,12 @@ def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
             cancelled=ctx.cancelled,
         )
     placed = boolean(
-        kind, [body, placing], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        kind,
+        [body, placing],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+        object_ids=(source.id, None),
     )
     findings.extend(placed.findings)
     if duplicate:
@@ -3722,7 +3746,9 @@ _NO_MOUTH_TO_GRIP: Final = _(
     # sie an und lässt keine Narben stehen (RM-248, Durchsicht 0.5.1).
     # 6: die gerundete Mündungskante einer Kette reist mit, statt an der alten
     # Stelle eine Mulde und an der neuen eine Haut zu lassen (RM-259).
-    cache_version="6",
+    # 7: beim Schließen einer Bohrung werden flächig berührende Körper zuerst verbunden (RM-319).
+    # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="8",
     title=_("Merkmal verschieben"),
     category="holes",
     params=MoveFeatureParams,
@@ -3842,6 +3868,7 @@ def move_feature(ctx: OpContext) -> OpResult:
                 quality=ctx.quality,
                 seed=ctx.seed,
                 cancelled=ctx.cancelled,
+                object_ids=(source.id, None),
             )
         )
         # **Mit Zugabe an den Mündungen, nicht bündig** (§39). Der exakte
@@ -3864,6 +3891,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_ids=(source.id, None),
         )
         features = _without_old_triangles(source.features)
         for related in chain:
@@ -3905,6 +3933,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_id=source.id,
             alone=True,
             whole=True,
         )
@@ -3916,6 +3945,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_ids=(source.id, None),
         )
         features = _without_old_triangles(source.features)
         moved = dataclasses.replace(
@@ -4085,7 +4115,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
     # 4: an einer gekrümmten Mündung kommt das Werkzeug aus den Flächen der
     # Kette statt aus Kennzahlen (RM-248, Durchsicht 0.5.1).
     # 5: die Kopie einer Kette nimmt ihre gerundete Mündungskante mit (RM-259).
-    cache_version="5",
+    # 6: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="6",
     title=_("Merkmal verdoppeln"),
     category="holes",
     params=DuplicateFeatureParams,
@@ -4938,6 +4969,7 @@ def _mesh_pattern_result(
             quality=ctx.quality,
             seed=seed,
             cancelled=ctx.cancelled,
+            object_ids=(source.id, *(None for _ in tools)),
         )
         placed = outcome.mesh
         findings.extend(outcome.findings)
@@ -5228,7 +5260,9 @@ class RemoveFeatureParams(BaseParams):
     # 10: eine gekrümmte Mündung schließt mit der fortgesetzten Fläche statt
     # mit einem Fächer vom Mittelpunkt ihres Rands (RM-248, Durchsicht 0.5.1).
     # 11: die ganze Kette schließt samt gerundeter Mündungskante (RM-259).
-    cache_version="11",
+    # 12: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
+    # 13: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="13",
     title=_("Merkmal entfernen"),
     category="holes",
     params=RemoveFeatureParams,
@@ -5366,6 +5400,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_id=source.id,
             alone=stands_alone,
             whole=True,
         )
@@ -5448,7 +5483,9 @@ class RotateFeatureParams(BaseParams):
     # Durchsicht 0.5.1).
     # 6: eine gekippte Sackbohrung reicht über ihre Mündung hinaus, statt über
     # der tiefen Seite eine Haut stehen zu lassen (RM-263, Durchsicht 0.5.1).
-    cache_version="6",
+    # 7: beim Schließen einer Bohrung werden flächig berührende Körper verbunden (RM-319).
+    # 8: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="8",
     title=_("Merkmal drehen"),
     category="holes",
     params=RotateFeatureParams,
@@ -5557,6 +5594,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        object_id=source.id,
         alone=True,
         whole=True,
     )
@@ -6671,7 +6709,9 @@ class ResizeFeatureParams(BaseParams):
     # Facettengrenzen konform geteilt und endet an den Stirnflächen des Stifts.
     # 9: Eine Senkung auf ihrer Bohrung wird aus den Einlaufprofilen neu
     # geschnitten, statt um ihre Mündung gestreckt (Durchsicht 0.5.1, rest-lippe).
-    cache_version="9",
+    # 10: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
+    # 12: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="12",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -6760,6 +6800,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        object_id=source.id,
         alone=stands_alone,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
@@ -7499,7 +7540,9 @@ OPEN_BODY_DETAIL: Final = _(
     # 11: an einer Haltelippe schneiden beide Umfänge über ihr eigenes Profil
     # (Durchsicht 0.5.1).
     # 12: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
-    cache_version="12",
+    # 13: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
+    # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="14",
     title=_("Bohrung ändern"),
     category="holes",
     params=ResizeHoleParams,
@@ -7799,6 +7842,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_id=source.id,
         )
         body = closing.mesh
         closed_first = list(closing.findings)
@@ -8185,8 +8229,10 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 9: das Werkzeug liegt in der Welt, der Körper bleibt, wo er ist (RM-274).
     # 10: der Winkel zählt gegen ``prepare.slot_frame`` statt gegen das Rauschen
     #     der gemessenen Achse (30.09.2026).
+    # 11: berührende B-Rep-Körper werden vor dem Schließen vereinigt (RM-319).
     # 13: die alte Winkelbedeutung bleibt an Projektparametern gebunden (RM-323).
-    cache_version="13",
+    # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="14",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -8395,6 +8441,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 values={"object": source.id},
             )
         started = source.mesh
+        merge_findings: list[Finding] = []
         if closes_the_old:
             # Bis zum 10.09.2026 stand hier eine Absage: „Am exakten Körper
             # lässt sich ein Loch noch nicht versetzen." Sie hatte einen
@@ -8404,7 +8451,49 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # Derselbe Stopfen wie beim Versetzen (:func:`_exact_cavity_filled`):
             # an den Randebenen begrenzt, damit eine schräge Mündung keine
             # Beule über der Fläche zurücklässt.
-            started = _exact_cavity_filled(started, feature)
+            from app.core.geom.repair import parts_that_cross
+
+            contact = (
+                parts_that_cross(
+                    body.raw,
+                    cancelled=ctx.cancelled,
+                    max_pairs=None,
+                    include_face_contacts=True,
+                    require_complete=True,
+                )
+                if source.mesh.solid_count > 1
+                else None
+            )
+            if contact is not None:
+                # **Erst die gemeinsame Grenzfläche entfernen, dann den Stopfen
+                # setzen** (RM-319). Sonst verbindet der Stopfen beide Schalen
+                # über der alten Bohrung; der neue Schnitt trifft danach ihre
+                # doppelte Innenfläche und verliert Material. Die Randebenen
+                # gehören zur ursprünglichen Merkmalskarte und werden vor dem
+                # Fusen festgehalten.
+                planes = _rim_planes(started, feature)
+                united = edit.fuse_solids(started, cancelled=ctx.cancelled)
+                if united.solid_count >= started.solid_count:
+                    raise GeometryError(
+                        detail=BOOLEAN_GEOMETRY_UNSAFE_DETAIL,
+                        suggestions=(SHOW_LOCATIONS, CORRECT_INPUT, CANCEL),
+                        object_id=source.id,
+                    )
+                started = united
+                started = _exact_cavity_filled(started, feature, planes=planes)
+                merge_findings.append(
+                    Finding(
+                        code="boolean.parts_united",
+                        severity="info",
+                        message=_(
+                            "Teile des Modells wurden vor diesem Schritt zu einem Körper vereinigt."
+                        ),
+                        location=contact,
+                        suggestions=(SHOW_LOCATION,),
+                    )
+                )
+            else:
+                started = _exact_cavity_filled(started, feature)
         cut_depth = _through_bore_depth(started, centre, axis) if through else depth
         if rounded:
             solid = edit.unified(
@@ -8436,7 +8525,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 detail=OPEN_BODY_DETAIL,
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
-        findings: list[Finding] = list(said)
+        findings: list[Finding] = [*said, *merge_findings]
         # Gegen den gefüllten Körper, wie am Netz (``prepare.slot_bore``): Ein
         # Versetzen oder Verkürzen mit neuer Breite trägt oft gleich viel ab,
         # wie es füllt, und hieß gegen das Original „nichts abgetragen"
@@ -8549,6 +8638,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_id=source.id,
         )
         body = closing.mesh
         filled = list(closing.findings)
@@ -11086,7 +11176,9 @@ def _exact_body(source: SceneObject) -> Any:
     return source.mesh
 
 
-def _exact_cavity_filled(solid: Any, feature: Feature) -> Any:
+def _exact_cavity_filled(
+    solid: Any, feature: Feature, *, planes: Sequence[SectionPlane] | None = None
+) -> Any:
     """Eine erkannte Bohrung oder ein Langloch exakt schließen — mit den gemessenen Maßen.
 
     Dieselbe Paarung wie am Netz (``_closed_at``), nur ohne Vieleck: Der
@@ -11102,7 +11194,7 @@ def _exact_cavity_filled(solid: Any, feature: Feature) -> Any:
     # **Begrenzt an den Randebenen, wo es sie gibt** — dieselbe Frage wie am
     # Netz (``_closed_at``, :func:`_rim_planes`): Die Deckel des Stopfens stehen
     # quer zur Achse, die Mündungen einer schrägen Bohrung nicht.
-    planes = _rim_planes(solid, feature)
+    planes = _rim_planes(solid, feature) if planes is None else tuple(planes)
     depth = _bore_number(_longer(feature) if planes else feature, "depth")
     # Ohne Randebenen begrenzt die konvexe Hülle, wie am Netz ``shell``: Ein
     # Stopfen darf nicht aus dem Körper herauswachsen, den er füllt.
@@ -14140,6 +14232,7 @@ def _pattern_cleared(ctx: OpContext, source: SceneObject, feature: Feature) -> B
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_ids=(source.id, None),
         )
     )
 
@@ -14352,6 +14445,7 @@ def _resize_pattern(
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        object_ids=(source.id, None),
     )
     params_after = {
         **feature.params,
@@ -15227,7 +15321,9 @@ class PlugParams(BaseParams):
     # 2: eine schräge Bohrung schließt an ihren Randebenen (22.09.2026).
     # 3: ein Langloch schließt mit dem Körper aus seinen Flächen (Durchsicht
     # 0.5.1).
-    cache_version="3",
+    # 4: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
+    # 5: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
+    cache_version="5",
     title=_("Bohrung verschließen"),
     category="holes",
     params=PlugParams,
@@ -15285,6 +15381,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
+            object_id=source.id,
             whole=True,
         )
         remaining = _without_old_triangles(source.features, without=(feature.id,))

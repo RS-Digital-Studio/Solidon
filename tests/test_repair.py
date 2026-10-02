@@ -211,6 +211,7 @@ def test_aligned_triangle_edges_do_not_hide_a_real_crossing() -> None:
 
     assert parts_that_cross(crossing) is not None
     assert parts_that_cross(crossing, include_face_contacts=True) is not None
+    assert parts_that_cross(crossing, max_pairs=None, require_complete=True) is not None
 
 
 def test_required_crossing_search_rejects_an_exhausted_pair_budget() -> None:
@@ -228,6 +229,114 @@ def test_required_crossing_search_rejects_an_exhausted_pair_budget() -> None:
         CORRECT_INPUT.id,
         CANCEL.id,
     ]
+
+
+def test_unbounded_crossing_search_scans_past_the_diagnostic_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die vollständige Vorprüfung darf an der Diagnosegrenze nicht früh abbrechen."""
+    from app.core.geom import intersections
+
+    triangle = np.asarray([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]])
+    triangles = np.repeat(triangle, 40, axis=0)
+    faces = np.tile(np.asarray([[0, 1, 2]], dtype=np.int64), (len(triangles), 1))
+    low, high = triangles.min(axis=1), triangles.max(axis=1)
+    one = np.arange(20, dtype=np.int64)
+    other = np.arange(20, 40, dtype=np.int64)
+    checked: list[int] = []
+
+    def no_crossing(
+        first: np.ndarray, *_args: object, **_kwargs: object
+    ) -> tuple[np.ndarray, np.ndarray]:
+        checked.append(len(first))
+        empty = np.zeros(len(first), dtype=bool)
+        return empty, empty
+
+    monkeypatch.setattr(intersections, "crossing_pairs", no_crossing)
+
+    bounded = _first_crossing_between(triangles, faces, low, high, one, other, budget=1)
+    assert bounded == (None, 1, False)
+    assert checked == []
+
+    unbounded = _first_crossing_between(triangles, faces, low, high, one, other, budget=None)
+    assert unbounded == (None, 400, True)
+    assert checked == [400]
+
+
+def test_crossing_search_splits_one_high_degree_row_into_bounded_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch eine Dreiecksfläche mit sehr vielen Partnern bleibt im Blocklimit."""
+    from app.core.geom import intersections
+    from app.core.geom.repair import CROSSING_BLOCK
+
+    triangle = np.asarray([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]])
+    triangles = np.repeat(triangle, 100_001, axis=0)
+    faces = np.tile(np.asarray([[0, 1, 2]], dtype=np.int64), (len(triangles), 1))
+    low, high = triangles.min(axis=1), triangles.max(axis=1)
+    one = np.asarray([0], dtype=np.int64)
+    other = np.arange(1, len(triangles), dtype=np.int64)
+    checked: list[int] = []
+
+    def no_crossing(
+        first: np.ndarray, *_args: object, **_kwargs: object
+    ) -> tuple[np.ndarray, np.ndarray]:
+        checked.append(len(first))
+        empty = np.zeros(len(first), dtype=bool)
+        return empty, empty
+
+    monkeypatch.setattr(intersections, "crossing_pairs", no_crossing)
+
+    result = _first_crossing_between(triangles, faces, low, high, one, other, budget=None)
+
+    assert result == (None, 100_000, True)
+    assert checked == [CROSSING_BLOCK, 100_000 - CROSSING_BLOCK]
+
+
+def test_unbounded_crossing_search_checks_cancellation_between_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine laufende vollständige Suche reagiert nach dem ersten Kandidatenblock auf Abbruch."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import intersections
+    from app.core.geom.repair import CROSSING_BLOCK
+
+    class Signal:
+        cancelled = False
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.cancelled
+
+        def raise_if_cancelled(self) -> None:
+            if self.cancelled:
+                raise OperationCancelled()
+
+    signal = Signal()
+    triangle = np.asarray([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]])
+    triangles = np.repeat(triangle, 100_001, axis=0)
+    faces = np.tile(np.asarray([[0, 1, 2]], dtype=np.int64), (len(triangles), 1))
+    low, high = triangles.min(axis=1), triangles.max(axis=1)
+    one = np.asarray([0], dtype=np.int64)
+    other = np.arange(1, len(triangles), dtype=np.int64)
+    checked: list[int] = []
+
+    def cancel_after_block(
+        first: np.ndarray, *_args: object, **_kwargs: object
+    ) -> tuple[np.ndarray, np.ndarray]:
+        checked.append(len(first))
+        signal.cancelled = True
+        empty = np.zeros(len(first), dtype=bool)
+        return empty, empty
+
+    monkeypatch.setattr(intersections, "crossing_pairs", cancel_after_block)
+
+    with pytest.raises(OperationCancelled):
+        _first_crossing_between(
+            triangles, faces, low, high, one, other, budget=None, cancelled=signal
+        )
+
+    assert checked == [CROSSING_BLOCK]
 
 
 def test_crossing_preflight_uses_the_axis_with_fewer_candidates() -> None:
@@ -282,7 +391,7 @@ def test_required_crossing_search_accepts_a_complete_no_contact_result() -> None
     second.apply_translation((3.0, 0.0, 0.0))
     separated = trimesh.util.concatenate([first, second])
 
-    assert parts_that_cross(separated, require_complete=True) is None
+    assert parts_that_cross(separated, max_pairs=None, require_complete=True) is None
 
 
 @pytest.mark.parametrize("as_soup", [False, True], ids=["indexed", "soup"])

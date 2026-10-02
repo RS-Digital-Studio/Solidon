@@ -126,9 +126,8 @@ zurück vernetzt (`voxel`); 5 Abbruch mit Befund und Handlungsvorschlag.
 
 - Stufe 4 steht im Prüfbericht, nie still; danach werden die Materialslots neu
   übertragen (§20). Im Entwurf endet die Kette nach Stufe 2.
-- **Ineinandersteckende Teile eines Eingangs werden vorher vereinigt, mit
-  Befund** (`boolean.parts_united`); mehrschalige Körper gehen durch
-  `boolean()`.
+- **Überlappende Teile je Eingang vorab vereinen, mit Befund** (`boolean.parts_united`);
+  Zusatzwerkzeuge ohne Objekt-ID ausnehmen; Mehrschaler durch `boolean()`.
 - **Was der Kern nicht geschnitten hat, kommt in der Darstellung des Eingangs
   und an seinem Ort zurück** (`attributes.in_source_layout`,
   `prepare_ops._without_scars`): Werkzeuge wandern in die Welt, nie Körper in

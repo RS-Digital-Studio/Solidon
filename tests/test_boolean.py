@@ -16,15 +16,21 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.errors import BooleanFailedError, GeometryError
+from app.core.errors import BOOLEAN_GEOMETRY_UNSAFE_DETAIL, BooleanFailedError, GeometryError
 from app.core.geom.attributes import used_slots, with_slot
-from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, BooleanKind, boolean, shared_volume
+from app.core.geom.boolean import (
+    DRAFT_CHAIN,
+    FULL_CHAIN,
+    BooleanKind,
+    boolean,
+    shared_volume,
+)
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import MaterialSlot, OpContext, OpResult, Scene, SceneObject
+from app.core.types import Feature, MaterialSlot, OpContext, OpResult, Scene, SceneObject
 from tests.helpers import two_cubes
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -38,6 +44,96 @@ def box(size: float, offset: tuple[float, float, float]) -> MeshData:
     body = trimesh.creation.box(extents=(size, size, size))
     body.apply_translation(offset)
     return MeshData.of(body)
+
+
+def crossing_shell_with_overlapping_part() -> MeshData:
+    """Eine geschlossene Eigenkreuzung plus ein zweites, sie schneidendes Teil."""
+    shell = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide()
+    corners = np.asarray(shell.vertices).copy()
+    top = np.flatnonzero(np.all(np.abs(corners - 10.0) < 1e-9, axis=1))
+    assert len(top) == 1
+    corners[top[0]] = (0.0, 0.0, -18.0)
+    shell = trimesh.Trimesh(vertices=corners, faces=shell.faces.copy(), process=False)
+    part = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+    part.apply_translation((8.0, 0.0, 0.0))
+    return MeshData.of(trimesh.util.concatenate([shell, part]))
+
+
+@pytest.mark.parametrize(
+    "offset, angle",
+    [(0.0, 0), (0.0, 17), (100.0, 0), (100.0, 17)],
+)
+def test_differently_subdivided_edge_contact_survives_transform(offset: float, angle: int) -> None:
+    """Ein reiner Kantenkontakt blockiert Boolesch auch nach starrer Bewegung nicht."""
+    from app.core.geom.repair import parts_that_cross
+
+    lower = trimesh.creation.box(extents=(1.0, 1.0, 10.0))
+    lower.apply_translation((0.5, 0.5, 5.0))
+    upper = trimesh.creation.box(extents=(1.0, 1.0, 5.0))
+    upper.apply_translation((-0.5, -0.5, 2.5))
+    transform = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))
+    transform[:3, 3] = (offset, -offset, offset)
+    lower.apply_transform(transform)
+    upper.apply_transform(transform)
+    body = MeshData.of(trimesh.util.concatenate([lower, upper]))
+
+    cutter = trimesh.creation.box(extents=(0.3, 0.3, 15.0))
+    cutter.apply_translation((0.5, 0.5, 5.0))
+    cutter.apply_transform(transform)
+
+    assert parts_that_cross(body.raw) is None
+    result = boolean("difference", [body, MeshData.of(cutter)], stages=("direct",), quality="fine")
+
+    assert result.mesh.component_count == 2
+    assert result.mesh.volume == pytest.approx(14.1, abs=1e-6)
+    assert result.solver.strategy == "direct"
+
+
+@pytest.mark.parametrize("order", [(False, True), (True, False)])
+def test_united_parts_cache_separates_face_contact_mode(order: tuple[bool, bool]) -> None:
+    """Kontaktflächen werden nur im angeforderten Vorprüfmodus vereinigt (RM-319)."""
+    from app.core.geom.boolean import _united_parts
+
+    lower = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    upper.apply_translation((0.0, 0.0, 15.0))
+    mesh = MeshData.of(trimesh.util.concatenate([lower, upper]))
+
+    answers = {
+        include_contacts: _united_parts(mesh, None, merge_face_contacts=include_contacts)
+        for include_contacts in order
+    }
+
+    assert answers[False] is None, "normale Boolesche Ops lassen Flächenkontakt getrennt"
+    merged = answers[True]
+    assert merged is not None and merged[0] is not None
+    assert merged[0].component_count == 1
+
+
+def test_united_parts_requests_an_unbounded_crossing_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vor einem Solverlauf prüft Boolesches die Teile vollständig und abbrechbar."""
+    from app.core.geom import boolean as boolean_module
+    from app.core.geom.boolean import _united_parts
+
+    first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second.apply_translation((4.0, 0.0, 0.0))
+    mesh = MeshData.of(trimesh.util.concatenate([first, second]))
+    observed: dict[str, object] = {}
+
+    def separated(_body: trimesh.Trimesh, **kwargs: object) -> None:
+        observed.update(kwargs)
+        return None
+
+    monkeypatch.setattr(boolean_module, "parts_that_cross", separated)
+    monkeypatch.setattr(boolean_module, "_nested_united", lambda *_args: None)
+
+    assert _united_parts(mesh, None) is None
+    assert observed["max_pairs"] is None
+    assert observed["require_complete"] is True
 
 
 @pytest.mark.parametrize("size", [0.0001, 0.001, 0.01])
@@ -405,28 +501,231 @@ def test_a_part_in_a_hollow_stays_a_part() -> None:
     assert "boolean.parts_united" not in [finding.code for finding in result.findings]
 
 
-def test_parts_that_cannot_be_united_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Stecken Teile ineinander, lässt sich das aber nicht auflösen — weil eine
-    Schale sich selbst kreuzt, wie am Laptop-Ständer (RM-253) —, rechnet die
-    Kette am Eingang, wie er ist, und sagt es mit Ort und *Stelle zeigen*.
-    Vorher blieb in einer versetzten Bohrung Material stehen, und der Bericht
-    sagte nur „geht nicht mehr durch"."""
+def test_an_incomplete_preflight_stops_the_boolean_before_its_solver() -> None:
+    """Die Teilegrenze darf einen unsicheren Solverlauf nicht als Entwarnung ausgeben."""
+    from app.core.errors import CANCEL, CORRECT_INPUT
+    from app.core.geom.repair import CROSSING_SEARCH_INCOMPLETE_DETAIL
+
+    first = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    second = first.copy()
+    second.apply_translation((1.0, 1.0, 0.0))
+    distant = []
+    for index in range(255):
+        piece = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
+        piece.apply_translation((100.0 + 3.0 * index, 0.0, 0.0))
+        distant.append(piece)
+    body = MeshData.of(trimesh.util.concatenate([first, second, *distant]))
+
+    with pytest.raises(GeometryError) as caught:
+        boolean("difference", [body, box(1.0, (0.0, 0.0, 0.0))])
+
+    assert caught.value.detail == CROSSING_SEARCH_INCOMPLETE_DETAIL
+    assert caught.value.suggestions == (CORRECT_INPUT, CANCEL)
+
+
+def test_a_crossing_shell_stops_before_the_boolean_solver_and_keeps_its_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine selbstkreuzende Schale darf kein falsches Boolesches Ergebnis liefern (RM-253)."""
+    from app.core.errors import CANCEL, SHOW_LOCATIONS
+    from app.core.geom import boolean as boolean_module
+
+    body = crossing_shell_with_overlapping_part()
+    assert body.component_count == 2
+    assert body.is_watertight
+    monkeypatch.setattr(
+        boolean_module,
+        "_run_stage",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Solver trotz fehlgeschlagener Vereinigung gestartet"
+        ),
+    )
+
+    with pytest.raises(GeometryError) as caught:
+        boolean(
+            "difference",
+            [body, box(2.0, (0.0, 0.0, 8.0))],
+            object_ids=("laptop-riser", "drill"),
+        )
+
+    assert caught.value.suggestions == (SHOW_LOCATIONS, CANCEL)
+    assert caught.value.object_id == "laptop-riser"
+    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+
+
+def test_closed_at_keeps_the_source_id_on_an_unsafe_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Beim Schließen bleibt die Handlung an den Szenenkörper gebunden (RM-253)."""
+    from app.core.errors import CANCEL, SHOW_LOCATIONS
+    from app.core.geom import prepare_ops
+
+    body = crossing_shell_with_overlapping_part()
+    feature = Feature(id="thread_1", kind="thread", provenance="detected", params={})
+    monkeypatch.setattr(prepare_ops, "_tool_for", lambda *_args, **_kwargs: box(2.0, (0, 0, 8)))
+
+    with pytest.raises(GeometryError) as caught:
+        prepare_ops._closed_at(
+            body,
+            feature,
+            (0.0, 0.0, 0.0),
+            False,
+            quality="fine",
+            seed=7,
+            cancelled=NeverCancelled(),
+            object_id="laptop-riser",
+        )
+
+    assert caught.value.object_id == "laptop-riser"
+    assert caught.value.suggestions == (SHOW_LOCATIONS, CANCEL)
+
+
+def test_a_crossing_shell_without_object_id_does_not_offer_show_locations() -> None:
+    """Ohne belegtes Ziel darf die Fehlermeldung keine Defektkarte versprechen."""
+    from app.core.errors import CANCEL, CORRECT_INPUT, SHOW_LOCATIONS
+
+    with pytest.raises(GeometryError) as caught:
+        boolean(
+            "difference",
+            [crossing_shell_with_overlapping_part(), box(2.0, (0.0, 0.0, 8.0))],
+        )
+
+    assert caught.value.object_id is None
+    assert caught.value.suggestions == (CORRECT_INPUT, CANCEL)
+    assert SHOW_LOCATIONS not in caught.value.suggestions
+    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+
+
+def test_a_failed_union_names_the_crossing_operand() -> None:
+    """Bei mehreren Op-Eingängen zeigt der Befund genau den fehlerhaften Körper."""
+    body = crossing_shell_with_overlapping_part()
+
+    with pytest.raises(GeometryError) as caught:
+        boolean(
+            "union",
+            [box(3.0, (-30.0, 0.0, 0.0)), body],
+            object_ids=("clean-body", "laptop-riser"),
+        )
+
+    assert caught.value.object_id == "laptop-riser"
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+    from app.ui.panels import actions_for_document
+
+    finding = _finding_from(
+        caught.value,
+        Operation(
+            id=12,
+            op="union_objects",
+            inputs=("clean-body", "laptop-riser"),
+            outputs=("joined-body",),
+        ),
+    )
+    assert finding.object_id == "laptop-riser"
+    assert [action.id for action in actions_for_document(finding, document=None)] == [
+        "show_locations"
+    ]
+
+
+def test_object_ids_must_align_with_boolean_inputs() -> None:
+    """Eine falsche Zuordnung darf keinen Defekt am falschen Körper zeigen."""
+    with pytest.raises(ValueError, match="object_ids must match meshes"):
+        boolean(
+            "difference",
+            [box(2.0, (0.0, 0.0, 0.0)), box(1.0, (0.0, 0.0, 0.0))],
+            object_ids=("body",),
+        )
+
+
+def test_a_failed_face_contact_merge_stops_before_boolean_solver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch ein ausdrücklich nötiger Kontakt-Merge darf nicht still übergangen werden."""
+    from app.core.errors import CANCEL, CORRECT_INPUT
+    from app.core.geom import boolean as boolean_module
+
+    monkeypatch.setattr(
+        boolean_module, "resolve_self_intersections", lambda mesh, _cancelled: (mesh, False)
+    )
+    monkeypatch.setattr(
+        boolean_module,
+        "_run_stage",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Solver trotz fehlgeschlagener Vereinigung gestartet"
+        ),
+    )
+    lower = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    upper.apply_translation((0.0, 0.0, 15.0))
+    body = MeshData.of(trimesh.util.concatenate([lower, upper]))
+
+    with pytest.raises(GeometryError) as caught:
+        boolean(
+            "difference",
+            [body, box(2.0, (0.0, 0.0, 10.0))],
+            merge_face_contacts=True,
+        )
+
+    assert caught.value.suggestions == (CORRECT_INPUT, CANCEL)
+    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+
+
+def test_face_contact_mode_keeps_crossing_diagnosis_and_locations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Flächenkontaktmodus kann auch an einer selbstkreuzenden Schale scheitern."""
+    from app.core.errors import CANCEL, SHOW_LOCATIONS
+    from app.core.geom import boolean as boolean_module
+
+    body = crossing_shell_with_overlapping_part()
+    monkeypatch.setattr(
+        boolean_module,
+        "_run_stage",
+        lambda *_args, **_kwargs: pytest.fail(
+            "Solver trotz fehlgeschlagener Vereinigung gestartet"
+        ),
+    )
+
+    with pytest.raises(GeometryError) as caught:
+        boolean(
+            "difference",
+            [body, box(2.0, (0.0, 0.0, 8.0))],
+            merge_face_contacts=True,
+            object_ids=("laptop-riser", "drill"),
+        )
+
+    assert caught.value.detail == BOOLEAN_GEOMETRY_UNSAFE_DETAIL
+    assert caught.value.object_id == "laptop-riser"
+    assert caught.value.suggestions == (SHOW_LOCATIONS, CANCEL)
+
+
+def test_face_contacts_that_cannot_be_united_get_a_neutral_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein fehlgeschlagener Kontaktversuch behauptet keine Durchdringung (RM-319)."""
     from app.core.errors import SHOW_LOCATION
     from app.core.geom import boolean as boolean_module
 
     monkeypatch.setattr(
         boolean_module, "resolve_self_intersections", lambda mesh, _cancelled: (mesh, False)
     )
-    body = two_cubes(10.0)
+    lower = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.box(extents=(40.0, 20.0, 10.0))
+    upper.apply_translation((0.0, 0.0, 15.0))
+    body = MeshData.of(trimesh.util.concatenate([lower, upper]))
 
-    result = boolean("difference", [body, box(2.0, (-8.0, 0.0, 10.0))])
+    _prepared, findings = boolean_module._parts_united_first(
+        "difference", [body], None, merge_face_contacts=True
+    )
 
-    stuck = [finding for finding in result.findings if finding.code == "boolean.parts_not_united"]
-    assert len(stuck) == 1, [finding.code for finding in result.findings]
-    assert stuck[0].severity == "warning"
+    stuck = [finding for finding in findings if finding.code == "boolean.parts_not_united"]
+    assert len(stuck) == 1, [finding.code for finding in findings]
+    assert stuck[0].message == (
+        "Teile des Modells ließen sich vor diesem Schritt nicht vereinigen. "
+        "Der Schritt kann Material stehen lassen."
+    )
     assert stuck[0].location is not None
     assert stuck[0].suggestions == (SHOW_LOCATION,)
-    assert "boolean.parts_united" not in [finding.code for finding in result.findings]
 
 
 def test_a_tool_made_of_crossing_pieces_is_left_to_the_kernel() -> None:
@@ -445,6 +744,22 @@ def test_a_tool_made_of_crossing_pieces_is_left_to_the_kernel() -> None:
     for kind in kinds:
         result = boolean(kind, [body, tool], allow_empty=True)
         assert "boolean.parts_united" not in [finding.code for finding in result.findings], kind
+
+
+def test_union_leaves_an_internal_crossing_tool_out_of_input_preflight() -> None:
+    """Interne Werkzeuge dürfen sich überschneiden; echte Eingänge prüft die Vorfrage."""
+    from app.core.geom import boolean as boolean_module
+
+    body = box(20.0, (0.0, 0.0, 0.0))
+    tool = crossing_shell_with_overlapping_part()
+
+    prepared, findings = boolean_module._parts_united_first(
+        "union", [body, tool], None, object_ids=("customer-body", None)
+    )
+
+    assert prepared[0] is body
+    assert prepared[1] is tool
+    assert not any(finding.code == "boolean.parts_not_united" for finding in findings)
 
 
 def test_parts_that_only_share_a_tool_are_not_named_as_united() -> None:
