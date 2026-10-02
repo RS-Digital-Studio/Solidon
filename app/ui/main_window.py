@@ -198,6 +198,7 @@ from app.core.scene import (
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import change_for, repair_is_available
+from app.core.scene.parameter_usage import bounds_refusal
 from app.core.scene.placement import NORMAL as NORMAL_FIELDS
 from app.core.scene.placement import POSITION as POSITION_FIELDS
 from app.core.scene.placement import seat_on_face, seats_on
@@ -18093,17 +18094,44 @@ class MainWindow(QMainWindow):
             return str(error)
         remote = Origin(by="agent", model=REMOTE_ORIGIN)
         if tool == ADD_PARAMETER:
+            # Titel und Grenzen bietet das Werkzeugschema an, also kommen sie
+            # an — wie im Chat (RM-447). Sie gingen hier verloren.
+            limits: dict[str, float] = {}
+            for limit in ("minimum", "maximum"):
+                if values.get(limit) is None:
+                    continue
+                try:
+                    limits[limit] = parse_number(values[limit])
+                except ValueError as error:
+                    return str(error)
+            title = values.get("title")
             made = self.session.add_parameter(
-                Parameter(name=name, value=number, unit=str(values.get("unit", "mm"))),
+                Parameter(
+                    name=name,
+                    value=number,
+                    unit=str(values.get("unit", "mm")),
+                    title=str(title) if title else None,
+                    minimum=limits.get("minimum"),
+                    maximum=limits.get("maximum"),
+                ),
                 origin=remote,
             )
             if not made:
                 return tr("Der Parameter wurde nicht angelegt — den Grund zeigt das Fenster.")
             return tr("Parameter angelegt: {name} = {value}", name=name, value=number)
-        if name not in self.session.project.document.parameters:
+        document = self.session.project.document
+        existing = document.parameters.get(name)
+        if existing is None:
             return tr("Diesen Parameter gibt es nicht: {name}", name=name)
-        if not self.session.change_parameter(name, number, origin=remote):
+        if is_close(existing.value, number):
             return tr("Der Wert ist schon so eingestellt.")
+        # Die Grenze steht in der Antwort, nicht nur im Fenster, das der
+        # Aufrufer nicht sieht (RM-447).
+        beyond = bounds_refusal(document, name, number)
+        if not self.session.change_parameter(name, number, origin=remote):
+            if beyond is not None:
+                return str(beyond)
+            return tr("Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.")
         return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
 
     def _draw_sketch_in_space(
@@ -22370,7 +22398,11 @@ class MainWindow(QMainWindow):
         ):
             self._refresh_parameters()
             return
-        self.session.change_parameter(name, value)
+        if not self.session.change_parameter(name, value):
+            # Abgelehnt — etwa weil ein abgeleitetes Maß ein Feld über seine
+            # Grenze triebe: Die Leiste zeigt wieder, was gilt, statt der
+            # getippten Zahl, die nie ins Dokument kam (RM-447).
+            self._refresh_parameters()
 
     def _on_parameter_unit_edited(self, name: str, unit: str) -> None:
         """Die feste Einheitenauswahl als rücknehmbare Dokumentänderung.

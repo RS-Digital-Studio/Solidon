@@ -20171,6 +20171,118 @@ def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> 
     assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
 
 
+def _a_stored_width_beyond_its_field(window: MainWindow) -> float:
+    """*Breite* jenseits der Feldgrenze, wie eine Datei sie mitbringt — zurück die Grenze."""
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    window._on_scene(window.session.evaluate_now())
+    window._refresh_parameters()
+    QApplication.processEvents()
+    return high
+
+
+def _type_into(window: MainWindow, name: str, number: float) -> None:
+    """Eine Zahl in die Zeile der Leiste tippen und mit der Eingabetaste übernehmen."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    editor = window.parameters._editors[name]
+    window.activateWindow()
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), str(int(number)))
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    for _round in range(3):
+        QApplication.processEvents()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+
+def test_a_stored_number_beyond_its_field_shows_and_takes_the_correction(
+    window: MainWindow,
+) -> None:
+    """Die Leiste zeigt die Zahl aus der Datei und nimmt die Korrektur an (RM-447).
+
+    Qt klemmte 5000 auf die Feldgrenze 1000: Die Leiste zeigte 1000, 1000 +
+    Enter war keine Änderung, und der Halt blieb — obwohl *Eingabe
+    korrigieren* genau in dieses Feld führt. In 0.5.1 stand dort 5000.
+    """
+    high = _a_stored_width_beyond_its_field(window)
+    editor = window.parameters._editors["breite"]
+    assert editor.value() == pytest.approx(high + 4000.0), "die gespeicherte Zahl steht da"
+    said = window.parameters.refusal_text()
+    assert str(int(high)) in said.replace(".", "").replace(",", ""), said
+
+    _type_into(window, "breite", high)
+
+    document = window.session.project.document
+    assert document.parameters["breite"].value == pytest.approx(high)
+    result = window.session.last_result
+    assert result is not None and result.stopped_at is None, "der Halt ist gelöst"
+    assert window.parameters.refusal_text() == "", "und der Satz zur Grenze geht"
+
+
+def test_a_refused_derived_change_shows_the_valid_number_again(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lehnt die Sitzung eine Zahl ab, zeigt die Leiste wieder, was gilt (RM-447).
+
+    *Breite* hat keine eigene Grenze, das Feld liest sie verdoppelt. 600 nimmt
+    das Feld an, die Sitzung lehnt ab — die Leiste zeigte weiter 600.
+    """
+    from app.core.scene import OperationDraft
+
+    shown: list[errors.AppError] = []
+    monkeypatch.setattr(main_window_module, "show_error", lambda error, *_args: shown.append(error))
+    window.show()
+    session = window.session
+    assert session.add_parameter(Parameter(name="breite", value=100.0, unit="mm"))
+    assert session.add_parameter(
+        Parameter(name="doppelt", value=200.0, unit="mm", expression="=@breite*2")
+    )
+    session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@doppelt"})])
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    _type_into(window, "breite", 600.0)
+
+    assert shown and getattr(shown[-1], "constraint", None) == "maximum", "die Sitzung lehnt ab"
+    assert session.project.document.parameters["breite"].value == pytest.approx(100.0)
+    assert window.parameters._editors["breite"].value() == pytest.approx(100.0)
+
+
+def test_remote_parameters_name_the_limit_and_keep_title_and_bounds(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fernsteuerung sagt die Grenze und behält Titel und Grenzen (RM-447).
+
+    ``set_parameter`` über der Grenze antwortete „Der Wert ist schon so
+    eingestellt.“, und ``add_parameter`` verlor ``minimum``, ``maximum`` und
+    ``title``, obwohl das Werkzeugschema sie anbietet.
+    """
+    monkeypatch.setattr(main_window_module, "show_error", lambda *_args: None)
+    high = _bound_width_project(window.session)
+
+    said = window._remote_parameter("set_parameter", {"name": "breite", "value": high + 4000.0})
+    assert str(int(high)) in said.replace(".", "").replace(",", ""), said
+    assert window.session.project.document.parameters["breite"].value == pytest.approx(60.0)
+    same = window._remote_parameter("set_parameter", {"name": "breite", "value": 60.0})
+    assert same == tr("Der Wert ist schon so eingestellt.")
+
+    window._remote_parameter(
+        "add_parameter",
+        {"name": "hoehe", "value": 30.0, "minimum": 10.0, "maximum": 50.0, "title": "Höhe"},
+    )
+    made = window.session.project.document.parameters["hoehe"]
+    assert (made.minimum, made.maximum, str(made.title)) == (10.0, 50.0, "Höhe")
+
+
 def _width_bound_box(session: Session) -> None:
     """Ein Quader, dessen Breite das Maß *breite* (80 mm) liest."""
     from app.core.scene import OperationDraft

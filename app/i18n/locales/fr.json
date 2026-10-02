@@ -1441,6 +1441,7 @@
   "Der Wert liegt außerhalb der eigenen Grenzen.": "La valeur se trouve en dehors de ses propres bornes.",
   "Der Wert liegt unter dem zulässigen Mindestwert.": "La valeur est en dessous du minimum autorisé.",
   "Der Wert liegt über dem zulässigen Höchstwert.": "La valeur dépasse le maximum autorisé.",
+  "Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.": "La valeur n'a pas été définie — la fenêtre en montre la raison.",
   "Der Winkel muss zwischen eins und 180 Grad liegen.": "L'angle doit être compris entre un et 180 degrés.",
   "Der Winkel muss zwischen null und 30 Grad liegen.": "L'angle doit être compris entre zéro et 30 degrés.",
   "Der Winkel muss zwischen null und 360 Grad liegen.": "L'angle doit être compris entre zéro et 360 degrés.",

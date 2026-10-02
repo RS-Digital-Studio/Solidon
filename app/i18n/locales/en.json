@@ -1441,6 +1441,7 @@
   "Der Wert liegt außerhalb der eigenen Grenzen.": "The value lies outside its own bounds.",
   "Der Wert liegt unter dem zulässigen Mindestwert.": "The value is below the allowed minimum.",
   "Der Wert liegt über dem zulässigen Höchstwert.": "The value is above the allowed maximum.",
+  "Der Wert wurde nicht gesetzt — den Grund zeigt das Fenster.": "The value was not set — the window shows the reason.",
   "Der Winkel muss zwischen eins und 180 Grad liegen.": "The angle must be between one and 180 degrees.",
   "Der Winkel muss zwischen null und 30 Grad liegen.": "The angle must be between zero and 30 degrees.",
   "Der Winkel muss zwischen null und 360 Grad liegen.": "The angle must be between zero and 360 degrees.",
