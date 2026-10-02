@@ -112,6 +112,9 @@ Nutzen da und sonst nichts.
 ### Bedienung und System
 
 - Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt.
+- Export, *Slicen* und *Im Slicer öffnen* bekommen immer die feine Rechnung, nicht die gröbere Ansicht des Fensters. Rundungen und Kegel kommen so mit voller Auflösung in die Datei.
+- Ein Export während einer laufenden Berechnung wartet auf das neue Ergebnis. Bisher konnte die Datei noch das alte Maß tragen.
+- Ein Maß jenseits seiner Grenze lehnt die Parameterleiste ab, statt das Bild leer stehen zu lassen.
 - In der Parameterleiste zählt jeder Pfeilschritt, und der Fokus bleibt im Feld.
 - Wartet ein Schritt auf eine Rückfrage, bleibt *Übernehmen* frei, und die Frage kommt.
 - Im Dialog einer Operation stehen die Beschriftungen in einer Spalte, die Felder gleich breit, und jeder Schalter vor dem, was er schaltet.

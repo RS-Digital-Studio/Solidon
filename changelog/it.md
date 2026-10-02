@@ -87,6 +87,9 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
+- Esportazione, «Affetta» e «Apri nello slicer …» ricevono sempre il calcolo fine, non la vista più grossolana della finestra. Raccordi e coni arrivano nel file a piena risoluzione.
+- Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
+- La barra dei parametri rifiuta una misura oltre il suo limite invece di lasciare la vista vuota.
 - Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
 - Se un passo attende una domanda, «Applica» resta disponibile e la domanda compare.
 - Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.

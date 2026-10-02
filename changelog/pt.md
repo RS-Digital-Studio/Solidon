@@ -87,6 +87,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Utilização e sistema
 
 - Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
+- A exportação, «Fatiar» e «Abrir no slicer …» recebem sempre o cálculo fino, não a vista mais grosseira da janela. Arredondamentos e cones chegam ao ficheiro com resolução completa.
+- Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
+- A barra de parâmetros recusa uma medida fora do seu limite em vez de deixar a vista vazia.
 - Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
 - Se um passo espera uma pergunta, «Aplicar» continua disponível e a pergunta aparece.
 - No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
