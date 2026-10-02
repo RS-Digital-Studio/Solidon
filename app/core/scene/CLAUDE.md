@@ -160,7 +160,8 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   bleibt bytegleich — er benennt auch Filamentbuchungen.
 - **Merkmale reisen durch beide Ebenen** (`cache.feature_to_data`): Maßquellen
   (fehlende bleiben unbekannt; `bore_advice` trennt Beleg, Schätzung und
-  Vorgabe) und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
+  Vorgabe, auch im eigenen Bausteinsatz; `at_hole_advice` erhält weiter nur
+  den Durchmesser) und `surface_patches` (Vertrag geprüft, im Speicherbudget; ein alter
   Name ohne Beleg behält keinen Formnachweis). **Nicht geprüft wird die
   Dreieckszahl**: Der Cache trägt die **rohe** Ausgabe; erst `_with_features`
   bindet — vorbereitete Objekte zu cachen ist verworfen. `_warm_figures` fasst

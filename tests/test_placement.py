@@ -23,7 +23,8 @@ from app.core.scene.placement import (
     values_for,
     values_for_object,
 )
-from app.core.types import Feature
+from app.core.types import Feature, MeasureSource, MeasureStatus, measure_status
+from app.i18n.catalog import available_languages
 
 load_operations()
 
@@ -511,3 +512,185 @@ def test_every_operation_with_a_feature_field_gets_it_filled_in() -> None:
             empty.append(f"{spec.name} ({', '.join(entry.name for entry in fields)})")
 
     assert not empty, "diese Operationen lassen den Nutzer die Kennung tippen:\n" + "\n".join(empty)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ("heatset_m4", "nut_trap", "printed_thread", "printed_screw", "fit_ladder"),
+)
+@pytest.mark.parametrize("source", ("native", "facets", "fit", "parameter", None))
+def test_part_bore_advice_qualifies_every_non_native_measure(
+    name: str, source: MeasureSource | None
+) -> None:
+    """Alle fünf Bausteinsätze unterscheiden Herkunft und Einschätzung."""
+    from dataclasses import replace
+
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import bore_advice
+    from app.i18n import get_language, set_language
+
+    previous = get_language()
+    set_language("de")
+    try:
+        spec = REGISTRY.get(f"insert_{name}")
+        part = part_of(spec.name)
+        assert part is not None and part.at_hole_advice is not None
+        bore = replace(
+            hole(diameter=5.19), measure_sources={} if source is None else {"diameter": source}
+        )
+        before = values_for(spec, bore)
+        body = part.at_hole_advice(5.19)
+        assert body is not None
+        status = measure_status(bore, "diameter")
+        assert status.source == source and status.available
+        assert status.state == (
+            "unknown" if source is None else "estimated" if source == "fit" else "exact"
+        )
+        said, choices = bore_advice(5.19, ask=False, feature=bore, status=status, spec=spec)
+        expected = str(body)
+        if source != "native":
+            expected = f"Einschätzung anhand dieses Maßes: {expected}"
+        assert said.endswith(expected), said
+        assert ("Einschätzung anhand dieses Maßes:" in said) is (source != "native")
+        assert not choices
+        assert values_for(spec, bore) == before, "Der Hinweis ändert keine Vorauswahl."
+    finally:
+        set_language(previous)
+
+
+@pytest.mark.parametrize(
+    ("name", "diameter"),
+    (("printed_thread", 6.5), ("heatset_m4", 40.0), ("nut_trap", 40.0)),
+)
+def test_part_bore_advice_qualifies_negative_measurement_answers(
+    name: str, diameter: float
+) -> None:
+    """Auch eine abgelehnte Normgröße ist bei einem Netzmaß eine Einschätzung."""
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import bore_advice
+    from app.i18n import get_language, set_language
+
+    previous = get_language()
+    set_language("de")
+    try:
+        spec = REGISTRY.get(f"insert_{name}")
+        part = part_of(spec.name)
+        assert part is not None and part.at_hole_advice is not None
+        body = part.at_hole_advice(diameter)
+        assert body is not None and str(body).startswith("Kein")
+        said, choices = bore_advice(
+            diameter,
+            ask=False,
+            feature=hole(diameter=diameter),
+            status=MeasureStatus("estimated", source="fit", available=True),
+            spec=spec,
+        )
+        assert said.endswith(f"Einschätzung anhand dieses Maßes: {body}"), said
+        assert not choices
+    finally:
+        set_language(previous)
+
+
+def test_part_bore_advice_keeps_the_single_argument_user_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein eigener Baustein bekommt weiter nur den ungerundeten Durchmesser."""
+    from dataclasses import replace
+
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.scene.placement import bore_advice
+    from app.i18n import get_language, set_language
+
+    calls: list[float] = []
+
+    def own_advice(diameter: float) -> str:
+        calls.append(diameter)
+        return f"Eigener Hinweis für {diameter} mm."
+
+    spec = REGISTRY.get("insert_printed_thread")
+    part = part_ops.part_of(spec.name)
+    assert part is not None
+    monkeypatch.setattr(part_ops, "part_of", lambda _name: replace(part, at_hole_advice=own_advice))
+    previous = get_language()
+    set_language("de")
+    try:
+        said, choices = bore_advice(
+            5.1873,
+            ask=False,
+            status=MeasureStatus("estimated", source="fit", available=True),
+            spec=spec,
+        )
+        assert calls == [5.1873]
+        assert said.endswith("Einschätzung anhand dieses Maßes: Eigener Hinweis für 5.1873 mm.")
+        assert not choices
+    finally:
+        set_language(previous)
+
+
+def test_part_bore_advice_skips_an_unavailable_measure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne verfügbares Maß wird kein Baustein nach einer passenden Größe gefragt."""
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.scene.placement import bore_advice
+
+    def unexpected(_name: str) -> None:
+        pytest.fail("Ein nicht verfügbares Maß erreicht keinen Bausteinrückruf.")
+
+    monkeypatch.setattr(part_ops, "part_of", unexpected)
+    said, choices = bore_advice(
+        5.19,
+        ask=False,
+        status=MeasureStatus("unknown", available=False),
+        spec=REGISTRY.get("insert_printed_thread"),
+    )
+    assert said and not choices
+    assert "Einschätzung anhand dieses Maßes:" not in said
+
+
+def test_part_bore_advice_none_keeps_the_general_size_answer() -> None:
+    """Ohne eigenen Bausteinsatz gilt weiter der allgemeine Hinweis zur Bohrung."""
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import bore_advice
+
+    spec = REGISTRY.get("insert_printed_screw")
+    part = part_of(spec.name)
+    assert part is not None and part.at_hole_advice is not None
+    assert part.at_hole_advice(40.0) is None
+    status = MeasureStatus("estimated", source="fit", available=True)
+    plain = bore_advice(40.0, ask=False, status=status)
+    assert bore_advice(40.0, ask=False, status=status, spec=spec) == plain
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_part_bore_advice_translates_the_complete_assessment_frame(language: str) -> None:
+    """Maßherkunft und Bausteinsatz werden zusammen in der gewählten Sprache gezeigt."""
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.placement import bore_advice
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    try:
+        spec = REGISTRY.get("insert_printed_thread")
+        part = part_of(spec.name)
+        assert part is not None and part.at_hole_advice is not None
+        body = part.at_hole_advice(5.19)
+        assert body is not None
+        said, choices = bore_advice(
+            5.19,
+            ask=False,
+            status=MeasureStatus("estimated", source="fit", available=True),
+            spec=spec,
+        )
+        expected = tr("Einschätzung anhand dieses Maßes: {advice}", advice=body)
+        assert said.endswith(expected), said
+        assert not choices
+        if language == "fr":
+            assert expected.startswith("Estimation à partir de cette cote : ")
+        elif language != "de":
+            assert not expected.startswith("Einschätzung anhand dieses Maßes:")
+    finally:
+        set_language(previous)

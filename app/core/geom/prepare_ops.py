@@ -16522,7 +16522,7 @@ def split_bodies(ctx: OpContext) -> OpResult:
     produces=2,
     # Eine Berührlinie an der Schnittfläche wird vor den Stiften abgesagt;
     # ein altes Ergebnis könnte die ungeeignete Hälfte oder ein Raster tragen.
-    cache_version="2",
+    cache_version="3",
     doc=_(
         "Teilt ein Objekt an einer Ebene, auf Wunsch mit Passstiften in der "
         "Schnittfläche. Das Spiel kommt aus dem Materialprofil; null Stifte heißt: "
@@ -16949,7 +16949,7 @@ def _halves_still_together(source: SceneObject) -> Finding:
         code="prepare.halves_in_place",
         severity="info",
         message=_(
-            "Die zwei Hälften liegen im Modell noch aneinander. Zum Drucken nebeneinander legen."
+            "Die zwei Hälften liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen."
         ),
         object_id=source.id,
     )
@@ -17058,7 +17058,7 @@ class SplitLineParams(BaseParams):
     consumes=1,
     produces=2,
     # Dieselbe Absage an einer Berührlinie wie bei *Teilen*.
-    cache_version="2",
+    cache_version="3",
     icon="split",
     doc=_(
         "Trennt ein Objekt entlang einer im Bild gezeichneten Linie und setzt auf "

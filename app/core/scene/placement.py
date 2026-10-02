@@ -428,7 +428,7 @@ def bore_advice(
                 "Diese Aufweitung misst {measure}. Die Schraubengröße richtet sich "
                 "nach der engeren Bohrung."
             ).replace("{measure}", named_measure), []
-    advice = _part_advice(spec, diameter)
+    advice = _part_advice(spec, diameter, status)
     if advice is not None:
         return f"{tr('Bohrungsmaß: {measure}.').replace('{measure}', named_measure)} {advice}", []
     if status.source != "native":
@@ -490,8 +490,8 @@ def bore_advice(
     )
 
 
-def _part_advice(spec: OperationSpec | None, diameter: float) -> str | None:
-    """Der eigene Satz des Bausteins zu dieser Bohrung — oder ``None``."""
+def _part_advice(spec: OperationSpec | None, diameter: float, status: MeasureStatus) -> str | None:
+    """Der eigene Bausteinsatz mit der Sicherheit der Maßquelle — oder ``None``."""
     if spec is None:
         return None
     from app.core.knowledge.parts.ops import part_of
@@ -500,7 +500,11 @@ def _part_advice(spec: OperationSpec | None, diameter: float) -> str | None:
     if part is None or part.at_hole_advice is None:
         return None
     said = part.at_hole_advice(float(diameter))
-    return None if said is None else str(said)
+    if said is None:
+        return None
+    if status.source != "native":
+        return tr("Einschätzung anhand dieses Maßes: {advice}", advice=said)
+    return str(said)
 
 
 def advises_on_bores(spec: OperationSpec) -> bool:

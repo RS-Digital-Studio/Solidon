@@ -2855,3 +2855,125 @@ def test_disk_results_come_back_with_warm_figures(tmp_path: Path) -> None:
     figures = fresh.objects[0].mesh.raw._cache
     for name in ("solidon_volume", "area", "is_watertight", "solidon_component_count"):
         assert name in figures, f"{name} must already be known when the window asks"
+
+
+@pytest.mark.parametrize("op", ("split_pinned", "split_line"))
+def test_split_cache_recalculates_old_single_cut_translation(
+    profile: Profile, tmp_path: Path, op: str
+) -> None:
+    """Ein alter einzelner Schnitt liest keinen inzwischen entfernten Textschlüssel."""
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.registry import REGISTRY, Registry
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import new_project
+    from app.i18n import _, get_language, set_language, tr
+    from app.i18n.catalog import install_language
+
+    class RecordingCache(ResultCache):
+        def __init__(self, disk: DiskCache) -> None:
+            super().__init__(disk=disk)
+            self.published: dict[str, CachedResult] = {}
+
+        def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
+            self.published[key] = result
+            super().put(key, result, to_disk=to_disk)
+
+    def split_results(cache: RecordingCache) -> list[tuple[str, CachedResult]]:
+        return [
+            (key, result)
+            for key, result in cache.published.items()
+            if any(finding.code == "prepare.halves_in_place" for finding in result.findings)
+        ]
+
+    load_operations()
+    old_registry = Registry()
+    for spec in REGISTRY.all():
+        old_registry.register(
+            dataclasses.replace(spec, cache_version="2") if spec.name == op else spec
+        )
+    project = new_project()
+    assert isinstance(project.document.printer, str)
+    assert isinstance(project.document.material, str)
+    history = History(project.document)
+    history.apply(
+        _("Quader"),
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 10.0, "height": 10.0})],
+    )
+    history.apply(
+        _("Teilen"),
+        [OperationDraft(op=op, inputs=("obj_1",), params={"pins": 0, "position": 5.0})],
+    )
+    directory = tmp_path / "schnitt-cache"
+    original = RecordingCache(DiskCache(codec=MeshCodec(), directory=directory))
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    try:
+        before = evaluate(project.document, profile, registry=old_registry, cache=original)
+        assert before.stopped_at is None
+        old_entries = split_results(original)
+        assert len(old_entries) == 1, "der echte Schnitt wurde auf die Platte gelegt"
+        old_key, old_result = old_entries[0]
+        old_text = _(
+            "Die zwei Hälften liegen im Modell noch aneinander. Zum Drucken nebeneinander legen."
+        )
+        legacy = dataclasses.replace(
+            old_result,
+            findings=tuple(
+                dataclasses.replace(finding, message=old_text)
+                if finding.code == "prepare.halves_in_place"
+                else finding
+                for finding in old_result.findings
+            ),
+        )
+        disk = DiskCache(codec=MeshCodec(), directory=directory)
+        disk.put(old_key, legacy)
+        restored = DiskCache(codec=MeshCodec(), directory=directory).get(old_key)
+        assert restored is not None
+        old_messages = [
+            finding.message
+            for finding in restored.findings
+            if finding.code == "prepare.halves_in_place"
+        ]
+        assert old_messages == [old_text], "der wirkliche Altcache trägt die alte Message-ID"
+        assert str(old_messages[0]) == old_text.msgid, (
+            "der entfernte Schlüssel fällt auf Deutsch zurück"
+        )
+
+        fresh = RecordingCache(DiskCache(codec=MeshCodec(), directory=directory))
+        after = evaluate(project.document, profile, cache=fresh)
+        assert after.stopped_at is None
+        messages = [
+            str(finding.message)
+            for finding in after.scene.report.findings
+            if finding.code == "prepare.halves_in_place"
+        ]
+        expected = tr(
+            "Die zwei Hälften liegen im Modell noch aneinander. Zum Drucken nebeneinanderlegen."
+        )
+        assert messages == [expected], "der öffentliche warme Ladeweg bleibt französisch"
+        new_entries = split_results(fresh)
+        assert len(new_entries) == 1, "der alte Schnitt wurde wirklich neu gerechnet"
+        assert new_entries[0][0] != old_key, (
+            "die aktuelle Op-Version verwendet einen anderen Schlüssel"
+        )
+        assert fresh.statistics.disk_hits > 0, (
+            "der übrige unveränderte Aufbau bleibt im Plattencache"
+        )
+        assert sum(body.mesh.volume for body in after.scene.objects.values()) == pytest.approx(
+            2000.0
+        )
+
+        warm = RecordingCache(DiskCache(codec=MeshCodec(), directory=directory))
+        repeated = evaluate(project.document, profile, cache=warm)
+        assert repeated.stopped_at is None
+        assert not split_results(warm), "der neue Schnitt kommt beim nächsten Öffnen aus dem Cache"
+        assert warm.statistics.disk_hits >= 2
+        assert [
+            str(finding.message)
+            for finding in repeated.scene.report.findings
+            if finding.code == "prepare.halves_in_place"
+        ] == [expected]
+    finally:
+        set_language(previous)

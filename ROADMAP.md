@@ -106,7 +106,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI mit b1d5381ce integriert; CLI-/Kerngruppe eigen- und zweitgeprüft, zentrale Abschlussnachweise am Punkt. Modellabnahme und eine Bereichsprüferzeile offen |
 | [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
-| [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | Nach 0.5.1: fünf Wortlaute und ein Wächter |
+| [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | a–h eigengeprüft und unabhängig zweitgeprüft: klare Aktionstitel, Apostrophe, Einschätzungsrahmen und warmer Splitcache. Zentrales vollständiges Entwicklungstor und Übernahme offen |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
@@ -3248,7 +3248,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-290"></a>
 
-- [ ] **RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1.** Aus dem Release 0.5.1 (Sprach- und Code-Review der
+- [~] **RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1.** Aus dem Release 0.5.1 (Sprach- und Code-Review der
   Pakete texte und ui, `konzepte/nachweise-release-0.5.1/reports/review-sprache-ui-texte.md`,
   `konzepte/nachweise-release-0.5.1/reports/review-code-ui-texte.md`). (a) fr und it nennen *Merkmal bearbeiten* (Knopf der
   örtlichen Erkennung) und *Merkmal ändern* (Operation) gleich („Modifier l'élément“,
@@ -3275,6 +3275,40 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   steht wie die Titel unter (b) im Infinitiv, verwandte Knöpfe im Imperativ („Riduci i
   triangoli e riprova“). (h) it „Fare clic“ im Leersatz „Kein Merkmal gewählt …“ spricht
   unpersönlich statt mit „tu“.
+
+  **Eigengeprüfter Stand 02.10.2026:** (a/b/g/h) Örtliche Bearbeitung und
+  Änderungsoperation unterscheiden sich in fr/it samt Handbuchzitaten; *Abschneiden*
+  heißt en Crop und it Tronca. Die fünf beanstandeten it-Titel und der Leersatz
+  sprechen im tu-Imperativ. (c) Beide Hinweise schreiben „nebeneinanderlegen“;
+  `split_pinned` und `split_line` verwenden jeweils Op-Cacheversion 3. Die echte
+  Vorher-Probe zeigte beide alten einzelnen Cachehinweise auf Deutsch; nach der
+  Invalidierung bleiben neuer Hinweis, Wiederöffnen und warmer Folgecache korrekt.
+  (d) Der konkrete it-Satz war bereits behoben; der Wächter findet nun den
+  Lei-Indikativ bei belegter Kundenanrede und bewahrt Modell-/Substantivgegenfälle.
+  (e) Der Messstatus wird beim Zusammenstellen des Bausteinhinweises ausgewertet,
+  die öffentliche Einargument-Schnittstelle bleibt erhalten. Nicht-native Quellen
+  erhalten den vollständigen neutralen Einschätzungsrahmen; Vorbelegung, unavailable
+  und None-Rückfall bleiben unverändert. (f) Alle fr/it-Katalogwerte einschließlich
+  Handbuch verwenden gerade Apostrophe; der neue Wächter prüft auch verschiedene
+  Einträge. Genau drei neue/zwei entfernte Schlüssel je Katalog; die getrennte
+  RM285-Bereichsprüferzeile ist nicht Teil von RM290.
+
+  **Belege:** `tmp/review-seit-0.5.1-2026-10-01/rm290-20261002-7db5/` mit
+  `EIGENREVIEW.md`, Alt-/Neu-Listen und Katalogrekonstruktion. Der enge Nachlauf
+  `focused-final-20261002-040005-8dad9c52/` bestand 92 Fälle (davon sechs separat
+  RM285-range), 967 abgewählt, tatsächlicher pytest-Exit 0; fünf weitere vorhandene
+  Platzhalter-Katalogwächter bestanden. Ruff, Format und Diffcheck jeweils Exit 0.
+  Der unabhängige Reviewnachgang korrigiert die 25 Maßquellenfälle auf den echten
+  `measure_status`-Leser, einschließlich exact für facets/parameter, und ergänzt
+  den tatsächlichen it-Leersatzwächter. Der frische Ausschnitt bestand 26 Fälle,
+  tatsächlicher Exit 0 (`test-guardian-followup-v2`). Zwölf tatsächliche alte
+  Katalog-Wächterfälle werden verworfen, dieselben zwölf aktuellen bestehen
+  (`catalog-negative-v3`, Gesamt-Exit 1 erwartet). Beide alten Splitcachefälle
+  bleiben als erwartete rote Gegenproben erhalten; frühere eigene Import-,
+  Testaufbau- und Ruff-Befunde sind getrennt dokumentiert und nachgezogen.
+  Die abschließende unabhängige Rückprüfung ist ohne offene Befunde abgeschlossen
+  (`QUELLREVIEW.md`). Zentrales vollständiges Entwicklungstor und Commit/Push
+  bleiben offen.
 
 <a id="rm-291"></a>
 

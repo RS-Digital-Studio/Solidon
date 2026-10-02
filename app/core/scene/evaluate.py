@@ -1947,7 +1947,7 @@ def _without_split_echoes(findings: Sequence[Finding], scene: Scene) -> list[Fin
                     entry,
                     message=_(
                         "Die Teile liegen im Modell noch aneinander. "
-                        "Zum Drucken nebeneinander legen."
+                        "Zum Drucken nebeneinanderlegen."
                     ),
                 )
         elif (

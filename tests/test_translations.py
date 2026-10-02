@@ -1294,6 +1294,11 @@ def test_context_keywords_reach_the_runtime_catalog(language: str) -> None:
 TOOL_IS_ITS_OPERATION = frozenset({("Bewegen", "Verschieben")})
 
 
+def _first_word_stem(text: str) -> str:
+    """Der Aktionsanfang bleibt auch vor einer Ergänzung vergleichbar."""
+    return _stem(text.split(maxsplit=1)[0])
+
+
 def _toolbar_names() -> list[str]:
     """Die Namen der Werkzeugzeile, gelesen an ``self.tools.add(…, tr("…"))``."""
     tree = ast.parse((UI_DIR / "main_window.py").read_text(encoding="utf-8"))
@@ -1330,7 +1335,8 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
     fr und pt gleich — „Split“, „Separar“, „Séparer“ —, it „Dividi“ gegen
     „Dividere“, dasselbe Verb. Verglichen werden ganze Namen und bei
     Einwortnamen der Wortstamm (:data:`GROUP_STEM`), wie bei den
-    Katalogruppen.
+    Kataloggruppen. *Trennen* und *Abschneiden* vergleichen außerdem das
+    erste Verb: Eine Ergänzung wie „away“ macht daraus keine andere Aktion.
     """
     from app.core.bootstrap import load_operations
     from app.core.registry import REGISTRY
@@ -1358,7 +1364,11 @@ def test_no_tool_or_operation_shares_its_name_with_another(language: str) -> Non
                 continue
             a, b = said(tool), said(title)
             one_word = " " not in a and " " not in b
-            if a == b or (one_word and _stem(a) == _stem(b)):
+            separate_cutting_actions = (tool, title) == ("Trennen", "Abschneiden")
+            if a == b or (
+                (one_word or separate_cutting_actions)
+                and _first_word_stem(a) == _first_word_stem(b)
+            ):
                 clashes.append(f"Werkzeug {tool!r} ({a!r}) und Operation {title!r} ({b!r})")
     assert not clashes, f"{language}: gleiche Namen\n" + "\n".join(clashes)
 
@@ -1487,6 +1497,10 @@ ITALIAN_LEI_INSIDE = re.compile(
     r"scriva|rivolga|tolga|renda)\b"
     r"|[:;—]\s+(?:" + "|".join(word.lower() for word in _LEI_OR_NOUN) + r")\b" + _OBJECT
 )
+# Ein Lei-Indikativ im Nebensatz ist ohne Pronomen nicht vom Modell als
+# Satzgegenstand unterscheidbar. Er zählt nur bei belegter Kundenanrede.
+GERMAN_CUSTOMER_CLAUSE = re.compile(r"\b(?:bis|wenn|solange|sobald|bevor|nachdem) Sie\b")
+ITALIAN_LEI_CUSTOMER_CLAUSE = re.compile(r"\b(?:finché|quando|se|mentre)\s+(?:non\s+)?modifica\b")
 #: Wo die Quelle „Ihr“ oder „Sie“ als Anrede sagt, darf it nicht „sua“, „può“
 #: oder „lei“ sagen — außer der Satz enthält die Du-Form. „Ihr“ nach einem
 #: Satzzeichen ist oft „ihr“ am Satzanfang und zählt nicht; „si può“ ist
@@ -1507,6 +1521,10 @@ def _italian_formal(key: str, value: str) -> str | None:
     """Warum ein it-Eintrag „Lei“ oder „voi“ spricht — oder ``None``."""
     for pattern in (ITALIAN_VOI, ITALIAN_LEI, ITALIAN_LEI_INSIDE):
         match = pattern.search(value)
+        if match:
+            return match.group(0).strip()
+    if GERMAN_CUSTOMER_CLAUSE.search(key):
+        match = ITALIAN_LEI_CUSTOMER_CLAUSE.search(value)
         if match:
             return match.group(0).strip()
     if not ITALIAN_TU.search(value):
@@ -1626,3 +1644,121 @@ def test_non_model_surface_labels_do_not_append_a_fixed_colon() -> None:
         for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
     ]
     assert not offenders, "feste Doppelpunkte neben Übersetzungen:\n" + "\n".join(offenders)
+
+
+@pytest.mark.parametrize("language", ("fr", "it"))
+def test_feature_edit_and_change_have_distinct_action_names(language: str) -> None:
+    """Örtliches Bearbeiten und die Änderungsoperation bleiben unterscheidbar."""
+    catalog = read_catalog(language)
+    edit = catalog["Merkmal bearbeiten"]
+    change = catalog["Merkmal ändern"]
+    assert _first_word_stem(edit) != _first_word_stem(change), (language, edit, change)
+    assert catalog["Merkmal bearbeiten …"] == edit + " …"
+
+
+@pytest.mark.parametrize(
+    ("tool", "operation", "same"),
+    (
+        ("Cut", "Cut away", True),
+        ("Taglia", "Tagliare via", True),
+        ("Séparer", "Séparer le long d'une ligne", True),
+        ("Cut", "Crop", False),
+        ("Taglia", "Tronca", False),
+        ("Séparer", "Découper", False),
+    ),
+)
+def test_action_stem_control_includes_multiword_names(
+    tool: str, operation: str, same: bool
+) -> None:
+    """Eine Ergänzung hinter demselben Verb versteckt die Kollision nicht."""
+    assert (_first_word_stem(tool) == _first_word_stem(operation)) is same
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    (
+        ("Abschneiden", "Tronca"),
+        ("Dreiecke angleichen", "Uniforma i triangoli"),
+        ("Fügeweg prüfen", "Verifica il percorso di montaggio"),
+        ("Lochfeld schneiden", "Taglia un campo di fori"),
+        ("Dreiecke verringern", "Riduci i triangoli"),
+    ),
+)
+def test_italian_reviewed_operation_titles_use_the_second_person(key: str, expected: str) -> None:
+    """Die fünf beanstandeten Operationstitel sprechen den Kunden direkt an."""
+    assert read_catalog("it")[key] == expected
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "formal"),
+    (
+        (
+            "Gedruckt wird er, solange Sie das Feld nicht ändern.",
+            "Viene stampato finché non modifica il campo.",
+            True,
+        ),
+        (
+            "Gedruckt wird er, solange Sie das Feld nicht ändern.",
+            "Viene stampato finché non modifichi il campo.",
+            False,
+        ),
+        (
+            "Gedruckt wird er, solange Sie das Feld nicht ändern.",
+            "Viene stampato finché non modifichi il campo della stampante.",
+            False,
+        ),
+        (
+            "Der Agent wiederholt, bis er das Feld ändert.",
+            "L'agente ripete finché non modifica il campo.",
+            False,
+        ),
+        ("Wenn Sie eine Änderung wünschen.", "Se vuoi una modifica del campo.", False),
+        ("Solange Sie das Feld ändern.", "Il modello non cambia.", False),
+    ),
+)
+def test_italian_customer_clause_guard_keeps_model_and_noun_counterexamples(
+    key: str, value: str, formal: bool
+) -> None:
+    """Nur die belegte Kundenanrede macht den Indikativ zur falschen Person."""
+    assert (_italian_formal(key, value) is not None) is formal
+
+
+def _typographic_apostrophe_entries(catalog: dict[str, str]) -> list[str]:
+    """Einheitliche Apostrophe gelten auch zwischen verschiedenen Katalogeinträgen."""
+    return [key for key, value in catalog.items() if "’" in value]
+
+
+@pytest.mark.parametrize("language", ("fr", "it"))
+def test_french_and_italian_use_straight_apostrophes_everywhere(language: str) -> None:
+    """Menütitel und ihre Zitate im Handbuch schreiben denselben Apostroph."""
+    catalog = read_catalog(language)
+    assert catalog, f"{language}: leerer Katalog prüft keine Apostrophe"
+    unexpected = _typographic_apostrophe_entries(catalog)
+    assert not unexpected, f"{language}: typografische Apostrophe in {len(unexpected)} Einträgen"
+
+
+@pytest.mark.parametrize(
+    ("catalog", "expected"),
+    (
+        ({"Titel": "Modifier l’élément", "Zitat": "Modifier l'élément"}, ["Titel"]),
+        ({"Hinweis": "Aspetta un po’.", "Zitat": "Aspetta un po'."}, ["Hinweis"]),
+        ({"Titel": "Modifier l'élément", "Zitat": "Modifier l'élément"}, []),
+    ),
+)
+def test_apostrophe_guard_control_checks_separate_entries(
+    catalog: dict[str, str], expected: list[str]
+) -> None:
+    """Auch zwei je einzeln konsistente Einträge können den Katalog mischen."""
+    assert _typographic_apostrophe_entries(catalog) == expected
+
+
+def test_italian_empty_feature_hint_uses_second_person() -> None:
+    """Auch der Leersatz gibt eine direkte Handlungsanweisung mit tu."""
+    key = (
+        "Kein Merkmal gewählt. Klicken Sie eine Bohrung, eine Fläche oder eine Verrundung an — "
+        "im Objektbaum oder im Bild."
+    )
+    value = read_catalog("it").get(key)
+    assert value, "Der Leersatz muss im italienischen Katalog stehen."
+    assert "Fai clic" in value, value
+    assert "Fare clic" not in value, value

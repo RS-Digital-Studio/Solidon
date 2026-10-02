@@ -64,9 +64,10 @@ folgen Anleitungen der Oberfläche, denn der Kunde sucht das Wort im Fenster.
 **Apostroph:** Französisch und Italienisch schreiben ihn gerade (`'`) wie die
 Mehrheit des Bestands, und kein Eintrag mischt beide Formen — ein Menüeintrag
 mit „’“ neben einem Satz, der ihn mit „'“ zitiert, ist für den Kunden derselbe
-Knopf, für die Zitatprüfung ein anderer. Neue Einträge schreiben ihn gerade; ein
-Bestandseintrag mit „’“ wird umgestellt, wenn man ihn ohnehin anfasst
-(`test_no_entry_mixes_two_apostrophes` prüft nur das Mischen).
+Knopf, für die Zitatprüfung ein anderer. Alle französischen und italienischen
+Katalogwerte schreiben ihn gerade, einschließlich Handbuch und Anleitungen
+(`test_french_and_italian_use_straight_apostrophes_everywhere`). Der zusätzliche
+Wächter `test_no_entry_mixes_two_apostrophes` prüft das Mischen im selben Text.
 
 **Vorher lesen: Der Genus zieht durch den Satz.** `bloque`, `bloc` und `bloco`
 sind maskulin, `pieza`, `pièce` und `peça` feminin. Wer beim Baustein nur das
