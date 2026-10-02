@@ -99,6 +99,7 @@ dans `website/version.json`.
 - Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
 - Un constat qui vise une étape l'ouvre pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
+- L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
 
 ## 0.5.1
 

@@ -98,6 +98,7 @@ scrive in `website/version.json`.
 - Gli spazi arrivano in ogni campo di testo, anche nel questionario di feedback e nella chat, mentre una finestra di dialogo mostra l'anteprima.
 - Un rilievo che riguarda un passo lo apre per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
 - Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
+- L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
 
 ## 0.5.1
 
