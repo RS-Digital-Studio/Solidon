@@ -89,10 +89,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart](#rm-384) | Geometrie, Erkennung und Druckvorbereitung | Konstruktor-Nachgang behoben und unabhängig ohne Befund geprüft; 106 Entwicklungsfälle grün, zentrales Tor und Integration ausstehend |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“](#rm-398) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-e`)** — Umfangsentscheidung Robert 02.10.: drei neue Formen nach den Checklisten Op/Baustein |
 | [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | Neigung, Ebene parallel zu einer Fläche und exakte Körper gebaut (Claude, in main mit `52cc9fd66`); offen: Ebene durch drei Punkte — braucht die Stellenwahl im Bild |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
-| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-b`)** — Review 02.10.: Folge zu RM-225 (archiviert); Grenze aus dem float32-Raster, Befund bei Ablehnung, Tests an vier Varianten |
+| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | Grenze aus dem float32-Raster, Befund `pattern.facets_unaligned` mit *Reparieren*, Rechnung je Ebenengruppe (Claude, in main mit `c117720b3`); Ø 80, CAD-Nullpunkt in der Ecke und feiner Träger frei von Selbstschnitten. Offen: fern vom Ursprung (110, 110) liegen die Facetten danach eben, an den Rillen bei 15° und 165° bleiben vier Selbstschnitte — Ursache im Stopfen oder der Vereinigung, festgehalten als strenges xfail |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
@@ -102,7 +101,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
 | [RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt](#rm-423) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-386: `_place_oriented_feature` am exakten Körper — Ergebnis exakt rechnen oder als Netz kennzeichnen und `evaluate.exact_became_mesh` melden; Test beide Kerne |
-| [RM-424 — Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben](#rm-424) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-330: Bettursprung in `PrinterProfile` (Vertrag §9, Profilformat); `discover_printers` und `threemf._placement` danach richten — Entscheidung Robert zum Vertrag |
+| [RM-424 — Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben](#rm-424) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert 02.10.: bauen — Bettursprung in `PrinterProfile` (Vertrag §9, Profilformat), `discover_printers` und `threemf._placement` danach richten |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -140,7 +139,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
 | [RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl](#rm-369) | Bedienung und Darstellung | Entscheidung Robert 02.10.: Vorgabe aus der letzten Wahl, Test und Handbuch nachziehen |
-| [RM-370 — Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein](#rm-370) | Bedienung und Darstellung | Entscheidung Robert 02.10.: Einstiegsknöpfe in der leeren Ansicht, verschwinden mit dem ersten Körper |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
 | [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Konzept §12/§7.5 einlösen, Befund nach dem Posieren |
 | [RM-390 — Ein neuer Grundkörper entsteht auf dem zuletzt gewählten Körper oder Merkmal, ohne es zu sagen](#rm-390) | Bedienung und Darstellung | **In Arbeit: Claude (Worktree `F:/solidon-claude-h`)** — Review 02.10. (Nachbau): Erzeuger nur bei ausdrücklicher Flächenwahl vorbelegen und es vorn sagen; vor RM-356 umsetzen |
@@ -2710,22 +2708,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\nachbau\bericht.md`, Sonden `f1_flaeche_nach_bohrung.py`,
   `f1_kern.txt`, `f3_im_lauf.txt`, `f3_drehdeckel_ui.py`. Verwandt: RM-218, RM-226.
 
-<a id="rm-398"></a>
-
-- [ ] **RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“.**
-  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 3).
-  „Ring anlegen“ ist ein Torus (`create_torus`, `app/core/geom/primitive_ops.py:501`); Rohr oder
-  Ring mit Bohrung brauchten in drei Nachbauten (Rohrschelle, Kartuschendeckel, Rankenclip)
-  Zylinder plus *Bohrung setzen*. Mit diesen drei Formen wären sie je in unter zehn Klicks gebaut.
-  **Umfang:** (a) Grundform *Rohr anlegen* (Außen-Ø, Innen-Ø oder Wand, Höhe) als Op nach der
-  Checkliste „neue Operation“ (beide Kerne, Test, Texte); (b) Baustein *Lasche mit Loch* (Breite,
-  Länge, Dicke, Lochgröße aus der Normteiltabelle, an einer Fläche ansetzbar) und (c) Baustein
-  *Rohrschelle* (Rohr-Ø, Breite, Wand, Schraubenlaschen; Spiel aus dem Materialprofil) nach der
-  Checkliste „neuer Baustein“ (Bereichsnachweis, Vorschaubild, `to_scad`, `LIBRARY_VERSION`).
-  **Abnahme:** je Form Geometrietest und Bereichsnachweis; Nachbau Rohrschelle in unter zehn
-  Klicks. Bauplan §24, §2.6, Regeln 4, 7, 22.
-  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Rohr, Lasche und Schelle mit **Maßreihen** statt Einzelmaßen (Rohr-Ø-Reihe, Lochgrößen M3–M8 aus der Normteiltabelle, Wand nach Materialprofil); Lasche und Schelle an jeder Fläche ansetzbar (RM-396). Nutzen: in `F:\3D Dateien` nach Dateinamen rund 18 Teile (Verbinder 01–07, Rankenclip, Kartuschendeckel, Ring, Torschloss-Adapter, Rohrhalter, Klemmen). Abnahme an mindestens drei unterschiedlichen Korpusteilen.
-
 <a id="rm-400"></a>
 
 - [ ] **RM-400 — Schräg abschneiden.**
@@ -2973,6 +2955,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Familien danach — Vertragsänderung, entscheidet Robert. Nebenbefund: OrcaSlicer schreibt für den
   Dremel 3D45 keine Druckdatei („G92 E0 … incompatible with absolute extruder addressing“), ungeklärt.
   **Abnahme:** Würfel mittig auf Dremel 3D45 (Orca) und BIBO (Prusa) liegt im G-Code mittig. Bauplan §29.
+  **Entscheidung Robert 02.10.2026: bauen** („1 ja“) — die Vertragsänderung an `PrinterProfile` ist freigegeben.
 
 ## Bedienung und Darstellung
 
@@ -4238,24 +4221,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: erster Grundkörper → Haken an; abgewählt und übernommen → nächster
   Grundkörper → Haken aus; Neustart behält die Wahl. Bauplan §13, §2.4 („gute Vorgabe“).
   **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
-
-<a id="rm-370"></a>
-
-- [ ] **RM-370 — Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 2).
-  Nach *Neues Projekt* zeigt die Ansicht nur den Bauraum (`viewport.py:15618ff.`); die
-  Werkzeugleiste ist teils gesperrt (`tool_strip.py:423`), die Bausteinkarte sagt „Bausteine gehen
-  auch so“ und führt in einen gesperrten Katalog (RM-356).
-  **Ablauf:** Über der leeren Ansicht eine ruhige Einladung mit fünf Knöpfen: *Quader*,
-  *Zylinder*, *Zeichnen*, *Bausteine*, *Im Chat beschreiben* (ohne KI-Zugang nur der Hinweis an
-  der Chatleiste, §2.3), dazu „oder eine Datei hierher ziehen“. Sie verschwindet mit dem ersten
-  Körper und kommt bei leerer Szene wieder; kein Dialog, nichts Modales.
-  **Stellen:** `app/ui/viewport.py` (Überlagerung der leeren Szene), `main_window.py:5930ff.`
-  (*Neu*), Aktionen aus dem Register (`REGISTRY`, Kategorie `primitive`), Kataloge.
-  **Abnahme:** Test: neues Projekt → fünf Einstiege sichtbar und auslösbar, Tastaturfokus
-  erreichbar, zugängliche Namen; nach *Quader anlegen* unsichtbar; Strg+Z zurück auf leer → wieder
-  sichtbar. Bauplan §2.3, §2.6.
-  **Vorgabe Robert 02.10.2026 — allgemein:** Einladung für jede leere Szene (neues Projekt, nach Löschen aller Körper, nach Strg+Z), Einstiege aus dem Register statt fest verdrahtet; Abnahme an drei Wegen in die leere Szene.
 
 <a id="rm-375"></a>
 

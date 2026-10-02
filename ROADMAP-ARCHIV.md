@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-398: Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“ (02.10.2026)](#rm-398-grundform-rohrring-und-bausteine-lasche-mit-loch-und-rohrschelle-02102026) |
+| 2026-10-02 | [RM-370: Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein (02.10.2026)](#rm-370-die-leere-szene-nach-neues-projekt-lädt-zum-anfangen-ein-02102026) |
 | 2026-10-02 | [RM-354: Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden (02.10.2026)](#rm-354-ein-hauptmaß-jenseits-der-grenze-der-operation-lässt-das-modell-verschwinden-02102026) |
 | 2026-10-02 | [RM-355: In der Parameterleiste geht nur ein Pfeilschritt, danach ist der Fokus weg (02.10.2026)](#rm-355-in-der-parameterleiste-geht-nur-ein-pfeilschritt-danach-ist-der-fokus-weg-02102026) |
 | 2026-10-02 | [RM-389: „Eine Rückfrage steht an — sie kommt beim Übernehmen“, und *Übernehmen* ist gesperrt (02.10.2026)](#rm-389-eine-rückfrage-steht-an--sie-kommt-beim-übernehmen-und-übernehmen-ist-gesperrt-02102026) |
@@ -35955,3 +35957,47 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
 
 **Abschluss:** Der wirksame Ursprung reist als `CuraMachine.origin_at_centre`/`SlicerConfig.origin_at_centre`; `off_the_bed` und die Naht (`_cura_seam`, Curas Formel) rechnen danach. Am echten CuraEngine 5.13 belegt (Malyan M180, Kossel Mini, Snapmaker-Instanz). Derselbe Fehler bei Orca und PrusaSlicer steht unter [RM-424](ROADMAP.md#rm-424). Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
+
+## RM-398: Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“ (02.10.2026)
+
+<a id="rm-398-grundform-rohrring-und-bausteine-lasche-mit-loch-und-rohrschelle-02102026"></a>
+<a id="rm-398"></a>
+
+**RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“.**
+  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 3).
+  „Ring anlegen“ ist ein Torus (`create_torus`, `app/core/geom/primitive_ops.py:501`); Rohr oder
+  Ring mit Bohrung brauchten in drei Nachbauten (Rohrschelle, Kartuschendeckel, Rankenclip)
+  Zylinder plus *Bohrung setzen*. Mit diesen drei Formen wären sie je in unter zehn Klicks gebaut.
+  **Umfang:** (a) Grundform *Rohr anlegen* (Außen-Ø, Innen-Ø oder Wand, Höhe) als Op nach der
+  Checkliste „neue Operation“ (beide Kerne, Test, Texte); (b) Baustein *Lasche mit Loch* (Breite,
+  Länge, Dicke, Lochgröße aus der Normteiltabelle, an einer Fläche ansetzbar) und (c) Baustein
+  *Rohrschelle* (Rohr-Ø, Breite, Wand, Schraubenlaschen; Spiel aus dem Materialprofil) nach der
+  Checkliste „neuer Baustein“ (Bereichsnachweis, Vorschaubild, `to_scad`, `LIBRARY_VERSION`).
+  **Abnahme:** je Form Geometrietest und Bereichsnachweis; Nachbau Rohrschelle in unter zehn
+  Klicks. Bauplan §24, §2.6, Regeln 4, 7, 22.
+  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Rohr, Lasche und Schelle mit **Maßreihen** statt Einzelmaßen (Rohr-Ø-Reihe, Lochgrößen M3–M8 aus der Normteiltabelle, Wand nach Materialprofil); Lasche und Schelle an jeder Fläche ansetzbar (RM-396). Nutzen: in `F:\3D Dateien` nach Dateinamen rund 18 Teile (Verbinder 01–07, Rankenclip, Kartuschendeckel, Ring, Torschloss-Adapter, Rohrhalter, Klemmen). Abnahme an mindestens drei unterschiedlichen Korpusteilen.
+
+**Abschluss:** Grundform *Rohr anlegen* (`create_tube`/`create_brep_tube`, Wand oder Innendurchmesser), Bausteine *Lasche mit Loch* (`lug`, M3–M8, Maße nach ISO 7089) und *Rohrschelle* (`pipe_clamp`, Rohrreihe 15–40 mm als Tabellenart `pipes` in `standards.toml` v10, eigener Durchmesser bis 110 mm, M3–M6) an beiden Kernen; je drei Fälle aus Nachbau und Korpus, Bereichsnachweise aller Bausteine neu gefahren. `LIBRARY_VERSION` bleibt (Entscheidung Robert 02.10.: nur neue Bausteine, kein geändertes Maß). Umgesetzt von Claude, in main mit `c117720b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-370: Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein (02.10.2026)
+
+<a id="rm-370-die-leere-szene-nach-neues-projekt-lädt-zum-anfangen-ein-02102026"></a>
+<a id="rm-370"></a>
+
+**RM-370 — Die leere Szene nach *Neues Projekt* lädt zum Anfangen ein.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 2).
+  Nach *Neues Projekt* zeigt die Ansicht nur den Bauraum (`viewport.py:15618ff.`); die
+  Werkzeugleiste ist teils gesperrt (`tool_strip.py:423`), die Bausteinkarte sagt „Bausteine gehen
+  auch so“ und führt in einen gesperrten Katalog (RM-356).
+  **Ablauf:** Über der leeren Ansicht eine ruhige Einladung mit fünf Knöpfen: *Quader*,
+  *Zylinder*, *Zeichnen*, *Bausteine*, *Im Chat beschreiben* (ohne KI-Zugang nur der Hinweis an
+  der Chatleiste, §2.3), dazu „oder eine Datei hierher ziehen“. Sie verschwindet mit dem ersten
+  Körper und kommt bei leerer Szene wieder; kein Dialog, nichts Modales.
+  **Stellen:** `app/ui/viewport.py` (Überlagerung der leeren Szene), `main_window.py:5930ff.`
+  (*Neu*), Aktionen aus dem Register (`REGISTRY`, Kategorie `primitive`), Kataloge.
+  **Abnahme:** Test: neues Projekt → fünf Einstiege sichtbar und auslösbar, Tastaturfokus
+  erreichbar, zugängliche Namen; nach *Quader anlegen* unsichtbar; Strg+Z zurück auf leer → wieder
+  sichtbar. Bauplan §2.3, §2.6.
+  **Vorgabe Robert 02.10.2026 — allgemein:** Einladung für jede leere Szene (neues Projekt, nach Löschen aller Körper, nach Strg+Z), Einstiege aus dem Register statt fest verdrahtet; Abnahme an drei Wegen in die leere Szene.
+
+**Abschluss:** Über jeder leeren Szene steht die Einladung `EmptySceneInvitation` mit Quader und Zylinder aus dem Register, *Zeichnen*, *Bausteine* und mit KI-Zugang *Im Chat beschreiben*, dazu „Oder ziehen Sie eine Datei hierher.“ Nicht modal, weicht dem ersten Körper und kehrt bei leerer Szene zurück; Fenstertest an neuem Projekt, Strg+Z bis zum Anfang und gelöschten Körpern. Umgesetzt von Claude, in main mit `c117720b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
