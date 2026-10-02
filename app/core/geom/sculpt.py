@@ -163,6 +163,9 @@ def _offsets(
     missed: list[Stroke] | None = None,
     cancelled: CancelToken | None = None,
     centre: np.ndarray | None = None,
+    *,
+    front_only: bool = True,
+    mirror_once: bool = True,
 ) -> np.ndarray:
     """Das Offsetfeld einer Etappe: alle Striche summiert, ein Durchgang.
 
@@ -196,11 +199,20 @@ def _offsets(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         touched = False
+        places = []
         for centre, direction in _mirrored(stroke, plane):
             near, weight = _weights(tree, points, centre, stroke.radius)
             if not len(near):
                 continue
             touched = True
+            if front_only:
+                weight = weight * _facing(normals[near], direction)
+            places.append((centre, direction, near, weight))
+        if mirror_once and len(places) > 1:
+            places = _strongest_copy(places)
+        for centre, direction, near, weight in places:
+            if not np.any(weight > 0.0):
+                continue
             scale = (weight * stroke.strength)[:, None]
             if stroke.tool == "draw":
                 shift[near] += direction * scale
@@ -227,6 +239,55 @@ def _offsets(
         if missed is not None and not touched:
             missed.append(stroke)
     return shift
+
+
+#: Ab welchem Skalarprodukt zwischen Eckpunktnormale und Strichrichtung ein
+#: Punkt dem Pinsel zugewandt ist. Null heißt: die ganze zugewandte
+#: Halbkugel — eine Rundung unter dem Pinsel bleibt erreichbar, die Rückseite
+#: einer dünnen Wand nicht (RM-376). Eine Richtung, keine Toleranz.
+FACING_LIMIT: Final = 0.0
+
+
+def _facing(normals: np.ndarray, direction: np.ndarray) -> np.ndarray:
+    """1 für Punkte, die dem Pinsel zugewandt sind, sonst 0 (RM-376).
+
+    Der Pinsel griff jeden Eckpunkt in seiner Kugel, auch die Unterseite einer
+    dünnen Wand und die Innenwand eines Hohlkörpers: *Abtragen* auf einer
+    4-mm-Platte drückte die Unterseite 3,7 mm unter das Bett. Elementweise wie
+    jeder Strahl im Kern (RM-187).
+    """
+    along = (
+        normals[:, 0] * direction[0] + normals[:, 1] * direction[1] + normals[:, 2] * direction[2]
+    )
+    return np.asarray(along > FACING_LIMIT, dtype=float)
+
+
+def _strongest_copy(places: list[Any]) -> list[Any]:
+    """Je Eckpunkt nur die stärkste Kopie eines gespiegelten Zugs (RM-378).
+
+    Ein Zug auf der Symmetrieebene wirkte mit seinem Spiegelbild zweimal am
+    selben Ort, je näher an der Ebene, desto mehr. Mit der stärksten Kopie je
+    Punkt wirkt er dort wie ein einzelner Zug; wo sich die Kopien nicht
+    überdecken, ändert sich nichts. Gleich starke Kopien entscheidet die
+    Reihenfolge — reproduzierbar aus den Parametern (Regel 2).
+    """
+    indices = np.concatenate([near for _centre, _direction, near, _weight in places])
+    weights = np.concatenate([weight for _centre, _direction, _near, weight in places])
+    owner = np.concatenate(
+        [np.full(len(near), number) for number, (_c, _d, near, _w) in enumerate(places)]
+    )
+    order = np.lexsort((owner, -weights, indices))
+    first = np.ones(len(order), dtype=bool)
+    first[1:] = indices[order][1:] != indices[order][:-1]
+    keep = np.zeros(len(order), dtype=bool)
+    keep[order[first]] = True
+    kept: list[Any] = []
+    start = 0
+    for centre, direction, near, weight in places:
+        mask = keep[start : start + len(near)]
+        start += len(near)
+        kept.append((centre, direction, near[mask], weight[mask]))
+    return kept
 
 
 def median_edge(mesh: MeshData) -> float:
@@ -282,6 +343,8 @@ def apply_strokes(
     *,
     cancelled: CancelToken | None = None,
     centre: Vec3 | None = None,
+    front_only: bool = True,
+    mirror_once: bool = True,
 ) -> MeshData:
     """Die ganze Strichliste auswerten — Etappe für Etappe, jede in einem Zug.
 
@@ -293,6 +356,10 @@ def apply_strokes(
     ``centre`` ist der Punkt, durch den die Symmetrieebenen gehen. Ohne
     Angabe die Mitte von ``mesh`` vor dem ersten Zug (:func:`mirror_centre`)
     — einmal genommen, nicht je Etappe, damit die Ebene beim Formen steht.
+
+    ``front_only`` lässt nur dem Pinsel zugewandte Punkte wirken (RM-376),
+    ``mirror_once`` einen Zug auf der Symmetrieebene nur einmal (RM-378).
+    Beide sind die Vorgabe; alte Formschritte tragen ``False`` (Format 41).
     """
     if not strokes:
         return mesh
@@ -300,7 +367,13 @@ def apply_strokes(
     body = mesh.raw
     for part in stages(strokes):
         moved = np.asarray(body.vertices, dtype=float) + _offsets(
-            mesh.replacing(body), part, missed, cancelled, plane
+            mesh.replacing(body),
+            part,
+            missed,
+            cancelled,
+            plane,
+            front_only=front_only,
+            mirror_once=mirror_once,
         )
         body = trimesh.Trimesh(vertices=moved, faces=body.faces, process=False)
     return mesh.replacing(body)
@@ -440,6 +513,20 @@ class SculptParams(BaseParams):
             "änderbar — eine fertige Sitzung lässt sich damit symmetrisch machen."
         ),
     )
+    front_only: bool = param(
+        title=_("Nur die zugewandte Seite formen"),
+        default=True,
+        placement="advanced",
+        internal=True,
+        doc=_("Ein Zug bewegt nur Punkte, die dem Pinsel zugewandt sind."),
+    )
+    mirror_once: bool = param(
+        title=_("Spiegelzug auf der Ebene einmal"),
+        default=True,
+        placement="advanced",
+        internal=True,
+        doc=_("Ein Zug auf der Symmetrieebene wirkt einmal, nicht doppelt."),
+    )
     mirror_at_body: bool = param(
         title=_("An der Körpermitte spiegeln"),
         default=True,
@@ -493,7 +580,15 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
     if params.mirror_at_body:
         middle = mirror_centre(before)
         centre = (float(middle[0]), float(middle[1]), float(middle[2]))
-    after = apply_strokes(before, strokes, missed, cancelled=ctx.cancelled, centre=centre)
+    after = apply_strokes(
+        before,
+        strokes,
+        missed,
+        cancelled=ctx.cancelled,
+        centre=centre,
+        front_only=params.front_only,
+        mirror_once=params.mirror_once,
+    )
     findings = _sculpting_findings(
         before, after, strokes, source.id, missed, ctx.profile, ctx.cancelled
     )

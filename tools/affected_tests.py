@@ -20,8 +20,9 @@ Hier wird nicht geschätzt, sondern gelesen. Betroffen ist eine Testdatei, wenn
    ``iterdir`` über die Quellen: Sprachregel, Kerntrennung, Fehlertexte,
    Verzeichniskarten. Diese Wächter sehen jede Änderung an ``app/`` oder
    ``tools/`` und gehören deshalb zu jeder dazu; oder
-4. eine geänderte Nicht-Python-Datei bei ihrem Namen genannt wird —
-   ``ROADMAP.md``, ``constraints.txt``, ein Katalog, eine Regeldatei.
+4. eine geänderte Nicht-Python-Datei oder ein Skript außerhalb der Pakete
+   bei ihrem Namen genannt wird — ``ROADMAP.md``, ``constraints.txt``, ein
+   Katalog, eine Regeldatei, der Hook unter ``.claude/hooks/``.
 
 Und ``tests/conftest.py`` ist die Ausnahme von allem: Wer es ändert, ändert
 jeden Test.
@@ -239,7 +240,7 @@ def _folder_pattern(folder: str) -> str:
 
 
 def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
-    """Testdateien, die von einer Nicht-Python-Datei abhängen — auf zwei Wegen.
+    """Testdateien, die von einer Datei außerhalb des Importgraphen abhängen — auf zwei Wegen.
 
     **Der Name allein genügt nicht, und das hat am 03.09.2026 eine CI-Runde
     gekostet.** Für eine geänderte ``changelog/de.md`` nannte diese Funktion
@@ -334,6 +335,12 @@ def affected(
                         and name in test_path.read_text(encoding="utf-8")
                     ):
                         reasons.setdefault(test_path, f"nennt {name}, und die Datei ist gelöscht")
+            else:
+                # Ein Skript außerhalb der Pakete — der gemeinsame Hook, ein
+                # Läufer unter ``.claude/.state/`` — importiert niemand; seine
+                # Tests laden es über den Pfad und nennen dabei den Namen.
+                for test_name, reason in _named_readers(graph, graph.root / relative).items():
+                    reasons.setdefault(graph.modules[test_name], reason)
         else:
             for name, reason in _named_readers(graph, graph.root / relative).items():
                 reasons.setdefault(graph.modules[name], reason)

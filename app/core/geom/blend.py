@@ -83,6 +83,14 @@ GRID_OFFSET: Final = 0.37
 #: iteriert, nicht abgenommen.
 DRAFT_FACTOR: Final = 2.0
 
+#: Bis zu wie vielen Rasterpunkten der Entwurf fein rechnet (RM-379). Gröber
+#: wurde vorher immer, und die Figur im Fenster wich bis 2 mm vom Export ab,
+#: ohne dass jemand es sagte. Gemessen am Leistungsfall aus §31 (zwei
+#: gekreuzte Rohre Ø 20, Übergang 6, Raster 1 mm): rund 243 000 Punkte in
+#: 1,5 s — eine Wartezeit, die beim Formen noch trägt. Darüber greift der
+#: Entwurfsfaktor, und der Befund ``blend.draft`` sagt es.
+DRAFT_SAMPLES: Final = 250_000
+
 #: Wie viele Rasterpunkte auf einmal gegen den Baum gefragt werden. Groß genug,
 #: dass der Aufruf sich lohnt, klein genug, dass ein Abbruch in einem
 #: Sekundenbruchteil ankommt — gemessen rund 0,3 s je Portion.
@@ -246,6 +254,29 @@ def _too_fine(wanted: int, grid: float) -> ValidationError:
     )
 
 
+def _grid(
+    first: MeshData, second: MeshData, radius: float, grid: float
+) -> tuple[np.ndarray, tuple[int, ...]]:
+    """Ursprung und Punktzahl je Achse des Rasters um beide Körper."""
+    margin = radius + grid * MARGIN_CELLS
+    low = np.minimum(first.raw.bounds[0], second.raw.bounds[0]) - margin + grid * GRID_OFFSET
+    high = np.maximum(first.raw.bounds[1], second.raw.bounds[1]) + margin
+    return low, tuple(math.ceil(value) + 1 for value in (high - low) / grid)
+
+
+def draft_grid(first: MeshData, second: MeshData, radius: float, grid: float) -> float:
+    """Die Rasterweite für den Entwurf: die feine, solange sie im Budget bleibt.
+
+    Gröber nur, wo die feine Weite :data:`DRAFT_SAMPLES` übersteigt (RM-379).
+    Dieselbe Regel gilt für jede Operation mit Entwurfsfaktor; heute hat ihn
+    nur diese.
+    """
+    _low, shape = _grid(first, second, radius, grid)
+    if int(np.prod(shape)) <= DRAFT_SAMPLES:
+        return grid
+    return grid * DRAFT_FACTOR
+
+
 def blend_bodies(
     first: MeshData,
     second: MeshData,
@@ -272,11 +303,8 @@ def blend_bodies(
                 open_edges=int(len(source.raw.edges_unique) * 2 - len(source.raw.faces) * 3),
             )
 
+    low, shape = _grid(first, second, radius, grid)
     margin = radius + grid * MARGIN_CELLS
-    low = np.minimum(first.raw.bounds[0], second.raw.bounds[0]) - margin + grid * GRID_OFFSET
-    high = np.maximum(first.raw.bounds[1], second.raw.bounds[1]) + margin
-    shape = tuple(math.ceil(value) + 1 for value in (high - low) / grid)
-
     wanted = int(np.prod(shape))
     if wanted > MAX_SAMPLES:
         raise _too_fine(wanted, grid)
@@ -373,7 +401,11 @@ def blend_union(ctx: OpContext) -> OpResult:
     """Zwei Körper hinein, einer heraus — mit einem Wulst in der Naht."""
     params = cast(BlendParams, ctx.params)
     first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
-    grid = params.grid * (DRAFT_FACTOR if ctx.quality == "draft" else 1.0)
+    grid = (
+        draft_grid(first, second, params.radius, params.grid)
+        if ctx.quality == "draft"
+        else params.grid
+    )
 
     merged = blend_bodies(
         first,
@@ -397,6 +429,19 @@ def blend_union(ctx: OpContext) -> OpResult:
             values={"grid_mm": round(grid, 3), "radius_mm": round(params.radius, 3)},
         )
     ]
+    if grid > params.grid:
+        findings.append(
+            Finding(
+                code="blend.draft",
+                severity="info",
+                message=_(
+                    "Im Fenster rechnet der Übergang in Entwurfsauflösung, damit das Formen "
+                    "flüssig bleibt. Export und Druckvorbereitung rechnen fein."
+                ),
+                object_id=ctx.inputs[0].id,
+                values={"grid_mm": round(grid, 3)},
+            )
+        )
     if merged.component_count > 1:
         findings.append(
             Finding(
