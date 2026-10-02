@@ -14767,9 +14767,9 @@ def _facets_refused(source: SceneObject) -> Finding:
         code="pattern.facets_unaligned",
         severity="warning",
         message=_(
-            "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen "
-            "legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz "
-            "und versuchen Sie es dann noch einmal."
+            "Die Mantelfläche unter diesem Muster ließ sich nicht genau ausrichten; im "
+            "Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen "
+            "Sie es dann noch einmal."
         ),
         object_id=source.id,
         suggestions=(REPAIR_AND_RETRY,),
