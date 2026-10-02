@@ -16,6 +16,68 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.5.2
+
+### Imprimir y entregar al slicer
+
+- En el primer inicio y en los ajustes elige primero el slicer y después una de sus impresoras. La lista tiene un campo de búsqueda, y el volumen y la boquilla vienen del perfil del slicer.
+- La boquilla se elige en los ajustes de impresión entre los tamaños que conoce su impresora, y el slicer recibe el perfil que le corresponde.
+- Los ajustes de impresión preguntan en el orden en que una cosa depende de otra: slicer, impresora, boquilla, placa, filamentos y calidad, y después los valores.
+- Con Creality Print 7.2 y 7.3, «Laminar» calcula ahora el archivo de impresión por sí mismo. Hasta ahora solo se podía en la ventana de Creality Print.
+- Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
+- Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
+- Los ajustes de impresión muestran solo las medidas de adherencia del tipo de cama elegido. Con brim desaparecen los campos de skirt y raft, que no harían nada.
+- Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
+- Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
+- Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
+- También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad.
+- Con «Organizar sobre la cama», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
+- Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
+- Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
+- La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
+
+### Taladros, ranuras y división
+
+- El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura.
+- Dos placas que se tocan conservan su material al estirar una ranura, y un pasador sobre el taladro se queda en su sitio.
+- Estirar un taladro que atraviesa dos cuerpos ya no informa de que el cuerpo se rompe cuando no ocurre.
+- Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
+- Los patrones sobre caras cilíndricas de modelos importados siguen cerrados al modificarlos.
+- También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
+- Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
+
+### Modelar, texto y dibujo
+
+- Con «En ambas caras», «Aplicar texto» pone las letras también en la cara posterior, legibles desde fuera. Sirve para banderas, carteles y colgantes.
+- La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la cama. Los proyectos antiguos conservan su forma.
+- El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
+- Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
+- Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
+- En la ventana, «Fusionar suavemente» muestra la misma forma que en la exportación. Solo con cuerpos muy grandes la vista previa calcula más gruesa y lo dice.
+- Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
+- Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
+- El destino de «Alinear a la característica» empieza vacío. «Aplicar» espera hasta que esté elegido y ya no coloca el cuerpo sin aviso en el lado equivocado.
+- Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
+
+### Generar con IA
+
+- Cancelar durante «Otro intento» solo detiene el intento en curso. Los terminados siguen disponibles para elegir.
+- El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén.
+- Si un error al generar nombra la configuración como salida, aparece como botón en el diálogo.
+- El diálogo de generar indica el volumen al tamaño con que llega la pieza.
+
+### Manejo y sistema
+
+- Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
+- En el diálogo de una operación las etiquetas forman una columna, los campos tienen el mismo ancho y cada interruptor está antes de lo que activa.
+- Las marcas de las listas se leen en cada fila, y los colores aparecen como un punto redondo al lado.
+- La paleta de comandos explica herramientas y acciones de archivo en una frase.
+- Tras cambiar el parámetro, «Generar variantes» empieza en el valor de ese parámetro.
+- Si falla el guardado de una calibración, se conservan los valores anteriores.
+- En el proyecto de ejemplo del segundo camino, los agujeros de los tornillos siguen el ancho y el grosor.
+- La ventana «Novedades» y el sitio web muestran el resaltado como texto destacado en vez de asteriscos.
+- El inglés y el español usan una sola palabra para la holgura de ajuste, y los mensajes ponen la puntuación que pide cada idioma.
+
 ## 0.5.1
 
 ### Imprimir y entregar al slicer

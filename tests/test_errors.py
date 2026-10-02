@@ -402,6 +402,9 @@ _NOT_A_RANGE = frozenset(
         # Zwei Klicks eines Lochrasters in einer Flucht: eine Lage der Hand,
         # keine Zahl in einem Feld (Durchsicht 22.09.2026).
         "grid_in_line",
+        # Schräg abschneiden (RM-400): eine Kippachse gleich der Schnittachse
+        # und eine Stelle ohne ebene Fläche — Wahl und Ort, keine Zahl im Feld.
+        "tilt_about_axis", "no_plane",
         # Flächenkontur und Projizieren (RM-188 P3.4): keine Fläche unter der
         # Zeichnung, eine gegen die Fläche gekippte Ebene, ein Netzrand ohne
         # eindeutigen Umlauf, Kanten, die schon in der Zeichnung stehen — Lagen

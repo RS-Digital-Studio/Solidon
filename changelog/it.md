@@ -15,6 +15,68 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.5.2
+
+### Stampare e passare allo slicer
+
+- Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
+- Scegli l'ugello nelle impostazioni di stampa tra le misure che la tua stampante conosce, e lo slicer riceve il profilo corrispondente.
+- Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.
+- Con Creality Print 7.2 e 7.3, «Affetta» calcola ora da sé il file di stampa. Finora funzionava solo nella finestra di Creality Print.
+- Con Cura, Solidon riprende su richiesta la stampante che Cura sta usando, con il suo ugello. Una stampante rinominata in Cura viene riconosciuta.
+- Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
+- Le impostazioni di stampa mostrano solo le misure di adesione del tipo di piano scelto. Con il brim spariscono i campi skirt e raft, che non avrebbero effetto.
+- Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.
+- I pezzi alti e sottili su una base piccola ricevono pareti più tranquille, a 60 mm/s e con meno accelerazione. Sulla Centauri Carbon 2 queste aste si staccavano.
+- Solidon propone «Prima la parete esterna» solo per il pezzo che ne ha bisogno, e mai per uno con supporti.
+- Anche nella ricerca rapida, «Orienta per la stampa» controlla che un pezzo stia in piedi in modo sicuro.
+- Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.
+- Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
+- Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
+- La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
+
+### Fori, asole e divisione
+
+- L'angolo di un'asola su un foro importato punta nella direzione attesa e la mantiene quando cambi la finezza.
+- Due piastre che si toccano conservano il loro materiale quando allunghi un'asola, e una spina sopra il foro resta al suo posto.
+- Allungare un foro che attraversa due corpi non segnala più che il corpo si spezza quando non succede.
+- Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
+- I motivi sulle facce cilindriche dei modelli importati restano chiusi quando li modifichi.
+- Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
+- Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
+
+### Modellare, testo e schizzo
+
+- Con «Su entrambe le facce», «Applica testo» mette le lettere anche sul retro, leggibili da fuori. Va bene per bandierine, cartelli e targhette.
+- La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.
+- Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
+- Un tratto sul piano di simmetria agisce una volta invece di due.
+- Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
+- Nella finestra, «Fondi dolcemente» mostra la stessa forma dell'esportazione. Solo con corpi molto grandi l'anteprima calcola più grossolana e lo dice.
+- Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
+- Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
+- Il bersaglio di «Allinea alla caratteristica» parte vuoto. «Applica» aspetta che sia scelto e non mette più il corpo in silenzio dal lato sbagliato.
+- Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
+
+### Generare con l'IA
+
+- Annullare durante «Un altro tentativo» ferma solo il tentativo in corso. Quelli finiti restano da scegliere.
+- Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già.
+- Se un errore durante la generazione indica la configurazione come via d'uscita, compare come pulsante nella finestra.
+- La finestra di generazione indica il volume alla misura con cui arriva il pezzo.
+
+### Uso e sistema
+
+- Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
+- Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.
+- Le spunte negli elenchi si leggono in ogni riga, e i colori compaiono come un pallino rotondo accanto.
+- La tavolozza dei comandi spiega strumenti e azioni sui file in una frase.
+- Dopo un cambio di parametro, «Genera varianti» parte dal valore di quel parametro.
+- Se il salvataggio di una calibrazione non riesce, restano i valori precedenti.
+- Nel progetto di esempio della seconda via, i fori per le viti seguono larghezza e spessore.
+- La finestra «Novità» e il sito mostrano le evidenziazioni come testo marcato invece che con asterischi.
+- Inglese e spagnolo usano una sola parola per il gioco di accoppiamento, e i messaggi seguono la punteggiatura di ogni lingua.
+
 ## 0.5.1
 
 ### Stampare e passare allo slicer

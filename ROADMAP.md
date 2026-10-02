@@ -82,24 +82,19 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Herkunft und vollständige Kurvenabdeckung korrigiert; 57 direkte und sechs Kundenfälle grün, Algorithmus unabhängig freigegeben; Dokumentabschluss und zentrales Tor/Übernahme offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
 | [RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert](#rm-327) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: Zahl am Endstand nachführen statt den Satz streichen; dazu fünf Codes in `ONE_PIECE_CODES` |
-| [RM-328 — Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil](#rm-328) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review seit 0.5.1: vier Tempopfade in `_SLICED_PART_PATHS`; Exporttest Stange plus Block; TPU-Grenze nicht lockern |
-| [RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen](#rm-329) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: native Cura-Instanz in `match` unabhängig von der Düse; „Instanz fehlt“ von „unvollständig“ trennen |
-| [RM-330 — An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“](#rm-330) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wirksamen Ursprung in `CuraMachine` tragen, `off_the_bed` und Nahtpunkt danach rechnen |
-| [RM-331 — Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer](#rm-331) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review seit 0.5.1: für `_creality_cli` vorher in Solidon anordnen oder mit *Anordnen* als Ausweg absagen; Test `keep_arrangement=False` |
-| [RM-333 — Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“](#rm-333) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review seit 0.5.1: eigener Befund für eine nicht zuordenbare Variante; `unreadable` nur für unlesbare Dateien |
+| [RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen](#rm-329) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-f`)** — Review seit 0.5.1: native Cura-Instanz in `match` unabhängig von der Düse; „Instanz fehlt“ von „unvollständig“ trennen |
+| [RM-330 — An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“](#rm-330) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-f`)** — Review seit 0.5.1: wirksamen Ursprung in `CuraMachine` tragen, `off_the_bed` und Nahtpunkt danach rechnen |
 | [RM-365 — *Festschreiben* einer Formsitzung friert das Entwurfsnetz ein](#rm-365) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Weg 4): beim Festschreiben in feiner Qualität rechnen; Test Dreieckszahl und Volumen |
 | [RM-381 — Boolesche Ops an mehrschaligen Modellen sind seit `eab5f4f47` 8- bis 15-mal langsamer und nicht abbrechbar](#rm-381) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Kandidaten über räumlichen Index, Deckel mit Befund, `cancelled` durchreichen; Zeitmessung Besenhalter |
 | [RM-382 — Ein Mehrschaler mit einer selbstkreuzenden Schale lässt sich seit `eab5f4f47` gar nicht mehr bearbeiten](#rm-382) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Entscheidung Robert, ob nur gehalten wird, wenn das Werkzeug die kaputte Schale berührt; Kennung und Satz mit Grund |
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
 | [RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart](#rm-384) | Geometrie, Erkennung und Druckvorbereitung | Konstruktor-Nachgang behoben und unabhängig ohne Befund geprüft; 106 Entwicklungsfälle grün, zentrales Tor und Integration ausstehend |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
-| [RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch](#rm-386) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-b`)** — Review 02.10.: Folge zu RM-319 (archiviert); berührende Schalen an allen schließenden Wegen beider Kerne verbinden, je Zwilling ein Test |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng](#rm-393) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Deckelgewinde mit wirksamem Durchmesser oder Passungsprüfung liest das gebaute Spiel; Test beide Kerne |
-| [RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“](#rm-398) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: drei neue Formen nach den Checklisten Op/Baustein |
-| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: *Abschneiden* an einer beliebigen Ebene (Neigung oder drei Punkte) |
+| [RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“](#rm-398) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-e`)** — Umfangsentscheidung Robert 02.10.: drei neue Formen nach den Checklisten Op/Baustein |
+| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-d`)** — Neigung um eine Achse und Ebene parallel zu einer gewählten Fläche in main (`bf829b68d`); offen: exakter Körper bleibt exakt statt Netz, Ebene durch drei Punkte, Abnahme an einem Mehrschaler |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
-| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-225 (archiviert); Grenze aus dem float32-Raster, Befund bei Ablehnung, Tests an vier Varianten |
+| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-b`)** — Review 02.10.: Folge zu RM-225 (archiviert); Grenze aus dem float32-Raster, Befund bei Ablehnung, Tests an vier Varianten |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
@@ -108,6 +103,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
+| [RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt](#rm-423) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-386: `_place_oriented_feature` am exakten Körper — Ergebnis exakt rechnen oder als Netz kennzeichnen und `evaluate.exact_became_mesh` melden; Test beide Kerne |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -135,7 +131,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Code mit 8374885ae integriert; Düsen-/Herstelleridentität und tatsächliche 3MF-Ausgabe eigen-/zweitgeprüft, Entwicklungstor grün. Funktionale Sieben-Slicer-Matrix und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Review seit 0.5.1: Doppelpunkt im Gegenstück-Dialog, Ablehnung ohne Feld, Sperrgrund ohne Feldnamen, Breitenrechnung, Apostrophe, fehlende Wächter |
+| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | Review 02.10. (Weg 1/2): Export an das nächste aktuelle, vollständige Ergebnis binden; Test Änderung + sofortiger Export |
 | [RM-354 — Ein Hauptmaß jenseits der Grenze der Operation lässt das Modell verschwinden](#rm-354) | Bedienung und Darstellung | Review 02.10. (Weg 2): wirksame Grenzen in Leiste und `change_parameter` ablehnen, Bild beim Halt stehen lassen |
 | [RM-355 — In der Parameterleiste geht nur ein Pfeilschritt, danach ist der Fokus weg](#rm-355) | Bedienung und Darstellung | Review 02.10. (Weg 2): Zeilen wiederverwenden statt neu bauen; Test dreimal ↑ |
@@ -167,7 +163,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-361 — „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren](#rm-361) | KI und Generatoren | Review 02.10. (Weg 3): Absage vor dem Lauf prüfen und beim Übernehmen anzeigen; Test mit Einfügemarke |
 | [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
 | [RM-372 — Eine Erzeugung ist ein Rückgängig-Schritt](#rm-372) | KI und Generatoren | Entscheidung Robert 02.10.: `load`, `fit_to_size`, `repair`, `place_on_bed` als eine Transaktion |
-| [RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert](#rm-373) | KI und Generatoren | Umfangsentscheidung Robert 02.10.: Zeilen unterscheidbar machen, Übernehmen nach geändertem Satz klären |
 | [RM-374 — Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern*](#rm-374) | KI und Generatoren | Entscheidung Robert 02.10.: Handlung öffnet den Schritt `fit_to_size` |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -2561,30 +2556,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `bericht-A.md` (M2, N2), Sonden `a_zerfall_teilezahl.py`, `a_schrift_lose_dann_vereint.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch, beide Teile. Nach der Brückenfolge an beiden Kernen 3 Teile ohne Zerfallssatz; `label.fell_apart` bleibt nach der Vereinigung zu einem Teil stehen. Die fünf Codes fehlen weiter in `ONE_PIECE_CODES` (`evaluate.py:1528–1537`).
 
-<a id="rm-328"></a>
-
-- [ ] **RM-328 — Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil.**
-  Review seit 0.5.1, Befund A-M3 und A-N1, Commit `69d0c8a85` (Claude).
-  `app/core/export/writer.py:1107–1118`: `_SLICED_PART_PATHS` fehlen `speed.outer_wall`,
-  `speed.inner_wall`, `speed.outer_wall_acceleration`, `speed.acceleration`. Ohne Schnitt
-  (`:1271`, `result=None`) fragt `advise.for_part` die Regel nicht (`slice/advise.py:1010`), und
-  `_unserved` (`writer.py:1345`) legt den übernommenen Rat an jedes Teil. Der Druckdialog fragt mit
-  gemessenen Schichten (`ui/print_settings_dialog.py:2240ff`) und nennt nur die Stange — Dialog und
-  Datei sagen Verschiedenes.
-  **Fehlerfall:** Platte mit Stange 8 × 8 × 122 mm und Block 60 × 60 × 10 mm, Orca, Rat der
-  Stange übernommen → in `model_settings.config` tragen beide Objekte `outer_wall_speed 60`,
-  `inner_wall_speed 60`, `default_acceleration 2000`, Befund `export.part_setting_all`.
-  **Dazu:** `_calm_walls` (`advise.py:1557ff`) vergleicht mit den Ausgangswerten statt mit dem
-  schon geltenden Vorschlag und lockert so die TPU-Grenze: TPU-95A, Wände 100 mm/s, schlanke
-  Stange → Vorschlag 41 mm/s statt `FLEXIBLE_MAX_SPEED` 30 mm/s (`:167`). Eine spätere Regel darf
-  eine frühere nicht lockern (`min`).
-  **Abnahme:** Exporttest Stange plus Block: nur die Stange trägt die Werte, Befund
-  `export.part_setting obj_1`; Test TPU schlank → 30 mm/s. Besser leitet sich
-  `_SLICED_PART_PATHS` aus den Regeln ab, die `result` brauchen. Bauplan §29, §22.2.
-  Beleg: `bericht-A.md` (M3, N1), Sonden `a_ruhige_waende_export.py`, `a_ruhige_waende_gegenprobe.py`,
-  `a_tpu_schlank.py`.
-  Nachprüfung am Stand `6ce767031`: besteht noch, beide Teile. Stange und Block tragen beide 60/60/2000/2000 mit `export.part_setting_all`; Gegenprobe mit den vier ergänzten Pfaden liefert `export.part_setting obj_1`. TPU schlank: 41,0 statt 30 mm/s.
-
 <a id="rm-329"></a>
 
 - [ ] **RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen.**
@@ -2633,47 +2604,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `bericht-B.md` (B-2), Sonden `test_probe_cura_center_zero.py` (+ `out_cura_center_zero.txt`),
   `cura_center_zero.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
-
-<a id="rm-331"></a>
-
-- [ ] **RM-331 — Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer.**
-  Review seit 0.5.1, Befund B-3, Commit `252fc77d2` (Claude).
-  `app/core/export/handover.py:3625` und `:3637–3651` (`_command`: bei `_creality_cli` kein
-  `--arrange`), `:4892–4897` (Rückfall ohne Anordnungsvorgabe ist für `_creality_cli`
-  ausgeschlossen), `app/ui/print_settings_dialog.py:1961–1972` (`place_on_bed=keep`),
-  `app/core/export/writer.py:580–622` (`arrangement_holds`), `threemf.py:309–314`.
-  **Fehlerfall:** Creality Print 7.3, *Slicen* einer Platte, auf der Solidons Anordnung nicht
-  hält (zwei Teile mit überlappender Hüllbox in der Aufsicht, etwa Teil in einem Ring; ein
-  schwebendes oder über den Rand ragendes Teil) → `keep = False`, die 3MF trägt keine
-  Bettverschiebung, und 7.3 ordnet laut der Messung im Commit auf der Konsole nie an → Abbruch -50
-  „Nicht jedes Teil liegt ganz auf der Druckplatte …“ oder eine Datei neben dem Bett. Bei allen
-  anderen Programmen der Familie und bei 7.2 ordnet in diesem Fall der Slicer an.
-  Der Codeweg ist belegt; der Ausgang am echten Creality Print 7.3 ist nicht nachgestellt —
-  zuerst dort messen.
-  **Fix:** Für `_creality_cli` vor dem Schreiben in Solidon anordnen (wie *Anordnen*) oder bei
-  nicht haltender Anordnung mit eigenem Satz absagen und *Anordnen* als erste Handlung anbieten
-  (Regeln 17, 21).
-  **Abnahme:** Test mit `keep_arrangement=False` (heute fährt `tests/test_print_settings.py:3017`
-  nur `True`); Lauf am echten Creality Print 7.3 mit Ring-Platte. Bauplan §29.
-  Beleg: `bericht-B.md` (B-3).
-  Nachprüfung am Stand `6ce767031`: besteht noch, nur am Codeweg belegt: Code unverändert, kein Test mit `keep_arrangement=False`; am echten Creality Print 7.3 weiter nicht nachgestellt.
-
-<a id="rm-333"></a>
-
-- [ ] **RM-333 — Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“.**
-  Review seit 0.5.1, Befund B-4, Commit `657631ddc` (Codex).
-  `app/core/export/manufacturer.py:1636–1656` (`base_settings`): Ist `_variant_selection` oder
-  `_variant_values` `None`, folgt `_table_foundation(..., unreadable=setup.base_process)` →
-  `slicer.process_unreadable` (`:1772–1780`, „Das gewählte Prozessprofil ließ sich nicht lesen.“).
-  **Fehlerfall:** H2C/H2D mit „High Flow“ an beiden Extrudern, mehrdeutiges
-  `nozzle_volume_type`, oder ein Grundfilament ohne die gewählte Variante → Rückfall auf Solidons
-  Tabelle (gewollt), der Kunde liest aber, das Profil sei unlesbar, und sucht eine kaputte Datei
-  (Regel 17). Der Test `tests/test_manufacturer.py:1160–1200` sichert genau diesen Text zu.
-  **Fix:** Eigener Befund (welche Variante, welches Profil, Weg in den Druckdialog), übersetzt in
-  allen Katalogen.
-  **Abnahme:** Test mehrdeutige Variante → neuer Befundcode, `process_unreadable` nur bei
-  unlesbarer Datei. Bauplan §29, §2.7. Beleg: `bericht-B.md` (B-4).
-  Nachprüfung am Stand `6ce767031`: besteht noch. `manufacturer.py:1636–1656` und `:1772–1780` unverändert; `test_manufacturer.py:1160–1200` sichert weiter `unreadable` zu und ist grün (mit den übrigen zitierten Tests 23 passed, Exit 0).
 
 <a id="rm-365"></a>
 
@@ -2805,25 +2735,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   grün. Beleg: `F:\solidon-review-reports\review-3fd3b1ace.md`.
   Review 02.10. (`7f0de659d`): Wiederholt sich — `ROADMAP.md` sagt im integrierenden Commit selbst „Zentrales Tor und Integration stehen aus“; der neue Absatz in `app/core/geom/CLAUDE.md` trägt wieder Implementierungsdetails. Dazu `ROADMAP-ARCHIV.md:34158–34160` (aus `0eccbe952`): ein „weiterhin“ offener Solverfehler bei Weltverschiebung 1e7 ohne Registerpunkt; ein Nachbau rechnet richtig (`sonden\r2_boolean_weltversatz.txt`) — Fall benennen und registrieren oder die Aussage streichen.
 
-<a id="rm-386"></a>
-
-- [ ] **RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch.**
-  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 3; Folgepunkt zu RM-319, das im Arbeitsbaum
-  inzwischen archiviert ist. Der Abnahmefall von RM-319 ist behoben (Netz 14 715,2, exakt
-  14 714,5 mm³, je ein Langloch). Offen:
-  - **Netz:** eine gesenkte Bohrung durch die zwei Berührplatten versetzen → −2 516,3 mm³ ohne
-    Befund; der Kettenzweig schließt ohne `merge_face_contacts`
-    (`app/core/geom/prepare_ops.py:3867`, ebenso `:3211`).
-  - **Exakt:** *Bohrung ändern* Ø 8 mit Versatz lässt einen losen Zylinder von 502,7 mm³ in der
-    Bohrung stehen, der Körper ist undicht, kein Befund (`prepare_ops.py:7667`).
-  - **Exakt:** *Merkmal verschieben* und *Merkmal drehen* sagen mit falschem Rat ab; das Netz
-    rechnet dieselben Fälle inzwischen richtig (Kerne sagen Verschiedenes, `operationen.md`).
-  **Fix:** berührende Schalen an allen schließenden Wegen beider Kerne verbinden.
-  **Abnahme:** je Zwilling ein Test an beiden Kernen (Volumen, ein Körper, dicht, kein loser
-  Rest). Ob `796c6d003` („Gekoppelte Senkbohrungen fangen ungültige Langlochzüge ab“) einen Teil
-  davon abdeckt, ist noch nicht geprüft. Bauplan §21.1, §25, §30, Regel 17.
-  Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_beruehrplatten_*.txt`.
-
 <a id="rm-388"></a>
 
 - [ ] **RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl.**
@@ -2851,22 +2762,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Mitte gleich); *Drehdeckel erzeugen* am Randring geht. Bauplan §21.2, §2.6, §18.5, §25, Regel 21.
   Belege: `F:\solidon-review-reports\nachbau\bericht.md`, Sonden `f1_flaeche_nach_bohrung.py`,
   `f1_kern.txt`, `f3_im_lauf.txt`, `f3_drehdeckel_ui.py`. Verwandt: RM-218, RM-226.
-
-<a id="rm-393"></a>
-
-- [ ] **RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng.**
-  Review 02.10.2026, Nachbau-Test F5, am HEAD `4449e3370`.
-  **Fehlerfall:** Dose aushöhlen, *Drehdeckel erzeugen* (Weg `lid_flow.apply_lid`): Befund „Die
-  Passung sitzt enger als vorgesehen.“ mit `actual 0.00 mm, expected 0.25 mm` — an exaktem und
-  Netzkörper, bei P 3 und P 3,5. Hals- und Deckelgewinde tragen denselben Nenndurchmesser
-  (`lid_neck_thread` 45,0, `lid_cap_thread` 45,0), obwohl die Operation 0,25 mm Spiel eingebaut hat.
-  **Stellen:** Merkmale in `app/core/geom/lid.py` ab `:1420` (`NECK_THREAD_FEATURE`,
-  `CAP_THREAD_FEATURE`), Passung `app/core/lid_flow.py:82`.
-  **Fix:** Deckelgewinde mit seinem wirksamen Durchmesser beschreiben oder die Passungsprüfung für
-  Gewinde das gebaute Spiel lesen lassen.
-  **Abnahme:** Test an beiden Kernen: frischer Drehdeckel ohne Passungswarnung; ein künstlich
-  verengter meldet. Bauplan §14, §2.7.
-  Beleg: `nachbau\bericht.md`, Sonde `f5_passung_ablauf.py`.
 
 <a id="rm-398"></a>
 
@@ -3104,6 +2999,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     nachgezogen; das Verhalten steht stattdessen in den Karten.
   **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
   rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
+
+<a id="rm-423"></a>
+
+- [ ] **RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt.**
+  Fund 02.10.2026 bei RM-386 (Claude, Unteragent), vorbestehend: *Merkmal verschieben* mit
+  Richtung (`nx`/`ny`/`nz`, `_place_oriented_feature` in `app/core/geom/prepare_ops.py`)
+  rechnet am exakten Körper über das Netz und gibt ein `MeshData` zurück, der Körper bleibt
+  aber als `brep` markiert. Folgeschritte des exakten Kerns treffen dann ein Netz. Im neuen
+  Test `test_every_closing_way_treats_touching_plates_as_one_printed_body` ist dieser eine
+  Fall deshalb ausgenommen. **Fix:** exakt rechnen oder `kind` auf `mesh` setzen und
+  `evaluate.exact_became_mesh` melden (`result_kind`). **Abnahme:** Test an beiden Kernen,
+  Ausnahme im RM-386-Test entfernt. Bauplan §21.
 
 ## Bedienung und Darstellung
 
@@ -4168,6 +4075,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     mit `reason == doc`, Tooltip zeilengenau.
   - **D-N7, `e969f88ce` (Claude):** Listenhaken (`style.check_files`, `_check_rules`) und runde
     Farbpunkte (`swatch(..., ring_when_empty=…)`) haben keinen Test.
+  **Stand 02.10.2026:** C-N1, D-N2, C-N2 und D-N7 sind mit `7c8bd7892` in main (Claude); offen D-N1 und D-N5.
   Bauplan §19, §4.1, §2.7.
   Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
 
@@ -4782,22 +4690,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: nach einer Erzeugung genau eine neue Transaktion; ein Strg+Z → Szene wie
   vorher; Strg+Y → Hashes gleich. Bauplan §15.5, §2.1.
   **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Bündelung für jeden zusammengehörigen Ablauf, der heute mehrere Transaktionen anlegt (Erzeugen, Import mit Reparatur, Assistenten); Abnahme an mindestens drei unterschiedlichen Abläufen.
-
-<a id="rm-373"></a>
-
-- [ ] **RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert.**
-  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
-  Jede Zeile der Versuchsliste (`app/ui/generate_dialog.py`) nennt nur Dreiecke, Volumen und
-  dicht. Wer zwischen zwei Versuchen den Satz ändert, sieht nicht, welcher Versuch zu welchem
-  Satz gehört; *Übernehmen* übernimmt trotz geändertem Satz den gewählten alten Versuch.
-  **Ablauf:** Jede Zeile trägt den Satzanfang (gekürzt, voller Satz im Tooltip) bzw. den
-  Bildnamen und den Startwert (Regel 9, `deterministic=False`); ist der Satz seit dem gewählten
-  Versuch geändert, sagt eine Zeile über *Übernehmen*, dass der alte Satz übernommen wird.
-  **Stellen:** `generate_dialog.py` (Listeneinträge, Zustand um `:859–872`), Kataloge.
-  **Abnahme:** Test: zwei Versuche mit verschiedenen Sätzen → zwei unterscheidbare Zeilen mit
-  Startwert; Satz geändert → Hinweis sichtbar; übernommen wird der gewählte Versuch mit seinem
-  Startwert im Schritt. Bauplan §2.8, Regel 9.
-  **Vorgabe Robert 02.10.2026 — allgemein:** Unterscheidbarkeit für jede Versuchsliste (Text, Bild, Varianten); Abnahme an mindestens drei unterschiedlichen Versuchsreihen.
 
 <a id="rm-374"></a>
 

@@ -1197,7 +1197,68 @@ def test_bambu_does_not_guess_between_duplicate_extruder_variants(
     foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
 
     assert not foundation.has_profile
-    assert foundation.unreadable == "0.20mm Standard @CC2"
+    # RM-333: Die Datei ist lesbar, nur die Variante nicht eindeutig. „Ließ
+    # sich nicht lesen“ schickte den Kunden auf die Suche nach einer kaputten
+    # Datei.
+    assert not foundation.unreadable
+    assert foundation.unresolved_variant == "High Flow"
+    found = manufacturer.findings(foundation)
+    assert [entry.code for entry in found] == ["slicer.process_variant_unresolved"]
+    assert found[0].values == {"variant": "High Flow", "profile": "0.20mm Standard @CC2"}
+    assert found[0].suggestions == (manufacturer.OPEN_PRINT_SETTINGS,)
+
+
+def test_a_base_filament_without_the_chosen_variant_is_not_called_unreadable(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-333: Das Grundfilament kennt die gewählte Düsenvariante nicht. Solidons
+    Tabelle gilt (gewollt), der Befund nennt die Variante und das Profil statt
+    eines unlesbaren Prozesses."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow", "Direct Drive E3D High Flow"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ["1", "1", "1"],
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": "E3D High Flow",
+            "print_extruder_variant": variants,
+            "print_extruder_id": ["1", "1", "1"],
+        }
+    )
+    _write(process_path, process)
+    filament_path = root / "filament" / "ECC2" / "pla.json"
+    filament = json.loads(filament_path.read_text(encoding="utf-8"))
+    filament.update(
+        {
+            "filament_extruder_variant": variants[:2],
+            "nozzle_temperature": ["215", "225"],
+        }
+    )
+    _write(filament_path, filament)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert not foundation.has_profile
+    assert not foundation.unreadable
+    assert foundation.unresolved_variant == "Direct Drive E3D High Flow"
+    found = manufacturer.findings(foundation)
+    assert [entry.code for entry in found] == ["slicer.process_variant_unresolved"]
+    assert found[0].values == {
+        "variant": "Direct Drive E3D High Flow",
+        "profile": "Elegoo PLA @ECC2",
+    }
 
 
 def test_what_the_chain_does_not_name_is_the_programs_default(

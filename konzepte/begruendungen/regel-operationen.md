@@ -1022,6 +1022,26 @@ gesamten Zielkörper. Beim allgemeinen Versetzen und Duplizieren einer
 Mesh-Bohrung entsteht das Werkzeug aus ihren tatsächlichen Wandflächen,
 damit ein fremder Sehnenzug weder schrumpft noch beim Füllen zurückbleibt.
 
+**Jeder schließende Weg verbindet vorher berührende Schalen** (RM-386). Am
+Netz trägt jede schließende Vereinigung `merge_face_contacts`, am exakten Kern
+füllt jeder Weg in den Körper aus `_exact_closing_base`; Ketten lesen ihren
+Einlauf am verbundenen Körper (`_exact_closing_chain`,
+`_exact_entrance_context`). RM-319 hatte das nur am Langlochzug eingelöst. An
+zwei 40 x 20 x 10 mm großen Platten, die sich bei z = 10 berühren, verlor die
+versetzte Senkbohrung (Ø 6, Senkung Ø 12) am Netz 2 516,3 mm³ und zerfiel in
+zwei halbe Bohrungen; am exakten Kern ließ *Bohrung ändern* auf Ø 8 mit
+Versatz einen losen Zylinder von 502,7 mm³ stehen, Versetzen und Kippen
+sagten mit dem Rat ab, die Stelle anders zu setzen, und *Merkmal entfernen*
+wie *Bohrung verschließen* gaben einen Körper mit undichtem Netz — alles ohne
+Befund. Der Stopfen verband beide Platten über der alten Bohrung, ihre
+gemeinsame Grenzfläche blieb im Körper, und der Schnitt danach traf sie.
+Gemessen werden die Merkmale am unverbundenen Körper: Ihre Dreiecksbezüge
+zeigen am verbundenen auf fremde Dreiecke. Die Vorfrage kostet am Netz mit
+Flächenkontakt so viel wie ohne (Besenhalter, drei Schalen, 6,3 gegen 6,3 s je
+schließender Vereinigung); am exakten Kern fällt sie nur bei mehreren
+Volumenkörpern an. Der Wächter: `test_feature_moves_keep_shape.py`, beide
+Kerne gegen die Platte aus einem Stück.
+
 ## Wulst und Kehle schließen je Kern anders, ein Gewinde wird nicht bewegt
 
 **Und seit P2.6 gilt es für Wulst und Kehle** (21.09.2026): Ein Torusmerkmal

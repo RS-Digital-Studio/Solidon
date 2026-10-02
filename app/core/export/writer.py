@@ -1101,23 +1101,6 @@ def _written(target: Path, payload: bytes) -> Path:
     return target
 
 
-#: Die Pfade, deren Rat je Teil aus dem Schnitt des Körpers kommt. Nur wenn
-#: einer davon je Teil geht, wird ein Körper eigens geschnitten; Passung und
-#: Verbinder kommen ohne aus.
-_SLICED_PART_PATHS: Final = frozenset(
-    {
-        "support.style",
-        "support.placement",
-        "support.block_channels",
-        "adhesion.kind",
-        "shell.wall_generator",
-        "shell.outer_wall_first",
-        "shell.scarf_seam",
-        "layers.line_width",
-    }
-)
-
-
 @dataclass(frozen=True, slots=True)
 class _PartValues:
     """Was ein Teil anders bekommt als die Platte, und warum."""
@@ -1257,7 +1240,10 @@ def _part_values(
         return _PartValues({}, [], [], split.plate)
     from app.core.knowledge import profiles as profile_table
     from app.core.scene.fits import fit_kinds_for
+    from app.core.slice import advise
 
+    # Geschnitten wird nur, wenn der Rat je Teil den Schnitt braucht; Passung
+    # und Verbinder kommen ohne aus (:data:`advise.SLICED_PATHS`).
     result = (
         _body_analysis(
             entry,
@@ -1268,7 +1254,7 @@ def _part_values(
             ),
             cancelled,
         )
-        if wanted & _SLICED_PART_PATHS
+        if wanted & advise.SLICED_PATHS
         else None
     )
     advice = part_advice(

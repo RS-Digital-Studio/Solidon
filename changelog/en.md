@@ -15,6 +15,68 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.5.2
+
+### Printing and slicer handover
+
+- On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
+- You choose the nozzle in the print dialog from the sizes your printer knows, and the slicer gets the matching profile with it.
+- The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
+- With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window.
+- With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
+- Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
+- The print dialog shows only the adhesion settings of the chosen bed type. With a brim, the skirt and raft fields that would do nothing are gone.
+- A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
+- Tall, slender parts on a small footprint get calmer walls suggested, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
+- Solidon now suggests *Outer wall first* only for the part that needs it, and never for one with supports.
+- In the quick search too, *Orient for printing* checks whether a part stands securely.
+- Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.
+- If you drag a body in the view onto another bed, it ends up on that bed's plate.
+- After the first *Open in slicer …*, Solidon no longer recalculates the history.
+- The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
+
+### Holes, slots and splitting
+
+- The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness.
+- Two plates that touch keep their material when you pull a slot, and a pin above the hole stays in place.
+- Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
+- If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
+- Patterns on cylindrical faces of imported models stay closed when you change them.
+- Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
+- If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
+
+### Sculpting, text and sketching
+
+- With *On both sides*, *Put text on* also places the lettering on the back, readable from outside. That suits flags, signs and tags.
+- Symmetry in *Sculpt* mirrors at the centre of the body, also away from the middle of the bed. Older projects keep their shape.
+- The sculpting brush only affects the side facing it. Carving on a thin plate no longer pushes the underside along.
+- A sculpting stroke on the mirror plane now acts once instead of twice.
+- If a sculpting stroke pierces the wall or makes it too thin, the report says so, with *Show the place*.
+- In the window, *Blend together* shows the same shape as in the export. Only for very large bodies does the preview work more coarsely, and it says so.
+- If a building block such as a keyhole reaches over the edge of its face, the report says so.
+- A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
+- The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
+- A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
+
+### Generating with AI
+
+- Cancelling during *One more try* only stops the running attempt. The finished ones remain to choose from.
+- The image model is now fetched by *Set up image model …* even when the other weights are already there.
+- If an error while generating names the setup as the way out, it appears as a button in the dialog.
+- The generate dialog states the volume at the size the part will arrive in.
+
+### Operation and system
+
+- Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
+- In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
+- Checkmarks in lists are readable in every row, and colours appear as a round dot next to them.
+- The command palette explains tools and file actions in a sentence.
+- After you switch the parameter, *Generate variants* starts at that parameter's value.
+- If saving a calibration fails, the previous values are kept.
+- In the example project for the second way, the screw holes follow width and thickness.
+- The *What's new* window and the website show emphasis as styled text instead of asterisks.
+- English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
+
 ## 0.5.1
 
 ### Printing and slicer handover

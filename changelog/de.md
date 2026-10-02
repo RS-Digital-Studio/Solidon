@@ -40,6 +40,68 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.5.2
+
+### Drucken und Übergabe an den Slicer
+
+- Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
+- Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
+- Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.
+- Mit Creality Print 7.2 und 7.3 rechnet *Slicen* die Druckdatei jetzt selbst. Bisher ging das nur im Fenster von Creality Print.
+- Mit Cura übernimmt Solidon auf Wunsch den Drucker, den Cura gerade nutzt, samt eigener Düse. Ein in Cura umbenannter Drucker wird wiedererkannt.
+- An Bambu Studio gehen Düsenvariante und die Temperaturen Ihrer Spulen mit, bis in die 3MF-Datei.
+- Im Druckdialog stehen nur die Haftungsmaße der gewählten Bettart. Bei Brim fehlen also Skirt- und Raft-Felder, die nichts bewirken würden.
+- Eine Zahl außerhalb ihrer Grenze bleibt im Feld stehen, die Grenze steht daneben, und *Slicen* wartet, bis sie stimmt. Bisher wurde sie still gekürzt.
+- Hohe, schlanke Teile auf kleinem Fuß bekommen ruhigere Wände vorgeschlagen, mit 60 mm/s und weniger Beschleunigung. Solche Stangen rissen sonst am Centauri Carbon 2 ab.
+- Solidon schlägt *Außenwand zuerst* nur noch für das Teil vor, das es braucht, und nie für eines mit Stützen.
+- Auch in der schnellen Suche prüft *Druckoptimal ausrichten*, ob ein Teil sicher steht.
+- Jedes Teil kommt mit *Auf dem Bett anordnen* auf die erste Platte, auf der es Platz hat. Der Minigolf-Satz braucht so vier statt sechs Platten.
+- Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
+- Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
+- Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
+
+### Bohrungen, Langlöcher und Teilen
+
+- Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern.
+- Zwei Platten, die sich berühren, behalten beim Langlochzug ihr Material, und ein Stift über der Bohrung bleibt stehen.
+- Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
+- Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
+- Muster auf Zylinderflächen eingelesener Modelle bleiben beim Ändern geschlossen.
+- Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
+- Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
+
+### Formen, Schrift und Zeichnen
+
+- Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.
+- Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
+- Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
+- Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
+- Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
+- Im Fenster zeigt *Weich verschmelzen* dieselbe Form wie im Export. Nur bei sehr großen Körpern rechnet die Vorschau gröber und sagt es.
+- Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
+- Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
+- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. *Übernehmen* wartet, bis es gewählt ist, und setzt den Körper nicht mehr still an die falsche Seite.
+- Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
+
+### Erzeugen mit KI
+
+- Abbrechen während *Noch ein Versuch* bricht nur den laufenden Versuch ab. Die fertigen bleiben zur Wahl.
+- Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind.
+- Nennt ein Fehler beim Erzeugen die Einrichtung als Ausweg, steht sie als Knopf im Dialog.
+- Der Erzeugen-Dialog nennt das Volumen in der Größe, in der das Teil ankommt.
+
+### Bedienung und System
+
+- Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt.
+- Im Dialog einer Operation stehen die Beschriftungen in einer Spalte, die Felder gleich breit, und jeder Schalter vor dem, was er schaltet.
+- Haken in Listen sind in jeder Zeile lesbar, und Farben stehen als runder Punkt daneben.
+- Die Befehlspalette erklärt Werkzeuge und Dateiaktionen in einem Satz.
+- Nach einem Wechsel des Parameters beginnt *Varianten erzeugen* bei dessen Wert.
+- Scheitert das Speichern einer Kalibrierung, bleiben die bisherigen Werte erhalten.
+- Im Beispielprojekt zum zweiten Weg folgen die Schraubenlöcher Breite und Stärke.
+- Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
+- Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
+
 ## 0.5.1
 
 ### Drucken und Übergabe an den Slicer

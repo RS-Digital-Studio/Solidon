@@ -31,6 +31,13 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-373: Die Versuchsliste nennt je Versuch Satzanfang und Startwert (02.10.2026)](#rm-373-die-versuchsliste-nennt-je-versuch-satzanfang-und-startwert-02102026) |
+| 2026-10-02 | [RM-393: Jeder Drehdeckel meldet seine eigene Passung als zu eng (02.10.2026)](#rm-393-jeder-drehdeckel-meldet-seine-eigene-passung-als-zu-eng-02102026) |
+| 2026-10-02 | [RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)](#rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026) |
+| 2026-10-02 | [RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)](#rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026) |
+| 2026-10-02 | [RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)](#rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026) |
+| 2026-10-02 | [RM-333: Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“ (02.10.2026)](#rm-333-eine-nicht-eindeutige-bambu-düsenvariante-meldet-prozessprofil-ließ-sich-nicht-lesen-02102026) |
+| 2026-10-02 | [RM-331: Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer (02.10.2026)](#rm-331-creality-print-73-platten-deren-anordnung-nicht-hält-gehen-ohne-anordnung-an-den-slicer-02102026) |
 | 2026-10-02 | [RM-346: Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen greift nur bei einer Schreibweise des Aufrufs (02.10.2026)](#rm-346-die-rückfrage-vor-geld--und-veröffentlichungswerkzeugen-greift-nur-bei-einer-schreibweise-des-aufrufs-02102026) |
 | 2026-10-02 | [RM-336: „Im Slicer öffnen“ ist gesperrt, solange im Slicerprofil kein Drucker gewählt ist (02.10.2026)](#rm-336-im-slicer-öffnen-ist-gesperrt-solange-im-slicerprofil-kein-drucker-gewählt-ist-02102026) |
 | 2026-10-02 | [RM-341: Druckeinstellungen: Maße nicht gewählter Haftungsarten bleiben sichtbar und sperren *Slicen* (02.10.2026)](#rm-341-druckeinstellungen-maße-nicht-gewählter-haftungsarten-bleiben-sichtbar-und-sperren-slicen-02102026) |
@@ -35656,3 +35663,164 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Nachprüfung am Stand `6ce767031`: besteht noch. Absoluter Interpreterpfad, `-m tools.…` und `./tools/…` laufen ohne Rückfrage durch den Hook (leere Ausgabe, Exit 0).
 
 **Abschluss:** Der PreToolUse-Hook erkennt die sechs Geld- und Veröffentlichungswerkzeuge in jeder Schreibweise (ask für Claude, deny für Codex ohne Marker `SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja`); 143 Hooktests. Codex erneuert die Hookfreigabe über `/hooks`. Umgesetzt von Claude, in main mit `457dc09d4`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)
+
+<a id="rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026"></a>
+<a id="rm-328"></a>
+
+**RM-328 — Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil.**
+  Review seit 0.5.1, Befund A-M3 und A-N1, Commit `69d0c8a85` (Claude).
+  `app/core/export/writer.py:1107–1118`: `_SLICED_PART_PATHS` fehlen `speed.outer_wall`,
+  `speed.inner_wall`, `speed.outer_wall_acceleration`, `speed.acceleration`. Ohne Schnitt
+  (`:1271`, `result=None`) fragt `advise.for_part` die Regel nicht (`slice/advise.py:1010`), und
+  `_unserved` (`writer.py:1345`) legt den übernommenen Rat an jedes Teil. Der Druckdialog fragt mit
+  gemessenen Schichten (`ui/print_settings_dialog.py:2240ff`) und nennt nur die Stange — Dialog und
+  Datei sagen Verschiedenes.
+  **Fehlerfall:** Platte mit Stange 8 × 8 × 122 mm und Block 60 × 60 × 10 mm, Orca, Rat der
+  Stange übernommen → in `model_settings.config` tragen beide Objekte `outer_wall_speed 60`,
+  `inner_wall_speed 60`, `default_acceleration 2000`, Befund `export.part_setting_all`.
+  **Dazu:** `_calm_walls` (`advise.py:1557ff`) vergleicht mit den Ausgangswerten statt mit dem
+  schon geltenden Vorschlag und lockert so die TPU-Grenze: TPU-95A, Wände 100 mm/s, schlanke
+  Stange → Vorschlag 41 mm/s statt `FLEXIBLE_MAX_SPEED` 30 mm/s (`:167`). Eine spätere Regel darf
+  eine frühere nicht lockern (`min`).
+  **Abnahme:** Exporttest Stange plus Block: nur die Stange trägt die Werte, Befund
+  `export.part_setting obj_1`; Test TPU schlank → 30 mm/s. Besser leitet sich
+  `_SLICED_PART_PATHS` aus den Regeln ab, die `result` brauchen. Bauplan §29, §22.2.
+  Beleg: `bericht-A.md` (M3, N1), Sonden `a_ruhige_waende_export.py`, `a_ruhige_waende_gegenprobe.py`,
+  `a_tpu_schlank.py`.
+  Nachprüfung am Stand `6ce767031`: besteht noch, beide Teile. Stange und Block tragen beide 60/60/2000/2000 mit `export.part_setting_all`; Gegenprobe mit den vier ergänzten Pfaden liefert `export.part_setting obj_1`. TPU schlank: 41,0 statt 30 mm/s.
+
+**Abschluss:** `advise.SLICED_PATHS` führt die vier Tempopfade, ein Wächter liest die Pfade der Regeln per ast; `_merged` behält auf Tempo- und Beschleunigungspfaden den kleineren Vorschlag (TPU bleibt bei 30 mm/s). Tests rot/grün. Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-333: Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“ (02.10.2026)
+
+<a id="rm-333-eine-nicht-eindeutige-bambu-düsenvariante-meldet-prozessprofil-ließ-sich-nicht-lesen-02102026"></a>
+<a id="rm-333"></a>
+
+**RM-333 — Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“.**
+  Review seit 0.5.1, Befund B-4, Commit `657631ddc` (Codex).
+  `app/core/export/manufacturer.py:1636–1656` (`base_settings`): Ist `_variant_selection` oder
+  `_variant_values` `None`, folgt `_table_foundation(..., unreadable=setup.base_process)` →
+  `slicer.process_unreadable` (`:1772–1780`, „Das gewählte Prozessprofil ließ sich nicht lesen.“).
+  **Fehlerfall:** H2C/H2D mit „High Flow“ an beiden Extrudern, mehrdeutiges
+  `nozzle_volume_type`, oder ein Grundfilament ohne die gewählte Variante → Rückfall auf Solidons
+  Tabelle (gewollt), der Kunde liest aber, das Profil sei unlesbar, und sucht eine kaputte Datei
+  (Regel 17). Der Test `tests/test_manufacturer.py:1160–1200` sichert genau diesen Text zu.
+  **Fix:** Eigener Befund (welche Variante, welches Profil, Weg in den Druckdialog), übersetzt in
+  allen Katalogen.
+  **Abnahme:** Test mehrdeutige Variante → neuer Befundcode, `process_unreadable` nur bei
+  unlesbarer Datei. Bauplan §29, §2.7. Beleg: `bericht-B.md` (B-4).
+  Nachprüfung am Stand `6ce767031`: besteht noch. `manufacturer.py:1636–1656` und `:1772–1780` unverändert; `test_manufacturer.py:1160–1200` sichert weiter `unreadable` zu und ist grün (mit den übrigen zitierten Tests 23 passed, Exit 0).
+
+**Abschluss:** Eigener Befund `slicer.process_variant_unresolved` mit Variante und Profil; `process_unreadable` nur für unlesbare Dateien. Tests rot/grün. Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-331: Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer (02.10.2026)
+
+<a id="rm-331-creality-print-73-platten-deren-anordnung-nicht-hält-gehen-ohne-anordnung-an-den-slicer-02102026"></a>
+<a id="rm-331"></a>
+
+**RM-331 — Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer.**
+  Review seit 0.5.1, Befund B-3, Commit `252fc77d2` (Claude).
+  `app/core/export/handover.py:3625` und `:3637–3651` (`_command`: bei `_creality_cli` kein
+  `--arrange`), `:4892–4897` (Rückfall ohne Anordnungsvorgabe ist für `_creality_cli`
+  ausgeschlossen), `app/ui/print_settings_dialog.py:1961–1972` (`place_on_bed=keep`),
+  `app/core/export/writer.py:580–622` (`arrangement_holds`), `threemf.py:309–314`.
+  **Fehlerfall:** Creality Print 7.3, *Slicen* einer Platte, auf der Solidons Anordnung nicht
+  hält (zwei Teile mit überlappender Hüllbox in der Aufsicht, etwa Teil in einem Ring; ein
+  schwebendes oder über den Rand ragendes Teil) → `keep = False`, die 3MF trägt keine
+  Bettverschiebung, und 7.3 ordnet laut der Messung im Commit auf der Konsole nie an → Abbruch -50
+  „Nicht jedes Teil liegt ganz auf der Druckplatte …“ oder eine Datei neben dem Bett. Bei allen
+  anderen Programmen der Familie und bei 7.2 ordnet in diesem Fall der Slicer an.
+  Der Codeweg ist belegt; der Ausgang am echten Creality Print 7.3 ist nicht nachgestellt —
+  zuerst dort messen.
+  **Fix:** Für `_creality_cli` vor dem Schreiben in Solidon anordnen (wie *Anordnen*) oder bei
+  nicht haltender Anordnung mit eigenem Satz absagen und *Anordnen* als erste Handlung anbieten
+  (Regeln 17, 21).
+  **Abnahme:** Test mit `keep_arrangement=False` (heute fährt `tests/test_print_settings.py:3017`
+  nur `True`); Lauf am echten Creality Print 7.3 mit Ring-Platte. Bauplan §29.
+  Beleg: `bericht-B.md` (B-3).
+  Nachprüfung am Stand `6ce767031`: besteht noch, nur am Codeweg belegt: Code unverändert, kein Test mit `keep_arrangement=False`; am echten Creality Print 7.3 weiter nicht nachgestellt.
+
+**Abschluss:** Gemessen an Creality Print 7.3 (V7.3.0.6149, Ender-3 V3 SE) mit Ring und Kern, schwebendem Teil, Teil über dem Rand und zwei überlappenden Teilen: Die Konsole ordnet in allen vier Fällen selbst an, kein Abbruch -50, kein `gcode.off_the_bed`. Kein Fehler — eine Absage hätte gelingende Läufe verhindert. Ein Test hält das Verhalten fest, Docstring und Karte sind korrigiert. Folgebefund unter [RM-414](#rm-414). Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)
+
+<a id="rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026"></a>
+<a id="rm-386"></a>
+
+**RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 3; Folgepunkt zu RM-319, das im Arbeitsbaum
+  inzwischen archiviert ist. Der Abnahmefall von RM-319 ist behoben (Netz 14 715,2, exakt
+  14 714,5 mm³, je ein Langloch). Offen:
+  - **Netz:** eine gesenkte Bohrung durch die zwei Berührplatten versetzen → −2 516,3 mm³ ohne
+    Befund; der Kettenzweig schließt ohne `merge_face_contacts`
+    (`app/core/geom/prepare_ops.py:3867`, ebenso `:3211`).
+  - **Exakt:** *Bohrung ändern* Ø 8 mit Versatz lässt einen losen Zylinder von 502,7 mm³ in der
+    Bohrung stehen, der Körper ist undicht, kein Befund (`prepare_ops.py:7667`).
+  - **Exakt:** *Merkmal verschieben* und *Merkmal drehen* sagen mit falschem Rat ab; das Netz
+    rechnet dieselben Fälle inzwischen richtig (Kerne sagen Verschiedenes, `operationen.md`).
+  **Fix:** berührende Schalen an allen schließenden Wegen beider Kerne verbinden.
+  **Abnahme:** je Zwilling ein Test an beiden Kernen (Volumen, ein Körper, dicht, kein loser
+  Rest). Ob `796c6d003` („Gekoppelte Senkbohrungen fangen ungültige Langlochzüge ab“) einen Teil
+  davon abdeckt, ist noch nicht geprüft. Bauplan §21.1, §25, §30, Regel 17.
+  Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_beruehrplatten_*.txt`.
+
+**Abschluss:** `merge_face_contacts` an jeder schließenden Vereinigung am Netz (Versetzen, Versetzen mit Richtung, Entfernen, Kippen, `_section_closed`, Senkung ändern, Einlauf mitnehmen, Wulst/Kehle als Hohlraum, Musterzellen); am exakten Kern `_exact_closing_base`, `_exact_closing_chain` und `_exact_entrance_context`, der Langlochzug läuft über denselben Helfer. Zwei parametrisierte Tests an beiden Kernen (30 Fälle, am Stand davor 21 rot). Laufzeit am Besenhalter unverändert. Vorbestehender Fund am exakten Versetzen mit Richtung unter [RM-423](ROADMAP.md#rm-423). Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)
+
+<a id="rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026"></a>
+<a id="rm-414"></a>
+
+**RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht.**
+  Messung 02.10.2026 zu RM-331 (Claude, Unteragent): Creality Print 7.3 (V7.3.0.6149) ordnet auf der
+  Konsole jede Platte selbst an, mit und ohne `plate`-Block — Solidons Plattenbelegung gilt dort nie.
+  Der Befund `slicer.arranged_itself` fehlt trotzdem, und `tests/test_print_settings.py:3017ff` sichert
+  das Fehlen zu. **Fix:** in `handover.slice_model` `arranged_by_slicer = keep_arrangement and (not
+  wanted_arrangement or _creality_cli(setup))`, Zusicherung im Test umdrehen. **Abnahme:** Test mit
+  haltender Anordnung an `_creality_cli` meldet `slicer.arranged_itself`. Bauplan §29.
+
+**Abschluss:** `slice_model` setzt `slicer.arranged_itself` auch für Creality Print 7.3 auf der Konsole; die Zusicherung im Test ist umgedreht, 7.2 mit `--arrange 0` bleibt still. Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-373: Die Versuchsliste nennt je Versuch Satzanfang und Startwert (02.10.2026)
+
+<a id="rm-373-die-versuchsliste-nennt-je-versuch-satzanfang-und-startwert-02102026"></a>
+<a id="rm-373"></a>
+
+**RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert.**
+  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
+  Jede Zeile der Versuchsliste (`app/ui/generate_dialog.py`) nennt nur Dreiecke, Volumen und
+  dicht. Wer zwischen zwei Versuchen den Satz ändert, sieht nicht, welcher Versuch zu welchem
+  Satz gehört; *Übernehmen* übernimmt trotz geändertem Satz den gewählten alten Versuch.
+  **Ablauf:** Jede Zeile trägt den Satzanfang (gekürzt, voller Satz im Tooltip) bzw. den
+  Bildnamen und den Startwert (Regel 9, `deterministic=False`); ist der Satz seit dem gewählten
+  Versuch geändert, sagt eine Zeile über *Übernehmen*, dass der alte Satz übernommen wird.
+  **Stellen:** `generate_dialog.py` (Listeneinträge, Zustand um `:859–872`), Kataloge.
+  **Abnahme:** Test: zwei Versuche mit verschiedenen Sätzen → zwei unterscheidbare Zeilen mit
+  Startwert; Satz geändert → Hinweis sichtbar; übernommen wird der gewählte Versuch mit seinem
+  Startwert im Schritt. Bauplan §2.8, Regel 9.
+  **Vorgabe Robert 02.10.2026 — allgemein:** Unterscheidbarkeit für jede Versuchsliste (Text, Bild, Varianten); Abnahme an mindestens drei unterschiedlichen Versuchsreihen.
+
+**Abschluss:** Jede Zeile der Versuchsliste nennt in einer zweiten Zeile den gekürzten Satz (voller Satz im Tooltip) bzw. den Bildnamen und den Startwert; passt die Eingabe nicht mehr zum gewählten Versuch, steht über *Übernehmen*, welcher Versuch kommt und dass *Noch ein Versuch* die neue Eingabe erzeugt. Übernommen wird der gewählte Versuch mit seinem Startwert. Drei Fenstertests für Sätze, Bilder und Varianten eines Satzes, je einmal gefahren. Umgesetzt von Claude, in main mit `0c7a6193f`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-393: Jeder Drehdeckel meldet seine eigene Passung als zu eng (02.10.2026)
+
+<a id="rm-393-jeder-drehdeckel-meldet-seine-eigene-passung-als-zu-eng-02102026"></a>
+<a id="rm-393"></a>
+
+**RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng.**
+  Review 02.10.2026, Nachbau-Test F5, am HEAD `4449e3370`.
+  **Fehlerfall:** Dose aushöhlen, *Drehdeckel erzeugen* (Weg `lid_flow.apply_lid`): Befund „Die
+  Passung sitzt enger als vorgesehen.“ mit `actual 0.00 mm, expected 0.25 mm` — an exaktem und
+  Netzkörper, bei P 3 und P 3,5. Hals- und Deckelgewinde tragen denselben Nenndurchmesser
+  (`lid_neck_thread` 45,0, `lid_cap_thread` 45,0), obwohl die Operation 0,25 mm Spiel eingebaut hat.
+  **Stellen:** Merkmale in `app/core/geom/lid.py` ab `:1420` (`NECK_THREAD_FEATURE`,
+  `CAP_THREAD_FEATURE`), Passung `app/core/lid_flow.py:82`.
+  **Fix:** Deckelgewinde mit seinem wirksamen Durchmesser beschreiben oder die Passungsprüfung für
+  Gewinde das gebaute Spiel lesen lassen.
+  **Abnahme:** Test an beiden Kernen: frischer Drehdeckel ohne Passungswarnung; ein künstlich
+  verengter meldet. Bauplan §14, §2.7.
+  Beleg: `nachbau\bericht.md`, Sonde `f5_passung_ablauf.py`.
+
+**Abschluss:** Das Kappengewinde nennt seinen gebauten Durchmesser (Hals plus Spiel, `_cap_sizes`); ein frischer Drehdeckel meldet an Netz und exaktem Kern keine Passung mehr, ein auf 0,1 mm verengter meldet „enger“. Tests an beiden Kernen (P 3 und 3,5), rot vor, grün nach dem Fix; Cache-Version `screw_lid` 5. Umgesetzt von Claude, in main mit `0c7a6193f`; Entwicklungstor auf dem zusammengeführten Stand grün.
