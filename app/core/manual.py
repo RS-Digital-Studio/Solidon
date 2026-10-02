@@ -804,7 +804,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Strichmitte und macht Kanten.\n\n"
             "**Innerhalb einer Etappe ist die Reihenfolge egal:** Zwei Züge über dieselbe "
             "Stelle addieren sich auf die Ausgangsfläche. Mit *Neu ansetzen* sitzt der "
-            "nächste Zug auf dem, was schon da ist.\n\n"
+            "nächste Zug auf dem, was schon da ist. Greift ein Zug in eine Mulde, die ein "
+            "Zug davor gegraben hat, setzt er dort von selbst neu an und gräbt tiefer.\n\n"
             "**Symmetrie lässt sich nachträglich ändern**, auch an einer fertigen "
             "Sitzung. Gespiegelt wird an der Mitte des Körpers, wie er vor den Zügen "
             "dasteht; beim Formen bleibt sie stehen. Ein Zug auf der Spiegelebene wirkt "
@@ -1328,9 +1329,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "stehen gewöhnliche Schritte wie *Reparieren*. Anfrage und Startwert bleiben "
             "dabei; derselbe Startwert liefert dasselbe Ergebnis, soweit das Modell es "
             "zulässt.\n\n"
-            "**Die Reparaturkette läuft ohne Nachfrage**, als eigener, rücknehmbarer "
-            "Schritt: Löcher schließen, doppelte Punkte zusammenführen, Außenseiten "
-            "angleichen."
+            "**Die Reparaturkette läuft ohne Nachfrage**: Löcher schließen, doppelte "
+            "Punkte zusammenführen, Außenseiten angleichen. Laden, Größe, Reparatur und "
+            "Aufsetzen bilden einen Schritt: Ein Strg+Z nimmt das ganze erzeugte Modell "
+            "zurück, im Verlauf bleibt jeder Teil einzeln änderbar."
         ),
     ),
     Page(
