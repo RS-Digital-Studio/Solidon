@@ -835,11 +835,7 @@ def as_mapping(
 #: Lüfter-Obergrenze nimmt das untere Ende mit: Elegoo PLA fährt unten 50 %,
 #: und wer oben 20 % wählte, bekam lange Schichten mit 50.
 COUPLED_PATHS: Final[Mapping[str, tuple[str, ...]]] = {
-    "adhesion.kind": (
-        "adhesion.skirt_loops",
-        "adhesion.brim_width",
-        "adhesion.raft_layers",
-    ),
+    "adhesion.kind": tuple(print_settings.ADHESION_MEASURES.values()),
     "cooling.fan_speed": ("cooling.minimum_fan_speed",),
 }
 
@@ -919,22 +915,15 @@ def effective_adhesion(
         or flavour == "other"
     ):
         return settings
-    prusa_foundation = (
-        foundation
-        if flavour == "prusa"
-        and foundation is not None
-        and foundation.has_profile
-        and foundation.profile == profile
-        else None
-    )
+    prusa_foundation = _prusa_foundation(profile, flavour, foundation)
     base = (
         prusa_foundation.settings
         if prusa_foundation is not None
         else print_settings.resolve(profile, settings.quality)
     )
     measures = {}
-    for name in ("skirt_loops", "brim_width", "raft_layers"):
-        path = f"adhesion.{name}"
+    for path in print_settings.ADHESION_MEASURES.values():
+        name = path.partition(".")[2]
         if path not in settings.explicit and (
             prusa_foundation is not None or getattr(settings.adhesion, name) <= 0
         ):
@@ -942,6 +931,61 @@ def effective_adhesion(
     return replace(
         settings,
         adhesion=replace(settings.adhesion, kind=base.adhesion.kind, **measures),
+    )
+
+
+def _prusa_foundation(
+    profile: Profile, flavour: SlicerFlavour, foundation: manufacturer.Foundation | None
+) -> manufacturer.Foundation | None:
+    """Die Prusa-Grundlage, deren Haftung „Automatisch“ bestimmt — sonst keine."""
+    if (
+        flavour == "prusa"
+        and foundation is not None
+        and foundation.has_profile
+        and foundation.profile == profile
+    ):
+        return foundation
+    return None
+
+
+def native_adhesion_kinds(
+    settings: PrintSettings,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    foundation: manufacturer.Foundation | None,
+) -> frozenset[str]:
+    """Die Haftungsarten, die eine Prusa-Grundlage bei „Automatisch“ selbst führt.
+
+    Ein Prusa-Prozess kann Skirt und Brim zugleich tragen; „Automatisch“ heißt
+    dort seine Kombination, und :func:`_only_chosen_adhesion` nullt diese Arten
+    nicht (:func:`prusa_values`). Nur Maße, die das Profil wirklich nennt.
+    """
+    chosen = _prusa_foundation(profile, flavour, foundation)
+    if settings.adhesion.kind != "auto" or chosen is None:
+        return frozenset()
+    return frozenset(
+        kind
+        for kind, path in print_settings.ADHESION_MEASURES.items()
+        if path in chosen.from_profile and read_path(chosen.settings, path) > 0
+    )
+
+
+def handed_over_adhesion_kinds(
+    settings: PrintSettings,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    foundation: manufacturer.Foundation | None = None,
+) -> tuple[str, frozenset[str]]:
+    """Die Haftungsart, die dieser Slicer bekommt, und die Arten, deren Maße wirken.
+
+    Dieselbe Auflösung wie die Übergabe (:func:`effective_adhesion`,
+    :func:`native_adhesion_kinds`, :func:`print_settings.adhesion_kinds`) —
+    der Druckdialog zeigt danach genau die Maße, die hinausgehen (RM-432).
+    """
+    effective = effective_adhesion(settings, profile, flavour, foundation)
+    kind = effective.adhesion.kind
+    return kind, print_settings.adhesion_kinds(kind) | native_adhesion_kinds(
+        settings, profile, flavour, foundation
     )
 
 
@@ -1186,14 +1230,11 @@ def _only_chosen_adhesion(
     hier gefunden, weil zwei kleine Teile plötzlich nicht mehr nebeneinander
     passten.
     """
-    kind = settings.adhesion.kind
+    # Der Auto-Brim misst mit der Brimbreite — sie bleibt stehen
+    # (:func:`print_settings.adhesion_kinds`, dieselbe Frage wie der Dialog).
+    kept = print_settings.adhesion_kinds(settings.adhesion.kind) | native_adhesion_kinds
     for wanted, keys in slicer_keys.ADHESION_KEYS[flavour].items():
-        # Der Auto-Brim misst mit der Brimbreite — sie bleibt stehen.
-        if (
-            wanted == kind
-            or wanted in native_adhesion_kinds
-            or (kind == "auto" and wanted == "brim")
-        ):
+        if wanted in kept:
             continue
         for key in keys:
             if key in written:
@@ -2373,6 +2414,7 @@ def prusa_values(
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
     preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
+    native_kinds = native_adhesion_kinds(effective, profile, "prusa", foundation)
     effective = effective_adhesion(effective, profile, "prusa", foundation)
     paths = manufacturer.written_paths(effective, foundation) or frozenset()
     if slots:
@@ -2390,18 +2432,9 @@ def prusa_values(
         # diese native Kombination. Einzelne ausdrücklich gewählte Maße
         # bleiben als eigene Abweichung in ``paths``.
         paths = paths - {"adhesion.kind"}
-    native_adhesion_kinds = frozenset(
-        kind
-        for kind, path, measure in (
-            ("skirt", "adhesion.skirt_loops", foundation.settings.adhesion.skirt_loops),
-            ("brim", "adhesion.brim_width", foundation.settings.adhesion.brim_width),
-            ("raft", "adhesion.raft_layers", foundation.settings.adhesion.raft_layers),
-        )
-        if preserve_native_adhesion and path in foundation.from_profile and measure > 0
-    )
     own = _followers_not_faster(
         {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values},
-        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_adhesion_kinds),
+        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_kinds),
         _suggested_speed_keys(effective, "prusa"),
         followers=_PRUSA_FOLLOWERS,
     )

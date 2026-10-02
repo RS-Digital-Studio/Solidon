@@ -4279,9 +4279,13 @@ class PrintSettingsDialog(QDialog):
                 ),
             ),
         )
+        # Sichtbar ist, was die Übergabe an diesen Slicer schreibt (RM-432):
+        # „Automatisch“ heißt bei PrusaSlicer und Cura die Art des Materials.
+        kind: str = settings.adhesion.kind
+        also: frozenset[str] = frozenset()
         flavour = self._current_flavour()
         if flavour is not None:
-            settings = handover.effective_adhesion(
+            kind, also = handover.handed_over_adhesion_kinds(
                 settings,
                 self.session.profile,
                 flavour,
@@ -4291,7 +4295,8 @@ class PrintSettingsDialog(QDialog):
             str(
                 _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
             ),
-            settings.adhesion.kind,
+            kind,
+            also=also,
         )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
@@ -6966,8 +6971,7 @@ class PrintSettingsDialog(QDialog):
         was_loading = self._loading
         self._loading = True
         try:
-            for name in ("skirt_loops", "brim_width", "raft_layers"):
-                path = f"adhesion.{name}"
+            for path in print_settings.ADHESION_MEASURES.values():
                 editor = self._editors[path]
                 if isinstance(editor, BoundedSpin) and editor.refusal():
                     continue
@@ -7236,11 +7240,10 @@ class PrintSettingsDialog(QDialog):
         field = self._fields[path]
         value = _setting_editor_value(self._editors[path], field)
         current_value = print_settings.read_path(self.settings, path)
-        if self.settings.adhesion.kind == "auto" and path in {
-            "adhesion.skirt_loops",
-            "adhesion.brim_width",
-            "adhesion.raft_layers",
-        }:
+        if (
+            self.settings.adhesion.kind == "auto"
+            and path in print_settings.ADHESION_MEASURES.values()
+        ):
             current_value = print_settings.read_path(self._effective_adhesion(self.settings), path)
         if not print_settings.same_value(value, current_value):
             before = self.settings.explicit

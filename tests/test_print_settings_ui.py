@@ -160,6 +160,12 @@ def test_search_guides_to_the_selector_for_an_inactive_detail_field(
         qt_app.processEvents()
     selector = dialog._editors[selector_path]
     target = dialog._editors[target_path]
+    # Der Ausgangszustand wird hergestellt, nicht angenommen: Der allgemeine
+    # Drucker legt mit PLA einen Skirt, und dann stand die Haftung nicht auf „keine“.
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData("none"))
+    for _ in range(3):
+        qt_app.processEvents()
     before = dialog.settings
     target_before = print_settings.read_path(before, target_path)
     search_window_size_before = (dialog.width(), dialog.height())
@@ -9007,6 +9013,66 @@ def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
         assert isinstance(editor, BoundedSpin)
         editor.lineEdit().setText("99999")
         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
+
+
+#: Der Schlüssel, an dem jede Haftungsart im Slicer wirkt, und die Felder, die
+#: dazugehören — von außen, aus den Schlüsselnamen der drei Familien.
+_ADHESION_EFFECT: dict[str, dict[str, tuple[str, ...]]] = {
+    "orca": {
+        "skirt_loops": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+        "brim_width": ("adhesion.brim_width",),
+        "raft_layers": ("adhesion.raft_layers",),
+    },
+    "prusa": {
+        "skirts": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+        "brim_width": ("adhesion.brim_width",),
+        "raft_layers": ("adhesion.raft_layers",),
+    },
+    "cura": {
+        "skirt_line_count": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+        "brim_width": ("adhesion.brim_width",),
+        "raft_surface_layers": ("adhesion.raft_layers",),
+    },
+}
+
+
+@pytest.mark.parametrize("material", ["pla", "petg"])
+@pytest.mark.parametrize(
+    ("flavour", "program"),
+    [("orca", "OrcaSlicer.exe"), ("prusa", "PrusaSlicer.exe"), ("cura", "CuraEngine.exe")],
+)
+def test_automatic_adhesion_shows_exactly_the_measures_the_slicer_gets(
+    dialog: PrintSettingsDialog, flavour: str, program: str, material: str
+) -> None:
+    """RM-432: „Automatisch“ zeigte bei PrusaSlicer und Cura die Brimbreite, die
+    dort null ist, und versteckte die Skirt-Felder, die wirken — die Übergabe
+    macht aus „Automatisch“ die Art des Materials. Sichtbar sind jetzt genau
+    die Felder, deren Schlüssel der Slicer mit einem Wert bekommt."""
+    dialog.session.start_new("centauri-carbon-2", material)
+    dialog.settings = print_settings.with_path(
+        print_settings.resolve(dialog.session.profile), "adhesion.kind", "auto"
+    )
+    dialog._foundation = None
+    dialog._foundation_key = None
+    dialog._slicer_path = Path(program)
+    dialog._load_into_editors()
+    dialog._update_inactive_setting_rows()
+
+    written = handover.values_for(dialog.settings, dialog.session.profile, flavour)
+    expected = {
+        path
+        for key, paths in _ADHESION_EFFECT[flavour].items()
+        if float(written.get(key, "0")) > 0
+        for path in paths
+    }
+    shown = {
+        path
+        for paths in _ADHESION_EFFECT[flavour].values()
+        for path in paths
+        if not dialog._labels[path].isHidden()
+    }
+    assert expected, written
+    assert shown == expected
 
 
 def test_the_refusal_at_the_slice_button_names_its_field(

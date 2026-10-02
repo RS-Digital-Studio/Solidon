@@ -2129,6 +2129,12 @@ def test_prusa_auto_preserves_multiple_native_adhesion_measures(prusa_bundle: Pa
     assert foundation.settings.adhesion.kind == "brim"
     assert written["skirts"] == "2"
     assert written["brim_width"] == "5"
+    # RM-432: Der Dialog zeigt genau, was hinausgeht — beide Arten, kein Raft.
+    kind, kinds = handover.handed_over_adhesion_kinds(automatic, profile, "prusa", foundation)
+    shown = set(print_settings.ADHESION_DETAILS) - print_settings.inactive_paths(
+        "auto", kind, also=kinds
+    )
+    assert shown == {"adhesion.skirt_loops", "adhesion.skirt_distance", "adhesion.brim_width"}
 
     chosen_skirt = print_settings.with_choice(automatic, "adhesion.skirt_loops", 4)
     changed, _expected = handover.prusa_values(chosen_skirt, profile, setup, console=False)

@@ -67,7 +67,10 @@ legen dieselbe Grundlage unter (`print_settings.on_base`). PrusaSlicer bekommt
 Konsole, in `writer._plate_config` für die Beilage), ohne Drucker des Bündels
 Solidons ganzen Satz; „Automatisch" als Haftung heißt dort und bei Cura die Art
 aus Solidons Tabelle, bei passender Prusa-Grundlage die Art des Profils.
-`effective_adhesion` ist die gemeinsame Auflösung für Dialog und Übergabe.
+`effective_adhesion` ist die gemeinsame Auflösung für Dialog und Übergabe;
+`handed_over_adhesion_kinds` nennt die Arten, deren Maße hinausgehen (samt
+`native_adhesion_kinds` einer Prusa-Grundlage), der Dialog zeigt genau sie.
+Die Maße je Art stehen einmal in `print_settings.ADHESION_PATHS`.
 `foundation_findings` meldet in Slicen und Export.
 
 **Ohne Herstellerprofil bekommt jede Rolle Solidons Wert**: PrusaSlicer volle
