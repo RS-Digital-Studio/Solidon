@@ -101,6 +101,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
 | [RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt](#rm-423) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-386: `_place_oriented_feature` am exakten Körper — Ergebnis exakt rechnen oder als Netz kennzeichnen und `evaluate.exact_became_mesh` melden; Test beide Kerne |
+| [RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung](#rm-434) | Geometrie, Erkennung und Druckvorbereitung | B02 aus dem Review von `48106c57a`: vorhandene Eingangsprüfung vor Bounds und Entwurfsbudget; beide Güten und gültige Budgetfälle prüfen |
+| [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 aus dem Review von `48106c57a`: Spiegelrichtungen gemeinsam begrenzen; alle Achsen/Pinsel, drei Körper und alter gespeicherter Verlauf |
 | [RM-424 — Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben](#rm-424) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-l`). Entscheidung Robert 02.10.: bauen — Bettursprung in `PrinterProfile` (Vertrag §9, Profilformat), `discover_printers` und `threemf._placement` danach richten |
 | [RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot](#rm-417) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (`4cf460e87`): Definition zusätzlich vergleichen; Testwettlauf und zu strenge Zusicherung berichtigen |
 | [RM-419 — Die neue Durchstichprüfung macht den Formschritt bis 130-mal langsamer](#rm-419) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-364 (archiviert); Schnittsuche nur um die bewegten Ecken, mit Fortschritt |
@@ -2981,6 +2983,47 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Fall deshalb ausgenommen. **Fix:** exakt rechnen oder `kind` auf `mesh` setzen und
   `evaluate.exact_became_mesh` melden (`result_kind`). **Abnahme:** Test an beiden Kernen,
   Ausnahme im RM-386-Test entfernt. Bauplan §21.
+
+<a id="rm-434"></a>
+
+- [ ] **RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung.**
+  Nachgang zu RM-379, Befund B02 des Reviews am festen Stand `48106c57a`.
+  Zunächst lokal als RM424 vorbereitet; nach dem zentralen Nummernabgleich
+  RM434, weil RM424 auf `origin/main` bereits den Orca-/Prusa-Bettursprung führt.
+  **Fehler:** Der registrierte `blend_union`-Aufruf liest im Entwurf über
+  `draft_grid`/`_grid` die Bounds, bevor die bisherige Volumen-/Dichtheitsprüfung
+  in `blend_bodies` greift. Ein leeres Eingangsnetz führt zu `TypeError` ohne
+  Handlung; derselbe Eingang in `fine` zu `NotManifoldError` mit Reparaturweg.
+  Ein häufiger nativer Kundenweg mit einem leeren Szenenobjekt ist damit nicht belegt.
+  **Fix:** Die bestehende Eingangsprüfung gemeinsam vor Bounds und Budgetentscheidung
+  ausführen; keine zweite Validierungsregel. Gültige Rasterentscheidungen erhalten.
+  **Abnahme:** Tatsächliche registrierte Op, leeres erstes/zweites/beide Netze,
+  offene und volumenlose Eingänge in beiden Güten: fachliche Absage mit Handlung,
+  kein Abstandsfeld. Gesunde Gegenfälle unter und über dem Entwurfsbudget unverändert.
+  Bauplan §31, Regel 17.
+  [Historischer Review mit Eingaben und Abnahmegrenzen](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
+  [Messdaten B02](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie-proben.json).
+
+<a id="rm-425"></a>
+
+- [ ] **RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie.**
+  Nachgang zu RM-378, Befund S01 des Reviews am festen Stand `48106c57a`.
+  `_strongest_copy` wählt bei gleichen Gewichten die zuerst zugeordnete Kopie.
+  Bei schräger Strichrichtung gewinnt dadurch auch auf der Spiegelebene eine
+  Seite, statt dass sich die entgegengesetzten Richtungsanteile aufheben.
+  **Historischer Nachweis:** Kugel R20, 1280 Dreiecke, wirklicher `stroke_at`-Zug
+  mit Radius 16 mm und Stärke 1 mm, anschließend registriertes `sculpt_strokes`:
+  Spiegelabweichung 0,341167593 mm, Ebenenaustritt 0,170583797 mm. Kein Hinweis auf
+  ein zu grobes Netz; die alte Semantik sowie `front_only` ohne den neuen Selektor
+  bleiben symmetrisch. Die Werte sind kein Nachlauf am späteren Hauptzweig.
+  **Fix:** Überlappende Wirkungen unter Erhalt der gespiegelten Richtungen auf
+  die vorgesehene Stärke begrenzen; die Reihenfolge darf keine Seite bevorzugen.
+  **Abnahme:** Frischer Rot-/Grünfall mit schrägem Zug neben der Ebene; alle
+  Achsen und Pinsel an mindestens drei Körpern, verschobene Spiegelmitte,
+  Vorschau und echte Op, Cache/Undo/Redo. Gespeicherte alte Züge behalten ihre
+  bisherige Semantik. Bauplan §25, Regel 2; Fensterabnahme beim Release.
+  [Historischer Review](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
+  [maßgeblicher Radius-16-Nachlauf](konzepte/nachweise-release-0.5.1/reports/remote-48106-spiegel-probe.json).
 
 <a id="rm-424"></a>
 

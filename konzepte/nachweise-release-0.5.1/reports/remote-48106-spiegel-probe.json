@@ -1,0 +1,73 @@
+{
+  "expected_head": "48106c57afadaa67c9e07d33a944a6c988c2bc70",
+  "qa_head": "48106c57afadaa67c9e07d33a944a6c988c2bc70",
+  "source_hashes": {
+    "app/core/geom/sculpt.py": "2e2382a095e97a69904a3c1d5787406936ac9be1febfac27856987570a9fc17a",
+    "app/core/geom/blend.py": "52bc6c00c4c3774d725d676be824112f41e59bf5f965e49241e9516de0ad8bd7",
+    "app/core/scene/migrations.py": "439e5e503be46503c805132f3b37864a8471a4fe59f25c6e2f0d686b2704bac1",
+    "app/core/export/writer.py": "664210610124fedbb1bc6c7cbb97a83fe449b7934bcbe5b26430e760867c30d1",
+    "app/ui/main_window.py": "65977e3a5b2de1df6d29f9bb0a0cd43fc5b4dbebd2da306eee7da38f5f62cbb0"
+  },
+  "probes": {
+    "S01": {
+      "fixture": "Icosphere R20, subdivision 3; wirklicher stroke_at-Aufruf",
+      "vertices": 642,
+      "triangles": 1280,
+      "stroke": {
+        "point": [
+          5.32809402269135,
+          0.0,
+          19.277225269352453
+        ],
+        "normal": [
+          0.2679932314359806,
+          -2.2264954261106484e-18,
+          0.9634207948266951
+        ],
+        "radius": 16.0,
+        "strength": 1.0,
+        "tool": "draw",
+        "symmetry": 1,
+        "cut": false
+      },
+      "before": {
+        "mirror_error_mm": 0.0,
+        "plane_escape_mm": 0.0,
+        "moved_mm": 0.0,
+        "watertight": true
+      },
+      "legacy": {
+        "mirror_error_mm": 0.0,
+        "plane_escape_mm": 0.0,
+        "moved_mm": 1.2264798851468122,
+        "watertight": true
+      },
+      "front_only_without_new_selector": {
+        "mirror_error_mm": 0.0,
+        "plane_escape_mm": 0.0,
+        "moved_mm": 1.2264798851468122,
+        "watertight": true
+      },
+      "current": {
+        "mirror_error_mm": 0.34116759325378004,
+        "plane_escape_mm": 0.17058379662689002,
+        "moved_mm": 1.000000135644991,
+        "watertight": true
+      },
+      "brush_radius_mm": 16.0,
+      "median_edge_mm": 3.013050066226539,
+      "current_findings": [
+        "sculpt.applied"
+      ]
+    }
+  },
+  "sources_unchanged": {
+    "app/core/geom/sculpt.py": true,
+    "app/core/geom/blend.py": true,
+    "app/core/scene/migrations.py": true,
+    "app/core/export/writer.py": true,
+    "app/ui/main_window.py": true
+  },
+  "qa_head_after": "48106c57afadaa67c9e07d33a944a6c988c2bc70",
+  "qt_application_created": false
+}

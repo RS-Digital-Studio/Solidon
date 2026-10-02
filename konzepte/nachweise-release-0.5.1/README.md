@@ -43,6 +43,8 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/remote-48106-geometrie.md`](reports/remote-48106-geometrie.md) | Unveränderter historischer Review am festen Stand `48106c57a`: feine Ausgabe, Eingangsprüfung vor Entwurfsbudget und Spiegelsymmetrie | RM-352, RM-434, RM-425 |
+| [`reports/remote-48106-geometrie-proben.json`](reports/remote-48106-geometrie-proben.json), [`reports/remote-48106-spiegel-probe.json`](reports/remote-48106-spiegel-probe.json) | Unveränderte Messdaten und Quellenhashes dieses Reviews; für die Symmetrie ist der getrennte Radius-16-Nachlauf maßgeblich | RM-352, RM-434, RM-425 |
 | [`reports/rm298-sitzungsabbruch-2026-10-02.md`](reports/rm298-sitzungsabbruch-2026-10-02.md) | Bestätigtes Ende vor synchronem Ersetzen, ungültige alte Kernfragen und korrigierter Fehlervertrag mit allen Katalogen | RM-298(e) |
 | [`reports/rm298-enospc-2026-10-02.md`](reports/rm298-enospc-2026-10-02.md) | ENOSPC gegen echte Speicherabsage am direkten und öffentlichen Transferanschluss; Ursachen, Rückfall und Ressourcenzähler | RM-298(b) |
 | [`reports/rm322-native-edge-binding-2026-10-02.md`](reports/rm322-native-edge-binding-2026-10-02.md) | Belegte native Kantenzuordnung, vollständige Abdeckung, Fehlerorte, analytischer Verlauf und echter gs-100-Nachlauf | RM-322 |
