@@ -80,6 +80,8 @@ scrive in `website/version.json`.
 - Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già.
 - Se un errore durante la generazione indica la configurazione come via d'uscita, compare come pulsante nella finestra.
 - La finestra di generazione indica il volume alla misura con cui arriva il pezzo.
+- Un modello generato si annulla con un solo Ctrl+Z. Prima ne servivano tre o quattro.
+- Se «Applica» viene rifiutato durante la generazione, la finestra resta aperta con tutti i tentativi e indica la via d'uscita invece di scartare la mesh.
 
 ### Uso e sistema
 
@@ -97,6 +99,8 @@ scrive in `website/version.json`.
 - La finestra «Novità» e il sito mostrano le evidenziazioni come testo marcato invece che con asterischi.
 - Inglese e spagnolo usano una sola parola per il gioco di accoppiamento, e i messaggi seguono la punteggiatura di ogni lingua.
 - Gli spazi arrivano in ogni campo di testo, anche nel questionario di feedback e nella chat, mentre una finestra di dialogo mostra l'anteprima.
+- Un rilievo che riguarda un passo lo apre per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
+- Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
 
 ## 0.5.1
 

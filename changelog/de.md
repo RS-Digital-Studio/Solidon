@@ -105,6 +105,8 @@ Nutzen da und sonst nichts.
 - Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind.
 - Nennt ein Fehler beim Erzeugen die Einrichtung als Ausweg, steht sie als Knopf im Dialog.
 - Der Erzeugen-Dialog nennt das Volumen in der Größe, in der das Teil ankommt.
+- Ein erzeugtes Modell nimmt ein einziges Strg+Z wieder zurück. Bisher brauchte es dafür drei bis vier.
+- Sagt *Übernehmen* beim Erzeugen ab, bleibt der Dialog mit allen Versuchen offen und nennt den Weg, statt das Netz zu verwerfen.
 
 ### Bedienung und System
 
@@ -122,6 +124,8 @@ Nutzen da und sonst nichts.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
 - Leerzeichen kommen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, während ein Dialog seine Vorschau zeigt.
+- Ein Befund, der einen Schritt meint, öffnet ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
+- Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 
 ## 0.5.1
 

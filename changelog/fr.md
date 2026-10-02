@@ -81,6 +81,8 @@ dans `website/version.json`.
 - Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.
 - Si une erreur de génération indique la configuration comme issue, elle apparaît comme bouton dans la boîte de dialogue.
 - La boîte de dialogue de génération indique le volume à la taille où la pièce arrive.
+- Un modèle généré s'annule d'un seul Ctrl+Z. Il en fallait trois ou quatre.
+- Si « Appliquer » est refusé pendant la génération, la boîte de dialogue reste ouverte avec tous les essais et indique l'issue au lieu de jeter le maillage.
 
 ### Utilisation et système
 
@@ -98,6 +100,8 @@ dans `website/version.json`.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
 - Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
+- Un constat qui vise une étape l'ouvre pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
+- Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 
 ## 0.5.1
 

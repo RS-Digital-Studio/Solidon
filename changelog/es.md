@@ -81,6 +81,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El modelo de imagen se descarga con «Configurar modelo de imagen …» aunque los demás pesos ya estén.
 - Si un error al generar nombra la configuración como salida, aparece como botón en el diálogo.
 - El diálogo de generar indica el volumen al tamaño con que llega la pieza.
+- Un modelo generado se deshace con un solo Ctrl+Z. Antes hacían falta tres o cuatro.
+- Si «Aplicar» se rechaza al generar, el diálogo sigue abierto con todos los intentos e indica la salida, en vez de desechar la malla.
 
 ### Manejo y sistema
 
@@ -98,6 +100,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La ventana «Novedades» y el sitio web muestran el resaltado como texto destacado en vez de asteriscos.
 - El inglés y el español usan una sola palabra para la holgura de ajuste, y los mensajes ponen la puntuación que pide cada idioma.
 - Los espacios llegan a todos los campos de texto, también al cuestionario de opinión y al chat, mientras un diálogo muestra su vista previa.
+- Un aviso que se refiere a un paso lo abre para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
+- Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
 
 ## 0.5.1
 

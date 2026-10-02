@@ -80,6 +80,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O modelo de imagem é descarregado por «Configurar modelo de imagem …» mesmo que os outros pesos já existam.
 - Se um erro ao gerar indicar a configuração como saída, ela aparece como botão no diálogo.
 - O diálogo de gerar indica o volume no tamanho com que a peça chega.
+- Um modelo gerado desfaz-se com um único Ctrl+Z. Antes eram precisos três ou quatro.
+- Se «Aplicar» for recusado ao gerar, o diálogo fica aberto com todas as tentativas e indica a saída, em vez de deitar fora a malha.
 
 ### Utilização e sistema
 
@@ -97,6 +99,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
 - O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
 - Os espaços chegam a todos os campos de texto, também ao questionário de opinião e ao chat, enquanto uma caixa de diálogo mostra a pré-visualização.
+- Uma constatação que se refere a um passo abre-o para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
+- Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
 
 ## 0.5.1
 
