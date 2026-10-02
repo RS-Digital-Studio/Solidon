@@ -56,7 +56,7 @@ from app.core.knowledge.parts.registry import (
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import op_params, param, play_param
 from app.core.types import BaseParams, Feature, FeatureId, PartResult, Vec3
-from app.core.units import MAX_FACET_SAG
+from app.core.units import EPS_GEOM, MAX_FACET_SAG
 from app.i18n import TranslatableText, _
 
 HOLDER_ADDED: Final = PartChange(
@@ -65,6 +65,22 @@ HOLDER_ADDED: Final = PartChange(
     reason=(
         "Halter-Vorlage aus RM-399: U-Form, rund, Gabel und Ablage mit Schlüsselloch, "
         "Schraublöchern, Lochwand-Haken oder Klemme (Vorgabe Robert, 02.10.2026)."
+    ),
+)
+
+#: Ein schmaler Halter bekommt ein Schlüsselloch in der Mitte, statt für zwei
+#: breiter zu werden (RM-443). Nur Halter mit Schlüsselloch, deren Rückwand
+#: schmaler ist als zwei Löcher mit Rand, ändern sich.
+ONE_KEYHOLE_WHEN_NARROW: Final = PartChange(
+    version="22",
+    date="2026-10-02",
+    reason=(
+        "Die Vorlage setzte immer zwei Schlüssellöcher und machte schmale Halter dafür "
+        "breiter, als eingetragen: Modell 1 aus dem Korpus wurde 24,7 statt 20 mm breit."
+    ),
+    effect=_(
+        "Ein schmaler Halter mit Schlüsselloch behält seine Breite und hängt an einem "
+        "Schlüsselloch in der Mitte statt an zwei."
     ),
 )
 
@@ -103,8 +119,9 @@ SCREW_SIZE: Final = WallMountParams().size
 _SAG: Final = MAX_FACET_SAG
 
 _MOUNT_DOC: Final = _(
-    "Wie der Halter befestigt wird: zwei Schlüssellöcher auf der Rückseite, zwei "
-    "Laschen mit gesenkten Schraublöchern, zwei Haken für die Lochwand oder eine "
+    "Wie der Halter befestigt wird: zwei Schlüssellöcher auf der Rückseite (an einem "
+    "schmalen Halter eines in der Mitte), zwei Laschen mit gesenkten Schraublöchern, "
+    "zwei Haken für die Lochwand oder eine "
     "Klemme, die über eine Plattenkante greift. Schrauben- und Lochwandmaße "
     "kommen aus der Normteiltabelle."
 )
@@ -248,6 +265,20 @@ def _keyhole_width(play: float) -> float:
     return standards.screw(KEYHOLE.size).head + HEAD_CLEARANCE + play
 
 
+def _keyholes(width: float, play: float, wall: float) -> int:
+    """Wie viele Schlüssellöcher in eine Rückwand dieser Breite passen: zwei oder eines.
+
+    **Die Zahl folgt der Breite, nicht umgekehrt** (RM-443). Zwei Löcher
+    nebeneinander mit einer Wandstärke Rand außen und zwischen ihnen halten
+    den Halter gegen Verdrehen; passen sie nicht, sitzt eines in der Mitte —
+    so hängt auch Modell 1 aus dem Korpus (20 mm breit). Vorher setzte die
+    Vorlage immer zwei und machte die Rückwand dafür breiter als den Halter,
+    24,7 statt 20 mm. Was der Kunde als Maß einträgt, ist das Maß.
+    """
+    pair = 2.0 * _keyhole_width(play) + 3.0 * wall
+    return 2 if width >= pair - EPS_GEOM else 1
+
+
 @dataclass(frozen=True, slots=True)
 class _Plate:
     """Die Rückwand: wie breit, hoch und dick sie wird."""
@@ -255,6 +286,8 @@ class _Plate:
     width: float
     height: float
     thickness: float
+    keyholes: int = 0
+    """Wie viele Schlüssellöcher sie trägt — null bei jeder anderen Befestigung."""
 
 
 def _thickness(mount: str, wall: float) -> float:
@@ -288,19 +321,22 @@ def _plate(params: _Fastened, width: float, height: float, hooks: Form | None) -
     """Die Rückwand für eine Halteform dieser Breite und Mindesthöhe.
 
     Sie ist mindestens so breit und hoch wie die Halteform und wächst nur,
-    wo die Befestigung mehr braucht: zwei Schlüssellöcher nebeneinander mit
-    Rand, zwei Laschen mit Senkung neben der Halteform, zwei Haken im Raster
-    der Lochwand.
+    wo die Befestigung mehr braucht: ein Schlüsselloch mit Rand, wenn die
+    Halteform schmaler ist (zwei, wo sie passen, :func:`_keyholes`), zwei
+    Laschen mit Senkung neben der Halteform, zwei Haken im Raster der
+    Lochwand.
     """
     wall = params.wall
     thickness = _thickness(params.mount, wall)
     if params.mount == "keyhole":
         across = _keyhole_width(params.play)
         length = across + KEYHOLE.drop
+        wide = max(width, across + 2.0 * wall)
         return _Plate(
-            max(width, 2.0 * across + 3.0 * wall),
+            wide,
             max(height, length + 2.0 * wall),
             thickness,
+            _keyholes(wide, params.play, wall),
         )
     if params.mount == "screws":
         countersink = standards.screw(SCREW_SIZE).countersink
@@ -354,7 +390,8 @@ def _assembled(
         tool = _onto_back(form_of(keyhole(_varied(KEYHOLE, play=params.play))))
         across = _keyhole_width(params.play)
         entrance = plate.height / 2.0 - KEYHOLE.drop / 2.0
-        for index, x in enumerate((-1.0, 1.0), start=1):
+        sides = (-1.0, 1.0) if plate.keyholes == 2 else (0.0,)
+        for index, x in enumerate(sides, start=1):
             offset = x * (plate.width / 2.0 - wall - across / 2.0)
             cutters.append(shapes.moved(tool, (offset, -t, entrance)))
             mounted.append(
@@ -502,7 +539,7 @@ class HolderUParams(BaseParams):
         "Schraublöchern, Lochwand-Haken oder Klemme."
     ),
     caveat=_CAVEAT,
-    changes=[HOLDER_ADDED],
+    changes=[HOLDER_ADDED, ONE_KEYHOLE_WHEN_NARROW],
 )
 def holder_u(raw: BaseParams) -> PartResult:
     params = cast(HolderUParams, raw)
@@ -612,7 +649,7 @@ def ring_centre(diameter: float, play: float, wall: float) -> float:
         "oder Klemme."
     ),
     caveat=_CAVEAT,
-    changes=[HOLDER_ADDED],
+    changes=[HOLDER_ADDED, ONE_KEYHOLE_WHEN_NARROW],
 )
 def holder_ring(raw: BaseParams) -> PartResult:
     params = cast(HolderRingParams, raw)
@@ -717,7 +754,7 @@ def _fork_too_shallow(raw: BaseParams) -> TranslatableText | None:
         "Schraublöchern, Lochwand-Haken oder Klemme."
     ),
     caveat=_CAVEAT,
-    changes=[HOLDER_ADDED],
+    changes=[HOLDER_ADDED, ONE_KEYHOLE_WHEN_NARROW],
 )
 def holder_fork(raw: BaseParams) -> PartResult:
     params = cast(HolderForkParams, raw)
@@ -828,7 +865,7 @@ def shelf_front(depth: float, play: float, wall: float, lip: float) -> float:
         "Befestigt mit Schlüsselloch, Schraublöchern, Lochwand-Haken oder Klemme."
     ),
     caveat=_CAVEAT,
-    changes=[HOLDER_ADDED],
+    changes=[HOLDER_ADDED, ONE_KEYHOLE_WHEN_NARROW],
 )
 def holder_shelf(raw: BaseParams) -> PartResult:
     """Rückwand nach unten, Ablage oben, Rand nach oben — von der Seite ein L oder ein Z.

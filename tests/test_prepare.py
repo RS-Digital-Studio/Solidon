@@ -7577,7 +7577,7 @@ def _box_of_kind(document: Document, kind: str):
         # Um Y geneigt, nah am Boden: Die Ebene z = 4 - tan 10° · x bleibt über
         # x ∈ [-20, 20] zwischen 0,47 und 7,53 mm; im Mittel bleiben 4 mm.
         ({"axis": "z", "position": 4.0, "tilt": 10.0, "tilt_axis": "y"}, 40.0 * 30.0 * 4.0),
-        ({"face": "top", "position": -2.0}, 21600.0),
+        ({"face": "top", "offset": -2.0}, 21600.0),
     ],
 )
 def test_cutting_away_keeps_the_kind_of_its_body(
@@ -7596,6 +7596,7 @@ def test_cutting_away_keeps_the_kind_of_its_body(
     wanted = dict(params)
     if wanted.pop("face", None) == "top":
         first = evaluate(document, profile, sources=ProjectSources(project))
+        wanted["plane"] = "at_face"
         wanted["at_feature"] = next(
             name
             for name, feature in first.scene.objects[made].features.items()
@@ -7668,7 +7669,12 @@ def test_cutting_away_parallel_to_a_face_takes_off_a_layer(
             OperationDraft(
                 op="cut_away",
                 inputs=("obj_1",),
-                params={"at_feature": top, "position": -2.0, "keep": "below"},
+                params={
+                    "plane": "at_face",
+                    "at_feature": top,
+                    "offset": -2.0,
+                    "keep": "below",
+                },
             )
         ],
     )
@@ -7680,3 +7686,447 @@ def test_cutting_away_parallel_to_a_face_takes_off_a_layer(
     assert body.is_watertight
     assert body.volume == pytest.approx(7200.0, rel=1e-6)
     assert body.bounds.maximum[2] == pytest.approx(8.0, abs=1e-6)
+
+
+def _placed_box(document: Document, kind: str, x: float = 0.0, y: float = 0.0):
+    """Ein Quader 40 × 30 × 20 als Netz oder exakt, in X und Y um ``x`` und ``y`` verschoben."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    history = History(document)
+    history.apply(
+        _("Quader"),
+        [
+            OperationDraft(
+                op="create_box" if kind == "mesh" else "create_brep_box",
+                params={"width": 40.0, "depth": 30.0, "height": 20.0, "x": x, "y": y},
+            )
+        ],
+    )
+    return project, history, document.ops[-1].outputs[0]
+
+
+def _cut_box(
+    document: Document, profile: Profile, kind: str, x: float = 0.0, y: float = 0.0, **params
+):
+    """Den Quader aus :func:`_placed_box` abschneiden und auswerten."""
+    if kind == "brep":
+        exact_kernel()
+    project, history, made = _placed_box(document, kind, x, y)
+    history.apply(_("Abschneiden"), [OperationDraft(op="cut_away", inputs=(made,), params=params)])
+    return evaluate(document, profile, sources=ProjectSources(project)), made
+
+
+def _below_the_plane(body, normal, point) -> None:
+    """Keine Ecke liegt über der Ebene mit dieser Normalen durch diesen Punkt."""
+    unit = np.asarray(normal, dtype=float) / np.linalg.norm(normal)
+    limit = float(unit @ np.asarray(point, dtype=float))
+    assert float((as_mesh_data(body).raw.vertices @ unit).max()) <= limit + 1e-6
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("tilt_axis", "tilt", "volume"),
+    [
+        # Um X durch (30, 5, 4) geneigt: z = 4 + (y - 5)·tan t über 30 mm Tiefe,
+        # die Ebene verlässt den Quader unten — V = 40·(4 + 15 tan t)² / (2 tan t).
+        (
+            "x",
+            30.0,
+            40.0
+            * (4.0 + 15.0 * math.tan(math.radians(30.0))) ** 2
+            / (2.0 * math.tan(math.radians(30.0))),
+        ),
+        (
+            "x",
+            20.0,
+            40.0
+            * (4.0 + 15.0 * math.tan(math.radians(20.0))) ** 2
+            / (2.0 * math.tan(math.radians(20.0))),
+        ),
+        # Um Y: z = 4 - (x - 30)·tan t über 40 mm Breite — V = 30·(4 + 20 tan t)² / (2 tan t).
+        (
+            "y",
+            30.0,
+            30.0
+            * (4.0 + 20.0 * math.tan(math.radians(30.0))) ** 2
+            / (2.0 * math.tan(math.radians(30.0))),
+        ),
+        (
+            "y",
+            -25.0,
+            30.0
+            * (4.0 + 20.0 * math.tan(math.radians(25.0))) ** 2
+            / (2.0 * math.tan(math.radians(25.0))),
+        ),
+    ],
+)
+def test_a_tilted_cut_follows_its_angle_its_axis_and_the_middle_of_the_body(
+    document: Document,
+    profile: Profile,
+    kind: str,
+    tilt_axis: str,
+    tilt: float,
+    volume: float,
+) -> None:
+    """Die Neigung wirkt an beiden Kernen mit ihrem Winkel, um ihre Achse, durch die Körpermitte.
+
+    Der Quader steht abseits des Ursprungs (Mitte x = 30, y = 5), und die
+    Ebene verlässt ihn auf einer Seite: Das Volumen hängt am Winkel, an der
+    Kippachse und an der Lage der Kippachse. Die Fälle davor schnitten durch
+    die Mitte eines Quaders um den Ursprung — dort hob sich die Neigung auf,
+    und eine Ebene ohne Neigung (7 von 8 Fällen) oder eine Kippachse durch den
+    Ursprung blieben grün (Nachprüfung RM-400).
+    """
+    result, made = _cut_box(
+        document,
+        profile,
+        kind,
+        x=30.0,
+        y=5.0,
+        axis="z",
+        position=4.0,
+        keep="below",
+        tilt=tilt,
+        tilt_axis=tilt_axis,
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects[made]
+    assert entry.kind == kind
+    body = as_mesh_data(entry.mesh)
+    assert body.is_watertight
+    assert body.volume == pytest.approx(volume, rel=1e-9)
+    sine, cosine = math.sin(math.radians(tilt)), math.cos(math.radians(tilt))
+    normal = (0.0, -sine, cosine) if tilt_axis == "x" else (sine, 0.0, cosine)
+    _below_the_plane(entry.mesh, normal, (30.0, 5.0, 4.0))
+
+
+@pytest.mark.parametrize(
+    ("axis", "position", "normal", "pivot"),
+    [
+        # Z kippt automatisch um X, Y ebenfalls um X, X um Y.
+        (
+            "z",
+            6.0,
+            (0.0, -math.sin(math.radians(20.0)), math.cos(math.radians(20.0))),
+            (30.0, 5.0, 6.0),
+        ),
+        (
+            "y",
+            9.0,
+            (0.0, math.cos(math.radians(20.0)), math.sin(math.radians(20.0))),
+            (30.0, 9.0, 10.0),
+        ),
+        (
+            "x",
+            25.0,
+            (math.cos(math.radians(20.0)), 0.0, -math.sin(math.radians(20.0))),
+            (25.0, 5.0, 10.0),
+        ),
+    ],
+)
+def test_the_automatic_tilt_axis_never_refuses_a_tilt(
+    document: Document,
+    profile: Profile,
+    axis: str,
+    position: float,
+    normal: tuple[float, float, float],
+    pivot: tuple[float, float, float],
+) -> None:
+    """Ohne Angabe kippt die Ebene um eine Achse quer zur Schnittachse (N3).
+
+    Mit der alten Vorgabe X wurde jede Neigung an Achse X abgewiesen, bis man
+    hinter der Klappe „Neigen um“ umstellte. Jetzt steht dort *Automatisch*:
+    Z und Y kippen um X, X um Y.
+    """
+    result, made = _cut_box(
+        document, profile, "mesh", x=30.0, y=5.0, axis=axis, position=position, tilt=20.0
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects[made]
+    assert 0.0 < entry.mesh.volume < 24000.0
+    _below_the_plane(entry.mesh, normal, pivot)
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    "order",
+    [
+        ((-20.0, -15.0, 2.0), (20.0, -15.0, 2.0), (-20.0, 15.0, 8.0)),
+        ((-20.0, 15.0, 8.0), (20.0, -15.0, 2.0), (-20.0, -15.0, 2.0)),
+    ],
+)
+def test_cutting_away_through_three_points_takes_their_plane_in_any_order(
+    document: Document,
+    profile: Profile,
+    kind: str,
+    order: tuple[tuple[float, float, float], ...],
+) -> None:
+    """Die Ebene durch drei Punkte (RM-400, Vorgabe Robert „drei Punkte“).
+
+    Die Punkte steigen von z = 2 vorn auf z = 8 hinten: Im Mittel bleiben 5 mm,
+    40·30·5 = 6000 mm³. Die Reihenfolge der Punkte dreht die Normale nicht um —
+    „Kleinere Seite“ meint die kleineren Werte entlang der Achse, zu der die
+    Ebene am steilsten steht, hier Z.
+    """
+    from app.core.sketch.planes import THROUGH_PREFIX, through_plane
+
+    points = through_plane(order).removeprefix(THROUGH_PREFIX)
+    result, made = _cut_box(
+        document, profile, kind, plane="through_points", points=points, keep="below"
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects[made]
+    assert entry.kind == kind
+    body = as_mesh_data(entry.mesh)
+    assert body.is_watertight
+    assert body.volume == pytest.approx(6000.0, rel=1e-9)
+    _below_the_plane(entry.mesh, (0.0, -0.2, 1.0), (0.0, -15.0, 2.0))
+
+
+def test_a_three_point_plane_moves_along_its_normal_by_the_offset(
+    document: Document, profile: Profile
+) -> None:
+    """Der Abstand verschiebt die Ebene senkrecht zu sich: 1 mm entlang der Normalen
+    (0, −0,2, 1)/√1,04 hebt sie um √1,04 mm in Z, es bleiben 40·30·(5 + √1,04)."""
+    from app.core.sketch.planes import THROUGH_PREFIX, through_plane
+
+    points = through_plane(
+        ((-20.0, -15.0, 2.0), (20.0, -15.0, 2.0), (-20.0, 15.0, 8.0))
+    ).removeprefix(THROUGH_PREFIX)
+    result, made = _cut_box(
+        document, profile, "mesh", plane="through_points", points=points, offset=1.0
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert result.scene.objects[made].mesh.volume == pytest.approx(
+        40.0 * 30.0 * (5.0 + math.sqrt(1.04)), rel=1e-9
+    )
+
+
+@pytest.mark.parametrize(
+    ("points", "constraint"),
+    [
+        ("", "no_points"),
+        ("1,2,3;4,5", "no_points"),
+        ("0,0,0;10,0,0;20,0,0", "points_on_one_line"),
+        ("0,0,5;0,0,5;10,0,5", "points_on_one_line"),
+    ],
+)
+def test_three_points_that_span_no_plane_are_refused_with_the_field(
+    document: Document, profile: Profile, points: str, constraint: str
+) -> None:
+    """Fehlende, unlesbare oder auf einer Geraden liegende Punkte sind eine Absage am Feld."""
+    from app.core.errors import ValidationError
+
+    project, _history, made = _placed_box(document, "mesh")
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    with pytest.raises(ValidationError) as caught:
+        REGISTRY.get("cut_away").fn(
+            _context(first.scene, made, plane="through_points", points=points)
+        )
+    assert caught.value.constraint == constraint
+    assert caught.value.field == "points"
+    assert caught.value.suggestions, "Regel 17"
+
+
+def _context(scene, made: str, **params):
+    """Ein Aufruf von *Abschneiden* am Körper ``made`` der ausgewerteten Szene."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext
+
+    spec = REGISTRY.get("cut_away")
+    return OpContext(
+        scene=scene,
+        inputs=[scene.objects[made]],
+        params=spec.params(**params),
+        profile=None,
+        quality="fine",
+        seed=None,
+        progress=lambda fraction, text: None,
+        ask=lambda question, choices: choices[0],
+        cancelled=NeverCancelled(),
+    )
+
+
+def _edge_key(entry, wanted) -> str:
+    """Der Schlüssel der einen Kante, deren Endpunkte ``wanted`` erfüllen."""
+    from app.core.geom.edges import edge_key, edges_in_kernel, points_in_kernel
+
+    kernel, entries = edges_in_kernel(entry.mesh, entry.kind)
+    found = []
+    for edge in entries:
+        points = points_in_kernel(kernel, entry.mesh, edge)
+        if wanted(np.asarray(points[0]), np.asarray(points[-1])):
+            if kernel == "brep":
+                from app.core.brep import edit
+
+                found.append(edit.edge_key(edge))
+            else:
+                found.append(edge_key(edge))
+    assert len(found) == 1, found
+    return found[0]
+
+
+def _top_front(first, last) -> bool:
+    """Die obere vordere Kante des Quaders 40 × 30 × 20: y = −15, z = 20, entlang X."""
+    return bool(
+        np.allclose([first[1], first[2], last[1], last[2]], [-15.0, 20.0, -15.0, 20.0])
+        and abs(abs(first[0] - last[0]) - 40.0) < 1e-6
+    )
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize("tilt", [-30.0, -20.0])
+def test_cutting_away_through_an_edge_tilts_about_that_edge(
+    document: Document, profile: Profile, kind: str, tilt: float
+) -> None:
+    """Die Ebene durch eine gewählte Kante, um sie geneigt (RM-400).
+
+    Durch die obere vordere Kante, von der Waagerechten (Achse Z) um die Kante
+    nach unten geneigt: z = 20 + (y + 15)·tan t. Bleibt die Seite darunter,
+    fällt ein Keil weg — V = 40·(20·30 − tan|t|·30²/2), solange die Ebene den
+    Quader hinten über dem Boden verlässt. Ohne Neigung schnitte sie nichts.
+    """
+    if kind == "brep":
+        exact_kernel()
+    project, history, made = _placed_box(document, kind)
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    edge = _edge_key(first.scene.objects[made], _top_front)
+    history.apply(
+        _("Abschneiden"),
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=(made,),
+                params={"plane": "through_edge", "edge": edge, "axis": "z", "tilt": tilt},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects[made]
+    assert entry.kind == kind
+    slope = math.tan(math.radians(abs(tilt)))
+    body = as_mesh_data(entry.mesh)
+    assert body.is_watertight
+    assert body.volume == pytest.approx(40.0 * (20.0 * 30.0 - slope * 30.0**2 / 2.0), rel=1e-9)
+    sine, cosine = math.sin(math.radians(tilt)), math.cos(math.radians(tilt))
+    _below_the_plane(entry.mesh, (0.0, -sine, cosine), (0.0, -15.0, 20.0))
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_chosen_edge_suggests_a_plane_through_the_middle_of_the_body(
+    document: Document, profile: Profile, kind: str
+) -> None:
+    """Die Vorbelegung zu einer gewählten Kante schneidet etwas ab (RM-400, M3).
+
+    Durch die obere vordere Kante ohne Neigung schnitte die Ebene nichts. Die
+    Vorbelegung legt sie durch die Mitte des Quaders (0, 0, 10): von z = 20
+    bei y = -15 auf z = 10 bei y = 0, also um atan(10/15) nach unten — die
+    Hälfte bleibt, 12 000 mm³.
+    """
+    from app.core.geom.prepare_ops import edge_cut_through_middle
+
+    if kind == "brep":
+        exact_kernel()
+    project, history, made = _placed_box(document, kind)
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    entry = first.scene.objects[made]
+    edge = _edge_key(entry, _top_front)
+    suggested = edge_cut_through_middle(entry, edge)
+    assert suggested is not None
+    axis, tilt = suggested
+    assert axis == "z"
+    assert tilt == pytest.approx(-math.degrees(math.atan(10.0 / 15.0)))
+    history.apply(
+        _("Abschneiden"),
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=(made,),
+                params={"plane": "through_edge", "edge": edge, "axis": axis, "tilt": tilt},
+            )
+        ],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    assert as_mesh_data(result.scene.objects[made].mesh).volume == pytest.approx(12000.0, rel=1e-9)
+    assert edge_cut_through_middle(entry, "e:0.00,0.00,0.00:1.000,0.000,0.000") is None
+
+
+@pytest.mark.parametrize("case", ["none", "two", "upright", "round"])
+def test_an_edge_plane_needs_one_straight_edge_across_the_axis(
+    document: Document, profile: Profile, case: str
+) -> None:
+    """Keine, zwei, eine Kante entlang der Achse oder eine runde: je eine Absage am Feld."""
+    from app.core.errors import ValidationError
+
+    project, _history, made = _placed_box(document, "mesh")
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    entry = first.scene.objects[made]
+    top_front = _edge_key(entry, _top_front)
+    upright = _edge_key(
+        entry,
+        lambda a, b: bool(
+            np.allclose([a[0], a[1], b[0], b[1]], [-20.0, -15.0, -20.0, -15.0])
+            and abs(abs(a[2] - b[2]) - 20.0) < 1e-6
+        ),
+    )
+    scene, target = first.scene, made
+    params: dict[str, object] = {"plane": "through_edge", "axis": "z", "tilt": 30.0}
+    expected = {
+        "none": "no_edge",
+        "two": "one_edge",
+        "upright": "edge_along_axis",
+        "round": "edge_not_straight",
+    }[case]
+    if case == "two":
+        params["edge"] = f"{top_front} {upright}"
+    elif case == "upright":
+        params["edge"] = upright
+    elif case == "round":
+        cylinder_project = new_project("centauri-carbon-2", "petg")
+        cylinder_history = History(cylinder_project.document)
+        cylinder_history.apply(
+            _("Zylinder"),
+            [OperationDraft(op="create_cylinder", params={"diameter": 20.0, "height": 10.0})],
+        )
+        target = cylinder_project.document.ops[-1].outputs[0]
+        scene = evaluate(
+            cylinder_project.document, profile, sources=ProjectSources(cylinder_project)
+        ).scene
+        params["edge"] = _edge_key(
+            scene.objects[target],
+            lambda a, b: bool(abs(a[2] - 10.0) < 1e-6 and abs(b[2] - 10.0) < 1e-6),
+        )
+    with pytest.raises(ValidationError) as caught:
+        REGISTRY.get("cut_away").fn(_context(scene, target, **params))
+    assert caught.value.constraint == expected
+    assert caught.value.field in ("edge", "axis")
+    assert caught.value.suggestions, "Regel 17"
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+def test_a_face_that_is_not_there_is_refused_at_both_kernels(
+    document: Document, profile: Profile, kind: str
+) -> None:
+    """„An Fläche“ mit einer Fläche, die es am Körper nicht gibt: Absage ``no_plane``,
+    an beiden Kernen — keine Rückkehr auf die Achsebene (N1)."""
+    from app.core.errors import ValidationError
+
+    if kind == "brep":
+        exact_kernel()
+    project, _history, made = _placed_box(document, kind)
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    with pytest.raises(ValidationError) as caught:
+        REGISTRY.get("cut_away").fn(
+            _context(first.scene, made, plane="at_face", at_feature="face_999", offset=-2.0)
+        )
+    assert caught.value.constraint == "no_plane"
+    assert caught.value.field == "at_feature"
+    assert caught.value.suggestions, "Regel 17"
