@@ -91,11 +91,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart](#rm-384) | Geometrie, Erkennung und Druckvorbereitung | Konstruktor-Nachgang behoben und unabhängig ohne Befund geprüft; 106 Entwicklungsfälle grün, zentrales Tor und Integration ausstehend |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng](#rm-393) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review 02.10. (Nachbau): Deckelgewinde mit wirksamem Durchmesser oder Passungsprüfung liest das gebaute Spiel; Test beide Kerne |
 | [RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“](#rm-398) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-e`)** — Umfangsentscheidung Robert 02.10.: drei neue Formen nach den Checklisten Op/Baustein |
 | [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-d`)** — Neigung um eine Achse und Ebene parallel zu einer gewählten Fläche in main (`bf829b68d`); offen: exakter Körper bleibt exakt statt Netz, Ebene durch drei Punkte, Abnahme an einem Mehrschaler |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
-| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-225 (archiviert); Grenze aus dem float32-Raster, Befund bei Ablehnung, Tests an vier Varianten |
+| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-b`)** — Review 02.10.: Folge zu RM-225 (archiviert); Grenze aus dem float32-Raster, Befund bei Ablehnung, Tests an vier Varianten |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
@@ -164,7 +163,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-361 — „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren](#rm-361) | KI und Generatoren | Review 02.10. (Weg 3): Absage vor dem Lauf prüfen und beim Übernehmen anzeigen; Test mit Einfügemarke |
 | [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
 | [RM-372 — Eine Erzeugung ist ein Rückgängig-Schritt](#rm-372) | KI und Generatoren | Entscheidung Robert 02.10.: `load`, `fit_to_size`, `repair`, `place_on_bed` als eine Transaktion |
-| [RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert](#rm-373) | KI und Generatoren | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Umfangsentscheidung Robert 02.10.: Zeilen unterscheidbar machen, Übernehmen nach geändertem Satz klären |
 | [RM-374 — Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern*](#rm-374) | KI und Generatoren | Entscheidung Robert 02.10.: Handlung öffnet den Schritt `fit_to_size` |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -2765,22 +2763,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\nachbau\bericht.md`, Sonden `f1_flaeche_nach_bohrung.py`,
   `f1_kern.txt`, `f3_im_lauf.txt`, `f3_drehdeckel_ui.py`. Verwandt: RM-218, RM-226.
 
-<a id="rm-393"></a>
-
-- [ ] **RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng.**
-  Review 02.10.2026, Nachbau-Test F5, am HEAD `4449e3370`.
-  **Fehlerfall:** Dose aushöhlen, *Drehdeckel erzeugen* (Weg `lid_flow.apply_lid`): Befund „Die
-  Passung sitzt enger als vorgesehen.“ mit `actual 0.00 mm, expected 0.25 mm` — an exaktem und
-  Netzkörper, bei P 3 und P 3,5. Hals- und Deckelgewinde tragen denselben Nenndurchmesser
-  (`lid_neck_thread` 45,0, `lid_cap_thread` 45,0), obwohl die Operation 0,25 mm Spiel eingebaut hat.
-  **Stellen:** Merkmale in `app/core/geom/lid.py` ab `:1420` (`NECK_THREAD_FEATURE`,
-  `CAP_THREAD_FEATURE`), Passung `app/core/lid_flow.py:82`.
-  **Fix:** Deckelgewinde mit seinem wirksamen Durchmesser beschreiben oder die Passungsprüfung für
-  Gewinde das gebaute Spiel lesen lassen.
-  **Abnahme:** Test an beiden Kernen: frischer Drehdeckel ohne Passungswarnung; ein künstlich
-  verengter meldet. Bauplan §14, §2.7.
-  Beleg: `nachbau\bericht.md`, Sonde `f5_passung_ablauf.py`.
-
 <a id="rm-398"></a>
 
 - [ ] **RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“.**
@@ -4707,22 +4689,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test: nach einer Erzeugung genau eine neue Transaktion; ein Strg+Z → Szene wie
   vorher; Strg+Y → Hashes gleich. Bauplan §15.5, §2.1.
   **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Bündelung für jeden zusammengehörigen Ablauf, der heute mehrere Transaktionen anlegt (Erzeugen, Import mit Reparatur, Assistenten); Abnahme an mindestens drei unterschiedlichen Abläufen.
-
-<a id="rm-373"></a>
-
-- [ ] **RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert.**
-  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
-  Jede Zeile der Versuchsliste (`app/ui/generate_dialog.py`) nennt nur Dreiecke, Volumen und
-  dicht. Wer zwischen zwei Versuchen den Satz ändert, sieht nicht, welcher Versuch zu welchem
-  Satz gehört; *Übernehmen* übernimmt trotz geändertem Satz den gewählten alten Versuch.
-  **Ablauf:** Jede Zeile trägt den Satzanfang (gekürzt, voller Satz im Tooltip) bzw. den
-  Bildnamen und den Startwert (Regel 9, `deterministic=False`); ist der Satz seit dem gewählten
-  Versuch geändert, sagt eine Zeile über *Übernehmen*, dass der alte Satz übernommen wird.
-  **Stellen:** `generate_dialog.py` (Listeneinträge, Zustand um `:859–872`), Kataloge.
-  **Abnahme:** Test: zwei Versuche mit verschiedenen Sätzen → zwei unterscheidbare Zeilen mit
-  Startwert; Satz geändert → Hinweis sichtbar; übernommen wird der gewählte Versuch mit seinem
-  Startwert im Schritt. Bauplan §2.8, Regel 9.
-  **Vorgabe Robert 02.10.2026 — allgemein:** Unterscheidbarkeit für jede Versuchsliste (Text, Bild, Varianten); Abnahme an mindestens drei unterschiedlichen Versuchsreihen.
 
 <a id="rm-374"></a>
 

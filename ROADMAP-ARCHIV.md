@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-373: Die Versuchsliste nennt je Versuch Satzanfang und Startwert (02.10.2026)](#rm-373-die-versuchsliste-nennt-je-versuch-satzanfang-und-startwert-02102026) |
+| 2026-10-02 | [RM-393: Jeder Drehdeckel meldet seine eigene Passung als zu eng (02.10.2026)](#rm-393-jeder-drehdeckel-meldet-seine-eigene-passung-als-zu-eng-02102026) |
 | 2026-10-02 | [RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)](#rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026) |
 | 2026-10-02 | [RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)](#rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026) |
 | 2026-10-02 | [RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)](#rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026) |
@@ -35780,3 +35782,45 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   haltender Anordnung an `_creality_cli` meldet `slicer.arranged_itself`. Bauplan §29.
 
 **Abschluss:** `slice_model` setzt `slicer.arranged_itself` auch für Creality Print 7.3 auf der Konsole; die Zusicherung im Test ist umgedreht, 7.2 mit `--arrange 0` bleibt still. Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-373: Die Versuchsliste nennt je Versuch Satzanfang und Startwert (02.10.2026)
+
+<a id="rm-373-die-versuchsliste-nennt-je-versuch-satzanfang-und-startwert-02102026"></a>
+<a id="rm-373"></a>
+
+**RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert.**
+  Umfangsentscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
+  Jede Zeile der Versuchsliste (`app/ui/generate_dialog.py`) nennt nur Dreiecke, Volumen und
+  dicht. Wer zwischen zwei Versuchen den Satz ändert, sieht nicht, welcher Versuch zu welchem
+  Satz gehört; *Übernehmen* übernimmt trotz geändertem Satz den gewählten alten Versuch.
+  **Ablauf:** Jede Zeile trägt den Satzanfang (gekürzt, voller Satz im Tooltip) bzw. den
+  Bildnamen und den Startwert (Regel 9, `deterministic=False`); ist der Satz seit dem gewählten
+  Versuch geändert, sagt eine Zeile über *Übernehmen*, dass der alte Satz übernommen wird.
+  **Stellen:** `generate_dialog.py` (Listeneinträge, Zustand um `:859–872`), Kataloge.
+  **Abnahme:** Test: zwei Versuche mit verschiedenen Sätzen → zwei unterscheidbare Zeilen mit
+  Startwert; Satz geändert → Hinweis sichtbar; übernommen wird der gewählte Versuch mit seinem
+  Startwert im Schritt. Bauplan §2.8, Regel 9.
+  **Vorgabe Robert 02.10.2026 — allgemein:** Unterscheidbarkeit für jede Versuchsliste (Text, Bild, Varianten); Abnahme an mindestens drei unterschiedlichen Versuchsreihen.
+
+**Abschluss:** Jede Zeile der Versuchsliste nennt in einer zweiten Zeile den gekürzten Satz (voller Satz im Tooltip) bzw. den Bildnamen und den Startwert; passt die Eingabe nicht mehr zum gewählten Versuch, steht über *Übernehmen*, welcher Versuch kommt und dass *Noch ein Versuch* die neue Eingabe erzeugt. Übernommen wird der gewählte Versuch mit seinem Startwert. Drei Fenstertests für Sätze, Bilder und Varianten eines Satzes, je einmal gefahren. Umgesetzt von Claude, in main mit `0c7a6193f`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-393: Jeder Drehdeckel meldet seine eigene Passung als zu eng (02.10.2026)
+
+<a id="rm-393-jeder-drehdeckel-meldet-seine-eigene-passung-als-zu-eng-02102026"></a>
+<a id="rm-393"></a>
+
+**RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng.**
+  Review 02.10.2026, Nachbau-Test F5, am HEAD `4449e3370`.
+  **Fehlerfall:** Dose aushöhlen, *Drehdeckel erzeugen* (Weg `lid_flow.apply_lid`): Befund „Die
+  Passung sitzt enger als vorgesehen.“ mit `actual 0.00 mm, expected 0.25 mm` — an exaktem und
+  Netzkörper, bei P 3 und P 3,5. Hals- und Deckelgewinde tragen denselben Nenndurchmesser
+  (`lid_neck_thread` 45,0, `lid_cap_thread` 45,0), obwohl die Operation 0,25 mm Spiel eingebaut hat.
+  **Stellen:** Merkmale in `app/core/geom/lid.py` ab `:1420` (`NECK_THREAD_FEATURE`,
+  `CAP_THREAD_FEATURE`), Passung `app/core/lid_flow.py:82`.
+  **Fix:** Deckelgewinde mit seinem wirksamen Durchmesser beschreiben oder die Passungsprüfung für
+  Gewinde das gebaute Spiel lesen lassen.
+  **Abnahme:** Test an beiden Kernen: frischer Drehdeckel ohne Passungswarnung; ein künstlich
+  verengter meldet. Bauplan §14, §2.7.
+  Beleg: `nachbau\bericht.md`, Sonde `f5_passung_ablauf.py`.
+
+**Abschluss:** Das Kappengewinde nennt seinen gebauten Durchmesser (Hals plus Spiel, `_cap_sizes`); ein frischer Drehdeckel meldet an Netz und exaktem Kern keine Passung mehr, ein auf 0,1 mm verengter meldet „enger“. Tests an beiden Kernen (P 3 und 3,5), rot vor, grün nach dem Fix; Cache-Version `screw_lid` 5. Umgesetzt von Claude, in main mit `0c7a6193f`; Entwicklungstor auf dem zusammengeführten Stand grün.
