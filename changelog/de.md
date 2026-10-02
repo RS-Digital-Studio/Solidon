@@ -110,6 +110,7 @@ Nutzen da und sonst nichts.
 - Im Beispielprojekt zum zweiten Weg folgen die Schraubenlöcher Breite und Stärke.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
+- Leerzeichen kommen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, während ein Dialog seine Vorschau zeigt.
 
 ## 0.5.1
 

@@ -86,6 +86,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el proyecto de ejemplo del segundo camino, los agujeros de los tornillos siguen el ancho y el grosor.
 - La ventana «Novedades» y el sitio web muestran el resaltado como texto destacado en vez de asteriscos.
 - El inglés y el español usan una sola palabra para la holgura de ajuste, y los mensajes ponen la puntuación que pide cada idioma.
+- Los espacios llegan a todos los campos de texto, también al cuestionario de opinión y al chat, mientras un diálogo muestra su vista previa.
 
 ## 0.5.1
 

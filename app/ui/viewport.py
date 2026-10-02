@@ -3675,10 +3675,21 @@ class DragValueBar(QFrame):
 
 
 def types_text(widget: QWidget | None) -> bool:
-    """Ob in diesem Feld ein Leerzeichen ein Leerzeichen ist."""
-    from PySide6.QtWidgets import QAbstractSpinBox, QComboBox, QLineEdit, QTextEdit
+    """Ob in diesem Feld ein Leerzeichen ein Leerzeichen ist.
 
-    if isinstance(widget, QLineEdit | QTextEdit | QAbstractSpinBox):
+    ``QPlainTextEdit`` erbt nicht von ``QTextEdit`` und steht deshalb eigens
+    da. Ohne ihn schluckte der Vergleich jedes Leerzeichen im Rückmeldebogen,
+    im Nachrichtenfeld und im Chat, solange eine Vorschau lief.
+    """
+    from PySide6.QtWidgets import (
+        QAbstractSpinBox,
+        QComboBox,
+        QLineEdit,
+        QPlainTextEdit,
+        QTextEdit,
+    )
+
+    if isinstance(widget, QLineEdit | QTextEdit | QPlainTextEdit | QAbstractSpinBox):
         return True
     return isinstance(widget, QComboBox) and widget.isEditable()
 

@@ -12244,6 +12244,7 @@ def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow
     assert "Diese Ebene teilt das Objekt nicht." in banner.note.text()
     assert banner.note.text().startswith(tr("Keine Vorschau: {reason}").format(reason=""))
     assert window.viewport.difference is None
+    assert not window.viewport._comparing, "ohne Differenz gehört die Leertaste nicht dem Band"
     # Das ``None`` des Arbeiters kommt nach dem Grund und lässt ihn stehen.
     window._show_preview(None)
     assert "Diese Ebene teilt das Objekt nicht." in banner.note.text()
@@ -13288,6 +13289,48 @@ def test_a_space_in_a_text_field_stays_a_space(window: MainWindow) -> None:
     hold = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
     assert not window.viewport._compare.eventFilter(field, hold)
     assert not window.viewport.difference_held
+
+
+def test_the_survey_takes_spaces_while_a_preview_runs(window: MainWindow) -> None:
+    """Im Rückmeldebogen ließ sich kein Leerzeichen tippen (RM-437).
+
+    Der Bogen ist nicht modal und erscheint auch, während ein
+    Operationsdialog seine Vorschau zeigt. Der Vergleich an der Anwendung
+    hielt seine Felder nicht für Textfelder, weil ``QPlainTextEdit`` nicht von
+    ``QTextEdit`` erbt, und nahm jedes Leerzeichen für sich. Geprüft wird mit
+    echten Tasten über den Filter der Anwendung: an jedem mehrzeiligen Feld
+    des Dialogs und an jeder Art Texteingabe, die die Oberfläche benutzt.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLineEdit, QPlainTextEdit, QTextEdit
+
+    window._show_preview(object())
+    window._open_survey()
+    dialog = window._survey_dialog
+    assert dialog is not None
+    try:
+        plain = dialog.findChildren(QPlainTextEdit)
+        assert len(plain) >= 3, "zwei Fragen des Bogens und das Nachrichtenfeld"
+        rich = QTextEdit(dialog)
+        line = QLineEdit(dialog)
+        combo = QComboBox(dialog)
+        combo.setEditable(True)
+        inner = combo.lineEdit()
+        assert inner is not None
+        fields: list[tuple[QWidget, Any]] = [
+            *((field, field.toPlainText) for field in plain),
+            (rich, rich.toPlainText),
+            (line, line.text),
+            (inner, combo.currentText),
+        ]
+        for field, read in fields:
+            field.setFocus()
+            QTest.keyClicks(field, "fehlt nichts")
+            assert read().endswith("fehlt nichts"), type(field).__name__
+        assert not window.viewport.difference_held, "der Vergleich blieb aus"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def test_a_held_key_is_not_a_flicker(window: MainWindow) -> None:

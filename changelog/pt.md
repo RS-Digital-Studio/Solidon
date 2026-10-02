@@ -85,6 +85,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No projeto de exemplo do segundo caminho, os furos dos parafusos seguem a largura e a espessura.
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
 - O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
+- Os espaços chegam a todos os campos de texto, também ao questionário de opinião e ao chat, enquanto uma caixa de diálogo mostra a pré-visualização.
 
 ## 0.5.1
 

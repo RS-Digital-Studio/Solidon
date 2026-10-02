@@ -85,6 +85,7 @@ it into `website/version.json`.
 - In the example project for the second way, the screw holes follow width and thickness.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
+- Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
 
 ## 0.5.1
 

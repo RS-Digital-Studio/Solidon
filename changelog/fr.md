@@ -86,6 +86,7 @@ dans `website/version.json`.
 - Dans le projet d'exemple de la deuxième voie, les trous de vis suivent la largeur et l'épaisseur.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
+- Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
 
 ## 0.5.1
 

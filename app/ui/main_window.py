@@ -19269,7 +19269,12 @@ class MainWindow(QMainWindow):
         self._preview_effect = ""
         self._block_apply(reason if advice in self._APPLY_BLOCKING_ADVICE else None)
         self._show_difference(None)
-        self.viewport.mark_preview(tr("Keine Vorschau: {reason}").format(reason=reason), "")
+        # Ohne Differenz gibt es kein Vorher zu halten. ``changes=False`` lässt
+        # die Leertaste dort, wo sie hingehört — der Rückmeldebogen erschien
+        # gerade über diesem Band und nahm kein Leerzeichen an (RM-437).
+        self.viewport.mark_preview(
+            tr("Keine Vorschau: {reason}").format(reason=reason), "", changes=False
+        )
 
     def _say_preview_busy(self) -> None:
         """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8)."""
@@ -19347,7 +19352,7 @@ class MainWindow(QMainWindow):
             "Vorschau abgebrochen — das Modell bleibt, wie es war. "
             "Ein geänderter Wert rechnet sie neu."
         )
-        self.viewport.mark_preview(note, "")
+        self.viewport.mark_preview(note, "", changes=False)
         self.announce(note, receipt=False)
         self._refresh_preview_block()
 
