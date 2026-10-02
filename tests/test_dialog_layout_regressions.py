@@ -130,12 +130,14 @@ def test_settings_advanced_rows_fit_without_widening_the_dialog(
     from app.i18n.catalog import install_language
     from app.ui import settings_dialog as settings_module
     from app.ui.settings import UiSettings
+    from app.ui.theme import apply_theme
 
     spoken = get_language()
     dialog: settings_module.SettingsDialog | None = None
     monkeypatch.setattr(settings_module.discover, "remembered_path", lambda _key: "")
     monkeypatch.setattr(settings_module._SlicerWorker, "work", lambda worker: worker.done.emit(()))
     try:
+        apply_theme(qt_app, UiSettings().theme)
         install_language(language)
         set_language(language)
         dialog = settings_module.SettingsDialog(UiSettings(language=language))
@@ -147,6 +149,16 @@ def test_settings_advanced_rows_fit_without_widening_the_dialog(
         heading.click()
         _settle(qt_app)
         assert dialog.width() == initial_width
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0
+
+        expanded_height = dialog.height()
+        short_height = max(dialog.minimumSizeHint().height(), expanded_height // 2)
+        assert short_height < expanded_height
+        dialog.resize(initial_width, short_height)
+        _settle(qt_app)
+        assert dialog.height() == short_height
+        assert dialog.width() == initial_width
+        assert dialog._scroll.verticalScrollBar().maximum() > 0
         assert dialog._scroll.horizontalScrollBar().maximum() == 0
     finally:
         if dialog is not None:

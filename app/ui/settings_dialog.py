@@ -74,7 +74,6 @@ from app.ui.style import (
     WIDE,
     ContentHeight,
     DialogScrollArea,
-    form_natural_width,
     make_primary,
     select_data,
 )
@@ -478,24 +477,60 @@ class SettingsDialog(QDialog):
 
     def _reserve_advanced_width(self) -> int:
         """Ermittelt die natürliche Fensterbreite samt verborgener Zusatzzeilen."""
-        self._advanced_form.invalidate()
-        self._advanced_form.activate()
-        wrapper = self.advanced.layout()
-        assert wrapper is not None
-        margins = wrapper.contentsMargins()
-        heading = self.advanced.findChild(QToolButton)
-        assert heading is not None
-        expanded_width = (
-            max(
-                heading.sizeHint().width(),
-                form_natural_width(self._advanced_form),
-            )
-            + margins.left()
-            + margins.right()
-        )
-        collapsed_width = max(heading.sizeHint().width(), self.advanced.sizeHint().width())
         base_width = max(self.sizeHint().width(), self.minimumWidth())
-        return base_width + max(0, expanded_width - collapsed_width)
+        was_hidden = self._advanced_content.isHidden()
+        group = self.advanced.parentWidget()
+        assert group is not None
+        contents = self._scroll.widget()
+        assert contents is not None
+        dialog_layout = self.layout()
+        assert dialog_layout is not None
+        layouts = (
+            self._advanced_form,
+            self.advanced.layout(),
+            group.layout(),
+            contents.layout(),
+            dialog_layout,
+        )
+
+        def activate_layouts() -> None:
+            for layout in layouts:
+                if layout is not None:
+                    layout.invalidate()
+                    layout.activate()
+            self.advanced.updateGeometry()
+            group.updateGeometry()
+            self._scroll.updateGeometry()
+            self.updateGeometry()
+
+        try:
+            self._advanced_content.setVisible(True)
+            activate_layouts()
+            margins = dialog_layout.contentsMargins()
+            content_width = max(contents.sizeHint().width(), contents.minimumSizeHint().width())
+            scroll_width = (
+                content_width
+                + 2 * self._scroll.frameWidth()
+                + self._scroll.verticalScrollBar().sizeHint().width()
+            )
+            other_width = 0
+            for index in range(dialog_layout.count()):
+                item = dialog_layout.itemAt(index)
+                if item is None or item.widget() is self._scroll:
+                    continue
+                other_width = max(
+                    other_width,
+                    item.sizeHint().width(),
+                    item.minimumSize().width(),
+                )
+            expanded_width = max(
+                self.minimumWidth(),
+                max(scroll_width, other_width) + margins.left() + margins.right(),
+            )
+        finally:
+            self._advanced_content.setVisible(not was_hidden)
+            activate_layouts()
+        return max(base_width, expanded_width)
 
     def _application_group(self) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)
@@ -546,6 +581,7 @@ class SettingsDialog(QDialog):
             details.setRowVisible(row, self.settings.spacemouse_seen)
         self.advanced = collapsible(tr("Weitere Einstellungen"), more, open_now=False)
         self._advanced_form = details
+        self._advanced_content = more
         form.addRow(self.advanced)
         return box
 
