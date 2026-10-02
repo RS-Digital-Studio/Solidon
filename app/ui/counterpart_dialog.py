@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -80,8 +81,8 @@ class CounterpartDialog(QDialog):
         button_layout = buttons.layout()
         assert button_layout is not None
         button_layout.setSpacing(SPACE)
-        accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        self._accept = accept
+        self._buttons = buttons
+        accept = self._accept
         accept.setText(tr("Gegenstücke setzen"))
         make_primary(accept)
         buttons.accepted.connect(self.accept)
@@ -102,6 +103,21 @@ class CounterpartDialog(QDialog):
         self._rebuild()
 
     # --- Aufbau ---------------------------------------------------------------
+
+    @property
+    def _accept(self) -> QPushButton:
+        """Der Hauptknopf, jedes Mal frisch vom Knopfkasten.
+
+        Kein gemerkter Verweis: PySide hängt ein Widget, das eine Abfrage wie
+        ``nextInFocusChain`` zurückgibt, an das befragte Widget. Fragte jemand
+        das letzte Maßfeld nach seinem Nachfolger, starb der gemerkte Verweis
+        auf diesen Knopf mit dem Feld beim nächsten Paarwechsel, und
+        ``_rebuild`` brach vor der Tabfolge zum Knopf und vor ``valuesChanged``
+        ab — die Vorschau des neuen Paares blieb aus.
+        """
+        button = self._buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert button is not None
+        return button
 
     def pair(self) -> Pair:
         """Das gewählte Paar."""

@@ -4235,3 +4235,44 @@ def test_v40_a_sculpt_session_keeps_its_old_brush(profile) -> None:
         sculpt.id, {**sculpt.params, "front_only": True, "mirror_once": True}
     )
     assert bottom() == pytest.approx(0.0, abs=1e-6), "der Pinsel von heute lässt die Unterseite"
+
+
+def test_v41_a_cut_at_a_face_keeps_its_face_and_computes_bit_for_bit(profile) -> None:
+    """41 → 42: Ein Schnitt *An Fläche* bekommt ``plane = "at_face"`` (RM-400).
+
+    ``cut_away_face_v41.p3d`` hat der Stand davor geschrieben: ein Quader
+    40 × 30 × 20 mm, an der Oberseite um 2 mm gekürzt, dann 20° um X bei
+    z = 9 geneigt abgeschnitten. Gemessen beim Schreiben: 10 800 mm³, 28
+    Dreiecke, Abdruck der Ecken und Dreiecke ``0e0416967210692d``. Nach der
+    Migration hängt der erste Schnitt sichtbar an der Fläche, der zweite an der
+    Achse mit der Kippachse X von damals, und das Ergebnis ist bitgleich.
+    """
+    import hashlib
+
+    import numpy as np
+
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "cut_away_face_v41.p3d"
+    assert project_data(path)["format_version"] == 41
+
+    project = load(path)
+    first, second = [entry for entry in project.document.ops if entry.op == "cut_away"]
+    assert first.params["plane"] == "at_face"
+    assert first.params["at_feature"] == "face_top"
+    assert first.params["offset"] == -2.0, "die Position zählte von der Fläche aus"
+    assert "plane" not in second.params, "an der Achse bleibt es bei der Vorgabe"
+    assert second.params["tilt_axis"] == "x"
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    (body,) = result.scene.objects.values()
+    raw = body.mesh.raw
+    stamp = hashlib.sha256(
+        np.ascontiguousarray(raw.vertices, dtype=np.float64).tobytes()
+        + np.ascontiguousarray(raw.faces, dtype=np.int64).tobytes()
+    ).hexdigest()
+    assert stamp[:16] == "0e0416967210692d", "bitgleich zum Stand vor der Migration"
+    assert len(raw.faces) == 28
+    assert float(body.mesh.volume) == pytest.approx(10800.0, rel=1e-12)

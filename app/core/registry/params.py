@@ -303,6 +303,8 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         # Die übernommenen Körper einer STEP-Baugruppe (P7.4): ihre Kennungen
         # als JSON-Liste, nach derselben Bauart wie die Konturauswahl.
         "step_bodies",
+        # Drei Punkte einer Schnittebene als Text (RM-400).
+        "points",
     }
 )
 
@@ -448,7 +450,9 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 detail=_("Der Wert liegt unter dem zulässigen Mindestwert."),
                 value=value,
                 constraint="minimum",
-                values={"minimum": spec.minimum},
+                # Mit der Einheit des Feldes (RM-359 F7): „Mindestwert: 0,1“
+                # ohne mm ließ offen, ob Millimeter oder Zoll gemeint sind.
+                values={"minimum": spec.minimum, **({"unit": spec.unit} if spec.unit else {})},
             )
         if spec.maximum is not None and is_greater(float(number), spec.maximum, EPS_GEOM):
             raise ValidationError(
@@ -456,7 +460,7 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 detail=_("Der Wert liegt über dem zulässigen Höchstwert."),
                 value=value,
                 constraint="maximum",
-                values={"maximum": spec.maximum},
+                values={"maximum": spec.maximum, **({"unit": spec.unit} if spec.unit else {})},
             )
         return number
 
@@ -567,6 +571,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "contours": "string",
     "organizer": "string",
     "step_bodies": "string",
+    "points": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,
@@ -584,6 +589,9 @@ GATHERED_KINDS: Final[frozenset[str]] = frozenset(
         # Koordinate. Der Agent wählt Gruppen — „alle senkrechten" —, und was
         # er dort nicht findet, rät er nicht in Zahlen zusammen.
         "edges",
+        # Und Punkte im Raum (RM-400): Sie sind Koordinaten, und die erzeugt
+        # die KI nicht (Leitprinzip 5) — sie werden im Bild angeklickt.
+        "points",
     }
 )
 

@@ -22,6 +22,7 @@ import pytest
 import trimesh
 
 from app.core.errors import ValidationError
+from app.core.geom.intersections import crossing_face_pairs
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.mesh_ops import uniform
 from app.core.geom.sculpt import (
@@ -1016,11 +1017,23 @@ def hollow_ball() -> MeshData:
     return MeshData.of(trimesh.util.concatenate([outer, inner]))
 
 
-@pytest.mark.parametrize("tool", ["draw", "carve", "smooth", "pinch"])
+def _crossing_pairs(mesh: MeshData) -> int:
+    found = crossing_face_pairs(
+        np.asarray(mesh.raw.vertices, dtype=float), np.asarray(mesh.raw.faces, dtype=np.int64)
+    )
+    return len(found.first)
+
+
+@pytest.mark.parametrize("tool", ["draw", "carve", "pinch", "inflate", "flatten"])
 def test_a_brush_on_a_thin_plate_leaves_the_far_side_alone(tool: str) -> None:
     """Der Pinsel griff jeden Eckpunkt in seiner Kugel, auch die Unterseite
-    einer dünnen Wand: *Abtragen* auf einer 4-mm-Platte drückte sie 3,7 mm
-    unter das Bett (RM-376). Jetzt bewegt er nur, was ihm zugewandt ist."""
+    einer dünnen Wand: *Abtragen* auf einer 4-mm-Platte zog sie mit (RM-376).
+    Jetzt bewegt er nur, was ihm zugewandt ist.
+
+    *Glätten* steht nicht in der Liste: An dieser regelmäßig unterteilten
+    Platte bewegt es auch ohne Filter nichts, der Fall könnte nie rot werden.
+    *Aufblasen* und *Flachziehen* zogen die Unterseite 0,5 und 1,8 mm mit
+    (RM-430)."""
     base = plate()
     stroke = Stroke(
         point=(0.0, 0.0, 2.0), normal=(0.0, 0.0, 1.0), radius=6.0, strength=3.0, tool=tool
@@ -1032,6 +1045,15 @@ def test_a_brush_on_a_thin_plate_leaves_the_far_side_alone(tool: str) -> None:
     after = np.asarray(shaped.raw.vertices, dtype=float)
     bottom = before[:, 2] < -2.0 + 1e-6
     assert np.allclose(after[bottom], before[bottom]), "die Unterseite bleibt, wo sie war"
+    if tool != "flatten":
+        # Flachziehen hat an der ebenen Oberseite nichts zu tun.
+        top = (before[:, 2] > 2.0 - 1e-6) & (np.linalg.norm(before[:, :2], axis=1) < 3.0)
+        moved = np.linalg.norm(after[top] - before[top], axis=1)
+        assert moved.max() > 0.5, "vorn wirkt der Pinsel"
+    if tool != "pinch":
+        # Stärke 3 an 4 mm Wand: Die Oberseite erreicht die Unterseite nicht.
+        # Kneifen faltet die Oberseite in sich (das meldet ``sculpt.pierced``).
+        assert _crossing_pairs(shaped) == _crossing_pairs(base) == 0, "keine Durchdringung"
 
 
 def test_a_brush_inside_a_hollow_body_leaves_the_inner_wall_alone() -> None:
@@ -1066,6 +1088,31 @@ def test_a_brush_on_a_figure_still_shapes_what_faces_it() -> None:
     shaped = apply_strokes(base, [stroke])
 
     assert shaped.raw.bounds[1][2] > top + 0.5, "der Zug trägt oben auf"
+
+
+@pytest.mark.parametrize("tool", ["draw", "carve", "inflate", "flatten"])
+def test_a_brush_on_the_figures_arm_leaves_its_back_alone(tool: str) -> None:
+    """RM-430: Am Arm der Korpusfigur reicht ein Pinsel R 6 durch den Arm
+    (7 mm) bis zur Rückseite. Vorn wirkt er, hinten bleibt alles stehen —
+    vorher zog er dort bis 0,3 mm mit."""
+    base = uniform(figure(), 1.0, 0.0)
+    before = np.asarray(base.raw.vertices, dtype=float)
+    normals = np.asarray(base.raw.vertex_normals, dtype=float)
+    click = before[int(np.argmin(np.linalg.norm(before - (20.0, -9.0, 59.0), axis=1)))]
+    stroke = stroke_at(
+        base, tuple(float(value) for value in click), radius=6.0, strength=1.5, tool=tool
+    )
+    direction = np.asarray(stroke.normal, dtype=float)
+    inside = np.linalg.norm(before - np.asarray(stroke.point, dtype=float), axis=1) <= 6.0
+    back = inside & (normals @ direction <= 0.0)
+    front = inside & (normals @ direction > 0.0)
+    assert back.sum() > 10, "der Pinsel reicht bis zur Rückseite des Arms"
+
+    after = np.asarray(apply_strokes(base, [stroke]).raw.vertices, dtype=float)
+
+    moved = np.linalg.norm(after - before, axis=1)
+    assert moved[back].max() == 0.0, "die Rückseite bleibt"
+    assert moved[front].max() > 0.5, "vorn wirkt der Pinsel"
 
 
 @pytest.mark.parametrize(("axis", "bit"), [(0, 1), (1, 2), (2, 4)])

@@ -151,8 +151,9 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
 ## Hinter einen Halt kommt kein Schritt
 
 Hält die Kette an (§15.3), zeigt das Bild den letzten vollständig gerechneten
-Stand, und dahinter wird nichts gerechnet. Zwei Stellen halten das, beide sind
-nötig:
+Stand, und dahinter wird nichts gerechnet. Gibt es keinen, sagen Leerkarte und
+Baum den Schritt, mit *Schritt korrigieren*, nie die Einladung (RM-458). Zwei
+Stellen halten das, beide sind nötig:
 
 - **Die Sitzung nimmt keinen Schritt an** (`Session.halt_in_the_way` in `apply`
   mit Entwürfen, `split_async`, `auto_split`, `split_along`, `create_lid`,
@@ -364,10 +365,8 @@ der Knopf die Handlung („Trennen“, „Jetzt trennen“;
 
 Von Hand gezogen oder beim Öffnen an den Inhalt angepasst — überschüssiger
 Raum braucht **eine** Stelle, sonst verteilt Qt ihn als Lücken zwischen
-Widgets fester Höhe (im KI-Hinweis stand die Überschrift allein über einer
-leeren Fläche). Die Stelle ist ein `addStretch` dort, wo Leere nicht stört,
-oder ein Widget, das den Platz nutzt (die Versuchsliste des Erzeugen-Dialogs
-nach dem Lauf). Lange Statusmeldungen bleiben im Rollbereich erreichbar und
+Widgets fester Höhe. Die Stelle ist ein `addStretch` dort, wo Leere nicht
+stört, oder ein Widget, das den Platz nutzt. Lange Statusmeldungen bleiben im Rollbereich erreichbar und
 ändern den Außenrahmen nicht; `style.WrappedNote` misst dafür ohne die
 gepinnte Höhe, denn `QLabel.heightForWidth` meldet nie weniger als die
 Mindesthöhe.
@@ -382,8 +381,8 @@ Rest rollt. Reiter, Suche, Statusmeldungen und bedingte Zeilen lassen den
 Außenrahmen stehen. `contentSizeChanged` meldet verzögerte Innenlayoutänderungen.
 Beim Öffnen sowie nach Monitorwechseln, geänderter nutzbarer Fläche oder
 logischer DPI stellt `DialogScrollArea` mit `fit_dialog_to_screen` die
-Erreichbarkeit wieder her. `form_natural_width` berücksichtigt zugeklappte
-Formularzeilen bei der einmaligen Anfangsbreite.
+Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
+Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine

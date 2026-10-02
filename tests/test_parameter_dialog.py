@@ -39,3 +39,42 @@ def test_the_bounds_are_written_the_way_the_window_writes_numbers(qt_app: QAppli
         assert taken.maximum == pytest.approx(1.25)
     finally:
         dialog.deleteLater()
+
+
+def test_only_name_value_and_unit_stand_in_front(qt_app: QApplication) -> None:
+    """RM-359 F11: Vorn stehen Name, Wert und Einheit; die Grenzen dahinter (§2.4).
+
+    Offen, wenn das Maß schon Grenzen hat, und sobald ein Satz eine Grenze
+    meint — sonst stünde der Satz unter Feldern, die man nicht sieht.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    fresh = ParameterDialog({})
+    bounded_parameter = Parameter(name="spiel", value=0.75, unit="mm", maximum=1.25)
+    bounded = ParameterDialog({"spiel": bounded_parameter}, existing=bounded_parameter)
+    try:
+        fresh.show()
+        bounded.show()
+        QApplication.processEvents()
+        front = [
+            label.text()
+            for label in fresh.findChildren(QLabel)
+            if label.buddy() is not None or label.text() in ("Name", "Wert", "Einheit")
+            if label.isVisibleTo(fresh)
+        ]
+        assert not fresh.minimum_field.isVisibleTo(fresh), "die Grenzen stehen hinten"
+        assert not fresh.maximum_field.isVisibleTo(fresh)
+        assert fresh.unit_field.isVisibleTo(fresh) and fresh.name_field.isVisibleTo(fresh)
+        assert "Untergrenze" not in front
+        assert bounded.maximum_field.isVisibleTo(bounded), "vorhandene Grenzen bleiben sichtbar"
+
+        fresh.name_field.setText("wand")
+        fresh.value_field.setValue(2.0)
+        fresh.minimum_field.setText("5")
+        fresh._accept()
+        QApplication.processEvents()
+        assert fresh.problem.text() == "Der Wert liegt außerhalb der eigenen Grenzen."
+        assert fresh.minimum_field.isVisibleTo(fresh), "der Satz klappt die Grenzen auf"
+    finally:
+        fresh.deleteLater()
+        bounded.deleteLater()

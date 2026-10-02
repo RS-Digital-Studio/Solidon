@@ -244,9 +244,10 @@ from app.core.types import (
     SourceOrigin,
     Stroke,
     Vec3,
+    vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import _, format_decimal, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
@@ -351,6 +352,7 @@ from app.ui.print_settings_dialog import (
 )
 from app.ui.recipe_dialog import RecipeDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
+from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
@@ -2354,6 +2356,8 @@ class MainWindow(QMainWindow):
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
         verschwindet mit dem Verlassen der Funktion."""
         self._local_features: LocalRecognitionFlow | None = None
+        self._plane_points_armed = False
+        """Ob die nächsten Klicks Punkte einer Schnittebene sind (RM-400)."""
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
@@ -9991,6 +9995,11 @@ class MainWindow(QMainWindow):
         if self._local_features is not None and self._local_features.active:
             self._local_features.invalidate()
             return
+        if self._disarm_plane_points():
+            # Die Punktwahl im Bild zuerst: Sie liegt über dem offenen Dialog,
+            # und was schon eingetragen ist, bleibt stehen.
+            self.announce(tr("Punktwahl beendet. Die eingetragenen Punkte bleiben."))
+            return
         if self.session.split_running:
             # Die lange Suche ist die oberste laufende Handlung. Erst sie
             # anhalten; die Auswahl darunter bleibt stehen und zeigt weiter,
@@ -17602,7 +17611,7 @@ class MainWindow(QMainWindow):
         if seat is not None and seat.values is not None:
             values.update(seat.values)
         values.update(self._spacing_for(spec))
-        values.update(self._plane_through(spec, chosen[0] if chosen else None))
+        values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
@@ -18287,6 +18296,11 @@ class MainWindow(QMainWindow):
             pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
             slots=self._slots_of_selection(),
             edges=self._edge_names(),
+            # Auch beim Ändern eines Grundkörpers (RM-359 F6, ``grenzen.md``):
+            # Wer seine Maße erst später benennen will, fand den Haken nur
+            # beim Anlegen.
+            offer_naming=offers_naming(spec),
+            naming_default=self.settings.name_dimensions,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
 
@@ -18321,7 +18335,17 @@ class MainWindow(QMainWindow):
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
-            self.session.change_params(op_id, fitted(dialog.values()))
+            params, changes = self._named_dimensions(
+                spec, fitted(dialog.values()), dialog.names_dimensions()
+            )
+            changed = self.session.change_params(op_id, params, changes)
+            if (
+                changed
+                and dialog.offers_naming()
+                and dialog.names_dimensions() != self.settings.name_dimensions
+            ):
+                self.settings.name_dimensions = dialog.names_dimensions()
+                self._store_settings()
 
         self._open_operation_dialog(dialog, apply_change)
         if field:
@@ -18353,6 +18377,13 @@ class MainWindow(QMainWindow):
         if not wanted:
             return values, None
         taken = set(self.session.project.document.parameters)
+        # **Zwei Quader, zweimal „Breite“** (RM-359 F5): Die Leiste zeigte drei
+        # gleiche Zeilen zweimal, ohne Bezug. Ein vergebener Titel bekommt die
+        # Nummer, die auch sein Name trägt — *Breite 2* zu ``breite_2``.
+        titles = {
+            str(parameter.title or parameter.name)
+            for parameter in self.session.project.document.parameters.values()
+        }
         created: dict[str, Parameter] = {}
         schema = spec.params.spec()
         for entry in schema:
@@ -18374,11 +18405,18 @@ class MainWindow(QMainWindow):
                 name = f"{stem}_{counter}"
                 counter += 1
             taken.add(name)
+            title: TranslatableText | str = entry.title
+            if str(title) in titles:
+                number = counter - 1 if name != stem else 2
+                while str(_("{title} {number}", title=entry.title, number=number)) in titles:
+                    number += 1
+                title = _("{title} {number}", title=entry.title, number=number)
+            titles.add(str(title))
             created[name] = Parameter(
                 name=name,
                 value=float(value),
                 unit="mm",
-                title=entry.title,
+                title=title,
                 minimum=entry.minimum,
                 maximum=entry.maximum,
             )
@@ -18431,6 +18469,7 @@ class MainWindow(QMainWindow):
         self._wire_outline_choice(dialog)
         self._wire_step_choice(dialog)
         self._wire_organizer_choice(dialog)
+        dialog.pointsPickRequested.connect(self._arm_plane_points)
 
         def finished(accepted: bool) -> None:
             prepared = getattr(dialog, "preview_order", None)
@@ -18441,6 +18480,7 @@ class MainWindow(QMainWindow):
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
             self.viewport.set_direct_picking(False)
+            self._disarm_plane_points()
             self._clear_preview()
             if applies:
                 on_accept()
@@ -18469,6 +18509,64 @@ class MainWindow(QMainWindow):
         # ein verschluckter erster.
         self.viewport.set_direct_picking(True)
         dialog.show()
+
+    def _arm_plane_points(self) -> None:
+        """*Im Bild wählen* an den drei Punkten: Die nächsten Klicks treffen den Körper.
+
+        Dieselbe Stellenwahl wie *Merkmale hier erkennen*
+        (``local_recognition_flow``): Die linke Taste gehört der Auswahl, die
+        Kamera bleibt bedienbar, ein Fadenkreuz trägt Pfeiltasten und
+        Eingabetaste, Esc beendet. Getroffen wird die sichtbare Oberfläche
+        (``placement_hit``) in Szenenkoordinaten — dieselben, in denen
+        *Abschneiden* rechnet. Nach dem dritten Punkt ist die Auswahl vorbei.
+        """
+        if self._op_dialog is None:
+            return
+        self._plane_points_armed = True
+        self.viewport.set_placement_pointer(self._plane_point_pointer)
+        self.viewport.set_surface_picker(self._pick_plane_point)
+        self.announce(tr("Klicken Sie Punkt 1 von 3 auf dem Körper an. Esc beendet die Auswahl."))
+
+    def _disarm_plane_points(self) -> bool:
+        """Die Punktwahl beenden — ``True``, wenn eine lief."""
+        if not self._plane_points_armed:
+            return False
+        self._plane_points_armed = False
+        self.viewport.set_placement_pointer(None)
+        self.viewport.set_surface_picker(None)
+        return True
+
+    def _plane_point_pointer(self, event: PointerEvent) -> bool:
+        """Die linke Taste nimmt eine Stelle; Alt und Strg bleiben der Kamera."""
+        if event.alt or event.ctrl:
+            return False
+        if event.button != "left" or event.kind not in ("press", "release"):
+            return False
+        if event.kind == "release":
+            self._pick_plane_point(event.x, event.y)
+        return True
+
+    def _pick_plane_point(self, x: float, y: float) -> None:
+        """Eine Stelle im Bild wird der nächste der drei Punkte."""
+        dialog = self._op_dialog
+        if dialog is None:
+            self._disarm_plane_points()
+            return
+        hit = self.viewport.placement_hit(round(x), round(y))
+        if hit is None:
+            self.announce(tr("Dort ist kein Körper. Klicken Sie auf seine Oberfläche."))
+            return
+        number = dialog.take_plane_point(hit[1])
+        if number is None or number >= 3:
+            self._disarm_plane_points()
+            if number is not None:
+                self.announce(tr("Drei Punkte gewählt — die Ebene geht durch sie."))
+            return
+        self.announce(
+            tr("Punkt {number} gesetzt. Klicken Sie Punkt {next} von 3 an.").format(
+                number=number, next=number + 1
+            )
+        )
 
     def _wire_outline_choice(self, dialog: OperationDialog) -> None:
         """Das Konturfeld benutzt dieselbe Auswahl wie der erste Zeichnungsimport."""
@@ -19857,15 +19955,28 @@ class MainWindow(QMainWindow):
         bleibt die Liste leer, und der Dialog zeigt eine leere Auswahl — die
         Operation selbst ist an einem Netz ohnehin gesperrt
         (``requires_kind="brep"``), und dort steht der Grund.
+
+        **Bis auf die Kante, die im Bild gewählt ist**: Sie steht auch an einem
+        Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante nimmt
+        sie an beiden Kernen (RM-400), und ohne sie stünde im Dialog ihr
+        Schlüssel statt Lage und Länge.
         """
         from app.core.brep import edit as brep_edit
         from app.core.brep.kernel import Solid, available
 
         result = self.session.last_result
         chosen = self.object_tree.selected()
-        if result is None or chosen is None or not available():
+        if result is None or chosen is None:
             return {}
         entry = result.scene.objects.get(chosen)
+        highlighted = self.viewport.highlighted_edge()
+        picked: dict[str, str] = {}
+        if highlighted is not None and highlighted[0] == chosen:
+            title = self.viewport.edge_title(chosen, highlighted[1])
+            if title:
+                picked[highlighted[1]] = title
+        if not available():
+            return picked
         # **Der exakte Körper steht in ``mesh``**, und das ist keine Feinheit:
         # ``SceneObject`` hat kein Feld ``exact``. Ein ``getattr`` darauf gab
         # immer ``None``, die Kantenliste blieb immer leer, und der Dialog
@@ -19873,7 +19984,7 @@ class MainWindow(QMainWindow):
         # Liste, nie am Fenster. ``brep_input`` fragt an derselben Stelle.
         body = entry.mesh if entry is not None else None
         if not isinstance(body, Solid):
-            return {}
+            return picked
         return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
@@ -19910,7 +20021,12 @@ class MainWindow(QMainWindow):
         )
         return {"spacing": max(float(default or 0.0), needed)}
 
-    def _plane_through(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+    def _plane_through(
+        self,
+        spec: OperationSpec,
+        selected: ObjectId | None,
+        given: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Eine Schnittebene beginnt in der Mitte des Körpers, nicht bei null.
 
         *Teilen* öffnete mit ``position=0``, und ein Körper steht auf dem Bett
@@ -19937,6 +20053,8 @@ class MainWindow(QMainWindow):
             return {}
         bounds = entry.mesh.bounds
         middle = tuple((bounds.minimum[index] + bounds.maximum[index]) / 2.0 for index in range(3))
+        if {"plane", "points", "at_feature", "edge"} <= names:
+            return self._cut_plane_through(entry, middle, given or {})
         if {"axis", "position"} <= names:
             axis = next(
                 (str(field.default) for field in spec.params.spec() if field.name == "axis"), "z"
@@ -19959,6 +20077,63 @@ class MainWindow(QMainWindow):
         return {
             "position": sum(middle[index] * normal[index] for index in range(3)) / length,
         }
+
+    def _cut_plane_through(
+        self, entry: SceneObject, middle: tuple[float, ...], given: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Die Vorbelegung von *Abschneiden*: jede Ebene schneidet durch die Körpermitte.
+
+        **Was gewählt ist, entscheidet die Ebene** (RM-400, M3 der Nachprüfung).
+        Eine gewählte Fläche belegte *An Fläche* vor, die Position aber aus der
+        Körpermitte entlang Z — gezählt von der Fläche aus lag die Ebene
+        außerhalb, und der Dialog öffnete mit „Diese Ebene schneidet nichts vom
+        Objekt ab.“ (vorher ein gültiger Schnitt). Jetzt geht die Ebene parallel
+        zur Fläche durch die Mitte; eine gewählte Kante legt sie durch Kante
+        und Mitte (``prepare_ops.edge_cut_through_middle``); sonst die Achse
+        wie bisher. Die drei Punkte stehen immer bereit — waagerecht durch die
+        Mitte —, damit *Durch drei Punkte* nicht mit einer Absage beginnt.
+        """
+        from app.core.geom.prepare_ops import edge_cut_through_middle
+
+        bounds = entry.mesh.bounds
+        low, high = bounds.minimum, bounds.maximum
+        level = middle[2]
+        values: dict[str, Any] = {
+            # Die Position wirkt nur an einer Achse; dort steht sie in der Mitte,
+            # gleich welche Ebene die Auswahl vorbelegt.
+            "position": middle[2],
+            "points": ";".join(
+                ",".join(repr(float(value)) for value in point)
+                for point in (
+                    (low[0], low[1], level),
+                    (high[0], low[1], level),
+                    (low[0], high[1], level),
+                )
+            ),
+        }
+        face = entry.features.get(str(given.get("at_feature") or ""))
+        normal = vec3_or_none(face.params.get("normal")) if face is not None else None
+        centre = vec3_or_none(face.params.get("centre")) if face is not None else None
+        if face is not None and face.kind == "face" and normal is not None and centre is not None:
+            length = math.sqrt(sum(value * value for value in normal))
+            if length > 0.0:
+                values["plane"] = "at_face"
+                values["offset"] = (
+                    sum((middle[index] - centre[index]) * normal[index] for index in range(3))
+                    / length
+                )
+                return values
+        highlighted = self.viewport.highlighted_edge()
+        if highlighted is not None and highlighted[0] == entry.id:
+            suggested = edge_cut_through_middle(entry, highlighted[1])
+            if suggested is not None:
+                values.update(
+                    plane="through_edge",
+                    edge=highlighted[1],
+                    axis=suggested[0],
+                    tilt=suggested[1],
+                )
+        return values
 
     def _measured_from_body(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Zwei Vorgaben, die am gewählten Körper gemessen sind statt fest zu stehen.
@@ -20219,11 +20394,56 @@ class MainWindow(QMainWindow):
         """
         result = self.session.last_result
         empty = result is not None and not result.scene.objects and not self.session.busy
-        self.viewport.invitation.set_chat_available(self.session.agent_backend is not None)
-        self.viewport.invitation.show_for(empty and not self._on_start_screen)
+        invitation = self.viewport.invitation
+        invitation.set_chat_available(self.session.agent_backend is not None)
+        halted = self._halted_before_a_body(result) if empty else None
+        if halted is not None and not self._on_start_screen:
+            # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
+            number, step = halted
+            invitation.show_halted(
+                tr("Das Projekt hält an Schritt {number}: {step}").format(number=number, step=step),
+                tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht."),
+            )
+            self.object_tree.say_why_empty(
+                tr(
+                    "Noch kein Körper: Das Projekt hält an Schritt {number}. "
+                    "Ein Doppelklick im Verlauf öffnet ihn."
+                ).format(number=number)
+            )
+            return
+        self.object_tree.say_why_empty("")
+        invitation.show_for(empty and not self._on_start_screen)
+
+    def _halted_before_a_body(self, result: EvaluationResult | None) -> tuple[int, str] | None:
+        """Nummer und Titel des Schritts, an dem die Kette hält, wenn noch nichts im Bild ist.
+
+        ``None``, wenn nichts hält — oder wenn die Ansicht ohnehin den letzten
+        vollständigen Stand zeigt (§15.3, RM-354); dann ist die Szene nicht leer.
+        """
+        if result is None or result.stopped_at is None:
+            return None
+        if self._picture_for(result).scene.objects:
+            return None
+        try:
+            entry = self.session.history.operation(result.stopped_at)
+        except AppError:
+            return None
+        try:
+            step = str(REGISTRY.get(entry.op).title)
+        except AppError:
+            step = entry.op
+        return int(result.stopped_at), step
 
     def _on_invitation(self, chosen: str) -> None:
         """Ein Einstieg aus der leeren Szene — derselbe Weg wie Menü und Werkzeugzeile."""
+        result = self.session.last_result
+        if chosen == "correct_step":
+            if result is not None and result.stopped_at is not None:
+                self.edit_operation(result.stopped_at)
+            return
+        if chosen == "report":
+            self._focus_report(force=True)
+            return
         if chosen == "draw":
             self.action_sketch_free()
         elif chosen == "parts":

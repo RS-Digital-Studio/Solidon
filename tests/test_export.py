@@ -2010,6 +2010,8 @@ def test_the_export_says_why_the_machine_side_is_missing(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
     settings = print_settings.resolve(profile, "standard")
 
@@ -2041,6 +2043,8 @@ def test_a_plain_export_hears_nothing_about_a_foreign_slicer(
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    # ElegooSlicer kennt den Centauri Carbon 2; der Kunde kann umstellen (RM-431).
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
     settings = print_settings.resolve(profile, "standard")
 
     _written, findings = write_assembly(
@@ -2307,6 +2311,56 @@ def test_calm_walls_of_a_slender_rod_go_only_to_the_rod(tmp_path: Path, profile:
     for key in ("outer_wall_speed", "inner_wall_speed", "default_acceleration"):
         assert key in values["Stange"], (key, values["Stange"])
         assert key not in values["Block"], (key, values["Block"])
+
+
+def test_cura_names_the_part_that_gets_the_rods_plate_wide_calm_walls(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """RM-430: CuraEngine nimmt Innenwandtempo und Grundbeschleunigung nicht je
+    Netz an. Sie bleiben plattenweit auf den ruhigen Werten der Stange — auch am
+    Block, und kein Befund sagte es: Der Rat je Teil wurde an einer Grundlage
+    gefragt, die die Übernahme schon trug, und schwieg."""
+    stange = MeshData.of(trimesh.creation.box(extents=(8.0, 8.0, 122.0)))
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [
+        replace(scene_object("obj_1", "Stange"), mesh=stange),
+        replace(scene_object("obj_2", "Block"), mesh=block),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    calm = {
+        "speed.outer_wall": advise.SLENDER_WALL_SPEED,
+        "speed.inner_wall": advise.SLENDER_WALL_SPEED,
+        "speed.outer_wall_acceleration": advise.CAREFUL_ACCELERATION,
+        "speed.acceleration": advise.CAREFUL_ACCELERATION,
+    }
+    for path, value in calm.items():
+        settings = print_settings.with_accepted(settings, path, value)
+
+    written, findings = write_assembly(
+        objects, tmp_path, project_name="Stange", profile=profile, settings=settings, flavour="cura"
+    )
+
+    per_part = {
+        (finding.object_id, finding.values["setting"])
+        for finding in findings
+        if finding.code == "export.part_setting"
+    }
+    assert per_part == {
+        ("obj_1", "speed.outer_wall"),
+        ("obj_1", "speed.outer_wall_acceleration"),
+    }
+    plate_wide = [entry for entry in findings if entry.code == "export.part_setting_unavailable"]
+    assert {(entry.object_id, entry.values["setting"]) for entry in plate_wide} == {
+        ("obj_2", "speed.inner_wall"),
+        ("obj_2", "speed.acceleration"),
+    }
+    for entry in plate_wide:
+        assert entry.severity == "warning"
+        assert "ganze Platte" in str(entry.message)
+        assert str(entry.values["reason"]), "der Grund der Stange bleibt nachprüfbar"
+    meshes = {mesh.path.name: dict(mesh.settings) for mesh in handover.cura_meshes(written)}
+    assert meshes["Stange-part-1.stl"]["speed_wall_0"] == "60"
+    assert "speed_wall_x" not in meshes["Stange-part-2.stl"], "Cura nimmt es nicht je Netz"
 
 
 def test_the_calm_walls_of_a_slender_rod_keep_the_limit_of_soft_filament() -> None:
@@ -4308,6 +4362,63 @@ def test_cura_window_without_print_settings_still_reports_the_active_printer(
         not in message
     )
     assert "slicer.cura_printer_unknown" not in {entry.code for entry in findings}
+
+
+@pytest.mark.parametrize(
+    ("solidon_printer", "cura_bed_width", "warns"),
+    [
+        ("creality-k1-max", None, False),
+        ("centauri-carbon-2", None, True),
+        ("creality-k1-max", 350.0, True),
+    ],
+    ids=["gleicher-drucker", "anderer-drucker", "gleiche-definition-anderes-bett"],
+)
+def test_cura_names_the_active_printer_only_when_it_is_a_different_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    solidon_printer: str,
+    cura_bed_width: float | None,
+    warns: bool,
+) -> None:
+    """RM-417: Curas aktive Instanz „Creality K1 Max“ auf ``creality_k1max`` und
+    Solidons eingebauter K1 Max sind derselbe Drucker. Die Warnung kam trotzdem
+    bei jedem *Im Slicer öffnen*, weil ``chosen_printer`` eine nicht
+    übernommene Instanz keinem Solidon-Drucker zuordnet."""
+    engine = _cura_install(tmp_path)
+    definitions = engine.parent / "share" / "cura" / "resources" / "definitions"
+    (definitions / "creality_k1max.def.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "name": "Creality K1 Max",
+                "inherits": "fdmprinter",
+                "metadata": {"visible": True},
+                "overrides": {
+                    "machine_width": {"default_value": 300},
+                    "machine_depth": {"default_value": 300},
+                    "machine_height": {"default_value": 300},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    _cura_active(tmp_path, monkeypatch, name="Creality K1 Max", definition="creality_k1max")
+    if cura_bed_width is not None:
+        changes = tmp_path / "config" / "cura" / "5.13" / "definition_changes"
+        changes.mkdir()
+        (changes / "Creality+K1+Max_settings.inst.cfg").write_text(
+            f"[general]\nversion = 4\n\n[values]\nmachine_width = {cura_bed_width}\n",
+            encoding="utf-8",
+        )
+    profile = profiles.make_profile(solidon_printer, "pla")
+    setup = handover.SlicerSetup(engine, "cura")
+
+    finding = handover.cura_active_printer_mismatch(setup, profile)
+
+    assert (finding is not None) is warns
+    if finding is not None:
+        assert finding.values["cura_printer"] == "Creality K1 Max"
+        assert finding.values["solidon_printer"] == profile.printer.title
 
 
 def test_cura_gets_parts_without_a_blocker_when_none_is_taken(
