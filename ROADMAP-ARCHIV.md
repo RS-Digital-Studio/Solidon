@@ -31,6 +31,14 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-404: Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still (02.10.2026)](#rm-404-die-facettenausrichtung-aus-rm-225-greift-an-verschobenen-größeren-oder-fein-vernetzten-stl-nicht-still-02102026) |
+| 2026-10-02 | [RM-443: Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test (02.10.2026)](#rm-443-reste-aus-rm-399-die-halter-vorlage-setzt-immer-zwei-schlüssellöcher-exakte-halter-nur-im-test-02102026) |
+| 2026-10-02 | [RM-400: Schräg abschneiden (02.10.2026)](#rm-400-schräg-abschneiden-02102026) |
+| 2026-10-02 | [RM-417: Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot (02.10.2026)](#rm-417-cura-meldet-anderer-drucker-aktiv-obwohl-es-derselbe-ist-zwei-neue-fenstertests-rot-02102026) |
+| 2026-10-02 | [RM-429: Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück (02.10.2026)](#rm-429-bambu-prozessprofil-mit-leerer-düsenvariante-fällt-still-auf-solidons-tabelle-zurück-02102026) |
+| 2026-10-02 | [RM-431: Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten (02.10.2026)](#rm-431-allgemeiner-drucker-mit-prusaslicer-slicen-bleibt-gesperrt-obwohl-solidons-werte-gelten-02102026) |
+| 2026-10-02 | [RM-432: Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder (02.10.2026)](#rm-432-bettart-automatisch-bei-prusaslicer-und-cura-zeigt-die-wirkungslosen-felder-02102026) |
+| 2026-10-02 | [RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)](#rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026) |
 | 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
@@ -36865,3 +36873,194 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) bei der Fensterabnahme v
   setzen* an. So schon in 0.5.1, kein Rückschritt. Bauplan §2.4 (gute Vorgabe), §29.
 
 **Abschluss:** Für einen Körper, der auf dem Bett steht, belegt der Dialog den Bezugspunkt „Druckbett“ vor (`MainWindow._from_selection`, `_stands_on_the_bed`, `_offers_the_bed_anchor`); was schwebt, behält die Mitte. Die Vorgabe der Operation bleibt die Mitte, gespeicherte Schritte, Rezepte und Agent rechnen unverändert. Test `test_analysis_ui.py::test_a_body_on_the_bed_grows_from_the_bed_when_scaled`; Fenstersonde: Dialog zeigt „Druckbett“, der Würfel wächst von z = 0 auf 46 mm. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-404: Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still (02.10.2026)
+
+<a id="rm-404-die-facettenausrichtung-aus-rm-225-greift-an-verschobenen-größeren-oder-fein-vernetzten-stl-nicht-still-02102026"></a>
+<a id="rm-404"></a>
+
+**RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still.**
+  Review 02.10.2026 der Commits `4449e3370..7f0de659d`, Funde F1–F4; Folgepunkt zu RM-225, das
+  `d0a3657e2` archiviert hat.
+  **Fehlerfall:** Die neue Facettenausrichtung (`app/core/geom/prepare_ops.py:14258–14259`,
+  `:14282–14283`, `:14322–14329`, `:14333–14334`) prüft gegen die feste Grenze `EPS_GEOM` (1 nm);
+  das float32-Raster einer binären STL ist ab 16 mm schon 1,9 nm, ab 64 mm 7,6 nm. Wird die Grenze
+  gerissen, gibt die Funktion still die Quelle zurück, und der alte RM-225-Fehler ist wieder da.
+  Belegt: Riffeldeckel mit Mitte bei x = y = 110 mm — Entfernen 15 Selbstschnittdreiecke und Stift
+  weg, Ändern 13 Selbstschnittdreiecke, 63 Flächen, kein Muster; Ø 80 am Ursprung — Stift verloren;
+  Ø 40 mit CAD-Nullpunkt in der Ecke — 5 bzw. 3 Selbstschnittdreiecke; echter `deckel_basis.stl`
+  um (110, 110, 0) verschoben — 60 statt 37 Flächen, 9 Selbstschnittdreiecke; fein vernetzter
+  Träger (101 376 Ecken, 1,01e-6 mm) wird nicht ausgerichtet. Befunde jeweils nur
+  `remove_feature.gone` bzw. `resize_feature.pattern`. Der Testfall (Ø 40 am Ursprung) liegt mit
+  0,69 nm knapp unter der Grenze.
+  **Weitere Reste:** (F2) 13 `return source` ohne Spur (`:14207–14334`, Aufrufer `:14395`,
+  `:14548`) — eine Ablehnung erzeugt Selbstschnitte ohne Befund; der Docstring verspricht eine
+  Auswahl je Gruppe, tatsächlich gilt alles oder nichts. (F3) `tests/test_pattern_features.py:1376`
+  (Achsfall) läuft nur durch „nichts geändert“ — die Identitätsmutante bleibt grün. (F4) rund
+  45 µs Python je Trägerecke, bei 26 112 Ecken 1,2–1,6 s ohne Fortschritt.
+  **Fix:** Grenze aus dem float32-Raster der Koordinaten beim Lesen ableiten (vor Aufsetzen oder
+  Zentrieren); bei Ablehnung Grund zurückgeben und Befund mit *Reparieren*; Docstring berichtigen;
+  Achsfall auf die Axiallage zusichern; in Feldern rechnen oder `ctx.progress` melden.
+  **Abnahme:** verschobene Variante, Ø 80, CAD-Nullpunkt und feiner Träger je *Entfernen* und
+  *Ändern* in beiden Güten ohne Selbstschnitt, Merkmale erhalten; Identitätsmutante des Achsfalls
+  rot. Bauplan §21, §25, Regeln 6, 17.
+  Belege: `F:\solidon-review-reports\review-7f0de659d.md`, Sonden `r2_rm225_*.txt`,
+  `r2_gegenprobe_axial.txt`, `r2_ausrichtung_laufzeit.txt`.
+  Nachprüfung am Stand `4373b5f12` (nach `fa7780785`): unvollständig. Verbessert: verschobener `deckel_basis.stl` 0 statt 9 Selbstschnitte, 37 Flächen; CAD-Nullpunkt frei; 26 112 Trägerecken 0,26 statt 1,60 s; feiner Träger (101 376 Ecken) wird ausgerichtet; Rest (110, 110) als strenges xfail registriert. Offen (mittel): Ø 80 mit 48 Rillen behält 2 Selbstschnitte ohne Befund, in Entwurf und fein, bei *Entfernen* und *Ändern*. Tests: der Test nimmt Ø 80 mit 24 Rillen; die Fälle mit feinem Träger sind am Elterncommit, mit Identitätsmutante und alter 1-nm-Grenze grün (stellen den Fehler nicht nach); nur Güte „fein“. Belege `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`, Sonden `v7g_rm404_*`.
+
+**Abschluss:** Muster an verschobenen und großen STL-Deckeln schließen ohne Selbstschnitt (`7a7958937`): Mantel und Stopfen lesen ihre Facetten über dieselbe achsparallele Ausgleichsgerade (`patterns.cylinder_facet_lines`), der Facettenwechsel liegt am Schnitt, Stopfenenden in der gemessenen Stirnfläche. Deckel (110, 110), Ø 80/48 und CAD (20, 20) ohne Selbstschnitt; Tor 20 283 passed. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-443: Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test (02.10.2026)
+
+<a id="rm-443-reste-aus-rm-399-die-halter-vorlage-setzt-immer-zwei-schlüssellöcher-exakte-halter-nur-im-test-02102026"></a>
+<a id="rm-443"></a>
+
+**RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test.**
+  Nachprüfung des Reviews am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben
+  (Bereichstest aller vier Halter). Offen: Der Nachbau von Modell 1 gelingt, die Rückwand wird
+  aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; die
+  Korpusabnahme an drei Haltern ist nicht belegt; der Fünf-Klick-Weg steht nur im Archivtext;
+  exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
+  **Abnahme:** Nachbau Modell 1 mit 20 mm Rückwand; drei Halter aus dem Korpus nachgebaut;
+  Fünf-Klick-Weg am echten Fenster; exakter Halter über den Kundenweg. Bauplan §24, §2.2.
+  Belege: `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`.
+
+**Abschluss:** Halter setzen ein Schlüsselloch, wenn zwei nicht mit Rand in die Breite passen, und wachsen nur, wenn auch eines nicht passt (`a64ca4802`, Bibliothek 22, Bereichsnachweis der vier Halter neu); Vorlagen entstehen exakt, wo der Kern da ist. Modell 1 im Kundenweg: exakt, 20 mm breit, ein Schlüsselloch; Beispielprojekte mit Bibliothek 22 neu erzeugt (`1deb59633`). Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-400: Schräg abschneiden (02.10.2026)
+
+<a id="rm-400-schräg-abschneiden-02102026"></a>
+<a id="rm-400"></a>
+
+**RM-400 — Schräg abschneiden.**
+  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 5).
+  *Abschneiden* (`cut_away`, `app/core/geom/prepare_ops.py:16944`) kennt nur Achsebenen
+  (`axis ∈ {x, y, z}`); Schale, Wedge-Lock und viele Organizer haben eine schräge Front, heute nur
+  über ein gezeichnetes Seitenprofil mit unpassenden Feldnamen (RM-391).
+  **Ablauf:** *Abschneiden* bekommt hinten eine Neigung (Winkel um eine Kante bzw. Achse) oder eine
+  Ebene durch eine gewählte Fläche/Kante; vorn bleibt Achse und Lage. Schnittfläche geschlossen,
+  beide Kerne, Parameter migriert (`format_version`/Migration, alte Projekte unverändert).
+  **Abnahme:** Geometrietest: Quader 30° schräg abgeschnitten → Volumen analytisch, dicht, an
+  beiden Kernen gleich; alte Projekte öffnen unverändert. Bauplan §21, §25, Regel 4.
+  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Schräg abschneiden an jeder Ebene (Winkel, Fläche, drei Punkte), an jedem Körper (Netz, exakt, Mehrschaler); dient Fronten, Fasen ganzer Seiten und dem Kürzen auf Druckhöhe. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 12 Teile mit schräger Front (Wedge-Lock, Laptop-Ständer, Handyständer, Schaber, Organizer). Abnahme an mindestens drei unterschiedlichen Korpusmodellen.
+  Nachprüfung am Stand `0041000a0` (nach `3006acb62`, `8401b2c64`, `bf829b68d`): unvollständig. Gut: Neigung und Fläche analytisch richtig an beiden Kernen und Güten, außermittig und an Mehrschalern; sechs Korpusmodelle aus `F:\3D Dateien` (zwei STEP) vollständig und geschlossen; alte Projekte rechnen bitgleich. Offen: Ebene durch drei Punkte bzw. eine Kante; Test am exakten Kern und für `no_plane`; die Gegenprobe „Kippachse durch den Ursprung“ bleibt grün. Neu: Mit gewählter Fläche belegt der Dialog „An Fläche“ und die Position aus der Körpermitte vor — *Abschneiden* öffnet mit „Diese Ebene schneidet nichts vom Objekt ab.“ (vorher gültiger Schnitt); Achse, Neigung und „Neigen um“ wirken neben „An Fläche“ nicht, bleiben aber bedienbar (kein `depends_on`) — 30° um die eigene Achse wird still übergangen; „Kleinere Seite — bei Z unten“ stimmt an einer Unterseite nicht; mit Vorgabe Kippachse x wird jede Neigung an Achse x abgewiesen. Belege `F:\solidon-review-reports\review-0041000a0.md`, Sonden `v6_rm400_*`.
+  Nachprüfung am Stand `4373b5f12` (nach `1c55ac1cb`, `c2ed098ec`): exaktes Abschneiden behoben (exakt bleibt exakt, analytische Volumina, STEP-Modelle exakt, Altprojekt bitgleich). Weiter offen wie vermerkt: Ebene durch drei Punkte, M3/M4. Niedrig: die neuen exakten Neigungstests hängen nicht vom Winkel ab — eine achsparallele Mutante bleibt in 7 von 8 Fällen grün.
+
+**Abschluss:** *Abschneiden* legt die Ebene durch Achse, Fläche, Kante oder drei Punkte (`5e9b56a8a`, Format 42 mit Migration, `cut_away_face_v41.p3d` rechnet bitgleich). Neigungsfälle an beiden Kernen, Punktwahl im Bild mit Esc; Mutanten achsparallel, Kippachse und Vorzeichen je 8 von 8 rot. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-417: Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot (02.10.2026)
+
+<a id="rm-417-cura-meldet-anderer-drucker-aktiv-obwohl-es-derselbe-ist-zwei-neue-fenstertests-rot-02102026"></a>
+<a id="rm-417"></a>
+
+**RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot.**
+  Review 02.10.2026 von `29ff469b5`/`4cf460e87`.
+  - **Falsche Warnung (mittel, neu mit `4cf460e87`):** Ist in Cura dasselbe Modell aktiv wie in
+    Solidon, kommt „In Cura ist „Creality K1 Max“ aktiv, in Solidon „Creality K1 Max“ …“ — das
+    trifft jeden *Im Slicer öffnen*-Lauf mit dem eingebauten Drucker. Ursache: `chosen_printer`
+    gibt für eine nicht übernommene Cura-Instanz `""` zurück. Fix: zusätzlich die Definition mit
+    `cura_definition` vergleichen.
+  - **Zwei neue Fenstertests aus `29ff469b5` rot** (fällt erst im Release-Tor auf):
+    `…can_be_adopted…` hat einen Wettlauf (`_slicer_path` gesetzt, ohne die Slicersuche abzuwarten;
+    mit `wait_for_slicers()` grün); `…not_reported_as_failed_adoption…` sichert eine leere
+    Hinweiszeile zu streng zu.
+  - **Niedrig:** Das neue `if setup.flavour == "cura"` in `machine_missing` doppelt nur
+    `machine_from_definition`.
+  **Abnahme:** Test mit gleichem Drucker in Cura und Solidon → keine Warnung, mit anderem →
+  Warnung; beide Fenstertests grün ohne Lockerung der Wirkung. Bauplan §29, §2.7.
+  Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`, Sonden
+  `v4u_test_cura_mismatch.py`, `v4u_test_cura_ui_diag.py`.
+
+**Abschluss:** Cura warnt nicht mehr vor einem anderen Drucker, wenn es derselbe ist: gleiche Definition und gleiches Bett gelten als derselbe Drucker (`048da569d`). Am echten Cura 5.13 mit aktivem Ender-3 V3 SE: vorher Warnung, jetzt keine; Centauri Carbon 2 warnt weiter. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-429: Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück (02.10.2026)
+
+<a id="rm-429-bambu-prozessprofil-mit-leerer-düsenvariante-fällt-still-auf-solidons-tabelle-zurück-02102026"></a>
+<a id="rm-429"></a>
+
+**RM-429 — Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-333 (archiviert), Regression aus
+  `88bd58c2a`. Lesbare Mehrdeutigkeiten und unbekannte Varianten melden jetzt
+  `slicer.process_variant_unresolved`.
+  **Fehlerfall:** Bei `nozzle_volume_type` = `"nil"`, `""`, `["", ""]` oder einer Zahl fällt die
+  Druckgrundlage ohne jeden Befund auf Solidons Tabelle zurück; am Stand `4cf460e87` kam dafür
+  `process_unreadable`. Ursache: `_wanted_variant` (`app/core/knowledge/manufacturer.py:273–280`)
+  gibt `""` zurück, und die Befundprüfung fragt nur `if foundation.unresolved_variant:` (`:1818`).
+  **Fix:** leere/unlesbare Variante als eigener Fall mit Befund (Herkunft „Solidon-Tabelle statt
+  Slicerprofil“ ausweisen, Regel 14).
+  **Abnahme:** Test je Wert (`nil`, leer, Liste leerer Werte, Zahl): Befund mit Handlung. Bauplan §28,
+  Regel 14, Regel 21. Beleg: Sonden `v5g_t_rm333_varianten.txt`, `v5g_t_rm333_varianten_alt.txt`.
+
+**Abschluss:** Ein Bambu-Profil ohne lesbare Düsenvariante sagt wieder, dass Solidons Werte gelten (`57891b263`, Befund `slicer.process_variant_unreadable`). Test je Wert (nil, leer, Liste, Zahl), vorher 4 rot; am echten Bambu Studio mit H2D bestätigt. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-431: Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten (02.10.2026)
+
+<a id="rm-431-allgemeiner-drucker-mit-prusaslicer-slicen-bleibt-gesperrt-obwohl-solidons-werte-gelten-02102026"></a>
+<a id="rm-431"></a>
+
+**RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-336 (archiviert). *Im Slicer öffnen* ohne
+  Druckerprofil ist jetzt frei und ausführbar.
+  - **PrusaSlicer gesperrt (mittel, Rückschritt gegenüber 0.5.1, seit `48ffcf145`):** Allgemeiner
+    Drucker mit PrusaSlicer-Bündel — das Profil bleibt von selbst leer, der Hinweis sagt „… es gelten
+    Solidons Werte …“, *Slicen* ist trotzdem gesperrt mit „Wählen Sie einen Drucker aus der Liste.“
+    Ursache: Rückfallsatz in `_machine_selection_issue` (`app/ui/print_settings_dialog.py:6328`) —
+    `_profile_gap()` ist leer, die Funktion meldet trotzdem.
+  - **Quittung überschrieben:** Nach dem Öffnen steht „An … übergeben — das Fenster gehört jetzt
+    Ihnen.“, danach „Dieser Slicer braucht ein Druckerprofil …“ (`_slice_finished` →
+    `_show_slicer_state`, Zweig `elif reason:`, `:6469–6482`).
+  - **Testlücke:** Der Test ruft `_open_in_slicer` nie auf; die Mutation „nur das Öffnen fragt das
+    Profil“ bleibt grün.
+  **Fix:** Auf dem Rechen-Weg nur `_profile_gap()` fragen; Quittung stehen lassen; Test über
+  `_open_in_slicer`.
+  **Abnahme:** Allgemeiner Drucker mit PrusaSlicer → *Slicen* frei; nach dem Öffnen bleibt die
+  Quittung; Mutation rot. Bauplan §29, §2.1. Belege:
+  `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`, Sonden `v5u_test_rm336.py`.
+
+**Abschluss:** Der allgemeine Drucker slict wieder mit PrusaSlicer, und die Quittung des Öffnens bleibt stehen (`a4c22fcec`); ein Slicer, der den Drucker des Projekts nicht kennt, meldet `slicer.printer_unknown`. Am echten PrusaSlicer 2.9.6 mit generic-220: 100 Schichten, 18 min. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-432: Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder (02.10.2026)
+
+<a id="rm-432-bettart-automatisch-bei-prusaslicer-und-cura-zeigt-die-wirkungslosen-felder-02102026"></a>
+<a id="rm-432"></a>
+
+**RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-341 (archiviert). Brim, Skirt, Raft und
+  „keine“ zeigen jetzt die richtigen Zeilen; Orca ist richtig.
+  - **„Automatisch“ (mittel):** `handover._adhesion_for` (`app/core/export/handover.py:863–889`)
+    macht daraus die Art aus Solidons Materialtabelle (PLA, PETG, TPU → Skirt). Gemessen mit PLA:
+    PrusaSlicer bekommt `skirts 2`, `brim_width 0`, Cura `skirt_line_count 2`, `brim_width 0`; der
+    Dialog zeigt nur die wirkungslose Brim-Breite und versteckt die wirksamen Skirt-Felder; die
+    Suche schickt zu „Ändern Sie die Auswahl …“.
+  - **Alter Test rot (Release-Tor):** `test_disabled_support_and_bed_adhesion_hide_their_detail_rows`
+    (`tests/test_print_settings_ui.py:2094`) verlangt bei Brim alle vier Zeilen.
+  - **Zweite Tabelle (niedrig):** `ADHESION_DETAILS` steht handgeschrieben neben
+    `ADHESION_MEASURES`, `slicer_keys.ADHESION_KEYS` und der Auto-Brim-Ausnahme in
+    `handover._only_chosen_adhesion`. Der UI-Test bezieht seinen Sollwert aus `inactive_paths` selbst.
+  **Fix:** Sichtbarkeit aus der Art, die tatsächlich übergeben wird (je Slicer); eine Quelle für alle
+  Tabellen; alten Test an die Entscheidung anpassen; Sollwert im Test von außen.
+  **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
+  die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
+  `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
+
+**Abschluss:** „Automatisch“ zeigt im Druckdialog genau die Haftungsmaße, die der Slicer bekommt (`1677cc0a5`, eine Tabelle `print_settings.ADHESION_PATHS`). Fenstertest Orca/Prusa/Cura × PLA/PETG gegen `values_for`; am echten Ender-3 V3 SE: PrusaSlicer `skirts = 2`, Cura drei Skirt-Runden. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)
+
+<a id="rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026"></a>
+<a id="rm-430"></a>
+
+**RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit.**
+  Review 02.10.2026 am Stand `70e9b3145`; beide Ursprungspunkte sind archiviert und im Verhalten
+  behoben.
+  - **RM-376, Tests:** `plate[smooth]` kann nicht rot werden (Glätten bewegt an der Testplatte auch
+    ohne Filter nichts); Aufblasen und Flachziehen zeigen den Fehler, fehlen aber; ein Filter, der
+    nichts durchlässt, lässt 14 neue Tests grün; „keine Selbstdurchdringung“ ist nicht zugesichert;
+    die Figur nur von vorn. Die Zahl „Unterseite 3,7 mm“ (Register, `sculpt.py:255–256`,
+    `tests/test_sculpt.py:890–891`) war schon damals falsch — es ist die Oberseite.
+  - **RM-328, Cura (älter):** Innenwand und Grundbeschleunigung bleiben plattenweit auf 60/2000, also
+    auch am Block, ohne `part_setting_unavailable` (`app/core/export/handover.py:1092–1098`).
+  **Abnahme:** Gegenproben (ohne Filter, Filter lässt nichts durch) machen die Tests rot; Cura-Fall
+  mit Befund. Beleg: `verif-70e9b3145-geometrie.md`, Sonden `v5g_rm376_*`, `v5g_rm328_cura.txt`.
+
+**Abschluss:** Cura nennt die Teile, die plattenweite Übernahmen nur mitbekommen (`6af7d3518`, Befund `export.part_setting_unavailable`). Test vorher rot; am echten CuraEngine 5.13 mit Stange und Block: Befund an obj_2 für Innenwand und Beschleunigung. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
