@@ -818,6 +818,7 @@
   "Größter Wert, den die Parameterleiste annimmt.": "Plus grande valeur acceptée par la barre des paramètres.",
   "Export abgebrochen.": "Export annulé.",
   "Export wartet auf die laufende Berechnung … {name}": "L'export attend le calcul en cours … {name}",
+  "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen Sie es dann noch einmal.": "Les facettes de l'enveloppe sous ce motif n'ont pas pu être ramenées sur leurs plans ; des triangles peuvent se croiser dans le résultat. Réparez le maillage et réessayez.",
   "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen ganzer Seiten. Null schneidet gerade.": "Incline le plan de coupe de cet angle — pour des façades obliques et des chanfreins sur des côtés entiers. Zéro coupe droit.",
   "Kleinster Wert, den die Parameterleiste annimmt.": "Plus petite valeur acceptée par la barre des paramètres.",
   "Neigen um": "Incliner autour de",

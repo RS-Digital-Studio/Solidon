@@ -818,6 +818,7 @@
   "Größter Wert, den die Parameterleiste annimmt.": "Valore più grande accettato dalla barra dei parametri.",
   "Export abgebrochen.": "Esportazione annullata.",
   "Export wartet auf die laufende Berechnung … {name}": "L'esportazione attende il calcolo in corso … {name}",
+  "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen Sie es dann noch einmal.": "Le faccette del mantello sotto questo motivo non si sono potute portare sui loro piani; nel risultato i triangoli possono intersecarsi. Ripara la mesh e riprova.",
   "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen ganzer Seiten. Null schneidet gerade.": "Inclina il piano di taglio di questo angolo, per frontali obliqui e smussi di interi lati. Zero taglia dritto.",
   "Kleinster Wert, den die Parameterleiste annimmt.": "Valore più piccolo accettato dalla barra dei parametri.",
   "Neigen um": "Inclina attorno a",

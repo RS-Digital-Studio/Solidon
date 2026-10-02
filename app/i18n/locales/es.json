@@ -818,6 +818,7 @@
   "Größter Wert, den die Parameterleiste annimmt.": "Valor más grande que acepta la barra de parámetros.",
   "Export abgebrochen.": "Exportación cancelada.",
   "Export wartet auf die laufende Berechnung … {name}": "La exportación espera al cálculo en curso … {name}",
+  "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen Sie es dann noch einmal.": "Las facetas del cuerpo bajo este patrón no se pudieron ajustar a sus planos; en el resultado pueden cruzarse triángulos. Repare la malla y vuelva a intentarlo.",
   "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen ganzer Seiten. Null schneidet gerade.": "Inclina el plano de corte este ángulo, para frentes oblicuos y biseles de lados enteros. Cero corta recto.",
   "Kleinster Wert, den die Parameterleiste annimmt.": "Valor más pequeño que acepta la barra de parámetros.",
   "Neigen um": "Inclinar sobre",

@@ -818,6 +818,7 @@
   "Größter Wert, den die Parameterleiste annimmt.": "Largest value the parameter bar accepts.",
   "Export abgebrochen.": "Export cancelled.",
   "Export wartet auf die laufende Berechnung … {name}": "Export is waiting for the current calculation … {name}",
+  "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen Sie es dann noch einmal.": "The shell facets under this pattern could not be laid onto their planes; triangles may intersect in the result. Repair the mesh and try again.",
   "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen ganzer Seiten. Null schneidet gerade.": "Tilts the cutting plane by this angle — for slanted fronts and bevels across whole sides. Zero cuts straight.",
   "Kleinster Wert, den die Parameterleiste annimmt.": "Smallest value the parameter bar accepts.",
   "Neigen um": "Tilt about",
