@@ -277,3 +277,31 @@ def test_the_placement_survives_the_round_trip(placed: dict[str, float]) -> None
         # also die Lage, nicht die Schreibweise.
         assert got == pytest.approx(np.array([0.0, 0.0, 1.0]), abs=1e-12)
         assert back["angle"] == pytest.approx(0.0, abs=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("name", "values"),
+    [
+        (
+            "create_cone",
+            {"bottom_diameter": 30.0, "top_diameter": 10.0, "height": 20.0, "segments": 64},
+        ),
+        ("create_torus", {"outer_diameter": 40.0, "tube_diameter": 8.0, "segments": 64}),
+    ],
+)
+def test_cone_and_ring_are_as_fine_in_the_draft_as_in_the_export(
+    name: str, values: dict[str, Any]
+) -> None:
+    """Kegel und Ring im Entwurf so fein wie beim Export (RM-427).
+
+    Halbiert wurde ohne Befund — ein Kegel stand mit 128 statt 256 Dreiecken
+    im Bild, ein Ring mit 2 048 statt 8 192 —, und gespart war nichts, was zählt.
+    """
+    load_operations()
+    defaults = {item.name: item.default for item in REGISTRY.get(name).params.spec()}
+    params = {**defaults, **values}
+
+    draft = primitive_local_tool(name, params, "draft")
+    fine = primitive_local_tool(name, params, "fine")
+
+    assert draft.triangle_count == fine.triangle_count, (draft.triangle_count, fine.triangle_count)

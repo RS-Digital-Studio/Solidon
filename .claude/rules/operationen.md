@@ -17,9 +17,8 @@ Eine Operation ist die einzige Stelle, an der Geometrie entsteht oder sich
 
 Regel 4 mit der Checkliste in `AGENTS.md` (`/neue-op`);
 `tests/test_registry_consistency.py` fängt unvollständige Ops und doppelte
-Kürzel. `ctx.quality` bedient beide Stufen: Entwurf zum Iterieren und für den
-Agenten, Fein für Export und finalen Prüfbericht; wer beide gleich behandelt,
-tut es bewusst.
+Kürzel. `ctx.quality`: Entwurf zum Iterieren, Fein für Export und Prüfbericht;
+**eine Entwurfsstufe nur über einem Budget und mit Befund** (`blend.draft_grid`).
 
 ## Was die Operation verlangt, steht im Register
 

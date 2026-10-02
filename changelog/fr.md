@@ -62,6 +62,7 @@ dans `website/version.json`.
 - Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Incliner autour de », et « Sur une face » mène la coupe parallèlement à une face plane.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
+- Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.
 
 ### Sculpter, texte et esquisse
 
