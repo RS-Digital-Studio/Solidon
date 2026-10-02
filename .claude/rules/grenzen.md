@@ -195,6 +195,13 @@ Robert).
   Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten
   (`tests/test_gesture_ops.py`), im Dialog vorn, wenn er der Grund ist, aus dem
   der Dialog aufgeht.
+- **Ein Pflichtziel beginnt leer, und der erste Bildklick füllt es** (RM-394,
+  RM-416): Die Liste steht auf „— im Bild wählen —“, der gezeigte Dialog gibt
+  den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal
+  (`_focus_first_empty_feature`; sonst nimmt Qt das gefüllte Quellmerkmal), und
+  *Übernehmen* sagt bis dahin, wohin geklickt wird (`_target_reason`) — „ein
+  zweiter Körper fehlt“ nur, wenn keiner da ist. Geprüft am **gezeigten**
+  Dialog: ungezeigt gibt es keinen Erstfokus.
 - **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**
   (`OperationDialog.switch_variant`): Was die Variante nicht kennt,
   verschwindet, die Beschreibung wechselt.

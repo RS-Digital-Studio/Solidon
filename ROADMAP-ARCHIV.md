@@ -36383,3 +36383,28 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Zug“. Bauplan §17.3, §2.6.
 
 **Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.
+
+## RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)
+
+<a id="rm-416--an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02-10-2026"></a>
+<a id="rm-416"></a>
+
+**RM-416 — *An Merkmal ausrichten*: der erste Bildklick wird am Hauptfenster weiter nicht angenommen.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-394, das im Arbeitsbaum archiviert ist.
+  Seit `eac0fd506` beginnt das Ziel leer und *Übernehmen* ist gesperrt — der stille Fehlgriff ist weg.
+  **Offen:** Am echten Hauptfenster nimmt der erste Bildklick ohne Fokus aufs Feld nichts an
+  („Dialog nahm face_2 nicht an“, `target: ''`): Beim Öffnen setzt der Erstfokus
+  `_feature_focus='feature'`, deshalb erreicht `take_feature` den neuen Zweig nie. Der Commit-Test
+  prüft den Dialog ungezeigt (ungezeigt grün, gezeigt rot). Regression:
+  `tests/test_operation_ui.py::test_an_alignment_target_is_never_left_empty` ist jetzt rot (an
+  `e3dff1907` grün), der alte Test wurde nicht nachgezogen. Am gesperrten Knopf steht „Dafür braucht
+  es ein Merkmal an einem zweiten Körper.“, obwohl der zweite Körper da ist.
+  **Fix:** Erstfokus auf das erste leere Pflichtfeld; Test am gezeigten Dialog; alten Test an die
+  neue Entscheidung anpassen; Sperrsatz „Klicken Sie im Bild auf die Fläche, an die … soll.“
+  **Abnahme:** am gezeigten Hauptfenster: Dialog öffnen, ein Bildklick auf die rechte Seite von A
+  füllt „Ziel“, B sitzt bündig rechts; beide Tests grün. Bauplan §2.6, Regel 21.
+  Belege: `verif-4cf460e87-oberflaeche.md`, Sonden `v4u_nachbau\v4u_a1_ausrichten.py`,
+  `v4u_test_rm394.py`.
+  Nachprüfung am Stand `4373b5f12` über die Oberfläche: nicht behoben — `46e6113ed` ändert nur Handbuch und Changelog; der erste Bildklick am Hauptfenster wird weiter nicht angenommen (`take_feature`), der alte Test bleibt rot.
+
+**Abschluss:** Der gezeigte Dialog gibt den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal (`OperationDialog._focus_first_empty_feature` im ersten `showEvent`); bis dahin nahm Qt das schon gefüllte Quellmerkmal, und `take_feature` erreichte das leere Ziel nie. Der Knopf folgt einem Pflichtziel jetzt sofort (`valuesChanged` → `_follow_source_pending`), nicht erst mit dem nächsten Vorschaubild. Der Sperrsatz unterscheidet: mit zweitem Körper „Klicken Sie im Bild auf die Fläche, an die ‹Körper› soll.“, ohne ihn weiter „Dafür braucht es ein Merkmal an einem zweiten Körper.“ (`_target_reason`, fünf Kataloge). Neuer Fenstertest `test_the_shown_alignment_dialog_takes_the_first_click_as_its_target` (Gegenprobe ohne den Erstfokus rot), `test_an_alignment_target_is_never_left_empty` auf die Entscheidung aus RM-394 gestellt; beide grün. Sonde am echten Hauptfenster mit echtem Mausklick in die Ansicht: am Stand `ba5a76365` 7 von 12 (Feldfokus `feature`, Ziel leer, B bleibt bei x = −50,4), danach 12 von 12 (Ziel `obj_1:face_4`, B bündig an A bei x = 6,5). Regel in `grenzen.md`. Umgesetzt von Claude, in main mit (Commit folgt).
