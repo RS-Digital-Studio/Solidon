@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 import numpy as np
 
-from app.core import activation
+from app.core import activation, build_area
 from app.core.deferred import trimesh
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -1864,7 +1864,14 @@ def write_assembly(
         )
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume
-    bed = (width, depth) if place_on_bed and needs_bed_translation(flavour) else None
+    # Solidons Bettmitte in den Koordinaten der Maschine — nicht immer das
+    # halbe Bett: Am Dremel 3D45 und an jedem Delta liegt der Nullpunkt
+    # woanders (``build_area.machine_shift``, RM-424).
+    bed_centre = (
+        build_area.machine_shift(profile.printer)
+        if place_on_bed and needs_bed_translation(flavour)
+        else None
+    )
 
     as_stl = for_slicer and not reads_assembly_file(flavour)
 
@@ -1906,10 +1913,12 @@ def write_assembly(
             return target, findings + noted
         target = _written(
             directory / (given_name(project_name, "projekt") + ".stl"),
-            _cura_assembly([exported[entry.id] for entry in chosen], bed),
+            _cura_assembly([exported[entry.id] for entry in chosen], bed_centre),
         )
         if takes_mesh_settings(flavour):
-            findings += _cura_meshes(chosen, exported, target, part_values, profile, bed, cancelled)
+            findings += _cura_meshes(
+                chosen, exported, target, part_values, profile, bed_centre, cancelled
+            )
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
@@ -1989,7 +1998,7 @@ def write_assembly(
             parts,
             project_name,
             across=whole_job,
-            bed=bed,
+            bed_centre=bed_centre,
             project_settings=_plate_settings(
                 settings,
                 profile,
@@ -2084,7 +2093,7 @@ def _cura_meshes(
     target: Path,
     part_values: Mapping[str, _PartValues],
     profile: Profile,
-    bed: tuple[float, float] | None,
+    bed_centre: tuple[float, float] | None,
     cancelled: CancelToken | None,
 ) -> list[Finding]:
     """Für CuraEngine je Teil ein Netz und jede Stützsperre als eigenes (§29).
@@ -2108,14 +2117,14 @@ def _cura_meshes(
     for number, entry in enumerate(chosen, start=1):
         part = _written(
             target.with_name(f"{target.stem}-part-{number}.stl"),
-            _cura_assembly([exported[entry.id]], bed),
+            _cura_assembly([exported[entry.id]], bed_centre),
         )
         meshes.append(handover.CuraMesh(part, part_values[entry.id].keys))
         blocker = blockers.get(entry.id)
         if blocker is not None:
             barrier = _written(
                 target.with_name(f"{target.stem}-blocker-{number}.stl"),
-                _cura_assembly([blocker], bed),
+                _cura_assembly([blocker], bed_centre),
             )
             meshes.append(handover.CuraMesh(barrier, {CURA_SUPPORT_BLOCKER: "true"}))
     handover.write_cura_meshes(target, meshes)
@@ -2188,12 +2197,17 @@ def _cura_window(
         )
         for entry in chosen
     ]
-    written = _written(target, threemf.write_assembly(parts, project_name, bed=bed, cura=True))
+    # Curas Leser zieht beim Öffnen das halbe Bett ab, gleich wo die Maschine
+    # ihren Nullpunkt hat (``ThreeMFReader.py``): Die 3MF misst von der Ecke.
+    centre = (bed[0] / 2.0, bed[1] / 2.0)
+    written = _written(
+        target, threemf.write_assembly(parts, project_name, bed_centre=centre, cura=True)
+    )
     _log.info("exported %d object(s) as a 3MF for Cura's window to %s", len(chosen), target.name)
     return written, findings
 
 
-def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) -> bytes:
+def _cura_assembly(meshes: Sequence[MeshData], bed_centre: tuple[float, float] | None) -> bytes:
     """Dieselbe Platte als ein STL — der einzige Weg zu ``CuraEngine``.
 
     Die 3MF-Seite von Cura sitzt in seiner Oberfläche, nicht in der Maschine
@@ -2207,17 +2221,19 @@ def _cura_assembly(meshes: Sequence[MeshData], bed: tuple[float, float] | None) 
     Namen und Materialslots liest ``CuraEngine`` ohnehin nicht, und die
     Einstellungen kommen bei ihm über die Kommandozeile.
 
-    ``bed`` sind die Bettmaße, wenn die Teile in Maschinenkoordinaten gehen
-    (:func:`needs_bed_translation`): Verschoben wird über die Punkte, denn ein
-    STL hat keine Platzierungsmatrix. Der aktuelle Cura-Weg übergibt jedoch
-    ``bed=None``, weil CuraEngine die mittig gelieferten Teile selbst auf dem
-    Bett platziert; ``needs_bed_translation("cura")`` ist daher falsch.
+    ``bed_centre`` ist Solidons Bettmitte in Maschinenkoordinaten, wenn die
+    Teile darin gehen (:func:`needs_bed_translation`): Verschoben wird über
+    die Punkte, denn ein STL hat keine Platzierungsmatrix. Der aktuelle
+    Cura-Weg übergibt jedoch ``None``, weil CuraEngine die mittig gelieferten
+    Teile selbst auf dem Bett platziert (``machine_center_is_zero``,
+    ``mesh_position_*`` aus ``handover._machine_keys``);
+    ``needs_bed_translation("cura")`` ist daher falsch.
     """
     bodies = []
     for entry in meshes:
         body = entry.raw.copy()
-        if bed is not None:
-            body.apply_translation((bed[0] / 2.0, bed[1] / 2.0, 0.0))
+        if bed_centre is not None:
+            body.apply_translation((bed_centre[0], bed_centre[1], 0.0))
         bodies.append(body)
     joined = concatenated(bodies) if len(bodies) > 1 else bodies[0]
     return MeshData.of(joined).to_stl()

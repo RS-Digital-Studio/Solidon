@@ -96,22 +96,18 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
-| [RM-408 — Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern](#rm-408) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Gültigkeit, Schalenzahl und Volumenabnahme nach der exakten Booleschen prüfen |
+| [RM-408 — Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern](#rm-408) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-y`). Review 02.10. (Modelltest): Gültigkeit, Schalenzahl und Volumenabnahme nach der exakten Booleschen prüfen |
 | [RM-409 — Auto Split bricht ganz ab, wenn eine einzige Stiftbohrung beim Beurteilen scheitert](#rm-409) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10. (Modelltest): `GeometryError` im Kandidaten als „unbekannt teuer“ werten; Zwilling zu RM-382 |
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
-| [RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt](#rm-423) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-386: `_place_oriented_feature` am exakten Körper — Ergebnis exakt rechnen oder als Netz kennzeichnen und `evaluate.exact_became_mesh` melden; Test beide Kerne |
 | [RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung](#rm-434) | Geometrie, Erkennung und Druckvorbereitung | Eingangsprüfung vor Bounds/Budget korrigiert; 24 Fachfälle und gezieltes Mypy grün, Code unabhängig freigegeben; Tor und Übernahme offen |
 | [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 aus dem Review von `48106c57a`: Spiegelrichtungen gemeinsam begrenzen; alle Achsen/Pinsel, drei Körper und alter gespeicherter Verlauf |
-| [RM-424 — Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben](#rm-424) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-l`). Entscheidung Robert 02.10.: bauen — Bettursprung in `PrinterProfile` (Vertrag §9, Profilformat), `discover_printers` und `threemf._placement` danach richten |
 | [RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot](#rm-417) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10. (`4cf460e87`): Definition zusätzlich vergleichen; Testwettlauf und zu strenge Zusicherung berichtigen |
 | [RM-419 — Die neue Durchstichprüfung macht den Formschritt bis 130-mal langsamer](#rm-419) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-364 (archiviert); Schnittsuche nur um die bewegten Ecken, mit Fortschritt |
-| [RM-420 — `solidon import` liest eine Meter-Datei weiter still als Zoll](#rm-420) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-353 (archiviert); Kommandozeile mit `plausible_reach` und Rückfrage bzw. `--unit`-Pflicht |
 | [RM-421 — Randprüfung der Bausteine übersieht Mündungsweite und Material hinter dem Rand](#rm-421) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-392 (archiviert); Senkung/Fase mitprüfen, Seitenwände prüfen, beide Kerne gleich |
 | [RM-422 — Reste aus RM-325 und RM-332: Drehtest an ±X, gespeicherte Lagen, Aushöhlen mit Entlüftung, `measured_frame` in Handbuch und CLI](#rm-422) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-325/RM-332 (archiviert); Test, Migration statt stiller Lageänderung, Rückseite außen, Feld ausblenden |
-| [RM-426 — Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung](#rm-426) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (`70e9b3145`): vor dem Schreiben fein auswerten; Satz von `blend.draft` stimmt sonst nicht |
-| [RM-427 — Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht](#rm-427) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-379 (archiviert); Budgetregel für jede Op mit Entwurfsfaktor, Oberflächenwolke mitzählen |
+| [RM-427 — Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht](#rm-427) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-y`). Review 02.10.: Folge zu RM-379 (archiviert); Budgetregel für jede Op mit Entwurfsfaktor, Oberflächenwolke mitzählen |
 | [RM-428 — Spiegelzug nahe der Ebene: Kerbe, verlorene Spiegelgleichheit, doppelte Laufzeit](#rm-428) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-378 (archiviert); geglättete Gewichtung statt Maximum, symmetrische Entscheidung, Laufzeit |
 | [RM-429 — Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück](#rm-429) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-333 (archiviert), Regression aus `88bd58c2a`; leere Variante meldet wieder |
 | [RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit](#rm-430) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Tests auf Wirkung schärfen, falsche Zahl berichtigen, Cura-Fall mit Befund |
@@ -125,7 +121,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-183 — Zeichenmodus am Fenster abnehmen](#rm-183) | Bedienung und Darstellung | Rampe der 3D-Maus am echten Gerät; ob dieser Rest in RM-070 aufgeht und der Punkt damit schließt, entscheidet Robert |
 | [RM-084 — Kundentexte gegen die vereinbarte Sprache prüfen](#rm-084) | Bedienung und Darstellung | Erschöpfender Durchgang durch den Bestand vor 0.5.0 in Anwendung und Website; Sollliste A16, A23, C12 und *Extrusionsbreite*/*Bahnbreite* (am Punkt) |
 | [RM-090 — Serie zum Übergabestatus entscheiden](#rm-090) | Bedienung und Darstellung | Nächsten Umfang aus den fünf Vorschlägen des Produktkompasses entscheiden |
-| [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; mehrere gezogene Dateien werden seit 0.5.0 angesagt statt still verworfen (`84185f4d`), geöffnet wird weiter nur die erste |
+| [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Zurückgestellt; mehrere gezogene Dateien werden seit 0.5.0 angesagt statt still verworfen (`84185f4d`), geöffnet wird weiter nur die erste |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Windows-Stand nachgemessen am 23.09.2026 (Overlay- und Kartentests grün); offen nur der macOS-Prüflauf |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Quelle nachgezogen (`84185f4d`: Kopfzeile, Fenster „Auswahl“ mit Handlungen, Alt-Text in allen Sprachen); Erzeugung und Sichtprüfung je Sprache beim Release |
 | [RM-175 — Bauplan §30.1 um Winkel, gleich, Mittelpunkt, Vieleck und Langloch nachtragen](#rm-175) | Bedienung und Darstellung | Robert sagt den Nachtrag für §9 und §30.1 an und entscheidet, ob eine neue Bedingungsart die Formatversion hebt |
@@ -135,52 +131,47 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-200 — Ein Zug am Griff soll flüssig sein](#rm-200) | Bedienung und Darstellung | Am echten Fenster prüfen, ob sich die Geste flüssig anfühlt (Release, RM-213) |
 | [RM-213 — Fensterabnahme und die Kundenwege am echten Fenster](#rm-213) | Bedienung und Darstellung | Beim Release: die offscreen belegten Änderungen am echten Fenster, die Kundenwege C14/A13/A4/C5/C1 und die vier Hauptwege mit Zeiten; vorher Release-Tor mit allen neuen Fensterdateien und frischem Bereichsnachweis |
 | [RM-232 — Die Klickkette an einem Merkmal rechnet noch im Hauptfaden](#rm-232) | Bedienung und Darstellung | Wabenhalter Bohrung zu Bohrung 74–79 ms bis zum ersten Bild mit Maßen (Median je Runde, der Stand davor 97–104 ms, abwechselnd unter leichter Last), 30 von 32 warmen Klicks unter 100 ms (`0273b8d23`, `c2bff45f1`); offen die Abnahme auf ruhiger Maschine am eingeschalteten zweiten Monitor — gemessen wurde auf dem Ersatzbildschirm in der Fläche des MSI |
-| [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
-| [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Ein einfacher Klick bleibt normal; echte Züge ab `CLICK_SLACK` auf Bohrung oder Senkfläche werden vor Platzierung und Navigator mit dem passenden Handlungshinweis abgefangen; Regressionen und unabhängiges Review grün, native Abnahme am Wabenhalter bleibt offen |
-| [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
+| [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
+| [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ein einfacher Klick bleibt normal; echte Züge ab `CLICK_SLACK` auf Bohrung oder Senkfläche werden vor Platzierung und Navigator mit dem passenden Handlungshinweis abgefangen; Regressionen und unabhängiges Review grün, native Abnahme am Wabenhalter bleibt offen |
+| [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
-| [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
+| [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
+| [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
-| [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
-| [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
+| [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
+| [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
-| [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
-| [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | Warten auf aktuelles Ergebnis integriert; offen B01: vor Export/Druckübergabe fein auswerten, sowie R6C942-01: nach Abbruch kein Warten ohne laufenden Auftrag |
-| [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
-| [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
-| [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
+| [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
+| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
+| [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
+| [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
+| [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
-| [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
-| [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
-| [RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl](#rm-369) | Bedienung und Darstellung | Entscheidung Robert 02.10.: Vorgabe aus der letzten Wahl, Test und Handbuch nachziehen |
-| [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
-| [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Konzept §12/§7.5 einlösen, Befund nach dem Posieren |
-| [RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD](#rm-395) | Bedienung und Darstellung | Review 02.10. (Nachbau): Sperrgrund im Dialog, Materialvorgabe Profilklemme, Menü *Aus Skizze erzeugen*, Hinweis beim Zudecken, Bezugsachse Langloch, Skizzenursprung sichtbar |
-| [RM-396 — Grundkörper „an die gewählte Fläche ansetzen und verbinden“ in einem Schritt](#rm-396) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Wahl „frei auf dem Bett“/„an Fläche, bündig, mittig, verbinden“ im Grundkörper-Dialog; zusammen mit RM-390 |
-| [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
-| [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
-| [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
+| [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
+| [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
+| [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
+| [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Konzept §12/§7.5 einlösen, Befund nach dem Posieren |
+| [RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD](#rm-395) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Nachbau): Sperrgrund im Dialog, Materialvorgabe Profilklemme, Menü *Aus Skizze erzeugen*, Hinweis beim Zudecken, Bezugsachse Langloch, Skizzenursprung sichtbar |
+| [RM-396 — Grundkörper „an die gewählte Fläche ansetzen und verbinden“ in einem Schritt](#rm-396) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Wahl „frei auf dem Bett“/„an Fläche, bündig, mittig, verbinden“ im Grundkörper-Dialog; zusammen mit RM-390 |
+| [RM-397 — Assistent „Dose mit Schraubdeckel“](#rm-397) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Dose, Hals, Deckel und Passung in einer Transaktion; nach RM-388/RM-393 |
+| [RM-401 — Verschieben auf eine absolute Lage](#rm-401) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Felder „Mitte bei X/Y“, „Boden auf Z“ neben dem relativen Weg |
+| [RM-403 — Flächenbausteine frei auf der Fläche platzieren statt immer mittig](#rm-403) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Lage auf der Fläche per Klick bzw. Abstand zur Kante, statt Weltkoordinaten hinten |
 | [RM-412 — Ausgelassene Rundungskanten erscheinen als eine Zeile ohne Ort; die Rückfallsuche dauert über 4 s](#rm-412) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Folge zu RM-284 (archiviert); Befunde mit Ort nicht bündeln, Satz ohne Bibliotheksnamen, Fortschritt |
-| [RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht](#rm-415) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-334 (archiviert); `_typed_to` über den Fensterwechsel behalten, mit Test |
-| [RM-416 — *An Merkmal ausrichten*: der erste Bildklick wird am Hauptfenster weiter nicht angenommen](#rm-416) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-394 (archiviert); Erstfokus aufs leere Ziel, alter Test nachziehen, Sperrsatz berichtigen |
-| [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
+| [RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht](#rm-415) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-334 (archiviert); `_typed_to` über den Fensterwechsel behalten, mit Test |
+| [RM-416 — *An Merkmal ausrichten*: der erste Bildklick wird am Hauptfenster weiter nicht angenommen](#rm-416) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-394 (archiviert); Erstfokus aufs leere Ziel, alter Test nachziehen, Sperrsatz berichtigen |
+| [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
-| [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
-| [RM-452 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung](#rm-452) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-03: gleiche Parameterzeilen ersetzen keine Dokumentidentität; Gegenfall noch auszuführen |
-| [RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld](#rm-453) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-04: direkte Bindung zum Maß, zusammengesetzter Ausdruck zur Formel; Gegenfall noch auszuführen |
-| [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-447 — Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren](#rm-447) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-354 (archiviert); Leiste zeigt den echten Wert, abgeleitete Maße, Fernsteuerung mit Grenzen |
-| [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
+| [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
+| [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
+| [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
-| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
+| [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
-| [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
-| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Fund 02.10.: Befund des Aushöhlens bekommt *Diesen Schritt ändern*; `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
+| [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
+| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10.: Befund des Aushöhlens bekommt *Diesen Schritt ändern*; `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -3039,18 +3030,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
   rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
 
-<a id="rm-423"></a>
-
-- [ ] **RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt.**
-  Fund 02.10.2026 bei RM-386 (Claude, Unteragent), vorbestehend: *Merkmal verschieben* mit
-  Richtung (`nx`/`ny`/`nz`, `_place_oriented_feature` in `app/core/geom/prepare_ops.py`)
-  rechnet am exakten Körper über das Netz und gibt ein `MeshData` zurück, der Körper bleibt
-  aber als `brep` markiert. Folgeschritte des exakten Kerns treffen dann ein Netz. Im neuen
-  Test `test_every_closing_way_treats_touching_plates_as_one_printed_body` ist dieser eine
-  Fall deshalb ausgenommen. **Fix:** exakt rechnen oder `kind` auf `mesh` setzen und
-  `evaluate.exact_became_mesh` melden (`result_kind`). **Abnahme:** Test an beiden Kernen,
-  Ausnahme im RM-386-Test entfernt. Bauplan §21.
-
 <a id="rm-434"></a>
 
 - [~] **RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung.**
@@ -3099,22 +3078,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   [Historischer Review](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
   [maßgeblicher Radius-16-Nachlauf](konzepte/nachweise-release-0.5.1/reports/remote-48106-spiegel-probe.json).
 
-<a id="rm-424"></a>
-
-- [ ] **RM-424 — Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben.**
-  Fund 02.10.2026 bei RM-330 (Claude, Unteragent): Rund 45 sichtbare Maschinenprofile in OrcaSlicer
-  und ElegooSlicer haben ein Bett um den Ursprung (Dremel 3D40/45, DeltaMaker u. a.), in PrusaSlicer
-  z. B. BIBO (`bed_shape -107x-93…`). `discover_printers` zentriert die Kontur und verliert dabei den
-  Ursprung (`slicer_profiles.py`, `cx, cy`), `threemf._placement` verschiebt Teile immer um das halbe
-  Bett. Gemessen: Die 3MF für den Dremel 3D45 setzt einen Würfel auf (112,5 / 77,5), das Bett reicht
-  von −127,5 bis 127,5 und −77,5 bis 77,5 — der Würfel liegt am hinteren Rand statt mittig. Betroffen
-  sind gehaltene Anordnungen; die Gegenprobe liest das Bett aus der Druckdatei und würde es melden.
-  **Fix:** Bettursprung in `PrinterProfile` (Vertrag §9, Profilformat) und alle Bettkoordinaten der
-  Familien danach — Vertragsänderung, entscheidet Robert. Nebenbefund: OrcaSlicer schreibt für den
-  Dremel 3D45 keine Druckdatei („G92 E0 … incompatible with absolute extruder addressing“), ungeklärt.
-  **Abnahme:** Würfel mittig auf Dremel 3D45 (Orca) und BIBO (Prusa) liegt im G-Code mittig. Bauplan §29.
-  **Entscheidung Robert 02.10.2026: bauen** („1 ja“) — die Vertragsänderung an `PrinterProfile` ist freigegeben.
-
 <a id="rm-417"></a>
 
 - [ ] **RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot.**
@@ -3152,20 +3115,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Messung an Kugel (sechs Züge R 5) und der Korpusfigur: höchstens 25 % über dem Stand
   vor `cd4875450`; Befunde unverändert. Bauplan §31, §17.3, §2.7.
   Belege: `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonden `v4g_rm364_*`.
-
-<a id="rm-420"></a>
-
-- [ ] **RM-420 — `solidon import` liest eine Meter-Datei weiter still als Zoll.**
-  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-353 (archiviert). Fenster- und Op-Weg
-  fragen jetzt richtig.
-  **Fehlerfall:** `solidon import` mit dem Helm 0,30 × 0,25 × 0,30 (Meter) liest still als Zoll und
-  speichert `unit: 'in'`. Ursache: `app/cli/main.py:504` ruft `detect_unit` ohne `plausible_reach`;
-  `tests/test_ingest.py:1777` sichert genau dieses Verhalten zu.
-  **Fix:** dieselbe Erkennung wie im Op-Weg; ist sie unsicher, bricht die Kommandozeile mit
-  Handlungsvorschlag ab („Geben Sie `--unit m|mm|cm|in` an“) statt zu raten (Regel 21); den Test
-  umkehren.
-  **Abnahme:** Test: Helm über die Kommandozeile → Abbruch mit Vorschlag bzw. mit `--unit m` richtig;
-  eindeutige Dateien wie bisher. Bauplan §17.1, Regel 21. Beleg: Sonde `v4g_rm353_cli.txt`.
 
 <a id="rm-421"></a>
 
@@ -3207,25 +3156,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   unveränderter Lage oder mit Befund; Aushöhlen mit Entlüftung → Rückseite außen; `measured_frame`
   weder im Handbuch noch in der CLI. Belege: `verif-4cf460e87-geometrie.md`, Sonden `v4g_rm325_*`,
   `v4g_rm332_*`.
-
-<a id="rm-426"></a>
-
-- [ ] **RM-426 — Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung.**
-  Review 02.10.2026 am Stand `70e9b3145` (Verifikation RM-379); älter als RM-379, nicht im Register.
-  Das Fenster rechnet immer im Entwurf (`app/ui/session.py:1596`); Export und Slicen nehmen
-  `session.last_result` (`app/ui/main_window.py:7821`, `app/ui/print_settings_dialog.py:7967`,
-  `:8021`); `evaluate_now` rechnet fein, hat in `app/` aber keinen Aufrufer.
-  **Fehlerfall (Ende zu Ende über `_start_export`):** Ein weich verschmolzenes Teil wird mit 12 448
-  Dreiecken geschrieben (fein 50 108), ein Kegel mit 128 (fein 256). Der neue Befund `blend.draft`
-  sagt dabei „Export und Druckvorbereitung rechnen fein“ (`app/core/geom/blend.py:432–444`) — eine
-  falsche Zusage. Betroffen ist jede Op mit Entwurfsstufe (Verschmelzen, Kegel/Torus, siehe RM-427).
-  **Fix:** Vor Export und Slicen das Dokument fein auswerten (bzw. an das feine Ergebnis binden,
-  zusammen mit RM-352: Export wartet auf das aktuelle, vollständige, feine Ergebnis), mit Fortschritt
-  und *Abbrechen*.
-  **Abnahme:** Test über den echten Exportweg: verschmolzenes Teil und Kegel werden mit der feinen
-  Dreieckszahl geschrieben; Slicen ebenso; der Satz von `blend.draft` stimmt. Bauplan §29, §31,
-  §15.3. Belege: `F:\solidon-review-reports\verif-70e9b3145-geometrie.md`, Sonde
-  `v5g_rm379_export_fenster.py`.
 
 <a id="rm-427"></a>
 
@@ -4466,63 +4396,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
   Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
 
-<a id="rm-352"></a>
-
-- [ ] **RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung.**
-  Review 02.10.2026, Gebietsprüfung Weg 1 (W1-5) und Weg 2 (F1), am HEAD `6ce767031`.
-  `export_action` wird ohne Blick auf `busy` oder `result_current` freigegeben
-  (`app/ui/main_window.py:4965`); `action_export` und `_start_export` lesen `session.last_result`
-  (`:7690`, `:7808`), kopieren aber das neue Dokument (`:7828`) — Geometrie und Druckeinstellungen
-  kommen aus zwei Ständen. Der Druckdialog wartet in derselben Lage schon
-  (`print_settings_dialog.py:7229`).
-  **Fehlerfall:** Beispiel *Dose mit Deckel*, in der Parameterleiste Breite 80 → 100, Enter,
-  sofort Strg+E, im Dateidialog Enter: Bild und Verlauf zeigen 100 mm, die Dateien sind
-  85 × 55,6 und 80 × 55 mm breit, die Quittung meldet Erfolg. Ebenso nach *Skalieren* an einer
-  geladenen STL (Datei 5 × 5 × 40, Bild 10 × 10 × 80) und immer auf den Wiederholwegen
-  *Erneut versuchen* (`:8087–8090`) und `:8141`.
-  **Fix:** Der Export bindet sich an das nächste aktuelle und vollständige Ergebnis (wie
-  `_apply_when_previewed`), die Statuszeile sagt „wartet“ und bietet *Abbrechen*; hält die
-  Kette an, wird nichts geschrieben.
-  **Abnahme:** Test `change_parameter` und sofort `_start_export` → die Datei trägt die neue
-  Breite; bei angehaltener Kette entsteht keine Datei. Bauplan §29, §2.8, `wartezeit.md`.
-  Belege: `F:\solidon-review-reports\gebiet-weg1.md`, `gebiet-weg2.md`, Sonden
-  `w1_export_laufend.py`, `w2_export_luecke.py`.
-  **Zusätzlicher Anschluss B01, Review am festen Stand `48106c57a`:** Der neue
-  Befund `blend.draft` verspricht feine Ausgabe. Der bisherige Exportplan übernimmt
-  jedoch das vorhandene Entwurfsnetz unverändert: 9076 Dreiecke bei 0,8 mm Raster,
-  während derselbe Feinlauf 36684 Dreiecke bei 0,4 mm hat. Dies wurde an der echten
-  Kernplanung gemessen; es wurde dabei keine Datei geschrieben und kein Fenster bedient.
-  Der Schreibpfad ist älter, neu ist die dort uneingelöste Zusage aus RM-379.
-  **Gemeinsamer Abschluss:** Dokument, eingebettete Quellen, Basisverzeichnis,
-  wirksames Profil und ausgewählte Kennungen beim Auftragsstart zusammen binden.
-  Vor Export, Druckvorprüfung und Slicer-Übergabe ausdrücklich `fine` auswerten;
-  Vorprüfung, Bestätigung und Schreiben verwenden denselben vollständigen Stand.
-  Fehlende gewählte Körper, Kernhalt oder Abbruch ergeben keine Ausgabe. Mehrere
-  Platten teilen einen Feinlauf; der Druckrat merkt die tatsächlich analysierten
-  feinen Körper. Abbruch muss auch während einer wartenden Kernfrage greifen.
-  **Ergänzte Abnahme:** Ursprünglicher Sofortexport nach Parameteränderung und
-  Skalierung sowie Wiederholwege; wirklicher Exportarbeiter bis STL/3MF-Rücklesen,
-  beide Slicerarbeiter, Auswahl und mehrere Platten, eingebettete Quelldatei,
-  inzwischen geändertes Dokument, warmer Cache, Kernfrage und Abbruch. Reine
-  Arbeiterverträge im Entwicklungslauf, Fenster-/Rendererabnahme beim Release.
-  Bauplan §31 und §29. Der Anschluss ist mit den zuständigen Sitzungen abgegrenzt.
-  [Historischer B01-Review](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie.md),
-  [Messdaten B01](konzepte/nachweise-release-0.5.1/reports/remote-48106-geometrie-proben.json).
-
-  **Ergänzung R6C942-01, Quellenreview am festen Stand `6c9420b1f`:** Nach
-  abgebrochener Auswertung kann `busy=False` bei `result_current=False` gelten.
-  `_start_export` reiht den Export ein, startet aber keinen Arbeiter; die
-  Fortsetzung wartet auf ein Ergebnis, das ohne weitere Änderung nie kommt.
-  **Fix und Abnahme:** Laufenden und ruhenden veralteten Stand unterscheiden.
-  Im zweiten Fall neu auswerten oder einen konkreten Neustart anbieten;
-  Auswertungsfehler und Abbruch beenden einen wartenden Export eindeutig.
-  Keine alte Geometrie schreiben und kein Warten ohne Auftrag. Den Abbruch
-  einer echten Auswertung und den anschließenden Export prüfen.
-  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`,
-  R6C942-01 (`main_window.py:7829`, feste Quellzeile). Quellenbefund;
-  Gegenfall im Abschlussabgleich nicht ausgeführt. Bauplan §2.7, §2.8, §29.
-  Nachprüfung am Stand `4373b5f12` über die Oberfläche (nach `18ec6d38e`): unvollständig. Der Abnahmefall ist erfüllt (Export wartet auf das neue Ergebnis). **Regression gegenüber 0.5.1:** Export nach einer abgebrochenen Rechnung — in 0.5.1 entstand sofort eine Datei (der gezeigte Stand), jetzt entsteht keine, und die Statuszeile sagt „Export wartet auf die laufende Berechnung …“, obwohl nichts rechnet (`app/ui/main_window.py:7856`, `:7979`); der Fix darf nicht zurück zum gemischten Stand, sondern muss nach einem Abbruch den gezeigten, vollständigen Stand schreiben oder mit Satz absagen. Zwilling offen: *Slicen* und *Im Slicer öffnen* übergeben während einer Neuberechnung den alten Stand (Auftrag 140 mm bei Dokument 150; `app/ui/print_settings_dialog.py:8031`, `:7977`). Test: `test_a_waiting_export_writes_nothing_when_the_chain_halts` bleibt grün ohne die Haltprüfung (mit Halt an Schritt 2 schreibt der Code dann „Exportiert: teil.stl“). RM-426 (Entwurfsnetz) nicht berührt. Belege `F:\solidon-review-reports\verif-4373b5f12-oberflaeche.md`, Sonden `v7u_rm352_*`.
-
 <a id="rm-358"></a>
 
 - [ ] **RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz.**
@@ -4664,23 +4537,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (Pfeile) bedient ihn, zugänglicher Name gesetzt. Bauplan §18.7, §2.1, §2.8 (Vorschau aus dem
   Cache, sonst Fortschritt).
   **Vorgabe Robert 02.10.2026 — allgemein:** Regler für jedes Projekt mit beliebig vielen Transaktionen, auch bei Mehrkörper-Szenen; Abnahme an mindestens drei unterschiedlichen Projekten (Beispiele aus `app/examples` und `F:\3D Dateien\*.p3d`).
-
-<a id="rm-369"></a>
-
-- [ ] **RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 2).
-  Heute steht der Haken bei jedem Grundkörper aus (`app/ui/op_dialog.py:1916–1927`, angeboten
-  über `offers_naming`, `main_window.py:1671`, `:17494`; Entscheidung Robert 14.09.2026 zur Lage
-  vorn); wer Weg 2 geht, muss ihn jedes Mal finden.
-  **Ablauf:** Der Haken übernimmt den zuletzt gesetzten Zustand (Nutzereinstellung, §38-Ort), beim
-  ersten Start an. Ändern ist eine Nutzergeste, keine Rückfrage.
-  **Stellen:** `op_dialog.py:1916ff.` (Vorgabe setzen, Zustand beim Übernehmen speichern),
-  Einstellungen (`app/ui/settings_dialog.py` bzw. QSettings-Schlüssel), der bestehende Test, der
-  „aus“ zusichert (in `tests/test_ui.py`/`tests/test_op_dialog*.py` suchen), Handbuchstelle
-  `app/core/guides.py:520–526` („haken Sie … an“) an die neue Vorgabe anpassen; Kataloge.
-  **Abnahme:** Test: erster Grundkörper → Haken an; abgewählt und übernommen → nächster
-  Grundkörper → Haken aus; Neustart behält die Wahl. Bauplan §13, §2.4 („gute Vorgabe“).
-  **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
 
 <a id="rm-375"></a>
 
@@ -4926,36 +4782,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
   Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
 
-<a id="rm-452"></a>
-
-- [ ] **RM-452 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung.**
-  Quellenreview `6c9420b1f`, R6C942-03; Folge zum archivierten RM-355.
-  `ParameterPanel.show_document` (`app/ui/panels.py:3639–3695` am geprüften
-  Stand) verwendet gleiche Parameterzeilen ohne Dokumentidentität weiter;
-  abgelehnter Eingabetext bleibt trotz neuem Projekt stehen.
-  **Fix:** Wiederverwendung innerhalb eines Dokuments von Projektwechsel
-  trennen und beim Wechsel Text sowie Ablehnung an das neue Dokument binden.
-  **Abnahme:** A und B mit Wert 60, Obergrenze 100 und gleichen Metadaten:
-  abgelehnte 150 aus A erscheint nach Öffnen von B nicht mehr. In A behalten
-  wiederholte Pfeiltasteneingaben Widget und Fokus. Bauplan §2.1, §13.
-  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
-  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
-
-<a id="rm-453"></a>
-
-- [ ] **RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld.**
-  Quellenreview `6c9420b1f`, R6C942-04; Folge zum archivierten RM-354.
-  `main_window.py:21709–21718` am geprüften Stand leitet bei genau einer
-  Parameterreferenz automatisch zum Projektmaß statt zum Ausdruck um.
-  Bei `create_box.width = "=max(@breite,2000)"` und Maximum 1000 kann keine
-  Änderung von `breite` den Fehler beheben.
-  **Fix und Abnahme:** Direkte Bindung `=@breite` führt weiterhin zum Maß;
-  zusammengesetzte Ausdrücke führen zum tatsächlich korrigierbaren
-  Operationsausdruck. Beide Wege prüfen. Bauplan §2.1, §2.7, §13, Regel 17.
-  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
-  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
-
-
 <a id="rm-440"></a>
 
 - [ ] **RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
@@ -4966,29 +4792,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
-
-<a id="rm-447"></a>
-
-- [ ] **RM-447 — Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren.**
-  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (Hauptfenster offscreen); Folgepunkt zu
-  RM-354 (archiviert, Abnahme dort erfüllt).
-  - **Regression gegenüber 0.5.1:** Datei mit Breite 5000 (Halt an Schritt 1): in 0.5.1 zeigte die
-    Leiste „5000,00“, 1000 + Enter löste den Halt; jetzt zeigt sie „1000,00“, weil Qt auf die
-    Feldgrenze klemmt (`app/ui/panels.py:3682–3690`, `:3766–3767`) — 1000 + Enter bewirkt nichts,
-    das Dokument bleibt 5000, der Halt bleibt; *Eingabe korrigieren* führt genau in dieses Feld.
-  - **Abgeleitetes Maß** (`=@breite*2`): die Sitzung lehnt ab, die Leiste zeigt weiter „600,00“
-    (`app/ui/main_window.py:22258`).
-  - **Fernsteuerung:** `set_parameter` 5000 antwortet „Der Wert ist schon so eingestellt.“;
-    `add_parameter` verliert `minimum`, `maximum` und `title`, obwohl das MCP-Schema sie anbietet
-    (`main_window.py:17984–17995`).
-  **Fix:** Die Leiste zeigt den gespeicherten Wert (auch außerhalb der Grenze, markiert) und nimmt
-  jede gültige Korrektur an; abgeleitete Maße zeigen den Rückweg; Fernsteuerung meldet die Grenze
-  und übernimmt die angebotenen Felder.
-  **Abnahme (über die Oberfläche):** Datei mit Breite 5000 öffnen → Leiste zeigt 5000, 1000 + Enter
-  löst den Halt; abgeleitetes Maß zeigt nach Ablehnung den alten Wert; `set_parameter` 5000 →
-  Ablehnung mit Grenze; `add_parameter` mit Grenzen speichert sie. Bauplan §13, §2.7, §15.3.
-  Belege: `F:\solidon-review-reports\verif-4373b5f12-oberflaeche.md`, Sonde
-  `v7u_vergleich_051.py`.
 
 <a id="rm-448"></a>
 

@@ -328,20 +328,25 @@ class _EvaluationWorker(Worker):
     cancelled = Signal()
     pictureWith = Signal(object)
 
-    def __init__(self, session: Session, *, picture_first: bool = False) -> None:
+    def __init__(
+        self, session: Session, *, picture_first: bool = False, quality: Quality = "draft"
+    ) -> None:
         super().__init__()
         self._session = session
         self._project_generation = session._project_generation
         self._picture_first = picture_first
+        self.quality: Quality = quality
+        """In welcher Güte dieser Lauf rechnet — fest ab dem Start, damit das
+        Ergebnis sagen kann, ob es für Export und Slicer taugt (RM-426)."""
 
     def _evaluate(self, session: Session) -> EvaluationResult:
         """Der ganze Lauf — beim Ladeweg mit dem Bild davor."""
         if not self._picture_first:
-            return session.run_evaluation()
+            return session.run_evaluation(self.quality)
         asked: dict[tuple[str, tuple[str, ...]], str | None] = {}
         session._pending.asked = asked
         try:
-            picture = session.run_evaluation(detect_features=False)
+            picture = session.run_evaluation(self.quality, detect_features=False)
         finally:
             session._pending.asked = None
         if picture.stopped_at is not None and not picture.scene.objects:
@@ -353,7 +358,7 @@ class _EvaluationWorker(Worker):
             self.pictureWith.emit(_as_picture(picture))
         session._pending.replay = asked
         try:
-            result = session.run_evaluation()
+            result = session.run_evaluation(self.quality)
         finally:
             session._pending.replay = None
         # Die Antworten des ersten Laufs trägt auch der zweite: Den Ladeschritt
@@ -412,7 +417,7 @@ class _EvaluationWorker(Worker):
                     if not check.changed:
                         break
                     rewritten = True
-                    result = session.run_evaluation()
+                    result = session.run_evaluation(self.quality)
                 if rewritten:
                     # Erst melden, wenn der Arbeiter mit dem Dokument fertig
                     # ist: Die Slots lesen es im Hauptthread, und die nächste
@@ -1633,8 +1638,13 @@ class Session(QObject):
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
         auf fein (§31)."""
         self._quality_once: Quality | None = None
-        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
+        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`.
+        Verbraucht wird sie beim Start des Arbeiters, nicht in seinem Lauf:
+        Ein Arbeiter, der noch am Stand davor rechnet, nähme sie sonst dem
+        Nachlauf weg, für den sie bestellt war."""
         self.last_result: EvaluationResult | None = None
+        self.last_quality: Quality = "draft"
+        """In welcher Güte :attr:`last_result` gerechnet wurde (RM-426)."""
         self.result_current = False
         """Ob die Szene bereits zum aktuellen Auswertungsauftrag gehört."""
         self._unconfirmed_import: tuple[str, frozenset[int], str] | None = None
@@ -2189,6 +2199,7 @@ class Session(QObject):
         forget_out_of_memory()
         self._dirty = False
         self.last_result = None
+        self.last_quality = "draft"
         self.picture = None
         self._unconfirmed_import = None
         self._coarse_scene = None
@@ -4477,7 +4488,8 @@ class Session(QObject):
         # Im Hauptthread: Das Fenster rechnet seine Grundlage mit Qt-Objekten,
         # der Arbeiter liest nur das Ergebnis (:attr:`evaluation_profile`).
         self._evaluation_settings = self._current_effective_settings()
-        worker = _EvaluationWorker(self, picture_first=self.picture_first())
+        quality, self._quality_once = self._quality_once or self.quality, None
+        worker = _EvaluationWorker(self, picture_first=self.picture_first(), quality=quality)
         # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
         # fertig, bevor Qt seine Signale zugestellt hat — und in dieser Lücke
         # startet der nächste. Ohne den Absender hielt der Nachzügler seine
@@ -4546,18 +4558,16 @@ class Session(QObject):
         """
         # Ein einmalig angeforderter Lauf gilt für diesen und keinen weiteren:
         # Wer die volle Kette braucht, braucht sie an einer Stelle, und alles
-        # danach soll wieder so schnell sein wie vorher (§31). Das Bild davor
-        # verbraucht ihn nicht — es gehört zum selben Lauf.
-        once = self._quality_once
-        if detect_features:
-            self._quality_once = None
+        # danach soll wieder so schnell sein wie vorher (§31). Die Güte legt
+        # :meth:`evaluate_async` beim Start des Arbeiters fest und gibt sie
+        # jedem seiner Läufe mit — dem Bild davor wie dem ganzen Lauf.
         # Bei einer Einfügemarke der Stand davor (P7.1) — die ganze Oberfläche
         # zeigt und löst gegen ihn auf, bis das Einfügen endet.
         document = self.displayed_document()
         result = evaluate(
             document,
             self.evaluation_profile,
-            quality=quality or once or self.quality,
+            quality=quality or self.quality,
             progress=self.report_progress,
             ask=self.ask_from_worker,
             question_context=self.announce_question,
@@ -4603,6 +4613,34 @@ class Session(QObject):
         self._quality_once = "fine"
         self.evaluate_async()
 
+    @property
+    def fine_current(self) -> bool:
+        """Ob das gezeigte Ergebnis zum Dokument gehört **und** fein gerechnet ist.
+
+        Das Fenster rechnet im Entwurf (§31); Export und Slicer brauchen die
+        feine Rechnung mit der vollen Rückfallkette. Bis 0.5.1 schrieben beide
+        das Entwurfsergebnis — ein verschmolzenes Teil mit einem Viertel der
+        Dreiecke, ein Kegel mit der Hälfte, während der Befund ``blend.draft``
+        versprach, Export und Druckvorbereitung rechneten fein (RM-426).
+        """
+        return self.result_current and not self.busy and self.last_quality == "fine"
+
+    def request_fine(self) -> None:
+        """Einen feinen Lauf bestellen, wenn das gezeigte Ergebnis keiner ist.
+
+        Läuft schon eine Auswertung, rechnet der Nachlauf fein; sie selbst
+        wird abgelöst, denn ihr Ergebnis wäre ohnehin nur der Entwurf.
+        """
+        if self.fine_current or self._quality_once == "fine":
+            return
+        running = self._worker
+        if running is not None and running.quality == "fine" and not self._rerun_pending:
+            # Ein feiner Lauf am heutigen Stand ist schon unterwegs; ihn neu zu
+            # starten, kostete nur seine bisherige Arbeit.
+            return
+        self._quality_once = "fine"
+        self.evaluate_async()
+
     def evaluate_now(self) -> EvaluationResult:
         """Synchroner Durchlauf, für Kommandozeile, Tests und Export (§38).
 
@@ -4634,6 +4672,7 @@ class Session(QObject):
         result = self.run_evaluation("fine")
         self.picture = None
         self.last_result = result
+        self.last_quality = "fine"
         # Wie in ``_on_finished``: Mit dem Ergebnis wartet keine Zustimmung mehr.
         self._recognition_answers.clear()
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
@@ -5596,6 +5635,7 @@ class Session(QObject):
             return
         self.picture = None
         self.last_result = result
+        self.last_quality = finished.quality if finished is not None else self.quality
         # Die grobe Kopie gehört der Szene, aus der sie entstand. Ohne dieses
         # Wegräumen hielte sie die **vorige** Szene am Leben — bei einem Netz
         # dieser Größe genau das, was die Stufe einsparen soll. Eine

@@ -45,7 +45,7 @@ from app.core.export.slicer_keys import (
 from app.core.knowledge import profiles as knowledge_profiles
 from app.core.log import get_logger
 from app.core.types import CancelToken, PrinterProfile, QualityPreset
-from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, inscribed_ratio
+from app.core.units import EPS_GEOM, MAX_FACET_SAG, circle_point, inscribed_ratio, is_zero
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -1369,6 +1369,10 @@ def _discovered_printer(
         if not isinstance(blocked, (list, tuple)):
             raise _incomplete_profile(entry.path)
         exclusions = tuple(_profile_points(points) for points in blocked)
+        # Curas Ursprung liegt an der Ecke oder in der Mitte — dieselbe
+        # Lesart wie ``handover._cura_machine`` (RM-330, RM-424).
+        centred = str(values.get("machine_center_is_zero", "")).strip().lower() == "true"
+        origin: tuple[float, float] | None = (0.0, 0.0) if centred else None
     else:
         contour = _profile_points(
             values.get("bed_shape" if flavour == "prusa" else "printable_area")
@@ -1387,6 +1391,16 @@ def _discovered_printer(
         count = float(len(nozzles))
         cx, cy = (left + right) / 2.0, (front + back) / 2.0
         contour = tuple((x - cx, y - cy) for x, y in contour)
+        # **Der Ursprung bleibt erhalten** (RM-424). Zentriert wird die
+        # Kontur, und bis dahin ging dabei verloren, wo die Maschine ihre
+        # Null hat: Die Übergabe nahm jede von der Ecke, und am Dremel 3D45
+        # (-127,5 bis 97,5) lag ein Würfel aus der Bettmitte am hinteren Rand.
+        # Ein Bett ab der Ecke bleibt ohne Angabe, wie jedes ältere Profil.
+        origin = (
+            None
+            if is_zero(left) and is_zero(front)
+            else (0.0 if is_zero(cx) else -cx, 0.0 if is_zero(cy) else -cy)
+        )
         blocked = values.get("bed_exclude_area", [])
         if blocked:
             points = _profile_points(blocked)
@@ -1427,6 +1441,7 @@ def _discovered_printer(
         printable_area=contour,
         bed_exclusions=exclusions,
         printable_height=None,
+        bed_origin=origin,
         cura_definition=entry.printer_model if flavour == "cura" else "",
         prusaslicer_printer=entry.name if flavour == "prusa" else "",
     )

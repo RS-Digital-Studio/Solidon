@@ -1519,6 +1519,52 @@ def test_the_handover_places_the_parts_the_export_does_not(
     assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
 
 
+def _dremel(profile: Profile, origin: tuple[float, float]) -> Profile:
+    """Ein Drucker mit dem Bett des Dremel 3D45, wie OrcaSlicer es führt."""
+    printer = replace(
+        profile.printer,
+        build_volume=(225.0, 155.0, 170.0),
+        printable_area=(),
+        bed_exclusions=(),
+        bed_origin=origin,
+    )
+    return replace(profile, printer=printer)
+
+
+@pytest.mark.parametrize(
+    ("origin", "first", "second"),
+    [
+        # Dremel 3D45 (Orca): Bett von -127,5 bis 97,5 und -77,5 bis 77,5.
+        ((15.0, 0.0), "-15 0 0", "255 0 0"),
+        # Ein Bett um den Ursprung: Solidons Mitte ist die der Maschine.
+        ((0.0, 0.0), None, "270 0 0"),
+    ],
+)
+def test_the_handover_places_the_parts_around_the_machines_own_origin(
+    tmp_path: Path,
+    profile: Profile,
+    origin: tuple[float, float],
+    first: str | None,
+    second: str,
+) -> None:
+    """RM-424: Die Übergabe verschob jedes Teil um das halbe Bett, auch an einer
+    Maschine, deren Nullpunkt nicht in der Ecke liegt. Die 3MF für den Dremel
+    3D45 setzte einen Würfel aus der Bettmitte auf (112,5 / 77,5) — an den
+    hinteren Rand eines Betts, das bei 77,5 endet. Die zweite Platte rückt um
+    dasselbe Raster wie an jeder Maschine (``plate_origin``)."""
+    on_dremel = _dremel(profile, origin)
+    two = [scene_object(), replace(scene_object("obj_2", "Zweites"), plate=2)]
+
+    placed, _findings = write_assembly(
+        two, tmp_path, project_name="dremel", profile=on_dremel, place_on_bed=True
+    )
+
+    text = zipfile.ZipFile(BytesIO(placed.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
+    transforms = re.findall(r'<item objectid="(\d+)"(?: transform="([^"]+)")?', text)
+    shifts = [entry[1].removeprefix("1 0 0 0 1 0 0 0 1 ") or None for entry in transforms]
+    assert shifts == [first, second]
+
+
 def test_the_handover_to_cura_is_stl_because_curaengine_reads_no_3mf(
     tmp_path: Path, profile: Profile
 ) -> None:
@@ -1747,6 +1793,24 @@ def test_a_machine_with_its_origin_in_the_middle_is_checked_around_it(profile: P
     beyond = start + f"G0 X0 Y0 Z0\nG1 X{width / 2 + 2.0} Y1 E1\n"
     finding = handover.off_the_bed(beyond, profile, "cura", origin_at_centre=True)
     assert finding is not None and finding.values["excess_mm"] == pytest.approx(2.0)
+
+
+@pytest.mark.parametrize("flavour", get_args(SlicerFlavour))
+def test_a_print_file_without_a_bed_is_checked_around_the_printers_origin(
+    profile: Profile, flavour: SlicerFlavour
+) -> None:
+    """RM-424: Ohne Bett in der Druckdatei gilt das des Druckerprofils — und
+    dessen Nullpunkt. Am Dremel 3D45 reicht das Bett von -127,5 bis 97,5; die
+    Gegenprobe maß bis dahin von 0 bis 225 und meldete jeden Druck links der
+    Maschinenmitte als daneben."""
+    on_dremel = _dremel(profile, (15.0, 0.0))
+    start = "G90\nM83\n;LAYER:0\n"
+    across = start + "G0 X-127 Y-77 Z0\nG1 X97 Y77 Z100 E1\n"
+    assert handover.off_the_bed(across, on_dremel, flavour) is None
+
+    beyond = start + "G0 X0 Y0 Z0\nG1 X100 Y1 E1\n"
+    finding = handover.off_the_bed(beyond, on_dremel, flavour)
+    assert finding is not None and finding.values["excess_mm"] == pytest.approx(2.5)
 
 
 def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:

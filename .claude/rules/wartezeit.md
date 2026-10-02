@@ -92,6 +92,13 @@ ersten Bild alte Pixel. `widget.grab()` sieht das nicht; Beweisbilder nur über
   `PICTURE_FIRST_TRIANGLES` erst das Bild ohne Erkennung (`pictureChanged`,
   `result_current` bleibt falsch); Rückfragen stellt nur der erste Durchgang
   (`_pending.asked`/`replay`).
+* **Datei und Slicer bekommen die feine Rechnung:** Das Fenster rechnet im
+  Entwurf; Export und *Slicen*/*Im Slicer öffnen* warten auf
+  `Session.fine_current` und bestellen sie über `request_fine` — der Klick
+  bindet sich an das Ergebnis, der Knopf bleibt frei. Die Güte legt
+  `evaluate_async` beim Start des Arbeiters fest (`_EvaluationWorker.quality`),
+  nie der Lauf selbst: Sonst nimmt ein Arbeiter am Stand davor dem Nachlauf
+  die bestellte Güte weg.
 * **Ein Import ohne Modell wird kein Schritt:** Hält sein erstes Bild am
   Ladeschritt mit `ValidationError`, nimmt `Session._settle_import` ihn ohne
   Redo zurück (`History.withdraw`), `importRejected` bietet *Andere Datei

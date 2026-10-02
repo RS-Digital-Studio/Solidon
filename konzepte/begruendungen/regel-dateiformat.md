@@ -257,6 +257,17 @@ Die Bettkoordinaten und der Fehler davor:
 > PrusaSlicers „All objects are outside of the print volume" kam aus dem
 > Widerspruch zwischen verschobenen Teilen und zentriert erklärtem Bett.
 
+Warum der Nullpunkt dem Drucker gehört (RM-424, 02.10.2026): Rund 45
+Maschinenprofile der Orca-Familie und mehrere Prusa-Bündel (BIBO) haben ihr
+Bett um den Ursprung oder versetzt dazu; die Erhebung zentrierte die Kontur
+und warf den Ursprung weg, die Übergabe verschob dann immer um das halbe
+Bett. Gemessen: Ein Würfel aus der Bettmitte lag am DeltaMaker 2 (OrcaSlicer,
+ElegooSlicer) bei (138 / 120) in der 3MF, der Slicer ordnete selbst neu an
+und druckte ihn bei (0 / 60); PrusaSlicer lehnte den BIBO2 mit „außerhalb des
+Bauraums“ ab; am Creality CR-6 SE (Bambu Studio, Bett ab x = 5) lag er 5 mm
+neben der Mitte. Mit `bed_origin` liegen alle mittig, CuraEngine ohne
+Druckerdefinition über `mesh_position_*` auch am Dremel 3D45 (-15 / 0).
+
 Warum ein Programm ohne Familie STL um den Ursprung bekommt (`other`, seit
 RM-071): „Es ist das eine Format, das jeder Slicer liest — auch der
 rudimentäre Hersteller-Slicer eines Resin-Druckers —, und einen Bauraum, zu

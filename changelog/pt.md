@@ -34,6 +34,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Agora pode gerar ficheiros de impressão diretamente a partir do Solidon com o Creality Print 7.2 e 7.3.
 - Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
 - O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
+- As impressoras com a origem fora do canto da mesa, como delta, BIBO ou Dremel, recebem as peças onde o Solidon as põe. Antes ficavam na borda ou o fatiador reorganizava-as.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
 - Se escolher brim, skirt, raft ou *Automático* nas definições de impressão, só aparecem as medidas que o seu slicer recebe, sem campos que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
@@ -45,6 +46,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
+- Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
 
 ### Furos, furos oblongos e divisão
 
@@ -52,6 +54,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Duas placas que se tocam continuam um só corpo num furo e mantêm o material, quer o estique, altere, desloque ou feche. Um pino por cima fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
+- No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
+- Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Inclinar em torno de», e «Na face» leva o corte paralelo a uma face plana.
@@ -85,7 +89,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- A caixa «Criar as medidas como parâmetros» vem marcada da primeira vez e depois lembra a sua última escolha, mesmo após reiniciar.
 - Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
+- A exportação, «Fatiar» e «Abrir no slicer …» recebem sempre o cálculo fino, não a vista mais grosseira da janela. Arredondamentos e cones chegam ao ficheiro com resolução completa.
+- Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.
+- A barra de parâmetros recusa uma medida fora do seu limite em vez de deixar a vista vazia.
 - Na barra de parâmetros cada passo de seta conta, e o foco fica no campo.
 - Se um passo espera uma pergunta, «Aplicar» continua disponível e a pergunta aparece.
 - No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
@@ -97,8 +105,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
 - O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
 - Os espaços chegam a todos os campos de texto, também ao questionário de opinião e ao chat, enquanto uma caixa de diálogo mostra a pré-visualização.
-- Uma constatação que se refere a um passo abre-o para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
+- Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
+- A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.
 
 ## 0.5.1
 

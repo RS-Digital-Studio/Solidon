@@ -59,6 +59,7 @@ Nutzen da und sonst nichts.
 - Mit Creality Print 7.2 und 7.3 können Sie die Druckdatei jetzt direkt aus Solidon erzeugen.
 - Mit Cura übernimmt Solidon auf Wunsch den Drucker, den Cura gerade nutzt, samt eigener Düse. Ein in Cura umbenannter Drucker wird wiedererkannt.
 - Cura rechnet jetzt mit der Düse, die Sie gewählt haben, auch bei Druckern aus Curas eigener Liste, und Drucker mit dem Nullpunkt in der Bettmitte behalten ihn.
+- Drucker mit dem Nullpunkt außerhalb der Bettecke, etwa Deltas, BIBO oder Dremel, bekommen die Teile dort, wo Solidon sie hinlegt. Bisher lagen sie am Rand, oder der Slicer ordnete neu an.
 - An Bambu Studio gehen Düsenvariante und die Temperaturen Ihrer Spulen mit, bis in die 3MF-Datei.
 - Wählen Sie im Druckdialog Brim, Skirt, Raft oder *Automatisch*, stehen dort nur die Maße, die Ihr Slicer dafür bekommt, ohne Felder, die nichts bewirken würden.
 - Eine Zahl außerhalb ihrer Grenze bleibt im Feld stehen, die Grenze steht daneben, und *Slicen* wartet, bis sie stimmt. Bisher wurde sie still gekürzt.
@@ -70,6 +71,7 @@ Nutzen da und sonst nichts.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
+- Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 
 ### Bohrungen, Langlöcher und Teilen
 
@@ -77,6 +79,8 @@ Nutzen da und sonst nichts.
 - Zwei Platten, die sich berühren, bleiben an einer Bohrung ein Körper und behalten ihr Material, ob Sie sie ziehen, ändern, versetzen oder schließen. Ein Stift darüber bleibt stehen.
 - Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
+- Im Verlauf eines STEP-Körpers lassen sich Schritte umstellen oder davor einfügen, auch wenn ein späterer Schritt eine Bohrung meint. Der Verweis folgt der Bohrung.
+- Eine Bohrung, mit neuer Richtung versetzt oder verdoppelt, bleibt an einem STEP-Körper exakt.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Neigen um*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.
@@ -110,7 +114,11 @@ Nutzen da und sonst nichts.
 
 ### Bedienung und System
 
+- Der Haken *Maße als Parameter anlegen* steht beim ersten Mal an und merkt sich danach Ihre letzte Wahl, auch über einen Neustart.
 - Dialoge öffnen in der Größe ihres Inhalts, ohne Leerraum, und eine Größe, die Sie selbst gezogen haben, bleibt.
+- Export, *Slicen* und *Im Slicer öffnen* bekommen immer die feine Rechnung, nicht die gröbere Ansicht des Fensters. Rundungen und Kegel kommen so mit voller Auflösung in die Datei.
+- Ein Export während einer laufenden Berechnung wartet auf das neue Ergebnis. Bisher konnte die Datei noch das alte Maß tragen.
+- Ein Maß jenseits seiner Grenze lehnt die Parameterleiste ab, statt das Bild leer stehen zu lassen.
 - In der Parameterleiste zählt jeder Pfeilschritt, und der Fokus bleibt im Feld.
 - Wartet ein Schritt auf eine Rückfrage, bleibt *Übernehmen* frei, und die Frage kommt.
 - Im Dialog einer Operation stehen die Beschriftungen in einer Spalte, die Felder gleich breit, und jeder Schalter vor dem, was er schaltet.
@@ -122,8 +130,9 @@ Nutzen da und sonst nichts.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
 - Leerzeichen kommen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, während ein Dialog seine Vorschau zeigt.
-- Ein Befund, der einen Schritt meint, öffnet ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
+- Einige Befunde, die einen Schritt meinen, öffnen ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
 - Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
+- Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.
 
 ## 0.5.1
 
