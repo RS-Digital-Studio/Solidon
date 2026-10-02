@@ -43,6 +43,10 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm285-textnachweise-2026-10-02.md`](reports/rm285-textnachweise-2026-10-02.md) | Integrierte UI-/CLI-/Bereichsprüfertexte, tatsächliche Tore und Abnahmegrenze | RM-285, RM-347 |
+| [`reports/rm285-modelltexte-2026-10-02.md`](reports/rm285-modelltexte-2026-10-02.md) | Fortsetzbare Liste der 42 Modelltextausdrücke mit 43 Texttrennern, Wirkung und Quellenhashes | RM-285, RM-347 |
+| [`reports/rm290-textnachweise-2026-10-02.md`](reports/rm290-textnachweise-2026-10-02.md) | Abschluss a–h, wirkliche Wächter/Altgegenproben und Commit-/Tor-Nachweis | RM-290, RM-347 |
+| [`reports/rm312-slicer-matrix-2026-10-02.md`](reports/rm312-slicer-matrix-2026-10-02.md) | Unabhängig geprüfter Zwischenbericht: 52/125 Matrixläufe, Messmethoden, Profile und offene Grenzen | RM-312, RM-347 |
 | [`RESTE-INVENTAR.md`](RESTE-INVENTAR.md) | Inventar der Reste der Durchsicht, Quelle jedes „Inventar 1.x“ im Register | RM-292 und die Punkte „Aus der Durchsicht v0.5.1 (Inventar …)“ |
 | [`laeufe/kanten-dicht.txt`](laeufe/kanten-dicht.txt) | Messlauf des Pakets kanten (Ausgabe der gleichnamigen Sonde) | RM-284 |
 | [`laeufe/kanten-gruppe-brep.txt`](laeufe/kanten-gruppe-brep.txt) | Messlauf des Pakets kanten (Ausgabe der gleichnamigen Sonde) | RM-284 |

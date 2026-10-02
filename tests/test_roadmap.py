@@ -6,7 +6,7 @@ enthielten 78 keinen einzigen offenen Punkt. Seither ist die Geschichte nach
 `ROADMAP-ARCHIV.md` getrennt, und die Arbeitsliste behält den Kopf, das
 Register, die Phasen und jeden Abschnitt mit einem offenen Punkt.
 
-Damit prüft diese Datei zwei Dinge statt einem:
+Damit prüft diese Datei drei zusammengehörige Zusagen:
 
 * **Das Register gegen die Punkte darunter** — nicht über die Gesamtzahl,
   sondern je Abschnitt, denn eine Summe stimmt auch dann noch, wenn ein Punkt
@@ -15,6 +15,8 @@ Damit prüft diese Datei zwei Dinge statt einem:
 * **Das Archiv gegen seine eigene Zusage** — dort steht kein offener Punkt.
   Sonst wäre der Schnitt eine zweite Liste, in der niemand sucht, und das
   Register könnte sie nicht führen, weil es diese Datei nicht liest.
+* **Die Belege offener Punkte bleiben fortsetzbar** — Restliste und tragende
+  Nachweise liegen im Repository statt ausschließlich auf einer Maschine.
 """
 
 from __future__ import annotations
@@ -270,3 +272,81 @@ def test_the_existing_support_mailbox_is_not_listed_as_open_work() -> None:
     assert "Postfach `support@solidon3d.de` samt SPF/DMARC" not in text
     assert "das Postfach support@solidon3d.de anlegen" not in text
     assert "Das Postfach `support@solidon3d.de` existiert" in text
+
+
+_LOCAL_EVIDENCE = re.compile(
+    r"(?<![\w.-])(?:tmp[/\\]|output[/\\]review[/\\]|\.claude[/\\]\.state[/\\]release-)",
+    re.IGNORECASE,
+)
+
+
+def _local_evidence_refs(lines: list[str]) -> list[str]:
+    """Offene Punkte behalten ihre Fortsetzungszeilen und eingerückten Teilaufgaben."""
+    active = False
+    indent = 0
+    found: list[str] = []
+    for number, line in enumerate(lines, 1):
+        if line.startswith(("## ", '<a id="rm-')):
+            active = False
+        point = re.match(r"^(\s*)-\s*\[[ x~]\]", line)
+        if point and (not active or len(point.group(1)) <= indent):
+            active = bool(_OPEN.match(line))
+            indent = len(point.group(1))
+        if active and _LOCAL_EVIDENCE.search(line):
+            found.append(f"Zeile {number}: {line.strip()}")
+    return found
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "tmp/probe/ergebnis.json",
+        r"tmp\probe\ergebnis.json",
+        "output/review/probe/bericht.md",
+        r"output\review\probe\bericht.md",
+        ".claude/.state/release-probe/bericht.md",
+        r".claude\.state\release-probe\bericht.md",
+    ],
+)
+def test_open_point_guard_rejects_each_local_evidence_root(reference: str) -> None:
+    """Alle drei lokalen Wurzeln werden mit beiden Pfadtrennern tatsächlich gefunden."""
+    lines = ["- [~] **RM-999 — Eine offene Aufgabe.**", f"  Beleg: `{reference}`."]
+    assert _local_evidence_refs(lines) == [f"Zeile 2: Beleg: `{reference}`."]
+
+
+def test_open_point_guard_ignores_closed_points_and_unrelated_paths() -> None:
+    """Ein datierter abgeschlossener Beleg und versionierte Nachweise bleiben zulässig."""
+    lines = [
+        "- [ ] **RM-999 — Eine offene Aufgabe.**",
+        "  Beleg: `konzepte/nachweise-release-0.5.1/reports/bericht.md`.",
+        "  Ein Dateiname: `template_tmp/probe.md`.",
+        "- [x] **RM-998 — Eine erledigte Aufgabe.**",
+        "  Historischer Beleg: `tmp/probe/bericht.md`.",
+        "## Ein anderer Abschnitt",
+        "Historischer Beleg: `output/review/probe/bericht.md`.",
+    ]
+    assert not _local_evidence_refs(lines)
+
+
+def test_a_closed_subtask_does_not_end_the_open_point_guard() -> None:
+    """Ein abgehakter Teilschritt macht die restliche offene Aufgabe nicht unsichtbar."""
+    lines = [
+        "- [ ] **RM-999 — Eine offene Aufgabe.**",
+        "  - [x] Ein erledigter Teilschritt.",
+        "  Die verbleibende Arbeit braucht `tmp/probe/bericht.md`.",
+    ]
+    assert _local_evidence_refs(lines) == [
+        "Zeile 3: Die verbleibende Arbeit braucht `tmp/probe/bericht.md`."
+    ]
+
+
+def test_open_points_keep_their_evidence_outside_local_scratch_folders() -> None:
+    """Eine andere Maschine kann einen offenen Punkt anhand des Repositorys fortsetzen."""
+    _, body = _split()
+    assert len(body) > 100, "Die Arbeitsliste fehlt; der Pfadwächter hätte sonst nichts zu lesen."
+    local = _local_evidence_refs(body)
+    assert not local, (
+        f"{len(local)} Verweise offener Punkte führen nur auf diese Maschine. "
+        "Restliste und tragende Belege ins Repository übernehmen oder im Punkt festhalten:\n"
+        + "\n".join(local)
+    )

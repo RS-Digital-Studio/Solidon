@@ -104,9 +104,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
-| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI mit b1d5381ce integriert; CLI-/Kerngruppe eigen- und zweitgeprüft, zentrale Abschlussnachweise am Punkt. Modellabnahme und eine Bereichsprüferzeile offen |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
 | [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
-| [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | a–h eigengeprüft und unabhängig zweitgeprüft: klare Aktionstitel, Apostrophe, Einschätzungsrahmen und warmer Splitcache. Zentrales vollständiges Entwicklungstor und Übernahme offen |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
@@ -3244,9 +3243,8 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   abgeschlossen. Die UI-Einheit ist mit `b1d5381ce` auf main/origin/main
   integriert; das exakt ausgewählte gemeinsame Entwicklungstor bestand
   18.850 Tests, 62 übersprungen, Suite/Ruff/Format/mypy jeweils Exit 0,
-  ohne Quelldrift. Nachweise:
-  `tmp/review-seit-0.5.1-2026-10-01/rm285-punctuation-20261002-7db5/` und
-  `tmp/review-seit-0.5.1-2026-10-01/commit-ui-abschluss.md`.
+  ohne Quelldrift. Dauerhafte Nachweise:
+  `konzepte/nachweise-release-0.5.1/reports/rm285-textnachweise-2026-10-02.md`.
 
   **Zweite Gruppe:** 29 vollständige Rahmen in `cli/main.py`, `core/install.py`,
   `core/log.py` und `core/support.py`; alle fünf Kataloge erhalten exakt
@@ -3256,20 +3254,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   erweiterte Wächter scheitert an den vier alten Quellen mit 25 tatsächlichen
   Fundstellen (1 erwarteter Fehler, Exit 1). Eigenreview und unabhängiger
   lesender Quellreview sind ohne offene Befunde abgeschlossen; der zentrale
-  Quellreview bestätigt die Freigabe. Das vollständige zentrale Entwicklungstor
-  und die Übernahme dieser Gruppe werden durch
-  `tmp/review-seit-0.5.1-2026-10-01/commit-tor-rm285-cli-core-final/` und
-  `tmp/review-seit-0.5.1-2026-10-01/commit-rm285-cli-core.json` belegt.
-  Die engen Prüf- und Reviewnachweise stehen unter
-  `tmp/review-seit-0.5.1-2026-10-01/rm285-cli-core-20261002-7db5/`.
+  Quellreview bestätigt die Freigabe. Diese Gruppe ist mit
+  `cb20e107b3b4f81cad6cda95c7aa61ca774ba43e` auf origin/main integriert;
+  das vollständige zentrale Entwicklungstor bestand 18.867 Tests, 62 übersprungen,
+  Suite/Ruff/Format/mypy jeweils Exit 0. Die dauerhaften Nachweise stehen im
+  oben genannten Textbericht. Auch die Bereichsprüferzeile ist nach tatsächlicher
+  Neuerzeugung der 35 Bausteinnachweise mit `eae249d2d` integriert (18.908/62,
+  sämtliche Entwicklungstor-Prüfungen Exit 0).
 
   **Offene Grenzen:** 43 feste Doppelpunkte in 42 Ausdrücken der sieben
   Agenten-/Steckbriefdateien betreffen tatsächlich Modellkontext, Antworten oder
   Werkzeugbeschreibungen. Eine Änderung erfordert die vorgeschriebene
-  Modellabnahme; diese Quellen bleiben unverändert (`RESTMODELLTEXTE.md`).
-  Die einzelne Textzeile in `knowledge/parts/range_check.py` bleibt bis zur
-  abgestimmten vollständigen Bereichsnachweis-Runde offen, weil sie in jeden
-  Bausteinabdruck eingeht. RM-285 ist insgesamt nicht abgeschlossen. Fenster-,
+  Modellabnahme; diese Quellen bleiben unverändert. Die vollständige Fundstellen-
+  und Abnahmeliste steht dauerhaft unter
+  `konzepte/nachweise-release-0.5.1/reports/rm285-modelltexte-2026-10-02.md`.
+  RM-285 ist insgesamt nicht abgeschlossen. Fenster-,
   Render- und Leistungsabnahme bleibt dem Release vorbehalten.
 
 <a id="rm-286"></a>
@@ -3280,70 +3279,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Parametergrenzen. Offen: Druckeinstellungen (`print_settings_dialog`). Abnahme: an allen
   vier Orten wird eine Zahl jenseits der Grenze abgelehnt und die Grenze genannt; die
   Kurzhilfe nennt die geänderte Grenze.
-
-<a id="rm-290"></a>
-
-- [~] **RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1.** Aus dem Release 0.5.1 (Sprach- und Code-Review der
-  Pakete texte und ui, `konzepte/nachweise-release-0.5.1/reports/review-sprache-ui-texte.md`,
-  `konzepte/nachweise-release-0.5.1/reports/review-code-ui-texte.md`). (a) fr und it nennen *Merkmal bearbeiten* (Knopf der
-  örtlichen Erkennung) und *Merkmal ändern* (Operation) gleich („Modifier l'élément“,
-  „Modifica elemento“); it verletzt dabei „Ändern → Cambia“, was auch alle Operationstitel
-  „… ändern“ und deren Handbuchzitate beträfe. (b) en heißt *Trennen* „Cut“ und
-  *Abschneiden* „Cut away“, it „Taglia“ gegen „Tagliare via“; der Wächter vergleicht Stämme
-  nur bei Einwortnamen, und vier it-Operationstitel stehen im Infinitiv statt im Imperativ
-  („Tagliare via“, „Uniformare i triangoli“, „Verificare il percorso di montaggio“,
-  „Tagliare un campo di fori“). (c) „nebeneinander legen“ im Hinweis zu
-  aneinanderliegenden Hälften ist zusammenzuschreiben (neuer Schlüssel in fünf
-  Katalogen). (d) Der it-Wächter findet Lei-Indikative ohne Pronomen nicht („finché non
-  modifica“). (e) Die Sätze der Bausteine sagen an gemessenen Bohrungen eine Größe als
-  Tatsache („Bohrungsmaß: 5,20 mm (eingepasst). In diese Bohrung passt ein Innengewinde
-  M6.“), obwohl eine Messung eine Größe als Einschätzung nennt (`placement.py`,
-  Entscheidung Durchsicht 0.5.0) — `at_hole_advice` den Messstatus mitgeben. Abnahme: je
-  Punkt nachgezogen, der Wächter mit Gegenprobe.
-
-  **Nachtrag 28.09.2026 (Sprachreview des zweiten Changelog-Durchgangs,
-  `konzepte/nachweise-release-0.5.1/reports/review-sprache-changelog2.md`):** (f) Die Kataloge fr und
-  it mischen typografische und gerade Apostrophe (fr 1 239 gegen 3 477, it 490 gegen
-  1 258), gegen die Entscheidung des Textpakets für den geraden; der Changelog setzt den
-  geraden, der Katalog etwa bei *Merkmal zeigen* („Montrer l’élément“, „Mostra
-  l’elemento“) den typografischen. (g) it „Ridurre i triangoli“ (*Dreiecke verringern*)
-  steht wie die Titel unter (b) im Infinitiv, verwandte Knöpfe im Imperativ („Riduci i
-  triangoli e riprova“). (h) it „Fare clic“ im Leersatz „Kein Merkmal gewählt …“ spricht
-  unpersönlich statt mit „tu“.
-
-  **Eigengeprüfter Stand 02.10.2026:** (a/b/g/h) Örtliche Bearbeitung und
-  Änderungsoperation unterscheiden sich in fr/it samt Handbuchzitaten; *Abschneiden*
-  heißt en Crop und it Tronca. Die fünf beanstandeten it-Titel und der Leersatz
-  sprechen im tu-Imperativ. (c) Beide Hinweise schreiben „nebeneinanderlegen“;
-  `split_pinned` und `split_line` verwenden jeweils Op-Cacheversion 3. Die echte
-  Vorher-Probe zeigte beide alten einzelnen Cachehinweise auf Deutsch; nach der
-  Invalidierung bleiben neuer Hinweis, Wiederöffnen und warmer Folgecache korrekt.
-  (d) Der konkrete it-Satz war bereits behoben; der Wächter findet nun den
-  Lei-Indikativ bei belegter Kundenanrede und bewahrt Modell-/Substantivgegenfälle.
-  (e) Der Messstatus wird beim Zusammenstellen des Bausteinhinweises ausgewertet,
-  die öffentliche Einargument-Schnittstelle bleibt erhalten. Nicht-native Quellen
-  erhalten den vollständigen neutralen Einschätzungsrahmen; Vorbelegung, unavailable
-  und None-Rückfall bleiben unverändert. (f) Alle fr/it-Katalogwerte einschließlich
-  Handbuch verwenden gerade Apostrophe; der neue Wächter prüft auch verschiedene
-  Einträge. Genau drei neue/zwei entfernte Schlüssel je Katalog; die getrennte
-  RM285-Bereichsprüferzeile ist nicht Teil von RM290.
-
-  **Belege:** `tmp/review-seit-0.5.1-2026-10-01/rm290-20261002-7db5/` mit
-  `EIGENREVIEW.md`, Alt-/Neu-Listen und Katalogrekonstruktion. Der enge Nachlauf
-  `focused-final-20261002-040005-8dad9c52/` bestand 92 Fälle (davon sechs separat
-  RM285-range), 967 abgewählt, tatsächlicher pytest-Exit 0; fünf weitere vorhandene
-  Platzhalter-Katalogwächter bestanden. Ruff, Format und Diffcheck jeweils Exit 0.
-  Der unabhängige Reviewnachgang korrigiert die 25 Maßquellenfälle auf den echten
-  `measure_status`-Leser, einschließlich exact für facets/parameter, und ergänzt
-  den tatsächlichen it-Leersatzwächter. Der frische Ausschnitt bestand 26 Fälle,
-  tatsächlicher Exit 0 (`test-guardian-followup-v2`). Zwölf tatsächliche alte
-  Katalog-Wächterfälle werden verworfen, dieselben zwölf aktuellen bestehen
-  (`catalog-negative-v3`, Gesamt-Exit 1 erwartet). Beide alten Splitcachefälle
-  bleiben als erwartete rote Gegenproben erhalten; frühere eigene Import-,
-  Testaufbau- und Ruff-Befunde sind getrennt dokumentiert und nachgezogen.
-  Die abschließende unabhängige Rückprüfung ist ohne offene Befunde abgeschlossen
-  (`QUELLREVIEW.md`). Zentrales vollständiges Entwicklungstor und Commit/Push
-  bleiben offen.
 
 <a id="rm-291"></a>
 
@@ -3417,11 +3352,12 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   83 gezielte Kernfälle und prüft die tatsächlich geschriebene 3MF sowie die
   alte falsche Profilkennung als Gegenprobe. Das vollständige zentrale
   Entwicklungstor bestand 18.771 Tests, 62 übersprungen; Suite/Ruff/Format/mypy
-  jeweils Exit 0. Nachweise unter
-  `tmp/review-seit-0.5.1-2026-10-01/`: `rm312-abschlussreview.md`,
-  `rm312-ausgabenachgang-zweitreview.md`, `commit-rm312-duesenprofile.json`
-  und `commit-tor-dialogrunde-v2-final/`. Der historische rote Lauf unter
-  `commit-tor-rm312-final/` bleibt erhalten und ist kein Abschlussnachweis.
+  jeweils Exit 0. Dauerhafter unabhängig geprüfter Zwischenbericht:
+  `konzepte/nachweise-release-0.5.1/reports/rm312-slicer-matrix-2026-10-02.md`
+  (SHA-256 `7a4fd24dc59c15d93fa47f201c968d89b0c6912bcd931da5b994ee1fe1c85de8`).
+  Er belegt am Stichtag 52/125 vollständige Matrixläufe und 839 Varianten
+  samt Profilidentitäten, Messmethoden und Grenzen. Der historische erste rote
+  Torlauf bleibt ein Altbefund und ist kein Abschlussnachweis.
   Offen bleiben die funktionale Sieben-Slicer-Matrix der Dialog-Sitzung und
   die native Fensterabnahme beim Release. Kein endgültiger Registerabschluss.
 

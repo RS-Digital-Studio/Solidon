@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-347: Offene Punkte tragen ihre Nachweise im Repository (02.10.2026)](#rm-347-offene-punkte-tragen-ihre-nachweise-im-repository-02102026) |
+| 2026-10-02 | [RM-290: Übersetzungen und Wortlaute sind abgeschlossen (02.10.2026)](#rm-290-übersetzungen-und-wortlaute-sind-abgeschlossen-02102026) |
 | 2026-10-02 | [RM-324: Inventarkennung ohne Druckeinstellungen bleibt dialoglokal (02.10.2026)](#rm-324-inventarkennung-ohne-druckeinstellungen-bleibt-dialoglokal-02102026) |
 | 2026-10-02 | [RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)](#rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
@@ -34384,3 +34386,127 @@ Quellabweichung. Die funktionale Sieben-Slicer-Matrix bleibt eine getrennte offe
 Abnahme unter RM-312; sie hält die Gesamtprüfung der Slicerübergabe offen, nicht RM-311.
 
 Fenster- und Leistungsläufe bleiben Release-Abnahmen.
+
+
+## RM-290: Übersetzungen und Wortlaute sind abgeschlossen (02.10.2026)
+
+<a id="rm-290"></a>
+
+- [x] **RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1.** Aus dem Release 0.5.1 (Sprach- und Code-Review der
+  Pakete texte und ui, `konzepte/nachweise-release-0.5.1/reports/review-sprache-ui-texte.md`,
+  `konzepte/nachweise-release-0.5.1/reports/review-code-ui-texte.md`). (a) fr und it nennen *Merkmal bearbeiten* (Knopf der
+  örtlichen Erkennung) und *Merkmal ändern* (Operation) gleich („Modifier l'élément“,
+  „Modifica elemento“); it verletzt dabei „Ändern → Cambia“, was auch alle Operationstitel
+  „… ändern“ und deren Handbuchzitate beträfe. (b) en heißt *Trennen* „Cut“ und
+  *Abschneiden* „Cut away“, it „Taglia“ gegen „Tagliare via“; der Wächter vergleicht Stämme
+  nur bei Einwortnamen, und vier it-Operationstitel stehen im Infinitiv statt im Imperativ
+  („Tagliare via“, „Uniformare i triangoli“, „Verificare il percorso di montaggio“,
+  „Tagliare un campo di fori“). (c) „nebeneinander legen“ im Hinweis zu
+  aneinanderliegenden Hälften ist zusammenzuschreiben (neuer Schlüssel in fünf
+  Katalogen). (d) Der it-Wächter findet Lei-Indikative ohne Pronomen nicht („finché non
+  modifica“). (e) Die Sätze der Bausteine sagen an gemessenen Bohrungen eine Größe als
+  Tatsache („Bohrungsmaß: 5,20 mm (eingepasst). In diese Bohrung passt ein Innengewinde
+  M6.“), obwohl eine Messung eine Größe als Einschätzung nennt (`placement.py`,
+  Entscheidung Durchsicht 0.5.0) — `at_hole_advice` den Messstatus mitgeben. Abnahme: je
+  Punkt nachgezogen, der Wächter mit Gegenprobe.
+
+  **Nachtrag 28.09.2026 (Sprachreview des zweiten Changelog-Durchgangs,
+  `konzepte/nachweise-release-0.5.1/reports/review-sprache-changelog2.md`):** (f) Die Kataloge fr und
+  it mischen typografische und gerade Apostrophe (fr 1 239 gegen 3 477, it 490 gegen
+  1 258), gegen die Entscheidung des Textpakets für den geraden; der Changelog setzt den
+  geraden, der Katalog etwa bei *Merkmal zeigen* („Montrer l’élément“, „Mostra
+  l’elemento“) den typografischen. (g) it „Ridurre i triangoli“ (*Dreiecke verringern*)
+  steht wie die Titel unter (b) im Infinitiv, verwandte Knöpfe im Imperativ („Riduci i
+  triangoli e riprova“). (h) it „Fare clic“ im Leersatz „Kein Merkmal gewählt …“ spricht
+  unpersönlich statt mit „tu“.
+
+  **Eigengeprüfter Stand 02.10.2026:** (a/b/g/h) Örtliche Bearbeitung und
+  Änderungsoperation unterscheiden sich in fr/it samt Handbuchzitaten; *Abschneiden*
+  heißt en Crop und it Tronca. Die fünf beanstandeten it-Titel und der Leersatz
+  sprechen im tu-Imperativ. (c) Beide Hinweise schreiben „nebeneinanderlegen“;
+  `split_pinned` und `split_line` verwenden jeweils Op-Cacheversion 3. Die echte
+  Vorher-Probe zeigte beide alten einzelnen Cachehinweise auf Deutsch; nach der
+  Invalidierung bleiben neuer Hinweis, Wiederöffnen und warmer Folgecache korrekt.
+  (d) Der konkrete it-Satz war bereits behoben; der Wächter findet nun den
+  Lei-Indikativ bei belegter Kundenanrede und bewahrt Modell-/Substantivgegenfälle.
+  (e) Der Messstatus wird beim Zusammenstellen des Bausteinhinweises ausgewertet,
+  die öffentliche Einargument-Schnittstelle bleibt erhalten. Nicht-native Quellen
+  erhalten den vollständigen neutralen Einschätzungsrahmen; Vorbelegung, unavailable
+  und None-Rückfall bleiben unverändert. (f) Alle fr/it-Katalogwerte einschließlich
+  Handbuch verwenden gerade Apostrophe; der neue Wächter prüft auch verschiedene
+  Einträge. Genau drei neue/zwei entfernte Schlüssel je Katalog; die getrennte
+  RM285-Bereichsprüferzeile ist nicht Teil von RM290.
+
+  **Belege:** `tmp/review-seit-0.5.1-2026-10-01/rm290-20261002-7db5/` mit
+  `EIGENREVIEW.md`, Alt-/Neu-Listen und Katalogrekonstruktion. Der enge Nachlauf
+  `focused-final-20261002-040005-8dad9c52/` bestand 92 Fälle (davon sechs separat
+  RM285-range), 967 abgewählt, tatsächlicher pytest-Exit 0; fünf weitere vorhandene
+  Platzhalter-Katalogwächter bestanden. Ruff, Format und Diffcheck jeweils Exit 0.
+  Der unabhängige Reviewnachgang korrigiert die 25 Maßquellenfälle auf den echten
+  `measure_status`-Leser, einschließlich exact für facets/parameter, und ergänzt
+  den tatsächlichen it-Leersatzwächter. Der frische Ausschnitt bestand 26 Fälle,
+  tatsächlicher Exit 0 (`test-guardian-followup-v2`). Zwölf tatsächliche alte
+  Katalog-Wächterfälle werden verworfen, dieselben zwölf aktuellen bestehen
+  (`catalog-negative-v3`, Gesamt-Exit 1 erwartet). Beide alten Splitcachefälle
+  bleiben als erwartete rote Gegenproben erhalten; frühere eigene Import-,
+  Testaufbau- und Ruff-Befunde sind getrennt dokumentiert und nachgezogen.
+  Die abschließende unabhängige Rückprüfung ist ohne offene Befunde abgeschlossen
+  (`QUELLREVIEW.md`). Diese damalige Aussage über ausstehendes Tor/Commit wird
+  durch den folgenden tatsächlichen Integrationsnachweis fortgeschrieben.
+
+**Abschlussnachtrag 02.10.2026:** Alle Einzelpunkte a–h sind mit
+`6ce767031be8e703d5937368aaa471d843771767` auf main/origin/main integriert. Das endgültige
+vollständige zentrale Entwicklungstor bestand 18.972 Tests, 62 übersprungen;
+Suite/Ruff/Format/mypy Exit 0, Quellstand während des Tors stabil. Zwei zusätzliche
+fr/it-Altwertbefunde des ersten roten zentralen Laufs (2 failed, 18.970 passed)
+wurden korrigiert und unabhängig rückgeprüft. Dauerhafte Einzelabnahmen, echte
+Gegenproben, aktuelle Commitdiffzahlen und Grenzen stehen in
+`konzepte/nachweise-release-0.5.1/reports/rm290-textnachweise-2026-10-02.md`.
+Kein neuer Fenster-, Renderer-, Leistungs- oder Paketnachweis.
+
+
+## RM-347: Offene Punkte tragen ihre Nachweise im Repository (02.10.2026)
+
+<a id="rm-347"></a>
+
+- [x] **RM-347 — Offene Punkte stützen sich wieder auf `tmp/`, das es nur auf einer Maschine gibt.**
+  Review seit 0.5.1, Befund F-M1, Commits `40cf9e72e` und `8fb2f47c8` (Codex).
+  RM-285 und RM-312 (offen) nennen als Nachweis und Arbeitsgrundlage
+  `tmp/review-seit-0.5.1-2026-10-01/…` (am HEAD `ROADMAP.md:3236–3257`, `:3375`; Archiv
+  `ROADMAP-ARCHIV.md:34219`, Abschluss RM-300). `tmp/` ist ignoriert (`.gitignore:60`); die Liste der
+  43 offenen Modelltexte (`RESTMODELLTEXTE.md`), an der RM-285 weiterläuft, liegt nur auf dieser
+  Maschine. Eine Sitzung auf den anderen Rechnern kann den Punkt nicht fortsetzen. Rückfall
+  hinter RM-294 (`58b86ee21`: „Kein offener Punkt verweist mehr auf einen Ordner, den es nur auf
+  einer Maschine gibt“).
+  **Fix:** Restliste und tragende Belege nach `konzepte/nachweise-release-0.5.1/` holen (oder als
+  Aussage in den Punkt), `tmp/`-Pfade ersetzen. Die Punkte RM-285 und RM-312 selbst nur in Beleg
+  und Verweis ändern.
+  **Abnahme:** Wächter in `tests/test_roadmap.py`, der in offenen Punkten `tmp/`,
+  `output/review/` und `.claude/.state/release-` ablehnt. Beleg: `bericht-F.md` (M1).
+
+**Abschlussnachtrag 02.10.2026:** Die RM-285-Textnachweise samt vollständiger
+Modelltext-Restliste, der RM-290-Integrationsnachweis und der unabhängig geprüfte
+RM-312-Zwischenbericht stehen unter `konzepte/nachweise-release-0.5.1/reports/`
+und sind im dortigen README verzeichnet. Offene RM-285/RM-312 führen auf diese
+selbsttragenden Berichte. Die Modellabnahme beziehungsweise vollständige Slicer-Matrix
+bleiben ausdrücklich in der aktuellen Arbeitsliste; dieser Dokumentabschluss
+bescheinigt sie nicht. Ergänzende lokale Rohbelegindizes in einem dauerhaften Bericht
+bleiben zulässig; die Abnahme und Fortsetzung hängen nicht ausschließlich daran.
+
+Der neue tatsächliche Wächter in `tests/test_roadmap.py` prüft offene Punkte und
+Fortsetzungszeilen auf alle drei lokalen Wurzeln mit beiden Pfadtrennern. Geschlossene
+Historie, versionierte Pfade und unabhängige Dateinamen bleiben zulässig; eine
+abgehakte eingerückte Teilaufgabe beendet den Wächter nicht. Vor der Dokumentmigration
+scheiterte derselbe Wächter mit 13 tatsächlichen lokalen Fundstellen: RM-285 fünf,
+RM-290 eine, RM-312 eine, RM-347 selbst sechs. Die sechs positiven Wurzelgegenproben
+und zwei Begrenzungsfälle bestanden schon davor: 1 failed, 8 passed, 9 deselected,
+Exit 1, keine Setupfehler. Die neue Quellen-/Dokumentauswahl erhält alle fremden
+Roadmap-/Archivhunks und verschiebt keine Rohmodelle, Slicerprofile oder G-Code-Dateien.
+
+Der Nachlauf nach der Migration und der Ruff-Korrektur bestand tatsächlich alle
+18 Roadmap-Fälle und 14 Dokumentkarten-Fälle, zusammen 32 bestanden, Exit 0,
+keine übersprungenen Fälle oder Setupfehler. Die acht eigenen Quell-/Dokumentdateien
+blieben während dieses Laufs unverändert. Ruff und Format des neuen Testcodes
+sowie der begrenzte Diffcheck endeten jeweils mit Exit 0. Der erste Ruff-Fund
+PIE810 betraf ausschließlich die doppelte startswith-Abfrage; sie verwendet jetzt
+den gleichwertigen Tupelaufruf. Das ist kein Entwicklungs- oder Release-Gesamttor.
