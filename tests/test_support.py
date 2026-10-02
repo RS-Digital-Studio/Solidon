@@ -19,6 +19,7 @@ from app.core import report as report_module
 from app.core import support
 from app.core.errors import AppError, UserError
 from app.core.support import Attachment, Ticket
+from app.i18n.catalog import available_languages
 from tests.php_probe import php_executable
 
 # --- derselbe begrenzte Protokollausschnitt für Vorschau, Versand und Ordner -----------
@@ -144,6 +145,63 @@ def test_the_subject_says_what_kind_it_is() -> None:
 
     assert str(support.KIND_NAMES[support.KIND_BUG]) in ticket.subject
     assert "Die Differenz frisst das Modell." in ticket.subject
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_ticket_text_keeps_catalogue_punctuation_and_raw_customer_values(
+    language: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Betreff, Kürzung und Rückadresse bleiben reine Vorschau ohne Versand."""
+    from app.branding import APP_NAME, APP_VERSION
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    monkeypatch.setattr(support, "environment", lambda: {"file": "pieces/12.5_box.stl"})
+    try:
+        first = "pieces/12.5_box.stl : " + "a" * 90
+        contact = "customer+12.5@example.com"
+        ticket = Ticket(kind=support.KIND_BUG, message=first + "\nsecond", contact=contact)
+        head = f"{APP_NAME} {APP_VERSION} — {ticket.kind_name}"
+        separator = " : " if language == "fr" else ": "
+        assert ticket.subject == head + separator + first[:80]
+        lines = ticket.as_text().splitlines()
+        assert lines[0] == ticket.subject
+        assert lines[3:5] == [first, "second"]
+        assert tr("Rückantwort an: {contact}", contact=contact) in lines
+        assert "file: pieces/12.5_box.stl" in lines
+        assert Ticket(kind=support.KIND_BUG, message="").subject == head
+    finally:
+        set_language(previous)
+
+
+def test_french_unhandled_report_path_keeps_raw_filename(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der echte Fehlerpfad formatiert den Ablageort und schreibt hier nichts."""
+    from app.core import log
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    diagnostics: list[str] = []
+    folder = tmp_path / "12.5_report"
+    monkeypatch.setattr(log, "_capture", None)
+    monkeypatch.setattr(log, "_reported_recently", lambda _key: False)
+    monkeypatch.setattr(log, "_diagnostic_stderr", diagnostics.append)
+    monkeypatch.setattr(report_module, "write", lambda _report, **_kwargs: folder)
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    try:
+        log._record_unhandled(ValueError("test:12.5"), None, "test")
+        assert diagnostics[-1] == "Le rapport d'erreur se trouve ici : " + str(folder)
+        assert not folder.exists()
+    finally:
+        set_language(previous)
 
 
 def test_attachments_are_named_in_the_text() -> None:

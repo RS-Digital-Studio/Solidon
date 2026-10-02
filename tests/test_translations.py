@@ -1607,3 +1607,22 @@ def test_no_entry_mixes_two_apostrophes(language: str) -> None:
 
     mixed = [key[:60] for key, value in reviewed.items() if "'" in value and "’" in value]
     assert not mixed, f"{language}: beide Apostrophe in einem Text:\n" + "\n".join(mixed)
+
+
+def non_model_surface_files() -> list[Path]:
+    """Kommandozeile und die drei eigenständigen Kundenmeldungswege im Kern."""
+    return sorted((PACKAGE_DIR / "cli").rglob("*.py")) + [
+        PACKAGE_DIR / "core" / name for name in ("install.py", "log.py", "support.py")
+    ]
+
+
+def test_non_model_surface_labels_do_not_append_a_fixed_colon() -> None:
+    """Modellkontext und Bereichsnachweis gehören zu ihren getrennten Abnahmen."""
+    paths = non_model_surface_files()
+    assert paths, "die Kundentextprüfung muss Quellen lesen"
+    offenders = [
+        f"{path.relative_to(PACKAGE_DIR)}:{line}"
+        for path in paths
+        for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
+    ]
+    assert not offenders, "feste Doppelpunkte neben Übersetzungen:\n" + "\n".join(offenders)

@@ -522,23 +522,21 @@ def why_not(requirement: Requirement) -> TranslatableText | str:
             "Die gebaute Anwendung bringt keine Paketverwaltung mit. "
             "In einer Entwicklungsumgebung ginge es von hier aus."
         )
-    # Der Name der Paketverwaltung ist ein Eigenname und steht deshalb neben
-    # dem Satz, nicht als Platzhalter darin — dasselbe Vorgehen wie bei den
-    # Fehlertexten in ``backends/mesh.py``: einen übersetzten Satz formatiert
-    # niemand nach, er wird angezeigt, wie er im Katalog steht.
+    # Eigenname und Handlung bleiben Werte; der Katalog setzt den Satzrahmen.
     wanted = for_platform()
     if wanted is None:
         return _("Für dieses System kennt Solidon keine Paketverwaltung, die das kann.")
     if not requirement.identifier(wanted):
-        return (
-            f"{tr('In der Paketverwaltung dieses Systems liegt es nicht')}: "
-            f"{wanted.program}. "
-            f"{tr('Es wird von Hand installiert, und die Seite steht daneben.')}"
+        return tr(
+            "In der Paketverwaltung dieses Systems liegt es nicht: {program}. {action}",
+            program=wanted.program,
+            action=tr("Es wird von Hand installiert, und die Seite steht daneben."),
         )
-    return (
-        f"{tr('Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet')}: "
-        f"{wanted.program}. "
-        f"{tr('Die Seite des Herstellers führt die Datei zum Selbstinstallieren.')}"
+    return tr(
+        "Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet: "
+        "{program}. {action}",
+        program=wanted.program,
+        action=tr("Die Seite des Herstellers führt die Datei zum Selbstinstallieren."),
     )
 
 
@@ -566,9 +564,7 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
         # Installation, die dabei zurückbleiben kann (Regel 17, §33.1).
         minutes = int(TIMEOUT_SECONDS // 60)
         _log.warning("install of %s hit the deadline after %s min", requirement.id, minutes)
-        # Die Minutenzahl steht **neben** dem Satz und nicht als Platzhalter
-        # darin: Ein übersetzter Text wird angezeigt, wie er im Katalog steht,
-        # nicht nachformatiert — dieselbe Bauart wie in ``why_not`` darüber.
+        # Zahl und Handlung bleiben Werte im vollständigen Übersetzungsrahmen.
         what_now = tr(
             "Ein zweiter Versuch nimmt den Rest; sonst führt die Seite des "
             "Herstellers die Datei zum Selbstinstallieren."
@@ -577,11 +573,12 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
             requirement=requirement,
             installed=False,
             output=str(expired),
-            reason=(
-                f"{tr('Die Paketverwaltung lief noch, als die Zeitgrenze kam')}: "
-                f"{minutes} min. "
-                f"{tr('Sie ist beendet worden, die Installation kann halb fertig sein.')} "
-                f"{what_now}"
+            reason=tr(
+                "Die Paketverwaltung lief noch, als die Zeitgrenze kam: {minutes} min. "
+                "{state} {action}",
+                minutes=minutes,
+                state=tr("Sie ist beendet worden, die Installation kann halb fertig sein."),
+                action=what_now,
             ),
         )
     except ProcessOutputLimitExceeded as problem:

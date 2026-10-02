@@ -201,7 +201,7 @@ class Ticket:
         """Was im Posteingang steht: Art, Version, erste Zeile."""
         first = self.message.strip().splitlines()[0] if self.message.strip() else ""
         head = f"{APP_NAME} {APP_VERSION} — {self.kind_name}"
-        return f"{head}: {first[:80]}" if first else head
+        return tr("{name}: {value}", name=head, value=first[:80]) if first else head
 
     def as_text(self) -> str:
         """Die Sendung als lesbarer Text — genau das, was ankommt."""
@@ -212,7 +212,7 @@ class Ticket:
             self.message.strip(),
         ]
         if self.contact:
-            lines.extend(["", f"{tr('Rückantwort an')}: {self.contact}"])
+            lines.extend(["", tr("Rückantwort an: {contact}", contact=self.contact)])
         tail = ["", "--- system ---"]
         tail.extend(f"{name}: {value}" for name, value in environment().items())
         if self.attachments:

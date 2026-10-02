@@ -366,7 +366,7 @@ def _record_unhandled(error: BaseException, traceback: TracebackType | None, con
             written = report.write(record, directory=folder)
             from app.i18n import tr
 
-            _diagnostic_stderr(f"{tr('Der Fehlerbericht liegt hier')}: {written}")
+            _diagnostic_stderr(tr("Der Fehlerbericht liegt hier: {folder}", folder=written))
             if folder is not None:
                 _trim_automatic_reports(folder, _CRASH_KEEP)
         except Exception as problem:

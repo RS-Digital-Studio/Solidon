@@ -136,7 +136,7 @@ def terminal_ask(question: str, choices: list[str]) -> str:
         print(f"  {index}) {choice}")
     while True:
         try:
-            answer = input(f"{tr('Auswahl')} [1-{len(choices)}]: ").strip()
+            answer = input(tr("Auswahl [1-{count}]: ", count=len(choices))).strip()
         except EOFError as end:
             raise UserError(
                 title=_("Diese Frage braucht eine Antwort, und hier ist niemand."),
@@ -361,7 +361,7 @@ def command_new(args: argparse.Namespace) -> int:
     _known("Drucker", args.printer, profiles.printer_profiles())
     project = new_project(printer=args.printer, material=args.material)
     path = save(project, Path(args.path))
-    print(f"{tr('Neues Projekt')}: {path}")
+    print(tr("Neues Projekt: {path}", path=path))
     return 0
 
 
@@ -387,11 +387,13 @@ def command_info(args: argparse.Namespace) -> int:
     document = project.document
     result = run_evaluation(project, path, quiet=True)
 
-    print(f"{tr('Projekt')}: {path.name}")
+    print(tr("Projekt: {name}", name=path.name))
     print(
-        f"{tr('Drucker')}: {document.printer or '-'}   "
-        f"{tr('Material')}: {document.material or '-'}   "
-        f"{tr('Format')}: {document.format_version}"
+        tr("Drucker: {value}", value=document.printer or "-")
+        + "   "
+        + tr("Material: {value}", value=document.material or "-")
+        + "   "
+        + tr("Format: {version}", version=document.format_version)
     )
     if document.parameters:
         print(tr("Parameter"))
@@ -432,7 +434,7 @@ def command_import(args: argparse.Namespace) -> int:
     project = open_project(path)
 
     if not incoming.is_file():
-        print(f"{tr('Die Datei gibt es nicht')}: {incoming}", file=sys.stderr)
+        print(tr("Die Datei gibt es nicht: {path}", path=incoming), file=sys.stderr)
         return 1
 
     payload = read_local_payload(incoming)
@@ -489,7 +491,7 @@ def command_import(args: argparse.Namespace) -> int:
     if not result.complete:
         return 1
     save(project, path)
-    print(f"{tr('Geladen')}: {name}")
+    print(tr("Geladen: {name}", name=name))
     return 0
 
 
@@ -545,7 +547,7 @@ def _revised(
     if not result.complete:
         return 1
     save(project, path)
-    print(f"{tr('Übernommen')}: {transaction.title}")
+    print(tr("Übernommen: {title}", title=transaction.title))
     return 0
 
 
@@ -611,7 +613,7 @@ def command_run(args: argparse.Namespace) -> int:
     if not result.complete:
         return 1
     save(project, path)
-    print(f"{tr('Ausgeführt')}: {spec.name}")
+    print(tr("Ausgeführt: {operation}", operation=spec.name))
     return 0
 
 
@@ -664,15 +666,23 @@ def command_recognize(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             if standing:
-                print(f"{tr('Gemeint war vielleicht')}: {', '.join(standing)}", file=sys.stderr)
+                print(
+                    tr("Gemeint war vielleicht: {names}", names=", ".join(standing)),
+                    file=sys.stderr,
+                )
         else:
             print(
                 tr("Für diese Objekte wurde keine Merkmalserkennung ausgelassen."), file=sys.stderr
             )
             if standing:
                 print(
-                    f"  - {tr('Neu entscheiden')}: {DISTRIBUTION_NAME} recognize {args.path} "
-                    f"--on {' '.join(standing)}",
+                    "  - "
+                    + tr(
+                        "Neu entscheiden: {command}",
+                        command=(
+                            f"{DISTRIBUTION_NAME} recognize {args.path} --on {' '.join(standing)}"
+                        ),
+                    ),
                     file=sys.stderr,
                 )
         return 1
@@ -693,7 +703,7 @@ def command_undo(args: argparse.Namespace) -> int:
         print(tr("Es gibt nichts zurückzunehmen."))
         return 1
     save(project, path)
-    print(f"{tr('Zurückgenommen')}: {transaction.title}")
+    print(tr("Zurückgenommen: {title}", title=transaction.title))
     return 0
 
 
@@ -757,7 +767,7 @@ def command_export(args: argparse.Namespace) -> int:
 
     written = write_plan(plan, Path(args.directory), args.export_format)
     for target in written:
-        print(f"{tr('Geschrieben')}: {target}")
+        print(tr("Geschrieben: {path}", path=target))
     return 0
 
 
@@ -1010,18 +1020,30 @@ def _mistyped_operation(argv: list[str]) -> int | None:
     # beides nutzlos. Erkannt wird der Pfad am Namen und nicht am Dateisystem —
     # ein vertippter Pfad ist derselbe Fall und verdient dieselbe Antwort.
     if wanted.lower().endswith((".p3d", ".stl", ".3mf", ".obj", ".step")) or "/" in wanted:
-        print(f"\n{tr('Das ist ein Dateipfad und keine Operation')}: {wanted}", file=sys.stderr)
         print(
-            f"  - {tr('Bei «run» kommt die Operation zuerst, der Pfad danach')}: "
-            "solidon3d run create_box <pfad>",
+            "\n" + tr("Das ist ein Dateipfad und keine Operation: {path}", path=wanted),
+            file=sys.stderr,
+        )
+        print(
+            "  - "
+            + tr(
+                "Bei «run» kommt die Operation zuerst, der Pfad danach: {command}",
+                command="solidon3d run create_box <pfad>",
+            ),
             file=sys.stderr,
         )
         return 1
     near = difflib.get_close_matches(wanted, [spec.name for spec in REGISTRY.all()], n=3)
-    print(f"\n{tr('Diese Operation gibt es nicht')}: {wanted}", file=sys.stderr)
+    print(
+        "\n" + tr("Diese Operation gibt es nicht: {operation}", operation=wanted),
+        file=sys.stderr,
+    )
     if near:
-        print(f"{tr('Gemeint war vielleicht')}: {', '.join(near)}", file=sys.stderr)
-    print(f"  - {tr('Alle Operationen auflisten')}: solidon3d ops", file=sys.stderr)
+        print(tr("Gemeint war vielleicht: {names}", names=", ".join(near)), file=sys.stderr)
+    print(
+        "  - " + tr("Alle Operationen auflisten: {command}", command="solidon3d ops"),
+        file=sys.stderr,
+    )
     return 1
 
 
@@ -1142,17 +1164,26 @@ def main(argv: list[str] | None = None) -> int:
             from app.core.paths import user_log_dir
 
             print(
-                f"  {tr('Der Fehlerbericht ließ sich nicht ablegen')}: "
-                f"{exception_report(denied).detail}",
+                "  "
+                + tr(
+                    "Der Fehlerbericht ließ sich nicht ablegen: {reason}",
+                    reason=exception_report(denied).detail,
+                ),
                 file=sys.stderr,
             )
-            print(f"  - {tr('Das Protokoll liegt hier')}: {user_log_dir()}", file=sys.stderr)
             print(
-                f"  - {tr('Damit hilft der Support weiter')}: {SUPPORT_ADDRESS}",
+                "  - " + tr("Das Protokoll liegt hier: {path}", path=user_log_dir()),
+                file=sys.stderr,
+            )
+            print(
+                "  - " + tr("Damit hilft der Support weiter: {address}", address=SUPPORT_ADDRESS),
                 file=sys.stderr,
             )
         else:
-            print(f"  - {tr('Der Fehlerbericht liegt hier')}: {folder}", file=sys.stderr)
+            print(
+                "  - " + tr("Der Fehlerbericht liegt hier: {folder}", folder=folder),
+                file=sys.stderr,
+            )
         return 1
 
 

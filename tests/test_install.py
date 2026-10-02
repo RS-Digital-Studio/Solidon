@@ -300,6 +300,57 @@ def test_the_two_reasons_a_program_is_missing_stay_apart(
     assert not by_id("comfyui").by_hand(), "wo es keine Kennung gibt, gibt es keinen Befehl"
 
 
+def test_french_installation_reasons_keep_names_and_complete_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei echte Absagegründe und die Zeitgrenze behalten Namen und Handlung."""
+    import subprocess
+
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
+
+    manager = install.Manager("brew", "brew:12.5", ())
+    monkeypatch.setattr(install, "for_platform", lambda: manager)
+    assert by_id("slicer").identifier(manager)
+    assert not by_id("comfyui").identifier(manager)
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    try:
+        assert str(install.why_not(by_id("slicer"))) == (
+            "Pour cela, Solidon a besoin ici d'un gestionnaire de paquets, "
+            "et aucun n'est en place : brew:12.5. "
+            + tr("Die Seite des Herstellers führt die Datei zum Selbstinstallieren.")
+        )
+        assert str(install.why_not(by_id("comfyui"))) == (
+            "Il n'est pas dans le gestionnaire de paquets de ce système : brew:12.5. "
+            + tr("Es wird von Hand installiert, und die Seite steht daneben.")
+        )
+
+        def expired(_command: list[str], _progress: object) -> None:
+            raise subprocess.TimeoutExpired([manager.program], install.TIMEOUT_SECONDS)
+
+        monkeypatch.setattr(install, "present", lambda _requirement: False)
+        monkeypatch.setattr(install, "installable", lambda _requirement: True)
+        monkeypatch.setattr(install, "_command", lambda _requirement: [manager.program])
+        monkeypatch.setattr(install, "_stream", expired)
+        result = install.install(by_id("slicer"))
+        assert not result.installed
+        assert str(result.reason) == (
+            "Le gestionnaire de paquets tournait encore quand la limite de temps est arrivée : "
+            + str(int(install.TIMEOUT_SECONDS // 60))
+            + " min. "
+            + tr("Sie ist beendet worden, die Installation kann halb fertig sein.")
+            + " "
+            + tr(
+                "Ein zweiter Versuch nimmt den Rest; sonst führt die Seite des "
+                "Herstellers die Datei zum Selbstinstallieren."
+            )
+        )
+    finally:
+        set_language(previous)
+
+
 def test_a_manager_that_needs_a_password_is_not_used() -> None:
     """``apt`` und ``dnf`` fehlen mit Absicht.
 

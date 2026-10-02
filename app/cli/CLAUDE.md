@@ -61,6 +61,8 @@ Registerbefehl und nicht eigens. `info` nennt ausgeschaltete Schritte mit
 - **Ausgewertet wird synchron.** Kein Thread, keine Halteleine.
 - **`tr()` gilt auch hier.** Eine Meldung auf der Kommandozeile ist ein
   Oberflächentext wie jeder andere (Regel 20).
+  Beschriftung und Satzzeichen stehen im vollständigen Rahmen; Kennungen,
+  Dateipfade und Befehle bleiben unveränderte Platzhalterwerte.
 
 ## Probelauf
 

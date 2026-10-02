@@ -12,6 +12,7 @@ import pytest
 from app.cli.main import main
 from app.core.registry import REGISTRY
 from app.core.scene.project import load
+from app.i18n.catalog import available_languages
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -29,6 +30,104 @@ def test_every_operation_is_reachable_from_the_command_line(
     printed = capsys.readouterr().out
     for spec in REGISTRY.all():
         assert spec.name in printed
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_cli_labels_keep_catalogue_punctuation_and_raw_values(
+    language: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Der echte Infobefehl erhält Kennungen, Pfadname und die drei Trenner."""
+    import argparse
+    from types import SimpleNamespace
+
+    from app.cli import main as cli
+    from app.core.scene.project import new_project
+    from app.core.types import Scene
+    from app.i18n import get_language, set_language, tr
+    from app.i18n.catalog import install_language
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    try:
+        project = new_project("Printer:12.5", "Material:PETG")
+        result = SimpleNamespace(scene=Scene(), stopped_at=None, complete=True)
+        monkeypatch.setattr(cli, "open_project", lambda _path: project)
+        monkeypatch.setattr(cli, "run_evaluation", lambda *_args, **_kwargs: result)
+        path = Path("pieces/12.5_box.p3d")
+        assert cli.command_info(argparse.Namespace(path=str(path))) == 0
+        lines = capsys.readouterr().out.splitlines()
+        separator = " : " if language == "fr" else ": "
+        assert lines[0] == tr("Projekt: {name}", name=path.name)
+        assert lines[1] == (
+            tr("Drucker")
+            + separator
+            + "Printer:12.5   "
+            + tr("Material")
+            + separator
+            + "Material:PETG   "
+            + tr("Format")
+            + separator
+            + str(project.document.format_version)
+        )
+        if language == "fr":
+            assert lines[0] == "Projet : 12.5_box.p3d"
+    finally:
+        set_language(previous)
+
+
+def test_french_cli_recovery_keeps_raw_paths_and_commands(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Pfadfehler und unbekannte Operation zeigen die echten unveränderten Befehle."""
+    from app.cli import main as cli
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    try:
+        path = "pieces/12.5_box.stl"
+        assert cli._mistyped_operation(["run", path]) == 1
+        assert capsys.readouterr().err == (
+            "\nCeci est un chemin de fichier, pas une opération : "
+            + path
+            + "\n  - Avec «run», l'opération vient d'abord, le chemin ensuite : "
+            "solidon3d run create_box <pfad>\n"
+        )
+        assert cli._mistyped_operation(["run", "zz_unregistered:12.5"]) == 1
+        assert capsys.readouterr().err == (
+            "\nCette opération n'existe pas : zz_unregistered:12.5\n"
+            "  - Lister toutes les opérations : solidon3d ops\n"
+        )
+    finally:
+        set_language(previous)
+
+
+def test_french_terminal_choice_keeps_range_spacing_and_selected_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der tatsächliche input-Aufruf übersetzt auch den nummerierten Präfix."""
+    from app.cli import main as cli
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    prompts: list[str] = []
+
+    def answer(prompt: str) -> str:
+        prompts.append(prompt)
+        return "2"
+
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    monkeypatch.setattr("builtins.input", answer)
+    try:
+        assert cli.terminal_ask("Quelle pièce ?", ["piece:1.5", "piece:2.5"]) == "piece:2.5"
+        assert prompts == ["Sélection [1-2] : "]
+    finally:
+        set_language(previous)
 
 
 def test_the_cli_speaks_the_settings_language(
