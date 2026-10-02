@@ -47,6 +47,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
 - Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
+- *Orientar para imprimir*, *Girar* y *Trasladar* funcionan también con modelos de superficies STEP, con giros de casi 180° y en caras reconocidas en parte. El cuerpo sigue exacto.
 
 ### Taladros, ranuras y división
 

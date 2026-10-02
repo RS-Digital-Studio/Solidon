@@ -71,6 +71,7 @@ Nutzen da und sonst nichts.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
 - Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
+- *Druckoptimal ausrichten*, *Drehen* und *Verschieben* gelingen auch an STEP-Flächenmodellen, bei Drehungen um fast 180° und an teilweise erkannten Flächen. Der Körper bleibt exakt.
 
 ### Bohrungen, Langlöcher und Teilen
 

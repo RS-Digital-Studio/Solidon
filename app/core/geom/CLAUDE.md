@@ -140,8 +140,8 @@ gibt auch bei Fehler seine Wartenden frei, nimmt offene Starts mit und trennt
 alte Reservierungen/Rückgaben/Absagen vom neuen Bestand; Regel: `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,
-Merkmale und Teilträger gemeinsam; ein unbelegter Ausschnitt einer nativen
-Fläche entfällt, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
+Merkmale und Teilträger gemeinsam; ein Teil einer nativen Fläche folgt nur
+belegt, sonst entfällt er, statt zu wachsen; `apply` vermerkt jede starre Bewegung ohne
 Spiegelung am Netz, `perceive.features.note_movement`) · `ops.py` („Transformation“,
 `place_on_bed`, `place_group_on_bed` ohne vorberechneten Versatz;
 `repair_object` gibt einen heilen Eingang unverändert zurück) · `align.py` ·

@@ -46,6 +46,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
 - A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
 - Exportar e fatiar usam o cálculo fino em vez da vista mais rápida da janela. Cones e peças fundidas suavemente chegam assim lisos ao ficheiro.
+- *Orientar para impressão*, *Rodar* e *Deslocar* funcionam também em modelos de superfícies STEP, com rotações de quase 180° e em faces reconhecidas em parte. O corpo continua exato.
 
 ### Furos, furos oblongos e divisão
 

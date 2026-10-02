@@ -2882,6 +2882,46 @@ def transformed(solid: Solid, matrix: Transform, *, cancelled: CancelToken | Non
     return transformed_with_faces(solid, matrix, cancelled=cancelled)[0]
 
 
+#: Bis wohin eine Matrix als Rundungsrauschen einer Ähnlichkeit gilt, relativ
+#: zum Quadrat ihres Maßstabs. Eine Drehung aus mehreren Schritten trägt mehr
+#: als die 64 eps einer einzelnen; eine gewollte Scherung dieser Größe
+#: verschöbe an einem Meter einen Mikrometer.
+_SIMILARITY_NOISE: Final = 1e-9
+
+
+def _nearest_similarity(linear: Any, scale: float, *, mirrored: bool) -> Any:
+    """Die Ähnlichkeit, deren Rauschen ``linear`` ist — Gram-Schmidt in Grundrechenarten.
+
+    Ohne Zerlegung über LAPACK, damit die Lage auf jeder Plattform dieselbe
+    bleibt (RM-187). Ein Maßstab, der nur im Rauschen von eins abweicht, ist
+    eins: sonst baute OCCT die Flächen neu, statt die Form nur zu legen.
+    """
+    import numpy as np
+
+    def unit(vector: tuple[float, float, float]) -> tuple[float, float, float]:
+        length = math.hypot(*vector)
+        return (vector[0] / length, vector[1] / length, vector[2] / length)
+
+    first = unit((float(linear[0, 0]), float(linear[1, 0]), float(linear[2, 0])))
+    column = (float(linear[0, 1]), float(linear[1, 1]), float(linear[2, 1]))
+    along = first[0] * column[0] + first[1] * column[1] + first[2] * column[2]
+    second = unit(
+        (column[0] - along * first[0], column[1] - along * first[1], column[2] - along * first[2])
+    )
+    sign = -1.0 if mirrored else 1.0
+    third = (
+        sign * (first[1] * second[2] - first[2] * second[1]),
+        sign * (first[2] * second[0] - first[0] * second[2]),
+        sign * (first[0] * second[1] - first[1] * second[0]),
+    )
+    if abs(scale - 1.0) <= _SIMILARITY_NOISE:
+        scale = 1.0
+    return np.array(
+        [[scale * first[row], scale * second[row], scale * third[row]] for row in range(3)],
+        dtype=np.float64,
+    )
+
+
 def _invalid_transform(*, result: bool = False) -> GeometryError:
     """Nennt ungültige Eingaben und nicht belegbare native Ergebnisse getrennt."""
     return GeometryError(
@@ -2945,17 +2985,27 @@ def transformed_with_faces(
     if np.allclose(values, np.eye(4), atol=roundoff, rtol=0.0):
         return solid, tuple(range(len(solid._copied_faces)))
     try:
-        if (
-            solid.solid_count < 1
-            or not solid.is_closed
-            or not BRepCheck_Analyzer(solid.shape).IsValid()
-        ):
-            raise _invalid_transform(result=True)
         gram = linear.T @ linear
         squared_scale = float(np.trace(gram) / 3.0)
-        similarity = bool(
-            np.allclose(gram, np.eye(3) * squared_scale, atol=roundoff * squared_scale, rtol=0.0)
-        )
+        deviation = float(np.abs(gram - np.eye(3) * squared_scale).max())
+        similarity = bool(deviation <= roundoff * squared_scale)
+        if not similarity and deviation <= _SIMILARITY_NOISE * squared_scale:
+            # Rauschen einer Drehung, keine Scherung: auf die Ähnlichkeit
+            # legen, sonst nähme sie den Weg über GTransform und wäre keine
+            # starre Bewegung mehr (RM-407, 175,7° an carpet-corner-clip.step).
+            values = values.copy()
+            values[:3, :3] = linear = _nearest_similarity(
+                linear, math.sqrt(squared_scale), mirrored=determinant < 0.0
+            )
+            determinant = float(np.linalg.det(linear))
+            similarity = True
+        rigid = similarity and math.isclose(determinant, 1.0, rel_tol=roundoff, abs_tol=0.0)
+        # Ein Flächenmodell ohne geschlossenes Volumen ist kein Grund, es nicht
+        # zu bewegen (RM-407, ``surfaces.step``): Die starre Bewegung belegt
+        # sich über die Partnerschaft und erbt die Gültigkeit ihrer Eingabe.
+        closed = solid.solid_count >= 1 and solid.is_closed
+        if not rigid and not BRepCheck_Analyzer(solid.shape).IsValid():
+            raise _invalid_transform(result=True)
         builder: Any
         # Wessen Form der Builder bekommt, und welche Fläche dieser Form zu
         # welcher Fläche des Eingangs gehört: ohne Kopie dieselbe Nummer, mit
@@ -2994,24 +3044,26 @@ def transformed_with_faces(
         # allgemeine affine Abbildung bauen die Flächen neu — eine Lage trägt
         # keinen Maßstab —, und dort belegt das Integral gegen die Determinante
         # weiterhin, dass nichts verloren ging.
-        rigid = similarity and math.isclose(determinant, 1.0, rel_tol=roundoff, abs_tol=0.0)
         if rigid and not shape.IsPartner(solid.shape):
             raise _invalid_transform(result=True)
-        if not BRepCheck_Analyzer(shape).IsValid():
+        if not rigid and not BRepCheck_Analyzer(shape).IsValid():
             raise _invalid_transform(result=True)
         result = owner.replacing(shape, history=builder, cancelled=cancelled)
-        if result.solid_count != solid.solid_count or not result.is_closed:
+        if result.solid_count != solid.solid_count or result.is_closed != solid.is_closed:
             raise _invalid_transform(result=True)
-        if not rigid:
-            expected_volume = solid._properties("volume", cancelled=cancelled).mass * abs(
-                determinant
-            )
+        # Ohne Volumen belegt die Fläche den Maßstab; eine allgemeine affine
+        # Abbildung eines Flächenmodells hat keinen festen Flächenfaktor, dort
+        # tragen Gültigkeit und die vollständige Flächenzuordnung unten.
+        measure = "volume" if closed else "surface" if similarity else None
+        if not rigid and measure is not None:
+            factor = abs(determinant) if closed else squared_scale
+            expected = solid._properties(measure, cancelled=cancelled).mass * factor
             if (
-                expected_volume <= 0.0
-                or not math.isfinite(expected_volume)
+                expected <= 0.0
+                or not math.isfinite(expected)
                 or not math.isclose(
-                    result._properties("volume", cancelled=cancelled).mass,
-                    expected_volume,
+                    result._properties(measure, cancelled=cancelled).mass,
+                    expected,
                     rel_tol=2.0 * INTEGRAL_RELATIVE_ERROR,
                     abs_tol=0.0,
                 )

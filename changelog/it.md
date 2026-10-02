@@ -46,6 +46,7 @@ scrive in `website/version.json`.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
 - Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
+- *Orienta per la stampa*, *Ruota* e *Sposta* funzionano anche con modelli di superfici STEP, con rotazioni di quasi 180° e su facce riconosciute in parte. Il corpo resta esatto.
 
 ### Fori, asole e divisione
 

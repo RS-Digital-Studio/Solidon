@@ -46,6 +46,7 @@ it into `website/version.json`.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
 - Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
+- *Orient for printing*, *Rotate* and *Move* now also work on STEP surface models, for turns of almost 180° and on partly recognised faces. The body stays exact.
 
 ### Holes, slots and splitting
 

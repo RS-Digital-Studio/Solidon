@@ -24,6 +24,7 @@ from app.core.brep.kernel import Solid, tessellate
 from app.core.errors import GeometryError, NeedsSolidError, ValidationError
 from app.core.export.writer import export_bytes, plan_export, write_plan
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.ingest.plan import import_plan
 from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
@@ -1738,6 +1739,86 @@ def test_affine_translation_does_not_round_a_small_motion_away() -> None:
     assert result.bounds.minimum[2] == pytest.approx(1e-7, abs=1e-12)
 
 
+def _counting_integrals(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Welche Integrale der exakte Kern rechnet — eine starre Bewegung rechnet keins."""
+    integrals: list[str] = []
+    original = Solid._properties
+
+    def counting(self: Solid, kind: str, *, cancelled: Any = None) -> Any:
+        integrals.append(kind)
+        return original(self, kind, cancelled=cancelled)
+
+    monkeypatch.setattr(Solid, "_properties", counting)
+    return integrals
+
+
+def _surface_kinds(solid: Solid) -> list[Any]:
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+
+    return sorted(int(BRepAdaptor_Surface(face).GetType()) for face in solid.faces())
+
+
+def test_an_open_shell_moves_turns_and_scales_like_a_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """RM-407 a: Ein Flächenmodell ließ sich nicht einmal um 1 mm verschieben.
+
+    Die Bewegung verlangte einen geschlossenen Körper, und die Meldung riet,
+    „die Änderung zu verkleinern“ (``surfaces.step``, ``obj_2``). Starr belegt
+    sie sich über die Partnerschaft, ein Maßstab über die Fläche.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import rotation
+
+    shell = open_box()
+    area = shell.area
+    integrals = _counting_integrals(monkeypatch)
+    moved = edit.moved(shell, (0.0, 0.0, 1.0))
+    turned, mapping = edit.transformed_with_faces(shell, rotation("x", 90.0))
+    assert integrals == [], "eine starre Bewegung rechnet kein Integral"
+    scaled = edit.transformed(shell, np.diag((2.0, 2.0, 2.0, 1.0)))
+    assert integrals.count("surface") == 2, "der Maßstab belegt sich über die Fläche"
+    sheared = edit.transformed(
+        shell,
+        ((1.0, 0.3, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0), (0.0, 0.0, 1.0, 0.0), (0.0, 0.0, 0.0, 1.0)),
+    )
+
+    assert moved.bounds.minimum[2] == pytest.approx(shell.bounds.minimum[2] + 1.0, abs=EPS_GEOM)
+    assert turned.bounds.maximum[1] == pytest.approx(0.0, abs=EPS_GEOM), "der Boden liegt bei y = 0"
+    assert sorted(mapping) == list(range(5))
+    for result in (moved, turned, scaled, sheared):
+        assert result.solid_count == 0 and not result.is_closed
+    assert scaled.area == pytest.approx(4.0 * area, rel=1e-9)
+    assert sheared.face_count == 5
+
+
+def test_a_rotation_with_rounding_noise_stays_a_rigid_motion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RM-407 b: 2,7·10⁻¹⁴ neben einer Drehung war keine Drehung mehr.
+
+    Die Matrix ging über GTransform, wurde zu NURBS, verlor die Partnerschaft
+    und fiel durch (``carpet-corner-clip.step``, 175,7°). Rauschen dieser
+    Größe wird auf die Drehung gelegt; eine echte Scherung bleibt eine.
+    """
+    import numpy as np
+
+    source = edit.fillet(block(), 3.0, "vertical")
+    volume, kinds = source.volume, _surface_kinds(source)
+    angle = math.radians(175.7)
+    matrix = np.eye(4)
+    matrix[1:3, 1:3] = ((math.cos(angle), -math.sin(angle)), (math.sin(angle), math.cos(angle)))
+    matrix[0, 1] += 3e-14
+    integrals = _counting_integrals(monkeypatch)
+
+    turned, mapping = edit.transformed_with_faces(source, matrix)
+
+    assert integrals == [], "eine starre Bewegung rechnet kein Volumen"
+    assert _surface_kinds(turned) == kinds, "Ebenen und Zylinder bleiben, was sie sind"
+    assert turned.volume == pytest.approx(volume, rel=1e-12)
+    assert sorted(mapping) == list(range(source.face_count))
+    assert matrix[0, 1] == 3e-14, "die Matrix des Aufrufers bleibt, wie sie war"
+
+
 @pytest.mark.parametrize(
     "failure_kind", ["not_done", "wrong_volume", "open_face", "missing_mapping"]
 )
@@ -2969,6 +3050,54 @@ def test_a_step_file_becomes_a_scene_object(profile: Profile, tmp_path: Path) ->
     # Quader 40 x 30 x 20 minus vier Kantenrundungen R 3 über die Höhe 20:
     # 24 000 - 20 * (36 - 9 pi) = 23 845,487.
     assert entry.mesh.volume == pytest.approx(23845.4867, rel=1e-6)
+
+
+@pytest.mark.parametrize("name", ["step/surfaces.step", "threads/gegen_naht.step"])
+def test_tilting_and_orienting_an_imported_step_keeps_every_exact_body(
+    profile: Profile, name: str
+) -> None:
+    """RM-407 a und c: Ausrichten brach an Flächenmodell und Teilflächenmerkmal ab.
+
+    ``surfaces.step`` trägt eine offene Hülle, ``gegen_naht.step`` ein
+    erkanntes ``curve_1`` über 3 647 der 3 649 Dreiecke seiner Flächen; jede
+    Bewegung sperrte mit „Wählen Sie vollständige Flächen aus“.
+    """
+    payload = (Path(__file__).parent / "data" / name).read_bytes()
+    project = new_project("centauri-carbon-2", "petg")
+    project.sources["src_1"] = payload
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=f"sources/{Path(name).name}", sha256=""
+    )
+    history = History(project.document)
+    # Der Weg der Oberfläche: ``import_plan`` wählt beide Körper der Datei.
+    plan = import_plan("src_1", Path(name).name, payload, "auto", first_model=True)
+    history.apply(plan.title, [plan.draft])
+    loaded = evaluate(project.document, profile, sources=ProjectSources(project))
+    names = sorted(loaded.scene.objects)
+    history.apply(
+        "Kippen",
+        [
+            OperationDraft(op="rotate_object", inputs=(oid,), params={"axis": "x", "angle": 90.0})
+            for oid in names
+        ],
+    )
+    tilted = evaluate(project.document, profile, sources=ProjectSources(project))
+    history.apply("Ausrichten", [OperationDraft(op="orient_for_print", params={})])
+    oriented = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    for result in (tilted, oriented):
+        assert result.complete, result.findings
+        for oid in names:
+            before, after = loaded.scene.objects[oid], result.scene.objects[oid]
+            assert after.kind == "brep"
+            assert after.mesh.is_closed == before.mesh.is_closed
+            assert after.mesh.area == pytest.approx(before.mesh.area, rel=1e-9)
+    if name.startswith("threads/"):
+        curve = loaded.scene.objects["obj_1"].features["curve_1"]
+        followed = tilted.scene.objects["obj_1"].features["curve_1"]
+        assert len(followed.face_indices) == len(curve.face_indices) == 3647
+    else:
+        assert not loaded.scene.objects["obj_2"].mesh.is_closed, "die Datei trägt eine offene Hülle"
 
 
 def test_the_stack_carries_a_body_through_fillet_and_conversion(

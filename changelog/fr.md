@@ -47,6 +47,7 @@ dans `website/version.json`.
 - Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
 - La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
 - L'export et le tranchage utilisent le calcul fin au lieu de la vue plus rapide de la fenêtre. Les cônes et les pièces fusionnées en douceur arrivent ainsi lisses dans le fichier.
+- *Orienter pour l'impression*, *Pivoter* et *Déplacer* fonctionnent aussi sur les surfaces STEP, pour des rotations de près de 180°, sur des faces reconnues en partie. Le corps reste exact.
 
 ### Perçages, trous oblongs et découpe
 

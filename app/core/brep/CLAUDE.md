@@ -64,9 +64,11 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Flächen- und Filamenthistorie.
 - **`transformed_with_faces`** bleibt bei Maßstab, Spiegelung, Scherung exakt
   (`gp_GTrsf`; `gp_Trsf.SetValues` orthogonalisiert); Matrix endlich, affin,
-  umkehrbar; Körperzahl, Geschlossenheit, Gültigkeit halten. Starr belegt
-  `IsPartner`, kein Integral, sonst das skalierte Volumen; eine Identität baut
-  nichts.
+  umkehrbar; Körperzahl, Geschlossenheit, Gültigkeit halten. Rauschen bis
+  `_SIMILARITY_NOISE` legt `_nearest_similarity` auf die Ähnlichkeit. Starr
+  belegt `IsPartner`, kein Integral und keine Gültigkeitsprüfung, auch an
+  offenen Hüllen; sonst das skalierte Volumen, ohne Volumen die Fläche; eine
+  Identität baut nichts.
 - **Was ein Körper über seine Flächen weiß, weiß er einmal** (`Solid.surface`,
   `face_properties`, `face_index`); Kopie und neue Qualität beginnen kalt.
   Grenzen aus `AddOptimal`, kein nativer Aufruf je Frame — ein Cache ersetzt
