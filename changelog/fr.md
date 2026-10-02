@@ -110,6 +110,7 @@ dans `website/version.json`.
 - Certains constats qui visent une étape l'ouvrent pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.
+- Quand d'autres programmes occupent l'ordinateur, *Annuler* arrête un long calcul en moins d'une seconde au lieu de demander un redémarrage après plusieurs secondes.
 
 ## 0.5.1
 

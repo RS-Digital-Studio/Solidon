@@ -110,6 +110,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Algunos avisos que se refieren a un paso lo abren para cambiarlo, por ejemplo «Cambiar tamaño» tras «Llevar a la cota».
 - Una línea de resumen del informe como «Reducir al volumen de impresión» es un solo paso de deshacer para todos los cuerpos.
 - La ayuda de una operación salta en el manual directamente a su entrada, y la referencia nombra campos y opciones como aparecen en el diálogo.
+- Si otros programas tienen el ordenador ocupado, *Cancelar* detiene un cálculo largo en menos de un segundo en lugar de pedir un reinicio tras varios segundos.
 
 ## 0.5.1
 

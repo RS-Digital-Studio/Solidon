@@ -109,6 +109,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Algumas constatações que se referem a um passo abrem-no para alterar, por exemplo «Alterar tamanho» depois de «Escalar para a cota».
 - Uma linha de resumo do relatório como «Reduzir para o volume de impressão» é um único passo de anular para todos os corpos.
 - A ajuda de uma operação salta no manual diretamente para a sua entrada, e a referência nomeia campos e opções como aparecem no diálogo.
+- Quando outros programas ocupam o computador, *Cancelar* para um cálculo longo em menos de um segundo, em vez de pedir um reinício após vários segundos.
 
 ## 0.5.1
 

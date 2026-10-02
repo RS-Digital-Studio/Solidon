@@ -134,6 +134,7 @@ Nutzen da und sonst nichts.
 - Einige Befunde, die einen Schritt meinen, öffnen ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
 - Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 - Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.
+- Lasten andere Programme den Rechner aus, bricht *Abbrechen* eine lange Rechnung in unter einer Sekunde ab, statt nach Sekunden einen Neustart zu verlangen.
 
 ## 0.5.1
 
