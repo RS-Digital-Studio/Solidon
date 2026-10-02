@@ -17574,9 +17574,9 @@ def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> Secti
 
 @register_op(
     name="cut_away",
-    result_kind="mesh",
     # Eine neu entstandene Berührlinie wird nicht als Modell übernommen.
-    cache_version="3",
+    # 4: Ein exakter Körper bleibt exakt (RM-400).
+    cache_version="4",
     title=_("Abschneiden"),
     category="prepare",
     params=CutAwayParams,
@@ -17608,6 +17608,8 @@ def cut_away(ctx: OpContext) -> OpResult:
     plane = _cut_away_plane(params, mesh, source.features)
     if params.keep == "above":
         plane = plane.flipped()
+    if source.kind == "brep":
+        return _cut_away_exact(ctx, source, plane, params.position)
     kept = cut(mesh, plane)
     check_cut_contact(kept, params.position)
     if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:
@@ -17647,6 +17649,99 @@ def cut_away(ctx: OpContext) -> OpResult:
             dataclasses.replace(source, mesh=kept.mesh, features=_without_old_triangles(features))
         ],
         findings=findings,
+    )
+
+
+def _cut_away_exact(
+    ctx: OpContext, source: SceneObject, plane: SectionPlane, position: float
+) -> OpResult:
+    """*Abschneiden* am exakten Körper: Er bleibt exakt (RM-400).
+
+    Bis hierher machte die Operation aus jedem exakten Körper ein Netz — auch
+    für einen geraden Schnitt, und mit ihm gingen Flächen, Kanten und der
+    STEP-Export. Weggenommen wird jetzt ein Quader, dessen Unterseite in der
+    Schnittebene liegt und der den Körper auf der anderen Seite ganz
+    überdeckt; die Schnittfläche ist damit eine echte Ebene. Die Merkmale
+    behalten ihre Namen, soweit sie bleiben (:func:`_exact_features_after`).
+    """
+    from app.core.brep import edit
+    from app.core.brep.ops import brep_input
+
+    exact, body = brep_input(ctx)
+    tool = edit.transformed(
+        _half_space_box(body, plane), _half_space_frame(body, plane), cancelled=ctx.cancelled
+    )
+    ctx.cancelled.raise_if_cancelled()
+    solid = edit.unified(edit.boolean("difference", [body, tool]))
+    ctx.cancelled.raise_if_cancelled()
+    before = as_mesh_data(body).volume
+    after = as_mesh_data(solid).volume if solid.face_count else 0.0
+    if after <= EPS_GEOM or abs(before - after) <= EPS_GEOM:
+        # Dieselbe Absage wie am Netz: Eine Ebene, die nichts oder alles
+        # nimmt, trifft das Objekt nicht.
+        raise ValidationError(
+            field="position",
+            detail=_("Diese Ebene schneidet nichts vom Objekt ab."),
+            value=position,
+            constraint="no_split",
+        )
+    checked = _exact_body_checked(solid)
+    features, continued, _lost = _exact_features_after(
+        source, checked, expected=None, cancelled=ctx.cancelled
+    )
+    return OpResult(
+        outputs=[dataclasses.replace(exact, mesh=checked, kind="brep", features=features)],
+        feature_continuations=(
+            tuple(
+                FeatureContinuation(FeatureRef(source.id, old_id), new_id)
+                for old_id, new_id in continued
+            ),
+        ),
+    )
+
+
+def _half_space_box(body: Any, plane: SectionPlane) -> Any:
+    """Ein Würfel, der größer ist als alles, was auf einer Seite der Ebene liegen kann."""
+    from app.core.brep import edit
+
+    size = 4.0 * max(float(body.bounds.diagonal), 1.0)
+    return edit.box(size, size, size)
+
+
+def _half_space_frame(body: Any, plane: SectionPlane) -> tuple[tuple[float, ...], ...]:
+    """Legt den Würfel aus :func:`_half_space_box` mit der Unterseite in die Ebene.
+
+    Der Würfel steht auf dem Bett, in X und Y zentriert; seine Z-Achse wird
+    zur Normalen, die Mitte der Unterseite zum Fußpunkt der Körpermitte auf
+    der Ebene. Er reicht damit auf die Seite, die wegfällt — die Normale
+    zeigt aus dem Teil, das bleibt (``SectionPlane``). Elementweise gerechnet
+    (RM-187).
+    """
+    normal = plane.normal
+    centre = [float(value) for value in body.bounds.centre]
+    offset = sum(normal[index] * centre[index] for index in range(3)) - plane.position
+    foot = [centre[index] - offset * normal[index] for index in range(3)]
+    # Eine Hilfsachse quer zur Normalen: die Weltachse, zu der sie am wenigsten zeigt.
+    smallest = min(range(3), key=lambda index: abs(normal[index]))
+    helper = [0.0, 0.0, 0.0]
+    helper[smallest] = 1.0
+    first = [
+        helper[1] * normal[2] - helper[2] * normal[1],
+        helper[2] * normal[0] - helper[0] * normal[2],
+        helper[0] * normal[1] - helper[1] * normal[0],
+    ]
+    length = math.sqrt(first[0] * first[0] + first[1] * first[1] + first[2] * first[2])
+    first = [value / length for value in first]
+    second = [
+        normal[1] * first[2] - normal[2] * first[1],
+        normal[2] * first[0] - normal[0] * first[2],
+        normal[0] * first[1] - normal[1] * first[0],
+    ]
+    return (
+        (first[0], second[0], normal[0], foot[0]),
+        (first[1], second[1], normal[1], foot[1]),
+        (first[2], second[2], normal[2], foot[2]),
+        (0.0, 0.0, 0.0, 1.0),
     )
 
 

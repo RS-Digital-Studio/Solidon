@@ -7213,6 +7213,104 @@ def test_a_tilt_about_the_cutting_axis_itself_is_refused(
     assert any("cut_away" in code for code in codes), codes
 
 
+def _box_of_kind(document: Document, kind: str):
+    """Ein Quader 40 × 30 × 20 als Netz oder als exakter Körper."""
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    history = History(document)
+    history.apply(
+        _("Quader"),
+        [
+            OperationDraft(
+                op="create_box" if kind == "mesh" else "create_brep_box",
+                params={"width": 40.0, "depth": 30.0, "height": 20.0},
+            )
+        ],
+    )
+    return project, history, document.ops[-1].outputs[0]
+
+
+@pytest.mark.parametrize("kind", ["mesh", "brep"])
+@pytest.mark.parametrize(
+    ("params", "volume"),
+    [
+        ({"axis": "z", "position": 10.0}, 12000.0),
+        # Um X durch die Mitte geneigt: Die Schräge hebt sich auf, die Hälfte bleibt.
+        ({"axis": "z", "position": 10.0, "tilt": 30.0, "tilt_axis": "x"}, 12000.0),
+        # Um Y geneigt, nah am Boden: Die Ebene z = 4 - tan 10° · x bleibt über
+        # x ∈ [-20, 20] zwischen 0,47 und 7,53 mm; im Mittel bleiben 4 mm.
+        ({"axis": "z", "position": 4.0, "tilt": 10.0, "tilt_axis": "y"}, 40.0 * 30.0 * 4.0),
+        ({"face": "top", "position": -2.0}, 21600.0),
+    ],
+)
+def test_cutting_away_keeps_the_kind_of_its_body(
+    document: Document, profile: Profile, kind: str, params: dict[str, object], volume: float
+) -> None:
+    """Ein exakter Körper bleibt beim Abschneiden exakt (RM-400).
+
+    Vorher machte *Abschneiden* aus jedem exakten Körper ein Netz, mit
+    Hinweis, aber ohne Flächen, Kanten und STEP. Gerade, geneigt und parallel
+    zu einer Fläche: dieselbe Rechnung an beiden Kernen, dasselbe Volumen,
+    und der Körper behält seine Art.
+    """
+    if kind == "brep":
+        exact_kernel()
+    project, history, made = _box_of_kind(document, kind)
+    wanted = dict(params)
+    if wanted.pop("face", None) == "top":
+        first = evaluate(document, profile, sources=ProjectSources(project))
+        wanted["at_feature"] = next(
+            name
+            for name, feature in first.scene.objects[made].features.items()
+            if feature.kind == "face"
+            and feature.params.get("normal") is not None
+            and float(feature.params["normal"][2]) > 0.99
+        )
+    history.apply(
+        _("Abschneiden"),
+        [OperationDraft(op="cut_away", inputs=(made,), params={**wanted, "keep": "below"})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects[made]
+    assert entry.kind == kind
+    assert "evaluate.exact_became_mesh" not in {f.code for f in result.scene.report.findings}
+    body = as_mesh_data(entry.mesh)
+    assert body.is_watertight
+    assert body.volume == pytest.approx(volume, rel=1e-6)
+
+
+def test_cutting_away_a_body_of_several_shells_cuts_each(
+    document: Document, profile: Profile
+) -> None:
+    """Ein Körper aus mehreren Schalen: Die Ebene schneidet jede, die sie trifft,
+    und keine fällt weg, die ganz auf der bleibenden Seite liegt (RM-400)."""
+    from app.core.geom.mesh import read_mesh
+
+    whole = read_mesh((MESHES / "two_components.stl").read_bytes(), ".stl")
+    assert whole.component_count == 2
+    low, high = whole.raw.bounds
+    middle = float((low[2] + high[2]) / 2.0)
+    result = _cut(
+        document,
+        profile,
+        "two_components.stl",
+        axis="z",
+        position=middle,
+        keep="below",
+        tilt=15.0,
+        tilt_axis="x",
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight
+    assert body.component_count == 2, "beide Schalen bleiben, je um ihren oberen Teil gekürzt"
+    assert 0.0 < body.volume < whole.volume
+
+
 def test_cutting_away_parallel_to_a_face_takes_off_a_layer(
     document: Document, profile: Profile
 ) -> None:
