@@ -121,6 +121,16 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-464 — Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen](#rm-464) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `default_materials` auch bei Orca lesen, Marke aus dem Unterordner, Generic vor Fremdmarke |
 | [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
 | [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
+| [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
+| [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
+| [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
+| [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
+| [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
+| [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
+| [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
+| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
+| [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
+| [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -3288,6 +3298,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Wächter je Programm × Tabellenzeile gegen den Optionsbestand; `prusa-mini` mit
   Schrägnaht in SuperSlicer liefert eine Druckdatei. Bauplan §28, §29.
   Belege: `F:\solidon-review-reports\gcode\befunde_teil1.md` (B1), `gcode\lauf1\`.
+  Nachtrag 02.10.2026 (Stand `09d8e9485`): **Regression gegenüber v0.5.0** — die Schrägnaht kam mit v0.5.1; dort derselbe Absturz (`prusa-mini` Würfel A/B, Pilz, Siebhalter). Schon die eigene Wahl „Schrägnaht aus“ reicht am Bündeldrucker (`scarf_seam_placement = nowhere` plus `external_fill_pattern`), am allgemeinen Drucker die Schrägnaht allein. Mit RM-479 und RM-480 sind alle 108 SuperSlicer-Abstürze der Codex-Matrix zugeordnet (41 Schrägnaht, 64 Bauraum, 3 Baumstütze). Beleg `gcode\befunde.md` (CP-5).
 
 <a id="rm-460"></a>
 
@@ -3307,6 +3318,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ausweisen.
   **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
   Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
+  Regression 02.10.2026: nein — v0.5.1 und v0.5.0 gleich (CC2 35 → `0`, P1S Schlüssel fehlt, kein `M141`/`M191`).
 
 <a id="rm-461"></a>
 
@@ -3322,6 +3334,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   gegen dessen Profilbestand prüfen.
   **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
   Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
+  Regression 02.10.2026: nein — Wert und Tabelle in v0.5.0, v0.5.1 und `09d8e9485` gleich (`slicer_keys.py:335`).
 
 <a id="rm-462"></a>
 
@@ -3338,6 +3351,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   wieder vergleichen.
   **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
   Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
+  Regression 02.10.2026: nein — Code in v0.5.0, v0.5.1 und `09d8e9485` gleich.
 
 <a id="rm-463"></a>
 
@@ -3355,6 +3369,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   je Familie (kleine Umfänge, Überhänge mit festem Tempo, erste Schicht über Raft).
   **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
   `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
+  Regression 02.10.2026: an den Tags nicht nachgefahren. Solidon schreibt `small_perimeter_speed` in keinem Stand (v0.5.0, v0.5.1, `09d8e9485`); der Wert kommt aus dem Herstellerbündel. Am Stand `09d8e9485` unverändert (MK4S 160 → 170, XL 136 → 170, MINI 126 → 131,75 mm/s).
 
 <a id="rm-464"></a>
 
@@ -3372,6 +3387,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Namenslänge.
   **Abnahme:** Wächter je erkanntem Drucker × Material gegen eine Positivliste. Bauplan §29.
   Beleg: `gcode\befunde_teil1.md` (B7).
+  Regression 02.10.2026: nein — v0.5.0, v0.5.1 und `09d8e9485` wählen dieselben Fremdmarken.
 
 <a id="rm-465"></a>
 
@@ -3390,6 +3406,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aus dem Materialvergleich nehmen.
   **Abnahme:** Würfel und Pilz an vier Slicern ohne Fehlalarm bei Standardwerten; Mehrfarbdruck mit
   getrennter Spülmenge. Beleg: `gcode\befunde_teil1.md` (B8), `gcode\matrix.md`.
+  Regression 02.10.2026: nein — `estimate.py` seit v0.5.0 unverändert, Abweichungen in v0.5.1 identisch.
 
 <a id="rm-466"></a>
 
@@ -3405,6 +3422,192 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Schichtzahl mit dem Raster der Analyse (erste Schichthöhe); Befunde mit Herkunft.
   **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
   Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
+  Regression 02.10.2026: nein — `_gcode_returned` vergleicht in allen Ständen nur die Summen.
+
+<a id="rm-475"></a>
+
+- [ ] **RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, ElegooSlicer 1.5.3.5, OrcaSlicer 2.4.2,
+  PrusaSlicer 2.9.6, Weg Bibliothek (Vorwahl wie der Druckdialog). Orca und PrusaSlicer führen den
+  Stützabstand als **Lücke** zwischen zwei Linien, Solidon schreibt `Bahnbreite / Dichte` als
+  Teilung. Gemessen am Pilz (CC2, Schicht z = 10 mm): 15 % → 12 %, 50 % → 31 %, und 0 % ergibt
+  die dichteste Stütze (28 922 mm³, 42,4 g statt 13,5 g, 62,7 statt 23,2 min), während Solidons
+  Schätzung 0 mm³ nennt. Die Rücklesung des Herstellerwerts irrt ebenso (Orca Kobra 2:
+  `support_base_pattern_spacing = 0.2` als 100 % statt 66 %). Trifft jeden Drucker der Familien
+  `orca` und `prusa` mit Stützen; am Kobra 2 gleich gemessen. Keine Regression gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:1175–1197` (`_support_spacing`),
+  `app/core/export/manufacturer.py:783–797` und `:1285–1290` (Rücklesung),
+  `app/core/slice/estimate.py:100–134`, Feld `app/ui/print_settings_dialog.py:807–817`.
+  **Fix (allgemein):** `spacing = s / d − s` und zurück `d = s / (spacing + s)` mit `s` =
+  Linienabstand der Stützbahn; 0 % ist als Abstand nicht darstellbar — keine Stützfüllung
+  schreiben oder das Feld auf den kleinsten darstellbaren Wert begrenzen und es im Dialog sagen.
+  **Abnahme:** je Familie ein Lauf mit 15 % und 50 %, gemessene Teilung gegen Bahnbreite / Dichte
+  (drei Drucker: CC2, Kobra 2, MK4S); Test `_support_spacing` gegen `_support_density` und die
+  Formel. Bauplan §28, §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G1), `gcode\rest\`.
+
+<a id="rm-476"></a>
+
+- [ ] **RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `09d8e9485`, OrcaSlicer 2.4.2, ElegooSlicer 1.5.3.5,
+  Bambu Studio 02.08.02.61, Modell `tests/data/meshes/colored.3mf` (zwei Farben). Ohne
+  `wipe_tower_x/y` bleibt die Konsolenvorgabe 15/220 stehen: Kobra 2 (220 mm) Turm bis y 236,3
+  (Orca) bzw. 258,3 (Elegoo), A1 mini (180 mm) bis y 246,8 (Orca) bzw. 242,6 (Bambu). Solidon
+  meldet danach `gcode.off_the_bed`, die Druckdatei ist unbrauchbar. Auf 256-mm-Betten passt es
+  zufällig. Für Creality Print setzt Solidon die Position bereits selbst. Keine Regression
+  gegenüber v0.5.1.
+  **Stellen:** `app/core/export/handover.py:4892–4975` (`_creality_cli_tower_position`, nur
+  `crealityprint`), `:170–171`; `slicer_keys.py` schreibt `wipe_tower_x/y` für keine Familie.
+  **Fix (allgemein):** Startposition des Turms als Regel je Programm der Orca-Familie, immer so,
+  dass Turmfläche plus Rand im nutzbaren Bett liegt.
+  **Abnahme:** je Programm (Orca, Elegoo, Bambu, Creality) zwei Farben auf einem 180- und einem
+  220-mm-Bett, Turm im Bett, kein `gcode.off_the_bed`. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (G2), `gcode\rest\`.
+
+<a id="rm-477"></a>
+
+- [ ] **RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0 (Windows, Codepage 1252), jeder
+  Drucker. Teilnetze heißen `<Projektname>-part-<n>.stl`; bei Namen wie „obj_4_Bayrak Direği uzun“
+  oder „埃菲尔铁塔18cm“ meldet CuraEngine `Failed to load model … (error number 2/22)`, Solidon sagt
+  nur „Der Slicer hat keine Druckdatei geschrieben“ mit „Maschinenprofil prüfen“. In der
+  Codex-Matrix trifft es alle 12 Korpusmodelle mit solchen Namen in allen 29 Varianten; Namen mit
+  Zeichen aus cp1252 laufen. Abgeleitet: ebenso jeder Lauf, wenn schon der Benutzerordner solche
+  Zeichen trägt. Keine Regression.
+  **Stellen:** `app/core/export/writer.py:2048–2056` (`_cura_meshes`),
+  `app/core/export/handover.py:3838` (`-l`), `:5193–5199` (Rückfallsatz ohne Ursache).
+  **Fix (allgemein):** Dateien, die ein Fremdprogramm über die Kommandozeile öffnet, ASCII und
+  technisch benennen (`platte-1-teil-1.stl`), den Projektnamen nur für Anzeige und Druckdatei;
+  liegt der Arbeitsordner außerhalb der Codepage, einen kurzen ASCII-Ordner verwenden; „Failed to
+  load model“ als eigene Ursache übersetzen.
+  **Abnahme:** je Familie ein Lauf mit türkischem, chinesischem und deutschem Namen, alle mit
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-1), `gcode\rest\`.
+
+<a id="rm-478"></a>
+
+- [ ] **RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` und jedes Prusa-Bündelprofil.
+  `arrangement_holds` verwirft die Anordnung schon bei überlappenden Hüllquadern in der Aufsicht
+  (Siebhalter umgreift ein Sieb); dann liegen die Teile um (0,0). Die Orca-Familie ordnet selbst
+  an, PrusaSlicers Konsole nicht: „All objects are outside of the print volume“, keine Druckdatei,
+  obwohl die sieben Teile (198 × 178 mm) auf 250 × 210 mm passen. Ein Teil der 56
+  Bauraum-Absagen der Codex-Matrix gehört dazu. Keine Regression.
+  **Stellen:** `app/core/export/writer.py:580–626` (`arrangement_holds`), `:1807`,
+  `app/core/export/handover.py:3727–3736`, `:5038–5080`.
+  **Fix (allgemein):** „Der Slicer ordnet selbst an“ als Prädikat je Programm neben
+  `wants_bed_coordinates`; wo nicht, ordnet Solidon vorher an (wie *Auf dem Bett anordnen*) und
+  meldet einen eigenen Bauraumbefund, wenn es nicht passt.
+  **Abnahme:** drei mehrteilige Platten mit überlappenden Hüllquadern (Siebhalter und zwei
+  weitere) an PrusaSlicer → Druckdatei, Teile im Bett. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-2), `gcode\rest\`.
+
+<a id="rm-479"></a>
+
+- [ ] **RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` (180 × 180 mm).
+  Besteckeinsatz (231 × 231 mm) und Siebhalter (sieben Teile, zusammen zu groß): Rückgabe
+  `0xC0000409`, Solidon: „abgestürzt … prüfen Sie Drucker- und Filamentprofile“, obwohl der
+  Export vorher `arrange.out_of_build_volume` bzw. `arrange.off_the_plate` meldet. Erklärt 64 der
+  108 SuperSlicer-Abstürze der Codex-Matrix (u. a. Filament-Regal, Bohrerhalter, Küchenhalter).
+  **Stellen:** `app/core/export/handover.py:5136–5154` (Absturzsatz vor jeder Ursache),
+  `:5751–5783` (`_outside_the_volume` kennt nur die Höhe), Anordnungsprüfung in
+  `app/core/export/writer.py`.
+  **Fix (allgemein):** Passt ein Teil in keiner Drehung um Z, hält die Übergabe mit derselben
+  Meldung wie für die Höhe an (Teilen, Verkleinern, anderer Drucker); nach einem Absturz zuerst
+  Solidons bekannte Ursache nennen, „Profile prüfen“ nur ohne.
+  **Abnahme:** Besteckeinsatz, Siebhalter und Filament-Regal am MINI → Bauraummeldung vor dem
+  Lauf, kein Slicerstart. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-3), `gcode\rest\`.
+
+<a id="rm-480"></a>
+
+- [ ] **RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13, `prusa-mini` und `generic-220`.
+  `support_material_style = organic` (Baumstütze) lässt SuperSlicer mit `0xC0000005` abstürzen —
+  isoliert gemessen, `snug` und `grid` rechnen; 3 der 108 Abstürze der Codex-Matrix (übernommener
+  Baumstützen-Vorschlag). `seam_position = nearest` wird dort zu `cost`, Solidon meldet
+  `slicer.setting_ignored`. Ursache wie RM-459: SuperSlicer läuft als Familie `prusa` mit
+  PrusaSlicers Wertebestand.
+  **Stellen:** `app/core/export/slicer_keys.py:233` (`_PRUSA_SUPPORT_STYLE`), `:244`
+  (`seam_position`), `:294`, `:915`, `:965–987` (`NOT_TAKEN_BY` nur je Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm aus dem gemessenen Bestand der installierten
+  Version (`discover.program_mark`); Baumstütze für SuperSlicer nicht anbieten, ein übernommener
+  Vorschlag wird „Gitter“ mit Hinweis; `nearest` → `cost` ohne Warnung.
+  **Abnahme:** Wächter jede Aufzählungszeile der Prusa-Tabelle gegen den Bestand jedes
+  erkannten Programms; Pilz, Würfel und ein Korpusmodell mit Baumstütze an SuperSlicer →
+  Druckdatei. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-4, CP-9), `gcode\rest\`.
+
+<a id="rm-481"></a>
+
+- [ ] **RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, SuperSlicer 2.5.59.13, alle
+  Bündeldrucker (`prusa-mk4s`, `prusa-mini`, `prusa-xl`, `sovol-sv06`). Solidon schreibt
+  `filament_type = TPU`, die Bündel führen Flex als `FLEX`: `filament_settings_id` bleibt leer,
+  kein Befund. Folge im G-Code des MK4S: Vermessen bei 170 statt 210 °C, Einzug `E-2` statt
+  `E-4`, kein Startcode des Herstellerfilaments. Keine Regression.
+  **Stellen:** `app/core/export/slicer_keys.py:841–846` (`FILAMENT_TYPES`),
+  `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
+  `app/ui/print_settings_dialog.py:5605–5625`, `app/core/export/handover.py:2357–2382`.
+  **Fix (allgemein):** Materialart je Familie an einer Stelle in Lese- und Schreibrichtung
+  übersetzen; fehlt ein Herstellerfilament, Befund mit Herkunft „Solidon-Tabelle statt
+  Slicerprofil“ (Regel 14).
+  **Abnahme:** je erkanntem Drucker und Material (PLA, PETG, ABS, ASA, TPU) eine nicht leere
+  Vorwahl, an mindestens drei Bündeldruckern gemessen. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-6), `gcode\rest\`.
+
+<a id="rm-482"></a>
+
+- [ ] **RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz.**
+  G-Code-Gegenprüfung 02.10.2026, CuraEngine aus Cura 5.13.0, `sovol-sv06` und `generic-220`.
+  `printers.toml` führt dort keine Beschleunigung, also gilt die Stufe (8000/5000 mm/s²); der
+  G-Code trägt 99 × `M204 S8000` hinter Curas eigenem `M201 X500 Y500`. Die Firmware deckelt auf
+  500, Curas Zeit und Solidons `gcode.print_time` rechnen mit 8000. Die Grenzen der Definition
+  (`machine_max_acceleration_*` als `value`) erreichen CuraEngine nicht. Trifft jeden Drucker
+  ohne Beschleunigung in `printers.toml`.
+  **Stellen:** `app/core/knowledge/data/printers.toml:492–511`,
+  `app/core/knowledge/data/print_settings.toml:65–66`, `app/core/export/slicer_keys.py`
+  (`CURA`, `CURA_MIRRORED`), `app/core/export/handover.py` (`_cura_machine`).
+  **Fix (allgemein):** Maschinenwerte aus dem Herstellerprofil in `printers.toml` (SV06: 1000
+  Druck, 500 Leerfahrt); ohne Maschinenwert keine Stufenbeschleunigung an Cura; Grenzen der
+  Definitionskette als Zahl an CuraEngine.
+  **Abnahme:** SV06, `generic-220` und ein dritter Drucker ohne Wert: `M204` nie über der
+  Maschinengrenze, Zeitabweichung gegen PrusaSlicer am selben Drucker unter 15 %. Bauplan §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-7), `gcode\rest\`.
+
+<a id="rm-483"></a>
+
+- [ ] **RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“.**
+  G-Code-Gegenprüfung 02.10.2026, SuperSlicer 2.5.59.13 (PrusaSlicer schreibt denselben Satz),
+  `prusa-mini`. `Cat_2.stp` endet mit „There is an object with no extrusions in the first layer.
+  Object name: …“; Solidon sagt nur „Der Slicer hat keine Druckdatei geschrieben“ mit
+  „Maschinenprofil prüfen“. Codex' Matrix führt den Fall zweimal.
+  **Stellen:** `app/core/export/handover.py:5717–5722` (nur `OUTSIDE_THE_VOLUME`, `NO_LAYERS`
+  erkannt), `:5193–5199`.
+  **Fix (allgemein):** Jeder Absagesatz der Prusa-Familie, der eine Ursache nennt, wird übersetzt
+  — hier „Die erste Schicht des Teils ist leer“ mit *Stelle zeigen*, *Auf das Bett legen*,
+  *Brim/Raft* und dem Teilnamen aus der Ausgabe.
+  **Abnahme:** `Cat_2.stp` und zwei weitere Teile mit leerer erster Schicht an PrusaSlicer und
+  SuperSlicer → eigene Meldung mit Handlungen. Bauplan §29, Regel 17.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-8), `gcode\rest\`.
+
+<a id="rm-484"></a>
+
+- [ ] **RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, alle Bündeldrucker. 25 Läufe der Matrix
+  melden auf der Konsole `print warning: Detected print stability issues … Consider enabling
+  supports`, `prusa__sovol-sv06__wuerfel__B` sogar „Empty layer between 0.48 and 0.92“ (erste
+  Objektschicht 0,44 mm über dem Raft) — im Bericht steht nichts davon. Solidon liest Warnungen nur
+  aus `; WARNING:`-Kommentaren.
+  **Stellen:** `app/core/slice/gcode.py:532`, `:1588–1599`, `app/core/export/handover.py:5228–5291`.
+  **Fix (allgemein):** Konsolenausgabe gelungener Läufe nach den Warnmarken der Familie lesen
+  (`print warning:` samt Folgezeilen) und als `gcode.warning` mit Herkunft Slicer melden, „Empty
+  layer“ als Fehlerstufe; Raft-Abstand (`raft_contact_distance`) zu `support.z_gap` oder als
+  eigener Pfad.
+  **Abnahme:** Pilz ohne Stützen an MK4S, MINI und SV06 → Warnung im Bericht; Würfel B am SV06
+  ohne leere Schicht. Bauplan §29, Regel 14.
+  Belege: `F:\solidon-review-reports\gcode\befunde.md` (CP-10), `gcode\rest\`.
 
 ## Bedienung und Darstellung
 
