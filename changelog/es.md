@@ -59,6 +59,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» e «Inclinar sobre», y «En la cara» lleva el corte paralelo a una cara plana.
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
+- Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.
 
 ### Modelar, texto y dibujo
 

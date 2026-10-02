@@ -58,6 +58,7 @@ it into `website/version.json`.
 - Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt about*, and *At face* runs the cut parallel to a flat face.
 - A STEP body stays a STEP body when you crop it, with its faces, edges and names.
 - A freshly created screw lid is no longer reported as too tight for its neck.
+- If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
 
 ### Sculpting, text and sketching
 
