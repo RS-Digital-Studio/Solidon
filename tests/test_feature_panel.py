@@ -722,10 +722,20 @@ def test_a_rejected_length_survives_a_display_unit_change(qt_app: QApplication) 
         set_display_unit("in")
         editor.refresh_unit()
 
+        # Die abgelehnte Zahl ist der Text im Feld, und der steht in der
+        # Stellenzahl der Einheit (``decimals_for``): 150 mm sind „5,9055 in“,
+        # nicht 5,905511811 — genauer als seine Anzeige kann sie nicht sein.
         refusal = editor.refusal()
-        assert editor.refused_value() == pytest.approx(from_mm(150.0, "in"))
+        shown_step = 10.0 ** -editor.decimals()
+        assert editor.refused_value() == pytest.approx(from_mm(150.0, "in"), abs=shown_step / 2)
         assert "in" in refusal and "Obergrenze" in refusal, refusal
         assert editor.textFromValue(editor.maximum()) in refusal, refusal
+
+        # Und zurück: Die Rundung der Zollanzeige kostet in Millimetern nichts.
+        set_display_unit("mm")
+        editor.refresh_unit()
+        assert editor.lineEdit().text() == editor.textFromValue(150.0) + editor.suffix()
+        assert editor.refused_value() == pytest.approx(150.0)
     finally:
         set_display_unit(previous_unit)
         editor.refresh_unit()
@@ -1044,6 +1054,15 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     emitted_op, params = emitted[0]
     assert emitted_op == operation
     assert float(params["diameter"]) == pytest.approx(measured)
+    # Der Ort ebenso: Die vergrößerte Platte trägt ihre Bohrungen über einen
+    # Meter vom Ursprung. Eine Ortsgrenze von ±1000 mm lehnte den Messwert ab
+    # oder versetzte die Bohrung still an die Grenze.
+    centre = [float(value) for value in feature.params["centre"]]
+    if kind == "hole":
+        assert max(abs(value) for value in centre) > 1000.0, "der Fall erreicht die alte Ortsgrenze"
+    for axis, value in zip("xyz", centre, strict=True):
+        if axis in params:
+            assert float(params[axis]) == pytest.approx(value), axis
     accepted = validate(REGISTRY.get(operation).params, params)
     assert accepted.diameter == pytest.approx(measured)
 

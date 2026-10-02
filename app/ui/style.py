@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QLabel,
+    QLayout,
     QLayoutItem,
     QMenu,
     QPushButton,
@@ -388,6 +389,84 @@ def form_natural_width(form: QFormLayout) -> int:
     if label_width and field_width:
         paired_width += spacing
     return margins.left() + max(paired_width, spanning_width) + margins.right()
+
+
+def _side_margins(owner: QLayout | QWidget) -> int:
+    margins = owner.contentsMargins()
+    return margins.left() + margins.right()
+
+
+def _layout_holding(layout: QLayout, widget: QWidget) -> QLayout | None:
+    """Das Layout, in dem ``widget`` unmittelbar steht — auch verschachtelt."""
+    for index in range(layout.count()):
+        item = layout.itemAt(index)
+        if item is None:
+            continue
+        if item.widget() is widget:
+            return layout
+        inner = item.layout()
+        if inner is not None and (found := _layout_holding(inner, widget)) is not None:
+            return found
+    return None
+
+
+def expanded_width(scroll: QScrollArea, *parts: QFormLayout | QWidget) -> int:
+    """Wie breit das Fenster um ``scroll`` sein muss, damit nach dem Aufklappen nichts quer rollt.
+
+    Die eine Rechnung für zugeklappte Zeilen (RM-342 D-N5): Ein verborgener
+    Teil trägt zur Größe seiner Eltern nichts bei, und ein Dialog, der nur das
+    Sichtbare misst, rollt nach dem Aufklappen quer. Gerechnet wird ohne Ein-
+    und Ausblenden von innen nach außen: ein Formular mit allen Zeilen, auch
+    den bedingt verborgenen (:func:`form_natural_width`), ein anderes Widget
+    mit seiner eigenen Größe — Reiter melden ihre breiteste Seite —, dann
+    jeder Rand der umschließenden Layouts und Widgets (eine Gruppe trägt ihren
+    Rahmen dort), am Rollbereich dessen Rahmen und der senkrechte Rollbalken,
+    den das Aufklappen bringt, bis zum Fenster. Der sichtbare Inhalt zählt mit
+    seiner Mindestbreite und demselben Rollbalken mit; wie breit er bequem
+    wäre, sagt die ``sizeHint`` des Fensters, die der Aufrufer danebenlegt.
+    """
+    widest = 0
+    content = scroll.widget()
+    content_layout = content.layout() if content is not None else None
+    if content is not None and content_layout is not None:
+        widest = _outward(content.minimumSizeHint().width(), content_layout, scroll)
+    for part in parts:
+        if isinstance(part, QFormLayout):
+            widest = max(widest, _outward(form_natural_width(part), part, scroll))
+        else:
+            own = max(part.sizeHint().width(), part.minimumSizeHint().width())
+            widest = max(widest, _past(own, part, scroll))
+    return widest
+
+
+def _outward(width: int, layout: QLayout, scroll: QScrollArea) -> int:
+    """``width`` innerhalb von ``layout`` samt aller Ränder bis zum Fenster.
+
+    Die Ränder von ``layout`` selbst stecken schon in ``width``.
+    """
+    while True:
+        parent = layout.parent()
+        if not isinstance(parent, QLayout):
+            break
+        width += _side_margins(parent)
+        layout = parent
+    owner = layout.parentWidget()
+    if owner is None or owner.isWindow():
+        return width
+    if owner is scroll.widget():
+        chrome = 2 * scroll.frameWidth() + scroll.verticalScrollBar().sizeHint().width()
+        return _past(width + chrome, scroll, scroll)
+    return _past(width + _side_margins(owner), owner, scroll)
+
+
+def _past(width: int, widget: QWidget, scroll: QScrollArea) -> int:
+    """``width`` eines Widgets samt dessen eigener Ränder, weiter bis zum Fenster."""
+    host = widget.parentWidget()
+    host_layout = host.layout() if host is not None else None
+    holder = _layout_holding(host_layout, widget) if host_layout is not None else None
+    if holder is None:
+        return width
+    return _outward(width + _side_margins(holder), holder, scroll)
 
 
 def _content_size_for_intent(

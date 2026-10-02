@@ -2724,7 +2724,9 @@ class Session(QObject):
         self._changed()
         return True
 
-    def change_params(self, op_id: int, params: dict[str, Any]) -> bool:
+    def change_params(
+        self, op_id: int, params: dict[str, Any], changes: DocumentChange | None = None
+    ) -> bool:
         """Andere Parameter für eine Operation, die schon im Stapel steht (§15.4).
 
         Gibt zurück, ob die Änderung im Dokument steht — der Verlauf lehnt
@@ -2734,7 +2736,7 @@ class Session(QObject):
         keine, und der Merker träfe die nächste beliebige.
         """
         try:
-            self.history.change_params(op_id, params)
+            self.history.change_params(op_id, params, changes)
         except AppError as error:
             self.failed.emit(error)
             return False

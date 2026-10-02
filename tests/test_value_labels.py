@@ -453,6 +453,40 @@ def test_a_part_setting_names_the_part_the_field_and_the_value(qt_app: object) -
         assert "support." not in text and "shell." not in text and "True" not in text, text
 
 
+def test_a_limit_names_its_unit_and_no_code_address(qt_app: object) -> None:
+    """RM-359 F7: Der Hinweis zu einer Grenzverletzung nennt die Grenze mit Einheit.
+
+    Er zeigte „Feld: width · Bedingung: maximum · Höchstwert: 1000,0“ — zwei
+    Adressen für den Code und eine Zahl ohne Einheit. Der Kern legt die
+    Einheit des Feldes in die Werte, Bericht und Fehlerdialog hängen sie an.
+    """
+    from app.core.errors import AppError
+    from app.core.registry import REGISTRY
+    from app.core.registry.params import validate
+    from app.core.types import Finding
+    from app.ui.dialogs import spoken_values
+    from app.ui.labels import set_display_unit
+    from app.ui.panels import _value_lines
+
+    set_display_unit("mm")
+    spec = REGISTRY.get("create_box")
+    try:
+        validate(spec.params, {"width": 5000.0})
+    except AppError as error:
+        refusal = error
+    else:  # pragma: no cover - der Schemawert muss abgelehnt werden
+        raise AssertionError("5000 mm Breite wurde angenommen")
+    assert refusal.values.get("unit") == "mm"
+    finding = Finding(
+        code="params.out_of_range", severity="error", message="x", values=dict(refusal.values)
+    )
+    for lines in (_value_lines(finding), spoken_values(refusal)):
+        joined = " · ".join(lines)
+        assert "width" not in joined and "maximum" not in joined, joined
+        assert any(line.endswith(" mm") and "1000" in line for line in lines), lines
+        assert not any(line.startswith("Einheit") for line in lines), lines
+
+
 def test_a_path_keeps_its_dots_and_a_number_gets_its_comma(qt_app: object) -> None:
     """Das Dezimaltrennzeichen gehört an Zahlen, nicht an Pfade.
 

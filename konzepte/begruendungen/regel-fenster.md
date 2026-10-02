@@ -706,3 +706,8 @@ Versand. Abwahl und Schließen bleiben möglich; geschlossene Dialoge verwerfen
 späte Antworten. Auch die Protokollbytes werden einmal behalten und für
 Vorschau, Versand und Ablage identisch verwendet. `report.log_tail()` liest
 rückwärts höchstens 1 MiB für die letzten 400 Zeilen, nie das gesamte Protokoll.
+
+**Überschüssige Höhe braucht eine Stelle.** Ohne sie verteilte Qt den Raum als
+Lücken: Im KI-Hinweis stand die Überschrift allein über einer leeren Fläche.
+Ein Beispiel für ein Widget, das den Platz nutzt, ist die Versuchsliste des
+Erzeugen-Dialogs nach dem Lauf.

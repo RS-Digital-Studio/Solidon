@@ -4779,6 +4779,51 @@ def test_a_count_over_its_limit_locks_the_button_with_the_sentence(qt_app: QAppl
         QApplication.processEvents()
 
 
+def test_an_expression_field_shows_its_start_and_room_for_it(qt_app: QApplication) -> None:
+    """RM-457: Ein gebundenes Maß zeigt seinen Ausdruck lesbar.
+
+    Im Schrittdialog stand „=max(@breite, 2000)“ als „@breite, 2000)“: Das Feld
+    war schmal, und der Cursor stand am Ende, also schob Qt den Anfang mit dem
+    Funktionsnamen aus dem Bild. Jetzt steht der Anfang da, das Feld ist so
+    breit wie der Ausdruck (bis zu einer Obergrenze), der Rest der Zeile gehört
+    ihm, und der Tooltip nennt den ganzen Ausdruck.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QFocusEvent
+
+    expression = "=max(@breite, 2000)"
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(
+        spec, {}, values={"width": expression}, parameter_values={"breite": 60.0}
+    )
+    try:
+        dialog.show()
+        for _ in range(8):
+            qt_app.processEvents()
+        field = dialog._editors["width"]
+        assert isinstance(field, ValueField)
+        line = field.text
+        assert line.isVisible() and line.text() == expression
+        metrics = line.fontMetrics()
+        assert line.width() >= metrics.horizontalAdvance(expression), "der Ausdruck passt ins Feld"
+        assert line.cursorPosition() == 0, "der Anfang mit dem Funktionsnamen steht im Bild"
+        assert expression in line.toolTip()
+        assert "@name" in line.toolTip(), "die Grammatikhilfe bleibt im Tooltip"
+
+        # Nach dem Tippen am Ende und dem Verlassen des Felds steht wieder der
+        # Anfang da, und der Tooltip zieht mit.
+        line.end(False)
+        line.insert(" + 1")
+        assert line.cursorPosition() == len(line.text())
+        leaving = QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason)
+        QApplication.sendEvent(line, leaving)
+        assert line.cursorPosition() == 0
+        assert line.text() in line.toolTip()
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
 def test_an_operation_field_refuses_a_number_over_its_limit_and_says_so(
     qt_app: QApplication,
 ) -> None:
@@ -5509,7 +5554,12 @@ def test_refining_a_dense_body_says_the_count_instead_of_computing(
     assert "geschätzt" in note and "Dreiecke" in note, note
     assert dialog.can_accept()
     dialog.accept()
-    assert window.session.wait_for_idle()
+    # Übernommen wird die echte Verfeinerung (0,5 mm an der ganzen Platte) im
+    # Hilfsprozess des Netzkerns. Das dauert, was es dauert; zugesagt ist nur,
+    # dass der Klick nicht auf die Vorschau wartet. Mit der Vorgabe von zehn
+    # Sekunden riss die Frist bei voller Rechnerlast ab (Release-Tor 0.5.2);
+    # im Wechsel mit 0.5.1 gemessen, braucht das Übernehmen dort gleich lang.
+    assert window.session.wait_for_idle(120_000)
     assert [entry.op for entry in window.session.project.document.ops] == ["load", "remesh_mesh"]
 
 
