@@ -1,7 +1,7 @@
 """Weg 4 aus §2.2, Ende zu Ende (Bauplan §40, Konzept P16 §16).
 
     Grundkörper → weich verschmelzen → gleichmäßig vernetzen → formen →
-    Prüfbericht → exportieren.
+    Skelett setzen und stellen → Prüfbericht → exportieren.
 
 Das ist die Abnahme der organischen Phase: eine Figur vom Grundkörper bis zum
 druckfertigen 3MF, ohne dass ein zweites Programm geöffnet wird. Und die
@@ -22,10 +22,11 @@ import numpy as np
 
 from app.core.export.writer import plan_export, write_plan
 from app.core.geom.mesh import as_mesh_data
+from app.core.geom.pose import armature_to_text, pose_text
 from app.core.geom.sculpt import strokes_to_text
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
-from app.core.types import Profile, Stroke
+from app.core.types import Bone, Profile, Stroke
 from app.core.units import EPS_GEOM
 
 #: Wie lange der ganze Weg höchstens dauern darf. Kein Budget aus §31 — das
@@ -112,6 +113,33 @@ def figure_project() -> Project:
                         ]
                     ),
                     "symmetry": "x",
+                },
+            )
+        ],
+    )
+    # **Skelett setzen und stellen** (§2.2): „stellen“ heißt hier posieren, nicht
+    # auf die Platte stellen — so gelesen fehlte der Schritt im Test und im
+    # Beispiel (RM-367, W4-8). Zwei Knochen im Inneren, Rücken und Hals; der
+    # Kopf neigt sich um 20° nach vorn.
+    history.apply(
+        "Skelett stellen",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=("obj_1",),
+                params={
+                    "armature": armature_to_text(
+                        [
+                            Bone(name="ruecken", head=(0.0, 0.0, 4.0), tail=(0.0, 0.0, 30.0)),
+                            Bone(
+                                name="hals",
+                                head=(0.0, 0.0, 30.0),
+                                tail=(0.0, 0.0, 42.0),
+                                parent="ruecken",
+                            ),
+                        ]
+                    ),
+                    "pose": pose_text({"hals": [20.0, 0.0, 0.0]}),
                 },
             )
         ],
@@ -273,6 +301,24 @@ def test_the_report_says_what_the_printer_thinks(profile: Profile) -> None:
     codes = {finding.code for finding in result.scene.report.findings}
     assert codes, "der Prüfbericht ist nicht leer"
     assert "sculpt.applied" in codes, "die Formsitzung meldet sich"
+
+
+def test_the_posed_skeleton_bends_the_figure(profile: Profile) -> None:
+    """Das Skelett wirkt: Mit geneigtem Hals steht der Kopf anders als gerade
+    (RM-367, W4-8)."""
+    project = figure_project()
+    bent = as_mesh_data(next(iter(evaluated(project, profile).scene.objects.values())).mesh)
+
+    pose = next(entry for entry in project.document.ops if entry.op == "pose_armature")
+    History(project.document).change_params(
+        pose.id, {**pose.params, "pose": pose_text({"hals": [0.0, 0.0, 0.0]})}
+    )
+    straight = as_mesh_data(next(iter(evaluated(project, profile).scene.objects.values())).mesh)
+
+    assert bent.is_watertight and straight.is_watertight
+    assert not np.allclose(bent.bounds.size, straight.bounds.size, atol=0.1), (
+        "der geneigte Kopf verändert die Hülle der Figur"
+    )
 
 
 def test_a_changed_parameter_reruns_the_chain(profile: Profile) -> None:

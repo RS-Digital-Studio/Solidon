@@ -26,7 +26,7 @@ import dataclasses
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import replace
-from typing import Any, Final, cast
+from typing import Any, Final, cast, get_args
 
 import numpy as np
 
@@ -43,6 +43,7 @@ from app.core.types import (
     OpContext,
     OpResult,
     Profile,
+    SculptTool,
     Stroke,
     Vec3,
     as_vec3,
@@ -332,22 +333,49 @@ def strokes_to_text(strokes: Sequence[Stroke]) -> str:
 
 
 def strokes_from_text(text: str) -> list[Stroke]:
-    """Zurück aus dem Parameterwert. Leerer Text ist eine leere Sitzung."""
+    """Zurück aus dem Parameterwert. Leerer Text ist eine leere Sitzung.
+
+    Der Text kommt aus einer Projektdatei oder dem Feld *Striche* — beides
+    fremde Eingabe. Ein verdorbener Text endete als „unerwarteter Fehler“ mit
+    *Fehler melden*; jetzt ist er ein Eingabefehler mit Ausweg, wie beim
+    Skelett (RM-367, W4-3).
+    """
     if not text.strip():
         return []
-    entries = json.loads(text)
-    return [
-        Stroke(
-            point=as_vec3(entry["p"]),
-            normal=as_vec3(entry["n"]),
-            radius=float(entry["r"]),
-            strength=float(entry["s"]),
-            tool=entry.get("t", "draw"),
-            symmetry=int(entry.get("y", 0)),
-            cut=bool(entry.get("c", False)),
-        )
-        for entry in entries
-    ]
+    try:
+        entries = json.loads(text)
+        strokes = [
+            Stroke(
+                point=as_vec3(entry["p"]),
+                normal=as_vec3(entry["n"]),
+                radius=float(entry["r"]),
+                strength=float(entry["s"]),
+                tool=_tool(entry.get("t", "draw")),
+                symmetry=int(entry.get("y", 0)),
+                cut=bool(entry.get("c", False)),
+            )
+            for entry in entries
+        ]
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError) as problem:
+        raise ValidationError(
+            title=_("Diese Pinselzüge lassen sich nicht lesen."),
+            field="strokes",
+            detail=_(
+                "Erwartet wird die Liste der Züge, wie *Formen* sie schreibt — gemalt, nicht "
+                "getippt. Den Schritt neu malen oder das Feld leeren."
+            ),
+            value=text,
+            constraint="unreadable",
+        ) from problem
+    return strokes
+
+
+def _tool(value: object) -> SculptTool:
+    """Ein Pinselwerkzeug aus dem Text — ein unbekanntes ist ein Lesefehler,
+    kein Zug, der still nichts tut."""
+    if value not in get_args(SculptTool):
+        raise ValueError(f"unknown sculpt tool {value!r}")
+    return cast(SculptTool, value)
 
 
 # --- operation --------------------------------------------------------------------

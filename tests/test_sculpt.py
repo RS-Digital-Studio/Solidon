@@ -368,6 +368,33 @@ def run(entry: SceneObject, profile: Profile, **params: object) -> OpResult:
     )
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{nicht json",
+        '[{"p": [0, 0, 0], "r": 1, "s": 1}]',
+        '[{"p": [0, 0], "n": [0, 0, 1], "r": 1, "s": 1}]',
+        '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": "groß", "s": 1}]',
+        '[{"p": [0, 0, 0], "n": [0, 0, 1], "r": 1, "s": 1, "t": "hammer"}]',
+        '{"p": 1}',
+    ],
+)
+def test_a_spoiled_stroke_text_is_an_input_error_with_a_way_out(
+    profile: Profile, text: str
+) -> None:
+    """Ein von Hand verdorbener Strichtext endete als „unerwarteter Fehler“
+    mit *Fehler melden* (RM-367, W4-3). Beim Skelett ist derselbe Fall seit
+    jeher ein Eingabefehler — jetzt auch hier."""
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+
+    with pytest.raises(ValidationError) as caught:
+        run(entry, profile, strokes=text)
+
+    assert caught.value.field == "strokes"
+    assert caught.value.constraint == "unreadable"
+    assert caught.value.suggestions, "Regel 17: ein Ausweg"
+
+
 def test_strokes_survive_the_round_trip_through_text() -> None:
     """Der Sammelparameter ist reiner Text und muss es unverändert bleiben.
 
