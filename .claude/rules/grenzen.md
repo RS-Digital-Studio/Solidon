@@ -194,9 +194,6 @@ Robert).
   Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten
   (`tests/test_gesture_ops.py`), im Dialog vorn, wenn er der Grund ist, aus dem
   der Dialog aufgeht.
-- **Ein Pflichtziel beginnt leer; der Erstfokus gehört ihm**
-  (`_focus_first_empty_feature`), sonst füllt der erste Bildklick das
-  Quellmerkmal. Prüfbar nur am gezeigten Dialog.
 - **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**
   (`OperationDialog.switch_variant`): Was die Variante nicht kennt,
   verschwindet, die Beschreibung wechselt.
