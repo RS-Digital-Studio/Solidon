@@ -95,6 +95,10 @@ nicht weggeräumt.
   dieselbe synthetische Metrik, auch ausdrücklich gesetzt). Was an der
   Schriftmetrik hängt, prüft die echte Plattform (`WA_DontShowOnScreen`) oder
   niemand.
+- **Was am Anzeigen hängt, prüft nur ein gezeigter Dialog** (`show()`,
+  `activateWindow()`): Ungezeigt gibt es keinen Erstfokus, und ein Test bleibt
+  grün, während der erste Bildklick am Fenster ins falsche Feld geht (RM-416,
+  `_focus_first_empty_feature`).
 - **Ein Test, der nur in einer Lage grün ist, die es im Betrieb nicht gibt, ist
   keine Zusicherung, sondern eine Tarnung** — und Rot in einer solchen Lage
   erzwingt Änderungen, die niemand braucht.

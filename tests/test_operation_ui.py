@@ -6072,6 +6072,14 @@ def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) ->
         assert "Projektparameter" in offered._naming.toolTip()
         offered._naming.setChecked(True)
         assert offered.names_dimensions()
+        remembered = OperationDialog(
+            REGISTRY.get("create_box"), {}, offer_naming=True, naming_default=True
+        )
+        try:
+            assert remembered.names_dimensions(), "das Fenster reicht die letzte Wahl durch"
+            assert remembered.offers_naming() and not plain.offers_naming()
+        finally:
+            remembered.deleteLater()
     finally:
         plain.deleteLater()
         offered.deleteLater()

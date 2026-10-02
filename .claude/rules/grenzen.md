@@ -187,17 +187,13 @@ Robert).
   `=@breite` darauf, beides in **einer** Transaktion (`changes` an
   `Session.apply`); ein Feld mit Ausdruck bleibt, ein Feld, dessen
   `depends_on` gerade nicht gilt, wird keiner — es steht ja nicht da
-  (`test_naming_the_dimensions_makes_them_project_parameters`,
-  `test_only_a_primitive_offers_to_name_its_dimensions`,
-  `test_a_holder_template_names_its_dimensions_but_not_an_idle_field`).
+  Der Haken steht beim ersten Start an und übernimmt danach die letzte Wahl
+  beim Übernehmen (`UiSettings.name_dimensions`).
 - **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat:**
   `ArmatureField` baut je Knochen drei Winkel (`ValueField`, §13), sobald der
   Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten
   (`tests/test_gesture_ops.py`), im Dialog vorn, wenn er der Grund ist, aus dem
   der Dialog aufgeht.
-- **Ein Pflichtziel beginnt leer; der Erstfokus gehört ihm**
-  (`_focus_first_empty_feature`), sonst füllt der erste Bildklick das
-  Quellmerkmal. Prüfbar nur am gezeigten Dialog.
 - **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**
   (`OperationDialog.switch_variant`): Was die Variante nicht kennt,
   verschwindet, die Beschreibung wechselt.

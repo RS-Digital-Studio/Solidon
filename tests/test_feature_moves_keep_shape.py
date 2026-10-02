@@ -32,7 +32,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.ingest.plan import import_plan
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, checksum, new_project
-from app.core.types import Feature, Finding, Profile, Quality, SceneObject, Source
+from app.core.types import Feature, Finding, Profile, Quality, SceneObject, Source, kind_of
 from tests.helpers import (
     BOTH_ENDS,
     cavity_under,
@@ -2350,10 +2350,9 @@ _EXACT_AFTER: dict[str, tuple[float | None, float | None]] = {
 }
 
 
-#: Die schließenden Wege je Kern. Den freien Platzierungsweg mit Richtung
-#: (``_place_oriented_feature``) rechnet nur das Netz: An einem exakten Körper
-#: gibt er heute ein Netz unter der Bauart ``brep`` zurück — ein eigener Fund,
-#: nicht dieser.
+#: Die schließenden Wege je Kern — auch der freie Platzierungsweg mit Richtung
+#: (``_place_oriented_feature``) am exakten Körper, seit er dort exakt rechnet
+#: bzw. ein Netz als Netz ausweist (RM-423).
 _CLOSING_WAYS: Final = [
     (kernel, op)
     for kernel in ("mesh", "brep")
@@ -2365,7 +2364,6 @@ _CLOSING_WAYS: Final = [
         "remove_feature",
         "plug_hole",
     )
-    if (kernel, op) != ("brep", "place_feature")
 ]
 
 
@@ -2412,6 +2410,52 @@ def test_every_closing_way_treats_touching_plates_as_one_printed_body(
     codes = [finding.code for finding in result.findings]
     assert codes.count("boolean.parts_united") == 1, codes
     assert not [finding for finding in result.findings if finding.severity == "warning"], codes
+
+
+@pytest.mark.parametrize("sunk", [False, True], ids=["Bohrung", "Senkbohrung"])
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_bore_placed_with_a_new_direction_says_which_kernel_it_ended_on(
+    kernel: str, sunk: bool
+) -> None:
+    """*Merkmal verschieben* mit Richtung am exakten Körper (RM-423).
+
+    Gerechnet wurde am Netz, und der Körper kam als Netz unter der Bauart
+    ``brep`` zurück — Folgeschritte des exakten Kerns trafen ein Netz. Eine
+    einzelne Bohrung rechnet jetzt exakt: dasselbe Volumen wie die um 10°
+    gekippte Bohrung durch die Platte, π r² · 20 / cos 10°. Eine Senkbohrung
+    rechnet weiter am Netz und ist danach eins.
+    """
+    profile = _plates_profile()
+    plate = _touching_plates(kernel, sunk=sunk, one_piece=True)
+    hole = next(name for name, feature in plate.features.items() if feature.kind == "hole")
+    x, y, z = (float(value) for value in plate.features[hole].params["centre"])
+    tilt = math.radians(10.0)
+
+    result = _raw(
+        "move_feature",
+        plate,
+        profile,
+        at_feature=hole,
+        x=x,
+        y=y,
+        z=z,
+        nx=math.sin(tilt),
+        ny=0.0,
+        nz=math.cos(tilt),
+    )
+
+    after = result.outputs[0]
+    stays_exact = kernel == "brep" and not sunk
+    assert after.kind == ("brep" if stays_exact else "mesh"), after.kind
+    assert (kind_of(after.mesh) == "brep") == (after.kind == "brep"), "Bauart und Körper stimmen"
+    if not sunk:
+        reference = _PLATES - _BORE / math.cos(tilt)
+        if stays_exact:
+            assert float(after.mesh.volume) == pytest.approx(reference, abs=0.05)
+        else:
+            assert float(after.mesh.volume) == pytest.approx(reference, rel=1e-2)
+        axis = np.asarray(after.features[hole].params["axis"], dtype=float)
+        assert abs(abs(float(axis[2])) - math.cos(tilt)) < 1e-6, axis
 
 
 #: Die schließenden Wege, die nur eine Senkbohrung hat: Abschnitte einzeln,

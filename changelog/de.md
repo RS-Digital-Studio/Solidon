@@ -126,7 +126,7 @@ Nutzen da und sonst nichts.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
 - Leerzeichen kommen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, während ein Dialog seine Vorschau zeigt.
-- Ein Befund, der einen Schritt meint, öffnet ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
+- Einige Befunde, die einen Schritt meinen, öffnen ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
 - Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 - Die Hilfe zu einer Operation springt im Handbuch direkt zu ihrem Eintrag, und die Referenz nennt Felder und Auswahlen so, wie sie im Dialog heißen.
 
