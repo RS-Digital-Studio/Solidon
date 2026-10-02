@@ -15,6 +15,68 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.5.2
+
+### Imprimir e entregar ao slicer
+
+- No primeiro arranque e nas definições escolhe primeiro o slicer e depois uma das suas impressoras. A lista tem um campo de pesquisa, e volume e bico vêm do perfil do slicer.
+- O bico escolhe-se nas definições de impressão entre os tamanhos que a sua impressora conhece, e o slicer recebe o perfil correspondente.
+- As definições de impressão perguntam pela ordem em que uma coisa depende da outra: slicer, impressora, bico, placa, filamentos e qualidade, e depois os valores.
+- Com o Creality Print 7.2 e 7.3, «Fatiar» calcula agora sozinho o ficheiro de impressão. Até agora isso só funcionava na janela do Creality Print.
+- Com o Cura, o Solidon adota a pedido a impressora que o Cura está a usar, com o seu próprio bico. Uma impressora renomeada no Cura volta a ser reconhecida.
+- O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
+- As definições de impressão mostram só as medidas de aderência do tipo de mesa escolhido. Com brim desaparecem os campos de skirt e raft, que não teriam efeito.
+- Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
+- Peças altas e finas sobre uma base pequena recebem paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
+- O Solidon só sugere «Parede exterior primeiro» para a peça que precisa dela, e nunca para uma com suportes.
+- Também na pesquisa rápida, «Orientar para impressão» verifica se uma peça fica de pé com segurança.
+- Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.
+- Se arrastar um corpo na vista para outra mesa, ele fica na placa dessa mesa.
+- Depois do primeiro «Abrir no slicer …», o Solidon já não volta a calcular o histórico.
+- A verificação cruzada com o SuperSlicer já não indica um código de arranque ignorado onde nenhum foi ignorado.
+
+### Furos, furos oblongos e divisão
+
+- O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura. Os ângulos guardados mantêm a sua direção.
+- Duas placas que se tocam mantêm o seu material ao esticar um furo oblongo, e um pino sobre o furo fica no lugar.
+- Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
+- Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
+- Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
+- Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
+- Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
+
+### Modelar, texto e esboço
+
+- Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.
+- A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.
+- O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.
+- Um traço sobre o plano de simetria atua uma vez em vez de duas.
+- Se um traço de modelação fura a parede ou a deixa fina demais, o relatório indica-o, com «Mostrar o ponto».
+- Na janela, «Fundir suavemente» mostra a mesma forma que na exportação. Só em corpos muito grandes a pré-visualização calcula mais grossa e di-lo.
+- Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
+- Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
+- O destino de «Alinhar à característica» começa vazio. O primeiro clique na vista preenche-o, e «Aplicar» espera até estar escolhido.
+- Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
+
+### Gerar com IA
+
+- Cancelar durante «Mais uma tentativa» só para a tentativa em curso. As terminadas continuam disponíveis para escolher.
+- O modelo de imagem é descarregado por «Configurar modelo de imagem …» mesmo que os outros pesos já existam.
+- Se um erro ao gerar indicar a configuração como saída, ela aparece como botão no diálogo.
+- O diálogo de gerar indica o volume no tamanho com que a peça chega.
+
+### Utilização e sistema
+
+- Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
+- No diálogo de uma operação as etiquetas ficam numa coluna, os campos têm a mesma largura e cada interruptor está antes do que comanda.
+- As marcas nas listas leem-se em todas as linhas, e as cores aparecem como um ponto redondo ao lado.
+- A paleta de comandos explica ferramentas e ações de ficheiro numa frase.
+- Depois de mudar o parâmetro, «Gerar variantes» começa no valor desse parâmetro.
+- Se a gravação de uma calibração falhar, os valores anteriores mantêm-se.
+- No projeto de exemplo do segundo caminho, os furos dos parafusos seguem a largura e a espessura.
+- A janela «Novidades» e o site mostram o realce como texto destacado em vez de asteriscos.
+- O inglês e o espanhol usam uma só palavra para a folga de ajuste, e as mensagens seguem a pontuação de cada língua.
+
 ## 0.5.1
 
 ### Imprimir e entregar ao slicer
