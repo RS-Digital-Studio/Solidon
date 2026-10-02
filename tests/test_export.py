@@ -3508,6 +3508,76 @@ def test_the_creality_window_gets_the_file_its_console_gets(
     assert not list(tmp_path.glob("*.staging.3mf")), "die Zwischenkopie bleibt nicht liegen"
 
 
+def test_creality_print_7_3_arranges_a_plate_whose_arrangement_does_not_hold(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-331: Hält Solidons Anordnung nicht (Teil im Ring), geht die Platte ohne
+    Bettverschiebung an Creality Print 7.3, und die Konsole ordnet selbst an.
+
+    Gemessen am 02.10.2026 mit 7.3.0.6149: Ring mit Kern, ein schwebendes Teil,
+    eines über den Rand und zwei überlappende Teile kamen getrennt und mittig
+    auf dem Bett zurück, ohne Abbruch -50 und ohne ``gcode.off_the_bed``. Eine
+    Absage mit *Anordnen* nähme dem Kunden hier einen Lauf, der gelingt; der
+    Aufruf ist derselbe wie bei haltender Anordnung, nur ohne Zusage.
+    """
+    profile = profiles.make_profile("creality-ender3-v3-se", "pla")
+    settings = print_settings.resolve(profile)
+    outer = trimesh.creation.cylinder(radius=30.0, height=10.0, sections=48)
+    ring = outer.difference(trimesh.creation.cylinder(radius=25.0, height=12.0, sections=48))
+    core = trimesh.creation.cylinder(radius=10.0, height=10.0, sections=32)
+    objects = [
+        replace(scene_object("obj_1", "Ring"), mesh=place_on_bed(MeshData.of(ring))),
+        replace(scene_object("obj_2", "Kern"), mesh=place_on_bed(MeshData.of(core))),
+    ]
+    keep = arrangement_holds([as_mesh_data(entry.mesh) for entry in objects], profile)
+    assert keep is False, "die Vorbedingung: der Kern steht im Grundriss des Rings"
+    executable = tmp_path / "Creality Print" / "CrealityPrint.exe"
+    executable.parent.mkdir()
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable, "orca")
+    written, _findings = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Ring",
+        profile=profile,
+        plate=0,
+        settings=settings,
+        flavour="orca",
+        place_on_bed=keep,
+        setup=setup,
+    )
+    commands: list[list[str]] = []
+
+    class _Finished:
+        returncode = 0
+        stdout = b""
+        stderr = b""
+
+    def creality(command: list[str], *_args: object, **_kwargs: object) -> _Finished:
+        commands.append(list(command))
+        target = Path(command[command.index("--outputdir") + 1])
+        # Wie gemessen: beide Teile mittig auf dem Bett, nebeneinander.
+        (target / "plate_1.gcode").write_text(
+            "G90\nM82\nG1 Z0.2 F300\nG1 X72.6 Y110 E0.1\nG1 X148.2 Y110 E0.2\n",
+            encoding="utf-8",
+        )
+        return _Finished()
+
+    monkeypatch.setattr(handover, "_run_slicer", creality)
+    monkeypatch.setattr(handover, "_REFUSES_THE_CLI_FLAG", set())
+
+    outcome = handover.slice_model(
+        [written], settings, profile, setup, keep_arrangement=keep, output_dir=tmp_path / "aus"
+    )
+
+    assert len(commands) == 1, "ein Lauf, keine Absage vorher"
+    assert "--cli" in commands[0] and "--need-gcode-file" in commands[0]
+    assert "--arrange" not in commands[0]
+    codes = {entry.code for entry in outcome.findings}
+    assert "gcode.off_the_bed" not in codes
+    assert "slicer.arranged_itself" not in codes, "Solidon hat keine Anordnung zugesagt"
+
+
 # --- RM-191: jede Rolle bekommt Solidons Werte (Durchsicht 0.5.0) ---------------
 
 
