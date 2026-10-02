@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
 | 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
 | 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
@@ -36758,3 +36759,21 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Sonden `v4u_rm334_fensterwechsel.py`, `v4u_rm334_qt_nativ.py`.
 
 **Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit (Commit folgt).
+
+## RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)
+
+<a id="rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026"></a>
+<a id="rm-418"></a>
+
+**RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen.**
+  Review 02.10.2026 am Stand `4cf460e87`; beide Ursprungspunkte sind im Arbeitsbaum archiviert.
+  - **Slicerpfad nur in Groß-/Kleinschreibung verschieden:** Die Wahl springt in Erststart und
+    Einstellungen auf „Später auswählen“ — die Liste fasst Schreibweisen über `Path` zusammen,
+    `select_data`/`findData` sucht den exakten Text. Dieselben Textvergleiche in
+    `app/ui/print_settings_dialog.py` (`_choose_slicer`) und `app/ui/filament_picker.py:538`.
+  - **Zweites „Abbrechen“ beim Erzeugen:** Solange der Abbruch von Versuch 2 noch ausläuft, schließt
+    ein zweiter Klick den Dialog und verwirft Versuch 1; der Knopf bleibt in dieser Zeit frei.
+  **Abnahme:** je Rest ein Test (Pfad `c:\…` gegen `C:\…` bleibt gewählt; zweiter Klick während des
+  Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
+
+**Abschluss:** Erststart, Einstellungen und Dateiwahl suchen den gewählten Slicer über `first_run.select_program` (Vergleich mit `discover.same_program`, also über `Path`) statt über den exakten Text; `PrintSettingsDialog._choose_slicer` und `filament_picker.slicer_filaments` vergleichen den gemerkten Pfad ebenso. *Abbrechen* im Erzeugen-Dialog ist gesperrt, solange der Abbruch eines weiteren Versuchs ausläuft, und trägt dabei den Satz „Wird abgebrochen — der laufende Schritt läuft aus.“; auch Esc und das Fensterkreuz verwerfen in dieser Zeit nichts (gefragt wird `_busy`, nicht `isRunning`, weil der Faden schon zurück sein kann, bevor seine Meldung ankommt). Tests: `test_a_slicer_in_another_case_stays_chosen_in_the_first_run`, `test_a_remembered_slicer_in_another_case_is_the_one_used` (Druckdialog und Filamentwähler), `test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings` (nur unter Windows, wo Pfade nicht nach Groß und Klein unterscheiden) und `test_a_second_cancel_while_the_first_runs_out_discards_nothing`; alle vier am Stand `ba5a76365` rot, danach grün. Sonde am echten Fenster: Erststart mit einer als `c:\…` gewählten Datei und anschließender Programmsuche, Erzeugen mit einem Abbruch, der zwei Sekunden ausläuft, echte Klicks und Esc: vorher 5 von 9, danach 9 von 9. In den Einstellungen trat der Fehler am echten Rechner nicht auf, weil die Programmsuche den gemerkten Pfad in seiner eigenen Schreibweise mitliefert; der Test stellt die Lage aus dem Review nach. Umgesetzt von Claude, in main mit (Commit folgt).

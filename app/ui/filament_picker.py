@@ -536,9 +536,9 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
     """
     found = discover.find_programs("slicer", tools.SLICERS)
     remembered = discover.remembered_path("slicer")
-    chosen = next((entry for entry in found if str(entry) == remembered), None) or (
-        found[0] if found else None
-    )
+    chosen = next(
+        (entry for entry in found if discover.same_program(str(entry), remembered)), None
+    ) or (found[0] if found else None)
     if chosen is None:
         return ()
     try:

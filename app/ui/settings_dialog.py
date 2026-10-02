@@ -58,6 +58,7 @@ from app.ui.first_run import (
     allowed_printers,
     choose_slicer_file,
     preferred_printer,
+    select_program,
     valid_printer_choice,
 )
 from app.ui.icons import icon
@@ -665,7 +666,7 @@ class SettingsDialog(QDialog):
                 self.slicer.setItemData(
                     self.slicer.count() - 1, str(path), Qt.ItemDataRole.ToolTipRole
                 )
-            select_data(self.slicer, chosen)
+            select_program(self.slicer, chosen)
         self.slicer_state.setText(
             ""
             if paths
