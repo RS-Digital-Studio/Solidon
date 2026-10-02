@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 import pytest
@@ -158,8 +159,39 @@ def test_measure_reads_all_three_older_shapes(baseline: Path, clock: list[float]
         assert _entry(baseline)["runs"] == expected_runs
 
 
+def test_measure_compares_against_the_cut_window_only(baseline: Path, clock: list[float]) -> None:
+    """Verglichen wird gegen die letzten ``WINDOW`` Läufe, nicht gegen alle gespeicherten.
+
+    Eine von Hand gewachsene oder vor einer Verkleinerung von ``WINDOW``
+    geschriebene Datei trägt mehr Läufe als das Fenster. Vorn liegen langsame
+    alte Läufe, hinten schnelle in der Mehrzahl: Mit Zuschnitt ist der Median
+    schnell und der neue Lauf eine Überschreitung; ohne Zuschnitt überstimmen
+    die alten Läufe den Median, und dieselbe Messung bleibt unbemerkt. Geprüft
+    wird über ``measure`` und ``strikes`` — das Ergebnis des Lesens, nicht die
+    geschriebene Liste, die ``measure`` beim Schreiben ohnehin selbst
+    zuschneidet.
+    """
+    assert marks.WINDOW >= marks.MIN_RUNS, "das Fenster trägt keinen Vergleich"
+    schnell = marks.WINDOW // 2 + 1
+    gespeichert = [9.0] * marks.WINDOW + [1.0] * schnell
+    neuer_lauf = 1.3
+    # Die Datenlage muss beide Lesarten trennen, sonst prüfte der Test nichts:
+    # ohne Zuschnitt kein Überschreiten, mit Zuschnitt eines.
+    assert neuer_lauf <= median(gespeichert) * marks.REGRESSION_LIMIT
+    assert neuer_lauf > median(gespeichert[-marks.WINDOW :]) * marks.REGRESSION_LIMIT
+    _store_entry(baseline, {"runs": gespeichert, "strikes": 0})
+
+    clock.append(neuer_lauf)
+    marks.measure("probe", lambda: None)
+
+    assert _entry(baseline)["strikes"] == 1, (
+        "der neue Lauf wurde gegen den Median aller gespeicherten Läufe verglichen, "
+        "nicht gegen das Fenster"
+    )
+
+
 def test_measure_cuts_a_stored_window_to_length(baseline: Path, clock: list[float]) -> None:
-    """Eine von Hand gewachsene Datei bestimmt die Fensterbreite nicht."""
+    """Eine von Hand gewachsene Datei bestimmt die Länge der geschriebenen Liste nicht."""
     zu_viele = [float(one) for one in range(marks.WINDOW + 3)]
     _store_entry(baseline, {"runs": zu_viele, "strikes": 0})
     clock.append(0.0)
