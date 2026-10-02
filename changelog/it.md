@@ -31,7 +31,7 @@ scrive in `website/version.json`.
 - Al primo avvio e nelle impostazioni scegli prima lo slicer e poi una delle sue stampanti. L'elenco ha un campo di ricerca, volume e ugello arrivano dal profilo dello slicer.
 - Scegli l'ugello nelle impostazioni di stampa tra le misure che la tua stampante conosce, e lo slicer riceve il profilo corrispondente.
 - Le impostazioni di stampa chiedono nell'ordine in cui una cosa dipende dall'altra: slicer, stampante, ugello, piatto, filamenti e qualità, poi i valori.
-- Con Creality Print 7.2 e 7.3, «Affetta» calcola ora da sé il file di stampa. Finora funzionava solo nella finestra di Creality Print. Se 7.3 riordina il piatto, Solidon lo dice.
+- Ora puoi generare i file di stampa direttamente da Solidon con Creality Print 7.2 e 7.3.
 - Con Cura, Solidon riprende su richiesta la stampante che Cura sta usando, con il suo ugello. Una stampante rinominata in Cura viene riconosciuta.
 - Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.

@@ -56,7 +56,7 @@ Nutzen da und sonst nichts.
 - Beim ersten Start und in den Einstellungen wählen Sie zuerst den Slicer und dann einen seiner Drucker. Die Liste hat ein Suchfeld, Bauraum und Düse kommen aus dem Profil des Slicers.
 - Die Düse wählen Sie im Druckdialog aus den Größen, die Ihr Drucker kennt, und der Slicer bekommt das passende Profil dazu.
 - Der Druckdialog fragt in der Folge, in der eins vom anderen abhängt: Slicer, Drucker, Düse, Platte, Filamente und Qualität, danach die Werte.
-- Mit Creality Print 7.2 und 7.3 rechnet *Slicen* die Druckdatei jetzt selbst. Bisher ging das nur im Fenster von Creality Print. Ordnet 7.3 die Platte dabei selbst an, sagt Solidon es.
+- Mit Creality Print 7.2 und 7.3 können Sie die Druckdatei jetzt direkt aus Solidon erzeugen.
 - Mit Cura übernimmt Solidon auf Wunsch den Drucker, den Cura gerade nutzt, samt eigener Düse. Ein in Cura umbenannter Drucker wird wiedererkannt.
 - Cura rechnet jetzt mit der Düse, die Sie gewählt haben, auch bei Druckern aus Curas eigener Liste, und Drucker mit dem Nullpunkt in der Bettmitte behalten ihn.
 - An Bambu Studio gehen Düsenvariante und die Temperaturen Ihrer Spulen mit, bis in die 3MF-Datei.
