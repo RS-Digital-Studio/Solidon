@@ -211,7 +211,6 @@ scipy = { licence = "BSD-3-Clause AND BSD-3-Clause-Open-MPI AND (GPL-3.0-or-late
 shapely = { licence = "BSD-3-Clause AND LGPL-2.1-or-later", note = "Polygone für den geschlossenen Schnitt; Ziel-Wheel bringt GEOS unter LGPL-2.1-or-later mit" }
 networkx = { licence = "BSD-3-Clause", note = "Konturhierarchie beim Schließen einer Schnittfläche" }
 scikit-image = { licence = "BSD-3-Clause", note = "Marching Cubes für die Voxelstufe der Rückfallkette" }
-lxml = { licence = "BSD-3-Clause", note = "XML-Leser hinter trimeshs SVG-Import (Zeichnungen)" }
 vhacdx = { licence = "BSD-3-Clause", note = "V-HACD-Hinweis für die Trennebene (§22.3); optional, das Original github.com/kmammou/v-hacd steht unter BSD-3" }
 fast-simplification = { licence = "MIT", note = "Quadrik-Dezimierung für erzeugte Netze (§25)" }
 hidapi = { licence = "BSD-3-Clause", note = "HID-Leser für die 3D-Maus (§2.9, Konzept 3D-Maus); das Paket ist dreifach lizenziert (GPL-3.0 OR BSD-3-Clause OR HIDAPI), gewählt ist BSD-3 — die Metadaten nennen nur Klassifikatoren, deshalb steht die Wahl hier" }
