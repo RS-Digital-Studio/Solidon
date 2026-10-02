@@ -83,7 +83,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
-| [RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am Netz bleibt sein Überstand](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Beide Kerne schneiden die gemessene Länge der Bohrung, wie das Netz |
+| [RM-320 — Ein zweiter Körper in einer Bohrung](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Arbeiterabbruch und gültige Innenkammer mit freiem Stift korrigiert; 1010 Fachtests und sechs Kundenrechnungen grün, unabhängiger Review ohne offene Codebefunde. Tor und Integration stehen aus |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -2397,7 +2397,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-320"></a>
 
-- [ ] **RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am
+- [~] **RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am
   Netz bleibt sein Überstand.** Gemessen am 30.09.2026: Platte 40 x 20 x 10
   mit Bohrung Ø 6, darin ein Stift Ø 5 x 15 als zweiter Körper (Verbund bzw.
   dessen Tessellierung). *Zum Langloch ziehen* auf 12 mm: exakt ein Teil,
@@ -2405,8 +2405,59 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zwei Teile, Platte 7 357,6 und Stiftrest 97,6 mm³ (z 10,01 bis 15). Beide
   Kerne sagen nicht dasselbe. Der Fall steht für eine Baugruppe aus einem STEP
   mit Schraube in der Bohrung. Weg: Beide schneiden die gemessene Länge
-  der Bohrung wie das Netz, nicht durch alles in der Flucht. Abnahme: an
-  beiden Kernen zwei Teile, Stiftrest gleich auf 0,1 mm³.
+  der Bohrung wie das Netz, nicht durch alles in der Flucht. **Erledigt:** Bei
+  mehreren Körpern begrenzt *Zum Langloch ziehen* den Durchgang auf die
+  gemessene Bohrungstiefe; der Hüllkörperdurchgang bleibt dem Einzelkörper
+  vorbehalten. Beide Kerne erhalten zwei Körper, und der obere Stiftrest liegt
+  von z = 10 bis 15 mm (±0,02 mm). Die Volumenerwartungen sind je Kern
+  getrennt und analytisch hergeleitet: am Netz π × 2,5² × 5 mm³ für den
+  Stift (±1 mm³) und 8000 − (36 + 9π) × 10 mm³ für die Platte (±2 mm³);
+  am exakten Kern π × 2,5² × 5 mm³ für den Stift (±0,000001 mm³).
+  Die Volumenabweichung kommt aus der Facettierung und der 0,02-mm-Verlängerung
+  des Netz-Durchzugs, die 0,01 mm zusätzlich am Stiftende abträgt.
+  **Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests;
+  unabhängiges Review nach Korrektur der Abnahme ohne weitere Findings.
+  **Nachprüfung 02.10.2026:** Der einseitige Erstfall war kein vollständiger
+  Beleg. Ein durch beide Plattenseiten ragender Stift wurde am Netz abgelehnt;
+  die gemeinsame Freigabe in Menü und Operation prüft jetzt den freien
+  Bohrungsträger getrennt. Weitere rote Gegenproben zeigten acht falsche
+  Freigaben an überlappenden oder flächig angeschlossenen Naben und einen
+  verkürzten Durchzug am Einzelkörper mit innerer Hohlschale. Der Nachgang
+  verlangt deshalb einen vollständigen geometrischen Trennungsbeleg, prüft
+  den Abbruch und zählt positive Außenkörper für die Baugruppenfrage.
+  Dieser Nachgang besteht mit 373 betroffenen Tests, ergänzenden Sicherheits-
+  und Merkerfällen sowie sechs Rechnungen an unveränderten Kundenmodellen.
+  Der unabhängige Nachreview fand jedoch noch vollständige positive
+  Einschließung: Oberflächenkontaktfreiheit allein beweist keine getrennten
+  Materialvolumen. Der neue Gegenfall ist an Menü und Ausführung beider Kerne
+  mit sechs roten Fällen belegt und korrigiert. Der gemeinsame strenge
+  Einschließungsbeleg erlaubt nur ein entschieden freies Materialvolumen;
+  offene Strahlenfragen sperren. Ein zuletzt fehlender Abbruchcallback in der
+  Gitterprüfung ist ebenfalls mit rotem Gegenfall korrigiert. Der endgültige
+  Fachlauf besteht mit 569 Tests, drei abgewählt; weitere 420 Boolean- und
+  Sprachprüfungen sind grün. Sechs Kundenrechnungen, Ruff, Format und mypy
+  sind grün. Der unabhängige Nachreview dieses Kerns war ohne offene Befunde.
+  **Zentrale Zweitprüfung:** Die tatsächlichen Erkennungsarbeiter verloren
+  ihren Abbruchtoken vor der neuen vollständigen Prüfung; der Panelarbeiter
+  besaß keinen Abbruchschalter. Beide Wege reichen ihn jetzt durch
+  `actions_for`/`feature_answers` weiter, Ersatzauftrag und Fensterende brechen
+  ihn ab. Acht rote Gegenfälle stehen grün, einschließlich Abbruch unmittelbar
+  vor der Merkerspeicherung. Sechs weitere rote Fälle belegten die falsche
+  Ablehnung einer gültigen Innenkammer mit freiem Stift. Der neue lesende
+  Materialfamilienbeleg ordnet negative Innenhäute dem positiven Träger zu;
+  unentschiedene Beziehungen und ungültige Vorzeichenketten sperren weiterhin.
+  19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsgegenfälle sind grün.
+  Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt abgewählt;
+  sechs Kundenrechnungen am eingefrorenen Endstand sind ebenfalls grün.
+  Der unabhängige Schlussreview ist ohne offene Codebefunde;
+  zentrales Tor und Integration stehen aus.
+  Die gezielten Belege stehen im
+  [portablen Bericht](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
+  Reproduzierbare Gegenfälle stehen in `tests/test_slot_features.py`
+  (`test_a_fixed_boss_is_not_a_separate_pin_for_the_slot`,
+  `test_an_inner_void_does_not_shorten_a_single_body_slot`).
+  Nachprüfung am Stand `3fd3b1ace`: nicht behoben, die Korrektur aus dem Arbeitsbaum ist nicht committet. Durchgesteckter Stift am Netz abgelehnt („In dieser Bohrung steht Material …“), exakt 1 Teil und Stift weg; auch der Eintragsfall unterscheidet sich weiter zwischen den Kernen.
+
 
 ## Bedienung und Darstellung
 

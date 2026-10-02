@@ -826,12 +826,24 @@ class _FeatureAnswersWorker(Worker):
 
     done = Signal(object)
 
-    def __init__(self, compute: Callable[[], Any]) -> None:
+    def __init__(
+        self, compute: Callable[[], Any], *, cancelled: CancelSignal | None = None
+    ) -> None:
         super().__init__()
         self._compute = compute
+        self.cancelled = cancelled if cancelled is not None else CancelSignal()
+
+    def cancel(self) -> None:
+        self.cancelled.cancel()
 
     def work(self) -> None:
-        self.done.emit(self._compute())
+        try:
+            self.cancelled.raise_if_cancelled()
+            answers = self._compute()
+            self.cancelled.raise_if_cancelled()
+        except OperationCancelled:
+            return
+        self.done.emit(answers)
 
 
 class _MapWorker(Worker):
@@ -15339,8 +15351,12 @@ class MainWindow(QMainWindow):
         self.feature_panel.show_pending(feature_id, feature)
         self.feature_dock.reveal()
         copy = for_a_worker(entry.mesh)
-        compute = on_the_copy(copy, lambda: feature_answers(feature_id, feature, features, copy))
-        worker = _FeatureAnswersWorker(compute)
+        cancelled = CancelSignal()
+        compute = on_the_copy(
+            copy,
+            lambda: feature_answers(feature_id, feature, features, copy, cancelled=cancelled),
+        )
+        worker = _FeatureAnswersWorker(compute, cancelled=cancelled)
         request = (entry.id, feature_id, result)
         worker.done.connect(
             weak_slot(self, MainWindow._answers_arrived, request, worker, forward=True)
@@ -15348,6 +15364,7 @@ class MainWindow(QMainWindow):
         worker.crashed.connect(weak_slot(self, MainWindow._answers_failed, worker, forward=True))
         worker.finished.connect(weak_slot(self, MainWindow._answers_worker_done, worker))
         if self._answers_worker is not None:
+            self._answers_worker.cancel()
             self._retire(self._answers_worker)
         self._answers_worker = worker
         self._leash.start(worker)
@@ -22759,6 +22776,8 @@ class MainWindow(QMainWindow):
         # schließende Fenster das Merkmalfenster auf, begann eine neue
         # Platzierung samt Arbeiter und meldete einen Fehler, den niemand liest.
         answers, self._answers_worker = self._answers_worker, None
+        if answers is not None:
+            answers.cancel()
         workers = (
             self._map_worker,
             answers,

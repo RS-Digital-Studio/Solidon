@@ -38,6 +38,7 @@ entfernt hat.
 | 2026-10-02 | [RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)](#rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
 | 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
+| 2026-10-01 | [RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)](#rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-erhalten-01102026) |
 | 2026-10-01 | [RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)](#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026) |
 | 2026-10-01 | [RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)](#rm-311-superslicer-vergleicht-g-code-werte-semantisch-01102026) |
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
@@ -34768,3 +34769,61 @@ stehen aus; RM-322 bleibt daneben offen.
 Konstruktion, Gegenfälle und Kundenmodell sind im
 [portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md)
 wiederholbar beschrieben.
+
+## RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)
+
+<a id="rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-01102026"></a>
+
+Beim Ziehen einer Bohrung im Langloch über mehrere Körper nutzte der exakte
+Kern die ganze Baugruppen-Hülltiefe. Ein zweiter Stift in der Bohrung wurde
+deshalb auch oberhalb der Platte abgeschnitten; am Netz blieb sein Überstand.
+Bei mehreren Körpern nutzt *Zum Langloch ziehen* jetzt die gemessene
+Bohrungstiefe. Den Hüllkörperdurchgang behält der Einzelkörperweg.
+
+Die Regression baut eine Platte 40 × 20 × 10 mm mit Bohrung Ø 6 mm und einen
+Stift Ø 5 × 15 mm. Beide Kerne liefern danach zwei Körper, der Stift reicht
+von z = 10 bis 15 mm. Die Erstprobe maß am Netz 97,6 mm³ für den Stift und
+7 357,6 mm³ für die Platte. Diese Messwerte sind keine unabhängigen Sollwerte;
+die Nachprüfung vom 02.10. verwendet π × 2,5² × 5 mm³ für den Stift
+(Netz ±1 mm³, exakt ±0,000001 mm³) und 8000 − (36 + 9π) × 10 mm³ für die
+Netzplatte (±2 mm³). Die Abweichung umfasst Facettierung und die
+0,02-mm-Verlängerung des Netz-Durchzugs, die am Stiftende 0,01 mm zusätzlich
+abträgt.
+
+**Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests.
+Unabhängiges Review nach Korrektur der Volumenabnahme ohne weitere Findings.
+Der vollständige Entwicklungslauf ist noch nicht erneut gelaufen; ein Commit
+bleibt bis zu seinem grünen Lauf aus.
+
+**Nachprüfung 02.10.2026:** Die einseitige Erstprobe deckte den Sicherheitsweg
+nicht vollständig ab. Der beidseitige Stift, angeschlossene Naben, eine
+negative Innenhaut und vollständig ineinanderliegende positive Körper
+ergaben weitere rote Gegenfälle. Der gemeinsame Menü-/Operationsbeleg prüft
+jetzt den freien Bohrungsträger, vollständige Kontaktfreiheit und die
+dreiwertige Materialeinschließung; nur ein entschieden freier Beleg erlaubt
+den Schnitt. Die Einzelkörperfrage zählt positive Außenkörper. Der Abbruch
+erreicht auch das vorhandene Gitterzertifikat, wofür zuletzt ein eigener
+roter Gegenfall ergänzt wurde. Die allgemeine Bohrungssicherheitsfrage bleibt
+unverändert; nur `slot_hole` nutzt die Sonderfreigabe, mit Cacheversion 15.
+
+Der abschließende betroffene Lauf bestand mit 569 Tests, drei abgewählten
+Fällen und Exit 0. Drei Boolean-Gegenfälle und 417 Sprachprüfungen bestanden
+zusätzlich. Sechs Rechnungen an unveränderten Kundenmodellen sowie Ruff,
+Format und mypy waren grün. Der unabhängige Schlussreview hat keine offenen
+Befunde. Der aktuelle [RM-320](ROADMAP.md#rm-320) bleibt bis zum zentralen
+Entwicklungstor und der tatsächlichen Integration offen. Eingangs-Hashes,
+analytische Sollwerte, historische Fehlannahmen und Wiederholung stehen im
+[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
+
+Die nachfolgende zentrale Zweitprüfung fand noch den fehlenden Tokenanschluss
+aus den tatsächlichen Erkennungsarbeitern durch `actions_for` und
+`feature_answers`. Acht direkte Arbeiterfälle belegen jetzt Abbruch während
+Kontakt-/Einschließungsprüfung, vor der Merkerspeicherung sowie beim
+Ersatzauftrag und Fensterende. Ein weiterer Nachgang erlaubt eine gültige
+negative Innenhaut zusammen mit einem freien Stift über entschiedene
+Materialfamilien. 19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsfälle
+sind grün. Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt
+abgewählt; die sechs Kundenrechnungen am Endstand sind ebenfalls grün.
+Der unabhängige Schlussreview hat die vollständigen RM320-Hunks ohne offene
+Codebefunde freigegeben. Diese Nachgänge bleiben bis zu Entwicklungstor und
+Integration unter dem aktiven RM-320 geführt.

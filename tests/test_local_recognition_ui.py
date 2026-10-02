@@ -223,6 +223,149 @@ def test_local_worker_preserves_the_error_cause_for_the_dialog(monkeypatch):
     worker.ready.emit.assert_not_called()
 
 
+@pytest.mark.parametrize("caller", ["local", "panel"])
+@pytest.mark.parametrize("phase", ["contact", "containment", "remember"])
+def test_feature_workers_cancel_the_separate_body_proof_without_remembering_it(
+    profile, monkeypatch, caller, phase
+):
+    """Der echte Arbeiteraufruf reicht seinen Schalter bis in beide Sicherheitsbelege.
+
+    In einer Ø6-Bohrung steht ein freier Ø5-Stift zwischen z=2 und z=8 mm.
+    Seine Hülle liegt im Hüllquader der Platte: Neben der Kontaktprüfung
+    wird deshalb wirklich die Einschließungsfrage gestellt. Abbruch darf
+    weder eine fertige Fensterauskunft noch den gemeinsamen Kernmerker setzen.
+    """
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from app.core.geom import prepare_ops, repair
+    from app.core.geom.prepare_ops import hole_is_clear
+    from app.core.perceive.features import forget_cache
+    from app.ui import local_recognition as local
+    from app.ui.main_window import MainWindow
+    from tests.helpers import bore_plate
+
+    load_operations()
+    plate = bore_plate("mesh", [(0, -1), (3, -1), (3, 11), (0, 11), (0, -1)])
+    feature = next(value for value in plate.features.values() if value.kind == "hole")
+    pin = trimesh.creation.cylinder(radius=2.5, height=6.0, sections=48)
+    pin.apply_translation((0.0, 0.0, 5.0))
+    mesh = MeshData.of(trimesh.util.concatenate((plate.mesh.raw, pin)))
+    entry = replace(plate, mesh=mesh, features={feature.id: feature})
+    assert mesh.component_count == 2 and not hole_is_clear(mesh, feature)
+    forget_cache()
+    result = SimpleNamespace(
+        complete=True,
+        answers={},
+        scene=SimpleNamespace(objects={entry.id: entry}, parameters={}),
+    )
+    answers = []
+    aborted = []
+    failed = []
+    if caller == "local":
+        monkeypatch.setattr(
+            local,
+            "History",
+            lambda _document: Mock(apply=Mock(return_value=SimpleNamespace(ops=("op_1",)))),
+        )
+        monkeypatch.setattr(local, "evaluate", lambda *_args, **_kwargs: result)
+        monkeypatch.setattr(local, "features_in_region", lambda *_args, **_kwargs: (feature.id,))
+        worker = local._RecognitionWorker(
+            new_project().document,
+            OperationDraft("detect_region", inputs=(entry.id,), params={"radius": 8.0}),
+            profile,
+            7,
+            None,
+            None,
+        )
+        worker.ready.connect(lambda _revision, reply: answers.append(reply.actions[feature.id]))
+        worker.aborted.connect(aborted.append)
+        worker.failed.connect(lambda *_args: failed.append(_args))
+    else:
+        # Der Fensteraufruf baut den echten Arbeiter samt Kopie und Rückkanal;
+        # nur Fenster und Threadstart bleiben Attrappen. work() läuft direkt.
+        view = Mock(_answers_worker=None)
+        view.session.last_result = result
+        view.object_tree.selected.return_value = entry.id
+        view.object_tree.selected_feature.return_value = feature.id
+        view.feature_panel.remember_answers.side_effect = (
+            lambda _id, _feature, _features, _mesh, reply: answers.append(reply.actions)
+        )
+        MainWindow._answer_in_worker(view, feature.id, entry, result)
+        worker = view._leash.start.call_args.args[0]
+        worker.crashed.connect(failed.append)
+
+    module, name = {
+        "contact": (repair, "parts_that_cross"),
+        "containment": (repair._Shells, "inside"),
+        "remember": (prepare_ops, "_hole_has_separate_contents_read"),
+    }[phase]
+    original = getattr(module, name)
+    calls = 0
+
+    def stop_inside_the_proof(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        received = args[0]._cancelled if phase == "containment" else kwargs.get("cancelled")
+        assert received is not None, "Der Abbruchschalter ging auf dem UI-Aufrufweg verloren."
+        assert received is worker.cancelled
+        if phase == "contact":
+            assert kwargs["max_pairs"] is None
+            assert kwargs["require_complete"] is True
+            assert kwargs["include_face_contacts"] is True
+        if phase == "remember":
+            answer = original(*args, **kwargs)
+            if calls == 1:
+                worker.cancelled.cancel()
+            return answer
+        if calls == 1:
+            worker.cancelled.cancel()
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, name, stop_inside_the_proof)
+    worker.work()
+    assert calls == 1 and not answers and not failed
+    if caller == "local":
+        assert aborted == [7]
+    worker.cancelled.reset()
+    worker.work()
+    assert calls == 2, "Ein abgebrochener Sicherheitsbeleg darf nicht im Merker stehen."
+    assert len(answers) == 1 and not failed
+    assert [row.op for row in answers[0] if row.op] == ["slot_hole"]
+    worker.cancelled.cancel()
+    worker.work()
+    assert calls == 2 and len(answers) == 1 and not failed
+
+
+@pytest.mark.parametrize("ending", ["replace", "close"])
+def test_an_obsolete_feature_answers_worker_receives_the_cancel_request(ending):
+    """Neuer Merkmalklick und Fensterende schalten den vorhandenen Arbeiter ab."""
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from app.core.perceive.features import detect
+    from app.ui.main_window import MainWindow
+
+    mesh = blind_cylinder()
+    features = detect(mesh)
+    feature_id = next(key for key, value in features.items() if value.kind == "hole")
+    entry = SimpleNamespace(id="obj_1", mesh=mesh, features=features)
+    view = Mock(_answers_worker=None, _inventory_view=None)
+    view.findChildren.return_value = []
+    view._leash.pending.return_value = ()
+    MainWindow._answer_in_worker(view, feature_id, entry, None)
+    worker = view._answers_worker
+
+    if ending == "replace":
+        MainWindow._answer_in_worker(view, feature_id, entry, None)
+        view._retire.assert_called_once_with(worker)
+    else:
+        MainWindow.wait_for_workers(view, 0)
+        assert view._answers_worker is None
+    assert worker.cancelled.is_cancelled
+
+
 def make_dialog(
     profile,
     monkeypatch,

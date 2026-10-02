@@ -229,6 +229,21 @@ Richtung, `opposite_side`)
   `local_text_body()` trägt jeden Formparameter. Ein Ring ohne gemessene Achse
   hat keine Lage (`FEATURE_WITHOUT_AXIS`); beim Platzieren fallen alte
   Dreiecks- und Trägerbezüge gemeinsam.
+- **Durchgang im Langlochzug** (`slot_hole`): Ein einzelner Körper wird über
+  seine Hülle geschnitten (`_through_bore_depth`); negative Innenhäute zählen
+  am Netz nicht als weitere Körper (`_slot_has_multiple_bodies`). Bei mehreren Körpern
+  gilt die vor dem Schließen gemessene Tiefe des ausgewählten Merkmals. Andere
+  Körper werden innerhalb dieser Schnitttiefe mitgeschnitten; Material dahinter
+  bleibt stehen. `hole_has_separate_contents` gibt nur für diesen Zug eine
+  Bohrung mit getrennten Körpern frei, deren eigener Träger innen frei ist;
+  eine vollständige Kontaktprüfung schließt auch geometrisch angeschlossene
+  Naben aus. `repair.material_part_families` belegt positive Materialkörper
+  samt direkt zugeordneten negativen Innenhäuten; die eigene Bohrung wird am
+  ganzen Träger geprüft. Eine negative Wurzel, gleiche Vorzeichen an Eltern
+  und Kind oder ein unklarer Strahl geben nichts frei. Menü und Ausführung
+  teilen den gemerkten, abbrechbaren Beleg; Abbruch vor der Ablage setzt ihn nicht.
+  Verbundene Naben und Speichen bleiben gesperrt, auch wenn weitere Körper im
+  Objekt stehen (RM-320).
 - **Altwinkel** (`measured_frame`, Migration 38 → 39): `slot_angle` bleibt als
   Ausdruck im Schritt; `bore_shape` und `slot_hole` rechnen ihn in jeder
   Auswertung mit der dann aktuellen Achse um, auch wenn deren Komponenten
@@ -282,6 +297,14 @@ Die reine Schnittansicht darf die unveränderte Berührung zeigen.
   entscheidende Vorzeichen kommt aus `mesh.signed_volume` oder
   `_shell_volumes`, nie aus `enclosed_volume`. Umschlossen heißt ganz darin
   (`_Shells.inside`); eine Schale im Material wird gemeldet, nicht geraten.
+  `has_nested_parts` teilt diese Materialtiefe mit `parts_inside_parts`, gibt
+  aber `None` bei unentschiedenen Strahlen zurück. `material_part_families`
+  befragt auch negative Häute und verlangt vollständig entschiedene,
+  alternierende Elternketten mit positiven Wurzeln. Eine positive Insel im
+  Hohlraum bleibt eine eigene Familie. Dichtheit und Kontaktfreiheit belegt
+  der Aufrufer; `None` gibt keine Familie frei. Beide optionalen Abbruchtoken
+  reichen durch `_Shells` bis in Gitterzertifikat und genaue Kreuzungssuche;
+  Diagnose und boolesche Familien behalten ihre Standardschnittstelle.
 
 **Anordnen und Ausrichten**:
 

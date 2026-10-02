@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from app.core.registry import REGISTRY
 from app.core.registry.surfaces import asked_fields, normal_fields_of
-from app.core.types import Feature, FeatureId, MeasureStatus, measure_status
+from app.core.types import CancelToken, Feature, FeatureId, MeasureStatus, measure_status
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
@@ -695,6 +695,7 @@ def actions_for(
     cavity: tuple[Feature, ...] | None = None,
     touches_other: bool = False,
     reason: FeatureGroupReason | None = None,
+    cancelled: CancelToken | None = None,
 ) -> list[FeatureAction]:
     """Was sich an diesem Merkmal tun lässt — und was nicht, mit Grund.
 
@@ -714,6 +715,8 @@ def actions_for(
     *Zum Langloch ziehen* an der gesenkten Bohrung öffneten eine Vorschau ohne
     Bild und hielten beim Übernehmen die Kette an.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     actions: list[FeatureAction] = []
     edge_blocked = fillet_blocked(feature, features, mesh)
     piece_blocked = cone_piece_blocked(feature) or torus_is_the_body(feature, mesh)
@@ -734,7 +737,15 @@ def actions_for(
         touches_other, reason = state.touches_other, state.reason
         cavity = state.chain if state.chain is not None else ()
     own_body_blocked = no_own_body(feature, cavity, touches_other, mesh, reason=reason)
-    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY
+    from app.core.geom.prepare_ops import HOLE_IS_NOT_EMPTY, hole_has_separate_contents
+
+    # Ein Langloch schneidet fremde Teile nur innerhalb seiner Bohrungstiefe.
+    # Die übrigen Handlungen behalten die Absage für Material im Hohlraum.
+    separate_contents = (
+        own_body_blocked is HOLE_IS_NOT_EMPTY
+        and mesh is not None
+        and hole_has_separate_contents(mesh, feature, cancelled=cancelled)
+    )
 
     for candidates in ACTION_ORDER:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
@@ -756,6 +767,7 @@ def actions_for(
             fitting is not None
             and own_body_blocked is not None
             and (fitting.name in _NEED_AN_OWN_BODY or own_body_blocked is HOLE_IS_NOT_EMPTY)
+            and not (fitting.name == "slot_hole" and separate_contents)
         ):
             actions.append(FeatureAction(title=fitting.title, op=None, reason=own_body_blocked))
         elif fitting is not None and edge_blocked is not None and fitting.name in _EDGE_OPS:

@@ -131,6 +131,7 @@ from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
 from app.core.types import (
+    CancelToken,
     Document,
     Feature,
     Finding,
@@ -6326,6 +6327,8 @@ def feature_answers(
     feature: Feature,
     features: Mapping[str, Feature] | None,
     mesh: MeshData | None,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> _FeatureAnswers:
     """Was der Kern über dieses Merkmal sagt: Hohlraumkette, Handlungen, Gleichartige.
 
@@ -6339,6 +6342,8 @@ def feature_answers(
     from app.core.perceive import relations
     from app.core.perceive.actions import actions_for
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     cavity: tuple[Feature, ...] = ()
     touches_other = False
     reason: relations.FeatureGroupReason | None = None
@@ -6356,6 +6361,7 @@ def feature_answers(
         cavity=cavity,
         touches_other=touches_other,
         reason=reason,
+        cancelled=cancelled,
     )
     groups: dict[str, FeatureActionGroup] = {}
     if features is not None and mesh is not None:
@@ -6368,6 +6374,8 @@ def feature_answers(
                 mesh,
             )
         }
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     return _FeatureAnswers(cavity, tuple(actions), groups)
 
 

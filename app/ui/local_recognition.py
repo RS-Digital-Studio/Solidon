@@ -246,6 +246,7 @@ class _RecognitionWorker(Worker):
                         entry.features[name],
                         entry.features,
                         mesh=entry.mesh if isinstance(entry.mesh, MeshData) else None,
+                        cancelled=self.cancelled,
                     )
                 )
             seed = int(draft.params.get("seed_face", -1))
