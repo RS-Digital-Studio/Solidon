@@ -414,6 +414,35 @@ def test_a_technical_detail_stays_behind_the_readable_sentence(
     assert zeile.values["kind"] == "Ein Wert liegt daneben."
 
 
+def test_error_places_and_outlines_remain_geometry_in_the_report() -> None:
+    """Ein Fehlerort bleibt erreichbar; seine Kontur darf kein Anzeigetext werden."""
+    import pickle
+
+    from app.core.errors import SHOW_LOCATION, GeometryError
+    from app.core.geom.kernel_jobs import _portable
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+
+    location = (10.0, 20.0, 30.0)
+    outline = ((location, (10.0, 20.0, 40.0)), ((50.0, 20.0, 30.0), (50.0, 20.0, 40.0)))
+    error = GeometryError(
+        detail=_("Diese Kanten bleiben unverändert."),
+        suggestions=(SHOW_LOCATION,),
+        values={"skipped": 2, "location": location, "outline": outline},
+        object_id="obj_1",
+    )
+    operation = Operation(id=2, op="fillet_edges", inputs=("obj_1",), outputs=("obj_1",), params={})
+    transported = pickle.loads(_portable(error))
+    assert isinstance(transported, GeometryError)
+    finding = _finding_from(transported, operation)
+    assert finding.location == location
+    assert finding.outline == outline
+    assert "location" not in finding.values and "outline" not in finding.values
+    assert finding.values["skipped"] == "2"
+    assert finding.object_id == "obj_1" and finding.op_id == 2
+    assert error.values["location"] is location and error.values["outline"] is outline
+
+
 def test_an_operation_without_any_input_stops_instead_of_crashing(
     history: History, document: Document, profile: Profile, registry: Registry
 ) -> None:

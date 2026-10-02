@@ -79,7 +79,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
-| [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Herkunft und vollständige Kurvenabdeckung korrigiert; 57 direkte und sechs Kundenfälle grün, Algorithmus unabhängig freigegeben; Dokumentabschluss und zentrales Tor/Übernahme offen |
+| [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Herkunft und vollständige Kurvenabdeckung korrigiert; 57 direkte und sechs Kundenfälle sowie 32 Dokumentprüfungen grün; zentrales Zweitreview, Tor und Übernahme offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
 | [RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert](#rm-327) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: Zahl am Endstand nachführen statt den Satz streichen; dazu fünf Codes in `ONE_PIECE_CODES` |
 | [RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen](#rm-329) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: native Cura-Instanz in `match` unabhängig von der Düse; „Instanz fehlt“ von „unvollständig“ trennen |
@@ -2519,7 +2519,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-322"></a>
 
-- [ ] **RM-322 — Tragende Netzkanten am exakten Körper wiederfinden.** Rest aus RM-284.
+- [~] **RM-322 — Tragende Netzkanten am exakten Körper wiederfinden.** Rest aus RM-284.
   **Präzisierte Diagnose am 02.10.2026:** Am unveränderten `pegboard-gs-100-v2.step`
   haben vier der zehn gewählten Netzzüge einen nativen Partner; dort muss das Maß unter
   0,8535533905932737 mm bleiben. Die übrigen sechs liegen innerhalb nativer Flächen und
@@ -2534,11 +2534,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   echten roten/grünen Gegenfällen korrigiert und im Nachreview freigegeben.
   **Fachnachweise:** 57 direkte Fälle einschließlich vier analytischer Verlaufs-/Cache-/
   Folgefälle, sechs Kundenfälle in beiden Güten sowie Fehlerort- und Übersetzungsprüfungen
-  grün. R0,3
-  bearbeitet vier Kanten und nennt sechs ausgelassene Stellen. R1/R2 sagen begründet ab,
+  grün. R0,3 bearbeitet vier Kanten und nennt sechs ausgelassene Stellen. R1/R2 sagen begründet ab,
   erhalten den Körper und nennen alle zehn Stellen. Quelle und Dateihash bleiben gleich.
   Beleg: [Zuordnung, Gegenproben und Kundenmodell](konzepte/nachweise-release-0.5.1/reports/rm322-native-edge-binding-2026-10-02.md).
-  **Offen:** abschließender Dokumentreview, zentrales Entwicklungstor und tatsächliche
+  Die gezielte Statikprüfung und alle 32 Dokumentwächter sind ebenfalls grün.
+  **Offen:** zentrales Zweitreview, Entwicklungstor und tatsächliche
   Übernahme nach `main`/`origin/main`. Fenster-, Renderer- und Leistungsabnahme gehören
   weiterhin zum Release.
 
