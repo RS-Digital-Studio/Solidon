@@ -3499,6 +3499,7 @@
   "Für Prozent und Schieber die Nennfüllung eintragen.": "Renseigner le poids nominal de remplissage pour utiliser le pourcentage et le curseur.",
   "Für Wahrheitswerte verwenden Sie true oder false (alternativ 1 oder 0).": "Pour les valeurs booléennes, utilisez true ou false (ou 1 ou 0).",
   "Für das Erzeugen: drei Modelle": "Pour la génération : trois modèles",
+  "Für das Profil „{profile}“ ließ sich keine Düsenvariante bestimmen. Bis Sie Düse und Profile im Druckdialog wählen, gelten Solidons Werte.": "Impossible de déterminer la variante de buse du profil « {profile} ». Tant que vous n'avez pas choisi la buse et les profils dans la fenêtre d'impression, les valeurs de Solidon s'appliquent.",
   "Für den Chat fehlt der Zugang zu einem Sprachmodell.": "Il manque au chat l'accès à un modèle de langue.",
   "Für den Chat: ein Sprachmodell": "Pour le chat : un modèle de langage",
   "Für den TripoSG-Quelltext wird git gebraucht. Entweder git installieren, oder das Verzeichnis „triposg“ von Hand neben die Knoten legen — woher, steht in der Doku.": "Le code source de TripoSG a besoin de git. Installez git, ou placez le répertoire « triposg » à la main à côté des nœuds — la documentation dit d'où.",
