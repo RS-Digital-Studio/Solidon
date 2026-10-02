@@ -36,9 +36,10 @@ scrive in `website/version.json`.
 - Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
 - Le stampanti con l'origine fuori dall'angolo del piano, come delta, BIBO o Dremel, ricevono i pezzi dove Solidon li mette. Prima finivano sul bordo o lo slicer li ridisponeva.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
-- Se scegli brim, skirt o raft nelle impostazioni di stampa, compaiono solo le misure di quel tipo di piano, senza campi che non avrebbero effetto.
+- Se scegli brim, skirt, raft o *Automatico* nelle impostazioni di stampa, compaiono solo le misure che riceve il tuo slicer, senza campi che non avrebbero effetto.
 - Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.
 - I pezzi alti e sottili su una base piccola ricevono pareti più tranquille, a 60 mm/s e con meno accelerazione. Sulla Centauri Carbon 2 queste aste si staccavano.
+- Con Cura il rapporto di verifica nomina i pezzi che ricevono questi valori solo di riflesso, perché Cura li accetta solo per l'intero piatto.
 - Solidon propone «Prima la parete esterna» solo per il pezzo che ne ha bisogno, e mai per uno con supporti.
 - Anche nella ricerca rapida, «Orienta per la stampa» controlla che un pezzo stia in piedi in modo sicuro.
 - Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.

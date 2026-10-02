@@ -36,9 +36,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
 - As impressoras com a origem fora do canto da mesa, como delta, BIBO ou Dremel, recebem as peças onde o Solidon as põe. Antes ficavam na borda ou o fatiador reorganizava-as.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
-- Se escolher brim, skirt ou raft nas definições de impressão, só aparecem as medidas desse tipo de mesa, sem campos que não teriam efeito.
+- Se escolher brim, skirt, raft ou *Automático* nas definições de impressão, só aparecem as medidas que o seu slicer recebe, sem campos que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
 - Peças altas e finas sobre uma base pequena recebem paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
+- Com o Cura, o relatório de verificação indica as peças que só recebem esses valores por arrasto, porque o Cura só os aceita para toda a placa.
 - O Solidon só sugere «Parede exterior primeiro» para a peça que precisa dela, e nunca para uma com suportes.
 - Também na pesquisa rápida, «Orientar para impressão» verifica se uma peça fica de pé com segurança.
 - Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.

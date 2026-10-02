@@ -106,7 +106,10 @@ class Foundation:
     """Die Bambu-Düsenvariante, die sich nicht eindeutig zuordnen ließ — die
     Dateien sind lesbar, die Grundlage ist trotzdem Solidons Tabelle (RM-333)."""
     unresolved_in: str = ""
-    """Das Profil, in dem :attr:`unresolved_variant` nicht eindeutig ist."""
+    """Das Profil, in dem :attr:`unresolved_variant` nicht eindeutig ist. Steht
+    es ohne :attr:`unresolved_variant` da, nennt das Profil gar keine lesbare
+    Variante (``"nil"``, leer, eine Zahl) — die Grundlage ist dann genauso
+    Solidons Tabelle, und auch das sagt ein Befund (RM-429)."""
     has_plates: bool = True
     """Kennt der Slicer Druckplatten mit eigener Betttemperatur? PrusaSlicer
     nicht: Dort steht die Betttemperatur am Filament, und eine Platte, die
@@ -1686,7 +1689,10 @@ def base_settings(
             if values is None
         ]
         return _table_foundation(
-            profile, fallback, unresolved_variant=variant.name, unresolved_in=lacking[0]
+            profile,
+            fallback,
+            unresolved_variant=variant.name,
+            unresolved_in=lacking[0] or setup.base_process,
         )
     defaults = PROGRAM_DEFAULTS.get(program(setup), {})
     read, foreign = _read_process(process_values, context, defaults)
@@ -1800,10 +1806,11 @@ def findings(foundation: Foundation) -> list[Finding]:
     Solidons Werte hinaus, und das Fenster sagte nur „Ohne Profil des
     Herstellers". Eine Bambu-Düsenvariante, die ein lesbares Profil nicht
     eindeutig zuordnet, ist kein unlesbares Profil (RM-333): Der Befund nennt
-    Variante und Profil. Eine Platte, die niemand nennt, und eine, die der Hersteller
-    für dieses Filament sperrt (R4): Die Orca-Familie bricht dann mit „does not
-    support filament" ab. Der Weg ist jedes Mal derselbe: im Druckdialog
-    wählen, was gilt.
+    Variante und Profil; nennt es gar keine lesbare Variante, sagt ein eigener
+    Befund, dass Solidons Werte gelten (RM-429). Eine Platte, die niemand
+    nennt, und eine, die der Hersteller für dieses Filament sperrt (R4): Die
+    Orca-Familie bricht dann mit „does not support filament" ab. Der Weg ist
+    jedes Mal derselbe: im Druckdialog wählen, was gilt.
     """
     if foundation.unreadable:
         return [
@@ -1831,6 +1838,23 @@ def findings(foundation: Foundation) -> list[Finding]:
                     "variant": foundation.unresolved_variant,
                     "profile": foundation.unresolved_in,
                 },
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        ]
+    if foundation.unresolved_in:
+        # **Keine lesbare Variante ist kein stiller Rückfall** (RM-429): Bis
+        # 88bd58c2a hieß dieser Fall „ließ sich nicht lesen“, danach kam gar
+        # nichts, und der Kunde hielt Solidons Tabelle für das Herstellerprofil.
+        return [
+            Finding(
+                code="slicer.process_variant_unreadable",
+                severity="warning",
+                message=_(
+                    "Für das Profil „{profile}“ ließ sich keine Düsenvariante bestimmen. "
+                    "Bis Sie Düse und Profile im Druckdialog wählen, gelten Solidons Werte.",
+                    profile=foundation.unresolved_in,
+                ),
+                values={"profile": foundation.unresolved_in},
                 suggestions=(OPEN_PRINT_SETTINGS,),
             )
         ]

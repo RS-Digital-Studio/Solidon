@@ -61,9 +61,10 @@ Nutzen da und sonst nichts.
 - Cura rechnet jetzt mit der Düse, die Sie gewählt haben, auch bei Druckern aus Curas eigener Liste, und Drucker mit dem Nullpunkt in der Bettmitte behalten ihn.
 - Drucker mit dem Nullpunkt außerhalb der Bettecke, etwa Deltas, BIBO oder Dremel, bekommen die Teile dort, wo Solidon sie hinlegt. Bisher lagen sie am Rand, oder der Slicer ordnete neu an.
 - An Bambu Studio gehen Düsenvariante und die Temperaturen Ihrer Spulen mit, bis in die 3MF-Datei.
-- Wählen Sie im Druckdialog Brim, Skirt oder Raft, stehen dort nur die Maße dieser Bettart, ohne Felder, die nichts bewirken würden.
+- Wählen Sie im Druckdialog Brim, Skirt, Raft oder *Automatisch*, stehen dort nur die Maße, die Ihr Slicer dafür bekommt, ohne Felder, die nichts bewirken würden.
 - Eine Zahl außerhalb ihrer Grenze bleibt im Feld stehen, die Grenze steht daneben, und *Slicen* wartet, bis sie stimmt. Bisher wurde sie still gekürzt.
 - Hohe, schlanke Teile auf kleinem Fuß bekommen ruhigere Wände vorgeschlagen, mit 60 mm/s und weniger Beschleunigung. Solche Stangen rissen sonst am Centauri Carbon 2 ab.
+- Mit Cura nennt der Prüfbericht die Teile, die solche Werte nur mitbekommen, weil Cura sie bloß für die ganze Platte annimmt.
 - Solidon schlägt *Außenwand zuerst* nur noch für das Teil vor, das es braucht, und nie für eines mit Stützen.
 - Auch in der schnellen Suche prüft *Druckoptimal ausrichten*, ob ein Teil sicher steht.
 - Jedes Teil kommt mit *Auf dem Bett anordnen* auf die erste Platte, auf der es Platz hat. Der Minigolf-Satz braucht so vier statt sechs Platten.
