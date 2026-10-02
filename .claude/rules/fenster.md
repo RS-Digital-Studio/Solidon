@@ -329,16 +329,18 @@ das angezeigte Fenster: `tests/test_style.py` hält beide Richtungen
 `test_no_window_wears_an_accent_it_never_asked_for`), misst gegen die
 gezeichnete Schrift und verbietet `setDefault(True)` außerhalb von `style.py`.
 
-**Der Fokus macht keinen Hauptknopf:** Ein `QPushButton` mit `autoDefault`
-(in einem `QDialog` die Vorgabe) macht sich beim Fokus selbst zum Default —
-Akzent ohne halbfette Schrift, und Enter löst ihn aus; wandert der Fokus vom
-gesperrten Hauptknopf auf *Abbrechen*, verwirft Enter danach das Ergebnis.
-`make_primary` meldet deshalb einmal je Anwendung einen Zuhörer am
-Anwendungsfilter an (`style._FocusTakesNoAccent`), der jedem Nebenknopf beim
-Fokus `autoDefault` nimmt, auch Knöpfen, die ein Dialog später baut;
-`test_no_button_takes_the_accent_when_it_gets_the_focus` stellt den Fokus je
-Knopf zu (mit `WA_DontShowOnScreen` wird ein Fenster nie aktiv, `setFocus`
-wirkt dort nicht).
+**Der Fokus macht keinen Hauptknopf, Enter gehört trotzdem dem per Tastatur
+gewählten Knopf:** Ein `QPushButton` mit `autoDefault` (im `QDialog` Vorgabe)
+macht sich beim Fokus zum Default. Der Zuhörer `style._FocusTakesNoAccent`
+(einmal je Anwendung, über `make_primary`/`no_primary`) nimmt jedem
+Nebenknopf beim Fokus `autoDefault`; ohne das gäbe der Knopf Enter an den
+Default weiter. Den per Tab/Umschalt+Tab erreichten Knopf klickt der Zuhörer
+bei Enter deshalb selbst (`style.enter_belongs_to_focus`), der Akzent bleibt.
+Maus, Fensterwechsel, `setFocus` und vom gesperrten oder verborgenen Knopf
+vertriebener Fokus (Qt meldet ihn als Tab) lassen Enter beim Hauptknopf. Kein
+Dialog tut dafür etwas selbst. Wächter: `tests/test_enter_key.py` und
+`test_no_button_takes_the_accent_when_it_gets_the_focus` (Fokus zugestellt —
+mit `WA_DontShowOnScreen` wird kein Fenster aktiv).
 
 **Ein typloses Stylesheet am Vorfahren nimmt dem Hauptknopf seine Farben:** Eine
 Regel ohne Selektor gilt für jeden Nachkommen (auch aus dem Stylesheet der
