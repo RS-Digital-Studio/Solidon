@@ -3478,7 +3478,11 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
         # Zeilen Rauschen neben die drei zu stellen, auf die es ankommt.
         if str(value).strip().casefold() in _NO_STATEMENT:
             continue
-        if not _same(str(value), ours):
+        if not _same(
+            str(value),
+            ours,
+            unescape_gcode_quotes=key.casefold().endswith("_gcode"),
+        ):
             apart.append(f"{key}: {ours} statt {value}")
 
     if not apart:
@@ -4180,10 +4184,11 @@ def off_the_bed(
     den Rahmen fährt.
 
     **Gegen das Bett der Datei, nicht gegen das eigene.** Die Orca-Familie und
-    PrusaSlicer schreiben ihre Bettform in die Datei; dann gilt die
-    (:func:`gcode.stated_bed`). Sonst gilt die wirksame Druckfläche des
-    Druckerprofils einschließlich seiner Sperrflächen. Das trifft insbesondere
-    CuraEngine, dem Solidon die Maße selbst gegeben hat. Der erste Anlauf maß
+    PrusaSlicer schreiben ihre Bettform in die Datei; dann gilt das darin
+    angegebene Bett aus ``gcode.analyze(...).bed``. Sonst gilt die wirksame
+    Druckfläche des Druckerprofils einschließlich seiner Sperrflächen. Das
+    trifft insbesondere CuraEngine, dem Solidon die Maße selbst gegeben hat.
+    Der erste Anlauf maß
     immer gegen den eigenen Bauraum,
     und der ElegooSlicer bekam damit bei einem Würfel in der Bettmitte einen
     Befund: sein Maschinenprofil kommt aus seinem eigenen Bestand, und
@@ -4799,7 +4804,7 @@ def slice_model(
             suggestions=(INSTALL_MISSING, EXPORT_ONLY),
         )
 
-    started = time.perf_counter()
+    started_perf_counter = time.perf_counter()
     # **Dieselbe Platte wie in der Datei** (Entscheidung G): Was je Teil gilt,
     # trägt das Modell aus ``write_assembly`` als Objektwert oder Netzwert.
     settings = split_for_parts(settings, profile, setup, setup.flavour).plate
@@ -4839,7 +4844,7 @@ def slice_model(
         # nicht wieder zweimal läuft.
         wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
         # Ab wann eine Ergebnisdatei zu diesem Lauf gehört (``_result_reason``).
-        started = time.time()
+        result_started_at = time.time()
         # **Bambu Studio endet manchmal nicht** nach seiner ``result.json``:
         # Druckdatei geschrieben, Prozess steht (Gesamtprüfung, 27.09.2026).
         # Ob die Datei dieses Laufs da ist, fragt :func:`_result_written`.
@@ -4916,7 +4921,7 @@ def slice_model(
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
             # ohne Text zu melden — und das ist schlimmer als keiner.
             output = _tail(completed.stdout, completed.stderr)
-            reason = _result_reason(target, started)
+            reason = _result_reason(target, result_started_at)
             if reason:
                 _log.info("%s refused the job: %s", setup.name, reason)
                 output = "\n".join(part for part in (output, reason) if part)
@@ -5120,7 +5125,7 @@ def slice_model(
         gcode_path=produced,
         metrics=metrics,
         findings=findings,
-        seconds=time.perf_counter() - started,
+        seconds=time.perf_counter() - started_perf_counter,
     )
 
 
@@ -5425,7 +5430,11 @@ def verify_settings(
         if key in _RECOMPUTED:
             continue
         actual = found.get(key.casefold())
-        if actual is None or _same(actual, wanted):
+        if actual is None or _same(
+            actual,
+            wanted,
+            unescape_gcode_quotes=key.casefold().endswith("_gcode"),
+        ):
             continue
         ignored.append(f"{key}: {wanted} → {actual}")
 
@@ -5445,16 +5454,23 @@ def verify_settings(
     ]
 
 
-def _same(actual: str, wanted: str) -> bool:
+def _same(
+    actual: str,
+    wanted: str,
+    *,
+    unescape_gcode_quotes: bool = False,
+) -> bool:
     """Ob zwei Werte dasselbe meinen.
 
     Verglichen wird nachsichtig: ``0.2`` und ``0.20``, ``15%`` und ``15``,
-    eine Liste aus einem Element gegen dieses Element und maskierte Anführungs-
-    zeichen gegen ihre Schreibweise im G-Code. Sonst meldete die Gegenprobe
-    Unterschiede, die keine sind, und würde nach dem dritten Mal weggesehen.
+    eine Liste aus einem Element gegen dieses Element. Nur bei G-Code-Werten
+    werden maskierte Anführungszeichen mit ihrer Schreibweise im G-Code
+    verglichen. Sonst meldete die Gegenprobe Unterschiede, die keine sind,
+    und würde nach dem dritten Mal weggesehen.
     """
-    actual = actual.replace(r"\"", '"')
-    wanted = wanted.replace(r"\"", '"')
+    if unescape_gcode_quotes:
+        actual = actual.replace(r"\"", '"')
+        wanted = wanted.replace(r"\"", '"')
     if actual.strip() == wanted.strip():
         return True
 

@@ -84,6 +84,10 @@ oberen — die eine Stelle für Profildatei, Beilage und Gegenprobe;
 | `verify_settings` | Hat der Slicer die geschriebenen Werte übernommen? |
 | `spools_left_out` | Sind **alle übergebenen Spulen** gedruckt worden? |
 
+`verify_settings` und `profile_differences` gleichen `\"` und `"` nur bei
+Schlüsseln ab, die mit `_gcode` enden. Bei anderen Einstellungswerten bleibt
+ein wörtlicher Backslash erhalten.
+
 Die vierte fragt `expected_tools` aus `threemf.tools_in_use`; ohne sie entfällt
 der Vergleich, ohne Filamentprofile je Spule sagt es `unreachable_overrides`
 vorher. `crashed` (Regel in `dateiformat.md`) lässt eigene Fehlercodes wie

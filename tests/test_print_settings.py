@@ -13,6 +13,7 @@ import re
 import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Final, get_args, get_type_hints
 from xml.etree import ElementTree as ET
 
@@ -3672,6 +3673,35 @@ def _slicer_writing(
     return model, handover.SlicerSetup(executable=executable, flavour=flavour)  # type: ignore[arg-type]
 
 
+def test_slice_duration_uses_a_monotonic_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Laufzeit darf nicht die Epoch-Zeit der Ergebnisdatei verwenden."""
+    profile = profiles.make_profile()
+    model, setup = _slicer_writing(
+        monkeypatch, tmp_path, _gcode_printing_at(1.0, 5.0), flavour="orca"
+    )
+    elapsed_values = iter((12.0, 12.375))
+    monkeypatch.setattr(
+        handover,
+        "time",
+        SimpleNamespace(
+            perf_counter=lambda: next(elapsed_values),
+            time=lambda: 1_800_000_000.0,
+        ),
+    )
+
+    outcome = handover.slice_model(
+        model,
+        print_settings.resolve(profile),
+        profile,
+        setup,
+        output_dir=tmp_path,
+    )
+
+    assert outcome.seconds == pytest.approx(0.375)
+
+
 def test_the_first_spools_value_is_verified_as_written(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3803,8 +3833,8 @@ def test_the_bed_in_the_file_beats_the_one_in_the_profile() -> None:
 
 
 def test_a_file_without_a_single_path_is_not_judged() -> None:
-    """Eine Datei ohne Materialbahn sagt nichts über den Bauraum — dazu steht
-    schon der Abbruch aus :func:`gcode.extrudes` bereit."""
+    """Eine Datei ohne Materialbahn sagt nichts über den Bauraum — das Feld
+    ``gcode.analyze(...).extrudes`` zeigt, ob sie Bahnen enthält."""
     profile = profiles.make_profile()
 
     assert handover.off_the_bed("G90\nG0 X400 Y400\nM104 S210\n", profile, "cura") is None
@@ -6468,6 +6498,16 @@ def test_the_gcode_comparison_unescapes_quotes_without_hiding_real_differences()
 
     assert handover.verify_settings({"start_gcode": 'M862.3 P "[printer_model]"'}, written) == []
     findings = handover.verify_settings({"start_gcode": 'M862.3 P "[different_printer]"'}, written)
+    assert [item.code for item in findings] == ["slicer.setting_ignored"]
+
+
+def test_the_gcode_comparison_does_not_unescape_other_setting_values() -> None:
+    """Die G-Code-Normalisierung darf abweichende Nicht-G-Code-Werte nicht verdecken."""
+    findings = handover.verify_settings(
+        {"vendor_note": 'M862.3 P "[printer_model]"'},
+        {"vendor_note": r"M862.3 P \"[printer_model]\""},
+    )
+
     assert [item.code for item in findings] == ["slicer.setting_ignored"]
 
 
