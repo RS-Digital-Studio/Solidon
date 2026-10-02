@@ -7211,3 +7211,37 @@ def test_a_tilt_about_the_cutting_axis_itself_is_refused(
     assert not result.complete
     codes = {f.code for f in result.scene.report.findings}
     assert any("cut_away" in code for code in codes), codes
+
+
+def test_cutting_away_parallel_to_a_face_takes_off_a_layer(
+    document: Document, profile: Profile
+) -> None:
+    """Die Ebene kann einer ebenen Fläche folgen statt einer Achse (RM-400):
+    −2 an der Oberseite des Würfels nimmt 2 mm ab, 20·20·18 = 7200 mm³ bleiben."""
+    project, history = loaded(document)
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    top = next(
+        name
+        for name, feature in first.scene.objects["obj_1"].features.items()
+        if feature.kind == "face"
+        and feature.params.get("normal") is not None
+        and float(feature.params["normal"][2]) > 0.99
+    )
+    history.apply(
+        _("Abschneiden"),
+        [
+            OperationDraft(
+                op="cut_away",
+                inputs=("obj_1",),
+                params={"at_feature": top, "position": -2.0, "keep": "below"},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight
+    assert body.volume == pytest.approx(7200.0, rel=1e-6)
+    assert body.bounds.maximum[2] == pytest.approx(8.0, abs=1e-6)

@@ -17317,9 +17317,22 @@ class CutAwayParams(BaseParams):
             "eingestellten Position durch die Mitte des Körpers."
         ),
     )
+    at_feature: str = param(
+        title=_("An Fläche"),
+        default="",
+        kind="feature",
+        feature_kinds=("face",),
+        placement="advanced",
+        doc=_(
+            "Schneidet parallel zu dieser ebenen Fläche statt an einer Achse. Die "
+            "Position zählt dann von der Fläche aus: -2 nimmt 2 mm von ihr weg."
+        ),
+    )
 
 
-def _cut_away_plane(params: CutAwayParams, mesh: MeshData) -> SectionPlane:
+def _cut_away_plane(
+    params: CutAwayParams, mesh: MeshData, features: Mapping[str, Feature]
+) -> SectionPlane:
     """Die Schnittebene von *Abschneiden*, gerade oder geneigt (RM-400).
 
     Geneigt wird die Achsnormale um ``tilt_axis``; die Kippachse liegt auf der
@@ -17328,6 +17341,8 @@ def _cut_away_plane(params: CutAwayParams, mesh: MeshData) -> SectionPlane:
     Eingang (Regel 2). Ohne Neigung ist es die Achsebene von vorher, auf den
     Bit genau: alte Schritte rechnen unverändert.
     """
+    if params.at_feature:
+        return _face_plane(params, features)
     axis = cast(Axis, params.axis)
     normal = AXIS_NORMALS[axis]
     if abs(params.tilt) <= EPS_GEOM:
@@ -17364,6 +17379,42 @@ def _cut_away_plane(params: CutAwayParams, mesh: MeshData) -> SectionPlane:
     return SectionPlane(normal=tilted, position=distance)
 
 
+def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> SectionPlane:
+    """Die Ebene parallel zu einer ebenen Fläche, um ``position`` nach außen versetzt.
+
+    Achse und Neigung zählen dann nicht: Die Fläche gibt beides vor — die
+    schräge Front eines Teils lässt sich so um ein Maß kürzen, ohne ihren
+    Winkel abzulesen (RM-400).
+    """
+    feature = features.get(params.at_feature)
+    normal = feature.params.get("normal") if feature is not None else None
+    centre = feature.params.get("centre") if feature is not None else None
+    if feature is None or feature.kind != "face" or normal is None or centre is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "An dieser Stelle gibt es keine ebene Fläche, an der sich schneiden "
+                "ließe. Wählen Sie eine ebene Fläche oder schneiden Sie an einer Achse."
+            ),
+            value=params.at_feature,
+            constraint="no_plane",
+        )
+    length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
+    if length <= EPS_GEOM:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "An dieser Stelle gibt es keine ebene Fläche, an der sich schneiden "
+                "ließe. Wählen Sie eine ebene Fläche oder schneiden Sie an einer Achse."
+            ),
+            value=params.at_feature,
+            constraint="no_plane",
+        )
+    unit = (float(normal[0]) / length, float(normal[1]) / length, float(normal[2]) / length)
+    distance = unit[0] * float(centre[0]) + unit[1] * float(centre[1]) + unit[2] * float(centre[2])
+    return SectionPlane(normal=unit, position=distance + params.position)
+
+
 @register_op(
     name="cut_away",
     result_kind="mesh",
@@ -17397,7 +17448,7 @@ def cut_away(ctx: OpContext) -> OpResult:
     params = cast(CutAwayParams, ctx.params)
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
-    plane = _cut_away_plane(params, mesh)
+    plane = _cut_away_plane(params, mesh, source.features)
     if params.keep == "above":
         plane = plane.flipped()
     kept = cut(mesh, plane)
