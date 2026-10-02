@@ -26,6 +26,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
 | Trägt jede Ausnahme einen Vorschlag? | `test_errors.py` |
+| Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Felder? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |

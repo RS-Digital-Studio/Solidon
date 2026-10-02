@@ -2410,6 +2410,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Exit 0. Der bestehende untätige Test bleibt erhalten. Tatsächliche
   §31-Hilfsprozessmarken, Linux/macOS und Paketnachweise bleiben offen.
 
+  **Teilstand 02.10.2026, (c), geometrische Fänge:** Alle sieben benannten
+  Fänge geben Abbruch, verlorenen Helfer und Stopfehler unverändert
+  weiter, bevor normale Geometrieauswege greifen. Tatsächlich zuvor
+  14 Testkörperfehler, danach 14 neue und 19 bestehende Kontrollen grün,
+  keine Aufbau-/Abbaufehler oder Skips. Nach finaler Importbereinigung
+  und abgestimmter RM327-/RM434-Basis erneut 14+19 grün, jeweils Exit 0
+  und 16 stabile Quell-/Test-/Korpusdateien; historische Hashstände
+  bleiben getrennt erhalten. Ruff, 26 eigene Formatbereiche und
+  unabhängiger Quell-/Testreview sind grün. Der tatsächliche Session-/
+  CLI-Cacheanschluss trennt Altresultate beim normalen Neustart/Update
+  über Quellstand bzw. Releaseversion; keine zusätzliche Format-/Opzahl.
+  [Portabler Weitergabe-/Cachebeleg](konzepte/nachweise-release-0.5.1/reports/rm298-weitergabe-2026-10-02.md).
+  Eigenständiges vollständiges Tor und tatsächliche Integration dieser
+  Einheit stehen aus; native Prozess-/Plattform-/Paket-/Releaseabnahmen
+  bleiben gesondert offen. RM298 bleibt `[~]`.
+
   **Teilstand 02.10.2026, (d), Vergleichsmarken:** Zwei zusätzliche öffentliche
   Arbeiterwege für Boolesche Rechnung und Anzeigeausdünnung sind vorbereitet:
   warmer Helfer, Produktionsschwelle, API samt Übertragung/Nacharbeit und

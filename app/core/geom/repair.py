@@ -34,7 +34,6 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SPLIT_BODIES,
     GeometryError,
-    OperationCancelled,
 )
 from app.core.geom.attributes import transfer
 from app.core.geom.intersections import Crossings
@@ -4309,6 +4308,7 @@ def resolve_self_intersections(
     Eingängen und kann nichts schneiden, was es vorher nicht schnitt. Bis
     dahin lief nach jeder Vereinigung eine zweite vollständige Suche.
     """
+    from app.core.geom import kernel_process
     from app.core.geom.boolean import boolean
 
     if cancelled is not None:
@@ -4333,7 +4333,7 @@ def resolve_self_intersections(
         rebuilt = boolean("union", operands, stages=("direct",), cancelled=cancelled).mesh
     except PROGRAMMING_ERRORS:
         raise
-    except OperationCancelled:
+    except kernel_process.NOT_A_KERNEL_FAILURE:
         raise
     except Exception as problem:  # pragma: no cover - kernspezifisch
         _log.warning("could not resolve self-intersections: %s", problem)

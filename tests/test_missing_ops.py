@@ -16,7 +16,7 @@ import pytest
 import trimesh
 
 from app.core.errors import DECIMATE_AND_RETRY, ValidationError
-from app.core.geom import mesh_ops
+from app.core.geom import kernel_process, mesh_ops
 from app.core.geom.hollow import hollow
 from app.core.geom.label_ops import outlines
 from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
@@ -1402,6 +1402,77 @@ def test_hollowing_leaves_the_wall_and_takes_the_rest(profile: Profile) -> None:
     assert result.removed > 30_000.0, "a 40 mm cube has plenty inside"
     assert result.mesh.volume < 64_000.0 * 0.4
     assert len(result.vents) == 1
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_the_first_hollowing_vent_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Prozessfehler in der ersten Entlüftung ist kein Auftrag für die nächste Stelle."""
+    from importlib import import_module
+
+    hollow_module = import_module("app.core.geom.hollow")
+    body = block()
+    original_vertices, original_faces = body.raw.vertices.copy(), body.raw.faces.copy()
+    original_boolean = hollow_module.boolean
+    original_run = kernel_process.run
+    injected_error = failure_type()
+    vent_phase = False
+    successful_before_vents = []
+    vent_calls = []
+    target_requests = []
+    following = []
+    returned = []
+
+    def progress(fraction, _text):
+        nonlocal vent_phase
+        if target_requests:
+            following.append(("progress", fraction))
+            raise TypeError("RM298: weitere Entlüftungsstelle nach dem Prozessfehler")
+        if fraction >= 0.8:
+            vent_phase = True
+
+    def counted_boolean(kind, meshes, **kwargs):
+        if target_requests:
+            following.append(("boolean", kind))
+            raise TypeError("RM298: weiterer Schnitt nach dem Prozessfehler")
+        if vent_phase:
+            vent_calls.append((kind, len(meshes)))
+        result = original_boolean(kind, meshes, **kwargs)
+        if not vent_phase:
+            successful_before_vents.append(kind)
+        return result
+
+    def failing_vent(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(("kernel", job))
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if vent_phase and job == "boolean" and values["kind"] == "difference":
+            target_requests.append((job, values["kind"], values["bodies"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(hollow_module, "boolean", counted_boolean)
+    monkeypatch.setattr(kernel_process, "run", failing_vent)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(hollow(body, 2.0, vents=2, progress=progress))
+    finally:
+        assert "difference" in successful_before_vents, (
+            "der Hohlraum wurde vorher echt ausgeschnitten"
+        )
+        assert vent_calls == [("difference", 2)], "die echte erste Entlüftung muss erreicht sein"
+        assert target_requests == [("boolean", "difference", 2)]
+
+    assert caught.value is injected_error
+    assert following == [], "keine nächste Entlüftungsstelle und kein weiterer Rechenschritt"
+    assert returned == [], "weder hollow.no_vent noch hollow.done ersetzen den Prozessfehler"
+    np.testing.assert_array_equal(body.raw.vertices, original_vertices)
+    np.testing.assert_array_equal(body.raw.faces, original_faces)
 
 
 def test_a_wall_thicker_than_the_body_leaves_nothing_to_take(profile: Profile) -> None:

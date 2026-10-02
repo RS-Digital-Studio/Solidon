@@ -82,6 +82,7 @@ einem neuen Lauf anzupassen.
 | [`reports/review-einfuegen.md`](reports/review-einfuegen.md) | Review von `einfuegen-freier-platz` (F11 bis F15, N8) | RM-303 bis RM-306 |
 | [`reports/review-gesamt-dd95985e5.md`](reports/review-gesamt-dd95985e5.md) | Review des Gesamtprüfungspakets bis `3018613e6` (B1 bis B10) | RM-289 |
 | [`reports/review-handbuch.md`](reports/review-handbuch.md) | Code-Review des Handbuchumbaus | RM-299, Handbuchkonzept |
+| [`reports/rm298-weitergabe-2026-10-02.md`](reports/rm298-weitergabe-2026-10-02.md) | Sieben fatalen Prozessfehlern durch geometrische Fänge folgen; öffentliche Gegenläufe, finale Basis und tatsächlicher Cacheanschluss | RM-298(c) |
 | [`reports/review-hilfsprozess.md`](reports/review-hilfsprozess.md) | Review des Pakets hilfsprozess | RM-298 |
 | [`reports/review-kopien.md`](reports/review-kopien.md) | Review von `merkmale-an-kopien` | RM-210, RM-302 |
 | [`reports/review-speicher.md`](reports/review-speicher.md) | Review von `speicher-ohne-prozesswerte` (F2) | RM-300 |

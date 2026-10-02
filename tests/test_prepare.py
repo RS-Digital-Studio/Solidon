@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.geom import kernel_process
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface, read_mesh
 from app.core.geom.prepare import (
@@ -1065,6 +1066,65 @@ def test_too_close_counts_as_a_collision_when_a_clearance_is_asked_for() -> None
     """
     assert not check_collisions([bracket(), bar(9.0)], clearance=0.2), "half a millimetre apart"
     assert check_collisions([bracket(), bar(9.8)], clearance=0.5), "a tenth apart, half asked for"
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_a_clearance_check_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Abstandsfang gibt Prozessfehler nach erfolgreicher Volumenprüfung weiter."""
+    from importlib import import_module
+
+    prepare_module = import_module("app.core.geom.prepare")
+    bodies = [bracket(), bar(9.8)]
+    original_arrays = [(body.raw.vertices.copy(), body.raw.faces.copy()) for body in bodies]
+    original_run = kernel_process.run
+    original_shared_volume = prepare_module.shared_volume
+    injected_error = failure_type()
+    shared_volumes = []
+    target_requests = []
+    following = []
+    returned = []
+
+    def counted_shared_volume(*args, **kwargs):
+        if target_requests:
+            following.append("shared_volume")
+            raise TypeError("RM298: weitere Volumenprüfung nach dem Prozessfehler")
+        volume = original_shared_volume(*args, **kwargs)
+        shared_volumes.append(volume)
+        return volume
+
+    def failing_gap(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(job)
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if job == "min_gap":
+            target_requests.append((job, values["search"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(prepare_module, "shared_volume", counted_shared_volume)
+    monkeypatch.setattr(kernel_process, "run", failing_gap)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(check_collisions(bodies, clearance=0.5))
+    finally:
+        # Ein Aufbaufehler vor dem Abstandsfang ist kein gültiger Gegenbeweis.
+        assert len(shared_volumes) == 1, "die echte Volumenprüfung muss erfolgreich sein"
+        assert abs(shared_volumes[0]) <= EPS_GEOM, "die Körper überlappen nicht"
+        assert len(target_requests) == 1, "der öffentliche Weg muss min_gap erreichen"
+
+    assert caught.value is injected_error
+    assert target_requests[0][1] == pytest.approx(0.5)
+    assert following == [], "kein weiterer Versuch nach dem Prozessfehler"
+    assert returned == [], "keine Ersatzwarnung anhand des Hüllquaders"
+    for body, (vertices, faces) in zip(bodies, original_arrays, strict=True):
+        np.testing.assert_array_equal(body.raw.vertices, vertices)
+        np.testing.assert_array_equal(body.raw.faces, faces)
 
 
 def test_an_open_body_falls_back_to_the_box_and_says_so() -> None:

@@ -33,7 +33,7 @@ from app.core.errors import (
     BooleanFailedError,
     NotManifoldError,
 )
-from app.core.geom import lathe
+from app.core.geom import kernel_process, lathe
 from app.core.geom.boolean import BooleanOutcome, boolean, deepest
 from app.core.geom.mesh import MeshData, concatenated
 from app.core.geom.repair import open_edge_count
@@ -1210,7 +1210,7 @@ def _vent(
         tool = apply(MeshData.of(tool), translation((x, y, bottom + height / 2.0)))
         try:
             outcome = boolean("difference", [drilled, tool], quality=quality, cancelled=cancelled)
-        except PROGRAMMING_ERRORS:
+        except (*PROGRAMMING_ERRORS, *kernel_process.NOT_A_KERNEL_FAILURE):
             raise
         except Exception as problem:  # eine Entlüftung, die nicht geht, ist nicht fatal
             _log.info("vent at %s failed: %s", (x, y), problem)

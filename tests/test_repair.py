@@ -13,6 +13,7 @@ import pytest
 import trimesh
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshCodec, MeshData, edge_table, read_mesh
 from app.core.geom.repair import (
     _first_crossing_between,
@@ -1510,6 +1511,59 @@ def test_an_unsuccessful_intersection_repair_never_reports_success(
     codes = {finding.code for finding in result.findings}
     assert "repair.self_intersections_unresolved" in codes
     assert "repair.self_intersections" not in codes
+
+
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_resolving_self_intersections_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der echte direkte Reparaturschnitt darf Prozessfehler nicht als Reparaturbefund melden."""
+    from app.core.geom import boolean as boolean_module
+
+    body, _removed = merge_vertices(raw("broken_selfint.stl"))
+    original_vertices, original_faces = body.raw.vertices.copy(), body.raw.faces.copy()
+    original_boolean = boolean_module.boolean
+    original_run = kernel_process.run
+    injected_error = failure_type()
+    boolean_calls = []
+    target_requests = []
+    following = []
+    returned = []
+
+    def counted_boolean(kind, meshes, **kwargs):
+        if target_requests:
+            following.append(("boolean", kind))
+            raise TypeError("RM298: weiterer Reparaturversuch nach dem Prozessfehler")
+        boolean_calls.append((kind, len(meshes), kwargs.get("stages")))
+        return original_boolean(kind, meshes, **kwargs)
+
+    def failing_union(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(("kernel", job))
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if job == "boolean" and values["kind"] == "union":
+            target_requests.append((job, values["kind"], values["bodies"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(boolean_module, "boolean", counted_boolean)
+    monkeypatch.setattr(kernel_process, "run", failing_union)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(repair(body, self_intersections=True))
+    finally:
+        assert boolean_calls == [("union", 2, ("direct",))], "der echte Reparaturweg muss rechnen"
+        assert target_requests == [("boolean", "union", 2)]
+
+    assert caught.value is injected_error
+    assert following == [], "keine Rückfallstufe und kein weiterer Reparaturversuch"
+    assert returned == [], "kein repair.self_intersections_unresolved als Ersatzbefund"
+    np.testing.assert_array_equal(body.raw.vertices, original_vertices)
+    np.testing.assert_array_equal(body.raw.faces, original_faces)
 
 
 def test_an_incomplete_intersection_check_is_not_a_clean_bill_of_health(
