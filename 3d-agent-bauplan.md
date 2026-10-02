@@ -121,8 +121,8 @@ Alles Weitere ist Ausbau dieser vier. Sie müssen ohne Handbuch gehen.
 **Weg 1 — Fremdes Modell anpassen** (der häufigste Fall)
 Datei ziehen und ablegen → Einheitenrückfrage, falls nötig → Modell steht,
 Prüfbericht sichtbar → Fläche oder Bohrung anklicken → im Chat sagen, was
-werden soll, oder aus dem Kontextmenü wählen → Vorschau als
-Vorher/Nachher → übernehmen → exportieren.
+werden soll, oder rechts im Auswahlfenster am Merkmal die passende Operation
+wählen → Vorschau als Vorher/Nachher → übernehmen → exportieren.
 
 **Weg 2 — Neu konstruieren**
 Neues Projekt → Grundformen, Bausteine oder Skizzen wählen, oder dem Agenten

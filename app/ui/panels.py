@@ -2893,9 +2893,9 @@ class ObjectTree(QWidget):
         """Das Menü zur aktuellen Auswahl, oder nichts.
 
         Gebaut wird es hier und nicht dort, wo es aufgeht: der Viewport zeigt
-        dasselbe Menü, wenn jemand mit rechts auf einen Körper klickt. §18.5
-        nennt das Kontextmenü am Merkmal den Ort für Weg 1 — zwei Menüs mit
-        derselben Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
+        dasselbe Menü, wenn jemand mit rechts auf einen Körper klickt (§18.5) —
+        zwei Menüs mit derselben Aufgabe wären zwei Gelegenheiten,
+        auseinanderzulaufen.
         """
         chosen = self.selected_objects()
         if not chosen:

@@ -17169,8 +17169,9 @@ class Viewport(QWidget):
         """Ein Rechtsklick wählt aus und fragt nach dem Menü — und **ohne
         Stufen**, anders als der Linksklick.
 
-        §18.5 nennt das Kontextmenü am Merkmal den Ort für Weg 1: ein fremdes
-        Modell wird angepasst, indem man auf die Stelle zeigt, die stört. Bis
+        §18.5: Weg 1 passt ein fremdes Modell an, indem man auf die Stelle
+        zeigt, die stört. Die Operationen stehen danach im Auswahlfenster am
+        Merkmal; das Menü zeigt nur, was es dort gibt. Bis
         hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das Menü
         gab es nur im Objektbaum, wo die Merkmale `hole_3` heißen.
 

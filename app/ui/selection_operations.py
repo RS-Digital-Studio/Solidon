@@ -264,10 +264,10 @@ def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]
 def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
     """Was an einem Merkmal gearbeitet wird — Bohren, Senken, Verschließen.
 
-    Dieselbe Zuordnung, aus der das Kontextmenü am Merkmal seine Zeilen baut
-    (``applies_to``, §18.5): eine dritte Oberfläche über einer Quelle, keine
-    zweite Rechnung. Sie standen bis zum 07.09.2026 nicht im Panel, und damit
-    bot eine gewählte Fläche dort nichts an.
+    Die Handlungen, die das Auswahlfenster am Merkmal anbietet (``applies_to``,
+    §18.5): eine Oberfläche über einer Quelle, keine zweite Rechnung. Sie
+    standen bis zum 07.09.2026 nicht im Panel, und damit bot eine gewählte
+    Fläche dort nichts an.
 
     **Die Bausteine mit Kachel bleiben draußen.** Ein räumliches Teil als
     Textzeile ist die schlechtere Darstellung; sie sind durch den Katalogknopf

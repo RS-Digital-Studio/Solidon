@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-360: Bauplan §2.2 nennt für Weg 1 das Auswahlfenster statt des Kontextmenüs (02.10.2026)](#rm-360-bauplan-22-nennt-für-weg-1-das-auswahlfenster-statt-des-kontextmenüs-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -36383,3 +36384,34 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Zug“. Bauplan §17.3, §2.6.
 
 **Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.
+
+## RM-360: Bauplan §2.2 nennt für Weg 1 das Auswahlfenster statt des Kontextmenüs (02.10.2026)
+
+<a id="rm-360-bauplan-22-nennt-für-weg-1-das-auswahlfenster-statt-des-kontextmenüs-02102026"></a>
+<a id="rm-360"></a>
+
+**RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters.**
+  Review 02.10.2026, Gebietsprüfung Weg 1 (I-4); Entscheidung Robert 02.10.2026: „§2.2 anpassen“.
+  `3d-agent-bauplan.md:124` (§2.2, Weg 1) sagt „im Chat sagen, was werden soll, oder aus dem
+  Kontextmenü wählen“. §2.6 und §18.5 legen fest: Die passenden Ops stehen rechts im
+  Auswahlfenster am Merkmal, der Rechtsklick führt keine Operation aus und zeigt nur, was es dort
+  gibt (Ursprungsschritt, Zeichnen auf der Fläche, Ausblenden).
+  **Umfang (nur Wortlaut, die App bleibt unverändert):**
+  - `3d-agent-bauplan.md:124` — „oder aus dem Kontextmenü wählen“ durch die Wahl im
+    Auswahlfenster am Merkmal ersetzen (etwa „oder im Auswahlfenster am Merkmal die passende
+    Operation wählen“).
+  - Folgestellen mit demselben veralteten Satz „das Kontextmenü am Merkmal ist der Ort für
+    Weg 1 (§18.5)“: `.claude/rules/ansicht.md:35–36`, `konzepte/begruendungen/regel-ansicht.md:38–40`,
+    Docstrings und Kommentare `app/ui/viewport.py:17061–17063`, `app/ui/panels.py:2873–2875`,
+    `app/ui/main_window.py:17476–17478`, `tests/test_analysis_ui.py:2293`,
+    `tests/test_selection.py:1453–1457`, `tests/test_way_one.py:7–8` („hier kommt die Operation
+    aus dem Kontextmenü“). Die Aussage über den ungestuften Rechtsklick bleibt richtig, nur der
+    Ort der Operationen wird berichtigt.
+  - Handbuch (`app/core/manual.py`, `website/handbuch.html`) und README: geprüft, kein Satz nennt
+    das Kontextmenü als Ort der Operationen von Weg 1; die Treffer dort betreffen *Diesen Schritt
+    ändern*, *Löschen* im Verlauf und die STEP-Umstellung und bleiben.
+  **Abnahme:** `git grep -n "Kontextmenü"` findet keinen Satz mehr, der Operationen für Weg 1 im
+  Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
+  Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
+
+**Abschluss:** Bauplan §2.2 (Weg 1) nennt jetzt „rechts im Auswahlfenster am Merkmal die passende Operation wählen“, abgestimmt mit Robert (Ansage 02.10.2026). Nachgezogen in `.claude/rules/ansicht.md`, `konzepte/begruendungen/regel-ansicht.md`, den Docstrings und Kommentaren in `app/ui/viewport.py`, `panels.py`, `main_window.py`, `labels.py`, `selection_operations.py` und in `tests/test_analysis_ui.py`, `test_selection.py`, `test_way_one.py`, `test_operation_ui.py`. `git grep "Kontextmenü am Merkmal"` findet nur noch Sätze über *Diesen Schritt ändern* im Menü (richtig nach §18.5) und datierte Archivtexte. Die App bleibt unverändert. Umgesetzt von Claude (Thread „Bedienung und KI“).

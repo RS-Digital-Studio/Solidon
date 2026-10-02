@@ -150,7 +150,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-352 — Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung](#rm-352) | Bedienung und Darstellung | In Arbeit: Claude, Thread „Offene RM-Punkte abarbeiten“, schließt mit RM-426. Warten auf aktuelles Ergebnis integriert; offen B01: vor Export/Druckübergabe fein auswerten, sowie R6C942-01: nach Abbruch kein Warten ohne laufenden Auftrag |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
-| [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
@@ -4577,32 +4576,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
   doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
   Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
-
-<a id="rm-360"></a>
-
-- [ ] **RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters.**
-  Review 02.10.2026, Gebietsprüfung Weg 1 (I-4); Entscheidung Robert 02.10.2026: „§2.2 anpassen“.
-  `3d-agent-bauplan.md:124` (§2.2, Weg 1) sagt „im Chat sagen, was werden soll, oder aus dem
-  Kontextmenü wählen“. §2.6 und §18.5 legen fest: Die passenden Ops stehen rechts im
-  Auswahlfenster am Merkmal, der Rechtsklick führt keine Operation aus und zeigt nur, was es dort
-  gibt (Ursprungsschritt, Zeichnen auf der Fläche, Ausblenden).
-  **Umfang (nur Wortlaut, die App bleibt unverändert):**
-  - `3d-agent-bauplan.md:124` — „oder aus dem Kontextmenü wählen“ durch die Wahl im
-    Auswahlfenster am Merkmal ersetzen (etwa „oder im Auswahlfenster am Merkmal die passende
-    Operation wählen“).
-  - Folgestellen mit demselben veralteten Satz „das Kontextmenü am Merkmal ist der Ort für
-    Weg 1 (§18.5)“: `.claude/rules/ansicht.md:35–36`, `konzepte/begruendungen/regel-ansicht.md:38–40`,
-    Docstrings und Kommentare `app/ui/viewport.py:17061–17063`, `app/ui/panels.py:2873–2875`,
-    `app/ui/main_window.py:17476–17478`, `tests/test_analysis_ui.py:2293`,
-    `tests/test_selection.py:1453–1457`, `tests/test_way_one.py:7–8` („hier kommt die Operation
-    aus dem Kontextmenü“). Die Aussage über den ungestuften Rechtsklick bleibt richtig, nur der
-    Ort der Operationen wird berichtigt.
-  - Handbuch (`app/core/manual.py`, `website/handbuch.html`) und README: geprüft, kein Satz nennt
-    das Kontextmenü als Ort der Operationen von Weg 1; die Treffer dort betreffen *Diesen Schritt
-    ändern*, *Löschen* im Verlauf und die STEP-Umstellung und bleiben.
-  **Abnahme:** `git grep -n "Kontextmenü"` findet keinen Satz mehr, der Operationen für Weg 1 im
-  Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
-  Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
 
 <a id="rm-366"></a>
 
