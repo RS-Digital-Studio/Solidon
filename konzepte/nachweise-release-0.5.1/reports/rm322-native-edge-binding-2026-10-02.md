@@ -182,5 +182,20 @@ und `card-budget-final.txt`. Der anschließende gemeinsame Dokumentlauf
 Der Plain-UI-Test verwendet einen kleinen Ein-/Ausgabehost. Er belegt die
 tatsächlichen Adapter- und Steuerungsmethoden, keine native Fenster- oder
 Rendererabnahme. Fenster-, Renderer- und Leistungsläufe bleiben der
-Releaseabnahme zugeordnet. Zentrales Zweitreview, Entwicklungslauf und
-Commit-/Pushbeleg werden getrennt ergänzt.
+Releaseabnahme zugeordnet.
+
+## Zentrales Entwicklungstor und lokale Übernahme
+
+Das zentrale Zweitreview hat die abgegrenzte Einheit freigegeben. Das
+anschließende Entwicklungstor `commit-tor-abschlussrunde-51-v3-final`
+bestand mit **19.464 Tests, 62 übersprungen, 453,37 s**. Suite, Ruff,
+Formatprüfung und mypy endeten jeweils mit Exit 0; die aufgezeichnete
+Quellenabweichung während des Tors ist leer.
+
+Commit `0041000a0e86209c1b93bbe5310b93bb0903bfd6` enthält die 17 eigenen
+Dateipfade. Der anschließende unabhängige Inhaltsabgleich bestand in
+38 Vergleichen: Produktfunktionen, eigene Testblöcke, drei Meldungen in fünf
+Katalogen und vollständiger Fachbericht passen zum freigegebenen Stand.
+Die Rohdaten liegen in `tmp/rm322-20261002/integration-local-check.json`.
+Beim Abgleich war dieser Commit noch nicht in `origin/main`; der Pushbeleg
+folgt nach der zentralen Zusammenführung und deren Prüfung.

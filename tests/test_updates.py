@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import urllib.error
+import urllib.request
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -22,6 +23,7 @@ from unittest import mock
 
 import pytest
 
+from app.branding import APP_VERSION
 from app.core import updates
 from app.core.changes import Group
 from app.core.errors import ExternalToolError, FileWriteError, OperationCancelled
@@ -54,21 +56,57 @@ def raw_answering(payload: dict[str, Any]) -> updates.Transport:
     return fetch
 
 
-def test_the_check_names_the_application_not_the_library() -> None:
-    """Die Anfrage sagt, von wem sie kommt — Solidon, nicht Python-urllib.
+@pytest.mark.parametrize("request_kind", ["check", "download"])
+@pytest.mark.parametrize(
+    ("is_packaged", "test_override", "agent_name"),
+    [
+        (False, None, "Solidon-Test"),
+        (False, "0", "Solidon-Test"),
+        (True, None, "Solidon"),
+        (True, "", "Solidon"),
+        (True, "0", "Solidon"),
+        (True, "1", "Solidon-Test"),
+    ],
+)
+def test_update_requests_separate_internal_tests_from_customer_installations(
+    monkeypatch: pytest.MonkeyPatch,
+    request_kind: str,
+    is_packaged: bool,
+    test_override: str | None,
+    agent_name: str,
+) -> None:
+    """Quellen und ausdrücklich markierte Paketproben bleiben aus der Statistik.
 
-    Manche CDNs sperren den Bibliotheksnamen, und die Prüfung scheiterte
-    still; die Datenschutzerklärung verspricht zudem ein Programm-Kennzeichen.
-    ``download()`` machte es seit je richtig, ``check()`` nicht.
+    Gemessen wird die echte HTTP-Anfrage beider Wege: Auch beim Test bleibt
+    die signierte Update-Antwort verfügbar und das Paket vollständig prüfbar.
+    Der Absender bleibt ein Programm-Kennzeichen statt Python-urllib.
     """
-    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(updates, "packaged", lambda: is_packaged)
+    if test_override is None:
+        monkeypatch.delenv("SOLIDON_UPDATE_TEST", raising=False)
+    else:
+        monkeypatch.setenv("SOLIDON_UPDATE_TEST", test_override)
+    seen: list[str | None] = []
+    payload = b"ein Paket"
+    response = (
+        json.dumps(signed({"version": "99.0.0"})).encode("utf-8")
+        if request_kind == "check"
+        else payload
+    )
 
-    def fetch(_url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:
-        seen.append(dict(headers))
-        return signed({"version": "99.0.0", "url": "https://example.org/"})
+    def open_url(request: urllib.request.Request, *, timeout: float) -> FakeAnswer:
+        seen.append(request.get_header("User-agent"))
+        return FakeAnswer(response)
 
-    updates.check(fetch=fetch)
-    assert seen and seen[0].get("User-Agent", "").startswith("Solidon/")
+    if request_kind == "check":
+        monkeypatch.setattr(updates, "_open_update", open_url)
+        release = updates.check()
+        assert release is not None and release.version == "99.0.0"
+    else:
+        downloaded = updates.download(package_for(payload), opener=open_url)
+        assert downloaded.read_bytes() == payload
+
+    assert seen == [f"{agent_name}/{APP_VERSION}"]
 
 
 def test_a_newer_version_is_reported() -> None:

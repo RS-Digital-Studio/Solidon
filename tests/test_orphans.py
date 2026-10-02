@@ -166,6 +166,65 @@ def test_the_references_of_a_document_are_listed() -> None:
     assert found[1].side == "b"
 
 
+@pytest.mark.parametrize("name", ["Passung", "RM218: Bohrung B und Prüfpin", ":a::b:"])
+def test_named_fit_references_keep_the_whole_name_and_both_sides(name: str) -> None:
+    """Der freie Name liegt zwischen dem festen Präfix und dem letzten Seitenmarker."""
+    fit = fit_to("hole_1", name=name)
+    found = orphans.references(document_with(fit))
+
+    assert [(entry.where, entry.fit_name, entry.side, entry.ref) for entry in found] == [
+        (f"fit:{name}:a", name, "a", fit.a),
+        (f"fit:{name}:b", name, "b", fit.b),
+    ]
+
+
+@pytest.mark.parametrize("name", ["Passung", "RM218: Bohrung B und Prüfpin", ":a::b:"])
+@pytest.mark.parametrize("side", ["a", "b"])
+def test_named_fit_reassignment_changes_only_the_chosen_side(
+    scene: Scene, name: str, side: str
+) -> None:
+    """Eine Wahl lässt die andere Seite und eine gleich beginnende Passung unberührt."""
+    neighbour = fit_to("hole_1", name="RM218")
+    original = fit_to("hole_1", name=name)
+    lost = replace(original, **{side: FeatureRef("obj_1", "hole_9")})
+    document = document_with(neighbour, lost)
+    asked: list[str] = []
+
+    def choose(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        assert "hole_2" in choices
+        return "hole_2"
+
+    result = orphans.check(document, scene, choose)
+
+    assert len(asked) == 1 and name in asked[0]
+    assert result.rewritten == 1 and result.removed == 0
+    assert document.fits == [
+        neighbour,
+        replace(original, **{side: FeatureRef("obj_1", "hole_2")}),
+    ]
+    assert not orphans.check(document, scene, refuse).changed
+
+
+@pytest.mark.parametrize("name", ["Passung", "RM218: Bohrung B und Prüfpin", ":a::b:"])
+@pytest.mark.parametrize("side", ["a", "b"])
+def test_named_fit_removal_leaves_a_similarly_named_fit(scene: Scene, name: str, side: str) -> None:
+    """Löschen benennt die ganze Passung, auch wenn der Name selbst Seitenmarker enthält."""
+    neighbour = fit_to("hole_1", name="RM218")
+    lost = replace(fit_to("hole_1", name=name), **{side: FeatureRef("obj_1", "hole_9")})
+    document = document_with(neighbour, lost)
+
+    def remove(question: str, choices: list[str]) -> str:
+        assert name in question
+        assert tr("Passung löschen") in choices
+        return tr("Passung löschen")
+
+    result = orphans.check(document, scene, remove)
+
+    assert result.removed == 1 and result.rewritten == 0
+    assert document.fits == [neighbour]
+
+
 def test_the_candidates_can_be_shown_highlighted(scene: Scene) -> None:
     """§21.3 will die Kandidaten in der Ansicht markiert, sie kommen also mit
     ihren Daten.

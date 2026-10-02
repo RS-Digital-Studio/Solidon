@@ -364,6 +364,10 @@ def _surface_for(
     Fläche nach allen Zügen. Sonst entscheidet, ob seine Kugel einen
     Eckpunkt der Etappenfläche greift: dieselbe Frage, an der
     :func:`_offsets` einen Zug verfehlt nennt.
+
+    Eine eigene Etappe bekommt er nur, wenn er die Fläche nach der Etappe
+    greift. Greift er auch die nicht, ist er verfehlt, und eine Etappe
+    kostete einen Durchgang, ohne etwas zu ändern (RM-442).
     """
     if not before:
         return mesh, cut
@@ -373,14 +377,21 @@ def _surface_for(
     fresh = cut or tool in ORDERED_TOOLS or current[-1].tool in ORDERED_TOOLS
     start = len(before) if fresh else len(before) - len(current)
     surface = _completed(mesh, tuple(before[:start]), plane)
-    if fresh:
+    if fresh or _reaches(surface, point, radius):
         return surface, cut
-    vertices = np.asarray(surface.raw.vertices, dtype=float)
-    if len(vertices):
-        away, _index = cKDTree(vertices).query(np.asarray(point, dtype=float))
-        if float(away) <= radius * FALLOFF:
-            return surface, False
-    return apply_strokes(surface, before[start:], centre=plane), True
+    after = apply_strokes(surface, before[start:], centre=plane)
+    if _reaches(after, point, radius):
+        return after, True
+    return surface, False
+
+
+def _reaches(mesh: MeshData, point: Vec3, radius: float) -> bool:
+    """Ob die Kugel eines Zugs um ``point`` einen Eckpunkt von ``mesh`` greift."""
+    vertices = np.asarray(mesh.raw.vertices, dtype=float)
+    if not len(vertices):
+        return False
+    away, _index = cKDTree(vertices).query(np.asarray(point, dtype=float))
+    return float(away) <= radius * FALLOFF
 
 
 #: Die zuletzt gerechnete Etappenfläche: Netz, Züge bis zu ihr, Ergebnis.

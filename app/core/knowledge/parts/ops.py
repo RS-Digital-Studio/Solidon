@@ -967,7 +967,7 @@ def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     lip = None
     rim = None
     if subtractive:
-        rim = _over_the_rim(body, placed, anchor, direction)
+        rim = _over_the_rim(body, placed, anchor, direction, cancelled=ctx.cancelled)
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     addition = spec.host_add(part_params) if spec.host_add is not None else None
@@ -1116,7 +1116,9 @@ SPRING_ARMS: Final[dict[str, tuple[str, str, str]]] = {
 }
 
 
-def _over_the_rim(body: Mesh, tool: Mesh, anchor: Vec3, direction: Vec3 | None) -> Finding | None:
+def _over_the_rim(
+    body: Mesh, tool: Mesh, anchor: Vec3, direction: Vec3 | None, *, cancelled: CancelToken
+) -> Finding | None:
     """Reicht ein abtragender Baustein seitlich über den Rand seiner Fläche?
 
     Gefunden im Nachbau-Test (RM-392): Ein Schlüsselloch an der Vorderseite
@@ -1162,7 +1164,9 @@ def _over_the_rim(body: Mesh, tool: Mesh, anchor: Vec3, direction: Vec3 | None) 
         np.asarray(host.raw.triangles, dtype=float),
         starts,
         np.broadcast_to(-normal, starts.shape).copy(),
+        cancelled=cancelled,
     )
+    cancelled.raise_if_cancelled()
     missed = ~np.isfinite(distances)
     if not missed.any():
         return None
@@ -1435,7 +1439,7 @@ def _insert_at_exact(
     lip = None
     rim = None
     if subtractive:
-        rim = _over_the_rim(body, placed, anchor, direction)
+        rim = _over_the_rim(body, placed, anchor, direction, cancelled=ctx.cancelled)
         placed = _opened_to_the_face(placed, body, ctx.params, anchor, direction, spec.keeps_up)
         lip = _lip_on_a_slant(spec, part_params, body, ctx.params, anchor, direction, spec.keeps_up)
     added_features: dict[str, Feature] = {}

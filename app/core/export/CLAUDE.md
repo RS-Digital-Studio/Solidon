@@ -68,7 +68,8 @@ legen dieselbe Grundlage unter (`print_settings.on_base`). PrusaSlicer bekommt
 über `prusa_values` die ganze Kette samt Abweichung (in `write_config` für die
 Konsole, in `writer._plate_config` für die Beilage), ohne Drucker des Bündels
 Solidons ganzen Satz; „Automatisch" als Haftung heißt dort und bei Cura die Art
-aus Solidons Tabelle (`_adhesion_for`), im Bündel die des Profils.
+aus Solidons Tabelle, bei passender Prusa-Grundlage die Art des Profils.
+`effective_adhesion` ist die gemeinsame Auflösung für Dialog und Übergabe.
 `foundation_findings` meldet in Slicen und Export.
 
 **Ohne Herstellerprofil bekommt jede Rolle Solidons Wert**: PrusaSlicer volle

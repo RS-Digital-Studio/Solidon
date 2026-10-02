@@ -69,6 +69,131 @@ def words(de: str, en: str) -> str:
     return en if LANGUAGE == "en" else de
 
 
+def _frame_bounds(
+    window: Any,
+    frame_size: tuple[int, int],
+    widget: Any,
+    *,
+    padding: tuple[int, int] = (0, 0),
+) -> list[int]:
+    """Widgetgrenzen samt Rand maßstäblich übertragen und auf den Rahmen begrenzen."""
+    from PySide6.QtCore import QPoint
+
+    frame_width, frame_height = frame_size
+    window_width, window_height = window.width(), window.height()
+    if min(frame_width, frame_height, window_width, window_height) <= 0:
+        raise ValueError("Fenster und Aufnahme brauchen positive Abmessungen.")
+    origin = widget.mapToGlobal(QPoint(0, 0)) - window.mapToGlobal(QPoint(0, 0))
+    scale_x = frame_width / window_width
+    scale_y = frame_height / window_height
+    padding_x, padding_y = padding
+    left = max(0, min(frame_width, round((origin.x() - padding_x) * scale_x)))
+    top = max(0, min(frame_height, round((origin.y() - padding_y) * scale_y)))
+    right = max(0, min(frame_width, round((origin.x() + widget.width() + padding_x) * scale_x)))
+    bottom = max(0, min(frame_height, round((origin.y() + widget.height() + padding_y) * scale_y)))
+    if right <= left or bottom <= top:
+        raise ValueError("Das Widget liegt außerhalb des aufgenommenen Fensters.")
+    return [left, top, right - left, bottom - top]
+
+
+def _union_bounds(first: list[int], second: list[int]) -> list[int]:
+    """Zwei gültige Rechtecke im Videobild zu ihrem gemeinsamen Bereich verbinden."""
+    left = min(first[0], second[0])
+    top = min(first[1], second[1])
+    right = max(first[0] + first[2], second[0] + second[2])
+    bottom = max(first[1] + first[3], second[1] + second[3])
+    return [left, top, right - left, bottom - top]
+
+
+def _entry_frame_bounds(
+    window: Any, frame_size: tuple[int, int], target: Any, dialog: Any
+) -> tuple[list[int], list[int]]:
+    """Klickziel und ersten Dialog gemeinsam im Ausschnitt des Einstiegsschritts halten."""
+    target_bounds = _frame_bounds(window, frame_size, target)
+    dialog_bounds = _frame_bounds(window, frame_size, dialog)
+    return target_bounds, _union_bounds(target_bounds, dialog_bounds)
+
+
+def _slot_capture_bounds(
+    window: Any, frame_size: tuple[int, int], viewport: Any, measure_box: Any
+) -> tuple[list[int], list[int]]:
+    """Langlochansicht und Maßkarte sowie ihren hervorgehobenen Rand erfassen."""
+    viewport_bounds = _frame_bounds(window, frame_size, viewport)
+    measure_bounds = _frame_bounds(window, frame_size, measure_box)
+    focus_bounds = _frame_bounds(window, frame_size, measure_box, padding=(7, 7))
+    return _union_bounds(viewport_bounds, measure_bounds), focus_bounds
+
+
+def _row_focus_bounds(
+    window: Any, frame_size: tuple[int, int], panel: Any, control: Any
+) -> list[int]:
+    """Eine Wertezeile über die volle Kartenbreite im Maßstab der Aufnahme markieren."""
+    panel_bounds = _frame_bounds(window, frame_size, panel)
+    row_bounds = _frame_bounds(window, frame_size, control, padding=(0, 12))
+    return [panel_bounds[0], row_bounds[1], panel_bounds[2], row_bounds[3]]
+
+
+def _print_settings_entry_scene(
+    step_key: str,
+    *,
+    first_slide: int,
+    last_slide: int,
+    action_first_slide: int,
+    target_bounds: list[int],
+    model_crop: list[int],
+    frame_size: tuple[int, int],
+) -> dict[str, Any]:
+    """Den Einstieg in die Druckeinstellungen im vollständigen Schnittschema beschreiben."""
+    voice = words("Oben rechts öffne ich Drucker.", "I open Printer at the top right.")
+    return {
+        "key": f"{step_key}-entry",
+        "title": words("Druckeinstellungen öffnen", "Open print settings"),
+        "detail": voice,
+        "voice": voice,
+        "short_voice": "",
+        "voice_before": voice,
+        "voice_after": "",
+        "first_slide": first_slide,
+        "last_slide": last_slide,
+        "action_first_slide": action_first_slide,
+        "action_last_slide": last_slide - 1,
+        "model_crop": model_crop,
+        "after_model_crop": [0, 0, *frame_size],
+        "focus": None,
+        "target_bounds": target_bounds,
+        "short": False,
+    }
+
+
+def _editorial_scenes(scenes: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Alle Aufnahmeszenen an der Dateigrenze in das Schnittschema überführen."""
+    result = []
+    for original in scenes:
+        scene = dict(original)
+        voice = scene.get("voice")
+        if not isinstance(voice, str) or not voice.strip():
+            voice = " ".join(
+                value
+                for value in (scene.get("voice_before", ""), scene.get("voice_after", ""))
+                if isinstance(value, str) and value.strip()
+            )
+        scene["voice"] = voice
+        if not isinstance(scene.get("detail"), str):
+            scene["detail"] = voice
+        if not isinstance(scene.get("short_voice"), str):
+            short_voice = " ".join(
+                value
+                for value in (
+                    scene.get("short_voice_before", scene.get("voice_before", "")),
+                    scene.get("short_voice_after", scene.get("voice_after", "")),
+                )
+                if isinstance(value, str) and value.strip()
+            )
+            scene["short_voice"] = short_voice or (voice if scene.get("short") else "")
+        result.append(scene)
+    return result
+
+
 def write_json(path: Path, value: Any) -> None:
     """Lesbare Belege ohne absolute Bildpfade schreiben."""
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -704,7 +829,6 @@ class Tutorial:
         short: bool = False,
     ) -> dict[str, Any]:
         """Ansage, wirkliche Bedienhandlung und Ergebnis mit ihren Rohbildgrenzen erfassen."""
-        from PySide6.QtCore import QPoint
         from shiboken6 import isValid
 
         first = len(self.recorder.slides)
@@ -714,11 +838,9 @@ class Tutorial:
         crop = [0, 0, *self.recorder.frame_size]
         target_bounds = None
         if target is not None and hasattr(target, "rect"):
-            point = target.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
-            target_bounds = [point.x(), point.y(), target.width(), target.height()]
+            target_bounds = _frame_bounds(self.window, self.recorder.frame_size, target)
         if dialog is not None:
-            point = dialog.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
-            crop = [point.x(), point.y(), dialog.width(), dialog.height()]
+            crop = _frame_bounds(self.window, self.recorder.frame_size, dialog)
         action_first = len(self.recorder.slides)
         if action is not None:
             action()
@@ -729,16 +851,20 @@ class Tutorial:
         after_crop = [0, 0, *self.recorder.frame_size]
         after_target_bounds = None
         if visible:
-            point = dialog.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
-            after_crop = [point.x(), point.y(), dialog.width(), dialog.height()]
+            after_crop = _frame_bounds(self.window, self.recorder.frame_size, dialog)
         if target is not None and isValid(target) and hasattr(target, "rect"):
-            point = target.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
-            after_target_bounds = [point.x(), point.y(), target.width(), target.height()]
+            after_target_bounds = _frame_bounds(self.window, self.recorder.frame_size, target)
         title, before, after = en if LANGUAGE == "en" else de
+        voice = " ".join(value for value in (before, after) if value)
+        short_voice = " ".join(
+            value for value in (before if short else "", after if short else "") if value
+        )
         return {
             "key": key,
             "title": title,
-            "voice": " ".join(value for value in (before, after) if value),
+            "detail": voice,
+            "voice": voice,
+            "short_voice": short_voice,
             "voice_before": before,
             "voice_after": after,
             "short_voice_before": before if short else "",
@@ -772,6 +898,8 @@ class Tutorial:
         scenes: list[dict[str, Any]] = []
         snapshots: list[dict[str, Any]] = []
         entry_end: int | None = None
+        entry_target_bounds: list[int] | None = None
+        entry_crop: list[int] | None = None
 
         def note(
             key: str, de: tuple[str, str, str], en: tuple[str, str, str], **kwargs: Any
@@ -779,9 +907,15 @@ class Tutorial:
             scenes.append(self.control_scene(f"{step['key']}-{key}", de, en, **kwargs))
 
         def opened(dialog: Any) -> None:
-            nonlocal entry_end
+            nonlocal entry_end, entry_target_bounds, entry_crop
             if entry_end is None:
                 _frame(self, dialog=dialog, seconds=1.5)
+                entry_target_bounds, entry_crop = _entry_frame_bounds(
+                    self.window,
+                    self.recorder.frame_size,
+                    self.window.header.printer_button,
+                    dialog,
+                )
                 entry_end = len(self.recorder.slides)
 
         def ready(dialog: Any) -> None:
@@ -1236,24 +1370,19 @@ class Tutorial:
         self.modal(lambda: _click(self, self.window.header.printer_button), fill, prelude=prelude)
         if entry_end is None:
             raise RuntimeError("Der Druckdialog wurde nicht sichtbar aufgenommen.")
+        if entry_target_bounds is None or entry_crop is None:
+            raise RuntimeError("Der Ausschnitt zum Druckdialog ließ sich nicht bestimmen.")
         scenes.insert(
             0,
-            {
-                "key": f"{step['key']}-entry",
-                "title": words("Druckeinstellungen öffnen", "Open print settings"),
-                "voice_before": words(
-                    "Oben rechts öffne ich Drucker.", "I open Printer at the top right."
-                ),
-                "voice_after": "",
-                "first_slide": first,
-                "last_slide": entry_end,
-                "action_first_slide": action_first,
-                "action_last_slide": entry_end - 1,
-                "model_crop": [1600, 0, 960, 600],
-                "after_model_crop": [0, 0, *self.recorder.frame_size],
-                "focus": None,
-                "short": False,
-            },
+            _print_settings_entry_scene(
+                step["key"],
+                first_slide=first,
+                last_slide=entry_end,
+                action_first_slide=action_first,
+                target_bounds=entry_target_bounds,
+                model_crop=entry_crop,
+                frame_size=self.recorder.frame_size,
+            ),
         )
         self.checked(titles[0])
         return scenes
@@ -1621,7 +1750,7 @@ class Tutorial:
 
     def drag_slot(self, step: dict[str, Any], body: str) -> list[dict[str, Any]]:
         """Den sichtbaren L-Griff mit echten Qt-Mausereignissen ziehen und übernehmen."""
-        from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+        from PySide6.QtCore import QEvent, QPointF, Qt
         from PySide6.QtGui import QMouseEvent
         from PySide6.QtWidgets import QApplication, QToolTip
 
@@ -1729,18 +1858,20 @@ class Tutorial:
         flow = self.window._quiet_placement
         if flow is None or flow.spec_of().name != "slot_hole":
             raise RuntimeError("Der Langlochzug hat keine passenden Maßfelder geöffnet.")
-        origin = flow._measure_box.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
-        focus = [
-            origin.x() - 7,
-            origin.y() - 7,
-            flow._measure_box.width() + 14,
-            flow._measure_box.height() + 14,
-        ]
-        crop = [500, 120, 1700, 1160]
+        crop, focus = _slot_capture_bounds(
+            self.window,
+            self.recorder.frame_size,
+            viewport,
+            flow._measure_box,
+        )
 
         def row_focus(control: Any) -> list[int]:
-            point = control.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
-            return [focus[0], point.y() - 12, focus[2], control.height() + 24]
+            return _row_focus_bounds(
+                self.window,
+                self.recorder.frame_size,
+                flow._measure_box,
+                control,
+            )
 
         def scene(
             key: str,
@@ -2191,7 +2322,7 @@ class Tutorial:
 
     def operation_scenes(self, step: dict[str, Any], bodies: Sequence[str]) -> list[dict[str, Any]]:
         """Körper, Operation, einzelne Felder und Übernehmen als wirklichen Kundenweg erfassen."""
-        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
 
         from tools.workshop_inventory_capture import _click, _frame, _type
@@ -2273,7 +2404,6 @@ class Tutorial:
         _frame(self, dialog=dialog, seconds=1.0)
         action_last = len(self.recorder.slides)
         self.recorder.add("", "", 6.0, dialog=dialog)
-        point = dialog.mapToGlobal(QPoint(0, 0)) - self.window.mapToGlobal(QPoint(0, 0))
         stage = step["stages"]["entry"]
         scenes.append(
             {
@@ -2284,7 +2414,7 @@ class Tutorial:
                 "action_first_slide": action_first,
                 "action_last_slide": action_last,
                 "model_crop": [0, 0, *self.recorder.frame_size],
-                "after_model_crop": [point.x(), point.y(), dialog.width(), dialog.height()],
+                "after_model_crop": _frame_bounds(self.window, self.recorder.frame_size, dialog),
                 "minimum_seconds": 8,
                 "short": bool(stage.get("short", step.get("short", False))),
             }
@@ -3688,7 +3818,7 @@ def run_recipe(tutorial: Tutorial, recipe: dict[str, Any], recipe_path: Path) ->
             "music": recipe["music"],
             "captured_at": datetime.now(UTC).isoformat(),
             "source_files": source_proof,
-            "scenes": scenes,
+            "scenes": _editorial_scenes(scenes),
             "hero": recipe["hero"],
             "redactions": tutorial.redactions,
         },

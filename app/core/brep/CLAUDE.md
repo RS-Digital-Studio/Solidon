@@ -130,7 +130,9 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   Werkzeuge: Material über trägen `profiles.for_object`, Profil aus
   `geom.prepare.drill_outline`, analytisch rotiert;
   `revolved_bore_tool`/`clipped_bore_tool` schneiden an den echten Randebenen
-  und schließen mit dem alten Radialprofil.
+  und schließen mit dem alten Radialprofil. Bei einer Nullnormalen teilt
+  `_bore_span` die Außenrichtung über
+  `geom.prepare.drill_outward_axis_from_bounds` mit der Platzierungsvorschau.
 - **Ein Langloch wird vom Boden zur Mündung aufgezogen** (`profiles.extrude`,
   sonst dreht `slot_angle` andersherum; `_bore_span`). `slot_bore` vereinigt
   koplanare Flanken, `fill_bore` endet an einer Randöffnung an der Außenwand.

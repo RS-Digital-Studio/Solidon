@@ -114,8 +114,12 @@ ersten Bild alte Pixel. `widget.grab()` sieht das nicht; Beweisbilder nur über
   Widgetmethode im Rückruf.
 * **Ein Nachzügler meldet weder Zustand noch Ergebnis** (`Session._outdated`
   in allen vier Abschluss-Slots; ohne Absender gilt ein Aufruf als aktuell).
-  `evaluate_now` macht einen laufenden Arbeiter zu `_superseded`, dessen
-  Ergebnis `_stale` verwirft, während `_on_thread_done` ihn weiter aufräumt.
+  `evaluate_now` markiert den alten Auftrag als `_superseded`, fordert
+  dessen Abbruch an und bestätigt sein Ende vor dem Reset des Tokens.
+  Ein unbestätigtes Ende sagt die neue Rechnung mit Handlung ab und
+  behält den Arbeiter; `_on_thread_done` räumt ihn weiter auf. Kernfragen
+  prüfen `_stale` während des Wartens und nach der Antwort; der Poll
+  begrenzt keine aktuelle Nutzerantwort.
 * **Ein Ersetzen ist kein Aufhören:** Bei `_rerun_pending` wird kein `False`
   gemeldet, und `evaluationCancelled` meldet keinen ersetzten Lauf.
 

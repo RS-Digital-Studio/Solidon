@@ -2042,6 +2042,62 @@ def test_a_slim_part_on_prusas_own_printer_gets_a_brim(prusa_bundle: Path) -> No
     ]
 
 
+def test_automatic_adhesion_uses_the_prusa_bundle_foundation(prusa_bundle: Path) -> None:
+    """RM-341: Auto übernimmt bei einer Prusa-Grundlage deren Haftungsart."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle)
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+    automatic = print_settings.with_choice(foundation.settings, "adhesion.kind", "auto")
+    automatic = print_settings.with_choice(automatic, "adhesion.brim_width", 5.0)
+
+    effective = handover.effective_adhesion(automatic, profile, "prusa", foundation)
+    written, _expected = handover.prusa_values(automatic, profile, setup, console=False)
+
+    assert foundation.has_profile
+    assert foundation.settings.adhesion.kind == "none"
+    assert effective.adhesion.kind == "none"
+    assert written["skirts"] == "0"
+    assert written["brim_width"] == "0"
+
+
+def test_prusa_auto_preserves_multiple_native_adhesion_measures(prusa_bundle: Path) -> None:
+    """RM-341: Auto lässt die gültige Mehrfach-Haftung des Prozesses bestehen."""
+    profile = _mk4s()
+    setup = _prusa_setup(prusa_bundle)
+    bundle = prusa_bundle.parent / "resources" / "profiles" / "PrusaResearch.ini"
+    source = bundle.read_text(encoding="utf-8")
+    source = source.replace(
+        "skirts = 0\n",
+        "skirts = 2\nbrim_width = 5\nbrim_type = outer_only\nraft_layers = 0\n",
+        1,
+    )
+    bundle.write_text(source, encoding="utf-8")
+
+    foundation = manufacturer.base_settings(profile, "standard", setup)
+    automatic = print_settings.with_choice(foundation.settings, "adhesion.kind", "auto")
+    written, _expected = handover.prusa_values(automatic, profile, setup, console=False)
+
+    assert foundation.has_profile
+    assert foundation.settings.adhesion.kind == "brim"
+    assert written["skirts"] == "2"
+    assert written["brim_width"] == "5"
+
+    chosen_skirt = print_settings.with_choice(automatic, "adhesion.skirt_loops", 4)
+    changed, _expected = handover.prusa_values(chosen_skirt, profile, setup, console=False)
+
+    assert changed["skirts"] == "4"
+    assert changed["brim_width"] == "5"
+    assert written["brim_type"] == "outer_only"
+    assert written["raft_layers"] == "0"
+
+    chosen_width = print_settings.with_choice(automatic, "adhesion.brim_width", 7.0)
+    changed, _expected = handover.prusa_values(chosen_width, profile, setup, console=False)
+    assert changed["skirts"] == "2"
+    assert changed["brim_width"] == "7"
+    assert changed["brim_type"] == "outer_only"
+    assert changed["raft_layers"] == "0"
+
+
 def test_prusas_automatic_support_angle_is_half_an_outer_wall(prusa_bundle: Path) -> None:
     """Null heißt bei PrusaSlicer „automatisch": überhängend ist, was mehr als
     die halbe Außenwand über die Schicht darunter ragt — bei 0,45 mm und

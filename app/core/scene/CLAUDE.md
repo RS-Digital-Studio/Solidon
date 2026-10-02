@@ -33,7 +33,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5); `OperationDraft`, `RevisionPlan` |
 | `revision.py` | Den Verlauf umbauen: `dependencies`, `step_needs`, `revise`, `verdict`, `commit`; `searched_at_the_end` lässt Eingefügtes seine freie Stelle am Endstand suchen |
 | `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5), **opt-in je Operation** |
-| `evaluate.py` | Die Auswertung (§15.1) |
+| `evaluate.py` | Die Auswertung (§15.1); `EvaluationResult.question_reference` trägt bei einer offenen Zuordnungsfrage den bisherigen Bezug mit Ansichtsdreiecken nur vorübergehend zur Ansicht |
 | `edge_binding.py` | Gewählte Kanten **vor** dem Verbrauchercache binden (§21.3) |
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, Speicher und Platte |
 | `hashing.py` | `operation_hash()`, `object_hash()`, `profile_key()`, `feature_digest` |
@@ -41,7 +41,7 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 | `cancel.py` | Kooperativer Abbruch (§15.6, §2.8) |
 | `fits.py` | Passungen (§14) — Verletzungen erkannt, nie still gerechnet; `fit_kinds_for` sagt, welche Passungsarten Körper tragen (Druckdialog, Export je Teil) |
 | `orphans.py` | Verweise ohne Merkmal (§21.3): `question_for()`, `candidates_of()`, `lineage()` |
-| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule |
+| `placement.py` | Dialogvorbelegung und Oberflächenplatzierung am Originalnetz (§18.5); `seat_on_face`: ein Erzeuger auf gewählter Fläche, in ihrer Ebene über das Bett gehoben; `seat_of`: wo sitzt, was schon da ist; `prepare_tool()` liefert in `PlacementTool` den effektiven Werkzeugwinkel und die Kernachse für die Vorschau; `slot_hole`/`resize_hole` verwenden bei markierten Altwinkeln die positive Merkmalsachse, ein migriertes `drill_hole` mit `measured_frame` behält seine gespeicherte Richtung, auch gegen die positive Normale; Nullnormalen verwenden dieselbe BRep-Hüllmittenentscheidung wie `_bore_span`, Mesh liest die lokale Materialsäule; `SIDE_NAMES` übernimmt die gemeinsamen Seitennamen aus `registry/surfaces.py` |
 | `ops.py` | Umbenennen, Löschen, Duplizieren, Muster |
 | `variants.py` | Der Variantengenerator (§28.3): `_marked` graviert den Wert ein, wo Material für drei Schichten plus Mindestwand steht (`label_ops.too_thin_to_print`), sonst `variants.no_mark`; fein, mit geteiltem Cache; ein Druckauftrag, kein Dokumentzustand (Regel 2) |
 
@@ -132,6 +132,17 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   Das ist Datenidentität ohne geometrische Näherung oder Rundung.
   Rohe Operationsbefunde bleiben unverändert,
   auch beim erneuten Abschluss aus dem Cache.
+  `_without_outdated` zählt Material nur für `bore.splits_the_body` sowie
+  `label.fell_apart`, `texture.fell_apart`, `parts.hanging_loose`,
+  `blend.still_apart` und `sketch.join_apart`: nativ über `solid_count`, am
+  Netz über `repair.material_part_count`. Innenhäute sind keine losen Teile;
+  ohne vollständigen Beleg bleibt der Befund. Nur `values['count']` des
+  Bohrungsbefunds wird bei mehreren Teilen frisch nachgeführt, bei einem
+  entfällt der Befund.
+  Die übrigen Zähler behalten `component_count`, mit getrennten Merkern je
+  Objekt. Der echte Abbruchtoken erreicht auch den Schalenaufbau; erst nach
+  dem Abschluss werden Bericht und Cache freigegeben. Der Bericht übernimmt
+  Ersatzbefunde auch bei unveränderter Zeilenzahl.
   `_finding_from` übernimmt `location` und `outline` aus einer Ausnahme als
   räumliche Felder und lässt sie aus den Anzeigewerten heraus. So führt
   `as_error` beim Rückweg zu den tatsächlichen Punkten statt zu deren Text.
@@ -224,6 +235,9 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
 
 ### Verweise
 
+- **Passungsschlüssel** bleiben `fit:<Name>:a/b`; der freie Name darf selbst
+  Doppelpunkte tragen. `orphans.fit_name_from_key` liest bis zum letzten
+  Seitenmarker, auch für Abhängigkeiten und Ruhevermerke beim Umbau.
 - **`kind="features"`**: jeder fehlende Verweis einzeln, auch nach einem
   Treffer; heißt leer „ganzer Körper", vergrößert „Verweis streichen" den
   Bereich nie; Abbrechen behält. Ausgeblendete Felder lösen sich nur aktiv auf

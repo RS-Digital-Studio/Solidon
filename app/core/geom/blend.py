@@ -257,7 +257,18 @@ def _too_fine(wanted: int, grid: float) -> ValidationError:
 def _grid(
     first: MeshData, second: MeshData, radius: float, grid: float
 ) -> tuple[np.ndarray, tuple[int, ...]]:
-    """Ursprung und Punktzahl je Achse des Rasters um beide Körper."""
+    """Prüft die Eingänge vor Ursprung und Punktzahl je Achse des gemeinsamen Rasters."""
+    for source in (first, second):
+        if not source.raw.is_watertight or source.volume <= 0.0:
+            raise NotManifoldError(
+                detail=_(
+                    "Dieser Körper umschließt kein Volumen — ohne ein Innen gibt es kein "
+                    "Abstandsfeld und keinen weichen Übergang. Erst reparieren, dann noch "
+                    "einmal."
+                ),
+                open_edges=int(len(source.raw.edges_unique) * 2 - len(source.raw.faces) * 3),
+            )
+
     margin = radius + grid * MARGIN_CELLS
     low = np.minimum(first.raw.bounds[0], second.raw.bounds[0]) - margin + grid * GRID_OFFSET
     high = np.maximum(first.raw.bounds[1], second.raw.bounds[1]) + margin
@@ -292,17 +303,6 @@ def blend_bodies(
     nicht nur bis vor sie: Dort liegt die Zeit, und ein Abbruch, der erst
     danach greift, ist keiner (§15.6).
     """
-    for source in (first, second):
-        if not source.raw.is_watertight or source.volume <= 0.0:
-            raise NotManifoldError(
-                detail=_(
-                    "Dieser Körper umschließt kein Volumen — ohne ein Innen gibt es kein "
-                    "Abstandsfeld und keinen weichen Übergang. Erst reparieren, dann noch "
-                    "einmal."
-                ),
-                open_edges=int(len(source.raw.edges_unique) * 2 - len(source.raw.faces) * 3),
-            )
-
     low, shape = _grid(first, second, radius, grid)
     margin = radius + grid * MARGIN_CELLS
     wanted = int(np.prod(shape))
@@ -380,7 +380,8 @@ class BlendParams(BaseParams):
     # Dreiecks statt zu seiner Mitte (siehe :func:`distance_field`). Ein
     # Ergebnis aus dem Cache trüge sonst weiter die gewellten Wände. 3 seit dem
     # 22.09.2026: Die Filamente beider Körper kommen mit (:func:`_with_filaments`).
-    cache_version="3",
+    # 4: Auch die Entwurfsplanung prüft die Eingänge vor Bounds und Punktbudget.
+    cache_version="4",
     title=_("Weich verschmelzen"),
     category="boolean",
     params=BlendParams,

@@ -29,12 +29,25 @@ driftet ab — deshalb gibt es keine.
 |---|---|
 | `registry.py` | `register_op`, `OperationSpec`, `Registry`. Die Ordnung: `CATEGORIES`, `MENU_GROUPS`, `PANEL_CATEGORIES` mit `in_the_menu_bar` (welche Gruppen rechts in der Karte wohnen statt in der Leiste), `VARIANT_GROUPS`, `MENU_TWINS` — nach Verfügbarkeit des exakten Kerns gebaut und deshalb **faul** über `menu_twins()`, denn die Antwort lädt OpenCASCADE (wer sie im Modul braucht, ruft die Funktion): die fünf Grundkörper aus `PRIMITIVE_TWINS` sichtbar exakt, versteckt als Netz; Bohren und Aushöhlen sichtbar als die Operation, die die Körperart selbst fragt. `exact_names` (welche Zwillinge exakt rechnen, für Verlauf und Fenster), `kernel_twin_of` und `kernel_switch_label` (Kernwechsel am Schritt, nur an einem Grundkörper, in den exakten Kern nur, wenn er da ist), `twin_way` für den Menüweg |
 | `params.py` | Das Parameterschema: `param()`, `op_params()`, `validate()`, `json_schema()` — Grenzen, Einheiten, Vorgaben, Vorder- oder Rückseite des Dialogs; `optional` für eine Zahl, bei der die Null gültig ist; `feature_kinds` für ein Merkmalsfeld, das nur bestimmte Arten annimmt (`scene.placement.values_for` trägt einen Klick auf eine andere Art nicht ein) |
-| `surfaces.py` | Alles, was **aus** dem Register erzeugt wird — die sechs Funktionen oben, dazu `parameter_table()`, `caveat_line()`, die Menütiefe und `catalogue_operations()` (siehe unten) |
+| `surfaces.py` | Alles, was **aus** dem Register erzeugt wird — die sechs Funktionen oben, dazu `parameter_table()`, `caveat_line()`, die gemeinsamen Auswahlbeschriftungen (`choice_label`, `SIDE_NAMES`), die Menütiefe und `catalogue_operations()` (siehe unten) |
 | `search.py` | Operationen nach Wörtern finden: Faltung (`fold`, „ä“ → „ae“), Wortstamm (`stem_of`), die Kundenwörter — `SYNONYMS` (deutsch) und `CUSTOMER_WORDS` (je Sprache ein Katalogtext mit Kontext „Suchwörter“, über `customer_phrases`) — und die Rangfolge: `rank_entries` über `search_fields` (Operationen und Fensterbefehle der Palette), `rank_operations` fürs Register. Der Agent wählt damit sein Angebot **nur mit `SYNONYMS`** (`customer_words=False`, Regel in `grenzen.md`), die Palette ordnet mit beiden. Seltene Wörter zählen, Füllwörter nicht (am ganzen Text gezählt); eine Kundenwendung zählt nur, wenn jedes Wort im Stamm beidseitig passt (`_same_word`) |
 | `__init__.py` | Exportiert lazy (siehe `app/core/CLAUDE.md`): ein neuer Name steht an drei Stellen |
 
 ## Parameterarten mit Folgen
 
+- `documentation()` und `parameter_table()` behalten mit `technical=True`
+  interne Schlüssel und Ausführungsverträge für technische Aufrufer. Das
+  Handbuch verwendet `technical=False`: Kundentitel, Bedienort, Kürzel,
+  Merkmale, Grenzen und Feldbeschreibungen bleiben; Auswahlwerte samt Vorgaben
+  und Bedingungen heißen wie im Dialog. Kein Feldtyp gilt pauschal als
+  versteckt. Überschriften in Beschreibungen werden mit
+  `markup.below_heading` unter den Operationstitel eingeordnet, auch bei
+  eigenen Rezepten mit ATX- oder Setext-Markdown; Codebeispiele bleiben Code.
+- Auswahlbeschriftungen leben einmal in `surfaces.py`, ohne Qt.
+  `choice_label()` leitet Normteilnamen aus der Normtabelle ab und erlaubt
+  einen Zahlenformatierer für die Anzeigeeinheit der Oberfläche;
+  `ui.labels.choice_label()` reicht ihn herein. `SIDE_NAMES` liefert auch die
+  Flächennamen und Rückfragen der Platzierung.
 - **`ParamKind="contours"`** bleibt im Kern Text mit einer JSON-Liste von
   Profilkennungen: `TEXT_KINDS`, nicht `GATHERED_KINDS` — Agent und Projekt
   führen die Auswahl als Daten, die Oberfläche zeigt einen Konturwähler;

@@ -99,7 +99,7 @@ def test_screen_fit_does_not_consume_the_initial_content_fit() -> None:
         def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
             return QSize(720, 500)
 
-        def screen(self):
+        def screen(self) -> None:
             return None
 
         def layout(self) -> Layout:
@@ -195,7 +195,7 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
         def resize(self, width: int, height: int) -> None:
             self._size = QSize(width, height)
 
-        def screen(self):
+        def screen(self) -> None:
             return None
 
         def size(self) -> QSize:
@@ -827,6 +827,7 @@ def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
     Gegenteil annimmt.
     """
     from app.core.knowledge import profiles
+    from app.ui.ai_disclosure import LocalPrivacyDialog
     from app.ui.catalog import PartCatalog
     from app.ui.changes_dialog import ChangesDialog
     from app.ui.comfy_dialog import ComfySetupDialog
@@ -854,6 +855,7 @@ def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
         ("Freischaltung", ActivationDialog),
         ("Freischaltung — Dateiweg", lambda: OfflineActivationDialog("PROBE")),
         ("Schlüssel", KeyDialog),
+        ("Datenschutz lokal", lambda: LocalPrivacyDialog("# Datenschutz")),
         ("Über", AboutDialog),
         ("Förderung", DonationDialog),
         ("Kalibrierung", lambda: CalibrationDialog(profiles.DEFAULT_MATERIAL)),

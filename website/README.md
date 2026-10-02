@@ -77,6 +77,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `eula.html`, `agb.html`, `widerruf.html` | Rechtstexte — erzeugt von `tools/make_legal.py` aus `EULA.md`, `AGB.md` und `WIDERRUF.md`, nie von Hand ändern |
 | `style.css` | Gestaltung, hell und dunkel über `prefers-color-scheme` |
 | `version.json` | Versionsdatei für den Update-Hinweis (`core/updates.py`) |
+| `release-dates.json` | Belegte Veröffentlichungstage je Version in Europe/Berlin; bei der Veröffentlichung ergänzen und hochladen |
 | `robots.txt`, `sitemap.xml`, `llms.txt` | Was Suchmaschinen zuerst holen — erzeugt von `tools/make_seo.py`, nie von Hand ändern |
 | `.htaccess` | Eine Adresse je Seite, Caching, Kompression — von Hand |
 
@@ -277,16 +278,38 @@ Dauer, Uhrzeit und Wochentag), **Konversion** (Besuche mit Download,
 Direktdownloads ohne Seitenaufruf, Version mal Zielsystem mit Anteil, die
 Seite vor dem Download, die Dateien im Ordner) und **Versionen**
 (Update-Prüfungen aller gespeicherten Tage, unabhängig vom gewählten Monat:
-je Version zuerst und zuletzt gesehen, Anteil gesamt und der letzten 7 Tage,
+je Version Veröffentlichung, erste und letzte Prüfung, Anteil gesamt und der letzten 7 Tage,
 Anteil in der ersten Woche und der erste Tag mit Mehrheit; die Anteile Tag für
 Tag als gestapelte Säulen; und Versionen Tag für Tag mit einer Spalte je
-Version und der Marke „neu" am ersten Tag). Was vom ersten Auftauchen aus
-zählt, bleibt leer, wenn eine Version schon am ersten gespeicherten Tag da
-war. Die Diagramme sind HTML und CSS ohne Skript — die Inhaltsrichtlinie der
-Seite lässt keines zu. Alles davon entsteht aus den fünf Feldern einer
+Version und der Marke „neu" am Veröffentlichungstag). Die Release-Tage stammen
+aus `release-dates.json`, nicht aus der ersten Update-Prüfung. Mehrheit und
+erste Woche beginnen am belegten Release-Tag; fehlt er oder reicht die
+Datenabdeckung nicht bis dorthin, bleiben diese Kennzahlen leer.
+Update-Prüfungen vor diesem Tag werden in allen Ansichten ausgeblendet;
+die Rohdaten bleiben unverändert. Frühe Testaufrufe nach dem Release sind
+rückwirkend nicht unterscheidbar.
+
+Der Update-Client kennzeichnet Quellenstarts automatisch mit
+`Solidon-Test/<Version>`. Bei Paketproben setzt `SOLIDON_UPDATE_TEST=1`
+dieselbe Kennung. `count.php` liefert weiterhin Versionsdatei und Downloads,
+schreibt für diese Aufrufe aber keine Zählzeilen und keinen Ratenzustand.
+Bereits ausgelieferte Pakete ohne diese Clientänderung senden die Kennung
+noch nicht. Normale Paketstarts behalten `Solidon/<Version>`.
+
+Die Diagramme sind HTML und CSS ohne Skript — die Inhaltsrichtlinie der
+Seite lässt keines zu. Die Abrufzahlen entstehen aus den fünf Feldern einer
 Zählzeile; ein Besuch ist ein Tageskennzeichen an einem Tag und endet um
 Mitternacht. `?format=json` liefert dieselbe Auswertung samt Befunden hinter
 derselben Anmeldung als JSON.
+
+Die nachgetragenen Release-Tage sind durch die Veröffentlichungscommits
+`7c5da7dda` (0.2.0), `7544a1259` und `3c2d9c9fe` (0.2.2),
+`967cad778` (0.3.1), `02bd79235` (0.3.3), `51a1738ec` und
+`85ddbbddf` (0.4.0), `d5ca6a109` und `8c037bab2` (0.4.1),
+`9369c03bf` (0.4.2), `ed40acaa6` (0.4.3), `e8a90e3f5` (0.4.4),
+`8ed5d6299` (0.5.0) und `1f5dc9f43` (0.5.1) belegt. Weitere Daten nur mit
+Veröffentlichungsbeleg ergänzen; das Datum im erzeugten Download-Kasten ist
+ein Erzeugungstag und reicht dafür allein nicht.
 
 Erreicht die Statistik ihre Monats- oder Gesamtquote, schreibt der Zähler
 keine weitere Zeile und nennt die betroffene Grenze im privaten PHP-Log.

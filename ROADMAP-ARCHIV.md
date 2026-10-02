@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
 | 2026-10-02 | [RM-374: Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern* (02.10.2026)](#rm-374-der-befund-auf-maß-gebracht-trägt-den-knopf-größe-ändern-02102026) |
@@ -34211,6 +34212,17 @@ Format bestanden; mypy auf `app/core/scene/evaluate.py` ohne Befund. Die
 Fensterabnahme bleibt Release-Sache. Der vollständige Entwicklungslauf ist
 nicht Teil dieses Nachweises.
 
+**Abgrenzung vom 02.10.2026:** Dieser historische Fachnachweis ist keine
+Gesamtfreigabe von RM218. Der notwendige begrenzte Anschluss und seine
+Regressionen wurden im RM284-Produktcommit
+`57848fa72c4ca229f5dc9bcdd2cca2baf6945987` nach `origin/main` übernommen;
+der [RM284-Abschluss](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md#abschluss-auf-dem-hauptzweig)
+grenzt RM218 ausdrücklich aus. Die spätere unabhängige Nachprüfung des
+Kundenteils bestätigt die drei Umbauten und Undo, hat den Passungsbezug am
+echten Modell jedoch nicht nachgeprüft. Dieser vollständige Passungsnachweis
+und die Gesamtfreigabe bleiben unter [RM218 in der Roadmap](ROADMAP.md#rm-218)
+offen; die Fensterabnahme gehört zum Release.
+
 ## RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)
 
 <a id="rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026"></a>
@@ -35380,6 +35392,21 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
 
 **Abschluss:** Befund `part.over_the_edge` für jeden abtragenden Baustein an beiden Kernen; rund 2 000 Bausteintests ohne Fehlalarm. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
+**Nachprüfung 02.10.2026, P2G03 — Abbruch im Randvergleich:** Beide
+Kernelwege übergeben jetzt den Kontexttoken an die Strahlenrechnung und
+prüfen ihn unmittelbar danach, bevor ein Teilstand zum Randbefund wird.
+Vier tatsächliche Testkörperfehler vor der Korrektur, danach acht neue
+und fünf bestehende Fälle grün. Die beiden isolierten Fehlvarianten
+ohne Tokenweitergabe bzw. Nachtest scheitern jeweils in allen vier
+Abbruchfällen. Frischer gemeinsamer Nachlauf mit RM327: 13 bestanden,
+Exit 0, fünf stabile Quell-/Testdateien, keine Fehler oder Skips. Ruff,
+eigene Formatbereiche und unabhängiger Produkt-/Laufreview sind grün.
+Maße, Schema und vollständige Ergebnisse bleiben gleich; kein neuer
+Bereichslauf oder Bibliotheks-/Cacheversionssprung.
+[Portabler Nachprüfungsbeleg](konzepte/nachweise-release-0.5.1/reports/rm392-bausteinabbruch-2026-10-02.md).
+Das vollständige Tor und die tatsächliche Integration dieses Nachgangs
+stehen aus; die Fenster-/Leistungsabnahme bleibt beim Release offen.
+
 ## RM-394: *An Merkmal ausrichten* wählt das Ziel still vor und nimmt den ersten Bildklick nicht an (02.10.2026)
 
 <a id="rm-394-an-merkmal-ausrichten-wählt-das-ziel-still-vor-und-nimmt-den-ersten-bildklick-nicht-an-02102026"></a>
@@ -35762,6 +35789,33 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
 
 **Abschluss:** Der PreToolUse-Hook erkennt die sechs Geld- und Veröffentlichungswerkzeuge in jeder Schreibweise (ask für Claude, deny für Codex ohne Marker `SOLIDON3D_WERKZEUG_FREIGEGEBEN=ja`); 143 Hooktests. Codex erneuert die Hookfreigabe über `/hooks`. Umgesetzt von Claude, in main mit `457dc09d4`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
+**Nachprüfung 02.10.2026 — Aufrufvarianten und sechs Reviewlücken:**
+Die kumulative Korrektur bindet tatsächliche Skript-/Modulstarts und
+literale `Start-Process`-Argumente an den bestehenden Werkzeugschutz.
+Der unabhängige erste Review fand danach sechs weitere konkrete
+Lücken: Semikolon vor Kommentar, freie Cmdletpositionen, native
+Windows-Quotes, Großschreibung im Bash-Vorfilter, native Kommas und
+mehrzeilige Cmdletarrays. Diese sind vorwärts behoben; die Freigabe-,
+Marker- und Triggerwerte sowie die generierte Codex-Konfiguration
+bleiben erhalten. Tatsächlich 44 neue Testkörperfehler bei 19 Kontrollen
+vor dem Reviewfix; final 63 und ursprüngliche 98 Fälle grün, Exit 0,
+fünf stabile Prüflingshashes je Lauf, Ruff/Format grün. Die 241 Fälle
+sind ausschließlich der frühere f28-Modullauf. Neuer unabhängiger
+Finalreview: JA für genau 9/9/1 eigene Quell-/Test-/Konfigurationshunks.
+[Portabler Aufruf-/Reviewbeleg](konzepte/nachweise-release-0.5.1/reports/rm346-aufrufvarianten-2026-10-02.md).
+Ein vollständiges neues Tor und tatsächliche Integration dieses Nachgangs
+stehen aus. Die erneuerte `/hooks`-Freigabe und tatsächliche Auslösung
+im Codex-/Claude-Client sind unbestätigt; kein Client-/Releaseabschluss.
+
+**Weiterer Nachreview derselben Einheit:** Der übersehene per Doppelpunkt
+gebundene `-ArgumentList:...`-Wert ist korrigiert, ebenso der unmittelbar
+betroffene Python-Kindparser für zitierte Parameternennungen. Die allein
+gebundene FilePath-Form bleibt eine schon vorher grüne Kontrolle.
+Tatsächlich 44 Assertions rot und 21 Kontrollen grün vor dem Fix;
+final 65 neue sowie 63 und 98 bestehende Fälle grün, Exit 0,
+fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
+Übergabe umfasst jetzt 10/9/1 Quell-/Test-/Konfigurationshunks.
+
 ## RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)
 
 <a id="rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026"></a>
@@ -36017,6 +36071,7 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Beleg: `bericht-B.md` (B-1), Sonden `test_probe_cura_nozzle.py` (+ `out_cura_nozzle.txt`),
   `old_sp_before_8374885ae.py`, `probe_incomplete_name.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch, alle drei Teile. Instanz 0,6 bei Düse 0,4 meldet „Meine Werkstatt ist unvollständig“; eine fehlende Instanz bekommt denselben Satz; „Snapmaker 2.0 A350“ wird zu „Snapmaker 2“ gekürzt.
+  Nachprüfung am Stand `4cf460e87` (nach `29ff469b5`): behoben, alle drei Teile (Düse 0,4 wird geschrieben, gelöschte Instanz mit eigenem Satz und `choose_printer`, „Snapmaker 2.0 A350“ bleibt ganz); Tests wirken. Neu dabei: RM-417.
 
 **Abschluss:** Die Familienregel in `slicer_profiles.match` gilt nur noch Profilen mit Datei je Düse; Cura-Instanzen und Werksdefinitionen (`_nozzle_is_a_value`) gewinnen unabhängig von der Düse — mit Cura 5.13 fanden vorher 595 von 634 übernommenen Druckern keine Maschine, jetzt 0. Namen bleiben ganz (`_shown_name`, „Snapmaker 2.0 A350“). „Fehlt“ und „unvollständig“ hatte Codex in `29ff469b5` getrennt. Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
 
@@ -36046,6 +36101,7 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Beleg: `bericht-B.md` (B-2), Sonden `test_probe_cura_center_zero.py` (+ `out_cura_center_zero.txt`),
   `cura_center_zero.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
+  Nachprüfung am Stand `4cf460e87`: nicht behoben, Code unverändert (`gcode.off_the_bed` mit `excess_mm 10.0`).
 
 **Abschluss:** Der wirksame Ursprung reist als `CuraMachine.origin_at_centre`/`SlicerConfig.origin_at_centre`; `off_the_bed` und die Naht (`_cura_seam`, Curas Formel) rechnen danach. Am echten CuraEngine 5.13 belegt (Malyan M180, Kossel Mini, Snapmaker-Instanz). Derselbe Fehler bei Orca und PrusaSlicer steht unter [RM-424](ROADMAP.md#rm-424). Umgesetzt von Claude, in main mit `0e2ca5531`; Entwicklungstor auf dem zusammengeführten Stand grün (sechs Ausfälle des Hilfsprozesses unter Fremdlast einzeln wiederholt und grün).
 
@@ -36067,6 +36123,7 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   **Abnahme:** je Form Geometrietest und Bereichsnachweis; Nachbau Rohrschelle in unter zehn
   Klicks. Bauplan §24, §2.6, Regeln 4, 7, 22.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Rohr, Lasche und Schelle mit **Maßreihen** statt Einzelmaßen (Rohr-Ø-Reihe, Lochgrößen M3–M8 aus der Normteiltabelle, Wand nach Materialprofil); Lasche und Schelle an jeder Fläche ansetzbar (RM-396). Nutzen: in `F:\3D Dateien` nach Dateinamen rund 18 Teile (Verbinder 01–07, Rankenclip, Kartuschendeckel, Ring, Torschloss-Adapter, Rohrhalter, Klemmen). Abnahme an mindestens drei unterschiedlichen Korpusteilen.
+  Nachprüfung am Stand `4373b5f12` (nach `8bf7e140e`, `6d4eb21bc`, `aa273d444`): behoben im Testumfang — 85 Tests grün, Bereichsnachweis Lasche 40/40, Rohrschelle 512/512 (192 erklärte Ausschlüsse) passt zu `part_ranges.toml`, Testmaße stimmen mit den Korpusteilen. Offen bis Release: Klickzahl am Fenster.
 
 **Abschluss:** Grundform *Rohr anlegen* (`create_tube`/`create_brep_tube`, Wand oder Innendurchmesser), Bausteine *Lasche mit Loch* (`lug`, M3–M8, Maße nach ISO 7089) und *Rohrschelle* (`pipe_clamp`, Rohrreihe 15–40 mm als Tabellenart `pipes` in `standards.toml` v10, eigener Durchmesser bis 110 mm, M3–M6) an beiden Kernen; je drei Fälle aus Nachbau und Korpus, Bereichsnachweise aller Bausteine neu gefahren. `LIBRARY_VERSION` bleibt (Entscheidung Robert 02.10.: nur neue Bausteine, kein geändertes Maß). Umgesetzt von Claude, in main mit `c117720b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
@@ -36109,6 +36166,7 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   **Abnahme:** Test: U-Halter mit Schlüsselloch in einem Schritt, Maße stimmen, Leiste dreht
   Innenmaß; Nachbau Modell 1 in höchstens fünf Klicks. Bauplan §2.2 (Weg 2), §24, §37.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Aus dem Punkt wird eine parametrische **Halter-Vorlage** für verschiedene Gegenstände und Befestigungen: Profil U, L, Z oder Gabel, mit/ohne Boden, Gegenstand als Maß (Breite × Tiefe oder Durchmesser), Befestigung Schlüsselloch, Schraublöcher, Lochwand-Haken oder Klemme. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 30 Halter (Besen-, Filament-, Flaschen-, Schlauch-, Werkzeughalter, Lochwand-Teile, Wandhalterungen). Abnahme an mindestens drei unterschiedlichen Haltern.
+  Nachprüfung am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben (Bereichstest aller vier Halter). Offen: Korpusabnahme an drei Haltern nicht belegt; Nachbau Modell 1 gelingt, die Rückwand wird aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; der Fünf-Klick-Rest steht nur im Archivtext; exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
 
 **Abschluss:** Vier Bausteine statt einer Vorlage (Bereichstest höchstens 512 Ecken): *Halter U-Form*, *Halter rund*, *Halter Gabel*, *Halter Ablage* (L oder Z) mit Befestigung Schlüsselloch, Schraublöcher (M4), Lochwand-Haken oder Klemme, Maße aus Normteiltabelle und vorhandenen Bausteinen; im Katalog über „Halter“, „Maße als Parameter anlegen“ legt Schritt und Parameter in einer Transaktion an (`PartSpec.template`). Beide Kerne, Bereichsnachweise aller 41 Bausteine, Prompt neu gezählt (7 729 Token bei 166 Werkzeugen). Offen bleibt der Fünf-Klick-Weg am echten Fenster (Release). Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
@@ -36133,6 +36191,7 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   **Abnahme:** Test: Körper gewählt, *Quader anlegen* → Z = 0; Fläche gewählt → Satz sichtbar,
   Körper steht auf der Fläche, nicht unter dem Bett. Bauplan §2.4, §18.5, Regel 21.
   Beleg: `nachbau\bericht.md`, Sonde `f4_stapeln.py`.
+  Nachprüfung am Stand `4373b5f12` (nach `cb72af460`): behoben — Körper gewählt → z 0; Deckfläche → z 20 mit „Wird auf … gesetzt“; Seitenfläche, Zylinder Ø 30 → z 0…30; *Auf das Bett* setzt zurück; der neue Körper ist danach gewählt; 7 neue Kerntests am Elterncommit rot. RM-396 (Ansetzen und Verbinden) bleibt offen.
 
 **Abschluss:** Ein gewählter Körper, eine Bohrung oder Kante setzen keinen Erzeuger mehr; nur eine ebene Fläche (`placement.seats_on`, `seat_on_face`), mit dem Satz „Wird auf „…“ von „…“ gesetzt.“ und dem Knopf *Auf das Bett*; reicht der Körper unter das Bett, rückt er in der Ebene hoch oder entsteht auf dem Bett, mit Satz. Fensterlose und Fenstertests an allen fünf Zwillingspaaren, rot vor dem Fix. Umgesetzt von Claude, in main mit `bf0b62fc5`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
@@ -36306,3 +36365,21 @@ allen sechs Sprachen den Pinselbegriff, auch als Bildschirmleser-Name. Fensterte
 `test_the_brush_strength_is_not_named_like_a_wall_thickness` für das Release-Tor. Changelog 0.5.2
 in sechs Sprachen. Umgesetzt von Claude, in main mit `910acb1ee` (Merge `551e8cf48`);
 Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
+
+## RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)
+
+<a id="rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026"></a>
+<a id="rm-442"></a>
+
+**RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug.**
+  Fund 02.10.2026 beim Zusammenführen von RM-361/372/374 (Claude): Der Fenstertest
+  `tests/test_sculpt_session.py::test_a_forced_cut_applies_to_one_stroke_only` ist seit
+  `6f64f7ed1` (RM-438, `stroke_at` kennt die Züge davor) rot, am Elternstand `4373b5f12` und
+  an `910acb1ee` grün. Nach einem erzwungenen Schnitt bei (20, 0, 0) trägt auch der zweite
+  Zug bei (0, 20, 0) `cut=True`. Das reguläre Tor fährt Fenstertests nicht und sah es nicht.
+  **Fix:** klären, ob der zweite Zug die Fläche seiner Etappe wirklich verfehlt (dann den
+  Test auf den neuen Vertrag stellen) oder `stroke_at` ihn fälschlich neu einordnet (dann
+  den Code). **Abnahme:** Test grün ohne Lockerung der Aussage „der Schalter gilt für einen
+  Zug“. Bauplan §17.3, §2.6.
+
+**Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.

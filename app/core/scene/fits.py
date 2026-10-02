@@ -331,11 +331,11 @@ def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str,
 
     Die Körper und alles, woraus sie entstanden sind: Der Stapel wird rückwärts
     gegangen, jeder Schritt, der einen der Körper erzeugt, bringt seine
-    Eingänge dazu. Eine eingetragene Passung zählt mit ihrer Art, ein
-    deaktivierter Deckel ohne Kragen nicht (:func:`active_fits`). Ein
-    passender Schritt ohne gebundene Passung zählt als Schiebesitz
-    (:data:`FITTING_OPS`), etwa eine ältere Mutternfalle mit Spiel aus der
-    Normteiltabelle.
+    Eingänge dazu. Eine eingetragene aktive Passung zählt mit ihrer Art
+    (:func:`active_fits`). Ein passender, eingeschalteter Schritt ohne gebundene
+    Passung zählt als Schiebesitz (:data:`FITTING_OPS`), etwa eine ältere
+    Mutternfalle mit Spiel aus der Normteiltabelle. Ausgeschaltete Schritte
+    zählen nicht.
 
     Zurück kommen die **Arten**, nicht bloß ein Ja: Eine bündige Passung
     verlangt eine Einstellung mehr als ein Schiebesitz. Der Druckdialog fragt
@@ -344,6 +344,8 @@ def fit_kinds_for(document: Document, object_ids: Collection[str]) -> tuple[str,
     wanted = set(object_ids)
     relevant_operations: set[int] = set()
     for operation in reversed(document.ops):
+        if operation.suppressed is not None:
+            continue
         if wanted.intersection(operation.outputs):
             relevant_operations.add(operation.id)
             wanted.update(operation.inputs)

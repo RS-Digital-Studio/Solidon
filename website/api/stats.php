@@ -695,6 +695,7 @@ function entries(string $dir, string $month, ?bool &$complete = null): array
         return [];
     }
     $zone = new DateTimeZone(DISPLAY_ZONE);
+    $releases = release_dates();
     $rows = [];
     $stream = @fopen($path, 'rb');
     if ($stream === false) {
@@ -719,6 +720,14 @@ function entries(string $dir, string $month, ?bool &$complete = null): array
             try {
                 $when = (new DateTimeImmutable((string) $row['t']))->setTimezone($zone);
             } catch (Exception $error) {
+                continue;
+            }
+            // Prüfungen vor einer belegten Veröffentlichung stammen aus
+            // Vorabfassungen. Die Rohdaten bleiben erhalten; alle Ansichten
+            // rechnen auf derselben bereinigten Menge.
+            $published = $releases[(string) ($row['v'] ?? '')] ?? null;
+            if (($row['k'] ?? '') === 'u' && $published !== null
+                && $when->format('Y-m-d') < $published) {
                 continue;
             }
             $rows[] = [
@@ -1016,6 +1025,30 @@ function current_release(): string
     return preg_match('/^[0-9]+(?:\.[0-9]+){0,3}$/D', $version) === 1 ? $version : '';
 }
 
+/** Belegte Veröffentlichungstage, unabhängig von Build und erster Prüfung.
+ *  Fehlende oder ungültige Angaben werden nicht aus Zähldaten erraten. */
+function release_dates(): array
+{
+    static $dates = null;
+    if ($dates !== null) {
+        return $dates;
+    }
+    $dates = [];
+    $raw = @file_get_contents(__DIR__ . '/../release-dates.json');
+    $data = is_string($raw) ? json_decode($raw, true) : null;
+    foreach (is_array($data) ? $data : [] as $version => $day) {
+        if (preg_match('/^[0-9]+(?:\.[0-9]+){0,3}$/D', (string) $version) !== 1
+            || !is_string($day) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $day) !== 1) {
+            continue;
+        }
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $day);
+        if ($date instanceof DateTimeImmutable && $date->format('Y-m-d') === $day) {
+            $dates[(string) $version] = $day;
+        }
+    }
+    return $dates;
+}
+
 /** Die Kopfzeile eines Monats: Aufrufe, Besuche, Downloads, Update-Prüfungen
  *  — für den Vergleich über die Monate, ohne die ganze Seite je Monat
  *  aufzubauen. */
@@ -1141,13 +1174,11 @@ function calendar_days(string $from, string $to): array
  * meistgesehenen einzeln und der Rest als „andere" — und gerade eine frisch
  * veröffentlichte Version mit wenigen Prüfungen verschwand darin.
  *
- * „Zuerst gesehen" ist der erste Tag mit einer Prüfung dieser Version. Fällt
- * er auf den ersten gespeicherten Tag, kann sie älter sein als die Daten;
- * alles, was von der Veröffentlichung aus zählt — Mehrheit nach wie vielen
- * Tagen, Anteil in der ersten Woche —, bleibt dann leer, statt ein Datum zu
- * behaupten, das die Daten nicht hergeben.
+ * Veröffentlichung und erste Prüfung sind getrennte Angaben. Mehrheit und
+ * erste Woche beginnen am belegten Veröffentlichungstag; fehlt er oder
+ * reicht er vor den Datenbeginn, bleiben diese Kennzahlen leer.
  */
-function version_timeline(array $rows, string $today, string $release): array
+function version_timeline(array $rows, string $today, string $release, array $releases): array
 {
     $first = null;
     $last = $today;
@@ -1194,9 +1225,9 @@ function version_timeline(array $rows, string $today, string $release): array
         foreach ($cells as $column => $count) {
             if ($count > 0 && !isset($seen[(string) $column])) {
                 $seen[(string) $column] = $day;
-                if ($day !== $first && preg_match('/^\d+(\.\d+)*$/D', (string) $column) === 1) {
-                    $new[] = (string) $column;
-                }
+            }
+            if (($releases[(string) $column] ?? null) === $day) {
+                $new[] = (string) $column;
             }
         }
         $timeline['days'][] = [
@@ -1213,20 +1244,24 @@ function version_timeline(array $rows, string $today, string $release): array
         }
     }
 
+    // Seiten wurden schon vor dem Updatezähler erfasst. Ihre älteren Zeilen
+    // belegen keine Abdeckung für die erste Woche einer Version.
+    $updateStart = min(array_keys($counts));
     foreach ($columns as $column) {
         $firstSeen = $seen[$column];
         $sinceStart = $firstSeen === $first;
         // „unbekannt" ist keine Version, die veröffentlicht wurde — sie hat
         // keinen ersten Tag, von dem aus eine Ablösung zu zählen wäre.
         $numbered = preg_match('/^\d+(\.\d+)*$/D', $column) === 1;
-        $fromRelease = $numbered && !$sinceStart;
+        $published = $releases[$column] ?? null;
+        $fromRelease = $numbered && $published !== null && $published >= $updateStart;
         $lastSeen = $firstSeen;
         $activeDays = 0;
         $peakDay = $firstSeen;
         $peak = 0;
         $week = 0;
         $majority = null;
-        $firstWeekEnd = shift_day($firstSeen, 6);
+        $firstWeekEnd = $published === null ? null : shift_day($published, 6);
         $firstWeek = 0;
         $firstWeekAll = 0;
         foreach ($timeline['days'] as $line) {
@@ -1241,11 +1276,11 @@ function version_timeline(array $rows, string $today, string $release): array
             if ($line['day'] >= $weekFrom && $line['day'] <= $today) {
                 $week += $count;
             }
-            if ($fromRelease && $majority === null && $line['day'] >= $firstSeen
+            if ($fromRelease && $majority === null && $line['day'] >= $published
                 && $count * 2 > $line['total']) {
                 $majority = $line['day'];
             }
-            if ($line['day'] >= $firstSeen && $line['day'] <= $firstWeekEnd) {
+            if ($fromRelease && $line['day'] >= $published && $line['day'] <= $firstWeekEnd) {
                 $firstWeek += $count;
                 $firstWeekAll += $line['total'];
             }
@@ -1253,6 +1288,8 @@ function version_timeline(array $rows, string $today, string $release): array
         $timeline['versions'][] = [
             'version' => $column,
             'current' => $column === $release,
+            'published_on' => $published,
+            'release_covered' => $fromRelease,
             'first_seen' => $firstSeen,
             'numbered' => $numbered,
             'since_data_start' => $sinceStart,
@@ -1265,7 +1302,7 @@ function version_timeline(array $rows, string $today, string $release): array
             'peak_day' => $peakDay,
             'peak' => $peak,
             'majority_from' => $majority,
-            'days_to_majority' => $majority === null ? null : days_between($firstSeen, $majority),
+            'days_to_majority' => $majority === null ? null : days_between($published, $majority),
             // Erst, wenn die sieben Tage vorbei sind — ein halber Zeitraum
             // sähe nach einer langsamen Ablösung aus.
             'first_week_share_percent' => $fromRelease && $firstWeekEnd <= $today
@@ -1504,7 +1541,7 @@ foreach ($available as $option) {
     $allRows = array_merge($allRows, month_rows($dir, $option, $done));
     $allComplete = $allComplete && $done;
 }
-$timeline = version_timeline($allRows, $today, $release);
+$timeline = version_timeline($allRows, $today, $release, release_dates());
 $versions = tally($allRows, 'value', 'u');
 $updateCount = $timeline['total'];
 $releaseShare = $release !== '' && isset($versions[$release])
@@ -1675,14 +1712,16 @@ if ($updateCount > 0 && $release !== '') {
     if ($releaseLife === null) {
         $say('info', 'Die aktuelle Version ' . $release . ' hat noch keine Update-Prüfung gemeldet.');
     } else {
-        $text = $release . ($releaseLife['since_data_start']
+        $text = $release . ($releaseLife['published_on'] !== null
+            ? ' veröffentlicht am ' . day_label($releaseLife['published_on'])
+            : ($releaseLife['since_data_start']
             ? ' meldet sich seit Beginn der Daten'
-            : ' zuerst am ' . day_label($releaseLife['first_seen']) . ' gesehen');
+            : ' zuerst am ' . day_label($releaseLife['first_seen']) . ' geprüft (Veröffentlichung nicht belegt)'));
         $text .= $timeline['week_total'] > 0
             ? '; in den letzten 7 Tagen ' . n($releaseLife['last_7_days_share_percent'], 0)
                 . ' % der Update-Prüfungen'
             : '; in den letzten 7 Tagen keine Update-Prüfung';
-        if (!$releaseLife['since_data_start']) {
+        if ($releaseLife['release_covered']) {
             $daysTo = $releaseLife['days_to_majority'];
             $text .= $releaseLife['majority_from'] === null
                 ? ', die Mehrheit an einem Tag hatte sie noch nicht'
@@ -2527,17 +2566,19 @@ wie schnell eine neue Version die alte ablöst, nicht wie viele sie benutzen.</p
 
 <article class="kachel ganz">
 <h3 id="versionen">Je Version</h3>
-<p class="sub">Zuerst gesehen ist der erste Tag mit einer Prüfung — ein Probelauf vor
-der Veröffentlichung zählt mit. „Mehrheit ab“ ist der erste Tag, an dem die Version
-mehr als die Hälfte aller Prüfungen des Tages stellte; „erste Woche“ ihr Anteil an
-den sieben Tagen ab dem ersten Auftauchen. Beides bleibt leer, wo die Version schon
-am ersten gespeicherten Tag da war.</p>
+<p class="sub">Veröffentlicht nennt den belegten Release-Tag, zuerst geprüft den ersten
+gespeicherten Aufruf ab diesem Tag. Prüfungen vor belegten Release-Tagen und künftig
+als Test gekennzeichnete Aufrufe zählen nicht mit. „Mehrheit ab“ ist der erste Tag mit
+mehr als der Hälfte aller Prüfungen; „erste Woche“ ihr Anteil in den sieben Tagen ab
+Veröffentlichung. Fehlt der Release-Tag oder reichen die Daten nicht bis dorthin,
+bleiben beide Kennzahlen leer. Frühere Tests ab dem Release-Tag sind nicht erkennbar.</p>
 <?php $lifePeak = max(1, ...array_column($timeline['versions'], 'checks')); ?>
 <table class="ohne-umbruch">
-  <tr><th>Version</th><th>zuerst gesehen</th><th>zuletzt</th><th class="n">Tage</th><th class="n">Prüfungen</th><th class="n">Anteil</th><th style="width:9%"></th><th class="n">letzte 7 Tage</th><th class="n">erste Woche</th><th>Mehrheit ab</th><th>stärkster Tag</th></tr>
+  <tr><th>Version</th><th>veröffentlicht</th><th>zuerst geprüft</th><th>zuletzt</th><th class="n">Tage</th><th class="n">Prüfungen</th><th class="n">Anteil</th><th style="width:9%"></th><th class="n">letzte 7 Tage</th><th class="n">erste Woche</th><th>Mehrheit ab</th><th>stärkster Tag</th></tr>
   <?php foreach ($timeline['versions'] as $life): ?>
   <tr>
     <td><span class="farbe <?= e($slotOf[$life['version']] ?? 'vx') ?>"></span><?= e($life['version']) ?><?php if ($life['current']): ?><span class="marke">aktuell</span><?php endif; ?></td>
+    <td><?= $life['published_on'] === null ? '<span class="leer">nicht belegt</span>' : e(day_label($life['published_on'])) ?></td>
     <td><?= $life['since_data_start'] ? '<span class="leer">seit Datenbeginn</span>' : e(day_label($life['first_seen'])) ?></td>
     <td><?= $life['last_seen'] === $today ? 'heute' : e(day_label($life['last_seen'])) ?></td>
     <td class="n"><?= n($life['active_days']) ?></td>
@@ -2546,7 +2587,7 @@ am ersten gespeicherten Tag da war.</p>
     <td><?= bar($life['checks'], $lifePeak) ?></td>
     <td class="n"><?= n($life['last_7_days']) ?><?php if ($life['last_7_days_share_percent'] !== null): ?> · <?= n($life['last_7_days_share_percent'], 0) ?> %<?php endif; ?></td>
     <td class="n"><?= $life['first_week_share_percent'] === null ? '—' : n($life['first_week_share_percent'], 0) . ' %' ?></td>
-    <td><?php if ($life['majority_from'] !== null): ?><?= e(day_label($life['majority_from'])) ?> <span class="leer">nach <?= e(plural((int) $life['days_to_majority'], 'Tag', 'Tagen')) ?></span><?php elseif ($life['since_data_start'] || !$life['numbered']): ?>—<?php else: ?><span class="leer">noch nicht</span><?php endif; ?></td>
+    <td><?php if ($life['majority_from'] !== null): ?><?= e(day_label($life['majority_from'])) ?> <span class="leer">nach <?= e(plural((int) $life['days_to_majority'], 'Tag', 'Tagen')) ?></span><?php elseif (!$life['release_covered']): ?>—<?php else: ?><span class="leer">noch nicht</span><?php endif; ?></td>
     <td><?= e(day_label($life['peak_day'])) ?> <span class="leer">(<?= n($life['peak']) ?>)</span></td>
   </tr>
   <?php endforeach; ?>
@@ -2574,7 +2615,7 @@ stehen in der Tabelle darunter.</p>
 <article class="kachel ganz">
 <h3>Versionen Tag für Tag</h3>
 <p class="sub">Jede Version in ihrer Spalte, der neueste Tag oben. „neu“ markiert den
-Tag, an dem sich eine Version zum ersten Mal meldete.</p>
+belegten Veröffentlichungstag.</p>
 <details open>
 <summary><?= plural(count($timeline['days']), 'Tag', 'Tage') ?>, <?= plural(count($timeline['columns']), 'Version', 'Versionen') ?></summary>
 <table>
@@ -2584,7 +2625,7 @@ Tag, an dem sich eine Version zum ersten Mal meldete.</p>
       <td class="tag"><?= e(day_label($line['day'])) ?><?php foreach ($line['new'] as $version): ?><span class="marke">neu: <?= e($version) ?></span><?php endforeach; ?></td>
       <?php foreach ($timeline['columns'] as $column): ?><td class="n<?= $line['cells'][$column] === 0 ? ' null' : '' ?>"><?= n($line['cells'][$column]) ?></td><?php endforeach; ?>
       <td class="n<?= $line['total'] === 0 ? ' null' : '' ?>"><?= n($line['total']) ?></td>
-      <?php if ($release !== '' && in_array($release, $timeline['columns'], true)): ?><td class="n"><?= $line['release_share_percent'] === null || $line['day'] < ($releaseLife['first_seen'] ?? '') ? '—' : n($line['release_share_percent'], 0) . ' %' ?></td><?php endif; ?>
+      <?php if ($release !== '' && in_array($release, $timeline['columns'], true)): ?><td class="n"><?= $line['release_share_percent'] === null || $line['day'] < ($releaseLife['published_on'] ?? $releaseLife['first_seen'] ?? '') ? '—' : n($line['release_share_percent'], 0) . ' %' ?></td><?php endif; ?>
     </tr>
   <?php endforeach; ?>
 </table>

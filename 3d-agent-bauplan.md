@@ -641,12 +641,20 @@ Die Typaliase und ihre Bedeutung gehören zu diesem Vertrag:
   wenn ihr Merkmal derzeit nicht sicher erkannt wird (§21.3).
 - `ObjectKind`: `mesh` oder `brep`; `Quality`: `draft` oder `fine`.
   `MetricSource`: `internal` oder `gcode` — nie vermischen (§22.5).
-- `SketchElementKind`: `point`, `line`, `arc`, `circle`, `spline`.
-  `construction` kennzeichnet Hilfsgeometrie.
+- `SketchElementKind`: `point`, `line`, `arc`, `circle`, `spline`, `ellipse`,
+  `elliptical_arc`. `construction` kennzeichnet Hilfsgeometrie.
 - `SketchConstraintKind`: `distance`, `radius`, `diameter`, `coincident`,
   `horizontal`, `vertical`, `parallel`, `perpendicular`, `tangent`,
-  `symmetric`, `fixed`, `reference`. `targets` referenziert die flache
-  Punktliste, `value` trägt einen Maßausdruck aus §13. Die Skizzenebene ist
+  `symmetric`, `fixed`, `reference`, `angle`, `equal`, `midpoint`,
+  `on_curve`, `smooth`, `curvature`. `angle` misst den Winkel zwischen zwei
+  Linien in Grad und liegt strikt zwischen 0° und 180°; `equal` hält zwei
+  Linienlängen oder Rundungsradien gleich und ordnet bei Ellipsen und
+  elliptischen Bögen jeweils große und kleine Halbachse einander zu, auch wenn
+  die Achsen in der Eingabe vertauscht sind. `midpoint` setzt einen Punkt auf
+  die Mitte einer Linie. `on_curve` setzt einen Punkt auf eine Kurve. `smooth`
+  hält zwei Kurven tangentenstetig, `curvature` zusätzlich krümmungsstetig. `targets`
+  referenziert die flache Punktliste, `value` trägt einen Maßausdruck aus §13.
+  Die Skizzenebene ist
   `plane:xy`, `plane:xz`, `plane:yz` oder
   `feature:<object_id>:<feature_id>`. Die Kurzform `feature:<id>` bleibt
   für ältere Skizzendaten lesbar. Dazu drei **abgeleitete** Ebenen, die auf
@@ -1099,6 +1107,10 @@ Bausteinrezepte dürfen registrierte Operationen und Daten enthalten (§24.5).
 ### 16.2 Version und Reproduzierbarkeit
 - **`format_version`**: gleich → laden, älter → Migrationskette, neuer →
   freundlich ablehnen statt halb zu laden
+- Eine neue serialisierte Skizzenelement- oder Bedingungsart erhöht
+  `format_version`, auch wenn ältere Projekte keine solchen Einträge enthalten.
+  Die Migration muss vorhandene Skizzen nicht umschreiben; ältere Programme
+  lehnen die neuere Datei anhand der Version ab.
 - **Migrationen** als eigene Funktionen mit Test und eingecheckter
   Beispieldatei je Altversion
 - **`libs`** hält fest, womit gerechnet wurde; Abweichung ergibt einen Hinweis,
@@ -2407,9 +2419,14 @@ Druckteil von der ersten Linie bis zum Export im selben Programm.
 
 - **Eine Skizze ist ein Datenmodell im Kern** (Verträge in §9): Ebene aus
   einer Hauptebene oder einer angeklickten planaren Fläche, Elemente (Linie,
-  Bogen, Kreis, Punkt, Spline), Bedingungen (Maß, Koinzidenz, horizontal,
-  vertikal, parallel, senkrecht, tangential, symmetrisch, fest, Referenz).
-  Kein Qt darunter.
+  Bogen, Kreis, Punkt, Spline, Ellipse, elliptischer Bogen), Bedingungen
+  (Maß, Winkel, Gleichheit, Mittelpunkt, Koinzidenz, horizontal, vertikal,
+  parallel, senkrecht, tangential, symmetrisch, fest, Referenz, Punkt auf
+  Kurve, tangentenstetig, krümmungsstetig). Kein Qt darunter.
+
+  `angle` speichert den Maßausdruck in Grad; zulässig sind nur Werte strikt
+  zwischen 0° und 180°. `concentric` ist die Oberflächenbezeichnung für die
+  Deckung zweier Mittelpunkte, keine eigene Bedingungsart im Datenmodell.
 
   Ein Spline beschreibt freie Kurven. Eine Referenzbedingung zeigt ein Maß,
   ohne es festzulegen; sie verändert die Freiheitsgrade nicht und erzeugt
@@ -2434,6 +2451,14 @@ Druckteil von der ersten Linie bis zum Export im selben Programm.
 - **Der Agent erzeugt Skizzen ausschließlich über benannte Grundformen**
   (Rechteck, Langloch, Kreisbild, Vieleck) und Maße — nie über rohe
   Punktlisten (Leitprinzip 5).
+- **Vieleck und Langloch entstehen mit je zwei Klicks.** Das Vieleck hat im
+  Editor drei bis zwölf Ecken und hält die Regelmäßigkeit über einen
+  Hilfskreis. Das Langloch nimmt zwei Mittelpunkte und die Breite aus seinem
+  Werkzeugfeld. Der durch die Klicks bestimmte Umkreis beziehungsweise
+  Mittenabstand bleibt frei; ein eingetippter Wert dafür wird als
+  Maßbedingung gespeichert. Die eingestellte Langlochbreite wird als
+  Durchmesserbedingung gespeichert; die Eckenzahl legt nur die Grundform
+  fest.
 - **Zwei gleichwertige Eingabewege.** Grundformen über Dialog, CLI und Agent
   sowie der grafische Editor im Viewport (Ebene anklicken, zeichnen,
   Bedingungen setzen) erzeugen dieselben parametrischen Skizzendaten. Der

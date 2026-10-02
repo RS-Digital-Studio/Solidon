@@ -55,7 +55,7 @@ from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QTextDocument
 from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_NAME, APP_VERSION, website_page_url
-from app.core import figures, guides, markup
+from app.core import figures, guides, manual, markup
 from app.i18n import TranslatableText, _, set_language, tr
 from app.i18n.catalog import available_languages, install_language
 
@@ -125,15 +125,18 @@ def films(only: list[str]) -> list[Film]:
     if only:
         chosen = [guide for guide in guides.GUIDES if guide.key in only]
         return [Film(guide.key, guide.title, (guide,)) for guide in chosen]
-    parts: tuple[tuple[str, TranslatableText], ...] = (
-        ("start", _("Vom Start bis zum Druck")),
-        ("tasks", _("Einzelne Aufgaben")),
-    )
-    return [
-        Film(part, title, tuple(guide for guide in guides.GUIDES if guide.part == part))
-        for part, title in parts
-        if any(guide.part == part for guide in guides.GUIDES)
-    ]
+    titles: dict[manual.Part, TranslatableText] = {
+        "start": _("Vom Start bis zum Druck"),
+        "tasks": _("Einzelne Aufgaben"),
+    }
+    guide_by_key = {guide.key: guide for guide in guides.GUIDES}
+    outline = dict(manual.OUTLINE)
+    result: list[Film] = []
+    for part, title in titles.items():
+        chapters = tuple(guide_by_key[key] for key in outline[part] if key in guide_by_key)
+        if chapters:
+            result.append(Film(part, title, chapters))
+    return result
 
 
 def check_pictures(folder: Path, chosen: tuple[guides.Guide, ...]) -> None:

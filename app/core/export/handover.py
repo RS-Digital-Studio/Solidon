@@ -754,6 +754,8 @@ def as_mapping(
     settings: PrintSettings,
     flavour: SlicerFlavour,
     paths: frozenset[str] | None = None,
+    *,
+    native_adhesion_kinds: frozenset[str] = frozenset(),
 ) -> dict[str, str]:
     """Die Einstellungen in der Sprache dieses Slicers (§29).
 
@@ -770,7 +772,8 @@ def as_mapping(
     ``paths`` beschränkt auf die Punktpfade, die vom Herstellerprofil
     abweichen sollen (Konzept Herstellerprofil, Entscheidung D); ``None``
     heißt alle — dort, wo kein Herstellerprofil darunter liegt. Was ohne
-    seinen Partner nicht wirkt, kommt mit (:data:`COUPLED_PATHS`).
+    seinen Partner nicht wirkt, kommt mit (:data:`COUPLED_PATHS`). Bei Prusa
+    Auto bleiben zusätzlich die im nativen Prozess aktiven Haftungsarten stehen.
     """
     settings = _fan_curve_in_order(settings)
     if paths is not None:
@@ -786,7 +789,9 @@ def as_mapping(
         # verglichen meldete er eine Abweichung von nichts.
         if value != "":
             written[entry.key] = value
-    chosen = _only_chosen_adhesion(written, settings, flavour)
+    chosen = _only_chosen_adhesion(
+        written, settings, flavour, native_adhesion_kinds=native_adhesion_kinds
+    )
     if flavour == "cura":
         return _cura_fan_start(_first_layer_width(chosen), settings)
     if paths is not None and "support.density" not in paths:
@@ -852,7 +857,7 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
     Zusammenführen laufen ließe, bekäme die Hälfte.
     """
-    values = as_mapping(_adhesion_for(settings, profile, flavour), flavour)
+    values = as_mapping(effective_adhesion(settings, profile, flavour), flavour)
     values |= _machine_keys(profile, flavour)
     if flavour == "cura":
         values = _cura_dependants(values, settings, profile)
@@ -860,16 +865,21 @@ def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
     return values
 
 
-def _adhesion_for(
-    settings: PrintSettings, profile: Profile, flavour: SlicerFlavour
+def effective_adhesion(
+    settings: PrintSettings,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    foundation: manufacturer.Foundation | None = None,
 ) -> PrintSettings:
-    """„Automatisch" dort, wo der Slicer keinen Auto-Brim kennt (Entscheidung J).
+    """Die wirksame Haftungsart für diesen Slicer und dieses Material.
 
     Die Orca-Familie hat ``auto_brim``; PrusaSlicer und CuraEngine nicht. Dort
-    heißt „Automatisch" die Art aus Solidons Tabelle für dieses Material —
-    bis Stufe C und D ist sie für beide die Grundlage. Ohne diese Abbildung
-    bekam Cura einen Skirt mit null Linien und PrusaSlicer an jedem Teil einen
-    Brim (Review Stufe A+B, F5).
+    heißt „Automatisch" die Art aus Solidons Tabelle, außer eine passende
+    Prusa-Grundlage ist gewählt; dann gilt die Art des Profils. Ein ausdrücklich
+    gewähltes Nullmaß bleibt stehen, während ein ungewähltes Nullmaß auf die
+    Vorgabe zurückfällt. Der Druckdialog und die Übergabe fragen dieselbe
+    Auflösung ab. Ohne diese Abbildung bekam Cura einen Skirt mit null Linien
+    und PrusaSlicer an jedem Teil einen Brim (Review Stufe A+B, F5).
     """
     from app.core.slice import advise
 
@@ -880,13 +890,30 @@ def _adhesion_for(
         or flavour == "other"
     ):
         return settings
-    table = print_settings.resolve(profile, settings.quality).adhesion
-    measures = {
-        name: getattr(table, name)
-        for name in ("skirt_loops", "brim_width", "raft_layers")
-        if getattr(settings.adhesion, name) <= 0
-    }
-    return replace(settings, adhesion=replace(settings.adhesion, kind=table.kind, **measures))
+    prusa_foundation = (
+        foundation
+        if flavour == "prusa"
+        and foundation is not None
+        and foundation.has_profile
+        and foundation.profile == profile
+        else None
+    )
+    base = (
+        prusa_foundation.settings
+        if prusa_foundation is not None
+        else print_settings.resolve(profile, settings.quality)
+    )
+    measures = {}
+    for name in ("skirt_loops", "brim_width", "raft_layers"):
+        path = f"adhesion.{name}"
+        if path not in settings.explicit and (
+            prusa_foundation is not None or getattr(settings.adhesion, name) <= 0
+        ):
+            measures[name] = getattr(base.adhesion, name)
+    return replace(
+        settings,
+        adhesion=replace(settings.adhesion, kind=base.adhesion.kind, **measures),
+    )
 
 
 def by_section(
@@ -1112,7 +1139,11 @@ def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintS
 
 
 def _only_chosen_adhesion(
-    written: dict[str, str], settings: PrintSettings, flavour: SlicerFlavour
+    written: dict[str, str],
+    settings: PrintSettings,
+    flavour: SlicerFlavour,
+    *,
+    native_adhesion_kinds: frozenset[str] = frozenset(),
 ) -> dict[str, str]:
     """Nullt die Maße der Haftungsarten, die nicht gewählt sind.
 
@@ -1129,7 +1160,11 @@ def _only_chosen_adhesion(
     kind = settings.adhesion.kind
     for wanted, keys in slicer_keys.ADHESION_KEYS[flavour].items():
         # Der Auto-Brim misst mit der Brimbreite — sie bleibt stehen.
-        if wanted == kind or (kind == "auto" and wanted == "brim"):
+        if (
+            wanted == kind
+            or wanted in native_adhesion_kinds
+            or (kind == "auto" and wanted == "brim")
+        ):
             continue
         for key in keys:
             if key in written:
@@ -2342,6 +2377,8 @@ def prusa_values(
         flat["filament_type"] = slicer_keys.filament_type(profile.material.id)
         return flat, flat
     foundation = manufacturer.base_settings(profile, settings.quality, setup)
+    preserve_native_adhesion = effective.adhesion.kind == "auto" and foundation.has_profile
+    effective = effective_adhesion(effective, profile, "prusa", foundation)
     paths = manufacturer.written_paths(effective, foundation) or frozenset()
     if slots:
         # Die erste Spule fährt den Satz (``settings_for_shared_slicer``), und
@@ -2351,9 +2388,25 @@ def prusa_values(
         paths |= frozenset(
             path for path in print_settings.all_paths() if manufacturer._material_path(path)
         )
+    if preserve_native_adhesion:
+        # Auto heißt bei einem Prusa-Prozess: seine gültige Kombination gilt.
+        # Die Profilart kann zugleich Skirt und Brim führen; würde der Marker
+        # ``adhesion.kind`` die drei Maße mitbringen, nullte die Ein-Art-Logik
+        # diese native Kombination. Einzelne ausdrücklich gewählte Maße
+        # bleiben als eigene Abweichung in ``paths``.
+        paths = paths - {"adhesion.kind"}
+    native_adhesion_kinds = frozenset(
+        kind
+        for kind, path, measure in (
+            ("skirt", "adhesion.skirt_loops", foundation.settings.adhesion.skirt_loops),
+            ("brim", "adhesion.brim_width", foundation.settings.adhesion.brim_width),
+            ("raft", "adhesion.raft_layers", foundation.settings.adhesion.raft_layers),
+        )
+        if preserve_native_adhesion and path in foundation.from_profile and measure > 0
+    )
     own = _followers_not_faster(
         {**manufacturer.PRUSA_PROGRAM_DEFAULTS, **chain.values},
-        as_mapping(effective, "prusa", paths),
+        as_mapping(effective, "prusa", paths, native_adhesion_kinds=native_adhesion_kinds),
         _suggested_speed_keys(effective, "prusa"),
         followers=_PRUSA_FOLLOWERS,
     )

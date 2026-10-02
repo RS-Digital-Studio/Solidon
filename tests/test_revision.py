@@ -9,6 +9,7 @@ ihrem Entwurf —, nicht aus dem Ergebnis, das geprüft wird.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ from app.core.scene import History, OperationDraft, ResultCache, evaluate
 from app.core.scene.project import load, new_project, save
 from app.core.scene.revision import commit, dependencies, revise
 from app.core.scene.serialise import document_to_data
-from app.core.types import Document, FeatureRef, Fit, Profile
+from app.core.types import Document, FeatureRef, Fit, Profile, ReferenceSight
 
 #: Die beiden Bohrungen der kleinen Platte: links (A) und rechts (C), aus ihren Entwürfen.
 LEFT_X = -20.0
@@ -32,6 +33,8 @@ KERNELS = {
     "mesh": ("create_box", "drill_hole"),
     "brep": ("create_brep_box", "drill_brep_hole"),
 }
+
+FIT_NAMES = ["Passung", "RM218: Bohrung B und Prüfpin", ":a::b:"]
 
 
 def _plate(kernel: str, *, first_x: float = LEFT_X, second_x: float = RIGHT_X) -> History:
@@ -305,6 +308,158 @@ def test_a_fit_follows_its_hole_when_the_names_swap(profile: Profile, kernel: st
     after = run(history.document)
     followed = history.document.fits[0].a.feature_id
     assert followed == _name_at(after, LEFT_X) != name, "die Passung nennt die linke Bohrung"
+
+
+def _named_fit_sight(name: str, side: str) -> ReferenceSight:
+    """Ein belegtes Loch von Schritt 2; die Namenslesung braucht keinen Geometrielauf."""
+    from app.core.types import Feature
+
+    feature = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="generated",
+        created_by=2,
+        params={"centre": (0.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0), "diameter": 5.0, "depth": 10.0},
+    )
+    return ReferenceSight(
+        key=f"fit:{name}:{side}",
+        ref=FeatureRef("obj_1", "hole_1"),
+        feature=feature,
+        candidates={feature.id: feature},
+        diagonal=20.0,
+    )
+
+
+@pytest.mark.parametrize("name", FIT_NAMES)
+def test_named_fit_dependencies_keep_the_whole_name(name: str) -> None:
+    """Der Abhängigkeitsgraph braucht den Dokumentnamen, sonst ruht die Passung nicht mit."""
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Operation, Scene
+
+    document = new_project().document
+    document.ops.extend(
+        [
+            Operation(id=1, op="create_box", outputs=("obj_1",)),
+            Operation(id=2, op="drill_hole", inputs=("obj_1",), outputs=("obj_1",)),
+        ]
+    )
+    result = EvaluationResult(
+        Scene(), fit_sights=tuple(_named_fit_sight(name, side) for side in ("a", "b"))
+    )
+
+    context = dependencies(document, result)
+
+    assert context.fit_needs == {name: frozenset({1, 2})}
+    assert set(context.fit_expectations) == {name}
+    assert [entry.key for entry in context.fit_expectations[name]] == [
+        f"fit:{name}:a",
+        f"fit:{name}:b",
+    ]
+
+
+@pytest.mark.parametrize("name", FIT_NAMES)
+@pytest.mark.parametrize("side", ["a", "b"])
+@pytest.mark.parametrize("stored", [False, True], ids=["Grundstand", "Ruhevermerk"])
+def test_named_fit_drifts_keep_the_whole_name(name: str, side: str, stored: bool) -> None:
+    """Beide Umbauwege müssen einen geänderten Merkmalsnamen derselben Passung zuordnen."""
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.scene.history import RevisionPlan
+    from app.core.scene.revision import drifts, expectation_of
+    from app.core.types import Operation, Scene, Suppression, Transaction
+
+    sight = _named_fit_sight(name, side)
+    assert sight.feature is not None
+    successor = replace(sight.feature, id="hole_2")
+    proposal = EvaluationResult(
+        Scene(),
+        fit_sights=(replace(sight, feature=None, candidates={successor.id: successor}),),
+    )
+    document = new_project().document
+    if stored:
+        expected = expectation_of(sight)
+        assert expected is not None
+        document.ops.append(
+            Operation(
+                id=2,
+                op="drill_hole",
+                suppressed=Suppression(expects=(expected,), fits=(name,)),
+            )
+        )
+    baseline = None if stored else EvaluationResult(Scene(), fit_sights=(sight,))
+    plan = RevisionPlan(kind="reactivate" if stored else "move", transaction=Transaction(1, "", ()))
+
+    found = drifts(document, plan, baseline, proposal)
+
+    assert len(found) == 1
+    assert found[0].fit == name and found[0].key == f"fit:{name}:{side}"
+    assert found[0].verdict.state == "renamed" and found[0].verdict.name == "hole_2"
+
+
+@pytest.mark.parametrize("name", FIT_NAMES)
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_named_fit_revision_survives_saving_and_undo(
+    profile: Profile, tmp_path: Path, kernel: str, name: str
+) -> None:
+    """Zwei getrennte Bohrungsbezüge reisen mit dem Umbau, der Datei und genau einem Undo."""
+    from app.core.knowledge.parts import LIBRARY_VERSION
+    from app.core.scene.history import change_for
+
+    if kernel == "brep":
+        from tests.helpers import exact_kernel
+
+        exact_kernel()
+    history = _plate(kernel)
+    # Das Öffnen aktualisiert die Bibliotheksversion; der Undo-Vergleich beginnt
+    # deshalb bereits im aktuellen Dateivertrag, nicht mit dem Altwert "0".
+    history.document.parts_version = LIBRARY_VERSION
+    _cache, run = _runner(profile)
+    base = run(history.document)
+    original = Fit(
+        name=name,
+        a=FeatureRef("obj_1", _name_at(base, LEFT_X)),
+        b=FeatureRef("obj_1", _name_at(base, RIGHT_X)),
+    )
+    history.apply("Passung", [], changes=change_for(history.document, fits=[original]))
+    base = run(history.document)
+    assert base.complete
+    assert [(sight.key, sight.ref) for sight in base.fit_sights] == [
+        (f"fit:{name}:a", original.a),
+        (f"fit:{name}:b", original.b),
+    ]
+    before = _document_without_numbering(history)
+    left, right = history.operations[1:3]
+    context = dependencies(history.document, base)
+    assert context.fit_needs == {name: frozenset({history.operations[0].id, left.id, right.id})}
+    plan = history.plan_move([right.id], left.id, context)
+    revision = revise(history, plan, evaluate=run, baseline=base, context=context)
+    transaction = commit(history, revision)
+    after = run(history.document)
+    assert after.complete
+    expected_fit = replace(
+        original,
+        a=FeatureRef("obj_1", _name_at(after, LEFT_X)),
+        b=FeatureRef("obj_1", _name_at(after, RIGHT_X)),
+    )
+    assert history.document.fits == [expected_fit]
+    assert expected_fit.a != original.a and expected_fit.b != original.b
+    assert len(after.fit_sights) == 2
+    assert _document_without_numbering(history) != before
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = history.document
+    reopened = load(save(project, tmp_path / "Passung.p3d"))
+    reopened_history = History(reopened.document)
+    assert reopened.document.fits == [expected_fit]
+    assert _document_without_numbering(reopened_history) == _document_without_numbering(history)
+    undone = reopened_history.undo()
+    assert undone is not None and undone.id == transaction.id
+    assert _document_without_numbering(reopened_history) == before
+    restored = run(reopened.document)
+    assert restored.complete and _holes(restored) == _holes(base)
+    assert [(sight.key, sight.ref) for sight in restored.fit_sights] == [
+        (f"fit:{name}:a", original.a),
+        (f"fit:{name}:b", original.b),
+    ]
 
 
 def test_a_lost_reference_asks_and_a_refusal_changes_nothing(profile: Profile) -> None:

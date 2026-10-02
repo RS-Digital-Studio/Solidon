@@ -64,7 +64,7 @@ from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.section import SectionPlane
 from app.core.ingest.archive import is_archive, model_from_archive
-from app.core.ingest.loader import read_bounded_payload, read_local_payload, unreadable_file
+from app.core.ingest.loader import read_local_payload, unreadable_file
 from app.core.ingest.plan import (
     ImportPlan,
     import_plan,
@@ -252,6 +252,12 @@ def _warm_metrics(result: EvaluationResult, cancelled: CancelSignal) -> None:
 #: Jahre alter Hardware ein Mehrfaches. Darunter wäre ein zweiter Aufbau von
 #: Baum, Bericht und Ansicht Unruhe ohne Gewinn.
 PICTURE_FIRST_TRIANGLES: Final = 50_000
+
+#: Wie beim Sitzungsabbau muss ein alter Auswertungsarbeiter sein Ende bestätigen.
+SYNC_EVALUATION_END_WAIT_MS: Final = 10_000
+
+#: Eine überholte Frage bemerkt den Abbruch auch ohne Qt-Zustellung einer Antwort.
+QUESTION_CANCEL_POLL_S: Final = 0.05
 
 
 def _recognition_follows(picture: EvaluationResult) -> bool:
@@ -3509,26 +3515,6 @@ class Session(QObject):
         self.project.document.sources.pop(source_id, None)
         self.project.sources.pop(source_id, None)
 
-    def embed_model(self, path: Path) -> str:
-        """Eine Modelldatei ins Projekt holen, ohne sie auf den Stapel zu legen.
-
-        **Der Gegenpart zum Quellenfeld im Operationsdialog.** Wer *Modell
-        laden* aus dem Menü öffnet, sieht dort eine Auswahl der Quellen, die
-        das Projekt schon hat — und in einem frischen Projekt ist die leer.
-        Die Liste klappte auf und zeigte nichts; das liest sich nicht als „hier
-        fehlt etwas", sondern als kaputt (Regel 19: keine Sackgassen).
-
-        Anders als :meth:`import_payload` legt diese Methode **keine**
-        Operation an: Der Dialog, der sie ruft, ist ja gerade dabei, eine zu
-        bauen. Zwei ``load``-Schritte für eine Datei wären das Gegenteil dessen,
-        was der Kunde wollte.
-
-        Dieselbe Bauart wie :meth:`import_image`, und aus demselben Grund an
-        derselben Grenze: Der Weg ändert das Dokument, also gilt Konzept §2 C.
-        """
-        activation.require(activation.CHANGE)
-        return self.embed_model_payload(path.name, read_local_payload(path))
-
     def embed_model_payload(self, name: str, payload: bytes) -> str:
         """Bettet einen bereits begrenzt gelesenen Modellinhalt ein.
 
@@ -3542,25 +3528,6 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
         return source_id
-
-    def import_image(self, path: Path) -> str:
-        """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).
-
-        Eingebettet wie ein Modell, aber ohne load-Operation: ein Bild wird
-        kein Körper, es gehört einer Operation als Wert. Ohne diesen Weg
-        führte kein Bildformat in die Quellen — das Feld „Bild" bot STLs an,
-        und der Befund schlug eine Handlung vor, die es nicht gab.
-
-        **Die Grenze steht hier ausdrücklich**, obwohl keine Operation folgt.
-        Der Weg ändert das Dokument, also gilt Konzept §2 C — und dass er
-        praktisch nur aus einem Operationsdialog erreichbar ist, der ohnehin
-        gesperrt ist, ist ein Zufall der Oberfläche und keine Grenze. Wer sich
-        darauf verlässt, hat eine Zusage, die beim nächsten neuen Aufrufer
-        still verschwindet (`kern.md`: jede Stelle holt den Zustand selbst und
-        wirft selbst).
-        """
-        activation.require(activation.CHANGE)
-        return self.import_image_payload(path.name, read_bounded_payload(path))
 
     def import_image_payload(self, name: str, payload: bytes) -> str:
         """Bettet einen bereits begrenzt gelesenen Bildinhalt ein.
@@ -4646,8 +4613,23 @@ class Session(QObject):
         Bausteinschritt und diesem Lauf stand im Objektbaum die Szene ohne den
         Baustein, und das Fenster hielt eine markierte Zeile für nicht gewählt.
         """
+        worker = self._worker
+        self._rerun_pending = False
+        self._cancel_by_user = False
+        self._superseded = worker
+        if worker is not None:
+            self.cancel_signal.cancel()
+            self.questionInvalidated.emit()
+            if not worker.wait(SYNC_EVALUATION_END_WAIT_MS):
+                raise UserError(
+                    title=_("Die neue Berechnung kann noch nicht starten."),
+                    detail=_(
+                        "Die vorherige Berechnung wurde nicht rechtzeitig beendet. "
+                        "Die neue Berechnung wurde deshalb nicht gestartet."
+                    ),
+                    suggestions=(CANCEL,),
+                )
         self.cancel_signal.reset()
-        self._superseded = self._worker
         self._evaluation_settings = self._current_effective_settings()
         result = self.run_evaluation("fine")
         self.picture = None
@@ -5448,7 +5430,7 @@ class Session(QObject):
         """Überholte Projekt- oder Arbeiterfragen dürfen keine Antwort übernehmen."""
         return (
             request.project_generation in (None, self._project_generation)
-            and not self._outdated(request.worker)
+            and not self._stale(request.worker)
             and not (
                 request.worker is not None
                 and (self._rerun_pending or self.cancel_signal.is_cancelled)
@@ -5546,7 +5528,9 @@ class Session(QObject):
         if not self.question_is_current(request):
             raise OperationCancelled
         self.askRequested.emit(request)
-        request.answered.wait()
+        while not request.answered.wait(QUESTION_CANCEL_POLL_S):
+            if not self.question_is_current(request):
+                raise OperationCancelled
         if not self.question_is_current(request):
             raise OperationCancelled
         asked = getattr(self._pending, "asked", None)

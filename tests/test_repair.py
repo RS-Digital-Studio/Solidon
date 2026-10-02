@@ -13,6 +13,7 @@ import pytest
 import trimesh
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
+from app.core.geom import kernel_process
 from app.core.geom.mesh import MeshCodec, MeshData, edge_table, read_mesh
 from app.core.geom.repair import (
     _first_crossing_between,
@@ -1512,6 +1513,59 @@ def test_an_unsuccessful_intersection_repair_never_reports_success(
     assert "repair.self_intersections" not in codes
 
 
+@pytest.mark.parametrize(
+    "failure_type",
+    (kernel_process.KernelHelperLostError, kernel_process.KernelHelperStopError),
+    ids=("lost", "stop"),
+)
+def test_resolving_self_intersections_forwards_the_original_kernel_process_error(
+    failure_type, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der echte direkte Reparaturschnitt darf Prozessfehler nicht als Reparaturbefund melden."""
+    from app.core.geom import boolean as boolean_module
+
+    body, _removed = merge_vertices(raw("broken_selfint.stl"))
+    original_vertices, original_faces = body.raw.vertices.copy(), body.raw.faces.copy()
+    original_boolean = boolean_module.boolean
+    original_run = kernel_process.run
+    injected_error = failure_type()
+    boolean_calls = []
+    target_requests = []
+    following = []
+    returned = []
+
+    def counted_boolean(kind, meshes, **kwargs):
+        if target_requests:
+            following.append(("boolean", kind))
+            raise TypeError("RM298: weiterer Reparaturversuch nach dem Prozessfehler")
+        boolean_calls.append((kind, len(meshes), kwargs.get("stages")))
+        return original_boolean(kind, meshes, **kwargs)
+
+    def failing_union(job, arrays, values, **kwargs):
+        if target_requests:
+            following.append(("kernel", job))
+            raise TypeError("RM298: weitere Kernelrechnung nach dem Prozessfehler")
+        if job == "boolean" and values["kind"] == "union":
+            target_requests.append((job, values["kind"], values["bodies"]))
+            raise injected_error
+        return original_run(job, arrays, values, **kwargs)
+
+    monkeypatch.setattr(boolean_module, "boolean", counted_boolean)
+    monkeypatch.setattr(kernel_process, "run", failing_union)
+    try:
+        with pytest.raises(failure_type) as caught:
+            returned.append(repair(body, self_intersections=True))
+    finally:
+        assert boolean_calls == [("union", 2, ("direct",))], "der echte Reparaturweg muss rechnen"
+        assert target_requests == [("boolean", "union", 2)]
+
+    assert caught.value is injected_error
+    assert following == [], "keine Rückfallstufe und kein weiterer Reparaturversuch"
+    assert returned == [], "kein repair.self_intersections_unresolved als Ersatzbefund"
+    np.testing.assert_array_equal(body.raw.vertices, original_vertices)
+    np.testing.assert_array_equal(body.raw.faces, original_faces)
+
+
 def test_an_incomplete_intersection_check_is_not_a_clean_bill_of_health(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2108,6 +2162,281 @@ def test_material_families_cancel_while_assigning_a_negative_skin(monkeypatch):
     with pytest.raises(OperationCancelled):
         repair_module.material_part_families(body, cancelled=token)
     assert calls == 1
+
+
+def _material_count_case(case: str) -> MeshData:
+    """Kleine Schalen mit analytisch bekannter Materialaufteilung oder echtem Defekt."""
+    if case == "soup":
+        return raw("cube_clean.stl")
+    if case == "self_crossing":
+        return _crossing_itself()
+    if case == "empty":
+        return MeshData.of(trimesh.Trimesh(process=False))
+    outside = _box(20.0)
+    if case == "open":
+        outside.update_faces(np.arange(len(outside.faces) - 1))
+    elif case == "inconsistent":
+        faces = np.asarray(outside.faces).copy()
+        faces[0] = faces[0, ::-1]
+        outside.faces = faces
+    elif case == "negative_root":
+        outside.invert()
+    elif case == "zero":
+        vertices = np.asarray(outside.vertices).copy()
+        vertices[:, 2] = 0.0
+        outside.vertices = vertices
+    elif case == "nonfinite":
+        vertices = np.asarray(outside.vertices).copy()
+        vertices[0, 0] = np.nan
+        outside.vertices = vertices
+    pieces = [outside]
+    if case in {"apart", "crossing", "face_contact"}:
+        offset = {"apart": 40.0, "crossing": 5.0, "face_contact": 20.0}[case]
+        pieces.append(_box(20.0, at=(offset, 0.0, 0.0)))
+    if case in {"cavity", "rattle", "positive_child", "void_outside"}:
+        inside = _box(10.0)
+        if case != "positive_child":
+            inside.invert()
+        if case == "void_outside":
+            inside.apply_translation((40.0, 0.0, 0.0))
+        pieces.append(inside)
+        if case == "rattle":
+            pieces.append(_box(2.0))
+    return MeshData.of(trimesh.util.concatenate(pieces))
+
+
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("cube", 1),
+        ("soup", 1),
+        ("apart", 2),
+        ("cavity", 1),
+        ("rattle", 2),
+        ("open", None),
+        ("inconsistent", None),
+        ("negative_root", None),
+        ("zero", None),
+        ("nonfinite", None),
+        ("empty", None),
+        ("self_crossing", None),
+        ("crossing", None),
+        ("face_contact", None),
+        ("positive_child", None),
+        ("void_outside", None),
+    ],
+)
+def test_material_part_count_requires_proven_material_families(case: str, expected: int | None):
+    """Innenhäute zählen nicht; keine unbewiesene Schale wird zu einem gesunden Teil."""
+    from app.core.geom.repair import material_part_count
+
+    source = _material_count_case(case)
+    slots = tuple(index % 3 for index in range(source.triangle_count))
+    body = MeshData.of(source.raw, slots=slots)
+    provenance = np.arange(body.triangle_count, dtype=np.int64)
+    body.raw.face_attributes["source"] = provenance.copy()
+    vertices, faces = body.raw.vertices.copy(), body.raw.faces.copy()
+    if case == "soup":
+        assert not body.raw.is_watertight and len(body.raw.vertices) == 36
+    if case == "self_crossing":
+        assert body.is_watertight and body.raw.is_winding_consistent
+        assert body.component_count == 1
+    assert material_part_count(body) == expected
+    assert np.array_equal(body.raw.vertices, vertices, equal_nan=True)
+    assert np.array_equal(body.raw.faces, faces)
+    assert np.array_equal(body.raw.face_attributes["source"], provenance)
+    assert body.slots == slots
+
+
+@pytest.mark.parametrize("case", ["open", "inconsistent", "negative_root", "zero", "self_crossing"])
+def test_an_unproven_single_shell_does_not_settle_a_bore_warning(case: str) -> None:
+    """Ein topologischer Zusammenhang beweist noch kein zusammenhängendes Material."""
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding, Scene, SceneObject
+
+    body = _material_count_case(case)
+    assert body.component_count == 1
+    said = Finding(
+        code="bore.splits_the_body",
+        severity="warning",
+        message="Prüfbefund",
+        object_id="obj_1",
+        values={"count": 2},
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=body)})
+    kept = _without_outdated([said], scene)
+    assert len(kept) == 1 and kept[0] is said and said.values == {"count": 2}
+
+
+@pytest.mark.parametrize("phase", ["self_check", "contacts", "families", "part_budget"])
+def test_material_part_count_keeps_incomplete_proofs_unknown(monkeypatch, phase: str) -> None:
+    """Unvollständigkeit bleibt unbekannt, auch wenn bisher kein Treffer gefunden wurde."""
+    from app.core.geom import repair as module
+
+    body = _material_count_case("cavity")
+    calls = []
+    if phase == "self_check":
+
+        def incomplete(*args, **kwargs):
+            calls.append("self_check")
+            return (), False
+
+        monkeypatch.setattr(module, "self_intersection_check", incomplete)
+    elif phase == "contacts":
+
+        def incomplete(*args, **kwargs):
+            calls.append("contacts")
+            assert kwargs["require_complete"] and kwargs["include_face_contacts"]
+            raise GeometryError(
+                detail=module.CROSSING_SEARCH_INCOMPLETE_DETAIL,
+                suggestions=(CORRECT_INPUT,),
+            )
+
+        monkeypatch.setattr(module, "parts_that_cross", incomplete)
+    elif phase == "families":
+
+        def undecided(*args):
+            calls.append("families")
+            return None
+
+        monkeypatch.setattr(module._Shells, "inside", undecided)
+    else:
+        monkeypatch.setattr(module, "CROSSING_PARTS_MAX", 1)
+    assert module.material_part_count(body) is None
+    if phase != "part_budget":
+        assert calls, "Die gewählte unvollständige Prüfung muss tatsächlich erreicht werden."
+
+
+def test_the_end_report_counts_material_once_and_keeps_component_values(monkeypatch):
+    """Zwei Materialteile und drei Schalen bekommen getrennte Merker und Bedeutungen."""
+    from app.core.geom import repair as module
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding, Scene, SceneObject
+
+    body = _material_count_case("rattle")
+    assert body.component_count == 3
+    codes = (
+        "bore.splits_the_body",
+        "label.fell_apart",
+        "texture.fell_apart",
+        "parts.hanging_loose",
+        "blend.still_apart",
+        "sketch.join_apart",
+    )
+    findings = [
+        Finding(
+            code=code,
+            severity="warning",
+            message="Prüfbefund",
+            object_id="obj_1",
+            values={"count": 7},
+        )
+        for code in codes
+    ]
+    findings.append(
+        Finding(
+            code="ingest.multiple_components",
+            severity="warning",
+            message="Prüfbefund",
+            object_id="obj_1",
+            values={"components": 3},
+        )
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Rassel", mesh=body)})
+    token = NeverCancelled()
+    original = module.material_part_count
+    calls = []
+
+    def counted(mesh, *, cancelled=None):
+        calls.append(mesh)
+        assert cancelled is token
+        return original(mesh, cancelled=cancelled)
+
+    monkeypatch.setattr(module, "material_part_count", counted)
+    kept = _without_outdated(findings, scene, cancelled=token)
+    assert len(calls) == 1 and calls[0] is body
+    assert [entry.code for entry in kept] == [entry.code for entry in findings]
+    assert kept[0] is not findings[0] and kept[0].values == {"count": 2}
+    assert findings[0].values == {"count": 7}
+    assert all(after is before for after, before in zip(kept[1:], findings[1:], strict=True))
+
+
+def test_material_part_count_does_not_hide_an_unexpected_geometry_error(monkeypatch):
+    """Nur die bekannte Prüfumfangsgrenze ergibt None; andere Fehler bleiben sichtbar."""
+    from app.core.geom import repair as module
+
+    error = GeometryError(detail="Prüffehler", suggestions=(CORRECT_INPUT,))
+
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(module, "parts_that_cross", broken)
+    with pytest.raises(GeometryError) as caught:
+        module.material_part_count(_material_count_case("apart"))
+    assert caught.value is error
+
+
+@pytest.mark.parametrize(
+    "phase", ["entry", "normalize", "components", "self_check", "contacts", "families"]
+)
+def test_material_part_count_stops_at_every_proof_boundary(monkeypatch, phase: str):
+    """Der übergebene Schalter beendet auch einen gerade fertig gewordenen Vorbeleg."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import repair as module
+    from app.core.scene.cancel import CancelSignal
+
+    body = _material_count_case("cavity")
+    token = CancelSignal()
+    calls = []
+    if phase == "entry":
+        token.cancel()
+    else:
+        name = {
+            "normalize": "merge_vertices",
+            "components": "face_components",
+            "self_check": "self_intersection_check",
+            "contacts": "parts_that_cross",
+            "families": "material_part_families",
+        }[phase]
+        original = getattr(module, name)
+
+        def stopped(*args, **kwargs):
+            calls.append(name)
+            if phase != "normalize":
+                assert kwargs["cancelled"] is token
+            result = original(*args, **kwargs)
+            token.cancel()
+            return result
+
+        monkeypatch.setattr(module, name, stopped)
+    with pytest.raises(OperationCancelled):
+        module.material_part_count(body, cancelled=token)
+    assert len(calls) == (0 if phase == "entry" else 1)
+
+
+def test_material_part_count_passes_the_token_to_the_component_worker(monkeypatch):
+    """Der kalte Schalenaufbau reicht den echten Abbruch bis component_labels durch."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import kernel_process
+    from app.core.geom import repair as module
+    from app.core.scene.cancel import CancelSignal
+
+    body = _material_count_case("cavity")
+    token = CancelSignal()
+    original = kernel_process.run
+    jobs = []
+
+    def stopped(name, *args, **kwargs):
+        jobs.append(name)
+        assert name == "component_labels" and kwargs["cancelled"] is token
+        token.cancel()
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(kernel_process, "run", stopped)
+    with pytest.raises(OperationCancelled):
+        module.material_part_count(body, cancelled=token)
+    assert jobs == ["component_labels"]
 
 
 @pytest.mark.parametrize("phase", ["shells", "ray", "certificate", "crossing"])
@@ -3686,3 +4015,278 @@ def test_repair_removes_a_previously_edited_pin_from_features_and_cached_replay(
     assert missing.scene.objects[original.id].mesh.volume == pytest.approx(
         math.prod(dimensions["stock_size"])
     )
+
+
+def _material_count_case(case: str) -> MeshData:
+    """Kleine Schalen mit analytisch bekannter Materialaufteilung oder echtem Defekt."""
+    if case == "soup":
+        return raw("cube_clean.stl")
+    if case == "self_crossing":
+        return _crossing_itself()
+    if case == "empty":
+        return MeshData.of(trimesh.Trimesh(process=False))
+    outside = _box(20.0)
+    if case == "open":
+        outside.update_faces(np.arange(len(outside.faces) - 1))
+    elif case == "inconsistent":
+        faces = np.asarray(outside.faces).copy()
+        faces[0] = faces[0, ::-1]
+        outside.faces = faces
+    elif case == "negative_root":
+        outside.invert()
+    elif case == "zero":
+        vertices = np.asarray(outside.vertices).copy()
+        vertices[:, 2] = 0.0
+        outside.vertices = vertices
+    elif case == "nonfinite":
+        vertices = np.asarray(outside.vertices).copy()
+        vertices[0, 0] = np.nan
+        outside.vertices = vertices
+    pieces = [outside]
+    if case in {"apart", "crossing", "face_contact"}:
+        offset = {"apart": 40.0, "crossing": 5.0, "face_contact": 20.0}[case]
+        pieces.append(_box(20.0, at=(offset, 0.0, 0.0)))
+    if case in {"cavity", "rattle", "positive_child", "void_outside"}:
+        inside = _box(10.0)
+        if case != "positive_child":
+            inside.invert()
+        if case == "void_outside":
+            inside.apply_translation((40.0, 0.0, 0.0))
+        pieces.append(inside)
+        if case == "rattle":
+            pieces.append(_box(2.0))
+    return MeshData.of(trimesh.util.concatenate(pieces))
+
+
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("cube", 1),
+        ("soup", 1),
+        ("apart", 2),
+        ("cavity", 1),
+        ("rattle", 2),
+        ("open", None),
+        ("inconsistent", None),
+        ("negative_root", None),
+        ("zero", None),
+        ("nonfinite", None),
+        ("empty", None),
+        ("self_crossing", None),
+        ("crossing", None),
+        ("face_contact", None),
+        ("positive_child", None),
+        ("void_outside", None),
+    ],
+)
+def test_material_part_count_requires_proven_material_families(case: str, expected: int | None):
+    """Innenhäute zählen nicht; keine unbewiesene Schale wird zu einem gesunden Teil."""
+    from app.core.geom.repair import material_part_count
+
+    source = _material_count_case(case)
+    slots = tuple(index % 3 for index in range(source.triangle_count))
+    body = MeshData.of(source.raw, slots=slots)
+    provenance = np.arange(body.triangle_count, dtype=np.int64)
+    body.raw.face_attributes["source"] = provenance.copy()
+    vertices, faces = body.raw.vertices.copy(), body.raw.faces.copy()
+    if case == "soup":
+        assert not body.raw.is_watertight and len(body.raw.vertices) == 36
+    if case == "self_crossing":
+        assert body.is_watertight and body.raw.is_winding_consistent
+        assert body.component_count == 1
+    assert material_part_count(body) == expected
+    assert np.array_equal(body.raw.vertices, vertices, equal_nan=True)
+    assert np.array_equal(body.raw.faces, faces)
+    assert np.array_equal(body.raw.face_attributes["source"], provenance)
+    assert body.slots == slots
+
+
+@pytest.mark.parametrize("case", ["open", "inconsistent", "negative_root", "zero", "self_crossing"])
+def test_an_unproven_single_shell_does_not_settle_a_bore_warning(case: str) -> None:
+    """Ein topologischer Zusammenhang beweist noch kein zusammenhängendes Material."""
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding, Scene, SceneObject
+
+    body = _material_count_case(case)
+    assert body.component_count == 1
+    said = Finding(
+        code="bore.splits_the_body",
+        severity="warning",
+        message="Prüfbefund",
+        object_id="obj_1",
+        values={"count": 2},
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=body)})
+    kept = _without_outdated([said], scene)
+    assert len(kept) == 1 and kept[0] is said and said.values == {"count": 2}
+
+
+@pytest.mark.parametrize("phase", ["self_check", "contacts", "families", "part_budget"])
+def test_material_part_count_keeps_incomplete_proofs_unknown(monkeypatch, phase: str) -> None:
+    """Unvollständigkeit bleibt unbekannt, auch wenn bisher kein Treffer gefunden wurde."""
+    from app.core.geom import repair as module
+
+    body = _material_count_case("cavity")
+    calls = []
+    if phase == "self_check":
+
+        def incomplete(*args, **kwargs):
+            calls.append("self_check")
+            return (), False
+
+        monkeypatch.setattr(module, "self_intersection_check", incomplete)
+    elif phase == "contacts":
+
+        def incomplete(*args, **kwargs):
+            calls.append("contacts")
+            assert kwargs["require_complete"] and kwargs["include_face_contacts"]
+            raise GeometryError(
+                detail=module.CROSSING_SEARCH_INCOMPLETE_DETAIL,
+                suggestions=(CORRECT_INPUT,),
+            )
+
+        monkeypatch.setattr(module, "parts_that_cross", incomplete)
+    elif phase == "families":
+
+        def undecided(*args):
+            calls.append("families")
+            return None
+
+        monkeypatch.setattr(module._Shells, "inside", undecided)
+    else:
+        monkeypatch.setattr(module, "CROSSING_PARTS_MAX", 1)
+    assert module.material_part_count(body) is None
+    if phase != "part_budget":
+        assert calls, "Die gewählte unvollständige Prüfung muss tatsächlich erreicht werden."
+
+
+def test_the_end_report_counts_material_once_and_keeps_component_values(monkeypatch):
+    """Zwei Materialteile und drei Schalen bekommen getrennte Merker und Bedeutungen."""
+    from app.core.geom import repair as module
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.scene.evaluate import _without_outdated
+    from app.core.types import Finding, Scene, SceneObject
+
+    body = _material_count_case("rattle")
+    assert body.component_count == 3
+    codes = (
+        "bore.splits_the_body",
+        "label.fell_apart",
+        "texture.fell_apart",
+        "parts.hanging_loose",
+        "blend.still_apart",
+        "sketch.join_apart",
+    )
+    findings = [
+        Finding(
+            code=code,
+            severity="warning",
+            message="Prüfbefund",
+            object_id="obj_1",
+            values={"count": 7},
+        )
+        for code in codes
+    ]
+    findings.append(
+        Finding(
+            code="ingest.multiple_components",
+            severity="warning",
+            message="Prüfbefund",
+            object_id="obj_1",
+            values={"components": 3},
+        )
+    )
+    scene = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Rassel", mesh=body)})
+    token = NeverCancelled()
+    original = module.material_part_count
+    calls = []
+
+    def counted(mesh, *, cancelled=None):
+        calls.append(mesh)
+        assert cancelled is token
+        return original(mesh, cancelled=cancelled)
+
+    monkeypatch.setattr(module, "material_part_count", counted)
+    kept = _without_outdated(findings, scene, cancelled=token)
+    assert len(calls) == 1 and calls[0] is body
+    assert [entry.code for entry in kept] == [entry.code for entry in findings]
+    assert kept[0] is not findings[0] and kept[0].values == {"count": 2}
+    assert findings[0].values == {"count": 7}
+    assert all(after is before for after, before in zip(kept[1:], findings[1:], strict=True))
+
+
+def test_material_part_count_does_not_hide_an_unexpected_geometry_error(monkeypatch):
+    """Nur die bekannte Prüfumfangsgrenze ergibt None; andere Fehler bleiben sichtbar."""
+    from app.core.geom import repair as module
+
+    error = GeometryError(detail="Prüffehler", suggestions=(CORRECT_INPUT,))
+
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(module, "parts_that_cross", broken)
+    with pytest.raises(GeometryError) as caught:
+        module.material_part_count(_material_count_case("apart"))
+    assert caught.value is error
+
+
+@pytest.mark.parametrize(
+    "phase", ["entry", "normalize", "components", "self_check", "contacts", "families"]
+)
+def test_material_part_count_stops_at_every_proof_boundary(monkeypatch, phase: str):
+    """Der übergebene Schalter beendet auch einen gerade fertig gewordenen Vorbeleg."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import repair as module
+    from app.core.scene.cancel import CancelSignal
+
+    body = _material_count_case("cavity")
+    token = CancelSignal()
+    calls = []
+    if phase == "entry":
+        token.cancel()
+    else:
+        name = {
+            "normalize": "merge_vertices",
+            "components": "face_components",
+            "self_check": "self_intersection_check",
+            "contacts": "parts_that_cross",
+            "families": "material_part_families",
+        }[phase]
+        original = getattr(module, name)
+
+        def stopped(*args, **kwargs):
+            calls.append(name)
+            if phase != "normalize":
+                assert kwargs["cancelled"] is token
+            result = original(*args, **kwargs)
+            token.cancel()
+            return result
+
+        monkeypatch.setattr(module, name, stopped)
+    with pytest.raises(OperationCancelled):
+        module.material_part_count(body, cancelled=token)
+    assert len(calls) == (0 if phase == "entry" else 1)
+
+
+def test_material_part_count_passes_the_token_to_the_component_worker(monkeypatch):
+    """Der kalte Schalenaufbau reicht den echten Abbruch bis component_labels durch."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import kernel_process
+    from app.core.geom import repair as module
+    from app.core.scene.cancel import CancelSignal
+
+    body = _material_count_case("cavity")
+    token = CancelSignal()
+    original = kernel_process.run
+    jobs = []
+
+    def stopped(name, *args, **kwargs):
+        jobs.append(name)
+        assert name == "component_labels" and kwargs["cancelled"] is token
+        token.cancel()
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(kernel_process, "run", stopped)
+    with pytest.raises(OperationCancelled):
+        module.material_part_count(body, cancelled=token)
+    assert jobs == ["component_labels"]

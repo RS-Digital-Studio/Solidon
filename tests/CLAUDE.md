@@ -19,18 +19,20 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Werden Normteilmaße vor dem Sortieren geprüft und bleiben gültige Größen stabil geordnet? | `test_standards.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
+| Bestätigt eine synchrone Auswertung zuerst das alte Arbeiterende, und bleiben überholte Fragen nach dem Reset ungültig? | `test_evaluation.py` — echte Session-Methoden an Namespace, Ereignis/Faden, keine Qt-Instanz |
 | Jede Rückfallstufe einmal erzwungen? | `test_boolean.py` |
 | Wählt die schnelle FDM-Ausrichtung eine tragfähige Lage oder hält sie mit Befund an? | `test_fast_orientation_standing.py` — Korpusring, beide Güten, Profil, Abbruch und Resin-Ausnahme |
 | Sagt eine tangierende Schnittebene vor den Stiften ab, während offene Eingänge und getrennte Schalen ihre eigene Diagnose behalten? Findet Auto Split eine gültige Folgeebene? | `test_tangent_cuts.py` — Korpusplatte, beide Güten und gemeinsame Schnittwege |
 | Sammelparameter-Ops über das Register | `test_gesture_ops.py` |
 | Öffnen alte Projektdateien? Halten die Korpusdateien, was sie belegen? | `test_project.py` mit `data/projects/` · `test_corpus.py` (§34) |
 | Trägt jede Ausnahme einen Vorschlag? | `test_errors.py` |
+| Erreichen Helfer- und Stopfehler den Kundenweg unverändert? | `test_prepare.py` · `test_difference.py` · `test_missing_ops.py` · `test_repair.py` · `test_threemf_native_materials.py` |
 | Kommt eine Rückmeldung an — und geht nur am Knopf hinaus? | `test_support.py` (§37.2) |
 | Bedeutung allein über Farbe? Neun Menüs, zwölf Zeilen, acht Felder? | `test_theme_and_palette.py` · `test_interface_limits.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`, nur beim Release) |
 | Verhindert eine abweisende Nachprüfung das Schreiben einer Vergleichsmarke und bleibt sie außerhalb der API-Zeit? | `test_performance_marks.py` — nachgestellte Prüfablehnungen, gestellte Uhr, eigene temporäre Marken; keine Leistungsmessung |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
-| Bleiben Tutorialreihenfolge, echte Gestendauer, native Ausschnitte, Dialogzustand und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
+| Bleiben Tutorialreihenfolge, echte Gestendauer, Hook-Manifest, skalierte Dialogausschnitte und akustische Satzuntertitel an ihre Quellen gebunden? | `test_workshop_edit.py` — ohne Fenster, Sprachsynthese oder Filmexport |
 | Sind G-Code-Auswertung, Startcodevergleich und Vorschlagsbefunde der Slicer-Matrix vollständig belegt? | `test_delivery_matrix_review.py` — fehlende Werte, unvollständige Vorschläge und G2/G3-Bögen |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
@@ -52,7 +54,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Wulst und Kehle · Gewinde ändern und verschließen · Filament an Ringen und Gewinden, jeweils in beiden Kernen | `test_torus_feature_ops.py` · `test_thread_feature_ops.py` · `test_filament_on_rings_and_threads.py` |
 | Bekommt ein Gewinde sein Gegenstück am anderen Teil, im Tabellenmaß und als ein Schritt? | `test_thread_counterpart.py`; das Fenster ohne Dialog in `test_counterpart_ui.py` |
 | Entstehen Grundkörper ohne Kernwahl-Haken im richtigen Kern, und wechselt der Verlauf einen Schritt? | `test_kernel_switch.py` |
-| Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) |
+| Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? Randprüfung abbrechbar? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) · `test_parts_review_regressions.py` |
 | Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen? | `test_thread_import.py`, Basiskörper in `data/threads/` |
 | Verrunden, Fase, Wulst, Rundung zurücknehmen · Fläche versetzen, Formschräge — an beiden Kernen, bleiben Rundungsgruppen am exakten Kern geschlossen und bleibt eine geänderte Rundung über den Folgeschritt dieselbe? | `test_brep.py` · `test_mesh_edges.py` · `test_mesh_faces.py` |
 | Lassen Merkmalshandlungen den Körper ohne Narben und alte Dreiecksnummern? | `test_feature_moves_keep_shape.py` |
@@ -75,7 +77,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Überleben zwei gleichzeitig schreibende Sitzungen in `MEMORY.md`? | `test_memory_index.py` — zwei echte Prozesse |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` |
 | Kommt ein Backslash in einem Pfad als Backslash an? | `test_source_escapes.py` |
-| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und — untätig — mit einem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme, sterbende und abweisende; verspätetes Ende, Ressourcenfreigabe, bleibende Absage, ursprüngliche Startursache, Startkontingent und Generationswechsel auch am öffentlichen Aufruf; ENOSPC gegenüber echtem Speichermangel über pack/copied und den öffentlichen Call-/Serve-Transfer; Schwelle null, Aufruf aus einem Nebenfaden. Das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob |
+| Rechnet der Hilfsprozess des Netzkerns bitgleich, endet er beim Abbrechen und — untätig — mit einem hart beendeten Elternprozess, fällt er zurück, wenn eine Rechnung nicht hinein- oder herauskommt, und sieht die Boolesche Kette seinen Tod? | `test_kernel_process.py` — echte Hilfsprozesse, dazu nachgestellte stumme, sterbende und abweisende; verspätetes Ende, Ressourcenfreigabe, bleibende Absage, ursprüngliche Startursache, Startkontingent und Generationswechsel auch am öffentlichen Aufruf; ENOSPC gegenüber echtem Speichermangel über pack/copied und den öffentlichen Call-/Serve-Transfer; Schwelle null, Aufruf aus einem Nebenfaden. Das gebaute Paket startet `tools/check_frozen_helper.py` im Paketjob; `test_packaging.py` prüft dessen eigenes Endebudget und harte Stopfehler mit Attrappen |
 | Endet ein rechnender Helfer mit seinem hart beendeten Elternprozess, und hat er nach normalem Start niedrigere OS-Priorität? | `test_kernel_process_lifecycle.py` — Windows-Jobobjekt, gehaltene Griffe, echte OS-Abfrage; negative Kontrollen treffen dasselbe Assert; ohne Fenster oder Leistungsmarken |
 
 ## Helfer

@@ -34,8 +34,12 @@ import shutil
 import struct
 import subprocess
 import sys
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from types import SimpleNamespace
+from typing import Any, Final
 
 import pytest
 
@@ -676,7 +680,8 @@ def test_the_orchestration_guard_rejects_tests_after_the_build() -> None:
 
 
 def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() -> None:
-    """Der freie Versionswächter läuft beim Release oder auf ausdrücklichen Handstart."""
+    """Nur öffentliche v*-Tags und öffentliche Handstarts mit
+    check_latest lösen den Wächter aus."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     triggers = workflow.split("\non:", 1)[1].split("\n# **Ein Stand", 1)[0]
     assert "\n  schedule:" not in triggers
@@ -686,10 +691,33 @@ def test_latest_dependencies_run_for_release_tags_or_an_explicit_manual_build() 
     latest_input = inputs.split("      check_latest:\n", 1)[1].split("\n#", 1)[0]
     assert "type: boolean" in latest_input and "default: false" in latest_input
     latest = job_block(workflow, "latest")
-    assert (
-        "    if: startsWith(github.ref, 'refs/tags/') || "
-        "(github.event_name == 'workflow_dispatch' && inputs.check_latest == true)"
-    ) in latest
+    expected = (
+        "github.event.repository.private == false && ( "
+        "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || "
+        "(github.event_name == 'workflow_dispatch' && inputs.check_latest == true) )"
+    )
+
+    def latest_condition(block: str) -> str:
+        match = re.search(
+            r"(?ms)^    if: >-\n(?P<condition>(?:      [^\n]*\n)+?)^    runs-on:",
+            block,
+        )
+        assert match is not None
+        return " ".join(match.group("condition").split())
+
+    condition = latest_condition(latest)
+    assert condition == expected
+    for old, new in (
+        ("github.event.repository.private == false &&", ""),
+        ("startsWith(github.ref, 'refs/tags/v')", "startsWith(github.ref, 'refs/tags/')"),
+        ("github.event_name == 'push' &&", ""),
+    ):
+        changed_latest = latest.replace(old, new, 1)
+        assert changed_latest != latest
+        changed = workflow.replace(latest, changed_latest, 1)
+        assert changed != workflow
+        with pytest.raises(AssertionError):
+            assert latest_condition(job_block(changed, "latest")) == expected
     assert "python -m ruff check ." in job_block(workflow, "quality")
     suite = job_block(workflow, "suite")
     assert "python -m ruff" not in suite
@@ -753,7 +781,7 @@ def test_ci_report_guard_rejects_always_on_a_different_step(job: str) -> None:
 
 
 def test_ci_window_steps_use_the_package_release_condition() -> None:
-    """main, PR, Zeitplan und tests_only geben keine Fensterprüfungen frei."""
+    """main, PR und tests_only-Handstarts geben keine Fensterprüfungen frei."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     expected = (
         "inputs.tests_only != true && "
@@ -2665,3 +2693,293 @@ def test_an_update_replaces_the_runtime_tree_instead_of_layering_it() -> None:
     ]
     assert entries == ['Type: filesandordirs; Name: "{app}\\_internal"'], entries
     assert script.index("\n[InstallDelete]\n") < script.index("\n[Files]\n")
+
+
+class _FrozenEndProcess:
+    """Beendet sich allein nach einem simulierten Wartebudget, ohne echte Zeit."""
+
+    def __init__(self, pid: int, end_after: float | None, *, kill_works: bool) -> None:
+        self.pid = pid
+        self.end_after = end_after
+        self.kill_works = kill_works
+        self.alive = True
+        self.exitcode: int | None = None
+        self.pipe_closed = False
+        self.pipe_closes = 0
+        self.kills = 0
+        self.joins: list[float | None] = []
+
+    def is_alive(self) -> bool:
+        return self.alive
+
+    def join(self, timeout: float | None = None) -> None:
+        self.joins.append(timeout)
+        if (
+            self.alive
+            and self.pipe_closed
+            and self.end_after is not None
+            and timeout is not None
+            and timeout >= self.end_after
+        ):
+            self.alive = False
+            self.exitcode = 0
+
+    def kill(self) -> None:
+        self.kills += 1
+        if self.kill_works:
+            self.alive = False
+            self.exitcode = -9
+
+    def close_pipe(self) -> None:
+        self.pipe_closes += 1
+        self.pipe_closed = True
+
+
+@dataclass
+class _FrozenEndCase:
+    """Hält Ergebnis und beobachtete Wege getrennt voneinander fest."""
+
+    executable: Path
+    temp: Path
+    pool: Any
+    product_grace: float
+    children: list[_FrozenEndProcess] = field(default_factory=list)
+    released: list[_FrozenEndProcess] = field(default_factory=list)
+    package_entries: list[Path] = field(default_factory=list)
+    transported_jobs: list[str] = field(default_factory=list)
+    tracker_calls: int = 0
+    shared_queries: int = 0
+    geometry_calls: int = 0
+
+
+@pytest.fixture
+def _frozen_helper_end_case(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Iterator[Callable[[str], _FrozenEndCase]]:
+    """Ein privater echter Pool mit simuliertem Start und echten Stop-Methoden."""
+    from multiprocessing import resource_tracker
+
+    import numpy as np
+
+    from app.core.geom import kernel_jobs, kernel_process
+    from tools import check_frozen_helper as tool
+
+    product_grace = kernel_process.GRACEFUL_SECONDS
+    assert product_grace == pytest.approx(0.5), "Die Produktfrist bleibt bei 0,5 s."
+    # check() ändert diese Modulwerte selbst; monkeypatch registriert ihren
+    # Ausgangswert ausdrücklich auch dann, wenn die Zuweisung über vars läuft.
+    monkeypatch.setitem(vars(kernel_process), "GRACEFUL_SECONDS", product_grace)
+    monkeypatch.setitem(vars(kernel_process), "STARTUP_SECONDS", kernel_process.STARTUP_SECONDS)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", kernel_process.OFFLOAD_ABOVE)
+
+    actual_helper = kernel_process._Helper
+    pool = kernel_process._Pool()
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    state = _FrozenEndCase(tmp_path / "Solidon3D.exe", tmp_path / "temp", pool, product_grace)
+    state.temp.mkdir()
+    behavior: str | None = None
+
+    def unexpected(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError(
+            "Dieser Test darf keine echten Prozess- oder Speicherressourcen öffnen."
+        )
+
+    def tracker_ready() -> None:
+        state.tracker_calls += 1
+
+    monkeypatch.setattr(resource_tracker, "ensure_running", tracker_ready)
+    monkeypatch.setattr(
+        kernel_process, "_CONTEXT", SimpleNamespace(Pipe=unexpected, Process=unexpected)
+    )
+    monkeypatch.setattr(kernel_process.process_boundary, "bind_helper", unexpected)
+    monkeypatch.setattr(kernel_process.process_boundary, "release_helper", state.released.append)
+    monkeypatch.setattr(kernel_jobs, "pack", unexpected)
+    monkeypatch.setattr(kernel_jobs, "copied", unexpected)
+
+    @contextmanager
+    def package(executable: Path) -> Iterator[None]:
+        state.package_entries.append(executable)
+        yield
+
+    def shared_names() -> set[str]:
+        state.shared_queries += 1
+        return set()
+
+    def fake_boolean(
+        _arrays: dict[str, Any], _values: dict[str, Any], check: Callable[[], None]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        state.geometry_calls += 1
+        check()
+        return {"answer": np.array([1, 2, 3], dtype=np.int64)}, {"source": "Attrappe"}
+
+    monkeypatch.setitem(kernel_jobs.JOBS, "boolean", fake_boolean)
+    monkeypatch.setattr(
+        tool,
+        "boolean_case",
+        lambda: ({"faces0": np.zeros((1, 3)), "faces1": np.zeros((1, 3))}, {}),
+    )
+    monkeypatch.setattr(tool, "as_the_package", package)
+    monkeypatch.setattr(tool, "image_of", lambda _pid: str(state.executable))
+    monkeypatch.setattr(tool, "shared_memory_names", shared_names)
+
+    def make_helper() -> Any:
+        assert behavior is not None, "Der Test benennt das simulierte Ende."
+        assert len(state.children) < 2, "Der Rauchtest startet genau seine beiden Phasen."
+        second = bool(state.children)
+        # Das verspätete Ende liegt sicher über der Produktfrist. Es ist keine
+        # echte Wartezeit; join entscheidet ausschließlich anhand seines Arguments.
+        end_after = 2.0 if second and behavior == "delayed" else None
+        child = _FrozenEndProcess(
+            4201 + len(state.children), end_after, kill_works=not second or behavior != "alive"
+        )
+        state.children.append(child)
+        helper = object.__new__(actual_helper)
+        helper.process = child
+        helper.connection = SimpleNamespace(close=child.close_pipe)
+        helper.ready = True
+        helper.started = 0.0
+
+        def transport(
+            job: str, arrays: dict[str, Any], values: dict[str, Any], _cancelled: Any
+        ) -> tuple[dict[str, Any], dict[str, Any]]:
+            state.transported_jobs.append(job)
+            return kernel_jobs.JOBS[job](arrays, values, lambda: None)
+
+        # Nur der Jobtransport ist ersetzt. stop, alive und pid stammen vom
+        # echten _Helper; warm_up, run, shutdown und in_a_worker bleiben echt.
+        monkeypatch.setattr(helper, "call", transport)
+        return helper
+
+    monkeypatch.setattr(kernel_process, "_Helper", make_helper)
+
+    def prepare(how: str) -> _FrozenEndCase:
+        nonlocal behavior
+        assert behavior is None, "Jeder Test verwendet seinen eigenen Pool."
+        assert how in {"delayed", "killed", "alive"}
+        behavior = how
+        return state
+
+    try:
+        yield prepare
+    finally:
+        # Der dritte Fall darf lebendig bleiben, bis seine roten Zusicherungen
+        # gelesen sind. Erst dieser reine Attrappenabbau gestattet sein Ende.
+        for child in state.children:
+            child.end_after = 0.0
+            child.kill_works = True
+        pool.shutdown()
+
+
+def _assert_frozen_end_route(state: _FrozenEndCase, report: dict[str, Any]) -> None:
+    """Die vorangegangene Rechnung und beide Paketphasen müssen wirklich erreicht sein."""
+    assert len(state.children) == 2
+    assert state.package_entries == [state.executable, state.executable]
+    assert state.transported_jobs == ["boolean"]
+    assert state.geometry_calls == 2, (
+        "Sollwert und simulierter Transport werden getrennt gerechnet."
+    )
+    assert report["same_bytes"] is True
+    assert report["statistics"]["helper:boolean"] == 1
+    assert report["statistics"]["fallback"] == 0
+    assert report["statistics"]["lost"] == 0
+    assert state.children[0].kills == 1
+    assert state.children[0].pipe_closes > 0, "Die erste Phase erreicht den echten Stop."
+
+
+# --- Ergebnisfälle: tool.check und der echte Stop entscheiden ------------------
+
+
+def test_frozen_helper_check_accepts_a_delayed_clean_idle_exit(
+    _frozen_helper_end_case: Callable[[str], _FrozenEndCase],
+) -> None:
+    """Das Prüfbudget lässt ein sauberes Ende oberhalb der Produktfrist zu."""
+    from tools import check_frozen_helper as tool
+
+    state = _frozen_helper_end_case("delayed")
+    report: dict[str, Any] = {}
+    problems = tool.check(state.executable, state.temp, report)
+
+    _assert_frozen_end_route(state, report)
+    assert problems == [], problems
+    idle = state.children[1]
+    first_wait = idle.joins[0]
+    assert first_wait is not None
+    assert first_wait == pytest.approx(tool.END_SECONDS)
+    assert first_wait > state.product_grace
+    assert idle.kills == 0 and not idle.alive and idle.exitcode == 0
+    assert report["exit_codes (beim Schließen)"] == [0]
+    assert report["temp_leftovers (beim Schließen)"] == []
+    assert report["shared_memory_leftovers"] == []
+    assert state.shared_queries == 2
+    assert state.released == state.children
+    assert state.pool.processes() == [] and state.pool.counts["stopped"] == 2
+
+
+def test_frozen_helper_check_rejects_a_killed_idle_child(
+    _frozen_helper_end_case: Callable[[str], _FrozenEndCase],
+) -> None:
+    """Bestätigter Tod ersetzt nicht das versprochene freiwillige Ende."""
+    from tools import check_frozen_helper as tool
+
+    state = _frozen_helper_end_case("killed")
+    report: dict[str, Any] = {}
+    problems = tool.check(state.executable, state.temp, report)
+
+    _assert_frozen_end_route(state, report)
+    idle = state.children[1]
+    assert idle.pipe_closes > 0 and idle.kills == 1
+    assert not idle.alive and idle.exitcode == -9
+    assert problems == ["Ein untätiger Hilfsprozess endete beim Schließen nicht selbst."]
+    assert report["exit_codes (beim Schließen)"] == [-9]
+    assert report["temp_leftovers (beim Schließen)"] == []
+    assert report["shared_memory_leftovers"] == []
+    assert state.released == state.children
+    assert state.pool.processes() == [] and state.pool.counts["stopped"] == 2
+
+
+def test_frozen_helper_check_rejects_a_child_that_survives_kill(
+    _frozen_helper_end_case: Callable[[str], _FrozenEndCase],
+) -> None:
+    """Auch mit größerem Prüfbudget muss ein weiterhin lebendes Kind rot bleiben."""
+    from app.core.geom import kernel_process
+    from tools import check_frozen_helper as tool
+
+    state = _frozen_helper_end_case("alive")
+    report: dict[str, Any] = {}
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        tool.check(state.executable, state.temp, report)
+
+    _assert_frozen_end_route(state, report)
+    idle = state.children[1]
+    assert idle.pipe_closes > 0 and idle.kills == 1
+    assert idle.alive and idle.exitcode is None
+    assert state.released == [state.children[0]], "Das lebende Kind behält sein Jobobjekt."
+    assert state.pool.processes() == [idle]
+    assert state.pool.counts["stopped"] == 1
+    assert state.pool.disabled and not state.pool._closing
+    assert "exit_codes (beim Schließen)" not in report
+
+
+# --- Unabhängige Kontrolle: dieselbe Strecke mit dem alten Wartebudget ---------
+
+
+def test_frozen_helper_end_budget_control_reproduces_the_old_deadline_failure(
+    _frozen_helper_end_case: Callable[[str], _FrozenEndCase],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mit 0,5 s Prüfbudget ist genau das verzögerte saubere Kind wieder rot."""
+    from tools import check_frozen_helper as tool
+
+    state = _frozen_helper_end_case("delayed")
+    # END_SECONDS existiert erst nach der getrennten Werkzeugkorrektur.
+    # raising=True verhindert, dass diese Kontrolle nur eine unbenutzte
+    # Testvariable anlegt und damit den wirklichen Anschluss verfehlt.
+    monkeypatch.setattr(tool, "END_SECONDS", state.product_grace)
+    report: dict[str, Any] = {}
+    problems = tool.check(state.executable, state.temp, report)
+
+    _assert_frozen_end_route(state, report)
+    idle = state.children[1]
+    assert idle.joins[0] == pytest.approx(state.product_grace)
+    assert idle.kills == 1 and idle.exitcode == -9
+    assert problems == ["Ein untätiger Hilfsprozess endete beim Schließen nicht selbst."]

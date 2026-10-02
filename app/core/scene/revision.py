@@ -61,7 +61,7 @@ from app.core.scene.history import (
     RevisionPlan,
     StepNeed,
 )
-from app.core.scene.orphans import Reference, references, with_reference
+from app.core.scene.orphans import Reference, fit_name_from_key, references, with_reference
 from app.core.types import (
     Document,
     Feature,
@@ -144,7 +144,7 @@ def dependencies(document: Document, result: EvaluationResult | None) -> Depende
     fit_needs: dict[str, set[OpId]] = {}
     fit_expectations: dict[str, list[ReferenceExpectation]] = {}
     for sight in result.fit_sights if result is not None else ():
-        name = sight.key.split(":")[1]
+        name = fit_name_from_key(sight.key)
         wanted = fit_needs.setdefault(name, set())
         if sight.ref.object_id in creators:
             wanted.add(creators[sight.ref.object_id])
@@ -388,13 +388,13 @@ def drifts(
             noted = expectation_of(sight)
             if noted is not None:
                 seen.add(noted.key)
-                check(noted, None, noted.key.split(":")[1])
+                check(noted, None, fit_name_from_key(noted.key))
         for entry in before.values():
             if entry.suppressed is None:
                 continue
             for expected in entry.suppressed.expects:
                 if expected.key.startswith("fit:") and expected.key not in seen:
-                    check(expected, None, expected.key.split(":")[1])
+                    check(expected, None, fit_name_from_key(expected.key))
     return found
 
 

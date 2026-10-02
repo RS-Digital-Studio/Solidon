@@ -82,6 +82,119 @@ def test_shortlist_matches_the_fully_sliced_geometric_candidates(organic, profil
     assert result.tried <= FINALISTS + SUPPORT_FINALISTS + 1 + len(AXES)
 
 
+@pytest.mark.parametrize(
+    ("supports", "standing_indices", "expected_indices"),
+    [
+        pytest.param(
+            (50.0, 30.0, 100.0, 10.0, 25.0, 60.0), (0, 4, 5), (0, 1, 4), id="cheaper-rest-pose"
+        ),
+        pytest.param(
+            (100.0, 200.0, 50.0, 10.0, 25.0, 300.0), (2, 4, 5), (0, 2, 4), id="keep-standing-tail"
+        ),
+        pytest.param(
+            (100.0, 200.0, 50.0, 10.0, 25.0, 300.0),
+            (0, 1, 2, 4, 5),
+            (0, 1, 2),
+            id="all-selected-stand",
+        ),
+    ],
+)
+def test_limited_ranking_keeps_a_cheaper_standing_candidate_from_the_rest(
+    monkeypatch: pytest.MonkeyPatch,
+    supports: tuple[float, ...],
+    standing_indices: tuple[int, ...],
+    expected_indices: tuple[int, ...],
+) -> None:
+    """Ein günstiger Stand aus dem Rest verdrängt keine vorhandene Standlage."""
+    from app.core.geom import orient
+
+    directions = [
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+        (-1.0, 0.0, 0.0),
+        (0.0, -1.0, 0.0),
+        (0.0, 0.0, -1.0),
+    ]
+    footprints = (100.0, 80.0, 60.0, 10.0, 9.0, 8.0)
+    scored = [
+        orient.Orientation(direction, footprints[index], 0.0, 0.0, supports[index])
+        for index, direction in enumerate(directions)
+    ]
+    monkeypatch.setattr(orient, "candidates", lambda _mesh: directions)
+    monkeypatch.setattr(orient, "evaluate_directions", lambda *_args, **_kwargs: scored)
+
+    checked: list[tuple[float, float, float]] = []
+
+    def standing(entry: orient.Orientation) -> bool:
+        checked.append(entry.direction)
+        return directions.index(entry.direction) in standing_indices
+
+    result = ranked_orientations(MeshData.of(trimesh.creation.box()), limit=3, standing=standing)
+
+    assert [entry.direction for entry in result] == [
+        directions[index] for index in expected_indices
+    ]
+    assert directions[5] not in checked, "teurer geschätzte Reste müssen nicht geprüft werden"
+
+
+def test_contact_selection_matches_brute_force_at_both_tolerance_edges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die vektorisierte Vorauswahl behält nur Dreiecke am Toleranzband."""
+    import numpy as np
+
+    from app.core.slice import orientation
+    from app.core.units import EPS_GEOM
+
+    plane = 0.2
+
+    def cuboid(x: float, low: float, high: float) -> trimesh.Trimesh:
+        raw = trimesh.creation.box(extents=(1.0, 1.0, high - low))
+        raw.apply_translation((x, 0.0, (low + high) / 2.0))
+        return raw
+
+    parts = [
+        cuboid(0.0, 0.0, 1.0),
+        cuboid(10.0, plane - 0.05 - 2.0 * EPS_GEOM, plane - 2.0 * EPS_GEOM),
+        cuboid(20.0, plane - 0.05 - 2.5 * EPS_GEOM, plane - 2.5 * EPS_GEOM),
+        cuboid(30.0, plane + 2.0 * EPS_GEOM, plane + 0.05 + 2.0 * EPS_GEOM),
+        cuboid(40.0, plane + 2.5 * EPS_GEOM, plane + 0.05 + 2.5 * EPS_GEOM),
+    ]
+    body = MeshData.of(trimesh.util.concatenate(parts))
+    seen_groups: set[int] = set()
+
+    def capture_band(mesh: MeshData, heights: np.ndarray, **_kwargs: Any):
+        assert heights.tolist() == [plane]
+        triangles = np.asarray(mesh.raw.vertices)[np.asarray(mesh.raw.faces)]
+        seen_groups.update(
+            int(round(float(triangle[:, 0].mean() / 10.0)) * 10) for triangle in triangles
+        )
+        from shapely.geometry import Polygon
+
+        return [Polygon(((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))]
+
+    monkeypatch.setattr(orientation, "cross_sections", capture_band)
+    contact, centre = orientation._contact(body, np.eye(4), plane)
+
+    # Die Sollmenge entsteht durch einen vollständigen Dreieckslauf, nicht
+    # durch dieselbe vektorisierte Auswahl wie im Produktcode.
+    reference_groups: set[int] = set()
+    vertices = np.asarray(body.raw.vertices, dtype=float)
+    for face in np.asarray(body.raw.faces, dtype=np.int64):
+        triangle = vertices[face]
+        if (
+            float(triangle[:, 2].min()) <= plane + 2.0 * EPS_GEOM
+            and float(triangle[:, 2].max()) >= plane - 2.0 * EPS_GEOM
+        ):
+            reference_groups.add(int(round(float(triangle[:, 0].mean() / 10.0)) * 10))
+
+    assert reference_groups == {0, 10, 30}, "die beiden exakten Ränder zählen, außen nicht"
+    assert seen_groups == reference_groups
+    assert contact is not None
+    assert np.isfinite(centre).all()
+
+
 def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
     """Achsen stehen fest und als Flächennormalen in derselben Kandidatenliste.
 
@@ -413,9 +526,9 @@ def test_a_bounded_shortlist_keeps_its_last_place_for_a_pose_that_stands(
     assert [entry.direction for entry in kept] == [*edge[:2], (0.0, 0.0, -1.0)], (
         "der letzte Platz geht an die stehende Lage mit dem kleinsten Stützraum"
     )
-    assert asked == [*edge, (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)], (
-        "gefragt wird nach dem Stützraum, bis eine steht"
-    )
+    expected_checks = {*edge, (0.0, 0.0, 1.0), (0.0, 0.0, -1.0)}
+    assert set(asked) == expected_checks, "gefragt wird bis die günstigste stehende Lage feststeht"
+    assert len(asked) == len(expected_checks), "jede Lage wird höchstens einmal geprüft"
     assert ranked_orientations(body, standing=wide) == ranked_orientations(body), (
         "ohne Grenze der Zahl bleibt die Rangliste, wie sie ist"
     )

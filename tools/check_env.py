@@ -58,10 +58,11 @@ PLATFORM_PINS: Final = {
     "colorama": "win32",
 }
 
-#: Ab wann die Versionspflege fällig ist. Der wöchentliche CI-Lauf „Neueste
-#: Versionen" meldet gebrochene Versionen; er sagt aber niemandem, dass es
-#: etwas Neues *gäbe*. Nach einem Vierteljahr ohne Nachziehen ist der Satz
-#: alt genug, dass ein Sprung wehtut — deshalb die Erinnerung.
+#: Ab wann die Versionspflege fällig ist. Der Job „Neueste Versionen" prüft
+#: frei auflösbare Versionen bei öffentlichen v*-Tag-Pushes oder auf
+#: Handstart mit check_latest im öffentlichen Repository. Nach einem
+#: Vierteljahr ohne Nachziehen ist der
+#: Satz alt genug, dass ein Sprung wehtut — deshalb die Erinnerung.
 DAYS_UNTIL_MAINTENANCE: Final = 90
 
 _LINE = re.compile(r"^([A-Za-z0-9._-]+)==([^=\s;#]+)")
