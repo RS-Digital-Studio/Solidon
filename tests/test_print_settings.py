@@ -3024,7 +3024,9 @@ def test_creality_print_slices_on_its_console_before_and_after_7_3(
     („Invalid option --arrange"), hält die Lage einer 3MF selbst und schreibt
     ``plate_1.gcode`` nur mit ``--need-gcode-file``. Eine ältere Fassung, die
     ``--cli`` ablehnt, rechnet einmal mit dem alten Aufruf weiter, gemerkt je
-    Programm; der Befund „selbst angeordnet" entsteht in keinem der Fälle.
+    Programm. 7.3 rückt jede Platte selbst zur Mitte, auch eine haltende
+    Anordnung (RM-414) — dort steht „selbst angeordnet"; 7.2 hält die Lage
+    mit ``--arrange 0`` und meldet nichts.
     """
     profile = profiles.make_profile()
     model = tmp_path / "platte.3mf"
@@ -3054,7 +3056,9 @@ def test_creality_print_slices_on_its_console_before_and_after_7_3(
     assert len(commands) == 1, "7.3 rechnet im ersten Lauf"
     assert "--cli" in commands[0] and "--need-gcode-file" in commands[0]
     assert "--arrange" not in commands[0], "7.3 kennt den Schalter nicht"
-    assert not any(entry.code == "slicer.arranged_itself" for entry in outcome.findings)
+    assert any(entry.code == "slicer.arranged_itself" for entry in outcome.findings), (
+        "7.3 ordnet auch eine haltende Anordnung selbst an"
+    )
 
     old = tmp_path / "alt" / "CrealityPrint.exe"
     old.parent.mkdir()

@@ -62,7 +62,7 @@ Nutzen da und sonst nichts.
 
 ### Bohrungen, Langlöcher und Teilen
 
-- Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern. Gespeicherte Winkel behalten ihre Richtung.
+- Der Winkel eines Langlochs an einer eingelesenen Bohrung zeigt in die erwartete Richtung und bleibt so, wenn Sie die Feinheit ändern.
 - Zwei Platten, die sich berühren, behalten beim Langlochzug ihr Material, und ein Stift über der Bohrung bleibt stehen.
 - Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
@@ -80,7 +80,7 @@ Nutzen da und sonst nichts.
 - Im Fenster zeigt *Weich verschmelzen* dieselbe Form wie im Export. Nur bei sehr großen Körpern rechnet die Vorschau gröber und sagt es.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.
-- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. Der erste Klick ins Bild füllt es, und *Übernehmen* wartet, bis es gewählt ist.
+- Das Ziel von *An Merkmal ausrichten* ist anfangs leer. *Übernehmen* wartet, bis es gewählt ist, und setzt den Körper nicht mehr still an die falsche Seite.
 - Eine Datei in Metern, die auch in Zoll aufs Bett passen würde, liest Solidon nicht mehr still falsch, sondern fragt nach der Einheit.
 
 ### Erzeugen mit KI

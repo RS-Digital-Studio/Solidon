@@ -37,7 +37,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Furos, furos oblongos e divisão
 
-- O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura. Os ângulos guardados mantêm a sua direção.
+- O ângulo de um furo oblongo num furo importado aponta na direção esperada e mantém-se ao mudar a finura.
 - Duas placas que se tocam mantêm o seu material ao esticar um furo oblongo, e um pino sobre o furo fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
@@ -55,7 +55,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Na janela, «Fundir suavemente» mostra a mesma forma que na exportação. Só em corpos muito grandes a pré-visualização calcula mais grossa e di-lo.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
 - Uma medida escrita como comprimento 40 estica o esboço só nessa direção. O corpo resultante fica fechado e assente na mesa.
-- O destino de «Alinhar à característica» começa vazio. O primeiro clique na vista preenche-o, e «Aplicar» espera até estar escolhido.
+- O destino de «Alinhar à característica» começa vazio. «Aplicar» espera até estar escolhido e já não põe o corpo sem aviso do lado errado.
 - Um ficheiro em metros que também caberia na mesa lido em polegadas já não é lido mal sem aviso. O Solidon pergunta a unidade.
 
 ### Gerar com IA

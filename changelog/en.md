@@ -37,7 +37,7 @@ it into `website/version.json`.
 
 ### Holes, slots and splitting
 
-- The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness. Saved angles keep their direction.
+- The angle of a slot on an imported hole points in the expected direction and stays that way when you change the fineness.
 - Two plates that touch keep their material when you pull a slot, and a pin above the hole stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
@@ -55,7 +55,7 @@ it into `website/version.json`.
 - In the window, *Blend together* shows the same shape as in the export. Only for very large bodies does the preview work more coarsely, and it says so.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
-- The target of *Align to feature* starts out empty. The first click in the view fills it, and *Apply* waits until it is chosen.
+- The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 
 ### Generating with AI

@@ -38,7 +38,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Taladros, ranuras y división
 
-- El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura. Los ángulos guardados conservan su dirección.
+- El ángulo de una ranura en un taladro importado apunta en la dirección esperada y se mantiene al cambiar la finura.
 - Dos placas que se tocan conservan su material al estirar una ranura, y un pasador sobre el taladro se queda en su sitio.
 - Estirar un taladro que atraviesa dos cuerpos ya no informa de que el cuerpo se rompe cuando no ocurre.
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
@@ -56,7 +56,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En la ventana, «Fusionar suavemente» muestra la misma forma que en la exportación. Solo con cuerpos muy grandes la vista previa calcula más gruesa y lo dice.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
-- El destino de «Alinear a la característica» empieza vacío. El primer clic en la vista lo rellena, y «Aplicar» espera hasta que esté elegido.
+- El destino de «Alinear a la característica» empieza vacío. «Aplicar» espera hasta que esté elegido y ya no coloca el cuerpo sin aviso en el lado equivocado.
 - Un archivo en metros que también cabría en la cama leído en pulgadas ya no se lee mal sin aviso. Solidon pregunta la unidad.
 
 ### Generar con IA
