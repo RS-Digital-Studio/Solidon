@@ -61,6 +61,7 @@ it into `website/version.json`.
 - A STEP body stays a STEP body when you crop it, with its faces, edges and names.
 - A freshly created screw lid is no longer reported as too tight for its neck.
 - If a hole cannot be cut cleanly into a STEP body, Solidon drills it into the triangle model instead of passing on a broken body.
+- If you chose “Load now”, the pieces from *Split the model* no longer start minutes of recognition either; “Recognise all features” catches up on it.
 
 ### Sculpting, text and sketching
 

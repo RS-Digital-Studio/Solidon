@@ -86,6 +86,7 @@ Nutzen da und sonst nichts.
 - Ein STEP-Körper bleibt beim Abschneiden ein STEP-Körper, mit seinen Flächen, Kanten und Namen.
 - Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
 - Lässt sich eine Bohrung an einem STEP-Körper nicht sauber schneiden, bohrt Solidon sie am Dreiecksmodell, statt einen kaputten Körper weiterzugeben.
+- Haben Sie beim Laden „Sofort laden“ gewählt, erkennen auch die Stücke von *Modell teilen* nicht minutenlang nach; „Alle Merkmale erkennen“ holt es nach.
 
 ### Formen, Schrift und Zeichnen
 
