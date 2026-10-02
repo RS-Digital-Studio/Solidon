@@ -68,6 +68,7 @@ einem neuen Lauf anzupassen.
 | [`laeufe/rev-code-t11.txt`](laeufe/rev-code-t11.txt) | Beleg T-11 des Code-Reviews: Stücknummern nach gelöschtem Schnitt | RM-287 |
 | [`laeufe/rev-code-u1.txt`](laeufe/rev-code-u1.txt) | Beleg U-1 des Code-Reviews: `op_dialog._switch` klemmt still | RM-286 |
 | [`reports/3mf-schluss.md`](reports/3mf-schluss.md) | Schlussbericht Paket 3mf: Qt-Takt beim Import großer 3MF | RM-258 |
+| [`reports/rm392-bausteinabbruch-2026-10-02.md`](reports/rm392-bausteinabbruch-2026-10-02.md) | Randvergleich beider Bausteinkerne abbrechen; echte Gegenläufe, finale RM327-Basis und unabhängige Freigaben | RM-392 / P2G03 |
 | [`reports/ast-flake.md`](reports/ast-flake.md) | Bericht zu den sporadischen Abrissen, Befund an der Maschine | RM-272 |
 | [`reports/bohren-schluss.md`](reports/bohren-schluss.md) | Schlussbericht Paket bohren, §6–7 Vorschlag zu `_without_scars` | RM-187 |
 | [`reports/fenster.md`](reports/fenster.md) | Bericht Paket fenster der Durchsicht, Empfehlung zum Fadenkreuz | RM-291 |

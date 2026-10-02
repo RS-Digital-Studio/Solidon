@@ -35391,6 +35391,21 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
 
 **Abschluss:** Befund `part.over_the_edge` für jeden abtragenden Baustein an beiden Kernen; rund 2 000 Bausteintests ohne Fehlalarm. Umgesetzt von Claude, in main mit `42771675d`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
 
+**Nachprüfung 02.10.2026, P2G03 — Abbruch im Randvergleich:** Beide
+Kernelwege übergeben jetzt den Kontexttoken an die Strahlenrechnung und
+prüfen ihn unmittelbar danach, bevor ein Teilstand zum Randbefund wird.
+Vier tatsächliche Testkörperfehler vor der Korrektur, danach acht neue
+und fünf bestehende Fälle grün. Die beiden isolierten Fehlvarianten
+ohne Tokenweitergabe bzw. Nachtest scheitern jeweils in allen vier
+Abbruchfällen. Frischer gemeinsamer Nachlauf mit RM327: 13 bestanden,
+Exit 0, fünf stabile Quell-/Testdateien, keine Fehler oder Skips. Ruff,
+eigene Formatbereiche und unabhängiger Produkt-/Laufreview sind grün.
+Maße, Schema und vollständige Ergebnisse bleiben gleich; kein neuer
+Bereichslauf oder Bibliotheks-/Cacheversionssprung.
+[Portabler Nachprüfungsbeleg](konzepte/nachweise-release-0.5.1/reports/rm392-bausteinabbruch-2026-10-02.md).
+Das vollständige Tor und die tatsächliche Integration dieses Nachgangs
+stehen aus; die Fenster-/Leistungsabnahme bleibt beim Release offen.
+
 ## RM-394: *An Merkmal ausrichten* wählt das Ziel still vor und nimmt den ersten Bildklick nicht an (02.10.2026)
 
 <a id="rm-394-an-merkmal-ausrichten-wählt-das-ziel-still-vor-und-nimmt-den-ersten-bildklick-nicht-an-02102026"></a>
