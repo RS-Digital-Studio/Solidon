@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
 | 2026-10-02 | [RM-374: Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern* (02.10.2026)](#rm-374-der-befund-auf-maß-gebracht-trägt-den-knopf-größe-ändern-02102026) |
@@ -36359,3 +36360,21 @@ allen sechs Sprachen den Pinselbegriff, auch als Bildschirmleser-Name. Fensterte
 `test_the_brush_strength_is_not_named_like_a_wall_thickness` für das Release-Tor. Changelog 0.5.2
 in sechs Sprachen. Umgesetzt von Claude, in main mit `910acb1ee` (Merge `551e8cf48`);
 Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
+
+## RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)
+
+<a id="rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026"></a>
+<a id="rm-442"></a>
+
+**RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug.**
+  Fund 02.10.2026 beim Zusammenführen von RM-361/372/374 (Claude): Der Fenstertest
+  `tests/test_sculpt_session.py::test_a_forced_cut_applies_to_one_stroke_only` ist seit
+  `6f64f7ed1` (RM-438, `stroke_at` kennt die Züge davor) rot, am Elternstand `4373b5f12` und
+  an `910acb1ee` grün. Nach einem erzwungenen Schnitt bei (20, 0, 0) trägt auch der zweite
+  Zug bei (0, 20, 0) `cut=True`. Das reguläre Tor fährt Fenstertests nicht und sah es nicht.
+  **Fix:** klären, ob der zweite Zug die Fläche seiner Etappe wirklich verfehlt (dann den
+  Test auf den neuen Vertrag stellen) oder `stroke_at` ihn fälschlich neu einordnet (dann
+  den Code). **Abnahme:** Test grün ohne Lockerung der Aussage „der Schalter gilt für einen
+  Zug“. Bauplan §17.3, §2.6.
+
+**Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.

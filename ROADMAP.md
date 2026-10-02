@@ -89,9 +89,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | Neigung, Ebene parallel zu einer Fläche und exakte Körper gebaut (Claude, in main mit `52cc9fd66`); offen: Ebene durch drei Punkte — braucht die Stellenwahl im Bild |
+| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Neigung, Ebene parallel zu einer Fläche und exakte Körper gebaut (Claude, in main mit `52cc9fd66`); offen: Ebene durch drei Punkte — braucht die Stellenwahl im Bild |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
-| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | Grenze aus dem float32-Raster, Befund `pattern.facets_unaligned` mit *Reparieren*, Rechnung je Ebenengruppe (Claude, in main mit `c117720b3`); Ø 80, CAD-Nullpunkt in der Ecke und feiner Träger frei von Selbstschnitten. Offen: fern vom Ursprung (110, 110) liegen die Facetten danach eben, an den Rillen bei 15° und 165° bleiben vier Selbstschnitte — Ursache im Stopfen oder der Vereinigung, festgehalten als strenges xfail |
+| [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-m`). Grenze aus dem float32-Raster, Befund `pattern.facets_unaligned` mit *Reparieren*, Rechnung je Ebenengruppe (Claude, in main mit `c117720b3`); Ø 80, CAD-Nullpunkt in der Ecke und feiner Träger frei von Selbstschnitten. Offen: fern vom Ursprung (110, 110) liegen die Facetten danach eben, an den Rillen bei 15° und 165° bleiben vier Selbstschnitte — Ursache im Stopfen oder der Vereinigung, festgehalten als strenges xfail |
+| [RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Review 02.10.: Nachbau Modell 1 wird 24,7 statt 20 mm breit; Korpusabnahme an drei Haltern, Kundenweg zum exakten Halter |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
 | [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
@@ -116,7 +117,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit](#rm-430) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Tests auf Wirkung schärfen, falsche Zahl berichtigen, Cura-Fall mit Befund |
 | [RM-435 — Exakte Gruppenrundungen sind seit `0041000a0` 27- bis 125-mal langsamer, und Absagen verlieren den Maßhinweis](#rm-435) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Auslass-Suche nur bei zu schmalen Kanten, größtes passendes Maß wieder nennen, teilweise belegte Züge nicht verwerfen |
 | [RM-436 — Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch](#rm-436) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Kunde erfährt ENOSPC, `edges.unmapped` mit gangbarem Weg, stabile Zahl, Wortwahl |
-| [RM-443 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
+| [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
+| [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -166,11 +168,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
-| [RM-444 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-444) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
-| [RM-445 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung](#rm-445) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-03: gleiche Parameterzeilen ersetzen keine Dokumentidentität; Gegenfall noch auszuführen |
-| [RM-446 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld](#rm-446) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-04: direkte Bindung zum Maß, zusammengesetzter Ausdruck zur Formel; Gegenfall noch auszuführen |
+| [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
+| [RM-452 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung](#rm-452) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-03: gleiche Parameterzeilen ersetzen keine Dokumentidentität; Gegenfall noch auszuführen |
+| [RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld](#rm-453) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-04: direkte Bindung zum Maß, zusammengesetzter Ausdruck zur Formel; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug](#rm-442) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-k`). Fund 02.10. beim Zusammenführen: Fenstertest seit `6f64f7ed1` rot; klären, ob `stroke_at` den zweiten Zug zu Recht als eigene Etappe einordnet, dann Code oder Test |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -2857,6 +2858,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Belege: `F:\solidon-review-reports\review-7f0de659d.md`, Sonden `r2_rm225_*.txt`,
   `r2_gegenprobe_axial.txt`, `r2_ausrichtung_laufzeit.txt`.
 
+<a id="rm-443"></a>
+
+- [ ] **RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test.**
+  Nachprüfung des Reviews am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben
+  (Bereichstest aller vier Halter). Offen: Der Nachbau von Modell 1 gelingt, die Rückwand wird
+  aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; die
+  Korpusabnahme an drei Haltern ist nicht belegt; der Fünf-Klick-Weg steht nur im Archivtext;
+  exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
+  **Abnahme:** Nachbau Modell 1 mit 20 mm Rückwand; drei Halter aus dem Korpus nachgebaut;
+  Fünf-Klick-Weg am echten Fenster; exakter Halter über den Kundenweg. Bauplan §24, §2.2.
+  Belege: `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`.
+
 <a id="rm-405"></a>
 
 - [ ] **RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen.**
@@ -3316,9 +3329,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     obwohl der Commit in main ist.
   **Abnahme:** je Rest Test bzw. berichtigte Unterlage. Beleg: `review-0041000a0.md`.
 
-<a id="rm-443"></a>
+<a id="rm-450"></a>
 
-- [ ] **RM-443 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger.**
+- [ ] **RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger.**
   Quellenreview am festen Stand `6c9420b1f`, G-CUT-01:
   `_cut_faces_continued` (`app/core/geom/prepare_ops.py:17740–17748` am
   geprüften Stand) wählt koplanare parallele Flächen nur nach Fläche; bei
@@ -3333,6 +3346,22 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-geometrie.md`.
   Der Gegenfall ist aus den Quellen abgeleitet, noch nicht ausgeführt;
   vor dem Fix gegen den aktuellen Hauptzweig prüfen.
+
+<a id="rm-454"></a>
+
+- [ ] **RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben.**
+  Quellenreview der parallelen Claude-Lieferung `105b2ba0d` am Stand
+  `18c76d96b`: Die neue zweite Trefferprüfung in `sculpt._surface_for`
+  berücksichtigt nur den Originalpunkt, die Auswertung dagegen auch
+  Spiegelpunkte. Erreicht ausschließlich eine Spiegelkopie einen bereits
+  verschobenen Eckpunkt, kann die erforderliche neue Etappe entfallen.
+  Der genaue asymmetrische Prismengegenfall und die Korrekturrichtung stehen
+  in `konzepte/nachweise-release-0.5.1/reports/remote-18c76-sculpt.md`.
+  **Offen:** Gegenfall ausführen, Etappenentscheidung und Auswertung an
+  dieselben Spiegelorte binden und den tatsächlichen Zug nachprüfen.
+  Dies ist ein quellenbelegter, noch nicht ausgeführter Gegenfall; die
+  Archivierung von RM-442 belegt seine Freigabe nicht. Keine neue Umsetzung
+  im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
 
 ## Bedienung und Darstellung
 
@@ -4853,9 +4882,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
   die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
   `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
-<a id="rm-444"></a>
+<a id="rm-451"></a>
 
-- [ ] **RM-444 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
+- [ ] **RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
   Quellenreview `6c9420b1f`, R6C942-02; Folge zum archivierten RM-354.
   `_show_scene` bereinigt `_hidden` und Plattenzahl aus dem leeren aktuellen
   Haltergebnis, bevor `_picture_for` das letzte vollständige Bild wählt
@@ -4867,9 +4896,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
   Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
 
-<a id="rm-445"></a>
+<a id="rm-452"></a>
 
-- [ ] **RM-445 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung.**
+- [ ] **RM-452 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung.**
   Quellenreview `6c9420b1f`, R6C942-03; Folge zum archivierten RM-355.
   `ParameterPanel.show_document` (`app/ui/panels.py:3639–3695` am geprüften
   Stand) verwendet gleiche Parameterzeilen ohne Dokumentidentität weiter;
@@ -4882,9 +4911,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
   Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
 
-<a id="rm-446"></a>
+<a id="rm-453"></a>
 
-- [ ] **RM-446 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld.**
+- [ ] **RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld.**
   Quellenreview `6c9420b1f`, R6C942-04; Folge zum archivierten RM-354.
   `main_window.py:21709–21718` am geprüften Stand leitet bei genau einer
   Parameterreferenz automatisch zum Projektmaß statt zum Ausdruck um.
@@ -4907,19 +4936,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
-
-<a id="rm-442"></a>
-
-- [ ] **RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug.**
-  Fund 02.10.2026 beim Zusammenführen von RM-361/372/374 (Claude): Der Fenstertest
-  `tests/test_sculpt_session.py::test_a_forced_cut_applies_to_one_stroke_only` ist seit
-  `6f64f7ed1` (RM-438, `stroke_at` kennt die Züge davor) rot, am Elternstand `4373b5f12` und
-  an `910acb1ee` grün. Nach einem erzwungenen Schnitt bei (20, 0, 0) trägt auch der zweite
-  Zug bei (0, 20, 0) `cut=True`. Das reguläre Tor fährt Fenstertests nicht und sah es nicht.
-  **Fix:** klären, ob der zweite Zug die Fläche seiner Etappe wirklich verfehlt (dann den
-  Test auf den neuen Vertrag stellen) oder `stroke_at` ihn fälschlich neu einordnet (dann
-  den Code). **Abnahme:** Test grün ohne Lockerung der Aussage „der Schalter gilt für einen
-  Zug“. Bauplan §17.3, §2.6.
 
 ## KI und Generatoren
 

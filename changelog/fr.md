@@ -52,7 +52,6 @@ dans `website/version.json`.
 - Deux plaques qui se touchent restent un seul corps autour d'un perçage et gardent leur matière, que vous l'étiriez, le modifiiez, le déplaciez ou le fermiez. Une goupille au-dessus reste en place.
 - Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
-- Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
 - Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Axe d'inclinaison », et « Sur une face » mène la coupe parallèlement à une face plane.
@@ -81,6 +80,8 @@ dans `website/version.json`.
 - Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.
 - Si une erreur de génération indique la configuration comme issue, elle apparaît comme bouton dans la boîte de dialogue.
 - La boîte de dialogue de génération indique le volume à la taille où la pièce arrive.
+- Un modèle généré s'annule d'un seul Ctrl+Z. Il en fallait trois ou quatre.
+- Si « Appliquer » est refusé pendant la génération, la boîte de dialogue reste ouverte avec tous les essais et indique l'issue au lieu de jeter le maillage.
 
 ### Utilisation et système
 
@@ -98,6 +99,8 @@ dans `website/version.json`.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
 - Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
+- Un constat qui vise une étape l'ouvre pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
+- Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 
 ## 0.5.1
 

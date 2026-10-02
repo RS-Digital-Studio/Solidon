@@ -51,7 +51,6 @@ it into `website/version.json`.
 - Two plates that touch stay one body at a hole and keep their material, whether you pull, change, move or close the hole. A pin above it stays in place.
 - Pulling at a hole that passes through two bodies no longer reports the body falling apart where it does not.
 - If a hole cuts the body in two, the report says so once, with the number of pieces at the end, and falls silent as soon as the body is one piece again.
-- Patterns on cylindrical faces of imported models stay closed when you change them.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt axis*, and *At face* runs the cut parallel to a flat face.
@@ -80,6 +79,8 @@ it into `website/version.json`.
 - The image model is now fetched by *Set up image model …* even when the other weights are already there.
 - If an error while generating names the setup as the way out, it appears as a button in the dialog.
 - The generate dialog states the volume at the size the part will arrive in.
+- A generated model is taken back with a single Ctrl+Z. Until now it took three to four.
+- If *Apply* is refused while generating, the dialog stays open with all attempts and names the way forward instead of discarding the mesh.
 
 ### Operation and system
 
@@ -97,6 +98,8 @@ it into `website/version.json`.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
 - Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
+- A finding that refers to a step opens it for changing, for example *Change size* after *Fit to size*.
+- A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 
 ## 0.5.1
 

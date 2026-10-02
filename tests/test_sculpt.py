@@ -237,6 +237,24 @@ def test_a_stroke_that_reaches_its_stage_stays_in_it() -> None:
     assert beside == stroke_at(base, (0.0, 20.0, 0.0), radius=3.0, strength=4.0, tool="carve")
 
 
+def test_a_stroke_that_reaches_nothing_starts_no_stage() -> None:
+    """RM-442: Ein Zug, der auch nach seiner Etappe nichts greift, ist verfehlt.
+
+    Eine eigene Etappe hülfe ihm nicht — sie kostete einen Durchgang und
+    änderte nichts —, und sie machte aus einem einmaligen *Neu ansetzen*
+    davor eines, das auch für diesen Zug gilt. Er bleibt in seiner Etappe,
+    und der Bericht nennt ihn verfehlt.
+    """
+    base = ball()
+    first = stroke_at(base, (20.0, 0.0, 0.0), radius=3.0, strength=4.0, tool="carve", cut=True)
+    aside = stroke_at(
+        base, (0.0, 40.0, 0.0), radius=3.0, strength=4.0, tool="carve", before=[first]
+    )
+
+    assert not aside.cut
+    assert len(stages([first, aside])) == 1
+
+
 def test_the_remembered_stage_never_answers_for_another_session() -> None:
     """Die gemerkte Etappenfläche spart die zweite Auswertung je Klick — und
     darf nach einem Rückgängig oder einer neuen Folge nie das Falsche sagen.
