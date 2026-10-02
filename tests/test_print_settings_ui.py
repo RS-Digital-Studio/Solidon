@@ -160,6 +160,12 @@ def test_search_guides_to_the_selector_for_an_inactive_detail_field(
         qt_app.processEvents()
     selector = dialog._editors[selector_path]
     target = dialog._editors[target_path]
+    # Der Ausgangszustand wird hergestellt, nicht angenommen: Der allgemeine
+    # Drucker legt mit PLA einen Skirt, und dann stand die Haftung nicht auf „keine“.
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData("none"))
+    for _ in range(3):
+        qt_app.processEvents()
     before = dialog.settings
     target_before = print_settings.read_path(before, target_path)
     search_window_size_before = (dialog.width(), dialog.height())
@@ -2856,7 +2862,14 @@ def test_a_part_that_fits_no_bed_is_named_before_slicing(
     monkeypatch.setattr(module, "handlers_of", lambda _widget: window_handlers)
 
     scene = types_module.SimpleNamespace(objects={"obj_1": big})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     # Ein Slicer ist da — ohne ihn nennt *Slicen* zu Recht zuerst den fehlenden
     # Slicer, und die Suite fragt die Maschine nicht (``_machine_stays_out_of_it``).
     dialog._slicer_path = Path("prusa-slicer-console")
@@ -2941,7 +2954,14 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
     # ``last_result`` ist ein schlichtes Instanzattribut — direkt setzen,
     # wie es die Auswertung selbst tut.
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     # ``with_settings`` wird mitgelesen und nicht nur geschluckt: Der
@@ -3019,7 +3039,14 @@ def test_an_error_in_the_report_is_named_before_the_model_leaves(
         objects={"obj_1": cube, "obj_2": other},
         report=Report((broken, elsewhere, warning)),
     )
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     asked: list[list[str]] = []
@@ -3090,7 +3117,14 @@ def test_several_plates_open_as_one_project_where_the_slicer_knows_plates(
     first = _cube_object()
     second = replace(_cube_object(), id="obj_2", plate=1)
     scene = types_module.SimpleNamespace(objects={"obj_1": first, "obj_2": second})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0, 1])
     monkeypatch.setattr(dialog, "_plate_slots", list)
 
@@ -3143,7 +3177,14 @@ def test_plate_files_are_prepared_outside_the_qt_thread(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3190,7 +3231,14 @@ def test_closing_does_not_wait_in_the_qt_thread_for_plate_preparation(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3273,7 +3321,14 @@ def test_only_a_finished_slicer_start_counts_as_handed_over(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3321,7 +3376,14 @@ def test_opening_in_the_slicer_counts_as_handed_over(
     written = tmp_path / "platte.3mf"
     written.write_bytes(b"x")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
     monkeypatch.setattr(
@@ -3356,7 +3418,14 @@ def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
     scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
-    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
     monkeypatch.setattr(dialog, "_plate_slots", list)
@@ -3587,7 +3656,9 @@ def test_cura_without_an_active_machine_is_not_reported_as_failed_adoption(
     assert result[0].printer_id == ""
     assert not result[0].unreadable
     dialog._cura_printer_found(result[0])
-    assert not dialog.profile_note.text()
+    # Gemeint ist „kein Satz über eine gescheiterte Übernahme“; die Zeile
+    # darf weiter sagen, was der Profilbestand gerade tut (RM-417).
+    assert "ließ sich nicht übernehmen" not in dialog.profile_note.text()
     assert dialog._cura_printer_id == ""
     assert dialog.adopt_printer.isHidden()
 
@@ -4968,6 +5039,9 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
     )
     dialog.settings = print_settings.with_choice(dialog.settings, "infill.density", 0.62)
     try:
+        # Erst die Slicersuche abwarten: Ihre späte Antwort startet die
+        # Profilsuche neu und leerte den Kandidaten (RM-417, ``dialog``-Fixture).
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
         dialog._slicer_path = Path("Cura.exe")
         dialog._start_profile_search()
         assert dialog.wait_for_cura_printer()
@@ -8878,29 +8952,197 @@ def test_opening_needs_no_machine_profile_but_slicing_does(
     assert dialog._current_setup(for_slicing=False) is not None
 
 
+def test_opening_without_a_machine_profile_reaches_the_window_and_keeps_its_receipt(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """RM-431: Der Klick auf *Im Slicer öffnen* ohne Druckerprofil kommt am
+    Fenster an, und die Quittung bleibt stehen. Danach überschrieb der Grund
+    des Rechen-Wegs („Dieser Slicer braucht ein Druckerprofil …“) die Zeile
+    „An … übergeben“, sobald der Arbeiter fertig war."""
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    monkeypatch.setattr(module.handover, "window_program", lambda found: found)
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+    dialog.machine_choice.clear()
+    dialog.machine_choice.addItem("— bitte wählen —", "")
+    dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle", "ecc2")
+    dialog.machine_choice.setEnabled(True)
+    dialog.machine_choice.setCurrentIndex(0)
+    written = tmp_path / "platte.3mf"
+    written.write_bytes(b"x")
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
+    monkeypatch.setattr(
+        dialog.session,
+        "last_result",
+        types_module.SimpleNamespace(scene=scene, object_names={}, stopped_at=None),
+    )
+    # Die Ersatzszene gilt als feine Rechnung, sonst wartet der Klick auf sie
+    # (RM-426, ``_wait_for_fine``).
+    monkeypatch.setattr(type(dialog.session), "fine_current", property(lambda _self: True))
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda _job, plate: module.PlateRun(
+            plate=plate,
+            model=written,
+            slots=(MaterialSlot(0, ""),),
+            keep_arrangement=False,
+            findings=(),
+        ),
+    )
+    opened: list[tuple[Path, object]] = []
+    monkeypatch.setattr(
+        module.handover, "open_in_slicer", lambda model, setup: opened.append((model, setup))
+    )
+
+    dialog._open_in_slicer()
+    assert dialog._worker is not None, dialog.state.text()
+    assert dialog._worker.wait(5_000)
+    QApplication.processEvents()
+
+    assert [model for model, _setup in opened] == [written], "der Klick kommt am Fenster an"
+    receipt = f"An {module._slicer_title(executable)} übergeben — das Fenster gehört jetzt Ihnen."
+    assert dialog.state.text() == receipt
+    assert not dialog.slice_button.isEnabled(), "rechnen braucht das Profil weiter"
+    assert dialog.slice_button.toolTip() == dialog._machine_missing_line()
+
+    # Auch der nächste Durchlauf der Zustandsprüfung lässt die Quittung stehen.
+    dialog._show_slicer_state()
+    assert dialog.state.text() == receipt
+
+
+def test_a_generic_printer_slices_with_prusaslicer_without_a_bundle_printer(
+    dialog: PrintSettingsDialog, session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-431: Allgemeiner Drucker, PrusaSlicer mit einem Bündel, das ihn nicht
+    kennt — das Druckerprofil bleibt von selbst leer, und Solidons Werte gehen
+    hinaus. *Slicen* war trotzdem gesperrt mit „Wählen Sie einen Drucker aus
+    der Liste.“ (Rückschritt gegenüber 0.5.1)."""
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "PrusaSlicer" / "prusa-slicer-console.exe"
+    root = executable.parent / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(_PRUSA_BUNDLE, encoding="utf-8")
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "user_roots", lambda *_args: [])
+    _select_printer(dialog, "generic-220")
+    assert session.wait_for_idle()
+    dialog._slicer_path = executable
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+
+    dialog._profiles_found(
+        sp.find_profiles(executable, "prusa", kinds=("machine", "process", "filament"))
+    )
+    dialog._show_slicer_state()
+
+    assert not str(dialog.machine_choice.currentData() or ""), "kein Drucker des Bündels passt"
+    assert dialog.slice_button.isEnabled(), dialog.slice_button.toolTip()
+    assert not dialog.slice_button.toolTip()
+    setup = dialog._current_setup()
+    assert setup is not None and setup.machine_profile == ""
+
+
+#: Welche Haftungsmaße bei welcher Bettart wirken — von Hand, nicht aus dem
+#: Kern abgeleitet, damit der Test eine falsche Tabelle dort finden kann (RM-432).
+_SHOWN_FOR_KIND: dict[str, set[str]] = {
+    "none": set(),
+    "skirt": {"adhesion.skirt_loops", "adhesion.skirt_distance"},
+    "brim": {"adhesion.brim_width"},
+    "raft": {"adhesion.raft_layers"},
+}
+
+
 @pytest.mark.parametrize("kind", ["none", "skirt", "brim", "raft"])
 def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
     dialog: PrintSettingsDialog, kind: str
 ) -> None:
     """Nur die Maße der gewählten Bettart stehen da; ein abgelehnter Wert in
     einem ausgeblendeten Feld sperrt nicht (RM-341)."""
-    from app.core.knowledge import print_settings
-
     selector = dialog._editors["adhesion.kind"]
     assert isinstance(selector, QComboBox)
     selector.setCurrentIndex(selector.findData(kind))
     dialog._update_inactive_setting_rows()
     form = dialog._tab_forms["adhesion"]
-    inactive = print_settings.inactive_paths("auto", kind)
-    for path in print_settings.ADHESION_DETAILS:
-        assert form.isRowVisible(dialog._labels[path]) is (path not in inactive), path
+    every = set().union(*_SHOWN_FOR_KIND.values())
+    for path in every:
+        assert form.isRowVisible(dialog._labels[path]) is (path in _SHOWN_FOR_KIND[kind]), path
 
-    hidden = [path for path in print_settings.ADHESION_DETAILS if path in inactive]
+    hidden = sorted(every - _SHOWN_FOR_KIND[kind])
     if hidden:
         editor = dialog._editors[hidden[0]]
         assert isinstance(editor, BoundedSpin)
         editor.lineEdit().setText("99999")
         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
+
+
+#: Der Schlüssel, an dem jede Haftungsart im Slicer wirkt, und die Felder, die
+#: dazugehören — von außen, aus den Schlüsselnamen der drei Familien.
+_ADHESION_EFFECT: dict[str, dict[str, tuple[str, ...]]] = {
+    "orca": {
+        "skirt_loops": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+        "brim_width": ("adhesion.brim_width",),
+        "raft_layers": ("adhesion.raft_layers",),
+    },
+    "prusa": {
+        "skirts": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+        "brim_width": ("adhesion.brim_width",),
+        "raft_layers": ("adhesion.raft_layers",),
+    },
+    "cura": {
+        "skirt_line_count": ("adhesion.skirt_loops", "adhesion.skirt_distance"),
+        "brim_width": ("adhesion.brim_width",),
+        "raft_surface_layers": ("adhesion.raft_layers",),
+    },
+}
+
+
+@pytest.mark.parametrize("material", ["pla", "petg"])
+@pytest.mark.parametrize(
+    ("flavour", "program"),
+    [("orca", "OrcaSlicer.exe"), ("prusa", "PrusaSlicer.exe"), ("cura", "CuraEngine.exe")],
+)
+def test_automatic_adhesion_shows_exactly_the_measures_the_slicer_gets(
+    dialog: PrintSettingsDialog, flavour: str, program: str, material: str
+) -> None:
+    """RM-432: „Automatisch“ zeigte bei PrusaSlicer und Cura die Brimbreite, die
+    dort null ist, und versteckte die Skirt-Felder, die wirken — die Übergabe
+    macht aus „Automatisch“ die Art des Materials. Sichtbar sind jetzt genau
+    die Felder, deren Schlüssel der Slicer mit einem Wert bekommt."""
+    dialog.session.start_new("centauri-carbon-2", material)
+    dialog.settings = print_settings.with_path(
+        print_settings.resolve(dialog.session.profile), "adhesion.kind", "auto"
+    )
+    dialog._foundation = None
+    dialog._foundation_key = None
+    dialog._slicer_path = Path(program)
+    dialog._load_into_editors()
+    dialog._update_inactive_setting_rows()
+
+    written = handover.values_for(dialog.settings, dialog.session.profile, flavour)
+    expected = {
+        path
+        for key, paths in _ADHESION_EFFECT[flavour].items()
+        if float(written.get(key, "0")) > 0
+        for path in paths
+    }
+    shown = {
+        path
+        for paths in _ADHESION_EFFECT[flavour].values()
+        for path in paths
+        if not dialog._labels[path].isHidden()
+    }
+    assert expected, written
+    assert shown == expected
 
 
 def test_the_refusal_at_the_slice_button_names_its_field(

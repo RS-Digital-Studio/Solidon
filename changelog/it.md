@@ -22,7 +22,7 @@ scrive in `website/version.json`.
 - Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.
 - Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.
 - Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.
-- Quattro supporti nascono in un passo: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, fori per viti, gancio per pannello o morsetto.
+- Quattro supporti nascono in un passo con facce e spigoli veri: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, fori per viti, gancio per pannello o morsetto.
 - Una scena vuota mostra come iniziare: parallelepipedo, cilindro, disegno, blocchi o un file che trascini dentro.
 - I nuovi corpi nascono sul piano o sulla faccia piana scelta, non più dove stava un corpo selezionato prima, e restano selezionati.
 
@@ -36,9 +36,10 @@ scrive in `website/version.json`.
 - Cura affetta ora con l'ugello che hai scelto, anche per le stampanti del suo elenco, e le stampanti con l'origine al centro del piano la mantengono.
 - Le stampanti con l'origine fuori dall'angolo del piano, come delta, BIBO o Dremel, ricevono i pezzi dove Solidon li mette. Prima finivano sul bordo o lo slicer li ridisponeva.
 - Bambu Studio riceve la variante dell'ugello e le temperature delle tue bobine, fino al file 3MF.
-- Se scegli brim, skirt o raft nelle impostazioni di stampa, compaiono solo le misure di quel tipo di piano, senza campi che non avrebbero effetto.
+- Se scegli brim, skirt, raft o *Automatico* nelle impostazioni di stampa, compaiono solo le misure che riceve il tuo slicer, senza campi che non avrebbero effetto.
 - Un numero fuori dal suo limite resta nel campo, il limite compare accanto e «Affetta» aspetta che sia giusto. Finora veniva tagliato senza avviso.
 - I pezzi alti e sottili su una base piccola ricevono pareti più tranquille, a 60 mm/s e con meno accelerazione. Sulla Centauri Carbon 2 queste aste si staccavano.
+- Con Cura il rapporto di verifica nomina i pezzi che ricevono questi valori solo di riflesso, perché Cura li accetta solo per l'intero piatto.
 - Solidon propone «Prima la parete esterna» solo per il pezzo che ne ha bisogno, e mai per uno con supporti.
 - Anche nella ricerca rapida, «Orienta per la stampa» controlla che un pezzo stia in piedi in modo sicuro.
 - Con «Disponi sul piano» ogni pezzo va sul primo piatto dove c'è posto. Il set di minigolf ora ne occupa quattro invece di sei.
@@ -53,11 +54,12 @@ scrive in `website/version.json`.
 - Due piastre che si toccano restano un solo corpo attorno a un foro e conservano il materiale, che tu lo allunghi, lo modifichi, lo sposti o lo chiuda. Una spina sopra resta al suo posto.
 - Allungare un foro che attraversa due corpi non segnala più che il corpo si spezza quando non succede.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
+- I motivi sulle facce cilindriche dei modelli importati restano chiusi quando li modifichi.
 - Nella cronologia di un corpo STEP puoi riordinare i passi o inserirne uno prima, anche se un passo successivo riguarda un foro. Il riferimento segue il foro.
 - Un foro spostato o duplicato con una nuova direzione resta esatto su un corpo STEP.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
-- Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Inclina attorno a», e «Su faccia» porta il taglio parallelo a una faccia piana.
+- Tronca ora taglia anche in obliquo: in alto scegli il «Piano»: su un asse con inclinazione, parallelo a una faccia, per uno spigolo o per tre punti cliccati nella vista.
 - Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 - Se un foro non si riesce a tagliare in modo pulito in un corpo STEP, Solidon lo esegue sul modello a triangoli invece di passare avanti un corpo difettoso.

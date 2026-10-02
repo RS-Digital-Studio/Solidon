@@ -72,6 +72,16 @@ ASSEMBLY_BODIES: Final[int] = 10_000
 #: stoppt, ist die Körpergrenze darüber; diese hält die Tiefe davor.
 ASSEMBLY_DEPTH: Final[int] = 32
 
+#: Wie weit vom Ursprung ein **gemessener Ort** liegen darf, in Millimetern
+#: und je Achse — die Grenze der Ortsfelder an erkannten Merkmalen (*Merkmal
+#: verschieben*, *Bohrung ändern*, *Zum Langloch ziehen* …). Ein Ort sagt nichts
+#: über die Druckbarkeit; er hängt daran, wo der Körper liegt. Mit ±1000 mm
+#: lehnte das Merkmalfenster an einem Körper über einen Meter den eigenen
+#: Messwert ab, und *Bohrung ändern* ließ sich nicht übernehmen, ohne die
+#: Bohrung zu versetzen. Hundert Meter sind die Grenze, die das Merkmalfenster
+#: einem Feld ohne eigene gibt.
+FEATURE_REACH: Final[float] = 100_000.0
+
 #: Und die zweite Grenze daneben, im Bogenmaß: Wie weit eine Facette drehen
 #: darf, auch wenn sie die Abweichung darüber einhält.
 #:

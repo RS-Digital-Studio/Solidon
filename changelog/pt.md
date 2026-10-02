@@ -22,7 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Nova é a forma base «Criar um tubo»: diâmetro exterior e altura, mais espessura de parede ou diâmetro interior, num só passo.
 - Novo é o bloco «Patilha com furo»: uma patilha plana em qualquer face, com furo e medidas à medida do parafuso de M3 a M8.
 - Nova é a «Abraçadeira de tubo» para tubos comuns de 15 a 40 mm ou qualquer medida própria até 110 mm, com parafuso de aperto M3 a M6 e a folga do seu material.
-- Quatro suportes nascem num passo: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, furos para parafusos, gancho de painel ou grampo.
+- Quatro suportes nascem num passo com faces e arestas verdadeiras: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, furos para parafusos, gancho de painel ou grampo.
 - Uma cena vazia mostra como começar: paralelepípedo, cilindro, desenho, blocos ou um ficheiro que arraste para dentro.
 - Os corpos novos aparecem na mesa ou na face plana escolhida, já não onde estava um corpo selecionado antes, e ficam selecionados.
 
@@ -36,9 +36,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O Cura fatia agora com o bico que escolheu, também nas impressoras da sua própria lista, e as impressoras com a origem no centro da mesa mantêm-na.
 - As impressoras com a origem fora do canto da mesa, como delta, BIBO ou Dremel, recebem as peças onde o Solidon as põe. Antes ficavam na borda ou o fatiador reorganizava-as.
 - O Bambu Studio recebe a variante do bico e as temperaturas das suas bobinas, até ao ficheiro 3MF.
-- Se escolher brim, skirt ou raft nas definições de impressão, só aparecem as medidas desse tipo de mesa, sem campos que não teriam efeito.
+- Se escolher brim, skirt, raft ou *Automático* nas definições de impressão, só aparecem as medidas que o seu slicer recebe, sem campos que não teriam efeito.
 - Um número fora do seu limite fica no campo, o limite aparece ao lado e «Fatiar» espera até estar certo. Até agora era cortado sem aviso.
 - Peças altas e finas sobre uma base pequena recebem paredes mais calmas, a 60 mm/s e com menos aceleração. Na Centauri Carbon 2 essas hastes soltavam-se.
+- Com o Cura, o relatório de verificação indica as peças que só recebem esses valores por arrasto, porque o Cura só os aceita para toda a placa.
 - O Solidon só sugere «Parede exterior primeiro» para a peça que precisa dela, e nunca para uma com suportes.
 - Também na pesquisa rápida, «Orientar para impressão» verifica se uma peça fica de pé com segurança.
 - Com «Dispor na mesa», cada peça vai para a primeira placa onde tem espaço. O conjunto de minigolfe precisa assim de quatro placas em vez de seis.
@@ -53,11 +54,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Duas placas que se tocam continuam um só corpo num furo e mantêm o material, quer o estique, altere, desloque ou feche. Um pino por cima fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
+- Os padrões em faces cilíndricas de modelos importados ficam fechados ao alterá-los.
 - No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
 - Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
-- Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Inclinar em torno de», e «Na face» leva o corte paralelo a uma face plana.
+- Cortar fora corta agora também em ângulo: em cima escolhe o «Plano» — num eixo com inclinação, paralelo a uma face, por uma aresta ou por três pontos que clica na vista.
 - Um corpo STEP continua um corpo STEP ao cortá-lo, com as suas faces, arestas e nomes.
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 - Se um furo não puder ser cortado de forma limpa num corpo STEP, o Solidon fura-o no modelo de triângulos em vez de passar adiante um corpo danificado.

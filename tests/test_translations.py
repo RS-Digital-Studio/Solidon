@@ -8,6 +8,7 @@ import ast
 import os
 import re
 import unicodedata
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -651,67 +652,87 @@ def test_translated_surface_labels_do_not_append_a_fixed_colon() -> None:
     assert not offenders, "feste Doppelpunkte neben Übersetzungen:\n" + "\n".join(offenders)
 
 
-@pytest.mark.parametrize("language", available_languages())
-def test_dynamic_value_labels_keep_catalogue_punctuation_and_raw_paths(
-    language: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Sechs Sprachen behalten ihre Zahlen, Werte und eigene Zeichensetzung."""
-    from app.i18n import get_language
-    from app.ui import labels
+@pytest.fixture
+def display_language() -> Iterator[Callable[[str], None]]:
+    """Stellt Katalog und Zahlenformat wie die Anwendung um und danach zurück.
 
-    previous = get_language()
-    install_language(language)
-    set_language(language)
-    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    Die Anwendung setzt mit der Sprache auch ``QLocale.setDefault``
+    (``install_qt_translations``); ohne das käme das Dezimaltrennzeichen vom
+    Betriebssystem, und ein Test wäre auf einem deutschen Rechner grün und auf
+    einem englischen rot.
+    """
+    from PySide6.QtCore import QLocale
+
+    from app.i18n import get_language
+
+    previous, previous_locale = get_language(), QLocale()
+
+    def use(language: str) -> None:
+        install_language(language)
+        set_language(language)
+        QLocale.setDefault(QLocale(language))
+
     try:
-        separator = " : " if language == "fr" else ": "
-        assert labels.value_line("diameter_mm", 12.5) == (
-            labels.value_label("diameter_mm") + separator + labels.length(12.5)
-        )
-        path = "pieces/12.5_box.stl"
-        assert labels.value_line("output_path", path) == "output_path" + separator + path
-        if language == "fr":
-            assert labels.value_line("diameter_mm", 12.5) == "Diamètre : 12,50 mm"
+        yield use
     finally:
         set_language(previous)
+        QLocale.setDefault(previous_locale)
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_dynamic_value_labels_keep_catalogue_punctuation_and_raw_paths(
+    language: str,
+    monkeypatch: pytest.MonkeyPatch,
+    display_language: Callable[[str], None],
+) -> None:
+    """Sechs Sprachen behalten ihre Zahlen, Werte und eigene Zeichensetzung."""
+    from app.ui import labels
+
+    display_language(language)
+    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    separator = " : " if language == "fr" else ": "
+    assert labels.value_line("diameter_mm", 12.5) == (
+        labels.value_label("diameter_mm") + separator + labels.length(12.5)
+    )
+    path = "pieces/12.5_box.stl"
+    assert labels.value_line("output_path", path) == "output_path" + separator + path
+    decimal = "12.50" if language == "en" else "12,50"
+    assert labels.length(12.5) == f"{decimal} mm", "Dezimaltrennzeichen der Sprache"
+    if language == "fr":
+        assert labels.value_line("diameter_mm", 12.5) == "Diamètre : 12,50 mm"
 
 
 def test_french_history_labels_translate_colons_without_changing_names_or_values(
     monkeypatch: pytest.MonkeyPatch,
+    display_language: Callable[[str], None],
 ) -> None:
     """Anlegen, Löschen, Werte und Grenzen nutzen denselben übersetzten Rahmen."""
     from app.core.types import DocumentChange, DocumentState, Parameter, Transaction
-    from app.i18n import get_language
     from app.ui import labels
     from app.ui.panels import _changed_parameters
 
-    previous = get_language()
-    install_language("fr")
-    set_language("fr")
+    display_language("fr")
     monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
-    try:
-        old = Parameter("width", 12.5, title=TranslatableText("Breite"), minimum=3.0, maximum=20.0)
-        new = Parameter("width", 14.5, title=old.title, maximum=22.5)
-        added = Parameter("added", 5.0, title="Cale:12.5")
-        removed = Parameter("removed", 2.0, title="Ancien:3.2")
-        transaction = Transaction(
-            id="test",
-            title="test",
-            ops=(),
-            changes=DocumentChange(
-                before=DocumentState(parameters={"width": old, "removed": removed}),
-                after=DocumentState(parameters={"width": new, "added": added, "removed": None}),
-            ),
-        )
-        assert _changed_parameters(transaction).splitlines() == [
-            "Largeur : 12,50 mm → 14,50 mm",
-            "Largeur · Borne inférieure : 3,00 mm → –",
-            "Largeur · Borne supérieure : 20,00 mm → 22,50 mm",
-            "Cale:12.5 : 5,00 mm",
-            "Ancien:3.2 : 2,00 mm → –",
-        ]
-    finally:
-        set_language(previous)
+    old = Parameter("width", 12.5, title=TranslatableText("Breite"), minimum=3.0, maximum=20.0)
+    new = Parameter("width", 14.5, title=old.title, maximum=22.5)
+    added = Parameter("added", 5.0, title="Cale:12.5")
+    removed = Parameter("removed", 2.0, title="Ancien:3.2")
+    transaction = Transaction(
+        id="test",
+        title="test",
+        ops=(),
+        changes=DocumentChange(
+            before=DocumentState(parameters={"width": old, "removed": removed}),
+            after=DocumentState(parameters={"width": new, "added": added, "removed": None}),
+        ),
+    )
+    assert _changed_parameters(transaction).splitlines() == [
+        "Largeur : 12,50 mm → 14,50 mm",
+        "Largeur · Borne inférieure : 3,00 mm → –",
+        "Largeur · Borne supérieure : 20,00 mm → 22,50 mm",
+        "Cale:12.5 : 5,00 mm",
+        "Ancien:3.2 : 2,00 mm → –",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -767,61 +788,56 @@ def test_french_placement_prefix_uses_its_actual_resolved_reference_frame(
 
 def test_french_measurement_warnings_and_advice_keep_complete_text_frames(
     monkeypatch: pytest.MonkeyPatch,
+    display_language: Callable[[str], None],
 ) -> None:
     """Reale Texthelfer prüfen dynamische Titel ohne Fenster oder Arbeiter."""
     from types import SimpleNamespace
 
     from app.core.types import Finding, SettingAdvice
-    from app.i18n import get_language, tr
+    from app.i18n import tr
     from app.ui import labels
     from app.ui.chat import _named, _warnings
     from app.ui.print_settings_dialog import PrintSettingsDialog, _TargetedAdvice
     from app.ui.section_bar import MeasureBar
 
-    previous = get_language()
-    install_language("fr")
-    set_language("fr")
+    display_language("fr")
     monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
-    try:
-        readouts: list[str] = []
-        bar = SimpleNamespace(readout=SimpleNamespace(setText=readouts.append))
-        MeasureBar.show_measurement(bar, "distance", 12.5, 3)
-        assert readouts == ["Distance : 12,50 mm   (3)"]
+    readouts: list[str] = []
+    bar = SimpleNamespace(readout=SimpleNamespace(setText=readouts.append))
+    MeasureBar.show_measurement(bar, "distance", 12.5, 3)
+    assert readouts == ["Distance : 12,50 mm   (3)"]
 
-        message = "Vérifier pieces/12.5_box.stl : entrée A."
-        proposal = SimpleNamespace(
-            findings=(
-                Finding("test.warning", "warning", message),
-                Finding("test.info", "info", "invisible"),
-                Finding(
-                    "test.error",
-                    "error",
-                    TranslatableText("Objekt: {object_id}", values={"object_id": "cube:12.5"}),
-                ),
-            )
+    message = "Vérifier pieces/12.5_box.stl : entrée A."
+    proposal = SimpleNamespace(
+        findings=(
+            Finding("test.warning", "warning", message),
+            Finding("test.info", "info", "invisible"),
+            Finding(
+                "test.error",
+                "error",
+                TranslatableText("Objekt: {object_id}", values={"object_id": "cube:12.5"}),
+            ),
         )
-        assert _warnings(proposal) == [
-            "avertissement : " + message,
-            "erreur : Objet : cube:12.5",
-        ]
-        assert _named([SimpleNamespace(op="cube:12.5")], tr("Operation")) == (
-            str(tr("Operation")) + " : cube:12.5"
-        )
+    )
+    assert _warnings(proposal) == [
+        "avertissement : " + message,
+        "erreur : Objet : cube:12.5",
+    ]
+    assert _named([SimpleNamespace(op="cube:12.5")], tr("Operation")) == (
+        str(tr("Operation")) + " : cube:12.5"
+    )
 
-        plain = SettingAdvice("layers.height", 0.2, 0.25, "test")
-        advice = _TargetedAdvice(
-            "layers.height", 0.2, 0.25, "test", parts=("12.5_A.stl", "cube:reference")
-        )
-        assert PrintSettingsDialog._advice_parts(advice) == (
-            "S'applique à : 12.5_A.stl, cube:reference"
-        )
-        assert PrintSettingsDialog._advice_parts(plain) == ""
-        assert (
-            PrintSettingsDialog._advice_parts(_TargetedAdvice("layers.height", 0.2, 0.25, "test"))
-            == ""
-        )
-    finally:
-        set_language(previous)
+    plain = SettingAdvice("layers.height", 0.2, 0.25, "test")
+    advice = _TargetedAdvice(
+        "layers.height", 0.2, 0.25, "test", parts=("12.5_A.stl", "cube:reference")
+    )
+    assert PrintSettingsDialog._advice_parts(advice) == (
+        "S'applique à : 12.5_A.stl, cube:reference"
+    )
+    assert PrintSettingsDialog._advice_parts(plain) == ""
+    assert (
+        PrintSettingsDialog._advice_parts(_TargetedAdvice("layers.height", 0.2, 0.25, "test")) == ""
+    )
 
 
 @pytest.mark.parametrize("path", surface_files(), ids=lambda path: path.name)

@@ -150,6 +150,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     fit_dialog_to_screen,
     make_primary,
     set_level,
@@ -4288,9 +4289,13 @@ class PrintSettingsDialog(QDialog):
                 ),
             ),
         )
+        # Sichtbar ist, was die Übergabe an diesen Slicer schreibt (RM-432):
+        # „Automatisch“ heißt bei PrusaSlicer und Cura die Art des Materials.
+        kind: str = settings.adhesion.kind
+        also: frozenset[str] = frozenset()
         flavour = self._current_flavour()
         if flavour is not None:
-            settings = handover.effective_adhesion(
+            kind, also = handover.handed_over_adhesion_kinds(
                 settings,
                 self.session.profile,
                 flavour,
@@ -4300,7 +4305,8 @@ class PrintSettingsDialog(QDialog):
             str(
                 _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
             ),
-            settings.adhesion.kind,
+            kind,
+            also=also,
         )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
@@ -4438,7 +4444,7 @@ class PrintSettingsDialog(QDialog):
             self._scroll,
             grow_width=intent == "initial",
             intent=intent,
-            natural_width=self._room_for_tabs() if intent == "initial" else 0,
+            natural_width=self._natural_width() if intent == "initial" else 0,
         )
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
@@ -4464,6 +4470,17 @@ class PrintSettingsDialog(QDialog):
         self._buttons.setOrientation(
             Qt.Orientation.Horizontal if wanted <= available else Qt.Orientation.Vertical
         )
+
+    def _natural_width(self) -> int:
+        """Die Anfangsbreite: Reiterleiste und alles, was hinter den Klappen wartet.
+
+        Zugeklappt sind die Reiter von *Weitere Einstellungen* und die *Profile
+        des Slicers*; ohne sie rollte der Dialog nach dem Aufklappen quer
+        (RM-342 D-N5, dieselbe Rechnung wie in den übrigen Dialogen).
+        """
+        hidden = self.slicer_inner.layout()
+        parts = (self.tabs, hidden) if isinstance(hidden, QFormLayout) else (self.tabs,)
+        return max(self._room_for_tabs(), expanded_width(self._scroll, *parts))
 
     def _room_for_tabs(self) -> int:
         """Die Breite, die die Reiterleiste braucht — gedeckelt vom Bildschirm.
@@ -6379,13 +6396,26 @@ class PrintSettingsDialog(QDialog):
         return ""
 
     def _machine_selection_issue(self) -> str:
-        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts."""
+        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts.
+
+        **Ein leeres Profil entscheidet** :meth:`_profile_gap` **allein**: Die
+        Orca-Familie verlangt eines, PrusaSlicer nimmt ohne Drucker seines
+        Bündels Solidons Werte. Der Rückfallsatz „Wählen Sie einen Drucker aus
+        der Liste.“ sperrte dort *Slicen*, obwohl der Hinweis darüber sagte,
+        dass Solidons Werte gelten (RM-431). Gesperrt wird nur noch ein Eintrag,
+        der keine Wahl ist, aber einen Wert trüge — ihn bekäme sonst der Slicer.
+        """
+        gap = self._profile_gap()
+        if gap:
+            return gap
+        box = self.machine_choice
         if (
-            self.machine_choice.isEnabled()
-            and self.machine_choice.count() > 0
-            and not valid_printer_choice(self.machine_choice)
+            box.isEnabled()
+            and box.count() > 0
+            and str(box.currentData() or "")
+            and not valid_printer_choice(box)
         ):
-            return self._profile_gap() or str(tr("Wählen Sie einen Drucker aus der Liste."))
+            return str(tr("Wählen Sie ein Druckerprofil aus der Liste."))
         return ""
 
     def _show_slicer_state(self) -> None:
@@ -6526,7 +6556,7 @@ class PrintSettingsDialog(QDialog):
             # haben kann — sonst wischte der nächste Aufruf ein Ergebnis weg,
             # obwohl zwischendurch nie ein Grund dastand.
             self._state_shows_reason = False
-        elif reason:
+        elif reason and not (self.settings.handover == "open" and not open_reason):
             # **Der Grund gehört auf den Bildschirm, nicht in einen Tooltip.**
             # Er stand bis hierhin nur an ``slice_button`` — und ein Tooltip
             # erscheint erst, wenn jemand mit der Maus darauf wartet. Wer den
@@ -6538,6 +6568,11 @@ class PrintSettingsDialog(QDialog):
             # Nur wenn es einen Grund gibt: Ohne einen trägt die Zeile das
             # Ergebnis des letzten Laufs, und das wäre hier nicht zu
             # überschreiben, sondern stehen zu lassen.
+            #
+            # **Und nur, wenn Rechnen der Hauptweg ist.** Ist es das Öffnen und
+            # steht dieser Weg frei, ist *Slicen* der Nebenknopf: Sein Grund
+            # steht an ihm, die Zeile behält die Quittung „An … übergeben“
+            # (RM-431) — dieselbe Regel wie im Zweig darunter.
             self.state.setText(str(reason))
             self._state_shows_reason = True
         elif open_reason and self.settings.handover == "open":
@@ -6957,8 +6992,7 @@ class PrintSettingsDialog(QDialog):
         was_loading = self._loading
         self._loading = True
         try:
-            for name in ("skirt_loops", "brim_width", "raft_layers"):
-                path = f"adhesion.{name}"
+            for path in print_settings.ADHESION_MEASURES.values():
                 editor = self._editors[path]
                 if isinstance(editor, BoundedSpin) and editor.refusal():
                     continue
@@ -7227,11 +7261,10 @@ class PrintSettingsDialog(QDialog):
         field = self._fields[path]
         value = _setting_editor_value(self._editors[path], field)
         current_value = print_settings.read_path(self.settings, path)
-        if self.settings.adhesion.kind == "auto" and path in {
-            "adhesion.skirt_loops",
-            "adhesion.brim_width",
-            "adhesion.raft_layers",
-        }:
+        if (
+            self.settings.adhesion.kind == "auto"
+            and path in print_settings.ADHESION_MEASURES.values()
+        ):
             current_value = print_settings.read_path(self._effective_adhesion(self.settings), path)
         if not print_settings.same_value(value, current_value):
             before = self.settings.explicit

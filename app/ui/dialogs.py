@@ -91,6 +91,7 @@ from app.ui.labels import (
     fill_parameter_units,
     localised_value,
     trial_days,
+    unit_of,
     value_line,
     wheel_needs_focus,
 )
@@ -658,9 +659,25 @@ class ParameterDialog(QDialog):
         form.addRow(tr("Wert"), value_row)
         form.addRow(tr("Ausdruck"), self.expression_row)
         form.addRow(tr("Einheit"), self.unit_field)
-        form.addRow(tr("Untergrenze"), self.minimum_field)
-        form.addRow(tr("Obergrenze"), self.maximum_field)
         self._form = form
+        # **Vorn nur Name, Wert, Einheit** (§2.4, RM-359 F11). Die Grenzen
+        # stehen hinter *Weitere Einstellungen*; offen, wenn das Maß schon
+        # welche hat — sonst sähe ein Änderungsdialog aus, als gäbe es keine.
+        from app.ui.panels import collapsible
+
+        self._limits = QWidget(content)
+        limits_form = QFormLayout(self._limits)
+        limits_form.setContentsMargins(0, 0, 0, 0)
+        limits_form.setHorizontalSpacing(NORMAL)
+        limits_form.setVerticalSpacing(NORMAL)
+        limits_form.addRow(tr("Untergrenze"), self.minimum_field)
+        limits_form.addRow(tr("Obergrenze"), self.maximum_field)
+        bounded = existing is not None and (
+            existing.minimum is not None or existing.maximum is not None
+        )
+        self._limits_section = collapsible(
+            tr("Weitere Einstellungen"), self._limits, open_now=bounded
+        )
         chain = (
             self.name_field,
             self.value_field,
@@ -713,6 +730,7 @@ class ParameterDialog(QDialog):
         content_layout.setSpacing(NORMAL)
         content_layout.addWidget(explanation)
         content_layout.addLayout(form)
+        content_layout.addWidget(self._limits_section)
         content_layout.addWidget(self.problem)
         content_layout.addStretch(1)
 
@@ -795,6 +813,15 @@ class ParameterDialog(QDialog):
             return tr("Der Wert liegt außerhalb der eigenen Grenzen.")
         return None
 
+    @staticmethod
+    def _limit_problems() -> tuple[str, ...]:
+        """Die Sätze, die eine Grenze meinen — sie klappen die Grenzen auf."""
+        return (
+            tr("Eine Grenze muss eine Zahl sein — oder das Feld bleibt leer."),
+            tr("Die Untergrenze liegt über der Obergrenze."),
+            tr("Der Wert liegt außerhalb der eigenen Grenzen."),
+        )
+
     def _bounds(self) -> tuple[float | None, float | None] | None:
         """Die eingetragenen Grenzen — oder ``None``, wenn eine keine Zahl ist.
 
@@ -874,6 +901,11 @@ class ParameterDialog(QDialog):
     def _accept(self) -> None:
         problem = self.validation_problem()
         if problem is not None:
+            if problem in self._limit_problems():
+                # Der Satz nennt eine Grenze; die Felder dazu gehören ins Bild.
+                from app.ui.panels import open_section
+
+                open_section(self._limits)
             self.problem.setText(problem)
             self.problem.setVisible(True)
             self._fit_soon()
@@ -3180,10 +3212,12 @@ def spoken_values(error: AppError) -> list[str]:
     das Datum nicht stimmt (Lagerdurchsicht 19.09.2026). Der Dialog setzt den
     Cursor ins Feld; das ist die Übersetzung der Adresse.
     """
+    unit = unit_of(error.values)
     return [
-        value_line(key, value)
+        value_line(key, value, unit)
         for key, value in error.values.items()
         if key not in ADDRESS_VALUES
+        and not (unit and key == "unit")
         and value is not None
         and value != ""
         and value != []

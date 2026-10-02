@@ -253,8 +253,9 @@ def _facing(normals: np.ndarray, direction: np.ndarray) -> np.ndarray:
 
     Der Pinsel griff jeden Eckpunkt in seiner Kugel, auch die Unterseite einer
     dünnen Wand und die Innenwand eines Hohlkörpers: *Abtragen* auf einer
-    4-mm-Platte drückte die Unterseite 3,7 mm unter das Bett. Elementweise wie
-    jeder Strahl im Kern (RM-187).
+    4-mm-Platte zog die Unterseite 0,6 mm mit (die 3,7 mm unter dem Bett waren
+    die durchgestoßene Oberseite, RM-430). Elementweise wie jeder Strahl im
+    Kern (RM-187).
     """
     along = (
         normals[:, 0] * direction[0] + normals[:, 1] * direction[1] + normals[:, 2] * direction[2]

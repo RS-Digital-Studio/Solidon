@@ -23,7 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.
 - Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.
 - Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.
-- Cuatro soportes se crean en un paso: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, agujeros para tornillos, gancho de panel o pinza.
+- Cuatro soportes se crean en un paso con caras y aristas reales: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, agujeros para tornillos, gancho de panel o pinza.
 - Una escena vacía muestra cómo empezar: caja, cilindro, dibujo, bloques o un archivo que arrastre dentro.
 - Los cuerpos nuevos aparecen sobre la cama o sobre la cara plana elegida, ya no donde estaba un cuerpo seleccionado antes, y quedan seleccionados.
 
@@ -37,9 +37,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Cura lamina ahora con la boquilla que usted eligió, también en impresoras de la lista de Cura, y las impresoras con el origen en el centro de la cama lo conservan.
 - Las impresoras con el origen fuera de la esquina de la cama, como delta, BIBO o Dremel, reciben las piezas donde Solidon las pone. Antes quedaban en el borde o el laminador las reorganizaba.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
-- Si elige brim, skirt o raft en los ajustes de impresión, solo aparecen las medidas de ese tipo de cama, sin campos que no harían nada.
+- Si elige brim, skirt, raft o *Automático* en los ajustes de impresión, solo aparecen las medidas que recibe su slicer, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
 - Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
+- Con Cura, el informe de comprobación nombra las piezas que solo reciben esos valores de rebote, porque Cura los acepta solo para toda la placa.
 - Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
 - También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad.
 - Con «Organizar sobre la cama», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
@@ -54,11 +55,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Dos placas que se tocan siguen siendo un cuerpo en un taladro y conservan su material, al estirarlo, cambiarlo, desplazarlo o cerrarlo. Un pasador encima se queda en su sitio.
 - Estirar un taladro que atraviesa dos cuerpos ya no informa de que el cuerpo se rompe cuando no ocurre.
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
+- Los patrones sobre caras cilíndricas de modelos importados siguen cerrados al modificarlos.
 - En el historial de un cuerpo STEP se pueden reordenar pasos o insertar uno antes, aunque un paso posterior se refiera a un taladro. La referencia sigue al taladro.
 - Un taladro desplazado o duplicado con una dirección nueva sigue exacto en un cuerpo STEP.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
-- Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» e «Inclinar sobre», y «En la cara» lleva el corte paralelo a una cara plana.
+- Recortar corta ahora también en ángulo: arriba elige el «Plano»: en un eje con inclinación, paralelo a una cara, por una arista o por tres puntos que marca en la vista.
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 - Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.

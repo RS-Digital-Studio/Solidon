@@ -35,6 +35,13 @@ Ausgabeformat, Normteilmaße aus der Tabelle, Vorschaubild gerendert von
   nicht gegen „gültig und geschlossen" — der nackte Kern ist beides.
 - „Loch für M4-Einpressmutter" ist ein Nachschlagewert in der Normteiltabelle,
   nie eine Zahl im Baustein.
+- **Eine Vorlage (`template`) entsteht wie ein Grundkörper exakt, wo der Kern
+  da ist** (`ops._creates_exactly`) — sie ist der Anfang einer Konstruktion. Die
+  übrigen Erzeuger bauen am Netz, wie ihre gespeicherten Schritte immer
+  rechneten.
+- **Das eingetragene Maß ist das Maß**: Eine Befestigung richtet sich nach der
+  Breite (zwei Schlüssellöcher oder eines mittig, `holders._keyholes`), statt
+  den Halter über sein Maß hinaus zu verbreitern.
 
 ## Ein abgezogener Baustein liegt unter seiner Mündung
 
