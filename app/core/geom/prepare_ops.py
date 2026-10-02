@@ -150,6 +150,7 @@ from app.core.units import (
     DEGREE_UNIT,
     EPS_DISPLAY,
     EPS_GEOM,
+    FEATURE_REACH,
     MAX_FACET_SAG,
     format_length,
     is_close,
@@ -3460,8 +3461,8 @@ class MoveFeatureParams(FeaturePlacementParams):
         title=_("X"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
     )
@@ -3469,8 +3470,8 @@ class MoveFeatureParams(FeaturePlacementParams):
         title=_("Y"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
     )
@@ -3478,8 +3479,8 @@ class MoveFeatureParams(FeaturePlacementParams):
         title=_("Z"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
     )
@@ -4325,8 +4326,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
         title=_("X"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte der Kopie. Beim Anklicken steht hier die alte, um einen "
@@ -4337,8 +4338,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
         title=_("Y"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte der Kopie. Beim Anklicken steht hier die alte, um einen "
@@ -4349,8 +4350,8 @@ class DuplicateFeatureParams(FeaturePlacementParams):
         title=_("Z"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte der Kopie. Beim Anklicken steht hier die alte, um einen "
@@ -4739,8 +4740,8 @@ class PatternFeatureParams(BaseParams):
         title=_("Punkt X"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="advanced",
         depends_on=("kind", ("circular", "mirror")),
         doc=_("Ein Punkt auf der Achse des Kreises oder in der Spiegelebene."),
@@ -4749,8 +4750,8 @@ class PatternFeatureParams(BaseParams):
         title=_("Punkt Y"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="advanced",
         depends_on=("kind", ("circular", "mirror")),
         doc=_("Zweite Koordinate des Punkts — siehe Punkt X."),
@@ -4759,8 +4760,8 @@ class PatternFeatureParams(BaseParams):
         title=_("Punkt Z"),
         default=0.0,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="advanced",
         depends_on=("kind", ("circular", "mirror")),
         doc=_("Dritte Koordinate des Punkts — siehe Punkt X."),
@@ -7373,8 +7374,8 @@ class ResizeHoleParams(BaseParams):
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
@@ -7386,8 +7387,8 @@ class ResizeHoleParams(BaseParams):
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
@@ -7399,8 +7400,8 @@ class ResizeHoleParams(BaseParams):
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte der Bohrung. Beim Anklicken steht hier ihre heutige; "
@@ -8413,8 +8414,8 @@ class SlotHoleParams(BaseParams):
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
@@ -8426,8 +8427,8 @@ class SlotHoleParams(BaseParams):
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "
@@ -8439,8 +8440,8 @@ class SlotHoleParams(BaseParams):
         default=None,
         optional=True,
         unit="mm",
-        minimum=-1000.0,
-        maximum=1000.0,
+        minimum=-FEATURE_REACH,
+        maximum=FEATURE_REACH,
         placement="front",
         doc=_(
             "Die Mitte des Langlochs. Beim Anklicken steht hier die heutige "

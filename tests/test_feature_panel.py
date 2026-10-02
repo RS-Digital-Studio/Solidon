@@ -991,6 +991,15 @@ def test_a_large_detected_diameter_reaches_the_edit_unchanged(
     emitted_op, params = emitted[0]
     assert emitted_op == operation
     assert float(params["diameter"]) == pytest.approx(measured)
+    # Der Ort ebenso: Die vergrößerte Platte trägt ihre Bohrungen über einen
+    # Meter vom Ursprung. Eine Ortsgrenze von ±1000 mm lehnte den Messwert ab
+    # oder versetzte die Bohrung still an die Grenze.
+    centre = [float(value) for value in feature.params["centre"]]
+    if kind == "hole":
+        assert max(abs(value) for value in centre) > 1000.0, "der Fall erreicht die alte Ortsgrenze"
+    for axis, value in zip("xyz", centre, strict=True):
+        if axis in params:
+            assert float(params[axis]) == pytest.approx(value), axis
     accepted = validate(REGISTRY.get(operation).params, params)
     assert accepted.diameter == pytest.approx(measured)
 
