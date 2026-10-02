@@ -344,6 +344,27 @@ def references(text: str) -> frozenset[str]:
     return frozenset(parser.references)
 
 
+def bound_name(text: object) -> str | None:
+    """Das Maß, an das ein Feld unverändert gebunden ist (``=@breite``) — sonst ``None``.
+
+    Nur diese Bindung reicht den Wert ohne Rechnung durch: Die Grenze des
+    Felds ist dann die des Maßes, und wer den Wert korrigiert, korrigiert das
+    Maß. ``=@breite*2`` oder ``=max(@breite, 2000)`` lesen das Maß nur; dort
+    gehört eine Korrektur in den Ausdruck (RM-453). Leerzeichen zählen nicht.
+    """
+    if not is_expression(text):
+        return None
+    body = _body(text).strip()
+    if not body.startswith(REFERENCE_PREFIX):
+        return None
+    try:
+        read = references(text)
+    except ValidationError:
+        return None
+    name = body[len(REFERENCE_PREFIX) :].strip()
+    return name if read == {name} else None
+
+
 def check(text: str) -> None:
     """Lehnt alles außerhalb der Grammatik ab. Wirft — oder kehrt still zurück."""
     references(text)

@@ -41,7 +41,7 @@ from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying, weak_slot
-from app.ui.panels import collapsible
+from app.ui.panels import collapsible, open_section
 from app.ui.style import NORMAL, SPACE, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
 
 #: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
@@ -397,6 +397,7 @@ class PartCatalog(QDialog):
         management_layout.addWidget(self.save_hint, 3, 0, 1, 2)
         management_layout.addWidget(self.share_hint, 4, 0, 1, 2)
         self.management_section = collapsible(tr("Bausteine verwalten"), management, open_now=False)
+        self._management = management
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
@@ -932,6 +933,13 @@ class PartCatalog(QDialog):
         # Bearbeiten sind zwei Handlungen, und die nächste Voraussetzung, die
         # eine von beiden bekommt, gehört dann an ihre Stelle.
         self.edit_part.setVisible(own)
+        if own:
+            # **Ein eigener Baustein klappt seine Verwaltung auf.** Bearbeiten,
+            # Weitergeben und Entfernen gibt es nur an ihm, und seit dem
+            # eingeklappten Abschnitt (48ffcf145) standen sie unter einer
+            # Kopfzeile, die niemand öffnet — in 0.5.1 lagen sie offen. Ein
+            # eingebauter Baustein lässt den Abschnitt, wie der Kunde ihn hat.
+            open_section(self._management)
 
     # --- choosing ---------------------------------------------------------------
 

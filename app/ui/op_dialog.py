@@ -1599,6 +1599,7 @@ class OperationDialog(QDialog):
         source_objects: Sequence[str] = (),
         edges: Mapping[str, str] | None = None,
         offer_naming: bool = False,
+        naming_default: bool = False,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1611,7 +1612,8 @@ class OperationDialog(QDialog):
         :meth:`names_dimensions` liest ihn. Der Dialog bietet ihn nur an, wo
         das Fenster es verlangt — bei den Grundkörpern, deren Maße eine
         Vorlage ausmachen, nicht bei einer Bohrung, die ein Maß *am* Körper
-        ist.
+        ist. ``naming_default`` ist sein Anfangszustand — das Fenster reicht
+        die letzte Wahl des Kunden durch (RM-369).
 
         ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
         seinen Text selbst, und eine Beschriftung daneben stünde zweimal
@@ -1948,6 +1950,7 @@ class OperationDialog(QDialog):
             # vorn, direkt unter den Maßen, die er benennt (Entscheidung
             # Robert, 14.09.2026).
             naming = RowCheckBox(self)
+            naming.setChecked(naming_default)
             front.addRow(str(tr("Maße als Parameter anlegen")), naming)
             caption = front.labelForField(naming)
             caption_toggles(caption, naming)
@@ -3656,6 +3659,10 @@ class OperationDialog(QDialog):
         nichts zu benennen, und der Aufrufer braucht keinen zweiten Fall.
         """
         return self._naming is not None and self._naming.isChecked()
+
+    def offers_naming(self) -> bool:
+        """Ob der Dialog den Haken *Maße als Parameter anlegen* trägt."""
+        return self._naming is not None
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
