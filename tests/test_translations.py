@@ -522,6 +522,290 @@ def surface_files() -> list[Path]:
     return sorted(UI_DIR.rglob("*.py"))
 
 
+def _fixed_translated_colons(tree: ast.AST) -> set[int]:
+    """Findet feste Doppelpunkte neben Übersetzungen und in Maßpräfixen.
+
+    Ein dynamischer Titel oder Wert bleibt ein Platzhalter im vollständigen
+    Rahmen. Die Prüfung verfolgt keine Variablen; dafür prüfen die Textfälle
+    unten die wirklichen Ausgaben der gemeinsamen Beschriftungshelfer.
+    """
+
+    def translated(node: ast.AST) -> bool:
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            function = child.func
+            if isinstance(function, ast.Name) and function.id in {"tr", "_", "TranslatableText"}:
+                return True
+            if isinstance(function, ast.Attribute) and function.attr in {"tr", "translate"}:
+                return True
+        return False
+
+    def starts_with_colon(node: ast.AST) -> bool:
+        if isinstance(node, ast.JoinedStr) and node.values:
+            node = node.values[0]
+        return (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and re.match(r"^\s*(?:</[^>]+>\s*)*:", node.value) is not None
+        )
+
+    offenders: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.JoinedStr) and translated(node):
+            if any(starts_with_colon(part) for part in node.values):
+                offenders.add(node.lineno)
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            if translated(node.left) and starts_with_colon(node.right):
+                offenders.add(node.lineno)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "setPrefix"
+            and node.args
+        ):
+            prefix = node.args[0]
+            if (
+                isinstance(prefix, ast.BinOp)
+                and isinstance(prefix.op, ast.Add)
+                and starts_with_colon(prefix.right)
+            ) or (
+                isinstance(prefix, ast.JoinedStr)
+                and any(starts_with_colon(part) for part in prefix.values)
+            ):
+                offenders.add(node.lineno)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"format", "format_map"}
+            and isinstance(node.func.value, ast.Constant)
+            and isinstance(node.func.value.value, str)
+            and re.search(r"}\s*(?:</[^>]+>\s*)*:", node.func.value.value)
+            and any(
+                translated(value) for value in (*node.args, *(kw.value for kw in node.keywords))
+            )
+        ):
+            offenders.add(node.lineno)
+    return offenders
+
+
+@pytest.mark.parametrize(
+    "source,expected",
+    [
+        ("f\"{tr('Wert')}: {value}\"", True),
+        ("f\"{str(tr('Wert'))}: {value}\"", True),
+        ("f\"{tr('Schritt')} {step}: {label}\"", True),
+        ("f\"<b>{tr('Wert')}</b>: {value}\"", True),
+        ("f\"{tr('Fehler') if error else tr('Warnung')}: {message}\"", True),
+        ('tr("Wert") + ": " + value', True),
+        ('_("Wert") + f": {value}"', True),
+        ('"{}: {}".format(tr("Wert"), value)', True),
+        ('"{name}: {value}".format_map({"name": tr("Wert"), "value": value})', True),
+        ('tr("Sicherheitsproblem melden") + f": <a>{address}</a>"', True),
+        ('field.setPrefix(reference_name + ": ")', True),
+        ('field.setPrefix(f"{reference_name}: ")', True),
+        ('field.setPrefix(tr("{name}: {value}", name=reference_name, value=""))', False),
+        ('tr("Wert: {value}", value=value)', False),
+        ('tr("{name}: {value}", name=_("Wert"), value=value)', False),
+        ('tr("Wert: {value}").format(value=value)', False),
+        ('f"{object_id}:{feature_id}"', False),
+        ('f"{host}:{port}"', False),
+        ('"QComboBox::drop-down { width: 12px; }"', False),
+        ("f\"{tr('Wert')} {value:.2f}\"", False),
+    ],
+)
+def test_the_colon_guard_distinguishes_labels_from_internal_syntax(
+    source: str, expected: bool
+) -> None:
+    """Gegenproben schützen echte Treffer, Platzhalter und technische Syntax."""
+    assert bool(_fixed_translated_colons(ast.parse(source))) is expected
+
+
+def test_translated_surface_labels_do_not_append_a_fixed_colon() -> None:
+    """Auch die Interpunktion einer Beschriftung kommt aus ihrem Katalog."""
+    paths = surface_files()
+    assert paths, "die Oberflächenprüfung muss Quellen lesen"
+    offenders = [
+        f"{path.relative_to(PACKAGE_DIR)}:{line}"
+        for path in paths
+        for line in sorted(_fixed_translated_colons(ast.parse(path.read_text(encoding="utf-8"))))
+    ]
+    assert not offenders, "feste Doppelpunkte neben Übersetzungen:\n" + "\n".join(offenders)
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_dynamic_value_labels_keep_catalogue_punctuation_and_raw_paths(
+    language: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sechs Sprachen behalten ihre Zahlen, Werte und eigene Zeichensetzung."""
+    from app.i18n import get_language
+    from app.ui import labels
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    try:
+        separator = " : " if language == "fr" else ": "
+        assert labels.value_line("diameter_mm", 12.5) == (
+            labels.value_label("diameter_mm") + separator + labels.length(12.5)
+        )
+        path = "pieces/12.5_box.stl"
+        assert labels.value_line("output_path", path) == "output_path" + separator + path
+        if language == "fr":
+            assert labels.value_line("diameter_mm", 12.5) == "Diamètre : 12,50 mm"
+    finally:
+        set_language(previous)
+
+
+def test_french_history_labels_translate_colons_without_changing_names_or_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anlegen, Löschen, Werte und Grenzen nutzen denselben übersetzten Rahmen."""
+    from app.core.types import DocumentChange, DocumentState, Parameter, Transaction
+    from app.i18n import get_language
+    from app.ui import labels
+    from app.ui.panels import _changed_parameters
+
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    try:
+        old = Parameter("width", 12.5, title=TranslatableText("Breite"), minimum=3.0, maximum=20.0)
+        new = Parameter("width", 14.5, title=old.title, maximum=22.5)
+        added = Parameter("added", 5.0, title="Cale:12.5")
+        removed = Parameter("removed", 2.0, title="Ancien:3.2")
+        transaction = Transaction(
+            id="test",
+            title="test",
+            ops=(),
+            changes=DocumentChange(
+                before=DocumentState(parameters={"width": old, "removed": removed}),
+                after=DocumentState(parameters={"width": new, "added": added, "removed": None}),
+            ),
+        )
+        assert _changed_parameters(transaction).splitlines() == [
+            "Largeur : 12,50 mm → 14,50 mm",
+            "Largeur · Borne inférieure : 3,00 mm → –",
+            "Largeur · Borne supérieure : 20,00 mm → 22,50 mm",
+            "Cale:12.5 : 5,00 mm",
+            "Ancien:3.2 : 2,00 mm → –",
+        ]
+    finally:
+        set_language(previous)
+
+
+@pytest.mark.parametrize(
+    "side,expected",
+    [(None, "Arête extérieure 3 : "), ("left", "Arête extérieure à gauche : ")],
+)
+def test_french_placement_prefix_uses_its_actual_resolved_reference_frame(
+    side: str | None, expected: str
+) -> None:
+    """Der echte Präfixaufruf trägt Nummer und Seitenbezug durch den Katalog.
+
+    Die Quelle bindet den Rahmen an den wirklichen setPrefix-Aufruf; die reine
+    Textprüfung löst dessen Referenznamen auf, ohne eine Maßansicht aufzubauen.
+    """
+    from app.i18n import get_language, tr
+    from app.ui.placement_flow import PlacementFlow
+
+    tree = ast.parse((UI_DIR / "placement_flow.py").read_text(encoding="utf-8"))
+    frames = [
+        node.args[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "setPrefix"
+        and node.args
+        and isinstance(node.args[0], ast.Call)
+        and isinstance(node.args[0].func, ast.Name)
+        and node.args[0].func.id == "tr"
+        and any(
+            keyword.arg == "name"
+            and isinstance(keyword.value, ast.Name)
+            and keyword.value.id == "reference_name"
+            for keyword in node.args[0].keywords
+        )
+    ]
+    assert len(frames) == 1
+    frame = frames[0]
+    assert len(frame.args) == 1 and isinstance(frame.args[0], ast.Constant)
+    assert frame.args[0].value == "{name}: {value}"
+    values = {keyword.arg: keyword.value for keyword in frame.keywords}
+    assert set(values) == {"name", "value"}
+    assert isinstance(values["value"], ast.Constant) and values["value"].value == ""
+
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    try:
+        name = PlacementFlow._reference_name("outer", 3, side)
+        assert tr(frame.args[0].value, name=name, value=values["value"].value) == expected
+    finally:
+        set_language(previous)
+
+
+def test_french_measurement_warnings_and_advice_keep_complete_text_frames(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reale Texthelfer prüfen dynamische Titel ohne Fenster oder Arbeiter."""
+    from types import SimpleNamespace
+
+    from app.core.types import Finding, SettingAdvice
+    from app.i18n import get_language, tr
+    from app.ui import labels
+    from app.ui.chat import _named, _warnings
+    from app.ui.print_settings_dialog import PrintSettingsDialog, _TargetedAdvice
+    from app.ui.section_bar import MeasureBar
+
+    previous = get_language()
+    install_language("fr")
+    set_language("fr")
+    monkeypatch.setattr(labels, "_DISPLAY_UNIT", "mm")
+    try:
+        readouts: list[str] = []
+        bar = SimpleNamespace(readout=SimpleNamespace(setText=readouts.append))
+        MeasureBar.show_measurement(bar, "distance", 12.5, 3)
+        assert readouts == ["Distance : 12,50 mm   (3)"]
+
+        message = "Vérifier pieces/12.5_box.stl : entrée A."
+        proposal = SimpleNamespace(
+            findings=(
+                Finding("test.warning", "warning", message),
+                Finding("test.info", "info", "invisible"),
+                Finding(
+                    "test.error",
+                    "error",
+                    TranslatableText("Objekt: {object_id}", values={"object_id": "cube:12.5"}),
+                ),
+            )
+        )
+        assert _warnings(proposal) == [
+            "avertissement : " + message,
+            "erreur : Objet : cube:12.5",
+        ]
+        assert _named([SimpleNamespace(op="cube:12.5")], tr("Operation")) == (
+            str(tr("Operation")) + " : cube:12.5"
+        )
+
+        plain = SettingAdvice("layers.height", 0.2, 0.25, "test")
+        advice = _TargetedAdvice(
+            "layers.height", 0.2, 0.25, "test", parts=("12.5_A.stl", "cube:reference")
+        )
+        assert PrintSettingsDialog._advice_parts(advice) == (
+            "S'applique à : 12.5_A.stl, cube:reference"
+        )
+        assert PrintSettingsDialog._advice_parts(plain) == ""
+        assert (
+            PrintSettingsDialog._advice_parts(_TargetedAdvice("layers.height", 0.2, 0.25, "test"))
+            == ""
+        )
+    finally:
+        set_language(previous)
+
+
 @pytest.mark.parametrize("path", surface_files(), ids=lambda path: path.name)
 def test_no_hard_wired_text_in_the_surface(path: Path) -> None:
     """Regel 20: Anzeigen und Dateifilter laufen über tr(), mit gemeinsamem AST."""

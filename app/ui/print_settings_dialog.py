@@ -7606,7 +7606,7 @@ class PrintSettingsDialog(QDialog):
         Tooltip und den Bildschirmleser, denn der Titel kürzt ab vier Teilen."""
         if not isinstance(entry, _TargetedAdvice) or not entry.parts:
             return ""
-        return f"{tr('Gilt für')}: {', '.join(entry.parts)}"
+        return tr("Gilt für: {parts}", parts=", ".join(entry.parts))
 
     def _chosen_advice(self) -> list[SettingAdvice]:
         """Die angehakten Vorschläge, in der Reihenfolge der Liste."""
@@ -8125,16 +8125,16 @@ class PrintSettingsDialog(QDialog):
         # Zeichenketten in der Oberfläche (Regel 20), während `facts.py` sie
         # ausdrücklich durch `tr()` schickt.
         if metrics.print_minutes is not None:
-            parts.append(f"{tr('Druckzeit')}: {duration(metrics.print_minutes * 60.0)}")
+            parts.append(tr("Druckzeit: {value}", value=duration(metrics.print_minutes * 60.0)))
         grams = metrics.grams(None, None)
         if grams is not None:
-            parts.append(f"{tr('Material')}: {mass(grams)}")
+            parts.append(tr("Material: {value}", value=mass(grams)))
         else:
-            parts.append(f"{tr('Material')}: {tr('Unbekannt')}")
+            parts.append(tr("Material: {value}", value=tr("Unbekannt")))
         if metrics.layer_count is not None:
-            parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
+            parts.append(tr("Schichten: {count}", count=metrics.layer_count))
         if len(outcomes) > 1:
-            parts.append(f"{tr('Platten')}: {len(outcomes)}")
+            parts.append(tr("Platten: {count}", count=len(outcomes)))
         self.state.setText(" · ".join(parts) if parts else tr("Fertig geslicet."))
         # Die Dateien liegen im Arbeitsordner, der beim Schließen verschwindet.
         # Ohne diesen Knopf wäre der ganze Lauf eine Zahl auf dem Bildschirm
@@ -8259,9 +8259,13 @@ class PrintSettingsDialog(QDialog):
             _log.info("wrote g-code to %s", target)
         self._gcode_save_succeeded = True
         self.state.setText(
-            f"{tr('Gespeichert')}: {targets[0].name}"
+            tr("Gespeichert: {file}", file=targets[0].name)
             if len(targets) == 1
-            else f"{tr('Gespeichert')}: {len(targets)} {tr('Druckdateien')} → {targets[0].parent}"
+            else tr(
+                "Gespeichert: {count} Druckdateien → {folder}",
+                count=len(targets),
+                folder=targets[0].parent,
+            )
         )
 
     def _slice_failed(self, problem: AppError, findings: Sequence[Finding] = ()) -> None:

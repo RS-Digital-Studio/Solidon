@@ -134,7 +134,7 @@ class CounterpartDialog(QDialog):
                 continue
             field = self._field_for(entry)
             self._fields[name] = field
-            self.form.addRow(f"{entry.title}:", field)
+            self.form.addRow(tr("{name}:", name=entry.title), field)
             caption = self.form.labelForField(field)
             if isinstance(caption, QLabel):
                 caption.setBuddy(field)

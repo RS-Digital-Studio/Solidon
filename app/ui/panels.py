@@ -1127,12 +1127,26 @@ def _changed_parameters(transaction: Transaction) -> str:
             continue
         label = str(shown.title or name)
         if now is None:
-            lines.append(f"{label}: {_parameter_value(shown)} → –")
+            lines.append(
+                tr(
+                    "{name}: {before} → {after}",
+                    name=label,
+                    before=_parameter_value(shown),
+                    after="–",
+                )
+            )
         elif was is None:
-            lines.append(f"{label}: {_parameter_value(now)}")
+            lines.append(tr("{name}: {value}", name=label, value=_parameter_value(now)))
         else:
             if not is_close(was.value, now.value):
-                lines.append(f"{label}: {_parameter_value(was)} → {_parameter_value(now)}")
+                lines.append(
+                    tr(
+                        "{name}: {before} → {after}",
+                        name=label,
+                        before=_parameter_value(was),
+                        after=_parameter_value(now),
+                    )
+                )
         if now is None:
             continue
         for bound, title in (
@@ -1157,7 +1171,15 @@ def _changed_parameters(transaction: Transaction) -> str:
                 if current is not None
                 else "–"
             )
-            lines.append(f"{label} · {title}: {before_text} → {after_text}")
+            lines.append(
+                tr(
+                    "{name} · {bound}: {before} → {after}",
+                    name=label,
+                    bound=title,
+                    before=before_text,
+                    after=after_text,
+                )
+            )
     return "\n".join(lines)
 
 
@@ -1269,7 +1291,11 @@ def _setting_line(finding: Finding) -> str:
     from app.ui.print_settings_dialog import setting_title, shown_value
 
     path = str(finding.values["setting"])
-    return f"{setting_title(path)}: {shown_value(path, finding.values.get('value'))}"
+    return tr(
+        "{name}: {value}",
+        name=setting_title(path),
+        value=shown_value(path, finding.values.get("value")),
+    )
 
 
 def _value_lines(finding: Finding) -> list[str]:
@@ -5515,7 +5541,7 @@ class ReportPanel(QWidget):
         item.setData(_TONE_ROLE, tone.name())
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
-        details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]
+        details = [tr("Herkunft: {value}", value=origin_label(finding.source))]
         step = _origin_text(finding.op_id, self._document)
         if step:
             details.append(step)

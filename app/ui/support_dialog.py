@@ -243,7 +243,9 @@ def _project_note(project: Project | None) -> str:
     parts = ", ".join(
         str(finding.values.get("parts", "")) for finding in findings if finding.values
     )
-    return f"{note} — {tr('Braucht eigene Bausteine')}: {parts}" if parts else note
+    return (
+        tr("{note} — Braucht eigene Bausteine: {parts}", note=note, parts=parts) if parts else note
+    )
 
 
 class _SessionWorker(Worker):
@@ -713,7 +715,7 @@ class SupportDialog(QDialog):
         self._crashes += 1
         trenner = f"--- {tr('Fehler')} {self._crashes} ---"
         self.detail = "\n\n".join((self.detail, trenner, detail))
-        gezaehlt = f"{tr('Seitdem sind weitere Fehler aufgetreten')}: {self._crashes}"
+        gezaehlt = tr("Seitdem sind weitere Fehler aufgetreten: {count}", count=self._crashes)
         self.headline.setText(
             self._opening.replace("{address}", SUPPORT_ADDRESS) + "\n\n" + gezaehlt
         )
@@ -747,7 +749,7 @@ class SupportDialog(QDialog):
         if size:
             lines.append("")
             lines.append(
-                f"{tr('Größe der Sendung')}: " + localised(f"{size / (1024 * 1024):.1f} MB")
+                tr("Größe der Sendung: {value}", value=localised(f"{size / (1024 * 1024):.1f} MB"))
             )
         self.preview.setPlainText("\n".join(lines))
         self._update_send()
@@ -844,7 +846,11 @@ class SupportDialog(QDialog):
         assert isinstance(receipt, Receipt)
         self.receipt = receipt
         self.progress.setVisible(False)
-        reference = f" {tr('Vorgang')}: {receipt.reference}" if receipt.reference else ""
+        reference = (
+            " " + tr("Vorgang: {reference}", reference=receipt.reference)
+            if receipt.reference
+            else ""
+        )
         self.state.setText(tr("Angekommen. Danke — das hilft wirklich.") + reference)
         _log.info("support ticket sent, reference=%s", receipt.reference or "-")
         if self.survey is not None:
@@ -909,7 +915,7 @@ class SupportDialog(QDialog):
         # ``reports.as_text`` — einmal.
         lines = [ticket.message.strip()]
         if ticket.contact:
-            lines.extend(["", f"{tr('Rückantwort an')}: {ticket.contact}"])
+            lines.extend(["", tr("Rückantwort an: {contact}", contact=ticket.contact)])
         if ticket.attachments:
             lines.extend(["", "--- anhänge ---"])
             lines.extend(
@@ -983,7 +989,7 @@ class SupportDialog(QDialog):
             return False
         assert written is not None
         self.written = written
-        self.state.setText(f"{tr('Abgelegt unter')}: {self.written}")
+        self.state.setText(tr("Abgelegt unter: {path}", path=self.written))
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.written)))
         return True
 

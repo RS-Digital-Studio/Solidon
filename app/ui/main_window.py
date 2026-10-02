@@ -2150,7 +2150,7 @@ def _candidate_labels(request: AskRequest) -> dict[str, str]:
         if body is None or feature is None:
             continue
         text = feature_label(feature_id, feature)
-        labels[f"{object_id}:{feature_id}"] = f"{body.name}: {text}"
+        labels[f"{object_id}:{feature_id}"] = tr("{name}: {value}", name=body.name, value=text)
         if len(homes[feature_id]) == 1:
             labels[feature_id] = text
     return labels
@@ -5635,7 +5635,11 @@ class MainWindow(QMainWindow):
         Sperrgrund führt selbst einen, und zwei in einem Satz sagen nicht mehr,
         welcher die Gliederung trägt.
         """
-        return f"{action.text()}: {reason}" if action.property("wordless") else reason
+        return (
+            tr("{name}: {value}", name=action.text(), value=reason)
+            if action.property("wordless")
+            else reason
+        )
 
     def _pick_hint(self, action: QAction, ready: bool, locked: bool, missing: str = "") -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
@@ -6630,9 +6634,11 @@ class MainWindow(QMainWindow):
         # Passungen" und „1 geschützte Stellen" lasen sich wie ein Fehler der
         # Anwendung — dieselbe Regel wie bei ``_when``.
         fits = len(applied.fits)
-        said = (
-            f"{tr('Geteilt')}: {len(applied.object_ids)} · {fits} "
-            f"{tr('Passung') if fits == 1 else tr('Passungen')}"
+        said = tr(
+            "Geteilt: {count} · {fits} {fit_word}",
+            count=len(applied.object_ids),
+            fits=fits,
+            fit_word=tr("Passung") if fits == 1 else tr("Passungen"),
         )
         if self._split_protected:
             # Die zweite Kodierung der Sperre (Regel 18): Die Schraffur sagt
@@ -7219,10 +7225,13 @@ class MainWindow(QMainWindow):
                 else:
                     mesh = as_mesh_data(body.mesh)
                     choices = [
-                        f"{slot.index + 1}: "
-                        + tr("{name} · {count} Dreiecke").format(
-                            name=str(slot.name),
-                            count=sum(value == slot.index for value in mesh.slots),
+                        tr(
+                            "{name}: {value}",
+                            name=slot.index + 1,
+                            value=tr("{name} · {count} Dreiecke").format(
+                                name=str(slot.name),
+                                count=sum(value == slot.index for value in mesh.slots),
+                            ),
                         )
                         for slot in body.material_slots
                     ]
@@ -7427,9 +7436,9 @@ class MainWindow(QMainWindow):
             self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]), comparison)
         self._focus_report()
         self.announce(
-            f"{tr('Geslicet')}: {outcomes[0].gcode_path.name}"
+            tr("Geslicet: {file}", file=outcomes[0].gcode_path.name)
             if len(outcomes) == 1
-            else f"{tr('Geslicet')}: {len(outcomes)} {tr('Platten')}"
+            else tr("Geslicet: {count} Platten", count=len(outcomes))
         )
 
     def _slicer_findings(self, findings: list[Finding]) -> None:
@@ -7518,7 +7527,9 @@ class MainWindow(QMainWindow):
         self.report.add_findings(findings, replacing_source="gcode")
         self._compare_totals(metrics)
         self._focus_report()
-        self.announce(f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}")
+        self.announce(
+            tr("G-Code gelesen: {slicer}", slicer=metrics.slicer or tr("unbekannter Slicer"))
+        )
 
         # Die Gegenprobe zum Stützvolumen braucht die eigene Schätzung. Sie
         # wird geholt, nicht erzwungen: liegt sie noch nicht vor, rechnet der
@@ -7998,9 +8009,13 @@ class MainWindow(QMainWindow):
         Dateien ab, und nach beiden fragt der Kunde dasselbe.
         """
         self.announce(
-            f"{tr('Exportiert')}: {written[0].name}"
+            tr("Exportiert: {file}", file=written[0].name)
             if len(written) == 1
-            else f"{tr('Exportiert')}: {len(written)} {tr('Dateien')} → {written[0].parent}"
+            else tr(
+                "Exportiert: {count} Dateien → {folder}",
+                count=len(written),
+                folder=written[0].parent,
+            )
         )
         self._export_folder = written[0].parent
         self.reveal_export.setToolTip(str(self._export_folder))
@@ -9110,8 +9125,11 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return
         self.announce(
-            f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} "
-            + localised(f"{calibrated.clearance:.2f} mm")
+            tr(
+                "Kalibriert: {material} · Spiel {clearance}",
+                material=calibrated.id,
+                clearance=localised(f"{calibrated.clearance:.2f} mm"),
+            )
         )
         # Toleranzen sind Verweise (§12), die Szene muss also neu gebaut werden.
         self.session.evaluate_async()
@@ -9460,7 +9478,7 @@ class MainWindow(QMainWindow):
         }
         for key, tool in self.tools.tools().items():
             commands[f"tool.{key}"] = (
-                f"{strip_title()}: {tool.title}",
+                tr("{name}: {value}", name=strip_title(), value=tool.title),
                 tool.shortcut,
                 lambda name=key: self.tools.toggle(name),
             )
@@ -9520,7 +9538,7 @@ class MainWindow(QMainWindow):
                 continue
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
-            title = f"{path}: {action.text()}" if path else action.text()
+            title = tr("{name}: {value}", name=path, value=action.text()) if path else action.text()
             key = f"menu.{len(found) - overridden}"
             found[key] = (
                 title,
@@ -17216,11 +17234,11 @@ class MainWindow(QMainWindow):
         # auch aus Fehlerhandlungen und Karten, wo ein Kasten den nächsten
         # Schritt nur aufhält (Review Fenster 0.5.0, 22.09.2026).
         if braucht and len(chosen) < braucht:
-            self.announce(f"{spec.title}: {_needs_objects(braucht)}")
+            self.announce(tr("{name}: {value}", name=spec.title, value=_needs_objects(braucht)))
             return
 
         if spec.takes_whole_scene and not objects:
-            self.announce(f"{spec.title}: {tr('Die Szene ist leer.')}")
+            self.announce(tr("{name}: {value}", name=spec.title, value=tr("Die Szene ist leer.")))
             return
 
         # **Eine Zeichnung trägt ihren Ort schon** (Bedienabnahme Zeichnen, F1
@@ -17598,7 +17616,7 @@ class MainWindow(QMainWindow):
             # Rückgängig-Knopf der Übernommen-Leiste (§26.5).
             asked = str(values.get("transaction", ""))
             if not agent_apply.sweep_for(self.session.project.document, asked):
-                return f"{tr('Diese Transaktion gibt es nicht')}: {asked}"
+                return tr("Diese Transaktion gibt es nicht: {transaction}", transaction=asked)
             if not self.session.undo_applied(asked):
                 return tr(
                     "Inzwischen liegt Neueres obenauf — das Rückgängig im Menü "
@@ -17671,7 +17689,11 @@ class MainWindow(QMainWindow):
             )
             if not changed:
                 return tr("Drucker und Material sind schon so eingestellt.")
-            return f"{tr('Druckziel geändert')}: {document.printer} / {document.material}"
+            return tr(
+                "Druckziel geändert: {printer} / {material}",
+                printer=document.printer,
+                material=document.material,
+            )
 
         spec = REGISTRY.get(name)
         chosen = [str(entry) for entry in values.pop(OBJECTS_FIELD, ()) or ()]
@@ -17705,8 +17727,14 @@ class MainWindow(QMainWindow):
         warnings = [
             finding for finding in result.scene.report.findings if finding.severity != "info"
         ]
-        lines = [f"{spec.title}: {tr('fertig')}.", f"{tr('Objekte')}: {names or tr('keine')}"]
-        lines.extend(f"{finding.severity}: {finding.message}" for finding in warnings)
+        lines = [
+            tr("{name}: fertig.", name=spec.title),
+            tr("Objekte: {names}", names=names or tr("keine")),
+        ]
+        lines.extend(
+            tr("{name}: {value}", name=finding.severity, value=finding.message)
+            for finding in warnings
+        )
         return "\n".join(lines)
 
     def _remote_report(self, severity: str) -> str:
@@ -17737,7 +17765,12 @@ class MainWindow(QMainWindow):
             return str(error)
         if not self.session.add_fit(fit, origin=Origin(by="agent", model=REMOTE_ORIGIN)):
             return tr("Die Passung wurde nicht angelegt — den Grund zeigt das Fenster.")
-        return f"{tr('Passung angelegt')}: {fit.name} ({fit.kind}, {fit.tolerance})"
+        return tr(
+            "Passung angelegt: {name} ({kind}, {tolerance})",
+            name=fit.name,
+            kind=fit.kind,
+            tolerance=fit.tolerance,
+        )
 
     def _remote_parameter(self, tool: str, values: Mapping[str, Any]) -> str:
         """Ein Projektmaß von außen — dieselben Wege wie die Parameterleiste.
@@ -17761,12 +17794,12 @@ class MainWindow(QMainWindow):
             )
             if not made:
                 return tr("Der Parameter wurde nicht angelegt — den Grund zeigt das Fenster.")
-            return f"{tr('Parameter angelegt')}: {name} = {number}"
+            return tr("Parameter angelegt: {name} = {value}", name=name, value=number)
         if name not in self.session.project.document.parameters:
-            return f"{tr('Diesen Parameter gibt es nicht')}: {name}"
+            return tr("Diesen Parameter gibt es nicht: {name}", name=name)
         if not self.session.change_parameter(name, number, origin=remote):
             return tr("Der Wert ist schon so eingestellt.")
-        return f"{tr('Parameter gesetzt')}: {name} = {number}"
+        return tr("Parameter gesetzt: {name} = {value}", name=name, value=number)
 
     def _draw_sketch_in_space(
         self, op_id: int, op_name: str, dialog: QDialog, text: str, *, field_name: str = ""
@@ -19844,7 +19877,7 @@ class MainWindow(QMainWindow):
                 if not self.session.import_unconfirmed:
                     self._on_import_confirmed()
             if geladen:
-                self.announce(f"{tr('Geladen')}: {geladen}")
+                self.announce(tr("Geladen: {name}", name=geladen))
         else:
             self.status_message.setText(self._announcement)
 

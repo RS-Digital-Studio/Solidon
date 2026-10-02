@@ -444,7 +444,7 @@ class TourPanel(QWidget):
         following = self._next_example() if finished else None
         self.follow_button.setVisible(following is not None)
         if following is not None:
-            self.follow_button.setText(f"{tr('Weiter mit')}: {following.title}")
+            self.follow_button.setText(tr("Weiter mit: {title}", title=following.title))
         self.progress.setText(
             tr("Tour abgeschlossen.")
             if finished

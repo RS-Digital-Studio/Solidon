@@ -1744,7 +1744,9 @@ def _chat_text() -> str:
     """
     backend = llm.first_available()
     if backend is not None:
-        return f"{tr('Der Chat ist bereit')} — {backend.id}: {backend.model}"
+        return tr(
+            "Der Chat ist bereit — {backend}: {model}", backend=backend.id, model=backend.model
+        )
     return tr(
         "Der Chat braucht einen Zugang zu einem Sprachmodell — ein eigener "
         "Schlüssel oder ein lokales Modell über Ollama. Alles andere "

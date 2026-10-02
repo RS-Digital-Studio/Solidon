@@ -92,7 +92,7 @@ class MeasureBar(QWidget):
             "angle": tr("Winkel"),
         }.get(kind, kind)
         shown = localised(f"{round_display(value):g}°") if kind == "angle" else length(value)
-        self.readout.setText(f"{name}: {shown}   ({count})")
+        self.readout.setText(tr("{name}: {value}   ({count})", name=name, value=shown, count=count))
 
     def show_status(self, text: str) -> None:
         """Sagt, welcher Klick als Nächstes fehlt oder warum keiner zählte."""

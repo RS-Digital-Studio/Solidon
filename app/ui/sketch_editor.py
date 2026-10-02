@@ -4490,7 +4490,9 @@ class SketchCanvas(QWidget):
                     label = _constraint_label(constraint.kind)
                     shown = measure_label(constraint, self.points())
                     action = loosen.addAction(f"{label} {shown}" if shown else label)
-                    action.setToolTip(f"{label}: {_does_phrase(constraint.kind)}.")
+                    action.setToolTip(
+                        tr("{name}: {value}.", name=label, value=_does_phrase(constraint.kind))
+                    )
                     action.triggered.connect(
                         lambda _checked=False, index=at: self.remove_constraint(index)
                     )
@@ -7938,7 +7940,9 @@ class SketchPanel(QWidget):
             # Die festen Punkte der Hilfsgeometrie: Sie haben keine Zahl, und
             # gelöst werden sie zusammen, wie sie zusammen dastehen.
             release = menu.addAction(tr("Alle {count} lösen  (Entf)").format(count=len(indices)))
-            release.setToolTip(f"{_constraint_label('fixed')}: {_does_phrase('fixed')}.")
+            release.setToolTip(
+                tr("{name}: {value}.", name=_constraint_label("fixed"), value=_does_phrase("fixed"))
+            )
             release.triggered.connect(
                 lambda _checked=False, chosen=indices: self.canvas.remove_constraints(chosen)
             )
@@ -7965,7 +7969,13 @@ class SketchPanel(QWidget):
         # **Aus derselben Quelle wie am Knopf.** Was die Bedingung tut, sagt
         # ``_does_phrase`` an inzwischen vier Stellen; eine eigene
         # Formulierung hier wäre die vierte Gelegenheit, auseinanderzulaufen.
-        remove.setToolTip(f"{_constraint_label(entry.kind)}: {_does_phrase(entry.kind)}.")
+        remove.setToolTip(
+            tr(
+                "{name}: {value}.",
+                name=_constraint_label(entry.kind),
+                value=_does_phrase(entry.kind),
+            )
+        )
         remove.triggered.connect(lambda _checked=False, at=index: self.canvas.remove_constraint(at))
         return menu
 
@@ -8002,7 +8012,9 @@ class SketchPanel(QWidget):
                 shown = f"{circle_shown(float(entry.value)):.9f}".rstrip("0").rstrip(".")
             except ValueError:
                 shown = str(entry.value)
-        value, agreed = QInputDialog.getText(self, str(tr("Maß ändern")), f"{caption}:", text=shown)
+        value, agreed = QInputDialog.getText(
+            self, str(tr("Maß ändern")), tr("{name}:", name=caption), text=shown
+        )
         if agreed and value.strip():
             entered = value.strip()
             if as_circle and (typed := read_number(entered)) is not None:

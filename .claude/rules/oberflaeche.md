@@ -42,6 +42,13 @@ zwei Stellen gewinnen abwechselnd.
 Keine feste Zeichenkette — alles über `tr()`, deutsche Quelle, jeder Katalog
 aus `app/i18n/locales/` zieht nach (Regel 20).
 
+**Beschriftung und Doppelpunkt gehören in denselben Übersetzungsrahmen.**
+Feste Titel stehen im vollständigen `tr()`-Satz; dynamische Namen und Werte
+werden als Platzhalter übergeben (`tr("{name}: {value}", ...)`). So bestimmt
+der Katalog auch die Abstände vor Satzzeichen, ohne Namen, Pfade oder Zahlen
+zu verändern. `tests/test_translations.py` prüft direkte Zusammensetzungen
+im Quelltext und die Ausgaben gemeinsamer Beschriftungshelfer.
+
 **Auswahlwerte sind Schlüssel, keine Beschriftungen:** Der Name von `raised`,
 `flat`, `linear` steht in `_CHOICE_NAMES` (`app/ui/labels.py`);
 `tests/test_translations.py` lässt nur Selbstnamen durch (M4, 6x3, mm, x,

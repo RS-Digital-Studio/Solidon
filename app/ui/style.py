@@ -165,7 +165,7 @@ def set_role(widget: QLabel, role: str, text: str) -> None:
     widget.setText(f"{painted}&nbsp;&nbsp;{html.escape(text)}")
     encoding = SEVERITY_ENCODING.get(role)
     spoken = tr(encoding.label_key) if encoding is not None else tr("Erledigt")
-    widget.setAccessibleDescription(f"{spoken}: {text}")
+    widget.setAccessibleDescription(tr("{name}: {value}", name=spoken, value=text))
     _repolish(widget)
 
 

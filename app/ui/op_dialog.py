@@ -2245,7 +2245,7 @@ class OperationDialog(QDialog):
             if not isinstance(editor, SketchField):
                 continue
             if not (editor.ready if entry.required else editor.has_drawing):
-                return f"{entry.title}: {editor.summary.text()}"
+                return tr("{name}: {value}", name=entry.title, value=editor.summary.text())
         return ""
 
     def _missing_material(self) -> str:
@@ -2259,7 +2259,7 @@ class OperationDialog(QDialog):
             if inactive_dependency(entry, schema, values) is not None:
                 continue
             if not values.get(entry.name):
-                return f"{entry.title}: {tr('Materialprofil wählen …')}"
+                return tr("{name}: {value}", name=entry.title, value=tr("Materialprofil wählen …"))
         return ""
 
     def _texture_face_missing(self) -> bool:

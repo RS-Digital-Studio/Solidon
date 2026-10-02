@@ -175,7 +175,7 @@ class MapLegend(QWidget):
             self._layout.addWidget(more)
 
         # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
-        parts = [f"{tr('Herkunft')}: {origin_label(analysis.source)}"]
+        parts = [tr("Herkunft: {value}", value=origin_label(analysis.source))]
         if analysis.display_scale == "asinh":
             parts.append(tr("Farben logarithmisch abgestuft"))
         if analysis.resolution is not None:

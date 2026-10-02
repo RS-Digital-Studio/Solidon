@@ -738,7 +738,7 @@ class InstallDialog(QDialog):
                 )
             return tr("Alles Zusätzliche ist bereit.")
         names = ", ".join(str(status.requirement.title) for status in absent)
-        return f"{tr('Nicht gefunden')}: {names}"
+        return tr("Nicht gefunden: {names}", names=names)
 
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand.
@@ -881,7 +881,7 @@ class InstallDialog(QDialog):
         """
         seconds = time.monotonic() - self._started_at
         action = tr("Wird gestartet") if self._running_action == "start" else tr("Wird installiert")
-        line = f"{action}: {self._running_title} ({seconds:.0f} s)"
+        line = tr("{name}: {value}", name=action, value=f"{self._running_title} ({seconds:.0f} s)")
         if self._running_action == "start" and self._expected_seconds > SLOW_START_SECONDS:
             line += " — " + tr("das dauert beim ersten Mal ein bis zwei Minuten")
         self.state.setText(line)
@@ -957,7 +957,13 @@ class InstallDialog(QDialog):
         self.stop_waiting.setVisible(False)
         self._busy(False)
         if start_result.running:
-            self.state.setText(f"{requirement.title}: {tr('Lokales Backend läuft jetzt.')}")
+            self.state.setText(
+                tr(
+                    "{name}: {value}",
+                    name=requirement.title,
+                    value=tr("Lokales Backend läuft jetzt."),
+                )
+            )
             return
         if start_result.stopped:
             # Der Kunde hat das Warten beendet. Sein Satz steht schon da; ihn
@@ -974,11 +980,14 @@ class InstallDialog(QDialog):
         if not start_result.launched:
             reason = start_result.reason or tr("Unbekannter Grund")
             self.state.setText(
-                f"{requirement.title}: "
-                + tr(
-                    "Das lokale Programm konnte nicht geöffnet werden: {reason}. "
-                    "Prüfen Sie den gespeicherten Ort oder wählen Sie die App erneut aus."
-                ).format(reason=reason)
+                tr(
+                    "{name}: {value}",
+                    name=requirement.title,
+                    value=tr(
+                        "Das lokale Programm konnte nicht geöffnet werden: {reason}. "
+                        "Prüfen Sie den gespeicherten Ort oder wählen Sie die App erneut aus."
+                    ).format(reason=reason),
+                )
             )
             return
         if requirement.id == "comfyui":
@@ -1024,7 +1033,7 @@ class InstallDialog(QDialog):
             reason = f"{reason} " + str(
                 tr("Ob es inzwischen antwortet, sehen Sie unter {address}.")
             ).format(address=page)
-        self.state.setText(f"{requirement.title}: {reason}")
+        self.state.setText(tr("{name}: {value}", name=requirement.title, value=reason))
 
     def _note_start_attempt(self, start_result: tools.StartResult) -> None:
         """Den Startversuch für die Einzelheiten festhalten.
@@ -1035,9 +1044,9 @@ class InstallDialog(QDialog):
         """
         lines = []
         if start_result.command:
-            lines.append(f"{tr('Aufruf')}: {' '.join(start_result.command)}")
+            lines.append(tr("Aufruf: {command}", command=" ".join(start_result.command)))
         if start_result.address:
-            lines.append(f"{tr('Adresse')}: {start_result.address}")
+            lines.append(tr("Adresse: {address}", address=start_result.address))
         if not lines:
             return
         self._details = "\n".join(lines)
@@ -1074,10 +1083,12 @@ class InstallDialog(QDialog):
         self._tick.stop()
         self._busy(False)
         if result.installed:
-            self.state.setText(f"{result.requirement.title}: {tr('fertig')}")
+            self.state.setText(
+                tr("{name}: {value}", name=result.requirement.title, value=tr("fertig"))
+            )
         else:
             reason = str(result.reason) if result.reason else tr("Das hat nicht geklappt.")
-            self.state.setText(f"{result.requirement.title}: {reason}")
+            self.state.setText(tr("{name}: {value}", name=result.requirement.title, value=reason))
             if result.output:
                 self._details = (
                     f"{self._details}\n{result.output}" if self._details else result.output

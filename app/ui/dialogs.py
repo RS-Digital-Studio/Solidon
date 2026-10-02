@@ -1638,7 +1638,7 @@ class KeyDialog(QDialog):
         self.probe_button.setToolTip(holt)
         self.probe_button.setStatusTip(holt)
         self.probe_button.setAccessibleDescription(holt)
-        set_role(self.probe_result, "info", f"{tr('Wird geholt')}: {model}")
+        set_role(self.probe_result, "info", tr("Wird geholt: {model}", model=model))
 
         worker = _PullWorker(model)
         worker.step.connect(self._pull_step)
@@ -3062,7 +3062,7 @@ def step_values_text(operation: Any) -> str:
     for name, value in sorted(dict(operation.params).items()):
         text = str(value)
         if newline in text:
-            lines.append(f"{name}:")
+            lines.append(tr("{name}:", name=name))
             lines.extend(f"    {line}" for line in text.splitlines())
         else:
             lines.append(f"{name} = {text}")
@@ -3367,9 +3367,9 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     # Antworten auf die Frage, welche Werte dem Kunden etwas sagen, driften.
     lines.extend(spoken_values(error))
     if error.object_id:
-        lines.append(f"{tr('Objekt')}: {error.object_id}")
+        lines.append(tr("Objekt: {object_id}", object_id=error.object_id))
     if error.op_id is not None:
-        lines.append(f"{tr('Operation')}: {error.op_id}")
+        lines.append(tr("Operation: {op_id}", op_id=error.op_id))
 
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Information)
@@ -3638,7 +3638,7 @@ class AboutDialog(QDialog):
             self,
         )
         made_by.setWordWrap(True)
-        support = QLabel(f"{tr('Support und Kontakt')}: {SUPPORT_ADDRESS}", self)
+        support = QLabel(tr("Support und Kontakt: {address}", address=SUPPORT_ADDRESS), self)
         support.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         security_heading = QLabel(tr("Aktualisierungen und Sicherheit"), self)
@@ -3661,8 +3661,11 @@ class AboutDialog(QDialog):
                 "{date}."
             ).format(date=calendar_date(SECURITY_SUPPORT_UNTIL))
             + "<br>"
-            + tr("Sicherheitsproblem melden")
-            + f': <a href="mailto:{SUPPORT_ADDRESS}">{SUPPORT_ADDRESS}</a> · '
+            + tr(
+                "Sicherheitsproblem melden: {contact}",
+                contact=f'<a href="mailto:{SUPPORT_ADDRESS}">{SUPPORT_ADDRESS}</a>',
+            )
+            + " · "
             + f'<a href="{_security_page_url()}">{tr("Sicherheitsseite öffnen")}</a>'
         )
 

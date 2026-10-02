@@ -107,7 +107,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
-| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | Nach 0.5.1: 40 Oberflächenstellen nach dem Muster von `afc251ae4`, Wächter über die Oberfläche |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | 79 Texthunks in 18 UI-Dateien und alle fünf Kataloge; 31 reine Textfälle grün, tatsächliche Ausgangsgegenprobe erwartungsgemäß rot. Eigen-/Quellreview grün; zentraler Paketreview, Entwicklungstor und CLI-/Kern-/Agentennachgang offen |
 | [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
 | [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | Nach 0.5.1: fünf Wortlaute und ein Wächter |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
@@ -3256,7 +3256,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-285"></a>
 
-- [ ] **RM-285 — Feste Doppelpunkte hinter übersetzten Teilen.** Aus dem Release 0.5.1 (Handbuch-Sitzung, Wächter aus
+- [~] **RM-285 — Feste Doppelpunkte hinter übersetzten Teilen.** Aus dem Release 0.5.1 (Handbuch-Sitzung, Wächter aus
   `afc251ae4`; Sprachreview U6). An 108 Stellen verbindet der Code einen übersetzten Teil
   mit einem festen „: “ (f-String mit `{tr(…)}` oder `{_(…)}` direkt vor `": "`): 40 in
   `app/ui`, für Kunden sichtbar — Druckeinstellungen („Druckzeit: …“, „Material: …“),
@@ -3276,6 +3276,30 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (`f"{tr('Gilt für')}: …"`, Vorschläge je Teil) und im Französischen die
   Werkzeugbeschreibungen des Agenten, vor denen „Où:“ ohne Leerzeichen fest steht
   (Code-Review Handbuch, B7).
+
+  **Arbeitsstand:** Die erneute Oberflächensuche umfasst auch dynamische Titel,
+  Namen und zugängliche Beschriftungen: 79 Textausdrücke in 18 UI-Dateien verwenden
+  jetzt vollständige Übersetzungsrahmen. Alle fünf Kataloge erhalten dieselben
+  50 neuen Schlüssel; 24 nun unbenutzte Schlüssel sind entfernt. Zahlenformat,
+  Einheiten, Dateinamen und technische Kennungen bleiben bei ihren bisherigen
+  Quellen. Der neue AST-Wächter trägt Gegenproben für f-Strings, Addition,
+  Formatierung, Platzhalter und technische Syntax. Reale reine Textfälle decken
+  sechs Sprachen sowie Verlauf, Maße, Warnungen und teilbezogene Druckvorschläge
+  ab. Der unabhängige lesende Review fand zusätzlich den Sicherheitskontakt im
+  Über-Dialog und ein dynamisches Maßpräfix der Platzierung; beide sind vorwärts
+  korrigiert, der Präfixwächter und Nummern-/Seitentextfälle ergänzt. Im
+  abgestimmten engen Slot bestehen alle 31 neuen reinen Fälle (155 abgewählt,
+  Exit 0). Derselbe Oberflächenwächter scheitert am gesicherten Ausgangsstand
+  mit den tatsächlichen festen Doppelpunkten (erwarteter Exit 1). Der erste
+  Lauf mit drei falsch erwarteten Nachkommastellen bleibt als Historie erhalten;
+  nur die Erwartungen wurden an die bestehende zweistellige Millimeteranzeige
+  angepasst. Ruff und Format auf den 19 betroffenen Pythonpfaden sind grün.
+  Eigenreview und unabhängiger Quellreview sind abgeschlossen; zentraler
+  Paketreview, vollständiges Entwicklungstor und Integration stehen aus.
+  Nachweise: `tmp/review-seit-0.5.1-2026-10-01/rm285-punctuation-20261002-7db5/`.
+  CLI, Kern- und Agententexte gehören nicht zu dieser ersten UI-Hunkgruppe und
+  bleiben im Nachgang ausdrücklich zu prüfen. Fenster-, Render- und
+  Leistungsabnahme bleibt dem Release vorbehalten.
 
 <a id="rm-286"></a>
 

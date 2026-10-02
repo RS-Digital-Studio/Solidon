@@ -351,7 +351,7 @@ class ChatPanel(QWidget):
         """
         self._available = available
         self._backend_name = backend
-        self.hint.setText(f"{tr('Modell')}: {backend}" if available else "")
+        self.hint.setText(tr("Modell: {backend}", backend=backend) if available else "")
         self.hint.setVisible(available and not self._locked)
         if not self._locked:
             self.access_hint.setText(
@@ -447,7 +447,7 @@ class ChatPanel(QWidget):
         acht Werkzeugen soll das Gespräch nicht mit acht Zeilen zuschütten,
         die gleich wieder verschwinden.
         """
-        text = f"{PROGRESS_MARKER} {tr('Schritt')} {step}: {label}"
+        text = f"{PROGRESS_MARKER} " + tr("Schritt {step}: {label}", step=step, label=label)
         if self._progress_item is None:
             self._progress_item = QListWidgetItem(text)
             self._progress_item.setForeground(QColor(UNDONE_COLOUR))
@@ -504,8 +504,12 @@ class ChatPanel(QWidget):
         self.show_proposal(preview)
         marker = f" ({transaction_id})" if transaction_id else ""
         self.summary.setText(
-            f"{tr('Übernommen')}{marker}: {describe(preview)} — "
-            + tr("Rückgängig nimmt alles zurück.")
+            tr(
+                "Übernommen{marker}: {description} — {undo}",
+                marker=marker,
+                description=describe(preview),
+                undo=tr("Rückgängig nimmt alles zurück."),
+            )
         )
         self.accept_button.setVisible(False)
         self.discard_button.setVisible(False)
@@ -722,7 +726,7 @@ def _named(entries: list[Any], word: str) -> str:
     """
     if len(entries) > NAMED_AT_MOST:
         return f"{len(entries)} × {word}"
-    return f"{word}: " + ", ".join(_title_of(entry) for entry in entries)
+    return tr("{name}: {value}", name=word, value=", ".join(_title_of(entry) for entry in entries))
 
 
 def _title_of(entry: Any) -> str:
@@ -762,7 +766,7 @@ def _warnings(proposal: Any) -> list[str]:
         # Zusammenfassung ist ein einfarbiges Label, und ohne es wäre eine
         # Warnung von einer Aufzählung nicht zu unterscheiden.
         marker = tr("Fehler") if finding.severity == "error" else tr("Warnung")
-        lines.append(f"{marker}: {finding.message}")
+        lines.append(tr("{name}: {value}", name=marker, value=finding.message))
     return lines
 
 

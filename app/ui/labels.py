@@ -2044,7 +2044,7 @@ def value_line(key: str, value: object) -> str:
     Die Zahl bekommt ihr Komma (§13) und ihre Einheit, der Rest bleibt, wie er
     ist — siehe :func:`value_text` und :func:`localised_value`.
     """
-    return f"{value_label(key)}: {value_text(key, value)}"
+    return tr("{name}: {value}", name=value_label(key), value=value_text(key, value))
 
 
 def spoiled_the_exact_body(result: Any) -> str:

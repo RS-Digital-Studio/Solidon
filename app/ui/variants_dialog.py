@@ -377,7 +377,7 @@ class VariantsDialog(QDialog):
             values = ", ".join(localised_value(entry.values.get("value", "")) for entry in stopped)
             text = tr("Nicht jede Variante ließ sich rechnen — nichts wurde geschrieben.")
             if values:
-                text = f"{text} {tr('Ohne Ergebnis')}: {values}"
+                text = tr("{name} Ohne Ergebnis: {values}", name=text, values=values)
             # Regel 17: der Weg nach vorn, und der Cursor steht schon dort.
             text = f"{text}\n" + tr(
                 "Wählen Sie einen anderen ersten Wert oder eine kleinere Schrittweite "

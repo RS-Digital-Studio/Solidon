@@ -5143,7 +5143,8 @@ class PlacementFlow(QObject):
                 if reference.id == edge.id
             )
             reference_name = self._reference_name(edge.kind, number, sides[index])
-            field.setPrefix(reference_name + ": ")
+            # Den Zahlenwert ergänzt das Feld; der Katalog setzt das gesamte Präfix.
+            field.setPrefix(tr("{name}: {value}", name=reference_name, value=""))
             # **Der Name für den Bildschirmleser zieht mit.** Er stand einmalig
             # als „Abstand zu Kante 1/2" im Aufbau der Felder; das Präfix nennt
             # aber den wirklichen Bezug (Außenkante 3, Achse 2 …) und wechselt
