@@ -42,6 +42,7 @@ entfernt hat.
 | 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
 | 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
 | 2026-10-01 | [RM-282: Profilwerte, die das Programm anders liest, als die Datei sie schreibt (01.10.2026)](#rm-282-profilwerte-die-das-programm-anders-liest-als-die-datei-sie-schreibt-01102026) |
+| 2026-09-30 | [RM-319: Zwei berührende Platten behalten ihr Material beim Langlochzug (30.09.2026)](#rm-319-zwei-berührende-platten-behalten-ihr-material-beim-langlochzug-30092026) |
 | 2026-09-29 | [CAD-Ausbau bis 0.5.1: der Weg von RM-188 (29.09.2026)](#cad-ausbau-bis-051-der-weg-von-rm-188-29092026) |
 | 2026-09-29 | [Handbuch bis 0.5.1: der Weg von RM-283 (29.09.2026)](#handbuch-bis-051-der-weg-von-rm-283-29092026) |
 | 2026-09-29 | [Tragende Nachweise im Repository: ein Punkt geschlossen (29.09.2026)](#tragende-nachweise-im-repository-ein-punkt-geschlossen-29092026) |
@@ -34084,6 +34085,117 @@ aller hier als implementiert geführten Pakete gehört zum Release (RM-213).
 | P7.4 | **implementiert, Release-Abnahme offen** — STEP-Mehrkörperimport über XCAF mit Namen, Flächenfarben und Instanzlagen, Auswahl vor der Übernahme, `load_step` legt das erste Modell aufs Bett; der STEP-Export schreibt Namen wörtlich und Umlaute nach ISO 10303-21; Format 33. Offen: Farbvorrang, Name eines einzelnen Körpers, Export mehrerer Körper als eine Baugruppe, Leistung großer Baugruppen und Filamentvorschlag je Farbe — Entscheidungen Roberts | `896622bd` (p7step) |
 | Zeichnen Z0/Z1 | **implementiert, Release-Abnahme offen** — aus der Bedienabnahme „Zeichnen“ (Robert, 23.09.2026, Bericht zeichnen-bedienung): Hochziehen auf einer gewählten Fläche geht und wird Teil des Körpers (`sketch_join`), eine Tasche außerhalb des Ursprungs schneidet dort, wo gezeichnet, Verrunden und Fase lassen das bemaßte Rechteck stehen, *Fertig* hat eine Bedeutung (die übrigen Arten unter *Mehr*), Escape verwirft keine Zeichnung, Zeichnen gilt einem Körper (Nachbarn ausgeblendet, *Nachbarn zeigen* mit N), *Hier zeichnen* und *Loch oder Aussparung zeichnen …* im Auswahlfenster, *Zeichnung weiterverwenden* im Verlauf | `4406137f` (zeichnenbau) |
 | Zeichnen Z2–Z6 | **offen** — Z2 Erstellen im Bild (Palette am Umriss statt Dialog, Drehachse gemeinsam mit P6.5), Z3 Bemaßen und Fang, Z4 Auswählen/Verschieben/Drehen (Links-Ziehen zeichnet), Z5 Werkzeuge mit P6.6a (900-Punkte-Grenze der Leiste), Z6 Ansicht und Texte, danach die Handbuchseite „Zeichnen“ einmal neu. Dazu die sechs Hinweise aus P6.6 für den Umbau: Werkzeugzeile mit 872 von 900 Bildpunkten voll, Entf löscht bei einem gewählten Splinepunkt das ganze Element, der Hilfspunkt einer Tangente ohne Stoß bleibt sichtbar, Ellipsenachsen nur als Punktabstand bemaßbar, Laufrichtung des Ellipsenbogens beim Zug unsichtbar, lange Bedingungszeile bei zwei Kurven | Reihenfolge und Abnahme je Etappe: Bericht zeichnen-bedienung §8, zeichnenbau „Vorschlag Etappe 2“, p66 „Für den Zeichnen-Umbau“ |
+
+## RM-319: Zwei berührende Platten behalten ihr Material beim Langlochzug (30.09.2026)
+
+<a id="rm-319-zwei-berührende-platten-behalten-ihr-material-beim-langlochzug-30092026"></a>
+
+Beim Schließen der alten Bohrung wurden zwei Schalen, die sich auf einer Fläche
+berühren, getrennt gelassen. Der Stopfen verband sie danach, und die Differenz
+traf die doppelte innere Grenzfläche. Das verlor Material und ließ am Netz das
+Langloch-Merkmal verschwinden.
+
+Die Vorprüfung kann flächigen Kontakt jetzt ausdrücklich erkennen. Nur beim
+vorübergehenden Füllen einer Bohrung vereinigt die Boolesche Kette solche
+Schalen vor dem Stopfen. Kanten- und Eckkontakt bleiben getrennt; der
+Vereinigungsmodus hat einen eigenen Cache-Schlüssel. Der exakte Zweig hält die
+ursprünglichen Mündungsebenen fest, vereinigt die nativen Körper mit
+Flächenhistorie und setzt danach den Stopfen. Die Schnittprüfung erkennt auch
+einen gemeinsamen Kantenpunkt, wenn die beiden Netze dieselbe Kante
+unterschiedlich unterteilen. Sie propagiert die gespeicherten
+Koordinaten-Rundungsgrenzen durch die orthogonale Projektion und projiziert
+Schnittstrecken relativ zu einem gemeinsamen Ursprung.
+
+Am Modell aus zwei 40 x 20 x 10 mm Platten mit Bohrung Ø 6 mm und Zuglänge
+12 mm berechnen beide Kerne 14 714,5 mm³ ± 1 mm³. Es bleibt ein geschlossenes
+Teil mit genau einem 20 mm tiefen Langloch; Befunde über verlorenes Merkmal
+oder unerwarteten Zerfall bleiben aus.
+
+Die Regressionen prüfen Mesh und B-Rep, die Vereinigungsmodi in beiden
+Cache-Reihenfolgen, erhaltene B-Rep-Merkmale und Filamentslots, reine
+Kantenberührung mit unterschiedlicher Unterteilung, echte Überschneidung sowie
+verschobene Geometrie. Ein späterer Dreh- und Verschiebefall prüft außerdem
+unterschiedlich unterteilte Randkanten in beiden Operandreihenfolgen. Der
+unabhängige Schlussreview fand keine bestätigten Befunde.
+
+**Nachweis:** 415 gezielte Schnitt-, Reparatur-, Slot-, Plattform- und
+Netztests bestanden. Im erweiterten Lauf bestanden 1 884 Tests; ein bestehender
+Bereichsnachweis-Test meldet weiterhin stale für alle 35 ausgelieferten
+Bausteine. Ruff und Format bestanden; mypy auf den fünf geänderten
+Geometriemodulen bestanden. Ein Fenster- oder Leistungslauf wurde nicht
+gemacht; beides bleibt der Release-Abnahme vorbehalten.
+
+**Abschlussnachtrag (01.10.2026):** Das Schlussreview fand noch zwei Fehler:
+der exakte Kern vereinigte berührende Körper ohne den Befund
+`boolean.parts_united`, und ein wirkungsloser Fuse-Versuch durfte nicht als
+Vereinigung gemeldet werden. Beide Fälle haben Regressionstests und sind
+behoben. Danach bestanden 895 gezielte Tests aus Schnitt-, Reparatur-, Slot-,
+Plattform-, Übersetzungs- und B-Rep-Bereichen; die Slotdatei allein bestand
+200 Tests. Ruff, Format und mypy für `prepare_ops.py` bestanden. Das letzte
+unabhängige Review fand keine Befunde. Der vollständige Entwicklungslauf wurde
+nach diesem Stand noch nicht erneut gefahren; ein Commit bleibt bis zu seinem
+grünen Lauf aus.
+
+**Nachtrag (02.10.2026):** Das Follow-up-Review fand einen P2 in der
+Kollinearitätsprüfung: Bei einer schrägen Kante projiziert die Rundung einer
+großen Weltkoordinate auch auf die jeweils andere Achse. Die alte komponentenweise
+Schranke bildete das nicht ab und meldete reinen Randkontakt als Durchdringung.
+Die Rundungsgrenze wird nun mit dem Betrag der orthogonalen Projektionsmatrix
+fortgepflanzt. Neue Regressionen prüfen die kurze diagonale Teilkante bei
+`(1e7, 0, 0)` in beiden Operandreihenfolgen; der flache echte Schnitt bleibt im
+gezielten Selbstüberschneidungslauf enthalten. Der unabhängige Nachreview fand
+keine offenen Befunde. Die Integrationsdurchsicht fand danach noch einen Verstoß
+gegen den Plattformvertrag: `np.einsum` kann auf ARM FMA-Ergebnisse liefern.
+Die Matrixgrenze wird nun als Betrag von `I − uuᵀ` über den vorhandenen
+`_dot_rows`-Helfer mit fester Summationsreihenfolge fortgepflanzt, ohne
+Toleranzänderung. Der Vergleich mit der vorherigen komponentenweisen Rechnung
+war über 4 096 Zeilen und 12 288 Werte bitidentisch, auch bei Nullrichtungen,
+Koordinatenachsen und anisotroper Rundung; der unabhängige Nachreview bestätigte
+Achsenzuordnung, Äquivalenz und Nullrichtungsfall. Im zusammengefassten Lauf über
+`test_self_intersections.py`, die RM-319-Transformationsprüfung sowie beide
+RM-253-Kennungsfälle bestanden 37 Tests. Ruff, Format und `git diff --check`
+waren für die geprüften Dateien grün. Ein separater Boolescher Direktlauf bei
+einer Weltverschiebung von `1e7` liefert weiterhin unplausible Volumina; die
+Schnittprüfungsregression deckt diesen anderen Solverfehler nicht ab. Das
+vollständige Entwicklungstor steht für den gebündelten Arbeitsstand noch aus.
+
+**Statuskorrektur (02.10.2026):** Die vorherige Erledigt-Markierung war zu
+weit gefasst. Ein lesender Paket-Review trennt die geprüfte
+Schnittklassifikationsgrundlage von ihrem strikten Boolean-/B-Rep-Anschluss.
+Im isolierten Kandidaten bestehen alle 35 frisch erzeugten
+Baustein-Bereichsnachweise; `--check` meldet 35 von 35, der Wächtertest
+1 bestanden. Der Kandidat enthält die strikten Aufrufer jedoch nicht. Im
+damaligen gemischten Arbeitsstand mit den strikten Aufrufern brechen beide
+Ringfälle in der Vollständigkeitsvorprüfung vor dem
+Entlüftungssolver ab und ergeben `hollow.no_vent`. Der vollständige Ring- und
+Langloch-Kundenweg bleibt deshalb unter RM-319 in `ROADMAP.md` offen; ein
+eigenständiger Fehler des Entlüftungssolvers ist nicht belegt.
+
+**Abgeschlossen und integriert (02.10.2026):** Die nach der Statuskorrektur
+fehlenden strikten Aufrufer sind jetzt enthalten: Die Berührungssuche läuft
+ohne Paarbudget bis zur ausgewiesenen Grenze von 256 Komponenten; die
+Boolesche Kette und die Langloch-Vorprüfung beider Kerne verlangen den
+vollständigen Befund. Ein fokussierter Lauf bestand 1 625 Tests, die getrennte
+Übersetzungs-/Fehler-/Dokuauswahl 565 Tests mit zunächst einem abgewählten
+Dokumentkarten-Budgettest. Danach bestanden alle 14 Dokumentationsprüfungen
+einschließlich dieses Budgettests mit Exit 0.
+
+Am Ring mit R 30 mm, Rohrradius 10 mm und Wand 2 mm bleiben alle sechs
+Fälle aus null, einer und zwei Entlüftungen in `fine` und `draft` wasserdicht.
+Ohne Entlüftung bleiben Außen- und Innenschale; mit einer oder zwei
+Entlüftungen entsteht jeweils ein zusammenhängender Körper mit der verlangten
+Öffnungszahl und ohne `hollow.no_vent`. Der Langlochzug an den berührenden
+Platten erhält das erwartete Material und erkennt das Merkmal an Netz und
+B-Rep. Der abschließende unabhängige Quellreview fand keine offenen P1/P2.
+
+Das vollständige Entwicklungstor bestand mit **19 033 Tests und 62 Skips**;
+Suite, Ruff, Format und mypy endeten jeweils mit Exit 0, ohne Quelldrift im
+geprüften Stand. Die Einheit liegt als
+`eab5f4f4751a722a5f069b62fcb06ef5c72ed557` auf `main` und `origin/main`.
+Die frühere Aussage über den fehlerhaften Hauptzweig beschreibt den Stand
+vor diesem Commit. RM-253, die Reparatur des Originalmodells und beliebige
+weitere Kundenmodelle sind damit nicht abgenommen. Fenster-, Renderer- und
+Leistungsabnahmen bleiben dem Release vorbehalten.
 
 ## RM-282: Profilwerte, die das Programm anders liest, als die Datei sie schreibt (01.10.2026)
 
