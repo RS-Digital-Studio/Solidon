@@ -53,6 +53,10 @@ Eigenreview und unabhängiges vollständiges Quell-/Mechanikreview sind abgeschl
 
 Die separate aktive Windows-Elternbindung und OS-Priorität sind bereits mit `d9f830aec41ae0531784406b75ad4a0fb549b4a6` auf dem tatsächlichen `origin/main` integriert. Ihr Tor bestand mit 19.059 Tests, 62 Überspringungen und jeweils Exit 0 für Suite, Ruff, Format und mypy. **Dieser Lauf enthält die vorliegende neue Leistungseinheit nicht.** Ihr Nachweis steht im [Prozessbericht](rm298-lifecycle-2026-10-02.md).
 
+## Integrationsnachtrag 02.10.2026
+
+Die vorliegende Quellen-/Mechanikeinheit ist mit `7f0de659d2c8fc1e35bd1067e738bcaef7f1ec72` auf dem tatsächlichen `origin/main` integriert. Das vollständige zentrale Entwicklungstor bestand 19.066 Tests mit 62 Überspringungen; Suite, Ruff, Format und mypy jeweils Exit 0, ohne Quelldrift. Commit, Trackingstand und tatsächliche Gegenstelle wurden unabhängig abgeglichen. Das ersetzt die oben datierte Aussage über damals ausstehendes Tor und Integration. Weiterhin wurden keine Leistungsmessungen gesammelt oder ausgeführt; RM-298 bleibt offen.
+
 ## Noch fällige Abnahme
 
 Beim Release: Beide neuen tatsächlichen Helfer-Messwege auf der Referenzmaschine einschließlich Kontrollen fehlender Auslagerung und veränderter Ergebnisbytes ausführen. Laufzeit, Marken und vollständige Prozessausgänge festhalten. Ein kalter Start, Bildrate, übrige §31-Marken, Linux/macOS und das gebaute Paket sind hier nicht geprüft. Der offene Gesamtpunkt RM-298 bleibt erhalten.

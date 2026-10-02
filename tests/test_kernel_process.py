@@ -1782,7 +1782,10 @@ def test_pool_old_refusal_does_not_disable_a_new_generation(
     worker.start()
     try:
         assert paused.wait(30.0), "Die reale run-Absage wartet direkt vor disable."
-        assert pool.shutdown() == 0
+        old = pool.processes()
+        assert len(old) == 1 and old[0].alive
+        assert pool.shutdown() == 1
+        assert not old[0].alive
         fresh = pool.take(None)
         assert fresh is not None and fresh.alive
         release.set()
@@ -2086,3 +2089,641 @@ def test_pool_harmless_warmup_failure_keeps_the_local_kernel_path(
         assert kernel_process.run("warmup_probe", {}, {}, weight=0) == ({}, {})
     finally:
         pool.shutdown()
+
+
+# --- Später bestätigtes Helferende löst nur seine eigene Sperre (RM-384) -----------------
+
+
+@pytest.fixture
+def late_stop_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]]]:
+    """Ein kontrolliert spät endender Bestand ohne echte Kindprozesse."""
+    pool = kernel_process._Pool()
+    made: list[_PoolHelper] = []
+    calls = {"local": 0, "helper": 0}
+
+    class LateHelper(_PoolHelper):
+        def __init__(self) -> None:
+            super().__init__()
+            self.pid += len(made)
+            made.append(self)
+
+        def stop(self, *, graceful: bool = False) -> None:
+            if self.alive:
+                raise kernel_process._HelperStopError(self)
+            super().stop(graceful=graceful)
+
+        def call(self, *_args: Any, **_kwargs: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+            calls["helper"] += 1
+            return {}, {"executed": "helper"}
+
+    def local_job(*_args: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        calls["local"] += 1
+        return {}, {"executed": "local"}
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", LateHelper)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "late_stop_probe", local_job)
+    try:
+        yield pool, made, calls
+    finally:
+        # Auch ein rotes Assert darf die autouse-Bereinigung nicht rot machen.
+        # Alle Wiederaufnahmezusagen werden vor diesem shutdown geprüft.
+        for helper in made:
+            helper.alive = False
+        pool.shutdown()
+
+
+@pytest.mark.parametrize("entry", ("local", "worker", "take"))
+def test_pool_late_stop_end_recovers_without_shutdown(
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+    entry: str,
+) -> None:
+    """Nach bestätigtem Tod funktioniert schon der erste neue Aufruf wieder."""
+    pool, made, calls = late_stop_pool
+    helper = pool.take(None)
+    assert helper is not None
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        pool.discard(helper)
+    assert pool.processes() == [helper] and pool.disabled
+    assert pool.counts.get("stopped", 0) == 0
+
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        kernel_process.run("late_stop_probe", {}, {}, weight=0)
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0)
+    assert calls == {"local": 0, "helper": 0}
+    assert pool.take(None) is None
+    assert len(made) == 1
+
+    helper.alive = False
+    if entry == "local":
+        assert kernel_process.run("late_stop_probe", {}, {}, weight=0) == (
+            {},
+            {"executed": "local"},
+        )
+        assert calls == {"local": 1, "helper": 0}
+        assert pool.processes() == []
+    elif entry == "worker":
+        assert in_a_worker(
+            lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+        ) == ({}, {"executed": "helper"})
+        assert calls == {"local": 0, "helper": 1}
+        assert len(made) == 2 and pool.processes() == [made[-1]]
+    else:
+        fresh = pool.take(None)
+        assert fresh is not None and fresh is not helper
+        assert calls == {"local": 0, "helper": 0}
+        assert pool.processes() == [fresh]
+    assert not pool.disabled
+    assert helper not in pool.processes()
+    assert pool.counts.get("stopped", 0) == 1
+
+
+@pytest.mark.parametrize("entry", ("worker", "take"))
+@pytest.mark.parametrize(
+    ("start_type", "stop_mode"),
+    (
+        pytest.param(None, "alive", id="normal"),
+        pytest.param(OSError, "alive", id="constructor-error"),
+        pytest.param(OSError, "raises", id="constructor-stop-error"),
+        pytest.param(LookupError, "alive", id="constructor-unexpected-error"),
+        pytest.param(LookupError, "raises", id="constructor-unexpected-stop-error"),
+        pytest.param(OSError, "ended-error", id="constructor-ended-error"),
+        pytest.param(LookupError, "ended-error", id="constructor-unexpected-ended-error"),
+    ),
+)
+def test_pool_late_stop_end_releases_the_real_helper_once(
+    monkeypatch: pytest.MonkeyPatch,
+    entry: str,
+    start_type: type[BaseException] | None,
+    stop_mode: str,
+) -> None:
+    """Das echte Stoppen gibt frei; erwartete Fehlstarts bleiben auch danach gezählt."""
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    start_problem = None if start_type is None else start_type("Leitungsattrappe")
+    expected_start = start_type is OSError
+    ended_in_cleanup = stop_mode == "ended-error"
+
+    class PipeEnd:
+        def __init__(self, *, fail_first: bool = False) -> None:
+            self.closed = 0
+            self.fail_first = fail_first
+
+        def close(self) -> None:
+            self.closed += 1
+            if self.fail_first and self.closed == 1:
+                assert start_problem is not None
+                raise start_problem
+
+    class Child:
+        pid = 42
+
+        def __init__(self) -> None:
+            self.alive = False
+            self.kills = 0
+            self.joins = 0
+
+        def start(self) -> None:
+            self.alive = True
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+        def kill(self) -> None:
+            self.kills += 1
+            if stop_mode == "ended-error":
+                self.alive = False
+            if stop_mode != "alive":
+                raise OSError("Beendigungsattrappe")
+
+        def join(self, timeout: float | None = None) -> None:
+            self.joins += 1
+
+    mine, peer = PipeEnd(), PipeEnd(fail_first=start_problem is not None)
+    child = Child()
+    pool = kernel_process._Pool()
+    bound: list[Child] = []
+    released: list[Child] = []
+    fresh: list[_PoolHelper] = []
+    local_calls = 0
+    helper_calls = 0
+    context = SimpleNamespace(Pipe=lambda **_args: (mine, peer), Process=lambda **_args: child)
+
+    def release(process: Child) -> None:
+        assert not process.alive, "Ein lebendes Kind darf seinen Jobgriff nicht verlieren."
+        released.append(process)
+
+    def ready(helper: Any, _cancelled: Any) -> None:
+        helper.ready = True
+
+    def local_job(*_args: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        nonlocal local_calls
+        local_calls += 1
+        return {}, {"executed": "local"}
+
+    class FreshHelper(_PoolHelper):
+        def __init__(self) -> None:
+            super().__init__()
+            fresh.append(self)
+
+        def call(self, *_args: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+            nonlocal helper_calls
+            helper_calls += 1
+            return {}, {"executed": "helper"}
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_CONTEXT", context)
+    monkeypatch.setattr(kernel_process, "_helper_environment", nullcontext)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setattr(kernel_process, "STARTS_BEFORE_GIVING_UP", 1)
+    monkeypatch.setattr(kernel_process._Helper, "wait_ready", ready)
+    monkeypatch.setattr(kernel_process.process_boundary, "bind_helper", bound.append)
+    monkeypatch.setattr(kernel_process.process_boundary, "release_helper", release)
+    monkeypatch.setitem(kernel_jobs.JOBS, "late_release_probe", local_job)
+    stop_problem: kernel_process.KernelHelperStopError | None = None
+    try:
+        if ended_in_cleanup:
+            if expected_start:
+                assert pool.take(None) is None
+            else:
+                with pytest.raises(LookupError) as unexpected:
+                    pool.take(None)
+                assert unexpected.value is start_problem
+            assert not child.alive and pool.processes() == []
+            assert released == [child] and pool.counts.get("stopped", 0) == 0
+        else:
+            if start_problem is None:
+                helper = pool.take(None)
+                assert helper is not None
+                with pytest.raises(kernel_process.KernelHelperStopError):
+                    pool.discard(helper)
+                assert bound == [child]
+            else:
+                with pytest.raises(kernel_process.KernelHelperStopError) as failed:
+                    pool.take(None)
+                stop_problem = failed.value
+                assert not bound, "Der Konstruktor scheitert vor dem Binden."
+            assert child.alive and pool.processes() == [child]
+            assert not released and pool.counts.get("stopped", 0) == 0
+            assert pool.disabled and pool._starting == 0
+            with pytest.raises(kernel_process.KernelHelperStopError):
+                kernel_process.run("late_release_probe", {}, {}, weight=0)
+            assert local_calls == 0
+            child.alive = False
+
+        assert child.kills == 1 and child.joins == int(stop_mode == "alive")
+        assert mine.closed >= 1 and peer.closed >= 1
+        assert kernel_process.run("late_release_probe", {}, {}, weight=0) == (
+            {},
+            {"executed": "local"},
+        )
+        assert local_calls == 1 and pool.processes() == []
+        assert released == [child]
+        assert child.kills == 1
+        assert child.joins == int(stop_mode == "alive") + int(not ended_in_cleanup)
+        stopped = int(not ended_in_cleanup)
+        assert pool.counts.get("stopped", 0) == stopped
+        pool.raise_if_stop_failed()
+
+        # Der nächste echte Startweg muss die Ursache prüfen, nicht nur weight=0.
+        monkeypatch.setattr(kernel_process, "_Helper", FreshHelper)
+        if entry == "worker":
+            outcome = in_a_worker(
+                lambda: kernel_process.run("late_release_probe", {}, {}, weight=1), timeout=10.0
+            )
+            assert outcome == ({}, {"executed": "local" if expected_start else "helper"})
+            assert helper_calls == int(not expected_start)
+        else:
+            taken = pool.take(None)
+            if expected_start:
+                assert taken is None
+            else:
+                assert taken is not None and fresh == [taken]
+                pool.give_back(taken)
+            assert helper_calls == 0
+        assert len(fresh) == int(not expected_start)
+        assert pool.disabled is expected_start
+        assert pool._failed_starts == int(expected_start)
+        if stop_problem is not None:
+            assert stop_problem.__cause__ is not None
+            assert stop_problem.__cause__.__cause__ is start_problem
+        assert pool.counts.get("stopped", 0) == stopped and released == [child]
+
+        # shutdown ist der bewusste Sitzungsreset und darf wieder einen Helfer starten.
+        pool.shutdown()
+        assert not pool.disabled and pool._failed_starts == 0
+        assert pool.take(None) is not None
+        assert len(fresh) == int(not expected_start) + 1
+    finally:
+        child.alive = False
+        pool.shutdown()
+    assert released == [child], "Auch die abschließende Bereinigung gibt nicht doppelt frei."
+
+
+def test_pool_reaps_dead_orphans_while_a_live_orphan_keeps_the_kernel_locked(
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+) -> None:
+    """Tote werden vollständig gesammelt; ein Lebender hält die Rechensperre."""
+    pool, made, calls = late_stop_pool
+    assert kernel_process.MOST_HELPERS >= 2
+    old = [pool.take(None) for _index in range(kernel_process.MOST_HELPERS)]
+    assert all(helper is not None for helper in old)
+    for helper in old:
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            pool.discard(helper)
+    for helper in old[:-1]:
+        helper.alive = False
+
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        kernel_process.run("late_stop_probe", {}, {}, weight=0)
+    assert pool.processes() == [old[-1]] and pool.disabled
+    assert pool.counts.get("stopped", 0) == len(old) - 1
+    assert calls == {"local": 0, "helper": 0} and len(made) == len(old)
+
+    old[-1].alive = False
+    pool._lock = _ObservedPoolCondition()
+    fresh = [pool.take(None) for _index in range(kernel_process.MOST_HELPERS)]
+    assert all(helper is not None and helper not in old for helper in fresh)
+    assert set(pool.processes()) == set(fresh)
+    assert not pool.disabled and pool.counts.get("stopped", 0) == len(old)
+    with pytest.raises(_PoolFullError):
+        pool.take(None)
+    assert len(made) == 2 * kernel_process.MOST_HELPERS
+
+
+@pytest.mark.parametrize("cause", ("disable", "start-error"))
+def test_pool_late_stop_end_keeps_a_permanent_disabling_cause(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+    cause: str,
+) -> None:
+    """Die Stop-Sperre endet; eine zusätzliche bleibende Absage bleibt erhalten."""
+    pool, made, calls = late_stop_pool
+    helper = pool.take(None)
+    assert helper is not None
+    if cause == "disable":
+        pool.disable("Dauerhafte Absageattrappe", helper)
+    else:
+        assert kernel_process.MOST_HELPERS >= 2
+
+        def failed_start() -> None:
+            raise OSError("Startattrappe")
+
+        monkeypatch.setattr(kernel_process, "_Helper", failed_start)
+        for _index in range(kernel_process.STARTS_BEFORE_GIVING_UP):
+            assert pool.take(None) is None
+        monkeypatch.setattr(kernel_process, "_Helper", type(helper))
+    assert pool.disabled
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        pool.discard(helper)
+    helper.alive = False
+
+    assert kernel_process.run("late_stop_probe", {}, {}, weight=0) == (
+        {},
+        {"executed": "local"},
+    )
+    assert in_a_worker(
+        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+    ) == ({}, {"executed": "local"})
+    assert calls == {"local": 2, "helper": 0}
+    assert pool.disabled and pool.processes() == []
+    assert pool.take(None) is None and len(made) == 1
+    assert pool.counts.get("stopped", 0) == 1
+
+
+def test_pool_retry_of_a_live_failed_stop_never_unlocks_the_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+) -> None:
+    """Auch während des erneuten Stopps darf kein lokaler Rückfall beginnen."""
+    pool, _made, calls = late_stop_pool
+    helper = pool.take(None)
+    assert helper is not None
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        pool.discard(helper)
+    entered, release = threading.Event(), threading.Event()
+    outcome: dict[str, Any] = {}
+
+    def delayed_stop(*, graceful: bool = False) -> None:
+        entered.set()
+        assert release.wait(10.0), "Der Test gibt den Wiederholungsstopp frei."
+        helper.alive = False
+
+    def retry() -> None:
+        try:
+            outcome["value"] = pool.discard(helper)
+        except BaseException as problem:
+            outcome["error"] = problem
+
+    monkeypatch.setattr(helper, "stop", delayed_stop)
+    worker = threading.Thread(target=retry, name="late-stop-retry", daemon=True)
+    worker.start()
+    try:
+        assert entered.wait(10.0), "Der erneut aufgerufene Stopp ist bestätigt."
+        assert helper.alive and pool.disabled
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            kernel_process.run("late_stop_probe", {}, {}, weight=0)
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            in_a_worker(
+                lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+            )
+        assert calls == {"local": 0, "helper": 0}
+        assert pool.take(None) is None
+        release.set()
+        worker.join(10.0)
+        assert not worker.is_alive() and outcome == {"value": None}, outcome
+        assert pool.processes() == [] and not pool.disabled
+        assert pool.counts.get("stopped", 0) == 1
+        assert kernel_process.run("late_stop_probe", {}, {}, weight=0) == (
+            {},
+            {"executed": "local"},
+        )
+        assert calls == {"local": 1, "helper": 0}
+    finally:
+        release.set()
+        worker.join(10.0)
+        assert not worker.is_alive(), "Der Wiederholungsstopp muss vor dem Fixture-Ende ruhen."
+
+
+def test_pool_reservation_before_reaping_does_not_cross_shutdown_generation(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+) -> None:
+    """Eine alte Reservierung liefert nach parallelem Schließen keinen neuen Helfer."""
+    pool, made, _calls = late_stop_pool
+    helper = pool.take(None)
+    assert helper is not None
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        pool.discard(helper)
+    helper.alive = False
+    stopping, release, stop_returned, reaped = (threading.Event() for _index in range(4))
+    closing_waits, closed = threading.Event(), threading.Event()
+    outcomes: dict[str, Any] = {}
+    original_stop = helper.stop
+
+    def delayed_stop(*, graceful: bool = False) -> None:
+        stopping.set()
+        assert release.wait(10.0), "Der Test gibt das Einsammeln frei."
+        original_stop(graceful=graceful)
+        stop_returned.set()
+
+    def reserve() -> None:
+        try:
+            outcomes["reserve"] = pool.take(None)
+        except BaseException as problem:
+            outcomes["reserve_error"] = problem
+
+    def close() -> None:
+        try:
+            outcomes["close"] = pool.shutdown()
+        except BaseException as problem:
+            outcomes["close_error"] = problem
+        finally:
+            closed.set()
+
+    taker = threading.Thread(target=reserve, name="late-stop-reserve", daemon=True)
+    closer = threading.Thread(target=close, name="late-stop-close", daemon=True)
+
+    class OrderedCondition(threading.Condition):
+        def __enter__(self) -> bool:
+            if threading.current_thread() is taker and reaped.is_set():
+                # Außerhalb des Schlosses warten: shutdown schließt vollständig,
+                # bevor die alte Reservierung ihre nächste Entscheidung trifft.
+                assert closed.wait(10.0), "Das parallele Schließen wird abgeschlossen."
+            return super().__enter__()
+
+        def __exit__(self, *args: Any) -> None:
+            super().__exit__(*args)
+            if threading.current_thread() is taker and stop_returned.is_set():
+                reaped.set()
+
+        def wait(self, timeout: float | None = None) -> bool:
+            if threading.current_thread() is closer:
+                closing_waits.set()
+            assert super().wait(10.0), "Der laufende Stopp gibt den wartenden Schließer frei."
+            return True
+
+    pool._lock = OrderedCondition()
+    monkeypatch.setattr(helper, "stop", delayed_stop)
+    taker.start()
+    try:
+        assert stopping.wait(10.0), "Die alte Reservierung sammelt den Toten ein."
+        closer.start()
+        assert closing_waits.wait(10.0), "shutdown wartet auf genau diesen laufenden Stopp."
+        release.set()
+        taker.join(10.0)
+        closer.join(10.0)
+        assert not taker.is_alive() and not closer.is_alive()
+        assert outcomes == {"reserve": None, "close": 1}, outcomes
+        assert pool.processes() == [] and not pool.disabled and len(made) == 1
+        fresh = pool.take(None)
+        assert fresh is not None and fresh is not helper
+        pool.discard(helper)
+        pool.give_back(helper)
+        assert pool.processes() == [fresh] and pool.counts.get("stopped", 0) == 1
+    finally:
+        release.set()
+        taker.join(10.0)
+        if closer.ident is not None:
+            closer.join(10.0)
+        assert not taker.is_alive() and not closer.is_alive()
+
+
+def test_pool_reaping_failure_does_not_strand_an_unvisited_dead_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+) -> None:
+    """Eine unerwartete Ausnahme lässt den nächsten Toten weiterhin einsammelbar."""
+    pool, _made, calls = late_stop_pool
+    assert kernel_process.MOST_HELPERS >= 2
+    old = [pool.take(None), pool.take(None)]
+    assert all(helper is not None for helper in old)
+    for helper in old:
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            pool.discard(helper)
+        helper.alive = False
+    stops = 0
+
+    def stop_once_raising(*, graceful: bool = False) -> None:
+        nonlocal stops
+        stops += 1
+        if stops == 1:
+            raise RuntimeError("Bereinigungsattrappe")
+
+    for helper in old:
+        monkeypatch.setattr(helper, "stop", stop_once_raising)
+    try:
+        with pytest.raises(RuntimeError, match="Bereinigungsattrappe"):
+            pool.raise_if_stop_failed()
+        assert len(pool.processes()) == 1 and pool.counts.get("stopped", 0) == 1
+        assert kernel_process.run("late_stop_probe", {}, {}, weight=0) == (
+            {},
+            {"executed": "local"},
+        )
+        assert pool.processes() == [] and not pool.disabled
+        assert pool.counts.get("stopped", 0) == 2 and stops == 2
+        assert calls == {"local": 1, "helper": 0}
+    finally:
+        # Die gezielte Gegenvariante kann den unbesuchten in _stopping belassen.
+        # Ohne Testfäden lösen wir nur die Fixture-Bereinigung; alle Asserts stehen davor.
+        with pool._lock:
+            for helper in old:
+                pool._stopping.discard(helper)
+            pool._lock.notify_all()
+        # Vor dem Fix wird die gestellte Ausnahme erst im Teardown erreicht.
+        for helper in old:
+            monkeypatch.setattr(helper, "stop", type(helper).stop.__get__(helper))
+
+
+@pytest.mark.parametrize("worker_request", (False, True), ids=("main-thread", "worker-thread"))
+def test_pool_local_choice_checks_a_stop_error_from_the_path_decision(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+    worker_request: bool,
+) -> None:
+    """Ein Stopfehler nach dem frühen Guard darf nicht den lokalen Job freigeben."""
+    pool, _made, calls = late_stop_pool
+    helper = pool.take(None)
+    assert helper is not None and not pool.disabled
+    original_offloaded = kernel_process.offloaded
+    decisions = 0
+
+    def choose_while_a_stop_fails(weight: int) -> bool:
+        nonlocal decisions
+        decisions += 1
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            pool.discard(helper)
+        return original_offloaded(weight)
+
+    monkeypatch.setattr(kernel_process, "offloaded", choose_while_a_stop_fails)
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        if worker_request:
+            in_a_worker(
+                lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+            )
+        else:
+            kernel_process.run("late_stop_probe", {}, {}, weight=0)
+    assert decisions == 1 and calls == {"local": 0, "helper": 0}
+    assert helper.alive and pool.processes() == [helper] and pool.disabled
+
+
+def test_pool_lasting_refusal_survives_a_failed_stop_on_public_run(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+) -> None:
+    """Die dauerhafte Absage des run-Wegs bleibt nach späterem Helferende bestehen."""
+    pool, made, calls = late_stop_pool
+    late_helper = kernel_process._Helper
+    refusals = 0
+
+    class RefusingHelper(late_helper):
+        def call(self, *_args: Any, **_kwargs: Any) -> None:
+            nonlocal refusals
+            refusals += 1
+            raise kernel_process._HelperRefusedError("Dauerhafte Absageattrappe", lasting=True)
+
+    monkeypatch.setattr(kernel_process, "_Helper", RefusingHelper)
+    with pytest.raises(kernel_process.KernelHelperStopError):
+        in_a_worker(lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0)
+    assert len(made) == 1 and refusals == 1
+    assert made[0].alive and pool.processes() == [made[0]] and pool.disabled
+    assert calls == {"local": 0, "helper": 0}
+    assert pool.counts.get("stopped", 0) == 0
+
+    made[0].alive = False
+    assert in_a_worker(
+        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+    ) == ({}, {"executed": "local"})
+    assert pool.disabled and pool.processes() == []
+    assert pool.take(None) is None
+    assert len(made) == 1 and refusals == 1
+    assert calls == {"local": 1, "helper": 0}
+    assert pool.counts.get("stopped", 0) == 1
+
+
+def test_pool_ready_failures_survive_failed_stops_on_public_take(
+    monkeypatch: pytest.MonkeyPatch,
+    late_stop_pool: tuple[kernel_process._Pool, list[_PoolHelper], dict[str, int]],
+) -> None:
+    """Jeder wirkliche Bereitschaftsfehler zählt trotz verweigertem Stopp."""
+    pool, made, calls = late_stop_pool
+    late_helper = kernel_process._Helper
+    ready_failures = 0
+
+    class UnreadyHelper(late_helper):
+        def __init__(self) -> None:
+            super().__init__()
+            self.ready = False
+
+        def wait_ready(self, _cancelled: Any) -> None:
+            nonlocal ready_failures
+            ready_failures += 1
+            raise kernel_process._HelperSilentError("Bereitschaftsattrappe")
+
+    monkeypatch.setattr(kernel_process, "_Helper", UnreadyHelper)
+    limit = kernel_process.STARTS_BEFORE_GIVING_UP
+    assert limit >= 1
+    for index in range(limit):
+        # Der nächste take muss zuerst den inzwischen Toten einsammeln und
+        # den folgenden Start versuchen; es gibt kein Zwischen-shutdown.
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            pool.take(None)
+        assert len(made) == ready_failures == index + 1
+        assert made[-1].alive and pool.processes() == [made[-1]] and pool.disabled
+        assert pool.counts.get("stopped", 0) == index
+        assert calls == {"local": 0, "helper": 0}
+        made[-1].alive = False
+
+    assert in_a_worker(
+        lambda: kernel_process.run("late_stop_probe", {}, {}, weight=1), timeout=10.0
+    ) == ({}, {"executed": "local"})
+    assert pool.disabled and pool.processes() == []
+    assert pool.take(None) is None
+    assert len(made) == ready_failures == limit
+    assert calls == {"local": 1, "helper": 0}
+    assert pool.counts.get("stopped", 0) == limit

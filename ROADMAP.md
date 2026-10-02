@@ -84,6 +84,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
 | [RM-320 — Ein zweiter Körper in einer Bohrung](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Arbeiterabbruch und gültige Innenkammer mit freiem Stift korrigiert; 1010 Fachtests und sechs Kundenrechnungen grün, unabhängiger Review ohne offene Codebefunde. Tor und Integration stehen aus |
+| [RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart](#rm-384) | Geometrie, Erkennung und Druckvorbereitung | Konstruktor-Nachgang behoben und unabhängig ohne Befund geprüft; 106 Entwicklungsfälle grün, zentrales Tor und Integration ausstehend |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -2308,7 +2309,10 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   als grüner Gesamtlauf ausgegeben. Eigenreview und unabhängiges Quell-/
   Mechanikreview sind abgeschlossen; der unabhängige Dokumentnachgang
   präzisierte die nachgestellten Prüfablehnungen ohne weitere Funde.
-  Zentrales Tor und Integration stehen aus. [Fortsetzbarer Messanschluss](konzepte/nachweise-release-0.5.1/reports/rm298-hilfsprozessmarken-2026-10-02.md).
+  Die Quellen-/Mechanikeinheit ist mit 7f0de659d2c8fc1e35bd1067e738bcaef7f1ec72
+  auf dem tatsächlichen origin/main. Zentrales Entwicklungstor: 19.066 bestanden,
+  62 übersprungen, Suite/Ruff/Format/mypy jeweils Exit 0, keine Quelldrift.
+  [Fortsetzbarer Messanschluss](konzepte/nachweise-release-0.5.1/reports/rm298-hilfsprozessmarken-2026-10-02.md).
   Keine performance-Fälle gesammelt/ausgeführt, keine Laufzeitabnahme.
   Referenzmaschine, übrige §31-Marken, farbige Slots und Plattform-/Paketwege
   bleiben im Release zu prüfen; RM-298 bleibt offen.
@@ -2458,6 +2462,44 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   `test_an_inner_void_does_not_shorten_a_single_body_slot`).
   Nachprüfung am Stand `3fd3b1ace`: nicht behoben, die Korrektur aus dem Arbeitsbaum ist nicht committet. Durchgesteckter Stift am Netz abgelehnt („In dieser Bohrung steht Material …“), exakt 1 Teil und Stift weg; auch der Eintragsfall unterscheidet sich weiter zwischen den Kernen.
 
+
+<a id="rm-384"></a>
+
+- [~] **RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart.**
+  Review 02.10.2026 von `a45730c79`, Fund 6. `raise_if_stop_failed`
+  (`app/core/geom/kernel_process.py:615–619`) prüft nie, ob das Kind nach der 5-s-Frist doch noch
+  beendet ist; der Pool bleibt gesperrt, jede weitere Rechnung — auch `face_components` und die
+  Anzeigeausdünnung — meldet `KernelHelperStopError` („Speichern Sie Ihr Projekt, starten Sie
+  Solidon neu …“), bis `shutdown` läuft.
+  **Fehlerfall (Attrappe, nicht am echten Prozess):** Kind endet nach der Frist → `discard` →
+  `KernelHelperStopError`, `disabled: True`, „Kind lebt noch: False“; drei weitere `run` scheitern
+  gleich; erst `shutdown` hebt die Sperre.
+  **Fix:** Vor dem Sperren und bei jedem `run` prüfen, ob der Prozess inzwischen fort ist, und die
+  Sperre dann aufheben.
+  **Abnahme:** Test für das späte Prozessende: nach dem Ende des Kinds rechnet der nächste `run`
+  wieder. Bauplan §2.7, §2.8. Beleg: Sonde `r_kernel_spaetes_ende.txt`, `review-3fd3b1ace.md`.
+
+  **Teilstand 02.10.2026:** Die nächste öffentliche Rechnung beziehungsweise
+  Reservierung sammelt einen inzwischen toten Stopprest über den bestehenden
+  Stopweg ein. Ein noch lebender Rest sperrt weiter; dauerhafte Start-/Helferabsagen
+  bleiben erhalten. Reservierung und Shutdown behalten ihre Generationsgrenze.
+  Der zentrale Zweitreview fand nach der ersten lokalen Freigabe einen weiteren
+  Konstruktoranschluss: Die ursprüngliche Startursache bleibt nun über beide
+  Stopfehlertypen erhalten. Erwartete Fehlstarts verbrauchen ihr Kontingent trotz
+  spätem Ende; unerwartete Ursachen zählen nicht als gewöhnliche Startabsage.
+  14 erweiterte Ressourcen-/Anschlussfälle waren zuvor 10 rot und 4 grün, ohne
+  Setup-/Teardownfehler oder Skips, danach alle grün. Sie führen jeweils bis
+  zum nächsten echten Arbeiter-/take-Auftrag und prüfen den Shutdown-Reset.
+  Alle 27 neuen Attrappenfälle und der verstärkte bestehende Generationsfall
+  bestehen im vollständigen Entwicklungsmodul: 106 grün, 1 Fenstertest abgewählt,
+  Exit 0; Quell-/Testhashes während des Laufs stabil. Die sechs isolierten
+  Fehlvarianten wurden am Nachgangstand erneut gefahren: 16 erwartete
+  Testfehlschläge und 4 passende Kontrollen grün, keine Setup-/Teardownfehler/Skips.
+  Ruff, Format und Diffcheck jeweils Exit 0. Auch der Konstruktor-P2 ist im
+  unabhängigen Nachreview ohne weitere Befunde geschlossen.
+  [Portabler Endstands- und Gegenlaufbeleg](konzepte/nachweise-release-0.5.1/reports/rm384-spaetes-helferende-2026-10-02.md).
+  Zentrales vollständiges Entwicklungstor und Integration stehen noch aus.
+  Kein echter Fristüberschreitungs-, Fenster-, Leistungs- oder Plattformnachweis.
 
 ## Bedienung und Darstellung
 
