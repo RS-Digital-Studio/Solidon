@@ -16,6 +16,68 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.5.2
+
+### Imprimer et transmettre au slicer
+
+- Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
+- Vous choisissez la buse dans les réglages d'impression parmi les tailles que connaît votre imprimante, et le slicer reçoit le profil correspondant.
+- Les réglages d'impression demandent dans l'ordre où l'un dépend de l'autre : slicer, imprimante, buse, plateau, filaments et qualité, puis les valeurs.
+- Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Jusqu'ici, cela ne marchait que dans la fenêtre de Creality Print.
+- Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
+- Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
+- Les réglages d'impression ne montrent que les cotes d'adhérence du type de plateau choisi. Avec un brim, les champs skirt et raft, sans effet, disparaissent.
+- Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
+- Les pièces hautes et fines sur une petite base reçoivent des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
+- Solidon ne propose « Paroi extérieure d'abord » que pour la pièce qui en a besoin, et jamais pour une pièce avec supports.
+- Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
+- Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.
+- Si vous faites glisser un corps dans la vue sur un autre plateau, il se retrouve sur ce plateau.
+- Après le premier « Ouvrir dans le slicer … », Solidon ne recalcule plus l'historique.
+- La contre-vérification avec SuperSlicer ne signale plus de code de démarrage ignoré là où aucun ne l'a été.
+
+### Perçages, trous oblongs et découpe
+
+- L'angle d'un trou oblong sur un perçage importé pointe dans la direction attendue et la garde quand vous changez la finesse. Les angles enregistrés gardent leur direction.
+- Deux plaques qui se touchent gardent leur matière quand vous étirez un trou oblong, et une goupille au-dessus du perçage reste en place.
+- Étirer un perçage qui traverse deux corps ne signale plus que le corps se fragmente quand ce n'est pas le cas.
+- Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
+- Les motifs sur les faces cylindriques des modèles importés restent fermés quand vous les modifiez.
+- Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
+- Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
+
+### Sculpter, texte et esquisse
+
+- Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.
+- La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
+- Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
+- Un trait sur le plan de symétrie agit une fois au lieu de deux.
+- Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
+- Dans la fenêtre, « Fusionner en douceur » montre la même forme qu'à l'export. Seuls les très grands corps sont prévisualisés plus grossièrement, et l'aperçu le dit.
+- Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
+- Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
+- La cible d'« Aligner sur une caractéristique » est d'abord vide. Le premier clic dans la vue la remplit, et « Appliquer » attend qu'elle soit choisie.
+- Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
+
+### Générer avec l'IA
+
+- Annuler pendant « Encore un essai » n'arrête que l'essai en cours. Les essais terminés restent au choix.
+- Le modèle d'image est téléchargé par « Configurer le modèle d'image … » même si les autres poids sont déjà là.
+- Si une erreur de génération indique la configuration comme issue, elle apparaît comme bouton dans la boîte de dialogue.
+- La boîte de dialogue de génération indique le volume à la taille où la pièce arrive.
+
+### Utilisation et système
+
+- Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
+- Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
+- Les coches des listes sont lisibles sur chaque ligne, et les couleurs apparaissent en pastille ronde à côté.
+- La palette de commandes explique outils et actions de fichier en une phrase.
+- Après un changement de paramètre, « Générer des variantes » commence à la valeur de ce paramètre.
+- Si l'enregistrement d'un calibrage échoue, les valeurs précédentes sont conservées.
+- Dans le projet d'exemple de la deuxième voie, les trous de vis suivent la largeur et l'épaisseur.
+- La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
+- L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
+
 ## 0.5.1
 
 ### Imprimer et transmettre au slicer
