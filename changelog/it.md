@@ -51,7 +51,6 @@ scrive in `website/version.json`.
 - Due piastre che si toccano restano un solo corpo attorno a un foro e conservano il materiale, che tu lo allunghi, lo modifichi, lo sposti o lo chiuda. Una spina sopra resta al suo posto.
 - Allungare un foro che attraversa due corpi non segnala più che il corpo si spezza quando non succede.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
-- I motivi sulle facce cilindriche dei modelli importati restano chiusi quando li modifichi.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Asse di inclinazione», e «Su faccia» porta il taglio parallelo a una faccia piana.
@@ -80,6 +79,8 @@ scrive in `website/version.json`.
 - Il modello di immagine viene scaricato da «Configura modello immagine …» anche se gli altri pesi ci sono già.
 - Se un errore durante la generazione indica la configurazione come via d'uscita, compare come pulsante nella finestra.
 - La finestra di generazione indica il volume alla misura con cui arriva il pezzo.
+- Un modello generato si annulla con un solo Ctrl+Z. Prima ne servivano tre o quattro.
+- Se «Applica» viene rifiutato durante la generazione, la finestra resta aperta con tutti i tentativi e indica la via d'uscita invece di scartare la mesh.
 
 ### Uso e sistema
 
@@ -97,6 +98,8 @@ scrive in `website/version.json`.
 - La finestra «Novità» e il sito mostrano le evidenziazioni come testo marcato invece che con asterischi.
 - Inglese e spagnolo usano una sola parola per il gioco di accoppiamento, e i messaggi seguono la punteggiatura di ogni lingua.
 - Gli spazi arrivano in ogni campo di testo, anche nel questionario di feedback e nella chat, mentre una finestra di dialogo mostra l'anteprima.
+- Un rilievo che riguarda un passo lo apre per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
+- Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
 
 ## 0.5.1
 

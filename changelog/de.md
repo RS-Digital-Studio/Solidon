@@ -76,7 +76,6 @@ Nutzen da und sonst nichts.
 - Zwei Platten, die sich berühren, bleiben an einer Bohrung ein Körper und behalten ihr Material, ob Sie sie ziehen, ändern, versetzen oder schließen. Ein Stift darüber bleibt stehen.
 - Ein Zug an einer Bohrung, durch die zwei Körper gehen, meldet keinen Zerfall mehr, wo keiner entsteht.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
-- Muster auf Zylinderflächen eingelesener Modelle bleiben beim Ändern geschlossen.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
 - Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Kippachse*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.
@@ -105,6 +104,8 @@ Nutzen da und sonst nichts.
 - Das Bildmodell holt *Bildmodell einrichten …* auch, wenn die übrigen Gewichte schon da sind.
 - Nennt ein Fehler beim Erzeugen die Einrichtung als Ausweg, steht sie als Knopf im Dialog.
 - Der Erzeugen-Dialog nennt das Volumen in der Größe, in der das Teil ankommt.
+- Ein erzeugtes Modell nimmt ein einziges Strg+Z wieder zurück. Bisher brauchte es dafür drei bis vier.
+- Sagt *Übernehmen* beim Erzeugen ab, bleibt der Dialog mit allen Versuchen offen und nennt den Weg, statt das Netz zu verwerfen.
 
 ### Bedienung und System
 
@@ -122,6 +123,8 @@ Nutzen da und sonst nichts.
 - Das Fenster *Neuerungen* und die Website zeigen Hervorhebungen als Schrift statt als Sternchen.
 - Englisch und Spanisch nennen das Passungsspiel überall gleich, und Meldungen setzen Satzzeichen, wie die jeweilige Sprache es verlangt.
 - Leerzeichen kommen in jedem Textfeld an, auch im Rückmeldebogen und im Chat, während ein Dialog seine Vorschau zeigt.
+- Ein Befund, der einen Schritt meint, öffnet ihn zum Ändern, etwa *Größe ändern* nach *Auf Maß bringen*.
+- Eine Sammelzeile im Prüfbericht wie *Auf den Bauraum verkleinern* ist über alle Körper ein einziger Rückgängig-Schritt.
 
 ## 0.5.1
 
