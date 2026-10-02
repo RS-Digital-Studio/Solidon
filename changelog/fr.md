@@ -23,7 +23,7 @@ dans `website/version.json`.
 - Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
 - Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
 - Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
-- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, pattes à vis, crochet de panneau ou pince.
+- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, trous de vis, crochet de panneau ou pince.
 - Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
 - Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
 
@@ -55,7 +55,7 @@ dans `website/version.json`.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
-- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Axe d'inclinaison », et « Sur une face » mène la coupe parallèlement à une face plane.
+- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Incliner autour de », et « Sur une face » mène la coupe parallèlement à une face plane.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 
@@ -67,7 +67,7 @@ dans `website/version.json`.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
-- Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
+- Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
 - La cible d'« Aligner sur une caractéristique » est d'abord vide. Vous la choisissez dans le champ « Cible », et « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
@@ -87,8 +87,6 @@ dans `website/version.json`.
 ### Utilisation et système
 
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
-- Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
-- La barre des paramètres refuse une cote hors de sa limite et nomme la limite, au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
 - Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.

@@ -23,7 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.
 - Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.
 - Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.
-- Cuatro soportes se crean en un paso: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, pestañas, gancho de panel o pinza.
+- Cuatro soportes se crean en un paso: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, agujeros para tornillos, gancho de panel o pinza.
 - Una escena vacía muestra cómo empezar: caja, cilindro, dibujo, bloques o un archivo que arrastre dentro.
 - Los cuerpos nuevos aparecen sobre la cama o sobre la cara plana elegida, ya no donde estaba un cuerpo seleccionado antes, y quedan seleccionados.
 
@@ -55,7 +55,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
-- Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» y «Eje de inclinación», y «En la cara» lleva el corte paralelo a una cara plana.
+- Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» e «Inclinar sobre», y «En la cara» lleva el corte paralelo a una cara plana.
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 
@@ -67,7 +67,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
-- En la ventana, «Fusionar suavemente» calcula ahora tan fino como en la exportación, mientras el cuerpo no sea muy grande.
+- En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.
 - El destino de «Alinear a la característica» empieza vacío. Se elige en el campo «Destino», y «Aplicar» espera hasta entonces en vez de poner el cuerpo sin aviso en el lado equivocado.
@@ -87,8 +87,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Manejo y sistema
 
 - Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
-- Una exportación durante un cálculo en curso espera al resultado nuevo. Antes el archivo podía llevar todavía la medida antigua.
-- La barra de parámetros rechaza una medida fuera de su límite y nombra el límite, en vez de dejar la vista vacía.
 - En la barra de parámetros cuenta cada paso de flecha, y el foco se queda en el campo.
 - Si un paso espera una pregunta, «Aplicar» sigue disponible y la pregunta aparece.
 - En el diálogo de una operación las etiquetas forman una columna, los campos tienen el mismo ancho y cada interruptor está antes de lo que activa.
