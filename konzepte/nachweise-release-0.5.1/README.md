@@ -43,6 +43,8 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm298-lifecycle-2026-10-02.md`](reports/rm298-lifecycle-2026-10-02.md) | Aktiver Windows-Elternabbruch, tatsächliche OS-Priorität und Gegenproben | RM-298(d) |
+| [`reports/rm298-poolnachweise-2026-10-02.md`](reports/rm298-poolnachweise-2026-10-02.md) | Integrierte Besitzgrenze, vier lokale Fehleranschlüsse, echte Gegenläufe und Entwicklungstor | RM-298(a) |
 | [`reports/rm285-textnachweise-2026-10-02.md`](reports/rm285-textnachweise-2026-10-02.md) | Integrierte UI-/CLI-/Bereichsprüfertexte, tatsächliche Tore und Abnahmegrenze | RM-285, RM-347 |
 | [`reports/rm285-modelltexte-2026-10-02.md`](reports/rm285-modelltexte-2026-10-02.md) | Fortsetzbare Liste der 42 Modelltextausdrücke mit 43 Texttrennern, Wirkung und Quellenhashes | RM-285, RM-347 |
 | [`reports/rm290-textnachweise-2026-10-02.md`](reports/rm290-textnachweise-2026-10-02.md) | Abschluss a–h, wirkliche Wächter/Altgegenproben und Commit-/Tor-Nachweis | RM-290, RM-347 |

@@ -75,7 +75,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
-| [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pooldeckel und Anschluss eigen-/zweitgeprüft: 80 Entwicklungsfälle grün; zentrales Tor/Übernahme und b–f offen |
+| [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pooldeckel/Anschluss auf origin/main; aktive Windows-Bindung und OS-Priorität eigen-/zweitgeprüft; Budget-/Plattformnachweise und b–f offen |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -2268,10 +2268,26 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beschriftungswächter, zusammen 80 grün (1 Fenstertest abgewählt, Exit 0);
   Quell-/Testhashes vor/nach identisch. Ruff, Format und Diffcheck sind grün.
   Eigenreview und erneutes unabhängiges Quell-/Nachweisreview der Nachgänge
-  ohne offene Befunde abgeschlossen. Vollständiges zentrales Entwicklungstor,
-  Commit und origin/main dieser Teilgruppe stehen noch aus. (b)–(f) bleiben offen; der vorhandene Eltern-Endetest prüft ein
+  ohne offene Befunde abgeschlossen. Das vollständige zentrale Entwicklungstor
+  bestand mit 19.033 Tests und 62 Überspringungen; Kernsammlung, Ruff, Format
+  und mypy jeweils Exit 0. Teilkorrektur a45730c79f1d7ad6416d2bd1b6b68b5a0f24f311
+  ist auf origin/main; [fortsetzbare Pool-/Anschlussbelege](konzepte/nachweise-release-0.5.1/reports/rm298-poolnachweise-2026-10-02.md).
+  (b)–(f) bleiben offen; der vorhandene Eltern-Endetest prüft ein
   untätiges Kind und ersetzt keine aktive Jobobjekt-, Prioritäts-, Paket-,
   Linux-/macOS- oder Release-Leistungsabnahme.
+
+  **Teilstand 02.10.2026, (d), Windows-Prozesswächter:** Neue getrennte Kernfälle
+  prüfen den Helfer während einer wirklichen öffentlichen run-Rechnung und lesen
+  seine Priorität nach dem normalen serve-Start beim Betriebssystem. Endstand
+  2/2 grün, auch unter Konsolenwächter; je abgeschalteter Elternbindung/Priorität
+  genau 1 beabsichtigtes Assert rot, keine Setupfehler und bestätigter Abbau.
+  Gehaltene wirkliche Griffe unterscheiden auch den .venv-Launcher vom
+  Python-Elternprozess; der äußere Aufräumjob bleibt bis nach der Zusicherung
+  geöffnet. Eigenprüfung und unabhängiger Quell-/Nachweisreview ohne Befunde.
+  [Dauerhafter Prozess-/Prioritätsbeleg](konzepte/nachweise-release-0.5.1/reports/rm298-lifecycle-2026-10-02.md).
+  Zentrales Tor und Übernahme dieser neuen Testeinheit stehen noch aus. Der
+  bestehende untätige Test bleibt erhalten. Tatsächliche §31-Hilfsprozessmarken,
+  Linux/macOS und Paketnachweise sind damit weiterhin nicht abgenommen.
 
 <a id="rm-301"></a>
 
