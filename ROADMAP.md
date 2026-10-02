@@ -75,7 +75,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
-| [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Deckel der Hilfsprozesse, gemeinsamer Speicher unter Linux/macOS, breite Fänge |
+| [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Pooldeckel und Anschluss eigen-/zweitgeprüft: 80 Entwicklungsfälle grün; zentrales Tor/Übernahme und b–f offen |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -2215,7 +2215,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-298"></a>
 
-- [ ] **RM-298 — Hilfsprozess: Reste aus dem Review.** Aus dem Release 0.5.1 (Review des Pakets hilfsprozess,
+- [~] **RM-298 — Hilfsprozess: Reste aus dem Review.** Aus dem Release 0.5.1 (Review des Pakets hilfsprozess,
   `konzepte/nachweise-release-0.5.1/reports/review-hilfsprozess.md`). (a) Der Deckel
   `MOST_HELPERS` hält nicht: nachgestellt liefen 6 statt 3 Hilfsprozesse zugleich. (b) Unter
   Linux und macOS bleibt nach Absturz oder Abbruch gemeinsamer Speicher in `/dev/shm`
@@ -2230,6 +2230,34 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   ab (Kommandozeile, Tests, Export). (f) Der Rauchtest im Paketjob verlangt das eigene Ende
   in der Produktfrist von 0,5 s; auf einem langsamen Mac-Runner bleibt ein kleines
   Wackelrisiko. Abnahme: je Punkt behoben oder mit Grund begrenzt.
+
+  **Teilstand 02.10.2026, (a):** Der heutige Code bestätigte den alten Deckelfehler
+  auch während offener Starts und Stopversuche. Reservierte Starts und der gesamte
+  Besitzbestand zählen bis zum bestätigten Prozessende; fehlgeschlagene Stopversuche
+  behalten ihren Platz und einen erneuten Aufräumweg. Shutdown nimmt offene Starts
+  mit, gibt seine Schließsperre auch bei Fehler frei und trennt alte Rückgaben sowie
+  bleibende Absagen vom neuen Bestand. Auch ein beim Konstruktor-Aufräumen noch
+  lebendes Kind bleibt erfasst. Ein nicht beendbarer Helfer meldet einen übersetzten
+  KernelHelperStopError mit tatsächlichen Fehlerbericht-Handlungen; seine technische
+  PID steht im Protokoll, nicht als unbeschrifteter Kundenwert. Nach einem gescheiterten
+  Vorabstart meldet auch die nächste öffentliche run-Anfrage den noch offenen Stopfehler
+  vor dem lokalen Rückfall; auch bei wartender Platzsuche, stummer Antwort und
+  bleibender Absage eines anderen Helfers. Ein erfolgreicher Aufräumversuch hebt die Sperre auf;
+  harmlose Vorabimport-/Startfehler behalten ihren lokalen Rückfall.
+  Zehn ursprüngliche und sechs zusätzliche Reviewgegenproben scheiterten vor den
+  jeweiligen Korrekturen an den echten Kontrollflüssen. Die zentrale Anschlussprüfung
+  fand danach zwei weitere Fehler: PID-Kundenwert und vom Warmup verschluckter
+  Neustartbedarf. Die jeweiligen Gegenläufe waren tatsächlich 4 rot; beim Warmup
+  zusätzlich 2 bereits grüne Kontrollfälle. Keine Setupfehler dieser Gegenläufe.
+  Die eigene reine Pool-/Faden-/Sprach-/Warmupgruppe umfasst jetzt 33 Fälle. Frisch
+  bestehen 79 Kernel-Entwicklungsfälle mit echten Prozesswegen sowie der unveränderte
+  Beschriftungswächter, zusammen 80 grün (1 Fenstertest abgewählt, Exit 0);
+  Quell-/Testhashes vor/nach identisch. Ruff, Format und Diffcheck sind grün.
+  Eigenreview und erneutes unabhängiges Quell-/Nachweisreview der Nachgänge
+  ohne offene Befunde abgeschlossen. Vollständiges zentrales Entwicklungstor,
+  Commit und origin/main dieser Teilgruppe stehen noch aus. (b)–(f) bleiben offen; der vorhandene Eltern-Endetest prüft ein
+  untätiges Kind und ersetzt keine aktive Jobobjekt-, Prioritäts-, Paket-,
+  Linux-/macOS- oder Release-Leistungsabnahme.
 
 <a id="rm-301"></a>
 

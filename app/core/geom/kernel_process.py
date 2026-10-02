@@ -135,6 +135,23 @@ class KernelHelperLostError(InternalError):
     )
 
 
+class KernelHelperStopError(InternalError):
+    """Das Ende eines Hilfsprozesses ist noch nicht bestätigt."""
+
+    default_detail = _(
+        "Ein Hilfsprozess lässt sich gerade nicht beenden. Speichern Sie Ihr Projekt, "
+        "starten Sie Solidon neu und erstellen Sie bei erneutem Auftreten einen Fehlerbericht."
+    )
+
+
+class _HelperStopError(Exception):
+    """Ein noch lebendes Kind bleibt auch nach einem Konstruktorfehler erreichbar."""
+
+    def __init__(self, helper: _Helper) -> None:
+        super().__init__("Das Ende des Hilfsprozesses ist noch nicht bestätigt.")
+        self.helper = helper
+
+
 class _HelperLostError(Exception):
     """Der Hilfsprozess lebt nicht mehr oder die Leitung ist zu."""
 
@@ -167,7 +184,11 @@ class _HelperRefusedError(Exception):
 #: gestorbenen Hilfsprozess still die nächste Stufe — dreimal gestartet, das
 #: Ergebnis aus der Voxelstufe, in der Vorschau der Rat, das Modell zu
 #: reparieren (Durchsicht RM-212, B3).
-NOT_A_KERNEL_FAILURE: Final = (OperationCancelled, KernelHelperLostError)
+NOT_A_KERNEL_FAILURE: Final = (
+    OperationCancelled,
+    KernelHelperLostError,
+    KernelHelperStopError,
+)
 
 
 @contextmanager
@@ -195,22 +216,38 @@ def _helper_environment() -> Iterator[None]:
 class _Helper:
     """Ein Hilfsprozess und die Leitung zu ihm. Gehört immer genau einem Faden."""
 
+    generation: int
+
     def __init__(self) -> None:
         mine, theirs = _CONTEXT.Pipe(duplex=True)
         self.process = _CONTEXT.Process(
             target=_SERVE, args=(theirs,), name="solidon-kernel", daemon=True
         )
-        with _helper_environment():
-            self.process.start()
-        theirs.close()
         self.connection = mine
-        self.started = time.monotonic()
         self.ready = False
         try:
-            process_boundary.bind_helper(self.process)
-        except OSError as problem:
-            # Ohne Jobobjekt endet er erst mit seiner Rechnung, nicht mit uns.
-            _log.warning("kernel helper %s not bound to this process: %s", self.pid, problem)
+            with _helper_environment():
+                self.process.start()
+            theirs.close()
+            self.started = time.monotonic()
+            try:
+                process_boundary.bind_helper(self.process)
+            except OSError as problem:
+                # Ohne Jobobjekt endet er erst mit seiner Rechnung, nicht mit uns.
+                _log.warning("kernel helper %s not bound to this process: %s", self.pid, problem)
+        except BaseException:
+            with suppress(OSError):
+                theirs.close()
+            with suppress(OSError):
+                mine.close()
+            if self.process.pid is not None:
+                try:
+                    self.stop()
+                except OSError as problem:
+                    if self.alive:
+                        raise _HelperStopError(self) from problem
+                    raise
+            raise
 
     @property
     def pid(self) -> int | None:
@@ -316,9 +353,12 @@ class _Helper:
                 if deadline is None
                 else min(CANCEL_POLL_SECONDS, deadline - now)
             )
-            ready = multiprocessing.connection.wait(
-                [self.connection, self.process.sentinel], timeout
-            )
+            try:
+                ready = multiprocessing.connection.wait(
+                    [self.connection, self.process.sentinel], timeout
+                )
+            except (EOFError, OSError) as problem:
+                raise _HelperLostError(str(problem)) from problem
             if self.process.sentinel in ready:
                 try:
                     if self.connection.poll(0):
@@ -337,13 +377,18 @@ class _Helper:
         """
         with suppress(OSError):
             self.connection.close()
-        if graceful and self.ready:
-            self.process.join(timeout=GRACEFUL_SECONDS)
-        if self.process.is_alive():
-            self.process.kill()
-        self.process.join(timeout=5.0)
-        with suppress(OSError):
-            process_boundary.release_helper(self.process)
+        try:
+            if graceful and self.ready:
+                self.process.join(timeout=GRACEFUL_SECONDS)
+            if self.process.is_alive():
+                self.process.kill()
+            self.process.join(timeout=5.0)
+        finally:
+            if not self.alive:
+                with suppress(OSError):
+                    process_boundary.release_helper(self.process)
+        if self.alive:
+            raise _HelperStopError(self)
 
 
 class _Pool:
@@ -353,6 +398,12 @@ class _Pool:
         self._lock = threading.Condition()
         self._idle: list[_Helper] = []
         self._busy: set[_Helper] = set()
+        # Der Besitz bleibt auch während stop außerhalb des Schlosses erhalten.
+        self._helpers: set[_Helper] = set()
+        self._stopping: set[_Helper] = set()
+        self._starting = 0
+        self._closing = False
+        self._generation = 0
         self._failed_starts = 0
         self.disabled = False
         self.counts: dict[str, int] = {}
@@ -370,8 +421,12 @@ class _Pool:
         helper = self._reserve(cancelled)
         if helper is None:
             return None
-        if helper.ready:
-            return helper
+        with self._lock:
+            if self._closing or helper not in self._busy:
+                return None
+            generation = self._generation
+            if helper.ready:
+                return helper
         try:
             helper.wait_ready(cancelled)
         except _HelperCancelledError:
@@ -380,17 +435,23 @@ class _Pool:
             raise
         except (_HelperLostError, _HelperSilentError) as problem:
             self.discard(helper)
-            self._start_failed(f"{type(problem).__name__}: {problem}")
+            self._start_failed(f"{type(problem).__name__}: {problem}", generation)
             return None
         with self._lock:
-            self._failed_starts = 0
+            obsolete = generation != self._generation or helper not in self._busy
+            if not obsolete:
+                self._failed_starts = 0
+        if obsolete:
+            self.discard(helper)
+            return None
         return helper
 
     def _reserve(self, cancelled: CancelToken | None) -> _Helper | None:
         """Ein untätiger Hilfsprozess, ein frischer — oder beim Deckel der nächste freie."""
         with self._lock:
+            generation = self._generation
             while True:
-                if self.disabled:
+                if self.disabled or self._closing or generation != self._generation:
                     return None
                 while self._idle:
                     helper = self._idle.pop()
@@ -398,29 +459,66 @@ class _Pool:
                         self._busy.add(helper)
                         return helper
                     self._stopped_quietly(helper)
-                if len(self._busy) < MOST_HELPERS:
+                if len(self._helpers) + self._starting < MOST_HELPERS:
+                    self._starting += 1
                     break
                 if cancelled is not None and cancelled.is_cancelled:
                     raise _HelperCancelledError
                 self._lock.wait(CANCEL_POLL_SECONDS)
         try:
             helper = _Helper()
-        except (OSError, ValueError, RuntimeError, pickle.PicklingError) as problem:
-            self._start_failed(f"{type(problem).__name__}: {problem}")
-            return None
+        except BaseException as problem:
+            expected = isinstance(
+                problem, (OSError, ValueError, RuntimeError, pickle.PicklingError)
+            )
+            with self._lock:
+                self._starting -= 1
+                if isinstance(problem, _HelperStopError):
+                    problem.helper.generation = generation
+                    self._helpers.add(problem.helper)
+                    self._bump("started")
+                    self.disabled = True
+                if expected:
+                    self._start_failed(f"{type(problem).__name__}: {problem}", generation)
+                self._lock.notify_all()
+            if isinstance(problem, _HelperStopError):
+                _log.error(
+                    "kernel helper %s not stopped after failed start: %s",
+                    problem.helper.pid,
+                    problem,
+                )
+                raise KernelHelperStopError from problem
+            if expected:
+                return None
+            raise
         with self._lock:
-            self._busy.add(helper)
+            self._starting -= 1
+            helper.generation = generation
+            self._helpers.add(helper)
             self._bump("started")
+            obsolete = self.disabled or self._closing or generation != self._generation
+            if obsolete:
+                self._stopping.add(helper)
+            else:
+                self._busy.add(helper)
+            self._lock.notify_all()
+        if obsolete:
+            self._stop(helper)
+            return None
         return helper
 
-    def disable(self, why: str) -> None:
+    def disable(self, why: str, helper: _Helper) -> None:
         """Diese Sitzung rechnet ab jetzt ohne Hilfsprozess — der Grund bleibt."""
         with self._lock:
+            if self._closing or helper.generation != self._generation:
+                return
             self.disabled = True
         _log.warning("kernel helper disabled for this session (%s)", why)
 
-    def _start_failed(self, why: str) -> None:
+    def _start_failed(self, why: str, generation: int) -> None:
         with self._lock:
+            if self._closing or generation != self._generation:
+                return
             self._failed_starts += 1
             if self._failed_starts >= STARTS_BEFORE_GIVING_UP:
                 self.disabled = True
@@ -428,15 +526,21 @@ class _Pool:
 
     def _stopped_quietly(self, helper: _Helper) -> None:
         """Räumt einen Toten aus dem Vorrat — unter dem Schloss, ohne Warten."""
-        helper.stop()
-        self._bump("stopped")
+        self.discard(helper)
 
     def give_back(self, helper: _Helper) -> None:
         """Der Faden ist fertig; der Hilfsprozess wartet auf den nächsten oder geht."""
         keep = False
         with self._lock:
-            self._busy.discard(helper)
-            if helper.alive and len(self._idle) < IDLE_KEPT:
+            if helper not in self._busy:
+                return
+            if (
+                not self._closing
+                and not self.disabled
+                and helper.alive
+                and len(self._idle) < IDLE_KEPT
+            ):
+                self._busy.discard(helper)
                 self._idle.append(helper)
                 keep = True
             self._lock.notify_all()
@@ -449,35 +553,74 @@ class _Pool:
         ``graceful``: Er ist untätig und darf selbst enden (:meth:`_Helper.stop`).
         """
         with self._lock:
+            if helper not in self._helpers or helper in self._stopping:
+                return
             self._busy.discard(helper)
             if helper in self._idle:
                 self._idle.remove(helper)
-        helper.stop(graceful=graceful)
-        with self._lock:
-            self._bump("stopped")
-            self._lock.notify_all()
+            self._stopping.add(helper)
+        self._stop(helper, graceful=graceful)
+
+    def _stop(self, helper: _Helper, *, graceful: bool = False) -> None:
+        """Gibt den unter dem Schloss belegten Platz nur nach bestätigtem Ende frei."""
+        problem: Exception | None = None
+        try:
+            helper.stop(graceful=graceful)
+        except (OSError, _HelperStopError) as refused:
+            problem = refused
+        finally:
+            alive = helper.alive
+            with self._lock:
+                self._stopping.discard(helper)
+                if alive:
+                    self.disabled = True
+                else:
+                    self._helpers.discard(helper)
+                    self._bump("stopped")
+                self._lock.notify_all()
+        if alive:
+            _log.error("kernel helper %s could not be stopped: %s", helper.pid, problem)
+            raise KernelHelperStopError from problem
 
     def shutdown(self) -> int:
         """Beendet jeden Hilfsprozess; die nächste Rechnung startet frisch."""
         with self._lock:
-            idle, busy = list(self._idle), list(self._busy)
-            self._idle.clear()
-            self._busy.clear()
-            self._failed_starts = 0
-            self.disabled = False
-        for helper in idle:
-            helper.stop(graceful=True)
-        for helper in busy:
-            helper.stop()
-        helpers = [*idle, *busy]
-        with self._lock:
-            self._bump("stopped", len(helpers))
+            while self._closing:
+                self._lock.wait()
+            self._closing = True
+            self._generation += 1
+            before = self.counts.get("stopped", 0)
+            helpers, idle = list(self._helpers), set(self._idle)
             self._lock.notify_all()
-        return len(helpers)
+        problem: KernelHelperStopError | None = None
+        try:
+            for helper in helpers:
+                try:
+                    self.discard(helper, graceful=helper in idle)
+                except KernelHelperStopError as refused:
+                    problem = refused
+            with self._lock:
+                while self._starting or self._stopping:
+                    self._lock.wait()
+                if self._helpers:
+                    raise KernelHelperStopError from problem
+                return self.counts.get("stopped", 0) - before
+        finally:
+            with self._lock:
+                self._failed_starts = 0
+                self.disabled = bool(self._helpers)
+                self._closing = False
+                self._lock.notify_all()
+
+    def raise_if_stop_failed(self) -> None:
+        """Auch ein Vorabstart darf ein noch nicht beendetes Kind nicht still verschlucken."""
+        with self._lock:
+            if self._helpers.difference(self._busy, self._idle, self._stopping):
+                raise KernelHelperStopError
 
     def processes(self) -> list[Any]:
         with self._lock:
-            return [helper.process for helper in (*self._idle, *self._busy)]
+            return [helper.process for helper in self._helpers]
 
 
 _POOL: Final = _Pool()
@@ -516,6 +659,7 @@ def run(
     plain = dict(values)
     check = cancelled.raise_if_cancelled if cancelled is not None else _unchecked
     if not offloaded(weight):
+        _POOL.raise_if_stop_failed()
         _POOL.count("in_process")
         return function(arrays, plain, check)
     try:
@@ -524,6 +668,7 @@ def run(
         _POOL.count("cancelled")
         raise OperationCancelled from None
     if helper is None:
+        _POOL.raise_if_stop_failed()
         _POOL.count("fallback")
         return function(arrays, plain, check)
     try:
@@ -534,6 +679,7 @@ def run(
         raise OperationCancelled from None
     except _HelperSilentError:
         _POOL.discard(helper)
+        _POOL.raise_if_stop_failed()
         _POOL.count("fallback")
         _log.warning(
             "kernel helper %s did not accept %s; computing in this process", helper.pid, job
@@ -542,7 +688,8 @@ def run(
     except _HelperRefusedError as refused:
         _POOL.discard(helper)
         if refused.lasting:
-            _POOL.disable(str(refused))
+            _POOL.disable(str(refused), helper)
+        _POOL.raise_if_stop_failed()
         _POOL.count("fallback")
         _log.warning(
             "kernel helper %s refused %s (%s); computing in this process", helper.pid, job, refused

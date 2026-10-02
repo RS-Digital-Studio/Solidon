@@ -31,6 +31,7 @@ import textwrap
 import threading
 import time
 from collections.abc import Callable, Iterator
+from contextlib import suppress
 from multiprocessing import shared_memory
 from pathlib import Path
 from typing import Any
@@ -39,10 +40,11 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.errors import OperationCancelled
+from app.core.errors import InternalError, OperationCancelled
 from app.core.geom import kernel_jobs, kernel_process
 from app.core.geom.mesh import MeshData
 from app.core.scene.cancel import CancelSignal
+from app.i18n.catalog import available_languages
 
 ROOT = Path(__file__).resolve().parent.parent
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -1320,3 +1322,767 @@ def test_the_workers_of_the_window_use_the_helper(
     finally:
         session.cancel_preview()
         session.wait_for_idle(30_000)
+
+
+# --- Der Pooldeckel gilt auch während Start und Ende (RM-298) -----------------------------
+
+
+class _PoolFullError(Exception):
+    """Die Attrappe meldet Warten, ohne einen Testfaden anhalten zu müssen."""
+
+
+class _ObservedPoolCondition(threading.Condition):
+    def wait(self, timeout: float | None = None) -> bool:
+        raise _PoolFullError
+
+
+class _PoolHelper:
+    """Ein sichtbarer Prozessbestand ohne Prozesse oder fremde Handles."""
+
+    def __init__(self) -> None:
+        self.ready = True
+        self.alive = True
+        self.process = self
+        self.pid = 42
+
+    def stop(self, *, graceful: bool = False) -> None:
+        self.alive = False
+
+
+@pytest.mark.parametrize("warm", (False, True), ids=("take", "warm-up"))
+def test_pool_pending_starts_use_a_slot(monkeypatch: pytest.MonkeyPatch, warm: bool) -> None:
+    """Offene Konstruktoren belegen ihren Platz schon vor dem Eintragen."""
+    pool = kernel_process._Pool()
+    pool._lock = _ObservedPoolCondition()
+    made: list[_PoolHelper] = []
+
+    class StartingHelper(_PoolHelper):
+        def __init__(self) -> None:
+            super().__init__()
+            made.append(self)
+            if len(made) < 6:
+                with suppress(_PoolFullError):
+                    pool._reserve(None)
+
+    monkeypatch.setattr(kernel_process, "_Helper", StartingHelper)
+    try:
+        if warm:
+            monkeypatch.setattr(kernel_process, "_POOL", pool)
+            assert kernel_process.warm_up()
+        else:
+            assert pool.take(None) is not None
+        assert len(made) == kernel_process.MOST_HELPERS
+        assert len(pool.processes()) == kernel_process.MOST_HELPERS
+    finally:
+        pool.shutdown()
+    assert all(not helper.alive for helper in made)
+
+
+@pytest.mark.parametrize("ending", ("discard", "give_back", "shutdown"))
+def test_pool_ending_helpers_keep_their_slot(monkeypatch: pytest.MonkeyPatch, ending: str) -> None:
+    """Erst nach dem wirklichen Ende darf ein neuer Prozess denselben Platz nutzen."""
+    pool = kernel_process._Pool()
+    pool._lock = _ObservedPoolCondition()
+    made: list[_PoolHelper] = []
+    peak = 0
+
+    class CountedHelper(_PoolHelper):
+        def __init__(self) -> None:
+            nonlocal peak
+            super().__init__()
+            made.append(self)
+            peak = max(peak, sum(helper.alive for helper in made))
+
+    monkeypatch.setattr(kernel_process, "_Helper", CountedHelper)
+    for _index in range(kernel_process.MOST_HELPERS):
+        assert pool.take(None) is not None
+    victim = made[1]
+
+    def stop_with_a_competing_request(*, graceful: bool = False) -> None:
+        for _index in range(kernel_process.MOST_HELPERS):
+            try:
+                pool.take(None)
+            except _PoolFullError:
+                break
+        victim.alive = False
+
+    monkeypatch.setattr(victim, "stop", stop_with_a_competing_request)
+    try:
+        if ending == "give_back":
+            pool.give_back(made[0])
+            pool.give_back(victim)
+        elif ending == "discard":
+            pool.discard(victim)
+        else:
+            pool.shutdown()
+        assert peak <= kernel_process.MOST_HELPERS
+    finally:
+        pool.shutdown()
+    assert all(not helper.alive for helper in made)
+
+
+@pytest.mark.parametrize("unexpected", (False, True), ids=("start-error", "unexpected-error"))
+def test_pool_failed_starts_release_the_reservation(
+    monkeypatch: pytest.MonkeyPatch, unexpected: bool
+) -> None:
+    """Auch ein weitergeworfener Fehler hinterlässt keinen reservierten Startplatz."""
+    pool = kernel_process._Pool()
+
+    def failed_start() -> None:
+        if unexpected:
+            raise LookupError("Startattrappe")
+        raise OSError("Startattrappe")
+
+    monkeypatch.setattr(kernel_process, "_Helper", failed_start)
+    if unexpected:
+        with pytest.raises(LookupError, match="Startattrappe"):
+            pool.take(None)
+    else:
+        assert pool.take(None) is None
+        assert pool.disabled
+    assert getattr(pool, "_starting", 0) == 0
+    assert pool.processes() == []
+    pool.shutdown()
+    monkeypatch.setattr(kernel_process, "_Helper", _PoolHelper)
+    try:
+        assert pool.take(None) is not None
+    finally:
+        pool.shutdown()
+
+
+@pytest.mark.parametrize("after_start", (False, True), ids=("before-child", "after-child"))
+def test_pool_constructor_failure_closes_the_child_and_both_pipes(
+    monkeypatch: pytest.MonkeyPatch, after_start: bool
+) -> None:
+    """Ein schon gestartetes Kind überlebt keinen Fehler seines Konstruktors."""
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    class PipeEnd:
+        def __init__(self, peer: bool = False) -> None:
+            self.closed = False
+            self.peer = peer
+            self.calls = 0
+
+        def close(self) -> None:
+            self.calls += 1
+            if self.peer and after_start and self.calls == 1:
+                raise OSError("Leitungsattrappe")
+            self.closed = True
+
+    class Child:
+        def __init__(self) -> None:
+            self.pid: int | None = None
+            self.alive = False
+            self.joined = False
+
+        def start(self) -> None:
+            if not after_start:
+                raise OSError("Startattrappe")
+            self.pid = 42
+            self.alive = True
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+        def kill(self) -> None:
+            self.alive = False
+
+        def join(self, timeout: float | None = None) -> None:
+            self.joined = True
+
+    mine, peer, child = PipeEnd(), PipeEnd(peer=True), Child()
+    context = SimpleNamespace(Pipe=lambda **_args: (mine, peer), Process=lambda **_args: child)
+    monkeypatch.setattr(kernel_process, "_CONTEXT", context)
+    monkeypatch.setattr(kernel_process, "_helper_environment", nullcontext)
+    monkeypatch.setattr(kernel_process.process_boundary, "bind_helper", lambda _child: None)
+    monkeypatch.setattr(kernel_process.process_boundary, "release_helper", lambda _child: None)
+    with pytest.raises(OSError, match="Leitungsattrappe" if after_start else "Startattrappe"):
+        kernel_process._Helper()
+    assert mine.closed and peer.closed
+    assert not child.alive
+    assert child.joined is after_start
+
+
+def test_pool_shutdown_collects_a_still_starting_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Shutdown wartet auf den offenen Start; dessen Rückgabe wird nicht wieder aufgenommen."""
+    started = threading.Event()
+    release = threading.Event()
+    closing = threading.Event()
+    made: list[_PoolHelper] = []
+    outcomes: dict[str, Any] = {}
+
+    class ClosingCondition(threading.Condition):
+        def __enter__(self) -> Any:
+            entered = super().__enter__()
+            if threading.current_thread().name == "pool-shutdown":
+                closing.set()
+            return entered
+
+    pool = kernel_process._Pool()
+    pool._lock = ClosingCondition()
+
+    class StartingHelper(_PoolHelper):
+        def __init__(self) -> None:
+            super().__init__()
+            made.append(self)
+            started.set()
+            assert release.wait(30.0), "Der Test gibt den angehaltenen Konstruktor frei."
+
+    def take() -> None:
+        try:
+            outcomes["taken"] = pool.take(None)
+        except BaseException as problem:
+            outcomes["take_error"] = problem
+
+    def close() -> None:
+        try:
+            outcomes["closed"] = pool.shutdown()
+        except BaseException as problem:
+            outcomes["close_error"] = problem
+
+    monkeypatch.setattr(kernel_process, "_Helper", StartingHelper)
+    creator = threading.Thread(target=take, name="pool-start", daemon=True)
+    shutdown = threading.Thread(target=close, name="pool-shutdown", daemon=True)
+    creator.start()
+    try:
+        assert started.wait(30.0), "Der Test beobachtet den begonnenen Konstruktor."
+        shutdown.start()
+        assert closing.wait(30.0), "Shutdown hält das Poolschloss vor dem Weiterstart."
+        release.set()
+        creator.join(30.0)
+        shutdown.join(30.0)
+        assert not creator.is_alive() and not shutdown.is_alive()
+        assert "take_error" not in outcomes and "close_error" not in outcomes, outcomes
+        assert outcomes["taken"] is None
+        assert outcomes["closed"] == 1
+        assert not made[0].alive
+        assert pool.processes() == []
+        pool.give_back(made[0])
+        assert pool.processes() == [], "Die alte Rückgabe gehört nicht zum neuen Bestand."
+        fresh = pool.take(None)
+        assert fresh is not None and fresh is not made[0] and fresh.alive
+    finally:
+        release.set()
+        creator.join(30.0)
+        if shutdown.ident is not None:
+            shutdown.join(30.0)
+        if (
+            not creator.is_alive()
+            and not shutdown.is_alive()
+            and not getattr(pool, "_closing", False)
+        ):
+            pool.shutdown()
+
+
+def test_pool_shutdown_does_not_reinsert_a_late_return(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Arbeiter kann beim Beenden seinen alten Helfer nicht wieder in idle einhängen."""
+    pool = kernel_process._Pool()
+    monkeypatch.setattr(kernel_process, "_Helper", _PoolHelper)
+    helper = pool.take(None)
+    assert helper is not None
+
+    def late_return(*, graceful: bool = False) -> None:
+        pool.give_back(helper)
+        helper.alive = False
+
+    monkeypatch.setattr(helper, "stop", late_return)
+    assert pool.shutdown() == 1
+    assert pool.processes() == []
+
+
+def test_pool_closed_wait_is_a_lost_helper_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Das von Shutdown geschlossene Handle meldet einen verlorenen Helfer, keinen OSError."""
+    from types import SimpleNamespace
+
+    helper = object.__new__(kernel_process._Helper)
+    helper.connection = SimpleNamespace(poll=lambda _timeout: False)
+    helper.process = SimpleNamespace(sentinel=object())
+
+    def closed_wait(*_args: Any, **_kwargs: Any) -> None:
+        raise OSError("handle is closed")
+
+    monkeypatch.setattr(kernel_process.multiprocessing.connection, "wait", closed_wait)
+    with pytest.raises(kernel_process._HelperLostError, match="handle is closed"):
+        helper._receive(None, None)
+
+
+@pytest.mark.parametrize("ending", ("discard", "shutdown"))
+def test_pool_failed_stop_keeps_ownership_and_can_be_retried(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, ending: str
+) -> None:
+    """Eine verweigerte Beendigung verliert weder den Platz noch den Aufräumweg."""
+    pool = kernel_process._Pool()
+    monkeypatch.setattr(kernel_process, "_Helper", _PoolHelper)
+    helper = pool.take(None)
+    assert helper is not None
+    stops = 0
+
+    def stop_once_refused(*, graceful: bool = False) -> None:
+        nonlocal stops
+        stops += 1
+        if stops == 1:
+            raise OSError("Beendigungsattrappe")
+        helper.alive = False
+
+    monkeypatch.setattr(helper, "stop", stop_once_refused)
+    with pytest.raises(InternalError) as failed:
+        if ending == "discard":
+            pool.discard(helper)
+        else:
+            pool.shutdown()
+    assert not failed.value.values, "Die technische PID erscheint nicht als Kundenwert."
+    assert "kernel helper 42" in caplog.text
+    assert pool.processes() == [helper.process]
+    assert pool.counts.get("stopped", 0) == 0
+    assert pool.disabled and not pool._closing
+    assert pool.shutdown() == 1
+    assert pool.processes() == []
+    assert not pool.disabled and not pool._closing
+    assert stops == 2
+
+
+def test_pool_join_returning_with_a_live_child_does_not_free_its_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """kill und join sind noch kein Nachweis, dass das Kind wirklich beendet ist."""
+    from types import SimpleNamespace
+
+    class Child:
+        pid = 42
+
+        def __init__(self) -> None:
+            self.alive = True
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+        def kill(self) -> None:
+            pass
+
+        def join(self, timeout: float | None = None) -> None:
+            pass
+
+    helper = object.__new__(kernel_process._Helper)
+    helper.process = Child()
+    helper.ready = True
+    helper.connection = SimpleNamespace(close=lambda: None)
+    released: list[Any] = []
+    monkeypatch.setattr(kernel_process.process_boundary, "release_helper", released.append)
+    pool = kernel_process._Pool()
+    pool._helpers.add(helper)
+    pool._busy.add(helper)
+    with pytest.raises(InternalError):
+        pool.discard(helper)
+    assert helper.alive and pool.processes() == [helper.process]
+    assert pool.counts.get("stopped", 0) == 0
+    assert not released, "Das Jobobjekt gehört weiter dem noch lebenden Kind."
+    assert pool.take(None) is None
+    helper.process.alive = False
+    assert pool.shutdown() == 1
+    assert pool.processes() == [] and released == [helper.process]
+
+
+def test_pool_parallel_shutdown_retries_after_a_failed_stop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der zweite Schließer wird auch beim Stopfehler des ersten wieder freigegeben."""
+    stopping, waiting, release = threading.Event(), threading.Event(), threading.Event()
+    outcomes: dict[str, Any] = {}
+    stops = 0
+
+    class ClosingCondition(threading.Condition):
+        def wait(self, timeout: float | None = None) -> bool:
+            waiting.set()
+            assert super().wait(30.0), "Der erste Schließer gibt den wartenden zweiten frei."
+            return True
+
+    pool = kernel_process._Pool()
+    pool._lock = ClosingCondition()
+    monkeypatch.setattr(kernel_process, "_Helper", _PoolHelper)
+    helper = pool.take(None)
+    assert helper is not None
+
+    def stop_once_refused(*, graceful: bool = False) -> None:
+        nonlocal stops
+        stops += 1
+        if stops == 1:
+            stopping.set()
+            assert release.wait(30.0), "Der Test gibt die erste Beendigung frei."
+            raise OSError("Beendigungsattrappe")
+        helper.alive = False
+
+    def close(name: str) -> None:
+        try:
+            outcomes[name] = pool.shutdown()
+        except BaseException as problem:
+            outcomes[name] = problem
+
+    monkeypatch.setattr(helper, "stop", stop_once_refused)
+    first = threading.Thread(target=close, args=("first",), daemon=True)
+    second = threading.Thread(target=close, args=("second",), daemon=True)
+    first.start()
+    try:
+        assert stopping.wait(30.0)
+        second.start()
+        assert waiting.wait(30.0)
+        release.set()
+        first.join(30.0)
+        second.join(30.0)
+        assert not first.is_alive() and not second.is_alive()
+        assert isinstance(outcomes["first"], InternalError), outcomes
+        assert outcomes["second"] == 1, outcomes
+        assert pool.processes() == []
+        assert not pool.disabled and not pool._closing
+        assert stops == 2
+    finally:
+        release.set()
+        with pool._lock:
+            pool._closing = False
+            pool._lock.notify_all()
+        first.join(30.0)
+        if second.ident is not None:
+            second.join(30.0)
+
+
+def test_pool_old_refusal_does_not_disable_a_new_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine alte dauerhafte Absage trifft keinen inzwischen frisch gestarteten Bestand."""
+    pool = kernel_process._Pool()
+    paused, release = threading.Event(), threading.Event()
+    outcomes: dict[str, Any] = {}
+
+    class RefusingHelper(_PoolHelper):
+        def call(self, *_args: Any, **_kwargs: Any) -> None:
+            raise kernel_process._HelperRefusedError("Speicherattrappe", lasting=True)
+
+    original_disable = pool.disable
+
+    def paused_disable(why: str, helper: Any = None) -> None:
+        paused.set()
+        assert release.wait(30.0), "Der Test gibt die alte Absage frei."
+        if helper is None:
+            original_disable(why)
+        else:
+            original_disable(why, helper)
+
+    def run() -> None:
+        try:
+            outcomes["result"] = kernel_process.run("refusal_probe", {}, {}, weight=1)
+        except BaseException as problem:
+            outcomes["error"] = problem
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", RefusingHelper)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "refusal_probe", lambda *_args: ({}, {}))
+    monkeypatch.setattr(pool, "disable", paused_disable)
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    try:
+        assert paused.wait(30.0), "Die reale run-Absage wartet direkt vor disable."
+        assert pool.shutdown() == 0
+        fresh = pool.take(None)
+        assert fresh is not None and fresh.alive
+        release.set()
+        worker.join(30.0)
+        assert not worker.is_alive()
+        assert "error" not in outcomes, outcomes
+        assert outcomes["result"] == ({}, {})
+        assert not pool.disabled, "Die Absage stammt vom alten, bereits beendeten Helfer."
+    finally:
+        release.set()
+        worker.join(30.0)
+        pool.shutdown()
+
+
+def test_pool_failed_constructor_cleanup_keeps_the_live_child(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Scheitert nach dem Start auch das Stoppen, bleibt das Kind sichtbar und belegend."""
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    class Peer:
+        def __init__(self) -> None:
+            self.closed = 0
+
+        def close(self) -> None:
+            self.closed += 1
+            if self.closed == 1:
+                raise OSError("Leitungsattrappe")
+
+    class Child:
+        pid = 42
+
+        def __init__(self) -> None:
+            self.alive = False
+            self.kills = 0
+
+        def start(self) -> None:
+            self.alive = True
+
+        def is_alive(self) -> bool:
+            return self.alive
+
+        def kill(self) -> None:
+            self.kills += 1
+            if self.kills == 1:
+                raise OSError("Beendigungsattrappe")
+            self.alive = False
+
+        def join(self, timeout: float | None = None) -> None:
+            pass
+
+    peer, child = Peer(), Child()
+    context = SimpleNamespace(
+        Pipe=lambda **_args: (SimpleNamespace(close=lambda: None), peer),
+        Process=lambda **_args: child,
+    )
+    monkeypatch.setattr(kernel_process, "_CONTEXT", context)
+    monkeypatch.setattr(kernel_process, "_helper_environment", nullcontext)
+    monkeypatch.setattr(kernel_process.process_boundary, "bind_helper", lambda _child: None)
+    monkeypatch.setattr(kernel_process.process_boundary, "release_helper", lambda _child: None)
+    pool = kernel_process._Pool()
+    with pytest.raises(InternalError) as failed:
+        pool.take(None)
+    assert not failed.value.values, "Die technische PID erscheint nicht als Kundenwert."
+    assert "kernel helper 42" in caplog.text
+    assert child.alive and pool.processes() == [child]
+    assert pool.disabled and pool._starting == 0
+    assert pool.shutdown() == 1
+    assert not child.alive and pool.processes() == []
+
+
+@pytest.mark.parametrize("language", available_languages())
+def test_pool_stop_error_has_translated_detail_and_an_action(language: str) -> None:
+    """Das verweigerte Ende wird in jeder Sprache mit einem tatsächlichen Ausweg gemeldet."""
+    from app.core.errors import REPORT_ERROR
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language, read_catalog
+
+    previous = get_language()
+    install_language(language)
+    set_language(language)
+    try:
+        error = kernel_process.KernelHelperStopError()
+        detail = str(error.detail)
+        assert REPORT_ERROR in error.suggestions
+        assert isinstance(error, kernel_process.NOT_A_KERNEL_FAILURE)
+        set_language("de")
+        source = str(error.detail)
+        if language == "de":
+            assert detail == source
+        else:
+            assert detail == read_catalog(language)[source]
+            assert detail != source
+    finally:
+        set_language(previous)
+
+
+@pytest.mark.parametrize("phase", ("constructor", "ready"))
+@pytest.mark.parametrize("worker_request", (False, True), ids=("main-thread", "worker-thread"))
+def test_pool_warmup_stop_error_reaches_the_next_kernel_request(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    phase: str,
+    worker_request: bool,
+) -> None:
+    """Auch nach dem echten Warmup-Crash meldet run das noch lebende Kind mit einem Ausweg."""
+    from app.core.errors import REPORT_ERROR
+    from app.ui.app import _ImportWarmup, _warmup_failed
+
+    pool = kernel_process._Pool()
+    made: list[_PoolHelper] = []
+    may_stop = False
+    local_calls = 0
+
+    class FailedWarmupHelper(_PoolHelper):
+        def __init__(self) -> None:
+            super().__init__()
+            self.ready = False
+            made.append(self)
+            if phase == "constructor":
+                raise kernel_process._HelperStopError(self)
+
+        def wait_ready(self, _cancelled: Any) -> None:
+            raise kernel_process._HelperSilentError("Warmup-Attrappe")
+
+        def stop(self, *, graceful: bool = False) -> None:
+            if not may_stop:
+                raise OSError("Beendigungsattrappe")
+            self.alive = False
+
+    def local_job(*_args: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        nonlocal local_calls
+        local_calls += 1
+        return {}, {}
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", FailedWarmupHelper)
+    monkeypatch.setitem(kernel_jobs.JOBS, "warmup_probe", local_job)
+    warmup = _ImportWarmup()
+    crashed: list[str] = []
+    warmup.crashed.connect(_warmup_failed)
+    warmup.crashed.connect(crashed.append)
+    try:
+        warmup.run()
+        assert len(crashed) == 1 and crashed[0].startswith("KernelHelperStopError:")
+        assert "the import warmup did not come back" in caplog.text
+        assert made[0].alive and pool.processes() == [made[0]]
+        assert pool.disabled
+
+        def request() -> Any:
+            weight = kernel_process.OFFLOAD_ABOVE + 1 if worker_request else 0
+            return kernel_process.run("warmup_probe", {}, {}, weight=weight)
+
+        for _attempt in range(2):
+            with pytest.raises(kernel_process.KernelHelperStopError) as failed:
+                if worker_request:
+                    in_a_worker(request)
+                else:
+                    request()
+            assert REPORT_ERROR in failed.value.suggestions
+            assert not failed.value.values
+        assert local_calls == 0, "Der Neustartbedarf wird nicht vom lokalen Rückfall verschluckt."
+        may_stop = True
+        assert pool.shutdown() == 1
+        assert kernel_process.run("warmup_probe", {}, {}, weight=0) == ({}, {})
+        assert local_calls == 1
+    finally:
+        may_stop = True
+        pool.shutdown()
+
+
+def test_pool_waiting_kernel_request_keeps_a_new_stop_error_visible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein beim Warten auf einen Platz entstandener Stopfehler verbietet den lokalen Rückfall."""
+    pool = kernel_process._Pool()
+    may_stop = False
+    local_calls = 0
+    monkeypatch.setattr(kernel_process, "_Helper", _PoolHelper)
+    helpers = [pool.take(None) for _index in range(kernel_process.MOST_HELPERS)]
+    victim = helpers[0]
+    assert victim is not None
+
+    def stop_refused(*, graceful: bool = False) -> None:
+        if not may_stop:
+            raise OSError("Beendigungsattrappe während der Platzsuche")
+        victim.alive = False
+
+    class StopWhileWaiting(threading.Condition):
+        def wait(self, timeout: float | None = None) -> bool:
+            with pytest.raises(kernel_process.KernelHelperStopError):
+                pool.discard(victim)
+            return True
+
+    def local_job(*_args: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        nonlocal local_calls
+        local_calls += 1
+        return {}, {}
+
+    pool._lock = StopWhileWaiting()
+    monkeypatch.setattr(victim, "stop", stop_refused)
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "waiting_probe", local_job)
+    try:
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            in_a_worker(lambda: kernel_process.run("waiting_probe", {}, {}, weight=1))
+        assert local_calls == 0
+        assert pool.disabled and victim in pool.processes()
+    finally:
+        may_stop = True
+        pool.shutdown()
+
+
+@pytest.mark.parametrize("refusal", ("silent", "lasting-refusal"))
+def test_pool_call_fallback_keeps_another_helpers_stop_error_visible(
+    monkeypatch: pytest.MonkeyPatch, refusal: str
+) -> None:
+    """Auch nach einer stummen oder ablehnenden Antwort darf kein Stopfehler verschwinden."""
+    pool = kernel_process._Pool()
+    may_stop = False
+    local_calls = 0
+
+    class AnsweringHelper(_PoolHelper):
+        stubborn = False
+
+        def call(self, *_args: Any, **_kwargs: Any) -> None:
+            other = pool.take(None)
+            assert other is not None
+            other.stubborn = True
+            with pytest.raises(kernel_process.KernelHelperStopError):
+                pool.discard(other)
+            if refusal == "silent":
+                raise kernel_process._HelperSilentError("Antwortattrappe")
+            raise kernel_process._HelperRefusedError("Antwortattrappe", lasting=True)
+
+        def stop(self, *, graceful: bool = False) -> None:
+            if self.stubborn and not may_stop:
+                raise OSError("Beendigungsattrappe des anderen Helfers")
+            self.alive = False
+
+    def local_job(*_args: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        nonlocal local_calls
+        local_calls += 1
+        return {}, {}
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    monkeypatch.setattr(kernel_process, "_Helper", AnsweringHelper)
+    monkeypatch.setattr(kernel_process, "OFFLOAD_ABOVE", 0)
+    monkeypatch.setitem(kernel_jobs.JOBS, "answer_probe", local_job)
+    try:
+        with pytest.raises(kernel_process.KernelHelperStopError):
+            in_a_worker(lambda: kernel_process.run("answer_probe", {}, {}, weight=1))
+        assert local_calls == 0
+        assert pool.disabled and len(pool.processes()) == 1
+    finally:
+        may_stop = True
+        pool.shutdown()
+
+
+@pytest.mark.parametrize("failure", ("optional-import", "clean-start"))
+def test_pool_harmless_warmup_failure_keeps_the_local_kernel_path(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Ein fehlender Vorabimport oder ein Start ohne Kind verlangt keinen Neustart."""
+    from types import SimpleNamespace
+
+    from app.ui import app as ui_app
+
+    pool = kernel_process._Pool()
+    original_import = ui_app.importlib.import_module
+
+    def import_with_a_missing_optional_module(name: str) -> Any:
+        if name == "scipy.spatial":
+            raise ImportError("Importattrappe")
+        return original_import(name)
+
+    def clean_start_failure() -> None:
+        raise OSError("Startattrappe ohne Kind")
+
+    monkeypatch.setattr(kernel_process, "_POOL", pool)
+    if failure == "optional-import":
+        monkeypatch.setattr(
+            ui_app,
+            "importlib",
+            SimpleNamespace(import_module=import_with_a_missing_optional_module),
+        )
+        monkeypatch.setattr(kernel_process, "_Helper", _PoolHelper)
+    else:
+        monkeypatch.setattr(kernel_process, "_Helper", clean_start_failure)
+    monkeypatch.setitem(kernel_jobs.JOBS, "warmup_probe", lambda *_args: ({}, {}))
+    warmup = ui_app._ImportWarmup()
+    crashed: list[str] = []
+    warmup.crashed.connect(ui_app._warmup_failed)
+    warmup.crashed.connect(crashed.append)
+    try:
+        warmup.run()
+        assert crashed == []
+        assert kernel_process.run("warmup_probe", {}, {}, weight=0) == ({}, {})
+    finally:
+        pool.shutdown()

@@ -124,7 +124,15 @@ Aufruf, der an ganzen Körpern den GIL hält — `manifold3d`, der Zusammenhang
 ist der einzige Weg in den Hilfsprozess; dazu seine Seite `serve` und der
 gemeinsame Speicher `pack`/`copied`) · `kernel_process.py` (`run` wählt: hier
 oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
-`shutdown`; `NOT_A_KERNEL_FAILURE` für breite Fänge). Die Regel steht in
+`shutdown`; `NOT_A_KERNEL_FAILURE` für breite Fänge). Ein Start belegt unter
+dem Poolschloss einen Platz; der gesamte Helferbestand behält seinen Platz
+bis zum bestätigten Prozessende. Ein Stopfehler lässt den Helfer sichtbar und
+erneut aufräumbar; neue Starts bleiben gesperrt, bis der Bestand beendet ist.
+Auch nach einem Vorabstart meldet die nächste `run`-Anfrage diesen Zustand vor
+jedem lokalen Rückfall mit dem bestehenden Fehlerbericht-Ausweg. Erst ein
+erfolgreicher Aufräumversuch hebt ihn auf.
+`shutdown` gibt auch beim Fehler seine Wartenden frei, nimmt offene Starts mit
+und trennt alte Reservierungen, Rückgaben und Absagen vom neuen Bestand. Die Regel steht in
 `kern.md`.
 
 **Bewegen und Ausrichten** — `transform.py` (`moved_object` führt Körper,

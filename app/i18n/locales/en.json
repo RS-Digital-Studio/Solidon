@@ -2750,6 +2750,7 @@
   "Ein Gewinde braucht mindestens zwei Gänge Länge.": "A thread needs at least two turns of length.",
   "Ein Gewinde in eine Bohrung": "A thread in a hole",
   "Ein Gewinde sitzt an seinem Schaft oder in seiner Bohrung. Versetzen, drehen oder verdoppeln Sie den Körper oder die Bohrung.": "A thread sits on its shaft or in its bore. Move, turn or duplicate the body or the bore.",
+  "Ein Hilfsprozess lässt sich gerade nicht beenden. Speichern Sie Ihr Projekt, starten Sie Solidon neu und erstellen Sie bei erneutem Auftreten einen Fehlerbericht.": "A helper process cannot be stopped at the moment. Save your project, restart Solidon and create an error report if this happens again.",
   "Ein Innenradius passt nicht in sein Fach. Verkleinern Sie den Radius oder vergrößern Sie das Fach.": "An inner radius does not fit its compartment. Reduce the radius or enlarge the compartment.",
   "Ein Kabelclip: der Bügel auf einer Fläche, dessen Öffnung enger ist als das Kabel, das er führt.": "A cable clip: the bow on a face whose opening is narrower than the cable it guides.",
   "Ein Kleinstteil wurde entfernt.": "One stray fragment was removed.",
