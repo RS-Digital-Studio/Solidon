@@ -82,19 +82,18 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Herkunft und vollständige Kurvenabdeckung korrigiert; 57 direkte und sechs Kundenfälle grün, Algorithmus unabhängig freigegeben; Dokumentabschluss und zentrales Tor/Übernahme offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
 | [RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert](#rm-327) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: Zahl am Endstand nachführen statt den Satz streichen; dazu fünf Codes in `ONE_PIECE_CODES` |
-| [RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen](#rm-329) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: native Cura-Instanz in `match` unabhängig von der Düse; „Instanz fehlt“ von „unvollständig“ trennen |
-| [RM-330 — An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“](#rm-330) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wirksamen Ursprung in `CuraMachine` tragen, `off_the_bed` und Nahtpunkt danach rechnen |
+| [RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen](#rm-329) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-f`)** — Review seit 0.5.1: native Cura-Instanz in `match` unabhängig von der Düse; „Instanz fehlt“ von „unvollständig“ trennen |
+| [RM-330 — An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“](#rm-330) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-f`)** — Review seit 0.5.1: wirksamen Ursprung in `CuraMachine` tragen, `off_the_bed` und Nahtpunkt danach rechnen |
 | [RM-365 — *Festschreiben* einer Formsitzung friert das Entwurfsnetz ein](#rm-365) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Weg 4): beim Festschreiben in feiner Qualität rechnen; Test Dreieckszahl und Volumen |
 | [RM-381 — Boolesche Ops an mehrschaligen Modellen sind seit `eab5f4f47` 8- bis 15-mal langsamer und nicht abbrechbar](#rm-381) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Kandidaten über räumlichen Index, Deckel mit Befund, `cancelled` durchreichen; Zeitmessung Besenhalter |
 | [RM-382 — Ein Mehrschaler mit einer selbstkreuzenden Schale lässt sich seit `eab5f4f47` gar nicht mehr bearbeiten](#rm-382) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Entscheidung Robert, ob nur gehalten wird, wenn das Werkzeug die kaputte Schale berührt; Kennung und Satz mit Grund |
 | [RM-383 — Über 256 Schalen hält jede Boolesche, auch an getrennten Teilen](#rm-383) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: getrennte Teile ohne Berührung weiterrechnen, Halt mit Kennung und passendem Rat |
 | [RM-384 — Ein Hilfsprozess, der erst nach der Frist endet, sperrt alle Kernrechnungen bis zum Neustart](#rm-384) | Geometrie, Erkennung und Druckvorbereitung | Konstruktor-Nachgang behoben und unabhängig ohne Befund geprüft; 106 Entwicklungsfälle grün, zentrales Tor und Integration ausstehend |
 | [RM-385 — Reste aus dem Review von `eab5f4f47` und `a45730c79`](#rm-385) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: exakter Rat, `parts_united` am exakten Kern, Tests auf Wirkung, Unterlagen nachziehen |
-| [RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch](#rm-386) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-b`)** — Review 02.10.: Folge zu RM-319 (archiviert); berührende Schalen an allen schließenden Wegen beider Kerne verbinden, je Zwilling ein Test |
 | [RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl](#rm-388) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Namen im Lauf und in der Anzeige aus derselben Vergabe; Test exakter Quader nach Bohrung und ausgehöhlter Zylinder |
-| [RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng](#rm-393) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Nachbau): Deckelgewinde mit wirksamem Durchmesser oder Passungsprüfung liest das gebaute Spiel; Test beide Kerne |
-| [RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“](#rm-398) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: drei neue Formen nach den Checklisten Op/Baustein |
-| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: *Abschneiden* an einer beliebigen Ebene (Neigung oder drei Punkte) |
+| [RM-393 — Jeder Drehdeckel meldet seine eigene Passung als zu eng](#rm-393) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review 02.10. (Nachbau): Deckelgewinde mit wirksamem Durchmesser oder Passungsprüfung liest das gebaute Spiel; Test beide Kerne |
+| [RM-398 — Grundform Rohr/Ring und Bausteine „Lasche mit Loch“ und „Rohrschelle“](#rm-398) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-e`)** — Umfangsentscheidung Robert 02.10.: drei neue Formen nach den Checklisten Op/Baustein |
+| [RM-400 — Schräg abschneiden](#rm-400) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-d`)** — Neigung um eine Achse und Ebene parallel zu einer gewählten Fläche in main (`bf829b68d`); offen: exakter Körper bleibt exakt statt Netz, Ebene durch drei Punkte, Abnahme an einem Mehrschaler |
 | [RM-402 — Kreismuster um einen gewählten Körper statt um den Weltursprung](#rm-402) | Geometrie, Erkennung und Druckvorbereitung | Umfangsentscheidung Robert 02.10.: Drehmitte aus Körper/Merkmal, gespeichert im Parameter |
 | [RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still](#rm-404) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-225 (archiviert); Grenze aus dem float32-Raster, Befund bei Ablehnung, Tests an vier Varianten |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
@@ -105,7 +104,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
-| [RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht](#rm-414) | Geometrie, Erkennung und Druckvorbereitung | Aus der Messung zu RM-331: `arranged_by_slicer` in `handover.slice_model` für `_creality_cli` setzen, Zusicherung in `test_print_settings.py:3017` umdrehen |
+| [RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt](#rm-423) | Geometrie, Erkennung und Druckvorbereitung | Aus RM-386: `_place_oriented_feature` am exakten Körper — Ergebnis exakt rechnen oder als Netz kennzeichnen und `evaluate.exact_became_mesh` melden; Test beide Kerne |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -165,7 +164,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-361 — „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren](#rm-361) | KI und Generatoren | Review 02.10. (Weg 3): Absage vor dem Lauf prüfen und beim Übernehmen anzeigen; Test mit Einfügemarke |
 | [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
 | [RM-372 — Eine Erzeugung ist ein Rückgängig-Schritt](#rm-372) | KI und Generatoren | Entscheidung Robert 02.10.: `load`, `fit_to_size`, `repair`, `place_on_bed` als eine Transaktion |
-| [RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert](#rm-373) | KI und Generatoren | Umfangsentscheidung Robert 02.10.: Zeilen unterscheidbar machen, Übernehmen nach geändertem Satz klären |
+| [RM-373 — Die Versuchsliste nennt je Versuch Satzanfang und Startwert](#rm-373) | KI und Generatoren | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Umfangsentscheidung Robert 02.10.: Zeilen unterscheidbar machen, Übernehmen nach geändertem Satz klären |
 | [RM-374 — Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern*](#rm-374) | KI und Generatoren | Entscheidung Robert 02.10.: Handlung öffnet den Schritt `fit_to_size` |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
@@ -2738,25 +2737,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   grün. Beleg: `F:\solidon-review-reports\review-3fd3b1ace.md`.
   Review 02.10. (`7f0de659d`): Wiederholt sich — `ROADMAP.md` sagt im integrierenden Commit selbst „Zentrales Tor und Integration stehen aus“; der neue Absatz in `app/core/geom/CLAUDE.md` trägt wieder Implementierungsdetails. Dazu `ROADMAP-ARCHIV.md:34158–34160` (aus `0eccbe952`): ein „weiterhin“ offener Solverfehler bei Weltverschiebung 1e7 ohne Registerpunkt; ein Nachbau rechnet richtig (`sonden\r2_boolean_weltversatz.txt`) — Fall benennen und registrieren oder die Aussage streichen.
 
-<a id="rm-386"></a>
-
-- [ ] **RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch.**
-  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 3; Folgepunkt zu RM-319, das im Arbeitsbaum
-  inzwischen archiviert ist. Der Abnahmefall von RM-319 ist behoben (Netz 14 715,2, exakt
-  14 714,5 mm³, je ein Langloch). Offen:
-  - **Netz:** eine gesenkte Bohrung durch die zwei Berührplatten versetzen → −2 516,3 mm³ ohne
-    Befund; der Kettenzweig schließt ohne `merge_face_contacts`
-    (`app/core/geom/prepare_ops.py:3867`, ebenso `:3211`).
-  - **Exakt:** *Bohrung ändern* Ø 8 mit Versatz lässt einen losen Zylinder von 502,7 mm³ in der
-    Bohrung stehen, der Körper ist undicht, kein Befund (`prepare_ops.py:7667`).
-  - **Exakt:** *Merkmal verschieben* und *Merkmal drehen* sagen mit falschem Rat ab; das Netz
-    rechnet dieselben Fälle inzwischen richtig (Kerne sagen Verschiedenes, `operationen.md`).
-  **Fix:** berührende Schalen an allen schließenden Wegen beider Kerne verbinden.
-  **Abnahme:** je Zwilling ein Test an beiden Kernen (Volumen, ein Körper, dicht, kein loser
-  Rest). Ob `796c6d003` („Gekoppelte Senkbohrungen fangen ungültige Langlochzüge ab“) einen Teil
-  davon abdeckt, ist noch nicht geprüft. Bauplan §21.1, §25, §30, Regel 17.
-  Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_beruehrplatten_*.txt`.
-
 <a id="rm-388"></a>
 
 - [ ] **RM-388 — Am exakten Körper meint ein Flächenname im Schritt eine andere Fläche als in Ansicht und Auswahl.**
@@ -3038,15 +3018,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
   rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
 
-<a id="rm-414"></a>
+<a id="rm-423"></a>
 
-- [ ] **RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht.**
-  Messung 02.10.2026 zu RM-331 (Claude, Unteragent): Creality Print 7.3 (V7.3.0.6149) ordnet auf der
-  Konsole jede Platte selbst an, mit und ohne `plate`-Block — Solidons Plattenbelegung gilt dort nie.
-  Der Befund `slicer.arranged_itself` fehlt trotzdem, und `tests/test_print_settings.py:3017ff` sichert
-  das Fehlen zu. **Fix:** in `handover.slice_model` `arranged_by_slicer = keep_arrangement and (not
-  wanted_arrangement or _creality_cli(setup))`, Zusicherung im Test umdrehen. **Abnahme:** Test mit
-  haltender Anordnung an `_creality_cli` meldet `slicer.arranged_itself`. Bauplan §29.
+- [ ] **RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt.**
+  Fund 02.10.2026 bei RM-386 (Claude, Unteragent), vorbestehend: *Merkmal verschieben* mit
+  Richtung (`nx`/`ny`/`nz`, `_place_oriented_feature` in `app/core/geom/prepare_ops.py`)
+  rechnet am exakten Körper über das Netz und gibt ein `MeshData` zurück, der Körper bleibt
+  aber als `brep` markiert. Folgeschritte des exakten Kerns treffen dann ein Netz. Im neuen
+  Test `test_every_closing_way_treats_touching_plates_as_one_printed_body` ist dieser eine
+  Fall deshalb ausgenommen. **Fix:** exakt rechnen oder `kind` auf `mesh` setzen und
+  `evaluate.exact_became_mesh` melden (`result_kind`). **Abnahme:** Test an beiden Kernen,
+  Ausnahme im RM-386-Test entfernt. Bauplan §21.
 
 ## Bedienung und Darstellung
 
