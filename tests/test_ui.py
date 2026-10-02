@@ -20127,6 +20127,44 @@ def test_correcting_a_field_that_reads_a_parameter_goes_to_the_parameter_bar(
     assert window._op_dialog is None, "kein Schrittdialog mit „=@breite“"
 
 
+def test_correcting_a_composed_expression_opens_the_step_and_not_the_parameter(
+    window: MainWindow,
+) -> None:
+    """„=max(@breite, …)“ über der Feldgrenze: *Eingabe korrigieren* öffnet den Schritt (RM-453).
+
+    Keine Breite behebt diesen Fehler, die Leiste wäre eine Sackgasse;
+    korrigierbar ist der Ausdruck im Feld *Breite* des Quaders. Der Halt
+    wird am Dokument erzwungen, wie eine ältere Datei ihn mitbringt.
+    """
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    composed = f"=max(@breite, {high + 1000.0:g})"
+    document = window.session.project.document
+    box = document.ops[0]
+    document.ops[0] = dataclasses.replace(box, params={**box.params, "width": composed})
+    assert window.session.evaluate_now().stopped_at == 1
+    QApplication.processEvents()
+    window.activateWindow()
+
+    error = errors.ValidationError(
+        field="width", detail="zu breit", constraint="maximum", values={"maximum": high}
+    )
+    error.op_id = 1
+    window._correct_after_error(error)
+    QApplication.processEvents()
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Schritt ist zum Korrigieren offen"
+    try:
+        assert not window.parameters._editors["breite"].hasFocus()
+        assert composed.replace(" ", "") in str(dialog.values()["width"]).replace(" ", "")
+    finally:
+        dialog.reject()
+        QApplication.processEvents()
+
+
 def test_a_new_expression_beyond_its_field_is_refused_too(session: Session) -> None:
     """*Parameter ändern …* mit einem Ausdruck über der Feldgrenze: dieselbe Absage (RM-354)."""
     import dataclasses

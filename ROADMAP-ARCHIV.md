@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-453: *Eingabe korrigieren* führt einen zusammengesetzten Ausdruck in den Schritt (02.10.2026)](#rm-453-eingabe-korrigieren-führt-einen-zusammengesetzten-ausdruck-in-den-schritt-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -36383,3 +36384,22 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Zug“. Bauplan §17.3, §2.6.
 
 **Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.
+
+## RM-453: *Eingabe korrigieren* führt einen zusammengesetzten Ausdruck in den Schritt (02.10.2026)
+
+<a id="rm-453-eingabe-korrigieren-führt-einen-zusammengesetzten-ausdruck-in-den-schritt-02102026"></a>
+<a id="rm-453"></a>
+
+**RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld.**
+  Quellenreview `6c9420b1f`, R6C942-04; Folge zum archivierten RM-354.
+  `main_window.py:21709–21718` am geprüften Stand leitet bei genau einer
+  Parameterreferenz automatisch zum Projektmaß statt zum Ausdruck um.
+  Bei `create_box.width = "=max(@breite,2000)"` und Maximum 1000 kann keine
+  Änderung von `breite` den Fehler beheben.
+  **Fix und Abnahme:** Direkte Bindung `=@breite` führt weiterhin zum Maß;
+  zusammengesetzte Ausdrücke führen zum tatsächlich korrigierbaren
+  Operationsausdruck. Beide Wege prüfen. Bauplan §2.1, §2.7, §13, Regel 17.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+**Abschluss:** Am Fenster nachgestellt (Stand `bd7f11180`): Datei mit `create_box.width = "=max(@breite, 2000)"` hält an Schritt 1, *Eingabe korrigieren* setzte den Fokus in die Leiste, kein Schrittdialog. `expressions.bound_name` erkennt jetzt nur die nackte Bindung (`=@breite`, auch `@breite` und mit Leerzeichen); `_correct_after_error` führt nur dann in die Leiste, sonst in den Schritt mit dem Cursor im Feld. `parameter_usage.field_bounds` fragt dieselbe Funktion, damit Grenze und Korrekturweg dieselbe Bindung meinen. Kerntest `test_only_a_bare_reference_binds_a_field_to_a_parameter` (10 Fälle), Fenstertest `test_correcting_a_composed_expression_opens_the_step_and_not_the_parameter` (vor dem Fix rot, Gegenprobe mit der alten Regel rot), RM-354-Test der direkten Bindung grün. Fenstersonde über den Knopf im Prüfbericht: zusammengesetzt → Schrittdialog mit Ausdruck und Fokus im Feld *Breite*; direkte Bindung → Fokus in der Leiste. Umgesetzt von Claude, Thread „Bedienung und KI“.
