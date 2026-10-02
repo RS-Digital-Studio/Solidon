@@ -819,6 +819,181 @@ def test_wall_mount_exact_matches_its_analytic_volume_with_holes_along_y() -> No
     _roundtrip(body)
 
 
+@pytest.mark.parametrize(
+    ("values", "width", "length"),
+    [
+        ({"size": "M4", "width": 0.0, "length": 0.0, "thickness": 4.0}, 9.0, 9.0),
+        ({"size": "M5", "width": 16.0, "length": 20.0, "thickness": 5.0}, 16.0, 20.0),
+        ({"size": "M8", "width": 0.0, "length": 30.0, "thickness": 6.0}, 16.0, 30.0),
+    ],
+)
+def test_lug_exact_is_half_a_slot_with_a_true_arc_and_the_hole_along_y(
+    values: dict[str, Any], width: float, length: float
+) -> None:
+    """Rechteck und Halbkreis mit dem Durchgangsloch der Tabelle, exakt bis auf die Rundung.
+
+    Ohne Eintrag ist die Lasche so breit wie die Unterlegscheibe (M4: 9 mm,
+    M8: 16 mm) und so lang, dass sie neben der Fläche Platz hat; das Loch sitzt
+    in der Mitte des runden Endes. Sie steht von der Fläche nach +Z ab und
+    liegt in Y von null bis zur Dicke nach -Y — dorthin, wo ``keeps_up`` oben
+    hinlegt.
+    """
+    exact_kernel()
+    produced = _built("lug", True, **values)
+    body = _sound(produced.mesh)
+    clearance = standards.screw(str(values["size"])).clearance
+    thickness = float(values["thickness"])
+    reach = length - width / 2.0
+    area = width * reach + math.pi * width**2 / 8.0 - math.pi * clearance**2 / 4.0
+    assert body.volume == pytest.approx(area * thickness, rel=1e-9)
+    assert tuple(body.bounds.minimum) == pytest.approx((-width / 2.0, -thickness, 0.0), abs=1e-9)
+    assert tuple(body.bounds.maximum) == pytest.approx((width / 2.0, 0.0, length), abs=1e-9)
+    hole = produced.features["bore_1"]
+    assert hole.params["axis"] == (0.0, 1.0, 0.0)
+    assert hole.params["diameter"] == pytest.approx(clearance)
+    assert hole.params["centre"] == pytest.approx((0.0, -thickness / 2.0, reach))
+    assert hole.params["through"] is True
+    assert produced.features["lug_1"].params["normal"] == (0.0, -1.0, 0.0)
+    # Nur Bogen und Loch sind am Netz facettiert, und beide fast gleich.
+    mesh = _built("lug", False, **values).mesh
+    assert abs(mesh.volume / body.volume - 1.0) < 0.005
+    _roundtrip(body)
+
+
+def test_a_lug_grows_on_an_exact_host_and_stays_exact(profile: Profile) -> None:
+    exact_kernel()
+    host = _host()
+    grown = run("insert_lug", host, profile, size="M4", thickness=4.0, **ON_TOP)
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    # Aufgesetzt sinkt sie um die Überlappung in den Träger (``ops._place``).
+    assert body.bounds.maximum[2] == pytest.approx(HOST[2] + 9.0 - BOOLEAN_OVERLAP, abs=1e-6)
+    assert {"lug_bore_1", "lug_lug_1"} <= set(grown.outputs[0].features)
+
+
+def _strip(radius: float, half: float) -> float:
+    """Fläche eines Halbkreises vom Radius ``radius``, auf ``|x| <= half`` beschnitten."""
+    half = min(half, radius)
+    return half * math.sqrt(radius**2 - half**2) + radius**2 * math.asin(half / radius)
+
+
+def _clamp_volume(pipe: float, play: float, wall: float, width: float, screw: str) -> float:
+    """Die Rohrschelle aus Kreisen, Rechtecken und Kreisstreifen, unabhängig vom Baustein.
+
+    Ring um die Rohrmitte eine Wand über dem Fuß; Fuß bis zur Ringmitte, so
+    breit wie die Ringmitte der Wand; Ohrenblock von der Ringmitte bis eine
+    Unterlegscheibe über den Ring; Spalt ``π · Spiel + 1``; die Querschraube
+    nimmt aus beiden Ohren je eine Wanddicke.
+    """
+    nut = standards.nut(screw)
+    seat = max(
+        standards.washer(screw).outer,
+        standards.screw(screw).head,
+        nut.width * 2.0 / math.sqrt(3.0),
+    )
+    clearance = standards.screw(screw).clearance
+    inner = (pipe + play) / 2.0
+    outer = inner + wall
+    centre = outer + wall
+    foot = inner + wall / 2.0
+    gap = math.pi * play + 1.0
+    ear = gap / 2.0 + wall
+    rise = outer + seat
+    section = (
+        math.pi * outer**2
+        + (2.0 * foot * centre - _strip(outer, foot))
+        + (2.0 * ear * rise - _strip(outer, ear))
+        - math.pi * inner**2
+        - (gap * rise - _strip(inner, gap / 2.0))
+    )
+    return width * section - 2.0 * wall * math.pi * clearance**2 / 4.0
+
+
+@pytest.mark.parametrize(
+    ("values", "pipe"),
+    [
+        # Klemmschelle aus dem Nachbau: Ring Ø 16,9 innen, Klemmohren mit M5.
+        (
+            {
+                "size": "15",
+                "diameter": 16.65,
+                "width": 30.0,
+                "wall": 3.0,
+                "screw_size": "M5",
+                "play": 0.25,
+            },
+            16.65,
+        ),
+        ({"size": "22", "width": 15.0, "wall": 3.0, "screw_size": "M4", "play": 0.25}, 22.0),
+        ({"size": "40", "width": 20.0, "wall": 4.0, "screw_size": "M6", "play": 0.35}, 40.0),
+    ],
+)
+def test_pipe_clamp_exact_matches_its_analytic_volume_and_keeps_the_pipe_free(
+    values: dict[str, Any], pipe: float
+) -> None:
+    """Rohrschelle am exakten Kern: Volumen gegen die Analytik, Merkmale, STEP-Rundreise.
+
+    Und die Zusage des Bausteins als Paar geprüft: Ein Rohr des Nennmaßes
+    in der Schelle schneidet sie nirgends, und die Querschraube läuft über
+    dem Ring, nicht durch das Rohr.
+    """
+    exact_kernel()
+    produced = _built("pipe_clamp", True, **values)
+    body = _sound(produced.mesh)
+    play, wall = float(values["play"]), float(values["wall"])
+    expected = _clamp_volume(pipe, play, wall, float(values["width"]), str(values["screw_size"]))
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    inner = (pipe + play) / 2.0
+    centre = inner + 2.0 * wall
+    seat = produced.features["seat_1"]
+    assert seat.params["diameter"] == pytest.approx(pipe + play)
+    assert seat.params["axis"] == (0.0, 1.0, 0.0)
+    assert seat.params["centre"] == pytest.approx((0.0, 0.0, centre))
+    bolt = produced.features["bore_1"]
+    clearance = standards.screw(str(values["screw_size"])).clearance
+    assert bolt.params["axis"] == (1.0, 0.0, 0.0)
+    assert bolt.params["diameter"] == pytest.approx(clearance)
+    assert bolt.params["centre"][2] - clearance / 2.0 > centre + inner + wall - 1e-9
+    assert body.bounds.minimum[2] == pytest.approx(0.0, abs=1e-9)
+
+    from app.core.brep import edit
+
+    length = float(values["width"]) + 2.0
+
+    def rod(diameter: float) -> Any:
+        upright = edit.moved(edit.cylinder(diameter, length), (0.0, 0.0, -length / 2.0))
+        return edit.moved(edit.transformed(upright, _turn_about_x()), (0.0, 0.0, centre))
+
+    assert float(edit.boolean("intersection", [body, rod(pipe)]).volume) == pytest.approx(
+        0.0, abs=1e-6
+    )
+    # Gegenprobe: Dasselbe Rohr eine halbe Wand dicker steckt im Ring.
+    assert float(edit.boolean("intersection", [body, rod(pipe + play + wall)]).volume) > 1.0
+    mesh = _built("pipe_clamp", False, **values).mesh
+    assert abs(mesh.volume / body.volume - 1.0) < 0.005
+    assert mesh.is_watertight and mesh.component_count == 1
+    _roundtrip(body)
+
+
+def _turn_about_x() -> Any:
+    """Eine Vierteldrehung um X — die Rohrachse liegt in der Schelle entlang Y."""
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import rotation
+
+    return as_transform(rotation("x", 90.0))
+
+
+def test_a_pipe_clamp_grows_on_an_exact_host_and_stays_exact(profile: Profile) -> None:
+    exact_kernel()
+    host = _host()
+    grown = run("insert_pipe_clamp", host, profile, size="22", **ON_TOP)
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    assert {"pipe_clamp_seat_1", "pipe_clamp_bore_1"} <= set(grown.outputs[0].features)
+
+
 def test_pegboard_hook_exact_is_two_hooks_without_a_plate_and_one_body_with_it() -> None:
     exact_kernel()
     values = {
@@ -1683,3 +1858,203 @@ def test_a_fit_ladder_grows_on_an_exact_host_as_one_body(profile: Profile) -> No
         HOST[0] * HOST[1] * HOST[2] + _ladder_volume(6.0, 4, 0.10, 0.05, 6.0) - sunk, rel=1e-9
     )
     assert {"fit_ladder_pin_1", "fit_ladder_bore_4"} <= set(grown.outputs[0].features)
+
+
+# --- Halter (RM-399) ----------------------------------------------------------------
+
+
+def _clipped(form: Any, low: tuple[float, float, float], high: tuple[float, float, float]) -> Any:
+    """Was von einer exakten Form zwischen zwei Ecken liegt — ein Quader als Schnitt."""
+    box = shapes.box(high[0] - low[0], high[1] - low[1], high[2] - low[2])
+    window = shapes.moved(box, ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0, low[2]))
+    return build.intersect(form, window)
+
+
+def _against_mesh(name: str, body: Any, values: dict[str, object]) -> None:
+    """Das Netz unterscheidet sich nur um die Sehnen seiner Rundungen."""
+    mesh = _built(name, False, **values).mesh
+    assert mesh.is_watertight and mesh.component_count == 1
+    assert mesh.volume / body.volume == pytest.approx(1.0, abs=2e-3)
+
+
+def test_holder_u_exact_with_keyholes_is_box_minus_room_minus_two_keyholes() -> None:
+    """U-Halter mit Schlüsselloch: Rückwand und Wände analytisch, die Löcher vom Baustein.
+
+    Abgezogen wird je Schlüsselloch genau das Werkzeug des Bausteins
+    ``keyhole`` unter seiner Mündung — das Haar darüber liegt hinter der Wand
+    in der Luft.
+    """
+    exact_kernel()
+    from app.core.knowledge.parts import holders
+    from app.core.knowledge.parts.mounting import HEAD_CLEARANCE
+
+    values: dict[str, object] = {
+        "width": 40.0,
+        "depth": 30.0,
+        "height": 40.0,
+        "mount": "keyhole",
+        "floor": False,
+        "wall": 3.0,
+        "play": 0.2,
+    }
+    produced = _built("holder_u", True, **values)
+    body = _sound(produced.mesh)
+    keyhole = holders.KEYHOLE
+    inner_width, inner_depth, wall, height = 40.2, 30.2, 3.0, 40.0
+    outer_width, outer_depth = inner_width + 2.0 * wall, inner_depth + wall
+    thickness = wall + keyhole.depth
+    across = standards.screw(keyhole.size).head + HEAD_CLEARANCE + 0.2
+    plate_width = max(outer_width, 2.0 * across + 3.0 * wall)
+    plate_height = max(height, across + keyhole.drop + 2.0 * wall)
+    with building("brep"):
+        tool = PARTS.get("keyhole").fn(PARTS.get("keyhole").params(size=keyhole.size, play=0.2))
+        below = _clipped(build.form_of(tool), (-50.0, -50.0, -50.0), (50.0, 50.0, 0.0))
+    expected = (
+        plate_width * thickness * plate_height
+        + outer_width * outer_depth * height
+        - inner_width * inner_depth * height
+        - 2.0 * below.volume
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.size == pytest.approx((plate_width, thickness + outer_depth, plate_height))
+    _against_mesh("holder_u", body, values)
+    _roundtrip(body)
+
+
+def test_holder_shelf_exact_with_screws_is_plate_brace_and_two_countersunk_holes() -> None:
+    """L-Halter mit Schraublöchern: Rückwand, Ablage mit 45-Grad-Stütze, zwei Senkungen.
+
+    Die Stütze unter der Ablage ist ein Dreieck plus der Streifen der Ablage,
+    ``front²/2 + Wand · front`` je Millimeter Breite. Jedes Loch ist ein
+    Kegelstumpf unter 45 Grad von der Vorderseite bis zum Bohrdurchmesser und
+    die Bohrung durch den Rest der Lasche.
+    """
+    exact_kernel()
+    from app.core.knowledge.parts import holders
+
+    values: dict[str, object] = {
+        "width": 60.0,
+        "depth": 40.0,
+        "height": 50.0,
+        "lip": 0.0,
+        "mount": "screws",
+        "wall": 3.0,
+        "play": 0.2,
+    }
+    produced = _built("holder_shelf", True, **values)
+    body = _sound(produced.mesh)
+    screw = standards.screw(holders.SCREW_SIZE)
+    wall, inner_width, front = 3.0, 60.2, 40.2
+    sink = (screw.countersink - screw.clearance) / 2.0
+    thickness = wall + sink
+    plate_width = inner_width + 2.0 * (screw.countersink + 2.0 * wall)
+    plate_height = 50.0
+    hole = _frustum(
+        screw.clearance, screw.clearance + 2.0 * (sink - BOOLEAN_OVERLAP), sink - BOOLEAN_OVERLAP
+    ) + math.pi * (screw.clearance / 2.0) ** 2 * (thickness - sink + BOOLEAN_OVERLAP)
+    expected = (
+        plate_width * thickness * plate_height
+        + inner_width * (front**2 / 2.0 + wall * front)
+        - 2.0 * hole
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.size == pytest.approx((plate_width, thickness + front, plate_height))
+    assert {"plate_1", "shelf_1", "bore_1", "bore_2"} == set(produced.features)
+    _against_mesh("holder_shelf", body, values)
+    _roundtrip(body)
+
+
+def test_holder_fork_exact_with_pegboard_hooks_is_plate_prongs_and_the_hooks_behind() -> None:
+    """Gabel mit rundem Grund und Lochwand-Haken: vor der Rückseite analytisch, dahinter die Haken.
+
+    Vor der Rückseite der Rückwand liegen Rückwand und Block mit dem
+    halbrunden Langloch. Dahinter liegt genau, was der Baustein
+    ``pegboard_hook`` jenseits des Hundertstels baut, um das er in die
+    Rückwand sinkt.
+    """
+    exact_kernel()
+    from app.core.knowledge.parts import holders
+
+    values: dict[str, object] = {
+        "width": 25.0,
+        "depth": 25.0,
+        "height": 15.0,
+        "mount": "pegboard",
+        "wall": 4.0,
+        "play": 0.2,
+    }
+    produced = _built("holder_fork", True, **values)
+    body = _sound(produced.mesh)
+    wall, height, radius, reach = 4.0, 15.0, 12.6, 25.2
+    outer_width = 2.0 * (radius + wall)
+    hook_spec = PARTS.get("pegboard_hook")
+    with building("brep"):
+        hooks = build.form_of(
+            hook_spec.fn(
+                hook_spec.params(
+                    system=holders.HOOKS.system,
+                    count=holders.HOOKS.count,
+                    steps=holders.HOOKS.steps,
+                    upright=holders.HOOKS.upright,
+                    latch=holders.HOOKS.latch,
+                    plate=holders.HOOKS.plate,
+                    lip=holders.HOOKS.lip,
+                    play=0.2,
+                )
+            )
+        )
+        behind = _clipped(hooks, (-200.0, -200.0, BOOLEAN_OVERLAP), (200.0, 200.0, 200.0))
+        size = hooks.bounds.size
+        plate_width = max(outer_width, size[0] + 2.0 * wall)
+        plate_height = max(height, size[1] + 2.0 * wall)
+        front_part = _clipped(body, (-200.0, -wall, -1.0), (200.0, 200.0, 200.0))
+        back_part = _clipped(body, (-200.0, -200.0, -1.0), (200.0, -wall, 200.0))
+    seat = math.pi * radius**2 / 2.0 + 2.0 * radius * (reach - radius)
+    assert front_part.volume == pytest.approx(
+        plate_width * wall * plate_height + height * (outer_width * reach - seat), rel=1e-9
+    )
+    assert back_part.volume == pytest.approx(behind.volume, rel=1e-9)
+    assert body.volume == pytest.approx(front_part.volume + back_part.volume, rel=1e-9)
+    assert {"hook_1", "hook_2", "latch_1", "latch_2", "prong_1", "prong_2"} <= set(
+        produced.features
+    )
+    _against_mesh("holder_fork", body, values)
+    _roundtrip(body)
+
+
+def test_holder_ring_exact_with_a_clamp_is_a_ring_on_the_plate_and_a_clip_behind() -> None:
+    """Becher mit Klemme: ganz analytisch, der Ring taucht eine halbe Wand in die Rückwand."""
+    exact_kernel()
+    from app.core.knowledge.parts import holders
+
+    values: dict[str, object] = {
+        "diameter": 70.0,
+        "height": 40.0,
+        "mount": "clamp",
+        "board": 18.0,
+        "floor": True,
+        "wall": 3.0,
+        "play": 0.2,
+    }
+    produced = _built("holder_ring", True, **values)
+    body = _sound(produced.mesh)
+    wall, height, board = 3.0, 40.0, 18.0
+    inner = 35.1
+    outer = inner + wall
+    centre = holders.ring_centre(70.0, 0.2, wall)
+    plate_width = 2.0 * outer
+    # Der Kreisabschnitt, mit dem der Ring hinter die Vorderseite der Rückwand taucht.
+    segment = outer**2 * math.acos(centre / outer) - centre * math.sqrt(outer**2 - centre**2)
+    expected = (
+        plate_width * wall * height
+        + height * (math.pi * outer**2 - segment)
+        - math.pi * inner**2 * (height - wall)
+        + plate_width * wall * (board + height)
+    )
+    assert body.volume == pytest.approx(expected, rel=1e-9)
+    assert body.bounds.size == pytest.approx(
+        (plate_width, wall + board + wall + centre + outer, height)
+    )
+    assert produced.features["seat_1"].params["through"] is False
+    _against_mesh("holder_ring", body, values)
+    _roundtrip(body)

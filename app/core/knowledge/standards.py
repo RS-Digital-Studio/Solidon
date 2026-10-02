@@ -153,6 +153,15 @@ class Tube:
 
 
 @dataclass(frozen=True, slots=True)
+class Pipe:
+    """Ein Rohr der Rohrreihe — was eine Schelle umfasst, ist sein Außendurchmesser."""
+
+    size: str
+    outer: float
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Tables:
     """Alles, was die Tabelle hält, mit ihrer Version."""
 
@@ -166,6 +175,7 @@ class Tables:
     profiles: dict[str, ProfileSlot]
     tubes: dict[str, Tube]
     boards: dict[str, Board]
+    pipes: dict[str, Pipe]
 
 
 def load(path: Path | None = None) -> Tables:
@@ -196,6 +206,8 @@ def load(path: Path | None = None) -> Tables:
         profiles=_index(ProfileSlot, data.get("profiles", ()), "profiles", source),
         tubes=_index(Tube, data.get("tubes", ()), "tubes", source),
         boards=_index(Board, data.get("boards", ()), "boards", source),
+        # Nach dem Außendurchmesser, damit die Auswahl der Rohrschelle aufsteigt.
+        pipes=_index(Pipe, data.get("pipes", ()), "pipes", source, "outer"),
     )
     _validate(tables, source)
     if path is None:
@@ -391,6 +403,7 @@ TABLES: Final[dict[str, str]] = {
     "profile": "profiles",
     "tube": "tubes",
     "board": "boards",
+    "pipe": "pipes",
 }
 
 
@@ -399,7 +412,7 @@ def table(kind: str) -> dict[str, Any] | None:
 
     Der eine Weg zu einer Tabelle über ihren Namen. Wer eine *Größe* sucht und
     einen Fehler mit Handlungsvorschlag will, nimmt den typisierten Zugriff
-    darunter — :func:`screw`, :func:`profile_slot` und die anderen sechs.
+    darunter — :func:`screw`, :func:`profile_slot`, :func:`pipe` und die übrigen.
     """
     field = TABLES.get(kind)
     if field is None:
@@ -472,6 +485,11 @@ def board(size: str) -> Board:
     return found
 
 
+def pipe(size: str) -> Pipe:
+    found: Pipe = _lookup(load().pipes, size, "pipe")
+    return found
+
+
 def screw_sizes() -> tuple[str, ...]:
     """Die Größen, die ein Parameter zur Auswahl anbietet."""
     return tuple(load().screws)
@@ -507,6 +525,10 @@ def tube_sizes() -> tuple[str, ...]:
 
 def board_sizes() -> tuple[str, ...]:
     return tuple(load().boards)
+
+
+def pipe_sizes() -> tuple[str, ...]:
+    return tuple(load().pipes)
 
 
 def _lookup(entries: dict[str, Any], size: str, what: str) -> Any:

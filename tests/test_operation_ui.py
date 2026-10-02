@@ -547,6 +547,103 @@ def test_a_selected_bore_opens_resize_at_its_measured_size(window: MainWindow) -
     assert values["diameter"] == pytest.approx(5.2, abs=0.001)
 
 
+def _shown_box() -> str:
+    """Der Quader, den Menü und Katalog anbieten — exakt, wo der Kern da ist."""
+    from app.core.registry import menu_twins
+
+    return menu_twins().get("create_box", "create_box")
+
+
+def test_a_new_body_stays_on_the_bed_when_only_a_body_is_chosen(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-390: Körper anklicken, *Quader anlegen* — Z stand auf seiner Oberseite.
+
+    Der Quader entstand auf dem gewählten Körper, ohne dass jemand eine Fläche
+    gezeigt hatte, und der Dialog sagte nichts dazu. Ein gewählter Körper
+    allein setzt einen Erzeuger nicht; er entsteht auf dem Bett.
+    """
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    select(window)
+
+    window.run_operation(REGISTRY.get(_shown_box()))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        values = dialog.values()
+        assert (values["x"], values["y"], values["z"]) == (0.0, 0.0, 0.0)
+        assert not dialog.seated()
+        assert not dialog.to_the_bed.isVisibleTo(dialog)
+    finally:
+        dialog.reject()
+
+
+def test_a_new_body_on_a_chosen_side_face_says_so_and_offers_the_bed(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-390: Mit gewählter Fläche sagt der Dialog vorn, wohin der Körper kommt.
+
+    „Wird auf ‹Fläche› von ‹Körper› gesetzt“, und *Auf das Bett* nimmt die
+    Vorbelegung zurück. Der Körper steht auf der Seitenfläche und nicht halb
+    unter dem Bett — gemessen an dem Körper, den die Operation mit genau den
+    Werten des Dialogs baut.
+    """
+    from app.core.registry import kernel_twin_of
+    from app.core.units import EPS_DISPLAY
+    from app.ui.labels import feature_name
+    from tests.helpers import primitive_operation
+
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    object_id = select(window)
+    body = window.session.last_result.scene.objects[object_id]
+    side, feature = next(
+        (name, entry)
+        for name, entry in body.features.items()
+        if entry.kind == "face" and abs(float(entry.params["normal"][0])) >= 0.9
+    )
+    window.object_tree.select_feature(object_id, side)
+
+    window.run_operation(REGISTRY.get(_shown_box()))
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        assert dialog.seated()
+        sentence = dialog._seat_note.text()
+        assert dialog._seat_note.isVisibleTo(dialog)
+        assert feature_name(side, feature) in sentence
+        assert window._object_names()[object_id] in sentence
+        assert dialog.to_the_bed.isVisibleTo(dialog)
+
+        values = dialog.values()
+        normal = tuple(float(value) for value in feature.params["normal"])
+        centre = tuple(float(value) for value in feature.params["centre"])
+        assert (values["nx"], values["ny"], values["nz"]) == pytest.approx(normal)
+        mesh_box = _shown_box() if _shown_box() == "create_box" else kernel_twin_of(_shown_box())
+        assert mesh_box == "create_box"
+        built = primitive_operation(
+            mesh_box,
+            {
+                name: values[name]
+                for name in ("x", "y", "z", "nx", "ny", "nz", "angle", "width", "depth", "height")
+            },
+            window.session.profile,
+        ).outputs[0]
+        vertices = built.mesh.raw.vertices
+        assert float(vertices[:, 2].min()) >= -EPS_DISPLAY, "nicht unter dem Bett"
+        along = (vertices - centre) @ normal
+        assert float(along.min()) == pytest.approx(0.0, abs=EPS_DISPLAY), "auf der Fläche"
+
+        dialog.to_the_bed.click()
+
+        back = dialog.values()
+        assert [back[name] for name in ("x", "y", "z", "nx", "ny", "nz")] == [0.0] * 6
+        assert not dialog.seated()
+        assert not dialog._seat_note.isVisibleTo(dialog)
+        assert not dialog.to_the_bed.isVisibleTo(dialog)
+    finally:
+        dialog.reject()
+
+
 def test_a_part_is_told_the_name_of_the_feature(window: MainWindow) -> None:
     """Der Name des Merkmals — **und seit dem 23.08.2026 die Größe dazu.**
 
@@ -5701,6 +5798,52 @@ def test_aligning_without_a_target_invites_instead_of_teaching_syntax(
         ]
     )
     assert "Doppelpunkt" in reason, reason
+
+
+def test_a_holder_template_names_its_dimensions_but_not_an_idle_field() -> None:
+    """Die Halter sind Vorlagen wie die Grundkörper (RM-399, §13).
+
+    Ihr Erzeuger bietet *Maße als Parameter anlegen* an, der eingesetzte
+    Baustein und ein Erzeuger ohne Vorlagenerklärung nicht. Und ein Maß, das
+    gerade nichts tut — die Plattenstärke ohne Klemme —, steht weder im
+    Dialog noch als Parameter in der Leiste. Geprüft am Rechenweg des
+    Fensters, ohne Fenster: ``_named_dimensions`` liest nur das Dokument.
+    """
+    from types import SimpleNamespace
+
+    from app.core.scene.project import new_project
+    from app.ui.main_window import offers_naming
+
+    bootstrap.load_operations()
+    for name in ("holder_u", "holder_ring", "holder_fork", "holder_shelf"):
+        assert offers_naming(REGISTRY.get(f"create_{name}")), name
+        assert not offers_naming(REGISTRY.get(f"insert_{name}")), "eingesetzt ein Maß am Körper"
+    assert not offers_naming(REGISTRY.get("create_organizer_tray")), "nur erklärte Vorlagen"
+
+    window = SimpleNamespace(
+        session=SimpleNamespace(project=new_project("centauri-carbon-2", "petg"))
+    )
+    spec = REGISTRY.get("create_holder_u")
+    defaults = {entry.name: entry.default for entry in spec.params.spec()}
+    values, change = MainWindow._named_dimensions(
+        window,  # type: ignore[arg-type]
+        spec,
+        {**defaults, "mount": "keyhole"},
+        True,
+    )
+    assert change is not None and change.after.parameters is not None
+    assert set(change.after.parameters) == {"breite", "tiefe", "hoehe"}
+    assert values["width"] == "=@breite"
+    assert values["board"] == defaults["board"], "ohne Klemme bleibt die Plattenstärke eine Zahl"
+    values, change = MainWindow._named_dimensions(
+        window,  # type: ignore[arg-type]
+        spec,
+        {**defaults, "mount": "clamp"},
+        True,
+    )
+    assert change is not None and change.after.parameters is not None
+    assert set(change.after.parameters) == {"breite", "tiefe", "hoehe", "plattenstaerke"}
+    assert values["board"] == "=@plattenstaerke"
 
 
 def test_only_a_primitive_offers_to_name_its_dimensions(qt_app: QApplication) -> None:

@@ -431,7 +431,7 @@ def test_without_a_body_the_catalogue_shows_but_does_not_insert(qt_app: QApplica
 
 
 def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication) -> None:
-    """Vierundzwanzig der siebenundzwanzig Bausteine brauchen eine Stelle.
+    """Die meisten Bausteine brauchen eine Stelle (gezählt am 02.10.2026: 25 von 35).
 
     Der Katalog fragte nur, ob ein **Körper** gewählt ist, und ließ dann
     einsetzen; die Absage kam als Fehler danach — „Für diesen Baustein fehlt
@@ -1407,6 +1407,133 @@ def _choose(catalog, name: str) -> None:
             catalog.list.setCurrentItem(item)
             return
     raise AssertionError(f"{name} steht nicht im Katalog")
+
+
+def _shown_box() -> str:
+    """Der Quader, den Menü und Katalog anbieten — exakt, wo der Kern da ist."""
+    from app.core.registry import menu_twins
+
+    return menu_twins().get("create_box", "create_box")
+
+
+def _face_part() -> str:
+    """Ein Baustein, der auf eine Fläche gesetzt wird und nicht frei steht."""
+    return next(spec.name for spec in PARTS.all() if spec.at_face and not spec.standalone)
+
+
+def test_a_new_body_is_chosen_and_the_catalogue_takes_the_only_body(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-356: Nach *Quader anlegen* war nichts gewählt, und der Katalog sperrte.
+
+    Alle Flächenbausteine standen grau mit „Wählen Sie zuerst ein Objekt im
+    Objektbaum.“ — im modalen Katalog nicht befolgbar, obwohl es genau einen
+    Körper gab. Ein Erzeugerschritt wählt seinen neuen Körper, und gibt es
+    genau einen, nimmt der Katalog diesen, auch wenn die Auswahl inzwischen
+    leer ist.
+    """
+    from app.core.knowledge.parts.ops import creation_name
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        # Das Schließen fragt sonst nach dem ungesicherten Quader — offscreen
+        # wartet die Frage auf einen Klick, den es nie gibt.
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        window.run_operation(REGISTRY.get(_shown_box()))
+        dialog = window._op_dialog
+        assert dialog is not None
+        dialog.accept()
+        assert window.session.wait_for_idle()
+        QApplication.processEvents()
+
+        created = tuple(window.session.project.document.ops[-1].outputs)
+        assert len(created) == 1
+        assert window.object_tree.selected_objects() == created, "der neue Körper ist gewählt"
+
+        # Auch ohne Auswahl: Ein einziger Körper ist keine Frage.
+        window.object_tree.select_object(None)
+        assert window.object_tree.selected_objects() == ()
+        part = _face_part()
+        states: list[tuple[bool, str]] = []
+
+        def instead_of_exec(catalog: PartCatalog) -> int:
+            _choose(catalog, part)
+            states.append(catalog._insert_state(next(s for s in PARTS.all() if s.name == part)))
+            assert catalog._insert is not None and catalog._insert.isEnabled()
+            return int(PartCatalog.DialogCode.Accepted)
+
+        started: list[tuple[str, tuple[str, ...]]] = []
+        monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+        monkeypatch.setattr(
+            window,
+            "run_operation",
+            lambda spec, *args, **kwargs: started.append(
+                (spec.name, window.object_tree.selected_objects())
+            ),
+        )
+        window.action_catalog()
+
+        assert states and states[0][0], "der Flächenbaustein ist frei"
+        assert started == [(creation_name(part), created)], "und er gilt dem einzigen Körper"
+    finally:
+        window.close()
+
+
+def test_the_empty_scene_offers_a_first_body_in_the_catalogue(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RM-356: In der leeren Szene nannte der Katalog einen Grundkörper ohne Knopf.
+
+    Er sperrte die Flächenbausteine und sagte „legen Sie einen Grundkörper an“
+    — ein Satz ohne Weg in einem modalen Dialog. Jetzt steht der Weg darunter:
+    *Quader anlegen* schließt den Katalog und öffnet den Dialog des Quaders,
+    und *Modell einfügen …* den Dateiweg, den der Satz ebenfalls nennt.
+    """
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+        # Das Schließen fragt sonst nach dem ungesicherten Quader — offscreen
+        # wartet die Frage auf einen Klick, den es nie gibt.
+        monkeypatch.setattr(window, "_may_discard", lambda: True)
+        seen: dict[str, object] = {}
+
+        def instead_of_exec(catalog: PartCatalog) -> int:
+            catalog.show()
+            QApplication.processEvents()
+            _choose(catalog, _face_part())
+            box = catalog.way_buttons["box"]
+            seen["insert"] = catalog._insert is not None and catalog._insert.isEnabled()
+            seen["box"] = (box.text(), box.isVisibleTo(catalog))
+            seen["import"] = catalog.way_buttons["import"].isVisibleTo(catalog)
+            # Ein freistehender Baustein braucht keinen Körper — dort kein Umweg.
+            _choose(catalog, next(spec.name for spec in PARTS.all() if spec.standalone))
+            seen["standalone"] = box.isVisibleTo(catalog)
+            _choose(catalog, _face_part())
+            box.click()
+            return int(catalog.result())
+
+        monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+        window.action_catalog()
+
+        assert seen["insert"] is False
+        assert seen["box"] == (str(REGISTRY.get(_shown_box()).title), True)
+        assert seen["import"] is True
+        assert seen["standalone"] is False
+        dialog = window._op_dialog
+        assert dialog is not None and dialog.spec.name == _shown_box()
+        dialog.reject()
+    finally:
+        window.close()
 
 
 def _box_recipe(name: str):

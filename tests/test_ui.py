@@ -12320,6 +12320,7 @@ def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow
     assert "Diese Ebene teilt das Objekt nicht." in banner.note.text()
     assert banner.note.text().startswith(tr("Keine Vorschau: {reason}").format(reason=""))
     assert window.viewport.difference is None
+    assert not window.viewport._comparing, "ohne Differenz gehört die Leertaste nicht dem Band"
     # Das ``None`` des Arbeiters kommt nach dem Grund und lässt ihn stehen.
     window._show_preview(None)
     assert "Diese Ebene teilt das Objekt nicht." in banner.note.text()
@@ -13364,6 +13365,48 @@ def test_a_space_in_a_text_field_stays_a_space(window: MainWindow) -> None:
     hold = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
     assert not window.viewport._compare.eventFilter(field, hold)
     assert not window.viewport.difference_held
+
+
+def test_the_survey_takes_spaces_while_a_preview_runs(window: MainWindow) -> None:
+    """Im Rückmeldebogen ließ sich kein Leerzeichen tippen (RM-437).
+
+    Der Bogen ist nicht modal und erscheint auch, während ein
+    Operationsdialog seine Vorschau zeigt. Der Vergleich an der Anwendung
+    hielt seine Felder nicht für Textfelder, weil ``QPlainTextEdit`` nicht von
+    ``QTextEdit`` erbt, und nahm jedes Leerzeichen für sich. Geprüft wird mit
+    echten Tasten über den Filter der Anwendung: an jedem mehrzeiligen Feld
+    des Dialogs und an jeder Art Texteingabe, die die Oberfläche benutzt.
+    """
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLineEdit, QPlainTextEdit, QTextEdit
+
+    window._show_preview(object())
+    window._open_survey()
+    dialog = window._survey_dialog
+    assert dialog is not None
+    try:
+        plain = dialog.findChildren(QPlainTextEdit)
+        assert len(plain) >= 3, "zwei Fragen des Bogens und das Nachrichtenfeld"
+        rich = QTextEdit(dialog)
+        line = QLineEdit(dialog)
+        combo = QComboBox(dialog)
+        combo.setEditable(True)
+        inner = combo.lineEdit()
+        assert inner is not None
+        fields: list[tuple[QWidget, Any]] = [
+            *((field, field.toPlainText) for field in plain),
+            (rich, rich.toPlainText),
+            (line, line.text),
+            (inner, combo.currentText),
+        ]
+        for field, read in fields:
+            field.setFocus()
+            QTest.keyClicks(field, "fehlt nichts")
+            assert read().endswith("fehlt nichts"), type(field).__name__
+        assert not window.viewport.difference_held, "der Vergleich blieb aus"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
 
 
 def test_a_held_key_is_not_a_flicker(window: MainWindow) -> None:
@@ -19803,6 +19846,39 @@ def test_show_the_place_flies_and_marks_like_the_report_click() -> None:
     marks = [call for call in calls if call[0] == "mark"]
     assert marks == [("mark", (place, "Offen", "obj_1", rim))], marks
 
+    # Auch eine abgesagte Kantengruppe trägt alle getrennten Stellen durch
+    # den echten Bericht und seine Handlung bis zum gemeinsamen Ansichtsweg.
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+    from app.ui.panels import actions_for_document, as_error
+
+    omitted = (
+        ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0)),
+        ((10.0, 0.0, 0.0), (12.0, 0.0, 0.0)),
+        ((20.0, 0.0, 0.0), (22.0, 0.0, 0.0)),
+    )
+    target = (1.0, 0.0, 0.0)
+    failure = errors.GeometryError(
+        title="Nicht verrundet",
+        values={"location": target, "outline": omitted, "skipped": 3},
+        object_id="obj_1",
+        suggestions=(errors.SHOW_LOCATION, errors.CORRECT_INPUT),
+    )
+    operation = Operation(id=9, op="fillet_edges", inputs=("obj_1",), outputs=("obj_1",), params={})
+    finding = _finding_from(failure, operation)
+    calls.clear()
+    MainWindow._show_error_place(view, as_error(finding))  # type: ignore[arg-type]
+
+    assert calls == [
+        ("clear", None),
+        ("fly", ((101.0, 0.0, 0.0), 70.0)),
+        ("mark", (target, "Nicht verrundet", "obj_1", omitted)),
+    ], "Fehler und Abschlussbericht müssen alle ausgelassenen Stellen bis zur Marke tragen"
+    assert errors.SHOW_LOCATION in actions_for_document(finding, None)
+    assert finding.object_id == "obj_1" and finding.op_id == 9
+    assert "location" not in finding.values and "outline" not in finding.values
+    assert failure.values["location"] == target and failure.values["outline"] == omitted
+
 
 def test_a_closing_window_takes_no_late_feature_answer(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
@@ -20155,3 +20231,58 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
 
     assert window._export_waiting is None
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
+
+
+def test_an_empty_scene_invites_to_start_and_steps_aside_for_the_first_body(
+    window: MainWindow,
+) -> None:
+    """Die leere Szene lädt zum Anfangen ein — auf drei Wegen dorthin (RM-370).
+
+    Nach *Neues Projekt* zeigte die Ansicht nur den Bauraum. Jetzt stehen dort
+    die Einstiege, über die Tastatur erreichbar und mit Namen; sie gehen mit
+    dem ersten Körper und kommen bei jeder leeren Szene wieder: neues
+    Projekt, Strg+Z bis zum Anfang, alle Körper gelöscht.
+    """
+    from PySide6.QtCore import Qt as QtCore_Qt
+
+    from app.core.scene import OperationDraft
+
+    window.show()
+    window.session._dirty = False
+    window.start_screen.new_button.click()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    invitation = window.viewport.invitation
+    assert invitation.isVisibleTo(window), "neues Projekt: die Einladung steht"
+    shown = {key for key, button in invitation.buttons.items() if button.isVisibleTo(window)}
+    assert {"create_box", "create_cylinder", "draw", "parts"} <= shown, shown
+    for key in shown:
+        button = invitation.buttons[key]
+        assert button.accessibleName(), key
+        assert button.focusPolicy() & QtCore_Qt.FocusPolicy.TabFocus, key
+
+    invitation.buttons["create_box"].click()
+    QApplication.processEvents()
+    assert window._op_dialog is not None, "der Einstieg öffnet den Schritt wie das Menü"
+    window._op_dialog.accept()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert window.session.last_result.scene.objects, "ein Quader steht"
+    assert not invitation.isVisibleTo(window), "mit dem ersten Körper tritt sie zur Seite"
+
+    window.action_undo()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert not window.session.last_result.scene.objects
+    assert invitation.isVisibleTo(window), "Strg+Z bis zum Anfang: sie ist wieder da"
+
+    window.session.apply("Quader", [OperationDraft(op="create_box", params={})])
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert not invitation.isVisibleTo(window)
+    (body,) = window.session.last_result.scene.objects
+    window.session.apply("Löschen", [OperationDraft(op="delete_object", inputs=(body,))])
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert invitation.isVisibleTo(window), "alles gelöscht: sie ist wieder da"

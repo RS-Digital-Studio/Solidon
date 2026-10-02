@@ -95,6 +95,24 @@ def test_scad_follows_the_parameters() -> None:
     assert thin != thick
 
 
+@pytest.mark.parametrize(
+    ("name", "field", "values"),
+    [("lug", "size", ("M3", "M8")), ("pipe_clamp", "size", ("15", "40"))],
+)
+def test_the_rm398_parts_write_their_scad_with_the_chosen_size(
+    name: str, field: str, values: tuple[str, str]
+) -> None:
+    """Checkliste „neuer Baustein", Punkt 4: Die Datei nennt die gewählte Größe und
+    trägt den Körper, den die Anwendung baut — für jede Größe einen anderen."""
+    spec = PARTS.get(name)
+    small, large = (scad.to_scad(spec, spec.params(**{field: value})) for value in values)
+
+    assert f"module {name}()" in small and small.rstrip().endswith(f"{name}();")
+    assert f'{field} = "{values[0]}";' in small
+    assert f'{field} = "{values[1]}";' in large
+    assert small != large
+
+
 # --- own parts (§24.5) ---------------------------------------------------------------
 
 

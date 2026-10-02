@@ -184,7 +184,7 @@ from app.core.registry import (
     palette_entries,
     variant_members,
 )
-from app.core.registry.params import body_keys
+from app.core.registry.params import body_keys, inactive_dependency
 from app.core.report import crash_detail
 from app.core.scene import (
     EdgeTarget,
@@ -198,6 +198,9 @@ from app.core.scene import (
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import change_for, repair_is_available
+from app.core.scene.placement import NORMAL as NORMAL_FIELDS
+from app.core.scene.placement import POSITION as POSITION_FIELDS
+from app.core.scene.placement import seat_on_face, seats_on
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
 from app.core.sketch.planes import (
     feature_plane,
@@ -296,6 +299,7 @@ from app.ui.labels import (
     edge_label,
     exact_conversion_lines,
     feature_label,
+    feature_name,
     feature_requirement,
     kind_requirement,
     length,
@@ -1685,13 +1689,16 @@ def _names_a_dimension(entry: ParamSpec) -> bool:
 def offers_naming(spec: OperationSpec) -> bool:
     """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
 
-    Die Grundkörper, und nur sie: Ihre Maße machen aus dem Projekt eine
-    Vorlage — „dieselbe Halterung, andere Maße" ist danach ein Zahlendialog.
-    Eine Bohrung oder eine Fase ist ein Maß *am* Körper; wer das benennen
-    will, tippt ``=@name`` in das Feld, wie bisher. Und ein Grundkörper ohne
-    Millimetermaß vorn bekäme einen Haken, der nichts täte.
+    Die Grundkörper und die Erzeuger der Vorlagen-Bausteine (``PartSpec.template``,
+    die Halter): Ihre Maße machen aus dem Projekt eine Vorlage — „dieselbe
+    Halterung, andere Maße" ist danach ein Zahlendialog. Eine Bohrung oder eine
+    Fase ist ein Maß *am* Körper; wer das benennen will, tippt ``=@name`` in das
+    Feld, wie bisher. Und ein Grundkörper ohne Millimetermaß vorn bekäme einen
+    Haken, der nichts täte.
     """
-    return spec.category == "primitive" and any(
+    part = part_of(spec.name) if spec.consumes == 0 else None
+    template = part is not None and part.template
+    return (spec.category == "primitive" or template) and any(
         _names_a_dimension(entry) for entry in spec.params.spec()
     )
 
@@ -2056,6 +2063,17 @@ class _PreviewOrder:
     changes: DocumentChange | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _Seat:
+    """Wohin ein neuer Körper auf einer gewählten Fläche kommt (RM-390)."""
+
+    feature: Feature
+    values: dict[str, float] | None
+    """Position und Richtung auf der Fläche — ``None``, wenn er dort unter das Bett reichte."""
+    sentence: str
+    """Der Satz vorn im Dialog: wohin er kommt, oder warum doch auf das Bett."""
+
+
 #: Ein Feld ohne Vorgabe unterscheidet sich von jedem Wert (``_place_from_feature_panel``).
 _NO_DEFAULT: Final = object()
 
@@ -2323,6 +2341,8 @@ class MainWindow(QMainWindow):
         self._announcement = ""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._on_start_screen = True
+        """Ob der Startbildschirm steht — dort lädt die leere Szene nicht ein (RM-370)."""
         self._last_complete: tuple[Any, EvaluationResult] | None = None
         """Das letzte durchgerechnete Ergebnis und sein Projekt — das Bild, das
         bei einem Halt am ersten Schritt stehen bleibt (§15.3, RM-354)."""
@@ -2685,6 +2705,7 @@ class MainWindow(QMainWindow):
         self.viewport.differenceApplied.connect(self._preview_rendered)
         self.viewport.differenceFailed.connect(self._preview_render_failed)
         self.viewport.sceneApplied.connect(self._preview_base_ready)
+        self.viewport.invitation.chosen.connect(self._on_invitation)
         # Die 3D-Maus fährt dieselbe Kamera — eine zweite Hand, kein Modus
         # (Konzept 3D-Maus). Gesucht wird das Gerät ab dem ersten Anzeigen —
         # vorher gibt es keine Kamera, die es fahren könnte.
@@ -2781,6 +2802,12 @@ class MainWindow(QMainWindow):
         Die Auswertung kommt asynchron; bis dahin zeigt ``last_result`` noch
         die alte Szene. Gemerkt werden deshalb die Ausgaben der Operation und
         nicht ein Zeitpunkt.
+        """
+        self._created_to_choose: tuple[ObjectId, ...] = ()
+        """Neue Körper eines Erzeugerschritts, die nach ihrer Auswertung gewählt werden.
+
+        Dieselbe Bauart wie die Hälften darüber: gemerkt werden die Ausgaben,
+        gewählt wird, sobald sie im Bild stehen (:meth:`_choose_the_created`).
         """
 
         # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
@@ -8345,10 +8372,24 @@ class MainWindow(QMainWindow):
         catalog = PartCatalog(self)
         catalog.set_can_save(*self._recipe_readiness())
         catalog.set_can_insert(*self._insert_readiness())
-        # Und die zweite Bedingung, die je Baustein gilt: Vierundzwanzig der
-        # siebenundzwanzig werden an eine Fläche oder Bohrung gesetzt. Sie
-        # sperrt nicht — der Weg über eine eingetragene Position bleibt —,
-        # aber sie sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            # **Der Satz über der Sperre nennt zwei Wege, also stehen zwei
+            # Knöpfe darunter** (RM-356): In der leeren Szene sagte er
+            # „legen Sie einen Grundkörper an“, und der modale Katalog bot
+            # keinen Weg dorthin. Die Knöpfe heißen wie Menüeintrag und
+            # Dateibefehl, die sie auslösen.
+            catalog.offer_ways(
+                (
+                    ("box", str(REGISTRY.get(self._shown_box()).title)),
+                    ("import", self.import_action.text()),
+                )
+            )
+        # Und die zweite Bedingung, die je Baustein gilt: Die meisten
+        # Bausteine werden an eine Fläche oder Bohrung gesetzt (gezählt am
+        # 02.10.2026: 25 von 35, die übrigen zehn stehen frei). Sie sperrt
+        # nicht — der Weg über eine eingetragene Position bleibt —, aber sie
+        # sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
         catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         catalog.shareRequested.connect(lambda: self._share_part(catalog))
@@ -8364,10 +8405,21 @@ class MainWindow(QMainWindow):
         """Den Katalog ausführen und eine bestätigte Einfügeauswahl anwenden."""
         try:
             if catalog.exec() != PartCatalog.DialogCode.Accepted:
+                way = catalog.way()
+                if way == "box":
+                    self.run_operation(REGISTRY.get(self._shown_box()))
+                elif way == "import":
+                    self.import_action.trigger()
                 return
             name = catalog.chosen()
             if name:
-                self.run_operation(REGISTRY.get(creation_name(name)))
+                spec = REGISTRY.get(creation_name(name))
+                lone = self._lone_body()
+                if spec.consumes and not self.object_tree.selected_objects() and lone:
+                    # Genau ein Körper ist keine Frage (RM-356): Der Katalog
+                    # hat den Baustein für ihn freigegeben, also gilt er ihm.
+                    self.object_tree.select_object(lone)
+                self.run_operation(spec)
         finally:
             # Die sechs Lambdas aus :meth:`_make_catalog` fangen das Fenster,
             # und der Katalog ist sein Kind: Ohne Freigeben hält jede Öffnung
@@ -8393,9 +8445,26 @@ class MainWindow(QMainWindow):
                 "Die Szene ist leer — ein Baustein wird auf einen Körper gesetzt. "
                 "Lesen Sie zuerst ein Modell ein oder legen Sie einen Grundkörper an."
             )
-        if not self.object_tree.selected_objects():
+        if not self.object_tree.selected_objects() and self._lone_body() is None:
             return False, _needs_objects(1)
         return True, ""
+
+    def _lone_body(self) -> ObjectId | None:
+        """Der einzige Körper der Szene — ``None`` bei keinem oder mehreren.
+
+        Bei genau einem fragt der Katalog nicht, wem ein Baustein gilt
+        (RM-356): „Wählen Sie zuerst ein Objekt im Objektbaum.“ war im modalen
+        Katalog nicht zu befolgen, und eine Wahl zwischen einem gibt es nicht.
+        """
+        result = self.session.last_result
+        if result is None or len(result.scene.objects) != 1:
+            return None
+        return next(iter(result.scene.objects))
+
+    @staticmethod
+    def _shown_box() -> str:
+        """Der Quader, den das Menü anbietet — exakt, wo der Kern da ist (``menu_twins``)."""
+        return menu_twins().get("create_box", "create_box")
 
     def _recipe_readiness(self) -> tuple[bool, str]:
         """Ob sich aus dem Stand ein eigener Baustein machen lässt — und sonst warum nicht.
@@ -14873,6 +14942,40 @@ class MainWindow(QMainWindow):
             ).format(count=connector_count)
         self.announce(message)
 
+    def _queue_created_choice(self, count_before: int) -> None:
+        """Ein Erzeugerschritt wählt seinen neuen Körper (RM-356).
+
+        Nach *Quader anlegen* war nichts gewählt: Das Auswahlfenster bot
+        *Bausteine*, und im Katalog standen alle Flächenbausteine gesperrt mit
+        „Wählen Sie zuerst ein Objekt im Objektbaum.“ — obwohl es genau einen
+        Körper gab. Gemerkt werden die Ausgaben der neuen Schritte, deren
+        Operation nichts verbraucht; ein Schritt über die ganze Szene
+        (*Auf dem Bett anordnen*) erzeugt keinen neuen Körper.
+        """
+        operations = self.session.project.document.ops[count_before:]
+        created = tuple(
+            output
+            for operation in operations
+            if REGISTRY.has(operation.op)
+            and REGISTRY.get(operation.op).consumes == 0
+            and not REGISTRY.get(operation.op).takes_whole_scene
+            for output in operation.outputs
+        )
+        if not created:
+            return
+        self._created_to_choose = created
+        result = self.session.last_result
+        if result is not None:
+            self._choose_the_created(result)
+
+    def _choose_the_created(self, result: EvaluationResult) -> None:
+        """Wählt die gemerkten neuen Körper, sobald sie in der Szene stehen."""
+        wanted = self._created_to_choose
+        if not wanted or not set(wanted) <= set(result.scene.objects):
+            return
+        self._created_to_choose = ()
+        self.object_tree.select_objects(wanted)
+
     def _queue_split_reveal(self, object_ids: Sequence[ObjectId]) -> None:
         """Öffnet neue Hälften, sobald genau diese Ausgaben im Bild stehen."""
         self._pending_split_reveal = frozenset(object_ids)
@@ -17412,6 +17515,16 @@ class MainWindow(QMainWindow):
             if _carries_a_drawing(spec, given)
             else dict(self._from_selection(spec, chosen[0] if chosen else None))
         )
+        # **Ein neuer Körper kommt nur auf eine gezeigte Fläche** (RM-390) —
+        # und der Dialog sagt es vorn. Wer Position oder Richtung schon
+        # mitbringt (ein zweiter Anlauf mit fertigen Werten), behält seine.
+        seat = (
+            None
+            if _carries_a_drawing(spec, given) or set(POSITION_FIELDS) & set(given or {})
+            else self._seat_for(spec, chosen[0] if chosen else None, {**values, **(given or {})})
+        )
+        if seat is not None and seat.values is not None:
+            values.update(seat.values)
         values.update(self._spacing_for(spec))
         values.update(self._plane_through(spec, chosen[0] if chosen else None))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
@@ -17545,6 +17658,7 @@ class MainWindow(QMainWindow):
             operations = self.session.project.document.ops
             if spec.name == "split_pinned" and len(operations) > count_before:
                 self._queue_split_reveal(operations[-1].outputs)
+            self._queue_created_choice(count_before)
 
         if spec.params.spec() or self._order_may_convert(
             spec,
@@ -17654,6 +17768,8 @@ class MainWindow(QMainWindow):
                 offer_naming=offers_naming(spec),
             )
             dialog.spoolChosen.connect(remember_spool)
+            if seat is not None:
+                self._show_seat(dialog, seat)
             if variant is not None:
                 # Dieselbe Pflicht wie beim Kernwechsel: Was der Dialog zeigt
                 # und was die Vorschau rechnet, muss dieselbe Variante sein.
@@ -17742,6 +17858,7 @@ class MainWindow(QMainWindow):
                 operations = self.session.project.document.ops
                 if picked.name == "split_pinned" and len(operations) > count_before:
                     self._queue_split_reveal(operations[-1].outputs)
+                self._queue_created_choice(count_before)
 
             self._open_operation_dialog(dialog, run_chosen)
             return
@@ -18124,9 +18241,14 @@ class MainWindow(QMainWindow):
             return values, None
         taken = set(self.session.project.document.parameters)
         created: dict[str, Parameter] = {}
-        for entry in spec.params.spec():
+        schema = spec.params.spec()
+        for entry in schema:
             value = values.get(entry.name)
             if not _names_a_dimension(entry) or isinstance(value, bool):
+                continue
+            if inactive_dependency(entry, schema, values) is not None:
+                # Ein Feld, das gerade nichts tut, steht nicht im Dialog — und
+                # wird kein Parameter in der Leiste, der nichts dreht.
                 continue
             if not isinstance(value, int | float):
                 continue
@@ -19230,7 +19352,12 @@ class MainWindow(QMainWindow):
         self._preview_effect = ""
         self._block_apply(reason if advice in self._APPLY_BLOCKING_ADVICE else None)
         self._show_difference(None)
-        self.viewport.mark_preview(tr("Keine Vorschau: {reason}").format(reason=reason), "")
+        # Ohne Differenz gibt es kein Vorher zu halten. ``changes=False`` lässt
+        # die Leertaste dort, wo sie hingehört — der Rückmeldebogen erschien
+        # gerade über diesem Band und nahm kein Leerzeichen an (RM-437).
+        self.viewport.mark_preview(
+            tr("Keine Vorschau: {reason}").format(reason=reason), "", changes=False
+        )
 
     def _say_preview_busy(self) -> None:
         """Nach 0,2 s ohne Ergebnis sagt das Band, dass gerechnet wird (§2.8)."""
@@ -19308,7 +19435,7 @@ class MainWindow(QMainWindow):
             "Vorschau abgebrochen — das Modell bleibt, wie es war. "
             "Ein geänderter Wert rechnet sie neu."
         )
-        self.viewport.mark_preview(note, "")
+        self.viewport.mark_preview(note, "", changes=False)
         self.announce(note, receipt=False)
         self._refresh_preview_block()
 
@@ -19768,7 +19895,9 @@ class MainWindow(QMainWindow):
         Ist nur der Körper gewählt und kein Merkmal darin, zählt seine oberste
         Fläche. Die Vorgabe war sonst der Ursprung, und ob der im Material
         liegt, ist Zufall: bei einem Teil, das auf dem Bett angeordnet ist,
-        liegt er daneben, und die Bohrung trägt nichts ab.
+        liegt er daneben, und die Bohrung trägt nichts ab. Ein Erzeuger
+        bekommt so keine Lage (RM-390): Er entsteht auf dem Bett, oder auf der
+        Fläche, die jemand gewählt hat (:meth:`_seat_for`).
         """
         result = self.session.last_result
         if selected is None or result is None:
@@ -19803,8 +19932,90 @@ class MainWindow(QMainWindow):
         feature_id = self.object_tree.selected_feature()
         feature = entry.features.get(feature_id) if feature_id else None
         if feature is not None:
-            return dict(values_for(spec, feature, selected))
+            found = dict(values_for(spec, feature, selected))
+            if spec.consumes == 0:
+                # **Die Lage eines Erzeugers kommt nur aus einer gewählten
+                # Fläche** (RM-390), und dann aus :meth:`_seat_for`, das sie
+                # auf der Fläche und über dem Bett hält. An einer Bohrung oder
+                # Kante entsteht er auf dem Bett.
+                for name in (*POSITION_FIELDS, *NORMAL_FIELDS):
+                    found.pop(name, None)
+            return found
         return dict(values_for_object(spec, entry.features))
+
+    def _seat_for(
+        self, spec: OperationSpec, selected: ObjectId | None, entered: Mapping[str, Any]
+    ) -> _Seat | None:
+        """Ein Erzeuger auf der ausdrücklich gewählten Fläche — oder ``None`` (RM-390).
+
+        Nur eine gewählte ebene Fläche setzt einen neuen Körper; ein gewählter
+        Körper, eine Bohrung oder eine Kante lassen ihn auf dem Bett. Wohin er
+        kommt, rechnet der Kern (``placement.seat_on_face``) mit den Maßen,
+        mit denen der Dialog aufgeht; der Satz nennt Fläche und Körper so, wie
+        Baum und Bild sie nennen.
+        """
+        result = self.session.last_result
+        feature_id = self.object_tree.selected_feature()
+        entry = result.scene.objects.get(selected) if result is not None and selected else None
+        feature = entry.features.get(feature_id) if entry is not None and feature_id else None
+        if selected is None or feature is None or feature_id is None:
+            return None
+        if not seats_on(spec, feature):
+            return None
+        face = feature_name(feature_id, feature)
+        body = self._object_names().get(selected, selected)
+        values = seat_on_face(spec, feature, entered, self.session.profile)
+        if values is None:
+            return _Seat(
+                feature,
+                None,
+                tr(
+                    "Auf „{face}“ von „{body}“ reichte der Körper unter das Bett. "
+                    "Er entsteht deshalb auf dem Bett.",
+                    face=face,
+                    body=body,
+                ),
+            )
+        return _Seat(
+            feature, values, tr("Wird auf „{face}“ von „{body}“ gesetzt.", face=face, body=body)
+        )
+
+    def _show_seat(self, dialog: OperationDialog, seat: _Seat) -> None:
+        """Den Satz vorn zeigen und den Körper auf seiner Fläche halten (RM-390).
+
+        Ändert jemand ein Maß, das quer zur Fläche liegt — die Breite eines
+        Quaders auf einer Seitenfläche —, rechnet der Sitz neu, damit er nicht
+        doch unter das Bett reicht. Wer Position oder Richtung selbst ändert,
+        hat die Stelle übernommen: Satz und Knopf gehen, die Werte bleiben.
+        *Auf das Bett* schreibt die Vorgaben der belegten Felder zurück.
+        """
+        if seat.values is None:
+            dialog.show_seat(seat.sentence, None)
+            return
+        defaults = {entry.name: entry.default for entry in dialog.spec.params.spec()}
+        dialog.show_seat(seat.sentence, {name: defaults[name] for name in seat.values})
+        placed = dict(seat.values)
+        profile = self.session.profile
+
+        def follow() -> None:
+            """Ein geändertes Maß hält den Körper auf der Fläche und über dem Bett."""
+            if not isValid(dialog) or not dialog.seated():
+                return
+            entered = dialog.values()
+            if any(
+                not isinstance(entered.get(name), int | float)
+                or abs(float(entered[name]) - value) > EPS_DISPLAY
+                for name, value in placed.items()
+            ):
+                dialog.release_seat()
+                return
+            again = seat_on_face(dialog.spec, seat.feature, entered, profile)
+            if again is None or all(abs(again[name] - placed[name]) <= EPS_GEOM for name in again):
+                return
+            placed.update(again)
+            dialog.take_placement(again)
+
+        dialog.valuesChanged.connect(follow)
 
     # --- session replies --------------------------------------------------------
 
@@ -19878,6 +20089,28 @@ class MainWindow(QMainWindow):
         ):
             return kept[1]
         return result
+
+    def _show_invitation(self) -> None:
+        """Die Einladung über der leeren Szene — sichtbar, solange nichts da ist und nichts läuft.
+
+        Während eine Datei lädt, ist die Szene auch leer; dann gehört das
+        Bild der Ladeanzeige und nicht der Frage, womit man anfängt (RM-370).
+        """
+        result = self.session.last_result
+        empty = result is not None and not result.scene.objects and not self.session.busy
+        self.viewport.invitation.set_chat_available(self.session.agent_backend is not None)
+        self.viewport.invitation.show_for(empty and not self._on_start_screen)
+
+    def _on_invitation(self, chosen: str) -> None:
+        """Ein Einstieg aus der leeren Szene — derselbe Weg wie Menü und Werkzeugzeile."""
+        if chosen == "draw":
+            self.action_sketch_free()
+        elif chosen == "parts":
+            self.action_catalog()
+        elif chosen == "chat":
+            self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
+        elif REGISTRY.has(chosen):
+            self.run_operation(REGISTRY.get(chosen))
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
@@ -19997,6 +20230,7 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
         self.viewport.show_scene(self._picture_for(result))
+        self._show_invitation()
         self._reveal_split_result(result)
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone
@@ -20004,6 +20238,7 @@ class MainWindow(QMainWindow):
         # Nach Baum **und** Ansicht: Beide stellen ihre Auswahl selbst wieder
         # her, und eine Nachwahl davor ginge im Aufbau der Ansicht verloren.
         self._reselect_the_renamed(result)
+        self._choose_the_created(result)
         # Und erst danach die Einträge — einmal, mit der Auswahl, die jetzt gilt.
         self._update_actions()
         if result.stopped_at is not None:
@@ -20160,6 +20395,8 @@ class MainWindow(QMainWindow):
         produced = frozenset(output for operation in document.ops for output in operation.outputs)
         if self._pending_split_reveal and not self._pending_split_reveal.issubset(produced):
             self._pending_split_reveal = frozenset()
+        if self._created_to_choose and not set(self._created_to_choose) <= produced:
+            self._created_to_choose = ()
         # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
         # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
         # acht Wegen wechselten sieben einzeln von Hand, und der achte war der
@@ -20612,6 +20849,7 @@ class MainWindow(QMainWindow):
         )
         self._update_waiting_state()
         self._update_veil(busy)
+        self._show_invitation()
         if not busy:
             self._resume_preview_after_idle()
             self._resume_map_after_idle()
@@ -22608,6 +22846,11 @@ class MainWindow(QMainWindow):
             # erreichbar.
             self._drop_feature_preview()
         switch(self.stack, self.start_screen if show else self.overlay)
+        self._on_start_screen = show
+        if self.__dict__.get("viewport") is not None:
+            # Die Einladung gehört der Arbeitsfläche; der Startbildschirm hat
+            # seine eigenen Einstiege (RM-370).
+            self._show_invitation()
         # Projektname, Drucker und Bearbeitungswerkzeuge gehören zum offenen
         # Arbeitsbereich. Auf der Startfläche stehen Neu, Öffnen und Import
         # bereits als beschriftete Einstiege bereit.

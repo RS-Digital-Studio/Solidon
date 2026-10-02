@@ -1,4 +1,4 @@
-"""Freie Position und Richtung der fünf analytischen Grundkörper."""
+"""Freie Position und Richtung der sechs analytischen Grundkörper."""
 
 from __future__ import annotations
 
@@ -46,6 +46,18 @@ CASES: tuple[tuple[str, dict[str, Any]], ...] = (
     (
         "create_torus",
         {"outer_diameter": 20.0, "tube_diameter": 4.0, "segments": 32, "name": ""},
+    ),
+    (
+        "create_tube",
+        {
+            "outer_diameter": 20.0,
+            "inner_given": False,
+            "wall": 2.0,
+            "inner_diameter": 16.0,
+            "height": 7.0,
+            "segments": 32,
+            "name": "",
+        },
     ),
 )
 

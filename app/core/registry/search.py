@@ -152,6 +152,8 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "create_brep_sphere": ("exakt", "brep", "echte kanten"),
     "create_torus": ("exakt", "brep", "echte kanten"),
     "create_brep_torus": ("exakt", "brep", "echte kanten"),
+    "create_tube": ("exakt", "brep", "echte kanten"),
+    "create_brep_tube": ("exakt", "brep", "echte kanten"),
     "drill_hole": ("exakt", "brep", "echte kanten"),
     "drill_brep_hole": ("exakt", "brep", "echte kanten"),
     # Stand bis zum 26.09.2026 unter ``repair_mesh`` — eine Operation dieses

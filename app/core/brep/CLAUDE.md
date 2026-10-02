@@ -169,8 +169,16 @@ unveränderten Ergebnis (`HasSourceDeviation`).
   (`checked_edge_indices`, `_edges_for`) geht vor `keys`, ohne Rückfall; die
   Auswertung bindet über `native_edge_indices`, nie über `edges_of`.
   `edge_points` gibt die Kante nach `DEFLECTION` als Punktfolge.
+- **`native_edges_of_chains` belegt ganze Kurven**: Netzknoten und
+  Dreiecksnachbarn führen über `face_sources` zu genau zwei nativen Flächen.
+  Mehrere gemeinsame Kanten entscheidet ihr tatsächlicher Sehnenverlauf;
+  projizierte Intervalle belegen dessen vollständige Abdeckung in beiden
+  Richtungen. Die Schweißgrenze verbindet Intervalle, ersetzt aber keines.
+  Entfällt ein Zug, wird die Abdeckung bis zum Fixpunkt neu geprüft.
+  Eine leere Bindung heißt unbekannt, auch bei einem Knick innerhalb einer
+  C0-Fläche; sie bedeutet weder alle Kanten noch glatt. Abbruch reist mit.
 - **`fillet_group`** wird nur für eine von `geom.edge_ops` automatisch
-  verkleinerte Gruppe konstanter Radien aufgerufen. Es misst die Wand einmal,
+  belegte Gruppe konstanter Radien aufgerufen. Es misst die Wand einmal,
   baut zuerst alle verbleibenden Kanten. Bei einem offenen Gruppenergebnis
   prüft es zuerst jede Kante einzeln und versucht, alle einzeln offenen Kanten
   gemeinsam auszulassen; danach versucht es jede Einzelauslassung. Nur ein gültiger,

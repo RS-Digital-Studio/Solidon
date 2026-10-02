@@ -33,7 +33,12 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
+from app.core.geom.boolean import (
+    BOOLEAN_OVERLAP,
+    NOTHING_LEFT_DETAIL,
+    NOTHING_LEFT_TITLE,
+    without_effect,
+)
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.ops import as_transform
@@ -53,8 +58,15 @@ from app.core.geom.prepare import (
 from app.core.geom.prepare_ops import DrillParams, bore_shape
 from app.core.geom.primitive_ops import (
     ANCHORS,
+    TUBE_HEIGHT_DOC,
+    TUBE_INNER_DOC,
+    TUBE_INNER_GIVEN_DOC,
+    TUBE_OUTER_DOC,
+    TUBE_WALL_DOC,
     PositionedPrimitiveParams,
     placement_transform,
+    tube_bore,
+    tube_findings,
     tube_fits_the_ring,
 )
 from app.core.geom.transform import Axis
@@ -376,6 +388,98 @@ def create_brep_torus(ctx: OpContext) -> OpResult:
     )
     return OpResult(
         outputs=[_object(params.name or str(_("Ring")), solid, cancelled=ctx.cancelled)]
+    )
+
+
+@op_params
+class BrepTubeParams(PositionedPrimitiveParams):
+    """Dieselben Felder wie ``TubeParams`` am Netz, ohne ``segments`` — ein Kreis des
+    exakten Kerns hat keine Segmente."""
+
+    outer_diameter: float = param(
+        title=_("Außendurchmesser"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=TUBE_OUTER_DOC,
+    )
+    inner_given: bool = param(
+        title=_("Innendurchmesser angeben"),
+        default=False,
+        doc=TUBE_INNER_GIVEN_DOC,
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.05,
+        maximum=500.0,
+        depends_on=("inner_given", (False,)),
+        doc=TUBE_WALL_DOC,
+    )
+    inner_diameter: float = param(
+        title=_("Innendurchmesser"),
+        default=16.0,
+        unit="mm",
+        minimum=0.05,
+        maximum=1000.0,
+        depends_on=("inner_given", (True,)),
+        doc=TUBE_INNER_DOC,
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=TUBE_HEIGHT_DOC,
+    )
+    name: str = param(
+        title=_("Name"),
+        default="",
+        placement="advanced",
+        doc=NAME_DOC,
+    )
+
+
+@register_op(
+    name="create_brep_tube",
+    title=_("Rohr anlegen"),
+    category="primitive",
+    params=BrepTubeParams,
+    consumes=0,
+    produces=1,
+    doc=_(
+        "Legt ein Rohr mit echten Kreisflächen an, stehend auf dem Druckbett — bemaßt über "
+        "die Wandstärke oder den Innendurchmesser; an seine Kanten lassen sich später Fasen "
+        "und Verrundungen setzen."
+    ),
+)
+def create_brep_tube(ctx: OpContext) -> OpResult:
+    params = cast(BrepTubeParams, ctx.params)
+    require()
+    inner = tube_bore(params.outer_diameter, params.wall, params.inner_diameter, params.inner_given)
+    # Die Öffnung reicht an beiden Enden über das Rohr hinaus: Ein Werkzeug
+    # endet nicht in der Fläche, die es schneidet (§39), auch exakt nicht.
+    reach = BOOLEAN_OVERLAP
+    body = edit.boolean(
+        "difference",
+        [
+            edit.cylinder(params.outer_diameter, params.height),
+            edit.moved(edit.cylinder(inner, params.height + 2.0 * reach), (0.0, 0.0, -reach)),
+        ],
+    )
+    solid = edit.transformed(body, placement_transform(params), cancelled=ctx.cancelled)
+    return OpResult(
+        outputs=[_object(params.name or str(_("Rohr")), solid, cancelled=ctx.cancelled)],
+        findings=tube_findings(
+            params.outer_diameter,
+            params.wall,
+            params.inner_diameter,
+            params.inner_given,
+            ctx.profile,
+        ),
     )
 
 
@@ -1229,6 +1333,7 @@ __all__ = [
     "create_brep_cylinder",
     "create_brep_sphere",
     "create_brep_torus",
+    "create_brep_tube",
     "drill_brep_hole",
     "mesh_to_exact",
     "shell_exact",

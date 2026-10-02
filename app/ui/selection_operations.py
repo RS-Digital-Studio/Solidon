@@ -768,10 +768,11 @@ class SelectionOperationsPanel(QWidget):
             # auch da sein um Bausteine setzen zu können"). Die Karte
             # verschwand ganz, und damit war der einzige sichtbare Zugang zum
             # Katalog weg — übrig blieben Strg+K und zwei Menüwege, die
-            # niemand sucht, der gerade auf eine leere Fläche klickt. Drei
-            # der siebenundzwanzig Bausteine stehen frei (``standalone``) und
-            # brauchen gar keinen Körper; der Katalog lässt sie durch und
-            # sagt bei den übrigen selbst, was fehlt. Dazu kommen die
+            # niemand sucht, der gerade auf eine leere Fläche klickt. Ein Teil
+            # der Bausteine steht frei (``standalone``; gezählt am 02.10.2026:
+            # 10 von 35) und braucht gar keinen Körper; der Katalog lässt sie
+            # durch, nimmt bei genau einem Körper diesen und bietet in der
+            # leeren Szene den Weg zu einem ersten (RM-356). Dazu kommen die
             # Handlungen für alle Körper (:attr:`_for_all_bodies`).
             self._without_a_selection(availability)
             return

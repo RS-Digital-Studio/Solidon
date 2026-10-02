@@ -1850,6 +1850,31 @@ class OperationDialog(QDialog):
         applies.setVisible(bool(note))
         self._note = applies
         layout.addWidget(applies)
+        # **Wohin ein neuer Körper kommt, steht vorn** (RM-390). Ein Erzeuger
+        # setzt sich auf eine ausdrücklich gewählte Fläche; ihre Lage steht
+        # in Position und Richtung hinter der Klappe, und ohne diesen Satz
+        # entstand er an einer Stelle, die der Kunde nicht gewählt zu haben
+        # glaubte. *Auf das Bett* nimmt die Vorbelegung zurück. Sichtbar nur,
+        # wenn das Fenster es sagt (:meth:`show_seat`).
+        self._seat_note = QLabel("", self)
+        self._seat_note.setWordWrap(True)
+        set_level(self._seat_note, "caption")
+        self._seat_note.setVisible(False)
+        layout.addWidget(self._seat_note)
+        self._seat_back: dict[str, Any] | None = None
+        self.to_the_bed = QPushButton(tr("Auf das Bett"), self)
+        bed_note = tr("Nimmt die gewählte Fläche zurück — der Körper entsteht auf dem Bett.")
+        self.to_the_bed.setToolTip(bed_note)
+        self.to_the_bed.setStatusTip(bed_note)
+        self.to_the_bed.setAccessibleDescription(bed_note)
+        self.to_the_bed.setAutoDefault(False)
+        self.to_the_bed.setVisible(False)
+        self.to_the_bed.clicked.connect(weak_slot(self, OperationDialog._to_the_bed))
+        bed_row = QHBoxLayout()
+        bed_row.setContentsMargins(0, 0, 0, 0)
+        bed_row.addWidget(self.to_the_bed)
+        bed_row.addStretch(1)
+        layout.addLayout(bed_row)
         # **Wer im Bild zielen muss, erfährt es im Dialog** (Befund Robert,
         # 18.09.2026: „Bohrung setzen sollte doch über den Viewport gehen,
         # wenn das dialogfenster da ist, keine Info dass es über den Viewport
@@ -2289,6 +2314,41 @@ class OperationDialog(QDialog):
         """
         self._placement_hint.setVisible(bool(on))
         self.aim_again.setVisible(paused)
+
+    def show_seat(self, sentence: str, back: Mapping[str, Any] | None) -> None:
+        """Sagen, auf welche Fläche ein neuer Körper kommt (RM-390).
+
+        ``back`` sind die Werte, die *Auf das Bett* zurückschreibt — die
+        Vorgaben der Felder, die die Fläche belegt hat. ``None`` heißt: Der
+        Satz erklärt, warum der Körper trotz gewählter Fläche auf dem Bett
+        entsteht, und es gibt nichts zurückzunehmen.
+        """
+        self._seat_back = dict(back) if back is not None else None
+        self._seat_note.setText(sentence)
+        self._seat_note.setVisible(bool(sentence))
+        self.to_the_bed.setVisible(back is not None)
+
+    def seated(self) -> bool:
+        """Ob der Körper gerade auf der gewählten Fläche steht."""
+        return self._seat_back is not None
+
+    def release_seat(self) -> None:
+        """Satz und Knopf weg — die Werte bleiben, wie sie stehen.
+
+        Wer Position oder Richtung selbst ändert, hat die Stelle übernommen;
+        „Wird auf … gesetzt“ stimmte danach nicht mehr.
+        """
+        self._seat_back = None
+        self._seat_note.setVisible(False)
+        self.to_the_bed.setVisible(False)
+
+    def _to_the_bed(self) -> None:
+        """*Auf das Bett*: die Vorbelegung der Fläche zurücknehmen."""
+        back = self._seat_back
+        if back is None:
+            return
+        self.release_seat()
+        self.take_placement(back)
 
     def show_refusal(
         self,

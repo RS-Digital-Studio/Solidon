@@ -1324,11 +1324,18 @@ EXACT_PARTS: Final = frozenset(
         # Befestigung
         "foot",
         "keyhole",
+        "lug",
         "magnet_pocket",
         "pegboard_hook",
+        "pipe_clamp",
         "wall_mount",
         "profile_clamp_liner",
         "profile_clamp_shell",
+        # Halter
+        "holder_u",
+        "holder_ring",
+        "holder_fork",
+        "holder_shelf",
         # Struktur und Kabel
         "rib",
         "gusset",

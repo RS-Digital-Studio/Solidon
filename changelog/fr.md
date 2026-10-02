@@ -18,6 +18,15 @@ dans `website/version.json`.
 
 ## 0.5.2
 
+### Nouvelles formes et nouveaux blocs
+
+- Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
+- Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
+- Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
+- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, pattes à vis, crochet de panneau ou pince.
+- Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
+- Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
+
 ### Imprimer et transmettre au slicer
 
 - Au premier démarrage et dans les réglages, vous choisissez d'abord le slicer, puis l'une de ses imprimantes. La liste a un champ de recherche, volume et buse viennent du profil du slicer.
@@ -25,6 +34,7 @@ dans `website/version.json`.
 - Les réglages d'impression demandent dans l'ordre où l'un dépend de l'autre : slicer, imprimante, buse, plateau, filaments et qualité, puis les valeurs.
 - Avec Creality Print 7.2 et 7.3, « Trancher » calcule maintenant lui-même le fichier d'impression. Avant, seule la fenêtre de Creality Print le pouvait. Si 7.3 réarrange le plateau, Solidon le dit.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
+- Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
 - Si vous choisissez brim, skirt ou raft dans les réglages d'impression, seules les cotes de ce type de plateau s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
@@ -46,6 +56,7 @@ dans `website/version.json`.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
 - Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Axe d'inclinaison », et « Sur une face » mène la coupe parallèlement à une face plane.
+- Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 
 ### Sculpter, texte et esquisse
@@ -58,7 +69,7 @@ dans `website/version.json`.
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.
-- La cible d'« Aligner sur une caractéristique » est d'abord vide. « Appliquer » attend qu'elle soit choisie et ne pose plus le corps sans rien dire du mauvais côté.
+- La cible d'« Aligner sur une caractéristique » est d'abord vide. Vous la choisissez dans le champ « Cible », et « Appliquer » attend jusque-là au lieu de poser le corps du mauvais côté.
 - Un fichier en mètres qui tiendrait aussi sur le plateau lu en pouces n'est plus lu faux sans rien dire. Solidon demande l'unité.
 
 ### Générer avec l'IA
@@ -72,6 +83,10 @@ dans `website/version.json`.
 ### Utilisation et système
 
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
+- Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
+- La barre des paramètres refuse une cote hors de sa limite et nomme la limite, au lieu de laisser la vue vide.
+- Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
+- Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
 - Les coches des listes sont lisibles sur chaque ligne, et les couleurs apparaissent en pastille ronde à côté.
 - La palette de commandes explique outils et actions de fichier en une phrase.
@@ -80,6 +95,7 @@ dans `website/version.json`.
 - Dans le projet d'exemple de la deuxième voie, les trous de vis suivent la largeur et l'épaisseur.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
+- Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
 
 ## 0.5.1
 

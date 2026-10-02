@@ -67,6 +67,11 @@ nächsten. Wer eine Unterscheidung einführt, führt die Anordnungsfrage mit ein
   Robert): Hauptknopf *Bausteine*, dazu *Datei → Bausteinkatalog …*, Strg+K,
   *Erzeugen → Bausteine*
   (`test_a_chosen_part_reaches_the_catalogue_in_one_click`).
+- **Der Katalog führt aus seiner Sperre hinaus:** Bei genau einem Körper gilt
+  ein Baustein ihm, auch ohne Auswahl (`MainWindow._lone_body`); in der leeren
+  Szene stehen unter dem Satz die Wege, die er nennt (`PartCatalog.offer_ways`:
+  *Quader anlegen*, *Modell einfügen …*). Ein modaler Katalog, der „wählen Sie
+  im Objektbaum“ sagt, ist eine Sackgasse (RM-356).
 - **Das Kontextmenü an Körper und Merkmal trägt keine Operationen**
   (Entscheidung Robert), nur *Diesen Schritt ändern*, *Auf dieser Fläche
   zeichnen* und die Sichtbarkeit; der Viewport zeigt dasselbe Menü.
@@ -165,15 +170,26 @@ Robert).
   (`axis`/`position`, `triangles`, `edge`), nicht nach der Operation; die Zahl
   bleibt änderbar. *Druckplatten* bleibt beim Höchstwert, das Feld ist eine
   Obergrenze.
+- **Ein Erzeuger nimmt seine Lage nur von einer gezeigten Fläche** (RM-390):
+  Ein gewählter Körper, eine Bohrung oder Kante setzen ihn nicht, er entsteht
+  auf dem Bett (`values_for_object` gibt `consumes == 0` nichts). Auf einer
+  gewählten Fläche steht er auf ihr und, wo nötig, in ihrer Ebene über das Bett
+  gehoben (`placement.seats_on`, `seat_on_face`); vorn steht „Wird auf ‹Fläche›
+  von ‹Körper› gesetzt“ mit *Auf das Bett* (`OperationDialog.show_seat`).
+  Nach dem Übernehmen ist sein neuer Körper gewählt (`_queue_created_choice`).
 - **Ein Grundkörper bietet an, seine Maße zu benennen** (§13, Entscheidung
   Robert): *Maße als Parameter anlegen* steht vorn in jedem Dialog der
-  Kategorie `primitive` (`offers_naming`). Gesetzt, wird jedes Millimetermaß der
-  Vorderseite ein Projektparameter nach seiner Beschriftung (*Breite* →
-  `breite`, vergeben → `breite_2`) mit übersetzbarem Titel und den Grenzen des
-  Feldes, der Schritt verweist mit `=@breite` darauf, beides in **einer**
-  Transaktion (`changes` an `Session.apply`); ein Feld mit Ausdruck bleibt
+  Kategorie `primitive` und im Erzeuger jedes Bausteins, der sich als Vorlage
+  erklärt (`PartSpec.template`, die Halter; `offers_naming`). Gesetzt, wird
+  jedes wirksame Millimetermaß der Vorderseite ein Projektparameter nach
+  seiner Beschriftung (*Breite* → `breite`, vergeben → `breite_2`) mit
+  übersetzbarem Titel und den Grenzen des Feldes, der Schritt verweist mit
+  `=@breite` darauf, beides in **einer** Transaktion (`changes` an
+  `Session.apply`); ein Feld mit Ausdruck bleibt, ein Feld, dessen
+  `depends_on` gerade nicht gilt, wird keiner — es steht ja nicht da
   (`test_naming_the_dimensions_makes_them_project_parameters`,
-  `test_only_a_primitive_offers_to_name_its_dimensions`).
+  `test_only_a_primitive_offers_to_name_its_dimensions`,
+  `test_a_holder_template_names_its_dimensions_but_not_an_idle_field`).
 - **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat:**
   `ArmatureField` baut je Knochen drei Winkel (`ValueField`, §13), sobald der
   Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten
@@ -251,7 +267,7 @@ rechnen“, „Als Dreiecksmodell rechnen“). Zwei Sperren vor dem Klick: in de
 exakten Kern nur, wenn er da ist (sonst fehlt der Eintrag; das Fenster prüft den
 direkten Aufruf ein zweites Mal); ins Netz nur, wenn kein späterer Schritt
 bearbeitbare Flächen braucht (`needs_exact`). Getauscht wird nur zwischen den
-fünf Grundkörpern aus `PRIMITIVE_TWINS` — an Bohren und Aushöhlen liefe ein
+Grundkörpern aus `PRIMITIVE_TWINS` — an Bohren und Aushöhlen liefe ein
 Wechsel ins Leere, dort entscheidet der Körper, und beliebige Operationen
 gegeneinander wären ein Umschreiben der Geschichte.
 
@@ -299,7 +315,7 @@ Filter darin still mit.
 ## Eine Grenze steht dort, wo gewählt wird
 
 `caveat` im Registereintrag sagt, wann eine Operation die falsche Wahl ist.
-Einundvierzig von hundertzweiundvierzig Operationen tragen einen (die Zahl prüft
+Zweiundfünfzig von hundertfünfundfünfzig Operationen tragen einen (die Zahl prüft
 `tests/test_registry_consistency.py`). `caveat_line()` (`surfaces.py`) ist die
 eine Quelle und trägt das Wort davor, sonst liest sich die Grenze als
 Fortsetzung des `doc`-Satzes: im Dialog ein eigenes halbfettes Label (Regel 18),

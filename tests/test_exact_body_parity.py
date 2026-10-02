@@ -188,6 +188,14 @@ CASES = [
         2.0 * math.pi**2 * 16.0 * 16.0,
     ),
     Case(
+        "create_brep_tube",
+        "none",
+        {"outer_diameter": 22.9, "inner_given": True, "inner_diameter": 16.9, "height": 30.0},
+        CREATE_EXACT,
+        "volume",
+        math.pi / 4.0 * (22.9**2 - 16.9**2) * 30.0,
+    ),
+    Case(
         "create_cone",
         "none",
         {"bottom_diameter": 20.0, "top_diameter": 10.0, "height": 12.0, "segments": 96},
@@ -268,6 +276,14 @@ CASES = [
         CREATE_MESH,
         "volume",
         80.0 * math.pi**2,
+    ),
+    Case(
+        "create_tube",
+        "none",
+        {"outer_diameter": 20.0, "wall": 2.0, "height": 20.0, "segments": 96},
+        CREATE_MESH,
+        "volume",
+        math.pi / 4.0 * (20.0**2 - 16.0**2) * 20.0,
     ),
     Case(
         "cut_away", "box", {"axis": "z", "position": 5.0, "keep": "below"}, KEEP, "volume", 1600.0
@@ -730,6 +746,28 @@ PART_CASES = {
     "gusset": ({"legs": 12.0, "thickness": 2.0, "wall": 2.0}, "greater", None),
     "heatset_m4": ({"size": "M3", "lead_in": True, "extra_depth": 0.5}, "less", None),
     "hinge_eye": ({"pin": 3.0, "width": 8.0, "reach": 8.0, "wall": 2.0}, "greater", None),
+    # Die Halter mit Klemme: Ihre Höhe ist die eingetragene, die Rückwand wächst
+    # nicht; die Ablage trägt ihren Rand darüber.
+    "holder_fork": (
+        {"width": 10.0, "depth": 10.0, "height": 20.0, "mount": "clamp", "board": 10.0},
+        "greater",
+        20.0,
+    ),
+    "holder_ring": (
+        {"diameter": 20.0, "height": 25.0, "mount": "clamp", "board": 10.0, "floor": True},
+        "greater",
+        25.0,
+    ),
+    "holder_shelf": (
+        {"width": 30.0, "depth": 15.0, "height": 30.0, "lip": 5.0, "mount": "clamp", "board": 10.0},
+        "greater",
+        30.0 + 5.0,
+    ),
+    "holder_u": (
+        {"width": 20.0, "depth": 15.0, "height": 30.0, "mount": "clamp", "board": 10.0},
+        "greater",
+        30.0,
+    ),
     "keyhole": ({"size": "M4", "drop": 8.0, "depth": 4.0, "head_room": 2.5}, "less", None),
     "latch": ({"width": 6.0, "depth": 1.0, "height": 3.0, "negative": False}, "greater", None),
     "living_hinge": (
@@ -737,6 +775,7 @@ PART_CASES = {
         "greater",
         None,
     ),
+    "lug": ({"size": "M4", "width": 0.0, "length": 0.0, "thickness": 4.0}, "greater", None),
     "magnet_pocket": ({"size": "8x3", "cover": 0.0, "press_lip": False}, "less", None),
     "nut_trap": ({"size": "M3", "direction": "bottom", "screw_hole": True}, "less", None),
     "organizer_divider": ({"length": 30.0, "height": 15.0, "thickness": 3.0}, "greater", 15.0),
@@ -764,6 +803,13 @@ PART_CASES = {
         {"system": "skadis", "count": 1, "steps": 1, "upright": False, "latch": True},
         "greater",
         None,
+    ),
+    "pipe_clamp": (
+        {"size": "22", "width": 15.0, "wall": 3.0, "screw_size": "M4"},
+        "greater",
+        # Fuß (eine Wand), Ring (Rohr mit 0,25 Spiel aus PETG und zwei
+        # Wänden) und darüber die Unterlegscheibe M4 (9,0).
+        3.0 + (22.25 + 2.0 * 3.0) + 9.0,
     ),
     "printed_nut": ({"size": "M5"}, "greater", None),
     "printed_screw": ({"size": "M5", "length": 12.0, "countersunk": False}, "greater", None),
@@ -806,11 +852,16 @@ PART_CASES = {
 }
 STANDALONE = (
     "fit_ladder",
+    "holder_fork",
+    "holder_ring",
+    "holder_shelf",
+    "holder_u",
     "organizer_divider",
     "organizer_foot",
     "organizer_rim",
     "organizer_tray",
     "overhang_fan",
+    "pipe_clamp",
     "profile_clamp_liner",
     "profile_clamp_shell",
     "seal_gasket",

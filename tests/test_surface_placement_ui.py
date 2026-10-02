@@ -1149,7 +1149,7 @@ def test_only_what_needs_a_face_goes_into_placement_by_itself() -> None:
     keinen extra Button klicken müssen"). Für alles, was auf etwas sitzt —
     Baustein, Beschriftung, Bohrung —, ist das richtig.
 
-    **Für die fünf Grundkörper nicht.** ``start`` versteckt den Dialog, und
+    **Für die Grundkörper nicht.** ``start`` versteckt den Dialog, und
     Breite, Tiefe und Höhe stehen nirgends sonst: Wer die Maße ändern wollte,
     musste Escape drücken, tippen und neu platzieren (Robert, 09.09.2026:
     „wer nur Maße tippen will, ignoriert ihn"). Dort zeigt stattdessen die

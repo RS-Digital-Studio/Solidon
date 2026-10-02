@@ -17,6 +17,15 @@ it into `website/version.json`.
 
 ## 0.5.2
 
+### New shapes and parts
+
+- New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.
+- New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.
+- New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
+- Four holders are made in one step: U-shaped, round, fork and shelf, fixed with a keyhole, screw tabs, a pegboard hook or a clamp.
+- An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
+- New bodies appear on the bed or on the chosen flat face, no longer where a previously selected body was, and are selected afterwards.
+
 ### Printing and slicer handover
 
 - On first start and in the settings you now pick the slicer first and then one of its printers. The list has a search field, and build volume and nozzle come from the slicer's profile.
@@ -24,6 +33,7 @@ it into `website/version.json`.
 - The print dialog asks in the order in which one thing depends on the other: slicer, printer, nozzle, plate, filaments and quality, then the values.
 - With Creality Print 7.2 and 7.3, *Slice* now produces the print file itself. Until now this only worked in Creality Print's own window. If 7.3 rearranges the plate, Solidon says so.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
+- Cura now slices with the nozzle you chose, also for printers from Cura's own list, and printers with their origin in the middle of the bed keep it.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
 - If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
@@ -45,6 +55,7 @@ it into `website/version.json`.
 - Even along its mirror seam, *Split the model* cuts a figure cleanly, and the pins sit in place already in the preview.
 - If a cut only grazes a wall, *Split the model* names the spot and leads to the cut position instead of failing at the pins.
 - Crop now also cuts at an angle: under *More settings* you find *Tilt* and *Tilt axis*, and *At face* runs the cut parallel to a flat face.
+- A STEP body stays a STEP body when you crop it, with its faces, edges and names.
 - A freshly created screw lid is no longer reported as too tight for its neck.
 
 ### Sculpting, text and sketching
@@ -57,7 +68,7 @@ it into `website/version.json`.
 - In the window, *Blend together* now computes as finely as for the export, as long as the body is not very large.
 - If a building block such as a keyhole reaches over the edge of its face, the report says so.
 - A typed dimension such as length 40 stretches a sketch only in that direction. The resulting body stays closed and sits on the bed.
-- The target of *Align to feature* starts out empty. *Apply* waits until it is chosen and no longer quietly puts the body on the wrong side.
+- The target of *Align to feature* starts out empty. You choose it via the *Target* field, and *Apply* waits until then instead of quietly putting the body on the wrong side.
 - A file in metres that would also fit on the bed read as inches is no longer quietly read wrong. Solidon asks for the unit.
 
 ### Generating with AI
@@ -71,6 +82,10 @@ it into `website/version.json`.
 ### Operation and system
 
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
+- An export during a running calculation waits for the new result. Until now the file could still carry the old size.
+- The parameter bar rejects a dimension beyond its limit and names the limit, instead of leaving the view empty.
+- In the parameter bar every arrow step counts, and the focus stays in the field.
+- If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.
 - Checkmarks in lists are readable in every row, and colours appear as a round dot next to them.
 - The command palette explains tools and file actions in a sentence.
@@ -79,6 +94,7 @@ it into `website/version.json`.
 - In the example project for the second way, the screw holes follow width and thickness.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
+- Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
 
 ## 0.5.1
 

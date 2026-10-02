@@ -12,6 +12,7 @@ benutzt, lässt sich nicht so weitergeben wie der Rest.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from PySide6.QtCore import QByteArray, QEvent, QSize, Qt, QTimer, Signal
@@ -39,7 +40,7 @@ from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
-from app.ui.leash import stop_watching_the_dying
+from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, SPACE, WIDE, DialogScrollArea, fit_dialog_to_screen, make_primary
 
@@ -253,13 +254,19 @@ class PartCatalog(QDialog):
         self.insert_hint = QLabel("", self)
         self.insert_hint.setWordWrap(True)
         self.insert_hint.setVisible(False)
+        # **Ein Satz, der einen Weg nennt, bietet ihn an** (RM-356): In der
+        # leeren Szene stand hier „legen Sie einen Grundkörper an“, und der
+        # modale Katalog ließ keinen Weg dorthin. Die Knöpfe gibt das Fenster
+        # (:meth:`offer_ways`); sichtbar sind sie, solange die Sperre gilt.
+        self.way_buttons: dict[str, QPushButton] = {}
+        self._way: str | None = None
         self._insert_allowed = True
         self._insert_reason = ""
         self._feature_chosen = True
         """Ob im Objektbaum eine Fläche oder Bohrung gewählt ist.
 
-        Vierundzwanzig der siebenundzwanzig Bausteine werden an eine solche
-        Stelle gesetzt; ohne sie wissen sie weder wohin noch in welche
+        Die meisten Bausteine werden an eine solche Stelle gesetzt (gezählt
+        am 02.10.2026: 25 von 35); ohne sie wissen sie weder wohin noch in welche
         Richtung, und die Operation bricht mit „Für diesen Baustein fehlt die
         Stelle, an die er soll" ab. Vorgabe ``True``: Wer die Auskunft nicht
         gibt, bekommt den Katalog wie zuvor."""
@@ -340,7 +347,7 @@ class PartCatalog(QDialog):
         # dem Entfernen, weil beide dieselbe Voraussetzung haben: ein Baustein,
         # der dem Kunden gehört. Beide sind deshalb unsichtbar, solange einer
         # der eingebauten gewählt ist — ein grauer Knopf an
-        # siebenundzwanzig von dreißig Einträgen wäre kein Angebot.
+        # jedem eingebauten Eintrag wäre kein Angebot.
         self.edit_part = QPushButton(tr("Zum Bearbeiten öffnen …"), self)
         self.edit_part.setAccessibleName(tr("Baustein zum Bearbeiten öffnen"))
         # Was der Klick bewirkt, steht am Knopf — er tauscht das offene
@@ -360,6 +367,7 @@ class PartCatalog(QDialog):
 
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
+        self._button_box = buttons
 
         split = QSplitter(Qt.Orientation.Horizontal, self)
         split.addWidget(self.list)
@@ -480,13 +488,39 @@ class PartCatalog(QDialog):
         self._insert_reason = "" if can else reason
         self._show_detail()
 
+    def offer_ways(self, ways: Sequence[tuple[str, str]]) -> None:
+        """Knöpfe unter der Sperre, die zu einem ersten Körper führen (RM-356).
+
+        Je Weg ein Schlüssel und die Beschriftung, die das Fenster seinem
+        Menüeintrag gibt. Sie stehen in der Knopfzeile, direkt unter dem Satz,
+        der sie nennt. Ein Klick schließt den Katalog; welcher Weg gewählt
+        wurde, sagt danach :meth:`way`, und das Fenster geht ihn — ein
+        Operationsdialog oder ein Dateidialog über dem modalen Katalog wäre
+        einer, den man nicht bedienen kann.
+        """
+        for key, label in ways:
+            button = QPushButton(label, self)
+            button.setAutoDefault(False)
+            button.clicked.connect(weak_slot(self, PartCatalog._take_way, key))
+            self.way_buttons[key] = button
+            self._button_box.addButton(button, QDialogButtonBox.ButtonRole.ActionRole)
+        self._show_detail()
+
+    def way(self) -> str | None:
+        """Der Weg, über den der Katalog geschlossen wurde — sonst ``None``."""
+        return self._way
+
+    def _take_way(self, key: str) -> None:
+        self._way = key
+        self.reject()
+
     def set_feature_chosen(self, chosen: bool) -> None:
         """Ob eine Fläche oder Bohrung gewählt ist — die zweite Bedingung.
 
         Sie gilt **je Baustein** und nicht für den ganzen Katalog: Von den
-        siebenundzwanzig werden vierundzwanzig an eine Stelle gesetzt, drei
-        Prüfkörper stehen frei. Eine pauschale Sperre nähme diesen dreien den
-        Weg, den sie haben.
+        Bausteinen wird der größere Teil an eine Stelle gesetzt, der Rest steht
+        frei (``standalone``; gezählt am 02.10.2026: 25 und 10 von 35). Eine
+        pauschale Sperre nähme den freistehenden den Weg, den sie haben.
 
         Und sie **sperrt nicht, sie sagt es** — anders als die Bedingung des
         Fensters darüber. Ein Baustein lässt sich auch über eine eingetragene
@@ -875,6 +909,11 @@ class PartCatalog(QDialog):
             self._insert.setAccessibleDescription(reason)
         self.insert_hint.setText(reason)
         self.insert_hint.setVisible(bool(reason))
+        # Die Wege zu einem ersten Körper gehören zur Sperre der leeren Szene:
+        # Ein freistehender Baustein braucht keinen, dort stünden sie umsonst.
+        blocked = not self._insert_allowed and not (spec is not None and spec.standalone)
+        for button in self.way_buttons.values():
+            button.setVisible(blocked)
         # Derselbe Wechsel entscheidet über den zweiten Knopf. **Hier und
         # nicht in einem eigenen Signalpfad**: Der Zustand hängt an genau
         # derselben Auswahl, und zwei Stellen, die dieselbe Frage
