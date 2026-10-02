@@ -2079,13 +2079,39 @@ def test_update_counting_keeps_no_visitor_identifier_or_referrer(tmp_path: Path)
         assert '<th class="n">Prüfungen</th>' in updates
         assert "Installationen" not in updates
         assert "Installationen (Tag mal Kennzeichen)" not in page
-        # Die Zeile der Version: Name, zuerst und zuletzt gesehen, Tage, dann
+        # Die Zeile: Name, Veröffentlichung, erste und letzte Prüfung, Tage, dann
         # die Prüfungen — zwei Abrufe bleiben zwei, keine Rechnerzahl.
         assert re.search(
-            r"0\.4\.0<span class=\"marke\">aktuell</span></td>(?:\s*<td[^>]*>.*?</td>){3}"
+            r"0\.4\.0<span class=\"marke\">aktuell</span></td>(?:\s*<td[^>]*>.*?</td>){4}"
             r"\s*<td class=\"n\">2</td>",
             updates,
         )
+
+
+def test_update_test_clients_receive_metadata_without_counting(tmp_path: Path) -> None:
+    """Testaufrufe bleiben verfügbar und erzeugen auch kein „unbekannt“."""
+    docroot = _temporary_docroot(tmp_path)
+    metadata = b'{"version":"0.5.1"}'
+    (docroot / "version.json").write_bytes(metadata)
+    with php_server(tmp_path, docroot=docroot) as base:
+        for agent in ("Solidon-Test/0.5.1", "Solidon-Test/0.6.0"):
+            status, _headers, body = _request(
+                f"{base}/count.php?u=1", headers={"User-Agent": agent}
+            )
+            assert (status, body.encode()) == (200, metadata)
+        stats = tmp_path / "stats"
+        assert not list(stats.glob("*.jsonl"))
+        assert not (stats / "rate.json").exists()
+        assert not (stats / "salt.json").exists()
+        # Derselbe Endpunkt zählt einen normalen Paketstart weiterhin.
+        status, _headers, body = _request(
+            f"{base}/count.php?u=1", headers={"User-Agent": "Solidon/0.5.1"}
+        )
+        assert (status, body.encode()) == (200, metadata)
+    rows = [
+        json.loads(line) for path in stats.glob("*.jsonl") for line in path.read_text().splitlines()
+    ]
+    assert len(rows) == 1 and rows[0]["v"] == "0.5.1"
 
 
 def _display_today() -> datetime:
@@ -2293,14 +2319,13 @@ def test_stats_derives_conversion_sources_and_pages_from_the_five_fields(
         66.7,
     )
     assert usage["version_columns"] == ["0.4.1", "0.4.0"]
-    # Die Tage stehen lückenlos bis heute; der 13. ist der Tag, an dem sich
-    # 0.4.0 zum ersten Mal meldete — der 12. ist der erste gespeicherte Tag.
+    # Ohne belegte Veröffentlichung wird aus der ersten Prüfung kein Release.
     per_day = {line["day"]: line for line in usage["versions_per_day"]}
     assert per_day[f"{month}-13"] == {
         "day": f"{month}-13",
         "cells": {"0.4.1": 1, "0.4.0": 1},
         "total": 2,
-        "new": ["0.4.0"],
+        "new": [],
         "release_share_percent": 50.0,
     }
     assert per_day[f"{month}-12"]["new"] == [], "am ersten Tag der Daten ist nichts neu"
@@ -2355,6 +2380,15 @@ def test_stats_gives_every_version_its_column_and_counts_from_its_first_day(
     _write_stats_rows(stats, rows)
     docroot = _temporary_docroot(tmp_path)
     (docroot / "version.json").write_text('{"version": "0.5.0"}', encoding="ascii")
+    (docroot / "release-dates.json").write_text(
+        json.dumps(
+            {
+                name: (today - (age + (age == 40)) * day).strftime("%Y-%m-%d")
+                for name, age in releases
+            }
+        ),
+        encoding="ascii",
+    )
     environment, headers = _stats_test_access(tmp_path)
     with php_server(tmp_path, environment, docroot=docroot) as base:
         status, _headers, page = _request(f"{base}/stats.php", headers=headers)
@@ -2399,6 +2433,76 @@ def test_stats_gives_every_version_its_column_and_counts_from_its_first_day(
         assert re.search(r"</span>" + re.escape(version) + r"</th>", table), version
     assert ">andere<" not in table
     assert '<span class="marke">neu: 0.5.0</span>' in table
+
+
+def test_stats_uses_release_dates_and_excludes_only_proven_prerelease_checks(
+    tmp_path: Path,
+) -> None:
+    """Release ist nicht erste Prüfung; Testzeilen bleiben nur in den Rohdaten.
+
+    Am Release-Tag gibt es noch keine Prüfung der neuen Version. Ihre erste
+    Mehrheit zwei Tage später zählt daher als zwei Tage, nicht als null.
+    """
+    today = _display_today()
+    day = timedelta(days=1)
+    published = today - 7 * day
+    rows = [
+        _stats_row(published - 4 * day, "p", "/", "", "aaaa0001"),
+        _stats_row(published - day, "u", "0.5.1"),
+        _stats_row(published - day, "p", "/", "", "aaaa0001"),
+        _stats_row(published, "u", "0.4.4"),
+        _stats_row(published + 2 * day, "u", "0.5.1"),
+        _stats_row(published + 3 * day, "u", "0.5.1"),
+        _stats_row(today, "u", "0.5.1"),
+        _stats_row(today, "u", "0.3.3"),
+    ]
+    stats = tmp_path / "stats"
+    stats.mkdir(mode=0o700)
+    _write_stats_rows(stats, rows)
+    before = {path.name: path.read_bytes() for path in stats.glob("*.jsonl")}
+    docroot = _temporary_docroot(tmp_path)
+    (docroot / "version.json").write_text('{"version":"0.5.1"}', encoding="ascii")
+    release_day = published.strftime("%Y-%m-%d")
+    (docroot / "release-dates.json").write_text(
+        json.dumps(
+            {
+                "0.5.1": release_day,
+                "0.4.4": "2026-02-30",
+                "other": release_day,
+                "0.3.3": (published - 3 * day).strftime("%Y-%m-%d"),
+            }
+        ),
+        encoding="ascii",
+    )
+    environment, headers = _stats_test_access(tmp_path)
+    with php_server(tmp_path, environment, docroot=docroot) as base:
+        status, _headers, body = _request(f"{base}/stats.php?format=json", headers=headers)
+        html_status, _headers, page = _request(f"{base}/stats.php", headers=headers)
+    assert status == html_status == 200 and "</html>" in page
+    report = json.loads(body)
+    usage = report["usage"]
+    life = {item["version"]: item for item in usage["lifecycle"]}
+    assert usage["updates"] == 5, "die Vorabprüfung fehlt auch im Nenner"
+    assert life["0.5.1"]["published_on"] == release_day
+    assert life["0.5.1"]["first_seen"] == (published + 2 * day).strftime("%Y-%m-%d")
+    assert life["0.5.1"]["days_to_majority"] == 2
+    assert life["0.5.1"]["checks"] == 3
+    assert life["0.5.1"]["first_week_share_percent"] == 66.7  # 2 von 3 in den Tagen 0 bis 6
+    assert life["0.4.4"]["published_on"] is None
+    assert life["0.4.4"]["days_to_majority"] is None
+    assert life["0.4.4"]["first_week_share_percent"] is None
+    assert life["0.3.3"]["published_on"] is not None
+    assert life["0.3.3"]["first_week_share_percent"] is None, "Seiten belegen keine Updateabdeckung"
+    assert not life["0.3.3"]["release_covered"]
+    per_day = {item["day"]: item for item in usage["versions_per_day"]}
+    assert per_day[release_day]["new"] == ["0.5.1"]
+    assert per_day[release_day]["cells"]["0.5.1"] == 0
+    assert per_day[(published - day).strftime("%Y-%m-%d")]["total"] == 0
+    assert "<th>veröffentlicht</th>" in page and "<th>zuerst geprüft</th>" in page
+    assert re.search(r"veröffentlicht am \w{2} " + re.escape(published.strftime("%d.%m.")), page)
+    release_row = page.split('<span class="marke">neu: 0.5.1</span>')[1].split("</tr>")[0]
+    assert '<td class="n">0 %</td>' in release_row, "auch vor der ersten Prüfung: 0 % ab Release"
+    assert {path.name: path.read_bytes() for path in stats.glob("*.jsonl")} == before
 
 
 def test_stats_findings_warn_about_a_silent_counter_and_a_missing_package(
@@ -2975,6 +3079,7 @@ def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
         + "\n".join(
             _php_function(source, name)
             for name in (
+                "release_dates",
                 "entries",
                 "month_rows",
                 "visits_of",

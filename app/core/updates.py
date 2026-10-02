@@ -639,6 +639,18 @@ def signature_ok(data: Mapping[str, Any]) -> bool:
     return ed25519.verify(RELEASE_PUBLIC_KEY, signed_payload(data), signature)
 
 
+def _user_agent() -> str:
+    """Kennzeichnet Quellen und Paketproben, ohne die Updateprüfung abzuschalten.
+
+    ``count.php`` nimmt ``Solidon-Test/`` von der Statistik aus. Für Proben
+    einer gebauten Anwendung gilt dieselbe Kennzeichnung mit
+    ``SOLIDON_UPDATE_TEST=1``; gewöhnliche Installationen behalten ihren
+    bisherigen Absender.
+    """
+    internal = not packaged() or os.environ.get("SOLIDON_UPDATE_TEST") == "1"
+    return f"{'Solidon-Test' if internal else 'Solidon'}/{APP_VERSION}"
+
+
 def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | None:
     """Fragt einmal. Jedes Problem heißt „keine Antwort", nie ein Fehlerdialog.
 
@@ -653,7 +665,7 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         # das, die Prüfung scheiterte still, und der Datenschutztext
         # verspricht ein Programm-Kennzeichen statt eines Bibliotheksnamens
         # (Gesamtreview L-6).
-        payload = (fetch or _get)(url, {"User-Agent": f"Solidon/{APP_VERSION}"}, {})
+        payload = (fetch or _get)(url, {"User-Agent": _user_agent()}, {})
     except Exception as problem:  # ein Netz scheitert auf viele Arten, keine davon ist unsere
         _log.info("update check did not answer: %s", problem)
         return None
@@ -1089,7 +1101,7 @@ def download(
         allow_fragment=False,
     )
     deadline = deadline_after(download_deadline_seconds(package.size))
-    request = urllib.request.Request(address, headers={"User-Agent": f"Solidon/{APP_VERSION}"})
+    request = urllib.request.Request(address, headers={"User-Agent": _user_agent()})
 
     try:
         answer = open_url(request, timeout=DOWNLOAD_TIMEOUT_SECONDS)

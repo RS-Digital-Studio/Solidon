@@ -412,7 +412,10 @@ function visitor_mark(string $salt): string
 function opted_out(): bool
 {
     return ($_SERVER['HTTP_DNT'] ?? '') === '1'
-        || ($_SERVER['HTTP_SEC_GPC'] ?? '') === '1';
+        || ($_SERVER['HTTP_SEC_GPC'] ?? '') === '1'
+        // Quellenstarts und Paketproben erhalten dieselbe Antwort, schreiben
+        // aber weder Zählzeilen noch Kennzeichen oder Ratenzustand.
+        || str_starts_with((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 'Solidon-Test/');
 }
 
 /** Zwei ohne das private Rate-Geheimnis nicht verknüpfbare Minutenkennzeichen. */
