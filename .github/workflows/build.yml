@@ -57,7 +57,7 @@ concurrency:
 jobs:
   quality:
     name: Stil und Format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,7 +65,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
           cache: pip
           cache-dependency-path: |
             constraints.txt
@@ -89,7 +89,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-24.04", "macos-latest"]') || fromJSON('["ubuntu-24.04"]') }}
         shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,7 +97,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
           cache: pip
           cache-dependency-path: |
             constraints.txt
@@ -202,7 +202,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest, ubuntu-24.04, macos-latest]
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
@@ -211,7 +211,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
           cache: pip
           cache-dependency-path: |
             constraints.txt
@@ -294,7 +294,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
           cache: pip
           cache-dependency-path: |
             constraints.txt
@@ -344,7 +344,7 @@ jobs:
         # liegt — ein auf arm64 gebautes Paket startet auf einem Intel-Mac
         # nicht, und das betrifft jedes Gerät vor 2020.
         #
-        # **Drei der vier Labels enden auf `-latest`, und das ist der Punkt.**
+        # **Windows und Apple Silicon enden auf `-latest`, und das ist der Punkt.**
         # Ein `-latest` wandert mit; eine feste Nummer veraltet und stirbt
         # irgendwann. Hier stand `macos-13`, seit dem 04.12.2025 abgeschaltet,
         # und ein Job mit einem toten Label wird nicht abgelehnt — er wird
@@ -356,15 +356,23 @@ jobs:
         # überhaupt so weit kam.
         #
         # Für Intel gibt es kein `-latest`: `macos-latest` ist arm64, und
-        # x64 gibt es nur unter seiner Nummer. Diese eine Zeile veraltet also
-        # zwangsläufig und ist die einzige, die **nachgesehen werden muss** —
-        # aktuell ist `macos-26-intel` (GA seit 26.02.2026).
+        # x64 gibt es nur unter seiner Nummer. Diese Zeile veraltet also
+        # zwangsläufig und **muss nachgesehen werden** — aktuell ist
+        # `macos-26-intel` (GA seit 26.02.2026).
         #
         # Und sie hat ein Ablaufdatum: Apple hat x86_64 aufgegeben, GitHub
         # trägt Intel bis zur Ausmusterung des 26er-Images. Fällt es weg,
         # fällt die Intel-Version — dann sagt die Website das, statt eine
         # Version anzubieten, die niemand mehr baut.
-        os: [windows-latest, ubuntu-latest, macos-26-intel, macos-latest]
+        #
+        # **Linux steht bewusst fest auf `ubuntu-24.04`**, und auch diese
+        # Zeile muss bis zur Ausmusterung von 24.04 nachgesehen werden. Das
+        # Linux-Paket nimmt die Systembibliotheken des Bauservers mit: ihre
+        # Fassungen stehen in der Lizenzbeilage (`third_party_licenses.toml`),
+        # und die glibc des Servers ist die Untergrenze, auf der das AppImage
+        # startet. `ubuntu-latest` wandert ab dem 19.10.2026 auf Ubuntu 26 und
+        # höbe beides still an; ein Wechsel ist eine eigene Entscheidung.
+        os: [windows-latest, ubuntu-24.04, macos-26-intel, macos-latest]
     env:
       # Keine Geheimnisse: Der Modus ist eine gewöhnliche Repository-Variable.
       # Schutz kommt ausschließlich von der Produktionsumgebung an den
@@ -377,7 +385,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
           cache: pip
 
       - name: Signiermodus fail-closed prüfen
@@ -675,7 +683,7 @@ jobs:
     name: Linux-Releaseakte prüfen
     needs: package
     if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
@@ -685,7 +693,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
       - name: Abhängigkeiten der Zielumgebung
         # Die Releaseakte liest die installierten Wheels
         # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
@@ -910,7 +918,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
       - name: Abhängigkeiten der Zielumgebung
         # Die Releaseakte liest die installierten Wheels
         # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
@@ -1155,7 +1163,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
       - name: Signierten App-Baum laden
         if: env.MACOS_SIGNING_MODE != 'unsigned'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1384,7 +1392,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
       - name: Abhängigkeiten der Zielumgebung
         # Die Releaseakte liest die installierten Wheels
         # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
@@ -1458,7 +1466,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' &&
       inputs.check_latest == true)
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1466,7 +1474,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
           cache: pip
 
       - name: Qt-Systembibliotheken

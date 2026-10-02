@@ -19,7 +19,8 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
 | `plan.py` | Welche Operation eine Datei einliest, für Fenster und Kommandozeile: freie Namen (`names_in_use`, `copy_name`), `is_only_imported` (trägt ein Dokument nur Eingelesenes?), STEP als Baugruppe (`BodyChoice`, `with_selection`), gemeinsames Aufsetzen (`imported_group`, `imported_group_for_bed`) |
 | `fetch.py` | Eine Modelldatei aus dem Netz (§16.3, §32), immer über `_open_download` und die gemeinsame HTTP-Grenze; eine Adresse von Printables, Thingiverse, MakerWorld, Cults3D, MyMiniFactory oder Thangs ohne Dateiendung ist eine Seite und wird ohne Netzzugriff mit dem Weg über deren Herunterladen-Knopf beantwortet (`model_page_host`) |
 | `archive.py` | Ein ZIP **vor** dem Einbetten auflösen: nur das Modell kommt ins Projekt, bei mehreren wird gefragt, Grenzen wie beim 3MF, Pfadtricks übergangen, GLTF-Begleitdateien aus demselben Archiv. `IMPORT_SUFFIXES` gilt Dateidialog, Ablage, Netz und Kommandozeile, `plan.MODEL_SUFFIXES` den Operationen |
-| `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen, extrudieren; SVG-Vorgaben für fehlende Rechteckpositionen nur in der Parserkopie |
+| `outline.py` | SVG/DXF-Profile mit Innenringen lesen, prüfen, auswählen, extrudieren; DXF liest trimesh |
+| `svg_drawing.py` | SVG-Elemente über `xml.etree` zu `Path2D`-Argumenten, ohne lxml: Transformationen nach SVG 1.1 (auch `rotate` in Grad, `skewX`/`skewY`), Ellipsen, abgerundete Rechtecke und Bögen unter verzerrender Abbildung als Punktfolge in `MAX_FACET_SAG`, `use` mit Schleifen- und Mengengrenze; nicht Gezeichnetes (`defs`, `clipPath`, `display:none` …) fehlt |
 
 ## Was die Stufe entscheidet
 

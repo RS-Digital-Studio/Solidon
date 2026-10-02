@@ -57,6 +57,7 @@ scrive in `website/version.json`.
 - I motivi sulle facce cilindriche dei modelli importati restano chiusi quando li modifichi.
 - Nella cronologia di un corpo STEP puoi riordinare i passi o inserirne uno prima, anche se un passo successivo riguarda un foro. Il riferimento segue il foro.
 - Un foro spostato o duplicato con una nuova direzione resta esatto su un corpo STEP.
+- Una caratteristica riconosciuta a più di un metro dall'origine mantiene il suo posto quando la modifichi. Prima il campo tagliava il numero in silenzio e il foro si spostava.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
 - Tronca ora taglia anche in obliquo: in alto scegli il «Piano»: su un asse con inclinazione, parallelo a una faccia, per uno spigolo o per tre punti cliccati nella vista.
@@ -76,6 +77,7 @@ scrive in `website/version.json`.
 - Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
+- I disegni SVG arrivano corretti: rotazioni, inclinazioni, angoli arrotondati, ellissi e archi ellittici sono giusti, e i livelli nascosti restano fuori.
 - La destinazione di «Allinea alla caratteristica» parte vuota, e il primo clic nella vista la riempie. «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
 - Un altro tratto in una cavità appena scavata la rende più profonda, anche con un pennello piccolo. Finora restava senza effetto e contava come mancato.
@@ -98,6 +100,7 @@ scrive in `website/version.json`.
 - Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
 - La barra dei parametri rifiuta una misura oltre il suo limite invece di lasciare la vista vuota.
 - Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
+- Nella barra dei parametri le misure di due parallelepipedi portano il loro numero, e una misura con un proprio campo di lavoro ha un cursore.
 - Se un passo attende una domanda, «Applica» resta disponibile e la domanda compare.
 - Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.
 - Le spunte negli elenchi si leggono in ogni riga, e i colori compaiono come un pallino rotondo accanto.
