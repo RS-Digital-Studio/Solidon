@@ -172,6 +172,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-452 — Projektwechsel übernimmt fremden Eingabetext und alte Grenzablehnung](#rm-452) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-03: gleiche Parameterzeilen ersetzen keine Dokumentidentität; Gegenfall noch auszuführen |
 | [RM-453 — Eingabe korrigieren führt zusammengesetzte Ausdrücke zum falschen Feld](#rm-453) | Bedienung und Darstellung | Quellenreview `6c9420b1f`, R6C942-04: direkte Bindung zum Maß, zusammengesetzter Ausdruck zur Formel; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
+| [RM-447 — Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren](#rm-447) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-354 (archiviert); Leiste zeigt den echten Wert, abgeleitete Maße, Fernsteuerung mit Grenzen |
+| [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -2813,6 +2815,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   beiden Kernen gleich; alte Projekte öffnen unverändert. Bauplan §21, §25, Regel 4.
   **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Schräg abschneiden an jeder Ebene (Winkel, Fläche, drei Punkte), an jedem Körper (Netz, exakt, Mehrschaler); dient Fronten, Fasen ganzer Seiten und dem Kürzen auf Druckhöhe. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 12 Teile mit schräger Front (Wedge-Lock, Laptop-Ständer, Handyständer, Schaber, Organizer). Abnahme an mindestens drei unterschiedlichen Korpusmodellen.
   Nachprüfung am Stand `0041000a0` (nach `3006acb62`, `8401b2c64`, `bf829b68d`): unvollständig. Gut: Neigung und Fläche analytisch richtig an beiden Kernen und Güten, außermittig und an Mehrschalern; sechs Korpusmodelle aus `F:\3D Dateien` (zwei STEP) vollständig und geschlossen; alte Projekte rechnen bitgleich. Offen: Ebene durch drei Punkte bzw. eine Kante; Test am exakten Kern und für `no_plane`; die Gegenprobe „Kippachse durch den Ursprung“ bleibt grün. Neu: Mit gewählter Fläche belegt der Dialog „An Fläche“ und die Position aus der Körpermitte vor — *Abschneiden* öffnet mit „Diese Ebene schneidet nichts vom Objekt ab.“ (vorher gültiger Schnitt); Achse, Neigung und „Neigen um“ wirken neben „An Fläche“ nicht, bleiben aber bedienbar (kein `depends_on`) — 30° um die eigene Achse wird still übergangen; „Kleinere Seite — bei Z unten“ stimmt an einer Unterseite nicht; mit Vorgabe Kippachse x wird jede Neigung an Achse x abgewiesen. Belege `F:\solidon-review-reports\review-0041000a0.md`, Sonden `v6_rm400_*`.
+  Nachprüfung am Stand `4373b5f12` (nach `1c55ac1cb`, `c2ed098ec`): exaktes Abschneiden behoben (exakt bleibt exakt, analytische Volumina, STEP-Modelle exakt, Altprojekt bitgleich). Weiter offen wie vermerkt: Ebene durch drei Punkte, M3/M4. Niedrig: die neuen exakten Neigungstests hängen nicht vom Winkel ab — eine achsparallele Mutante bleibt in 7 von 8 Fällen grün.
 
 <a id="rm-402"></a>
 
@@ -2857,6 +2860,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   rot. Bauplan §21, §25, Regeln 6, 17.
   Belege: `F:\solidon-review-reports\review-7f0de659d.md`, Sonden `r2_rm225_*.txt`,
   `r2_gegenprobe_axial.txt`, `r2_ausrichtung_laufzeit.txt`.
+  Nachprüfung am Stand `4373b5f12` (nach `fa7780785`): unvollständig. Verbessert: verschobener `deckel_basis.stl` 0 statt 9 Selbstschnitte, 37 Flächen; CAD-Nullpunkt frei; 26 112 Trägerecken 0,26 statt 1,60 s; feiner Träger (101 376 Ecken) wird ausgerichtet; Rest (110, 110) als strenges xfail registriert. Offen (mittel): Ø 80 mit 48 Rillen behält 2 Selbstschnitte ohne Befund, in Entwurf und fein, bei *Entfernen* und *Ändern*. Tests: der Test nimmt Ø 80 mit 24 Rillen; die Fälle mit feinem Träger sind am Elterncommit, mit Identitätsmutante und alter 1-nm-Grenze grün (stellen den Fehler nicht nach); nur Güte „fein“. Belege `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`, Sonden `v7g_rm404_*`.
 
 <a id="rm-443"></a>
 
@@ -4279,6 +4283,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   die laut Projektregel erst beim Release läuft.
   Registerabgleich 02.10.: umgesetzt (`BoundedSpin` in Merkmalfenster, Druckeinstellungen und Operationsdialog), offen nur die Fensterabnahme; Titel und Registerzeile („fehlt noch in Merkmalfenster und Druckeinstellungen“) sind veraltet.
   Druckeinstellungen: Die zwölf Offscreen-Fenstertests der Grenzablehnung in `tests/test_print_settings_ui.py` sind grün, seit Aus- und Einblenden die abgelehnte Zahl nicht mehr verwerfen, ein Heben außerhalb der Suche seinen Umschaltersatz einlöst und ein nachgetragenes Haftungsmaß nur sein eigenes Feld lädt. Die native Fensterabnahme bleibt an allen vier Orten offen.
+  Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
 
 <a id="rm-291"></a>
 
@@ -4493,6 +4498,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`,
   R6C942-01 (`main_window.py:7829`, feste Quellzeile). Quellenbefund;
   Gegenfall im Abschlussabgleich nicht ausgeführt. Bauplan §2.7, §2.8, §29.
+  Nachprüfung am Stand `4373b5f12` über die Oberfläche (nach `18ec6d38e`): unvollständig. Der Abnahmefall ist erfüllt (Export wartet auf das neue Ergebnis). **Regression gegenüber 0.5.1:** Export nach einer abgebrochenen Rechnung — in 0.5.1 entstand sofort eine Datei (der gezeigte Stand), jetzt entsteht keine, und die Statuszeile sagt „Export wartet auf die laufende Berechnung …“, obwohl nichts rechnet (`app/ui/main_window.py:7856`, `:7979`); der Fix darf nicht zurück zum gemischten Stand, sondern muss nach einem Abbruch den gezeigten, vollständigen Stand schreiben oder mit Satz absagen. Zwilling offen: *Slicen* und *Im Slicer öffnen* übergeben während einer Neuberechnung den alten Stand (Auftrag 140 mm bei Dokument 150; `app/ui/print_settings_dialog.py:8031`, `:7977`). Test: `test_a_waiting_export_writes_nothing_when_the_chain_halts` bleibt grün ohne die Haltprüfung (mit Halt an Schritt 2 schreibt der Code dann „Exportiert: teil.stl“). RM-426 (Entwurfsnetz) nicht berührt. Belege `F:\solidon-review-reports\verif-4373b5f12-oberflaeche.md`, Sonden `v7u_rm352_*`.
 
 <a id="rm-358"></a>
 
@@ -4827,6 +4833,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   füllt „Ziel“, B sitzt bündig rechts; beide Tests grün. Bauplan §2.6, Regel 21.
   Belege: `verif-4cf460e87-oberflaeche.md`, Sonden `v4u_nachbau\v4u_a1_ausrichten.py`,
   `v4u_test_rm394.py`.
+  Nachprüfung am Stand `4373b5f12` über die Oberfläche: nicht behoben — `46e6113ed` ändert nur Handbuch und Changelog; der erste Bildklick am Hauptfenster wird weiter nicht angenommen (`take_feature`), der alte Test bleibt rot.
 
 <a id="rm-418"></a>
 
@@ -4936,6 +4943,45 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
   zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
   geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
+
+<a id="rm-447"></a>
+
+- [ ] **RM-447 — Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren.**
+  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (Hauptfenster offscreen); Folgepunkt zu
+  RM-354 (archiviert, Abnahme dort erfüllt).
+  - **Regression gegenüber 0.5.1:** Datei mit Breite 5000 (Halt an Schritt 1): in 0.5.1 zeigte die
+    Leiste „5000,00“, 1000 + Enter löste den Halt; jetzt zeigt sie „1000,00“, weil Qt auf die
+    Feldgrenze klemmt (`app/ui/panels.py:3682–3690`, `:3766–3767`) — 1000 + Enter bewirkt nichts,
+    das Dokument bleibt 5000, der Halt bleibt; *Eingabe korrigieren* führt genau in dieses Feld.
+  - **Abgeleitetes Maß** (`=@breite*2`): die Sitzung lehnt ab, die Leiste zeigt weiter „600,00“
+    (`app/ui/main_window.py:22258`).
+  - **Fernsteuerung:** `set_parameter` 5000 antwortet „Der Wert ist schon so eingestellt.“;
+    `add_parameter` verliert `minimum`, `maximum` und `title`, obwohl das MCP-Schema sie anbietet
+    (`main_window.py:17984–17995`).
+  **Fix:** Die Leiste zeigt den gespeicherten Wert (auch außerhalb der Grenze, markiert) und nimmt
+  jede gültige Korrektur an; abgeleitete Maße zeigen den Rückweg; Fernsteuerung meldet die Grenze
+  und übernimmt die angebotenen Felder.
+  **Abnahme (über die Oberfläche):** Datei mit Breite 5000 öffnen → Leiste zeigt 5000, 1000 + Enter
+  löst den Halt; abgeleitetes Maß zeigt nach Ablehnung den alten Wert; `set_parameter` 5000 →
+  Ablehnung mit Grenze; `add_parameter` mit Grenzen speichert sie. Bauplan §13, §2.7, §15.3.
+  Belege: `F:\solidon-review-reports\verif-4373b5f12-oberflaeche.md`, Sonde
+  `v7u_vergleich_051.py`.
+
+<a id="rm-448"></a>
+
+- [ ] **RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**
+  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (echter Filterweg); Folgepunkt zu
+  RM-437 (archiviert; Leerzeichen in Rückmeldebogen und Chat sind behoben). Besteht schon in 0.5.1,
+  keine Regression.
+  **Fehlerfall:** Solange eine Vorschau mit Differenz läuft, nehmen Haken, Auswahlpunkte und Knöpfe in
+  jedem Fenster die Leertaste nicht an, auch die Skala des Rückmeldebogens
+  (`app/ui/viewport.py:3714–3727`, anwendungsweiter Tastenfilter).
+  **Fix:** Der Filter der Ansicht greift nur, wenn die Ansicht den Fokus hat.
+  **Abnahme:** Test über die Oberfläche: Vorschau offen, Leertaste auf einem Haken im Dialog und im
+  Rückmeldebogen schaltet. Bauplan §19.2 (Tastaturbedienung). Nebenbei: Die Zählkommentare der
+  Bausteine in `selection_operations.py`/`catalog.py` sind seit RM-398/399 wieder falsch (gemessen
+  26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
+  Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
 
 ## KI und Generatoren
 
