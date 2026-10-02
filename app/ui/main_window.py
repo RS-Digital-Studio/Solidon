@@ -20170,9 +20170,15 @@ class MainWindow(QMainWindow):
 
         Während eine Datei lädt, ist die Szene auch leer; dann gehört das
         Bild der Ladeanzeige und nicht der Frage, womit man anfängt (RM-370).
+        Gefragt wird das gezeigte Bild: Ein Halt am ersten Schritt ist leer,
+        zu sehen bleibt aber das letzte vollständige Bild (RM-451).
         """
         result = self.session.last_result
-        empty = result is not None and not result.scene.objects and not self.session.busy
+        empty = (
+            result is not None
+            and not self._picture_for(result).scene.objects
+            and not self.session.busy
+        )
         self.viewport.invitation.set_chat_available(self.session.agent_backend is not None)
         self.viewport.invitation.show_for(empty and not self._on_start_screen)
 
@@ -20237,10 +20243,15 @@ class MainWindow(QMainWindow):
         self.viewport.set_analysis_map(None, None)
         self.viewport.set_layer(None)
         self.analysis_bar.show_legend(None)
+        # Die Ansichtsfilter gehören dem Bild, das gezeigt wird. Hält die Kette
+        # am ersten Schritt an, ist das das letzte vollständige Bild, nicht das
+        # leere Haltergebnis — an diesem gemessen fielen Ausblendung und
+        # Plattenwahl des erhaltenen Bilds weg (RM-451).
+        picture = self._picture_for(result)
         # Ausgeblendetes, das die Szene nicht mehr enthält, wird vergessen —
         # sonst blendet eine wiederhergestellte Nummer später etwas aus, das
         # niemand versteckt hat.
-        self._hidden &= set(result.scene.objects)
+        self._hidden &= set(picture.scene.objects)
         self.viewport.set_hidden(self._hidden)
         self.object_tree.set_hidden(self._hidden)
         # **Und dasselbe für das Merkmalsfenster** — es war der Zwilling, den
@@ -20275,7 +20286,7 @@ class MainWindow(QMainWindow):
         self.object_tree.show_scene(result, self.session.project.document)
         effective_settings = self.effective_print_settings()
         self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
-        plates = {entry.plate for entry in result.scene.objects.values()}
+        plates = {entry.plate for entry in picture.scene.objects.values()}
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
         # unter einem Werkzeug, das Teile auseinanderzieht.
@@ -20304,7 +20315,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
-        self.viewport.show_scene(self._picture_for(result))
+        self.viewport.show_scene(picture)
         self._show_invitation()
         self._reveal_split_result(result)
         self.history_panel.show_document(

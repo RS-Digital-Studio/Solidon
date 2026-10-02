@@ -20303,6 +20303,91 @@ def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> 
     assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
 
 
+def _two_plates_bound(window: MainWindow) -> tuple[Any, float]:
+    """Zwei Bretter auf zwei Platten, das erste liest *breite* — zurück Ergebnis und Feldgrenze."""
+    from app.core.registry import REGISTRY
+    from app.i18n import _
+
+    session = window.session
+    assert session.add_parameter(
+        Parameter(name="breite", value=200.0, unit="mm", title=_("Breite"))
+    )
+    for width in ("=@breite", 200.0):
+        session.apply(
+            "Anlegen",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": width, "depth": 200.0, "height": 20.0}
+                )
+            ],
+        )
+        assert session.wait_for_idle(30_000)
+    result = session.last_result
+    assert result is not None
+    session.apply(
+        "Anordnen",
+        [
+            OperationDraft(
+                op="arrange_bed", inputs=tuple(result.scene.objects), params={"plates": 2}
+            )
+        ],
+    )
+    assert session.wait_for_idle(30_000)
+    result = session.last_result
+    assert result is not None
+    assert {entry.plate for entry in result.scene.objects.values()} == {0, 1}, "zwei Platten"
+    entry = {item.name: item for item in REGISTRY.get("create_box").params.spec()}["width"]
+    assert entry.maximum is not None
+    return result, float(entry.maximum)
+
+
+def test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid(window: MainWindow) -> None:
+    """Das erhaltene Bild behält Ausblendung und Plattenwahl (RM-451).
+
+    ``_show_scene`` schnitt die Ausblendungen mit dem leeren Haltergebnis und
+    zählte die Platten daran — das alte Bild kam mit allen Körpern und auf
+    „Alle Platten“ zurück. Gegenfall: eine echte Löschung räumt die Filter
+    weiterhin auf.
+    """
+    import dataclasses
+
+    window.show()
+    result, high = _two_plates_bound(window)
+    QApplication.processEvents()
+    hidden = next(key for key, entry in result.scene.objects.items() if entry.plate == 0)
+    window._on_visibility([hidden], False)
+    window.header.plates.setCurrentIndex(2)
+    QApplication.processEvents()
+    assert window.header.plate == 1 and window.viewport._plate == 1, "Platte 2 gewählt"
+
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    halted = window.session.evaluate_now()
+    assert halted.stopped_at == 1 and not halted.scene.objects
+    window._on_scene(halted)
+    QApplication.processEvents()
+
+    shown = window.viewport._requested_result
+    assert shown is not None and hidden in shown.scene.objects, "das alte Bild bleibt"
+    assert hidden in window._hidden, "die Ausblendung des alten Bilds bleibt"
+    assert hidden in window.viewport._hidden
+    assert window.header.plate == 1, "die gewählte Platte bleibt"
+    assert window.viewport._plate == 1
+    assert not window.viewport.invitation.isVisible(), "kein „Womit fangen Sie an?“ über Körpern"
+
+    document.parameters["breite"] = dataclasses.replace(document.parameters["breite"], value=200.0)
+    window._on_scene(window.session.evaluate_now())
+    window.session.apply(
+        "Löschen", [OperationDraft(op="delete_object", inputs=(hidden,), params={})]
+    )
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert hidden not in window._hidden, "eine echte Löschung räumt die Ausblendung weg"
+    assert hidden not in window.viewport._hidden
+
+
 def _a_stored_width_beyond_its_field(window: MainWindow) -> float:
     """*Breite* jenseits der Feldgrenze, wie eine Datei sie mitbringt — zurück die Grenze."""
     import dataclasses

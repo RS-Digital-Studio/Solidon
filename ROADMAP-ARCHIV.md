@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-451: Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl (02.10.2026)](#rm-451-bei-einem-halt-verliert-das-erhaltene-bild-ausblendungen-und-plattenwahl-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
@@ -36642,3 +36643,22 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
 
 **Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-451: Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl (02.10.2026)
+
+<a id="rm-451-bei-einem-halt-verliert-das-erhaltene-bild-ausblendungen-und-plattenwahl-02102026"></a>
+<a id="rm-451"></a>
+
+**RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl.**
+  Quellenreview `6c9420b1f`, R6C942-02; Folge zum archivierten RM-354.
+  `_show_scene` bereinigt `_hidden` und Plattenzahl aus dem leeren aktuellen
+  Haltergebnis, bevor `_picture_for` das letzte vollständige Bild wählt
+  (`app/ui/main_window.py:19852–19916` am geprüften Stand).
+  **Fix:** Zuerst das gezeigte Bild bestimmen, dessen Ansichtsfilter erhalten.
+  **Abnahme:** Halt am ersten Schritt lässt ausgeblendete Körper und gewählte
+  Platte des erhaltenen Bilds unverändert; echte spätere Körperlöschung
+  bereinigt Filter weiterhin. Bauplan §15.3, §18.8, §25.
+  Beleg: `konzepte/nachweise-release-0.5.1/reports/remote-6c942-oberflaeche.md`.
+  Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
+
+**Abschluss:** `_show_scene` bestimmt zuerst das gezeigte Bild (`_picture_for`) und misst daran Ausblendungen und Plattenzahl; ein Halt am ersten Schritt behält so die ausgeblendeten Körper und die gewählte Platte des erhaltenen Bilds, eine echte Löschung räumt weiter auf. Mitgefunden am Fenster: Über dem erhaltenen Bild stand die Einladung „Womit fangen Sie an?“, weil `_show_invitation` das leere Haltergebnis fragte; sie fragt jetzt ebenfalls das gezeigte Bild. Test: `test_ui.py::test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid` (zwei Platten, eine Ausblendung, Platte 2, Halt am ersten Schritt; Gegenfall Löschung), am Ausgangsstand rot, einzeln grün; die Nachbarn zu Halt und Einladung (9 Fälle) grün. Fenstersonde am echten Fenster (Plattenwahl per Tastatur, Ausblenden über das Signal des Kontextmenüs, Halt über eine gespeicherte Breite jenseits der Feldgrenze): am Stand `origin/main` 3 von 6 (Ausblendung leer, „Alle Platten“, Wähler verborgen), danach 7 von 7. Umgesetzt von Claude (Thread „Bedienung und KI“).
