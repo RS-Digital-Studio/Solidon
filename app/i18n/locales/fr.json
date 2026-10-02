@@ -810,6 +810,7 @@
   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura ne connaît pas « {printer} ». Le fichier d'impression commence donc sans le code de démarrage du fabricant, sans ligne de purge et sans maillage du plateau.",
   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura n'accepte les réglages que sous forme de profil. Il se trouve à côté du modèle : dans Cura, choisissez Gérer les profils → Importer.",
   "Cura-Drucker": "Imprimante Cura",
+  "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen Sie es dann noch einmal.": "Les facettes de l'enveloppe sous ce motif n'ont pas pu être ramenées sur leurs plans ; des triangles peuvent se croiser dans le résultat. Réparez le maillage et réessayez.",
   "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen ganzer Seiten. Null schneidet gerade.": "Incline le plan de coupe de cet angle — pour des façades obliques et des chanfreins sur des côtés entiers. Zéro coupe droit.",
   "Neigen um": "Incliner autour de",
   "Neigung": "Inclinaison",

@@ -810,6 +810,7 @@
   "Cura kennt „{printer}“ nicht. Die Druckdatei beginnt deshalb ohne den Startcode des Herstellers, ohne Spüllinie und ohne Bettnetz.": "Cura does not know “{printer}”. The print file therefore starts without the manufacturer's start G-code, without a purge line and without a bed mesh.",
   "Cura übernimmt Einstellungen nur als Profil. Es liegt neben dem Modell: in Cura unter Profile verwalten → Importieren wählen.": "Cura only takes settings as a profile. It is next to the model: in Cura, choose Manage profiles → Import.",
   "Cura-Drucker": "Cura printer",
+  "Die Mantelfacetten unter diesem Muster ließen sich nicht auf ihre Ebenen legen; im Ergebnis können sich Dreiecke schneiden. Reparieren Sie das Netz und versuchen Sie es dann noch einmal.": "The shell facets under this pattern could not be laid onto their planes; triangles may intersect in the result. Repair the mesh and try again.",
   "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen ganzer Seiten. Null schneidet gerade.": "Tilts the cutting plane by this angle — for slanted fronts and bevels across whole sides. Zero cuts straight.",
   "Neigen um": "Tilt about",
   "Neigung": "Tilt",
