@@ -1662,6 +1662,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "style": _("Stil"),
     "steps": _("Schritte"),
     "stress": _("Biegespannung"),
+    "stroke": _("Zug"),
     "strokes": _("Striche"),
     "suffix": _("Endung"),
     "suggested_name": _("Freier Name"),

@@ -63,9 +63,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con «En ambas caras», «Aplicar texto» pone las letras también en la cara posterior, legibles desde fuera. Sirve para banderas, carteles y colgantes.
 - La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la cama. Los proyectos antiguos conservan su forma.
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
-- Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
+- Un trazo sobre el plano de simetría actúa una vez en lugar de dos, y justo al lado el trazo y su reflejo se funden con suavidad.
 - La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
-- Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
+- Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe y antes de exportar, con «Mostrar el punto» y «Deshacer el trazo».
 - En la ventana, «Fusionar suavemente» calcula ahora fino, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.
 - Una medida tecleada como longitud 40 estira el dibujo solo en esa dirección. El cuerpo resultante queda cerrado y apoyado en la cama.

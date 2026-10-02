@@ -230,6 +230,7 @@ def plan_export(
     scene: Scene | None = None,
     document: Document | None = None,
     checked: Sequence[Finding] | None = None,
+    evaluated: Sequence[Finding] = (),
 ) -> ExportPlan:
     """Ermittelt die Dateinamen und führt die Prüfung vor dem Export aus.
 
@@ -284,6 +285,7 @@ def plan_export(
             export_format,
             scene=scene,
             document=document,
+            evaluated=evaluated,
         )
     )
     if export_format != "step":
@@ -772,6 +774,7 @@ def check_before_export(
     scene: Scene | None = None,
     document: Document | None = None,
     cancelled: CancelToken | None = None,
+    evaluated: Sequence[Finding] = (),
 ) -> list[Finding]:
     """Ein Bericht vor dem Schreiben, keine Sperre (§29).
 
@@ -786,6 +789,14 @@ def check_before_export(
     Mindeststärke. Ohne ``scene`` bleiben sie ungestellt — ein Aufrufer, der
     keine Szene hat, bekommt den Bericht, den er belegen kann, und keinen
     erfundenen (Regel 21).
+
+    **Und was die Auswertung schon weiß, sagt der Export noch einmal**
+    (``evaluated``, :data:`CARRIED_TO_EXPORT`): Ein Formzug, der die Wand
+    durchstochen hat, stand im Prüfbericht, der Export lief trotzdem ohne
+    Hinweis (RM-419). Nachmessen hieße, jeden Körper ganz auf
+    Selbstdurchdringung zu prüfen — die Auswertung hat es um die bewegten
+    Stellen schon getan, und was ein späterer Schritt behoben hat, steht dort
+    nicht mehr.
     """
     from app.core.scene.cancel import NeverCancelled
 
@@ -867,8 +878,19 @@ def check_before_export(
     )
     findings.extend(_licence_findings(sources))
     findings.extend(_fits_and_walls(objects, profile, scene, document, token))
+    exported = {entry.id for entry in objects}
+    findings.extend(
+        finding
+        for finding in evaluated
+        if finding.code in CARRIED_TO_EXPORT and finding.object_id in exported
+    )
     token.raise_if_cancelled()
     return findings
+
+
+#: Befunde der Auswertung, die die Prüfung vor dem Export weitersagt: was am
+#: Körper kaputt ist und sich nicht ohne Weiteres nachmessen lässt.
+CARRIED_TO_EXPORT: Final = frozenset({"sculpt.pierced"})
 
 
 def _fits_and_walls(

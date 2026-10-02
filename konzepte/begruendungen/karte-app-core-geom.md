@@ -396,6 +396,12 @@ nicht über `ceil` einer Bibliotheksfunktion.
 Splinekurve mit begrenzter Sehnenabweichung, Abbruch und Punktbudget.
 Ohne diese optionale Grenze bleibt die bisherige Abtastung erhalten.
 
+### Der Netzkern im Hilfsprozess
+
+Die ursprüngliche Konstruktorursache eines Hilfsprozesses bleibt auswertbar:
+Erwartete Fehlstarts verbrauchen ihr Kontingent, unerwartete gelten nicht als
+gewöhnliche Startabsage (aus der Karte verschoben, deren Budget es verlangte).
+
 ### Bewegen und Ausrichten
 
 *Früher im Kopf der Karte, HEAD-Fassung.*

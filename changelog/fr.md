@@ -63,9 +63,9 @@ dans `website/version.json`.
 - Avec « Sur les deux faces », « Appliquer du texte » pose aussi les lettres au dos, lisibles de l'extérieur. Pratique pour drapeaux, panneaux et étiquettes.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
-- Un trait sur le plan de symétrie agit une fois au lieu de deux.
+- Un trait sur le plan de symétrie agit une fois au lieu de deux, et juste à côté le trait et son reflet se fondent en douceur.
 - La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
-- Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
+- Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport et l'export le signalent, avec « Montrer l'endroit » et « Retirer le trait ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant finement, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.
 - Une cote tapée comme longueur 40 n'étire l'esquisse que dans cette direction. Le corps obtenu reste fermé et posé sur le plateau.

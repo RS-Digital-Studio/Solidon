@@ -150,6 +150,7 @@ from app.core.geom.sculpt import (
     median_edge,
     stages,
     stroke_at,
+    strokes_from_text,
     strokes_to_text,
 )
 from app.core.geom.section import SectionPlane, plane_through
@@ -1207,6 +1208,7 @@ class _ExportWorker(Worker):
         scene: Any = None,
         document: Any = None,
         checked: list[Finding] | None = None,
+        evaluated: Sequence[Finding] = (),
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -1222,6 +1224,8 @@ class _ExportWorker(Worker):
         self._all_objects = tuple(all_objects) if all_objects is not None else tuple(objects)
         self._scene = scene
         self._document = document
+        self._evaluated = tuple(evaluated)
+        """Die Befunde der Auswertung, aus der die Körper stammen (RM-419)."""
         #: Ein schon erhobener Bericht — dann wurde die Frage bereits gestellt
         #: und beantwortet. ``None`` heißt „noch nicht geprüft"; eine **leere**
         #: Liste ist eine Antwort und keine fehlende.
@@ -1255,6 +1259,7 @@ class _ExportWorker(Worker):
             scene=self._scene,
             document=self._document,
             checked=list(findings),
+            evaluated=self._evaluated,
         )
 
     def work(self) -> None:
@@ -1269,6 +1274,7 @@ class _ExportWorker(Worker):
                     scene=self._scene,
                     document=self._document,
                     cancelled=self.cancelled,
+                    evaluated=self._evaluated,
                 )
                 self.cancelled.raise_if_cancelled()
                 if any(entry.severity in ("warning", "error") for entry in found):
@@ -5561,6 +5567,31 @@ class MainWindow(QMainWindow):
         if error.op_id is not None:
             self._suppress_history_steps([int(error.op_id)])
 
+    def _take_back_stroke(self, error: AppError) -> None:
+        """*Zug zurücknehmen*: den Zug, der die Wand durchstochen hat, aus seiner
+        Formsitzung nehmen (RM-419).
+
+        Der Befund nennt ihn ab eins (``values["stroke"]``). Eine
+        Parameteränderung am Schritt, also eine Transaktion: Strg+Z holt den
+        Zug zurück, und keine Nachfrage davor (Regel 19).
+        """
+        number = error.values.get("stroke")
+        if error.op_id is None or number is None:
+            return
+        operation = next(
+            (entry for entry in self.session.project.document.ops if entry.id == error.op_id),
+            None,
+        )
+        if operation is None or operation.op != "sculpt_strokes":
+            return
+        strokes = strokes_from_text(str(operation.params.get("strokes", "")))
+        index = int(float(number)) - 1
+        if not 0 <= index < len(strokes):
+            return
+        del strokes[index]
+        self.session.change_params(operation.id, {"strokes": strokes_to_text(strokes)})
+        self.announce(tr("Zug zurückgenommen — Strg+Z holt ihn wieder."))
+
     def _suppress_along_after_error(self, error: AppError) -> None:
         """„Diesen Schritt mit ausschalten": dieselben Schritte und der, an dem es hielt."""
         steps = [int(step) for step in str(error.values.get("steps", "")).split(",") if step]
@@ -8008,6 +8039,9 @@ class MainWindow(QMainWindow):
             # sie herum. Ohne beides bliebe die Prüfung, was sie war.
             scene=result.scene,
             document=document,
+            # Und was die Auswertung schon fand: Ein durchstochener Formzug
+            # stand im Prüfbericht und nicht vor dem Schreiben (RM-419).
+            evaluated=result.scene.report.findings,
         )
         self._run_export(worker)
 
@@ -21503,6 +21537,7 @@ class MainWindow(QMainWindow):
             # beenden — alle rücknehmbar, alle ohne Nachfrage (Regel 19).
             "reactivate_step": self._reactivate_after_error,
             "suppress_step": self._suppress_after_error,
+            "take_back_stroke": self._take_back_stroke,
             "suppress_along": self._suppress_along_after_error,
             "stop_inserting": lambda _error: self.session.stop_inserting(),
             "enter_licence_key": lambda _error: self.action_activate(),

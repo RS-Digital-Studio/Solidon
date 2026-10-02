@@ -62,9 +62,9 @@ scrive in `website/version.json`.
 - Con «Su entrambe le facce», «Applica testo» mette le lettere anche sul retro, leggibili da fuori. Va bene per bandierine, cartelli e targhette.
 - La simmetria in «Modella» specchia al centro del corpo, anche lontano dal centro del piano. I progetti più vecchi mantengono la loro forma.
 - Il pennello di modellazione agisce solo sulla faccia rivolta verso di lui. Scavare una piastra sottile non spinge più anche la faccia inferiore.
-- Un tratto sul piano di simmetria agisce una volta invece di due.
+- Un tratto sul piano di simmetria agisce una volta invece di due, e subito accanto il tratto e il suo riflesso si fondono con continuità.
 - La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
-- Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
+- Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto e l'esportazione lo segnalano, con «Mostra il punto» e «Ritira il tratto».
 - Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.

@@ -87,9 +87,9 @@ Nutzen da und sonst nichts.
 - Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.
 - Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
-- Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
+- Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt, und knapp daneben gehen Zug und Spiegelbild glatt ineinander über.
 - In den übersetzten Fassungen heißt die Stärke des Formpinsels nicht mehr wie eine Wanddicke.
-- Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
+- Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht und vor dem Export, mit *Stelle zeigen* und *Zug zurücknehmen*.
 - Im Fenster rechnet *Weich verschmelzen* jetzt fein, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.
 - Ein getipptes Maß wie Länge 40 streckt eine Zeichnung nur in dieser Richtung. Der Körper daraus bleibt geschlossen und liegt auf dem Bett.

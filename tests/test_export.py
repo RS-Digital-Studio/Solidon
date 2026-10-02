@@ -171,6 +171,23 @@ def test_a_clean_part_has_nothing_to_report(profile: Profile) -> None:
     assert check_before_export([scene_object()], profile, {}) == []
 
 
+def test_the_check_before_export_repeats_a_pierced_sculpt_stroke(profile: Profile) -> None:
+    """Ein Formzug, der die Wand durchstochen hat, stand im Prüfbericht — der
+    Export lief ohne Hinweis (RM-419). Die Prüfung vor dem Schreiben sagt ihn
+    weiter, für die Körper, die geschrieben werden."""
+    from app.core.types import Finding
+
+    pierced = Finding(code="sculpt.pierced", severity="warning", message="", object_id="obj_1")
+    elsewhere = Finding(code="sculpt.pierced", severity="warning", message="", object_id="obj_9")
+    unrelated = Finding(code="sculpt.applied", severity="info", message="", object_id="obj_1")
+
+    findings = check_before_export(
+        [scene_object()], profile, {}, evaluated=[pierced, elsewhere, unrelated]
+    )
+
+    assert findings == [pierced]
+
+
 def test_a_part_below_the_bed_is_reported(profile: Profile) -> None:
     """Der Bauraum beginnt bei Z = 0; ein halber Würfel darunter ist es wert,
     gesagt zu werden.

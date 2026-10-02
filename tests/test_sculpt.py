@@ -15,6 +15,7 @@ Op-Stapel darunter wertlos.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 from pathlib import Path
 
 import numpy as np
@@ -253,6 +254,61 @@ def test_a_stroke_that_reaches_nothing_starts_no_stage() -> None:
 
     assert not aside.cut
     assert len(stages([first, aside])) == 1
+
+
+def lopsided_prism() -> MeshData:
+    """Ein geschlossenes Prisma, dessen Hüllmitte im Ursprung liegt: links die
+    Wand ``x = −10`` mit einem Mittelpunkt ``M = (−10, 0, 0)``, rechts die
+    schräge Wand ``x = 9 + 0,1·y`` nur aus ihren vier Ecken
+    (``remote-18c76-sculpt.md``, RM-454)."""
+    left = [(-10.0, y, z) for y, z in ((-10, -10), (10, -10), (10, 10), (-10, 10))]
+    right = [(9.0 + 0.1 * y, y, z) for _x, y, z in left]
+    vertices = np.asarray([*left, *right, (-10.0, 0.0, 0.0)], dtype=float)
+    middle = 8
+    faces = [(middle, (k + 1) % 4, k) for k in range(4)]
+    faces += [(4, 5, 6), (4, 6, 7)]
+    for k in range(4):
+        following = (k + 1) % 4
+        faces += [(k, following, following + 4), (k, following + 4, k + 4)]
+    body = trimesh.Trimesh(vertices, np.asarray(faces), process=False)
+    body.fix_normals()
+    assert body.is_watertight and body.volume > 0.0
+    return MeshData.of(body)
+
+
+@pytest.mark.parametrize("where", ["at_the_stroke", "over_the_session"])
+def test_a_mirrored_stroke_that_reaches_only_the_sculpted_face_gets_its_stage(
+    profile: Profile, where: str
+) -> None:
+    """RM-454: Die Etappenentscheidung fragte nur den Klickpunkt.
+
+    Ein Zug bei ``M`` gräbt einen Millimeter ein; der Klick auf ``P = (9, 0,
+    0)`` greift selbst nichts, sein Spiegelbild ``−P`` aber genau den
+    verschobenen Punkt ``M′`` — nur auf der Fläche nach der ersten Etappe.
+    Blieb der Zug in ihr, wirkte er nirgends. Die Spiegelung trägt der Zug
+    selbst oder die ganze Sitzung (die Leiste *Symmetrie*, im Fenster).
+    """
+    prism = lopsided_prism()
+    brush = {"radius": 0.4, "strength": 1.0, "tool": "carve"}
+    if where == "at_the_stroke":
+        first = stroke_at(prism, (-10.0, 0.0, 0.0), symmetry=1, **brush)  # type: ignore[arg-type]
+        second = stroke_at(prism, (9.0, 0.0, 0.0), symmetry=1, before=[first], **brush)  # type: ignore[arg-type]
+        session = "none"
+    else:
+        first = stroke_at(prism, (-10.0, 0.0, 0.0), **brush)  # type: ignore[arg-type]
+        shown = [dataclasses.replace(first, symmetry=1)]
+        second = stroke_at(prism, (9.0, 0.0, 0.0), before=shown, mirrored=1, **brush)  # type: ignore[arg-type]
+        session = "x"
+    assert second.cut, "der Zug wirkt erst auf der Fläche nach der ersten Etappe"
+
+    entry = SceneObject(id="obj_1", name="Prisma", mesh=prism)
+    result = run(entry, profile, strokes=strokes_to_text([first, second]), symmetry=session)
+    once = run(entry, profile, strokes=strokes_to_text([first]), symmetry=session)
+    middle = np.asarray(result.outputs[0].mesh.raw.vertices, dtype=float)[8]
+    after_first = np.asarray(once.outputs[0].mesh.raw.vertices, dtype=float)[8]
+    assert np.allclose(after_first, (-9.0, 0.0, 0.0), atol=1e-9), "Voraussetzung: M′ bei x = −9"
+    assert float(np.linalg.norm(middle - after_first)) > 0.5, "das Spiegelbild gräbt bei M′ weiter"
+    assert "sculpt.strokes_missed" not in {f.code for f in result.findings}
 
 
 def test_the_remembered_stage_never_answers_for_another_session() -> None:
@@ -724,6 +780,47 @@ def test_carving_through_the_plate_is_reported(profile: Profile) -> None:
     assert abs(pierced.location[0]) < 8.0 and abs(pierced.location[1]) < 8.0
 
 
+def test_a_piercing_stroke_can_be_taken_back(profile: Profile) -> None:
+    """Der Befund nannte als Weg nur *Stelle zeigen*; „zurücknehmen“ stand im
+    Satz und nirgends als Knopf (RM-419). Jetzt nennt er den Zug, der die
+    Wand durchstochen hat — gezählt wie im Verlauf, ab eins —, und bietet
+    *Zug zurücknehmen* an."""
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+    harmless = Stroke(
+        point=(15.0, 15.0, 2.0), normal=(0.0, 0.0, 1.0), radius=3.0, strength=0.5, tool="draw"
+    )
+    strokes = [harmless, carve_into_plate(6.0), harmless]
+
+    result = run(entry, profile, strokes=strokes_to_text(strokes))
+
+    pierced = next(f for f in result.findings if f.code == "sculpt.pierced")
+    assert pierced.values["stroke"] == 2
+    assert [action.id for action in pierced.suggestions] == ["take_back_stroke", "show_location"]
+
+
+def test_the_sculpt_step_reports_its_progress(profile: Profile) -> None:
+    """Züge übertragen und die Wand prüfen kosten an großen Netzen Sekunden;
+    der Schritt meldet seinen Anteil bis eins (RM-419, §2.8)."""
+    spec = REGISTRY.get("sculpt_strokes")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+    shares: list[float] = []
+    spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(strokes=strokes_to_text([carve_into_plate(6.0)])),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: shares.append(fraction),
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    assert shares[0] == 0.0 and shares[-1] == 1.0
+    assert all(later >= earlier for earlier, later in itertools.pairwise(shares))
+
+
 def test_carving_a_wall_below_the_minimum_is_reported(profile: Profile) -> None:
     """Ein flacher Zug ließ 0,44 mm Restwand bei verlangten 0,84 mm, ohne
     Befund; der Export lief ohne Warnung (RM-364)."""
@@ -1101,3 +1198,152 @@ def test_a_stroke_on_the_mirror_plane_acts_once(axis: int, bit: int, body: str) 
         np.asarray(single.raw.vertices, dtype=float) - before,
         atol=1e-9,
     ), "auf der Ebene wirkt der Zug einmal"
+
+
+SCULPT_TOOLS = ("draw", "carve", "pinch", "smooth", "inflate", "flatten")
+
+
+@pytest.mark.parametrize("tool", SCULPT_TOOLS)
+def test_every_brush_acts_once_on_the_mirror_plane(tool: str) -> None:
+    """RM-428: „einmal auf der Ebene“ galt geprüft nur für *Auftragen*.
+
+    Jeder Pinsel, an der Kugel quer zur Spiegelachse X angesetzt: gespiegelt
+    wirkt er wie ohne Symmetrie.
+    """
+    base = ball()
+    stroke = on_ball(0.0, 0.0, 1.0, tool=tool, strength=1.0, brush=6.0)
+
+    single = apply_strokes(base, [stroke])
+    mirrored = apply_strokes(base, [dataclasses.replace(stroke, symmetry=1)])
+
+    before = np.asarray(base.raw.vertices, dtype=float)
+    assert np.abs(np.asarray(single.raw.vertices) - before).max() > 1e-3, "der Pinsel wirkt"
+    assert np.allclose(
+        np.asarray(mirrored.raw.vertices, dtype=float),
+        np.asarray(single.raw.vertices, dtype=float),
+        atol=1e-9,
+    )
+
+
+@pytest.mark.parametrize("tool", SCULPT_TOOLS)
+def test_every_brush_far_from_the_mirror_plane_acts_on_both_sides(
+    profile: Profile, tool: str
+) -> None:
+    """Weit weg von der Ebene wirken Zug und Spiegelbild wie zwei Züge — so
+    wie vor RM-378, bitgleich mit einem alten Formschritt (``mirror_once``
+    aus)."""
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    text = strokes_to_text([on_ball(1.0, 0.1, 0.2, tool=tool, strength=1.0, brush=6.0)])
+
+    new = run(entry, profile, strokes=text, symmetry="x")
+    old = run(entry, profile, strokes=text, symmetry="x", mirror_once=False)
+
+    before = np.asarray(entry.mesh.raw.vertices, dtype=float)
+    after = np.asarray(new.outputs[0].mesh.raw.vertices, dtype=float)
+    moved = np.linalg.norm(after - before, axis=1) > 1e-9
+    assert (before[moved][:, 0] > 0).any() and (before[moved][:, 0] < 0).any(), "beide Seiten"
+    assert np.array_equal(after, np.asarray(old.outputs[0].mesh.raw.vertices, dtype=float))
+
+
+def mirror_plate() -> MeshData:
+    """Eine 4-mm-Platte, gleichmäßig unterteilt: Ihre Ecken liegen spiegelgleich
+    zur Mitte, im Raster von 0,375 mm. ``subdivide_to_size`` teilt nach Länge
+    und legt die Ecken dabei nicht spiegelgleich (bis 0,125 mm daneben)."""
+    box = trimesh.creation.box(extents=(24.0, 24.0, 4.0))
+    vertices, faces = np.asarray(box.vertices), np.asarray(box.faces)
+    for _ in range(6):
+        vertices, faces = trimesh.remesh.subdivide(vertices, faces)
+    return MeshData.of(trimesh.Trimesh(vertices, faces, process=True))
+
+
+def _mirror_partner(points: np.ndarray, axis: int, middle: float) -> np.ndarray:
+    """Je Eckpunkt die Nummer seines Spiegelbilds an der Ebene durch ``middle``."""
+    from scipy.spatial import cKDTree
+
+    mirrored = points.copy()
+    mirrored[:, axis] = 2.0 * middle - mirrored[:, axis]
+    away, partner = cKDTree(points).query(mirrored)
+    assert float(np.max(away)) < 1e-9, "Voraussetzung: der Körper ist spiegelgleich vernetzt"
+    return np.asarray(partner, dtype=np.int64)
+
+
+@pytest.mark.parametrize("tool", SCULPT_TOOLS)
+@pytest.mark.parametrize("body", ["ball", "plate"])
+def test_a_stroke_beside_the_mirror_plane_stays_mirror_equal(body: str, tool: str) -> None:
+    """RM-428: Ein Zug 1 mm neben der Ebene schob die Ecken auf der Ebene zur
+    Seite des Originalzugs — Kneifen 0,426 mm, Auftragen 0,043 mm —, weil bei
+    gleich starken Kopien immer die erste gewann. Das Ergebnis eines
+    gespiegelten Zugs ist spiegelgleich, und die Ecken auf der Ebene bleiben
+    darauf."""
+    base = ball() if body == "ball" else mirror_plate()
+    points = np.asarray(base.raw.vertices, dtype=float)
+    top = float(points[:, 2].max())
+    if body == "ball":
+        # Auf der Kugel 1 mm neben dem Nordpol, die Richtung der Fläche dort.
+        direction = np.asarray([1.0, 0.0, 20.0])
+        direction /= np.linalg.norm(direction)
+        point, normal = direction * 20.0, direction
+    else:
+        point, normal = np.asarray([1.0, 0.0, top]), np.asarray([0.0, 0.0, 1.0])
+    stroke = Stroke(
+        point=tuple(float(value) for value in point),  # type: ignore[arg-type]
+        normal=tuple(float(value) for value in normal),  # type: ignore[arg-type]
+        radius=5.0,
+        strength=1.0,
+        tool=tool,  # type: ignore[arg-type]
+        symmetry=1,
+    )
+
+    shaped = apply_strokes(base, [stroke])
+
+    shift = np.asarray(shaped.raw.vertices, dtype=float) - points
+    partner = _mirror_partner(points, 0, 0.0)
+    mirrored = shift[partner] * np.asarray([-1.0, 1.0, 1.0])
+    assert np.abs(shift).max() > 1e-3 or tool in ("smooth", "inflate", "flatten"), "er wirkt"
+    assert np.allclose(shift, mirrored, atol=1e-9), "das Ergebnis ist spiegelgleich"
+    on_plane = points[:, 0] == 0.0
+    assert on_plane.sum() > 4, "Voraussetzung: Ecken auf der Ebene"
+    assert np.abs(shift[on_plane, 0]).max() < 1e-9, "Ecken auf der Ebene bleiben darauf"
+
+
+def _top_row(base: MeshData, shaped: MeshData) -> tuple[np.ndarray, np.ndarray]:
+    """Die Höhe der Plattenoberseite entlang ``y = 0``, nach ``x`` geordnet."""
+    before = np.asarray(base.raw.vertices, dtype=float)
+    after = np.asarray(shaped.raw.vertices, dtype=float)
+    top = float(before[:, 2].max())
+    row = np.flatnonzero((before[:, 1] == 0.0) & (before[:, 2] == top))
+    order = row[np.argsort(before[row, 0])]
+    return before[order, 0], after[order, 2] - before[order, 2]
+
+
+def test_a_stroke_beside_the_mirror_plane_leaves_no_notch() -> None:
+    """RM-428: Ein Zug 1 mm neben der Ebene ließ eine Kerbe von 0,148 mm mit
+    Knick (Steigung ±0,263) zwischen Zug und Spiegelbild — die stärkere Kopie
+    je Ecke ergibt einen Knick, wo beide gleich stark sind. Vor RM-378 war der
+    Übergang glatt, aber fast doppelt so hoch (1,70).
+
+    Jetzt verschmelzen Zug und Spiegelbild nahe der Ebene zu einer glatten
+    Kuppe von der Höhe eines Zugs: bei 1 mm eingipflig, bei 2 mm ohne Knick.
+    """
+    base = mirror_plate()
+    top = float(np.asarray(base.raw.vertices)[:, 2].max())
+    for away in (1.0, 2.0):
+        stroke = Stroke(
+            point=(away, 0.0, top),
+            normal=(0.0, 0.0, 1.0),
+            radius=5.0,
+            strength=1.0,
+            symmetry=1,
+        )
+        x, height = _top_row(base, apply_strokes(base, [stroke]))
+        near = np.abs(x) <= 3.0
+        assert near.sum() >= 9, "Voraussetzung: eine Zeile durch den Zug"
+        assert 0.9 <= float(height.max()) <= 1.2, f"{away} mm: so hoch wie ein Zug, nicht doppelt"
+        middle = int(np.flatnonzero(x == 0.0)[0])
+        step = float(x[middle + 1] - x[middle])
+        slope = abs(float(height[middle + 1] - height[middle])) / step
+        assert slope < 0.1, f"{away} mm: Knick an der Ebene, Steigung {slope:.3f}"
+        if away == 1.0:
+            left = np.diff(height[(x >= -3.0) & (x <= 0.0)])
+            right = np.diff(height[(x >= 0.0) & (x <= 3.0)])
+            assert (left >= -1e-12).all() and (right <= 1e-12).all(), "eingipflig, keine Kerbe"

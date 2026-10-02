@@ -577,6 +577,138 @@ def test_the_wall_check_does_not_hold_the_window(
     assert window.sculpt_bar.warning.text() == text, "an old answer must not overwrite it"
 
 
+def with_a_plate(window: MainWindow, tmp_path: Path) -> str:
+    """Eine 4-mm-Platte, fein genug vernetzt für einen 6-mm-Pinsel, geöffnet
+    wie eine Datei des Kunden."""
+    import trimesh
+
+    box = trimesh.creation.box(extents=(40.0, 40.0, 4.0))
+    vertices, faces = trimesh.remesh.subdivide_to_size(box.vertices, box.faces, max_edge=0.8)
+    path = tmp_path / "platte.stl"
+    path.write_bytes(trimesh.exchange.stl.export_stl(trimesh.Trimesh(vertices, faces)))
+    window.open_path(path)
+    assert window.session.wait_for_idle(30_000)
+    object_id = next(iter(window.session.last_result.scene.objects))
+    return str(object_id)
+
+
+def test_taking_back_the_piercing_stroke_is_one_undoable_step(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """*Zug zurücknehmen* am Durchstich im Prüfbericht nimmt genau den Zug aus
+    der Sitzung, der die Wand durchstochen hat — eine Transaktion, die
+    Strg+Z zurückholt (RM-419). Vorher stand „zurücknehmen“ nur im Satz."""
+    from app.core.geom.sculpt import strokes_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Stroke
+
+    object_id = with_a_plate(window, tmp_path)
+    low, high = window.session.last_result.scene.objects[object_id].mesh.raw.bounds
+    middle = (low + high) / 2.0
+    top = float(high[2])
+    harmless = Stroke(
+        point=(float(low[0]) + 3.0, float(low[1]) + 3.0, top),
+        normal=(0.0, 0.0, 1.0),
+        radius=2.0,
+        strength=0.3,
+    )
+    piercing = Stroke(
+        point=(float(middle[0]), float(middle[1]), top),
+        normal=(0.0, 0.0, 1.0),
+        radius=6.0,
+        strength=6.0,
+        tool="carve",
+    )
+    assert window.session.apply(
+        "Formen",
+        [
+            OperationDraft(
+                op="sculpt_strokes",
+                inputs=(object_id,),
+                params={"strokes": strokes_to_text([harmless, piercing])},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    report = window.report
+    item = next(
+        report.list.item(row)
+        for row in range(report.list.count())
+        if getattr(report.list.item(row).data(256), "code", "") == "sculpt.pierced"
+    )
+
+    report._run_action_for(item, "take_back_stroke")
+    assert window.session.wait_for_idle(30_000)
+
+    sculpt = window.session.project.document.ops[-1]
+    assert strokes_from_text(sculpt.params["strokes"]) == [harmless]
+    assert "sculpt.pierced" not in {
+        f.code for f in window.session.last_result.scene.report.findings
+    }
+    assert "Strg+Z" in window.status_message.text()
+
+    window.session.undo()
+    assert window.session.wait_for_idle(30_000)
+    restored = window.session.project.document.ops[-1]
+    assert len(strokes_from_text(restored.params["strokes"])) == 2
+
+
+def test_the_export_says_a_stroke_pierced_the_wall(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Durchstich stand im Prüfbericht, der Export schrieb ohne Hinweis
+    (RM-419). Jetzt fragt der Export davor und nennt ihn."""
+    from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+    from app.core.geom.sculpt import strokes_to_text
+    from app.core.scene.history import OperationDraft
+    from app.core.types import Stroke
+    from app.i18n import tr
+    from tests.ui_helpers import wait_for_export
+
+    object_id = with_a_plate(window, tmp_path)
+    low, high = window.session.last_result.scene.objects[object_id].mesh.raw.bounds
+    middle = (low + high) / 2.0
+    piercing = Stroke(
+        point=(float(middle[0]), float(middle[1]), float(high[2])),
+        normal=(0.0, 0.0, 1.0),
+        radius=6.0,
+        strength=6.0,
+        tool="carve",
+    )
+    assert window.session.apply(
+        "Formen",
+        [
+            OperationDraft(
+                op="sculpt_strokes",
+                inputs=(object_id,),
+                params={"strokes": strokes_to_text([piercing])},
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    target = tmp_path / "platte_geformt.stl"
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+    seen: list[str] = []
+
+    def cancel(box: QMessageBox) -> int:
+        seen.append(box.informativeText())
+        next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen")).click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", cancel)
+    window.action_export()
+    wait_for_export(window)
+
+    assert seen, "the export wrote without showing the pierced wall"
+    assert "Wand dahinter" in seen[0], f"the dialog does not name the pierce: {seen[0]!r}"
+    assert not target.exists()
+
+
 # --- Einbacken (Entscheidung D) -------------------------------------------------
 
 
