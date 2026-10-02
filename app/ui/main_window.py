@@ -2925,7 +2925,7 @@ class MainWindow(QMainWindow):
         # die gezeichnete Linie; ein getrenntes Teil bleibt getrennt und geht
         # über Strg+Z zurück. (Das Bemalen stand mit demselben Argument
         # daneben, bis der Punkt-Radius-Pinsel fiel — Färben läuft seither
-        # über das Kontextmenü am Merkmal, als Operation wie jede andere.)
+        # über das Auswahlfenster am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
             tr("Trennen"),
@@ -17902,7 +17902,7 @@ class MainWindow(QMainWindow):
                 # Auswahl aus dem *Wert*, den er mitbekommt: Aus „hole_1"
                 # wurde ein Eintrag „hole_1", und die übrigen Flächen des
                 # Körpers kannte die Liste nicht. Das ist der Hauptweg — das
-                # Kontextmenü am Merkmal (Weg 1) und die Menüs *Erzeugen* und
+                # Auswahlfenster am Merkmal (Weg 1) und die Menüs *Erzeugen* und
                 # *Ändern* laufen hier durch —, und der Docstring des
                 # Parameters verspricht die lesbare Bezeichnung. Gemessen:
                 # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
@@ -19890,7 +19890,7 @@ class MainWindow(QMainWindow):
 
         ``spec`` verengt die Liste auf die Merkmalsarten, mit denen diese
         Operation etwas anfangen kann (``applies_to``) — dieselbe Zuordnung,
-        über die das Kontextmenü am Merkmal die Operation findet (§18.5, §10).
+        über die das Auswahlfenster am Merkmal die Operation findet (§18.5, §10).
 
         **Ohne sie war die Auswahl eines Dialogs die aller Merkmale.** An einer
         eingelesenen STEP-Datei mit 302 erkannten Merkmalen bot *Bohrung
@@ -20315,9 +20315,23 @@ class MainWindow(QMainWindow):
         elif chosen == "parts":
             self.action_catalog()
         elif chosen == "chat":
+            # **Der Chat kommt nach vorn, dann bekommt er den Cursor** (RM-448):
+            # Stand der Reiter auf dem Prüfbericht oder war die Spalte
+            # ausgeblendet, landete der Fokus in einem verborgenen Feld, und
+            # wer zu tippen begann, schrieb ins Nichts.
+            if not self.right_column.isVisible():
+                self.right_column.setVisible(True)
+                self.settings.right_panel_visible = True
+                self._store_settings()
+                self._mark_status_alerts()
+            switch(self.right, self.chat)
             self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
         elif REGISTRY.has(chosen):
-            self.run_operation(REGISTRY.get(chosen))
+            # Gleich beschriftet heißt gleich gemacht: *Quader anlegen* aus der
+            # Einladung ist der Quader des Menüs — exakt, wo der Kern da ist
+            # (``menu_twins``, RM-448), sonst entstand hier ein Netz und im
+            # Menü ein Körper mit echten Kanten.
+            self.run_operation(REGISTRY.get(menu_twins().get(chosen, chosen)))
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
