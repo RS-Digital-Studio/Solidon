@@ -8671,3 +8671,28 @@ def test_opening_needs_no_machine_profile_but_slicing_does(
     assert dialog.slice_button.toolTip() == dialog._profile_gap()
     assert dialog.slice_button.toolTip() != "Wählen Sie einen Drucker aus der Liste."
     assert dialog._current_setup(for_slicing=False) is not None
+
+
+@pytest.mark.parametrize("kind", ["none", "skirt", "brim", "raft"])
+def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
+    dialog: PrintSettingsDialog, kind: str
+) -> None:
+    """Nur die Maße der gewählten Bettart stehen da; ein abgelehnter Wert in
+    einem ausgeblendeten Feld sperrt nicht (RM-341)."""
+    from app.core.knowledge import print_settings
+
+    selector = dialog._editors["adhesion.kind"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData(kind))
+    dialog._update_inactive_setting_rows()
+    form = dialog._tab_forms["adhesion"]
+    inactive = print_settings.inactive_paths("auto", kind)
+    for path in print_settings.ADHESION_DETAILS:
+        assert form.isRowVisible(dialog._labels[path]) is (path not in inactive), path
+
+    hidden = [path for path in print_settings.ADHESION_DETAILS if path in inactive]
+    if hidden:
+        editor = dialog._editors[hidden[0]]
+        assert isinstance(editor, BoundedSpin)
+        editor.lineEdit().setText("99999")
+        assert not editor.refusal() or dialog._first_numeric_refusal() == ""

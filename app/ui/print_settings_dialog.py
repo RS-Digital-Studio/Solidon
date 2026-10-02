@@ -4230,11 +4230,18 @@ class PrintSettingsDialog(QDialog):
         control = {"support": "support.style", "adhesion": "adhesion.kind"}.get(field.group)
         if control is None or path == control:
             return None
-        editor = self._editors.get(control)
-        selector = self._fields.get(control)
-        if editor is None or selector is None:
-            return None
-        return control if _setting_editor_value(editor, selector) == "none" else None
+        return control if path in self._inactive_paths() else None
+
+    def _inactive_paths(self) -> frozenset[str]:
+        """Was bei der sichtbaren Wahl nichts tut — gefragt im Kern (RM-341)."""
+        return print_settings.inactive_paths(
+            str(
+                _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
+            ),
+            str(
+                _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
+            ),
+        )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
         """Zeigt und benennt die Wahl, die ein bedingtes Trefferfeld freigibt."""
@@ -7005,19 +7012,9 @@ class PrintSettingsDialog(QDialog):
         for editor in (self.nozzle, self.nozzle_count):
             if reason := editor.refusal():
                 return reason
-        inactive = {
-            "support": (
-                _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
-                == "none"
-            ),
-            "adhesion": (
-                _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
-                == "none"
-            ),
-        }
+        inactive = self._inactive_paths()
         for field in FIELDS:
-            group = field.path.partition(".")[0]
-            if inactive.get(group, False):
+            if field.path in inactive:
                 continue
             field_editor = self._editors.get(field.path)
             if isinstance(field_editor, BoundedSpin) and (reason := field_editor.refusal()):
@@ -7069,42 +7066,19 @@ class PrintSettingsDialog(QDialog):
 
     def _update_inactive_setting_rows(self) -> None:
         """Keine Detailwerte zeigen, wenn Stützen oder Bettart ausgeschaltet sind."""
-        support_enabled = (
-            _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
-            != "none"
-        )
-        for path in (
-            "support.placement",
-            "support.threshold_angle",
-            "support.z_gap",
-            "support.xy_gap",
-            "support.density",
-            "support.interface_layers",
-            "support.block_channels",
+        inactive = self._inactive_paths()
+        for tab, paths in (
+            ("support", print_settings.SUPPORT_DETAILS),
+            ("adhesion", tuple(print_settings.ADHESION_DETAILS)),
         ):
-            form = self._tab_forms["support"]
-            form.setRowVisible(self._labels[path], support_enabled)
-            editor = self._editors[path]
-            refusal = self._refusals.get(path)
-            if isinstance(editor, BoundedSpin) and refusal is not None:
-                form.setRowVisible(refusal, support_enabled and bool(editor.refusal()))
-
-        adhesion_enabled = (
-            _setting_editor_value(self._editors["adhesion.kind"], self._fields["adhesion.kind"])
-            != "none"
-        )
-        for path in (
-            "adhesion.skirt_loops",
-            "adhesion.skirt_distance",
-            "adhesion.brim_width",
-            "adhesion.raft_layers",
-        ):
-            form = self._tab_forms["adhesion"]
-            form.setRowVisible(self._labels[path], adhesion_enabled)
-            editor = self._editors[path]
-            refusal = self._refusals.get(path)
-            if isinstance(editor, BoundedSpin) and refusal is not None:
-                form.setRowVisible(refusal, adhesion_enabled and bool(editor.refusal()))
+            form = self._tab_forms[tab]
+            for path in paths:
+                active = path not in inactive
+                form.setRowVisible(self._labels[path], active)
+                editor = self._editors[path]
+                refusal = self._refusals.get(path)
+                if isinstance(editor, BoundedSpin) and refusal is not None:
+                    form.setRowVisible(refusal, active and bool(editor.refusal()))
         self._queue_refit("passive")
 
     def _editor_changed(self, path: str) -> None:
