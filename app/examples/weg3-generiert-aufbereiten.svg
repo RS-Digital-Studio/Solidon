@@ -122,6 +122,8 @@
 <polygon points="196.3,95.9 196.2,109.0 198.6,102.8" fill="#788189" stroke="#788189" stroke-width="0.6" />
 <polygon points="25.9,50.0 25.9,61.2 35.1,38.5" fill="#798189" stroke="#798189" stroke-width="0.6" />
 <polygon points="185.2,59.9 188.8,72.8 194.7,76.5" fill="#7d868f" stroke="#7d868f" stroke-width="0.6" />
+<polygon points="211.6,159.5 209.1,152.0 212.0,164.9" fill="#767e87" stroke="#767e87" stroke-width="0.6" />
+<line x1="209.1" y1="152.0" x2="211.6" y2="159.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="77.3,14.4 87.6,14.0 91.3,10.8" fill="#7b838c" stroke="#7b838c" stroke-width="0.6" />
 <line x1="77.3" y1="14.4" x2="91.3" y2="10.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="196.2,109.0 193.0,133.9 193.9,133.5" fill="#788189" stroke="#788189" stroke-width="0.6" />
@@ -145,14 +147,12 @@
 <polygon points="56.8,186.4 80.4,195.0 67.0,189.3" fill="#a8b3bf" stroke="#a8b3bf" stroke-width="0.6" />
 <polygon points="200.0,193.6 200.6,191.1 189.5,198.5" fill="#8d97a1" stroke="#8d97a1" stroke-width="0.6" />
 <polygon points="169.0,201.3 178.8,203.3 173.5,199.9" fill="#9faab5" stroke="#9faab5" stroke-width="0.6" />
-<polygon points="203.5,149.9 212.0,164.9 211.6,159.5" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <polygon points="134.0,193.0 144.4,189.7 142.2,186.9" fill="#97a1ab" stroke="#97a1ab" stroke-width="0.6" />
 <polygon points="146.9,192.5 159.4,199.5 154.3,196.3" fill="#a7b2be" stroke="#a7b2be" stroke-width="0.6" />
 <polygon points="8.0,99.8 17.2,90.2 14.6,82.8" fill="#97a2ac" stroke="#97a2ac" stroke-width="0.6" />
 <polygon points="58.4,20.5 65.7,25.2 76.4,18.7" fill="#777f88" stroke="#777f88" stroke-width="0.6" />
-<polygon points="203.5,149.9 211.6,159.5 209.1,152.0" fill="#757d86" stroke="#757d86" stroke-width="0.6" />
-<line x1="209.1" y1="152.0" x2="211.6" y2="159.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="35.1,38.5 43.4,45.4 43.4,32.3" fill="#7b838c" stroke="#7b838c" stroke-width="0.6" />
+<polygon points="203.5,149.9 212.0,164.9 209.1,152.0" fill="#757e86" stroke="#757e86" stroke-width="0.6" />
 <polygon points="202.0,140.5 203.5,149.9 205.5,144.5" fill="#7c858d" stroke="#7c858d" stroke-width="0.6" />
 <polygon points="173.7,41.8 168.6,41.4 177.6,50.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="203.5,149.9 209.1,152.0 205.5,144.5" fill="#7c848d" stroke="#7c848d" stroke-width="0.6" />

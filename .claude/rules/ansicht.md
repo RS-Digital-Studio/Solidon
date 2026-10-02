@@ -32,8 +32,9 @@ Stufen: nichts, Körper, Merkmal oder Kante (`Viewport.selection_depth`).
 * **Links geht eine Stufe**: erst der Körper, dann das Merkmal — sonst ist ein
   Körper mit Bohrungen per Klick nicht wählbar. Nur der Klick wandert, nicht der
   Zug (`kamera.md`).
-* **Rechts meint immer das Genaueste** (`_select_at(..., direct=True)`): Das
-  Kontextmenü am Merkmal ist Weg 1 (§18.5), ohne Vorbedingung.
+* **Rechts meint immer das Genaueste** (`_select_at(..., direct=True)`): Wer
+  auf die störende Stelle zeigt, hängt an keiner Vorbedingung (§18.5). Die
+  Operationen von Weg 1 stehen im Auswahlfenster; das Menü führt keine aus.
 * **Ein offener Operationsdialog schaltet die Stufen ab**
   (`set_direct_picking`) — dort ist ein Klick eine Antwort.
 * **Escape geht eine Stufe je Druck zurück**, in `MainWindow._escape` nach dem
@@ -121,6 +122,13 @@ muss die Auswahl aufheben können (§18.5); die Kerbe eines L-Profils zählt mit
 Nur wenn sonst nichts traf, je Körper einmal (`_object_hulls`), als Stichprobe
 (4096 Punkte plus die äußersten je Achsenrichtung), über Halbräume statt
 Hüllnetz.
+
+## Die Leertaste gehört dem, der sie braucht
+
+Der Vergleich der Vorschau (`HoldToCompare`) hängt an der Anwendung und
+nimmt die Taste nur, wo der Fokus kein Bedienelement trifft, das sie selbst
+braucht (`answers_space`: Text, Haken, Knopf, Auswahlliste, Liste) — sonst
+schaltete während jeder Vorschau in keinem Fenster ein Haken (RM-448).
 
 ## Messen
 

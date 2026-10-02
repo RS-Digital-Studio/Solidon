@@ -781,7 +781,9 @@ def register_part(
 #: Version 21: Gedruckte Schraube und Mutter halten das Profilspiel auch zu
 #: ihrem Sitz — Sechskantkopf und Mutter um das Spiel angehoben, die Senkung
 #: um das Spiel weiter (``fasteners.py``, RM-276, 27.09.2026).
-LIBRARY_VERSION: Final = "21"
+#: Version 22: Ein schmaler Halter mit Schlüsselloch behält seine Breite und
+#: hängt an einem Loch in der Mitte statt an zwei (``holders.py``, RM-443).
+LIBRARY_VERSION: Final = "22"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

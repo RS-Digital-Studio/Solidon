@@ -303,6 +303,8 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         # Die übernommenen Körper einer STEP-Baugruppe (P7.4): ihre Kennungen
         # als JSON-Liste, nach derselben Bauart wie die Konturauswahl.
         "step_bodies",
+        # Drei Punkte einer Schnittebene als Text (RM-400).
+        "points",
     }
 )
 
@@ -567,6 +569,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "contours": "string",
     "organizer": "string",
     "step_bodies": "string",
+    "points": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,
@@ -584,6 +587,9 @@ GATHERED_KINDS: Final[frozenset[str]] = frozenset(
         # Koordinate. Der Agent wählt Gruppen — „alle senkrechten" —, und was
         # er dort nicht findet, rät er nicht in Zahlen zusammen.
         "edges",
+        # Und Punkte im Raum (RM-400): Sie sind Koordinaten, und die erzeugt
+        # die KI nicht (Leitprinzip 5) — sie werden im Bild angeklickt.
+        "points",
     }
 )
 

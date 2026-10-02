@@ -31,6 +31,19 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-404: Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still (02.10.2026)](#rm-404-die-facettenausrichtung-aus-rm-225-greift-an-verschobenen-größeren-oder-fein-vernetzten-stl-nicht-still-02102026) |
+| 2026-10-02 | [RM-443: Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test (02.10.2026)](#rm-443-reste-aus-rm-399-die-halter-vorlage-setzt-immer-zwei-schlüssellöcher-exakte-halter-nur-im-test-02102026) |
+| 2026-10-02 | [RM-400: Schräg abschneiden (02.10.2026)](#rm-400-schräg-abschneiden-02102026) |
+| 2026-10-02 | [RM-417: Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot (02.10.2026)](#rm-417-cura-meldet-anderer-drucker-aktiv-obwohl-es-derselbe-ist-zwei-neue-fenstertests-rot-02102026) |
+| 2026-10-02 | [RM-429: Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück (02.10.2026)](#rm-429-bambu-prozessprofil-mit-leerer-düsenvariante-fällt-still-auf-solidons-tabelle-zurück-02102026) |
+| 2026-10-02 | [RM-431: Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten (02.10.2026)](#rm-431-allgemeiner-drucker-mit-prusaslicer-slicen-bleibt-gesperrt-obwohl-solidons-werte-gelten-02102026) |
+| 2026-10-02 | [RM-432: Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder (02.10.2026)](#rm-432-bettart-automatisch-bei-prusaslicer-und-cura-zeigt-die-wirkungslosen-felder-02102026) |
+| 2026-10-02 | [RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)](#rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026) |
+| 2026-10-02 | [RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)](#rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026) |
+| 2026-10-02 | [RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)](#rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026) |
+| 2026-10-02 | [RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)](#rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026) |
+| 2026-10-02 | [RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)](#rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026) |
+| 2026-10-02 | [RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)](#rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026) |
 | 2026-10-02 | [RM-416: *An Merkmal ausrichten* nimmt den ersten Bildklick am Hauptfenster an (02.10.2026)](#rm-416-an-merkmal-ausrichten-nimmt-den-ersten-bildklick-am-hauptfenster-an-02102026) |
 | 2026-10-02 | [RM-427: Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht (02.10.2026)](#rm-427-entwurfsauflösung-kegel-und-torus-ohne-befund-budget-zählt-die-oberfläche-nicht-02102026) |
 | 2026-10-02 | [RM-408: Eine Bohrung am exakten Körper kann einen ungültigen Körper mit zwei Schalen und mehr Volumen liefern (02.10.2026)](#rm-408-eine-bohrung-am-exakten-körper-kann-einen-ungültigen-körper-mit-zwei-schalen-und-mehr-volumen-liefern-02102026) |
@@ -45,6 +58,7 @@ entfernt hat.
 | 2026-10-02 | [RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)](#rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026) |
 | 2026-10-02 | [RM-447: Regression gegenüber 0.5.1: Ein Hauptmaß über der Feldgrenze aus einer Datei lässt sich in der Leiste nicht mehr korrigieren (02.10.2026)](#rm-447-regression-gegenüber-051-ein-hauptmaß-über-der-feldgrenze-aus-einer-datei-lässt-sich-in-der-leiste-nicht-mehr-korrigieren-02102026) |
 | 2026-10-02 | [RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)](#rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026) |
+| 2026-10-02 | [RM-360: Bauplan §2.2 nennt für Weg 1 das Auswahlfenster statt des Kontextmenüs (02.10.2026)](#rm-360-bauplan-22-nennt-für-weg-1-das-auswahlfenster-statt-des-kontextmenüs-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -32965,7 +32979,7 @@ der Runde stehen als RM-273 bis RM-280 in `ROADMAP.md`.
   [RM-279](#rm-279). (4) `Viewport.frame_next_scene` rahmt nach *Modell teilen*
   einmal auf alle Teile; am Organizer ×2,3 mit sechs Teilen stehen 100 statt 29 % im Bild,
   über alle fünf Teilungswege (`9f821c70c`). Nach *Skalieren* bleibt die Kamera weiter
-  stehen; das steht als [RM-280](ROADMAP.md#rm-280). **KUNDE-08, entschieden: nein.** Der
+  stehen; das steht als [RM-280](#rm-280). **KUNDE-08, entschieden: nein.** Der
   Hinweis „Nicht jedes Maß der Zeichnung ist festgelegt …“ kommt nur noch an einer
   Zeichnung, die mindestens ein Maß trägt und trotzdem wandern kann. Wer ganz ohne Maß
   zeichnet, druckt, was er sieht, und las den Satz im Prüfbericht wie einen Mangel ohne
@@ -36733,3 +36747,320 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
 
 **Abschluss:** Fensterabnahme am echten Fenster (Fenstersonde auf dem zweiten Monitor, getippte Zahlen mit `QTest`), Stand nach RM-342 D-N2: Operationsdialog *Quader anlegen* lehnt 1100 mm ab, Übernehmen gesperrt, der Knopf nennt „Breite: …“; Parameterleiste lehnt 1100 ab, das Dokument bleibt, 70 + Enter kommt an; Merkmalfenster an Bohrung 1 von `plate_holes.stl`, *Merkmal drehen* 365° zeigt den Satz an der Zeile und „Merkmal drehen — Winkel: …“ am Fuß; Druckeinstellungen, Schichthöhe 1,5 mm abgelehnt, *Slicen* gesperrt mit „Schichthöhe: …“. 16 von 16 Prüfungen, Bilder im Scratchpad des Threads. Der im Review genannte rote Test `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am HEAD grün. Abgenommen von Claude (Thread „Bedienung und KI“).
+
+**Abschluss:** Der gezeigte Dialog gibt den Erstfokus dem ersten leeren Pflichtfeld für ein Merkmal (`OperationDialog._focus_first_empty_feature` im ersten `showEvent`); bis dahin nahm Qt das schon gefüllte Quellmerkmal, und `take_feature` erreichte das leere Ziel nie. Der Knopf folgt einem Pflichtziel jetzt sofort (`valuesChanged` → `_follow_source_pending`), nicht erst mit dem nächsten Vorschaubild. Der Sperrsatz unterscheidet: mit zweitem Körper „Klicken Sie im Bild auf die Fläche, an die ‹Körper› soll.“, ohne ihn weiter „Dafür braucht es ein Merkmal an einem zweiten Körper.“ (`_target_reason`, fünf Kataloge). Neuer Fenstertest `test_the_shown_alignment_dialog_takes_the_first_click_as_its_target` (Gegenprobe ohne den Erstfokus rot), `test_an_alignment_target_is_never_left_empty` auf die Entscheidung aus RM-394 gestellt; beide grün. Sonde am echten Hauptfenster mit echtem Mausklick in die Ansicht: am Stand `ba5a76365` 7 von 12 (Feldfokus `feature`, Ziel leer, B bleibt bei x = −50,4), danach 12 von 12 (Ziel `obj_1:face_4`, B bündig an A bei x = 6,5). Regel in `grenzen.md`. Umgesetzt von Claude, in main mit `ba7ff0ede` (Nachträge `d38792e7f`, `ab4e0e7cb`, Merge `c51f2d4e2`); Entwicklungstor grün bis auf `test_kernel_process*` unter Volllast (Auslagerungsdatei zu klein), einzeln zweimal nachgefahren, im zweiten Lauf 143 von 143 grün.
+
+## RM-448: Haken und Knöpfe nehmen die Leertaste während einer Vorschau wieder an (02.10.2026)
+
+<a id="rm-448-haken-und-knöpfe-nehmen-die-leertaste-während-einer-vorschau-wieder-an-02102026"></a>
+<a id="rm-448"></a>
+
+**RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste.**
+  Review 02.10.2026 am Stand `4373b5f12` über die Oberfläche (echter Filterweg); Folgepunkt zu
+  RM-437 (archiviert; Leerzeichen in Rückmeldebogen und Chat sind behoben). Besteht schon in 0.5.1,
+  keine Regression.
+  **Fehlerfall:** Solange eine Vorschau mit Differenz läuft, nehmen Haken, Auswahlpunkte und Knöpfe in
+  jedem Fenster die Leertaste nicht an, auch die Skala des Rückmeldebogens
+  (`app/ui/viewport.py:3714–3727`, anwendungsweiter Tastenfilter).
+  **Fix:** Der Filter der Ansicht greift nur, wenn die Ansicht den Fokus hat.
+  **Abnahme:** Test über die Oberfläche: Vorschau offen, Leertaste auf einem Haken im Dialog und im
+  Rückmeldebogen schaltet. Bauplan §19.2 (Tastaturbedienung). Nebenbei: Die Zählkommentare der
+  Bausteine in `selection_operations.py`/`catalog.py` sind seit RM-398/399 wieder falsch (gemessen
+  26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
+  Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
+
+**Abschluss:** Der Vergleich an der Anwendung lässt die Leertaste jedem Bedienelement, das sie selbst braucht (`viewport.answers_space`: Textfelder wie bisher, dazu Knöpfe, Haken, Auswahlpunkte, Auswahllisten, Listen und ankreuzbare Rahmen); auf der Ansicht, einem Dialoghintergrund oder einer Beschriftung bleibt sie der Vergleich, und ein Loslassen auf einem Bedienelement beendet einen gehaltenen Vergleich. Entschieden statt „nur mit Fokus auf der Ansicht“: Der Vergleich soll auch während eines offenen Operationsdialogs gehen, dessen Hintergrund den Fokus hält; nur die Bedienelemente bekommen ihre Taste zurück. *Im Chat beschreiben* holt die rechte Spalte zurück, stellt den Chat nach vorn und setzt dann den Cursor. *Quader*/*Zylinder anlegen* aus der Einladung starten den Zwilling des Menüs (`menu_twins`, mit exaktem Kern `create_brep_box`/`create_brep_cylinder`): Gleich beschriftet heißt gleich gemacht, und der exakte Körper ist der, den der Kunde über das Menü kennt und mit echten Kanten weiterbearbeitet; ohne exakten Kern bleibt es das Netz, wie im Menü. Die Zählkommentare in `selection_operations.py` und `catalog.py` nennen keine Zahl mehr, sondern `standalone` (gemessen 15 von 41 frei). Fenstertests `test_controls_keep_the_space_key_while_a_preview_runs` und `test_every_entry_of_the_invitation_does_what_the_menu_does` (beide am Stand `ba5a76365` rot, danach grün; die bisherigen Leertasten- und Einladungstests grün). Sonde am echten Hauptfenster mit echten Tasten und Klicks: am Stand `ba5a76365` 7 von 13 (Chat nicht vorn, Einladung `create_box` gegen Menü `create_brep_box`, Haken und Skala ohne Leertaste), danach 13 von 13. Regel in `ansicht.md`. Umgesetzt von Claude, in main mit `40d3c8e36` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
+
+## RM-415: Enter folgt nach einem Fensterwechsel weiter dem per Tab gewählten Knopf (02.10.2026)
+
+<a id="rm-415-enter-folgt-nach-einem-fensterwechsel-weiter-dem-per-tab-gewählten-knopf-02102026"></a>
+<a id="rm-415"></a>
+
+**RM-415 — Nach einem Fensterwechsel löst Enter wieder den Hauptknopf aus, obwohl der Fokus auf „Abbrechen“ steht.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-334, das im Arbeitsbaum archiviert ist.
+  Tab + Enter folgt seit `2dc4ce0ce` dem Fokus in allen Rückfragen.
+  **Fehlerfall:** Rückfrage öffnen, Tab auf „Abbrechen“, zu einem anderen Fenster und zurück
+  wechseln, Enter → `confirm_discard` gibt `True`, `confirm_unsaved` `'save'`; die Leertaste löst
+  „Abbrechen“ aus, und ohne Solidons Zuhörer klickt Qt selbst „Abbrechen“.
+  **Ursache:** `app/ui/style.py` — `FocusOut` setzt `_typed_to` zurück, und
+  `ActiveWindowFocusReason` gilt nicht als Tastaturwahl.
+  **Fix:** `_typed_to` über den Fensterwechsel behalten (bzw. beim Zurückkehren den Fokusknopf als
+  Tastaturwahl werten).
+  **Abnahme:** Test je Rückfrage mit Fensterwechsel: Enter löst den fokussierten Knopf aus.
+  Bauplan §19.2, Regel 19. Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`,
+  Sonden `v4u_rm334_fensterwechsel.py`, `v4u_rm334_qt_nativ.py`.
+
+**Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit (Commit folgt).
+## RM-360: Bauplan §2.2 nennt für Weg 1 das Auswahlfenster statt des Kontextmenüs (02.10.2026)
+
+<a id="rm-360-bauplan-22-nennt-für-weg-1-das-auswahlfenster-statt-des-kontextmenüs-02102026"></a>
+<a id="rm-360"></a>
+
+**RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters.**
+  Review 02.10.2026, Gebietsprüfung Weg 1 (I-4); Entscheidung Robert 02.10.2026: „§2.2 anpassen“.
+  `3d-agent-bauplan.md:124` (§2.2, Weg 1) sagt „im Chat sagen, was werden soll, oder aus dem
+  Kontextmenü wählen“. §2.6 und §18.5 legen fest: Die passenden Ops stehen rechts im
+  Auswahlfenster am Merkmal, der Rechtsklick führt keine Operation aus und zeigt nur, was es dort
+  gibt (Ursprungsschritt, Zeichnen auf der Fläche, Ausblenden).
+  **Umfang (nur Wortlaut, die App bleibt unverändert):**
+  - `3d-agent-bauplan.md:124` — „oder aus dem Kontextmenü wählen“ durch die Wahl im
+    Auswahlfenster am Merkmal ersetzen (etwa „oder im Auswahlfenster am Merkmal die passende
+    Operation wählen“).
+  - Folgestellen mit demselben veralteten Satz „das Kontextmenü am Merkmal ist der Ort für
+    Weg 1 (§18.5)“: `.claude/rules/ansicht.md:35–36`, `konzepte/begruendungen/regel-ansicht.md:38–40`,
+    Docstrings und Kommentare `app/ui/viewport.py:17061–17063`, `app/ui/panels.py:2873–2875`,
+    `app/ui/main_window.py:17476–17478`, `tests/test_analysis_ui.py:2293`,
+    `tests/test_selection.py:1453–1457`, `tests/test_way_one.py:7–8` („hier kommt die Operation
+    aus dem Kontextmenü“). Die Aussage über den ungestuften Rechtsklick bleibt richtig, nur der
+    Ort der Operationen wird berichtigt.
+  - Handbuch (`app/core/manual.py`, `website/handbuch.html`) und README: geprüft, kein Satz nennt
+    das Kontextmenü als Ort der Operationen von Weg 1; die Treffer dort betreffen *Diesen Schritt
+    ändern*, *Löschen* im Verlauf und die STEP-Umstellung und bleiben.
+  **Abnahme:** `git grep -n "Kontextmenü"` findet keinen Satz mehr, der Operationen für Weg 1 im
+  Kontextmenü verortet; Bauplanänderung mit Robert abgestimmt (`AGENTS.md`: Bauplan nur mit
+  Ansage — die Ansage liegt vor); `tests/test_directory_docs.py` bleibt grün.
+
+**Abschluss:** Bauplan §2.2 (Weg 1) nennt jetzt „rechts im Auswahlfenster am Merkmal die passende Operation wählen“, abgestimmt mit Robert (Ansage 02.10.2026). Nachgezogen in `.claude/rules/ansicht.md`, `konzepte/begruendungen/regel-ansicht.md`, den Docstrings und Kommentaren in `app/ui/viewport.py`, `panels.py`, `main_window.py`, `labels.py`, `selection_operations.py` und in `tests/test_analysis_ui.py`, `test_selection.py`, `test_way_one.py`, `test_operation_ui.py`. `git grep "Kontextmenü am Merkmal"` findet nur noch Sätze über *Diesen Schritt ändern* im Menü (richtig nach §18.5) und datierte Archivtexte. Die App bleibt unverändert. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+**Abschluss:** Der Zuhörer in `app/ui/style.py` behält die Wahl der Tastatur, wenn der Knopf den Fokus mit `ActiveWindowFocusReason` oder `PopupFocusReason` abgibt und genauso zurückbekommt (`_WINDOW_REASONS`); jeder andere Fokuswechsel entscheidet wie bisher. Neuer Fenstertest `test_enter_keeps_the_tabbed_button_across_a_window_switch` über alle drei Rückfragen mit echtem `exec()`, Tab, Fensterwechsel und Enter (vier Fälle am Stand `ba5a76365` rot, alle sieben danach grün; die übrigen 16 Tests der Datei grün). Sonde am echten Fenster mit `QTest.keyClick`: am Stand `ba5a76365` 2 von 6 (*Abbrechen* lieferte „verwerfen“, „speichern“, „exportieren“), danach 6 von 6; ohne Tab bleibt Enter beim Hauptknopf. Unter Windows wird das andere Fenster neben einer modalen Rückfrage nicht aktiv, die Rückfrage verliert ihre Aktivierung trotzdem; genau dieser Weg traf den Fehler. Regel in `fenster.md` („Der Hauptknopf“). Umgesetzt von Claude, in main mit `c06c4d3b6` (Merge `d690c166e`); Entwicklungstor grün bis auf einen Fall aus `test_kernel_process` unter Volllast, einzeln nachgefahren grün.
+
+## RM-418: Slicerpfad in anderer Schreibweise und zweites Abbrechen beim Erzeugen verlieren nichts mehr (02.10.2026)
+
+<a id="rm-418-slicerpfad-in-anderer-schreibweise-und-zweites-abbrechen-beim-erzeugen-verlieren-nichts-mehr-02102026"></a>
+<a id="rm-418"></a>
+
+**RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen.**
+  Review 02.10.2026 am Stand `4cf460e87`; beide Ursprungspunkte sind im Arbeitsbaum archiviert.
+  - **Slicerpfad nur in Groß-/Kleinschreibung verschieden:** Die Wahl springt in Erststart und
+    Einstellungen auf „Später auswählen“ — die Liste fasst Schreibweisen über `Path` zusammen,
+    `select_data`/`findData` sucht den exakten Text. Dieselben Textvergleiche in
+    `app/ui/print_settings_dialog.py` (`_choose_slicer`) und `app/ui/filament_picker.py:538`.
+  - **Zweites „Abbrechen“ beim Erzeugen:** Solange der Abbruch von Versuch 2 noch ausläuft, schließt
+    ein zweiter Klick den Dialog und verwirft Versuch 1; der Knopf bleibt in dieser Zeit frei.
+  **Abnahme:** je Rest ein Test (Pfad `c:\…` gegen `C:\…` bleibt gewählt; zweiter Klick während des
+  Auslaufens verwirft nichts). Beleg: `verif-4cf460e87-oberflaeche.md`.
+
+**Abschluss:** Erststart, Einstellungen und Dateiwahl suchen den gewählten Slicer über `first_run.select_program` (Vergleich mit `discover.same_program`, also über `Path`) statt über den exakten Text; `PrintSettingsDialog._choose_slicer` und `filament_picker.slicer_filaments` vergleichen den gemerkten Pfad ebenso. *Abbrechen* im Erzeugen-Dialog ist gesperrt, solange der Abbruch eines weiteren Versuchs ausläuft, und trägt dabei den Satz „Wird abgebrochen — der laufende Schritt läuft aus.“; auch Esc und das Fensterkreuz verwerfen in dieser Zeit nichts (gefragt wird `_busy`, nicht `isRunning`, weil der Faden schon zurück sein kann, bevor seine Meldung ankommt). Tests: `test_a_slicer_in_another_case_stays_chosen_in_the_first_run`, `test_a_remembered_slicer_in_another_case_is_the_one_used` (Druckdialog und Filamentwähler), `test_a_remembered_slicer_in_another_case_stays_chosen_in_the_settings` (nur unter Windows, wo Pfade nicht nach Groß und Klein unterscheiden) und `test_a_second_cancel_while_the_first_runs_out_discards_nothing`; alle vier am Stand `ba5a76365` rot, danach grün. Sonde am echten Fenster: Erststart mit einer als `c:\…` gewählten Datei und anschließender Programmsuche, Erzeugen mit einem Abbruch, der zwei Sekunden ausläuft, echte Klicks und Esc: vorher 5 von 9, danach 9 von 9. In den Einstellungen trat der Fehler am echten Rechner nicht auf, weil die Programmsuche den gemerkten Pfad in seiner eigenen Schreibweise mitliefert; der Test stellt die Lage aus dem Review nach. Umgesetzt von Claude, in main mit `db87b3815` (Merge `db0f5ef13`); Entwicklungstor grün (20215 bestanden, ruff, format und mypy ohne Befund).
+## RM-280: Nach Skalieren über den Rahmen steht das Teil ganz im Bild (02.10.2026)
+
+<a id="rm-280-nach-skalieren-über-den-rahmen-steht-das-teil-ganz-im-bild-02102026"></a>
+<a id="rm-280"></a>
+
+**RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild
+  wächst.** Aus der Durchsicht v0.5.1 (rest-kunde, Registersatz 2). Am Organizer stehen
+  nach *Skalieren* ×2,3 noch 52 % des Körpers im Bild
+  (`konzepte/nachweise-release-0.5.1/sonden/rest-kunde/out/teilen-vorher-organizer.txt`, Zeile „vor
+  dem Teilen“). `Viewport._fit_once_for` rahmt nach dem ersten Bild nur, wenn `outgrown` es
+  verlangt (das Fünffache oder kein Überlapp); „jeder weitere Aufbau lässt die Kamera in
+  Ruhe“ ist eine ausdrückliche Regel (Robert, 23.08.2026, beim Verschieben). Nach *Modell
+  teilen* rahmt seit `9f821c70c` `frame_next_scene` einmal auf alle Teile. Ob Skalieren
+  unter die Regel fällt, ist eine Bedienfrage für `bedienlogik`; Vorschlag:
+  `frame_next_scene` auch nach einem Skalieren, das über den Rahmen hinauswächst. Abnahme:
+  die Frage entschieden und begründet; wird gebaut, steht der Organizer nach ×2,3 ganz im
+  Bild, und ein Verschieben lässt die Kamera weiter in Ruhe.
+
+**Abschluss:** Entschieden (Robert, „alles ja“, 02.10.2026) und gebaut: Ein neuer Größenschritt (`scale_object`, `fit_to_size`, `RESIZING_OPERATIONS`) meldet sich über `MainWindow._frame_after_resizing` einmal bei `Viewport.frame_if_beyond`; gerahmt wird nur, wenn die Körper gewachsen sind und über den eingepassten Rahmen hinausreichen (`reaches_beyond`). Verkleinern, Verschieben, Undo und Themenwechsel lassen die Kamera in Ruhe; Roberts Regel vom 23.08.2026 gilt weiter. Tests: `test_analysis_ui.py::test_a_body_beyond_the_frame_is_framed_only_when_asked`, `::test_scaling_beyond_the_frame_frames_once_and_moving_does_not` (ohne den Aufruf rot). Fenstersonde am echten Fenster: Würfel ×2,3 über den Dialog *Skalieren* → Rahmen (−23…23, 0…46), Körper ganz im Bild, danach *Verschieben* lässt den Rahmen; 7 von 7 Prüfungen. Regel in `.claude/rules/kamera.md`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-473: Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus (02.10.2026)
+
+<a id="rm-473-ein-körper-auf-dem-bett-wächst-beim-skalieren-vom-bett-aus-02102026"></a>
+<a id="rm-473"></a>
+
+**RM-473 — Ein Körper auf dem Bett wächst beim Skalieren vom Bett aus.**
+Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) bei der Fensterabnahme von RM-280: *Skalieren*
+  skaliert um die Mitte. Ein Würfel, der auf dem Bett steht, sank beim Faktor 2,3 um 13 mm unter
+  die Platte; der Prüfbericht meldete „Ein Objekt steckt unter dem Druckbett“ und bot *Auf das Bett
+  setzen* an. So schon in 0.5.1, kein Rückschritt. Bauplan §2.4 (gute Vorgabe), §29.
+
+**Abschluss:** Für einen Körper, der auf dem Bett steht, belegt der Dialog den Bezugspunkt „Druckbett“ vor (`MainWindow._from_selection`, `_stands_on_the_bed`, `_offers_the_bed_anchor`); was schwebt, behält die Mitte. Die Vorgabe der Operation bleibt die Mitte, gespeicherte Schritte, Rezepte und Agent rechnen unverändert. Test `test_analysis_ui.py::test_a_body_on_the_bed_grows_from_the_bed_when_scaled`; Fenstersonde: Dialog zeigt „Druckbett“, der Würfel wächst von z = 0 auf 46 mm. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-404: Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still (02.10.2026)
+
+<a id="rm-404-die-facettenausrichtung-aus-rm-225-greift-an-verschobenen-größeren-oder-fein-vernetzten-stl-nicht-still-02102026"></a>
+<a id="rm-404"></a>
+
+**RM-404 — Die Facettenausrichtung aus RM-225 greift an verschobenen, größeren oder fein vernetzten STL nicht, still.**
+  Review 02.10.2026 der Commits `4449e3370..7f0de659d`, Funde F1–F4; Folgepunkt zu RM-225, das
+  `d0a3657e2` archiviert hat.
+  **Fehlerfall:** Die neue Facettenausrichtung (`app/core/geom/prepare_ops.py:14258–14259`,
+  `:14282–14283`, `:14322–14329`, `:14333–14334`) prüft gegen die feste Grenze `EPS_GEOM` (1 nm);
+  das float32-Raster einer binären STL ist ab 16 mm schon 1,9 nm, ab 64 mm 7,6 nm. Wird die Grenze
+  gerissen, gibt die Funktion still die Quelle zurück, und der alte RM-225-Fehler ist wieder da.
+  Belegt: Riffeldeckel mit Mitte bei x = y = 110 mm — Entfernen 15 Selbstschnittdreiecke und Stift
+  weg, Ändern 13 Selbstschnittdreiecke, 63 Flächen, kein Muster; Ø 80 am Ursprung — Stift verloren;
+  Ø 40 mit CAD-Nullpunkt in der Ecke — 5 bzw. 3 Selbstschnittdreiecke; echter `deckel_basis.stl`
+  um (110, 110, 0) verschoben — 60 statt 37 Flächen, 9 Selbstschnittdreiecke; fein vernetzter
+  Träger (101 376 Ecken, 1,01e-6 mm) wird nicht ausgerichtet. Befunde jeweils nur
+  `remove_feature.gone` bzw. `resize_feature.pattern`. Der Testfall (Ø 40 am Ursprung) liegt mit
+  0,69 nm knapp unter der Grenze.
+  **Weitere Reste:** (F2) 13 `return source` ohne Spur (`:14207–14334`, Aufrufer `:14395`,
+  `:14548`) — eine Ablehnung erzeugt Selbstschnitte ohne Befund; der Docstring verspricht eine
+  Auswahl je Gruppe, tatsächlich gilt alles oder nichts. (F3) `tests/test_pattern_features.py:1376`
+  (Achsfall) läuft nur durch „nichts geändert“ — die Identitätsmutante bleibt grün. (F4) rund
+  45 µs Python je Trägerecke, bei 26 112 Ecken 1,2–1,6 s ohne Fortschritt.
+  **Fix:** Grenze aus dem float32-Raster der Koordinaten beim Lesen ableiten (vor Aufsetzen oder
+  Zentrieren); bei Ablehnung Grund zurückgeben und Befund mit *Reparieren*; Docstring berichtigen;
+  Achsfall auf die Axiallage zusichern; in Feldern rechnen oder `ctx.progress` melden.
+  **Abnahme:** verschobene Variante, Ø 80, CAD-Nullpunkt und feiner Träger je *Entfernen* und
+  *Ändern* in beiden Güten ohne Selbstschnitt, Merkmale erhalten; Identitätsmutante des Achsfalls
+  rot. Bauplan §21, §25, Regeln 6, 17.
+  Belege: `F:\solidon-review-reports\review-7f0de659d.md`, Sonden `r2_rm225_*.txt`,
+  `r2_gegenprobe_axial.txt`, `r2_ausrichtung_laufzeit.txt`.
+  Nachprüfung am Stand `4373b5f12` (nach `fa7780785`): unvollständig. Verbessert: verschobener `deckel_basis.stl` 0 statt 9 Selbstschnitte, 37 Flächen; CAD-Nullpunkt frei; 26 112 Trägerecken 0,26 statt 1,60 s; feiner Träger (101 376 Ecken) wird ausgerichtet; Rest (110, 110) als strenges xfail registriert. Offen (mittel): Ø 80 mit 48 Rillen behält 2 Selbstschnitte ohne Befund, in Entwurf und fein, bei *Entfernen* und *Ändern*. Tests: der Test nimmt Ø 80 mit 24 Rillen; die Fälle mit feinem Träger sind am Elterncommit, mit Identitätsmutante und alter 1-nm-Grenze grün (stellen den Fehler nicht nach); nur Güte „fein“. Belege `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`, Sonden `v7g_rm404_*`.
+
+**Abschluss:** Muster an verschobenen und großen STL-Deckeln schließen ohne Selbstschnitt (`7a7958937`): Mantel und Stopfen lesen ihre Facetten über dieselbe achsparallele Ausgleichsgerade (`patterns.cylinder_facet_lines`), der Facettenwechsel liegt am Schnitt, Stopfenenden in der gemessenen Stirnfläche. Deckel (110, 110), Ø 80/48 und CAD (20, 20) ohne Selbstschnitt; Tor 20 283 passed. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-443: Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test (02.10.2026)
+
+<a id="rm-443-reste-aus-rm-399-die-halter-vorlage-setzt-immer-zwei-schlüssellöcher-exakte-halter-nur-im-test-02102026"></a>
+<a id="rm-443"></a>
+
+**RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test.**
+  Nachprüfung des Reviews am Stand `4373b5f12` (nach `4b44e6e0e`): im Testumfang behoben
+  (Bereichstest aller vier Halter). Offen: Der Nachbau von Modell 1 gelingt, die Rückwand wird
+  aber 24,7 statt 20 mm breit, weil die Vorlage immer zwei Schlüssellöcher setzt; die
+  Korpusabnahme an drei Haltern ist nicht belegt; der Fünf-Klick-Weg steht nur im Archivtext;
+  exakte Halter sind nur im Test erreichbar, der Kundenweg baut immer ein Netz.
+  **Abnahme:** Nachbau Modell 1 mit 20 mm Rückwand; drei Halter aus dem Korpus nachgebaut;
+  Fünf-Klick-Weg am echten Fenster; exakter Halter über den Kundenweg. Bauplan §24, §2.2.
+  Belege: `F:\solidon-review-reports\verif-4373b5f12-geometrie.md`.
+
+**Abschluss:** Halter setzen ein Schlüsselloch, wenn zwei nicht mit Rand in die Breite passen, und wachsen nur, wenn auch eines nicht passt (`a64ca4802`, Bibliothek 22, Bereichsnachweis der vier Halter neu); Vorlagen entstehen exakt, wo der Kern da ist. Modell 1 im Kundenweg: exakt, 20 mm breit, ein Schlüsselloch; Beispielprojekte mit Bibliothek 22 neu erzeugt (`1deb59633`). Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-400: Schräg abschneiden (02.10.2026)
+
+<a id="rm-400-schräg-abschneiden-02102026"></a>
+<a id="rm-400"></a>
+
+**RM-400 — Schräg abschneiden.**
+  Umfangsentscheidung Robert 02.10.2026 („Alle“, Nachbau-Vorschlag Nr. 5).
+  *Abschneiden* (`cut_away`, `app/core/geom/prepare_ops.py:16944`) kennt nur Achsebenen
+  (`axis ∈ {x, y, z}`); Schale, Wedge-Lock und viele Organizer haben eine schräge Front, heute nur
+  über ein gezeichnetes Seitenprofil mit unpassenden Feldnamen (RM-391).
+  **Ablauf:** *Abschneiden* bekommt hinten eine Neigung (Winkel um eine Kante bzw. Achse) oder eine
+  Ebene durch eine gewählte Fläche/Kante; vorn bleibt Achse und Lage. Schnittfläche geschlossen,
+  beide Kerne, Parameter migriert (`format_version`/Migration, alte Projekte unverändert).
+  **Abnahme:** Geometrietest: Quader 30° schräg abgeschnitten → Volumen analytisch, dicht, an
+  beiden Kernen gleich; alte Projekte öffnen unverändert. Bauplan §21, §25, Regel 4.
+  **Vorgabe Robert 02.10.2026 — allgemein, nicht für ein Modell:** Schräg abschneiden an jeder Ebene (Winkel, Fläche, drei Punkte), an jedem Körper (Netz, exakt, Mehrschaler); dient Fronten, Fasen ganzer Seiten und dem Kürzen auf Druckhöhe. Nutzen: in `F:\3D Dateien` nach Dateinamen rund 12 Teile mit schräger Front (Wedge-Lock, Laptop-Ständer, Handyständer, Schaber, Organizer). Abnahme an mindestens drei unterschiedlichen Korpusmodellen.
+  Nachprüfung am Stand `0041000a0` (nach `3006acb62`, `8401b2c64`, `bf829b68d`): unvollständig. Gut: Neigung und Fläche analytisch richtig an beiden Kernen und Güten, außermittig und an Mehrschalern; sechs Korpusmodelle aus `F:\3D Dateien` (zwei STEP) vollständig und geschlossen; alte Projekte rechnen bitgleich. Offen: Ebene durch drei Punkte bzw. eine Kante; Test am exakten Kern und für `no_plane`; die Gegenprobe „Kippachse durch den Ursprung“ bleibt grün. Neu: Mit gewählter Fläche belegt der Dialog „An Fläche“ und die Position aus der Körpermitte vor — *Abschneiden* öffnet mit „Diese Ebene schneidet nichts vom Objekt ab.“ (vorher gültiger Schnitt); Achse, Neigung und „Neigen um“ wirken neben „An Fläche“ nicht, bleiben aber bedienbar (kein `depends_on`) — 30° um die eigene Achse wird still übergangen; „Kleinere Seite — bei Z unten“ stimmt an einer Unterseite nicht; mit Vorgabe Kippachse x wird jede Neigung an Achse x abgewiesen. Belege `F:\solidon-review-reports\review-0041000a0.md`, Sonden `v6_rm400_*`.
+  Nachprüfung am Stand `4373b5f12` (nach `1c55ac1cb`, `c2ed098ec`): exaktes Abschneiden behoben (exakt bleibt exakt, analytische Volumina, STEP-Modelle exakt, Altprojekt bitgleich). Weiter offen wie vermerkt: Ebene durch drei Punkte, M3/M4. Niedrig: die neuen exakten Neigungstests hängen nicht vom Winkel ab — eine achsparallele Mutante bleibt in 7 von 8 Fällen grün.
+
+**Abschluss:** *Abschneiden* legt die Ebene durch Achse, Fläche, Kante oder drei Punkte (`5e9b56a8a`, Format 42 mit Migration, `cut_away_face_v41.p3d` rechnet bitgleich). Neigungsfälle an beiden Kernen, Punktwahl im Bild mit Esc; Mutanten achsparallel, Kippachse und Vorzeichen je 8 von 8 rot. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-417: Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot (02.10.2026)
+
+<a id="rm-417-cura-meldet-anderer-drucker-aktiv-obwohl-es-derselbe-ist-zwei-neue-fenstertests-rot-02102026"></a>
+<a id="rm-417"></a>
+
+**RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot.**
+  Review 02.10.2026 von `29ff469b5`/`4cf460e87`.
+  - **Falsche Warnung (mittel, neu mit `4cf460e87`):** Ist in Cura dasselbe Modell aktiv wie in
+    Solidon, kommt „In Cura ist „Creality K1 Max“ aktiv, in Solidon „Creality K1 Max“ …“ — das
+    trifft jeden *Im Slicer öffnen*-Lauf mit dem eingebauten Drucker. Ursache: `chosen_printer`
+    gibt für eine nicht übernommene Cura-Instanz `""` zurück. Fix: zusätzlich die Definition mit
+    `cura_definition` vergleichen.
+  - **Zwei neue Fenstertests aus `29ff469b5` rot** (fällt erst im Release-Tor auf):
+    `…can_be_adopted…` hat einen Wettlauf (`_slicer_path` gesetzt, ohne die Slicersuche abzuwarten;
+    mit `wait_for_slicers()` grün); `…not_reported_as_failed_adoption…` sichert eine leere
+    Hinweiszeile zu streng zu.
+  - **Niedrig:** Das neue `if setup.flavour == "cura"` in `machine_missing` doppelt nur
+    `machine_from_definition`.
+  **Abnahme:** Test mit gleichem Drucker in Cura und Solidon → keine Warnung, mit anderem →
+  Warnung; beide Fenstertests grün ohne Lockerung der Wirkung. Bauplan §29, §2.7.
+  Belege: `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`, Sonden
+  `v4u_test_cura_mismatch.py`, `v4u_test_cura_ui_diag.py`.
+
+**Abschluss:** Cura warnt nicht mehr vor einem anderen Drucker, wenn es derselbe ist: gleiche Definition und gleiches Bett gelten als derselbe Drucker (`048da569d`). Am echten Cura 5.13 mit aktivem Ender-3 V3 SE: vorher Warnung, jetzt keine; Centauri Carbon 2 warnt weiter. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-429: Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück (02.10.2026)
+
+<a id="rm-429-bambu-prozessprofil-mit-leerer-düsenvariante-fällt-still-auf-solidons-tabelle-zurück-02102026"></a>
+<a id="rm-429"></a>
+
+**RM-429 — Bambu-Prozessprofil mit leerer Düsenvariante fällt still auf Solidons Tabelle zurück.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-333 (archiviert), Regression aus
+  `88bd58c2a`. Lesbare Mehrdeutigkeiten und unbekannte Varianten melden jetzt
+  `slicer.process_variant_unresolved`.
+  **Fehlerfall:** Bei `nozzle_volume_type` = `"nil"`, `""`, `["", ""]` oder einer Zahl fällt die
+  Druckgrundlage ohne jeden Befund auf Solidons Tabelle zurück; am Stand `4cf460e87` kam dafür
+  `process_unreadable`. Ursache: `_wanted_variant` (`app/core/knowledge/manufacturer.py:273–280`)
+  gibt `""` zurück, und die Befundprüfung fragt nur `if foundation.unresolved_variant:` (`:1818`).
+  **Fix:** leere/unlesbare Variante als eigener Fall mit Befund (Herkunft „Solidon-Tabelle statt
+  Slicerprofil“ ausweisen, Regel 14).
+  **Abnahme:** Test je Wert (`nil`, leer, Liste leerer Werte, Zahl): Befund mit Handlung. Bauplan §28,
+  Regel 14, Regel 21. Beleg: Sonden `v5g_t_rm333_varianten.txt`, `v5g_t_rm333_varianten_alt.txt`.
+
+**Abschluss:** Ein Bambu-Profil ohne lesbare Düsenvariante sagt wieder, dass Solidons Werte gelten (`57891b263`, Befund `slicer.process_variant_unreadable`). Test je Wert (nil, leer, Liste, Zahl), vorher 4 rot; am echten Bambu Studio mit H2D bestätigt. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-431: Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten (02.10.2026)
+
+<a id="rm-431-allgemeiner-drucker-mit-prusaslicer-slicen-bleibt-gesperrt-obwohl-solidons-werte-gelten-02102026"></a>
+<a id="rm-431"></a>
+
+**RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-336 (archiviert). *Im Slicer öffnen* ohne
+  Druckerprofil ist jetzt frei und ausführbar.
+  - **PrusaSlicer gesperrt (mittel, Rückschritt gegenüber 0.5.1, seit `48ffcf145`):** Allgemeiner
+    Drucker mit PrusaSlicer-Bündel — das Profil bleibt von selbst leer, der Hinweis sagt „… es gelten
+    Solidons Werte …“, *Slicen* ist trotzdem gesperrt mit „Wählen Sie einen Drucker aus der Liste.“
+    Ursache: Rückfallsatz in `_machine_selection_issue` (`app/ui/print_settings_dialog.py:6328`) —
+    `_profile_gap()` ist leer, die Funktion meldet trotzdem.
+  - **Quittung überschrieben:** Nach dem Öffnen steht „An … übergeben — das Fenster gehört jetzt
+    Ihnen.“, danach „Dieser Slicer braucht ein Druckerprofil …“ (`_slice_finished` →
+    `_show_slicer_state`, Zweig `elif reason:`, `:6469–6482`).
+  - **Testlücke:** Der Test ruft `_open_in_slicer` nie auf; die Mutation „nur das Öffnen fragt das
+    Profil“ bleibt grün.
+  **Fix:** Auf dem Rechen-Weg nur `_profile_gap()` fragen; Quittung stehen lassen; Test über
+  `_open_in_slicer`.
+  **Abnahme:** Allgemeiner Drucker mit PrusaSlicer → *Slicen* frei; nach dem Öffnen bleibt die
+  Quittung; Mutation rot. Bauplan §29, §2.1. Belege:
+  `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`, Sonden `v5u_test_rm336.py`.
+
+**Abschluss:** Der allgemeine Drucker slict wieder mit PrusaSlicer, und die Quittung des Öffnens bleibt stehen (`a4c22fcec`); ein Slicer, der den Drucker des Projekts nicht kennt, meldet `slicer.printer_unknown`. Am echten PrusaSlicer 2.9.6 mit generic-220: 100 Schichten, 18 min. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-432: Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder (02.10.2026)
+
+<a id="rm-432-bettart-automatisch-bei-prusaslicer-und-cura-zeigt-die-wirkungslosen-felder-02102026"></a>
+<a id="rm-432"></a>
+
+**RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder.**
+  Review 02.10.2026 am Stand `70e9b3145`; Folgepunkt zu RM-341 (archiviert). Brim, Skirt, Raft und
+  „keine“ zeigen jetzt die richtigen Zeilen; Orca ist richtig.
+  - **„Automatisch“ (mittel):** `handover._adhesion_for` (`app/core/export/handover.py:863–889`)
+    macht daraus die Art aus Solidons Materialtabelle (PLA, PETG, TPU → Skirt). Gemessen mit PLA:
+    PrusaSlicer bekommt `skirts 2`, `brim_width 0`, Cura `skirt_line_count 2`, `brim_width 0`; der
+    Dialog zeigt nur die wirkungslose Brim-Breite und versteckt die wirksamen Skirt-Felder; die
+    Suche schickt zu „Ändern Sie die Auswahl …“.
+  - **Alter Test rot (Release-Tor):** `test_disabled_support_and_bed_adhesion_hide_their_detail_rows`
+    (`tests/test_print_settings_ui.py:2094`) verlangt bei Brim alle vier Zeilen.
+  - **Zweite Tabelle (niedrig):** `ADHESION_DETAILS` steht handgeschrieben neben
+    `ADHESION_MEASURES`, `slicer_keys.ADHESION_KEYS` und der Auto-Brim-Ausnahme in
+    `handover._only_chosen_adhesion`. Der UI-Test bezieht seinen Sollwert aus `inactive_paths` selbst.
+  **Fix:** Sichtbarkeit aus der Art, die tatsächlich übergeben wird (je Slicer); eine Quelle für alle
+  Tabellen; alten Test an die Entscheidung anpassen; Sollwert im Test von außen.
+  **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
+  die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
+  `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
+
+**Abschluss:** „Automatisch“ zeigt im Druckdialog genau die Haftungsmaße, die der Slicer bekommt (`1677cc0a5`, eine Tabelle `print_settings.ADHESION_PATHS`). Fenstertest Orca/Prusa/Cura × PLA/PETG gegen `values_for`; am echten Ender-3 V3 SE: PrusaSlicer `skirts = 2`, Cura drei Skirt-Runden. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-430: Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit (02.10.2026)
+
+<a id="rm-430-reste-aus-rm-376-und-rm-328-testlücken-am-vorderseitenfilter-cura-bremswerte-plattenweit-02102026"></a>
+<a id="rm-430"></a>
+
+**RM-430 — Reste aus RM-376 und RM-328: Testlücken am Vorderseitenfilter, Cura-Bremswerte plattenweit.**
+  Review 02.10.2026 am Stand `70e9b3145`; beide Ursprungspunkte sind archiviert und im Verhalten
+  behoben.
+  - **RM-376, Tests:** `plate[smooth]` kann nicht rot werden (Glätten bewegt an der Testplatte auch
+    ohne Filter nichts); Aufblasen und Flachziehen zeigen den Fehler, fehlen aber; ein Filter, der
+    nichts durchlässt, lässt 14 neue Tests grün; „keine Selbstdurchdringung“ ist nicht zugesichert;
+    die Figur nur von vorn. Die Zahl „Unterseite 3,7 mm“ (Register, `sculpt.py:255–256`,
+    `tests/test_sculpt.py:890–891`) war schon damals falsch — es ist die Oberseite.
+  - **RM-328, Cura (älter):** Innenwand und Grundbeschleunigung bleiben plattenweit auf 60/2000, also
+    auch am Block, ohne `part_setting_unavailable` (`app/core/export/handover.py:1092–1098`).
+  **Abnahme:** Gegenproben (ohne Filter, Filter lässt nichts durch) machen die Tests rot; Cura-Fall
+  mit Befund. Beleg: `verif-70e9b3145-geometrie.md`, Sonden `v5g_rm376_*`, `v5g_rm328_cura.txt`.
+
+**Abschluss:** Cura nennt die Teile, die plattenweite Übernahmen nur mitbekommen (`6af7d3518`, Befund `export.part_setting_unavailable`). Test vorher rot; am echten CuraEngine 5.13 mit Stange und Block: Befund an obj_2 für Innenwand und Beschleunigung. Umgesetzt von Claude, in main mit `85665092d`; Entwicklungstor auf dem zusammengeführten Stand grün.

@@ -238,11 +238,13 @@ from app.core.types import (
     PrintSettings,
     Profile,
     QualityPreset,
+    SceneObject,
     SliceResult,
     SolvedSketch,
     SourceOrigin,
     Stroke,
     Vec3,
+    vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
 from app.i18n import _, format_decimal, tr
@@ -350,6 +352,7 @@ from app.ui.print_settings_dialog import (
 )
 from app.ui.recipe_dialog import RecipeDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
+from app.ui.render.api import PointerEvent
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.selection_operations import SelectionOperationsPanel
@@ -1687,6 +1690,23 @@ def _names_a_dimension(entry: ParamSpec) -> bool:
     return entry.placement == "front" and entry.kind == "float" and entry.unit == "mm"
 
 
+#: Schritte, die die Größe eines Körpers ausdrücklich ändern: Danach rahmt die
+#: Ansicht einmal nach, wenn er über den Rahmen hinausreicht (RM-280).
+RESIZING_OPERATIONS: Final[frozenset[str]] = frozenset({"scale_object", "fit_to_size"})
+
+
+def _stands_on_the_bed(entry: SceneObject) -> bool:
+    """Ob ein Körper mit seiner Unterseite auf der Druckfläche steht (RM-473)."""
+    return abs(float(entry.mesh.bounds.minimum[2])) <= EPS_DISPLAY
+
+
+def _offers_the_bed_anchor(spec: OperationSpec) -> bool:
+    """Ob die Operation einen Bezugspunkt „Druckbett“ zur Wahl stellt."""
+    return any(
+        entry.name == "about" and "bed" in (entry.choices or ()) for entry in spec.params.spec()
+    )
+
+
 def offers_naming(spec: OperationSpec) -> bool:
     """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
 
@@ -2336,6 +2356,8 @@ class MainWindow(QMainWindow):
         braucht er eine Referenz: ein Dialog, den nur eine lokale Variable hält,
         verschwindet mit dem Verlassen der Funktion."""
         self._local_features: LocalRecognitionFlow | None = None
+        self._plane_points_armed = False
+        """Ob die nächsten Klicks Punkte einer Schnittebene sind (RM-400)."""
         self._hidden: frozenset[str] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
@@ -2804,6 +2826,9 @@ class MainWindow(QMainWindow):
         die alte Szene. Gemerkt werden deshalb die Ausgaben der Operation und
         nicht ein Zeitpunkt.
         """
+        self._resized_seen: set[str] = set()
+        """Transaktionen, nach denen die Ansicht schon gefragt hat, ob sie
+        nachrahmt (:meth:`_frame_after_resizing`) — jede nur einmal."""
         self._created_to_choose: tuple[ObjectId, ...] = ()
         """Neue Körper eines Erzeugerschritts, die nach ihrer Auswertung gewählt werden.
 
@@ -2914,7 +2939,7 @@ class MainWindow(QMainWindow):
         # die gezeichnete Linie; ein getrenntes Teil bleibt getrennt und geht
         # über Strg+Z zurück. (Das Bemalen stand mit demselben Argument
         # daneben, bis der Punkt-Radius-Pinsel fiel — Färben läuft seither
-        # über das Kontextmenü am Merkmal, als Operation wie jede andere.)
+        # über das Auswahlfenster am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
             tr("Trennen"),
@@ -9970,6 +9995,11 @@ class MainWindow(QMainWindow):
         if self._local_features is not None and self._local_features.active:
             self._local_features.invalidate()
             return
+        if self._disarm_plane_points():
+            # Die Punktwahl im Bild zuerst: Sie liegt über dem offenen Dialog,
+            # und was schon eingetragen ist, bleibt stehen.
+            self.announce(tr("Punktwahl beendet. Die eingetragenen Punkte bleiben."))
+            return
         if self.session.split_running:
             # Die lange Suche ist die oberste laufende Handlung. Erst sie
             # anhalten; die Auswahl darunter bleibt stehen und zeigt weiter,
@@ -15012,6 +15042,23 @@ class MainWindow(QMainWindow):
         if result is not None:
             self._reveal_split_result(result)
 
+    def _frame_after_resizing(self) -> None:
+        """Nach einem neuen Größenschritt rahmt die Ansicht einmal, wenn nötig (RM-280).
+
+        Gemeint ist die jüngste Transaktion, und nur einmal: Ein Undo, ein
+        Themenwechsel oder eine weitere Auswertung desselben Stands rahmen
+        nicht nach. Wer verschiebt oder bohrt, behält seinen Zoom
+        (:meth:`Viewport.frame_if_beyond`).
+        """
+        transactions = self.session.history.transactions
+        newest = transactions[-1] if transactions else None
+        if newest is None or newest.id in self._resized_seen:
+            return
+        self._resized_seen.update(entry.id for entry in transactions)
+        operations = {entry.id: entry.op for entry in self.session.project.document.ops}
+        if any(operations.get(op_id) in RESIZING_OPERATIONS for op_id in newest.ops):
+            self.viewport.frame_if_beyond()
+
     def _reveal_split_result(self, result: EvaluationResult) -> None:
         """Macht Naht, Stifte und Löcher ohne gesuchten zweiten Griff sichtbar."""
         wanted = self._pending_split_reveal
@@ -17564,7 +17611,7 @@ class MainWindow(QMainWindow):
         if seat is not None and seat.values is not None:
             values.update(seat.values)
         values.update(self._spacing_for(spec))
-        values.update(self._plane_through(spec, chosen[0] if chosen else None))
+        values.update(self._plane_through(spec, chosen[0] if chosen else None, values))
         values.update(self._measured_from_body(spec, chosen[0] if chosen else None))
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
@@ -17776,7 +17823,7 @@ class MainWindow(QMainWindow):
                 # Auswahl aus dem *Wert*, den er mitbekommt: Aus „hole_1"
                 # wurde ein Eintrag „hole_1", und die übrigen Flächen des
                 # Körpers kannte die Liste nicht. Das ist der Hauptweg — das
-                # Kontextmenü am Merkmal (Weg 1) und die Menüs *Erzeugen* und
+                # Auswahlfenster am Merkmal (Weg 1) und die Menüs *Erzeugen* und
                 # *Ändern* laufen hier durch —, und der Docstring des
                 # Parameters verspricht die lesbare Bezeichnung. Gemessen:
                 # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
@@ -18393,6 +18440,7 @@ class MainWindow(QMainWindow):
         self._wire_outline_choice(dialog)
         self._wire_step_choice(dialog)
         self._wire_organizer_choice(dialog)
+        dialog.pointsPickRequested.connect(self._arm_plane_points)
 
         def finished(accepted: bool) -> None:
             prepared = getattr(dialog, "preview_order", None)
@@ -18403,6 +18451,7 @@ class MainWindow(QMainWindow):
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
             self.viewport.set_direct_picking(False)
+            self._disarm_plane_points()
             self._clear_preview()
             if applies:
                 on_accept()
@@ -18431,6 +18480,64 @@ class MainWindow(QMainWindow):
         # ein verschluckter erster.
         self.viewport.set_direct_picking(True)
         dialog.show()
+
+    def _arm_plane_points(self) -> None:
+        """*Im Bild wählen* an den drei Punkten: Die nächsten Klicks treffen den Körper.
+
+        Dieselbe Stellenwahl wie *Merkmale hier erkennen*
+        (``local_recognition_flow``): Die linke Taste gehört der Auswahl, die
+        Kamera bleibt bedienbar, ein Fadenkreuz trägt Pfeiltasten und
+        Eingabetaste, Esc beendet. Getroffen wird die sichtbare Oberfläche
+        (``placement_hit``) in Szenenkoordinaten — dieselben, in denen
+        *Abschneiden* rechnet. Nach dem dritten Punkt ist die Auswahl vorbei.
+        """
+        if self._op_dialog is None:
+            return
+        self._plane_points_armed = True
+        self.viewport.set_placement_pointer(self._plane_point_pointer)
+        self.viewport.set_surface_picker(self._pick_plane_point)
+        self.announce(tr("Klicken Sie Punkt 1 von 3 auf dem Körper an. Esc beendet die Auswahl."))
+
+    def _disarm_plane_points(self) -> bool:
+        """Die Punktwahl beenden — ``True``, wenn eine lief."""
+        if not self._plane_points_armed:
+            return False
+        self._plane_points_armed = False
+        self.viewport.set_placement_pointer(None)
+        self.viewport.set_surface_picker(None)
+        return True
+
+    def _plane_point_pointer(self, event: PointerEvent) -> bool:
+        """Die linke Taste nimmt eine Stelle; Alt und Strg bleiben der Kamera."""
+        if event.alt or event.ctrl:
+            return False
+        if event.button != "left" or event.kind not in ("press", "release"):
+            return False
+        if event.kind == "release":
+            self._pick_plane_point(event.x, event.y)
+        return True
+
+    def _pick_plane_point(self, x: float, y: float) -> None:
+        """Eine Stelle im Bild wird der nächste der drei Punkte."""
+        dialog = self._op_dialog
+        if dialog is None:
+            self._disarm_plane_points()
+            return
+        hit = self.viewport.placement_hit(round(x), round(y))
+        if hit is None:
+            self.announce(tr("Dort ist kein Körper. Klicken Sie auf seine Oberfläche."))
+            return
+        number = dialog.take_plane_point(hit[1])
+        if number is None or number >= 3:
+            self._disarm_plane_points()
+            if number is not None:
+                self.announce(tr("Drei Punkte gewählt — die Ebene geht durch sie."))
+            return
+        self.announce(
+            tr("Punkt {number} gesetzt. Klicken Sie Punkt {next} von 3 an.").format(
+                number=number, next=number + 1
+            )
+        )
 
     def _wire_outline_choice(self, dialog: OperationDialog) -> None:
         """Das Konturfeld benutzt dieselbe Auswahl wie der erste Zeichnungsimport."""
@@ -19764,7 +19871,7 @@ class MainWindow(QMainWindow):
 
         ``spec`` verengt die Liste auf die Merkmalsarten, mit denen diese
         Operation etwas anfangen kann (``applies_to``) — dieselbe Zuordnung,
-        über die das Kontextmenü am Merkmal die Operation findet (§18.5, §10).
+        über die das Auswahlfenster am Merkmal die Operation findet (§18.5, §10).
 
         **Ohne sie war die Auswahl eines Dialogs die aller Merkmale.** An einer
         eingelesenen STEP-Datei mit 302 erkannten Merkmalen bot *Bohrung
@@ -19819,15 +19926,28 @@ class MainWindow(QMainWindow):
         bleibt die Liste leer, und der Dialog zeigt eine leere Auswahl — die
         Operation selbst ist an einem Netz ohnehin gesperrt
         (``requires_kind="brep"``), und dort steht der Grund.
+
+        **Bis auf die Kante, die im Bild gewählt ist**: Sie steht auch an einem
+        Netz mit ihrer Beschriftung da. *Abschneiden* durch eine Kante nimmt
+        sie an beiden Kernen (RM-400), und ohne sie stünde im Dialog ihr
+        Schlüssel statt Lage und Länge.
         """
         from app.core.brep import edit as brep_edit
         from app.core.brep.kernel import Solid, available
 
         result = self.session.last_result
         chosen = self.object_tree.selected()
-        if result is None or chosen is None or not available():
+        if result is None or chosen is None:
             return {}
         entry = result.scene.objects.get(chosen)
+        highlighted = self.viewport.highlighted_edge()
+        picked: dict[str, str] = {}
+        if highlighted is not None and highlighted[0] == chosen:
+            title = self.viewport.edge_title(chosen, highlighted[1])
+            if title:
+                picked[highlighted[1]] = title
+        if not available():
+            return picked
         # **Der exakte Körper steht in ``mesh``**, und das ist keine Feinheit:
         # ``SceneObject`` hat kein Feld ``exact``. Ein ``getattr`` darauf gab
         # immer ``None``, die Kantenliste blieb immer leer, und der Dialog
@@ -19835,7 +19955,7 @@ class MainWindow(QMainWindow):
         # Liste, nie am Fenster. ``brep_input`` fragt an derselben Stelle.
         body = entry.mesh if entry is not None else None
         if not isinstance(body, Solid):
-            return {}
+            return picked
         return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
@@ -19872,7 +19992,12 @@ class MainWindow(QMainWindow):
         )
         return {"spacing": max(float(default or 0.0), needed)}
 
-    def _plane_through(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
+    def _plane_through(
+        self,
+        spec: OperationSpec,
+        selected: ObjectId | None,
+        given: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Eine Schnittebene beginnt in der Mitte des Körpers, nicht bei null.
 
         *Teilen* öffnete mit ``position=0``, und ein Körper steht auf dem Bett
@@ -19899,6 +20024,8 @@ class MainWindow(QMainWindow):
             return {}
         bounds = entry.mesh.bounds
         middle = tuple((bounds.minimum[index] + bounds.maximum[index]) / 2.0 for index in range(3))
+        if {"plane", "points", "at_feature", "edge"} <= names:
+            return self._cut_plane_through(entry, middle, given or {})
         if {"axis", "position"} <= names:
             axis = next(
                 (str(field.default) for field in spec.params.spec() if field.name == "axis"), "z"
@@ -19921,6 +20048,63 @@ class MainWindow(QMainWindow):
         return {
             "position": sum(middle[index] * normal[index] for index in range(3)) / length,
         }
+
+    def _cut_plane_through(
+        self, entry: SceneObject, middle: tuple[float, ...], given: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """Die Vorbelegung von *Abschneiden*: jede Ebene schneidet durch die Körpermitte.
+
+        **Was gewählt ist, entscheidet die Ebene** (RM-400, M3 der Nachprüfung).
+        Eine gewählte Fläche belegte *An Fläche* vor, die Position aber aus der
+        Körpermitte entlang Z — gezählt von der Fläche aus lag die Ebene
+        außerhalb, und der Dialog öffnete mit „Diese Ebene schneidet nichts vom
+        Objekt ab.“ (vorher ein gültiger Schnitt). Jetzt geht die Ebene parallel
+        zur Fläche durch die Mitte; eine gewählte Kante legt sie durch Kante
+        und Mitte (``prepare_ops.edge_cut_through_middle``); sonst die Achse
+        wie bisher. Die drei Punkte stehen immer bereit — waagerecht durch die
+        Mitte —, damit *Durch drei Punkte* nicht mit einer Absage beginnt.
+        """
+        from app.core.geom.prepare_ops import edge_cut_through_middle
+
+        bounds = entry.mesh.bounds
+        low, high = bounds.minimum, bounds.maximum
+        level = middle[2]
+        values: dict[str, Any] = {
+            # Die Position wirkt nur an einer Achse; dort steht sie in der Mitte,
+            # gleich welche Ebene die Auswahl vorbelegt.
+            "position": middle[2],
+            "points": ";".join(
+                ",".join(repr(float(value)) for value in point)
+                for point in (
+                    (low[0], low[1], level),
+                    (high[0], low[1], level),
+                    (low[0], high[1], level),
+                )
+            ),
+        }
+        face = entry.features.get(str(given.get("at_feature") or ""))
+        normal = vec3_or_none(face.params.get("normal")) if face is not None else None
+        centre = vec3_or_none(face.params.get("centre")) if face is not None else None
+        if face is not None and face.kind == "face" and normal is not None and centre is not None:
+            length = math.sqrt(sum(value * value for value in normal))
+            if length > 0.0:
+                values["plane"] = "at_face"
+                values["offset"] = (
+                    sum((middle[index] - centre[index]) * normal[index] for index in range(3))
+                    / length
+                )
+                return values
+        highlighted = self.viewport.highlighted_edge()
+        if highlighted is not None and highlighted[0] == entry.id:
+            suggested = edge_cut_through_middle(entry, highlighted[1])
+            if suggested is not None:
+                values.update(
+                    plane="through_edge",
+                    edge=highlighted[1],
+                    axis=suggested[0],
+                    tilt=suggested[1],
+                )
+        return values
 
     def _measured_from_body(self, spec: OperationSpec, selected: ObjectId | None) -> dict[str, Any]:
         """Zwei Vorgaben, die am gewählten Körper gemessen sind statt fest zu stehen.
@@ -20016,7 +20200,15 @@ class MainWindow(QMainWindow):
                 for name in (*POSITION_FIELDS, *NORMAL_FIELDS):
                     found.pop(name, None)
             return found
-        return dict(values_for_object(spec, entry.features))
+        values = dict(values_for_object(spec, entry.features))
+        if _stands_on_the_bed(entry) and _offers_the_bed_anchor(spec):
+            # **Was auf dem Bett steht, wächst vom Bett aus** (RM-473): Um die
+            # Mitte skaliert, sank ein Würfel auf dem Bett beim Faktor 2,3 um
+            # 13 mm unter die Platte, und der Bericht bot danach *Auf das Bett
+            # setzen* an. Die Vorgabe der Operation bleibt die Mitte; Rezepte
+            # und Agent rechnen weiter so, wie sie gespeichert sind.
+            values.setdefault("about", "bed")
+        return values
 
     def _seat_for(
         self, spec: OperationSpec, selected: ObjectId | None, entered: Mapping[str, Any]
@@ -20183,9 +20375,23 @@ class MainWindow(QMainWindow):
         elif chosen == "parts":
             self.action_catalog()
         elif chosen == "chat":
+            # **Der Chat kommt nach vorn, dann bekommt er den Cursor** (RM-448):
+            # Stand der Reiter auf dem Prüfbericht oder war die Spalte
+            # ausgeblendet, landete der Fokus in einem verborgenen Feld, und
+            # wer zu tippen begann, schrieb ins Nichts.
+            if not self.right_column.isVisible():
+                self.right_column.setVisible(True)
+                self.settings.right_panel_visible = True
+                self._store_settings()
+                self._mark_status_alerts()
+            switch(self.right, self.chat)
             self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
         elif REGISTRY.has(chosen):
-            self.run_operation(REGISTRY.get(chosen))
+            # Gleich beschriftet heißt gleich gemacht: *Quader anlegen* aus der
+            # Einladung ist der Quader des Menüs — exakt, wo der Kern da ist
+            # (``menu_twins``, RM-448), sonst entstand hier ein Netz und im
+            # Menü ein Körper mit echten Kanten.
+            self.run_operation(REGISTRY.get(menu_twins().get(chosen, chosen)))
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
@@ -20304,6 +20510,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
+        self._frame_after_resizing()
         self.viewport.show_scene(self._picture_for(result))
         self._show_invitation()
         self._reveal_split_result(result)
