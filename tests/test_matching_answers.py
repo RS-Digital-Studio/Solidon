@@ -79,6 +79,9 @@ def test_competing_group_asks_every_owner_and_never_offers_one_target_twice(plat
         asked.append((question, tuple(choices)))
         return choices[0]
 
+    def announce(scene, targets, _previous_feature):
+        contexts.append((scene, targets))
+
     result = _with_features(
         body,
         deepcopy(before),
@@ -87,7 +90,7 @@ def test_competing_group_asks_every_owner_and_never_offers_one_target_twice(plat
         [],
         recorded=recorded,
         referenced={"before_3"},
-        question_context=lambda scene, targets: contexts.append((scene, targets)),
+        question_context=announce,
     )
     result = _with_feature_reservations(result, set(before), set(before))
     assert len(asked) == 2
@@ -157,7 +160,7 @@ def test_answer_failure_after_another_group_keeps_mapping_records_and_findings(p
             recorded,
             {"old_a", "old_b"},
             signal,
-            lambda scene, targets: contexts.append((scene, targets)),
+            lambda scene, targets, _previous_feature: contexts.append((scene, targets)),
             None,
         )
     assert len(calls) == 2
