@@ -10,7 +10,9 @@ in zwei Verlaufstests ist entfernt und mit unabhängiger Sensitivitätsprobe
 abgesichert; 13 gezielte Fälle bestehen. Ein weiterer Anschlussfix erhält
 verschiedene Fundstellen im Abschlussbericht und besteht mit 21 gezielten
 Fällen. Die unabhängigen Schlussreviews haben keine offenen Befunde.
-Entwicklungstor und Integration stehen aus.
+Das vollständige Entwicklungstor ist grün. Die Einheit ist seit dem
+02.10.2026 mit `57848fa72` auf `main` und `origin/main` integriert;
+der Abschlussbeleg steht unten.
 
 ## Gruppenbildung und Rückmeldung
 
@@ -204,8 +206,8 @@ Einheit ohne offene Codebefunde freigegeben. Neben den Rundungs- und
 Herkunftshunks umfasst diese Freigabe den notwendigen RM218-Anschluss und
 dessen Tests für Verschieben, Einfügen, Passungsbezug und Undo. Ausdrücklich
 nicht enthalten sind Fragevorschau, `previous_reference`, `SIDE_NAMES`,
-RM320, der RM319-Testumzug und der B-Rep-Nullnormalenabsatz. Das zentrale
-Entwicklungstor und der tatsächliche Commit/Push stehen weiterhin aus.
+RM320, der RM319-Testumzug und der B-Rep-Nullnormalenabsatz. Diese Freigabe
+ging dem unten belegten zentralen Entwicklungstor und Commit/Push voraus.
 
 ### Strenge Verlaufstests nach der zentralen Gegenprüfung
 
@@ -276,11 +278,31 @@ Die bestehende Oberflächenbündelung bleibt erhalten: `show_result` übernimmt
 und zählt beide Rohbefunde, zeigt aber eine Sammelzeile. Bei verschiedenen
 Orten hat diese Zeile keinen gemeinsamen Ort und keine einzelne
 Ortsnavigation. Mehrstellenanzeige und der separate Vorschlagsnachschub
-über `add_findings` sind nicht durch diesen Kernfix abgenommen. Das zentrale
-Entwicklungstor und die tatsächliche Integration bleiben ausstehend.
+über `add_findings` sind nicht durch diesen Kernfix abgenommen.
 
 **RM-322 bleibt offen:** Die sechs tragenden Netzkanten des
 `pegboard-gs-100-v2.step` werden weiterhin nicht zuverlässig ihren exakten
 Gegenkanten zugeordnet. Dieser Zuordnungsrest wird nicht durch die
 Gruppenrückfälle als abgeschlossen erklärt. Fenster-, Renderer- und
 Leistungsprüfungen gehören weiterhin zum Release.
+
+## Abschluss auf dem Hauptzweig
+
+Der Produktcommit `57848fa72c4ca229f5dc9bcdd2cca2baf6945987`
+(23 Pfade) ist auf `main` und `origin/main`. Sein Nachfolger
+`e3dff190728d4caf447cb3be7927d5d651dee168` integriert RM320 getrennt.
+Die tatsächliche Gegenstelle wurde am 02.10.2026 zusätzlich mit
+`git ls-remote origin refs/heads/main` geprüft; der erste Commit ist
+nachweislich Vorfahr des zweiten. Der Abgleich von Commit-Dateiliste und
+Restdiff bestätigt den vollständigen RM284-Umfang. Die oben ausdrücklich
+ausgeschlossenen fremden Änderungen blieben außerhalb dieser Einheit.
+
+Das gemeinsame vollständige Entwicklungstor
+`commit-tor-abschlussrunde-45-final` prüfte den ausgewählten Stand beider
+Einheiten: **19 187 bestanden, 62 übersprungen**, 432,53 s Testlauf;
+Suite, Ruff, Format und mypy jeweils **Exit 0**. Es gab keine Quelldrift
+während des Laufs. Die 62 übersprungenen Fälle zählen nicht als bestanden.
+Das Tor enthält keine Fenster-, Renderer- oder Leistungsabnahme.
+
+Damit ist RM284 abgeschlossen. Der notwendige begrenzte RM218-Anschluss
+ist enthalten; RM218 insgesamt und RM322 werden damit nicht abgeschlossen.

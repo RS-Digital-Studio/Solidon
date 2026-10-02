@@ -6,7 +6,9 @@ Zweitprüfung fand nach dem internen Schlussreview noch fehlenden Abbruch aus
 Erkennungsarbeitern und die falsche Ablehnung einer gültigen Innenkammer mit
 freiem Stift. Beide Nachgänge sind test-first korrigiert; 1010 Fachtests und
 sechs Kundenrechnungen am letzten Stand sind grün. Der unabhängige Schlussreview
-hat keine offenen Codebefunde. Entwicklungstor und Integration stehen noch aus.
+hat keine offenen Codebefunde. Das vollständige Entwicklungstor ist grün;
+die Einheit ist seit dem 02.10.2026 mit `e3dff1907` auf `main` und
+`origin/main` integriert. Der Abschlussbeleg steht unten.
 
 ## Fehler und Korrektur
 
@@ -264,5 +266,25 @@ interne unabhängige Nachreview war ohne offene Befunde. Die danach zentral
 gefundenen Aufrufer- und Innenhautreste sind korrigiert, durch den erneuten
 Fachlauf belegt und im unabhängigen Schlussreview ohne offene Codebefunde
 freigegeben.
-Das vollständige Entwicklungstor und der tatsächliche Commit/Push stehen
-für RM320 ebenfalls noch aus.
+
+## Abschluss auf dem Hauptzweig
+
+Der Produktcommit `e3dff190728d4caf447cb3be7927d5d651dee168`
+(16 Pfade) ist auf `main` und `origin/main`. Die tatsächliche Gegenstelle
+wurde am 02.10.2026 zusätzlich mit `git ls-remote origin refs/heads/main`
+bestätigt. Der eigene enge Abgleich der Commit-Dateiliste und verbleibenden
+Änderungen bestätigt sämtliche RM320-Produkt-, Test- und Kartenhunks,
+einschließlich Materialfamilien, beider Merkeranschlüsse, echter Arbeiter,
+gemeinsamen Abbruchsignals und Fensterende. Die verbliebenen Änderungen
+gehören anderen Einheiten; die RM319-Testblöcke sind nur unverändert umgeordnet.
+
+Das gemeinsame vollständige Entwicklungstor
+`commit-tor-abschlussrunde-45-final` prüfte den ausgewählten Stand mit dem
+vorhergehenden RM284-Commit `57848fa72`: **19 187 bestanden,
+62 übersprungen**, 432,53 s Testlauf. Suite, Ruff, Format und mypy endeten
+jeweils mit **Exit 0**, ohne Quelldrift während des Laufs. Übersprungene
+Fälle zählen nicht als bestanden; Fenster-, Renderer- und Leistungsabnahmen
+bleiben dem Release vorbehalten.
+
+Damit ist RM320 abgeschlossen. Der eigenständige Seitenwandfehler RM325
+bleibt offen und gehört nicht zu dieser Abnahme.

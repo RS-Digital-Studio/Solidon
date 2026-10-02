@@ -304,6 +304,31 @@ def test_a_printer_cura_does_not_know_prints_with_fdmprinter_and_says_so(
     assert handover.machine_missing(setup, known) == []
 
 
+def test_cura_instance_identity_is_kept_and_cli_unknown_finding_survives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.export import slicer_profiles
+
+    engine = _cura(tmp_path)
+    setup = handover.SlicerSetup(engine, "cura")
+    known = profiles.make_profile("creality-k1-max", "pla")
+    active = slicer_profiles.CuraActiveMachine(
+        name="K1 Max in der Werkstatt",
+        definition=Path("creality_k1max.def.json"),
+        bed=(300.0, 300.0),
+    )
+    monkeypatch.setattr(slicer_profiles, "cura_active_machine", lambda _executable: active)
+    monkeypatch.setattr(slicer_profiles, "chosen_printer", lambda *_args: "")
+
+    mismatch = handover.cura_active_printer_mismatch(setup, known)
+    assert mismatch is not None
+    assert mismatch.code == "slicer.machine_mismatch"
+    assert "K1 Max in der Werkstatt" in str(mismatch.message)
+
+    [unknown] = handover.machine_missing(setup, profiles.make_profile("centauri-carbon-2", "pla"))
+    assert unknown.code == "slicer.cura_printer_unknown"
+
+
 def test_without_readable_definitions_nothing_is_claimed(tmp_path: Path) -> None:
     """Ohne Definitionen startet CuraEngine gar nicht; der Befund behauptet nichts."""
     engine = tmp_path / "CuraEngine.exe"

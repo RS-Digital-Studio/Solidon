@@ -43,6 +43,7 @@ einem neuen Lauf anzupassen.
 
 | Datei | Wofür | Punkt |
 |---|---|---|
+| [`reports/rm384-spaetes-helferende-2026-10-02.md`](reports/rm384-spaetes-helferende-2026-10-02.md) | Späteres Helferende am öffentlichen Kernweg, erhaltene Startursache, Startkontingent, Generation und tatsächliche Gegenläufe | RM-384 |
 | [`reports/rm320-baugruppen-2026-10-02.md`](reports/rm320-baugruppen-2026-10-02.md) | Begrenzter Langlochzug mit freien Stiften und Innenkammern, tatsächlicher Arbeiterabbruch sowie analytische und reale Modellbelege | RM-320 |
 | [`reports/rm284-rundungsgruppen-2026-10-02.md`](reports/rm284-rundungsgruppen-2026-10-02.md) | Rundungsgruppen, belegte Merkmalsfortführung und ausdrückliche Neuwahl; analytische Gegenfälle, Kundenmodelle und Schlussreview | RM-284, notwendiger RM-218-Anschluss |
 | [`reports/rm298-hilfsprozessmarken-2026-10-02.md`](reports/rm298-hilfsprozessmarken-2026-10-02.md) | Vorbereitete öffentliche Helfer-Messwege, unverfälschte Marken und Entwicklungskontrollen | RM-298(d) |

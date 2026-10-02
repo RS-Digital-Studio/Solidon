@@ -555,6 +555,8 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     Druckerdefinition (:func:`_cura_machine`); fehlt sie, sagt es dieser
     Befund.
     """
+    if setup.flavour == "cura":
+        return _cura_printer_unknown(setup, profile)
     if machine_from_definition(setup.flavour):
         return _cura_printer_unknown(setup, profile)
     if not takes_a_machine_profile(setup.flavour) and setup.flavour != "prusa":
@@ -637,6 +639,56 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
             suggestions=(CHECK_SLICER_PROFILE, EXPORT_ONLY),
         )
     ]
+
+
+def cura_active_printer_mismatch(
+    setup: SlicerSetup,
+    profile: Profile,
+    *,
+    solidon_settings_included: bool = True,
+) -> Finding | None:
+    """Nennt beide Drucker, wenn Curas aktive Maschine eine andere ist."""
+    active = slicer_profiles.cura_active_machine(setup.executable)
+    if active is None:
+        return None
+    known = dict(profiles.printer_profiles())
+    known[profile.printer.id] = profile.printer
+    active_id = slicer_profiles.chosen_printer("cura", setup.executable, known)
+    if active_id == profile.printer.id:
+        return None
+    cura_printer = active.name or (
+        known[active_id].title
+        if active_id in known
+        else slicer_profiles.cura_definition_id(active.definition)
+    )
+    if solidon_settings_included:
+        message = _(
+            "In Cura ist „{cura_printer}“ aktiv, in Solidon „{solidon_printer}“. Das "
+            "Cura-Fenster richtet das Modell nach Curas Druckbett aus; Temperaturen "
+            "und Druckgeschwindigkeiten stammen weiter aus Solidons Druckerprofil. "
+            "Öffnen Sie die Druckeinstellungen. Ist Curas Profil vollständig lesbar, "
+            "können Sie den Drucker dort mit einem Klick übernehmen.",
+            cura_printer=cura_printer,
+            solidon_printer=profile.printer.title,
+        )
+    else:
+        message = _(
+            "In Cura ist „{cura_printer}“ aktiv, in Solidon „{solidon_printer}“. Das "
+            "Cura-Fenster richtet das Modell nach Curas Druckbett aus. Druckwerte "
+            "werden nicht mitgegeben; schalten Sie „Werte mitgeben“ in den "
+            "Druckeinstellungen ein, wenn Solidons Werte in Cura gelten sollen. Ist "
+            "Curas Profil vollständig lesbar, können Sie den Drucker dort mit einem "
+            "Klick übernehmen.",
+            cura_printer=cura_printer,
+            solidon_printer=profile.printer.title,
+        )
+    return Finding(
+        code="slicer.machine_mismatch",
+        severity="warning",
+        message=message,
+        values={"cura_printer": cura_printer, "solidon_printer": profile.printer.title},
+        suggestions=(OPEN_PRINT_SETTINGS, EXPORT_ONLY),
+    )
 
 
 def _cura_printer_unknown(setup: SlicerSetup, profile: Profile) -> list[Finding]:
@@ -3856,11 +3908,22 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
             source=discover.program_mark(setup.executable.name),
         )
         if source is None and profile.printer.id.startswith("slicer-cura-"):
-            raise slicer_profiles._incomplete_profile(Path(profile.printer.title))
+            raise _cura_instance_error(
+                setup,
+                profile.printer.title,
+                missing=not slicer_profiles.cura_instance_is_present(
+                    setup.executable, profile.printer
+                ),
+            )
     if isinstance(source, slicer_profiles.SlicerProfile):
         definition = source.path
         own = str(definition)
-        chain = slicer_profiles.resolve_profile(source, roots)
+        try:
+            chain = slicer_profiles.resolve_profile(source, roots)
+        except ExternalToolError as problem:
+            if source.cura_instance is None:
+                raise
+            raise _cura_instance_error(setup, profile.printer.title, missing=False) from problem
     else:
         chain = slicer_profiles.resolve_values(definition, roots)
     hardware = (
@@ -3888,6 +3951,34 @@ def _cura_machine(setup: SlicerSetup, profile: Profile, values: Mapping[str, str
         switches=_temperature_switches(str(chain.get("machine_start_gcode") or "")),
         settings=hardware,
         name=str(chain.get("machine_name") or ""),
+    )
+
+
+def _cura_instance_error(setup: SlicerSetup, printer: str, *, missing: bool) -> ExternalToolError:
+    """Den fehlenden Cura-Stapel vom vorhandenen, unvollständigen trennen."""
+    if missing:
+        return ExternalToolError(
+            tool=setup.name,
+            title=_("Der Drucker ist in Cura nicht eingerichtet."),
+            detail=_(
+                "Die Druckerinstanz „{printer}“ ist in Cura nicht eingerichtet. Richten Sie sie "
+                "in Cura ein oder wählen Sie in Solidon einen anderen Drucker.",
+                printer=printer,
+            ),
+            suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER),
+            values={"printer": printer},
+        )
+    return ExternalToolError(
+        tool=setup.name,
+        title=_("Solidon kann das Cura-Druckerprofil nicht vollständig auswerten."),
+        detail=_(
+            "Solidon kann das Cura-Druckerprofil „{printer}“ nicht vollständig auswerten. "
+            "Prüfen Sie seine Profilwerte und Vorlagen in Cura oder wählen Sie in Solidon "
+            "einen anderen Drucker.",
+            printer=printer,
+        ),
+        suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER),
+        values={"printer": printer},
     )
 
 

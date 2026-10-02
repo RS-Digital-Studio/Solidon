@@ -595,11 +595,12 @@ def _cura_material_files(*folders: Path) -> dict[str, Path]:
 class CuraActiveMachine:
     """Der Drucker, der in Cura eingerichtet und zuletzt aktiv war.
 
-    ``definition`` ist seine Druckerdefinition, ``variant`` der Name der Düse
-    im ersten Fach („0.4mm Nozzle"), ``material_type`` die Art der Spule darin
-    („PLA"). Leer heißt: Die Maschine hat keine Düsenvarianten, oder das Fach
-    ist leer. ``bed`` ist Breite und Tiefe ihres Betts — ``None``, wenn die
-    Erbkette sie nicht als Zahl führt.
+    ``name`` ist der Anzeigename aus Cura, ``definition`` seine
+    Druckerdefinition, ``variant`` der Name der Düse im ersten Fach
+    („0.4mm Nozzle"), ``material_type`` die Art der Spule darin („PLA"). Leer
+    heißt: Die Maschine hat keine Düsenvarianten, oder das Fach ist leer.
+    ``bed`` ist Breite und Tiefe ihres Betts — ``None``, wenn die Erbkette sie
+    nicht als Zahl führt.
     """
 
     name: str
@@ -646,10 +647,19 @@ def cura_active_machine(executable: Path) -> CuraActiveMachine | None:
         if definition is None:
             _log.debug("the active Cura machine %s names no definition we find", machine)
             continue
+        display_name = machine
+        for path in sorted((folder / "machine_instances").glob("*.global.cfg")):
+            parsed = _read_ini(path)
+            if parsed is None or not parsed.has_section("general"):
+                continue
+            general = parsed["general"]
+            if general.get("id", "").strip() == machine:
+                display_name = general.get("name", "").strip() or machine
+                break
         trains = _cura_trains(folder, machine)
         first = trains[0][1] if trains else {}
         return CuraActiveMachine(
-            name=machine,
+            name=display_name,
             definition=definition,
             variant=_cura_variant_name(first.get(_CURA_VARIANT_INDEX, ""), resources, folder),
             material_type=_cura_material_type(
@@ -1461,6 +1471,42 @@ def matches_saved_cura_printer(entry: SlicerProfile, printer: PrinterProfile, so
     )
 
 
+def cura_instance_is_present(executable: Path, printer: PrinterProfile) -> bool:
+    """Ob eine gespeicherte Cura-Instanz noch im lokalen Bestand steht.
+
+    Die Maschinenwerte können unvollständig sein und die Instanz damit aus
+    :func:`find_profiles` fallen. Ihre native Kennung bleibt trotzdem lesbar
+    und trennt diesen Fall von einem Drucker, der auf diesem Rechner fehlt.
+    """
+    if not printer.id.startswith("slicer-cura-"):
+        return False
+    source = discover.program_mark(executable.name)
+    for root in user_roots("cura", executable):
+        for path in sorted((root / "machine_instances").glob("*.global.cfg")):
+            parsed = _read_ini(path)
+            if parsed is None or not parsed.has_section("general"):
+                continue
+            general = parsed["general"]
+            section = general.get("id", "").strip()
+            if not section:
+                continue
+            containers = parsed["containers"] if parsed.has_section("containers") else {}
+            entry = SlicerProfile(
+                path=path,
+                name=general.get("name", "").strip() or section,
+                kind="machine",
+                printer_model=containers.get("7", "").strip() or printer.cura_definition,
+                section=section,
+                from_user=True,
+                cura_instance=path,
+            )
+            if _printer_identifier(
+                entry, "cura", source
+            ) == printer.id or matches_saved_cura_printer(entry, printer, source):
+                return True
+    return False
+
+
 def chosen_printer(
     flavour: SlicerFlavour, executable: Path, known: Mapping[str, PrinterProfile]
 ) -> str:
@@ -1478,7 +1524,18 @@ def chosen_printer(
         ]
         if len(saved) == 1:
             return saved[0]
-        return entry.printer_id if entry.printer_id in known else ""
+        if entry.printer_id in known:
+            return entry.printer_id
+        # Die Werksdefinition bezeichnet eine Modellfamilie, keine konfigurierte
+        # Cura-Instanz. Zwei Instanzen derselben Familie bleiben getrennt.
+        if entry.cura_instance is not None:
+            return ""
+        definitions = [
+            identifier
+            for identifier, printer in known.items()
+            if entry.printer_model and printer.cura_definition == entry.printer_model
+        ]
+        return definitions[0] if len(definitions) == 1 else ""
     return printer_for(chosen, known)
 
 
@@ -3299,17 +3356,26 @@ def match(
         if source_machine is not None
         else []
     )
+    native_instance = next((entry for entry in native if entry.cura_instance is not None), None)
+    # Nur die gespeicherte native Kennung darf eine exakte Cura-Definition
+    # überstimmen. Ein Anzeigename ist änderbar und kann mit einer anderen
+    # Maschine kollidieren.
+    cura_instance = native_instance
     candidates = (
-        native
-        or named_in_bundle
-        or defined_in_cura
-        or source_family
-        or [
-            entry
-            for entry in all_machines
-            if _names_the_printer(entry.printer_model, printer.title)
-            or _names_the_printer(entry.name, printer.title)
-        ]
+        [cura_instance]
+        if cura_instance is not None
+        else (
+            native
+            or named_in_bundle
+            or defined_in_cura
+            or source_family
+            or [
+                entry
+                for entry in all_machines
+                if _names_the_printer(entry.printer_model, printer.title)
+                or _names_the_printer(entry.name, printer.title)
+            ]
+        )
     )
     if not candidates:
         return None, None
@@ -3325,7 +3391,7 @@ def match(
     candidates = own_model or candidates
 
     exact = [entry for entry in candidates if abs(entry.nozzle - printer.nozzle_diameter) < 1e-6]
-    if source_family and not exact:
+    if source_family and not exact and cura_instance is None:
         # Ein exakt erkanntes importiertes Profil belegt seine Gerätefamilie,
         # aber nicht, welche fremde Düse an diesem Gerät aufgeschraubt ist.
         # Ohne passende Variante bleibt die Auswahl leer statt am Nachbarmaß

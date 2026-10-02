@@ -1820,6 +1820,17 @@ def test_cura_names_its_active_machine_with_nozzle_and_spool(
     root = _cura_konfiguration(tmp_path, monkeypatch)
     _cura_maschine(root, "Andere Maschine", "ohne_angabe")
     _cura_maschine(root, "Meine Werkstatt", "abax_pri3")
+    active_instance = next(
+        path
+        for path in (root / "machine_instances").glob("*.global.cfg")
+        if "id = Meine Werkstatt" in path.read_text(encoding="utf-8")
+    )
+    active_instance.write_text(
+        active_instance.read_text(encoding="utf-8").replace(
+            "name = Meine Werkstatt", "name = Drucker am Fenster"
+        ),
+        encoding="utf-8",
+    )
     stack = root / "extruders" / "meine+werkstatt_0.extruder.cfg"
     stack.write_text(
         stack.read_text(encoding="utf-8").replace("5 = empty_variant", "5 = abax_pri3_0.4"),
@@ -1834,7 +1845,7 @@ def test_cura_names_its_active_machine_with_nozzle_and_spool(
     )
 
     assert sp.cura_active_machine(cura) == sp.CuraActiveMachine(
-        name="Meine Werkstatt",
+        name="Drucker am Fenster",
         definition=cura_bestand / "definitions" / "abax_pri3.def.json",
         variant="0.4mm Nozzle",
         material_type="PLA",
@@ -1916,6 +1927,75 @@ def test_discovery_reads_all_configured_cura_machines_and_the_actual_nozzle(
     assert machine is not None and machine.cura_instance is not None
     assert sp.identity(machine) == sp.chosen_machine("cura", cura)
     assert machine.nozzle == pytest.approx(chosen.nozzle_diameter)
+
+
+def test_cura_factory_definition_resolves_only_one_known_solidon_printer(
+    cura: Path, cura_configured_printers: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    factory = sp.SlicerProfile(
+        path=cura / "share" / "cura" / "resources" / "definitions" / "abax_pri3.def.json",
+        name="Abax PRi3",
+        kind="machine",
+        printer_model="abax_pri3",
+    )
+    monkeypatch.setattr(sp, "chosen_machine", lambda *_args: "factory")
+    monkeypatch.setattr(sp, "profile_by_name", lambda *_args: factory)
+    printer = PrinterProfile(
+        id="solidon-abax",
+        title="Abax PRi3",
+        build_volume=(240.0, 230.0, 260.0),
+        cura_definition="abax_pri3",
+    )
+    assert sp.chosen_printer("cura", cura, {printer.id: printer}) == printer.id
+
+    duplicate = replace(printer, id="another-abax-profile", title="Abax angepasst")
+    assert sp.chosen_printer("cura", cura, {printer.id: printer, duplicate.id: duplicate}) == ""
+
+    unrelated = replace(printer, cura_definition="other_definition")
+    assert sp.chosen_printer("cura", cura, {unrelated.id: unrelated}) == ""
+
+    configured = replace(
+        factory,
+        printer_id="slicer-cura-active-instance",
+        cura_instance=cura_configured_printers / "machine_instances" / "active.global.cfg",
+    )
+    monkeypatch.setattr(sp, "profile_by_name", lambda *_args: configured)
+    other_instance = replace(printer, id="slicer-cura-other-instance")
+    assert sp.chosen_printer("cura", cura, {other_instance.id: other_instance}) == ""
+
+
+def test_same_named_cura_instance_does_not_override_selected_factory_definition(
+    tmp_path: Path,
+) -> None:
+    """Ein freier Instanzname darf keine andere Cura-Definition verdrängen."""
+    factory = sp.SlicerProfile(
+        path=tmp_path / "resources" / "definitions" / "model_a.def.json",
+        name="Modell A 0.4 nozzle",
+        kind="machine",
+        printer_model="model_a",
+        nozzle=0.4,
+    )
+    other_instance = sp.SlicerProfile(
+        path=tmp_path / "user" / "machine_instances" / "machine_b.global.cfg",
+        name="Modell A",
+        kind="machine",
+        printer_model="model_b",
+        nozzle=0.6,
+        section="Maschine B",
+        from_user=True,
+        cura_instance=tmp_path / "user" / "machine_instances" / "machine_b.global.cfg",
+    )
+    printer = PrinterProfile(
+        id="solidon-model-a",
+        title="Modell A",
+        build_volume=(200.0, 180.0, 200.0),
+        nozzle_diameter=0.4,
+        cura_definition="model_a",
+    )
+
+    machine, _process = sp.match([other_instance, factory], printer)
+
+    assert machine is factory
 
 
 def test_cura_printer_selection_survives_a_display_name_change(
@@ -2145,6 +2225,53 @@ def test_cura_instance_hardware_and_codes_reach_the_engine(
     assert corrected.cura_machine.codes == written.cura_machine.codes
 
 
+def test_cura_instance_stays_usable_when_solidon_nozzle_changes(
+    cura: Path, cura_configured_printers: Path, tmp_path: Path
+) -> None:
+    """Die native Instanz bleibt Maschine, auch wenn Solidon eine andere Düse wählt."""
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    found = {printer.id: printer for printer in sp.discover_printers(cura, "cura")}
+    printer = replace(found[sp.chosen_printer("cura", cura, found)], nozzle_diameter=0.4)
+    profile = Profile(printer=printer, material=profiles.material("pla"))
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(cura, "cura")
+
+    written = handover.write_config(settings, profile, setup, tmp_path)
+
+    assert written.cura_machine is not None and written.cura_machine.from_printer
+    assert written.written["machine_nozzle_size"] == "0.4"
+
+
+def test_missing_cura_instance_has_its_own_error_and_keeps_the_full_printer_name(
+    cura: Path, cura_configured_printers: Path, tmp_path: Path
+) -> None:
+    from app.core.errors import ExternalToolError
+    from app.core.export import handover
+    from app.core.knowledge import print_settings
+
+    found = {printer.id: printer for printer in sp.discover_printers(cura, "cura")}
+    printer = replace(found[sp.chosen_printer("cura", cura, found)], title="Snapmaker 2.0 A350")
+    profile = Profile(printer=printer, material=profiles.material("pla"))
+    instance = next(
+        path
+        for path in (cura_configured_printers / "machine_instances").glob("*.global.cfg")
+        if "id = Meine Werkstatt" in path.read_text(encoding="utf-8")
+    )
+    instance.unlink()
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover.write_config(
+            print_settings.resolve(profile), profile, handover.SlicerSetup(cura, "cura"), tmp_path
+        )
+
+    assert "nicht eingerichtet" in str(caught.value.detail).casefold()
+    assert "Snapmaker 2.0 A350" in str(caught.value.detail)
+    assert "Snapmaker 2 A350" not in str(caught.value.detail)
+    assert [action.id for action in caught.value.suggestions] == ["check_profile", "choose_printer"]
+
+
 def test_same_machine_from_two_slicers_keeps_the_selected_printer(
     unknown_printers: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2175,7 +2302,7 @@ def test_removed_cura_instance_never_silently_uses_factory_codes(
     from app.core.knowledge import print_settings
 
     found = {p.id: p for p in sp.discover_printers(cura, "cura")}
-    printer = found[sp.chosen_printer("cura", cura, found)]
+    printer = replace(found[sp.chosen_printer("cura", cura, found)], title="Snapmaker 2.0 A350")
     profile = Profile(printer=printer, material=profiles.material("pla"))
     path = cura_configured_printers / "definition_changes" / "Meine+Werkstatt_settings.inst.cfg"
     path.write_text(
@@ -2187,6 +2314,10 @@ def test_removed_cura_instance_never_silently_uses_factory_codes(
             print_settings.resolve(profile), profile, handover.SlicerSetup(cura, "cura"), tmp_path
         )
     assert caught.value.suggestions
+    assert "solidon" in str(caught.value.title).casefold()
+    assert "nicht vollständig auswerten" in str(caught.value.title).casefold()
+    assert "Snapmaker 2.0 A350" in str(caught.value.detail)
+    assert "Snapmaker 2 A350" not in str(caught.value.detail)
 
 
 @pytest.mark.parametrize(
