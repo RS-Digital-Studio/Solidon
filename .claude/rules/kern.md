@@ -154,6 +154,11 @@ ihn ruft, hält das Fenster an (RM-212).
   `test_the_jobs_call_no_blas` hält es.
 - **Das Gewicht ist die größte Dreieckszahl der Rechnung**, bei einer
   Verfeinerung die erwartete des Ergebnisses.
+- **Ein voller Datenträger pausiert, er schaltet nicht ab** (RM-436): ENOSPC
+  beim Transfer rechnet für `FULL_DISK_PAUSE_SECONDS` im Prozess, danach nimmt
+  die nächste große Rechnung den Hilfsprozess wieder. Jede Rechnung, die deshalb
+  im Prozess lief, hinterlässt ihrem Faden einen Hinweis (`take_notice`); die
+  Auswertung meldet ihn am Schritt als `kernel.disk_full`, nie im Ergebniscache.
 - **Der Abbruch reicht als Token hinein** und beendet den Hilfsprozess; wer um
   einen Aufruf breit fängt (`except Exception`), lässt
   `kernel_process.NOT_A_KERNEL_FAILURE` durch — Abbruch und verlorenen

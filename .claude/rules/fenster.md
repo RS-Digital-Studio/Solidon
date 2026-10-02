@@ -185,9 +185,9 @@ nötig:
   anordnen*, nicht *Modell teilen*.
 - **Gleiche Meldungen sind eine Zeile, die Zahl davor in Klammern**
   (Entscheidung Robert): gebündelt ab zwei nach Satz, Kennung, Schwere, Schritt
-  und Handlungen. Die Sammelzeile trägt alle Körper und wählt beim Klick alle,
-  ihre Handlung fragt, für welche sie gilt, Ort und Merkmale trägt sie nur, wenn
-  alle Mitglieder dieselben haben.
+  und Handlungen. Die Sammelzeile trägt alle Körper, wählt beim Klick alle,
+  ihre Handlung fragt, für welche sie gilt; Merkmale trägt sie nur gleiche,
+  Orte eines Körpers mit Umrissen alle.
 - **Die Handlungen stehen sichtbar da, nicht im Rechtsklick:** eine Knopfzeile
   unter der Liste über `actions_for(finding)`, dieselbe Quelle wie das
   Kontextmenü (§2.7).

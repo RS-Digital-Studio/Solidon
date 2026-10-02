@@ -57,6 +57,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um corpo STEP continua um corpo STEP ao cortá-lo, com as suas faces, arestas e nomes.
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 
+### Arredondar e chanfrar
+
+- Arredondar um grupo de arestas num corpo STEP arredonda agora as arestas possíveis em vez de recusar tudo. *Mostrar o ponto* encontra cada aresta omitida.
+- As arestas junto a uma parede não mais espessa do que o raio ficam vivas, e o relatório indica o raio que cabe ali. Antes, todo o arredondamento era recusado.
+- Se um corpo STEP não tiver aresta própria num local escolhido, o relatório oferece *Terminar a edição de faces e tentar de novo*. No modelo de triângulos também é arredondado.
+- Se faltar espaço para a troca com o processo de cálculo, o Solidon calcula o passo mesmo assim e indica-o no relatório. Antes parava com o conselho de calcular de forma mais grosseira.
+
 ### Modelar, texto e esboço
 
 - Com «Nas duas faces», «Aplicar texto» põe as letras também no verso, legíveis por fora. Serve para bandeiras, placas e etiquetas.

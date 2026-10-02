@@ -104,11 +104,7 @@ Radien an einer Ecke) eine Absage mit Weg (Regel 21).
 
 ### Kantengruppen und gebogene Züge
 
-Nur `edges.choose` fragt die Lage: Strecken nach Richtung, Ränder nur waagerecht
-(`edge_lie_of`), ein „Senkrecht“ beschrifteter zu keiner. Ein gebogener
-Zug wird durch seine Knoten gezogen (`_swept_tool`, RM-279). Eine Gruppe lässt
-aus, was das Maß nicht trägt (`contact_band_limits`, `edges.too_narrow` mit Zahl
-und Stelle); trägt keine, sagt sie ab.
+Stehen in `kanten.md`.
 
 ### Eine angestellte Fläche darf nicht durch fremdes Material laufen
 

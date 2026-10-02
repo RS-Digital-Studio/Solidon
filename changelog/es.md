@@ -58,6 +58,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 
+### Redondear y achaflanar
+
+- Redondear un grupo de aristas en un cuerpo STEP redondea ahora las aristas posibles en lugar de rechazar todo. *Mostrar el punto* encuentra cada arista omitida.
+- Las aristas junto a una pared no más gruesa que el radio quedan vivas, y el informe indica el radio que cabe allí. Antes se rechazaba todo el redondeo.
+- Si un cuerpo STEP no tiene arista propia en una zona elegida, el informe ofrece *Finalizar la edición de caras y volver a intentarlo*. En el modelo de triángulos se redondea también.
+- Si no queda espacio para el intercambio con el proceso de cálculo, Solidon calcula el paso igualmente y lo indica en el informe. Antes se detenía aconsejando calcular más grueso.
+
 ### Modelar, texto y dibujo
 
 - Con «En ambas caras», «Aplicar texto» pone las letras también en la cara posterior, legibles desde fuera. Sirve para banderas, carteles y colgantes.

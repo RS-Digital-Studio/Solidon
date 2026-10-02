@@ -475,7 +475,7 @@ _NOT_A_RANGE = frozenset(
         "missing_payload", "checksum_missing",
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_decimate_target",
         "no_direction", "no_face",
-        "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile",
+        "no_geometry", "no_mesh_target", "no_migration", "no_normal", "no_outline", "no_profile",
         "no_remesh_target", "no_repair_target", "no_section",
         "no_shapes", "no_size", "no_sources", "no_split", "no_split_target", "no_triangles",
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",

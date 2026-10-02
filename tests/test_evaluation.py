@@ -6168,3 +6168,39 @@ def test_reply_none_distinguishes_a_current_question_from_a_superseded_one() -> 
         assert type(caught.value) is (OperationCancelled if superseded else QuestionDeclined)
         assert len(requests) == 1 and requests[0].answered.is_set()
         assert remembered == ({} if superseded else {("Welche Seite?", ("oben", "unten")): None})
+
+
+def test_a_full_disk_is_reported_at_its_step_and_not_cached(profile: Profile) -> None:
+    """Rechnete ein Schritt wegen eines vollen Datenträgers im Programm, sagt es sein Bericht.
+
+    Der Hinweis gehört zu diesem Lauf, nicht zur Geometrie: Kommt derselbe
+    Schritt aus dem Ergebniscache, steht er nicht mehr da (RM-436).
+    """
+    from dataclasses import replace
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom import kernel_process
+    from app.core.registry import REGISTRY, Registry
+    from app.core.scene.project import new_project
+
+    load_operations()
+    box = REGISTRY.get("create_box")
+
+    def with_a_full_disk(ctx: OpContext) -> OpResult:
+        kernel_process._NOTICE.pending = kernel_process.DISK_FULL
+        return box.fn(ctx)
+
+    own = Registry()
+    own.register(replace(box, name="full_disk_box", fn=with_a_full_disk))
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document, registry=own)
+    history.apply("Quader", [OperationDraft(op="full_disk_box", params={})])
+    cache = ResultCache()
+
+    first = evaluate(project.document, profile, registry=own, cache=cache)
+    (notice,) = [entry for entry in first.scene.report.findings if entry.code == "kernel.disk_full"]
+    assert notice.op_id == project.document.ops[-1].id
+    assert notice.severity == "warning"
+
+    again = evaluate(project.document, profile, registry=own, cache=cache)
+    assert not [entry for entry in again.scene.report.findings if entry.code == "kernel.disk_full"]

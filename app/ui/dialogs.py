@@ -2983,6 +2983,8 @@ NEEDS_OP: Final = frozenset(
         "decimate_and_retry",
         # Und vor ein umgeschlagenes *Glätten* das Verfeinern (Durchsicht 0.5.1).
         "remesh_and_retry",
+        # Und vor eine Rundung ohne Kante im exakten Körper die Umwandlung (RM-436).
+        "mesh_and_retry",
         # Öffnet den Schritt, den ein Befund meint (RM-374, *Größe ändern*).
         "change_step",
     }

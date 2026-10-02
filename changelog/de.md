@@ -82,6 +82,13 @@ Nutzen da und sonst nichts.
 - Ein STEP-Körper bleibt beim Abschneiden ein STEP-Körper, mit seinen Flächen, Kanten und Namen.
 - Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
 
+### Verrunden und Fasen
+
+- Verrunden einer Kantengruppe an einem STEP-Körper rundet jetzt die Kanten, die gehen, statt ganz abzusagen. Jede ausgelassene Kante findet *Stelle zeigen*.
+- Kanten an einer Wand, die nicht dicker ist als der Radius, bleiben scharf, und der Prüfbericht nennt den Radius, der dort passt. Bisher sagte die ganze Rundung ab.
+- Hat ein STEP-Körper an einer gewählten Stelle keine eigene Kante, bietet der Prüfbericht *Flächenbearbeitung beenden und erneut versuchen* an. Am Dreiecksmodell wird sie mitgerundet.
+- Fehlt Platz für den Austausch mit dem Rechenprozess, rechnet Solidon den Schritt trotzdem und sagt es im Prüfbericht. Bisher brach er mit dem Rat ab, gröber zu rechnen.
+
 ### Formen, Schrift und Zeichnen
 
 - Mit *Auf beiden Seiten* setzt *Text aufbringen* die Schrift auch auf die Rückseite, von außen lesbar. Das passt für Fahnen, Schilder und Anhänger.
