@@ -20233,6 +20233,97 @@ def test_a_waiting_export_writes_nothing_when_the_chain_halts(
     assert not target.exists(), "aus einem angehaltenen Stand wird keine Datei"
 
 
+def _a_cone_in_draft(window: MainWindow) -> None:
+    """Ein Kegel, der im Entwurf mit halb so vielen Dreiecken steht wie fein."""
+    assert window.session.apply(
+        "Kegel",
+        [
+            OperationDraft(
+                op="create_cone",
+                params={
+                    "bottom_diameter": 30.0,
+                    "top_diameter": 10.0,
+                    "height": 20.0,
+                    "segments": 64,
+                },
+            )
+        ],
+    )
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.session.last_quality == "draft", "Voraussetzung: das Fenster rechnet im Entwurf"
+
+
+def _fine_triangles(window: MainWindow) -> int:
+    """Die Dreiecke der feinen Rechnung desselben Dokuments, unabhängig vom Fenster."""
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.scene import evaluate
+    from app.core.scene.project import ProjectSources
+
+    session = window.session
+    fine = evaluate(
+        session.project.document,
+        session.profile,
+        sources=ProjectSources(session.project),
+        quality="fine",
+    )
+    return sum(as_mesh_data(entry.mesh).triangle_count for entry in fine.scene.objects.values())
+
+
+def test_the_export_writes_the_fine_calculation(window: MainWindow, tmp_path: Path) -> None:
+    """Die Datei trägt die feine Rechnung, nicht den Entwurf des Fensters (RM-426).
+
+    Das Fenster rechnet im Entwurf (§31). Geschrieben wurde dieser Entwurf —
+    ein Kegel mit der Hälfte seiner Dreiecke, ein verschmolzenes Teil mit
+    einem Viertel —, während der Befund ``blend.draft`` versprach, der
+    Export rechne fein.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import as_mesh_data
+
+    _a_cone_in_draft(window)
+    result = window.session.last_result
+    assert result is not None
+    draft = sum(as_mesh_data(entry.mesh).triangle_count for entry in result.scene.objects.values())
+    fine = _fine_triangles(window)
+    assert fine > draft, "Voraussetzung: fein und Entwurf unterscheiden sich"
+    target = tmp_path / "kegel.stl"
+
+    window._start_export(target, "stl")
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    wait_for_export(window)
+
+    written = sum(len(trimesh.load(path, force="mesh").faces) for path in tmp_path.glob("*.stl"))
+    assert written == fine, (written, fine, draft)
+    assert window.session.last_quality == "fine"
+
+
+def test_slicing_waits_for_the_fine_calculation(window: MainWindow) -> None:
+    """Ein Klick auf *Slicen* bindet sich an die feine Rechnung (RM-426).
+
+    Warten ist keine Sperre: Der Auftrag merkt sich den Klick, bestellt die
+    feine Rechnung und läuft, sobald sie steht — den Entwurf bekommt der
+    Slicer nicht.
+    """
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    _a_cone_in_draft(window)
+    dialog = PrintSettingsDialog(window.session, window.settings, window)
+    ran: list[str] = []
+
+    assert dialog._wait_for_fine(lambda: ran.append(window.session.last_quality))
+    assert dialog.state.text() == tr("Wartet auf die feine Berechnung des Modells …")
+    assert not ran, "der Klick wartet"
+    assert window.session.wait_for_idle(30_000)
+    QApplication.processEvents()
+
+    assert ran == ["fine"], "der Klick läuft einmal, auf der feinen Rechnung"
+    assert not dialog._wait_for_fine(lambda: ran.append("zweimal")), "fein steht schon"
+    dialog.close()
+
+
 def test_an_empty_scene_invites_to_start_and_steps_aside_for_the_first_body(
     window: MainWindow,
 ) -> None:

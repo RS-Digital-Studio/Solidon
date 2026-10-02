@@ -44,6 +44,7 @@ scrive in `website/version.json`.
 - Se trascini un corpo nella vista su un altro piano, finisce sul piatto di quel piano.
 - Dopo il primo «Apri nello slicer …», Solidon non ricalcola più la cronologia.
 - La controverifica con SuperSlicer non segnala più un codice di avvio saltato dove non ne è stato saltato nessuno.
+- Esportazione e slicing usano il calcolo fine invece della vista più rapida nella finestra. Coni e parti fuse in modo morbido arrivano così lisci nel file.
 
 ### Fori, asole e divisione
 

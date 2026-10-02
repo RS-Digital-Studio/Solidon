@@ -69,6 +69,7 @@ Nutzen da und sonst nichts.
 - Ziehen Sie einen Körper im Bild auf ein anderes Bett, liegt er danach auf dessen Platte.
 - Nach dem ersten *Im Slicer öffnen* rechnet Solidon den Verlauf nicht mehr neu.
 - Die Gegenprobe mit SuperSlicer meldet keinen übergangenen Startcode mehr, wo keiner übergangen wurde.
+- Exportieren und Slicen nehmen die feine Rechnung statt der schnelleren Ansicht im Fenster. Kegel und weich verschmolzene Teile kommen so glatt in der Datei an.
 
 ### Bohrungen, Langlöcher und Teilen
 

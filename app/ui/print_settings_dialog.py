@@ -2891,6 +2891,10 @@ class PrintSettingsDialog(QDialog):
         self._advice_timer.setInterval(200)
         self._advice_timer.timeout.connect(self._start_advice)
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
+        self._waiting_for_fine: Callable[[], None] | None = None
+        """Der Klick auf *Slicen* oder *Im Slicer öffnen*, der auf die feine
+        Rechnung wartet (RM-426). Warten ist keine Sperre: Der Knopf bleibt
+        frei, der Klick bindet sich an das Ergebnis."""
         self._profile_worker: _ProfileWorker | None = None
         self._cura_printer_worker: _CuraPrinterWorker | None = None
         self._cura_printer_pending = False
@@ -3084,6 +3088,7 @@ class PrintSettingsDialog(QDialog):
         session.sceneChanged.connect(self._advice_scene_changed)
         session.projectChanged.connect(self._advice_scene_changed)
         session.busyChanged.connect(self._advice_scene_changed)
+        session.busyChanged.connect(self._fine_arrived)
         self.machine_choice.currentIndexChanged.connect(self._advice_scene_changed)
         self.process_choice.currentIndexChanged.connect(self._advice_scene_changed)
         # Zuletzt, wenn jede Zeile steht: eine Beschriftungsspalte für den
@@ -7974,6 +7979,8 @@ class PrintSettingsDialog(QDialog):
         if self._first_numeric_refusal():
             self._show_slicer_state()
             return
+        if self._wait_for_fine(self._open_in_slicer):
+            return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
         if not objects:
@@ -8024,9 +8031,40 @@ class PrintSettingsDialog(QDialog):
         self._worker = worker
         self._leash.start(worker)
 
+    def _wait_for_fine(self, action: Callable[[], None]) -> bool:
+        """Ob der Auftrag auf die feine Rechnung warten muss — dann wartet er.
+
+        Das Fenster rechnet im Entwurf, der Slicer bekommt die feine Rechnung
+        mit der vollen Rückfallkette (§31, RM-426). Bis 0.5.1 bekam er den
+        Entwurf: ein weich verschmolzenes Teil mit einem Viertel der Dreiecke.
+        """
+        if self.session.fine_current:
+            return False
+        self._waiting_for_fine = action
+        self.session.request_fine()
+        self.state.setText(tr("Wartet auf die feine Berechnung des Modells …"))
+        self._state_shows_reason = True
+        return True
+
+    def _fine_arrived(self, *_args: object) -> None:
+        """Ein wartender Klick läuft, sobald die feine Rechnung steht."""
+        action = self._waiting_for_fine
+        if action is None or self.session.busy:
+            return
+        self._waiting_for_fine = None
+        if self.session.fine_current:
+            action()
+            return
+        # Abgebrochen oder gescheitert: Das Fenster sagt schon, warum. Der
+        # Entwurf geht nicht an seiner Stelle hinaus.
+        self.state.setText(tr("Abgebrochen."))
+        self._state_shows_reason = False
+
     def _slice(self) -> None:
         if self._first_numeric_refusal():
             self._show_slicer_state()
+            return
+        if self._wait_for_fine(self._slice):
             return
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []

@@ -45,6 +45,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si arrastra un cuerpo en la vista a otra cama, queda en la placa de esa cama.
 - Tras el primer «Abrir en el slicer …», Solidon ya no vuelve a calcular el historial.
 - La comprobación cruzada con SuperSlicer ya no informa de un código de inicio omitido cuando no se omitió ninguno.
+- Exportar y laminar usan el cálculo fino en lugar de la vista más rápida de la ventana. Así, los conos y las piezas fusionadas con suavidad llegan lisos al archivo.
 
 ### Taladros, ranuras y división
 

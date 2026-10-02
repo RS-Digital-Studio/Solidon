@@ -7463,6 +7463,9 @@ class MainWindow(QMainWindow):
         deshalb nicht in die gemeinsamen Druckempfehlungen.
         """
         self._end_inserting_for_output()
+        # Der Slicer bekommt die feine Rechnung (RM-426). Bestellt wird sie
+        # schon beim Öffnen, damit ein Klick auf *Slicen* selten warten muss.
+        self.session.request_fine()
         # §29: Was Solidon hier rechnet, reist mit einer gespeicherten 3MF und
         # mit der Übergabe an den Slicer. Der Hinweis sagt das einmal je
         # Textfassung und lässt dabei wählen, ob es so sein soll; danach steht
@@ -7810,6 +7813,9 @@ class MainWindow(QMainWindow):
         landen im Prüfbericht. „Wer trotzdem exportieren will, kann das — er
         weiß dann nur, was er tut", sagt §29.
 
+        Geschrieben wird die feine Rechnung, nicht der Entwurf des Fensters
+        (§31, RM-426); :meth:`_start_export` wartet auf sie.
+
         Gerechnet und geschrieben wird im Arbeiter (§2.8): Prüfung, Aufbau der
         Baugruppe und das Schreiben zusammen sind bei mehreren großen Körpern
         mehr als zwei Sekunden. Hier bleiben der Dateidialog und das
@@ -7936,14 +7942,19 @@ class MainWindow(QMainWindow):
         """
         if self._close_requested or self._exporting:
             return
-        if self.session.busy or not self.session.result_current:
+        if not self.session.fine_current:
             # **Erst das Ergebnis, dann die Datei** (RM-352). Geschrieben
             # wurde das vorige Ergebnis mit dem neuen Dokument: Bild und
             # Verlauf zeigten 100 mm, die Datei war 80 mm breit, und die
             # Quittung meldete Erfolg. Der Auftrag wartet wie ein Klick vor
             # der Vorschau, die Statuszeile sagt es, *Abbrechen* nimmt ihn
             # zurück.
+            #
+            # **Und das feine Ergebnis** (RM-426): Das Fenster rechnet im
+            # Entwurf, die Datei braucht die feine Rechnung mit der vollen
+            # Rückfallkette (§31). Bestellt wird sie hier, gewartet wie oben.
             self._export_waiting = (target, export_format, self.session.project)
+            self.session.request_fine()
             text = tr("Export wartet auf die laufende Berechnung … {name}").format(name=target.name)
             self._set_progress_state(
                 "export",
@@ -8059,12 +8070,18 @@ class MainWindow(QMainWindow):
         dem Stand vor dem Halt und sähe aus wie das Bild, wäre es aber nicht.
         """
         waiting = self._export_waiting
-        if waiting is None or self.session.busy or not self.session.result_current:
+        if waiting is None or self.session.busy:
             return
         self._export_waiting = None
         self._set_progress_state("export", active=False, cancellable=False, cancel_enabled=False)
         target, export_format, project = waiting
         if self._close_requested or project is not self.session.project:
+            return
+        if not self.session.fine_current:
+            # Die feine Rechnung kam nicht zu Ende — abgebrochen oder
+            # gescheitert, beides steht schon im Fenster. Geschrieben wird
+            # nicht der Entwurf an ihrer Stelle (RM-426).
+            self.announce(tr("Export abgebrochen."))
             return
         result = self.session.last_result
         if result is None or result.stopped_at is not None:

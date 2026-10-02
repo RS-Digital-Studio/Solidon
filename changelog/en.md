@@ -44,6 +44,7 @@ it into `website/version.json`.
 - If you drag a body in the view onto another bed, it ends up on that bed's plate.
 - After the first *Open in slicer …*, Solidon no longer recalculates the history.
 - The cross-check with SuperSlicer no longer reports a skipped start code where none was skipped.
+- Export and slicing use the fine calculation instead of the faster view in the window. Cones and smoothly blended parts now arrive smooth in the file.
 
 ### Holes, slots and splitting
 
