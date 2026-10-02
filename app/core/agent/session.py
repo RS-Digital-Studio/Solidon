@@ -53,7 +53,13 @@ from app.core.agent.tools import (
     tool_schemas,
     untrusted_recipe_text,
 )
-from app.core.backends.llm import LLMBackend, Message, ToolCall, UnreadableArguments
+from app.core.backends.llm import (
+    LLMBackend,
+    Message,
+    OllamaBackend,
+    ToolCall,
+    UnreadableArguments,
+)
 from app.core.errors import PROGRAMMING_ERRORS, AppError, InternalError, UserError, ValidationError
 from app.core.knowledge import rules
 from app.core.log import get_logger
@@ -87,6 +93,18 @@ _log = get_logger(__name__)
 
 #: Harte Grenzen aus §26.5. Ein Lauf, der an eine stößt, sagt an welche.
 MAX_STEPS = 8
+#: Die Grenze für ein Modell auf dem eigenen Rechner (RM-251, Entscheidung
+#: Robert 02.10.2026). Lokal kostet ein Schritt kein Geld, nur Zeit, und ein
+#: lokales Modell ruft seine Werkzeuge meist einzeln statt gebündelt: Mit 12
+#: löste qwen3:14b 23 statt 22 von 39 Fällen, mehrteilige 4 statt 2 von 10, und
+#: 8 statt 10 Fälle endeten am Limit (Durchsicht 0.5.1).
+MAX_STEPS_LOCAL = 12
+
+
+def steps_for(backend: object) -> int:
+    """Wie viele Schritte ein Zug mit diesem Modell höchstens macht (§26.5)."""
+    return MAX_STEPS_LOCAL if isinstance(backend, OllamaBackend) else MAX_STEPS
+
 
 #: Das Zugbudget, gezählt in **gewichteten** Token
 #: (:attr:`~app.core.backends.llm.Reply.budget_input_tokens`) und nicht in
@@ -349,7 +367,8 @@ class AgentSession:
     registry: Registry = field(default_factory=lambda: REGISTRY)
     rule_set: rules.RuleSet | None = None
     temperature: float = 0.0
-    max_steps: int = MAX_STEPS
+    max_steps: int = 0
+    """Null heißt: nach dem Modell (:func:`steps_for`)."""
     max_tokens: int = MAX_TOKENS
     selection: tuple[ObjectId, str] | None = None
     cancelled: CancelToken | None = None
@@ -366,6 +385,10 @@ class AgentSession:
     """Das Werkzeugangebot des laufenden Zugs, wenn ein lokales Modell ihn
     rechnet (:mod:`app.core.agent.offer`) — sonst ``None``, und das Modell
     bekommt jede Operation ausführlich."""
+
+    def __post_init__(self) -> None:
+        if self.max_steps <= 0:
+            self.max_steps = steps_for(self.backend)
 
     def propose(self, request: str) -> Proposal:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
