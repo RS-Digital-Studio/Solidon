@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)](#rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
@@ -36642,3 +36643,20 @@ Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenst
   **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
 
 **Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“), in main mit `10f658811` (Merge `1a9c383aa`); Entwicklungstor grün bis auf einen Hilfsprozessausfall unter Volllast, der einzeln grün ist.
+
+## RM-286: Grenzablehnung in allen Zahlenfeldern, am Fenster abgenommen (02.10.2026)
+
+<a id="rm-286-grenzablehnung-in-allen-zahlenfeldern-am-fenster-abgenommen-02102026"></a>
+<a id="rm-286"></a>
+
+**RM-286 — Grenzablehnung in allen Zahlenfeldern.** Aus dem Release 0.5.1
+  (Oberflächenpaket, Code-Review U-5, U-6, U-8). Die Grenzablehnung ist in Parameterleiste,
+  Operationsdialog, Merkmalfenster und Druckeinstellungen umgesetzt; der `fx`-Rückweg erhält
+  auch einen Ausdruck jenseits der Grenze, und die Kurzhilfe nennt geänderte Parametergrenzen.
+  Die regulären Prüfungen sind grün. Offen bleibt die native Fensterabnahme an allen vier Orten,
+  die laut Projektregel erst beim Release läuft.
+  Registerabgleich 02.10.: umgesetzt (`BoundedSpin` in Merkmalfenster, Druckeinstellungen und Operationsdialog), offen nur die Fensterabnahme; Titel und Registerzeile („fehlt noch in Merkmalfenster und Druckeinstellungen“) sind veraltet.
+  Druckeinstellungen: Die zwölf Offscreen-Fenstertests der Grenzablehnung in `tests/test_print_settings_ui.py` sind grün, seit Aus- und Einblenden die abgelehnte Zahl nicht mehr verwerfen, ein Heben außerhalb der Suche seinen Umschaltersatz einlöst und ein nachgetragenes Haftungsmaß nur sein eigenes Feld lädt. Die native Fensterabnahme bleibt an allen vier Orten offen.
+  Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
+
+**Abschluss:** Fensterabnahme am echten Fenster (Fenstersonde auf dem zweiten Monitor, getippte Zahlen mit `QTest`), Stand nach RM-342 D-N2: Operationsdialog *Quader anlegen* lehnt 1100 mm ab, Übernehmen gesperrt, der Knopf nennt „Breite: …“; Parameterleiste lehnt 1100 ab, das Dokument bleibt, 70 + Enter kommt an; Merkmalfenster an Bohrung 1 von `plate_holes.stl`, *Merkmal drehen* 365° zeigt den Satz an der Zeile und „Merkmal drehen — Winkel: …“ am Fuß; Druckeinstellungen, Schichthöhe 1,5 mm abgelehnt, *Slicen* gesperrt mit „Schichthöhe: …“. 16 von 16 Prüfungen, Bilder im Scratchpad des Threads. Der im Review genannte rote Test `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am HEAD grün. Abgenommen von Claude (Thread „Bedienung und KI“).
