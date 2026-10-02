@@ -500,17 +500,16 @@ class CommandPalette(QDialog):
                 label = f"{label}\n{detail}"
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, entry.name)
-            item.setToolTip(
-                "\n".join(
-                    text
-                    for text in (
-                        str(entry.title),
-                        str(entry.reason) if not entry.available else "",
-                        str(entry.doc),
-                    )
-                    if text
-                )
-            )
+            tooltip_lines: list[str] = []
+            for text in (
+                str(entry.title),
+                str(entry.reason) if not entry.available else "",
+                str(entry.doc),
+            ):
+                text = text.strip()
+                if text and text not in tooltip_lines:
+                    tooltip_lines.append(text)
+            item.setToolTip("\n".join(tooltip_lines))
             if not entry.available:
                 # Sichtbar, aber nicht wählbar — dieselbe Antwort wie im
                 # Menü. Die Palette bleibt eine Reihenfolge, keine Auswahl:
