@@ -17295,6 +17295,73 @@ class CutAwayParams(BaseParams):
         choices=("below", "above"),
         doc=_("Welche Seite der Ebene stehen bleibt. Die andere fällt weg."),
     )
+    tilt: float = param(
+        title=_("Neigung"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-89.0,
+        maximum=89.0,
+        placement="advanced",
+        doc=_(
+            "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen "
+            "ganzer Seiten. Null schneidet gerade."
+        ),
+    )
+    tilt_axis: str = param(
+        title=_("Neigen um"),
+        default="x",
+        choices=_AXES,
+        placement="advanced",
+        doc=_(
+            "Um welche Achse die Ebene gekippt wird. Die Kippachse geht auf der "
+            "eingestellten Position durch die Mitte des Körpers."
+        ),
+    )
+
+
+def _cut_away_plane(params: CutAwayParams, mesh: MeshData) -> SectionPlane:
+    """Die Schnittebene von *Abschneiden*, gerade oder geneigt (RM-400).
+
+    Geneigt wird die Achsnormale um ``tilt_axis``; die Kippachse liegt auf der
+    eingetragenen Position und geht in den beiden anderen Richtungen durch die
+    Mitte des Hüllquaders der Eingabe — reproduzierbar aus Parametern und
+    Eingang (Regel 2). Ohne Neigung ist es die Achsebene von vorher, auf den
+    Bit genau: alte Schritte rechnen unverändert.
+    """
+    axis = cast(Axis, params.axis)
+    normal = AXIS_NORMALS[axis]
+    if abs(params.tilt) <= EPS_GEOM:
+        return SectionPlane(normal=normal, position=params.position)
+    if params.tilt_axis == params.axis:
+        raise ValidationError(
+            field="tilt_axis",
+            detail=_(
+                "Um die eigene Schnittachse gekippt ändert sich die Ebene nicht. Wählen "
+                "Sie eine der beiden anderen Achsen."
+            ),
+            value=params.tilt_axis,
+            constraint="tilt_about_axis",
+        )
+    cosine = units.exact_cos_degrees(params.tilt)
+    sine = units.exact_sin_degrees(params.tilt)
+    about = AXIS_NORMALS[cast(Axis, params.tilt_axis)]
+    # Rodrigues für einen zur Drehachse senkrechten Vektor:
+    # n' = n·cos + (a kreuz n)·sin — elementweise, plattformgleich (RM-187).
+    cross = (
+        about[1] * normal[2] - about[2] * normal[1],
+        about[2] * normal[0] - about[0] * normal[2],
+        about[0] * normal[1] - about[1] * normal[0],
+    )
+    tilted = (
+        normal[0] * cosine + cross[0] * sine,
+        normal[1] * cosine + cross[1] * sine,
+        normal[2] * cosine + cross[2] * sine,
+    )
+    low, high = mesh.raw.bounds
+    pivot = [float(low[index] + high[index]) / 2.0 for index in range(3)]
+    pivot[_AXES.index(params.axis)] = params.position
+    distance = tilted[0] * pivot[0] + tilted[1] * pivot[1] + tilted[2] * pivot[2]
+    return SectionPlane(normal=tilted, position=distance)
 
 
 @register_op(
@@ -17328,11 +17395,11 @@ def cut_away(ctx: OpContext) -> OpResult:
     ebene Fläche versetzen — der Weg, Wände auf eine Höhe zu bringen.
     """
     params = cast(CutAwayParams, ctx.params)
-    plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
-    if params.keep == "above":
-        plane = plane.flipped()
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
+    plane = _cut_away_plane(params, mesh)
+    if params.keep == "above":
+        plane = plane.flipped()
     kept = cut(mesh, plane)
     check_cut_contact(kept, params.position)
     if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:

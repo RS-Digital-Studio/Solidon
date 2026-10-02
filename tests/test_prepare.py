@@ -7124,3 +7124,90 @@ def test_a_ray_along_a_large_mesh_hits_what_the_full_comparison_hits() -> None:
                     chosen = ray_hits_along(triangles, origin, direction, minimum_travel=travel)
                     assert np.array_equal(full[1], chosen[1])
                     assert np.array_equal(full[0], chosen[0])
+
+
+def _cut(document: Document, profile: Profile, name: str, **params: object):
+    project, history = loaded(document, name)
+    history.apply(
+        _("Abschneiden"),
+        [OperationDraft(op="cut_away", inputs=("obj_1",), params=params)],
+    )
+    return evaluate(document, profile, sources=ProjectSources(project))
+
+
+def test_cutting_away_at_a_slant_keeps_the_analytic_volume(
+    document: Document, profile: Profile
+) -> None:
+    """*Abschneiden* kannte nur Achsebenen (RM-400). Der Würfel 20 mm, bei z = 2
+    um 30° um X geneigt geschnitten: Die Ebene bleibt im Würfel (2 ± 5,77), der
+    geneigte Anteil hebt sich auf, unten bleiben 20·20·12 = 4800 mm³ —
+    geschlossen, ein Körper, jeder Punkt unter der Ebene."""
+    import math
+
+    result = _cut(
+        document,
+        profile,
+        "cube_clean.stl",
+        axis="z",
+        position=2.0,
+        keep="below",
+        tilt=30.0,
+        tilt_axis="x",
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight and body.component_count == 1
+    assert body.volume == pytest.approx(4800.0, rel=1e-6)
+    normal = (0.0, -math.sin(math.radians(30.0)), math.cos(math.radians(30.0)))
+    heights = body.raw.vertices @ normal
+    assert heights.max() <= 2.0 * normal[2] + 1e-6
+
+
+@pytest.mark.parametrize(
+    "name", ["clean_figure.stl", "plate_holes.stl", "block_with_rounded_edge.stl"]
+)
+def test_a_slanted_cut_works_on_any_closed_body(
+    document: Document, profile: Profile, name: str
+) -> None:
+    """Dieselbe Schräge an drei verschiedenen Korpuskörpern: dicht, ein Körper,
+    kleiner als vorher, und nichts über der geneigten Ebene durch die Mitte."""
+    import math
+
+    from app.core.geom.mesh import read_mesh
+
+    whole = read_mesh((MESHES / name).read_bytes(), ".stl")
+    low, high = whole.raw.bounds
+    middle = (low + high) / 2.0
+    result = _cut(
+        document,
+        profile,
+        name,
+        axis="z",
+        position=float(middle[2]),
+        keep="below",
+        tilt=20.0,
+        tilt_axis="y",
+    )
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.is_watertight and body.component_count >= 1
+    assert 0.0 < body.volume < whole.volume
+    normal = (math.sin(math.radians(20.0)), 0.0, math.cos(math.radians(20.0)))
+    limit = sum(n * m for n, m in zip(normal, middle, strict=True))
+    assert (body.raw.vertices @ normal).max() <= limit + 1e-6
+
+
+def test_a_tilt_about_the_cutting_axis_itself_is_refused(
+    document: Document, profile: Profile
+) -> None:
+    """Um die eigene Schnittachse geneigt ändert sich die Ebene nicht — das ist
+    eine Eingabe ohne Wirkung und wird mit dem Feld gesagt (Regel 17)."""
+    result = _cut(
+        document, profile, "cube_clean.stl", axis="z", position=2.0, tilt=30.0, tilt_axis="z"
+    )
+
+    assert not result.complete
+    codes = {f.code for f in result.scene.report.findings}
+    assert any("cut_away" in code for code in codes), codes
