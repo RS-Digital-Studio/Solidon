@@ -8,6 +8,7 @@ teilen.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import warnings
 
@@ -1035,6 +1036,40 @@ def test_an_exact_jar_gets_an_exact_screw_lid(
     assert step.read(step.write(container.mesh)).volume == pytest.approx(
         container.mesh.volume, rel=1e-9
     )
+
+
+@pytest.mark.parametrize(("clearance", "violated"), [(0.0, False), (0.1, True)])
+def test_the_exact_screw_lid_fits_its_own_neck(
+    profile: Profile, clearance: float, violated: bool
+) -> None:
+    """Am exakten Kern dasselbe wie am Netz (RM-393): Die Kappe nennt den
+    Durchmesser, auf den sie geschnitten ist, und die Passung misst das
+    gebaute Spiel — mit dem Spiel aus dem Material ohne Befund, verengt mit."""
+    from app.core.scene.fits import check as check_fits
+    from app.core.types import FeatureRef, Fit, Scene
+
+    exact_kernel()
+    container, cap = make_screw_lid(
+        exact_jar(), profile, height=8.0, pitch=3.0, clearance=clearance
+    ).outputs
+    assert container.kind == cap.kind == "brep"
+    cap = dataclasses.replace(cap, id="obj_2")
+    played = clearance or profile.material.clearance
+    assert cap.features[CAP_THREAD_FEATURE].params["diameter"] == pytest.approx(40.0 + played)
+    scene = Scene(
+        objects={container.id: container, cap.id: cap},
+        fits=[
+            Fit(
+                name="deckel",
+                a=FeatureRef(container.id, NECK_THREAD_FEATURE),
+                b=FeatureRef(cap.id, CAP_THREAD_FEATURE),
+            )
+        ],
+    )
+
+    codes = [entry.code for entry in check_fits(scene, profile)]
+
+    assert ("fit.violated" in codes) is violated, codes
 
 
 def test_the_exact_neck_follows_the_translated_opening(profile: Profile) -> None:
