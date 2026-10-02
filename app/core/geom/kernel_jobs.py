@@ -476,8 +476,8 @@ _ALIGNMENT: Final = 64
 #: ``MemoryError`` (Durchsicht RM-212, B2).
 _WINDOWS_OUT_OF_MEMORY: Final = frozenset({8, 14, 1450, 1455})
 
-#: Dasselbe unter POSIX: kein Speicher, oder kein Platz in ``/dev/shm``.
-_POSIX_OUT_OF_MEMORY: Final = frozenset({errno.ENOMEM, errno.ENOSPC})
+#: Unter POSIX nur echter Speichermangel; ENOSPC kann allein den Transfer verhindern.
+_POSIX_OUT_OF_MEMORY: Final = frozenset({errno.ENOMEM})
 
 
 def short_of_memory(problem: OSError) -> bool:

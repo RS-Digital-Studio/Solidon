@@ -2417,6 +2417,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bleiben im Release zu prüfen; RM-298 bleibt offen.
   Review 02.10. (`7f0de659d`): Der neue Bericht `rm298-poolnachweise-2026-10-02.md` (Z. 22, 26, 61) erklärt (a) für geschlossen, ohne zu sagen, dass nur `shutdown` die Sperre nach einem späten Prozessende aufhebt (RM-384).
 
+  **Teilstand 02.10.2026, (b), Transfermangel:** ENOSPC bleibt als
+  `OSError` vom tatsächlichen Speichermangel getrennt; ein abgewiesener
+  Eltern-Eingangs- oder Helfer-Eingangs-/Ergebnistransfer nimmt den bestehenden
+  lokalen Rückfall. ENOMEM, Windows 8/14/1450/1455 und ein ursprünglicher
+  `MemoryError` bleiben Speichermangel, ohne lokale Zweitrechnung.
+  35 kleine direkte und öffentliche Anschlussfälle: zuvor 5 ENOSPC-Fälle
+  im Testkörper rot und 30 Kontrollen grün, danach 35 grün; keine Aufbau-/
+  Abbaufehler oder Skips. Das ganze Kernel-Entwicklungsmodul besteht mit
+  141 Fällen, 1 Fenstertest abgewählt, Exit 0; drei Quell-/Testhashes stabil.
+  [Portabler Transfer-/Ursachenbeleg](konzepte/nachweise-release-0.5.1/reports/rm298-enospc-2026-10-02.md).
+  Vollständiges Tor und Integration dieser Teileinheit stehen noch aus.
+  Wirklicher POSIX-Speicherbesitz, SIGBUS, Crashbereinigung, Linux/macOS,
+  Paket- und Release-Abnahmen bleiben offen; RM298(b) ist damit nur teilweise
+  bearbeitet, RM298 als Gesamtpunkt bleibt `[~]`.
+
 <a id="rm-301"></a>
 
 - [ ] **RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons.** Aus dem Release 0.5.1 (Gesamtprüfung, Sichtprüfung B5 im
