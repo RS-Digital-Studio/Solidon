@@ -51,7 +51,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
-from app.core.geom.boolean import body_split
+from app.core.geom.boolean import body_split, pieces
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.profiles import analysis_limits, for_process
 from app.core.log import get_logger
@@ -127,6 +127,7 @@ from app.core.types import (
     AskFn,
     BaseParams,
     BoundingBox,
+    BRepBody,
     CancelToken,
     Document,
     Feature,
@@ -1378,15 +1379,15 @@ def _evaluate(
     settled = _without_split_echoes(
         _without_repeats(
             _without_undone_placements(
-                _without_outdated(_without_settled(findings), scene),
+                _without_outdated(_without_settled(findings), scene, cancelled=token),
                 scene,
                 placed=stopped_at is None and bool(objects),
             )
         ),
         scene,
     )
-    if len(settled) != len(findings):
-        scene = dataclasses.replace(scene, report=Report(tuple(settled)))
+    # Auch eine ersetzte Teilezahl ändert den Bericht bei gleicher Zeilenzahl.
+    scene = dataclasses.replace(scene, report=Report(tuple(settled)))
     token.raise_if_cancelled()
     # Erst nach sämtlichen Abschlussprüfungen ist der Durchlauf vollständig.
     # Abbruch davor veröffentlicht weder einen Teilcache noch eine Fertigmeldung.
@@ -1520,14 +1521,28 @@ CLOSED_STATE_CODES: Final = frozenset(
     }
 )
 
+#: Befunde über lose Materialteile. Innenhäute eines Hohlraums sind keine
+#: weiteren Teile; ohne vollständigen Materialbeleg bleibt der Befund stehen.
+MATERIAL_PART_CODES: Final = frozenset(
+    {
+        "bore.splits_the_body",
+        "label.fell_apart",
+        "texture.fell_apart",
+        "parts.hanging_loose",
+        "blend.still_apart",
+        "sketch.join_apart",
+    }
+)
+
 #: Und die, die „mehr als ein Teil" aussagen — am Endstand gestrichen, wenn
 #: der Körper dort aus einem Stück besteht. Ein Teil im Teil gehört dazu:
 #: Ohne zweite Schale gibt es keines. Ebenso der Zerfall an einem Schritt, den
 #: ein späterer wieder zu einem Stück vereinigt hat — ob die Bohrung ihn meldet
 #: (``bore.splits_the_body``) oder die Auswertung (``feature.body_split``).
-ONE_PIECE_CODES: Final = frozenset(
+#: Nur :data:`MATERIAL_PART_CODES` fragen Materialteile; die übrigen alten
+#: Befunde behalten ihre Bedeutung als Zahl zusammenhängender Netzkomponenten.
+ONE_PIECE_CODES: Final = MATERIAL_PART_CODES | frozenset(
     {
-        "bore.splits_the_body",
         "feature.body_split",
         "ingest.multiple_components",
         "ingest.small_components",
@@ -1540,12 +1555,12 @@ ONE_PIECE_CODES: Final = frozenset(
 #: Sie fallen auch an einem Körper, der am Endstand aus **anderen** vielen
 #: Teilen besteht: „69 Teile, von denen manche ineinanderstecken" stand über
 #: dem Bohrmaschinenhalter, den *Überschneidungen auflösen* zu vier Teilen
-#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13). Ebenso „Anzahl 8"
-#: über einer Wanne, die ein späterer Schritt zu drei Teilen überbrückt hatte.
+#: vereinigt hatte, und darüber „4 Teile" im Kopf (KUNDE-13).
+#: Die Bohrungszahl wird dagegen am Endstand nachgeführt, solange mehr als
+#: ein Materialteil belegt ist; sie steht deshalb nicht in dieser Tabelle.
 #: **Nicht** ``feature.body_split``: Bei einem Baustein mit lösbarem Teil zählt
 #: sein „Nachher" nur die Stücke des Trägers, der Körper hat eines mehr.
 COUNTED_PARTS: Final[dict[str, str]] = {
-    "bore.splits_the_body": "count",
     "ingest.multiple_components": "components",
     "repair.part_inside": "components",
     "mesh.components_split": "after_components",
@@ -1799,7 +1814,9 @@ def _without_undone_placements(
     return kept
 
 
-def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding]:
+def _without_outdated(
+    findings: Sequence[Finding], scene: Scene, *, cancelled: CancelToken | None = None
+) -> list[Finding]:
     """Streicht Zustandsbefunde, die am fertigen Körper nicht mehr stimmen.
 
     „Das Modell ist nicht geschlossen" steht im Präsens; ist der Körper am
@@ -1812,7 +1829,15 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
     —, und gegeneinander zeigende Außenseiten an einem einheitlich gewickelten
     (:data:`WOUND_STATE_CODES`). Ein Befund ohne Körper oder an einem Körper,
     den es am Ende nicht mehr gibt, bleibt — über ihn weiß der Endstand nichts.
+
+    Nur :data:`MATERIAL_PART_CODES` fragen belegte Materialteile statt Schalen;
+    die native Topologie zählt über ``solid_count``. Die Bohrungszahl wird bei
+    weiter mehreren Teilen in einem frischen Befund nachgeführt. Ein unbekannter
+    Endstand erhält den bisherigen Befund, die rohen Operationsbefunde bleiben
+    unverändert. Beide Zählarten werden getrennt einmal je Objekt ermittelt.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if not any(
         entry.code in CLOSED_STATE_CODES
         or entry.code in ONE_PIECE_CODES
@@ -1822,6 +1847,7 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
         return list(findings)
     closed: dict[ObjectId, bool] = {}
     parts: dict[ObjectId, int | None] = {}
+    material_parts: dict[ObjectId, int | None] = {}
     wound: dict[ObjectId, bool] = {}
 
     def body_of(entry: Finding) -> SceneObject | None:
@@ -1832,6 +1858,8 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
 
     kept: list[Finding] = []
     for entry in findings:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         body = body_of(entry)
         # Gefragt wird, was der Körper von sich weiß; wer es nicht weiß (ein
         # Körper ohne diese Auskunft), behält seinen Befund.
@@ -1840,7 +1868,29 @@ def _without_outdated(findings: Sequence[Finding], scene: Scene) -> list[Finding
                 closed[body.id] = getattr(body.mesh, "is_watertight", False) is True
             if closed[body.id]:
                 continue
-        if body is not None and entry.code in ONE_PIECE_CODES:
+        if body is not None and entry.code in MATERIAL_PART_CODES:
+            if body.id not in material_parts:
+                if isinstance(body.mesh, BRepBody):
+                    # Die native Topologie zählt Materialkörper einschließlich
+                    # ihrer Innenhäute; Null oder eine offene Form belegt nichts.
+                    native_count = (
+                        pieces(body.mesh) if getattr(body.mesh, "is_closed", False) is True else 0
+                    )
+                    material_parts[body.id] = native_count if native_count > 0 else None
+                elif isinstance(body.mesh, MeshData):
+                    from app.core.geom.repair import material_part_count
+
+                    material_parts[body.id] = material_part_count(body.mesh, cancelled=cancelled)
+                else:
+                    material_parts[body.id] = None
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            current = material_parts[body.id]
+            if current == 1:
+                continue
+            if entry.code == "bore.splits_the_body" and current is not None:
+                entry = dataclasses.replace(entry, values={**dict(entry.values), "count": current})
+        elif body is not None and entry.code in ONE_PIECE_CODES:
             if body.id not in parts:
                 count = getattr(body.mesh, "component_count", None)
                 parts[body.id] = count if isinstance(count, int) else None

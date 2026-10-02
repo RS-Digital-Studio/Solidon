@@ -132,6 +132,17 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   Das ist Datenidentität ohne geometrische Näherung oder Rundung.
   Rohe Operationsbefunde bleiben unverändert,
   auch beim erneuten Abschluss aus dem Cache.
+  `_without_outdated` zählt Material nur für `bore.splits_the_body` sowie
+  `label.fell_apart`, `texture.fell_apart`, `parts.hanging_loose`,
+  `blend.still_apart` und `sketch.join_apart`: nativ über `solid_count`, am
+  Netz über `repair.material_part_count`. Innenhäute sind keine losen Teile;
+  ohne vollständigen Beleg bleibt der Befund. Nur `values['count']` des
+  Bohrungsbefunds wird bei mehreren Teilen frisch nachgeführt, bei einem
+  entfällt der Befund.
+  Die übrigen Zähler behalten `component_count`, mit getrennten Merkern je
+  Objekt. Der echte Abbruchtoken erreicht auch den Schalenaufbau; erst nach
+  dem Abschluss werden Bericht und Cache freigegeben. Der Bericht übernimmt
+  Ersatzbefunde auch bei unveränderter Zeilenzahl.
   `_finding_from` übernimmt `location` und `outline` aus einer Ausnahme als
   räumliche Felder und lässt sie aus den Anzeigewerten heraus. So führt
   `as_error` beim Rückweg zu den tatsächlichen Punkten statt zu deren Text.

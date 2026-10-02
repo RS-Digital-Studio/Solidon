@@ -5630,3 +5630,126 @@ def test_a_placement_the_end_state_undid_is_not_reported(profile: Profile) -> No
     left = {finding.code for finding in loose.scene.report.findings}
     assert {entry.plate for entry in loose.scene.objects.values()} == {0, 1}
     assert not left & (placement | {"arrange.needs_more_plates"}), left
+
+
+def _a_bore_report_with_an_added_island(document: Document):
+    """Echter Bohrungsbefund und gewollter dritter Würfel ohne zweite Berichtszeile."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.prepare import split_findings
+
+    cubes = []
+    for x in (0.0, 20.0, 40.0):
+        cube = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        cube.apply_translation((x, 0.0, 5.0))
+        cubes.append(cube)
+    one = MeshData.of(cubes[0])
+    two = MeshData.of(trimesh.util.concatenate(cubes[:2]))
+    three = MeshData.of(trimesh.util.concatenate(cubes))
+    assert (one.component_count, two.component_count, three.component_count) == (1, 2, 3)
+    raw = split_findings(one, two)
+    assert len(raw) == 1 and raw[0].values == {"count": 2}
+    own = Registry()
+    calls = []
+
+    @register_op(
+        name="split_source",
+        title=_("Prüfkörper"),
+        category="primitive",
+        params=EmptyParams,
+        consumes=0,
+        registry=own,
+    )
+    def source(ctx: OpContext) -> OpResult:
+        calls.append("source")
+        return OpResult(outputs=[SceneObject(id="", name="Zwei Teile", mesh=two)], findings=raw)
+
+    @register_op(
+        name="separate_island",
+        title=_("Loser Prüfkörper"),
+        category="scene",
+        params=EmptyParams,
+        consumes=1,
+        keeps_inputs=1,
+        leaves_separate_parts=True,
+        registry=own,
+    )
+    def add_island(ctx: OpContext) -> OpResult:
+        calls.append("island")
+        return OpResult(outputs=[dataclasses.replace(ctx.inputs[0], mesh=three)])
+
+    history = History(document, registry=own)
+    history.apply("Zwei Teile", [OperationDraft(op="split_source")])
+    history.apply(
+        "Ein gewollt loser dritter Teil", [OperationDraft(op="separate_island", inputs=("obj_1",))]
+    )
+    return own, raw, calls
+
+
+def test_the_final_report_replaces_a_count_without_changing_the_number_of_findings(
+    document: Document, profile: Profile
+) -> None:
+    """Ein echter Bohrungsbefund wird ersetzt, auch wenn keine Zeile hinzukommt oder fällt."""
+    own, raw, calls = _a_bore_report_with_an_added_island(document)
+    cache = ResultCache()
+    for pass_number in range(2):
+        result = evaluate(
+            document,
+            profile,
+            registry=own,
+            cache=cache,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+        )
+        assert result.complete
+        assert len(result.scene.report.findings) == 1, "keine Entdopplung darf den Fehler verdecken"
+        reported = result.scene.report.findings[0]
+        assert reported.code == "bore.splits_the_body" and reported.values == {"count": 3}
+        assert reported.op_id == 1 and reported.object_id == "obj_1"
+        assert reported is not raw[0]
+        assert raw[0].values == {"count": 2} and raw[0].op_id is None
+        assert calls == ["source", "island"]
+        assert cache.statistics.hits == 2 * pass_number
+
+
+@pytest.mark.parametrize("warm", [False, True])
+def test_cancelling_the_material_count_does_not_publish_a_report_or_pending_cache(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch, warm: bool
+) -> None:
+    """Der tatsächliche Endabschluss trägt sein Token bis zum Materialbeleg, auch aus dem Cache."""
+    from app.core.geom import repair as repair_module
+
+    own, raw, calls = _a_bore_report_with_an_added_island(document)
+    cache = ResultCache()
+    if warm:
+        assert evaluate(document, profile, registry=own, cache=cache).complete
+    cached = len(cache)
+    signal = CancelSignal()
+    original = repair_module.material_part_count
+    counted = []
+    progress = []
+
+    def stop_at_the_final_count(body, *, cancelled=None):
+        counted.append(body)
+        assert cancelled is signal
+        count = original(body, cancelled=cancelled)
+        assert count == 3
+        signal.cancel()
+        return count
+
+    monkeypatch.setattr(repair_module, "material_part_count", stop_at_the_final_count)
+    with pytest.raises(OperationCancelled):
+        evaluate(
+            document,
+            profile,
+            registry=own,
+            cache=cache,
+            cancelled=signal,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+            progress=lambda fraction, text: progress.append((fraction, text)),
+        )
+    assert len(counted) == 1 and calls == ["source", "island"]
+    assert len(cache) == cached == (2 if warm else 0)
+    assert cache.statistics.hits == (2 if warm else 0)
+    assert (1.0, "") not in progress, "keine Fertigmeldung nach dem angeforderten Abbruch"
+    assert raw[0].values == {"count": 2} and raw[0].op_id is None
