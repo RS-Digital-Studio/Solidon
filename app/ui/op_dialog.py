@@ -53,6 +53,7 @@ from app.i18n import tr
 from app.ui.dialogs import ErrorNotice
 from app.ui.labels import (
     BoundedSpin,
+    LengthSpin,
     RowCheckBox,
     caption_toggles,
     choice_label,
@@ -1425,6 +1426,93 @@ class EdgeSetField(QWidget):
         self.validityChanged.emit()
 
 
+def _three_points(text: str) -> list[list[float]]:
+    """Drei Punkte aus ``x,y,z;x,y,z;x,y,z`` — oder dreimal der Ursprung, wo nichts lesbar ist."""
+    rows: list[list[float]] = []
+    for part in str(text or "").split(";")[:3]:
+        try:
+            values = [float(value) for value in part.split(",")]
+        except ValueError:
+            values = []
+        rows.append(values if len(values) == 3 else [0.0, 0.0, 0.0])
+    while len(rows) < 3:
+        rows.append([0.0, 0.0, 0.0])
+    return rows
+
+
+class PointsField(QWidget):
+    """Drei Punkte einer Ebene — eingetragen oder im Bild angeklickt (RM-400).
+
+    Der Wert ist der Text ``x,y,z;x,y,z;x,y,z``, wie ihn der Kern als
+    ``kind="points"`` ablegt; was der Kunde sieht, sind drei Zeilen mit je
+    drei Längenfeldern in seiner Einheit. *Im Bild wählen* bittet das Fenster,
+    die nächsten drei Klicks auf den Körper anzunehmen (:meth:`take_point`):
+    Jeder füllt den nächsten Punkt, wie die Bohrung ihre Position aus einem
+    Klick bekommt. Die Zahl bleibt die Wahrheit, der Klick die bequeme Eingabe.
+    """
+
+    changed = Signal()
+    pickRequested = Signal()
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        self.spins: list[tuple[LengthSpin, LengthSpin, LengthSpin]] = []
+        for number, values in enumerate(_three_points(text), start=1):
+            line = QHBoxLayout()
+            line.setSpacing(TIGHT)
+            caption = QLabel(tr("Punkt {number}").format(number=number), self)
+            line.addWidget(caption)
+            row: list[LengthSpin] = []
+            for axis_name, value in zip(("X", "Y", "Z"), values, strict=True):
+                spin = LengthSpin(self)
+                spin.set_range_mm(-10_000.0, 10_000.0)
+                spin.set_value_mm(value)
+                # Ein Name je Feld für den Bildschirmleser — „Punkt 2, Y“ und
+                # nicht neunmal „Drehfeld“, wie im Dialog *Neue Ebene*.
+                spin.setAccessibleName(
+                    tr("Punkt {number}, {axis}").format(number=number, axis=axis_name)
+                )
+                spin.valueChanged.connect(self._edited)
+                line.addWidget(spin)
+                row.append(spin)
+            self.spins.append((row[0], row[1], row[2]))
+            layout.addLayout(line)
+        self.pick = QPushButton(tr("Im Bild wählen"), self)
+        self.pick.setToolTip(
+            tr("Danach füllen drei Klicks auf den Körper die drei Punkte, der Reihe nach.")
+        )
+        self.pick.clicked.connect(self._start_pick)
+        layout.addWidget(self.pick)
+        self._next = 0
+
+    def value(self) -> str:
+        """Die drei Punkte als ``x,y,z;x,y,z;x,y,z`` in Millimetern."""
+        return ";".join(
+            ",".join(repr(float(spin.value_mm())) for spin in row) for row in self.spins
+        )
+
+    def take_point(self, point: Sequence[float]) -> int:
+        """Den nächsten Punkt setzen — gibt seine Nummer zurück, 1 bis 3."""
+        row = self.spins[self._next]
+        for spin, value in zip(row, point, strict=True):
+            with QSignalBlocker(spin):
+                spin.set_value_mm(float(value))
+        number = self._next + 1
+        self._next = number % 3
+        self.changed.emit()
+        return number
+
+    def _start_pick(self) -> None:
+        self._next = 0
+        self.pickRequested.emit()
+
+    def _edited(self, *_args: object) -> None:
+        self.changed.emit()
+
+
 class FeatureSetField(QWidget):
     """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag.
 
@@ -1610,6 +1698,9 @@ class OperationDialog(QDialog):
     manualRequested = Signal(str, str)
     """F1: Seite und Stelle des Handbuchs, die diese Operation erklären
     (``manual.help_for``). Das Fenster, das den Dialog öffnet, schlägt sie auf."""
+
+    pointsPickRequested = Signal()
+    """*Im Bild wählen* an den drei Punkten: Das Fenster nimmt die nächsten Klicks an."""
 
     placement_flow: PlacementFlow | None = None
     seal_flow: SealFlow | None = None
@@ -3074,6 +3165,8 @@ class OperationDialog(QDialog):
         if isinstance(editor, FeatureSetField | EdgeSetField):
             editor.changed.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
+        elif isinstance(editor, PointsField):
+            editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, ContourField | OrganizerLayoutField | SealPathField):
             editor.valueChanged.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
@@ -3131,6 +3224,10 @@ class OperationDialog(QDialog):
             return FeatureSetField(self._features, tuple(start or ()), self)
         if entry.kind == "edges":
             return EdgeSetField(self._edges, str(start or ""), self)
+        if entry.kind == "points":
+            points = PointsField(str(start or ""), self)
+            points.pickRequested.connect(self.pointsPickRequested)
+            return points
         if entry.kind == "bool":
             # Die ganze Zeile antwortet, nicht nur das Kästchen (``RowCheckBox``).
             editor = RowCheckBox(self)
@@ -3445,6 +3542,18 @@ class OperationDialog(QDialog):
             if isinstance(editor, ValueField):
                 editor.set_value(float(value))
         return True
+
+    def take_plane_point(self, point: Sequence[float]) -> int | None:
+        """Einen im Bild angeklickten Punkt in das Punktefeld eintragen (RM-400).
+
+        Gibt die Nummer des gesetzten Punkts zurück, 1 bis 3 — oder ``None``,
+        wenn der Dialog gerade kein wirksames Punktefeld trägt: Wer die Ebene
+        inzwischen auf eine Achse gestellt hat, dessen Klick ist keine Antwort.
+        """
+        for editor in self._editors.values():
+            if isinstance(editor, PointsField) and editor.isEnabled():
+                return editor.take_point(point)
+        return None
 
     def take_placement(self, values: Mapping[str, Any]) -> None:
         """Übernimmt eine vollständige Raumlage ohne gerundete Zwischenwerte."""
@@ -3767,7 +3876,8 @@ class OperationDialog(QDialog):
             if isinstance(editor, SealPathField):
                 collected.update(editor.selection())
             elif isinstance(
-                editor, FeatureSetField | EdgeSetField | ContourField | OrganizerLayoutField
+                editor,
+                FeatureSetField | EdgeSetField | ContourField | OrganizerLayoutField | PointsField,
             ):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, MaterialField):

@@ -1261,6 +1261,54 @@ def test_a_base_filament_without_the_chosen_variant_is_not_called_unreadable(
     }
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["nil", "", ["", ""], 5],
+    ids=["nil", "leer", "liste-leerer-werte", "zahl"],
+)
+def test_bambu_without_a_readable_variant_says_solidons_values_apply(
+    bestand: Path, monkeypatch: pytest.MonkeyPatch, value: object
+) -> None:
+    """RM-429: Ohne lesbare Düsenvariante fiel die Grundlage still auf
+    Solidons Tabelle zurück — kein Befund, und der Kunde hielt die Werte für
+    die des Herstellers (Regel 14, 21)."""
+    monkeypatch.setattr(handover, "_fits_the_printer", lambda _machine, _profile: True)
+    monkeypatch.setattr(manufacturer, "program", lambda _setup: "bambustudio")
+    root = bestand.parent / "resources" / "profiles" / "Elegoo"
+    variants = ["Direct Drive Standard", "Direct Drive High Flow"]
+    machine_path = root / "machine" / "ECC2" / "cc2.json"
+    machine = json.loads(machine_path.read_text(encoding="utf-8"))
+    machine.update(
+        {
+            "extruder_type": ["Direct Drive"],
+            "printer_extruder_variant": variants,
+            "printer_extruder_id": ["1", "1"],
+        }
+    )
+    _write(machine_path, machine)
+    process_path = root / "process" / "ECC2" / "standard.json"
+    process = json.loads(process_path.read_text(encoding="utf-8"))
+    process.update(
+        {
+            "nozzle_volume_type": value,
+            "print_extruder_variant": variants,
+            "print_extruder_id": ["1", "1"],
+        }
+    )
+    _write(process_path, process)
+
+    foundation = manufacturer.base_settings(_cc2(), "standard", _setup(bestand))
+
+    assert not foundation.has_profile
+    assert not foundation.unreadable, "die Datei ist lesbar"
+    found = manufacturer.findings(foundation)
+    assert [entry.code for entry in found] == ["slicer.process_variant_unreadable"]
+    assert found[0].severity == "warning"
+    assert found[0].values == {"profile": "0.20mm Standard @CC2"}
+    assert "Solidons Werte" in str(found[0].message)
+    assert found[0].suggestions == (manufacturer.OPEN_PRINT_SETTINGS,)
+
+
 def test_what_the_chain_does_not_name_is_the_programs_default(
     bestand: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2081,6 +2129,12 @@ def test_prusa_auto_preserves_multiple_native_adhesion_measures(prusa_bundle: Pa
     assert foundation.settings.adhesion.kind == "brim"
     assert written["skirts"] == "2"
     assert written["brim_width"] == "5"
+    # RM-432: Der Dialog zeigt genau, was hinausgeht — beide Arten, kein Raft.
+    kind, kinds = handover.handed_over_adhesion_kinds(automatic, profile, "prusa", foundation)
+    shown = set(print_settings.ADHESION_DETAILS) - print_settings.inactive_paths(
+        "auto", kind, also=kinds
+    )
+    assert shown == {"adhesion.skirt_loops", "adhesion.skirt_distance", "adhesion.brim_width"}
 
     chosen_skirt = print_settings.with_choice(automatic, "adhesion.skirt_loops", 4)
     changed, _expected = handover.prusa_values(chosen_skirt, profile, setup, console=False)

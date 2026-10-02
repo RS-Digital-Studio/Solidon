@@ -4289,9 +4289,13 @@ class PrintSettingsDialog(QDialog):
                 ),
             ),
         )
+        # Sichtbar ist, was die Übergabe an diesen Slicer schreibt (RM-432):
+        # „Automatisch“ heißt bei PrusaSlicer und Cura die Art des Materials.
+        kind: str = settings.adhesion.kind
+        also: frozenset[str] = frozenset()
         flavour = self._current_flavour()
         if flavour is not None:
-            settings = handover.effective_adhesion(
+            kind, also = handover.handed_over_adhesion_kinds(
                 settings,
                 self.session.profile,
                 flavour,
@@ -4301,7 +4305,8 @@ class PrintSettingsDialog(QDialog):
             str(
                 _setting_editor_value(self._editors["support.style"], self._fields["support.style"])
             ),
-            settings.adhesion.kind,
+            kind,
+            also=also,
         )
 
     def _show_search_requirement(self, text: str, control: str = "") -> None:
@@ -6391,13 +6396,26 @@ class PrintSettingsDialog(QDialog):
         return ""
 
     def _machine_selection_issue(self) -> str:
-        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts."""
+        """Was dem Druckerprofil des Slicers fürs Slicen fehlt — leer, wenn nichts.
+
+        **Ein leeres Profil entscheidet** :meth:`_profile_gap` **allein**: Die
+        Orca-Familie verlangt eines, PrusaSlicer nimmt ohne Drucker seines
+        Bündels Solidons Werte. Der Rückfallsatz „Wählen Sie einen Drucker aus
+        der Liste.“ sperrte dort *Slicen*, obwohl der Hinweis darüber sagte,
+        dass Solidons Werte gelten (RM-431). Gesperrt wird nur noch ein Eintrag,
+        der keine Wahl ist, aber einen Wert trüge — ihn bekäme sonst der Slicer.
+        """
+        gap = self._profile_gap()
+        if gap:
+            return gap
+        box = self.machine_choice
         if (
-            self.machine_choice.isEnabled()
-            and self.machine_choice.count() > 0
-            and not valid_printer_choice(self.machine_choice)
+            box.isEnabled()
+            and box.count() > 0
+            and str(box.currentData() or "")
+            and not valid_printer_choice(box)
         ):
-            return self._profile_gap() or str(tr("Wählen Sie einen Drucker aus der Liste."))
+            return str(tr("Wählen Sie ein Druckerprofil aus der Liste."))
         return ""
 
     def _show_slicer_state(self) -> None:
@@ -6538,7 +6556,7 @@ class PrintSettingsDialog(QDialog):
             # haben kann — sonst wischte der nächste Aufruf ein Ergebnis weg,
             # obwohl zwischendurch nie ein Grund dastand.
             self._state_shows_reason = False
-        elif reason:
+        elif reason and not (self.settings.handover == "open" and not open_reason):
             # **Der Grund gehört auf den Bildschirm, nicht in einen Tooltip.**
             # Er stand bis hierhin nur an ``slice_button`` — und ein Tooltip
             # erscheint erst, wenn jemand mit der Maus darauf wartet. Wer den
@@ -6550,6 +6568,11 @@ class PrintSettingsDialog(QDialog):
             # Nur wenn es einen Grund gibt: Ohne einen trägt die Zeile das
             # Ergebnis des letzten Laufs, und das wäre hier nicht zu
             # überschreiben, sondern stehen zu lassen.
+            #
+            # **Und nur, wenn Rechnen der Hauptweg ist.** Ist es das Öffnen und
+            # steht dieser Weg frei, ist *Slicen* der Nebenknopf: Sein Grund
+            # steht an ihm, die Zeile behält die Quittung „An … übergeben“
+            # (RM-431) — dieselbe Regel wie im Zweig darunter.
             self.state.setText(str(reason))
             self._state_shows_reason = True
         elif open_reason and self.settings.handover == "open":
@@ -6969,8 +6992,7 @@ class PrintSettingsDialog(QDialog):
         was_loading = self._loading
         self._loading = True
         try:
-            for name in ("skirt_loops", "brim_width", "raft_layers"):
-                path = f"adhesion.{name}"
+            for path in print_settings.ADHESION_MEASURES.values():
                 editor = self._editors[path]
                 if isinstance(editor, BoundedSpin) and editor.refusal():
                     continue
@@ -7239,11 +7261,10 @@ class PrintSettingsDialog(QDialog):
         field = self._fields[path]
         value = _setting_editor_value(self._editors[path], field)
         current_value = print_settings.read_path(self.settings, path)
-        if self.settings.adhesion.kind == "auto" and path in {
-            "adhesion.skirt_loops",
-            "adhesion.brim_width",
-            "adhesion.raft_layers",
-        }:
+        if (
+            self.settings.adhesion.kind == "auto"
+            and path in print_settings.ADHESION_MEASURES.values()
+        ):
             current_value = print_settings.read_path(self._effective_adhesion(self.settings), path)
         if not print_settings.same_value(value, current_value):
             before = self.settings.explicit
