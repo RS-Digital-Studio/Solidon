@@ -1837,7 +1837,11 @@ def test_disabling_a_settings_group_clears_its_refusal_gate(
 
     refusal = editor.refusal()
     assert refusal
-    assert dialog._first_numeric_refusal() == refusal
+    from app.ui.print_settings_dialog import setting_title
+
+    # Der Sperrgrund nennt das Feld (RM-342, D-N2).
+    named = f"{setting_title(number_path)}: {refusal}"
+    assert dialog._first_numeric_refusal() == named
     assert dialog._refusals[number_path].isVisibleTo(dialog)
 
     selector.setCurrentIndex(selector.findData("none"))
@@ -1853,9 +1857,9 @@ def test_disabling_a_settings_group_clears_its_refusal_gate(
     qt_app.processEvents()
 
     assert editor.refusal() == refusal
-    assert dialog._first_numeric_refusal() == refusal
+    assert dialog._first_numeric_refusal() == named
     assert dialog._refusals[number_path].isVisibleTo(dialog)
-    assert refusal in dialog.slice_button.toolTip()
+    assert named in dialog.slice_button.toolTip()
     assert refusal in dialog.open_button.toolTip()
 
 
@@ -8696,3 +8700,21 @@ def test_measures_of_other_bed_types_are_hidden_and_do_not_lock_slicing(
         assert isinstance(editor, BoundedSpin)
         editor.lineEdit().setText("99999")
         assert not editor.refusal() or dialog._first_numeric_refusal() == ""
+
+
+def test_the_refusal_at_the_slice_button_names_its_field(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Am Knopf stand nur „95 °C liegt über der Obergrenze 90 °C.“ — welches der
+    dreißig Felder gemeint war, musste man suchen (RM-342, D-N2)."""
+    from app.ui.print_settings_dialog import setting_title
+
+    selector = dialog._editors["support.style"]
+    assert isinstance(selector, QComboBox)
+    selector.setCurrentIndex(selector.findData("grid"))
+    editor = dialog._editors["support.density"]
+    monkeypatch.setattr(editor, "refusal", lambda: "95 liegt über der Obergrenze 90.")
+
+    assert dialog._first_numeric_refusal() == (
+        f"{setting_title('support.density')}: 95 liegt über der Obergrenze 90."
+    )
