@@ -4930,6 +4930,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
   macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
   Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
 
 ## KI und Generatoren
 
