@@ -2713,6 +2713,7 @@ class MainWindow(QMainWindow):
         self.viewport.slotDragged.connect(self._on_slot_dragged)
         self.viewport.slotStarted.connect(self._close_the_other_way)
         self.viewport.slotProposed.connect(self._on_slot_proposed)
+        self.viewport.slotPullBlocked.connect(self._on_slot_pull_blocked)
         # Was der Griff bewegen wird, sagt die Ansicht — wo der Satz steht,
         # entscheidet das Fenster, wie bei ``measurementStatus``. Ein Hinweis,
         # keine Quittung: Er steht in der Statuszeile und nimmt der letzten
@@ -20217,6 +20218,10 @@ class MainWindow(QMainWindow):
 
     def _on_gizmo_status(self, text: str) -> None:
         """Der Satz am Griff — solange er gilt, und ohne die Quittung zu wischen."""
+        self.announce(text, receipt=False)
+
+    def _on_slot_pull_blocked(self, text: str) -> None:
+        """Die abgelehnte Geste ist ein Hinweis und lässt die letzte Quittung stehen."""
         self.announce(text, receipt=False)
 
     def announce(self, text: str, *, receipt: bool = True) -> None:

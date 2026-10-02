@@ -7543,6 +7543,272 @@ def test_a_held_button_leaves_the_grips_out_of_the_way(qt_app: QApplication) -> 
     assert griff.gefragt == 2, "wer zieht, sieht seine Bewegung"
 
 
+def test_a_selected_countersunk_cavity_refuses_the_slot_pull_before_drag_fallback() -> None:
+    """Nur ein echter Zug an der Senkung wird abgefangen; ein Klick bleibt ein Klick (RM-278)."""
+    import dataclasses
+    from pathlib import Path
+    from types import MethodType, SimpleNamespace
+
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.actions import actions_for
+    from app.core.perceive.features import detect
+    from app.core.perceive.relations import cavity_chain_state_at
+    from app.ui import viewport as modul
+    from app.ui.render.api import PointerEvent
+
+    model = Path(__file__).parent / "data" / "meshes" / "plate_countersunk.stl"
+    mesh = normalise(read_mesh(model.read_bytes(), ".stl"), "mm").mesh
+    features = detect(mesh)
+    hole = next(feature for feature in features.values() if feature.kind == "hole")
+    cone = next(feature for feature in features.values() if feature.kind == "cone")
+    state = cavity_chain_state_at(hole, features, mesh)
+    assert cone.params.get("recess") is True, "der Kegel ist eine echte Senkung"
+    assert state.chain is not None and {feature.id for feature in state.chain} == {
+        hole.id,
+        cone.id,
+    }, "die Erkennung muss die echte Bohrung-Senkungs-Kette liefern"
+    slot_action = next(
+        action
+        for action in actions_for(hole, features, mesh=mesh)
+        if str(action.title) == "Zum Langloch ziehen"
+    )
+    assert slot_action.op is None and slot_action.reason, "der Kern liefert den Handlungshinweis"
+
+    class _Signal:
+        def __init__(self) -> None:
+            self.messages: list[str] = []
+
+        def emit(self, message: str) -> None:
+            self.messages.append(message)
+
+    def viewport(
+        *,
+        hit: str | None,
+        hit_owner: str,
+        refs: tuple[tuple[str, str], ...],
+        placement_active: bool,
+        body_features: dict[str, object] | None = None,
+    ) -> SimpleNamespace:
+        navigation: list[PointerEvent] = []
+        placement: list[PointerEvent] = []
+        blocked = _Signal()
+        placement_pointer = (
+            (lambda event: placement.append(event) or True) if placement_active else None
+        )
+        selected_entry = SimpleNamespace(
+            features=features if body_features is None else body_features, mesh=mesh
+        )
+        other_entry = SimpleNamespace(features=features, mesh=mesh)
+        result = SimpleNamespace(
+            scene=SimpleNamespace(objects={"obj_1": selected_entry, "obj_2": other_entry})
+        )
+        view = SimpleNamespace(
+            _placement_grip=None,
+            _preview_gizmo=None,
+            _gizmo=None,
+            _scale_handle=None,
+            _slot_handle=None,
+            _placement_pointer=placement_pointer,
+            _placement_resume=None,
+            _selected_feature=None,
+            _selected_feature_refs=refs,
+            _blocked_cavity_slot_pull=False,
+            _pending_cavity_slot_pull=None,
+            _result=result,
+            renderer=SimpleNamespace(device_ratio=lambda: 1.0),
+            _aim_at=lambda x, y: (0.0, 0.0, 0.0),
+            _from_view=lambda point: point,
+            _object_at=lambda point: hit_owner,
+            _feature_at=lambda point: hit,
+            slotPullBlocked=blocked,
+            _navigator=SimpleNamespace(handle=navigation.append),
+            _pull_at_the_hole=lambda event: False,
+            navigation=navigation,
+            placement=placement,
+            blocked=blocked,
+        )
+        view._block_unsupported_cavity_slot_pull = MethodType(
+            modul.Viewport._block_unsupported_cavity_slot_pull, view
+        )
+        view._cavity_slot_pull_refusal = MethodType(modul.Viewport._cavity_slot_pull_refusal, view)
+        view._dispatch_pointer = MethodType(modul.Viewport._dispatch_pointer, view)
+        return view
+
+    selected = (("obj_1", hole.id), ("obj_1", cone.id))
+    press = PointerEvent("press", 200, 200, button="left")
+    click = PointerEvent("release", 205, 203, button="left")
+    clicked = viewport(hit=hole.id, hit_owner="obj_1", refs=selected, placement_active=False)
+    modul.Viewport._dispatch_pointer(clicked, press)
+    assert clicked.navigation == [], "der Druck wartet, bis Klick und Zug unterscheidbar sind"
+    modul.Viewport._dispatch_pointer(clicked, click)
+    assert clicked.navigation == [press, click], "ein einfacher Klick behält seinen Auswahlweg"
+    assert clicked.blocked.messages == [], "ein Klick zeigt keinen Ablehnungshinweis"
+
+    view = viewport(hit=hole.id, hit_owner="obj_1", refs=selected, placement_active=True)
+    modul.Viewport._dispatch_pointer(view, press)
+    modul.Viewport._dispatch_pointer(
+        view, PointerEvent("move", 225, 215, buttons=frozenset({"left"}))
+    )
+    assert view.blocked.messages == [str(slot_action.reason)]
+    modul.Viewport._dispatch_pointer(view, PointerEvent("release", 225, 215, button="left"))
+    assert view.placement == [] and view.navigation == [], (
+        "Druck, Zug und Loslassen bleiben vor beiden Rückfallwegen"
+    )
+    assert not view._blocked_cavity_slot_pull, "mit dem Loslassen ist die Sperre abgeräumt"
+
+    countersink_surface = viewport(
+        hit=cone.id, hit_owner="obj_1", refs=selected, placement_active=True
+    )
+    modul.Viewport._dispatch_pointer(countersink_surface, press)
+    modul.Viewport._dispatch_pointer(
+        countersink_surface, PointerEvent("move", 225, 215, buttons=frozenset({"left"}))
+    )
+    assert countersink_surface.blocked.messages == [str(slot_action.reason)], (
+        "ein Treffer auf der sichtbaren Senkfläche derselben Öffnung wird ebenfalls abgefangen"
+    )
+    modul.Viewport._dispatch_pointer(
+        countersink_surface, PointerEvent("release", 225, 215, button="left")
+    )
+    assert countersink_surface.placement == [] and countersink_surface.navigation == []
+
+    secondary_button = viewport(
+        hit=hole.id, hit_owner="obj_1", refs=selected, placement_active=True
+    )
+    modul.Viewport._dispatch_pointer(secondary_button, press)
+    modul.Viewport._dispatch_pointer(
+        secondary_button,
+        PointerEvent(
+            "press",
+            203,
+            202,
+            button="right",
+            buttons=frozenset({"left", "right"}),
+        ),
+    )
+    assert secondary_button._pending_cavity_slot_pull is not None, (
+        "ein weiterer Knopf vor Überschreiten der Klickschwelle gibt den Druck nicht frei"
+    )
+    modul.Viewport._dispatch_pointer(
+        secondary_button, PointerEvent("move", 230, 220, buttons=frozenset({"left", "right"}))
+    )
+    assert secondary_button._blocked_cavity_slot_pull, "der gemeinsame Zug bleibt abgefangen"
+    assert secondary_button.blocked.messages == [str(slot_action.reason)]
+    modul.Viewport._dispatch_pointer(
+        secondary_button,
+        PointerEvent(
+            "press",
+            230,
+            220,
+            button="right",
+            buttons=frozenset({"left", "right"}),
+        ),
+    )
+    modul.Viewport._dispatch_pointer(
+        secondary_button,
+        PointerEvent("release", 230, 220, button="right", buttons=frozenset({"left"})),
+    )
+    assert secondary_button._blocked_cavity_slot_pull, (
+        "Nebenknöpfe lösen die Sperre vor dem Linksloslassen nicht"
+    )
+    modul.Viewport._dispatch_pointer(
+        secondary_button, PointerEvent("move", 235, 225, buttons=frozenset({"left"}))
+    )
+    assert secondary_button.navigation == [] and secondary_button.placement == [], (
+        "kein Teil des gemeinsamen Zugs erreicht Navigator oder Platzierung"
+    )
+    modul.Viewport._dispatch_pointer(
+        secondary_button, PointerEvent("release", 230, 220, button="left")
+    )
+    assert not secondary_button._blocked_cavity_slot_pull
+
+    secondary_press_over_slack = viewport(
+        hit=hole.id, hit_owner="obj_1", refs=selected, placement_active=True
+    )
+    modul.Viewport._dispatch_pointer(secondary_press_over_slack, press)
+    modul.Viewport._dispatch_pointer(
+        secondary_press_over_slack,
+        PointerEvent(
+            "press",
+            225,
+            215,
+            button="right",
+            buttons=frozenset({"left", "right"}),
+        ),
+    )
+    assert secondary_press_over_slack._pending_cavity_slot_pull is None
+    assert secondary_press_over_slack._blocked_cavity_slot_pull
+    assert secondary_press_over_slack.blocked.messages == [str(slot_action.reason)]
+    modul.Viewport._dispatch_pointer(
+        secondary_press_over_slack,
+        PointerEvent("release", 225, 215, button="left", buttons=frozenset({"right"})),
+    )
+    assert not secondary_press_over_slack._blocked_cavity_slot_pull
+    assert (
+        secondary_press_over_slack.navigation == [] and secondary_press_over_slack.placement == []
+    )
+
+    outside_opening = viewport(
+        hit="face_1", hit_owner="obj_1", refs=selected, placement_active=True
+    )
+    modul.Viewport._dispatch_pointer(outside_opening, press)
+    assert outside_opening.placement == [press], "außerhalb der Öffnung bleibt Platzierung möglich"
+
+    anderer_koerper = viewport(
+        hit=hole.id, hit_owner="obj_2", refs=selected, placement_active=False
+    )
+    modul.Viewport._dispatch_pointer(anderer_koerper, press)
+    assert anderer_koerper.navigation == [press], (
+        "dieselbe Merkmalkennung an einem anderen Körper darf den Klick nicht abfangen"
+    )
+
+    narrowing = dataclasses.replace(cone, params={**cone.params, "narrowing": True})
+    narrowing_features = {**features, cone.id: narrowing}
+    narrowing_view = viewport(
+        hit=hole.id,
+        hit_owner="obj_1",
+        refs=selected,
+        placement_active=False,
+        body_features=narrowing_features,
+    )
+    narrowing_reason = modul.Viewport._cavity_slot_pull_refusal(narrowing_view, "obj_1", hole.id)
+    assert narrowing_reason is not None and "Verengung" in narrowing_reason
+    assert "Senkung sitzt" not in narrowing_reason
+
+    duplicate_cone = dataclasses.replace(cone, id="cone_unscharf")
+    ambiguous_features = {**features, duplicate_cone.id: duplicate_cone}
+    ambiguous_state = cavity_chain_state_at(hole, ambiguous_features, mesh)
+    assert ambiguous_state.chain is None and ambiguous_state.touches_other, (
+        "der doppelte Kegel macht die echte Randbeziehung mehrdeutig"
+    )
+    ambiguous_view = viewport(
+        hit=hole.id,
+        hit_owner="obj_1",
+        refs=selected,
+        placement_active=True,
+        body_features=ambiguous_features,
+    )
+    ambiguous_reason = modul.Viewport._cavity_slot_pull_refusal(ambiguous_view, "obj_1", hole.id)
+    assert ambiguous_reason is not None, (
+        "bei unklarer Topologie darf der Zug nicht zur Kamera fallen"
+    )
+    assert "Hohlraumabschnitten" in ambiguous_reason
+
+
+def test_a_blocked_slot_pull_is_announced_as_a_hint() -> None:
+    """Eine Ablehnung darf eine vorherige Exportquittung nicht verdrängen (RM-278)."""
+    from types import SimpleNamespace
+
+    from app.ui.main_window import MainWindow
+
+    heard: list[tuple[str, bool]] = []
+    view = SimpleNamespace(announce=lambda text, *, receipt=True: heard.append((text, receipt)))
+
+    MainWindow._on_slot_pull_blocked(view, "Hinweis")
+
+    assert heard == [("Hinweis", False)]
+
+
 def test_every_grip_the_viewport_holds_stands_in_the_right_of_way() -> None:
     """Jeder Griff, den der Viewport führt, wird in ``_on_pointer`` gefragt.
 

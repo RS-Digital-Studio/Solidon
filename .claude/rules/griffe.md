@@ -18,9 +18,15 @@ laden am Viewport mit. Anlässe und Messwerte:
 
 ## Ein Griff steht vor allem, was über der Ansicht liegt
 
-`Viewport._dispatch_pointer` hat eine feste Vorfahrt: **Griffe, dann eine
-laufende Platzierung, dann der Zeiger, zuletzt die Kamera.** Stünde die
-Platzierung vorn, nähme sie jede Bewegung als Zielversuch, und die Griffe wären
+`Viewport._dispatch_pointer` hat eine feste Vorfahrt: **Ein bereits
+beanspruchter Griff; bei einem noch ungeklärten Linksdruck in einer gemeinsam
+gewählten Senkbohrung zuerst die `CLICK_SLACK`-Prüfung; danach eine laufende
+Platzierung, der allgemeine Zeiger und zuletzt die Kamera.** Die Sonderprüfung
+hält den Druck nur so lange zurück, bis Klick und Zug unterscheidbar sind. Ein
+Klick läuft über den normalen Auswahlweg; ein nicht unterstützter Zug wird vor
+Platzierung, Zeiger und Kamera abgefangen. Ein nicht abgelehnter Zug wird
+unverändert in die normale Vorfahrt zurückgegeben. Stünde die Platzierung vor
+den Griffen, nähme sie jede Bewegung als Zielversuch, und die Griffe wären
 sichtbar und tot.
 
 * **Verschluckt wird nichts**: `move` nimmt ein Griff nur gedrückt, `press` nur
@@ -160,6 +166,14 @@ Mündung. Wo er sitzt, sagt das Register (`slot_feature_kinds()` aus dem
   `_grab_at`); nur die runde Bohrung rechnet aus der Mitte. Loslassen ist
   `slotProposed`, das Fenster holt die Maße (`_on_slot_proposed` →
   `request_in_view`). Neben dem Loch führt links den Körper.
+* **Ein Klick auf eine gemeinsam gewählte Senkbohrung bleibt ein Klick**:
+  `Viewport._block_unsupported_cavity_slot_pull` merkt den Linksdruck nur vor.
+  Erst jenseits von `CLICK_SLACK` prüft `_cavity_slot_pull_refusal` die
+  Bohrung-Senkungs-Kette am getroffenen Körper. Eine verbundene oder
+  mehrdeutige Kette endet vor Platzierung und Navigator; ein unverbundenes
+  Merkmal folgt dem normalen Zeigerweg. `slotPullBlocked` zeigt den passenden
+  Handlungshinweis aus `actions_for` ohne Quittungsstatus; Senkung und Körper
+  bleiben unverändert.
 * **Der Ring um die Bohrachse dreht das Langloch**, nicht seine Achse
   (`_slot_turn_sign`, `SLOT_RING_ALIGNED`): Griff, Marke und Beschriftung folgen
   dem gerasteten Winkel (`_turn_slot_with`, `_slot_turn_base`), das Loslassen

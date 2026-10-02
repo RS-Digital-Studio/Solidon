@@ -81,9 +81,14 @@ from app.core.geom.transform import (
     snap_to_step,
 )
 from app.core.log import get_logger
+from app.core.perceive.actions import actions_for
 from app.core.perceive.features import CURVATURE_LIMIT, EPS_ANGLE, copy_with_answers
 from app.core.perceive.maps import AnalysisMap
-from app.core.perceive.relations import cavity_chain_at, cavity_surface_indices
+from app.core.perceive.relations import (
+    cavity_chain_at,
+    cavity_chain_state_at,
+    cavity_surface_indices,
+)
 from app.core.scene import EdgeTarget, EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.sketch.planes import axis_hit, image_normal, ray_hit, to_plane, to_world
@@ -155,7 +160,7 @@ from app.ui.render.api import (
 )
 from app.ui.render.edges import feature_edges, outline_edges
 from app.ui.render.gizmo import ARROW_SHARE, Gizmo, display_ray, normal_frame, ray_plane_hit
-from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
+from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks, is_click
 from app.ui.scale_widget import ScaleHandle
 from app.ui.slot_handle import SlotHandle, settled_length, shown_length
 from app.ui.style import ROOMY, TIGHT
@@ -4641,6 +4646,11 @@ class Viewport(QWidget):
     Kennung, Länge in Millimetern, Winkel in Grad. **Ein Vorschlag und keine
     Operation**: Er landet in den Feldern des Merkmalfensters, und erst deren
     Übernehmen macht einen Schritt daraus (Regel 2)."""
+    slotPullBlocked = Signal(str)
+    """Ein Zug an einer gewählten Senkbohrung passt nicht zum Langloch.
+
+    Der Viewport gibt den vorhandenen Handlungshinweis weiter, bevor die
+    Geste eine Platzierung oder den Navigator erreicht."""
 
     slotStarted = Signal()
     """Der Zug am Langlochgriff ist **übernommen** — das Loch wird länger.
@@ -5205,6 +5215,10 @@ class Viewport(QWidget):
         wieder ab — sonst blieben Scheibe, Vorschau und Knöpfe stehen, und der
         nächste Druck am Loch verschöbe den Körper, weil der Zug am Loch auf
         ``_slot_handle is None`` wartet."""
+        self._blocked_cavity_slot_pull = False
+        """Ob eine abgelehnte Senkbohrungs-Geste bis zum Loslassen abgefangen wird."""
+        self._pending_cavity_slot_pull: tuple[PointerEvent, ObjectId, FeatureId] | None = None
+        """Ein möglicher Langlochzug: erst die Klickschwelle unterscheidet ihn vom Klick."""
         self._drag_kind: str | None = None
         """Was gerade gezogen wird — ``move``, ``turn``, ``face``, ``scale``
         oder ``pull``, ``None`` heißt kein Zug. Entscheidet, was eine getippte
@@ -5853,13 +5867,14 @@ class Viewport(QWidget):
         if self.renderer.frame_was_reduced():
             self._draw()
 
-    def _dispatch_pointer(self, event: PointerEvent) -> None:
+    def _dispatch_pointer(self, event: PointerEvent, *, guard_cavity_pull: bool = True) -> None:
         """Jede Zeigergeste des Renderers, in fester Vorfahrt.
 
         Zuerst die Griffe — Vorschaugriff, Bewegungsgriff, Skalierwürfel und
         Langlochgriff sagen mit ``True``, dass die Geste ihnen gehört —, dann
-        eine laufende Platzierung, dann der Zeiger selbst (Hover,
-        Skizzenvorschau), zuletzt die Kameraführung. Was ein Griff nimmt, dreht
+        die Klickschwelle einer gemeinsam gewählten Hohlraumkette, dann eine
+        laufende Platzierung, dann der Zeiger selbst (Hover, Skizzenvorschau),
+        zuletzt die Kameraführung. Was ein Griff nimmt, dreht
         keine Kamera; das ist die ganze Vorfahrt, und sie steht an einer Stelle
         statt in drei Beobachtern am Interactor wie bis zum 05.09.2026.
 
@@ -5905,6 +5920,80 @@ class Viewport(QWidget):
         ersten Bewegung, die die Klickschwelle verlässt (``dragging``) — ein
         Klick bleibt ein Klick, wie im Navigator.
         """
+        if guard_cavity_pull and self._blocked_cavity_slot_pull:
+            if event.kind == "release" and event.button == "left":
+                self._blocked_cavity_slot_pull = False
+                return
+            if event.kind == "release" and "left" in event.buttons:
+                return
+            if event.kind == "move":
+                if "left" in event.buttons:
+                    return
+                self._blocked_cavity_slot_pull = False
+            elif event.kind == "leave":
+                return
+            elif event.kind == "press":
+                if event.button != "left" and "left" in event.buttons:
+                    return
+                self._blocked_cavity_slot_pull = False
+
+        pending = self._pending_cavity_slot_pull if guard_cavity_pull else None
+        if pending is not None:
+            press, object_id, feature_id = pending
+            start = (press.x, press.y)
+            ratio = self.renderer.device_ratio() if self.renderer is not None else 1.0
+            if event.kind == "leave":
+                return
+            if event.kind == "move":
+                if "left" not in event.buttons:
+                    self._pending_cavity_slot_pull = None
+                    self._dispatch_pointer(press, guard_cavity_pull=False)
+                    self._dispatch_pointer(
+                        PointerEvent("release", event.x, event.y, button="left"),
+                        guard_cavity_pull=False,
+                    )
+                    self._dispatch_pointer(event, guard_cavity_pull=False)
+                    return
+                if is_click(start, (event.x, event.y), ratio):
+                    return
+                self._pending_cavity_slot_pull = None
+                reason = self._cavity_slot_pull_refusal(object_id, feature_id)
+                if reason:
+                    self._blocked_cavity_slot_pull = True
+                    self.slotPullBlocked.emit(reason)
+                    return
+                self._dispatch_pointer(press, guard_cavity_pull=False)
+                self._dispatch_pointer(event, guard_cavity_pull=False)
+                return
+            if event.kind == "release" and event.button == "left":
+                self._pending_cavity_slot_pull = None
+                if not is_click(start, (event.x, event.y), ratio):
+                    reason = self._cavity_slot_pull_refusal(object_id, feature_id)
+                    if reason:
+                        self._blocked_cavity_slot_pull = False
+                        self.slotPullBlocked.emit(reason)
+                        return
+                self._dispatch_pointer(press, guard_cavity_pull=False)
+                self._dispatch_pointer(event, guard_cavity_pull=False)
+                return
+            if event.kind == "press":
+                if event.button != "left" and "left" in event.buttons:
+                    if is_click(start, (event.x, event.y), ratio):
+                        return
+                    self._pending_cavity_slot_pull = None
+                    reason = self._cavity_slot_pull_refusal(object_id, feature_id)
+                    if reason:
+                        self._blocked_cavity_slot_pull = True
+                        self.slotPullBlocked.emit(reason)
+                        return
+                    self._dispatch_pointer(press, guard_cavity_pull=False)
+                    self._dispatch_pointer(event, guard_cavity_pull=False)
+                    return
+                self._pending_cavity_slot_pull = None
+                self._dispatch_pointer(press, guard_cavity_pull=False)
+            elif event.kind != "wheel":
+                return
+
         held = event.kind == "move" and bool(event.buttons)
         for handle in (
             self._placement_grip,
@@ -5948,6 +6037,8 @@ class Viewport(QWidget):
                     self._on_slot_interaction_cancelled()
                 self._queue_feature_label_layout()
                 return
+        if guard_cavity_pull and self._block_unsupported_cavity_slot_pull(event):
+            return
         if (
             event.kind == "press"
             and event.button == "left"
@@ -13470,6 +13561,122 @@ class Viewport(QWidget):
             return None
         needed = ("centre", "axis", "diameter")
         return feature if all(feature.params.get(name) is not None for name in needed) else None
+
+    def _block_unsupported_cavity_slot_pull(self, event: PointerEvent) -> bool:
+        """Einen möglichen Zug in einer gemeinsam gewählten Bohrung vormerken.
+
+        Das Langloch nimmt die Senkung nicht mit (Regel in
+        ``operationen.md``). Bei der Paarwahl fehlt deshalb ein einzelner
+        Langlochgriff. Der Druck allein bleibt ein normaler Klick; erst wenn
+        der Weg die Klickschwelle verlässt, entscheidet
+        :meth:`_cavity_slot_pull_refusal`, ob die Geste vor Platzierung und
+        Navigator endet.
+        """
+        refs = self._selected_feature_refs
+        if (
+            event.kind != "press"
+            or event.button != "left"
+            or self._slot_handle is not None
+            or self._selected_feature is not None
+            or len(refs) != 2
+            or refs[0][0] != refs[1][0]
+            or self.renderer is None
+            or self._result is None
+        ):
+            return False
+
+        object_id = refs[0][0]
+        selected_ids = frozenset(feature_id for _owner, feature_id in refs)
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return False
+        selected = tuple(entry.features.get(feature_id) for feature_id in selected_ids)
+        if any(feature is None for feature in selected):
+            return False
+        if {feature.kind for feature in selected if feature is not None} != {"hole", "cone"}:
+            return False
+
+        point = self._aim_at(event.x, event.y)
+        if point is None:
+            return False
+        scene_point = self._from_view(point)
+        hit_object_id = self._object_at(scene_point)
+        hit_id = self._feature_at(scene_point)
+        if hit_object_id != object_id or hit_id not in selected_ids:
+            return False
+        hit = entry.features.get(hit_id)
+        if hit is None or hit.kind not in {"hole", "cone"}:
+            return False
+        hole_id = next(
+            (
+                identifier
+                for identifier in selected_ids
+                if (selected_feature := entry.features.get(identifier)) is not None
+                and selected_feature.kind == "hole"
+            ),
+            None,
+        )
+        if hole_id is None:
+            return False
+
+        self._pending_cavity_slot_pull = (event, object_id, hole_id)
+        return True
+
+    def _cavity_slot_pull_refusal(self, object_id: ObjectId, feature_id: FeatureId) -> str | None:
+        """Den Grund aus dem Merkmalsfenster für einen wirklichen Zug holen.
+
+        Die Kette und ihre Unsicherheit kommen aus demselben Netzbeleg wie im
+        Panel. Ein eindeutiger Zug an einem alleinstehenden Loch bleibt beim
+        Navigator; eine verbundene oder mehrdeutige Kette wird mit ihrem
+        eigenen Handlungshinweis abgefangen.
+        """
+        refs = self._selected_feature_refs
+        selected_ids = frozenset(identifier for _owner, identifier in refs)
+        if (
+            len(refs) != 2
+            or refs[0][0] != object_id
+            or refs[1][0] != object_id
+            or feature_id not in selected_ids
+            or len(selected_ids - {feature_id}) != 1
+            or self._result is None
+        ):
+            return None
+        entry = self._result.scene.objects.get(object_id)
+        feature = entry.features.get(feature_id) if entry is not None else None
+        if entry is None or feature is None or feature.kind != "hole":
+            return None
+        selected = tuple(entry.features.get(identifier) for _owner, identifier in refs)
+        if any(item is None for item in selected) or {item.kind for item in selected if item} != {
+            "hole",
+            "cone",
+        }:
+            return None
+
+        mesh = as_mesh_data(entry.mesh)
+        state = cavity_chain_state_at(feature, entry.features, mesh)
+        linked = state.chain is not None and selected_ids.issubset(
+            {member.id for member in state.chain}
+        )
+        if not linked and not state.touches_other:
+            return None
+
+        title = tr("Zum Langloch ziehen")
+        action = next(
+            (
+                item
+                for item in actions_for(
+                    feature,
+                    entry.features,
+                    mesh=mesh,
+                    cavity=state.chain,
+                    touches_other=state.touches_other,
+                    reason=state.reason,
+                )
+                if str(item.title) == title
+            ),
+            None,
+        )
+        return str(action.reason) if action is not None and action.op is None else None
 
     def set_feature_gizmo_blocked(self, blocked: bool, *, knobs: bool = False) -> None:
         """Ein fester Flächenbezug erlaubt während der Eingabe keinen Bewegungsgriff.
