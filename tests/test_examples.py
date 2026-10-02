@@ -806,3 +806,34 @@ def test_the_oversized_example_shows_auto_split_with_its_pins(evaluated) -> None
             assert entry.mesh.is_watertight, entry.name
     pinned = [entry for entry in result.scene.objects.values() if "pin_1" in entry.features]
     assert pinned, "die Stücke tragen die Stifte als Merkmale"
+
+
+@pytest.mark.parametrize(
+    ("width", "thickness"), [(30.0, 6.0), (40.0, 6.0), (90.0, 4.0), (60.0, 10.0)]
+)
+def test_the_screw_holes_of_way_two_follow_width_and_thickness(
+    width: float, thickness: float
+) -> None:
+    """Die Tour verspricht, dass die Schraubenlöcher bleiben, wo sie hingehören.
+
+    Sie standen fest bei x = ±20 und 6 mm tief: Breite 40 schnitt eine Bohrung
+    halb in die Kante, Breite 30 ließ sie neben dem Körper ins Leere gehen,
+    Stärke 10 ließ beide nicht mehr durchgehen — alles ohne Befund (RM-357).
+    Zwei durchgehende Löcher ganz im Material machen den Körper vom
+    Geschlecht zwei: Eine angeschnittene Kante ist eine Kerbe, kein Loch.
+    """
+    import dataclasses
+
+    project = load(examples.directory() / "weg2-halter-konstruieren.p3d")
+    parameters = project.document.parameters
+    parameters["breite"] = dataclasses.replace(parameters["breite"], value=width)
+    parameters["staerke"] = dataclasses.replace(parameters["staerke"], value=thickness)
+
+    result = evaluate(project.document, _profile_of(project), sources=ProjectSources(project))
+
+    assert result.complete
+    (body,) = result.scene.objects.values()
+    assert body.mesh.is_watertight
+    assert body.mesh.raw.euler_number == -2, "zwei Löcher, beide durch und ganz im Material"
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "boolean.without_effect" not in codes

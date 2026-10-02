@@ -95,18 +95,22 @@ def way_two() -> Project:
             )
         ],
     )
+    # **Lage und Tiefe hängen an den Parametern** (Regel 8): Die Tour verspricht,
+    # dass die Löcher bleiben, wo sie hingehören. Fest bei x = ±20 und 6 mm
+    # tief schnitt Breite 40 eine Bohrung in die Kante, Breite 30 ließ sie
+    # ins Leere gehen, Stärke 10 ließ beide nicht mehr durchgehen (RM-357).
     history.apply(
         _("Schraubenlöcher"),
         [
             OperationDraft(
                 op="insert_screw_hole",
                 inputs=("obj_1",),
-                params={"size": "M4", "depth": 6.0, "x": -20.0, "z": "=@staerke"},
+                params={"size": "M4", "depth": "=@staerke", "x": "=10-@breite/2", "z": "=@staerke"},
             ),
             OperationDraft(
                 op="insert_screw_hole",
                 inputs=("obj_1",),
-                params={"size": "M4", "depth": 6.0, "x": 20.0, "z": "=@staerke"},
+                params={"size": "M4", "depth": "=@staerke", "x": "=@breite/2-10", "z": "=@staerke"},
             ),
         ],
     )
