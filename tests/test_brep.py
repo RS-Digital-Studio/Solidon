@@ -3364,6 +3364,78 @@ def test_switching_a_bore_between_the_kernels_keeps_its_values(profile: Profile)
     assert body.mesh.volume == pytest.approx(24000.0 - math.pi * 9.0 * 20.0, rel=1e-9)
 
 
+def test_an_invalid_boolean_result_is_retried_fuzzy_and_never_kept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein ungültiges Ergebnis reist nicht weiter (RM-408).
+
+    OpenCASCADE meldete ``IsDone`` für eine Bohrung an einer Lochplatte, und
+    der Körper trug eine zweite Schale: ungültig, nicht dicht, 670 mm³ mehr
+    Netzvolumen. Jetzt rechnet die Boolesche mit Unschärfe noch einmal; hält
+    auch das nicht, sagt sie ab.
+    """
+    body = block()
+    tool = edit.moved(edit.box(WIDTH / 4, DEPTH * 2, HEIGHT * 2), (0.0, -DEPTH / 2, -HEIGHT / 2))
+    real_holds = edit._holds
+    calls: list[int] = []
+
+    def first_fails(result: Any, source: Any) -> bool:
+        calls.append(1)
+        return len(calls) > 1 and real_holds(result, source)
+
+    monkeypatch.setattr(edit, "_holds", first_fails)
+    cut = edit.boolean("difference", [body, tool])
+    assert len(calls) == 2, "die erste Fassung galt nicht, die unscharfe schon"
+    assert cut.volume < body.volume
+
+    monkeypatch.setattr(edit, "_holds", lambda _result, _source: False)
+    with pytest.raises(GeometryError):
+        edit.boolean("difference", [body, tool])
+
+
+def test_a_bore_the_exact_kernel_cannot_cut_is_drilled_in_the_mesh(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lieber das Dreiecksmodell als ein kaputter Körper (RM-408).
+
+    Sagt der exakte Kern ab, bohrt das Netz, und der Körper ist danach eins —
+    gültig, dicht, mit weniger Volumen. Die Auswertung sagt die Umwandlung.
+    """
+    from app.core.brep import ops as brep_ops
+
+    def refuses(_ctx: Any) -> Any:
+        raise GeometryError(detail="ungültig")
+
+    monkeypatch.setattr(brep_ops, "drill_brep_hole", refuses)
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Exakter Quader",
+        [OperationDraft(op="create_brep_box", params={"width": 40, "depth": 30, "height": 20})],
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "x": 0.0, "y": 0.0, "z": 20.0, "compensate": False},
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.stopped_at is None
+    body = next(iter(result.scene.objects.values()))
+    assert body.kind == "mesh"
+    twin = as_mesh_data(body.mesh)
+    assert twin.is_watertight and twin.component_count == 1
+    assert twin.volume == pytest.approx(24000.0 - math.pi * 9.0 * 20.0, rel=1e-2)
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "evaluate.exact_became_mesh" in codes
+
+
 def test_the_corner_where_three_fillets_meet_is_one_too() -> None:
     """Verrundet man alle Kanten, bleibt an jeder Ecke ein Kugelstück übrig.
 
