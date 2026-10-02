@@ -6609,9 +6609,9 @@ class PrintSettingsDialog(QDialog):
         Dialog bot keinen zweiten an, obwohl zwei danebenstanden.
         """
         remembered = discover.remembered_path("slicer")
-        return next((entry for entry in found if str(entry) == remembered), None) or (
-            found[0] if found else None
-        )
+        return next(
+            (entry for entry in found if discover.same_program(str(entry), remembered)), None
+        ) or (found[0] if found else None)
 
     def _start_slicer_search(self) -> None:
         """Nachsehen, welche Slicer da sind — im Arbeiter, nicht im Fenster.

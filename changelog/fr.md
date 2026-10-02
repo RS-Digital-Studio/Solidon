@@ -108,7 +108,8 @@ dans `website/version.json`.
 - Dans le projet d'exemple de la deuxième voie, les trous de vis suivent la largeur et l'épaisseur.
 - La fenêtre « Nouveautés » et le site web affichent la mise en valeur en style au lieu d'astérisques.
 - L'anglais et l'espagnol emploient un seul mot pour le jeu d'ajustement, et les messages suivent la ponctuation de chaque langue.
-- Les espaces arrivent dans chaque champ de texte, y compris le questionnaire de retour et le chat, pendant qu'un dialogue affiche son aperçu.
+- Pendant qu'un dialogue affiche son aperçu, les espaces arrivent dans chaque champ de texte, y compris le questionnaire et le chat, et cases et boutons acceptent la barre d'espace.
+- Avec « Mettre à l'échelle », un corps reste posé sur le plateau au lieu de s'enfoncer sous la plaque, et la vue le recadre quand il grandit.
 - Certains constats qui visent une étape l'ouvrent pour la modifier, par exemple « Modifier la taille » après « Mettre à la cote ».
 - Une ligne récapitulative du rapport comme « Réduire au volume d'impression » est une seule étape d'annulation pour tous les corps.
 - L'aide d'une opération mène dans le manuel directement à son entrée, et la référence nomme champs et choix comme dans la boîte de dialogue.

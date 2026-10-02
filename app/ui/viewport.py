@@ -2786,6 +2786,26 @@ def outgrown(
     )
 
 
+def reaches_beyond(
+    fitted: tuple[float, float, float, float, float, float] | None,
+    current: tuple[float, float, float, float, float, float] | None,
+) -> bool:
+    """Ob die Körper über den eingepassten Rahmen hinausreichen (RM-280).
+
+    Eine Toleranz von einem Hundertstel der Rahmendiagonale, damit ein
+    Rundungsrest am Rand keinen Kamerasprung auslöst. Als reine Funktion,
+    aus demselben Grund wie :func:`outgrown`.
+    """
+    if fitted is None or current is None:
+        return False
+    slack = 0.01 * diagonal_of(fitted)
+    return any(
+        current[axis * 2] < fitted[axis * 2] - slack
+        or current[axis * 2 + 1] > fitted[axis * 2 + 1] + slack
+        for axis in range(3)
+    )
+
+
 def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, float], str]]:
     """Die Maßzahlen an der vorderen und linken Plattenkante (§18.6).
 
@@ -3327,7 +3347,8 @@ class ViewBar(QFrame):
 
 
 #: Die Grundkörper, mit denen die leere Szene einlädt — Namen aus dem Register,
-#: ihre Beschriftung ist der Registertitel (RM-370).
+#: ihre Beschriftung ist der Registertitel (RM-370). Gestartet wird der Zwilling,
+#: den das Menü zeigt (``MainWindow._on_invitation`` über ``menu_twins``).
 INVITED_PRIMITIVES: Final = ("create_box", "create_cylinder")
 
 
@@ -3694,13 +3715,32 @@ def types_text(widget: QWidget | None) -> bool:
     return isinstance(widget, QComboBox) and widget.isEditable()
 
 
+def answers_space(widget: QWidget | None) -> bool:
+    """Ob dieses Widget die Leertaste selbst braucht (RM-448).
+
+    Neben jedem Textfeld schaltet sie Haken und Auswahlpunkte, drückt Knöpfe,
+    klappt Auswahllisten auf, wählt Zeilen einer Liste und schaltet einen
+    ankreuzbaren Rahmen. Der Vergleich der Vorschau hängt an der Anwendung;
+    er nahm all diesen Bedienelementen in jedem Fenster die Taste, solange
+    eine Vorschau mit Differenz lief.
+    """
+    from PySide6.QtWidgets import QAbstractButton, QAbstractItemView, QComboBox, QGroupBox
+
+    if types_text(widget):
+        return True
+    if isinstance(widget, QAbstractButton | QComboBox | QAbstractItemView):
+        return True
+    return isinstance(widget, QGroupBox) and widget.isCheckable()
+
+
 class HoldToCompare(QWidget):
     """Leertaste halten heißt: kurz das Vorher sehen.
 
     Als Filter auf der Anwendung, nicht als Tastenkürzel — ein Kürzel feuert
     beim Drücken und weiß vom Loslassen nichts. Und nicht am Viewport selbst:
     solange ein Operationsdialog offen ist, liegt der Fokus dort, und genau
-    dann will man vergleichen.
+    dann will man vergleichen — wo der Fokus auf keinem Bedienelement liegt,
+    das die Taste selbst braucht (:func:`answers_space`).
 
     Auto-Repeat wird verworfen. Eine gehaltene Taste schickt eine Folge aus
     Press und Release, nicht einen langen Druck; ohne diese Prüfung flackerte
@@ -3720,8 +3760,14 @@ class HoldToCompare(QWidget):
             return False
         # ``watched`` ist bei einer Taste das Widget mit dem Fokus. Es zu
         # nehmen statt ``QApplication.focusWidget()`` ist nicht nur kürzer: es
-        # ist die Frage, um die es geht — wer bekommt diesen Anschlag?
-        if types_text(watched):
+        # ist die Frage, um die es geht — wer bekommt diesen Anschlag? Braucht
+        # er sie selbst, bekommt er sie: Text, Haken, Knopf, Liste (RM-448).
+        # Die Ansicht, ein Dialoghintergrund oder eine Beschriftung brauchen
+        # sie nicht, dort bleibt sie der Vergleich. Ein gehaltener Vergleich
+        # endet beim Loslassen auch dann, wenn der Fokus inzwischen gewandert ist.
+        if answers_space(watched):
+            if kind == QEvent.Type.KeyRelease:
+                self._viewport.hold_before(False)
             return False
         self._viewport.hold_before(kind == QEvent.Type.KeyPress)
         return True
@@ -4984,6 +5030,12 @@ class Viewport(QWidget):
         #: Ob der letzte Aufbau nur ein Verschieben war. Gesetzt und gelesen
         #: in :meth:`_fit_once_for` (für :func:`outgrown`).
         self._moved_only: bool = False
+        #: Ob der nächste Aufbau einmal nachrahmt, sobald die Körper über den
+        #: eingepassten Rahmen hinausreichen (:meth:`frame_if_beyond`).
+        self._frame_beyond: bool = False
+        #: Die Diagonale der Körper beim letzten Aufbau — ob ein Größenschritt
+        #: sie hat wachsen lassen (:meth:`frame_if_beyond`).
+        self._shown_extent: float | None = None
         self._scheme: NavigationScheme = "solidon"
         self._theme: str | None = None
         """Welches Thema gerade gilt — damit :meth:`set_theme` prüfen kann.
@@ -15980,6 +16032,18 @@ class Viewport(QWidget):
         """
         self._fitted_to = ""
 
+    def frame_if_beyond(self) -> None:
+        """Rahmt den nächsten Aufbau einmal, **wenn** er über den Rahmen hinausreicht.
+
+        Für einen Schritt, der die Größe eines Körpers ausdrücklich ändert
+        (*Skalieren*, *Auf Maß bringen*): Am Organizer standen nach dem Faktor 2,3 nur
+        52 % im Bild (RM-280), weil :func:`outgrown` erst ab dem Fünffachen
+        greift — eine Grenze, die das Nachbessern schützt und hier nicht passt.
+        Wer vergrößert, will das Ergebnis sehen; was im Rahmen bleibt oder
+        kleiner wird, lässt die Kamera in Ruhe.
+        """
+        self._frame_beyond = True
+
     def _fit_once_for(self, result: EvaluationResult | None) -> None:
         """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.
 
@@ -16024,8 +16088,24 @@ class Viewport(QWidget):
         # dieselben Objekte da wie beim letzten Einpassen, war es ein
         # Verschieben und kein neuer Inhalt — dann zählt nur noch, ob die Szene
         # gewachsen ist. Ohne das rahmte jedes Loslassen neu.
-        if wanted != self._fitted_to or outgrown(
-            self._fitted_bounds, self._object_bounds(), moved_only=self._moved_only
+        beyond, self._frame_beyond = self._frame_beyond, False
+        current = self._object_bounds()
+        before, self._shown_extent = (
+            self._shown_extent,
+            diagonal_of(current) if current is not None else None,
+        )
+        # Nur, was gewachsen ist: Wer verkleinert, sieht das Ergebnis in
+        # seinem Rahmen, und ein vorher verschobener Körper bleibt, wo die
+        # Kamera ihn ließ.
+        grew = (
+            before is not None
+            and self._shown_extent is not None
+            and (self._shown_extent > before * 1.01)
+        )
+        if (
+            wanted != self._fitted_to
+            or outgrown(self._fitted_bounds, current, moved_only=self._moved_only)
+            or (beyond and grew and reaches_beyond(self._fitted_bounds, current))
         ):
             self._fit_camera(follow_selection=False)
             self._fitted_to = wanted  # type: ignore[assignment]
@@ -17169,8 +17249,9 @@ class Viewport(QWidget):
         """Ein Rechtsklick wählt aus und fragt nach dem Menü — und **ohne
         Stufen**, anders als der Linksklick.
 
-        §18.5 nennt das Kontextmenü am Merkmal den Ort für Weg 1: ein fremdes
-        Modell wird angepasst, indem man auf die Stelle zeigt, die stört. Bis
+        §18.5: Weg 1 passt ein fremdes Modell an, indem man auf die Stelle
+        zeigt, die stört. Die Operationen stehen danach im Auswahlfenster am
+        Merkmal; das Menü zeigt nur, was es dort gibt. Bis
         hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das Menü
         gab es nur im Objektbaum, wo die Merkmale `hole_3` heißen.
 

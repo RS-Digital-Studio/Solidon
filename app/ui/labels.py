@@ -2038,7 +2038,7 @@ def feature_requirement(spec: Any, feature_kinds: Collection[str]) -> str | None
     ``_reason_locked`` an Menü, Kontextmenü, Palette und Zwillingshaken geht.
 
     Welche Art passt, sagt ``applies_to`` — die Zuordnung, über die auch das
-    Kontextmenü am Merkmal die Operation findet (§18.5). Eine Operation ohne
+    Auswahlfenster am Merkmal die Operation findet (§18.5). Eine Operation ohne
     diese Angabe wird nicht gesperrt: Raten wäre schlechter als Anbieten.
     """
     needs_feature = any(entry.required and entry.kind == "feature" for entry in spec.params.spec())

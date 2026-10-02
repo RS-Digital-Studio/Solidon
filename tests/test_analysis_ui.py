@@ -2290,7 +2290,7 @@ def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
 
 
 def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
-    """§18.5: das Kontextmenü am Merkmal ist der Ort für Weg 1.
+    """§18.5: Weg 1 zeigt auf die Stelle, die stört — der Rechtsklick antwortet.
 
     Ein fremdes Modell wird angepasst, indem man auf die Stelle zeigt, die
     stört. Bis hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das
@@ -2540,6 +2540,109 @@ def test_a_scene_that_outgrows_the_view_gets_fitted_again() -> None:
     assert not outgrown(huge, tiny), "was kleiner wird, zieht die Kamera nicht an sich"
     assert not outgrown(None, huge), "ohne Vorher gibt es nichts zu vergleichen"
     assert not outgrown(huge, None), "und ohne Körper nichts einzupassen"
+
+
+def test_a_body_beyond_the_frame_is_framed_only_when_asked() -> None:
+    """RM-280: Was über den eingepassten Rahmen hinausreicht, erkennt eine reine Funktion."""
+    from app.ui.viewport import reaches_beyond
+
+    fitted = (-10.0, 10.0, -10.0, 10.0, 0.0, 20.0)
+    assert reaches_beyond(fitted, (-23.0, 23.0, -23.0, 23.0, 0.0, 46.0)), "auf das 2,3-Fache"
+    assert not reaches_beyond(fitted, (-5.0, 5.0, -5.0, 5.0, 0.0, 10.0)), "verkleinert bleibt drin"
+    assert not reaches_beyond(fitted, (-10.1, 10.1, -10.0, 10.0, 0.0, 20.0)), "Rundungsrest"
+    assert not reaches_beyond(None, fitted) and not reaches_beyond(fitted, None)
+
+
+def test_scaling_beyond_the_frame_frames_once_and_moving_does_not(qt_app: QApplication) -> None:
+    """RM-280: Nach *Skalieren* über den Rahmen hinaus steht der Körper ganz im Bild.
+
+    Am Organizer standen nach dem Faktor 2,3 nur 52 % im Bild. Wer skaliert,
+    will das Ergebnis sehen; wer danach verschiebt, behält seine Ansicht
+    (Robert, 23.08.2026), und ein Verkleinern rahmt nicht.
+    """
+    from app.core.scene.history import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    session = window.session
+    assert session.apply(
+        "Quader",
+        [OperationDraft("create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    body = next(iter(session.last_result.scene.objects))
+    first = window.viewport._fitted_bounds
+    assert first is not None
+
+    assert session.apply(
+        "Skalieren", [OperationDraft("scale_object", inputs=(body,), params={"factor": 2.3})]
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    grown = window.viewport._fitted_bounds
+    assert grown is not None and grown != first, "nach dem Wachsen neu gerahmt"
+    assert window.viewport._object_bounds() is not None
+
+    assert session.apply(
+        "Verschieben",
+        [OperationDraft("translate_object", inputs=(body,), params={"dx": 60.0})],
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.viewport._fitted_bounds == grown, "Verschieben lässt die Kamera in Ruhe"
+
+    assert session.apply(
+        "Skalieren", [OperationDraft("scale_object", inputs=(body,), params={"factor": 0.5})]
+    )
+    assert session.wait_for_idle(30_000)
+    QApplication.processEvents()
+    assert window.viewport._fitted_bounds == grown, "Verkleinern bleibt im Rahmen"
+
+
+def test_a_body_on_the_bed_grows_from_the_bed_when_scaled(qt_app: QApplication) -> None:
+    """RM-473: *Skalieren* belegt für einen Körper auf dem Bett den Bezugspunkt „Druckbett“ vor.
+
+    Um die Mitte skaliert, sank ein Würfel auf dem Bett beim Faktor 2,3 um
+    13 mm unter die Platte. Ein Körper, der nicht auf dem Bett steht, behält
+    die Mitte; die Vorgabe der Operation bleibt für Rezepte und Agent dieselbe.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.history import OperationDraft
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    session = window.session
+    assert session.apply(
+        "Quader",
+        [OperationDraft("create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    assert session.wait_for_idle(30_000)
+    body = next(iter(session.last_result.scene.objects))
+    assert REGISTRY.get("scale_object").params.spec()  # Schema geladen
+
+    assert window._from_selection(REGISTRY.get("scale_object"), body)["about"] == "bed"
+    assert "about" not in window._from_selection(REGISTRY.get("translate_object"), body)
+
+    assert session.apply(
+        "Skalieren",
+        [OperationDraft("scale_object", inputs=(body,), params={"factor": 2.3, "about": "bed"})],
+    )
+    assert session.wait_for_idle(30_000)
+    grown = session.last_result.scene.objects[body]
+    assert float(grown.mesh.bounds.minimum[2]) == pytest.approx(0.0, abs=1e-6)
+    assert float(grown.mesh.bounds.maximum[2]) == pytest.approx(46.0, abs=1e-6)
+
+    assert session.apply(
+        "Anheben", [OperationDraft("translate_object", inputs=(body,), params={"dz": 10.0})]
+    )
+    assert session.wait_for_idle(30_000)
+    lifted = window._from_selection(REGISTRY.get("scale_object"), body)
+    assert lifted.get("about", "centre") == "centre", "was schwebt, bleibt bei der Mitte"
 
 
 def test_a_body_the_user_dragged_leaves_the_camera_alone() -> None:

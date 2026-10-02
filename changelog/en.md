@@ -107,7 +107,8 @@ it into `website/version.json`.
 - In the example project for the second way, the screw holes follow width and thickness.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
-- Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
+- While a dialog shows its preview, spaces reach every text field, including the feedback questionnaire and the chat, and ticks and buttons accept the space bar.
+- With *Scale*, a body stays standing on the bed instead of sinking below the plate, and the view reframes it when it grows.
 - Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.

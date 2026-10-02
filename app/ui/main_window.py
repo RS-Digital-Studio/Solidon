@@ -1690,6 +1690,23 @@ def _names_a_dimension(entry: ParamSpec) -> bool:
     return entry.placement == "front" and entry.kind == "float" and entry.unit == "mm"
 
 
+#: Schritte, die die Größe eines Körpers ausdrücklich ändern: Danach rahmt die
+#: Ansicht einmal nach, wenn er über den Rahmen hinausreicht (RM-280).
+RESIZING_OPERATIONS: Final[frozenset[str]] = frozenset({"scale_object", "fit_to_size"})
+
+
+def _stands_on_the_bed(entry: SceneObject) -> bool:
+    """Ob ein Körper mit seiner Unterseite auf der Druckfläche steht (RM-473)."""
+    return abs(float(entry.mesh.bounds.minimum[2])) <= EPS_DISPLAY
+
+
+def _offers_the_bed_anchor(spec: OperationSpec) -> bool:
+    """Ob die Operation einen Bezugspunkt „Druckbett“ zur Wahl stellt."""
+    return any(
+        entry.name == "about" and "bed" in (entry.choices or ()) for entry in spec.params.spec()
+    )
+
+
 def offers_naming(spec: OperationSpec) -> bool:
     """Ob der Dialog dieser Operation *Maße als Parameter anlegen* anbietet (§13).
 
@@ -2809,6 +2826,9 @@ class MainWindow(QMainWindow):
         die alte Szene. Gemerkt werden deshalb die Ausgaben der Operation und
         nicht ein Zeitpunkt.
         """
+        self._resized_seen: set[str] = set()
+        """Transaktionen, nach denen die Ansicht schon gefragt hat, ob sie
+        nachrahmt (:meth:`_frame_after_resizing`) — jede nur einmal."""
         self._created_to_choose: tuple[ObjectId, ...] = ()
         """Neue Körper eines Erzeugerschritts, die nach ihrer Auswertung gewählt werden.
 
@@ -2919,7 +2939,7 @@ class MainWindow(QMainWindow):
         # die gezeichnete Linie; ein getrenntes Teil bleibt getrennt und geht
         # über Strg+Z zurück. (Das Bemalen stand mit demselben Argument
         # daneben, bis der Punkt-Radius-Pinsel fiel — Färben läuft seither
-        # über das Kontextmenü am Merkmal, als Operation wie jede andere.)
+        # über das Auswahlfenster am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
             tr("Trennen"),
@@ -15022,6 +15042,23 @@ class MainWindow(QMainWindow):
         if result is not None:
             self._reveal_split_result(result)
 
+    def _frame_after_resizing(self) -> None:
+        """Nach einem neuen Größenschritt rahmt die Ansicht einmal, wenn nötig (RM-280).
+
+        Gemeint ist die jüngste Transaktion, und nur einmal: Ein Undo, ein
+        Themenwechsel oder eine weitere Auswertung desselben Stands rahmen
+        nicht nach. Wer verschiebt oder bohrt, behält seinen Zoom
+        (:meth:`Viewport.frame_if_beyond`).
+        """
+        transactions = self.session.history.transactions
+        newest = transactions[-1] if transactions else None
+        if newest is None or newest.id in self._resized_seen:
+            return
+        self._resized_seen.update(entry.id for entry in transactions)
+        operations = {entry.id: entry.op for entry in self.session.project.document.ops}
+        if any(operations.get(op_id) in RESIZING_OPERATIONS for op_id in newest.ops):
+            self.viewport.frame_if_beyond()
+
     def _reveal_split_result(self, result: EvaluationResult) -> None:
         """Macht Naht, Stifte und Löcher ohne gesuchten zweiten Griff sichtbar."""
         wanted = self._pending_split_reveal
@@ -17786,7 +17823,7 @@ class MainWindow(QMainWindow):
                 # Auswahl aus dem *Wert*, den er mitbekommt: Aus „hole_1"
                 # wurde ein Eintrag „hole_1", und die übrigen Flächen des
                 # Körpers kannte die Liste nicht. Das ist der Hauptweg — das
-                # Kontextmenü am Merkmal (Weg 1) und die Menüs *Erzeugen* und
+                # Auswahlfenster am Merkmal (Weg 1) und die Menüs *Erzeugen* und
                 # *Ändern* laufen hier durch —, und der Docstring des
                 # Parameters verspricht die lesbare Bezeichnung. Gemessen:
                 # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
@@ -19834,7 +19871,7 @@ class MainWindow(QMainWindow):
 
         ``spec`` verengt die Liste auf die Merkmalsarten, mit denen diese
         Operation etwas anfangen kann (``applies_to``) — dieselbe Zuordnung,
-        über die das Kontextmenü am Merkmal die Operation findet (§18.5, §10).
+        über die das Auswahlfenster am Merkmal die Operation findet (§18.5, §10).
 
         **Ohne sie war die Auswahl eines Dialogs die aller Merkmale.** An einer
         eingelesenen STEP-Datei mit 302 erkannten Merkmalen bot *Bohrung
@@ -20163,7 +20200,15 @@ class MainWindow(QMainWindow):
                 for name in (*POSITION_FIELDS, *NORMAL_FIELDS):
                     found.pop(name, None)
             return found
-        return dict(values_for_object(spec, entry.features))
+        values = dict(values_for_object(spec, entry.features))
+        if _stands_on_the_bed(entry) and _offers_the_bed_anchor(spec):
+            # **Was auf dem Bett steht, wächst vom Bett aus** (RM-473): Um die
+            # Mitte skaliert, sank ein Würfel auf dem Bett beim Faktor 2,3 um
+            # 13 mm unter die Platte, und der Bericht bot danach *Auf das Bett
+            # setzen* an. Die Vorgabe der Operation bleibt die Mitte; Rezepte
+            # und Agent rechnen weiter so, wie sie gespeichert sind.
+            values.setdefault("about", "bed")
+        return values
 
     def _seat_for(
         self, spec: OperationSpec, selected: ObjectId | None, entered: Mapping[str, Any]
@@ -20330,9 +20375,23 @@ class MainWindow(QMainWindow):
         elif chosen == "parts":
             self.action_catalog()
         elif chosen == "chat":
+            # **Der Chat kommt nach vorn, dann bekommt er den Cursor** (RM-448):
+            # Stand der Reiter auf dem Prüfbericht oder war die Spalte
+            # ausgeblendet, landete der Fokus in einem verborgenen Feld, und
+            # wer zu tippen begann, schrieb ins Nichts.
+            if not self.right_column.isVisible():
+                self.right_column.setVisible(True)
+                self.settings.right_panel_visible = True
+                self._store_settings()
+                self._mark_status_alerts()
+            switch(self.right, self.chat)
             self.chat.input.setFocus(Qt.FocusReason.OtherFocusReason)
         elif REGISTRY.has(chosen):
-            self.run_operation(REGISTRY.get(chosen))
+            # Gleich beschriftet heißt gleich gemacht: *Quader anlegen* aus der
+            # Einladung ist der Quader des Menüs — exakt, wo der Kern da ist
+            # (``menu_twins``, RM-448), sonst entstand hier ein Netz und im
+            # Menü ein Körper mit echten Kanten.
+            self.run_operation(REGISTRY.get(menu_twins().get(chosen, chosen)))
 
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
@@ -20451,6 +20510,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
+        self._frame_after_resizing()
         self.viewport.show_scene(self._picture_for(result))
         self._show_invitation()
         self._reveal_split_result(result)
