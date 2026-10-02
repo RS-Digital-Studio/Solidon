@@ -7987,7 +7987,11 @@ class FeaturePanel(QWidget):
             self._apply.setAccessibleDescription(entry.reason)
 
     def _active_field_refusal(self) -> str:
-        """Die erste sichtbare Grenzablehnung der scharfgestellten Handlung."""
+        """Die erste sichtbare Grenzablehnung der scharfgestellten Handlung — mit dem Feld.
+
+        Der Satz steht auch am Fußknopf, weit unter der Zeile; ohne Feldnamen
+        musste man suchen, welches der Felder gemeint war (RM-342, D-N2).
+        """
         row = next(
             (row for row in self._shown_rows.values() if row.key == self._armed),
             None,
@@ -8006,7 +8010,8 @@ class FeaturePanel(QWidget):
                 else ""
             )
             if reason:
-                return reason
+                name = editor.accessibleName() or str(field.label)
+                return str(tr("{name}: {value}", name=name, value=reason))
         return ""
 
     def _set_refusal_label(self, editor: BoundedSpin | BoundedLengthSpin, label: QLabel) -> str:
@@ -8490,6 +8495,13 @@ class FeaturePanel(QWidget):
             _set_shown(editor, active)
             if label is not None:
                 _set_shown(label, active)
+            # **Der Ablehnungssatz geht mit seinem Feld** (RM-342 D-N1): Ohne
+            # Feld stand „Höchstens 1000 mm“ unter einer Zeile, die es nicht
+            # mehr gab. Kommt das Feld zurück, steht der Satz wieder, solange
+            # die Zahl abgelehnt bleibt.
+            refusal = row.refusals.get(name)
+            if refusal is not None:
+                _set_shown(refusal, active and bool(refusal.text()))
 
     def _in_the_view(self, row: _ActionRow) -> frozenset[str]:
         """Die Felder dieser Zeile, die die Maßgruppe im Bild gerade selbst trägt.
