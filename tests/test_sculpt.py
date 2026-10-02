@@ -14,6 +14,7 @@ Op-Stapel darunter wertlos.
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import numpy as np
@@ -874,3 +875,98 @@ def test_a_long_session_can_be_stopped_while_it_is_applied(profile: Profile) -> 
             )
         )
     assert token.asked == 2, "gefragt wird zwischen den Zügen, und nach dem Abbruch nicht weiter"
+
+
+def hollow_ball() -> MeshData:
+    """Eine Kugel Ø 40 mit 3 mm Wand — ein Hohlkörper."""
+    outer = trimesh.creation.icosphere(subdivisions=4, radius=20.0)
+    inner = trimesh.creation.icosphere(subdivisions=4, radius=17.0)
+    inner.invert()
+    return MeshData.of(trimesh.util.concatenate([outer, inner]))
+
+
+@pytest.mark.parametrize("tool", ["draw", "carve", "smooth", "pinch"])
+def test_a_brush_on_a_thin_plate_leaves_the_far_side_alone(tool: str) -> None:
+    """Der Pinsel griff jeden Eckpunkt in seiner Kugel, auch die Unterseite
+    einer dünnen Wand: *Abtragen* auf einer 4-mm-Platte drückte sie 3,7 mm
+    unter das Bett (RM-376). Jetzt bewegt er nur, was ihm zugewandt ist."""
+    base = plate()
+    stroke = Stroke(
+        point=(0.0, 0.0, 2.0), normal=(0.0, 0.0, 1.0), radius=6.0, strength=3.0, tool=tool
+    )
+
+    shaped = apply_strokes(base, [stroke])
+
+    before = np.asarray(base.raw.vertices, dtype=float)
+    after = np.asarray(shaped.raw.vertices, dtype=float)
+    bottom = before[:, 2] < -2.0 + 1e-6
+    assert np.allclose(after[bottom], before[bottom]), "die Unterseite bleibt, wo sie war"
+
+
+def test_a_brush_inside_a_hollow_body_leaves_the_inner_wall_alone() -> None:
+    """Dasselbe an einem Hohlkörper: Die Innenwand liegt hinter der Außenhaut."""
+    base = hollow_ball()
+    stroke = Stroke(
+        point=(20.0, 0.0, 0.0), normal=(1.0, 0.0, 0.0), radius=6.0, strength=2.0, tool="carve"
+    )
+
+    shaped = apply_strokes(base, [stroke])
+
+    before = np.asarray(base.raw.vertices, dtype=float)
+    after = np.asarray(shaped.raw.vertices, dtype=float)
+    inner = np.linalg.norm(before, axis=1) < 18.0
+    assert np.allclose(after[inner], before[inner])
+    assert not np.allclose(after[~inner], before[~inner]), "die Außenhaut wird geformt"
+
+
+def test_a_brush_on_a_figure_still_shapes_what_faces_it() -> None:
+    """Die Gegenprobe an der Korpusfigur: Ein Zug wirkt wie bisher."""
+    base = figure()
+    centre = base.raw.bounds.mean(axis=0)
+    top = float(base.raw.bounds[1][2])
+    stroke = Stroke(
+        point=(float(centre[0]), float(centre[1]), top),
+        normal=(0.0, 0.0, 1.0),
+        radius=4.0,
+        strength=1.0,
+        tool="draw",
+    )
+
+    shaped = apply_strokes(base, [stroke])
+
+    assert shaped.raw.bounds[1][2] > top + 0.5, "der Zug trägt oben auf"
+
+
+@pytest.mark.parametrize(("axis", "bit"), [(0, 1), (1, 2), (2, 4)])
+@pytest.mark.parametrize("body", ["ball", "plate", "hollow"])
+def test_a_stroke_on_the_mirror_plane_acts_once(axis: int, bit: int, body: str) -> None:
+    """Ein Zug genau auf der Symmetrieebene wurde mit seinem Spiegelbild zweimal
+    am selben Ort angewandt (RM-378). Er wirkt jetzt so weit wie derselbe Zug
+    ohne Symmetrie; weit weg von der Ebene wirken beide wie bisher."""
+    base = {"ball": ball(), "plate": plate(), "hollow": hollow_ball()}[body]
+    low, high = base.raw.bounds
+    middle = (low + high) / 2.0
+    point = middle.copy()
+    normal = np.zeros(3)
+    # Der Zug liegt auf der Oberfläche quer zur Spiegelachse.
+    across = (axis + 1) % 3 if body != "plate" else 2
+    if across == axis:
+        across = (axis + 2) % 3
+    point[across] = high[across]
+    normal[across] = 1.0
+    stroke = Stroke(
+        point=tuple(float(value) for value in point),  # type: ignore[arg-type]
+        normal=tuple(float(value) for value in normal),  # type: ignore[arg-type]
+        radius=5.0,
+        strength=1.0,
+    )
+
+    single = apply_strokes(base, [stroke])
+    mirrored = apply_strokes(base, [dataclasses.replace(stroke, symmetry=bit)])
+
+    before = np.asarray(base.raw.vertices, dtype=float)
+    assert np.allclose(
+        np.asarray(mirrored.raw.vertices, dtype=float) - before,
+        np.asarray(single.raw.vertices, dtype=float) - before,
+        atol=1e-9,
+    ), "auf der Ebene wirkt der Zug einmal"
