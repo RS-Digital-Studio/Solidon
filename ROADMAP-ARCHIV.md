@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
+| 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
 | 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
 | 2026-10-01 | [RM-315: Testhelfer zusammenführen: der Rest aus dem Aufräumen (01.10.2026)](#rm-315-testhelfer-zusammenführen-der-rest-aus-dem-aufräumen-01102026) |
@@ -34143,6 +34145,8 @@ Fenster- und Leistungstests bleiben Release-Prüfungen.
 
 ## RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)
 
+<a id="rm-300"></a>
+
 <a id="rm-300-nach-dem-ersten-im-slicer-öffnet-rechnet-der-verlauf-neu-01102026"></a>
 
 `_plate_job` erzeugte beim ersten Übergabeklick eine `inventory_project_id` und
@@ -34186,8 +34190,9 @@ ausdrücklich belegt; ein zweiter Auftrag schreibt nichts erneut. Mit dem
 positiven Grundlagenfall und der echten Dialogwahl bestehen **6 fokussierte
 Fälle**. Die betroffene Auswahl einschließlich Roadmap-Wächter bestand mit
 **32 Fällen**, **255** wurden durch den Entwicklungsfilter abgewählt; Ruff,
-Format und `git diff --check` waren grün. Die unabhängige Zweitprüfung dieses Nachgangs und das
-vollständige Entwicklungstor vor der Übernahme nach `origin/main` bleiben offen.
+Format und `git diff --check` waren grün. Zu diesem Zwischenstand waren die
+unabhängige Zweitprüfung und das vollständige Entwicklungstor noch offen; der
+tatsächliche Abschluss folgt unten.
 
 **Zweitreview-Nachgang:** Die erste Fixfassung schrieb bei einer echten Wahl am
 Dialogabschluss den noch kennungslosen Dialogsatz zurück. Das löschte die neue
@@ -34200,13 +34205,88 @@ Wahl. Die Fehlergegenprobe war mit **4 roten und 6 grünen Fällen** belegt; nac
 dem Produktfix bestehen **16 fokussierte Fälle**, Ruff und Format. Der breite
 betroffene Nachlauf brach mit einer Windows-Zugriffsverletzung im
 AST-/Pytest-Fehlerformatierer ab (Pytest-Exit `3221225477`, Wrapper-Exit 1).
-Seine Diagnose, unabhängiges Nachreview, vollständiges Tor und Übernahme bleiben
-offen; der Abbruch ist kein grüner Gesamtnachweis.
+Seine Ursache bleibt ungeklärt; dieser rote Lauf ist kein grüner Gesamtnachweis.
+Das spätere Nachreview und das frische vollständige Tor sind getrennt belegt.
 
-Offen bleibt als separate Designfrage die Beständigkeit der Kennung, wenn ein
-Projekt noch keine Druckeinstellungen hat und der Kunde keine eigene Dialogwahl
-trifft: Sie bleibt dann dialoglokal und wird beim erneuten Öffnen nicht
-wiederverwendet. Dieses RM erweitert weder das
-Projektformat noch die Inventarpersistenz, um `None` und den 3MF-Vertrag nicht
-umzudeuten. Fenster- und vollständiger Entwicklungslauf sind nicht Bestandteil
-dieses fokussierten Nachweises; der Entwicklungslauf folgt im übergeordneten RM-Gate.
+**Abgeschlossen am 02.10.2026:** Der unabhängige Abschlussnachgang besteht den
+früheren echten Kennungs-/Fingerprint-Fehlerfall und drei Kontrollen. Der
+geprüfte, selektierte Stand besteht das frische vollständige Entwicklungstor
+mit **18.787 bestandenen und 62 übersprungenen Fällen**; Suite, Ruff, Format und
+mypy jeweils Exit 0, keine Quelldrift. Der normale Commit-Hook und Push sind
+erfolgreich. Die sechs freigegebenen Pfade sind mit
+`136698d180a1e13faee41c729842821d8d5f4ad7` auf `main` und `origin/main`;
+die Gegenstelle wurde zusätzlich per `git ls-remote` gelesen. Belege:
+`tmp/review-seit-0.5.1-2026-10-01/rm300-abschluss-zweitreview.md`,
+`commit-tor-rm300-v3-final/` und `commit-rm300-prozesswerte.json`.
+
+Der ursprüngliche Minigolf-Befund betraf gut zwei Minuten Neuberechnung nach
+*Im Slicer öffnen*. *Druckoptimal ausrichten* liest Prozesswerte zu Recht;
+der behobene Fehler war deren unbeabsichtigte Änderung durch den Plattenauftrag.
+Die roten historischen Hauptbaumläufe bleiben erhalten. Ein erster zentraler
+Prüfstandlauf scheiterte nur an seiner fehlenden `.venv`-Verknüpfung; nach der
+Umgebungskorrektur bestand dasselbe unveränderte Paket das vollständige v3-Tor.
+Fenster-, Renderer- und Leistungsabnahme bleiben ausschließlich Releasearbeit.
+
+Die getrennte offene Produktfrage bleibt unter
+[RM-324](ROADMAP.md#rm-324) sichtbar: Bei bisher `None` und ohne eigene Dialogwahl
+ist die Kennung weiterhin dialoglokal. Der abgeschlossene RM-300-Fix entscheidet
+weder eine neue Formatänderung noch Inventarpersistenz oder Prozessvorgaben.
+
+## RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)
+
+<a id="rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026"></a>
+
+`refine.solve` prüft das positive ganzzahlige Auswertungsbudget vor SciPy;
+Formeldocstrings verweisen auf die Planfunktionen. B8 meldet Fortschritt je
+geplantem Fleck und Solverrunde. Der Stapelfaktor 12 deckt den gemessenen
+Spitzenwert 10,2 ab; geprüft sind der kleinste Kegelblock sowie die größten
+aufgefüllten Kegel- und Ringblöcke. Der Schatten-Test verlangt eine nichtleere
+Menge. Die Speicheranzeige nutzt 2 200 B/Dreieck: beim Meshy-Brett mit
+1 949 922 Dreiecken entsprechen 4 017 MiB einer Anzeige von 5 GB.
+
+Gezielt bestanden: `test_refine.py` (59), `test_features.py` (267) und der
+Meshy-Speichertest. Das unabhängige Review fand keinen Codebefund.
+
+**Abschlussnachweis:** Der Commit
+`f8a42f60256df979c6c395c2aa37c4fc0e2ffda2` mit den neun geprüften Pfaden liegt
+auf `main` und `origin/main`. Das vollständige Entwicklungstor bestand
+18 819 Tests und übersprang 62; Suite, Ruff, Formatprüfung und mypy endeten
+jeweils mit Exit 0, ohne Quelldrift.
+
+## RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)
+
+<a id="rm-295-testqualität-reste-aus-den-code-reviews-051-02102026"></a>
+
+Aus dem Release 0.5.1 (Code-Review texte/ui, U-9 und T-3). (a) Der frühere
+Test in `test_viewport_decisions.py` verglich nur zwei Konstanten.
+`test_the_finding_ring_never_uses_the_selection_colour` zeichnet jetzt den
+Ring-Actor; die Gegenprobe mit `SELECTED_COLOUR` wird rot. (b) In
+`test_translations.py` prüfen `test_french_names_the_escape_key_as_its_keyboard_does`,
+`test_italian_says_tu_outside_the_manual` und `test_no_entry_mixes_two_apostrophes`
+prüfen, dass die erhobene Stichprobe nicht leer ist (`.claude/rules/tests.md`).
+
+**Nachtrag 28.09.2026:** (c)
+`test_http_security.py::test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block`
+riss unter Last: Wurde der lesende Faden verdrängt, lagen bei Beginn seiner
+Frist schon alle Bytes im Puffer, und die Frist riss nie. Der Schreiber startet
+jetzt erst nach Lesebeginn; die Frist entsteht nach `Thread.start()`.
+Die Lastkontrolle wartet 250 ms nach der Rückkehr aus `Thread.start()` und
+bleibt grün. Die beiden blockierenden `read(size)`-Mutanten fallen
+erwartungsgemäß durch.
+
+**Nachtrag 01.10.2026:** Der Ringtest ruft den echten Zeichenweg auf und prüft
+die Farbe des angelegten Actors; die Auswahlfarbe als Gegenprobe macht ihn rot.
+Die Escape-, Anrede- und Apostrophprüfungen halten bei leerer Stichprobe an;
+vier Gegenproben mit leeren Katalogen sind rot. Der HTTP-Schreiber wartet am
+Event-Tor. 59 gezielte Fälle bestanden; beide `read(size)`-Mutanten fielen
+erwartungsgemäß durch. Ruff, Format und unabhängiges Review waren grün.
+
+**Abgeschlossen am 02.10.2026:** Der Commit
+`0bea116753fd32b4ec41cba41fe144c56e1ee0d4` hat exakt den geprüften Baum
+`03fe3935e73ca7d009f570cf95e9ac78c59d0aa6` und liegt auf `main` sowie
+`origin/main`. Das vollständige Entwicklungstor auf diesem Baum bestand
+**18 732 Tests**, übersprang **62** und hatte keine Fehlschläge; Suite, Ruff,
+Format und mypy endeten jeweils mit Exit 0. Der aktuelle Hauptzweig enthält
+diesen Commit als Vorfahren. Der unabhängige Abschlussreview fand keine offenen
+Befunde. Fenster-, Render- und Leistungsprüfungen wurden nicht ausgeführt; sie
+bleiben Release-Abnahme.

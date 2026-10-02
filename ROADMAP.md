@@ -75,9 +75,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
 | [RM-296 — Die genaue Vorschau großer Teile rechnet am ganzen Körper](#rm-296) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hohlraum am örtlichen Ausschnitt tauschen |
-| [RM-297 — Stapel der Erkennung: Reste aus dem Review](#rm-297) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: fünf kleine Stellen und eine Speicheranzeige |
 | [RM-298 — Hilfsprozess: Reste aus dem Review](#rm-298) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Deckel der Hilfsprozesse, gemeinsamer Speicher unter Linux/macOS, breite Fänge |
-| [RM-300 — Nach dem ersten Im Slicer öffnen rechnet der Verlauf neu](#rm-300) | Geometrie, Erkennung und Druckvorbereitung | Prozesswerte bleiben am echten Setter stabil; Abschluss-Rückschritt behoben, Kennung und echter Lager-Fingerprint über Wiederöffnen belegt; Nachreview, vollständiges Tor und Übernahme nach origin/main offen |
+| [RM-324 — Beständige Inventarkennung ohne Druckeinstellungen entscheiden](#rm-324) | Geometrie, Erkennung und Druckvorbereitung | Entscheidung Robert: Kennung ohne gespeicherten Prozesssatz und ohne eigene Dialogwahl; None- und 3MF-Vertrag erhalten |
 | [RM-301 — Curas Fenster folgt Curas Drucker, Temperaturen und Tempi folgen Solidons](#rm-301) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Hinweis bei abweichendem Drucker |
 | [RM-302 — Merkmale an Kopien: Reste aus dem Review](#rm-302) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: doppelter Beleg je Körper, ein Regelsatz |
 | [RM-304 — Freie Stelle nach Filament trennen](#rm-304) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Filamentgruppen an `first_free_spot` oder Ausnahme in §17.1 |
@@ -130,7 +129,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-234 — Linux-Fensterabnahme und macOS-Gegenprobe nachweisen](#rm-234) | Tests und Entwicklungswerkzeuge | Gepinnter Ubuntu-Releasejob 107485122706 erreicht die Fensterverträge und besteht; „Neueste Versionen" enthält heute nur Kerntests. Der vollständige macOS-Taglauf 35982366247 ist grün; die unabhängige Ergebnismeldung der Fensterverträge bei rotem Kernschritt ist im Workflow gebaut (`0a0e4eef0`, `78e151e85`), offen ihr Nachweis an einem echten Lauf |
 | [RM-272 — Die Entwicklungsmaschine rechnet zeitweise falsch](#rm-272) | Tests und Entwicklungswerkzeuge | Entscheidung Robert: CPU-Tausch über Intels verlängerte Garantie; bis dahin Intel Default Settings, einmal MemTest86, Release-Pakete in der CI bauen oder doppelt bauen und bitweise vergleichen |
 | [RM-288 — Ein Einzelprozess über die ganze Suite hängt im Sammler](#rm-288) | Tests und Entwicklungswerkzeuge | Nachstellversuch als Einzelprozess lief ohne Hänger durch (3:33 h); offen: Ursache, und ob die Anwendung betroffen ist |
-| [RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1](#rm-295) | Tests und Entwicklungswerkzeuge | Nach 0.5.1: zwei Tests schärfen |
 | [RM-313 — Der Wächter „Neueste Versionen“ liefert im privaten Repository nichts](#rm-313) | Tests und Entwicklungswerkzeuge | Einen Lauf gegen die neuesten Versionen schaffen, der ohne öffentliches Repository läuft |
 | [RM-314 — Rechtenachweis der Stimme für die englischen Werkstattfilme](#rm-314) | Tests und Entwicklungswerkzeuge | Lizenz von `en_US-ljspeech-high` und seinem Datensatz belegen (`/legal-review`) |
 | [RM-316 — Zwillinge und Nur-Test-Wege: der Rest aus dem Code-Bericht des Aufräumens](#rm-316) | Tests und Entwicklungswerkzeuge | Die gesperrten Zwillinge nachziehen, die dünnen Hüllen auf ihren Produktionsweg umstellen, die Nur-Test-Kernfunktionen einzeln entscheiden |
@@ -2216,19 +2214,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   am ganzen Körper (`prepare_ops.resize_hole`, `difference.compare`). Abnahme: Senkplatte
   genau unter 3 s auf ruhiger Maschine.
 
-<a id="rm-297"></a>
-
-- [~] **RM-297 — Stapel der Erkennung: Reste aus dem Review.** Aus dem Release 0.5.1
-  (`konzepte/nachweise-release-0.5.1/reports/review-stapel.md`). `refine.solve` prüft das
-  positive ganzzahlige Auswertungsbudget vor SciPy; Formeldocstrings verweisen auf die
-  Planfunktionen. B8 meldet Fortschritt je geplantem Fleck und Solverrunde. Der Stapelfaktor
-  12 deckt den gemessenen Spitzenwert 10,2 ab; geprüft sind der kleinste Kegelblock sowie die
-  größten aufgefüllten Kegel- und Ringblöcke. Der Schatten-Test verlangt eine nichtleere Menge.
-  Die Speicheranzeige nutzt
-  2 200 B/Dreieck: beim Meshy-Brett (1 949 922 Dreiecke) entsprechen 4 017 MiB einer Anzeige
-  von 5 GB. Gezielt bestanden: `test_refine.py` (59), `test_features.py` (267) und der
-  Meshy-Speichertest; unabhängiger Review ohne Codebefund. Abschluss nach dem gemeinsamen
-  Entwicklungstor.
 
 <a id="rm-298"></a>
 
@@ -2248,72 +2233,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   in der Produktfrist von 0,5 s; auf einem langsamen Mac-Runner bleibt ein kleines
   Wackelrisiko. Abnahme: je Punkt behoben oder mit Grund begrenzt.
 
-<a id="rm-300"></a>
+<a id="rm-324"></a>
 
-- [~] **RM-300 — Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu.** Aus dem Release 0.5.1 (Review von
-  `speicher-ohne-prozesswerte`, `konzepte/nachweise-release-0.5.1/reports/review-speicher.md`, F2).
-  An Roberts Minigolf-Projekt rechnete nach *Im Slicer öffnen* der ganze Verlauf gut zwei
-  Minuten neu, weil sich die Prozesswerte geändert hatten. Seit 0.5.1 behalten Laden,
-  Kopieren und Bewegen ihr Ergebnis (`reads_process`); fast die ganze Zeit liegt aber in
-  *Druckoptimal ausrichten*, das die Werte zu Recht liest. Offen ist, warum sich die Werte
-  beim Öffnen des Slicers überhaupt ändern.
-
-  **Ursache belegt:** `_plate_job` schrieb die vollständigen Dialogwerte nur, um die interne
-  `inventory_project_id` zu erzeugen. `Session.set_print_settings` löst `projectChanged` aus;
-  `MainWindow._on_project` erneuert daraufhin Kopfzeile und Druckgrundlage. Die neuen Werte
-  ändern `Session.profile` und damit den Schlüssel der Herstellergrundlage. Deren Rückkehr
-  startet in `_foundation_found` eine neue Auswertung, sobald `evaluation_follows` die andere
-  Schichthöhe oder Bahnbreite erkennt.
-
-  **Behoben:** Die Kennung wird am Übergabeauftrag ergänzt und für weitere Aufträge im Dialog
-  gehalten. Gibt es bereits gespeicherte Druckeinstellungen, reicht der Auftrag deren Satz mit
-  neuer Kennung an den echten `Session.set_print_settings`. Der Setter markiert das Dokument
-  geändert und löst `projectChanged` aus. Alte `slot_profiles` ohne Identitätsbindungen kann
-  er dabei einmalig anhand der vollständigen letzten Szene nachbinden; bereits gebundene Profile
-  bleiben erhalten. Sämtliche Prozesswerte bleiben gleich. Bei `print_settings is None` bleibt
-  auch das Dokument `None`. Der Vertrag für 3MF ohne Solidon-Einstellungen bleibt damit erhalten.
-  Echte Dialogwahlen bleiben in `self.settings`, gelten für den Übergabeauftrag und werden beim
-  Dialogabschluss weiter gespeichert. Auftrag, Dialogsatz und Vergleichsstand `_opened_with`
-  tragen dieselbe Kennung: Eine Metadatenänderung wird damit keine eigene Wahl, und eine echte
-  Wahl löscht die Kennung beim Speichern nicht wieder.
-
-  **Getrennte offene Frage:** Ohne gespeicherte Druckeinstellungen und ohne eigene Dialogwahl
-  bleibt die neu erzeugte Kennung dialoglokal und wird beim erneuten Öffnen nicht wiederverwendet. Eine
-  beständige Inventarkennung für diesen Fall braucht eine eigene Entwurfsentscheidung, ohne
-  `None` als „Dialog nie geöffnet“ oder den 3MF-Vertrag umzudeuten. Sie ist nicht Voraussetzung
-  für den No-rerun-Fix.
-
-  **Nachweis:** `test_plate_job_adds_its_identity_without_replacing_project_process_values`
-  nutzt eine echte `Session` und prüft vier Speicherzustände: fehlend, normal, alte Profilplätze
-  sowie vorhandene Identitätsbindungen. `projectChanged` erreicht die echten `_on_project`-,
-  `_update_header`- und Grundlagenmethoden; nur Anzeigeziele sind Doppel. Der ganze Prozessprofil-
-  und Foundation-Schlüssel bleibt gleich, kein Grundlagenarbeiter oder Auswertungslauf startet,
-  und ein zweiter Auftrag übernimmt dieselbe Kennung ohne weiteren Setteraufruf. Die erwarteten
-  Filamentbindungen und die Dokumentänderung werden ausdrücklich geprüft.
-  `test_foundation_arrival_runs_history_when_process_values_changed` belegt den positiven Weg
-  über `_foundation_found` bis `evaluate_async`.
-  `test_plate_job_keeps_a_real_dialog_choice_for_persistence_and_handover` prüft echte
-  Nutzereinstellungen. Die sechs fokussierten Testfälle bestanden; die betroffene Auswahl
-  einschließlich Roadmap-Wächter bestand mit **32 Fällen**, **255** wurden durch den
-  Entwicklungsfilter abgewählt. Ruff, Format und `git diff --check` waren grün.
-  Der frühere Vier-Fälle-Nachweis nutzte noch ein Setterdoppel; sein Review ersetzt keine
-  Zweitprüfung dieses Nachgangs. Unabhängiges Zweitreview, vollständiges Entwicklungstor und
-  Übernahme nach `origin/main` stehen noch aus. Die native Fensterabnahme bleibt dem Release
-  vorbehalten.
-
-  **Zweitreview-Nachgang:** Die erste Fixfassung verlor beim tatsächlichen Abschluss
-  `MainWindow.action_print_settings` eine neu erzeugte Kennung, sobald der Kunde etwas
-  geändert hatte. Das Nachführen in Dialog- und Vergleichssatz behebt diesen belegten
-  Rückschritt. Zehn zusätzliche Fälle laufen mit echter `Session` über den tatsächlichen
-  Abschluss und ein Wiederöffnen; `filament_usage.prepare` berechnet den wirklichen
-  Lager-Fingerprint. Fehlende, normale, bereits identifizierte, alte ungebundene und
-  gebundene Einstellungen laufen jeweils mit und ohne eigene Wahl. Vor dem Produktfix
-  waren **4 Fälle rot und 6 grün**; danach bestehen alle **16 fokussierten Fälle** sowie
-  Ruff und Format. Bei eigener Wahl bleiben Werte und Kennung gespeichert, bei reinen
-  Metadaten entsteht keine neue Speicherhandlung. Der breite betroffene Nachlauf brach
-  mit einer Windows-Zugriffsverletzung im AST-/Pytest-Fehlerformatierer ab (Pytest-Exit
-  `3221225477`, Wrapper-Exit 1); daraus folgt kein grüner Nachweis. Diagnose, unabhängiges
-  Nachreview und vollständiges Entwicklungstor vor dem Commit bleiben offen.
+- [ ] **RM-324 — Beständige Inventarkennung ohne Druckeinstellungen entscheiden.**
+  Getrennte Produktfrage aus [RM-300](ROADMAP-ARCHIV.md#rm-300), dessen Prozess-
+  und Abschlussfehler mit `136698d18` behoben ist. Hat ein Projekt noch keine
+  gespeicherten Druckeinstellungen und trifft der Kunde keine eigene Dialogwahl,
+  bleibt die beim Plattenauftrag erzeugte Kennung dialoglokal. Nach erneutem
+  Öffnen entstehen eine andere Kennung und ein anderer Lager-Fingerprint;
+  `print_settings` bleibt dabei absichtlich `None`. Robert entscheidet, ob und
+  wo die Kennung unabhängig von einer Prozesswahl beständig werden soll.
+  Keine neue Vorgabe, Formatänderung oder Inventarpersistenz ist damit freigegeben.
+  Abnahme: Entscheidung samt Begründung dokumentiert; falls umgesetzt, bleiben
+  Kennung und Fingerprint über die beschlossenen Wiederöffnungs-/Speicherwege
+  stabil, ohne eine eigene Prozesswahl vorzutäuschen oder Solidon-Einstellungen
+  in eine bisher unveränderte 3MF einzuführen.
 
 <a id="rm-301"></a>
 
@@ -3757,24 +3691,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   dort läuft der Sammler von selbst. Bis dahin wählen Sitzungen betroffene Tests gezielt
   oder fahren das Tor. Abnahme: der Einzelprozess läuft durch, oder die Ursache ist
   benannt und behoben.
-
-<a id="rm-295"></a>
-
-- [ ] **RM-295 — Testqualität: Reste aus den Code-Reviews 0.5.1.** Aus dem Release 0.5.1 (Code-Review texte/ui, U-9 und
-  T-3). (a) `test_viewport_decisions.py::test_the_finding_mark_never_wears_the_colour_of_the_selection`
-  vergleicht nur zwei Konstanten; die Gegenprobe (Ring zurück auf `SELECTED_COLOUR`) bleibt
-  grün, rot wird nur der Fenstertest `test_a_finding_with_a_rim_outlines_the_new_face` —
-  den Namen auf das Geprüfte eingrenzen. (b) In `test_translations.py` prüfen
-  `test_french_names_the_escape_key_as_its_keyboard_does`,
-  `test_italian_says_tu_outside_the_manual` und `test_no_entry_mixes_two_apostrophes` eine
-  erhobene Menge ohne Zusicherung, dass sie nicht leer ist (`.claude/rules/tests.md`). Abnahme:
-  beide Gegenproben rot.
-
-  **Nachtrag 28.09.2026:** (c)
-  `test_http_security.py::test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block`
-  reißt unter Last: Wird der lesende Faden verdrängt, liegen bei Beginn seiner Frist schon
-  alle Bytes im Puffer, und die Frist reißt nie (Tor über `055924bb4`, einzeln dreimal grün).
-  Den Schreiber erst nach dem Lesebeginn starten.
 
 <a id="rm-313"></a>
 
