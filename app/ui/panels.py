@@ -560,7 +560,7 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "prepare.halves_in_place": (ARRANGE_ON_BED,),
     # Derselbe Sachverhalt, nur eine Stufe später gemessen: nicht die Szene
     # ragt hinaus, sondern die **Druckdatei**, die der Slicer daraus gemacht
-    # hat (``gcode.printed_extent``). CuraEngine prüft seinen Bauraum nicht.
+    # hat (``gcode.analyze(...).extent``). CuraEngine prüft seinen Bauraum nicht.
     # Es hilft dasselbe wie oben — anordnen, und wenn es allein nicht passt,
     # verkleinern.
     "gcode.off_the_bed": (ARRANGE_ON_BED, SCALE_TO_FIT),

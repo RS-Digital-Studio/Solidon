@@ -140,11 +140,6 @@ DEVICE_LIMITS: Final[dict[LicenceKind, int]] = {
 }
 
 
-def device_limit(kind: LicenceKind) -> int:
-    """Wie viele Rechner diese Lizenzart gleichzeitig freischalten darf."""
-    return DEVICE_LIMITS[kind]
-
-
 @dataclass(frozen=True, slots=True)
 class Licence:
     """Was ein gültiger Schlüssel aussagt."""
