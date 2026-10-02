@@ -1180,7 +1180,12 @@ def split_for_parts(
     from app.core.export import manufacturer
     from app.core.slice import advise
 
-    wanted = frozenset(settings.accepted) & advise.PART_PATHS
+    # Was das Programm nicht kennt, geht an kein Teil (RM-459); auf der
+    # Platte nimmt es :func:`prusa_values` heraus.
+    unknown = slicer_keys.NOT_TAKEN_BY_PROGRAM.get(
+        slicer_keys.program_of(setup.executable) if setup is not None else "", frozenset()
+    )
+    wanted = frozenset(settings.accepted) & advise.PART_PATHS - unknown
     if not wanted:
         return PartSplit(settings, settings)
     foundation = manufacturer.base_settings(profile, settings.quality, setup).settings
@@ -2441,7 +2446,28 @@ def prusa_values(
     **Ohne Drucker des Bestands** bleibt es bei Solidons vollständigem Satz
     samt Maschine (:func:`_machine_keys`), und der Filamenttyp geht mit: Ohne
     ihn ging PETG als PLA hinaus (Prüfbericht Prusa, B11).
+
+    **Beides nur mit Schlüsseln, die das Programm lesen kann**
+    (:func:`slicer_keys.for_program`): SuperSlicer stürzte an der Schrägnaht
+    aus PrusaSlicer 2.9 ab (RM-459).
     """
+    program = slicer_keys.program_of(setup.executable) if setup is not None else ""
+    written, expected = _prusa_values(settings, profile, setup, slots, console=console)
+    return (
+        slicer_keys.for_program(written, "prusa", program),
+        slicer_keys.for_program(expected, "prusa", program),
+    )
+
+
+def _prusa_values(
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup | None,
+    slots: Sequence[MaterialSlot],
+    *,
+    console: bool,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """:func:`prusa_values` ohne den Blick auf das Programm."""
     effective = settings_for_handover(settings, profile, "prusa", slots, setup)
     chain: manufacturer.PrusaChain | None = None
     if setup is not None:

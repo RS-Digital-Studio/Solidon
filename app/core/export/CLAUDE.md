@@ -118,7 +118,12 @@ Print** ab Version 6), `cura` (CuraEngine). `flavour_of` ist die einzige
 Stelle, an der ein Programm eine Familie wird (`FLAVOUR_BY_NAME`); alles andere
 ist `other` — Datei nur ins Fenster (§29), STL um den Ursprung, jedes Prädikat
 „nein“, `slice_model` und `write_config` sagen mit Vorschlag ab
-(`_refuse_untranslated`, `only_opens`).
+(`_refuse_untranslated`, `only_opens`). Gleiche Familie heißt nicht gleicher
+Stand: Was ein Programm nicht kennt, steht je Programmmarke in
+`NOT_TAKEN_BY_PROGRAM` und `PROGRAM_ALIASES` (`takes(…, program)`,
+`for_program`; SuperSlicer stürzt an fremden 3MF-Schlüsseln ab). Rat
+(`writer.part_advice`, `split_for_parts`), Beilage (`prusa_values`) und Dialog
+fragen es; gemessener Bestand in `tests/data/superslicer_3mf_keys.json`.
 
 ## Stolperfallen
 
