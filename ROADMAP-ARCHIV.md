@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)](#rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026) |
 | 2026-10-02 | [RM-424: Orca- und Prusa-Maschinen mit Bett um den Ursprung bekommen die Teile verschoben (02.10.2026)](#rm-424-orca--und-prusa-maschinen-mit-bett-um-den-ursprung-bekommen-die-teile-verschoben-02102026) |
 | 2026-10-02 | [RM-426: Export und Slicen schreiben das Entwurfsergebnis des Fensters, nicht die feine Rechnung (02.10.2026)](#rm-426-export-und-slicen-schreiben-das-entwurfsergebnis-des-fensters-nicht-die-feine-rechnung-02102026) |
 | 2026-10-02 | [RM-352: Ein Export während der Neuberechnung schreibt den Stand vor der letzten Änderung (02.10.2026)](#rm-352-ein-export-während-der-neuberechnung-schreibt-den-stand-vor-der-letzten-änderung-02102026) |
@@ -36522,3 +36523,22 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   `v7u_vergleich_051.py`.
 
 **Abschluss:** Die Leiste weitet das Feld bis zur gespeicherten Zahl (`ParameterPanel._set_limits`), nennt die wirksame Grenze darunter und nimmt die Korrektur an; nach einer Ablehnung der Sitzung zeigt sie wieder den gültigen Wert; die Fernsteuerung nennt bei `set_parameter` die Grenze und übernimmt bei `add_parameter` Titel und Grenzen. Drei Fenstertests, alle vor dem Fix rot. Umgesetzt von Claude, in main mit `76ca8d57b`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)
+
+<a id="rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026"></a>
+<a id="rm-455"></a>
+
+**RM-455 — Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen.**
+Fund 02.10.2026 (Claude, Thread „Bedienung und KI“) beim Gegenlauf der Fenstertests am Stand
+  `origin/main`: Seit `48ffcf145` (29.09.2026) stehen *Zum Bearbeiten öffnen …*, *Baustein als Datei
+  weitergeben …* und *Aus Bibliothek entfernen* im Abschnitt *Bausteine verwalten*, der zugeklappt
+  beginnt. Wer seinen eigenen Baustein wählt, sieht keinen dieser Knöpfe; in 0.5.1 lagen sie offen
+  (Rückschritt gegenüber 0.5.1). Vier Fenstertests waren deshalb rot, auch am Ausgangsstand:
+  `test_catalog_ui.py::test_opening_a_part_for_editing_puts_its_steps_into_the_window`,
+  `::test_the_locked_save_button_shows_its_reason_beside_it`,
+  `::test_part_file_export_stays_shut_and_says_why` und
+  `test_shared_hosting_removed.py::test_local_part_file_runs_through_the_ui_buttons`.
+  Bauplan §24.3, §2.6.
+
+**Abschluss:** Wählt der Kunde einen eigenen Baustein (Rezept oder eingelesen), klappt *Bausteine verwalten* auf (`PartCatalog` über `open_section`); ein eingebauter lässt den Abschnitt, wie er ist. Die beiden Hinweistests öffnen den Abschnitt jetzt selbst, weil Knopf und Grund dort stehen. `test_catalog_ui.py` und `test_shared_hosting_removed.py` mit Fensterfällen: 45 bestanden. Fenstersonde am echten Fenster (Katalog über *Bausteine*, Klicks mit `QTest` auf die Kacheln): eingebauter Baustein lässt die Verwaltung zu, eigener zeigt Bearbeiten, Weitergeben und Entfernen, 9 von 9 Prüfungen. Umgesetzt von Claude (Thread „Bedienung und KI“).
