@@ -129,10 +129,14 @@ oder im Hilfsprozess, bitgleich; Vorrat, Abbruch, Tod, Rückfall, `warm_up`,
 `shutdown`; `NOT_A_KERNEL_FAILURE` für breite Fänge). Ein Start belegt unter
 dem Poolschloss einen Platz; der gesamte Helferbestand behält seinen Platz
 bis zum bestätigten Prozessende. Ein Stopfehler lässt den Helfer sichtbar und
-erneut aufräumbar; neue Starts bleiben gesperrt, bis der Bestand beendet ist.
-Auch nach einem Vorabstart meldet die nächste `run`-Anfrage diesen Zustand vor
-jedem lokalen Rückfall mit dem bestehenden Fehlerbericht-Ausweg. Erst ein
-erfolgreicher Aufräumversuch hebt ihn auf.
+erneut aufräumbar. Die nächste Anfrage sammelt sein inzwischen bestätigtes
+Ende über den regulären Stopweg ein; solange er lebt, bleiben neue Starts
+und lokale Rückfälle gesperrt. Auch nach einem Vorabstart meldet die nächste
+`run`-Anfrage diesen Zustand mit dem bestehenden Fehlerbericht-Ausweg.
+Dauerhafte Start-/Helferabsagen bleiben beim Einsammeln erhalten.
+Die ursprüngliche Konstruktorursache bleibt auch nach einem Stopfehler
+auswertbar. Erwartete Fehlstarts verbrauchen ihr Kontingent; unerwartete
+Fehler werden nicht als gewöhnliche Startabsage behandelt.
 `shutdown` gibt auch beim Fehler seine Wartenden frei, nimmt offene Starts mit
 und trennt alte Reservierungen, Rückgaben und Absagen vom neuen Bestand. Die Regel steht in
 `kern.md`.

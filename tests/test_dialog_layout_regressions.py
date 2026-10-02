@@ -364,3 +364,44 @@ def test_dialog_rechecks_reachability_when_screen_metrics_change(
     finally:
         dialog.deleteLater()
         qt_app.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("doc", "available", "reason", "expected"),
+    [
+        ("Maß setzen", True, "", ["Maß setzen"]),
+        ("Legt den Wert fest.", True, "", ["Maß setzen", "Legt den Wert fest."]),
+        ("Erst wählen.", False, "Erst wählen.", ["Maß setzen", "Erst wählen."]),
+        (
+            "Legt den Wert fest.",
+            False,
+            "Erst wählen.",
+            ["Maß setzen", "Erst wählen.", "Legt den Wert fest."],
+        ),
+    ],
+)
+def test_the_palette_tooltip_names_every_line_once(
+    qt_app: QApplication, doc: str, available: bool, reason: str, expected: list[str]
+) -> None:
+    """Titel, Grund und Beschreibung stehen je einmal im Tooltip, zeilengenau
+    (RM-342, C-N2): Ein ``doc`` gleich dem Titel und ein Grund gleich dem
+    ``doc`` wurden entdoppelt, ohne dass ein Test es hielt."""
+    from app.core.registry import PaletteEntry
+    from app.ui.command_palette import CommandPalette
+
+    entry = PaletteEntry(
+        name="tooltip_sample",
+        title="Maß setzen",
+        category="modify",
+        doc=doc,
+        shortcut="",
+        available=available,
+        reason=reason,
+    )
+    dialog = CommandPalette([entry])
+    try:
+        item = dialog.list.item(0)
+        assert item is not None
+        assert item.toolTip().split("\n") == expected
+    finally:
+        dialog.deleteLater()

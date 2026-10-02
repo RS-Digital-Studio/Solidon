@@ -1101,23 +1101,6 @@ def _written(target: Path, payload: bytes) -> Path:
     return target
 
 
-#: Die Pfade, deren Rat je Teil aus dem Schnitt des Körpers kommt. Nur wenn
-#: einer davon je Teil geht, wird ein Körper eigens geschnitten; Passung und
-#: Verbinder kommen ohne aus.
-_SLICED_PART_PATHS: Final = frozenset(
-    {
-        "support.style",
-        "support.placement",
-        "support.block_channels",
-        "adhesion.kind",
-        "shell.wall_generator",
-        "shell.outer_wall_first",
-        "shell.scarf_seam",
-        "layers.line_width",
-    }
-)
-
-
 @dataclass(frozen=True, slots=True)
 class _PartValues:
     """Was ein Teil anders bekommt als die Platte, und warum."""
@@ -1257,7 +1240,10 @@ def _part_values(
         return _PartValues({}, [], [], split.plate)
     from app.core.knowledge import profiles as profile_table
     from app.core.scene.fits import fit_kinds_for
+    from app.core.slice import advise
 
+    # Geschnitten wird nur, wenn der Rat je Teil den Schnitt braucht; Passung
+    # und Verbinder kommen ohne aus (:data:`advise.SLICED_PATHS`).
     result = (
         _body_analysis(
             entry,
@@ -1268,7 +1254,7 @@ def _part_values(
             ),
             cancelled,
         )
-        if wanted & _SLICED_PART_PATHS
+        if wanted & advise.SLICED_PATHS
         else None
     )
     advice = part_advice(
@@ -1823,9 +1809,10 @@ def write_assembly(
     as_stl = for_slicer and not reads_assembly_file(flavour)
 
     if as_stl:
-        if settings is not None:
+        if settings is not None or (for_window and takes_mesh_settings(flavour)):
             from app.core.export import handover
 
+        if settings is not None:
             slots = threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
@@ -1838,6 +1825,14 @@ def write_assembly(
             known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
             findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
         if for_window and takes_mesh_settings(flavour):
+            if setup is not None and setup.flavour == "cura":
+                mismatch = handover.cura_active_printer_mismatch(
+                    setup,
+                    profile,
+                    solidon_settings_included=settings is not None,
+                )
+                if mismatch is not None:
+                    findings.append(mismatch)
             target, noted = _cura_window(
                 chosen,
                 exported,

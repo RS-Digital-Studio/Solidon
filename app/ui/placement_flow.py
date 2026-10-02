@@ -3307,18 +3307,26 @@ class PlacementFlow(QObject):
             )
             entered = self.dialog.values()
             spec = self.spec_of()
-            if spec.name in placement.DRILL_OPERATIONS and entered.get("measured_frame"):
-                # Eine Positionsgeste darf die alte Achse samt Ausdruck nicht
-                # durch die Normale der angeklickten Fläche ersetzen.
+            keeps_old_frame = (
+                spec.name in placement.DRILL_OPERATIONS
+                and bool(entered.get("measured_frame"))
+                and _same_direction(entered, values, normal_fields(spec.params))
+            )
+            if keeps_old_frame:
+                # Eine Positionsgeste auf derselben Fläche darf die alte Achse
+                # samt Ausdruck nicht durch die Normale der angeklickten Fläche
+                # ersetzen.
                 for field in normal_fields(spec.params):
                     if field in entered:
                         values[field] = entered[field]
+            elif spec.name in placement.DRILL_OPERATIONS and entered.get("measured_frame"):
+                # **Auf eine andere Fläche umgesetzt** (RM-332, N6): Die alte
+                # Richtung gehört zur alten Fläche. Hier stand sie weiter im
+                # Schritt, und die Bohrung lief quer zur neuen Fläche. Mit der
+                # neuen Normalen gilt der Rahmen von heute, der Marker fällt.
+                values["measured_frame"] = False
             self.dialog.take_placement(values)
-            refresh_tool = (
-                spec.name in placement.DRILL_OPERATIONS
-                and bool(entered.get("measured_frame"))
-                and bool(self._tool_context.position_dependent_axis)
-            )
+            refresh_tool = keeps_old_frame and bool(self._tool_context.position_dependent_axis)
         finally:
             self._updating = False
         if refresh_tool:
@@ -5480,3 +5488,32 @@ class PlacementFlow(QObject):
         """Das bestellte Bild zeichnen, falls es den Fluss noch gibt."""
         if not self._disposed and isValid(self):
             self.viewport._draw()
+
+
+def _same_direction(
+    entered: Mapping[str, Any], placed: Mapping[str, Any], fields: Sequence[str]
+) -> bool:
+    """Ob die gespeicherte Normale dieselbe ist wie die der angeklickten Fläche.
+
+    Ein Ausdruck im gespeicherten Wert gilt als dieselbe Richtung: Er ist eine
+    Bindung des Kunden und wird nicht durch eine Geste ersetzt.
+    """
+    for field in fields:
+        if field not in entered or field not in placed:
+            continue
+        stored, new = entered[field], placed[field]
+        if isinstance(stored, str):
+            return True
+        if abs(float(stored) - float(new)) > _same_face_tolerance():
+            return False
+    return True
+
+
+def _same_face_tolerance() -> float:
+    """Wie weit eine gespeicherte Normale je Komponente neben der Flächennormale
+    liegen darf und noch dieselbe Fläche meint — der Kegel, in dem
+    ``slot_frame`` eine Achse als Hauptachse liest (Messrauschen alter Achsen)."""
+    from app.core import units
+    from app.core.geom.prepare import SLOT_FRAME_CONE
+
+    return units.exact_sin_degrees(SLOT_FRAME_CONE)

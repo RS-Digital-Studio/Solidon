@@ -289,19 +289,52 @@ def test_the_finding_says_the_result_is_rastered(profile: Profile) -> None:
     assert float(finding.values["grid_mm"]) == pytest.approx(1.0)
 
 
-def test_draft_quality_is_coarser_than_fine(profile: Profile) -> None:
-    """Hier trägt der Unterschied, anders als beim Vernetzen.
+def test_draft_quality_is_coarser_than_fine_only_above_the_budget(profile: Profile) -> None:
+    """Über :data:`blend.DRAFT_SAMPLES` rechnet der Entwurf gröber und sagt es.
 
     Die Rasterweite ist keine Zusage über das Ergebnis, sondern der Preis für
-    seine Genauigkeit — und im Entwurf wird iteriert, nicht abgenommen.
+    seine Genauigkeit — und im Entwurf wird iteriert, nicht abgenommen. Aber
+    nur, wo es nötig ist: Darunter wich die Figur im Fenster ohne Not bis
+    2 mm vom Export ab (RM-379).
     """
     first, second = rod("z"), rod("y")
+
+    draft = run(first, second, profile, "draft", radius=4.0, grid=0.6)
+    fine = run(first, second, profile, "fine", radius=4.0, grid=0.6)
+
+    assert draft.outputs[0].mesh.triangle_count < fine.outputs[0].mesh.triangle_count
+    assert draft.outputs[0].mesh.is_watertight
+    assert "blend.draft" in {entry.code for entry in draft.findings}
+    assert "blend.draft" not in {entry.code for entry in fine.findings}
+
+
+def _small_pairs() -> list[tuple[MeshData, MeshData]]:
+    box = trimesh.creation.box(extents=(20.0, 20.0, 10.0))
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
+    ball.apply_translation((0.0, 0.0, 9.0))
+    small = trimesh.creation.box(extents=(6.0, 6.0, 6.0))
+    other = trimesh.creation.box(extents=(6.0, 6.0, 6.0))
+    other.apply_translation((5.0, 0.0, 0.0))
+    return [
+        (rod("z"), rod("y")),
+        (MeshData.of(box), MeshData.of(ball)),
+        (MeshData.of(small), MeshData.of(other)),
+    ]
+
+
+@pytest.mark.parametrize("pair", range(3))
+def test_below_the_budget_the_draft_is_the_fine_body(profile: Profile, pair: int) -> None:
+    """Unter dem Budget sind Entwurf und Export dasselbe Netz (RM-379)."""
+    first, second = _small_pairs()[pair]
 
     draft = run(first, second, profile, "draft", radius=4.0, grid=1.0)
     fine = run(first, second, profile, "fine", radius=4.0, grid=1.0)
 
-    assert draft.outputs[0].mesh.triangle_count < fine.outputs[0].mesh.triangle_count
-    assert draft.outputs[0].mesh.is_watertight
+    assert np.array_equal(
+        np.asarray(draft.outputs[0].mesh.raw.vertices),
+        np.asarray(fine.outputs[0].mesh.raw.vertices),
+    )
+    assert "blend.draft" not in {entry.code for entry in draft.findings}
 
 
 def test_both_filaments_come_through_the_blend(profile: Profile) -> None:

@@ -4204,3 +4204,34 @@ def test_v39_slot_angle_without_origin_marker_survives_file_roundtrip(
         for scene_object in evaluated.scene.objects.values()
         for feature in scene_object.features.values()
     )
+
+
+def test_v40_a_sculpt_session_keeps_its_old_brush(profile) -> None:
+    """40 → 41: Eine alte Formsitzung behält ihre Form (RM-376, RM-378).
+
+    ``sculpt_brush_v40.p3d`` hat der Stand davor geschrieben: eine 4-mm-Platte,
+    ein Abtragzug, der die Unterseite mitnahm (gemessen beim Schreiben: Unterkante
+    bei z = −0,498), und ein Zug mit Symmetrie Y. Nach der Migration tragen beide
+    Schalter ``False``, und die Platte rechnet wie gespeichert; mit den
+    Schaltern von heute bleibt die Unterseite auf dem Bett.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources
+
+    path = Path(__file__).parent / "data" / "projects" / "sculpt_brush_v40.p3d"
+    assert project_data(path)["format_version"] == 40
+
+    project = load(path)
+    (sculpt,) = [entry for entry in project.document.ops if entry.op == "sculpt_strokes"]
+    assert sculpt.params["front_only"] is False and sculpt.params["mirror_once"] is False
+
+    def bottom() -> float:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        return float(result.scene.objects["obj_1"].mesh.raw.bounds[0][2])
+
+    assert bottom() == pytest.approx(-0.498, abs=1e-3), "wie gespeichert"
+    History(project.document).change_params(
+        sculpt.id, {**sculpt.params, "front_only": True, "mirror_once": True}
+    )
+    assert bottom() == pytest.approx(0.0, abs=1e-6), "der Pinsel von heute lässt die Unterseite"

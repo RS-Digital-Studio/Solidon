@@ -243,6 +243,51 @@ def test_a_data_file_does_not_drag_in_the_whole_tree(tree: Path) -> None:
     )
 
 
+def test_a_script_outside_the_packages_selects_the_test_that_loads_it(tree: Path) -> None:
+    """Ein Skript außerhalb von ``app/``, ``tools/`` und ``tests/`` importiert niemand.
+
+    Seine Tests laden es über ``spec_from_file_location`` und nennen dabei den
+    Dateinamen — so wie ``test_delivery_matrix_review.py`` den Matrixläufer
+    unter ``.claude/.state/`` lädt. Ohne Rückfall auf die Namenssuche meldete
+    die Auswahl „Keine Testdatei hängt an dieser Änderung“, und der Test, der
+    rot würde, lief nicht.
+    """
+    _write(tree, ".claude/.state/durchsicht/einheit.py", "def main() -> int:\n    return 0\n")
+    _write(tree, ".claude/.state/durchsicht/gcode_lesen.py", "LAYERS = 0\n")
+    _write(
+        tree,
+        "tests/test_matrix.py",
+        "from pathlib import Path\n"
+        "RUN = Path('.claude/.state/durchsicht') / 'einheit.py'\n"
+        "READ = Path('.claude/.state/durchsicht') / 'gcode_lesen.py'\n",
+    )
+
+    for script in ("einheit.py", "gcode_lesen.py"):
+        files, reasons = affected(
+            [tree / ".claude" / ".state" / "durchsicht" / script], ImportGraph(tree)
+        )
+
+        assert _names(files, tree) == {"tests/test_matrix.py"}, script
+        assert reasons[tree / "tests" / "test_matrix.py"] == f"nennt {script}"
+
+
+def test_the_real_graph_finds_the_test_of_the_shared_hook() -> None:
+    """Gegen den echten Baum: Der Hook unter ``.claude/hooks/`` hat seinen Test.
+
+    ``test_solidon3d_hooks.py`` lädt ihn über seinen Pfad; eine Änderung am
+    Hook ohne diesen Test wäre ein grüner Stand, der keiner ist.
+    """
+    graph = ImportGraph()
+    hook = graph.root / ".claude" / "hooks" / "solidon3d_hooks.py"
+    assert hook.is_file()
+
+    files, reasons = affected([hook], graph)
+
+    expected = graph.root / "tests" / "test_solidon3d_hooks.py"
+    assert expected in files
+    assert reasons[expected] == "nennt solidon3d_hooks.py"
+
+
 def test_a_syntax_error_in_the_tree_does_not_stop_the_selection(tree: Path) -> None:
     """Ein fremder Zwischenstand im geteilten Baum darf die Auswahl nicht abbrechen."""
     _write(tree, "app/broken.py", "def (\n")

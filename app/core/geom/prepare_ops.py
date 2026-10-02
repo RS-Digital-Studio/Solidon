@@ -500,6 +500,7 @@ class DrillParams(BaseParams):
         title=_("Richtung aus einem älteren Projekt"),
         default=False,
         placement="advanced",
+        internal=True,
         depends_on=("slotted", (True,)),
         doc=_(
             "Liest die gespeicherte Richtung im alten Rahmen und rechnet sie bei jeder "
@@ -8401,6 +8402,7 @@ class SlotHoleParams(BaseParams):
         title=_("Richtung aus einem älteren Projekt"),
         default=False,
         placement="advanced",
+        internal=True,
         doc=_(
             "Liest die gespeicherte Richtung im alten Rahmen und rechnet sie bei jeder "
             "Auswertung in den neuen Rahmen um. Neue Langlöcher brauchen den Haken nicht."
@@ -17450,6 +17452,124 @@ class CutAwayParams(BaseParams):
         choices=("below", "above"),
         doc=_("Welche Seite der Ebene stehen bleibt. Die andere fällt weg."),
     )
+    tilt: float = param(
+        title=_("Neigung"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-89.0,
+        maximum=89.0,
+        placement="advanced",
+        doc=_(
+            "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen "
+            "ganzer Seiten. Null schneidet gerade."
+        ),
+    )
+    tilt_axis: str = param(
+        title=_("Neigen um"),
+        default="x",
+        choices=_AXES,
+        placement="advanced",
+        doc=_(
+            "Um welche Achse die Ebene gekippt wird. Die Kippachse geht auf der "
+            "eingestellten Position durch die Mitte des Körpers."
+        ),
+    )
+    at_feature: str = param(
+        title=_("An Fläche"),
+        default="",
+        kind="feature",
+        feature_kinds=("face",),
+        placement="advanced",
+        doc=_(
+            "Schneidet parallel zu dieser ebenen Fläche statt an einer Achse. Die "
+            "Position zählt dann von der Fläche aus: -2 nimmt 2 mm von ihr weg."
+        ),
+    )
+
+
+def _cut_away_plane(
+    params: CutAwayParams, mesh: MeshData, features: Mapping[str, Feature]
+) -> SectionPlane:
+    """Die Schnittebene von *Abschneiden*, gerade oder geneigt (RM-400).
+
+    Geneigt wird die Achsnormale um ``tilt_axis``; die Kippachse liegt auf der
+    eingetragenen Position und geht in den beiden anderen Richtungen durch die
+    Mitte des Hüllquaders der Eingabe — reproduzierbar aus Parametern und
+    Eingang (Regel 2). Ohne Neigung ist es die Achsebene von vorher, auf den
+    Bit genau: alte Schritte rechnen unverändert.
+    """
+    if params.at_feature:
+        return _face_plane(params, features)
+    axis = cast(Axis, params.axis)
+    normal = AXIS_NORMALS[axis]
+    if abs(params.tilt) <= EPS_GEOM:
+        return SectionPlane(normal=normal, position=params.position)
+    if params.tilt_axis == params.axis:
+        raise ValidationError(
+            field="tilt_axis",
+            detail=_(
+                "Um die eigene Schnittachse gekippt ändert sich die Ebene nicht. Wählen "
+                "Sie eine der beiden anderen Achsen."
+            ),
+            value=params.tilt_axis,
+            constraint="tilt_about_axis",
+        )
+    cosine = units.exact_cos_degrees(params.tilt)
+    sine = units.exact_sin_degrees(params.tilt)
+    about = AXIS_NORMALS[cast(Axis, params.tilt_axis)]
+    # Rodrigues für einen zur Drehachse senkrechten Vektor:
+    # n' = n·cos + (a kreuz n)·sin — elementweise, plattformgleich (RM-187).
+    cross = (
+        about[1] * normal[2] - about[2] * normal[1],
+        about[2] * normal[0] - about[0] * normal[2],
+        about[0] * normal[1] - about[1] * normal[0],
+    )
+    tilted = (
+        normal[0] * cosine + cross[0] * sine,
+        normal[1] * cosine + cross[1] * sine,
+        normal[2] * cosine + cross[2] * sine,
+    )
+    low, high = mesh.raw.bounds
+    pivot = [float(low[index] + high[index]) / 2.0 for index in range(3)]
+    pivot[_AXES.index(params.axis)] = params.position
+    distance = tilted[0] * pivot[0] + tilted[1] * pivot[1] + tilted[2] * pivot[2]
+    return SectionPlane(normal=tilted, position=distance)
+
+
+def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> SectionPlane:
+    """Die Ebene parallel zu einer ebenen Fläche, um ``position`` nach außen versetzt.
+
+    Achse und Neigung zählen dann nicht: Die Fläche gibt beides vor — die
+    schräge Front eines Teils lässt sich so um ein Maß kürzen, ohne ihren
+    Winkel abzulesen (RM-400).
+    """
+    feature = features.get(params.at_feature)
+    normal = feature.params.get("normal") if feature is not None else None
+    centre = feature.params.get("centre") if feature is not None else None
+    if feature is None or feature.kind != "face" or normal is None or centre is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "An dieser Stelle gibt es keine ebene Fläche, an der sich schneiden "
+                "ließe. Wählen Sie eine ebene Fläche oder schneiden Sie an einer Achse."
+            ),
+            value=params.at_feature,
+            constraint="no_plane",
+        )
+    length = math.hypot(float(normal[0]), float(normal[1]), float(normal[2]))
+    if length <= EPS_GEOM:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "An dieser Stelle gibt es keine ebene Fläche, an der sich schneiden "
+                "ließe. Wählen Sie eine ebene Fläche oder schneiden Sie an einer Achse."
+            ),
+            value=params.at_feature,
+            constraint="no_plane",
+        )
+    unit = (float(normal[0]) / length, float(normal[1]) / length, float(normal[2]) / length)
+    distance = unit[0] * float(centre[0]) + unit[1] * float(centre[1]) + unit[2] * float(centre[2])
+    return SectionPlane(normal=unit, position=distance + params.position)
 
 
 @register_op(
@@ -17483,11 +17603,11 @@ def cut_away(ctx: OpContext) -> OpResult:
     ebene Fläche versetzen — der Weg, Wände auf eine Höhe zu bringen.
     """
     params = cast(CutAwayParams, ctx.params)
-    plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
-    if params.keep == "above":
-        plane = plane.flipped()
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
+    plane = _cut_away_plane(params, mesh, source.features)
+    if params.keep == "above":
+        plane = plane.flipped()
     kept = cut(mesh, plane)
     check_cut_contact(kept, params.position)
     if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:

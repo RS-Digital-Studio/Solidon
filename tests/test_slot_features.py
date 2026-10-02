@@ -4026,3 +4026,14 @@ def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, s
     assert len(slots) == 1, "genau ein Langloch, keine Reste des alten Umrisses"
     assert slots[0].params["length"] == pytest.approx(14.0, abs=1e-6 if exact else 0.01)
     assert not any(finding.code == "slot_hole.feature_lost" for finding in findings)
+
+
+@pytest.mark.parametrize("operation", ["drill_hole", "slot_hole"])
+def test_the_migration_marker_is_not_offered_to_the_agent(operation: str) -> None:
+    """``measured_frame`` setzt nur die Migration 38 → 39; im Werkzeugschema des
+    Agenten stand er als Wahl „Richtung aus einem älteren Projekt“ (RM-332, N5)."""
+    from app.core.registry.params import json_schema
+
+    spec = REGISTRY.get(operation)
+    assert any(entry.name == "measured_frame" and entry.internal for entry in spec.params.spec())
+    assert "measured_frame" not in json_schema(spec.params)["properties"]

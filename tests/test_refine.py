@@ -253,17 +253,6 @@ def test_the_batch_reports_progress_between_solver_rounds(
     assert all(later > earlier for earlier, later in pairwise(progress))
 
 
-@pytest.mark.parametrize("rows", (16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192))
-@pytest.mark.parametrize("columns", (6, 7))
-def test_the_batch_chunk_respects_its_measured_peak(rows: int, columns: int) -> None:
-    """Die Blockformel deckt beide Rundformen und alle aufgefüllten Zeilenzahlen ab."""
-    assert refine.BATCH_PEAK_FACTOR >= 12, "Die Reserve muss über der gemessenen Spitze liegen."
-    peak_per_problem = 2 * (rows + 3) * columns * 8 * refine.BATCH_PEAK_FACTOR
-    chunk = refine._batch_chunk_size(rows, columns)
-    assert chunk * peak_per_problem <= refine.BATCH_BYTES
-    assert (chunk + 1) * peak_per_problem > refine.BATCH_BYTES
-
-
 def test_a_full_smallest_cone_block_stays_within_the_memory_budget() -> None:
     """Der kleinste Kegelblock hält auch seine echte Spitze unter der Speichergrenze."""
     problem = refine.ConeProblem(

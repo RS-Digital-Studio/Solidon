@@ -1914,6 +1914,13 @@ class ParamSpec:
     Der Wert reist als ``null`` in der Projektdatei, fehlt im Werkzeugschema
     des Agenten als Pflichtfeld und steht im Dialog als leeres Feld mit einem
     Sondertext am Mindestwert."""
+    internal: bool = False
+    """Ein Marker, den eine Migration setzt, und kein Feld für den Kunden.
+
+    Er reist in der Projektdatei und wirkt bei der Auswertung, steht aber
+    weder im Dialog noch im Werkzeugschema des Agenten: ``measured_frame``
+    hieß dort „Richtung aus einem älteren Projekt“ und stand unter jeder neuen
+    Langlochbohrung, die ihn nie braucht (RM-332, N5)."""
     sketch_planes: tuple[str, ...] = ()
     """Auf welchen Ebenen die Zeichnung dieses Skizzenfelds liegen darf.
 

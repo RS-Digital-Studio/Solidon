@@ -7039,3 +7039,26 @@ def test_the_file_export_of_a_selection_asks_the_whole_job(
     supported, codes = export((block,))
     assert len(supported) == 1, "B2: allein ist der Klotz der ganze Auftrag"
     assert "export.part_setting_all" in codes
+
+
+@pytest.mark.parametrize(
+    ("kind", "active"),
+    [
+        ("none", set()),
+        ("skirt", {"adhesion.skirt_loops", "adhesion.skirt_distance"}),
+        ("brim", {"adhesion.brim_width"}),
+        ("auto", {"adhesion.brim_width"}),
+        ("raft", {"adhesion.raft_layers"}),
+    ],
+)
+def test_only_the_measures_of_the_chosen_bed_type_are_active(kind: str, active: set[str]) -> None:
+    """Bei *Brim* standen Skirt- und Raft-Maße im Dialog und sperrten mit einem
+    Grenzwert das Slicen, obwohl die Übergabe sie nullt (RM-341). Eine Stelle
+    sagt jetzt für Sichtbarkeit, Sperre und Suche, was wirkt."""
+    from app.core.knowledge import print_settings
+
+    inactive = print_settings.inactive_paths("auto", kind)
+
+    assert set(print_settings.ADHESION_DETAILS) - inactive == active
+    assert not inactive & set(print_settings.SUPPORT_DETAILS), "Stützen sind an"
+    assert set(print_settings.SUPPORT_DETAILS) <= print_settings.inactive_paths("none", kind)

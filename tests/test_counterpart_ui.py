@@ -498,3 +498,25 @@ def test_a_result_from_before_the_counterpart_does_not_use_up_its_fit(
     finally:
         window.release()
         window.deleteLater()
+
+
+def test_the_counterpart_labels_carry_no_colon(qt_app: QApplication) -> None:
+    """„Paar“ stand ohne, „Durchmesser:“, „Länge:“ und die übrigen Maße mit
+    Doppelpunkt — dieselbe Form wie jede andere Formularzeile (RM-342, C-N1)."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.bootstrap import load_operations
+    from app.ui.counterpart_dialog import CounterpartDialog
+
+    load_operations()
+    dialog = CounterpartDialog("Oberseite", "Oberseite")
+    try:
+        captions = [
+            caption.text()
+            for field in dialog._fields.values()
+            if isinstance(caption := dialog.form.labelForField(field), QLabel)
+        ]
+        assert captions, "die Maße stehen da"
+        assert not [text for text in captions if text.rstrip().endswith(":")], captions
+    finally:
+        dialog.deleteLater()
