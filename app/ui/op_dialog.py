@@ -77,7 +77,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
-    form_natural_width,
+    expanded_width,
     make_primary,
     set_level,
 )
@@ -3576,10 +3576,7 @@ class OperationDialog(QDialog):
             content_layout.activate()
         self._scroll.updateGeometry()
         layout.activate()
-        margins = layout.contentsMargins()
-        content_width = content_layout.minimumSize().width() if content_layout is not None else 0
-        natural_width = max(content_width, form_natural_width(self._advanced_form))
-        natural_width += margins.left() + margins.right()
+        natural_width = expanded_width(self._scroll, self._advanced_form)
         self._height.fit(
             self,
             self._scroll,

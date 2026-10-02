@@ -150,6 +150,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
+    expanded_width,
     fit_dialog_to_screen,
     make_primary,
     set_level,
@@ -4434,7 +4435,7 @@ class PrintSettingsDialog(QDialog):
             self._scroll,
             grow_width=intent == "initial",
             intent=intent,
-            natural_width=self._room_for_tabs() if intent == "initial" else 0,
+            natural_width=self._natural_width() if intent == "initial" else 0,
         )
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
@@ -4460,6 +4461,17 @@ class PrintSettingsDialog(QDialog):
         self._buttons.setOrientation(
             Qt.Orientation.Horizontal if wanted <= available else Qt.Orientation.Vertical
         )
+
+    def _natural_width(self) -> int:
+        """Die Anfangsbreite: Reiterleiste und alles, was hinter den Klappen wartet.
+
+        Zugeklappt sind die Reiter von *Weitere Einstellungen* und die *Profile
+        des Slicers*; ohne sie rollte der Dialog nach dem Aufklappen quer
+        (RM-342 D-N5, dieselbe Rechnung wie in den übrigen Dialogen).
+        """
+        hidden = self.slicer_inner.layout()
+        parts = (self.tabs, hidden) if isinstance(hidden, QFormLayout) else (self.tabs,)
+        return max(self._room_for_tabs(), expanded_width(self._scroll, *parts))
 
     def _room_for_tabs(self) -> int:
         """Die Breite, die die Reiterleiste braucht — gedeckelt vom Bildschirm.

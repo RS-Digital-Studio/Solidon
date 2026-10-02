@@ -90,7 +90,7 @@ from app.ui.style import (
     ContentFitIntent,
     ContentHeight,
     DialogScrollArea,
-    form_natural_width,
+    expanded_width,
     make_primary,
     select_data,
     set_level,
@@ -738,29 +738,15 @@ class FirstRunDialog(QDialog):
         layout = self.layout()
         if layout is None:
             return
-        natural_width = max(self.sizeHint().width(), self.minimumWidth())
+        # Das verborgene Formular des eigenen Druckers trägt nichts zur
+        # äußeren sizeHint bei; seine ganze Breite muss schon beim Öffnen
+        # Platz haben, samt dem Rollbalken, den das Aufklappen bringt.
         form = self.custom_printer.layout()
-        basics = self.custom_printer.parentWidget()
+        forms = (form,) if isinstance(form, QFormLayout) else ()
+        natural_width = max(
+            self.sizeHint().width(), self.minimumWidth(), expanded_width(self._scroll, *forms)
+        )
         content_layout = self._contents.layout()
-        if isinstance(form, QFormLayout) and basics is not None and content_layout is not None:
-            basics_layout = basics.layout()
-            assert basics_layout is not None
-            # Das verborgene Formular trägt nichts zur äußeren sizeHint bei.
-            # Seine ganze Breite samt den umgebenden Rändern muss deshalb
-            # schon beim Öffnen Platz haben. Beim Aufklappen kommt ein
-            # senkrechter Rollbalken hinzu, ohne dass das Fenster breiter wird.
-            custom_width = form_natural_width(form)
-            for margins in (
-                basics_layout.contentsMargins(),
-                basics.contentsMargins(),
-                content_layout.contentsMargins(),
-                layout.contentsMargins(),
-            ):
-                custom_width += margins.left() + margins.right()
-            custom_width += (
-                2 * self._scroll.frameWidth() + self._scroll.verticalScrollBar().sizeHint().width()
-            )
-            natural_width = max(natural_width, custom_width)
         may_size_initially = intent == "initial" and not self._height.initial_fit_done
         if may_size_initially:
             natural_width = max(self.width(), natural_width)

@@ -363,10 +363,8 @@ der Knopf die Handlung („Trennen“, „Jetzt trennen“;
 
 Von Hand gezogen oder beim Öffnen an den Inhalt angepasst — überschüssiger
 Raum braucht **eine** Stelle, sonst verteilt Qt ihn als Lücken zwischen
-Widgets fester Höhe (im KI-Hinweis stand die Überschrift allein über einer
-leeren Fläche). Die Stelle ist ein `addStretch` dort, wo Leere nicht stört,
-oder ein Widget, das den Platz nutzt (die Versuchsliste des Erzeugen-Dialogs
-nach dem Lauf). Lange Statusmeldungen bleiben im Rollbereich erreichbar und
+Widgets fester Höhe. Die Stelle ist ein `addStretch` dort, wo Leere nicht
+stört, oder ein Widget, das den Platz nutzt. Lange Statusmeldungen bleiben im Rollbereich erreichbar und
 ändern den Außenrahmen nicht; `style.WrappedNote` misst dafür ohne die
 gepinnte Höhe, denn `QLabel.heightForWidth` meldet nie weniger als die
 Mindesthöhe.
@@ -381,8 +379,8 @@ Rest rollt. Reiter, Suche, Statusmeldungen und bedingte Zeilen lassen den
 Außenrahmen stehen. `contentSizeChanged` meldet verzögerte Innenlayoutänderungen.
 Beim Öffnen sowie nach Monitorwechseln, geänderter nutzbarer Fläche oder
 logischer DPI stellt `DialogScrollArea` mit `fit_dialog_to_screen` die
-Erreichbarkeit wieder her. `form_natural_width` berücksichtigt zugeklappte
-Formularzeilen bei der einmaligen Anfangsbreite.
+Erreichbarkeit wieder her. Die Anfangsbreite samt zugeklappter Teile und
+Rollbalken rechnet allein `style.expanded_width` (RM-342 D-N5).
 
 **Formulare: eine Zeilenform, eine Kante.** Keine Beschriftung über dem Feld
 (`DontWrapRows`); das Fenster wird so breit wie seine breiteste Zeile, eine
