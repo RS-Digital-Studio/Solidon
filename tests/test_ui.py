@@ -12214,14 +12214,19 @@ def test_a_preview_that_stops_at_a_question_says_so(session: Session) -> None:
 
     reasons: list[str] = []
     shown: list[object] = []
+    asked: list[object] = []
     session.preview_async(
         shown.append,
         [OperationDraft(op="remove_feature", inputs=("obj_1",), params={"at_feature": hole})],
         explained=reasons.append,
+        asked=asked.append,
     )
     session.wait_for_idle()
     assert shown == [None]
     assert reasons == [tr("Eine Rückfrage steht an — sie kommt beim Übernehmen.")]
+    # Und es eigens gesagt, damit das Fenster den Satz nicht als Absage liest
+    # und *Übernehmen* sperrt (RM-389).
+    assert asked == [None]
 
 
 def test_the_banner_names_the_reason_and_the_empty_difference(window: MainWindow) -> None:

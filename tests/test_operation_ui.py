@@ -5893,3 +5893,66 @@ def test_the_migration_marker_has_no_row_in_the_dialog(qt_app: QApplication) -> 
         assert dialog.values()["measured_frame"] is True
     finally:
         dialog.deleteLater()
+
+
+def test_a_preview_waiting_for_a_question_leaves_apply_free_and_asks_on_apply(
+    qt_app: QApplication,
+) -> None:
+    """Eine anstehende Rückfrage sperrt *Übernehmen* nicht (RM-389).
+
+    *Merkmal entfernen* an einer gesenkten Bohrung fragt, ob die Senkung
+    mitgeht. Die stille Vorschau fragt nicht und sagt das im Band — das Band
+    zählte aber als Problem: Der Knopf war grau, der Klick tat nichts, und die
+    Frage kam nie. Gleich im Nachbau an *Tasche schneiden*, Lochkreis und
+    Lochraster. Jetzt ist der Knopf frei, der Klick stellt die Frage, und nach
+    der Antwort steht der Schritt im Verlauf.
+    """
+    from PySide6.QtTest import QTest
+
+    window = MainWindow(Session(), UiSettings())
+    window.open_path(MESHES / "plate_countersunk.stl")
+    assert window.session.wait_for_idle()
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = next(identifier for identifier, f in entry.features.items() if f.kind == "hole")
+    window.object_tree.select_object("obj_1")
+    window.object_tree.select_feature("obj_1", hole)
+    QApplication.processEvents()
+    window.run_operation(REGISTRY.get("remove_feature"), {"at_feature": hole})
+    dialog = window._op_dialog
+    assert dialog is not None
+    # Wie die Zeichnung auf einer Fläche (``PlacementFlow``, Maßgruppe) und
+    # jeder exakte Eingang: Die Vorschau muss gezeigt sein, bevor übernommen
+    # wird. Genau dort sperrte das Band der Rückfrage den Knopf.
+    dialog.requires_displayed_preview = True
+    dialog.valuesChanged.emit()
+    for _ in range(40):
+        QTest.qWait(50)
+        window.session.wait_for_idle()
+        QApplication.processEvents()
+        if tr("Eine Rückfrage steht an — sie kommt beim Übernehmen.") in (
+            window.viewport.banner.note.text()
+        ):
+            break
+    assert tr("Eine Rückfrage steht an — sie kommt beim Übernehmen.") in (
+        window.viewport.banner.note.text()
+    ), "die Vorschau hält an der Rückfrage"
+    assert dialog.can_accept(), dialog._blocked_reason
+
+    asked: list[str] = []
+
+    def answer(request: Any) -> None:
+        asked.append(request.question)
+        request.reply(request.choices[0])
+
+    window.session.askRequested.connect(answer, Qt.ConnectionType.DirectConnection)
+    try:
+        count = len(window.session.project.document.ops)
+        dialog.accept()
+        assert window.session.wait_for_idle()
+        QApplication.processEvents()
+        assert window.session.wait_for_idle()
+    finally:
+        window.session.askRequested.disconnect(answer)
+
+    assert asked, "der Klick stellt die Frage"
+    assert len(window.session.project.document.ops) == count + 1, "danach steht der Schritt"
