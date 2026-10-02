@@ -753,6 +753,7 @@ PART_CASES = {
         "greater",
         None,
     ),
+    "lug": ({"size": "M4", "width": 0.0, "length": 0.0, "thickness": 4.0}, "greater", None),
     "magnet_pocket": ({"size": "8x3", "cover": 0.0, "press_lip": False}, "less", None),
     "nut_trap": ({"size": "M3", "direction": "bottom", "screw_hole": True}, "less", None),
     "organizer_divider": ({"length": 30.0, "height": 15.0, "thickness": 3.0}, "greater", 15.0),

@@ -1,6 +1,6 @@
 """Bausteine, die etwas an etwas anderem halten (Bauplan §24.1).
 
-Hier liegen: die Magnettasche, die Wandhalterung, die
+Hier liegen: die Magnettasche, die Wandhalterung, die Lasche mit Loch, die
 Schlüsselloch-Aufhängung, der Lochwand-Einhänger und der Standfuß. Manche sind
 Formen zum Abziehen, andere Körper zum Hinzufügen, und der Standfuß ist beides
 je nach Wahl — darum sagt die Deklaration es, und ``insert_part`` muss nicht
@@ -495,6 +495,188 @@ def wall_mount(raw: BaseParams) -> PartResult:
         )
 
     return result(body, *features)
+
+
+LUG_ADDED = PartChange(
+    version="1",
+    date="2026-10-02",
+    reason="Lasche mit Loch — im Nachbau entstand jede Lasche aus Quader, Verschieben und "
+    "Bohrung (RM-398).",
+)
+
+#: Die Schrauben der Lasche: M3 bis M8 aus der Normteiltabelle (Vorgabe Robert,
+#: RM-398), soweit die Tabelle eine Unterlegscheibe dazu führt — aus deren
+#: Außenmaß folgen Breite und Länge, wo keine eingetragen sind.
+_LUG_SCREWS: Final = tuple(
+    size
+    for size in _SCREWS
+    if standards.screw(size).nominal >= 3.0 and size in standards.washer_sizes()
+)
+
+LUG_TOO_NARROW = _(
+    "Die Lasche ist schmaler als der Schraubenkopf. Eine größere Breite oder eine "
+    "kleinere Schraube wählen."
+)
+LUG_TOO_SHORT = _(
+    "Die Lasche ist zu kurz: Der Schraubenkopf stieße an die Fläche. Eine größere Länge "
+    "oder eine kleinere Schraube wählen."
+)
+
+
+@op_params
+class LugParams(BaseParams):
+    size: str = param(
+        title=_("Schraube"),
+        default="M4",
+        choices=_LUG_SCREWS,
+        doc=_("Wofür das Loch ist. Es ist das Durchgangsloch aus der Normteiltabelle."),
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=100.0,
+        doc=_(
+            "Quer zur Lasche gemessen. Null heißt: so breit wie die Unterlegscheibe der Schraube."
+        ),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=200.0,
+        doc=_(
+            "Wie weit die Lasche von der Fläche absteht, bis zum Scheitel des runden Endes. "
+            "Null heißt: so lang, dass die Unterlegscheibe neben der Fläche Platz hat."
+        ),
+    )
+    thickness: float = param(
+        title=_("Dicke"),
+        default=4.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=20.0,
+        doc=_("Materialstärke der Lasche, in Richtung des Lochs gemessen."),
+    )
+
+
+def _lug_size(params: LugParams) -> tuple[float, float, float]:
+    """Breite, Länge und Abstand der Lochmitte von der Fläche.
+
+    Eine Null nimmt das Maß der Unterlegscheibe (ISO 7089) aus der
+    Normteiltabelle: so breit wie sie und so lang, dass sie neben der Fläche
+    Platz hat. Das Loch sitzt immer in der Mitte des runden Endes — eine Maßreihe
+    je Schraube statt eines Einzelmaßes (Vorgabe Robert, RM-398).
+    """
+    washer = standards.washer(params.size).outer
+    width = params.width or washer
+    length = params.length or (width + washer) / 2.0
+    return width, length, length - width / 2.0
+
+
+def _lug_reason(params: LugParams) -> TranslatableText | None:
+    """Die erklärte Bedingung: Der Schraubenkopf liegt auf der Lasche und neben der Fläche.
+
+    Gemessen am Zylinderkopf aus der Tabelle (ISO 4762) — eine schmalere Lasche
+    trüge ihn nicht, eine kürzere ließe ihn an die Fläche stoßen, an der sie
+    ansetzt. Der Bereichstest fährt solche Ecken als erklärte Ausschlüsse.
+    """
+    head = standards.screw(params.size).head
+    width, _length, reach = _lug_size(params)
+    if is_greater(head, width):
+        return LUG_TOO_NARROW
+    if is_greater(head / 2.0, reach):
+        return LUG_TOO_SHORT
+    return None
+
+
+@register_part(
+    name="lug",
+    title=_("Lasche mit Loch"),
+    group="mounting",
+    params=LugParams,
+    keeps_up=True,
+    features=["bore", "lug"],
+    wall=WallRequirement.from_parameter("thickness"),
+    doc=_(
+        "Eine flache Lasche mit rundem Ende und einem Durchgangsloch aus der "
+        "Normteiltabelle, die von der Fläche absteht — zum Anschrauben an Wand, Gehäuse "
+        "oder Deckel. Ohne eingetragene Breite und Länge richtet sie sich nach der "
+        "Unterlegscheibe der gewählten Schraube."
+    ),
+    caveat=_(
+        "Nicht für Lasten, die die Lasche biegen: Gedruckt bricht sie dort, wo sie an der "
+        "Fläche ansetzt. Dann eine Versteifungsrippe oder einen Eckwinkel dazusetzen."
+    ),
+    changes=[LUG_ADDED],
+    feasible=lambda raw: _lug_reason(cast(LugParams, raw)),
+)
+def lug(raw: BaseParams) -> PartResult:
+    """Eine flache Lasche, die senkrecht von der Fläche absteht, mit Loch im runden Ende.
+
+    **Die Unterseite liegt im Ansatzpunkt.** Die Lasche reicht von der Fläche
+    nach +Z, ist in X so breit wie eingetragen und in Y so dick — von null nach
+    -Y, und -Y ist bei ``keeps_up`` oben. An einer senkrechten Wand liegt sie
+    damit flach, und wer den Ansatzpunkt an die Unterkante setzt, bekommt eine
+    Lasche bündig mit der Standfläche; das Loch steht senkrecht.
+
+    Gebaut wird sie flach — Länge in X, Breite in Y, Dicke in Z — aus der
+    halben Langlochform mit echtem Bogen, und erst danach aufgestellt: Ein
+    Quader mit angesetztem Zylinder berührte ihn entlang einer Linie, und
+    genau dort scheitert eine Boolesche Operation (§39).
+    """
+    params = cast(LugParams, raw)
+    screw = standards.screw(params.size)
+    width, length, reach = _lug_size(params)
+    reason = _lug_reason(params)
+    if reason is not None:
+        narrow = reason is LUG_TOO_NARROW
+        raise ValidationError(
+            "width" if narrow else "length",
+            reason,
+            constraint="feasible",
+            values={"minimum": screw.head if narrow else (width + screw.head) / 2.0},
+        )
+    thickness = params.thickness
+
+    eye = shapes.slot(width, 2.0 * reach + width, thickness)
+    behind = shapes.moved(
+        shapes.box(2.0 * length + 2.0, width + 2.0, thickness + 2.0),
+        (-(length + 1.0), 0.0, -1.0),
+    )
+    hole = shapes.moved(
+        shapes.cylinder(screw.clearance, thickness + 2.0 * BOOLEAN_OVERLAP),
+        (reach, 0.0, -BOOLEAN_OVERLAP),
+    )
+    flat = subtract(eye, behind, hole)
+    # Länge nach +Z, Breite nach X, Dicke nach Y: erst um X, dann um Y, je
+    # eine Vierteldrehung — beide Kerne drehen exakt um 90 Grad.
+    standing = shapes.turned(shapes.turned(flat, -90.0, (1.0, 0.0, 0.0)), -90.0, (0.0, 1.0, 0.0))
+    body = shapes.moved(standing, (0.0, -thickness, 0.0))
+
+    area = width * reach + math.pi * width**2 / 8.0 - math.pi * screw.clearance**2 / 4.0
+    return result(
+        body,
+        bore(
+            "bore_1",
+            screw.clearance,
+            (0.0, -thickness / 2.0, reach),
+            depth=thickness,
+            axis=(0.0, 1.0, 0.0),
+            through=True,
+        ),
+        # Die Fläche, auf der Kopf und Scheibe liegen — oben, wo ``keeps_up``
+        # -Y hinlegt. Ihre Mitte liegt zwischen Ansatz und Loch auf der Fläche,
+        # nicht im Schwerpunkt: Der läge bei der Vorgabe im Loch.
+        face(
+            "lug_1",
+            area,
+            (0.0, -thickness, (reach - screw.clearance / 2.0) / 2.0),
+            (0.0, -1.0, 0.0),
+        ),
+    )
 
 
 #: Wie viel Luft der Schraubenkopf im runden Ende eines Schlüssellochs hat,

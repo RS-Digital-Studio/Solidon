@@ -231,10 +231,14 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     ``seal_groove`` und ``seal_gasket`` kamen am selben Tag dazu: die
     abtragende Dichtnut und die separate Dichtung aus demselben geschlossenen
     Weg, dieselbe Bauart mit Zeichnung und Materialrolle.
+
+    ``lug`` kam am 02.10.2026 aus dem Nachbau-Test (RM-398): Laschen mit Loch
+    entstanden dort je aus Quader, Verschieben und Bohrung, an Schraubendreherhalter
+    und Kartuschendeckel.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 32
+    assert len(building) == 33
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -294,7 +298,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2666_cartesian_boundaries() -> None:
+def test_the_library_really_has_2706_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -302,9 +306,11 @@ def test_the_library_really_has_2666_cartesian_boundaries() -> None:
     dem Prüfling abgelesen. Seit dem 22.09.2026 kommen 120 dazu: Die
     Klemmschale bietet vier Schraubengrößen statt einer (32 → 128), und der
     Überhangfächer hat für Breite und Auskraglänge eine Obergrenze (8 → 32).
+    Die Lasche mit Loch (RM-398) bringt 40: fünf Schrauben mal Breite, Länge
+    und Dicke an je zwei Grenzen.
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2666
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2706
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -2114,7 +2120,7 @@ def test_the_keyhole_puts_the_screw_above_the_hole_it_went_through() -> None:
     ), "the head opening is no wider than the shaft slot"
 
 
-@pytest.mark.parametrize("kind", ["keyhole", "pegboard_hook"])
+@pytest.mark.parametrize("kind", ["keyhole", "pegboard_hook", "lug"])
 def test_a_part_that_knows_up_hangs_the_right_way_on_every_wall(kind: str) -> None:
     """``keeps_up`` gilt beiden gleich — und beinahe hätte es sie gegeneinander
     ausgespielt.
@@ -5095,6 +5101,149 @@ def test_every_group_has_a_title_and_every_title_a_tile() -> None:
     assert not ohne_kachel, (
         f"Gruppentitel ohne einen einzigen Baustein: {ohne_kachel} — ein leerer Abschnitt"
     )
+
+
+# --- Die Lasche mit Loch (insert_lug, RM-398) ---------------------------------------
+
+
+def _carrier_with(
+    profile: Profile, carrier: OperationDraft, part: str, values: dict[str, Any]
+) -> Any:
+    """Ein Träger aus einem Grundkörper, daran ein Baustein — über Verlauf und Auswertung."""
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Träger", [carrier])
+    History(project.document).apply(
+        part,
+        [OperationDraft(op=part_ops.op_name(part), inputs=("obj_1",), params=values)],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+    return result.scene.objects["obj_1"]
+
+
+def _lug_hole(body: Any) -> Any:
+    hole = next(f for name, f in body.features.items() if name.endswith("bore_1"))
+    assert hole.kind == "hole"
+    return hole
+
+
+@pytest.mark.parametrize(
+    ("case", "carrier", "values", "size", "check"),
+    [
+        # Schraubendreherhalter aus dem Nachbau: Wandlasche mit Ø 4,5, an der
+        # Seitenwand bündig mit der Standfläche.
+        pytest.param(
+            "seitenwand",
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}),
+            {"x": -20.0, "y": 0.0, "z": 0.0, "nx": -1.0, "ny": 0.0, "nz": 0.0},
+            "M4",
+            "flat",
+            id="schraubendreherhalter",
+        ),
+        # Kartuschendeckel aus dem Nachbau: radiale Lasche am runden Rand einer
+        # Scheibe Ø 74,4 mal 2,4, so dick wie die Scheibe.
+        pytest.param(
+            "rand",
+            OperationDraft(
+                op="create_cylinder", params={"diameter": 74.4, "height": 2.4, "segments": 96}
+            ),
+            {"x": 37.2, "y": 0.0, "z": 0.0, "nx": 1.0, "ny": 0.0, "nz": 0.0, "thickness": 2.4},
+            "M3",
+            "flat",
+            id="kartuschendeckel",
+        ),
+        # Öse auf der Oberseite, mit eingetragener Breite und Länge.
+        pytest.param(
+            "oben",
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}),
+            {"x": 0.0, "y": 0.0, "z": 20.0, "width": 16.0, "length": 20.0, "thickness": 5.0},
+            "M5",
+            "upright",
+            id="oese",
+        ),
+    ],
+)
+def test_a_lug_carries_the_hole_of_its_screw_on_every_kind_of_face(
+    profile: Profile,
+    case: str,
+    carrier: OperationDraft,
+    values: dict[str, Any],
+    size: str,
+    check: str,
+) -> None:
+    """Abnahme RM-398 an drei Fällen: Seitenwand, runder Rand, Oberseite.
+
+    Die Lasche wird mit ihrem Träger ein Körper, das Loch ist das
+    Durchgangsloch der Normteiltabelle, und an einer senkrechten Fläche liegt
+    sie flach mit senkrechtem Loch — die Unterseite im Ansatzpunkt, also bündig
+    mit der Standfläche, wenn der Ansatzpunkt an der Unterkante sitzt.
+    """
+    body = _carrier_with(profile, carrier, "lug", {**values, "size": size})
+    mesh = body.mesh
+    assert mesh.is_watertight and mesh.component_count == 1, case
+    hole = _lug_hole(body)
+    screw = standards.screw(size)
+    assert hole.params["diameter"] == pytest.approx(screw.clearance), case
+    # Die Maße von außen: ohne Eintrag die Unterlegscheibe aus der Tabelle.
+    washer = standards.washer(size).outer
+    width = float(values.get("width", 0.0)) or washer
+    length = float(values.get("length", 0.0)) or (width + washer) / 2.0
+    axis = np.abs(np.asarray(hole.params["axis"], dtype=float))
+    if check == "flat":
+        # Senkrechtes Loch, Lasche von null bis zu ihrer Dicke über dem Bett.
+        assert axis == pytest.approx((0.0, 0.0, 1.0), abs=1e-6), case
+        assert float(hole.params["centre"][2]) == pytest.approx(
+            float(values.get("thickness", 4.0)) / 2.0, abs=1e-6
+        )
+        outward = float(values["x"]) + float(values["nx"]) * length
+        reach = float(mesh.bounds.minimum[0] if values["nx"] < 0 else mesh.bounds.maximum[0])
+        assert reach == pytest.approx(outward, abs=0.05), case
+        assert float(mesh.bounds.minimum[2]) == pytest.approx(0.0, abs=1e-6), case
+    else:
+        # Auf der Oberseite steht sie als Öse: Loch waagerecht, Scheitel oben.
+        assert axis[2] == pytest.approx(0.0, abs=1e-6), case
+        assert float(mesh.bounds.maximum[2]) == pytest.approx(20.0 + length, abs=0.05), case
+        assert width == 16.0
+
+
+def test_a_lug_follows_the_washer_of_its_screw_without_a_dimension() -> None:
+    """Die Maßreihe statt eines Einzelmaßes: Ohne Breite und Länge folgt die Lasche
+    der Unterlegscheibe (ISO 7089) jeder Größe von M3 bis M8 — so breit wie sie,
+    so lang, dass sie neben der Fläche liegt, das Loch in der Mitte des runden Endes.
+    """
+    spec = PARTS.get("lug")
+    sizes = next(entry for entry in spec.params.spec() if entry.name == "size").choices
+    assert tuple(sizes) == ("M3", "M4", "M5", "M6", "M8")
+    for size in sizes:
+        washer = standards.washer(size).outer
+        built = spec.fn(spec.params(size=size))
+        bounds = built.mesh.bounds
+        assert float(bounds.size[0]) == pytest.approx(washer, abs=1e-6), size
+        assert float(bounds.maximum[2]) == pytest.approx(washer, abs=0.05), size
+        assert built.features["bore_1"].params["centre"][2] == pytest.approx(washer / 2.0)
+        assert built.features["bore_1"].params["diameter"] == standards.screw(size).clearance
+
+
+@pytest.mark.parametrize(
+    ("values", "field"),
+    [
+        ({"size": "M8", "width": 10.0}, "width"),
+        ({"size": "M8", "width": 20.0, "length": 12.0}, "length"),
+    ],
+)
+def test_a_lug_that_cannot_carry_its_screw_is_refused_with_advice(
+    values: dict[str, Any], field: str
+) -> None:
+    """Schmaler als der Schraubenkopf oder so kurz, dass er an die Fläche stieße."""
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("lug")
+    params = spec.params(**values)
+    assert spec.feasible is not None and spec.feasible(params) is not None
+    with pytest.raises(ValidationError) as caught:
+        spec.fn(params)
+    assert caught.value.field == field
+    assert caught.value.constraint == "feasible"
 
 
 # --- Der Kabelclip (insert_cable_clip) ------------------------------------------

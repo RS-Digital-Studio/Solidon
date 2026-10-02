@@ -819,6 +819,59 @@ def test_wall_mount_exact_matches_its_analytic_volume_with_holes_along_y() -> No
     _roundtrip(body)
 
 
+@pytest.mark.parametrize(
+    ("values", "width", "length"),
+    [
+        ({"size": "M4", "width": 0.0, "length": 0.0, "thickness": 4.0}, 9.0, 9.0),
+        ({"size": "M5", "width": 16.0, "length": 20.0, "thickness": 5.0}, 16.0, 20.0),
+        ({"size": "M8", "width": 0.0, "length": 30.0, "thickness": 6.0}, 16.0, 30.0),
+    ],
+)
+def test_lug_exact_is_half_a_slot_with_a_true_arc_and_the_hole_along_y(
+    values: dict[str, Any], width: float, length: float
+) -> None:
+    """Rechteck und Halbkreis mit dem Durchgangsloch der Tabelle, exakt bis auf die Rundung.
+
+    Ohne Eintrag ist die Lasche so breit wie die Unterlegscheibe (M4: 9 mm,
+    M8: 16 mm) und so lang, dass sie neben der Fläche Platz hat; das Loch sitzt
+    in der Mitte des runden Endes. Sie steht von der Fläche nach +Z ab und
+    liegt in Y von null bis zur Dicke nach -Y — dorthin, wo ``keeps_up`` oben
+    hinlegt.
+    """
+    exact_kernel()
+    produced = _built("lug", True, **values)
+    body = _sound(produced.mesh)
+    clearance = standards.screw(str(values["size"])).clearance
+    thickness = float(values["thickness"])
+    reach = length - width / 2.0
+    area = width * reach + math.pi * width**2 / 8.0 - math.pi * clearance**2 / 4.0
+    assert body.volume == pytest.approx(area * thickness, rel=1e-9)
+    assert tuple(body.bounds.minimum) == pytest.approx((-width / 2.0, -thickness, 0.0), abs=1e-9)
+    assert tuple(body.bounds.maximum) == pytest.approx((width / 2.0, 0.0, length), abs=1e-9)
+    hole = produced.features["bore_1"]
+    assert hole.params["axis"] == (0.0, 1.0, 0.0)
+    assert hole.params["diameter"] == pytest.approx(clearance)
+    assert hole.params["centre"] == pytest.approx((0.0, -thickness / 2.0, reach))
+    assert hole.params["through"] is True
+    assert produced.features["lug_1"].params["normal"] == (0.0, -1.0, 0.0)
+    # Nur Bogen und Loch sind am Netz facettiert, und beide fast gleich.
+    mesh = _built("lug", False, **values).mesh
+    assert abs(mesh.volume / body.volume - 1.0) < 0.005
+    _roundtrip(body)
+
+
+def test_a_lug_grows_on_an_exact_host_and_stays_exact(profile: Profile) -> None:
+    exact_kernel()
+    host = _host()
+    grown = run("insert_lug", host, profile, size="M4", thickness=4.0, **ON_TOP)
+    body = _sound(grown.outputs[0].mesh)
+    assert grown.outputs[0].kind == "brep"
+    assert body.volume > HOST[0] * HOST[1] * HOST[2]
+    # Aufgesetzt sinkt sie um die Überlappung in den Träger (``ops._place``).
+    assert body.bounds.maximum[2] == pytest.approx(HOST[2] + 9.0 - BOOLEAN_OVERLAP, abs=1e-6)
+    assert {"lug_bore_1", "lug_lug_1"} <= set(grown.outputs[0].features)
+
+
 def test_pegboard_hook_exact_is_two_hooks_without_a_plate_and_one_body_with_it() -> None:
     exact_kernel()
     values = {

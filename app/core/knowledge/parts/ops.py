@@ -1324,6 +1324,7 @@ EXACT_PARTS: Final = frozenset(
         # Befestigung
         "foot",
         "keyhole",
+        "lug",
         "magnet_pocket",
         "pegboard_hook",
         "wall_mount",
