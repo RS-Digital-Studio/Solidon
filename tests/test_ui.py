@@ -19874,3 +19874,141 @@ def test_three_arrow_steps_in_the_parameter_bar_turn_the_number_by_three(
     assert window.parameters._editors["breite"] is editor, "dieselbe Zeile, kein Neubau"
     focus = QApplication.focusWidget()
     assert focus is editor or editor.isAncestorOf(focus), "der Fokus bleibt in Breite"
+
+
+def _bound_width_project(session: Session) -> float:
+    """Ein Quader, dessen Breite das Maß *breite* liest — zurück kommt die Obergrenze des Felds."""
+    from app.core.registry import REGISTRY
+    from app.core.scene import OperationDraft
+    from app.i18n import _
+
+    assert session.add_parameter(Parameter(name="breite", value=60.0, unit="mm", title=_("Breite")))
+    session.apply("Quader", [OperationDraft(op="create_box", params={"width": "=@breite"})])
+    assert session.wait_for_idle(30_000)
+    entry = {item.name: item for item in REGISTRY.get("create_box").params.spec()}["width"]
+    assert entry.maximum is not None
+    return float(entry.maximum)
+
+
+def test_a_parameter_beyond_its_field_is_refused_and_the_body_stays(session: Session) -> None:
+    """Breite 5000 lief durch, die Kette hielt am Quader an, und die Szene war leer (RM-354).
+
+    Jetzt sagt ``change_parameter`` die Grenze des Felds samt Schritt, das
+    Dokument bleibt, und der Körper steht weiter da.
+    """
+    high = _bound_width_project(session)
+    refused: list[errors.AppError] = []
+    session.failed.connect(refused.append)
+
+    assert not session.change_parameter("breite", high + 4000.0)
+    session.wait_for_idle()
+
+    assert session.project.document.parameters["breite"].value == pytest.approx(60.0)
+    assert refused and isinstance(refused[-1], errors.ValidationError)
+    assert refused[-1].constraint == "maximum"
+    assert refused[-1].values["maximum"] == pytest.approx(high)
+    assert session.last_result is not None and "obj_1" in session.last_result.scene.objects
+    assert session.change_parameter("breite", high), "die Grenze selbst geht"
+
+
+def test_the_parameter_bar_knows_the_limit_of_the_field_it_feeds(window: MainWindow) -> None:
+    """Die Zeile *Breite* nimmt die Grenze des Quaderfelds und lehnt 5000 mit ihr ab (RM-354)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    window.show()
+    high = _bound_width_project(window.session)
+    QApplication.processEvents()
+    editor = window.parameters._editors["breite"]
+    assert editor.maximum() == pytest.approx(high)
+
+    window.activateWindow()
+    editor.setFocus()
+    editor.lineEdit().selectAll()
+    QTest.keyClicks(editor.lineEdit(), str(int(high + 4000.0)))
+    QTest.keyClick(editor.lineEdit(), Qt.Key.Key_Return)
+    for _round in range(3):
+        QApplication.processEvents()
+    window.session.wait_for_idle()
+
+    assert window.session.project.document.parameters["breite"].value == pytest.approx(60.0)
+    said = window.parameters.refusal_text()
+    assert str(int(high)) in said.replace(".", "").replace(",", ""), said
+
+
+def test_correcting_a_field_that_reads_a_parameter_goes_to_the_parameter_bar(
+    window: MainWindow,
+) -> None:
+    """*Eingabe korrigieren* an „=@breite“ führt in die Zeile der Leiste (RM-354).
+
+    Im Schrittdialog stand „=@breite“, und wer dort eine Zahl tippte, trennte
+    still die Bindung. Der Halt wird hier am Dokument erzwungen, an Leiste
+    und Sitzung vorbei — so, wie eine ältere Datei ihn mitbringt.
+    """
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    result = window.session.evaluate_now()
+    assert result.stopped_at == 1
+    QApplication.processEvents()
+    window.activateWindow()
+
+    error = errors.ValidationError(
+        field="width", detail="zu breit", constraint="maximum", values={"maximum": high}
+    )
+    error.op_id = 1
+    window._correct_after_error(error)
+    QApplication.processEvents()
+
+    editor = window.parameters._editors["breite"]
+    assert editor.hasFocus(), "der Fokus steht in der Zeile des Maßes"
+    assert window._op_dialog is None, "kein Schrittdialog mit „=@breite“"
+
+
+def test_a_new_expression_beyond_its_field_is_refused_too(session: Session) -> None:
+    """*Parameter ändern …* mit einem Ausdruck über der Feldgrenze: dieselbe Absage (RM-354)."""
+    import dataclasses
+
+    high = _bound_width_project(session)
+    refused: list[errors.AppError] = []
+    session.failed.connect(refused.append)
+    existing = session.project.document.parameters["breite"]
+
+    assert not session.edit_parameter(
+        "breite", dataclasses.replace(existing, expression=f"={high + 4000.0:g}")
+    )
+
+    assert session.project.document.parameters["breite"] == existing
+    assert refused and getattr(refused[-1], "constraint", None) == "maximum"
+
+
+def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> None:
+    """§15.3: nie ein leeres Fenster — auch nicht, wenn schon der erste Schritt anhält (RM-354).
+
+    Ein Halt weiter hinten zeigt den Stand davor; am ersten Schritt ist der
+    leer, und die Ansicht stand ohne Körper da. Erzwungen wird der Halt am
+    Dokument, an Leiste und Sitzung vorbei.
+    """
+    import dataclasses
+
+    window.show()
+    high = _bound_width_project(window.session)
+    QApplication.processEvents()
+    document = window.session.project.document
+    document.parameters["breite"] = dataclasses.replace(
+        document.parameters["breite"], value=high + 4000.0
+    )
+    halted = window.session.evaluate_now()
+    assert halted.stopped_at == 1 and not halted.scene.objects
+
+    window._on_scene(halted)
+    QApplication.processEvents()
+
+    shown = window.viewport._requested_result
+    assert shown is not None and "obj_1" in shown.scene.objects, "der Körper bleibt im Bild"
+    assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"

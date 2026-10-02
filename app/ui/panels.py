@@ -130,6 +130,7 @@ from app.core.registry import REGISTRY, kernel_switch_label, kernel_twin_of, sho
 from app.core.scene import EvaluationResult
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import StepNeed, recognition_reopenable, repair_is_available
+from app.core.scene.parameter_usage import field_bounds
 from app.core.types import (
     CancelToken,
     Document,
@@ -3593,6 +3594,46 @@ class ParameterPanel(QWidget):
         if editor is not None:
             editor.setFocus(Qt.FocusReason.OtherFocusReason)
 
+    def focus_parameter(self, name: str) -> bool:
+        """Setzt den Fokus in die Zeile eines Maßes — ``False``, wenn es keine gibt.
+
+        Der Weg von *Eingabe korrigieren*, wenn das Feld des angehaltenen
+        Schritts ein Maß liest (RM-354): Im Schrittdialog stand „=@breite“,
+        und wer dort eine Zahl tippte, trennte still die Bindung. Ein
+        abgeleitetes Maß hat kein Zahlenfeld; dort führt der Fokus auf den
+        Knopf zu seinem Ausdruck.
+        """
+        target: QWidget | None = self._editors.get(name) or self._detail_buttons.get(name)
+        if target is None:
+            return False
+        open_section(self)
+        self._scroll.ensureWidgetVisible(target)
+        target.setFocus(Qt.FocusReason.OtherFocusReason)
+        editor = self._editors.get(name)
+        if editor is not None:
+            editor.selectAll()
+        return True
+
+    @staticmethod
+    def _bounds(document: Document, name: str) -> tuple[float, float]:
+        """Die wirksamen Grenzen einer Zeile: die eigenen und die der Felder, die sie lesen.
+
+        Ohne eigene Grenzen fiel *Breite* auf ±100 000 zurück, und 5000 lief
+        durch, obwohl *Quader* höchstens 1000 mm breit wird — die Kette hielt
+        an, die Ansicht stand leer (RM-354). Jetzt lehnt das Feld die Zahl ab
+        und nennt die Grenze (:class:`BoundedSpin`); was über einen Ausdruck
+        liest, prüft :meth:`Session.change_parameter`.
+        """
+        parameter = document.parameters[name]
+        low, high = field_bounds(document, name)
+        if parameter.minimum is not None:
+            low = parameter.minimum if low is None else max(low, parameter.minimum)
+        if parameter.maximum is not None:
+            high = parameter.maximum if high is None else min(high, parameter.maximum)
+        least = low if low is not None else -100_000.0
+        most = high if high is not None else 100_000.0
+        return least, max(least, most)
+
     @staticmethod
     def _layout_of(document: Document) -> tuple[object, ...]:
         """Was eine Zeile ausmacht: Name, Titel, Wert oder Ausdruck, Einheit, Grenzen."""
@@ -3638,6 +3679,11 @@ class ParameterPanel(QWidget):
                 row = label.parentWidget()
             else:
                 editor = self._editors[name]
+                low, high = self._bounds(document, name)
+                if editor.minimum() != low or editor.maximum() != high:
+                    blocked = editor.blockSignals(True)
+                    editor.setRange(low, high)
+                    editor.blockSignals(blocked)
                 if not is_close(editor.value(), parameter.value):
                     # Ohne Signal: Der Wert kommt aus dem Dokument und ist keine
                     # neue Eingabe. Eine abgelehnte Zahl darunter gilt nicht mehr.
@@ -3719,8 +3765,7 @@ class ParameterPanel(QWidget):
             editor = BoundedSpin(self)
             wheel_needs_focus(editor)
             editor.setDecimals(2)
-            editor.setMinimum(parameter.minimum if parameter.minimum is not None else -100_000.0)
-            editor.setMaximum(parameter.maximum if parameter.maximum is not None else 100_000.0)
+            editor.setRange(*self._bounds(document, name))
             editor.setValue(parameter.value)
             editor.setKeyboardTracking(False)
             # Der Wertebereich bestimmt sonst die Mindestbreite der Spinbox:

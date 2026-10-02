@@ -2318,6 +2318,9 @@ class MainWindow(QMainWindow):
         self._announcement = ""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._last_complete: tuple[Any, EvaluationResult] | None = None
+        """Das letzte durchgerechnete Ergebnis und sein Projekt — das Bild, das
+        bei einem Halt am ersten Schritt stehen bleibt (§15.3, RM-354)."""
         self._halted = False
         """Ob die stehende Meldung von einer angehaltenen Kette stammt.
 
@@ -19686,6 +19689,31 @@ class MainWindow(QMainWindow):
             self._pending_scene = None
         self._show_the_plate_of_the_import()
 
+    def _picture_for(self, result: EvaluationResult) -> EvaluationResult:
+        """Was die Ansicht zeigt: das Ergebnis — oder bei einem Halt ohne Körper das letzte Bild.
+
+        §15.3: Der Viewport zeigt den letzten vollständig gerechneten Zustand,
+        nie ein leeres Fenster. Ein Halt hinter dem ersten Schritt erfüllt das
+        von selbst, die Auswertung liefert den Stand davor. Am ersten Schritt
+        ist dieser Stand leer — *Breite* 5000 am Beispiel Weg 2 ließ die
+        Ansicht leer stehen (RM-354). Dann bleibt das letzte durchgerechnete
+        Ergebnis desselben Projekts im Bild; Baum, Verlauf und Bericht zeigen
+        den angehaltenen Stand und sagen, warum.
+        """
+        project = self.session.project
+        if result.stopped_at is None:
+            self._last_complete = (project, result)
+            return result
+        kept = self._last_complete
+        if (
+            not result.scene.objects
+            and kept is not None
+            and kept[0] is project
+            and kept[1].scene.objects
+        ):
+            return kept[1]
+        return result
+
     def _show_the_plate_of_the_import(self) -> None:
         """Ist eine Einzelplatte gewählt, zeigt das Fenster die Platte des eben
         eingefügten Modells (Review F14).
@@ -19803,7 +19831,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_protected(self.session.project.document.protected)
-        self.viewport.show_scene(result)
+        self.viewport.show_scene(self._picture_for(result))
         self._reveal_split_result(result)
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone
@@ -21585,7 +21613,27 @@ class MainWindow(QMainWindow):
             return
         # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
         # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
-        self.edit_operation(error.op_id, str(error.values.get("field", "")))
+        field = str(error.values.get("field", ""))
+        # **Liest das Feld ein Maß, wird das Maß korrigiert** (RM-354). Der
+        # Schrittdialog zeigte „=@breite“, und eine dort getippte Zahl trennte
+        # still die Bindung; der Wert gehört in die Zeile der Parameterleiste.
+        from app.core import expressions
+
+        try:
+            raw = self.session.history.operation(error.op_id).params.get(field)
+        except AppError:
+            raw = None
+        read = expressions.references(raw) if expressions.is_expression(raw) else frozenset()
+        if len(read) == 1:
+            (name,) = read
+            if self.parameters.focus_parameter(name):
+                self.announce(
+                    tr(
+                        "Dieses Feld liest das Maß „{name}“. Ändern Sie es in der Parameterleiste."
+                    ).format(name=name)
+                )
+                return
+        self.edit_operation(error.op_id, field)
 
     def _show_feature_after_error(self, error: AppError) -> None:
         """*Merkmal zeigen*: das Merkmal des Befunds wählen, wie ein Klick im Baum.

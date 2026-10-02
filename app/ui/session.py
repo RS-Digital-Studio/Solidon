@@ -92,6 +92,7 @@ from app.core.scene import (
 )
 from app.core.scene.evaluate import conversion_finding, evaluate
 from app.core.scene.history import Dependencies, MoveTarget, RevisionPlan, StepNeed, change_for
+from app.core.scene.parameter_usage import bounds_refusal, bounds_refusal_with
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -2462,6 +2463,14 @@ class Session(QObject):
         if problem is not None and _unresolvable(parameters) is None:
             self.failed.emit(problem)
             return False
+        # **Und an den Grenzen der Felder, die das Maß lesen** (RM-354). Breite
+        # 5000 lief durch, die Kette hielt an *Quader* an, und die Ansicht stand
+        # leer. Wie oben nur, wenn genau diese Zahl das Problem ist.
+        document = self.project.document
+        beyond = bounds_refusal(document, name, value)
+        if beyond is not None and bounds_refusal(document, name, existing.value) is None:
+            self.failed.emit(beyond)
+            return False
         try:
             self.history.apply(
                 _parameter_title(changed),
@@ -2583,6 +2592,13 @@ class Session(QObject):
                 # hier ist sie schärfer: Der Parameter steht schon darin, also
                 # kann er sich jetzt selbst nennen.
                 expressions.resolution_order({**parameters, name: parameter})
+            # Ein neuer Ausdruck treibt ein lesendes Feld so über seine Grenze
+            # wie eine getippte Zahl (RM-354) — gesagt nur, wenn erst diese
+            # Änderung das Problem ist.
+            document = self.project.document
+            beyond = bounds_refusal_with(document, {**parameters, name: parameter}, name)
+            if beyond is not None and bounds_refusal_with(document, parameters, name) is None:
+                raise beyond
             self.history.apply(
                 _parameter_title(parameter),
                 changes=change_for(self.project.document, parameters={name: parameter}),
