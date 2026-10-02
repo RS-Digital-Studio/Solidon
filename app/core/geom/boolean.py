@@ -569,7 +569,8 @@ def _meets_the_shells(
     fallen dort als Ganzes heraus oder bleiben als Ganzes stehen. Der Ort ist
     die Mitte des ersten getroffenen Paars, sonst die Ecke des Werkzeugs.
     """
-    from app.core.geom.intersections import BoxTree, box_pairs_between, crossing_pairs
+    from app.core.geom.box_pairs import BoxTree, box_pairs_between
+    from app.core.geom.intersections import crossing_pairs
     from app.core.perceive.features import _point_inside_shell, _triangle_bounds
 
     corners = np.asarray(body.raw.triangles, dtype=np.float64)

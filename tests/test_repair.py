@@ -14,7 +14,7 @@ import trimesh
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError
 from app.core.geom import kernel_process
-from app.core.geom.intersections import TREE_PAIR_FIRST_BLOCK
+from app.core.geom.box_pairs import TREE_PAIR_FIRST_BLOCK
 from app.core.geom.mesh import MeshCodec, MeshData, edge_table, read_mesh
 from app.core.geom.repair import (
     _first_crossing_between,
@@ -274,7 +274,7 @@ def test_crossing_search_splits_one_high_degree_row_into_bounded_blocks(
     Grenze und bleiben dort; keiner ist größer.
     """
     from app.core.geom import intersections
-    from app.core.geom.intersections import TREE_PAIR_BLOCK
+    from app.core.geom.box_pairs import TREE_PAIR_BLOCK
 
     triangle = np.asarray([[(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]])
     triangles = np.repeat(triangle, 100_001, axis=0)

@@ -1511,7 +1511,7 @@ def parts_that_cross(
 
     **Die Paare kommen aus Hüllquaderbäumen** (RM-381): Zuerst die Teile, deren
     Hüllen sich überdecken, dann je Teil ein Baum über seine Dreiecke im
-    Überlapp (:class:`~app.core.geom.intersections.BoxTree`), und je Teilepaar
+    Überlapp (:class:`~app.core.geom.box_pairs.BoxTree`), und je Teilepaar
     steigen beide Bäume gemeinsam ab. Der frühere Lauf entlang einer Achse
     zählte am Besenhalter 55,7 Millionen Grobkandidaten für 14 058 Paare, deren
     Hüllquader sich wirklich überdecken — mit Budget brach er sofort ab und
@@ -1607,7 +1607,7 @@ def _touching_parts(
     Überdeckungsmatrix — über einen Baum statt der Matrix, die bei
     Tausenden Teilen quadratisch wuchs.
     """
-    from app.core.geom.intersections import BoxTree, box_pairs_between
+    from app.core.geom.box_pairs import BoxTree, box_pairs_between
 
     numbers = np.arange(len(part_low), dtype=np.int64)
     parts = BoxTree(numbers, part_low, part_high)
@@ -1643,7 +1643,7 @@ def _part_pairs(
     gegen jedes, gesammelt in einem Feld: Eine Dreieckssuppe aus Tausenden
     Teilen kostet so wenige Feldaufrufe statt Tausender Bäume.
     """
-    from app.core.geom.intersections import TREE_PAIR_BLOCK, BoxTree, box_pairs_between
+    from app.core.geom.box_pairs import TREE_PAIR_BLOCK, BoxTree, box_pairs_between
 
     gathered: dict[int, tuple[np.ndarray, np.ndarray]] = {}
     whole: dict[int, BoxTree] = {}
@@ -1697,9 +1697,9 @@ def _every_pair(
     """Je Gruppe jedes Dreieck des einen gegen jedes des anderen, mit überdeckenden Hüllquadern.
 
     Alle Gruppen in einem Feld, in ihrer Reihenfolge; herausgegeben in Blöcken
-    wie die Bäume (:data:`~app.core.geom.intersections.TREE_PAIR_BLOCK`).
+    wie die Bäume (:data:`~app.core.geom.box_pairs.TREE_PAIR_BLOCK`).
     """
-    from app.core.geom.intersections import TREE_PAIR_BLOCK, _boxes_meet
+    from app.core.geom.box_pairs import TREE_PAIR_BLOCK, boxes_meet
 
     ones = np.concatenate([one for one, _other in groups])
     others = np.concatenate([other for _one, other in groups])
@@ -1714,7 +1714,7 @@ def _every_pair(
     )
     first = ones[begin_one[row] + step // size_other[row]]
     second = others[begin_other[row] + step % size_other[row]]
-    meet = _boxes_meet(low[first], high[first], low[second], high[second])
+    meet = boxes_meet(low[first], high[first], low[second], high[second])
     first, second = first[meet], second[meet]
     for offset in range(0, len(first), TREE_PAIR_BLOCK):
         yield first[offset : offset + TREE_PAIR_BLOCK], second[offset : offset + TREE_PAIR_BLOCK]
@@ -1772,10 +1772,10 @@ def _first_crossing_between(
     """Das erste Paar aus ``one`` und ``other``, das quer durchdringt, und wie viele geprüft wurden.
 
     Die Kandidaten sind genau die Paare mit überdeckenden Hüllquadern, aus
-    zwei Bäumen (:func:`~app.core.geom.intersections.box_pairs_between`). Der
+    zwei Bäumen (:func:`~app.core.geom.box_pairs.box_pairs_between`). Der
     letzte Wert unterscheidet einen vollständigen Lauf vom Abbruch am Budget.
     """
-    from app.core.geom.intersections import BoxTree, box_pairs_between
+    from app.core.geom.box_pairs import BoxTree, box_pairs_between
 
     if not len(one) or not len(other):
         return None, 0, True

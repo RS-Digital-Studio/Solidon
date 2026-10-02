@@ -46,7 +46,7 @@ die einander durchdringen oder ineinanderliegen, beim Schließen einer alten
 Höhlung (`merge_face_contacts=True`) auch flächig berührende; am exakten Kern
 dasselbe über `prepare_ops._exact_closing_base` (Ketten:
 `_exact_closing_chain`). Die Vorfrage ist `repair.parts_that_cross`: Paare aus
-Hüllquaderbäumen (`intersections.BoxTree`, `box_pairs_between`), geprüft mit
+Hüllquaderbäumen (`box_pairs.BoxTree`, `box_pairs_between`), geprüft mit
 `intersections.crossing_pairs` — Rundungsgrenzen und Ursprung stehen dort im
 Docstring. Was sich nicht vereinigen lässt, geht unverändert weiter;
 `_meets_the_shells` fragt, ob ein Werkzeug eine Schale trifft, die sich selbst
@@ -93,8 +93,8 @@ Wert; `lifted_caps`, Zwilling von `brep.edit.collared`) · `boolean.py` ·
 `attributes.py` (Slots durch eine Operation, §20; `transfer`, `with_slots`,
 `carry_refined_units`) · `lathe.py` · `enclosure.py` (Verschachtelung ohne
 `rtree`) · `intersections.py` (Selbstdurchdringung als Feld, für Karte und
-Bereichstest; Hüllquaderpaare zwischen zwei Mengen) · `repair.py` (unten) ·
-`deviation.py` (Grenzen ausgefüllter
+Bereichstest) · `box_pairs.py` (Hüllquaderpaare zwischen zwei Dreiecksmengen) ·
+`repair.py` (unten) · `deviation.py` (Grenzen ausgefüllter
 Originaldreiecke zu einem belegten `SurfacePatch`, Budget je Dreieck; keine
 neue Einpassung, Geometrie oder Cache) · `contours.py` (`section_of`,
 `offset_section`: ungültige Konturen werden nicht still repariert, Spiel gibt
