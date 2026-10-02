@@ -41,3 +41,6 @@ allen Zügen der Auswahl (`_why_it_does_not_fit`), nicht nur an den belegten.
   ersten gescheiterten Bau.
 - **Ein Befund je Grund mit allen Umrissen**, ohne Bibliotheksnamen und mit
   Weg; was der exakte Kern nicht baut, bietet das Dreiecksmodell an.
+- **Eine Rundung oder Fase legt keine Wendel an**: Trägt der Eingang kein
+  Gewinde, liest das Ergebnis keines (`features_of(known_threads=())`) — die
+  Lesung kostete am gerundeten Lochbrett über die Hälfte der Auswertung.

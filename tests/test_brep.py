@@ -2468,6 +2468,45 @@ def test_narrow_edges_of_an_exact_group_are_counted_as_native_edges(profile: Pro
     assert (narrow.values["skipped"], narrow.values["worked"]) == (16, 16)
 
 
+def test_a_rounding_reads_a_thread_only_where_the_input_had_one(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Rundung oder Fase legt keine Wendel an — die Gewindelesung am Ergebnis entfällt.
+
+    Am gerundeten Lochbrett passte sie 66 Achsen an Rundungsränder an und
+    kostete über die Hälfte der Auswertung (RM-435). Trägt der Eingang ein
+    Gewinde, wird weiter gelesen: Eine Gruppe kann dessen Kanten treffen.
+    """
+    import dataclasses
+
+    from app.core.brep import thread
+    from app.core.types import Feature
+
+    calls: list[int] = []
+    real = thread.thread_features
+
+    def counted(solid: Solid, **kwargs: Any) -> Any:
+        calls.append(1)
+        return real(solid, **kwargs)
+
+    monkeypatch.setattr(thread, "thread_features", counted)
+    body = block()
+    plain = SceneObject(id="obj_1", name="Quader", mesh=body, kind="brep", features={})
+
+    for op, size in (("fillet_edges", {"radius": 1.0}), ("chamfer_edges", {"distance": 1.0})):
+        run(op, plain, profile, edges="vertical", **size)
+    assert calls == [], "ohne Gewinde am Eingang wird keines gelesen"
+
+    marked = dataclasses.replace(
+        plain,
+        features={
+            "thread_1": Feature(id="thread_1", kind="thread", provenance="detected", params={})
+        },
+    )
+    run("fillet_edges", marked, profile, radius=1.0, edges="vertical")
+    assert calls == [1], "mit Gewinde am Eingang wird gelesen"
+
+
 def test_a_fillet_group_builds_each_candidate_on_its_own_native_copy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

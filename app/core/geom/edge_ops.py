@@ -968,10 +968,20 @@ def _on_a_solid(
             )
         raise with_places(explained)
     empty = _too_small_to_see(source.mesh, solid, profile, kind="fillet" if rounded else "chamfer")
+    # **Eine Rundung oder Fase legt keine Wendel an**: Trägt der Eingang kein
+    # Gewinde, liest das Ergebnis keines (``known_threads=()``). Die Lesung
+    # passte an ``pegboard-gs-100-v2.step`` nach „alle Kanten“ R 0,5 66 Achsen
+    # an Rundungsränder an — über die Hälfte der Auswertung (RM-435).
+    threaded = any(feature.kind == "thread" for feature in source.features.values())
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=solid, kind="brep", features=features_of(solid, cancelled=cancelled)
+                source,
+                mesh=solid,
+                kind="brep",
+                features=features_of(
+                    solid, cancelled=cancelled, known_threads=None if threaded else ()
+                ),
             )
         ],
         findings=[
