@@ -62,6 +62,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 - Si un taladro no se puede cortar limpiamente en un cuerpo STEP, Solidon lo hace en el modelo de triángulos en lugar de seguir con un cuerpo dañado.
+- Si eligió «Cargar ahora», las piezas de *Dividir el modelo* tampoco inician un reconocimiento de minutos; «Reconocer todas las características» lo recupera.
 
 ### Modelar, texto y dibujo
 

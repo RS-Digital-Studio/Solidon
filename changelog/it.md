@@ -61,6 +61,7 @@ scrive in `website/version.json`.
 - Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 - Se un foro non si riesce a tagliare in modo pulito in un corpo STEP, Solidon lo esegue sul modello a triangoli invece di passare avanti un corpo difettoso.
+- Se hai scelto «Carica subito», anche i pezzi di *Dividi il modello* non avviano più minuti di riconoscimento; «Riconosci tutte le caratteristiche» lo recupera.
 
 ### Modellare, testo e schizzo
 

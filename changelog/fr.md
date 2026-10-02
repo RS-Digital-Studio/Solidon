@@ -62,6 +62,7 @@ dans `website/version.json`.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 - Si un perçage ne peut pas être découpé proprement dans un corps STEP, Solidon le perce dans le modèle en triangles au lieu de transmettre un corps défectueux.
+- Si vous avez choisi « Charger maintenant », les pièces de *Scinder le modèle* ne lancent plus non plus des minutes de reconnaissance ; « Reconnaître toutes les caractéristiques » la rattrape.
 
 ### Sculpter, texte et esquisse
 
