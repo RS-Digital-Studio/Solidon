@@ -24,7 +24,9 @@ Anlässe und Zahlen: `konzepte/begruendungen/karte-app-core-ingest.md`.
 ## Was die Stufe entscheidet
 
 - **Einheiten**: STL trägt keine; erkannt wird aus der Größe, bei
-  Mehrdeutigkeit **gefragt** (`ctx.ask`, Regel 21). GLB/GLTF: Meter sind eine
+  Mehrdeutigkeit **gefragt** (`ctx.ask`, Regel 21). Mehrdeutig ist auch eine
+  einzige Lesart unter 300 mm, solange eine zweite innerhalb `plausible_reach`
+  liegt — nur Millimeter entscheiden dann allein (`detect_unit`). GLB/GLTF: Meter sind eine
   Vorschrift des Formats, keine Aussage der Datei (`_a_format_convention`) —
   unplausibel (`PLAUSIBLE_MIN_MM` bis `plausible_reach`) fragt `_unit_for`
   mit Meter zuerst. `load` dreht die schon angewandten Knoten von Y-oben nach
