@@ -4970,15 +4970,15 @@ def test_curas_active_printer_can_be_adopted_without_losing_print_choices(
     )
     dialog.settings = print_settings.with_choice(dialog.settings, "infill.density", 0.62)
     try:
+        # Erst die Slicersuche abwarten: Ihre späte Antwort startet die
+        # Profilsuche neu und leerte den Kandidaten (RM-417, ``dialog``-Fixture).
+        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
         dialog._slicer_path = Path("Cura.exe")
         dialog._start_profile_search()
         assert dialog.wait_for_cura_printer()
 
         assert candidate.id not in profiles.printer_profiles(), "der Suchlauf speichert nichts"
         assert dialog._cura_printer_candidate == candidate
-        # Erst die Slicersuche abwarten: Ihre späte Antwort startet die
-        # Profilsuche neu und leerte den Kandidaten (RM-417, ``dialog``-Fixture).
-        assert dialog.wait_for_slicers(), "die Slicersuche kam nicht zurück"
         assert not dialog.adopt_printer.isHidden()
         title = str(candidate.title)
         assert dialog.adopt_printer.text() == f"{title} übernehmen"
