@@ -163,15 +163,15 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
 | [RM-439 — Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke](#rm-439) | Bedienung und Darstellung | Kontext „Pinsel“ für den Wert, fünf Kataloge, Changelog 0.5.2 |
+| [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
+| [RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug](#rm-442) | Bedienung und Darstellung | Fund 02.10. beim Zusammenführen: Fenstertest seit `6f64f7ed1` rot; klären, ob `stroke_at` den zweiten Zug zu Recht als eigene Etappe einordnet, dann Code oder Test |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
-| [RM-361 — „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren](#rm-361) | KI und Generatoren | Review 02.10. (Weg 3): Absage vor dem Lauf prüfen und beim Übernehmen anzeigen; Test mit Einfügemarke |
 | [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
-| [RM-372 — Eine Erzeugung ist ein Rückgängig-Schritt](#rm-372) | KI und Generatoren | Entscheidung Robert 02.10.: `load`, `fit_to_size`, `repair`, `place_on_bed` als eine Transaktion |
-| [RM-374 — Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern*](#rm-374) | KI und Generatoren | Entscheidung Robert 02.10.: Handlung öffnet den Schritt `fit_to_size` |
+| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Fund 02.10.: Befund des Aushöhlens bekommt *Diesen Schritt ändern*; `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -4670,6 +4670,31 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Formtexte („strength“, „intensidad“, „intensité“, „intensità“, „intensidade“).
   **Abnahme:** Leiste und Bildschirmleser zeigen in jeder Sprache den Pinselbegriff, der allgemeine
   Schlüssel bleibt für Maße; Changelog 0.5.2 in sechs Sprachen. Bauplan §4.1, §19.
+
+<a id="rm-440"></a>
+
+- [ ] **RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten.**
+  Fund 02.10.2026 bei RM-372 (Claude, Unteragent), am Code gelesen, nicht im Fenster
+  nachgestellt: Wählt der Kunde in der Sammelzeile des Prüfberichts *Modell teilen* für
+  mehrere Körper, startet die Handlung je Körper eine Teilungssuche; die zweite trifft die
+  laufende erste und endet mit „Die Teilung läuft schon“. Geteilt wird nur der erste Körper.
+  **Fix:** Teilungen nacheinander abarbeiten oder die Zeile nur für einen Körper anbieten;
+  zuerst am Fenster nachstellen. **Abnahme:** Test mit zwei zu großen Körpern, beide
+  geteilt oder die Wahl auf einen begrenzt. Bauplan §25, §2.6.
+
+<a id="rm-442"></a>
+
+- [ ] **RM-442 — Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug.**
+  Fund 02.10.2026 beim Zusammenführen von RM-361/372/374 (Claude): Der Fenstertest
+  `tests/test_sculpt_session.py::test_a_forced_cut_applies_to_one_stroke_only` ist seit
+  `6f64f7ed1` (RM-438, `stroke_at` kennt die Züge davor) rot, am Elternstand `4373b5f12` und
+  an `910acb1ee` grün. Nach einem erzwungenen Schnitt bei (20, 0, 0) trägt auch der zweite
+  Zug bei (0, 20, 0) `cut=True`. Das reguläre Tor fährt Fenstertests nicht und sah es nicht.
+  **Fix:** klären, ob der zweite Zug die Fläche seiner Etappe wirklich verfehlt (dann den
+  Test auf den neuen Vertrag stellen) oder `stroke_at` ihn fälschlich neu einordnet (dann
+  den Code). **Abnahme:** Test grün ohne Lockerung der Aussage „der Schalter gilt für einen
+  Zug“. Bauplan §17.3, §2.6.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -4783,28 +4808,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-konzepte-nachrecherchiert-19082026).
   Registerabgleich 02.10.: Statuszeichen wäre nach der Legende `[~]`.
 
-<a id="rm-361"></a>
-
-- [ ] **RM-361 — „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren.**
-  Review 02.10.2026, Gebietsprüfung Weg 3 (W3-1), am HEAD `6ce767031`.
-  *Modell erzeugen* bleibt bei gesetzter Einfügemarke frei (`app/ui/main_window.py:4990–4999`).
-  Nach dem Lauf wirft `add_generated` beim Übernehmen `UserError` „Das geht nicht mitten im
-  Verlauf.“ (`app/ui/session.py:3501–3503`; bei Lizenzsperre ebenso `app/core/generate.py:186`).
-  `MainWindow._generate` (`main_window.py:6575–6579`) fängt sie nicht — sie landet bei
-  `sys.excepthook`: kein Dialog, keine Statuszeile, der Dialog ist zu, das minutenlang erzeugte
-  Netz verloren. Der Import fängt dieselbe Art Fehler und zeigt ihn (`:6154`). Ein ins Chatfenster
-  gezogenes Bild (`app/ui/chat.py:667–673`) prüft weder Halt noch Lizenz und läuft in dieselbe
-  Stelle.
-  **Fix:** dieselbe Vorprüfung wie beim Import vor dem Start (Eintrag gesperrt mit Grund oder
-  Absage im Dialog); beim Übernehmen die Absage als Vorschlag zeigen (etwa *Marke ans Ende setzen
-  und übernehmen*) und das Netz nicht verwerfen.
-  **Abnahme:** Test mit gesetzter Einfügemarke und gestelltem Backend: kein Aufruf von
-  `sys.excepthook`, Satz mit Handlung sichtbar, das erzeugte Netz bleibt übernehmbar; derselbe
-  Fall über das Chatfenster. Bauplan §2.7, §2.1, Regel 17.
-  Belege: `F:\solidon-review-reports\gebiet-weg3.md`, Sonde `w3_dialog.py` Teil B
-  (`show_error aufgerufen: 0`, `unbehandelt an sys.excepthook: ['UserError: …']`).
-  Nachprüfung am Stand `4cf460e87`: nicht behoben, der Code ist unverändert — `w3_dialog.py` Teil B: `show_error` 0-mal, `UserError` an `sys.excepthook`, Netz verloren; Zwilling über das Chatfenster ebenso. Beleg `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`.
-
 <a id="rm-371"></a>
 
 - [ ] **RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar.**
@@ -4825,38 +4828,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   bricht den Lauf; danach ist das Ergebnis übernehmbar. Bauplan §2.8, §15.3.
   **Vorgabe Robert 02.10.2026 — allgemein:** gleiches nichtmodales Verhalten für jede lange Erzeugung (Text, Bild, später weitere Generatoren); Abnahme mit mindestens drei unterschiedlichen Läufen (Text, Bild, Abbruch).
 
-<a id="rm-372"></a>
+<a id="rm-441"></a>
 
-- [ ] **RM-372 — Eine Erzeugung ist ein Rückgängig-Schritt.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
-  Heute legt eine Erzeugung drei bis vier Transaktionen an (`app/core/generate.py:213–349`): nach
-  dem ersten Strg+Z ändert sich bei einem dichten Netz sichtbar nichts (`repair.nothing_to_do`),
-  nach dem zweiten liegt ein 2-mm-Krümel da, erst der dritte nimmt das Modell weg. §15.5 erlaubt
-  die Bündelung („ein zusammengehöriger Bedienablauf kann mehrere Ops gemeinsam anwenden“).
-  **Ablauf:** *Übernehmen* legt `load → fit_to_size → repair → place_on_bed` als **eine**
-  Transaktion mit dem Titel der Erzeugung an; ein Strg+Z nimmt das ganze Modell zurück. Die Ops
-  bleiben einzeln im Verlauf sichtbar und änderbar.
-  **Stellen:** `generate.py:213–349` (Aufteilung in Transaktionen und ihre Begründung im Code
-  anpassen), `app/ui/session.py` (`add_generated`, `:3501ff.`), Agentenweg derselben Erzeugung.
-  **Abnahme:** Test: nach einer Erzeugung genau eine neue Transaktion; ein Strg+Z → Szene wie
-  vorher; Strg+Y → Hashes gleich. Bauplan §15.5, §2.1.
-  **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Bündelung für jeden zusammengehörigen Ablauf, der heute mehrere Transaktionen anlegt (Erzeugen, Import mit Reparatur, Assistenten); Abnahme an mindestens drei unterschiedlichen Abläufen.
-
-<a id="rm-374"></a>
-
-- [ ] **RM-374 — Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern*.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
-  `transform.fitted` (`app/core/geom/ops.py:597ff.`, Befund `:643`) meldet „Auf Maß gebracht.“
-  (Arbeitsgröße 100 mm) ohne Vorschlag; der kürzeste Weg vom Generatorwürfel zum gemeinten Maß
-  fehlt.
-  **Ablauf:** Am Befund ein Knopf *Größe ändern*, der den Schritt `fit_to_size` dieses Körpers zum
-  Ändern öffnet (wie *Eingabe korrigieren*); der Wert ist danach ein normaler Parameter.
-  **Stellen:** Befund in `ops.py:643` mit Handlung versehen, Zuordnung der Handlung in der
-  Oberfläche (Befund-Knöpfe, `tests/test_finding_ways.py` und dessen `OHNE_KNOPF`-Liste
-  nachziehen), Kataloge.
-  **Abnahme:** Test: Erzeugung → Befund mit Knopf; Klick öffnet `fit_to_size` mit dem aktuellen
-  Maß; Änderung auf 150 mm → Körper 150 mm. Bauplan §2.7, §2.6.
-  **Vorgabe Robert 02.10.2026 — allgemein:** jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf zum Ändern dieses Schritts (nicht nur `transform.fitted`); Abnahme an mindestens drei unterschiedlichen Befunden.
+- [ ] **RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen.**
+  Fund 02.10.2026 beim Abschluss von RM-372/RM-374 (Claude). (a) Der Befund `hollow.done`
+  (`app/core/geom/hollow.py`) meint einen änderbaren Schritt und trägt noch nicht
+  *Diesen Schritt ändern* — Vorgabe Robert zu RM-374, ausgelassen, weil `hollow.py` bei Codex
+  offen lag; danach `MEINT_DEN_SCHRITT` in `tests/test_finding_ways.py` nachziehen.
+  (b) `weg3-generiert-aufbereiten.p3d` trägt noch die früheren getrennten Transaktionen; beim
+  Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
+  Release-Lauf. Bauplan §2.7, §15.5.
 
 ## Tests und Entwicklungswerkzeuge
 

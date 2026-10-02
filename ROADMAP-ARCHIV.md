@@ -31,6 +31,9 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
+| 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
+| 2026-10-02 | [RM-374: Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern* (02.10.2026)](#rm-374-der-befund-auf-maß-gebracht-trägt-den-knopf-größe-ändern-02102026) |
 | 2026-10-02 | [RM-438: Ein Formzug in die eben gegrabene Mulde galt als verfehlt (02.10.2026)](#rm-438-ein-formzug-in-die-eben-gegrabene-mulde-galt-als-verfehlt-02102026) |
 | 2026-10-02 | [RM-437: Im Rückmeldebogen ließ sich kein Leerzeichen tippen (02.10.2026)](#rm-437-im-rückmeldebogen-ließ-sich-kein-leerzeichen-tippen-02102026) |
 | 2026-10-02 | [RM-399: Vorlage „Halter/Bügel“ (02.10.2026)](#rm-399-vorlage-halterbügel-02102026) |
@@ -36207,3 +36210,73 @@ seiner Etappe; das Gedächtnis gegen frische Rechnung nach Rückgängig und mitt
 (beide Gegenproben per Mutation rot). Der Warnsatz nennt die wirklichen Ursachen in allen
 Katalogen; Changelog 0.5.2 in sechs Sprachen. Umgesetzt von Claude, in main mit `6f64f7ed1`;
 Entwicklungstor grün (19735 bestanden, ruff, format, mypy ohne Befund).
+
+## RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)
+
+<a id="rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026"></a>
+<a id="rm-361"></a>
+
+**RM-361 — „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren.**
+  Review 02.10.2026, Gebietsprüfung Weg 3 (W3-1), am HEAD `6ce767031`.
+  *Modell erzeugen* bleibt bei gesetzter Einfügemarke frei (`app/ui/main_window.py:4990–4999`).
+  Nach dem Lauf wirft `add_generated` beim Übernehmen `UserError` „Das geht nicht mitten im
+  Verlauf.“ (`app/ui/session.py:3501–3503`; bei Lizenzsperre ebenso `app/core/generate.py:186`).
+  `MainWindow._generate` (`main_window.py:6575–6579`) fängt sie nicht — sie landet bei
+  `sys.excepthook`: kein Dialog, keine Statuszeile, der Dialog ist zu, das minutenlang erzeugte
+  Netz verloren. Der Import fängt dieselbe Art Fehler und zeigt ihn (`:6154`). Ein ins Chatfenster
+  gezogenes Bild (`app/ui/chat.py:667–673`) prüft weder Halt noch Lizenz und läuft in dieselbe
+  Stelle.
+  **Fix:** dieselbe Vorprüfung wie beim Import vor dem Start (Eintrag gesperrt mit Grund oder
+  Absage im Dialog); beim Übernehmen die Absage als Vorschlag zeigen (etwa *Marke ans Ende setzen
+  und übernehmen*) und das Netz nicht verwerfen.
+  **Abnahme:** Test mit gesetzter Einfügemarke und gestelltem Backend: kein Aufruf von
+  `sys.excepthook`, Satz mit Handlung sichtbar, das erzeugte Netz bleibt übernehmbar; derselbe
+  Fall über das Chatfenster. Bauplan §2.7, §2.1, Regel 17.
+  Belege: `F:\solidon-review-reports\gebiet-weg3.md`, Sonde `w3_dialog.py` Teil B
+  (`show_error aufgerufen: 0`, `unbehandelt an sys.excepthook: ['UserError: …']`).
+  Nachprüfung am Stand `4cf460e87`: nicht behoben, der Code ist unverändert — `w3_dialog.py` Teil B: `show_error` 0-mal, `UserError` an `sys.excepthook`, Netz verloren; Zwilling über das Chatfenster ebenso. Beleg `F:\solidon-review-reports\verif-4cf460e87-oberflaeche.md`.
+
+**Abschluss:** `_generate` prüft vor dem Start über `_generation_refusal` Lizenz, Halt und Einfügemarke (Menü und Chat); an der Marke steht der Knopf *Einfügen beenden und Modell erzeugen*. Beim Übernehmen zeigt `GenerateDialog.take` die Absage über dem Dialog, der Dialog bleibt mit allen Versuchen offen und bietet *Einfügen beenden und übernehmen*. Acht neue Fenstertests, Gegenprobe vorher rot mit dem gemeldeten `UserError`. Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)
+
+<a id="rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026"></a>
+<a id="rm-372"></a>
+
+**RM-372 — Eine Erzeugung ist ein Rückgängig-Schritt.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
+  Heute legt eine Erzeugung drei bis vier Transaktionen an (`app/core/generate.py:213–349`): nach
+  dem ersten Strg+Z ändert sich bei einem dichten Netz sichtbar nichts (`repair.nothing_to_do`),
+  nach dem zweiten liegt ein 2-mm-Krümel da, erst der dritte nimmt das Modell weg. §15.5 erlaubt
+  die Bündelung („ein zusammengehöriger Bedienablauf kann mehrere Ops gemeinsam anwenden“).
+  **Ablauf:** *Übernehmen* legt `load → fit_to_size → repair → place_on_bed` als **eine**
+  Transaktion mit dem Titel der Erzeugung an; ein Strg+Z nimmt das ganze Modell zurück. Die Ops
+  bleiben einzeln im Verlauf sichtbar und änderbar.
+  **Stellen:** `generate.py:213–349` (Aufteilung in Transaktionen und ihre Begründung im Code
+  anpassen), `app/ui/session.py` (`add_generated`, `:3501ff.`), Agentenweg derselben Erzeugung.
+  **Abnahme:** Test: nach einer Erzeugung genau eine neue Transaktion; ein Strg+Z → Szene wie
+  vorher; Strg+Y → Hashes gleich. Bauplan §15.5, §2.1.
+  **Vorgabe Robert 02.10.2026 — allgemein:** dieselbe Bündelung für jeden zusammengehörigen Ablauf, der heute mehrere Transaktionen anlegt (Erzeugen, Import mit Reparatur, Assistenten); Abnahme an mindestens drei unterschiedlichen Abläufen.
+
+**Abschluss:** `generate.into_project` legt eine Transaktion „Modell erzeugen“ an, die Ops stehen einzeln im Verlauf; die Körperkennung kommt vorab aus `History.next_object_id()`, bei Absage wird die Quelle entfernt. Allgemein sammelt `Session.one_step()` mehrere `apply` zu einer Transaktion, die Sammelzeile in `panels._run_action_for` läuft darin; alte Titel in `generate.EARLIER_TITLES`. Abgenommen an Erzeugen (Strg+Z leer, Strg+Y bitgleich), Agentenrücknahme, Sammelzeile *Auf den Bauraum verkleinern* über zwei Körper und Einfügen mit Reparatur. Rest in [RM-441](ROADMAP.md#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-374: Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern* (02.10.2026)
+
+<a id="rm-374-der-befund-auf-maß-gebracht-trägt-den-knopf-größe-ändern-02102026"></a>
+<a id="rm-374"></a>
+
+**RM-374 — Der Befund „Auf Maß gebracht“ trägt den Knopf *Größe ändern*.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 3).
+  `transform.fitted` (`app/core/geom/ops.py:597ff.`, Befund `:643`) meldet „Auf Maß gebracht.“
+  (Arbeitsgröße 100 mm) ohne Vorschlag; der kürzeste Weg vom Generatorwürfel zum gemeinten Maß
+  fehlt.
+  **Ablauf:** Am Befund ein Knopf *Größe ändern*, der den Schritt `fit_to_size` dieses Körpers zum
+  Ändern öffnet (wie *Eingabe korrigieren*); der Wert ist danach ein normaler Parameter.
+  **Stellen:** Befund in `ops.py:643` mit Handlung versehen, Zuordnung der Handlung in der
+  Oberfläche (Befund-Knöpfe, `tests/test_finding_ways.py` und dessen `OHNE_KNOPF`-Liste
+  nachziehen), Kataloge.
+  **Abnahme:** Test: Erzeugung → Befund mit Knopf; Klick öffnet `fit_to_size` mit dem aktuellen
+  Maß; Änderung auf 150 mm → Körper 150 mm. Bauplan §2.7, §2.6.
+  **Vorgabe Robert 02.10.2026 — allgemein:** jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf zum Ändern dieses Schritts (nicht nur `transform.fitted`); Abnahme an mindestens drei unterschiedlichen Befunden.
+
+**Abschluss:** Handlung `change_step` (`errors.py`) mit *Größe ändern*, *Diesen Schritt ändern*, *Reliefhöhe ändern* und *Zellgröße ändern*, eingelöst über `_correct_after_error`/`edit_operation`; Befunde `transform.fitted`, `transform.without_effect`, `lattice.filled`, `displace.applied`; `cache_version` erhöht bei translate, rotate, scale, fit_to_size, lattice_fill, displace_image. Wächter `MEINT_DEN_SCHRITT` in `test_finding_ways`. Rest in [RM-441](ROADMAP.md#rm-441). Umgesetzt von Claude, in main mit `1816d9a24`; Entwicklungstor auf dem zusammengeführten Stand grün.
