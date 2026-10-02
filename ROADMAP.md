@@ -162,6 +162,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-418 — Reste aus RM-335 und RM-362: Pfad in anderer Schreibweise, zweites Abbrechen](#rm-418) | Bedienung und Darstellung | Review 02.10.: Pfadvergleich über `Path`, Abbrechen-Knopf während des Auslaufens sperren |
 | [RM-431 — Allgemeiner Drucker mit PrusaSlicer: *Slicen* bleibt gesperrt, obwohl Solidons Werte gelten](#rm-431) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-336 (archiviert); Rechen-Weg nur `_profile_gap()` fragen, Quittung nicht überschreiben, Test über `_open_in_slicer` |
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
+| [RM-439 — Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke](#rm-439) | Bedienung und Darstellung | Kontext „Pinsel“ für den Wert, fünf Kataloge, Changelog 0.5.2 |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -4657,6 +4658,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Test je Slicer (Orca, PrusaSlicer, Cura) × „Automatisch“ × PLA/PETG: sichtbar sind genau
   die übergebenen Felder. Bauplan §29, §2.4. Beleg: `verif-70e9b3145-oberflaeche.md`, Sonden
   `v5u_test_rm341.py`, `v5u_rm341_auto_kern.py`.
+
+<a id="rm-439"></a>
+
+- [ ] **RM-439 — Die Formleiste nennt die Pinselstärke in fünf Sprachen Wanddicke.**
+  `app/ui/sculpt_bar.py` beschriftet den Pinselwert und seinen Namen für den Bildschirmleser mit
+  dem allgemeinen Schlüssel `tr("Stärke")`. Der steht für Maße wie die Stärke eines Halters
+  (`tools/make_examples.py`) und ist mit „Thickness“, „Espesor“, „Épaisseur“, „Spessore“,
+  „Espessura“ übersetzt; gemeint ist, wie weit ein Zug die Fläche verschiebt. Sichtbar in v0.5.1.
+  **Fix:** eigener Übersetzungskontext „Pinsel“, in den Katalogen mit den Begriffen der übrigen
+  Formtexte („strength“, „intensidad“, „intensité“, „intensità“, „intensidade“).
+  **Abnahme:** Leiste und Bildschirmleser zeigen in jeder Sprache den Pinselbegriff, der allgemeine
+  Schlüssel bleibt für Maße; Changelog 0.5.2 in sechs Sprachen. Bauplan §4.1, §19.
 ## KI und Generatoren
 
 <a id="rm-003"></a>

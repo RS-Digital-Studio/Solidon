@@ -89,6 +89,7 @@ Nutzen da und sonst nichts.
 - Die Symmetrie beim *Formen* spiegelt an der Mitte des Körpers, auch abseits der Bettmitte. Ältere Projekte behalten ihre Form.
 - Der Formpinsel wirkt nur auf die Seite, die ihm zugewandt ist. Abtragen an einer dünnen Platte drückt die Unterseite nicht mehr mit.
 - Ein Formzug auf der Spiegelebene wirkt einmal statt doppelt.
+- In den übersetzten Fassungen heißt die Stärke des Formpinsels nicht mehr wie eine Wanddicke.
 - Sticht ein Formzug durch die Wand oder macht er sie zu dünn, steht das im Prüfbericht, mit *Stelle zeigen*.
 - Im Fenster rechnet *Weich verschmelzen* jetzt so fein wie beim Export, solange der Körper nicht sehr groß ist.
 - Reicht ein Baustein wie ein Schlüsselloch über den Rand seiner Fläche, steht das im Prüfbericht.

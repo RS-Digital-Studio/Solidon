@@ -65,6 +65,7 @@ dans `website/version.json`.
 - La symétrie de « Sculpter » reflète au centre du corps, même loin du centre du plateau. Les anciens projets gardent leur forme.
 - Le pinceau de sculpture n'agit que sur la face tournée vers lui. Creuser une plaque mince n'entraîne plus la face inférieure.
 - Un trait sur le plan de symétrie agit une fois au lieu de deux.
+- La barre de sculpture nomme maintenant la valeur du pinceau « Intensité » au lieu d'« Épaisseur », qui faisait penser à une paroi.
 - Si un trait de sculpture perce la paroi ou la rend trop mince, le rapport le signale, avec « Montrer l'endroit ».
 - Dans la fenêtre, « Fusionner en douceur » calcule maintenant aussi finement qu'à l'export, tant que le corps n'est pas très grand.
 - Si un bloc comme un trou de serrure déborde de sa face, le rapport le signale.

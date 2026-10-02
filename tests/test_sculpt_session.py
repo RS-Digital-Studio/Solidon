@@ -355,6 +355,41 @@ def test_a_brush_finer_than_the_mesh_says_so_before_anyone_paints(
     assert not window.sculpt_bar.warning.text()
 
 
+@pytest.mark.parametrize("language", ["en", "es", "fr", "it", "pt"])
+def test_the_brush_strength_is_not_named_like_a_wall_thickness(
+    qt_app: QApplication, language: str
+) -> None:
+    """„Stärke" heißt in der Leiste Pinselstärke, nicht Wandstärke.
+
+    Der allgemeine Schlüssel steht für Maße wie die Stärke eines Halters und
+    ist mit „Thickness" übersetzt; die Formleiste las sich so, als stelle sie
+    eine Wanddicke ein. Beschriftung und Name für den Bildschirmleser tragen
+    deshalb den Kontext „Pinsel".
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language, read_catalog
+    from app.ui.sculpt_bar import SculptBar
+
+    catalog = read_catalog(language)
+    brush = catalog["Pinsel\x04Stärke"]
+    assert brush != catalog["Stärke"]
+    install_language(language)
+    set_language(language)
+    try:
+        bar = SculptBar()
+        try:
+            labels = {label.text() for label in bar.findChildren(QLabel)}
+            assert brush in labels and catalog["Stärke"] not in labels
+            assert bar.strength.accessibleName() == brush
+        finally:
+            bar.deleteLater()
+    finally:
+        install_language("de")
+        set_language("de")
+
+
 # --- der Pinselring -------------------------------------------------------------
 
 

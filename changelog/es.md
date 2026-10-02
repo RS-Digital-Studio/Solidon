@@ -65,6 +65,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La simetría al «Modelar» refleja en el centro del cuerpo, también lejos del centro de la cama. Los proyectos antiguos conservan su forma.
 - El pincel de modelado actúa solo sobre la cara que tiene delante. Rebajar una placa fina ya no empuja también la cara inferior.
 - Un trazo sobre el plano de simetría actúa una vez en lugar de dos.
+- La barra de modelado llama ahora «Intensidad» al valor del pincel, en lugar de «Espesor», que parecía un grosor de pared.
 - Si un trazo de modelado atraviesa la pared o la deja demasiado fina, aparece en el informe con «Mostrar el punto».
 - En la ventana, «Fusionar suavemente» calcula ahora tan fino como en la exportación, mientras el cuerpo no sea muy grande.
 - Si un bloque como un ojo de cerradura sobrepasa el borde de su cara, aparece en el informe.

@@ -64,6 +64,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A simetria em «Modelar» espelha no centro do corpo, também longe do centro da mesa. Os projetos antigos mantêm a sua forma.
 - O pincel de modelação atua só sobre a face virada para ele. Rebaixar uma placa fina já não empurra também a face de baixo.
 - Um traço sobre o plano de simetria atua uma vez em vez de duas.
+- A barra de modelação chama agora «Intensidade» ao valor do pincel, em vez de «Espessura», que fazia pensar numa parede.
 - Se um traço de modelação fura a parede ou a deixa fina demais, o relatório indica-o, com «Mostrar o ponto».
 - Na janela, «Fundir suavemente» calcula agora tão fino como na exportação, desde que o corpo não seja muito grande.
 - Se um bloco como um buraco de fechadura passa a borda da sua face, o relatório indica-o.
