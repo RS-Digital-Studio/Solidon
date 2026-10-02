@@ -54,6 +54,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Dos placas que se tocan siguen siendo un cuerpo en un taladro y conservan su material, al estirarlo, cambiarlo, desplazarlo o cerrarlo. Un pasador encima se queda en su sitio.
 - Estirar un taladro que atraviesa dos cuerpos ya no informa de que el cuerpo se rompe cuando no ocurre.
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
+- En el historial de un cuerpo STEP se pueden reordenar pasos o insertar uno antes, aunque un paso posterior se refiera a un taladro. La referencia sigue al taladro.
+- Un taladro desplazado o duplicado con una dirección nueva sigue exacto en un cuerpo STEP.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
 - Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» e «Inclinar sobre», y «En la cara» lleva el corte paralelo a una cara plana.
@@ -87,6 +89,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manejo y sistema
 
+- La casilla «Crear las medidas como parámetros» viene marcada la primera vez y luego recuerda su última elección, también tras reiniciar.
 - Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
 - La exportación, «Laminar» y «Abrir en el slicer …» reciben siempre el cálculo fino, no la vista más gruesa de la ventana. Redondeos y conos llegan al archivo con resolución completa.
 - Una exportación durante un cálculo en curso espera al resultado nuevo. Antes el archivo podía llevar todavía la medida antigua.

@@ -53,6 +53,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Duas placas que se tocam continuam um só corpo num furo e mantêm o material, quer o estique, altere, desloque ou feche. Um pino por cima fica no lugar.
 - Esticar um furo que atravessa dois corpos já não indica que o corpo se parte quando isso não acontece.
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
+- No histórico de um corpo STEP pode reordenar passos ou inserir um antes, mesmo que um passo posterior se refira a um furo. A referência segue o furo.
+- Um furo deslocado ou duplicado com uma nova direção continua exato num corpo STEP.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
 - Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Inclinar em torno de», e «Na face» leva o corte paralelo a uma face plana.
@@ -86,6 +88,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Utilização e sistema
 
+- A caixa «Criar as medidas como parâmetros» vem marcada da primeira vez e depois lembra a sua última escolha, mesmo após reiniciar.
 - Os diálogos abrem no tamanho do seu conteúdo, sem espaço vazio, e um tamanho que tenha ajustado mantém-se.
 - A exportação, «Fatiar» e «Abrir no slicer …» recebem sempre o cálculo fino, não a vista mais grosseira da janela. Arredondamentos e cones chegam ao ficheiro com resolução completa.
 - Uma exportação durante um cálculo em curso espera pelo resultado novo. Antes o ficheiro podia ainda levar a medida antiga.

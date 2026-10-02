@@ -510,7 +510,7 @@ GUIDES: Final[tuple[Guide, ...]] = (
             step(
                 _(
                     "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an "
-                    "und haken Sie *Maße als Parameter anlegen* an."
+                    "und lassen Sie *Maße als Parameter anlegen* angehakt."
                 ),
                 "dialog.naming",
             ),
