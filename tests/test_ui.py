@@ -18873,7 +18873,7 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
         dialog = window._op_dialog
         assert dialog is not None
         assert dialog._naming is not None, "ein Grundkörper bietet den Haken an"
-        assert not dialog.names_dimensions(), "und er ist aus, bis jemand ihn setzt"
+        assert dialog.names_dimensions(), "beim ersten Start steht er an (RM-369)"
         for name, value in (("width", width), ("depth", depth), ("height", height)):
             editor = dialog._editors[name]
             assert isinstance(editor, ValueField)
@@ -18938,6 +18938,52 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
     document = window.session.project.document
     assert document.ops == []
     assert document.parameters == {}, "der Quader nimmt seine Maße mit"
+
+
+@pytest.mark.parametrize("name", ["create_box", "create_cylinder", "create_holder_u"])
+def test_the_naming_box_remembers_the_last_choice(window: MainWindow, name: str) -> None:
+    """*Maße als Parameter anlegen* übernimmt die letzte Wahl (RM-369, §13, §2.4).
+
+    Beim ersten Start steht der Haken an; wer ihn abwählt und übernimmt, findet
+    ihn beim nächsten Dialog aus, auch nach einem Neustart. Ein Abbrechen
+    entscheidet nichts. Geprüft an zwei Grundkörpern und einem Vorlagenbaustein,
+    weil die Zusage für jeden Dialog mit dem Haken gilt (Vorgabe Robert).
+    """
+    from app.ui.settings import load_settings
+
+    spec = REGISTRY.get(name)
+
+    def open_dialog() -> OperationDialog:
+        window.run_operation(spec)
+        dialog = window._op_dialog
+        assert dialog is not None
+        assert dialog.offers_naming(), f"{name} bietet den Haken an"
+        return dialog
+
+    first = open_dialog()
+    assert first.names_dimensions(), "beim ersten Start an"
+    first._naming.setChecked(False)
+    _accept_after_preview(window, first)
+    QApplication.processEvents()
+    window.session.wait_for_idle()
+    assert window.session.project.document.parameters == {}, "abgewählt legt nichts an"
+    assert load_settings().name_dimensions is False, "die Wahl überlebt einen Neustart"
+
+    second = open_dialog()
+    assert not second.names_dimensions(), "der nächste Dialog übernimmt die letzte Wahl"
+    second._naming.setChecked(True)
+    second.reject()
+    QApplication.processEvents()
+    assert window.settings.name_dimensions is False, "Abbrechen entscheidet nichts"
+
+    third = open_dialog()
+    assert not third.names_dimensions()
+    third._naming.setChecked(True)
+    _accept_after_preview(window, third)
+    QApplication.processEvents()
+    window.session.wait_for_idle()
+    assert window.session.project.document.parameters, "angehakt legt die Maße an"
+    assert load_settings().name_dimensions is True
 
 
 def test_finish_lists_the_sketch_operations_in_the_window(window: MainWindow) -> None:

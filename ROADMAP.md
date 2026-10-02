@@ -154,7 +154,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
-| [RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl](#rm-369) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: Vorgabe aus der letzten Wahl, Test und Handbuch nachziehen |
 | [RM-375 — Eine Formsitzung lässt sich wieder öffnen](#rm-375) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: wie das Skelett denselben Schritt ändern, Strichfeld als Zusammenfassung |
 | [RM-377 — Überhangkarte, Bauraum und Druckbefund laufen in der Formsitzung mit](#rm-377) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Konzept §12/§7.5 einlösen, Befund nach dem Posieren |
 | [RM-395 — Nachbau: kleine Lücken beim Konstruieren ohne CAD](#rm-395) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Nachbau): Sperrgrund im Dialog, Materialvorgabe Profilklemme, Menü *Aus Skizze erzeugen*, Hinweis beim Zudecken, Bezugsachse Langloch, Skizzenursprung sichtbar |
@@ -4664,23 +4663,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (Pfeile) bedient ihn, zugänglicher Name gesetzt. Bauplan §18.7, §2.1, §2.8 (Vorschau aus dem
   Cache, sonst Fortschritt).
   **Vorgabe Robert 02.10.2026 — allgemein:** Regler für jedes Projekt mit beliebig vielen Transaktionen, auch bei Mehrkörper-Szenen; Abnahme an mindestens drei unterschiedlichen Projekten (Beispiele aus `app/examples` und `F:\3D Dateien\*.p3d`).
-
-<a id="rm-369"></a>
-
-- [ ] **RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl.**
-  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 2).
-  Heute steht der Haken bei jedem Grundkörper aus (`app/ui/op_dialog.py:1916–1927`, angeboten
-  über `offers_naming`, `main_window.py:1671`, `:17494`; Entscheidung Robert 14.09.2026 zur Lage
-  vorn); wer Weg 2 geht, muss ihn jedes Mal finden.
-  **Ablauf:** Der Haken übernimmt den zuletzt gesetzten Zustand (Nutzereinstellung, §38-Ort), beim
-  ersten Start an. Ändern ist eine Nutzergeste, keine Rückfrage.
-  **Stellen:** `op_dialog.py:1916ff.` (Vorgabe setzen, Zustand beim Übernehmen speichern),
-  Einstellungen (`app/ui/settings_dialog.py` bzw. QSettings-Schlüssel), der bestehende Test, der
-  „aus“ zusichert (in `tests/test_ui.py`/`tests/test_op_dialog*.py` suchen), Handbuchstelle
-  `app/core/guides.py:520–526` („haken Sie … an“) an die neue Vorgabe anpassen; Kataloge.
-  **Abnahme:** Test: erster Grundkörper → Haken an; abgewählt und übernommen → nächster
-  Grundkörper → Haken aus; Neustart behält die Wahl. Bauplan §13, §2.4 („gute Vorgabe“).
-  **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
 
 <a id="rm-375"></a>
 

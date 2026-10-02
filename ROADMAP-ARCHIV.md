@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)](#rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026) |
 | 2026-10-02 | [RM-442: Der Schalter *Neu ansetzen* gilt nach RM-438 auch für den nächsten Zug (02.10.2026)](#rm-442-der-schalter-neu-ansetzen-gilt-nach-rm-438-auch-für-den-nächsten-zug-02102026) |
 | 2026-10-02 | [RM-361: „Übernehmen“ nach der Erzeugung scheitert bei gesetzter Einfügemarke still, das Netz ist verloren (02.10.2026)](#rm-361-übernehmen-nach-der-erzeugung-scheitert-bei-gesetzter-einfügemarke-still-das-netz-ist-verloren-02102026) |
 | 2026-10-02 | [RM-372: Eine Erzeugung ist ein Rückgängig-Schritt (02.10.2026)](#rm-372-eine-erzeugung-ist-ein-rückgängig-schritt-02102026) |
@@ -36383,3 +36384,25 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Zug“. Bauplan §17.3, §2.6.
 
 **Abschluss:** Ursache: Beide Klicks des Fenstertests liegen 8,5 und 16,7 mm neben der Figur (Pinsel 6 mm); der zweite verfehlte also auch die Fläche nach der Etappe und bekam trotzdem eine eigene. `_surface_for` gibt einem Zug jetzt nur dann eine eigene Etappe, wenn er die Fläche nach ihr greift (`_reaches`); sonst bleibt er in seiner und heißt verfehlt. Neuer Kerntest `test_a_stroke_that_reaches_nothing_starts_no_stage` (vor dem Fix rot), der Fenstertest ist wieder grün, die RM-438-Tests bleiben grün. Umgesetzt von Claude, in main mit `e7da5153f`; Entwicklungstor grün.
+
+## RM-369: Der Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl (02.10.2026)
+
+<a id="rm-369-der-haken-maße-als-parameter-anlegen-merkt-sich-die-letzte-wahl-02102026"></a>
+<a id="rm-369"></a>
+
+**RM-369 — Haken „Maße als Parameter anlegen“ merkt sich die letzte Wahl.**
+  Entscheidung Robert 02.10.2026 („Alles“ auf die Ideenliste der Gebietsprüfung Weg 2).
+  Heute steht der Haken bei jedem Grundkörper aus (`app/ui/op_dialog.py:1916–1927`, angeboten
+  über `offers_naming`, `main_window.py:1671`, `:17494`; Entscheidung Robert 14.09.2026 zur Lage
+  vorn); wer Weg 2 geht, muss ihn jedes Mal finden.
+  **Ablauf:** Der Haken übernimmt den zuletzt gesetzten Zustand (Nutzereinstellung, §38-Ort), beim
+  ersten Start an. Ändern ist eine Nutzergeste, keine Rückfrage.
+  **Stellen:** `op_dialog.py:1916ff.` (Vorgabe setzen, Zustand beim Übernehmen speichern),
+  Einstellungen (`app/ui/settings_dialog.py` bzw. QSettings-Schlüssel), der bestehende Test, der
+  „aus“ zusichert (in `tests/test_ui.py`/`tests/test_op_dialog*.py` suchen), Handbuchstelle
+  `app/core/guides.py:520–526` („haken Sie … an“) an die neue Vorgabe anpassen; Kataloge.
+  **Abnahme:** Test: erster Grundkörper → Haken an; abgewählt und übernommen → nächster
+  Grundkörper → Haken aus; Neustart behält die Wahl. Bauplan §13, §2.4 („gute Vorgabe“).
+  **Vorgabe Robert 02.10.2026 — allgemein:** gilt für jeden Dialog mit dem Haken (alle Grundkörper und Bausteine mit `offers_naming`); Abnahme an mindestens drei unterschiedlichen Dialogen.
+
+**Abschluss:** Der Haken *Maße als Parameter anlegen* steht beim ersten Start an und übernimmt danach die letzte Wahl beim Übernehmen (`UiSettings.name_dimensions`, `OperationDialog(naming_default=…)`, `offers_naming()`); Abbrechen entscheidet nichts, ein Neustart behält die Wahl. Gilt für jeden Dialog mit dem Haken (Grundkörper und Vorlagenbausteine). Tests: `test_ui.py::test_the_naming_box_remembers_the_last_choice` an `create_box`, `create_cylinder` und `create_holder_u` (je erster Dialog an, abgewählt übernommen → nächster aus, `load_settings()` behält, Abbrechen ändert nichts), `test_operation_ui.py::test_only_a_primitive_offers_to_name_its_dimensions` mit `naming_default`; `test_naming_the_dimensions_makes_them_project_parameters` erwartet jetzt „an beim ersten Start“. 117 betroffene Fenstertests einzeln gefahren (153 Fälle): grün bis auf drei, die am Ausgangsstand genauso rot sind (eigene Punkte). Fenstersonde am echten Fenster (Menü *Quader anlegen* und *Zylinder anlegen*, Katalogweg *Halter U-Form*, Klicks mit `QTest`): 8 von 8 Prüfungen. Regel in `.claude/rules/grenzen.md` nachgezogen. Die Anleitung „Ein Maß nachträglich ändern“ (`app/core/guides.py`, „haken Sie … an“) zieht der Handbuch-Thread nach. Umgesetzt von Claude (Thread „Bedienung und KI“).
