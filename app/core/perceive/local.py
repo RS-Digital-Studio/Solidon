@@ -39,8 +39,9 @@ FEATURE_LIMIT_TRIANGLES = 1_500_000
 #: Vollerkennung größerer Importe nur nach ausdrücklicher gespeicherter Wahl.
 CONFIRMED_FEATURE_LIMIT_TRIANGLES: Final = 5_000_000
 #: Spitzenbedarf des ganzen Imports je Dreieck, Einlesen eingeschlossen:
-#: 1 600 Byte am Gartenschlauchhalter, 1 660 am Drachen, 1 770 am Schiff.
-RECOGNITION_BYTES_PER_TRIANGLE: Final = 1_800
+#: höchstens 2 161 Byte am Meshy-Murmelbrett (1,95 Mio. Dreiecke); 2 200
+#: enthält rund zwei Prozent Reserve.
+RECOGNITION_BYTES_PER_TRIANGLE: Final = 2_200
 
 
 def recognition_minutes(

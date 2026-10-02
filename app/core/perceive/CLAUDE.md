@@ -15,8 +15,8 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 | Datei | Rolle |
 |---|---|
-| `features.py` | Vollerkennung `detect` (§21.1): Ebenen, `_fitted` in Runden (Zylinder, Krümmungssplit, Stadion, `_arcs_of_a_prism`, `_pieces_at_a_seam`), Zusammenlegen, `detect_holes`, `detect_voids`, `narrowings_marked`, Anschnitt, `is_a_freeform`, zuletzt `detect_curved_faces` (nie auf einer Freiform); Fits (Felder an `CylinderFit`, `ConeFit`, `StadiumFit`), Merker, `numbering_order` und die Fragen, die Kantenweg und Panel teilen (`planar_facet`, `planes_beside`, `replaces_an_edge`, `tangent_walls`, `sits_at_the_mouth_of`) |
-| `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`) |
+| `features.py` | Vollerkennung `detect` (§21.1): Ebenen, `_fitted` in Runden (Zylinder, Krümmungssplit, Stadion, `_arcs_of_a_prism`, `_pieces_at_a_seam`), Zusammenlegen, `detect_holes`, `detect_voids`, `narrowings_marked`, Anschnitt, `is_a_freeform`, zuletzt `detect_curved_faces` (nie auf einer Freiform); Fits (Felder an `CylinderFit`, `ConeFit`, `StadiumFit`), Merker, `numbering_order` und die Fragen, die Kantenweg und Panel teilen (`planar_facet`, `planes_beside`, `replaces_an_edge`, `tangent_walls`, `sits_at_the_mouth_of`); `_screened_fits` meldet den Rundform-Fortschritt schon bei den vorbereiteten Flecken |
+| `refine.py` | Der Löser der Rundformen im Stapel (RM-209): `exhausted` sagt für viele Kegel- und Ringverfeinerungen zugleich, welcher Lauf sein Budget sicher ausschöpft — mit Abständen zu jedem Zweig, zu jedem Abbruch und einem Schattenlauf; die Blockzahl hält die kalibrierte Spitzenschätzung mit `BATCH_PEAK_FACTOR` innerhalb `BATCH_BYTES`; `_run` meldet nach jeder Solverrunde; `solve` ist SciPys `least_squares` auf diesem Weg, bitgleich nachgebaut, und rechnet jeden Lauf mit Ableitung (`features._refined_fit`) |
 | `helix.py` | Gewinde am eingelesenen Netz: Spektrum `_best_pitch` (beide Vorzeichen), Kantenleser `_measured_helix`; was eine Wendel verschluckt, sagt `features.without_phantoms_on` für beide Kerne. Bausteingewinde laufen nie hindurch (§24.1) |
 | `slots.py` | Langlöcher, topologisch: zwei Halbzylinder, zwei ebene Flanken (Gegenprobe `tests/test_slot_features.py`); `slots_from_stadiums`, `open_slots_instead_of_fillets`, `native_open_slot_measures`, Paarsuche `_PairPlan` |
 | `patterns.py` | Muster (§25): `Frame`, Stopfen `plug_for`, Feld `field_outline` für `remove_feature`/`resize_feature` in `geom/prepare_ops.py`; `carrier_of` findet den Träger über Ebene oder Achse, nie über eine Kennung |
@@ -74,8 +74,9 @@ denselben Überschriften: `konzepte/begruendungen/karte-app-core-perceive.md`.
 
 - **Staffel** (§21.1): automatisch bis `FEATURE_LIMIT_TRIANGLES`, bestätigt bis
   `CONFIRMED_FEATURE_LIMIT_TRIANGLES`, darüber örtlich; `recognition_minutes`
-  und `recognition_gigabytes` sind Anzeige, keine Grenze. Speicherfehler:
-  `remember_out_of_memory` (`kern.md`).
+  und `recognition_gigabytes` sind Anzeige, keine Grenze. Die Speicheranzeige
+  rechnet mit 2 200 Byte je Dreieck (inklusive Reserve gegen den Messwert am
+  Meshy-Murmelbrett). Speicherfehler: `remember_out_of_memory` (`kern.md`).
 - **`detect_local`** veröffentlicht nur vollständig belegte Merkmale mit
   globalen Dreiecksnummern, nie eine Randöffnung des Ausschnitts: Treffer aus
   den Dreiecken am Punkt (`_region(bounded=False)`, beide Würfel aus einem

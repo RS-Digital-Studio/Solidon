@@ -7985,47 +7985,55 @@ def _screened_fits(
 
     Lesung und Kennzahl jedes Flecks legt der Stapel mit ab, damit die Runde
     sie nicht ein zweites Mal rechnet (:func:`_surface_support`,
-    :func:`_rigid_key`).
+    :func:`_rigid_key`). ``share`` meldet die Vorbereitung je Fleck in der
+    ersten Hälfte seines Anteils und die Solverrunden in der zweiten.
     """
     tolerance = max(weld_tolerance(float(np.linalg.norm(body.extents))), ROUND_WALL_TOLERANCE)
+    planning = share.part(0.0, 0.5)
+    solving = share.part(0.5, 1.0)
     entries: dict[tuple[Any, ...], tuple[Any, bool]] = {}
     supports: dict[bytes, _SurfaceSupport] = {}
     rigid: dict[bytes, tuple[Any, ...] | None] = {}
     asked: list[tuple[tuple[Any, ...], refine.Problem]] = []
     seen = None if shapes is None else set(shapes)
+    total_weight = sum(_fit_weight(patch) for patch in patches)
+    planned = 0.0
     for patch in patches:
+        weight = _fit_weight(patch)
         if check_cancelled is not None:
             check_cancelled()
         support = _surface_support(body, patch, check_cancelled)
-        if support is None:
-            continue
-        name = _patch_key(patch)
-        supports[name] = support
-        shape = None
-        if seen is not None:
-            shape = rigid[name] if name in rigid else _rigid_key_read(body, patch)
-            rigid[name] = shape
-        if seen is None or shape is None or shape not in seen:
-            if seen is not None and shape is not None:
-                seen.add(shape)
-            key: tuple[Any, ...] = ("fit_cone", support.digest, tolerance)
-            if key not in entries and not _answered_by_geometry("fit_cone", support, tolerance):
-                cone = _cone_plan(support, tolerance, check_cancelled)
-                entries[key] = (cone, False)
-                if cone is not None:
-                    asked.append((key, cone.problem()))
-        key = ("fit_torus", support.digest)
-        if key not in entries and not _answered_by_geometry("fit_torus", support):
-            ring = _torus_plan(support)
-            entries[key] = (ring, False)
-            if ring is not None:
-                asked.append((key, ring.problem()))
+        if support is not None:
+            name = _patch_key(patch)
+            supports[name] = support
+            shape = None
+            if seen is not None:
+                shape = rigid[name] if name in rigid else _rigid_key_read(body, patch)
+                rigid[name] = shape
+            if seen is None or shape is None or shape not in seen:
+                if seen is not None and shape is not None:
+                    seen.add(shape)
+                key: tuple[Any, ...] = ("fit_cone", support.digest, tolerance)
+                if key not in entries and not _answered_by_geometry("fit_cone", support, tolerance):
+                    cone = _cone_plan(support, tolerance, check_cancelled)
+                    entries[key] = (cone, False)
+                    if cone is not None:
+                        asked.append((key, cone.problem()))
+            key = ("fit_torus", support.digest)
+            if key not in entries and not _answered_by_geometry("fit_torus", support):
+                ring = _torus_plan(support)
+                entries[key] = (ring, False)
+                if ring is not None:
+                    asked.append((key, ring.problem()))
+        planned += weight
+        planning.reach(planned / total_weight if total_weight else 1.0)
+    planning.reach(1.0)
     verdicts = refine.exhausted(
         [problem for _key, problem in asked],
         precision=ROUND_FIT_PRECISION,
         evaluations=ROUND_FIT_EVALUATIONS,
         check_cancelled=check_cancelled,
-        progress=share.reach,
+        progress=solving.reach,
     )
     for (key, _problem), verdict in zip(asked, verdicts, strict=True):
         if verdict:

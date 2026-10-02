@@ -7055,6 +7055,29 @@ def test_the_recognition_tells_how_far_it_is() -> None:
     assert again == [], "eine Antwort aus dem Merker meldet nichts"
 
 
+def test_the_round_screening_reports_progress_while_planning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die erste Hälfte des Stapelanteils wächst schon beim Vorbereiten der Flecken."""
+    body = trimesh.creation.box()
+    patches = [[0], [1], [2], [3]]
+    reported: list[float] = []
+    observed_before_read: list[float] = []
+
+    def no_support(_body: trimesh.Trimesh, _patch: list[int], _check_cancelled: Any = None) -> None:
+        observed_before_read.append(reported[-1] if reported else 0.0)
+        return None
+
+    monkeypatch.setattr(features_module, "_surface_support", no_support)
+    features_module._screened_fits(body, patches, share=features_module._Share(reported.append))
+
+    assert len(observed_before_read) == len(patches)
+    assert observed_before_read[0] == 0.0
+    assert observed_before_read[1] > observed_before_read[0]
+    assert observed_before_read[-1] < 0.5, "Die Planung soll vor der letzten Runde sichtbar sein."
+    assert reported[-1] == 1.0
+
+
 def test_a_small_patch_is_grouped_like_a_large_one(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ein kleiner Fleck wird sortiert gruppiert, und es kommen dieselben Flecken heraus.
 

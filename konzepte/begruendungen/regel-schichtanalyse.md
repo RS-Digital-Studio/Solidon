@@ -681,7 +681,15 @@ stapel, B9). Der Stapellauf selbst
 behält vom Weg nur das laufende Maximum von Plan-Schatten-Abstand und Betrag;
 der ganze Weg wog an einem vollen Block 149 MiB. Die Blockgröße folgt der
 gemessenen Spitze (`BATCH_BYTES`, `BATCH_PEAK_FACTOR`): am Meshy-Murmelbrett
-höchstens 64 statt 299 MiB je Block, Urteile Problem für Problem gleich.
+hält sie höchstens 64 statt 299 MiB je Block, Urteile Problem für Problem
+gleich. Der volle 16-Zeilen-Kegelblock überschritt mit Faktor 10 die Grenze
+um 1,9 % (65,2 MiB, Faktor 10,2); Faktor 12 lässt rund 17 % Reserve. Die
+Gegenprobe misst die Spitzen des kleinsten Kegelblocks sowie der größten
+aufgefüllten Kegel- und Ringblöcke bei 8 192 Zeilen. Die Formel ist für beide
+Rundformen über alle aufgefüllten Zeilenzahlen geprüft.
+Der Balkenanteil des Rundform-Stapels meldet die gewichtete Planarbeit je
+Fleck und danach jede Löserrunde; er wartet nicht mehr auf den fertigen Block
+(Review stapel, B8).
 
 RM-209, RM-132, RM-193 (Paket stapel der Release-Sitzung 0.5.1). Eine
 Verfeinerung, die ihr Budget ausschöpft, liefert nichts (RM-210) — an der

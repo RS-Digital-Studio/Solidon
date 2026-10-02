@@ -54,14 +54,14 @@ wird auf eine Zeilenzahl aufgefüllt, die nur von ihm selbst abhängt.
 
 **Und der echte Lauf selbst steht auch hier** (:func:`solve`): SciPys
 ``least_squares`` auf diesem Weg, Schritt für Schritt nachgebaut und Bit für
-Bit gleich, nur ohne die Hülle aus Argumentprüfung und ``VectorFunction``,
+Bit gleich, nur ohne SciPys übrige Argumentprüfung und ``VectorFunction``,
 die ein Fünftel der Löserzeit kostete.
 
 Die Rechnung folgt SciPy (BSD-3-Clause; Vermerk, Bedingungen und
 Haftungsausschluss stehen wortgleich unter diesem Docstring); die Residuen
 und Ableitungen von Kegel und Ring sind dieselben Formeln wie in
-:func:`app.core.perceive.features._fit_cone_measured`
-und ``_fit_torus_measured`` — wer dort eine ändert, ändert sie hier mit
+:func:`app.core.perceive.features._cone_from_plan`
+und ``_torus_from_plan`` — wer dort eine ändert, ändert sie hier mit
 (``tests/test_refine.py`` hält beide aneinander).
 """
 
@@ -105,6 +105,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Any, Final, NamedTuple
 
 import numpy as np
@@ -149,9 +150,9 @@ BATCH_BYTES: Final = 64 * 2**20
 
 #: Die Spitze eines Blocks als Vielfaches eines Ableitungsfelds von Plan und
 #: Schatten (2 mal Probleme mal (Zeilen + 3) mal Größe mal 8 Byte). Gemessen mit
-#: ``tracemalloc`` an allen Zeilenzahlen von 16 bis 4 096 am
-#: Meshy-Murmelbrett, Kegel und Ring: 4,1 bis 9,9.
-BATCH_PEAK_FACTOR: Final = 10
+#: ``tracemalloc`` an Zeilenzahlen von 16 bis 4 096 am Meshy-Murmelbrett:
+#: höchstens 10,2; 12 lässt rund 17 Prozent Reserve.
+BATCH_PEAK_FACTOR: Final = 12
 
 #: Die kleinste Zeilenzahl, auf die ein Problem aufgefüllt wird — Splitter
 #: aus sechs bis sechzehn Stützpunkten rechnen in einer Gruppe.
@@ -175,7 +176,7 @@ _RUNNING: Final = -1
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ConeProblem:
-    """Eine Kegelverfeinerung, wie ``features._fit_cone_measured`` sie stellt.
+    """Eine Kegelverfeinerung, wie ``features._cone_from_plan`` sie stellt.
 
     ``points`` sind die Löserzeilen (skaliert), ``apex`` die belegte Spitze
     darunter oder ``None``; ``axis``, ``first`` und ``second`` spannen die
@@ -193,7 +194,7 @@ class ConeProblem:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class TorusProblem:
-    """Eine Ringverfeinerung, wie ``_fit_torus_measured`` sie stellt.
+    """Eine Ringverfeinerung, wie ``features._torus_from_plan`` sie stellt.
 
     ``initial``: Mitte, zwei Neigungen, Ring- und Röhrenradius.
     """
@@ -224,6 +225,16 @@ class Solution:
         return self.status > 0
 
 
+def _positive_evaluation_budget(value: object) -> int:
+    """Prüft SciPys positives ganzzahliges Auswertungsbudget vor jedem Aufruf."""
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError("Das Auswertungsbudget muss eine positive ganze Zahl sein.")
+    budget = int(value)
+    if budget < 1:
+        raise ValueError("Das Auswertungsbudget muss eine positive ganze Zahl sein.")
+    return budget
+
+
 def solve(
     fun: Callable[[np.ndarray], np.ndarray],
     jac: Callable[[np.ndarray], np.ndarray],
@@ -237,7 +248,7 @@ def solve(
     **Dieselben Gleitkommaschritte in derselben Folge** wie SciPy 1.18 auf
     diesem Weg — ``least_squares`` → ``trf`` → ``trf_no_bounds`` mit
     ``tr_solver='exact'`` und ``x_scale=1`` —, nur ohne ``VectorFunction``,
-    Argumentprüfung und ``OptimizeResult``: Dieselben NumPy- und
+    SciPys übrige Argumentprüfung und ``OptimizeResult``: Dieselben NumPy- und
     SciPy-Aufrufe (``np.dot``, ``norm``, ``scipy.linalg.svd``) auf denselben
     Feldern, die Multiplikation mit dem Einheitsmaßstab entfällt, weil sie
     nichts ändert. Gemessen bitgleich in ``x``, Residuen, Ableitung,
@@ -247,6 +258,8 @@ def solve(
 
     Nachbau von Code aus SciPy (BSD-3-Clause).
     """
+    evaluations = _positive_evaluation_budget(evaluations)
+
     from scipy.linalg import svd  # schwer; erst beim ersten Lauf laden (wie deferred.py)
 
     x0 = np.atleast_1d(x0).astype(float)
@@ -378,7 +391,8 @@ def exhausted(
     sein ``max_nfev``. ``True`` heißt: Der echte Lauf hätte nach
     ``evaluations`` Auswertungen ohne Abbruch aufgehört und damit nichts
     geliefert. ``False`` heißt nicht das Gegenteil, sondern nur: nicht sicher.
-    ``progress`` erfährt den erledigten Anteil, gezählt in Problemen.
+    ``progress`` erfährt den erledigten Anteil, je Block nach Löserrunden und
+    zwischen Blöcken nach der Zahl der Probleme.
 
     Plan und Schatten laufen übereinander im selben Stapel, und ein Paar
     verlässt ihn, sobald eine Hälfte nicht mehr sicher werden kann — ein
@@ -396,9 +410,11 @@ def exhausted(
     for (kind, rows), members in sorted(groups.items()):
         if len(members) < MIN_BATCH:
             done += len(members)
+            if progress is not None:
+                progress(done / len(problems))
             continue
         columns = 6 if kind == ConeProblem.__name__ else 7
-        chunk = max(1, BATCH_BYTES // (2 * (rows + 3) * columns * 8 * BATCH_PEAK_FACTOR))
+        chunk = _batch_chunk_size(rows, columns)
         for start in range(0, len(members), chunk):
             part = members[start : start + chunk]
             chosen = [problems[index] for index in part]
@@ -407,15 +423,27 @@ def exhausted(
             evaluate = _cone_residual if cone else _torus_residual
             count = len(part)
             stacked = {key: np.concatenate((value, value)) for key, value in data.items()}
+
+            def report_round(
+                fraction: float, completed: int = done, batch_size: int = count
+            ) -> None:
+                """Den Fortschritt der laufenden Runde auf den ganzen Stapel abbilden."""
+                if progress is not None:
+                    progress((completed + batch_size * fraction) / len(problems))
+
             safe, apart, _status, _x = _run(
-                stacked, size, evaluate, precision, evaluations, check_cancelled
+                stacked,
+                size,
+                evaluate,
+                precision,
+                evaluations,
+                check_cancelled,
+                progress=report_round if progress is not None else None,
             )
             verdicts = safe[:count] & safe[count:] & (apart <= SHADOW_AGREEMENT)
             for index, verdict in zip(part, verdicts.tolist(), strict=True):
                 answers[index] = verdict
             done += len(part)
-            if progress is not None:
-                progress(done / len(problems))
     return answers
 
 
@@ -425,6 +453,12 @@ def _padded_rows(count: int) -> int:
     while rows < count:
         rows *= 2
     return rows
+
+
+def _batch_chunk_size(rows: int, columns: int) -> int:
+    """Die größte Blockzahl, deren abgeschätzte Spitze in ``BATCH_BYTES`` bleibt."""
+    peak_per_problem = 2 * (rows + 3) * columns * 8 * BATCH_PEAK_FACTOR
+    return max(1, BATCH_BYTES // peak_per_problem)
 
 
 #: Die Felder eines Stapels, je Zeile ein Problem — Plan und Schatten übereinander.
@@ -488,7 +522,7 @@ def _direction(data: _Data, values: np.ndarray) -> tuple[np.ndarray, np.ndarray,
 def _cone_residual(
     values: np.ndarray, data: _Data, want_jacobian: bool
 ) -> tuple[np.ndarray, np.ndarray | None]:
-    """Der Kegelabstand aus ``_fit_cone_measured``, Koordinate für Koordinate."""
+    """Der Kegelabstand aus ``_cone_from_plan``, Koordinate für Koordinate."""
     _raw, length, direction = _direction(data, values)
     dx, dy, dz = direction[:, 0:1], direction[:, 1:2], direction[:, 2:3]
     cosine, sine = np.cos(values[:, 5:6]), np.sin(values[:, 5:6])
@@ -529,7 +563,7 @@ def _cone_residual(
 def _torus_residual(
     values: np.ndarray, data: _Data, want_jacobian: bool
 ) -> tuple[np.ndarray, np.ndarray | None]:
-    """Der Meridianabstand aus ``_fit_torus_measured``, Koordinate für Koordinate."""
+    """Der Meridianabstand aus ``_torus_from_plan``, Koordinate für Koordinate."""
     _raw, length, direction = _direction(data, values)
     dx, dy, dz = direction[:, 0:1], direction[:, 1:2], direction[:, 2:3]
     ring, tube = values[:, 5:6], values[:, 6:7]
@@ -592,6 +626,7 @@ def _run(
     precision: float,
     evaluations: int,
     check_cancelled: Callable[[], None] | None,
+    progress: Callable[[float], None] | None = None,
 ) -> _Outcome:
     """Ein Stapellauf über Plan und Schatten: je Zeile sicher ja/nein, je Paar ihr Abstand.
 
@@ -623,6 +658,7 @@ def _run(
 
     ids = np.arange(count)
     x = data.pop("initial").copy()
+    reported_progress = 0.0
 
     def follow() -> None:
         """Nach jeder Runde: größter Betrag des Plans, größtes Auseinander von Plan und Schatten."""
@@ -783,6 +819,13 @@ def _run(
             # Nach einer Annahme wird neu zerlegt; aufgebrauchtes Budget geht zur äußeren Prüfung.
             fresh = accepted | (~ended & (nfev >= evaluations))
             follow()
+            if progress is not None:
+                fraction = min(1.0, float(nfev.max()) / evaluations)
+                if fraction > reported_progress:
+                    progress(fraction)
+                    reported_progress = fraction
+    if progress is not None and reported_progress < 1.0:
+        progress(1.0)
     safe: np.ndarray = (
         (final_status == 0)
         & (final_stop >= STOP_MARGIN_DECADES)

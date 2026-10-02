@@ -22,8 +22,10 @@ ihr Budget ausschöpfen, und solche, die antworten.
 
 from __future__ import annotations
 
+import builtins
 import contextlib
 import json
+import tracemalloc
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -189,6 +191,145 @@ def test_the_batch_never_turns_away_a_run_that_answers(
     assert not wrong, f"the batch turned away runs that answer after {wrong} evaluations"
     vain = sum(run.nfev >= features.ROUND_FIT_EVALUATIONS for run in runs)
     assert sum(verdicts) >= vain // 2, f"only {sum(verdicts)} of {vain} vain runs recognised"
+
+
+@pytest.mark.parametrize("budget", (0, -1, 1.5, float("nan"), float("inf"), True))
+def test_the_solver_rejects_an_invalid_budget_before_imports_or_callbacks(
+    budget: int | float | bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein ungültiges Budget erreicht weder den scipy-Import noch einen Rückruf."""
+    original_import = builtins.__import__
+    calls: list[str] = []
+
+    def guarded_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "scipy.linalg":
+            raise AssertionError("Ein ungültiges Budget darf SciPy nicht laden.")
+        return original_import(name, *args, **kwargs)
+
+    def residual(_values: np.ndarray) -> np.ndarray:
+        calls.append("residual")
+        return np.zeros(1)
+
+    def jacobian(_values: np.ndarray) -> np.ndarray:
+        calls.append("jacobian")
+        return np.zeros((1, 1))
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    with pytest.raises(ValueError, match="positive ganze Zahl"):
+        refine.solve(
+            residual,
+            jacobian,
+            np.zeros(1),
+            precision=features.ROUND_FIT_PRECISION,
+            evaluations=cast(int, budget),
+        )
+    assert not calls, "Ein ungültiges Budget darf keine Rückrufe ausführen."
+
+
+def test_the_solver_accepts_a_numpy_integral_budget() -> None:
+    """Das NumPy-Integer wird vor dem Löser in ein Python-Integer überführt."""
+    assert refine._positive_evaluation_budget(np.int64(3)) == 3
+
+
+def test_the_batch_reports_progress_between_solver_rounds(
+    runs: list[Run], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Stapel meldet Rundenfortschritt, bevor ein ganzer Block endet."""
+    from itertools import pairwise
+
+    problem = next(run.problem for run in runs if run.nfev >= features.ROUND_FIT_EVALUATIONS)
+    monkeypatch.setattr(refine, "MIN_BATCH", 1)
+    progress: list[float] = []
+
+    refine.exhausted(
+        [problem],
+        precision=features.ROUND_FIT_PRECISION,
+        evaluations=features.ROUND_FIT_EVALUATIONS,
+        progress=progress.append,
+    )
+
+    assert len(progress) > 1, "Der Fortschritt darf nicht erst nach einem vollen Block kommen."
+    assert progress[-1] == 1.0
+    assert all(later > earlier for earlier, later in pairwise(progress))
+
+
+@pytest.mark.parametrize("rows", (16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192))
+@pytest.mark.parametrize("columns", (6, 7))
+def test_the_batch_chunk_respects_its_measured_peak(rows: int, columns: int) -> None:
+    """Die Blockformel deckt beide Rundformen und alle aufgefüllten Zeilenzahlen ab."""
+    assert refine.BATCH_PEAK_FACTOR >= 12, "Die Reserve muss über der gemessenen Spitze liegen."
+    peak_per_problem = 2 * (rows + 3) * columns * 8 * refine.BATCH_PEAK_FACTOR
+    chunk = refine._batch_chunk_size(rows, columns)
+    assert chunk * peak_per_problem <= refine.BATCH_BYTES
+    assert (chunk + 1) * peak_per_problem > refine.BATCH_BYTES
+
+
+def test_a_full_smallest_cone_block_stays_within_the_memory_budget() -> None:
+    """Der kleinste Kegelblock hält auch seine echte Spitze unter der Speichergrenze."""
+    problem = refine.ConeProblem(
+        points=np.array([[1.0, 0.0, 1.0]]),
+        apex=None,
+        axis=np.array([0.0, 0.0, 1.0]),
+        first=np.array([1.0, 0.0, 0.0]),
+        second=np.array([0.0, 1.0, 0.0]),
+        initial=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.7]),
+    )
+    problems = [problem] * refine._batch_chunk_size(16, 6)
+    tracemalloc.start()
+    try:
+        refine.exhausted(
+            problems,
+            precision=features.ROUND_FIT_PRECISION,
+            evaluations=2,
+        )
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak <= refine.BATCH_BYTES, f"block reached {peak / 2**20:.1f} MiB"
+
+
+@pytest.mark.parametrize("kind", ("cone", "torus"))
+def test_a_full_largest_padded_block_stays_within_the_memory_budget(
+    kind: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein voller 8 192-Zeilen-Block bleibt bei beiden Rundformen im Speicherbudget."""
+    points = np.tile(np.array([[1.0, 0.0, 1.0]]), (4097, 1))
+    axis = np.array([0.0, 0.0, 1.0])
+    first = np.array([1.0, 0.0, 0.0])
+    second = np.array([0.0, 1.0, 0.0])
+    if kind == "cone":
+        problem: refine.Problem = refine.ConeProblem(
+            points=points,
+            apex=None,
+            axis=axis,
+            first=first,
+            second=second,
+            initial=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.7]),
+        )
+        columns = 6
+    else:
+        problem = refine.TorusProblem(
+            points=points,
+            axis=axis,
+            first=first,
+            second=second,
+            initial=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.5]),
+        )
+        columns = 7
+    chunk = refine._batch_chunk_size(8192, columns)
+    monkeypatch.setattr(refine, "MIN_BATCH", 1)
+    tracemalloc.start()
+    try:
+        answers = refine.exhausted(
+            [problem] * chunk,
+            precision=features.ROUND_FIT_PRECISION,
+            evaluations=2,
+        )
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert len(answers) == chunk
+    assert peak <= refine.BATCH_BYTES, f"{kind} block reached {peak / 2**20:.1f} MiB"
 
 
 def _same_bits(first: Any, second: Any) -> bool:
@@ -533,8 +674,9 @@ def test_the_shadow_is_disturbed(runs: list[Run], monkeypatch: pytest.MonkeyPatc
     ohne Störung fallen sie Bit für Bit zusammen.
     """
     problems = [run.problem for run in runs if run.nfev >= features.ROUND_FIT_EVALUATIONS]
+    assert len(problems) >= 10, "Die Schattenprobe braucht echte vergebliche Löserläufe."
     _safe, _status, apart, _last = _outcomes(problems)
-    assert (apart > 0.0).sum() >= len(problems) // 2
+    assert 2 * (apart > 0.0).sum() >= len(problems)
     monkeypatch.setattr(refine, "SHADOW_NOISE", 0.0)
     _safe, _status, quiet, _last = _outcomes(problems)
     assert not quiet.any()

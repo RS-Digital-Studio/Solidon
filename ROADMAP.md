@@ -2218,19 +2218,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-297"></a>
 
-- [ ] **RM-297 — Stapel der Erkennung: Reste aus dem Review.** Aus dem Release 0.5.1 (Review des Pakets stapel,
-  `konzepte/nachweise-release-0.5.1/reports/review-stapel.md`). (B5) `refine.solve` hängt bei einem
-  Budget unter eins: `nfev == evaluations` und `nfev < evaluations` sind bei null nie wahr,
-  SciPy weist den Wert ab. (B7) Fünf Docstrings in `refine.py` verweisen auf
-  `_fit_cone_measured`/`_fit_torus_measured` als Formelquelle; die Formeln stehen seit dem
-  Stapel in `_cone_from_plan`/`_torus_from_plan`. (B8) Der Fortschrittsbalken steht während
-  des Stapels: Die Lesungen liegen vor der `classify`-Schleife, `SCREEN_SHARE` bewegt sich
-  erst je fertigem Block. (B10) `BATCH_PEAK_FACTOR = 10` hat keine Reserve (gemessen 10,2
-  beim kleinsten Kegelblock), und kein Test hält die Blockgröße. (B11)
-  `test_the_shadow_is_disturbed` sichert nicht zu, dass seine Menge nicht leer ist. Dazu
-  ein Hinweis außerhalb des Pakets: Die Speicheranzeige vor der bestätigten Vollerkennung
-  (`RECOGNITION_BYTES_PER_TRIANGLE = 1 800`) liegt am Meshy-Brett zu tief. Abnahme: je
-  Punkt behoben, die Speicheranzeige am Meshy-Brett gegen die gemessene Spitze.
+- [~] **RM-297 — Stapel der Erkennung: Reste aus dem Review.** Aus dem Release 0.5.1
+  (`konzepte/nachweise-release-0.5.1/reports/review-stapel.md`). `refine.solve` prüft das
+  positive ganzzahlige Auswertungsbudget vor SciPy; Formeldocstrings verweisen auf die
+  Planfunktionen. B8 meldet Fortschritt je geplantem Fleck und Solverrunde. Der Stapelfaktor
+  12 deckt den gemessenen Spitzenwert 10,2 ab; geprüft sind der kleinste Kegelblock sowie die
+  größten aufgefüllten Kegel- und Ringblöcke. Der Schatten-Test verlangt eine nichtleere Menge.
+  Die Speicheranzeige nutzt
+  2 200 B/Dreieck: beim Meshy-Brett (1 949 922 Dreiecke) entsprechen 4 017 MiB einer Anzeige
+  von 5 GB. Gezielt bestanden: `test_refine.py` (59), `test_features.py` (267) und der
+  Meshy-Speichertest; unabhängiger Review ohne Codebefund. Abschluss nach dem gemeinsamen
+  Entwicklungstor.
 
 <a id="rm-298"></a>
 

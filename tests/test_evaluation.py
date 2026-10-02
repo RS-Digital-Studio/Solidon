@@ -4359,11 +4359,19 @@ def test_recognition_memory_estimate_covers_the_measured_imports():
     Gemessen am 24.09.2026 je Import in einem eigenen Prozess, Einlesen
     eingeschlossen: Gartenschlauchhalter 392 532 Dreiecke 601 MiB, Piratenschiff
     1 223 836 Dreiecke 2 163 MiB (RM-042), Drache 2 330 374 Dreiecke 3 859 MiB.
+    Der Meshy-Murmelbrettlauf (1 949 922 Dreiecke, RM-297 B9) erreichte
+    4 017 MiB; die Anzeige muss daraus fünf ganze GB machen.
     """
     from app.core.perceive.local import recognition_gigabytes
 
-    for triangles, mebibytes in ((392_532, 601), (1_223_836, 2_163), (2_330_374, 3_859)):
+    for triangles, mebibytes in (
+        (392_532, 601),
+        (1_223_836, 2_163),
+        (1_949_922, 4_017),
+        (2_330_374, 3_859),
+    ):
         assert recognition_gigabytes(triangles) * 1_000_000_000 >= mebibytes * 2**20
+    assert recognition_gigabytes(1_949_922) == 5
     assert recognition_gigabytes(1) == 1, "nie null Gigabyte"
 
 
