@@ -115,6 +115,14 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-436 — Reste aus dem Review bis `0041000a0`: stilles Abschalten bei vollem Datenträger, Satz ohne Weg, Kantenzahl, Italienisch](#rm-436) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-q`). Review 02.10.: Kunde erfährt ENOSPC, `edges.unmapped` mit gangbarem Weg, stabile Zahl, Wortwahl |
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
+| [RM-459 — SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt](#rm-459) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `NOT_TAKEN_BY` je Programm statt je Familie, Beilage gegen den Optionsbestand des Programms filtern |
+| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
+| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
+| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
+| [RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht](#rm-463) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `small_perimeter_speed` als Folger der Außenwand deckeln, Rollen je Familie |
+| [RM-464 — Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen](#rm-464) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `default_materials` auch bei Orca lesen, Marke aus dem Unterordner, Generic vor Fremdmarke |
+| [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
+| [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -165,6 +173,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
 | [RM-448 — Während einer Vorschau mit Differenz reagieren Haken und Knöpfe in keinem Fenster auf die Leertaste](#rm-448) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10.: Folge zu RM-437 (archiviert); Tastenfilter der Ansicht nur für die Ansicht; besteht seit 0.5.1 |
+| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -3264,6 +3273,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     (Exit 1 am Stand `8401b2c64`); Register und Bericht zu `5230384ff` sagen „Tor ausstehend“,
     obwohl der Commit in main ist.
   **Abnahme:** je Rest Test bzw. berichtigte Unterlage. Beleg: `review-0041000a0.md`.
+  Teil Italienisch erledigt mit `8cb019980` (02.10.2026): „Ridisegna il passaggio“ → „Ridipingi il passaggio“ (`app/i18n/locales/it.json:3258`), neuer Wächter `test_italian_painted_strokes_are_painted_again_not_redrawn` (ohne Fix rot); das zweite „Ridisegna“ (Kontur neu zeichnen) ist richtig und bleibt.
 
 <a id="rm-450"></a>
 
@@ -3298,6 +3308,148 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Dies ist ein quellenbelegter, noch nicht ausgeführter Gegenfall; die
   Archivierung von RM-442 belegt seine Freigabe nicht. Keine neue Umsetzung
   im begrenzten Codex-Abschluss; als Folgeprüfung für Claude dokumentiert.
+  Review 02.10.: bestätigt über die Oberfläche — mit X-Symmetrie wirkt ein Zug nicht, wenn nur seine Spiegelkopie die eben verformte Fläche greift, der Bericht nennt ihn verfehlt (gleich wie in v0.5.1). Beleg Fall C in `F:\solidon-review-reports\sonden\v8k_rm442_ui.py`.
+
+<a id="rm-459"></a>
+
+- [ ] **RM-459 — SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, SuperSlicer 2.5.59.13, Weg Bibliothek (wie
+  die Matrix aus RM-312). SuperSlicers 3MF-Leser stürzt mit `0xC0000005` ab, sobald
+  `Metadata/Slic3r_PE.config` mindestens zwei ihm unbekannte Schlüssel trägt (gemessen:
+  `gcode\probe_ss_keys.py`). Unbekannt sind `external_fill_pattern` (aus SuperSlicers eigenem
+  Bündel, in jeder Beilage) und die vier `scarf_seam_*` aus PrusaSlicer 2.9 — eine Schrägnaht genügt
+  zum Absturz. An `prusa-mini` stürzen `wuerfel A/B`, `pilz A`, `farben A` ab; 41 der 108
+  SuperSlicer-Abstürze aus der Codex-Matrix gehen darauf zurück (Variante „vorschlaege“ an runden
+  Teilen). Solidon meldet nur „Der Slicer ist beim Verarbeiten der Übergabe abgestürzt“.
+  **Stellen:** `app/core/export/slicer_keys.py:245–248` (Schrägnaht-Zeilen), `:915` (`superslicer` →
+  Familie `prusa`), `:965–981` (`NOT_TAKEN_BY` nur je Familie), `app/core/slice/advise.py:1189–1196`
+  (Vorschlag ohne Blick auf das Programm), Beilage `app/core/export/writer.py:1989–2018`,
+  `threemf.py:372`.
+  **Fix (allgemein):** Was ein Programm einer Familie nicht kennt, weder vorschlagen noch schreiben —
+  `NOT_TAKEN_BY` je Programm (`discover.program_mark`), für SuperSlicer mindestens
+  `shell.scarf_seam`; vor dem Schreiben die Schlüssel gegen den gemessenen Optionsbestand der
+  installierten Version filtern (gilt ebenso für Creality Print und Bambu Studio gegenüber
+  OrcaSlicer).
+  **Abnahme:** Wächter je Programm × Tabellenzeile gegen den Optionsbestand; `prusa-mini` mit
+  Schrägnaht in SuperSlicer liefert eine Druckdatei. Bauplan §28, §29.
+  Belege: `F:\solidon-review-reports\gcode\befunde_teil1.md` (B1), `gcode\lauf1\`.
+
+<a id="rm-460"></a>
+
+- [ ] **RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek.
+  - Bambu Studio 02.08.02.61 (alle 12 Profile): `chamber_temperature` fehlt im Konfigurationsblock;
+    Bambu führt `chamber_temperatures` (bleibt 0).
+  - ElegooSlicer 1.5.3.5 (alle mit Elegoo-/Bambu-Filamentprofil): `0` — die Filamentbasis bringt den
+    Altschlüssel `chamber_temperatures: ["0"]` mit und überschreibt Solidons Wert.
+  - OrcaSlicer 2.4.2, Creality Print 7.3: Wert steht im Block, aber `activate_chamber_temp_control
+    = 0` → kein `M141`/`M191` im G-Code. In keinem Lauf ein Kammerbefehl.
+  **Stellen:** `app/core/export/slicer_keys.py:411`, Rücklesung `slicer_profiles.py:3593`, `:3780`,
+  `manufacturer.py:924`.
+  **Fix (allgemein):** Wert an den Schlüssel, den dieses Programm liest, mit dem Schalter, ohne den er
+  nicht wirkt (wie `_positive_switch`); Altschlüssel der Basis mitsetzen oder entfernen; ohne
+  Kammerregelung (`support_chamber_temp_control = 0`) das Feld im Druckdialog als nicht wirksam
+  ausweisen.
+  **Abnahme:** je Orca-Programm ein Lauf mit 35 °C → Kammerbefehl im G-Code bzw. Feld ausgewiesen.
+  Belege: `gcode\befunde_teil1.md` (B2), `gcode\lauf1\arbeit\`.
+
+<a id="rm-461"></a>
+
+- [ ] **RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`, Weg Bibliothek. `sparse_infill_pattern`
+  `rectilinear` landet in Bambu Studio 02.08.02.61 als `cubic` (6 von 6 Läufen) und in Creality
+  Print 7.3 als `grid` (7 von 7); beide führen „Rectilinear“ unter `zig-zag`. Elegoo und Orca
+  richtig. Solidons Gegenprobe meldet `slicer.setting_ignored`, gedruckt wird trotzdem das falsche
+  Muster.
+  **Stellen:** `app/core/export/slicer_keys.py:335` (`"lines": "rectilinear"`), `:403` (eine Tabelle für
+  die ganze Orca-Familie).
+  **Fix (allgemein):** Aufzählungswerte je Programm übersetzen; jede Aufzählung einmal je Programm
+  gegen dessen Profilbestand prüfen.
+  **Abnahme:** Wächter je Programm × geschriebenem Aufzählungswert; Lauf „Linien“ in Bambu und
+  Creality druckt Linien. Belege: `gcode\befunde_body.md` (B2).
+
+<a id="rm-462"></a>
+
+- [ ] **RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat.**
+  G-Code-Gegenprüfung 02.10.2026 am Stand `4373b5f12`. `handover.verify_settings` überspringt jeden
+  geschriebenen Schlüssel, der im Konfigurationsblock fehlt (`app/core/export/handover.py:5581`).
+  Orca-Familie und PrusaSlicer schreiben ihre Konfiguration aber vollständig (631 bzw. 358
+  Schlüssel) — was fehlt, hat das Programm verworfen: `chamber_temperature` in Bambu Studio
+  (RM-460) ohne Meldung; in SuperSlicer `fan_always_on`/`min_fan_speed`. `_RECOMPUTED`
+  (`:5533–5547`) nimmt `brim_type`, `wall_sequence`, `support_type` ganz aus der Gegenprobe — genau
+  die Aufzählungen, bei denen ein unbekannter Wert still auf die Vorgabe fällt (RM-461).
+  **Fix:** Für `orca` und `prusa` einen fehlenden geschriebenen Schlüssel als „vom Slicer nicht
+  übernommen“ melden (Ausnahmeliste je Programm für belegte Umbenennungen); die drei Aufzählungen
+  wieder vergleichen.
+  **Abnahme:** Test mit verworfenem Schlüssel → Befund; belegte Umbenennung → still. Bauplan §28,
+  Regel 14. Beleg: `gcode\befunde_teil1.md` (B5).
+
+<a id="rm-463"></a>
+
+- [ ] **RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht.**
+  G-Code-Gegenprüfung 02.10.2026, PrusaSlicer 2.9.6, `prusa-mk4s` (und jedes Bündelprofil mit
+  absolutem `small_perimeter_speed`: 20 Prozesse 170, 7 mit 160, 9 mit 120 mm/s). Pilz A:
+  geschrieben `external_perimeter_speed = 160`, Stiel gedruckt mit 170 mm/s. Solidon schreibt
+  `small_perimeter_speed` nie; wer die Außenwand bremst (auch über `advise._calm_walls` für schlanke
+  Teile), bremst genau die kleinen Stäbe nicht. In der Orca-Familie führen 23–55 Prozesse den
+  Wert ebenfalls absolut.
+  **Stellen:** `app/core/export/slicer_keys.py:275`, `handover.py:3019–3021`
+  (`_ORCA_FOLLOWERS`/`_PRUSA_FOLLOWERS`), `:3024–3064` (`_followers_not_faster`).
+  **Fix (allgemein):** Jeder Slicerschlüssel, der eine Rolle eines Solidon-Tempos mit eigenem Wert
+  überschreibt, wird Folger dieses Tempos und auf die langsamere Außenwand gedeckelt; Rollenliste
+  je Familie (kleine Umfänge, Überhänge mit festem Tempo, erste Schicht über Raft).
+  **Abnahme:** Pilz A an MK4S, XL, SV06: Stiel mit dem geschriebenen Tempo. Beleg:
+  `gcode\befunde_teil1.md` (B6), `gcode\zwischenstand.md`.
+
+<a id="rm-464"></a>
+
+- [ ] **RM-464 — Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen.**
+  G-Code-Gegenprüfung 02.10.2026, Weg Bibliothek (Vorwahl wie der Druckdialog). ElegooSlicer, Bambu
+  A1 mini, PETG → `addnorth PETG ESD` (leitfähiges Sonderfilament) statt Generic/Bambu PETG; Bambu
+  A1, PETG → `BETA PETG @BBL A1` statt `Generic PETG @BBL A1` (steht in `default_materials`);
+  PrusaSlicer MK4S HF0.4, ABS → `Esun ABS @MK4S HF0.4` statt `Generic ABS @MK4S HF0.4`. Mit dem
+  Filament kommen Temperatur, Lüfter und Volumenstrom des ganzen Drucks.
+  **Stellen:** `app/core/export/slicer_profiles.py:3235–3304` (`match_filament`),
+  `:2647–2675` (`default_materials` nur bei PrusaSlicer), `:1713–1724` (Orca-Modellprofil liest die
+  Liste nicht), `:3307–3318` (`_vendor_of` nimmt bei `BBL/filament/<Marke>/` den Herstellerordner).
+  **Fix:** `default_materials` auch aus Orca-Modellprofilen; Marke = Unterordner; ohne Vorschlag der
+  Maschine „Generic <Typ>“ bzw. die Marke des Druckerherstellers vor jeder Fremdmarke, erst dann die
+  Namenslänge.
+  **Abnahme:** Wächter je erkanntem Drucker × Material gegen eine Positivliste. Bauplan §29.
+  Beleg: `gcode\befunde_teil1.md` (B7).
+
+<a id="rm-465"></a>
+
+- [ ] **RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an.**
+  G-Code-Gegenprüfung 02.10.2026 (§28.2). Die interne Schätzung (`slice/estimate.py`, Herkunft
+  `internal`) kennt keine Mindestschichtzeit: Am 20-mm-Würfel ist jede Schicht kürzer als
+  `slow_down_layer_time`; mit der Untergrenze „Schichtzahl × Mindestschichtzeit“ sinkt der Median
+  der Abweichung (ElegooSlicer +74 % → +31 %, Creality +78 % → +10 %, PrusaSlicer +75 % → +21 %,
+  SuperSlicer +41 % → +12 %). Rest: Startcode (Bambu P1S Kalibrierung 6–7 min) und Beschleunigung.
+  Mehrfarbig: `colored.3mf` 9,6 g geschätzt gegen 61,7–83 g wegen Spülmenge → `gcode.deviation` bei
+  jedem Mehrfarbdruck. Die Herkunft ist sauber getrennt (Regel 14 erfüllt).
+  **Stellen:** `app/core/slice/estimate.py:199–227`, `:61` (`TRAVEL_SHARE`),
+  `app/core/slice/gcode.py:1459` (`compare`, Schwelle 15 %), Aufruf `app/ui/main_window.py:7672–7718`.
+  **Fix:** Untergrenze je Schicht aus `cooling.minimum_layer_time`; Startzeit je Drucker aus der
+  letzten Druckdatei (§28.3); Spülmenge (`total filament used for wipe tower`) getrennt ausweisen und
+  aus dem Materialvergleich nehmen.
+  **Abnahme:** Würfel und Pilz an vier Slicern ohne Fehlalarm bei Standardwerten; Mehrfarbdruck mit
+  getrennter Spülmenge. Beleg: `gcode\befunde_teil1.md` (B8), `gcode\matrix.md`.
+
+<a id="rm-466"></a>
+
+- [ ] **RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1).**
+  G-Code-Gegenprüfung 02.10.2026. §28.1 verlangt Stützmaterialvolumen und Schichtzahl aus dem G-Code
+  als Gegenprobe. Nach *Slicen* vergleicht `_gcode_returned` → `_compare_totals` nur Zeit und
+  Material (`app/ui/main_window.py:7466–7490`, `:7672–7718`); `_compare_support` läuft nur nach
+  *G-Code prüfen* mit einer von Hand gewählten Datei (`:7583–7592`). `support_mm3` und `layer_count`
+  werden gelesen, aber weder verglichen noch gezeigt. Gemessen (Pilz A, G-Code gegen
+  Schichtanalyse): CC2 9 969 gegen 14 764 mm³, P1S 6 219 gegen 7 171, MK4S 6 629 gegen 8 889, Kobra 2
+  (Orca) 4 207 gegen 32 112 mm³.
+  **Fix:** `_gcode_returned` ruft dieselbe Stützgegenprobe wie der manuelle Weg und vergleicht die
+  Schichtzahl mit dem Raster der Analyse (erste Schichthöhe); Befunde mit Herkunft.
+  **Abnahme:** Test über die Oberfläche: *Slicen* mit Pilz → Stütz- und Schichtbefund mit beiden
+  Herkünften. Bauplan §28.1, Regel 14. Beleg: `gcode\befunde_teil1.md` (B9).
 
 ## Bedienung und Darstellung
 
@@ -4809,6 +4961,24 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   26 gesperrt, 15 frei von 41). Beleg: `verif-4373b5f12-oberflaeche.md`.
   Folgevermerk 02.10. (Rest aus RM-370, inzwischen archiviert, Stand `4373b5f12`, über die Oberfläche): *Im Chat beschreiben* lässt den Reiter „Prüfbericht“ vorn, der Fokus landet im verborgenen Chatfeld (`app/ui/main_window.py:20027–20028`); *Quader*/*Zylinder anlegen* aus der Einladung erzeugen `create_box`/`create_cylinder` als Netz, das gleich beschriftete Menü `create_brep_box` (`app/ui/viewport.py:3331`) — zwei Wege, zwei Ergebnisse; der Test klickt nur einen der fünf Einstiege.
 
+<a id="rm-456"></a>
+
+- [ ] **RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test.**
+  Review 02.10.2026 der Claude-Commits bis `73d83b55b` über die Oberfläche.
+  - **Regression gegenüber 0.5.1 (gering):** Seit RM-372 (`e27743131`) bündelt eine Erzeugung ihre
+    Schritte in einer Verlaufsgruppe, die zugeklappt erscheint — in v0.5.1 waren nach dem Erzeugen
+    2 von 4 Schritten sichtbar, jetzt 0 von 4; der Kunde sieht erst nach Aufklappen, was geschah.
+    Fix: die Gruppe der gerade entstandenen Transaktion offen zeigen.
+  - **Testlücke RM-438 (`6f64f7ed1`):** Wird `before=self._sculpt_shown()` in
+    `app/ui/main_window.py:11698` entfernt, bleiben alle 23 Fenstertests grün, die Züge setzen — der
+    Kundenfehler (Formzug in die eben gegrabene Mulde gilt als verfehlt) könnte unbemerkt
+    zurückkehren. Fix: Fenstertest mit zwei Zügen in dieselbe Mulde.
+  - **Interner Wert sichtbar (gering, keine Verschlechterung):** Die Lizenzabsage beim Erzeugen
+    zeigt die Zeile „Handlung: change“.
+  **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
+  macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
+  Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -4952,6 +5122,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   (b) `weg3-generiert-aufbereiten.p3d` trägt noch die früheren getrennten Transaktionen; beim
   Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
   Release-Lauf. Bauplan §2.7, §15.5.
+  Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2219`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -5356,6 +5527,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Sprachwächter rot gegen die alte Schreibweise, grün nach dem Umbenennen; der
   Abbildungstest `[en]` grün beim Release. Beleg:
   `F:\solidon-review-reports\register-bedienung.md`.
+  Teil Bezeichner erledigt mit `bd7f11180` (02.10.2026): `eingelesen`/`geladen` in `app/ui/main_window.py` heißen `imported`/`downloaded`, die Stämme stehen in `GERMAN_STEMS`; Gegenprobe rot an genau den drei alten Stellen. Offen bleibt der Teil `fit.svg` (Erzeugung beim nächsten Release).
 
 <a id="rm-433"></a>
 

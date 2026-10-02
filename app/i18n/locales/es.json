@@ -4297,7 +4297,7 @@
   "Lege ein Hauptmaß als Projektparameter an, statt es als Zahl zu setzen.": "Crea una cota principal como parámetro de proyecto, en vez de fijarla como número.",
   "Lege ein Passungspaar an. Die Toleranz kommt aus dem Materialprofil.": "Crea un par de ajuste. La tolerancia sale del perfil de material.",
   "Legen Sie die Datei filaments.json beiseite und beginnen Sie leer.": "Aparte el archivo filaments.json y empiece de cero.",
-  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an und haken Sie *Maße als Parameter anlegen* an.": "Añada una caja como en [Su primera pieza propia](manual:first-part) y marque *Crear las medidas como parámetros*.",
+  "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an und lassen Sie *Maße als Parameter anlegen* angehakt.": "Añada una caja como en [Su primera pieza propia](manual:first-part) y deje marcado *Crear las medidas como parámetros*.",
   "Legen Sie wie in [Das erste eigene Teil](manual:first-part) einen Quader an und klicken Sie darauf.": "Añada una caja como en [Su primera pieza propia](manual:first-part) y haga clic en ella.",
   "Legen Sie zuerst Projektparameter an und binden Sie die Maße daran, die am Baustein einstellbar sein sollen.": "Cree primero parámetros de proyecto y vincule a ellos las cotas que deban ser ajustables en el bloque.",
   "Legt Kopien in einer Reihe oder auf einem Kreis an — ein Lochbild, ein Kranz Schraubdome, eine Reihe Clips. Ein Schritt mit einer Zahl darin statt neun gleicher Schritte im Stapel.": "Coloca copias en fila o sobre un círculo — un patrón de agujeros, una corona de torretas de atornillado, una fila de clips. Un paso con un número dentro, en vez de nueve pasos idénticos en la pila.",
