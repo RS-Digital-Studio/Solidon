@@ -106,14 +106,14 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-258 — Zwei einmalige Stillstände beim Einlesen großer 3MF](#rm-258) | Bedienung und Darstellung | Ursache behoben (0.5.1, Paket 3mf); offen zwei einmalige Stellen über 200 ms je Import: erstes Bild der Arbeitsfläche, Rückfrage zur Vollerkennung |
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Wabenhalter: Bohrung und Senkung gemeinsam gewählt, kein einzelnes Merkmal, keine Langlochknöpfe — der Druck fällt an den Navigator, `translate_object` am ganzen Halter. Bedienentwurf über `bedienlogik` (Langloch samt Senkung, Versetzen oder nichts), dann Kern und Ansicht |
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
-| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | 79 Texthunks in 18 UI-Dateien und alle fünf Kataloge; 31 reine Textfälle grün, tatsächliche Ausgangsgegenprobe erwartungsgemäß rot. Eigen-/Quellreview grün; zentraler Paketreview, Entwicklungstor und CLI-/Kern-/Agentennachgang offen |
+| [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI mit b1d5381ce integriert; CLI-/Kerngruppe eigen- und zweitgeprüft, zentrale Abschlussnachweise am Punkt. Modellabnahme und eine Bereichsprüferzeile offen |
 | [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
 | [RM-290 — Übersetzungen und Wortlaute: Reste der Durchsicht 0.5.1](#rm-290) | Bedienung und Darstellung | Nach 0.5.1: fünf Wortlaute und ein Wächter |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | Nach 0.5.1: zwei doppelte Quellen in den Anleitungen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Nach 0.5.1: Produktfrage an Robert |
-| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Auftrag Robert: Größen aus den Maschinenvarianten des Slicers, Auswahl mit „Andere …“; vorher mit der Dialog-Sitzung abstimmen |
+| [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Code mit 8374885ae integriert; Düsen-/Herstelleridentität und tatsächliche 3MF-Ausgabe eigen-/zweitgeprüft, Entwicklungstor grün. Funktionale Sieben-Slicer-Matrix und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Vorschauwerkzeug im Rahmen des Schnitts bauen; wartet auf `app/core/scene/placement.py` (fremd geändert) |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
@@ -3228,12 +3228,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Lauf mit drei falsch erwarteten Nachkommastellen bleibt als Historie erhalten;
   nur die Erwartungen wurden an die bestehende zweistellige Millimeteranzeige
   angepasst. Ruff und Format auf den 19 betroffenen Pythonpfaden sind grün.
-  Eigenreview und unabhängiger Quellreview sind abgeschlossen; zentraler
-  Paketreview, vollständiges Entwicklungstor und Integration stehen aus.
-  Nachweise: `tmp/review-seit-0.5.1-2026-10-01/rm285-punctuation-20261002-7db5/`.
-  CLI, Kern- und Agententexte gehören nicht zu dieser ersten UI-Hunkgruppe und
-  bleiben im Nachgang ausdrücklich zu prüfen. Fenster-, Render- und
-  Leistungsabnahme bleibt dem Release vorbehalten.
+  Eigenreview, unabhängiger Quellreview und zentraler Paketreview sind
+  abgeschlossen. Die UI-Einheit ist mit `b1d5381ce` auf main/origin/main
+  integriert; das exakt ausgewählte gemeinsame Entwicklungstor bestand
+  18.850 Tests, 62 übersprungen, Suite/Ruff/Format/mypy jeweils Exit 0,
+  ohne Quelldrift. Nachweise:
+  `tmp/review-seit-0.5.1-2026-10-01/rm285-punctuation-20261002-7db5/` und
+  `tmp/review-seit-0.5.1-2026-10-01/commit-ui-abschluss.md`.
+
+  **Zweite Gruppe:** 29 vollständige Rahmen in `cli/main.py`, `core/install.py`,
+  `core/log.py` und `core/support.py`; alle fünf Kataloge erhalten exakt
+  22 neue und entfernen 18 global unbenutzte Schlüssel. Rohwerte, Befehle,
+  Zeilenumbrüche, Eingabeschlussleerzeichen und Betreffkürzung bleiben erhalten.
+  Alle 17 neuen reinen Fälle bestehen (393 abgewählt, Exit 0); derselbe
+  erweiterte Wächter scheitert an den vier alten Quellen mit 25 tatsächlichen
+  Fundstellen (1 erwarteter Fehler, Exit 1). Eigenreview und unabhängiger
+  lesender Quellreview sind ohne offene Befunde abgeschlossen; der zentrale
+  Quellreview bestätigt die Freigabe. Das vollständige zentrale Entwicklungstor
+  und die Übernahme dieser Gruppe werden durch
+  `tmp/review-seit-0.5.1-2026-10-01/commit-tor-rm285-cli-core-final/` und
+  `tmp/review-seit-0.5.1-2026-10-01/commit-rm285-cli-core.json` belegt.
+  Die engen Prüf- und Reviewnachweise stehen unter
+  `tmp/review-seit-0.5.1-2026-10-01/rm285-cli-core-20261002-7db5/`.
+
+  **Offene Grenzen:** 43 feste Doppelpunkte in 42 Ausdrücken der sieben
+  Agenten-/Steckbriefdateien betreffen tatsächlich Modellkontext, Antworten oder
+  Werkzeugbeschreibungen. Eine Änderung erfordert die vorgeschriebene
+  Modellabnahme; diese Quellen bleiben unverändert (`RESTMODELLTEXTE.md`).
+  Die einzelne Textzeile in `knowledge/parts/range_check.py` bleibt bis zur
+  abgestimmten vollständigen Bereichsnachweis-Runde offen, weil sie in jeden
+  Bausteinabdruck eingeht. RM-285 ist insgesamt nicht abgeschlossen. Fenster-,
+  Render- und Leistungsabnahme bleibt dem Release vorbehalten.
 
 <a id="rm-286"></a>
 
@@ -3321,9 +3346,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-312"></a>
 
-- [ ] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
+- [~] **RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl.**
   Auftrag Robert, 29.09.2026: Die Düsen und damit die Düsengröße sollen vom Drucker kommen
-  oder als Auswahlliste wählbar sein. Heute ist `Düse ⌀` ein freies Zahlenfeld (0,1 bis
+  oder als Auswahlliste wählbar sein. Ausgangsbefund: `Düse ⌀` ist ein freies Zahlenfeld (0,1 bis
   2,0 mm, `print_settings_dialog.nozzle`), vorbelegt mit 0,4 aus `printers.toml`; wer eine
   andere Düse aufschraubt, tippt sie ein, und die Maschinenvariante im Slicer folgt über
   `slicer_profiles.machine_with_nozzle`. Plan: im Kern die Düsengrößen, die der gewählte
@@ -3336,6 +3361,23 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Sitzung abstimmen, die den Dialog umgebaut hat (`4d955a9e7`). Abnahme: Elegoo CC2 bietet
   0,2/0,4/0,6/0,8 an, eine Wahl stellt Bahnbreite und Maschinenprofil, eine eigene Größe
   bleibt möglich.
+
+  **Arbeitsstand:** Düsenauswahl, „Andere …“, Zustandssatz und Profilanschluss
+  sind mit `8374885aeb61da8becb9c2c8d2f3643568d27a93` auf main/origin/main
+  integriert. Eigenreview, unabhängige Quell- und zentrale Paketreviews schließen
+  die bestätigten UI-/Profilbefunde. Native Cura-Identität hat Vorrang; Orca-
+  Geschwisterreferenzen bleiben bis zur tatsächlichen Herstellerunterlage
+  eindeutig, auch bei gleichen Anzeigenamen. Der Ausgabeanschluss bestand
+  83 gezielte Kernfälle und prüft die tatsächlich geschriebene 3MF sowie die
+  alte falsche Profilkennung als Gegenprobe. Das vollständige zentrale
+  Entwicklungstor bestand 18.771 Tests, 62 übersprungen; Suite/Ruff/Format/mypy
+  jeweils Exit 0. Nachweise unter
+  `tmp/review-seit-0.5.1-2026-10-01/`: `rm312-abschlussreview.md`,
+  `rm312-ausgabenachgang-zweitreview.md`, `commit-rm312-duesenprofile.json`
+  und `commit-tor-dialogrunde-v2-final/`. Der historische rote Lauf unter
+  `commit-tor-rm312-final/` bleibt erhalten und ist kein Abschlussnachweis.
+  Offen bleiben die funktionale Sieben-Slicer-Matrix der Dialog-Sitzung und
+  die native Fensterabnahme beim Release. Kein endgültiger Registerabschluss.
 
 <a id="rm-321"></a>
 
