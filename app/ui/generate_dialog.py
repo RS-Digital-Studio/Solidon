@@ -15,7 +15,7 @@ sieht aus wie ein Fehler; eine, die sich erklärt, nicht.
 from __future__ import annotations
 
 import threading
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
@@ -96,6 +96,49 @@ MAX_SEED = 2**31 - 1
 #: Wie hoch die Versuchsliste von sich aus sein will, in Bildpunkten. Mehr
 #: bekommt sie nur, wenn das Fenster höher ist als sein Inhalt.
 _ATTEMPTS_HEIGHT: Final = 120
+
+#: Wie viele Zeichen einer Beschreibung eine Zeile der Versuchsliste zeigt;
+#: der ganze Satz steht im Tooltip der Zeile.
+_PROMPT_IN_A_ROW: Final = 40
+
+
+@dataclass(frozen=True, slots=True)
+class _Origin:
+    """Woraus ein Versuch entstand: Beschreibung oder Bild, und der Startwert.
+
+    **Damit zwei Zeilen der Liste sich unterscheiden** (RM-373). Die Zeile
+    nannte nur Dreiecke, Volumen und dicht; wer zwischen zwei Versuchen den
+    Satz änderte, sah nicht, welcher Versuch zu welchem gehört, und
+    *Übernehmen* nahm wortlos den alten. Festgehalten beim Start, weil der
+    Bildweg die Beschreibung nicht liest und das Ergebnis den Bildnamen nicht
+    kennt.
+    """
+
+    prompt: str
+    picture: bytes | None
+    picture_name: str
+    seed: int
+
+    @property
+    def source(self) -> tuple[str, bytes | None]:
+        """Das, was der Generator gelesen hat — mit Bild nur das Bild."""
+        return ("" if self.picture is not None else self.prompt, self.picture)
+
+
+def _shortened(text: str) -> str:
+    """Der Satzanfang für eine Zeile der Versuchsliste."""
+    if len(text) <= _PROMPT_IN_A_ROW:
+        return text
+    return text[: _PROMPT_IN_A_ROW - 1].rstrip() + "\u2026"
+
+
+def _origin_line(origin: _Origin) -> str:
+    """Die zweite Zeile eines Versuchs: woraus und mit welchem Startwert."""
+    if origin.picture is not None:
+        return tr("Bild „{name}“ · Startwert {seed}", name=origin.picture_name, seed=origin.seed)
+    if origin.prompt:
+        return tr("„{text}“ · Startwert {seed}", text=_shortened(origin.prompt), seed=origin.seed)
+    return tr("Startwert {seed}", seed=origin.seed)
 
 
 class _AttemptList(QListWidget):
@@ -307,6 +350,7 @@ class GenerateDialog(QDialog):
         # noch nicht gesetztes Feld — und ein Konstruktor, der auf halbem Weg
         # abbricht, hinterlässt ein Fenster ohne Arbeiterfeld.
         self._image: bytes | None = None
+        self._image_name = ""
         self._readiness: mesh.Readiness | None = None
         """Die letzte Antwort — ``None`` heißt, dass gerade nachgesehen wird."""
         self._readiness_worker: _ReadinessWorker | None = None
@@ -323,6 +367,10 @@ class GenerateDialog(QDialog):
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
+        self._origins: list[_Origin] = []
+        """Woraus jeder Versuch in :attr:`tries` entstand, in derselben Reihe."""
+        self._starting: _Origin | None = None
+        """Woraus der laufende Wurf entsteht — er kommt erst mit ``done`` an."""
         self.tries: list[GeneratedMesh] = []
         """Was bisher entstanden ist (Konzept P15, E8).
 
@@ -440,6 +488,12 @@ class GenerateDialog(QDialog):
         self.again = QPushButton(tr("Noch ein Versuch"), self)
         self.again.setVisible(False)
         self.again.clicked.connect(self._try_again)
+        # Die Zeile über *Übernehmen*, sobald die Eingabe nicht mehr zum
+        # gewählten Versuch passt (:meth:`_show_what_is_taken`).
+        self.taken = QLabel(self)
+        self.taken.setWordWrap(True)
+        self.taken.setVisible(False)
+        self.attempts.currentRowChanged.connect(self._show_what_is_taken)
 
         # Der Weg zu dem, was fehlt — siehe :meth:`_update_state`. Welcher
         # von beiden, entscheidet die Lage: Wo nichts läuft, hilft die Liste
@@ -474,6 +528,7 @@ class GenerateDialog(QDialog):
         outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
         outer.setSpacing(NORMAL)
         outer.addWidget(self._scroll, 1)
+        outer.addWidget(self.taken)
         outer.addWidget(self.buttons)
         heading = self.advanced.findChild(QToolButton)
         if heading is not None:
@@ -481,6 +536,7 @@ class GenerateDialog(QDialog):
         wheel_needs_focus(self.seed)
 
         self.prompt.textChanged.connect(self._update_state)
+        self.prompt.textChanged.connect(self._show_what_is_taken)
         self._update_state()
         self.recheck()
 
@@ -825,6 +881,7 @@ class GenerateDialog(QDialog):
         versprach das Gegenteil.
         """
         self._image = picture
+        self._image_name = name if picture is not None else ""
         self.picture_label.setText(name or tr("Kein Bild gewählt"))
         self.drop_picture.setVisible(picture is not None)
         resting = (
@@ -845,6 +902,7 @@ class GenerateDialog(QDialog):
         # Bild braucht es kein SDXL-Modell; ohne schon. Wer eines wählt, soll
         # nicht weiter lesen, dass etwas fehlt, was er gerade umgangen hat.
         self.recheck()
+        self._show_what_is_taken()
 
     # --- running ----------------------------------------------------------------
 
@@ -945,6 +1003,12 @@ class GenerateDialog(QDialog):
         self.progress.setVisible(True)
         self.progress.setValue(0)
 
+        self._starting = _Origin(
+            prompt=self.prompt.text().strip(),
+            picture=self._image,
+            picture_name=self._image_name,
+            seed=self.seed.value(),
+        )
         worker = _Worker(backend, self.prompt.text().strip(), self._image, self.seed.value())
         worker.done.connect(self._on_done)
         worker.failed.connect(self._on_failed)
@@ -966,6 +1030,7 @@ class GenerateDialog(QDialog):
 
     def _on_done(self, result: object) -> None:
         assert isinstance(result, GeneratedMesh)
+        self._origins = [*self._origins[: len(self.tries)], self._origin_of_the_run(result)]
         self.tries.append(result)
         self.result_mesh = result
         _log.info("generated %d triangles", result.mesh.triangle_count)
@@ -991,14 +1056,19 @@ class GenerateDialog(QDialog):
         for index, entry in enumerate(self.tries, start=1):
             mesh = entry.mesh
             closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
+            origin = self._origin_at(index - 1)
             item = QListWidgetItem(
                 f"{index}. {mesh.triangle_count} {tr('Dreiecke', context='Anzahl')} · "
                 # Dieselbe Quelle wie Steckbrief und Chat (labels.volume):
                 # feste Kubikzentimeter meldeten kleine Körper als „0,0 cm³"
                 # und blieben in Zoll stehen.
                 + volume(working_volume(mesh))
-                + f" · {closed}"
+                + f" · {closed}\n"
+                # Die zweite Zeile unterscheidet die Versuche (RM-373): woraus
+                # und mit welchem Startwert, wie er im Projekt gespeichert wird.
+                + _origin_line(origin)
             )
+            item.setToolTip(origin.picture_name if origin.picture is not None else origin.prompt)
             self.attempts.addItem(item)
         self.attempts.setCurrentRow(len(self.tries) - 1)
         self.attempts.setVisible(True)
@@ -1018,6 +1088,62 @@ class GenerateDialog(QDialog):
             tr("Der Zufall spielt mit — ein weiterer Versuch kostet nichts als Zeit.")
         )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Übernehmen"))
+        self._show_what_is_taken()
+
+    def _origin_of_the_run(self, result: GeneratedMesh) -> _Origin:
+        """Woraus das gerade gelieferte Ergebnis entstand."""
+        starting, self._starting = self._starting, None
+        if starting is not None:
+            return starting
+        return _Origin(prompt=result.prompt, picture=None, picture_name="", seed=result.seed)
+
+    def _origin_at(self, row: int) -> _Origin:
+        """Woraus der Versuch in dieser Zeile entstand.
+
+        Ein Versuch, der nicht über :meth:`_start` kam, nennt, was sein
+        Ergebnis selbst trägt: Beschreibung und Startwert.
+        """
+        if len(self._origins) == len(self.tries):
+            return self._origins[row]
+        entry = self.tries[row]
+        return _Origin(prompt=entry.prompt, picture=None, picture_name="", seed=entry.seed)
+
+    def _show_what_is_taken(self) -> None:
+        """Sagt über *Übernehmen*, wenn der gewählte Versuch aus einer früheren Eingabe stammt.
+
+        *Übernehmen* nimmt immer den gewählten Versuch. Wer danach den Satz
+        ändert oder ein anderes Bild wählt, sah im Knopf keinen Unterschied
+        und bekam den alten (RM-373). Die Zeile nennt, welcher Versuch kommt,
+        und den Weg zu einem aus der neuen Eingabe.
+        """
+        row = self.attempts.currentRow()
+        if not self.tries or not 0 <= row < len(self.tries):
+            self.taken.setVisible(False)
+            return
+        origin = self._origin_at(row)
+        now = _Origin(
+            prompt=self.prompt.text().strip(),
+            picture=self._image,
+            picture_name=self._image_name,
+            seed=origin.seed,
+        )
+        if now.source == origin.source:
+            self.taken.setVisible(False)
+            return
+        if origin.picture is not None:
+            said = tr(
+                "Übernommen wird Versuch {number} aus dem früheren Bild. Was jetzt "
+                "eingetragen ist, erzeugt „Noch ein Versuch“.",
+                number=row + 1,
+            )
+        else:
+            said = tr(
+                "Übernommen wird Versuch {number} mit der früheren Beschreibung. Was jetzt "
+                "eingetragen ist, erzeugt „Noch ein Versuch“.",
+                number=row + 1,
+            )
+        self.taken.setText(said)
+        self.taken.setVisible(True)
 
     def _show_the_tries_in_view(self) -> None:
         self._scroll.ensureWidgetVisible(self.attempts)

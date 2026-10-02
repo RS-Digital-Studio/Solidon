@@ -2383,3 +2383,137 @@ def test_a_long_setup_failure_stays_in_the_scroll_area(
         dialog.release()
         dialog.deleteLater()
     qt_app.processEvents()
+
+
+def _run_once(dialog: GenerateDialog, qt_app: QApplication) -> None:
+    """Einen weiteren Wurf zu Ende laufen lassen, wie „Noch ein Versuch“ ihn startet."""
+    dialog._start()
+    worker = dialog._worker
+    assert worker is not None
+    assert worker.wait(60000), "the worker did not finish within a minute"
+    qt_app.processEvents()
+
+
+def _rows(dialog: GenerateDialog) -> list[str]:
+    return [dialog.attempts.item(row).text() for row in range(dialog.attempts.count())]
+
+
+def test_tries_from_different_sentences_say_which_sentence_and_seed(
+    qt_app: QApplication, generator: ScriptedMeshBackend
+) -> None:
+    """Zwei Sätze, zwei Zeilen, die man auseinanderhält (RM-373).
+
+    Die Zeile nannte nur Dreiecke, Volumen und dicht; zwei Würfe aus
+    verschiedenen Sätzen sahen gleich aus. Jetzt nennt jede ihren Satzanfang
+    und den Startwert, den der Schritt im Projekt speichert. Wer danach den
+    Satz ändert, liest über *Übernehmen*, dass der gewählte alte Versuch kommt
+    — und genau der kommt, mit seinem Startwert.
+    """
+    long_sentence = "eine kleine Figur mit Hut, Mantel und einem Regenschirm in der Hand"
+    dialog = GenerateDialog(backend=generator)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText(long_sentence)
+        dialog.seed.setValue(12)
+        _run_once(dialog, qt_app)
+        dialog.prompt.setText("ein Becher")
+        dialog.seed.setValue(40)
+        _run_once(dialog, qt_app)
+
+        first, second = _rows(dialog)
+        assert first != second
+        assert "„eine kleine Figur mit Hut" in first and "Startwert 12" in first, first
+        assert "Regenschirm" not in first, "lange Sätze kommen gekürzt in die Zeile"
+        assert dialog.attempts.item(0).toolTip() == long_sentence, "der ganze Satz im Tooltip"
+        assert "„ein Becher“" in second and "Startwert 40" in second, second
+        assert not dialog.taken.isVisibleTo(dialog), "der letzte Versuch passt zur Eingabe"
+
+        dialog.attempts.setCurrentRow(0)
+        assert dialog.taken.isVisibleTo(dialog), "Versuch 1 stammt aus einem anderen Satz"
+        assert "Versuch 1" in dialog.taken.text()
+        dialog.attempts.setCurrentRow(1)
+        assert not dialog.taken.isVisibleTo(dialog)
+        dialog.prompt.setText("ein Becher mit Henkel")
+        assert dialog.taken.isVisibleTo(dialog), "der Satz ist seit dem Versuch geändert"
+        assert "Versuch 2" in dialog.taken.text()
+
+        dialog.attempts.setCurrentRow(0)
+        dialog._accept_or_start()
+        assert dialog.result() == GenerateDialog.DialogCode.Accepted
+        assert dialog.result_mesh is dialog.tries[0], "übernommen wird der gewählte Versuch"
+        assert dialog.result_mesh.seed == 12, "mit seinem Startwert, nicht dem im Feld"
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_tries_from_pictures_name_the_picture(
+    qt_app: QApplication, generator: ScriptedMeshBackend, tmp_path: Path
+) -> None:
+    """Die Bildreihe: Jede Zeile nennt ihr Bild, und ein anderes Bild sagt es (RM-373)."""
+    katze = tmp_path / "katze.png"
+    katze.write_bytes(b"erstes Bild")
+    hund = tmp_path / "hund.png"
+    hund.write_bytes(b"zweites Bild")
+    dialog = GenerateDialog(backend=generator)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.set_image(katze)
+        dialog.seed.setValue(3)
+        wait_for_readiness(dialog, qt_app)
+        _run_once(dialog, qt_app)
+        dialog.set_image(hund)
+        wait_for_readiness(dialog, qt_app)
+        _run_once(dialog, qt_app)
+
+        first, second = _rows(dialog)
+        assert "katze.png" in first and "Startwert 3" in first, first
+        assert "hund.png" in second, second
+        assert not dialog.taken.isVisibleTo(dialog)
+
+        dialog.attempts.setCurrentRow(0)
+        assert dialog.taken.isVisibleTo(dialog), "Versuch 1 kam aus dem anderen Bild"
+        assert "Bild" in dialog.taken.text()
+
+        dialog.set_image(katze)
+        assert not dialog.taken.isVisibleTo(dialog), "dasselbe Bild wieder gewählt"
+        dialog.clear_image()
+        dialog.prompt.setText("eine Katze")
+        assert dialog.taken.isVisibleTo(dialog), "der Weg wechselte vom Bild zum Satz"
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
+
+
+def test_variants_of_one_sentence_differ_by_their_seed(
+    qt_app: QApplication, generator: ScriptedMeshBackend
+) -> None:
+    """Die Variantenreihe: derselbe Satz, „Noch ein Versuch“ zählt den Startwert
+    hoch, und die Zeilen unterscheiden sich daran (RM-373). Ein Wechsel
+    zwischen ihnen ist kein geänderter Satz — die Zeile über *Übernehmen*
+    bleibt weg."""
+    dialog = GenerateDialog(backend=generator)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("ein Becher")
+        dialog.seed.setValue(7)
+        _run_once(dialog, qt_app)
+        for _ in range(2):
+            dialog._try_again()
+            assert dialog._worker is not None
+            assert dialog._worker.wait(60000)
+            qt_app.processEvents()
+
+        rows = _rows(dialog)
+        assert len(set(rows)) == 3, rows
+        for row, seed in zip(rows, (7, 8, 9), strict=True):
+            assert f"Startwert {seed}" in row and "„ein Becher“" in row, row
+        for index in range(3):
+            dialog.attempts.setCurrentRow(index)
+            assert not dialog.taken.isVisibleTo(dialog), index
+    finally:
+        dialog.wait_for_workers()
+        dialog.deleteLater()
+    qt_app.processEvents()
