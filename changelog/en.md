@@ -35,9 +35,10 @@ it into `website/version.json`.
 - With Cura, Solidon takes over the printer Cura is currently using if you ask it to, including its own nozzle. A printer renamed in Cura is recognised again.
 - Cura now slices with the nozzle you chose, also for printers from Cura's own list, and printers with their origin in the middle of the bed keep it.
 - Bambu Studio receives the nozzle variant and the temperatures of your spools, all the way into the 3MF file.
-- If you choose brim, skirt or raft in the print dialog, only the settings of that bed type appear, without fields that would do nothing.
+- If you choose brim, skirt, raft or *Automatic* in the print dialog, only the settings your slicer receives for it appear, without fields that would do nothing.
 - A number outside its limit stays in the field, the limit is shown next to it, and *Slice* waits until it is right. Until now it was quietly clipped.
 - Tall, slender parts on a small footprint get calmer walls suggested, at 60 mm/s and with lower acceleration. Otherwise such rods broke off on the Centauri Carbon 2.
+- With Cura, the report names the parts that only get such values along, because Cura takes them for the whole plate only.
 - Solidon now suggests *Outer wall first* only for the part that needs it, and never for one with supports.
 - In the quick search too, *Orient for printing* checks whether a part stands securely.
 - Every part goes onto the first plate with room for it when you use *Arrange on the bed*. The mini golf set now needs four plates instead of six.

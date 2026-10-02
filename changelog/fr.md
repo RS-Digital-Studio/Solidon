@@ -36,9 +36,10 @@ dans `website/version.json`.
 - Avec Cura, Solidon reprend à votre demande l'imprimante que Cura utilise, avec sa propre buse. Une imprimante renommée dans Cura est reconnue.
 - Cura tranche maintenant avec la buse que vous avez choisie, aussi pour les imprimantes de sa propre liste, et celles dont l'origine est au centre du plateau la gardent.
 - Bambu Studio reçoit la variante de buse et les températures de vos bobines, jusque dans le fichier 3MF.
-- Si vous choisissez brim, skirt ou raft dans les réglages d'impression, seules les cotes de ce type de plateau s'affichent, sans champs sans effet.
+- Si vous choisissez brim, skirt, raft ou *Automatique* dans les réglages d'impression, seules les cotes que reçoit votre slicer s'affichent, sans champs sans effet.
 - Un nombre hors de sa limite reste dans le champ, la limite s'affiche à côté et « Trancher » attend qu'il soit juste. Jusqu'ici, il était tronqué sans rien dire.
 - Les pièces hautes et fines sur une petite base reçoivent des parois plus calmes, à 60 mm/s et avec moins d'accélération. Sur la Centauri Carbon 2, ces tiges se détachaient.
+- Avec Cura, le rapport de contrôle nomme les pièces qui reçoivent ces valeurs par ricochet, car Cura ne les prend que pour tout le plateau.
 - Solidon ne propose « Paroi extérieure d'abord » que pour la pièce qui en a besoin, et jamais pour une pièce avec supports.
 - Dans la recherche rapide aussi, « Orienter pour l'impression » vérifie qu'une pièce tient debout en sécurité.
 - Avec « Disposer sur le plateau », chaque pièce va sur le premier plateau où elle a de la place. Le jeu de minigolf tient ainsi sur quatre plateaux au lieu de six.

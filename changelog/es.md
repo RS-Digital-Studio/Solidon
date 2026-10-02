@@ -36,9 +36,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Con Cura, Solidon adopta si usted lo pide la impresora que Cura está usando, con su propia boquilla. Una impresora renombrada en Cura se vuelve a reconocer.
 - Cura lamina ahora con la boquilla que usted eligió, también en impresoras de la lista de Cura, y las impresoras con el origen en el centro de la cama lo conservan.
 - Bambu Studio recibe la variante de boquilla y las temperaturas de sus bobinas, hasta el archivo 3MF.
-- Si elige brim, skirt o raft en los ajustes de impresión, solo aparecen las medidas de ese tipo de cama, sin campos que no harían nada.
+- Si elige brim, skirt, raft o *Automático* en los ajustes de impresión, solo aparecen las medidas que recibe su slicer, sin campos que no harían nada.
 - Un número fuera de su límite se queda en el campo, el límite aparece al lado y «Laminar» espera hasta que sea correcto. Hasta ahora se recortaba sin aviso.
 - Las piezas altas y delgadas sobre una base pequeña reciben la sugerencia de paredes más tranquilas, a 60 mm/s y con menos aceleración. En la Centauri Carbon 2 esas varillas se arrancaban.
+- Con Cura, el informe de comprobación nombra las piezas que solo reciben esos valores de rebote, porque Cura los acepta solo para toda la placa.
 - Solidon sugiere «Pared exterior primero» solo para la pieza que lo necesita y nunca para una con soportes.
 - También en la búsqueda rápida, «Orientar para imprimir» comprueba si una pieza se sostiene con seguridad.
 - Con «Organizar sobre la cama», cada pieza va a la primera placa donde cabe. El juego de minigolf necesita así cuatro placas en lugar de seis.
