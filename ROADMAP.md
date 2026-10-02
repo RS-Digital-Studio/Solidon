@@ -82,11 +82,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Herkunft und vollständige Kurvenabdeckung korrigiert; 57 direkte und sechs Kundenfälle grün, Algorithmus unabhängig freigegeben; Dokumentabschluss und zentrales Tor/Übernahme offen |
 | [RM-326 — Die schnelle Druckausrichtung sagt der ganzen Szene ab, sobald ein Körper nirgends steht](#rm-326) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wie der gründliche Weg weiterrechnen und `orient.no_footing` melden |
 | [RM-327 — Der Zerfallssatz einer Bohrung verschwindet, sobald sich die Teilezahl ändert](#rm-327) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: Zahl am Endstand nachführen statt den Satz streichen; dazu fünf Codes in `ONE_PIECE_CODES` |
-| [RM-328 — Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil](#rm-328) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review seit 0.5.1: vier Tempopfade in `_SLICED_PART_PATHS`; Exporttest Stange plus Block; TPU-Grenze nicht lockern |
 | [RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen](#rm-329) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: native Cura-Instanz in `match` unabhängig von der Düse; „Instanz fehlt“ von „unvollständig“ trennen |
 | [RM-330 — An Cura-Maschinen mit Ursprung in der Bettmitte gilt jeder Druck als „über den Bauraum hinaus“](#rm-330) | Geometrie, Erkennung und Druckvorbereitung | Review seit 0.5.1: wirksamen Ursprung in `CuraMachine` tragen, `off_the_bed` und Nahtpunkt danach rechnen |
-| [RM-331 — Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer](#rm-331) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review seit 0.5.1: für `_creality_cli` vorher in Solidon anordnen oder mit *Anordnen* als Ausweg absagen; Test `keep_arrangement=False` |
-| [RM-333 — Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“](#rm-333) | Geometrie, Erkennung und Druckvorbereitung | **In Arbeit: Claude (Worktree `F:/solidon-claude-a`)** — Review seit 0.5.1: eigener Befund für eine nicht zuordenbare Variante; `unreadable` nur für unlesbare Dateien |
 | [RM-365 — *Festschreiben* einer Formsitzung friert das Entwurfsnetz ein](#rm-365) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Weg 4): beim Festschreiben in feiner Qualität rechnen; Test Dreieckszahl und Volumen |
 | [RM-381 — Boolesche Ops an mehrschaligen Modellen sind seit `eab5f4f47` 8- bis 15-mal langsamer und nicht abbrechbar](#rm-381) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Kandidaten über räumlichen Index, Deckel mit Befund, `cancelled` durchreichen; Zeitmessung Besenhalter |
 | [RM-382 — Ein Mehrschaler mit einer selbstkreuzenden Schale lässt sich seit `eab5f4f47` gar nicht mehr bearbeiten](#rm-382) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Entscheidung Robert, ob nur gehalten wird, wenn das Werkzeug die kaputte Schale berührt; Kennung und Satz mit Grund |
@@ -108,6 +105,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
+| [RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht](#rm-414) | Geometrie, Erkennung und Druckvorbereitung | Aus der Messung zu RM-331: `arranged_by_slicer` in `handover.slice_model` für `_creality_cli` setzen, Zusicherung in `test_print_settings.py:3017` umdrehen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -2561,30 +2559,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `bericht-A.md` (M2, N2), Sonden `a_zerfall_teilezahl.py`, `a_schrift_lose_dann_vereint.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch, beide Teile. Nach der Brückenfolge an beiden Kernen 3 Teile ohne Zerfallssatz; `label.fell_apart` bleibt nach der Vereinigung zu einem Teil stehen. Die fünf Codes fehlen weiter in `ONE_PIECE_CODES` (`evaluate.py:1528–1537`).
 
-<a id="rm-328"></a>
-
-- [ ] **RM-328 — Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil.**
-  Review seit 0.5.1, Befund A-M3 und A-N1, Commit `69d0c8a85` (Claude).
-  `app/core/export/writer.py:1107–1118`: `_SLICED_PART_PATHS` fehlen `speed.outer_wall`,
-  `speed.inner_wall`, `speed.outer_wall_acceleration`, `speed.acceleration`. Ohne Schnitt
-  (`:1271`, `result=None`) fragt `advise.for_part` die Regel nicht (`slice/advise.py:1010`), und
-  `_unserved` (`writer.py:1345`) legt den übernommenen Rat an jedes Teil. Der Druckdialog fragt mit
-  gemessenen Schichten (`ui/print_settings_dialog.py:2240ff`) und nennt nur die Stange — Dialog und
-  Datei sagen Verschiedenes.
-  **Fehlerfall:** Platte mit Stange 8 × 8 × 122 mm und Block 60 × 60 × 10 mm, Orca, Rat der
-  Stange übernommen → in `model_settings.config` tragen beide Objekte `outer_wall_speed 60`,
-  `inner_wall_speed 60`, `default_acceleration 2000`, Befund `export.part_setting_all`.
-  **Dazu:** `_calm_walls` (`advise.py:1557ff`) vergleicht mit den Ausgangswerten statt mit dem
-  schon geltenden Vorschlag und lockert so die TPU-Grenze: TPU-95A, Wände 100 mm/s, schlanke
-  Stange → Vorschlag 41 mm/s statt `FLEXIBLE_MAX_SPEED` 30 mm/s (`:167`). Eine spätere Regel darf
-  eine frühere nicht lockern (`min`).
-  **Abnahme:** Exporttest Stange plus Block: nur die Stange trägt die Werte, Befund
-  `export.part_setting obj_1`; Test TPU schlank → 30 mm/s. Besser leitet sich
-  `_SLICED_PART_PATHS` aus den Regeln ab, die `result` brauchen. Bauplan §29, §22.2.
-  Beleg: `bericht-A.md` (M3, N1), Sonden `a_ruhige_waende_export.py`, `a_ruhige_waende_gegenprobe.py`,
-  `a_tpu_schlank.py`.
-  Nachprüfung am Stand `6ce767031`: besteht noch, beide Teile. Stange und Block tragen beide 60/60/2000/2000 mit `export.part_setting_all`; Gegenprobe mit den vier ergänzten Pfaden liefert `export.part_setting obj_1`. TPU schlank: 41,0 statt 30 mm/s.
-
 <a id="rm-329"></a>
 
 - [ ] **RM-329 — Ein aus Cura übernommener Drucker lässt sich nach einem Düsenwechsel nicht mehr slicen.**
@@ -2633,47 +2607,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Beleg: `bericht-B.md` (B-2), Sonden `test_probe_cura_center_zero.py` (+ `out_cura_center_zero.txt`),
   `cura_center_zero.py`.
   Nachprüfung am Stand `6ce767031`: besteht noch. `gcode.off_the_bed` (error) mit `excess_mm 10.0`, gedruckt −10…10, erlaubt 0…240. `test_slicer_profiles.py:2131` hält die Naht weiter auf „0“ fest und ist grün.
-
-<a id="rm-331"></a>
-
-- [ ] **RM-331 — Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer.**
-  Review seit 0.5.1, Befund B-3, Commit `252fc77d2` (Claude).
-  `app/core/export/handover.py:3625` und `:3637–3651` (`_command`: bei `_creality_cli` kein
-  `--arrange`), `:4892–4897` (Rückfall ohne Anordnungsvorgabe ist für `_creality_cli`
-  ausgeschlossen), `app/ui/print_settings_dialog.py:1961–1972` (`place_on_bed=keep`),
-  `app/core/export/writer.py:580–622` (`arrangement_holds`), `threemf.py:309–314`.
-  **Fehlerfall:** Creality Print 7.3, *Slicen* einer Platte, auf der Solidons Anordnung nicht
-  hält (zwei Teile mit überlappender Hüllbox in der Aufsicht, etwa Teil in einem Ring; ein
-  schwebendes oder über den Rand ragendes Teil) → `keep = False`, die 3MF trägt keine
-  Bettverschiebung, und 7.3 ordnet laut der Messung im Commit auf der Konsole nie an → Abbruch -50
-  „Nicht jedes Teil liegt ganz auf der Druckplatte …“ oder eine Datei neben dem Bett. Bei allen
-  anderen Programmen der Familie und bei 7.2 ordnet in diesem Fall der Slicer an.
-  Der Codeweg ist belegt; der Ausgang am echten Creality Print 7.3 ist nicht nachgestellt —
-  zuerst dort messen.
-  **Fix:** Für `_creality_cli` vor dem Schreiben in Solidon anordnen (wie *Anordnen*) oder bei
-  nicht haltender Anordnung mit eigenem Satz absagen und *Anordnen* als erste Handlung anbieten
-  (Regeln 17, 21).
-  **Abnahme:** Test mit `keep_arrangement=False` (heute fährt `tests/test_print_settings.py:3017`
-  nur `True`); Lauf am echten Creality Print 7.3 mit Ring-Platte. Bauplan §29.
-  Beleg: `bericht-B.md` (B-3).
-  Nachprüfung am Stand `6ce767031`: besteht noch, nur am Codeweg belegt: Code unverändert, kein Test mit `keep_arrangement=False`; am echten Creality Print 7.3 weiter nicht nachgestellt.
-
-<a id="rm-333"></a>
-
-- [ ] **RM-333 — Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“.**
-  Review seit 0.5.1, Befund B-4, Commit `657631ddc` (Codex).
-  `app/core/export/manufacturer.py:1636–1656` (`base_settings`): Ist `_variant_selection` oder
-  `_variant_values` `None`, folgt `_table_foundation(..., unreadable=setup.base_process)` →
-  `slicer.process_unreadable` (`:1772–1780`, „Das gewählte Prozessprofil ließ sich nicht lesen.“).
-  **Fehlerfall:** H2C/H2D mit „High Flow“ an beiden Extrudern, mehrdeutiges
-  `nozzle_volume_type`, oder ein Grundfilament ohne die gewählte Variante → Rückfall auf Solidons
-  Tabelle (gewollt), der Kunde liest aber, das Profil sei unlesbar, und sucht eine kaputte Datei
-  (Regel 17). Der Test `tests/test_manufacturer.py:1160–1200` sichert genau diesen Text zu.
-  **Fix:** Eigener Befund (welche Variante, welches Profil, Weg in den Druckdialog), übersetzt in
-  allen Katalogen.
-  **Abnahme:** Test mehrdeutige Variante → neuer Befundcode, `process_unreadable` nur bei
-  unlesbarer Datei. Bauplan §29, §2.7. Beleg: `bericht-B.md` (B-4).
-  Nachprüfung am Stand `6ce767031`: besteht noch. `manufacturer.py:1636–1656` und `:1772–1780` unverändert; `test_manufacturer.py:1160–1200` sichert weiter `unreadable` zu und ist grün (mit den übrigen zitierten Tests 23 passed, Exit 0).
 
 <a id="rm-365"></a>
 
@@ -3104,6 +3037,16 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
     nachgezogen; das Verhalten steht stattdessen in den Karten.
   **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
   rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
+
+<a id="rm-414"></a>
+
+- [ ] **RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht.**
+  Messung 02.10.2026 zu RM-331 (Claude, Unteragent): Creality Print 7.3 (V7.3.0.6149) ordnet auf der
+  Konsole jede Platte selbst an, mit und ohne `plate`-Block — Solidons Plattenbelegung gilt dort nie.
+  Der Befund `slicer.arranged_itself` fehlt trotzdem, und `tests/test_print_settings.py:3017ff` sichert
+  das Fehlen zu. **Fix:** in `handover.slice_model` `arranged_by_slicer = keep_arrangement and (not
+  wanted_arrangement or _creality_cli(setup))`, Zusicherung im Test umdrehen. **Abnahme:** Test mit
+  haltender Anordnung an `_creality_cli` meldet `slicer.arranged_itself`. Bauplan §29.
 
 ## Bedienung und Darstellung
 

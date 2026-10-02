@@ -3695,7 +3695,7 @@ def _command(
             # die Anordnung wirklich eine ist (siehe
             # :func:`app.core.export.writer.arrangement_holds`) — sonst
             # druckten zwei Teile übereinander. Creality Print mit ``--cli``
-            # kennt den Schalter nicht und hält die Lage eines Projekts selbst.
+            # kennt den Schalter nicht und ordnet selbst an (:func:`_creality_cli`).
             arguments += ["--arrange", "0"]
         if _creality_cli(setup):
             # Ohne ihn legt 7.3 die Druckdatei nur in sein eigenes Temp-Projekt,
@@ -4444,9 +4444,18 @@ def _creality_cli(setup: SlicerSetup) -> bool:
     welche Schalter folgen, und der Lauf wartete bis zum Zeitlimit (gemessen am
     29.09.2026 mit 7.3.0.6149, ``CrealityPrint.cpp``:
     ``parse_application_arguments``). Dieselbe Konsole kennt ``--arrange`` nicht
-    mehr und ordnet ein Projekt nicht an (``SliceCommand::arrange_model_input``
-    kehrt bei einer 3MF zurück), die Lage der Teile bleibt die der Datei; die
-    Druckdatei schreibt sie nur mit ``--need-gcode-file`` in den Ausgabeordner.
+    mehr; die Druckdatei schreibt sie nur mit ``--need-gcode-file`` in den
+    Ausgabeordner.
+
+    **Eine einzelne Platte ordnet sie selbst an** (RM-331, gemessen am
+    02.10.2026 mit 7.3.0.6149 an einer Ender-3 V3 SE mit Creality-Profilen, je
+    Platte eine 3MF wie bei *Slicen*): Ring mit Kern, ein schwebendes Teil,
+    eines über den Rand und zwei überlappende Teile lagen in der Druckdatei
+    getrennt, abgesetzt und mittig auf dem Bett, ohne Absage und ohne
+    ``gcode.off_the_bed``. Eine Platte, deren Anordnung nicht hält, geht
+    deshalb wie bei den übrigen Programmen der Familie ohne Vorgabe hinaus.
+    Dieselbe Messung rückte auch eine haltende Anordnung zur Mitte, mit und
+    ohne ``plate``-Block.
     Version 7.2 lehnt ``--cli`` als unbekannten Schalter ab; dann läuft der
     Aufruf ohne ihn, gemerkt je Programm.
     """

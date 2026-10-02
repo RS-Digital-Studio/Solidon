@@ -102,6 +102,11 @@ class Foundation:
     """Ein gewähltes Prozessprofil, das sich nicht lesen ließ — dann ist die
     Grundlage Solidons Tabelle, und der Kunde erfährt es
     (:func:`findings`; Review Stufe A+B, H13)."""
+    unresolved_variant: str = ""
+    """Die Bambu-Düsenvariante, die sich nicht eindeutig zuordnen ließ — die
+    Dateien sind lesbar, die Grundlage ist trotzdem Solidons Tabelle (RM-333)."""
+    unresolved_in: str = ""
+    """Das Profil, in dem :attr:`unresolved_variant` nicht eindeutig ist."""
     has_plates: bool = True
     """Kennt der Slicer Druckplatten mit eigener Betttemperatur? PrusaSlicer
     nicht: Dort steht die Betttemperatur am Filament, und eine Platte, die
@@ -263,6 +268,16 @@ def _variant_selection(
     if len(matches) != 1:
         return None
     return _VariantSelection(selected_name, extruder_id, matches[0], len(variants))
+
+
+def _wanted_variant(process: Mapping[str, Any], machine: Mapping[str, Any]) -> str:
+    """Die Düsenvariante, wie das Profil sie verlangt — für den Befund, wenn
+    :func:`_variant_selection` sie nicht eindeutig zuordnet."""
+    raw = process.get("nozzle_volume_type")
+    if raw is None:
+        raw = machine.get("nozzle_volume_type")
+    entries = _variant_entries(raw)
+    return " / ".join(entry for entry in entries if entry) if entries else ""
 
 
 def _variant_values(
@@ -1635,7 +1650,15 @@ def base_settings(
     )
     variant = _variant_selection(process, machine)
     if variant is None:
-        return _table_foundation(profile, fallback, unreadable=setup.base_process)
+        # **Lesbar, aber nicht eindeutig** (RM-333): Solidons Tabelle gilt wie
+        # bei einer unlesbaren Datei, der Befund nennt aber die Variante, nicht
+        # eine kaputte Datei.
+        return _table_foundation(
+            profile,
+            fallback,
+            unresolved_variant=_wanted_variant(process, machine),
+            unresolved_in=setup.base_process,
+        )
     context = _Context(
         nozzle=profile.printer.nozzle_diameter,
         variant_index=variant.index,
@@ -1653,7 +1676,18 @@ def base_settings(
         filament, context, "filament_extruder_variant", "filament_extruder_id"
     )
     if process_values is None or machine_values is None or filament_values is None:
-        return _table_foundation(profile, fallback, unreadable=setup.base_process)
+        lacking = [
+            name
+            for values, name in (
+                (process_values, setup.base_process),
+                (machine_values, machine_name or ""),
+                (filament_values, setup.base_filament or ""),
+            )
+            if values is None
+        ]
+        return _table_foundation(
+            profile, fallback, unresolved_variant=variant.name, unresolved_in=lacking[0]
+        )
     defaults = PROGRAM_DEFAULTS.get(program(setup), {})
     read, foreign = _read_process(process_values, context, defaults)
     refuses = False
@@ -1764,7 +1798,9 @@ def findings(foundation: Foundation) -> list[Finding]:
 
     Ein gewähltes Prozessprofil, das sich nicht lesen ließ (H13): Dann gehen
     Solidons Werte hinaus, und das Fenster sagte nur „Ohne Profil des
-    Herstellers". Eine Platte, die niemand nennt, und eine, die der Hersteller
+    Herstellers". Eine Bambu-Düsenvariante, die ein lesbares Profil nicht
+    eindeutig zuordnet, ist kein unlesbares Profil (RM-333): Der Befund nennt
+    Variante und Profil. Eine Platte, die niemand nennt, und eine, die der Hersteller
     für dieses Filament sperrt (R4): Die Orca-Familie bricht dann mit „does not
     support filament" ab. Der Weg ist jedes Mal derselbe: im Druckdialog
     wählen, was gilt.
@@ -1776,6 +1812,25 @@ def findings(foundation: Foundation) -> list[Finding]:
                 severity="warning",
                 message=_("Das gewählte Prozessprofil ließ sich nicht lesen."),
                 values={"profile": foundation.unreadable},
+                suggestions=(OPEN_PRINT_SETTINGS,),
+            )
+        ]
+    if foundation.unresolved_variant:
+        return [
+            Finding(
+                code="slicer.process_variant_unresolved",
+                severity="warning",
+                message=_(
+                    "Das Profil „{profile}“ ordnet die Düsenvariante „{variant}“ nicht "
+                    "eindeutig zu. Bis Sie Düse und Profile im Druckdialog wählen, "
+                    "gelten Solidons Werte.",
+                    profile=foundation.unresolved_in,
+                    variant=foundation.unresolved_variant,
+                ),
+                values={
+                    "variant": foundation.unresolved_variant,
+                    "profile": foundation.unresolved_in,
+                },
                 suggestions=(OPEN_PRINT_SETTINGS,),
             )
         ]
