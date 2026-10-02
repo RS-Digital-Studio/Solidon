@@ -736,11 +736,27 @@ class FirstRunDialog(QDialog):
             return
         natural_width = max(self.sizeHint().width(), self.minimumWidth())
         form = self.custom_printer.layout()
-        if isinstance(form, QFormLayout):
-            natural_width += max(
-                0,
-                form_natural_width(form) - self.custom_printer.sizeHint().width(),
+        basics = self.custom_printer.parentWidget()
+        content_layout = self._contents.layout()
+        if isinstance(form, QFormLayout) and basics is not None and content_layout is not None:
+            basics_layout = basics.layout()
+            assert basics_layout is not None
+            # Das verborgene Formular trägt nichts zur äußeren sizeHint bei.
+            # Seine ganze Breite samt den umgebenden Rändern muss deshalb
+            # schon beim Öffnen Platz haben. Beim Aufklappen kommt ein
+            # senkrechter Rollbalken hinzu, ohne dass das Fenster breiter wird.
+            custom_width = form_natural_width(form)
+            for margins in (
+                basics_layout.contentsMargins(),
+                basics.contentsMargins(),
+                content_layout.contentsMargins(),
+                layout.contentsMargins(),
+            ):
+                custom_width += margins.left() + margins.right()
+            custom_width += (
+                2 * self._scroll.frameWidth() + self._scroll.verticalScrollBar().sizeHint().width()
             )
+            natural_width = max(natural_width, custom_width)
         may_size_initially = intent == "initial" and not self._height.initial_fit_done
         if may_size_initially:
             natural_width = max(self.width(), natural_width)
@@ -759,7 +775,6 @@ class FirstRunDialog(QDialog):
             if label.wordWrap() and label.width() > 0 and label.isVisibleTo(self._contents):
                 label.setMinimumHeight(0)
                 label.setMinimumHeight(label.heightForWidth(label.width()))
-        content_layout = self._contents.layout()
         if content_layout is None:
             return
         content_layout.invalidate()

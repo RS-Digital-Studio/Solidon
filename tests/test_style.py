@@ -162,6 +162,9 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
         def layout(self) -> None:
             return None
 
+        def parentWidget(self) -> None:  # noqa: N802 — Qt-Name
+            return None
+
     class Dialog:
         def __init__(self) -> None:
             self._size = QSize(680, 400)

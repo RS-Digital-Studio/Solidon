@@ -677,16 +677,19 @@ def test_failed_slicer_path_save_keeps_first_run_open_and_can_be_retried(
 
 
 @pytest.mark.parametrize("language", ["fr", "it"])
+@pytest.mark.parametrize("technology", ["fdm", "resin"])
 def test_custom_printer_natural_width_and_manual_height_survive_toggling(
-    setup_dialog: FirstRunDialog, qt_app: QApplication, language: str
+    setup_dialog: FirstRunDialog, qt_app: QApplication, language: str, technology: str
 ) -> None:
     """Die langen Maßzeilen bekommen Platz; eine bewusst gewählte Höhe bleibt erhalten."""
     from PySide6.QtTest import QTest
 
     from app.i18n import get_language, set_language
     from app.i18n.catalog import install_language
+    from app.ui.theme import apply_theme
 
     spoken = get_language()
+    apply_theme(qt_app, UiSettings().theme)
     install_language(language)
     set_language(language)
     dialog = FirstRunDialog(UiSettings(language=language))
@@ -695,8 +698,10 @@ def test_custom_printer_natural_width_and_manual_height_survive_toggling(
         QTest.qWait(100)
         initial_height = dialog.height()
         initial_width = dialog.width()
+        assert dialog._scroll.horizontalScrollBar().maximum() == 0
         default = dialog.printer.currentData()
         dialog.printer.setCurrentIndex(dialog.printer.findData("__custom__"))
+        dialog.printer_technology.setCurrentIndex(dialog.printer_technology.findData(technology))
         QTest.qWait(100)
         assert dialog._scroll.horizontalScrollBar().maximum() == 0
         assert dialog.width() == initial_width
