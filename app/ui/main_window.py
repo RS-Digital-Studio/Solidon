@@ -20173,11 +20173,58 @@ class MainWindow(QMainWindow):
         """
         result = self.session.last_result
         empty = result is not None and not result.scene.objects and not self.session.busy
-        self.viewport.invitation.set_chat_available(self.session.agent_backend is not None)
-        self.viewport.invitation.show_for(empty and not self._on_start_screen)
+        invitation = self.viewport.invitation
+        invitation.set_chat_available(self.session.agent_backend is not None)
+        halted = self._halted_before_a_body(result) if empty else None
+        if halted is not None and not self._on_start_screen:
+            # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
+            number, step = halted
+            invitation.show_halted(
+                tr("Das Projekt hält an Schritt {number}: {step}").format(
+                    number=number, step=step
+                ),
+                tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht."),
+            )
+            self.object_tree.say_why_empty(
+                tr(
+                    "Noch kein Körper: Das Projekt hält an Schritt {number}. "
+                    "Ein Doppelklick im Verlauf öffnet ihn."
+                ).format(number=number)
+            )
+            return
+        self.object_tree.say_why_empty("")
+        invitation.show_for(empty and not self._on_start_screen)
+
+    def _halted_before_a_body(self, result: EvaluationResult | None) -> tuple[int, str] | None:
+        """Nummer und Titel des Schritts, an dem die Kette hält, wenn noch nichts im Bild ist.
+
+        ``None``, wenn nichts hält — oder wenn die Ansicht ohnehin den letzten
+        vollständigen Stand zeigt (§15.3, RM-354); dann ist die Szene nicht leer.
+        """
+        if result is None or result.stopped_at is None:
+            return None
+        if self._picture_for(result).scene.objects:
+            return None
+        try:
+            entry = self.session.history.operation(result.stopped_at)
+        except AppError:
+            return None
+        try:
+            step = str(REGISTRY.get(entry.op).title)
+        except AppError:
+            step = entry.op
+        return int(result.stopped_at), step
 
     def _on_invitation(self, chosen: str) -> None:
         """Ein Einstieg aus der leeren Szene — derselbe Weg wie Menü und Werkzeugzeile."""
+        result = self.session.last_result
+        if chosen == "correct_step":
+            if result is not None and result.stopped_at is not None:
+                self.edit_operation(result.stopped_at)
+            return
+        if chosen == "report":
+            self._focus_report(force=True)
+            return
         if chosen == "draw":
             self.action_sketch_free()
         elif chosen == "parts":

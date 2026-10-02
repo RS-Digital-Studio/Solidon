@@ -1908,6 +1908,18 @@ class ObjectTree(QWidget):
         layout.addWidget(self._empty)
         layout.addWidget(self.tree)
 
+    def say_why_empty(self, note: str) -> None:
+        """Was der leere Baum sagt: die Einladung, oder warum noch kein Körper da ist.
+
+        Ein Projekt, dessen Kette am ersten Schritt hält, ist nicht leer; dort
+        „Über „Erzeugen“ entsteht ein Körper“ zu lesen, schickte den Kunden an
+        den Anfang statt an den Schritt (RM-458). Leer heißt: die Vorgabe.
+        """
+        text = note or _empty_objects_text()
+        if self._empty.text() != text:
+            self._empty.setText(text)
+            fit_wrapped(self._empty)
+
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
         """Welche Körper gerade nicht gezeichnet werden — nur zum Anzeigen."""
         if hidden == self._hidden:

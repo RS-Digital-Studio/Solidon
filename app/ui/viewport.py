@@ -3342,10 +3342,16 @@ class EmptySceneInvitation(QFrame):
     einer Datei. Nichts Modales: Die Einladung verschwindet mit dem ersten
     Körper und kommt bei jeder leeren Szene wieder (neues Projekt, alles
     gelöscht, Strg+Z bis zum Anfang).
+
+    **Leer ist nicht dasselbe wie neu** (RM-458): Hält die Kette schon am
+    ersten Schritt, hat das Projekt Schritte, aber noch keinen Körper. Dann
+    fragt die Karte nicht, womit man anfängt, sondern sagt, wo das Projekt
+    hält, und bietet den Weg zur Korrektur (:meth:`show_halted`, §2.7, §15.3).
     """
 
     chosen = Signal(str)
-    """Welcher Einstieg gewählt wurde: ein Operationsname oder ``draw``, ``parts``, ``chat``."""
+    """Welcher Einstieg gewählt wurde: ein Operationsname oder ``draw``, ``parts``,
+    ``chat`` — bei angehaltener Kette ``correct_step`` oder ``report``."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3355,7 +3361,12 @@ class EmptySceneInvitation(QFrame):
         outer.setSpacing(TIGHT)
         self.title = QLabel(tr("Womit fangen Sie an?"), self)
         self.title.setObjectName("invitationTitle")
+        self.title.setWordWrap(True)
         outer.addWidget(self.title)
+        self.reason = QLabel("", self)
+        self.reason.setWordWrap(True)
+        self.reason.hide()
+        outer.addWidget(self.reason)
         row = QHBoxLayout()
         row.setSpacing(TIGHT)
         self.buttons: dict[str, QPushButton] = {}
@@ -3377,15 +3388,32 @@ class EmptySceneInvitation(QFrame):
             row.addWidget(button)
             self.buttons[key] = button
         outer.addLayout(row)
+        halt_row = QHBoxLayout()
+        halt_row.setSpacing(TIGHT)
+        self.halt_buttons: dict[str, QPushButton] = {}
+        for key, text in (
+            ("correct_step", tr("Schritt korrigieren")),
+            ("report", tr("Prüfbericht zeigen")),
+        ):
+            button = QPushButton(text, self)
+            button.setAccessibleName(text)
+            button.clicked.connect(lambda _checked=False, chosen=key: self.chosen.emit(chosen))
+            button.hide()
+            halt_row.addWidget(button)
+            self.halt_buttons[key] = button
+        halt_row.addStretch(1)
+        outer.addLayout(halt_row)
         self.drop_hint = QLabel(tr("Oder ziehen Sie eine Datei hierher."), self)
         self.drop_hint.setObjectName("invitationHint")
         outer.addWidget(self.drop_hint)
+        self._chat_available = True
         self.set_theme("dark")
         self.hide()
 
     def set_chat_available(self, available: bool) -> None:
         """Ohne KI-Zugang kein Chatknopf — dann spricht der Hinweis an der Chatleiste (§2.3)."""
-        self.buttons["chat"].setVisible(available)
+        self._chat_available = available
+        self.buttons["chat"].setVisible(available and not self.reason.isVisibleTo(self))
 
     def set_theme(self, theme: str) -> None:
         """Ruhig wie das Vorschauband, aber durchgezogen: Das ist kein Zwischenstand."""
@@ -3414,10 +3442,28 @@ class EmptySceneInvitation(QFrame):
         self.raise_()
 
     def show_for(self, empty: bool) -> None:
-        """Sichtbar genau dann, wenn die Szene leer ist."""
+        """Sichtbar genau dann, wenn die Szene leer ist — als Einladung zum Anfangen."""
+        self.title.setText(tr("Womit fangen Sie an?"))
+        self._halted(False)
         self.setVisible(empty)
         if empty:
             self.place()
+
+    def show_halted(self, title: str, reason: str) -> None:
+        """Die Kette hält, bevor ein Körper entsteht: wo, warum, und der Weg weiter."""
+        self.title.setText(title)
+        self.reason.setText(reason)
+        self._halted(True)
+        self.show()
+        self.place()
+
+    def _halted(self, halted: bool) -> None:
+        for key, button in self.buttons.items():
+            button.setVisible(not halted and (key != "chat" or self._chat_available))
+        self.drop_hint.setVisible(not halted)
+        self.reason.setVisible(halted)
+        for button in self.halt_buttons.values():
+            button.setVisible(halted)
 
 
 class PreviewBanner(QFrame):

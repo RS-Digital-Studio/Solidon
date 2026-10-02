@@ -20303,6 +20303,62 @@ def test_a_halt_at_the_first_step_keeps_the_last_picture(window: MainWindow) -> 
     assert window._halted, "und die Statuszeile sagt, dass die Kette anhält"
 
 
+def test_a_project_halting_at_its_first_step_says_so_instead_of_inviting(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """RM-458: Eine Datei, deren Kette am ersten Schritt hält, ist kein leeres Projekt.
+
+    Geöffnet stand „Noch keine Objekte“ im Baum und „Womit fangen Sie an?“
+    über der Ansicht, obwohl ein Quader-Schritt da war. Jetzt sagen Ansicht und
+    Baum, dass das Projekt an Schritt 1 hält, und *Schritt korrigieren* öffnet
+    ihn (§2.7, §15.3). Der Weg ist der des Kunden: Datei öffnen.
+    """
+    import dataclasses
+
+    builder = Session()
+    high = _bound_width_project(builder)
+    document = builder.project.document
+    box = document.ops[0]
+    document.ops[0] = dataclasses.replace(
+        box, params={**box.params, "width": f"=max(@breite, {high + 1000.0:g})"}
+    )
+    stored = builder.save_project(tmp_path / "haelt.p3d")
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window.open_path(stored)
+        assert window.session.wait_for_idle(30_000)
+        for _ in range(8):
+            QApplication.processEvents()
+        result = window.session.last_result
+        assert result is not None and result.stopped_at == 1 and not result.scene.objects
+
+        card = window.viewport.invitation
+        assert card.isVisible()
+        assert "Womit" not in card.title.text()
+        assert "1" in card.title.text(), card.title.text()
+        assert not any(button.isVisibleTo(card) for button in card.buttons.values())
+        assert not card.drop_hint.isVisibleTo(card)
+        correct = card.halt_buttons["correct_step"]
+        assert correct.isVisibleTo(card) and card.halt_buttons["report"].isVisibleTo(card)
+
+        note = window.object_tree._empty.text()
+        assert "1" in note and "Erzeugen" not in note, note
+
+        correct.click()
+        QApplication.processEvents()
+        dialog = window._op_dialog
+        assert dialog is not None, "der Schritt ist zum Korrigieren offen"
+        dialog.reject()
+        QApplication.processEvents()
+    finally:
+        window.session.wait_for_idle()
+        window.close()
+        window.deleteLater()
+        builder.deleteLater()
+
+
 def _a_stored_width_beyond_its_field(window: MainWindow) -> float:
     """*Breite* jenseits der Feldgrenze, wie eine Datei sie mitbringt — zurück die Grenze."""
     import dataclasses

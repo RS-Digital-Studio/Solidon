@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-458: Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen (02.10.2026)](#rm-458-eine-datei-die-an-schritt-1-hält-sagt-das-statt-zum-anfangen-einzuladen-02102026) |
 | 2026-10-02 | [RM-457: Das Ausdrucksfeld im Schrittdialog zeigt seinen Ausdruck lesbar (02.10.2026)](#rm-457-das-ausdrucksfeld-im-schrittdialog-zeigt-seinen-ausdruck-lesbar-02102026) |
 | 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
 | 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
@@ -36658,3 +36659,18 @@ Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfl
   Bauplan §13, §19.
 
 **Abschluss:** Das Ausdrucksfeld (`op_dialog.ValueField`) ist so breit wie sein Ausdruck, mindestens wie das Beispiel im Platzhalter, höchstens 40 Zeichen (`_fit_expression`), nie schmaler als die Zahl, an deren Stelle es steht; der Leerraum hinter den Knöpfen weicht ihm. Ein gespeicherter Ausdruck öffnet mit dem Anfang im Bild, und wer das Feld verlässt, liest ihn wieder von vorn. Der Tooltip nennt den ganzen Ausdruck, darunter die Grammatik (`_name_expression`). Test: `test_operation_ui.py::test_an_expression_field_shows_its_start_and_room_for_it` (rot am Ausgangsstand: 205 Punkte Feld gegen 228 Ausdruck), dazu 24 Ausdrucksfälle der Datei grün. Fenstersonde am echten Fenster (Datei `a453` öffnen, *Schritt korrigieren* aus RM-458): Feld 192 Punkte für 109 Punkte Ausdruck, Cursor vorn, Tooltip mit Ausdruck; Bilder `457-01-schrittdialog.png`, `457-02-feld-ohne-fokus.png`. Umgesetzt von Claude (Thread „Bedienung und KI“).
+
+## RM-458: Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen (02.10.2026)
+
+<a id="rm-458-eine-datei-die-an-schritt-1-hält-sagt-das-statt-zum-anfangen-einzuladen-02102026"></a>
+<a id="rm-458"></a>
+
+**RM-458 — Eine Datei, die an Schritt 1 hält, sagt das statt zum Anfangen einzuladen.**
+Gruppe „Bedienung und Darstellung“. Fund eines Unteragenten über die Oberfläche (02.10.2026,
+  Sonde zu RM-453): Eine Projektdatei, deren Kette schon an Schritt 1 hält (Quader mit
+  `=max(@breite, 2000)` über der Feldgrenze), öffnete mit leerer Szene, „Noch keine Objekte. Über
+  „Erzeugen“ entsteht ein Körper …“ im Baum und der Einladung „Womit fangen Sie an?“ über der
+  Ansicht, obwohl ein Quader-Schritt da war. Die Startkarte für eine leere Szene schickte den
+  Kunden an den Anfang statt an den Schritt. Bauplan §2.7, §15.3.
+
+**Abschluss:** Hält die Kette, bevor ein Körper im Bild ist (kein letzter vollständiger Stand nach RM-354), zeigt die Karte über der Ansicht „Das Projekt hält an Schritt 1: Quader anlegen“, darunter „Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht.“ und die Knöpfe *Schritt korrigieren* (öffnet den Schritt, `edit_operation`) und *Prüfbericht zeigen* (`EmptySceneInvitation.show_halted`, `MainWindow._halted_before_a_body`); der Baum sagt „Noch kein Körper: Das Projekt hält an Schritt 1. Ein Doppelklick im Verlauf öffnet ihn.“ (`ObjectTree.say_why_empty`). Rechnet die Kette wieder, tritt die Karte zur Seite; ein wirklich leeres Projekt lädt weiter ein. Texte in allen fünf Katalogen. Test: `test_ui.py::test_a_project_halting_at_its_first_step_says_so_instead_of_inviting` (Datei speichern und öffnen wie der Kunde; rot am Ausgangsstand), Nachbarn `test_a_halt_at_the_first_step_keeps_the_last_picture`, `test_correcting_a_composed_expression_opens_the_step_and_not_the_parameter` und die vier Einladungstests grün. Fenstersonde am echten Fenster (`a453` öffnen, Knopf mit `QTest` geklickt, Ausdruck korrigiert, übernommen): vorher 4 Prüfungen offen, nachher erfüllt, Karte nach der Korrektur weg; Bilder `458-01-geoeffnet.png`, `458-02-karte.png`, `458-03-korrigiert.png`. Regel in `fenster.md` („Hinter einen Halt kommt kein Schritt“). Umgesetzt von Claude (Thread „Bedienung und KI“).

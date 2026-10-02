@@ -151,8 +151,9 @@ wird nur, wenn Zurückgenommenes verworfen würde (§15.4,
 ## Hinter einen Halt kommt kein Schritt
 
 Hält die Kette an (§15.3), zeigt das Bild den letzten vollständig gerechneten
-Stand, und dahinter wird nichts gerechnet. Zwei Stellen halten das, beide sind
-nötig:
+Stand, und dahinter wird nichts gerechnet. Gibt es keinen, sagen Leerkarte und
+Baum den Schritt, mit *Schritt korrigieren*, nie die Einladung (RM-458). Zwei
+Stellen halten das, beide sind nötig:
 
 - **Die Sitzung nimmt keinen Schritt an** (`Session.halt_in_the_way` in `apply`
   mit Entwürfen, `split_async`, `auto_split`, `split_along`, `create_lid`,
