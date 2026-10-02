@@ -3958,3 +3958,71 @@ def test_brep_slot_preflight_does_not_continue_when_search_is_incomplete(
     assert observed["max_pairs"] is None
     assert observed["require_complete"] is True
     assert caught.value.detail == CROSSING_SEARCH_INCOMPLETE_DETAIL
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+@pytest.mark.parametrize("side", ["+x", "-x", "+y"])
+def test_a_slot_in_a_side_wall_can_be_shortened(profile: Profile, kernel: str, side: str) -> None:
+    """Das Werkzeug aus den Kennzahlen drehte das Profil mit ``rotation_between``
+    statt im Rahmen von ``slot_frame``: An einer Seitenwand mit Normale ±X lag
+    es um 90° verdreht, *Zum Langloch ziehen* schloss den alten Umriss nicht,
+    und es blieb ``slot_hole.feature_lost`` (RM-325). +Y war schon richtig."""
+    exact = kernel == "brep"
+    sign = -1.0 if side.startswith("-") else 1.0
+    along_x = side.endswith("x")
+    if exact:
+        exact_kernel()
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+
+        body = edit.box(60.0, 100.0, 60.0)
+    else:
+        body = MeshData.of(trimesh.creation.box(extents=(60.0, 100.0, 60.0)))
+        body.raw.apply_translation((0.0, 0.0, 30.0))
+    wall = 60.0 if along_x else 100.0
+
+    def recognised(result: SceneObject) -> dict[str, Feature]:
+        return features_of(result.mesh) if exact else detect(as_mesh_data(result.mesh))
+
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=body, kind=kernel)
+    drilled = run_op(
+        "drill_hole",
+        entry,
+        profile,
+        diameter=6.0,
+        slotted=True,
+        slot_length=20.0,
+        slot_angle=30.0,
+        x=sign * 30.0 if along_x else 0.0,
+        y=0.0 if along_x else sign * 50.0,
+        z=30.0,
+        axis="normal",
+        nx=sign if along_x else 0.0,
+        ny=0.0 if along_x else sign,
+        nz=0.0,
+        depth=0.0,
+        compensate=False,
+    )
+    drilled = dataclasses.replace(drilled, features=recognised(drilled))
+    before = next(feature for feature in drilled.features.values() if feature.kind == "slot")
+
+    result, findings = run_op_with_findings(
+        "slot_hole",
+        drilled,
+        profile,
+        at_feature=before.id,
+        slot_length=14.0,
+        slot_angle=30.0,
+        diameter=6.0,
+        compensate=False,
+    )
+
+    solid = 60.0 * 100.0 * 60.0
+    # Am Netz sind die Bögen Sehnenzüge; die Abweichung wächst mit der Wandlänge.
+    assert result.mesh.volume == pytest.approx(
+        solid - (math.pi * 9.0 + 6.0 * 8.0) * wall, abs=1e-6 if exact else 0.05 * wall
+    )
+    slots = [feature for feature in recognised(result).values() if feature.kind == "slot"]
+    assert len(slots) == 1, "genau ein Langloch, keine Reste des alten Umrisses"
+    assert slots[0].params["length"] == pytest.approx(14.0, abs=1e-6 if exact else 0.01)
+    assert not any(finding.code == "slot_hole.feature_lost" for finding in findings)

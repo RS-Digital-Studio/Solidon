@@ -1413,6 +1413,14 @@ def slot_profile(*, radius: float, travel: float, angle_deg: float = 0.0) -> Ske
 #: so gewollt.
 SLOT_ACROSS_LIMIT: Final = 0.5
 
+#: Der Kegel um ±X, ±Y und ±Z, in dem :func:`slot_frame` eine Achse als diese
+#: Hauptachse liest. Heute derselbe halbe Grad wie die Drehschwelle darüber,
+#: aber eine **eigene** Zahl (RM-325): Wer die Schwelle nachstellt, darf damit
+#: nicht den Rahmen verschieben, gegen den gespeicherte Winkel zählen.
+#: **Eine Änderung braucht eine Migration** — jeder gespeicherte Langlochwinkel
+#: an einer Achse im Kegelrand meinte danach eine andere Richtung.
+SLOT_FRAME_CONE: Final = 0.5
+
 
 def slot_frame(axis: Vec3, origin: Vec3) -> PlaneFrame:
     """Der Rahmen, gegen den der Winkel eines Langlochs zählt — beim Schneiden an
@@ -1429,7 +1437,7 @@ def slot_frame(axis: Vec3, origin: Vec3) -> PlaneFrame:
     Langloch damit nach jeder Änderung eines früheren Schritts in eine andere
     Richtung.
 
-    **Innerhalb von** :data:`SLOT_ACROSS_LIMIT` **neben ±X, ±Y oder ±Z gilt die
+    **Innerhalb von** :data:`SLOT_FRAME_CONE` **neben ±X, ±Y oder ±Z gilt die
     Achse als diese Hauptachse** (Entscheidung 30.09.2026): Die erste
     Rahmenachse kommt aus der Hauptachse (``units.plane_axes``) und wird gegen
     die gemessene Achse gestellt, die zweite ist das Kreuzprodukt aus Achse und
@@ -1450,7 +1458,7 @@ def slot_frame(axis: Vec3, origin: Vec3) -> PlaneFrame:
     unit = (x / span, y / span, z / span)
     main = max(range(3), key=lambda index: abs(unit[index]))
     beside = math.hypot(*(unit[index] for index in range(3) if index != main))
-    if beside == 0.0 or beside > units.exact_sin_degrees(SLOT_ACROSS_LIMIT):
+    if beside == 0.0 or beside > units.exact_sin_degrees(SLOT_FRAME_CONE):
         return frame_of(axis, origin)
     principal = [0.0, 0.0, 0.0]
     principal[main] = 1.0 if unit[main] > 0.0 else -1.0

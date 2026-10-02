@@ -927,7 +927,7 @@ def _feature_solid(
         # Zylinder träfe seine geraden Flanken nicht. Aufgezogen wird in der
         # **lokalen** Ebene; die Drehung in die Achse macht der gemeinsame
         # Schluss unten, wie bei Zylinder und Kegel auch.
-        from app.core.geom.prepare import slot_profile
+        from app.core.geom.prepare import slot_frame, slot_profile
         from app.core.geom.sketch_solid import extrude_profile
 
         measured = float(feature.params.get("diameter", 0.0)) * scale
@@ -935,6 +935,16 @@ def _feature_solid(
         if travel <= EPS_GEOM:
             body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS)
         else:
+            # **Im Rahmen, gegen den der Winkel zählt** (RM-325). Hier stand ein
+            # lokales Profil, das der Schluss unten mit ``rotation_between``
+            # in die Achse drehte — dessen Basis ist nicht die von
+            # ``slot_frame``. An +Y und +Z fielen beide zusammen, an einer
+            # Seitenwand mit Normale ±X lag das Werkzeug um 90° verdreht:
+            # *Zum Langloch ziehen* schloss den alten Umriss nicht.
+            axis_vec = (float(direction[0]), float(direction[1]), float(direction[2]))
+            frame = slot_frame(axis_vec, (0.0, 0.0, 0.0))
+            normal = np.asarray(frame.normal, dtype=float)
+            start = np.asarray(centre, dtype=float) - normal * (height / 2.0)
             body = extrude_profile(
                 slot_profile(
                     radius=diameter / 2.0,
@@ -943,12 +953,13 @@ def _feature_solid(
                 ),
                 height,
                 PlaneFrame(
-                    origin=(0.0, 0.0, -height / 2.0),
-                    x_axis=(1.0, 0.0, 0.0),
-                    y_axis=(0.0, 1.0, 0.0),
-                    normal=(0.0, 0.0, 1.0),
+                    origin=(float(start[0]), float(start[1]), float(start[2])),
+                    x_axis=frame.x_axis,
+                    y_axis=frame.y_axis,
+                    normal=frame.normal,
                 ),
             )
+            return MeshData.of(body)
     else:
         body = lathe.cylinder(radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS)
 
