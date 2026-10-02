@@ -88,6 +88,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Manejo y sistema
 
 - Los diálogos se abren al tamaño de su contenido, sin espacio vacío, y un tamaño que usted haya ajustado se mantiene.
+- La exportación, «Laminar» y «Abrir en el slicer …» reciben siempre el cálculo fino, no la vista más gruesa de la ventana. Redondeos y conos llegan al archivo con resolución completa.
+- Una exportación durante un cálculo en curso espera al resultado nuevo. Antes el archivo podía llevar todavía la medida antigua.
+- La barra de parámetros rechaza una medida fuera de su límite en vez de dejar la vista vacía.
 - En la barra de parámetros cuenta cada paso de flecha, y el foco se queda en el campo.
 - Si un paso espera una pregunta, «Aplicar» sigue disponible y la pregunta aparece.
 - En el diálogo de una operación las etiquetas forman una columna, los campos tienen el mismo ancho y cada interruptor está antes de lo que activa.

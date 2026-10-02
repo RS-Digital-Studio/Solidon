@@ -87,6 +87,9 @@ it into `website/version.json`.
 ### Operation and system
 
 - Dialogs open at the size of their content, without empty space, and a size you dragged yourself stays.
+- Export, *Slice* and *Open in slicer …* always get the fine calculation, not the coarser view of the window. Fillets and cones reach the file at full resolution.
+- An export during a running calculation waits for the new result. Until now the file could still carry the old size.
+- The parameter bar rejects a dimension beyond its limit instead of leaving the view empty.
 - In the parameter bar every arrow step counts, and the focus stays in the field.
 - If a step is waiting for a question, *Apply* stays available and the question appears.
 - In the dialog of an operation the labels stand in one column, the fields have the same width, and every switch sits before what it switches.

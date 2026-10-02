@@ -88,6 +88,9 @@ dans `website/version.json`.
 ### Utilisation et système
 
 - Les boîtes de dialogue s'ouvrent à la taille de leur contenu, sans espace vide, et une taille que vous avez réglée vous-même est conservée.
+- L'export, « Trancher » et « Ouvrir dans le slicer … » reçoivent toujours le calcul fin, pas la vue plus grossière de la fenêtre. Congés et cônes arrivent ainsi en pleine résolution.
+- Un export pendant un calcul en cours attend le nouveau résultat. Avant, le fichier pouvait encore porter l'ancienne cote.
+- La barre des paramètres refuse une cote hors de sa limite au lieu de laisser la vue vide.
 - Dans la barre des paramètres, chaque pas de flèche compte, et le focus reste dans le champ.
 - Si une étape attend une question, « Appliquer » reste disponible et la question s'affiche.
 - Dans la boîte de dialogue d'une opération, les libellés forment une colonne, les champs ont la même largeur et chaque interrupteur précède ce qu'il commande.
