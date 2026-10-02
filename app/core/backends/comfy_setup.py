@@ -1475,8 +1475,9 @@ def setup(
 
     ``image_model`` holt zusätzlich das Bildmodell für den Weg aus Text — als
     eigener Wunsch, denn es braucht nur dieser Weg, und es sind sieben
-    Gigabyte. Ohne ``weights`` bleibt auch das Bildmodell liegen: Die Gewichte
-    sind der Kernweg, und wer sie nicht will, richtet gerade nur die Knoten ein.
+    Gigabyte. Es hängt nicht an ``weights``: Der Dialog schaltet die Gewichte
+    ab, sobald sie schon liegen, und genau dann fehlt meist nur noch das
+    Bildmodell (RM-343). Ohne beides richtet der Lauf nur die Knoten ein.
 
     Abgebrochen wird **auch mitten in einem Schritt** — der Download der
     Gewichte dauert eine halbe Stunde, und ein Abbrechen, das erst danach
@@ -1501,21 +1502,22 @@ def setup(
         # ein fehlendes Paket zu melden ist nach zwei Sekunden mehr wert als
         # nach einer halben Stunde Download.
         nodes_load(found, python, target, progress, cancelled)
-        if not weights:
+        if not weights and not image_model:
             return Result(
                 comfyui=found,
                 nodes=target,
                 weights=weights_present(found),
                 image_model=image_model_present(found),
             )
-        if cancelled is not None and cancelled():
-            return _stopped(found, target)
-        # Das Kleine zuerst: 445 MB gegen 7,5 GB. Wer abbricht, hat dann
-        # wenigstens den Teil, der schnell ging.
-        fetch_background(found, python, progress, cancelled)
-        if cancelled is not None and cancelled():
-            return _stopped(found, target)
-        fetch_weights(found, python, progress, cancelled)
+        if weights:
+            if cancelled is not None and cancelled():
+                return _stopped(found, target)
+            # Das Kleine zuerst: 445 MB gegen 7,5 GB. Wer abbricht, hat dann
+            # wenigstens den Teil, der schnell ging.
+            fetch_background(found, python, progress, cancelled)
+            if cancelled is not None and cancelled():
+                return _stopped(found, target)
+            fetch_weights(found, python, progress, cancelled)
         if image_model:
             if cancelled is not None and cancelled():
                 return _stopped(found, target)
@@ -1528,7 +1530,12 @@ def setup(
         # das erst danach wirkt, ist keines.
         return _stopped(found, target)
     _log.info("comfy setup finished in %s", found)
-    return Result(comfyui=found, nodes=target, weights=True, image_model=image_model_present(found))
+    return Result(
+        comfyui=found,
+        nodes=target,
+        weights=weights or weights_present(found),
+        image_model=image_model_present(found),
+    )
 
 
 def _stopped(comfyui: Path, nodes: Path) -> Result:

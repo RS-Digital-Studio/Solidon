@@ -2989,8 +2989,15 @@ def test_the_setup_fetches_the_image_model_only_when_asked(
 
     steps.clear()
     result = comfy_setup.setup(comfyui, weights=False, image_model=True)
-    assert "image_model" not in steps, "ohne Gewichte nur die Knoten — auch kein Bildmodell"
-    assert result.image_model, "was da ist, wird trotzdem gemeldet"
+    assert steps[-1] == "image_model", (
+        "liegen die Gewichte schon, holt der Wunsch das Bildmodell trotzdem (RM-343)"
+    )
+    assert "weights" not in steps and "background" not in steps
+    assert result.done and result.image_model
+
+    steps.clear()
+    result = comfy_setup.setup(comfyui, weights=False, image_model=False)
+    assert steps[-1] == "nodes_load", "ohne Wunsch nur die Knoten"
 
 
 @pytest.mark.parametrize("path", ["/prompt", "/history/", "/upload/image"])
