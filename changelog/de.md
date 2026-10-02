@@ -78,7 +78,7 @@ Nutzen da und sonst nichts.
 - Schneidet eine Bohrung den Körper durch, sagt der Prüfbericht es einmal, mit der Teilezahl am Ende, und schweigt, sobald der Körper wieder ein Stück ist.
 - Eine Figur schneidet *Modell teilen* auch an ihrer Spiegelnaht geschlossen, und die Stifte sitzen schon in der Vorschau.
 - Streift ein Schnitt eine Wand nur, nennt *Modell teilen* die Stelle und führt zur Lage des Schnitts, statt an den Stiften zu scheitern.
-- Abschneiden schneidet jetzt auch schräg: Unter *Weitere Einstellungen* stehen *Neigung* und *Kippachse*, und *An Fläche* führt den Schnitt parallel zu einer ebenen Fläche.
+- Abschneiden schneidet jetzt auch schräg: Vorn wählen Sie die *Ebene* — an einer Achse mit Neigung, parallel zu einer Fläche, durch eine Kante oder durch drei Punkte, die Sie im Bild anklicken.
 - Ein STEP-Körper bleibt beim Abschneiden ein STEP-Körper, mit seinen Flächen, Kanten und Namen.
 - Ein frisch erzeugter Drehdeckel gilt im Prüfbericht nicht mehr als zu eng für seinen Hals.
 

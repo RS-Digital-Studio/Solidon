@@ -54,7 +54,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un taladro corta el cuerpo en dos, el informe lo dice una sola vez, con el número de piezas al final, y calla en cuanto el cuerpo vuelve a ser una pieza.
 - También por la costura de simetría de una figura, «Dividir el modelo» corta sin dejarla abierta, y los pasadores ya están en la vista previa.
 - Si un corte solo roza una pared, «Dividir el modelo» indica el lugar y lleva a la posición del corte en vez de fallar en los pasadores.
-- Recortar corta ahora también en ángulo: en «Más ajustes» están «Inclinación» y «Eje de inclinación», y «En la cara» lleva el corte paralelo a una cara plana.
+- Recortar corta ahora también en ángulo: arriba elige el «Plano»: en un eje con inclinación, paralelo a una cara, por una arista o por tres puntos que marca en la vista.
 - Un cuerpo STEP sigue siendo un cuerpo STEP al recortarlo, con sus caras, aristas y nombres.
 - Una tapa roscada recién creada ya no aparece en el informe como demasiado ajustada para su cuello.
 

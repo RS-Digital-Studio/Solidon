@@ -53,7 +53,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um furo corta o corpo em dois, o relatório di-lo uma só vez, com o número de peças no fim, e cala-se assim que o corpo volta a ser uma peça.
 - Também ao longo da costura de simetria de uma figura, «Dividir o modelo» corta sem a deixar aberta, e os pinos já estão no lugar na pré-visualização.
 - Se um corte só roça uma parede, «Dividir o modelo» indica o sítio e leva à posição do corte em vez de falhar nos pinos.
-- Cortar fora corta agora também em ângulo: em «Mais definições» estão «Inclinação» e «Eixo de inclinação», e «Na face» leva o corte paralelo a uma face plana.
+- Cortar fora corta agora também em ângulo: em cima escolhe o «Plano» — num eixo com inclinação, paralelo a uma face, por uma aresta ou por três pontos que clica na vista.
 - Um corpo STEP continua um corpo STEP ao cortá-lo, com as suas faces, arestas e nomes.
 - Uma tampa de rosca acabada de criar já não aparece no relatório como demasiado justa para o gargalo.
 

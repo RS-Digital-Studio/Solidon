@@ -32,6 +32,7 @@ from app.core.errors import (
     SHOW_LOCATIONS,
     SPLIT_AND_RETRY,
     SPLIT_MODEL,
+    AppError,
     BooleanFailedError,
     GeometryError,
     InternalError,
@@ -17513,21 +17514,55 @@ def _surface_side(feature: Feature, plane: SectionPlane, mesh: Mesh | None) -> F
     return None
 
 
+#: Woran die Ebene von *Abschneiden* hängt (RM-400, Vorgabe Robert „an jeder
+#: Ebene: Winkel, Fläche, drei Punkte“). Eigene Schlüssel und nicht „face“ oder
+#: „points“: Ein Auswahlwert trägt überall dieselbe Beschriftung
+#: (``labels.choice_label``), und „face“ heißt dort schon „Auf eine Fläche“.
+CUT_PLANES: Final = ("along_axis", "at_face", "through_edge", "through_points")
+
+#: Die Kippachse, die *Automatisch* nimmt: quer zur Schnittachse, so dass eine
+#: waagerechte oder senkrechte Front nach hinten kippt (N3 der Nachprüfung —
+#: die alte Vorgabe X wies an Achse X jede Neigung ab).
+_TILT_AXIS_FOR: Final[Mapping[str, str]] = {"x": "y", "y": "x", "z": "x"}
+
+
 @op_params
 class CutAwayParams(BaseParams):
+    plane: str = param(
+        title=_("Ebene"),
+        default="along_axis",
+        choices=CUT_PLANES,
+        doc=_(
+            "Woran die Schnittebene hängt: an einer Achse, parallel zu einer ebenen "
+            "Fläche, durch eine Kante oder durch drei Punkte. Kante und Punkte "
+            "werden im Bild gewählt."
+        ),
+    )
     axis: str = param(
         title=_("Achse"),
         default="z",
         choices=_AXES,
+        depends_on=("plane", ("along_axis", "through_edge")),
         doc=_("Senkrecht zu welcher Achse geschnitten wird. Z legt einen waagerechten Schnitt."),
     )
     position: float = param(
         title=_("Position"),
         default=0.0,
         unit="mm",
+        depends_on=("plane", ("along_axis",)),
         doc=_(
             "Wo die Schnittebene liegt, auf dieser Achse gemessen. Die Zahl bleibt "
             "änderbar: ein Doppelklick auf den Schritt verschiebt den Schnitt."
+        ),
+    )
+    offset: float = param(
+        title=_("Abstand"),
+        default=0.0,
+        unit="mm",
+        depends_on=("plane", ("at_face", "through_edge", "through_points")),
+        doc=_(
+            "Wie weit die Ebene parallel zu sich versetzt wird, gemessen von Fläche, "
+            "Kante oder Punkten. An einer Fläche nimmt -2 zwei Millimeter weg."
         ),
     )
     keep: str = param(
@@ -17542,7 +17577,7 @@ class CutAwayParams(BaseParams):
         unit=DEGREE_UNIT,
         minimum=-89.0,
         maximum=89.0,
-        placement="advanced",
+        depends_on=("plane", ("along_axis", "through_edge")),
         doc=_(
             "Kippt die Schnittebene um diesen Winkel — für schräge Fronten und Fasen "
             "ganzer Seiten. Null schneidet gerade."
@@ -17550,12 +17585,14 @@ class CutAwayParams(BaseParams):
     )
     tilt_axis: str = param(
         title=_("Neigen um"),
-        default="x",
-        choices=_AXES,
+        default="auto",
+        choices=("auto", *_AXES),
         placement="advanced",
+        depends_on=("plane", ("along_axis",)),
         doc=_(
-            "Um welche Achse die Ebene gekippt wird. Die Kippachse geht auf der "
-            "eingestellten Position durch die Mitte des Körpers."
+            "Um welche Achse die Ebene gekippt wird; automatisch eine quer zur "
+            "Schnittachse. Die Kippachse geht auf der eingestellten Position durch "
+            "die Mitte des Körpers."
         ),
     )
     at_feature: str = param(
@@ -17564,31 +17601,64 @@ class CutAwayParams(BaseParams):
         kind="feature",
         feature_kinds=("face",),
         placement="advanced",
+        depends_on=("plane", ("at_face",)),
         doc=_(
-            "Schneidet parallel zu dieser ebenen Fläche statt an einer Achse. Die "
-            "Position zählt dann von der Fläche aus: -2 nimmt 2 mm von ihr weg."
+            "Schneidet parallel zu dieser ebenen Fläche statt an einer Achse. Der "
+            "Abstand zählt dann von der Fläche aus: -2 nimmt 2 mm von ihr weg."
+        ),
+    )
+    edge: str = param(
+        title=_("Kante"),
+        default="",
+        kind="edges",
+        placement="advanced",
+        depends_on=("plane", ("through_edge",)),
+        doc=_(
+            "Die gerade Kante, durch die die Ebene geht. Ohne Neigung steht sie "
+            "senkrecht zur Achse, die Neigung kippt sie um die Kante."
+        ),
+    )
+    points: str = param(
+        title=_("Drei Punkte"),
+        default="",
+        kind="points",
+        placement="advanced",
+        depends_on=("plane", ("through_points",)),
+        doc=_(
+            "Drei Stellen der Ebene, im Bild angeklickt oder eingetragen. Unten liegt "
+            "die Seite mit den kleineren Werten entlang der Achse, zu der die Ebene "
+            "am steilsten steht."
         ),
     )
 
 
 def _cut_away_plane(
-    params: CutAwayParams, mesh: MeshData, features: Mapping[str, Feature]
+    params: CutAwayParams,
+    source: SceneObject,
+    mesh: MeshData,
+    bound: tuple[int, ...] | None = None,
 ) -> SectionPlane:
-    """Die Schnittebene von *Abschneiden*, gerade oder geneigt (RM-400).
+    """Die Schnittebene von *Abschneiden*: an einer Achse, Fläche, Kante oder drei Punkten.
 
     Geneigt wird die Achsnormale um ``tilt_axis``; die Kippachse liegt auf der
     eingetragenen Position und geht in den beiden anderen Richtungen durch die
     Mitte des Hüllquaders der Eingabe — reproduzierbar aus Parametern und
     Eingang (Regel 2). Ohne Neigung ist es die Achsebene von vorher, auf den
-    Bit genau: alte Schritte rechnen unverändert.
+    Bit genau: alte Schritte rechnen unverändert. ``bound`` ist die von der
+    Auswertung gebundene Kante (``OpContext.bound_edges``).
     """
-    if params.at_feature:
-        return _face_plane(params, features)
+    if params.plane == "at_face":
+        return _face_plane(params, source.features)
+    if params.plane == "through_points":
+        return _points_plane(params)
+    if params.plane == "through_edge":
+        return _edge_plane(params, source, bound)
     axis = cast(Axis, params.axis)
     normal = AXIS_NORMALS[axis]
     if abs(params.tilt) <= EPS_GEOM:
         return SectionPlane(normal=normal, position=params.position)
-    if params.tilt_axis == params.axis:
+    about = _TILT_AXIS_FOR[axis] if params.tilt_axis == "auto" else params.tilt_axis
+    if about == params.axis:
         raise ValidationError(
             field="tilt_axis",
             detail=_(
@@ -17598,21 +17668,7 @@ def _cut_away_plane(
             value=params.tilt_axis,
             constraint="tilt_about_axis",
         )
-    cosine = units.exact_cos_degrees(params.tilt)
-    sine = units.exact_sin_degrees(params.tilt)
-    about = AXIS_NORMALS[cast(Axis, params.tilt_axis)]
-    # Rodrigues für einen zur Drehachse senkrechten Vektor:
-    # n' = n·cos + (a kreuz n)·sin — elementweise, plattformgleich (RM-187).
-    cross = (
-        about[1] * normal[2] - about[2] * normal[1],
-        about[2] * normal[0] - about[0] * normal[2],
-        about[0] * normal[1] - about[1] * normal[0],
-    )
-    tilted = (
-        normal[0] * cosine + cross[0] * sine,
-        normal[1] * cosine + cross[1] * sine,
-        normal[2] * cosine + cross[2] * sine,
-    )
+    tilted = _tilted(normal, AXIS_NORMALS[cast(Axis, about)], params.tilt)
     low, high = mesh.raw.bounds
     pivot = [float(low[index] + high[index]) / 2.0 for index in range(3)]
     pivot[_AXES.index(params.axis)] = params.position
@@ -17620,8 +17676,262 @@ def _cut_away_plane(
     return SectionPlane(normal=tilted, position=distance)
 
 
+def _tilted(normal: Vec3, about: Vec3, degrees: float) -> Vec3:
+    """``normal`` um die Einheitsachse ``about`` gedreht, die senkrecht zu ihr steht.
+
+    Rodrigues für einen zur Drehachse senkrechten Vektor:
+    n' = n·cos + (a kreuz n)·sin — elementweise, plattformgleich (RM-187).
+    """
+    cosine = units.exact_cos_degrees(degrees)
+    sine = units.exact_sin_degrees(degrees)
+    cross = (
+        about[1] * normal[2] - about[2] * normal[1],
+        about[2] * normal[0] - about[0] * normal[2],
+        about[0] * normal[1] - about[1] * normal[0],
+    )
+    return (
+        normal[0] * cosine + cross[0] * sine,
+        normal[1] * cosine + cross[1] * sine,
+        normal[2] * cosine + cross[2] * sine,
+    )
+
+
+def _upward(normal: Vec3) -> Vec3:
+    """Die Normale so gedreht, dass ihr größter Anteil positiv ist.
+
+    Drei Punkte geben ihrer Ebene je nach Reihenfolge die eine oder die andere
+    Normale. „Kleinere Seite“ soll aber dieselbe Seite meinen, gleich in
+    welcher Folge sie angeklickt wurden: die mit den kleineren Werten entlang
+    der Achse, zu der die Ebene am steilsten steht — bei Z unten, wie an einer
+    Achse. Bei Gleichstand gewinnt Z vor Y vor X.
+    """
+    leading = max((2, 1, 0), key=lambda index: abs(normal[index]))
+    if normal[leading] < 0.0:
+        return (-normal[0], -normal[1], -normal[2])
+    return normal
+
+
+def _points_plane(params: CutAwayParams) -> SectionPlane:
+    """Die Ebene durch die drei eingetragenen Punkte, um ``offset`` entlang ihrer Normalen."""
+    from app.core.sketch.planes import THROUGH_PREFIX, ThroughPlane, derived_plane
+
+    try:
+        described = derived_plane(THROUGH_PREFIX + params.points, field="points")
+    except ValidationError:
+        described = None
+    if not isinstance(described, ThroughPlane):
+        raise ValidationError(
+            field="points",
+            detail=_(
+                "Für eine Ebene durch drei Punkte fehlen Punkte. Klicken Sie drei Stellen "
+                "am Körper an oder tragen Sie sie ein."
+            ),
+            value=params.points,
+            constraint="no_points",
+        )
+    first, second, third = described.points
+    one = (second[0] - first[0], second[1] - first[1], second[2] - first[2])
+    two = (third[0] - first[0], third[1] - first[1], third[2] - first[2])
+    cross = (
+        one[1] * two[2] - one[2] * two[1],
+        one[2] * two[0] - one[0] * two[2],
+        one[0] * two[1] - one[1] * two[0],
+    )
+    length = math.sqrt(cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2)
+    spread = math.sqrt(one[0] ** 2 + one[1] ** 2 + one[2] ** 2) * math.sqrt(
+        two[0] ** 2 + two[1] ** 2 + two[2] ** 2
+    )
+    if length <= EPS_GEOM * max(spread, 1.0):
+        raise ValidationError(
+            field="points",
+            detail=_(
+                "Die drei Punkte liegen auf einer Geraden oder aufeinander — sie spannen "
+                "keine Ebene auf. Einen davon seitlich versetzen."
+            ),
+            value=params.points,
+            constraint="points_on_one_line",
+        )
+    unit = _upward((cross[0] / length, cross[1] / length, cross[2] / length))
+    distance = unit[0] * first[0] + unit[1] * first[1] + unit[2] * first[2]
+    return SectionPlane(normal=unit, position=distance + params.offset)
+
+
+def _edge_plane(
+    params: CutAwayParams, source: SceneObject, bound: tuple[int, ...] | None
+) -> SectionPlane:
+    """Die Ebene durch eine gerade Kante, senkrecht zur Achse und um die Kante geneigt.
+
+    Ohne Neigung enthält sie die Kante und steht senkrecht zur gewählten
+    Achse; die Neigung dreht sie um die Kante (Rodrigues wie an der Achse).
+    Die Kante hat keine Vorzeichenrichtung (``edges.edge_key``) — gedreht wird
+    um die Richtung, deren erster Anteil ungleich null positiv ist, so wie es
+    der Schlüssel festhält.
+    """
+    from app.core.geom.edges import edges_in_kernel, points_in_kernel
+
+    keys = tuple(part for part in str(params.edge or "").split() if part)
+    if not keys:
+        raise ValidationError(
+            field="edge",
+            detail=_(
+                "Für eine Ebene durch eine Kante fehlt die Kante. Wählen Sie eine gerade "
+                "Kante des Körpers."
+            ),
+            value=params.edge,
+            constraint="no_edge",
+        )
+    if len(keys) > 1:
+        raise ValidationError(
+            field="edge",
+            detail=_("Eine Ebene geht durch genau eine Kante. Wählen Sie nur eine."),
+            value=params.edge,
+            constraint="one_edge",
+        )
+    kernel, entries = edges_in_kernel(source.mesh, source.kind)
+    chosen = _the_edge(kernel, source, entries, keys, bound)
+    points = points_in_kernel(kernel, source.mesh, chosen)
+    start, end = points[0], points[-1]
+    along = (end[0] - start[0], end[1] - start[1], end[2] - start[2])
+    length = math.sqrt(along[0] ** 2 + along[1] ** 2 + along[2] ** 2)
+    straight = length > EPS_GEOM and all(
+        _off_the_line(point, start, along, length) <= MAX_FACET_SAG for point in points
+    )
+    if not straight:
+        raise ValidationError(
+            field="edge",
+            detail=_(
+                "Durch eine runde Kante geht keine Ebene. Wählen Sie eine gerade Kante "
+                "oder legen Sie die Ebene durch drei Punkte."
+            ),
+            value=params.edge,
+            constraint="edge_not_straight",
+        )
+    direction = (along[0] / length, along[1] / length, along[2] / length)
+    leading = next(index for index in range(3) if abs(direction[index]) > EPS_GEOM)
+    if direction[leading] < 0.0:
+        direction = (-direction[0], -direction[1], -direction[2])
+    axis = AXIS_NORMALS[cast(Axis, params.axis)]
+    across = units.dot3(axis, direction)
+    base = (
+        axis[0] - across * direction[0],
+        axis[1] - across * direction[1],
+        axis[2] - across * direction[2],
+    )
+    size = math.sqrt(base[0] ** 2 + base[1] ** 2 + base[2] ** 2)
+    if size <= EPS_DISPLAY:
+        raise ValidationError(
+            field="axis",
+            detail=_(
+                "Die Kante läuft entlang der Achse — eine Ebene durch sie steht nicht "
+                "senkrecht zu ihr. Wählen Sie eine andere Achse."
+            ),
+            value=params.axis,
+            constraint="edge_along_axis",
+        )
+    normal = _tilted((base[0] / size, base[1] / size, base[2] / size), direction, params.tilt)
+    return SectionPlane(normal=normal, position=units.dot3(normal, start) + params.offset)
+
+
+def _the_edge(
+    kernel: str,
+    source: SceneObject,
+    entries: Sequence[Any],
+    keys: tuple[str, ...],
+    bound: tuple[int, ...] | None,
+) -> Any:
+    """Die eine gewählte Kante — gebunden von der Auswertung oder über ihren Schlüssel."""
+    from app.core.geom.edges import selected_or_wanted
+
+    if kernel == "brep" and bound is not None:
+        from app.core.brep import edit
+
+        chosen = list(edit._edges_at(cast(Any, source.mesh), bound))
+    else:
+        chosen = selected_or_wanted(entries, "named", keys, bound)
+    if len(chosen) != 1:
+        raise ValidationError(
+            field="edge",
+            detail=_(
+                "Diese Kante gibt es am Körper nicht mehr — ein Schritt davor hat sie "
+                "verändert. Wählen Sie sie neu."
+            ),
+            value=" ".join(keys),
+            constraint="no_edge",
+        )
+    return chosen[0]
+
+
+def _off_the_line(point: Vec3, start: Vec3, along: Vec3, length: float) -> float:
+    """Wie weit ein Punkt von der Geraden durch ``start`` in Richtung ``along`` liegt."""
+    offset = (point[0] - start[0], point[1] - start[1], point[2] - start[2])
+    cross = (
+        offset[1] * along[2] - offset[2] * along[1],
+        offset[2] * along[0] - offset[0] * along[2],
+        offset[0] * along[1] - offset[1] * along[0],
+    )
+    return math.sqrt(cross[0] ** 2 + cross[1] ** 2 + cross[2] ** 2) / length
+
+
+def edge_cut_through_middle(source: SceneObject, key: str) -> tuple[str, float] | None:
+    """Achse und Neigung, mit denen die Ebene durch diese Kante die Körpermitte trifft.
+
+    Die Vorbelegung des Dialogs, wenn eine Kante gewählt ist (RM-400, M3 der
+    Nachprüfung): Durch eine Außenkante schneidet eine Ebene ohne Neigung
+    nichts ab, und der Dialog öffnete sonst mit „Diese Ebene schneidet nichts
+    vom Objekt ab.“ Durch die Mitte des Körpers nimmt sie sichtbar etwas weg;
+    den Winkel stellt der Kunde danach ein. Die Achse ist die, zu der die
+    Kante am meisten quer liegt, bei Gleichstand Z vor Y vor X. ``None``, wenn
+    es die Kante nicht gibt oder sie nicht gerade ist.
+    """
+    from app.core.geom.edges import edges_in_kernel, points_in_kernel
+
+    kernel, entries = edges_in_kernel(source.mesh, source.kind)
+    try:
+        chosen = _the_edge(kernel, source, entries, (key,), None)
+    except AppError:
+        return None
+    points = points_in_kernel(kernel, source.mesh, chosen)
+    start, end = points[0], points[-1]
+    along = (end[0] - start[0], end[1] - start[1], end[2] - start[2])
+    length = math.sqrt(along[0] ** 2 + along[1] ** 2 + along[2] ** 2)
+    if length <= EPS_GEOM or any(
+        _off_the_line(point, start, along, length) > MAX_FACET_SAG for point in points
+    ):
+        return None
+    direction = (along[0] / length, along[1] / length, along[2] / length)
+    leading = next(index for index in range(3) if abs(direction[index]) > EPS_GEOM)
+    if direction[leading] < 0.0:
+        direction = (-direction[0], -direction[1], -direction[2])
+    order: tuple[Axis, ...] = ("z", "y", "x")
+    name = min(order, key=lambda axis: abs(units.dot3(AXIS_NORMALS[axis], direction)))
+    axis = AXIS_NORMALS[name]
+    across = units.dot3(axis, direction)
+    base = (
+        axis[0] - across * direction[0],
+        axis[1] - across * direction[1],
+        axis[2] - across * direction[2],
+    )
+    size = math.sqrt(base[0] ** 2 + base[1] ** 2 + base[2] ** 2)
+    base = (base[0] / size, base[1] / size, base[2] / size)
+    side = (
+        direction[1] * base[2] - direction[2] * base[1],
+        direction[2] * base[0] - direction[0] * base[2],
+        direction[0] * base[1] - direction[1] * base[0],
+    )
+    low, high = as_mesh_data(source.mesh).raw.bounds
+    middle = tuple(float(low[index] + high[index]) / 2.0 - start[index] for index in range(3))
+    # n(t)·v = a·cos t + b·sin t verschwindet bei t = atan2(-a, b); in (-90°, 90°]
+    # zeigt die Normale zur Achse hin, wie an jeder anderen Ebene des Schnitts.
+    tilt = math.degrees(math.atan2(-units.dot3(base, middle), units.dot3(side, middle)))
+    if tilt > 90.0:
+        tilt -= 180.0
+    elif tilt <= -90.0:
+        tilt += 180.0
+    return name, max(-89.0, min(89.0, tilt))
+
+
 def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> SectionPlane:
-    """Die Ebene parallel zu einer ebenen Fläche, um ``position`` nach außen versetzt.
+    """Die Ebene parallel zu einer ebenen Fläche, um ``offset`` nach außen versetzt.
 
     Achse und Neigung zählen dann nicht: Die Fläche gibt beides vor — die
     schräge Front eines Teils lässt sich so um ein Maß kürzen, ohne ihren
@@ -17653,14 +17963,16 @@ def _face_plane(params: CutAwayParams, features: Mapping[str, Feature]) -> Secti
         )
     unit = (float(normal[0]) / length, float(normal[1]) / length, float(normal[2]) / length)
     distance = unit[0] * float(centre[0]) + unit[1] * float(centre[1]) + unit[2] * float(centre[2])
-    return SectionPlane(normal=unit, position=distance + params.position)
+    return SectionPlane(normal=unit, position=distance + params.offset)
 
 
 @register_op(
     name="cut_away",
     # Eine neu entstandene Berührlinie wird nicht als Modell übernommen.
     # 4: Ein exakter Körper bleibt exakt (RM-400).
-    cache_version="4",
+    # 5: Die Kippachse „Automatisch“ neigt an Achse X um Y, wo vorher eine
+    # Absage stand; dazu Ebenen durch Kante und drei Punkte (RM-400).
+    cache_version="5",
     title=_("Abschneiden"),
     category="prepare",
     params=CutAwayParams,
@@ -17689,20 +18001,23 @@ def cut_away(ctx: OpContext) -> OpResult:
     params = cast(CutAwayParams, ctx.params)
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
-    plane = _cut_away_plane(params, mesh, source.features)
+    plane = _cut_away_plane(params, source, mesh, ctx.bound_edges.get("edge"))
+    # Das Feld, das die Lage der Ebene trägt: die Position an einer Achse, sonst
+    # der Abstand von Fläche, Kante oder Punkten — eine Absage zeigt dorthin.
+    where = "position" if params.plane == "along_axis" else "offset"
     if params.keep == "above":
         plane = plane.flipped()
     if source.kind == "brep":
-        return _cut_away_exact(ctx, source, plane, params.position)
+        return _cut_away_exact(ctx, source, plane, where, getattr(params, where))
     kept = cut(mesh, plane)
-    check_cut_contact(kept, params.position)
+    check_cut_contact(kept, getattr(params, where))
     if not kept.mesh.triangle_count or kept.mesh.triangle_count == mesh.triangle_count:
         # Nichts übrig oder nichts weggenommen: beides ist eine Ebene, die das
         # Objekt nicht trifft — dieselbe Absage wie beim Teilen, mit dem Feld.
         raise ValidationError(
-            field="position",
+            field=where,
             detail=_("Diese Ebene schneidet nichts vom Objekt ab."),
-            value=params.position,
+            value=getattr(params, where),
             constraint="no_split",
         )
     features, _dropped = _features_after_split(source.features, plane, mesh)
@@ -17737,7 +18052,7 @@ def cut_away(ctx: OpContext) -> OpResult:
 
 
 def _cut_away_exact(
-    ctx: OpContext, source: SceneObject, plane: SectionPlane, position: float
+    ctx: OpContext, source: SceneObject, plane: SectionPlane, field: str, value: float
 ) -> OpResult:
     """*Abschneiden* am exakten Körper: Er bleibt exakt (RM-400).
 
@@ -17764,9 +18079,9 @@ def _cut_away_exact(
         # Dieselbe Absage wie am Netz: Eine Ebene, die nichts oder alles
         # nimmt, trifft das Objekt nicht.
         raise ValidationError(
-            field="position",
+            field=field,
             detail=_("Diese Ebene schneidet nichts vom Objekt ab."),
-            value=position,
+            value=value,
             constraint="no_split",
         )
     checked = _exact_body_checked(solid)

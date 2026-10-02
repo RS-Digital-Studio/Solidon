@@ -54,7 +54,7 @@ dans `website/version.json`.
 - Si un perçage coupe le corps en deux, le rapport le dit une seule fois, avec le nombre de pièces à la fin, et se tait dès que le corps est de nouveau d'un seul tenant.
 - Même le long de sa couture de symétrie, « Scinder le modèle » coupe une figure proprement, et les goupilles sont en place dès l'aperçu.
 - Si une coupe ne fait qu'effleurer une paroi, « Scinder le modèle » indique l'endroit et mène à la position de la coupe au lieu d'échouer sur les goupilles.
-- Découper coupe maintenant aussi en biais : sous « Autres réglages » se trouvent « Inclinaison » et « Axe d'inclinaison », et « Sur une face » mène la coupe parallèlement à une face plane.
+- Découper coupe maintenant aussi en biais : en haut, vous choisissez le « Plan » — sur un axe avec inclinaison, parallèle à une face, par une arête ou par trois points cliqués dans la vue.
 - Un corps STEP reste un corps STEP quand vous le découpez, avec ses faces, arêtes et noms.
 - Un couvercle vissé tout juste créé n'est plus signalé comme trop serré pour son goulot.
 

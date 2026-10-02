@@ -62,7 +62,7 @@ er:** `skirt`, `brim`, `raft` mit „Skirt-Runden“, „Brim-Breite“,
 anders heißt als sein Feld, ist eine Fährte ins Nichts.
 
 **Jedes Feld sagt, was es tut — und zwar alle**, sonst lernt niemand, dass es
-hier Sätze gibt: die Druckeinstellungen über `note`, die 1574 Parameter der 155
+hier Sätze gibt: die Druckeinstellungen über `note`, die 1578 Parameter der 155
 Operationen über ihren `doc`-Satz. Der Satz sagt, was der Wert bewirkt, nicht
 den Titel noch einmal, und hängt an **beiden** Hälften der Zeile — man zeigt
 auf das unverständliche Wort (`_editor` und `_label`; im Operationsdialog
@@ -220,6 +220,13 @@ Bedingung nicht gilt, und kommt mit ihr wieder — im Operationsdialog, im
 Merkmalfenster und überall, wo Felder einer Wahl folgen. Was vorn steht und wie
 `depends_on` deklariert, gezeigt und geprüft wird: `grenzen.md` („Die
 Vorderseite eines Dialogs“, „Bedingte Felder“).
+
+**Eine Zahl, die je nach Wahl etwas anderes misst, bekommt je Bedeutung ein
+eigenes Feld**: *Abschneiden* misst die `position` auf der Achse, den `offset`
+von Fläche, Kante oder Punkten (RM-400) — ein gemeinsames Feld behielt beim
+Umschalten einen Wert, der dort etwas anderes hieß. Und **eine Vorbelegung
+schneidet etwas ab**: Was die Auswahl vorgibt, legt die Ebene durch die
+Körpermitte (`MainWindow._cut_plane_through`), nie eine Absage zur Begrüßung.
 
 ## Was eine Vorschau nicht zeigen kann, sagt sie
 

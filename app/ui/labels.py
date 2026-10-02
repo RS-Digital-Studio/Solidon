@@ -1218,6 +1218,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "upper": _("Obere Hälfte"),
     "below": _("Kleinere Seite"),
     "above": _("Größere Seite"),
+    # Woran die Ebene von *Abschneiden* hängt (RM-400). Eigene Schlüssel: „face“
+    # heißt oben schon „Auf eine Fläche“.
+    "along_axis": _("An einer Achse"),
+    "at_face": _("An einer Fläche"),
+    "through_edge": _("Durch eine Kante"),
+    "through_points": _("Durch drei Punkte"),
     "hex": _("Sechskant"),
     "dovetail": _("Schwalbenschwanz"),
     "snap": _("Schnapper"),
@@ -1427,8 +1433,20 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "ellipse": _("Elliptischer Querschnitt aus Breite und Höhe."),
     "lower": _("Die untere Schale nimmt die Schraubenköpfe auf."),
     "upper": _("Die obere Schale nimmt die Muttern auf."),
-    "below": _("Die Seite mit den kleineren Werten auf der Achse bleibt — bei Z unten."),
-    "above": _("Die Seite mit den größeren Werten auf der Achse bleibt — bei Z oben."),
+    # Gilt für jede Ebene von *Abschneiden*, nicht nur für die Achse (N2 der
+    # Nachprüfung RM-400): An einer Unterseite stimmte „bei Z unten“ nicht.
+    "below": _(
+        "Die Seite unter der Ebene bleibt: an einer Achse die mit den kleineren Werten, "
+        "bei Z unten; an einer Fläche die Seite hinter ihr, im Körper."
+    ),
+    "above": _(
+        "Die Seite über der Ebene bleibt: an einer Achse die mit den größeren Werten, "
+        "bei Z oben; an einer Fläche die Seite, zu der sie zeigt."
+    ),
+    "along_axis": _("Senkrecht zu X, Y oder Z, auf Wunsch geneigt."),
+    "at_face": _("Parallel zu einer ebenen Fläche, um den Abstand versetzt."),
+    "through_edge": _("Die Ebene enthält eine gerade Kante und kippt um sie."),
+    "through_points": _("Die Ebene geht durch drei Stellen, im Bild angeklickt."),
     "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
     "dovetail": _(
         "Schwalbenschwanz: die Teile schieben sich ein und halten quer zur Fuge ohne Kleber."

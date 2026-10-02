@@ -53,7 +53,7 @@ scrive in `website/version.json`.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
-- Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Asse di inclinazione», e «Su faccia» porta il taglio parallelo a una faccia piana.
+- Tronca ora taglia anche in obliquo: in alto scegli il «Piano»: su un asse con inclinazione, parallelo a una faccia, per uno spigolo o per tre punti cliccati nella vista.
 - Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 

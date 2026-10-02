@@ -274,7 +274,8 @@ Richtung, `opposite_side`)
 erzeugt, wird vor den Verbindern abgesagt (`check_cut_contact`): Schnittfläche
 und Modellwand treffen sich längs einer Linie. `CutContactError` zeigt zum
 Verschieben auf das Lagefeld. `split_at_plane` prüft beide Hälften, `cut_away`
-nur die behaltene. War der Eingang schon offen, bleibt seine eigene
+nur die behaltene; seine Ebene hängt an Achse, Fläche, Kante oder drei Punkten
+(`plane`). War der Eingang schon offen, bleibt seine eigene
 Reparaturdiagnose bestehen. Auto Split lässt Kontaktkandidaten bei Konturzahl
 und Vorauswahl aus und nennt den Grund, falls keine verwendbare Lage bleibt.
 Die reine Schnittansicht darf die unveränderte Berührung zeigen.
