@@ -22,7 +22,7 @@ scrive in `website/version.json`.
 - Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.
 - Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.
 - Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.
-- Quattro supporti nascono in un passo: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, alette a vite, gancio per pannello o morsetto.
+- Quattro supporti nascono in un passo: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, fori per viti, gancio per pannello o morsetto.
 - Una scena vuota mostra come iniziare: parallelepipedo, cilindro, disegno, blocchi o un file che trascini dentro.
 - I nuovi corpi nascono sul piano o sulla faccia piana scelta, non più dove stava un corpo selezionato prima, e restano selezionati.
 
@@ -53,7 +53,7 @@ scrive in `website/version.json`.
 - Se un foro taglia il corpo in due, il rapporto lo dice una volta sola, con il numero di pezzi alla fine, e tace appena il corpo torna a essere un pezzo unico.
 - Anche lungo la cucitura di simmetria di una figura, «Dividi il modello» taglia senza lasciarla aperta, e le spine sono già al loro posto nell'anteprima.
 - Se un taglio sfiora soltanto una parete, «Dividi il modello» indica il punto e porta alla posizione del taglio invece di fallire sulle spine.
-- Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Asse di inclinazione», e «Su faccia» porta il taglio parallelo a una faccia piana.
+- Tronca ora taglia anche in obliquo: in «Altre impostazioni» ci sono «Inclinazione» e «Inclina attorno a», e «Su faccia» porta il taglio parallelo a una faccia piana.
 - Un corpo STEP resta un corpo STEP quando lo tronchi, con facce, spigoli e nomi.
 - Un coperchio a vite appena creato non risulta più troppo stretto per il suo collo.
 
@@ -65,7 +65,7 @@ scrive in `website/version.json`.
 - Un tratto sul piano di simmetria agisce una volta invece di due.
 - La barra di modellazione chiama ora «Intensità» il valore del pennello invece di «Spessore», che faceva pensare a una parete.
 - Se un tratto di modellazione buca la parete o la rende troppo sottile, il rapporto lo segnala, con «Mostra il punto».
-- Nella finestra, «Fondi dolcemente» calcola ora fine come nell'esportazione, finché il corpo non è molto grande.
+- Nella finestra, «Fondi dolcemente» calcola ora fine, finché il corpo non è molto grande.
 - Se un componente come un buco per chiave sporge oltre il bordo della sua faccia, il rapporto lo segnala.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
 - La destinazione di «Allinea alla caratteristica» parte vuota. La scegli nel campo «Destinazione», e «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
@@ -85,8 +85,6 @@ scrive in `website/version.json`.
 ### Uso e sistema
 
 - Le finestre di dialogo si aprono alla misura del loro contenuto, senza spazio vuoto, e una misura che hai trascinato tu resta.
-- Un'esportazione durante un calcolo in corso aspetta il nuovo risultato. Prima il file poteva avere ancora la misura vecchia.
-- La barra dei parametri rifiuta una misura oltre il suo limite e nomina il limite, invece di lasciare la vista vuota.
 - Nella barra dei parametri conta ogni passo di freccia, e il focus resta nel campo.
 - Se un passo attende una domanda, «Applica» resta disponibile e la domanda compare.
 - Nella finestra di un'operazione le etichette stanno in una colonna, i campi hanno la stessa larghezza e ogni interruttore sta prima di ciò che comanda.

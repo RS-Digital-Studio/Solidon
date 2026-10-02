@@ -227,7 +227,10 @@ def _where_to_start_page() -> Page:
                 "findet Ihren schnell. Steht er nicht darin, nehmen Sie einen ähnlichen; "
                 "die Maße lassen sich später ändern. *Später einstellen* geht auch. Alles "
                 "ändern Sie jederzeit in den Einstellungen. Filamente aus Ihrem Slicer "
-                "übernehmen Sie im Filamentlager als eigene Spulen."
+                "übernehmen Sie im Filamentlager als eigene Spulen. Solange die Szene leer "
+                "ist, zeigt sie die Einstiege: Quader, Zylinder, *Zeichnen*, *Bausteine* "
+                "und mit KI-Zugang *Im Chat beschreiben*; eine Datei ziehen Sie einfach "
+                "hinein."
             )
         ),
         "![](figure:start-screen)",
