@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)](#rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026) |
+| 2026-10-02 | [RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)](#rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026) |
 | 2026-10-02 | [RM-328: Die ruhigen Wände der schlanken Stange landen beim Export an jedem Teil (02.10.2026)](#rm-328-die-ruhigen-wände-der-schlanken-stange-landen-beim-export-an-jedem-teil-02102026) |
 | 2026-10-02 | [RM-333: Eine nicht eindeutige Bambu-Düsenvariante meldet „Prozessprofil ließ sich nicht lesen“ (02.10.2026)](#rm-333-eine-nicht-eindeutige-bambu-düsenvariante-meldet-prozessprofil-ließ-sich-nicht-lesen-02102026) |
 | 2026-10-02 | [RM-331: Creality Print 7.3: Platten, deren Anordnung nicht hält, gehen ohne Anordnung an den Slicer (02.10.2026)](#rm-331-creality-print-73-platten-deren-anordnung-nicht-hält-gehen-ohne-anordnung-an-den-slicer-02102026) |
@@ -35738,4 +35740,43 @@ Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
   Beleg: `bericht-B.md` (B-3).
   Nachprüfung am Stand `6ce767031`: besteht noch, nur am Codeweg belegt: Code unverändert, kein Test mit `keep_arrangement=False`; am echten Creality Print 7.3 weiter nicht nachgestellt.
 
-**Abschluss:** Gemessen an Creality Print 7.3 (V7.3.0.6149, Ender-3 V3 SE) mit Ring und Kern, schwebendem Teil, Teil über dem Rand und zwei überlappenden Teilen: Die Konsole ordnet in allen vier Fällen selbst an, kein Abbruch -50, kein `gcode.off_the_bed`. Kein Fehler — eine Absage hätte gelingende Läufe verhindert. Ein Test hält das Verhalten fest, Docstring und Karte sind korrigiert. Folgebefund unter [RM-414](ROADMAP.md#rm-414). Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+**Abschluss:** Gemessen an Creality Print 7.3 (V7.3.0.6149, Ender-3 V3 SE) mit Ring und Kern, schwebendem Teil, Teil über dem Rand und zwei überlappenden Teilen: Die Konsole ordnet in allen vier Fällen selbst an, kein Abbruch -50, kein `gcode.off_the_bed`. Kein Fehler — eine Absage hätte gelingende Läufe verhindert. Ein Test hält das Verhalten fest, Docstring und Karte sind korrigiert. Folgebefund unter [RM-414](#rm-414). Umgesetzt von Claude, in main mit `b0d6f9d28`; Entwicklungstor auf dem zusammengeführten Stand grün. Die Abnahme am echten Fenster läuft beim Release unter RM-213.
+
+## RM-386: Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch (02.10.2026)
+
+<a id="rm-386-berührende-platten-die-zwillinge-des-langlochzugs-rechnen-teils-still-falsch-02102026"></a>
+<a id="rm-386"></a>
+
+**RM-386 — Berührende Platten: die Zwillinge des Langlochzugs rechnen teils still falsch.**
+  Review 02.10.2026 der Commits bis `3fd3b1ace`, Fund 3; Folgepunkt zu RM-319, das im Arbeitsbaum
+  inzwischen archiviert ist. Der Abnahmefall von RM-319 ist behoben (Netz 14 715,2, exakt
+  14 714,5 mm³, je ein Langloch). Offen:
+  - **Netz:** eine gesenkte Bohrung durch die zwei Berührplatten versetzen → −2 516,3 mm³ ohne
+    Befund; der Kettenzweig schließt ohne `merge_face_contacts`
+    (`app/core/geom/prepare_ops.py:3867`, ebenso `:3211`).
+  - **Exakt:** *Bohrung ändern* Ø 8 mit Versatz lässt einen losen Zylinder von 502,7 mm³ in der
+    Bohrung stehen, der Körper ist undicht, kein Befund (`prepare_ops.py:7667`).
+  - **Exakt:** *Merkmal verschieben* und *Merkmal drehen* sagen mit falschem Rat ab; das Netz
+    rechnet dieselben Fälle inzwischen richtig (Kerne sagen Verschiedenes, `operationen.md`).
+  **Fix:** berührende Schalen an allen schließenden Wegen beider Kerne verbinden.
+  **Abnahme:** je Zwilling ein Test an beiden Kernen (Volumen, ein Körper, dicht, kein loser
+  Rest). Ob `796c6d003` („Gekoppelte Senkbohrungen fangen ungültige Langlochzüge ab“) einen Teil
+  davon abdeckt, ist noch nicht geprüft. Bauplan §21.1, §25, §30, Regel 17.
+  Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_beruehrplatten_*.txt`.
+
+**Abschluss:** `merge_face_contacts` an jeder schließenden Vereinigung am Netz (Versetzen, Versetzen mit Richtung, Entfernen, Kippen, `_section_closed`, Senkung ändern, Einlauf mitnehmen, Wulst/Kehle als Hohlraum, Musterzellen); am exakten Kern `_exact_closing_base`, `_exact_closing_chain` und `_exact_entrance_context`, der Langlochzug läuft über denselben Helfer. Zwei parametrisierte Tests an beiden Kernen (30 Fälle, am Stand davor 21 rot). Laufzeit am Besenhalter unverändert. Vorbestehender Fund am exakten Versetzen mit Richtung unter [RM-423](ROADMAP.md#rm-423). Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)
+
+<a id="rm-414-creality-print-73-rückt-auch-eine-haltende-anordnung-zur-mitte-und-solidon-sagt-es-nicht-02102026"></a>
+<a id="rm-414"></a>
+
+**RM-414 — Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht.**
+  Messung 02.10.2026 zu RM-331 (Claude, Unteragent): Creality Print 7.3 (V7.3.0.6149) ordnet auf der
+  Konsole jede Platte selbst an, mit und ohne `plate`-Block — Solidons Plattenbelegung gilt dort nie.
+  Der Befund `slicer.arranged_itself` fehlt trotzdem, und `tests/test_print_settings.py:3017ff` sichert
+  das Fehlen zu. **Fix:** in `handover.slice_model` `arranged_by_slicer = keep_arrangement and (not
+  wanted_arrangement or _creality_cli(setup))`, Zusicherung im Test umdrehen. **Abnahme:** Test mit
+  haltender Anordnung an `_creality_cli` meldet `slicer.arranged_itself`. Bauplan §29.
+
+**Abschluss:** `slice_model` setzt `slicer.arranged_itself` auch für Creality Print 7.3 auf der Konsole; die Zusicherung im Test ist umgedreht, 7.2 mit `--arrange 0` bleibt still. Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
