@@ -95,7 +95,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-443 — Reste aus RM-399: die Halter-Vorlage setzt immer zwei Schlüssellöcher, exakte Halter nur im Test](#rm-443) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-n`). Review 02.10.: Nachbau Modell 1 wird 24,7 statt 20 mm breit; Korpusabnahme an drei Haltern, Kundenweg zum exakten Halter |
 | [RM-405 — Die volle Schichtanalyse reißt §31 um Faktor 35–60; drei belegte Ursachen](#rm-405) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): `_cuts_along` in Feldern, Säulenkontur vereinfachen, Schichtansicht und Kanalfrage über den Merker |
 | [RM-406 — Teilungsstücke eines großen Modells werden ungefragt voll erkannt, obwohl der Kunde die lange Erkennung abgelehnt hat](#rm-406) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-z`). Review 02.10. (Modelltest): Bauplan §21.1 — Absage an Teilungsstücke vererben, braucht Roberts Ansage |
-| [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
+| [RM-407 — Ausrichten scheitert an exakten Körpern, obwohl es nur eine Drehung ist](#rm-407) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-z`). Review 02.10. (Modelltest): offene Flächenhülle, Drehmatrix nahe 180°, unvollständige Merkmalsflächen — drei Ursachen |
 | [RM-409 — Auto Split bricht ganz ab, wenn eine einzige Stiftbohrung beim Beurteilen scheitert](#rm-409) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-p`). Review 02.10. (Modelltest): `GeometryError` im Kandidaten als „unbekannt teuer“ werten; Zwilling zu RM-382 |
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
@@ -141,14 +141,13 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-278 — Ein Zug in der Öffnung einer Senkbohrung verschiebt den ganzen Körper](#rm-278) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Ein einfacher Klick bleibt normal; echte Züge ab `CLICK_SLACK` auf Bohrung oder Senkfläche werden vor Platzierung und Navigator mit dem passenden Handlungshinweis abgefangen; Regressionen und unabhängiges Review grün, native Abnahme am Wabenhalter bleibt offen |
 | [RM-280 — Nach *Skalieren* bleibt die Kamera, auch wenn das Teil aus dem Bild wächst](#rm-280) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Organizer ×2,3: danach 52 % im Bild. Bedienfrage für `bedienlogik`, ob Skalieren unter Roberts Regel „jeder weitere Aufbau lässt die Kamera in Ruhe“ (23.08.2026) fällt; Vorschlag: `frame_next_scene` auch nach einem Skalieren über den Rahmen hinaus |
 | [RM-285 — Feste Doppelpunkte hinter übersetzten Teilen](#rm-285) | Bedienung und Darstellung | UI/CLI/Bereichsprüfer auf origin/main integriert; dauerhafte Nachweise und Modelltext-Restliste vorhanden. Modellabnahme offen |
-| [RM-286 — Die Grenzablehnung fehlt noch in Merkmalfenster und Druckeinstellungen](#rm-286) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Merkmalfenster und Druckeinstellungen auf `BoundedSpin`, fx-Umschalten, Kurzhilfe |
 | [RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht](#rm-291) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Arme in den Renderer (Empfehlung, kein Fehler) |
 | [RM-299 — Handbuch: Reste aus dem Code-Review](#rm-299) | Bedienung und Darstellung | `OUTLINE` ist die einzige Quelle für Anleitungsteile; Spulennamen kommen aus dem aktiven Katalog. Zieltests und unabhängiges Review grün; gemeinsames Tor und sicherer Einzelcommit offen |
 | [RM-303 — Freie Stelle: Fenstertests und Abnahme](#rm-303) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Plattenwechsel auf allen drei Wegen, Abnahme im Fenster |
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. C-N1, D-N2, C-N2, D-N7 erledigt (Claude, in main mit `7c8bd7892`); offen D-N1 (`panels.py`) und D-N5 (eine Breitenfunktion für vier Dialoge) |
+| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
 | [RM-358 — Weg 1: Export nennt den Umfang nicht, die Differenz trägt kein Muster, Zahlen und Ablegen ohne Satz](#rm-358) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 1): vier kleine Funde W1-1, W1-3, W1-4, W1-6, je ein Test |
 | [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-360 — Bauplan §2.2 nennt für Weg 1 noch das Kontextmenü statt des Auswahlfensters](#rm-360) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10. („§2.2 anpassen“): Wortlaut in §2.2 und den Folgestellen angleichen, App unverändert |
@@ -167,14 +166,14 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-432 — Bettart „Automatisch“ bei PrusaSlicer und Cura zeigt die wirkungslosen Felder](#rm-432) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10.: Folge zu RM-341 (archiviert); Sichtbarkeit aus der tatsächlich übergebenen Art, alten Test nachziehen, eine Tabelle |
 | [RM-451 — Bei einem Halt verliert das erhaltene Bild Ausblendungen und Plattenwahl](#rm-451) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Quellenreview `6c9420b1f`, R6C942-02: Ansichtsfilter des tatsächlich gezeigten Bilds erhalten; Gegenfall noch auszuführen |
 | [RM-440 — Sammelzeile *Modell teilen* über mehrere Körper teilt nur den ersten](#rm-440) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10. bei RM-372: die Teilung läuft je Körper an, der zweite Start trifft „Die Teilung läuft schon“; nacheinander teilen oder die Zeile für eine Teilung anbieten |
-| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
+| [RM-456 — Regression gegenüber 0.5.1: Nach einer Erzeugung ist die Verlaufsgruppe zugeklappt; Fensteranschluss des Mulden-Formzugs ohne Test](#rm-456) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“ (Teil 1 und 3 mit RM-371). Review 02.10. (`73d83b55b`): Gruppe nach dem Erzeugen offen zeigen; Test für `before=self._sculpt_shown()`; interne Handlung nicht anzeigen |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
 | [RM-251 — Mehrteilige Aufträge enden lokal am Schrittlimit](#rm-251) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) gemessen in der Durchsicht 0.5.1: Schrittgrenze 12 lokal 23 von 39 gegen 22, mehrteilig 4 gegen 2 von 10, am Limit 8 statt 10 — keine Verschlechterung; Entscheidung Robert: Grenze 12 für den lokalen Weg ja/nein. (b) ungemessen (zwei volle Läufe je Stand). Der Grund, an dem magnet_lid endete, ist behoben (`51c17b7a6`), die Suite danach nicht neu gefahren |
 | [RM-016 — Agenten-Suite gegen das aktuelle Vorgabemodell messen](#rm-016) | KI und Generatoren | Lokal abgeschlossen am 26.09.2026 (qwen3:14b 22/39 mit Angebot, ohne 14, mit großem Fenster ohne Angebot 24 in dreifacher Zeit; Modellvergleich am Punkt); offen ist nur der gehostete Vorgabeweg — ein kostenpflichtiger Lauf, der Roberts Freigabe braucht |
 | [RM-371 — Die Oberfläche bleibt während der Erzeugung bedienbar](#rm-371) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Entscheidung Robert 02.10.: Erzeugen ohne `dialog.exec`, Fortschritt mit Abbrechen in der Statusleiste |
-| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. Fund 02.10.: Befund des Aushöhlens bekommt *Diesen Schritt ändern*; `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
+| [RM-441 — Reste aus RM-372 und RM-374: `hollow.done` ohne Knopf, Beispielprojekt mit alten Transaktionen](#rm-441) | KI und Generatoren | Übernommen: Claude, Thread „Bedienung und KI“. (a) erledigt: `hollow.done` trägt *Diesen Schritt ändern*; offen (b) `weg3-generiert-aufbereiten.p3d` beim Release mit `make_examples.py` neu |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Verweise sind vollständig gültig; offen ist nur noch das Umräumen — Umfang entscheidet Robert |
 | [RM-103 — Große Kernfunktionen nach konkretem Wartungsbedarf aufteilen](#rm-103) | Tests und Entwicklungswerkzeuge | Auswertung und weitere große Funktionen nach Wartungsbedarf priorisieren |
@@ -192,6 +191,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-380 — `test_the_workers_of_the_window_use_the_helper` scheitert nach dem Vorschautest derselben Datei](#rm-380) | Tests und Entwicklungswerkzeuge | Review 02.10.: Zustand zwischen den Tests zurücksetzen (Zählung bzw. Vorschau-Cache); Datei am Stück grün |
 | [RM-387 — Deutsche Bezeichner rutschen am Sprachwächter vorbei; englische Passungszeichnung veraltet](#rm-387) | Tests und Entwicklungswerkzeuge | Review 02.10.: umbenennen und Stämme in `GERMAN_STEMS`; `fit.svg` beim nächsten Release neu erzeugen |
 | [RM-433 — Die Rückfrage vor Geld- und Veröffentlichungswerkzeugen lässt Umhüllungen und Unterschalen durch](#rm-433) | Tests und Entwicklungswerkzeuge | Review 02.10.: Folge zu RM-346 (archiviert); `timeout`, `exec`, `( )`, `$( )`, `then`/`do`, `cmd /c`, Start-Process-Argumente |
+| [RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren](#rm-467) | Tests und Entwicklungswerkzeuge | übernommen: Bibliotheken alle 3 Tage aktualisieren — erster Lauf 02.10.: 18 neue Fassungen, pypdf mit sechs Sicherheitsmeldungen zuerst |
 | [RM-002 — netcup-AVV und Freigabe der Rechtstexte belegen](#rm-002) | Veröffentlichung, Betrieb und Vertrieb | netcup-AVV belegen und zugehörige Rechtstexte fachlich abgleichen |
 | [RM-006 — Nächsten messbaren Schritt für die Sichtbarkeit festlegen](#rm-006) | Veröffentlichung, Betrieb und Vertrieb | Roberts Fragen im Bericht Reichweite und die erste Montagsmessung; der Punkt schließt, wenn Robert den Plan bestätigt |
 | [RM-008 — DMARC-Eintrag öffentlich prüfen und gegebenenfalls einrichten](#rm-008) | Veröffentlichung, Betrieb und Vertrieb | DMARC einrichten und legitimen Mailversand prüfen |
@@ -4317,18 +4317,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Render- und Leistungsabnahme bleibt dem Release vorbehalten.
   Registerabgleich 02.10. (Stand `4449e3370`): Oberfläche und Kommandozeile erledigt, beide Doppelpunkt-Wächter grün; offen nur die Modelltexte (Abnahme kostet Geld, nicht gefahren).
 
-<a id="rm-286"></a>
-
-- [~] **RM-286 — Grenzablehnung in allen Zahlenfeldern.** Aus dem Release 0.5.1
-  (Oberflächenpaket, Code-Review U-5, U-6, U-8). Die Grenzablehnung ist in Parameterleiste,
-  Operationsdialog, Merkmalfenster und Druckeinstellungen umgesetzt; der `fx`-Rückweg erhält
-  auch einen Ausdruck jenseits der Grenze, und die Kurzhilfe nennt geänderte Parametergrenzen.
-  Die regulären Prüfungen sind grün. Offen bleibt die native Fensterabnahme an allen vier Orten,
-  die laut Projektregel erst beim Release läuft.
-  Registerabgleich 02.10.: umgesetzt (`BoundedSpin` in Merkmalfenster, Druckeinstellungen und Operationsdialog), offen nur die Fensterabnahme; Titel und Registerzeile („fehlt noch in Merkmalfenster und Druckeinstellungen“) sind veraltet.
-  Druckeinstellungen: Die zwölf Offscreen-Fenstertests der Grenzablehnung in `tests/test_print_settings_ui.py` sind grün, seit Aus- und Einblenden die abgelehnte Zahl nicht mehr verwerfen, ein Heben außerhalb der Suche seinen Umschaltersatz einlöst und ein nachgetragenes Haftungsmaß nur sein eigenes Feld lädt. Die native Fensterabnahme bleibt an allen vier Orten offen.
-  Review 02.10. (`4373b5f12`): `test_an_adhesion_measure_brought_along_keeps_a_refusal_elsewhere` ist am Stand von main rot (am eigenen Commit `21568a84a` grün) — Ursache ist die Zusammenführung mit `354cad78f`, der dem Sperrsatz den Feldnamen voranstellt; die Zeile „zwölf Fenstertests grün“ stimmt damit nicht mehr.
-
 <a id="rm-291"></a>
 
 - [ ] **RM-291 — Das Fadenkreuz der Stellenwahl liegt als Widgets über der Ansicht.** Aus der Durchsicht v0.5.1 (Inventar 1.4,
@@ -4507,6 +4495,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bauplan §19, §4.1, §2.7.
   Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
   Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
+  **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
 
 <a id="rm-358"></a>
 
@@ -4873,6 +4862,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** nach einer Erzeugung ist die neue Gruppe offen; die Mutation am Fensteranschluss
   macht den neuen Test rot; keine internen Werte in der Meldung. Bauplan §2.8, §15.5.
   Belege: `F:\solidon-review-reports\verif-73d83b55b-claude.md`, Sonden `v8k_*`.
+  **Teil 2 erledigt (Claude, Thread „Bedienung und KI“):** `test_sculpt_session.py::test_a_second_carve_into_the_shown_pit_starts_its_own_stage` zieht zweimal in dieselbe Mulde einer fein vernetzten Kugel; ohne `before=self._sculpt_shown()` ist er rot (Gegenprobe). Teil 1 und 3 laufen mit RM-371.
 
 ## KI und Generatoren
 
@@ -5018,6 +5008,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Release mit `tools/make_examples.py` neu erzeugen. **Abnahme:** Test für (a); (b) im
   Release-Lauf. Bauplan §2.7, §15.5.
   Review 02.10. (`73d83b55b`, RM-374 archiviert mit `9983e9923`): Die Vorgabe „jeder Befund, der einen änderbaren Schritt meint, bekommt den Knopf“ ist nicht erfüllt — ohne Knopf bleiben `mesh.already_below_target` (`app/core/geom/mesh_ops.py:2219`, im Fenster geprüft), `rotate_feature.unchanged`, `resize_feature.unchanged`, `move_feature.unchanged`, `{operation}.unchanged` (`prepare_ops.py`) und `bore.resize_unchanged` (`prepare.py`, `prepare_ops.py`); dieser Punkt nennt bisher nur `hollow.done`. Beleg `F:\solidon-review-reports\verif-73d83b55b-claude.md`.
+  **Stand 02.10.2026 abends:** (a) erledigt (Claude, Thread „Bedienung und KI“): Beide `hollow.done` tragen *Diesen Schritt ändern* mit `field: wall`, `MEINT_DEN_SCHRITT` nennt sie. Offen (b).
 
 ## Tests und Entwicklungswerkzeuge
 
@@ -5440,6 +5431,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Argumentlisten), im Zweifel fragen.
   **Abnahme:** Test je genannter Form → Rückfrage; Lesen/Prüfen bleibt still. Beleg:
   `verif-70e9b3145-oberflaeche.md`, Sonden `v5u_rm346_*`.
+
+<a id="rm-467"></a>
+
+- [~] **RM-467 — Bibliotheken alle drei Tage auf neue Versionen prüfen und aktualisieren.**
+  Auftrag Robert 02.10.2026, übernommen: Bibliotheken alle 3 Tage aktualisieren. Je Lauf werden die
+  festen Versionen aus `constraints.txt` (Laufzeit und Entwicklung, mit den Plattformpins), die
+  Werkzeuge in `.github/workflows/` und die Paketlaufzeiten gegen ihre neueste Fassung abgefragt;
+  eine neue Fassung zählt nur mit cp314-Rädern für Windows x64, Linux x86_64 und beide Macs.
+  Reihenfolge: Sicherheitsmeldungen, dann Patch und Minor, dann Hauptversionen. Jede Aktualisierung
+  geht einzeln durch das Entwicklungstor und, wo sie die Oberfläche oder den Renderer berührt,
+  durch die echte Anwendung; danach `tools/check_env.py --freeze`. Was den 0.5.2-Stand gefährdet,
+  bleibt festgelegt und bekommt einen eigenen Punkt mit dem nötigen Umbau. Ergänzt RM-313: Der
+  CI-Wächter „Neueste Versionen“ läuft nur öffentlich, dieser Lauf lokal und regelmäßig.
+  **Abnahme je Lauf:** geprüft, übernommen und zurückgestellt mit Commit im Archiv; der Punkt
+  bleibt offen, solange der Auftrag gilt.
 
 ## Veröffentlichung, Betrieb und Vertrieb
 
