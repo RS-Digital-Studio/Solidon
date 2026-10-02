@@ -32,7 +32,8 @@ import numpy as np
 
 from app.core.deferred import cKDTree, trimesh
 from app.core.errors import CANCEL, ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
+from app.core.geom.intersections import crossing_face_pairs
+from app.core.geom.mesh import MeshData, as_mesh_data, ray_hits_batch, read_mesh
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
     ORDERED_TOOLS,
@@ -46,6 +47,7 @@ from app.core.types import (
     Vec3,
     as_vec3,
 )
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 #: Die drei Symmetrieebenen als Bit im Feld ``Stroke.symmetry``.
@@ -425,7 +427,9 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
 
     missed: list[Stroke] = []
     after = apply_strokes(before, strokes, missed, cancelled=ctx.cancelled)
-    findings = _sculpting_findings(before, after, strokes, source.id, missed, ctx.profile)
+    findings = _sculpting_findings(
+        before, after, strokes, source.id, missed, ctx.profile, ctx.cancelled
+    )
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
 
@@ -488,6 +492,7 @@ def _sculpting_findings(
     object_id: str,
     missed: Sequence[Stroke],
     profile: Profile,
+    cancelled: CancelToken | None = None,
 ) -> list[Finding]:
     """Was die Sitzung gekostet hat — und was ihr im Weg stand.
 
@@ -647,4 +652,171 @@ def _sculpting_findings(
                 object_id=object_id,
             )
         )
+    if changed:
+        findings.extend(_damage_findings(before, after, shifted, object_id, profile, cancelled))
     return findings
+
+
+#: Wie viele der am tiefsten abgetragenen Eckpunkte die Wandprobe misst. Die
+#: dünnste Stelle liegt dort, wo am meisten abgetragen wurde; jeden bewegten
+#: Punkt zu messen kostete an einer feinen Figur Sekunden je Auswertung.
+WALL_PROBES: Final = 256
+
+#: Blockgröße für die Hüllquader der Dreiecke — begrenzt den Speicher an
+#: Netzen mit Millionen Dreiecken.
+_BOX_BLOCK: Final = 262_144
+
+
+def _damage_findings(
+    before: MeshData,
+    after: MeshData,
+    shifted: np.ndarray,
+    object_id: str,
+    profile: Profile,
+    cancelled: CancelToken | None,
+) -> list[Finding]:
+    """Hat ein Zug die Wand durchstoßen oder unter die Mindestwand gedünnt?
+
+    Gefunden in der Gebietsprüfung von Weg 4 (RM-364): Ein *Abtragen* an
+    einer 4-mm-Platte drückte die Oberseite durch die Unterseite, ein
+    flacherer ließ 0,44 mm Restwand — beide Male stand im Bericht nur
+    „übertragen“, und der Export lief ohne Warnung. „Aufgerissen“ kann es
+    nicht sehen, denn ``warp`` ändert die Topologie nicht.
+
+    Geprüft wird nur um die bewegten Punkte, mit dem Rand, in dem ein
+    Gegenüber dünner als die Mindestwand liegen kann. Gemeldet wird nur, was
+    der Zug verursacht hat: mehr schneidende Paare mit einem bewegten
+    Dreieck als vorher, eine Wand, die dünner wurde.
+    """
+    moved_points = shifted > MOVED_EPSILON_MM
+    if not moved_points.any():
+        return []
+    minimum = profile.minimum_wall_thickness
+    vertices = np.asarray(after.raw.vertices, dtype=float)
+    earlier = np.asarray(before.raw.vertices, dtype=float)
+    faces = np.asarray(after.raw.faces, dtype=np.int64)
+    margin = 2.0 * minimum
+    low = np.minimum(vertices[moved_points].min(axis=0), earlier[moved_points].min(axis=0))
+    high = np.maximum(vertices[moved_points].max(axis=0), earlier[moved_points].max(axis=0))
+    near = _faces_in_box(vertices, faces, low - margin, high + margin)
+    if not len(near):
+        return []
+    local = faces[near]
+    touched = moved_points[local].any(axis=1)
+
+    pierced = _new_crossings(earlier, vertices, local, touched, cancelled)
+    if pierced is not None:
+        count, where = pierced
+        return [
+            Finding(
+                code="sculpt.pierced",
+                severity="warning",
+                message=_(
+                    "Ein Zug hat die Fläche durch die Wand dahinter gedrückt — der Körper "
+                    "durchdringt sich dort selbst. So gedruckt bleibt die Stelle offen oder "
+                    "doppelt. Den Zug schwächer setzen oder zurücknehmen."
+                ),
+                object_id=object_id,
+                values={"pairs": count},
+                location=where,
+            )
+        ]
+
+    thinnest = _thinned_wall(before, after, local, minimum, cancelled)
+    if thinnest is None:
+        return []
+    thickness, where = thinnest
+    return [
+        Finding(
+            code="sculpt.thin_wall",
+            severity="warning",
+            message=_(
+                "Ein Zug hat die Wand dünner gemacht, als dieses Material sicher druckt. "
+                "Den Zug schwächer setzen oder an dieser Stelle Material auftragen."
+            ),
+            object_id=object_id,
+            values={"thickness_mm": round(thickness, 2), "minimum_mm": round(minimum, 2)},
+            location=where,
+        )
+    ]
+
+
+def _faces_in_box(
+    vertices: np.ndarray, faces: np.ndarray, low: np.ndarray, high: np.ndarray
+) -> np.ndarray:
+    """Die Dreiecke, deren Hüllquader den Quader ``low`` … ``high`` berührt."""
+    kept: list[np.ndarray] = [np.zeros(0, dtype=np.int64)]
+    for start in range(0, len(faces), _BOX_BLOCK):
+        corners = vertices[faces[start : start + _BOX_BLOCK]]
+        inside = np.all(corners.max(axis=1) >= low, axis=1) & np.all(
+            corners.min(axis=1) <= high, axis=1
+        )
+        kept.append(np.flatnonzero(inside) + start)
+    return np.concatenate(kept)
+
+
+def _new_crossings(
+    earlier: np.ndarray,
+    vertices: np.ndarray,
+    local: np.ndarray,
+    touched: np.ndarray,
+    cancelled: CancelToken | None,
+) -> tuple[int, Vec3] | None:
+    """Wie viele Paare mit einem bewegten Dreieck sich jetzt schneiden, wenn es
+    mehr sind als vorher — und wo das erste liegt."""
+    now = crossing_face_pairs(vertices, local, cancelled)
+    hits = touched[now.first] | touched[now.second]
+    count = int(hits.sum())
+    if not count:
+        return None
+    then = crossing_face_pairs(earlier, local, cancelled)
+    if count <= int((touched[then.first] | touched[then.second]).sum()):
+        return None
+    face = int(now.first[np.flatnonzero(hits)[0]])
+    centre = vertices[local[face]].mean(axis=0)
+    return count, (float(centre[0]), float(centre[1]), float(centre[2]))
+
+
+def _thinned_wall(
+    before: MeshData,
+    after: MeshData,
+    local: np.ndarray,
+    minimum: float,
+    cancelled: CancelToken | None,
+) -> tuple[float, Vec3] | None:
+    """Die dünnste Wand unter den am tiefsten abgetragenen Punkten, wenn sie
+    unter ``minimum`` liegt und der Zug sie dünner gemacht hat."""
+    earlier = np.asarray(before.raw.vertices, dtype=float)
+    vertices = np.asarray(after.raw.vertices, dtype=float)
+    normals_then = np.asarray(before.raw.vertex_normals, dtype=float)
+    # Abgetragen heißt: gegen die Normale von vorher bewegt.
+    inward = -np.sum((vertices - earlier) * normals_then, axis=1)
+    candidates = np.flatnonzero(inward > MOVED_EPSILON_MM)
+    if not len(candidates):
+        return None
+    probes = candidates[np.argsort(-inward[candidates], kind="stable")[:WALL_PROBES]]
+    normals_now = np.asarray(after.raw.vertex_normals, dtype=float)[probes]
+    # Dieselben Schwellen wie die Wandstärke (``measure.ray_distances``): Das
+    # Dreieck unter dem Startpunkt ist kein Gegenüber.
+    now, _hit = ray_hits_batch(
+        vertices[local],
+        vertices[probes],
+        -normals_now,
+        edge_margin=EPS_GEOM,
+        minimum_travel=EPS_GEOM * 100.0,
+        cancelled=cancelled,
+    )
+    then, _hit = ray_hits_batch(
+        earlier[local],
+        earlier[probes],
+        -normals_then[probes],
+        edge_margin=EPS_GEOM,
+        minimum_travel=EPS_GEOM * 100.0,
+        cancelled=cancelled,
+    )
+    thinner = np.isfinite(now) & (now < minimum) & (now < then)
+    if not thinner.any():
+        return None
+    index = int(np.flatnonzero(thinner)[np.argmin(now[thinner])])
+    point = vertices[probes[index]]
+    return float(now[index]), (float(point[0]), float(point[1]), float(point[2]))

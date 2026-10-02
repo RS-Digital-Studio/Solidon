@@ -504,6 +504,63 @@ def test_a_stroke_that_lands_stays_quiet(profile: Profile) -> None:
 # --- gegen den Korpus -----------------------------------------------------------
 
 
+def plate() -> MeshData:
+    """Eine 4-mm-Platte, fein genug vernetzt für einen 6-mm-Pinsel."""
+    box = trimesh.creation.box(extents=(40.0, 40.0, 4.0))
+    vertices, faces = trimesh.remesh.subdivide_to_size(box.vertices, box.faces, max_edge=0.8)
+    return MeshData.of(trimesh.Trimesh(vertices, faces, process=True))
+
+
+def carve_into_plate(strength: float) -> Stroke:
+    return Stroke(
+        point=(0.0, 0.0, 2.0), normal=(0.0, 0.0, 1.0), radius=6.0, strength=strength, tool="carve"
+    )
+
+
+def test_carving_through_the_plate_is_reported(profile: Profile) -> None:
+    """Ein Abtragzug drückte die Oberseite durch die Unterseite: 48 sich
+    durchdringende Dreieckspaare, und im Bericht stand nur „übertragen“
+    (RM-364). Die Prüfung „aufgerissen“ kann das nie sehen, denn Formen
+    ändert die Topologie nicht."""
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+
+    result = run(entry, profile, strokes=strokes_to_text([carve_into_plate(6.0)]))
+
+    pierced = next(f for f in result.findings if f.code == "sculpt.pierced")
+    assert pierced.severity == "warning"
+    assert pierced.values["pairs"] > 0
+    assert pierced.location is not None, "Stelle zeigen fliegt zur Durchdringung"
+    assert abs(pierced.location[0]) < 8.0 and abs(pierced.location[1]) < 8.0
+
+
+def test_carving_a_wall_below_the_minimum_is_reported(profile: Profile) -> None:
+    """Ein flacher Zug ließ 0,44 mm Restwand bei verlangten 0,84 mm, ohne
+    Befund; der Export lief ohne Warnung (RM-364)."""
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+
+    result = run(entry, profile, strokes=strokes_to_text([carve_into_plate(4.0)]))
+
+    codes = {f.code for f in result.findings}
+    assert "sculpt.pierced" not in codes, "durchgestochen ist hier nichts"
+    thin = next(f for f in result.findings if f.code == "sculpt.thin_wall")
+    assert thin.severity == "warning"
+    assert 0.0 < thin.values["thickness_mm"] < thin.values["minimum_mm"]
+    assert thin.values["minimum_mm"] == pytest.approx(profile.minimum_wall_thickness, abs=0.01)
+    assert thin.location is not None
+
+
+def test_a_shallow_carve_in_a_thick_wall_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe: 1 mm aus 4 mm lässt genug Wand."""
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
+
+    result = run(entry, profile, strokes=strokes_to_text([carve_into_plate(1.0)]))
+
+    codes = {f.code for f in result.findings}
+    assert "sculpt.applied" in codes
+    assert "sculpt.pierced" not in codes
+    assert "sculpt.thin_wall" not in codes
+
+
 def figure() -> MeshData:
     """Die saubere Figur aus dem Referenzkorpus."""
     path = Path(__file__).parent / "data" / "meshes" / "clean_figure.stl"
