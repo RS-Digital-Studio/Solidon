@@ -36,9 +36,10 @@ Zugschwelle des Systems, und nur der Klick wandert (siehe unten).
   Körper mit erkannten Bohrungen war per Klick **überhaupt nicht auswählbar** —
   wer die Platte verschieben wollte, musste in den Objektbaum ausweichen.
 * **Der Rechtsklick meint immer das Genaueste** (`_select_at(..., direct=True)`).
-  Das folgt aus §18.5: Dort ist das Kontextmenü *am Merkmal* der Ort für Weg 1,
-  „indem man auf die Stelle zeigt, die stört". Gestuft wäre diese Zusage an eine
-  Vorbedingung geknüpft, die niemand kennt.
+  Das folgt aus §18.5: Weg 1 passt ein fremdes Modell an, indem man auf die Stelle
+  zeigt, die stört. Gestuft wäre diese Zusage an eine Vorbedingung geknüpft, die
+  niemand kennt. Die Operationen dafür stehen im Auswahlfenster am Merkmal; das
+  Menü zeigt nur, was es dort gibt (Ursprungsschritt, Zeichnen, Ausblenden).
 
 **Ein Merkmalsklick am schon allein gewählten Körper meldet ihn nicht noch
 einmal** (Durchsicht 0.5.1). `objectPicked` wählte im Baum den Körper ohne

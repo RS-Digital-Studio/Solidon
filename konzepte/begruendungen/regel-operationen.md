@@ -2028,3 +2028,13 @@ waren es fünf, vier davon in `tests/test_agent_suite.py`.
   ausführbarer Code** darin (Regel 13).
 - Format geändert? Dann alle fünf Schritte: Version, Migration,
   Beispieldatei, Test, alte Migrationen behalten.
+
+## Entwurfsstufe nur über einem Budget (RM-427)
+
+Darunter ist der Entwurf dasselbe Netz wie fein; darüber gröber, und ein Befund
+sagt es (`blend.draft`). Das Budget zählt, was kostet: beim Verschmelzen
+Rasterpunkte, gewogen mit der Oberfläche über `DRAFT_SURFACE` — an 327 680
+Dreiecken knapp unter dem Punktebudget dauerte der Entwurf 3,8 s statt 0,9 s.
+Kegel und Ring halbierten ihre Segmente ohne Befund und sparten nichts, was
+zählt; sie haben keine Entwurfsstufe mehr. Export und Slicer nehmen ohnehin die
+feine Rechnung (RM-426, `wartezeit.md`).

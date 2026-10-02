@@ -542,21 +542,8 @@ def test_an_odd_torus_segment_count_keeps_the_declared_bounds(quality: Quality) 
     assert mesh.bounds.maximum == pytest.approx((outer / 2.0, outer / 2.0, tube))
 
 
-@pytest.mark.parametrize(
-    ("op", "params"),
-    [
-        (
-            "create_cone",
-            {"bottom_diameter": 20.0, "top_diameter": 8.0, "height": 12.0},
-        ),
-        ("create_torus", {"outer_diameter": 40.0, "tube_diameter": 8.0}),
-    ],
-)
-def test_round_primitives_are_lighter_in_draft(op: str, params: dict[str, float]) -> None:
-    draft = run(op, quality="draft", segments=96, name="", **params).outputs[0].mesh
-    fine = run(op, quality="fine", segments=96, name="", **params).outputs[0].mesh
-
-    assert draft.triangle_count < fine.triangle_count
+# Kegel und Ring haben keine Entwurfsstufe mehr (RM-427); dass sie im Entwurf so fein
+# sind wie beim Export, prüft ``test_primitive_placement``.
 
 
 # --- G-6: was als Ergebnis einer Booleschen durchging ---------------------------

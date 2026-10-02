@@ -690,3 +690,14 @@ Füllwort ist (eine Wendung „zu einem Teil" traf jede Anfrage mit „eine" und
 „Teils"), und dass es nicht über einen kurzen Stamm ein anderes Wort meint —
 `test_every_customer_word_belongs_to_a_row_of_the_palette` hält die Schlüssel
 am Register und an den Fensterbefehlen fest.
+
+## Maße als Parameter anlegen
+
+Die Regel in `grenzen.md` sichern `test_naming_the_dimensions_makes_them_project_parameters`,
+`test_only_a_primitive_offers_to_name_its_dimensions`,
+`test_a_holder_template_names_its_dimensions_but_not_an_idle_field` und
+`test_the_naming_box_remembers_the_last_choice`. Dass der Haken die letzte Wahl
+übernimmt, statt jedes Mal aus zu stehen, folgt aus Weg 2: Wer Maße benennt, tut
+es bei jedem Grundkörper, und musste den Haken bisher jedes Mal neu finden
+(RM-369, Entscheidung Robert). Gemerkt wird beim Übernehmen, nicht beim Klick
+auf den Haken; wer ihn nur ausprobiert und abbricht, hat nichts entschieden.

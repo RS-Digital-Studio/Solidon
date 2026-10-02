@@ -47,19 +47,24 @@ def test_only_the_keyboard_hands_enter_to_the_focused_button(
     assert enter_belongs_to_focus(reason, forced=forced) is expected
 
 
-def _answer(qt_app: Any, ask: Callable[[], object], target: str | None) -> object:
+def _answer(
+    qt_app: Any, ask: Callable[[], object], target: str | None, *, switch: bool = False
+) -> object:
     """Stellt die Rückfrage mit ``exec()`` und antwortet per Tastatur.
 
     ``target`` ist die Beschriftung des Knopfs, auf den Tab gehen soll;
-    ``None`` drückt Enter, ohne den Fokus zu bewegen. Bleibt die Box offen
+    ``None`` drückt Enter, ohne den Fokus zu bewegen. ``switch`` wechselt vor
+    Enter in ein anderes Fenster und zurück (RM-415). Bleibt die Box offen
     — etwa weil Enter nichts auslöste —, schließt der Wächter sie mit
     ``reject``, und der Test sieht das als Fehler statt zu hängen.
     """
     from PySide6.QtCore import QTimer
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton
+    from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton, QWidget
 
     problems: list[str] = []
+    elsewhere = QWidget()
+    elsewhere.setWindowTitle("Anderes Fenster")
 
     def press() -> None:
         box = QApplication.activeModalWidget()
@@ -88,6 +93,17 @@ def _answer(qt_app: Any, ask: Callable[[], object], target: str | None) -> objec
                     return
                 if focused.isDefault():
                     problems.append(f"„{target}“ trägt mit dem Fokus den Akzent")
+            if switch:
+                chosen = QApplication.focusWidget()
+                elsewhere.show()
+                elsewhere.activateWindow()
+                QApplication.processEvents()
+                if box.isActiveWindow():
+                    problems.append("das andere Fenster wurde nicht aktiv")
+                box.activateWindow()
+                QApplication.processEvents()
+                if not box.isActiveWindow() or QApplication.focusWidget() is not chosen:
+                    problems.append("nach dem Fensterwechsel steht der Fokus woanders")
             QTest.keyClick(QApplication.focusWidget() or box, Qt.Key.Key_Return)
         finally:
             if box.isVisible():
@@ -95,7 +111,11 @@ def _answer(qt_app: Any, ask: Callable[[], object], target: str | None) -> objec
                 box.reject()
 
     QTimer.singleShot(0, press)
-    answer = ask()
+    try:
+        answer = ask()
+    finally:
+        elsewhere.close()
+        elsewhere.deleteLater()
     qt_app.processEvents()
     assert not problems, problems
     return answer
@@ -127,6 +147,35 @@ def test_enter_on_a_tabbed_button_of_unsaved_changes_does_not_save(
     from app.ui.dialogs import confirm_unsaved
 
     assert _answer(qt_app, lambda: confirm_unsaved("Halter.solidon"), target) == expected
+
+
+@pytest.mark.parametrize(
+    ("ask", "target", "expected"),
+    [
+        ("discard", "Abbrechen", False),
+        ("discard", None, True),
+        ("unsaved", "Abbrechen", "cancel"),
+        ("unsaved", "Verwerfen", "discard"),
+        ("unsaved", None, "save"),
+        ("export", "Abbrechen", False),
+        ("export", None, True),
+    ],
+)
+def test_enter_keeps_the_tabbed_button_across_a_window_switch(
+    qt_app: Any, ask: str, target: str | None, expected: object
+) -> None:
+    """Tab auf *Abbrechen*, kurz ein anderes Fenster, zurück, Enter — und die
+    Rückfrage verwarf, speicherte oder exportierte trotzdem (RM-415): Der
+    Fensterwechsel löschte die Wahl der Tastatur. Er ist keine neue Wahl; ohne
+    Tab bleibt Enter auch nach dem Wechsel beim Hauptknopf."""
+    from app.ui.dialogs import confirm_discard, confirm_export, confirm_unsaved
+
+    questions: dict[str, Callable[[], object]] = {
+        "discard": lambda: confirm_discard(3, ("Bohrung", "Fase")),
+        "unsaved": lambda: confirm_unsaved("Halter.solidon"),
+        "export": lambda: confirm_export(_findings()),
+    }
+    assert _answer(qt_app, questions[ask], target, switch=True) == expected
 
 
 def test_enter_on_the_tabbed_cancel_does_not_export(qt_app: Any) -> None:

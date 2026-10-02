@@ -139,9 +139,8 @@ def field_bounds(
     """
     low: float | None = None
     high: float | None = None
-    bare = f"{expressions.EXPRESSION_PREFIX}{expressions.REFERENCE_PREFIX}{name}"
     for _operation, entry, raw in _reading_fields(document, {name}, registry):
-        if raw.replace(" ", "") != bare:
+        if expressions.bound_name(raw) != name:
             continue
         if entry.minimum is not None:
             low = entry.minimum if low is None else max(low, entry.minimum)

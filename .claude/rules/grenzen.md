@@ -187,9 +187,8 @@ Robert).
   `=@breite` darauf, beides in **einer** Transaktion (`changes` an
   `Session.apply`); ein Feld mit Ausdruck bleibt, ein Feld, dessen
   `depends_on` gerade nicht gilt, wird keiner — es steht ja nicht da
-  (`test_naming_the_dimensions_makes_them_project_parameters`,
-  `test_only_a_primitive_offers_to_name_its_dimensions`,
-  `test_a_holder_template_names_its_dimensions_but_not_an_idle_field`).
+  Der Haken steht beim ersten Start an und übernimmt danach die letzte Wahl
+  beim Übernehmen (`UiSettings.name_dimensions`).
 - **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat:**
   `ArmatureField` baut je Knochen drei Winkel (`ValueField`, §13), sobald der
   Dialog ein Skelett hat, sonst bleibt das Textfeld. Im Schema steht er hinten

@@ -4,8 +4,8 @@
     Prüfbericht sichtbar → eine Fläche anklicken → eine Operation wählen →
     Vorschau → annehmen → exportieren.
 
-Der Chat-Teil gehört zu P4; hier kommt die Operation aus dem Kontextmenü, und
-das ist die andere Hälfte desselben Satzes in §2.2. Alles übrige ist der echte
+Der Chat-Teil gehört zu P4; hier kommt die Operation aus dem Auswahlfenster am
+Merkmal, und das ist die andere Hälfte desselben Satzes in §2.2. Alles übrige ist der echte
 Weg: echte Dateien, der echte Stapel, die echte Auswertung, echte exportierte
 Bytes.
 """
@@ -64,7 +64,7 @@ def test_way_one_from_dropped_file_to_exported_part(tmp_path: Path, profile: Pro
     # --- Reparieren, denn ein heruntergeladenes Modell braucht das meist -------
     history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=("obj_1",))])
 
-    # --- Aufs Bett setzen und bohren, wie es das Kontextmenü täte --------------
+    # --- Aufs Bett setzen und bohren, wie es das Auswahlfenster täte -----------
     assert "drill_hole" in {spec.name for spec in REGISTRY.for_feature("face")}
     history.apply(_("Auf das Bett setzen"), [OperationDraft(op="place_on_bed", inputs=("obj_1",))])
     history.apply(

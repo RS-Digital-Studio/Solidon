@@ -1450,8 +1450,8 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
 def test_a_right_click_goes_straight_to_the_deepest_target(window: MainWindow) -> None:
     """Rechts fragt, was hier liegt — und meint immer das Genaueste (§18.5).
 
-    Der Bauplan nennt das Kontextmenü **am Merkmal** den Ort für Weg 1: ein
-    fremdes Modell wird angepasst, indem man auf die Stelle zeigt, die stört.
+    Weg 1 passt ein fremdes Modell an, indem man auf die Stelle zeigt, die
+    stört (§18.5); die Operationen stehen danach im Auswahlfenster am Merkmal.
     Wäre der Rechtsklick gestuft wie der Linksklick, hinge diese Zusage an einer
     Vorbedingung, die niemand kennt — man müsste die Bohrung erst linksklicken,
     um ihr Menü zu bekommen.
