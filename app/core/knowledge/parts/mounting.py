@@ -1,10 +1,10 @@
 """Bausteine, die etwas an etwas anderem halten (Bauplan §24.1).
 
 Hier liegen: die Magnettasche, die Wandhalterung, die Lasche mit Loch, die
-Schlüsselloch-Aufhängung, der Lochwand-Einhänger und der Standfuß. Manche sind
-Formen zum Abziehen, andere Körper zum Hinzufügen, und der Standfuß ist beides
-je nach Wahl — darum sagt die Deklaration es, und ``insert_part`` muss nicht
-raten.
+Rohrschelle, die Schlüsselloch-Aufhängung, der Lochwand-Einhänger und der
+Standfuß. Manche sind Formen zum Abziehen, andere Körper zum Hinzufügen, und
+der Standfuß ist beides je nach Wahl — darum sagt die Deklaration es, und
+``insert_part`` muss nicht raten.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.knowledge.parts.shapes import Form
 from app.core.registry import GRIP_TITLE, op_params, param, play_param
-from app.core.types import BaseParams, PartResult
+from app.core.types import BaseParams, PartResult, Vec3
 from app.core.units import is_greater
 from app.i18n import TranslatableText, _
 
@@ -675,6 +675,215 @@ def lug(raw: BaseParams) -> PartResult:
             area,
             (0.0, -thickness, (reach - screw.clearance / 2.0) / 2.0),
             (0.0, -1.0, 0.0),
+        ),
+    )
+
+
+PIPE_CLAMP_ADDED = PartChange(
+    version="1",
+    date="2026-10-02",
+    reason="Rohrschelle — im Nachbau der Klemmschelle entstand der Ring aus Zylinder, "
+    "Bohrung, Quader und Schlitz (RM-398).",
+)
+
+_PIPES: Final = standards.pipe_sizes()
+
+#: Die Klemmschrauben der Rohrschelle: M3 bis M6, soweit die Normteiltabelle
+#: Mutter und Unterlegscheibe dazu führt. **Nicht bis M8 wie die Lasche**: Der
+#: Bereichstest fährt Rohrreihe, eigenen Durchmesser, Breite, Wand, Spiel und
+#: Schraube als kartesisches Produkt, und mit acht Rohren und vier Schrauben
+#: sind das genau die 512 Ecken, die ``range_check.MAX_CORNERS`` zulässt.
+_CLAMP_SCREWS: Final = tuple(
+    size
+    for size in ("M3", "M4", "M5", "M6")
+    if size in _SCREWS and size in standards.nut_sizes() and size in standards.washer_sizes()
+)
+
+#: Wie weit die Klemmschraube den Ring **über das Spiel hinaus** schließen
+#: kann, als Breite des Klemmspalts gemessen.
+#:
+#: Das Spiel aus dem Materialprofil (Regel 7) steckt schon im Spalt: Der Ring
+#: ist um ``play`` weiter als das Rohr, und ``π · play`` Spalt nehmen genau
+#: das wieder weg. Dieser Wert ist kein Passungsmaß, sondern der Klemmweg
+#: danach: Ein Millimeter Spalt verengt den Ring um ``1 / π`` ≈ 0,32 mm im
+#: Durchmesser — so weit darf ein Rohr unter seinem Nennmaß liegen und wird
+#: noch gehalten. Er sorgt auch dafür, dass der Spalt ohne Profil (``play``
+#: null, Vorschau und SCAD-Datei) nicht verschwindet.
+CLAMP_TRAVEL = 1.0
+
+CLAMP_TOO_NARROW = _(
+    "Die Schelle ist schmaler als die Unterlegscheibe der Klemmschraube. Eine größere "
+    "Breite oder eine kleinere Schraube wählen."
+)
+
+
+@op_params
+class PipeClampParams(BaseParams):
+    size: str = param(
+        title=_("Rohr"),
+        default="22",
+        choices=_PIPES,
+        doc=_("Außendurchmesser des Rohrs in Millimetern, aus der Rohrreihe der Normteiltabelle."),
+    )
+    diameter: float = param(
+        title=_("Eigener Durchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=110.0,
+        placement="advanced",
+        doc=_(
+            "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
+            "Null verwendet die ausgewählte Größe."
+        ),
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=15.0,
+        unit="mm",
+        minimum=7.0,
+        maximum=80.0,
+        doc=_("Wie breit die Schelle ist, längs des Rohrs gemessen."),
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=3.0,
+        unit="mm",
+        minimum=1.5,
+        maximum=10.0,
+        doc=_("Dicke von Ring, Fuß und Klemmohren."),
+    )
+    screw_size: str = param(
+        title=_("Klemmschraube"),
+        default="M4",
+        choices=_CLAMP_SCREWS,
+        doc=_(
+            "Die Schraube quer durch beide Klemmohren, mit Mutter und zwei Unterlegscheiben "
+            "aus der Normteiltabelle."
+        ),
+    )
+    play: float = play_param()
+
+
+def _clamp_seat(screw_size: str) -> float:
+    """Wie viel Fläche Kopf, Scheibe und Mutter an einem Klemmohr brauchen.
+
+    Das größte der drei Maße aus der Normteiltabelle — Zylinderkopf,
+    Unterlegscheibe (ISO 7089) und Mutter über Eck. Das Ohr ist so hoch und
+    die Schelle mindestens so breit, damit jedes davon ganz aufliegt.
+    """
+    nut = standards.nut(screw_size)
+    return max(
+        standards.washer(screw_size).outer,
+        standards.screw(screw_size).head,
+        nut.width * 2.0 / math.sqrt(3.0),
+    )
+
+
+def _clamp_reason(params: PipeClampParams) -> TranslatableText | None:
+    """Die erklärte Bedingung: Die Unterlegscheibe liegt ganz auf dem Klemmohr."""
+    return CLAMP_TOO_NARROW if is_greater(_clamp_seat(params.screw_size), params.width) else None
+
+
+@register_part(
+    name="pipe_clamp",
+    title=_("Rohrschelle"),
+    group="mounting",
+    params=PipeClampParams,
+    standalone=True,
+    keeps_up=True,
+    features=["seat", "bore"],
+    wall=WallRequirement.from_parameter("wall"),
+    doc=_(
+        "Ein Ring um ein Rohr mit zwei Klemmohren und einer Schraube quer durch beide: "
+        "Angezogen schließt sie den Spalt, und der Ring klemmt. Rohr aus der Rohrreihe der "
+        "Normteiltabelle oder mit eigenem Durchmesser; das Spiel kommt aus dem "
+        "Materialprofil."
+    ),
+    caveat=_(
+        "Liegend gedruckt laufen die Schichten quer durch den Ring, und er hält weniger "
+        "Klemmkraft. Für eine Schelle, die fest klemmen soll, so drucken, dass die "
+        "Rohrachse senkrecht steht."
+    ),
+    changes=[PIPE_CLAMP_ADDED],
+    feasible=lambda raw: _clamp_reason(cast(PipeClampParams, raw)),
+)
+def pipe_clamp(raw: BaseParams) -> PartResult:
+    """Ein geschlitzter Ring auf einem Fuß, oben zwei Klemmohren mit Querschraube.
+
+    **Der Fuß steht auf der Fläche, das Rohr läuft parallel zu ihr.** Die
+    Rohrachse liegt in Y, und der Ring steht um eine Wand über der Fläche im
+    Fuß, damit sein Umfang die Fläche nicht nur in einer Linie berührt — genau
+    dort scheitert eine Boolesche Operation (§39). Mit ``keeps_up`` steht die
+    Rohrachse an einer senkrechten Wand senkrecht, wie bei der Klemmschelle aus
+    dem Nachbau.
+
+    **Der Spalt ist das Spiel und der Klemmweg** (:data:`CLAMP_TRAVEL`): Die
+    Schraube quer durch beide Ohren zieht ihn zu, und der Ring legt sich ums
+    Rohr. Ihre Achse liegt über dem Ring, sodass Kopf, Scheibe und Mutter
+    nirgends am Ring anstoßen und der Schaft das Rohr nicht berührt.
+    """
+    params = cast(PipeClampParams, raw)
+    seat = _clamp_seat(params.screw_size)
+    reason = _clamp_reason(params)
+    if reason is not None:
+        raise ValidationError("width", reason, constraint="feasible", values={"minimum": seat})
+    screw = standards.screw(params.screw_size)
+    pipe = params.diameter or standards.pipe(params.size).outer
+    wall = params.wall
+    width = params.width
+    inner = (pipe + params.play) / 2.0
+    outer = inner + wall
+    centre = outer + wall
+    foot = inner + wall / 2.0
+    gap = math.pi * params.play + CLAMP_TRAVEL
+    ear = gap / 2.0 + wall
+    top = centre + outer + seat
+    bolt = centre + outer + seat / 2.0
+
+    def lying(diameter: float, length: float, axis: Vec3) -> Form:
+        """Ein Zylinder mittig im Ursprung, um eine Vierteldrehung in X oder Y gelegt."""
+        upright = shapes.moved(shapes.cylinder(diameter, length), (0.0, 0.0, -length / 2.0))
+        return shapes.turned(upright, 90.0, axis)
+
+    body = union(
+        shapes.moved(lying(2.0 * outer, width, (1.0, 0.0, 0.0)), (0.0, 0.0, centre)),
+        # Der Fuß reicht von der Fläche bis zur Ringmitte und endet seitlich in
+        # der Ringwand — kein Berühren in einer Linie, keine Stufe.
+        shapes.box(2.0 * foot, width, centre),
+        shapes.moved(shapes.box(2.0 * ear, width, top - centre), (0.0, 0.0, centre)),
+    )
+    body = subtract(
+        body,
+        shapes.moved(
+            lying(2.0 * inner, width + 2.0 * BOOLEAN_OVERLAP, (1.0, 0.0, 0.0)), (0.0, 0.0, centre)
+        ),
+        shapes.moved(
+            shapes.box(gap, width + 2.0 * BOOLEAN_OVERLAP, top - centre + BOOLEAN_OVERLAP),
+            (0.0, 0.0, centre),
+        ),
+        shapes.moved(
+            lying(screw.clearance, 2.0 * ear + 2.0 * BOOLEAN_OVERLAP, (0.0, 1.0, 0.0)),
+            (0.0, 0.0, bolt),
+        ),
+    )
+    return result(
+        body,
+        bore(
+            "seat_1",
+            2.0 * inner,
+            (0.0, 0.0, centre),
+            depth=width,
+            axis=(0.0, 1.0, 0.0),
+            through=True,
+        ),
+        bore(
+            "bore_1",
+            screw.clearance,
+            (0.0, 0.0, bolt),
+            depth=2.0 * ear,
+            axis=(1.0, 0.0, 0.0),
+            through=True,
         ),
     )
 

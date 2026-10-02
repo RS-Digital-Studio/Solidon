@@ -782,6 +782,13 @@ PART_CASES = {
         "greater",
         None,
     ),
+    "pipe_clamp": (
+        {"size": "22", "width": 15.0, "wall": 3.0, "screw_size": "M4"},
+        "greater",
+        # Fuß (eine Wand), Ring (Rohr mit 0,25 Spiel aus PETG und zwei
+        # Wänden) und darüber die Unterlegscheibe M4 (9,0).
+        3.0 + (22.25 + 2.0 * 3.0) + 9.0,
+    ),
     "printed_nut": ({"size": "M5"}, "greater", None),
     "printed_screw": ({"size": "M5", "length": 12.0, "countersunk": False}, "greater", None),
     "printed_thread": ({"size": "M6", "length": 8.0, "internal": False}, "greater", None),
@@ -828,6 +835,7 @@ STANDALONE = (
     "organizer_rim",
     "organizer_tray",
     "overhang_fan",
+    "pipe_clamp",
     "profile_clamp_liner",
     "profile_clamp_shell",
     "seal_gasket",

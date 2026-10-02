@@ -2311,7 +2311,10 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Mit der *Lasche mit Loch* (RM-398) derselbe Aufruf: **7 372 Token bei 156
 #: Werkzeugen**; SHA-256
 #: ``0c050279ab0443f9cd1987c7a4634d20b6765c808d6db1fadff2335caf4cd820``.
-PROMPT_TOKENS: Final = 7372
+#: Mit der *Rohrschelle* (Einsetzen und Anlegen) und der Rohrreihe als
+#: Tabellenart: **7 436 Token bei 158 Werkzeugen**; SHA-256
+#: ``6319d645968f0b9fdcb2c847a41c2349e03e654518204fcaa98ed61c2363ddfe``.
+PROMPT_TOKENS: Final = 7436
 
 #: Wie viele Token der **erste Schritt eines üblichen Zugs** einliest — die
 #: Zahl, mit der die Wartezeit auf dem Prozessor geschätzt wird
@@ -2338,9 +2341,9 @@ TURN_TOKENS: Final = 9061
 #: ist, sagt der nächste echte Lauf gegen qwen3:14b; bis dahin ist sie eine
 #: Untergrenze und als solche benannt.
 #:
-#: Die funktionale Zählung vom 02.10.2026 enthält genau diese 156 Werkzeuge;
+#: Die funktionale Zählung vom 02.10.2026 enthält genau diese 158 Werkzeuge;
 #: Modell, Kontext und Anfragebeleg stehen bei :data:`PROMPT_TOKENS`.
-PROMPT_TOOL_COUNT: Final = 156
+PROMPT_TOOL_COUNT: Final = 158
 
 #: Unter diesem Anteil der Mindestzahl aus :func:`least_tokens` gilt eine
 #: Antwort als gekürzt (:func:`prompt_was_cut`). Die Mindestzahl ist schon

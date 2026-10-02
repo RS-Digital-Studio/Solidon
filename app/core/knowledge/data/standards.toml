@@ -12,6 +12,9 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 10 seit dem 02.10.2026: Die Rohrreihe ist als eigene Tabellenart
+# `pipes` dazugekommen, für die Rohrschelle (RM-398). Kein bestehender Wert hat
+# sich geändert.
 # Version 9 seit dem 22.09.2026: Die Schrauben tragen neben dem mittleren
 # Durchgangsloch auch die feine und die grobe Reihe nach ISO 273. Kein
 # bestehender Wert hat sich geändert. Gebraucht werden die Reihen für die
@@ -42,7 +45,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "9"
+version = "10"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -539,3 +542,53 @@ note = "Rundkabel, Durchführung"
 size = "cable-7"
 outer = 7.0
 inner = 0.0
+
+# --- Rohre ----------------------------------------------------------------------
+# outer: Außendurchmesser. Die Rohrreihe der Rohrschelle (RM-398): Bei Kupfer-,
+# Kunststoff- und Elektro-Installationsrohren ist der Außendurchmesser zugleich
+# die Handelsbezeichnung — „Kupferrohr 22“ misst außen 22 mm, „M20“ ebenso 20.
+# Die Werte sind diese Nennmaße, wie sie die frei zugänglichen Kataloge der
+# Hersteller führen; abgeschrieben ist keine Normtabelle. Was hier nicht steht
+# (Gewinderohr 21,3, Gartenschlauch, Besenstiel), trägt der Baustein als eigenen
+# Durchmesser ein. Der Schlüssel ist das Maß in Millimetern und damit in jeder
+# Sprache sein eigener Name.
+
+[[pipes]]
+size = "15"
+outer = 15.0
+note = "Kupferrohr 15 mm (EN 1057)"
+
+[[pipes]]
+size = "16"
+outer = 16.0
+note = "Mehrschichtverbund- und PE-X-Rohr 16 mm; Elektro-Installationsrohr M16 (EN 61386)"
+
+[[pipes]]
+size = "20"
+outer = 20.0
+note = "Mehrschichtverbund- und PE-X-Rohr 20 mm; Elektro-Installationsrohr M20; PVC-Druckrohr d20"
+
+[[pipes]]
+size = "22"
+outer = 22.0
+note = "Kupferrohr 22 mm (EN 1057)"
+
+[[pipes]]
+size = "25"
+outer = 25.0
+note = "Elektro-Installationsrohr M25; PE- und PVC-Druckrohr d25"
+
+[[pipes]]
+size = "28"
+outer = 28.0
+note = "Kupferrohr 28 mm (EN 1057)"
+
+[[pipes]]
+size = "32"
+outer = 32.0
+note = "Elektro-Installationsrohr M32; HT-Abflussrohr DN 32"
+
+[[pipes]]
+size = "40"
+outer = 40.0
+note = "Elektro-Installationsrohr M40; HT-Abflussrohr DN 40"

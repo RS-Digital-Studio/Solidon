@@ -911,10 +911,14 @@ def self_naming_sizes() -> frozenset[str]:
     und nicht als ``\\d{4}`` ans Muster gehängt — dieses Muster ließe auch
     Lagerbezeichnungen wie „6800" durch, ohne dass jemand das entschieden hat,
     und eine neue Profilgröße ist hier von selbst dabei.
+
+    Dasselbe gilt für die Rohrreihe der Rohrschelle (RM-398): „22" ist der
+    Außendurchmesser in Millimetern und die Handelsbezeichnung des Rohrs —
+    in jeder Sprache dieselbe Zahl.
     """
     from app.core.knowledge import standards
 
-    return frozenset(standards.profile_sizes())
+    return frozenset(standards.profile_sizes()) | frozenset(standards.pipe_sizes())
 
 
 def self_naming_fonts() -> frozenset[str]:

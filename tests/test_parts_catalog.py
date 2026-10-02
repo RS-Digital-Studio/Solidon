@@ -95,7 +95,10 @@ def test_scad_follows_the_parameters() -> None:
     assert thin != thick
 
 
-@pytest.mark.parametrize(("name", "field", "values"), [("lug", "size", ("M3", "M8"))])
+@pytest.mark.parametrize(
+    ("name", "field", "values"),
+    [("lug", "size", ("M3", "M8")), ("pipe_clamp", "size", ("15", "40"))],
+)
 def test_the_rm398_parts_write_their_scad_with_the_chosen_size(
     name: str, field: str, values: tuple[str, str]
 ) -> None:

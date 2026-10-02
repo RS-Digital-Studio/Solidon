@@ -1327,6 +1327,7 @@ EXACT_PARTS: Final = frozenset(
         "lug",
         "magnet_pocket",
         "pegboard_hook",
+        "pipe_clamp",
         "wall_mount",
         "profile_clamp_liner",
         "profile_clamp_shell",

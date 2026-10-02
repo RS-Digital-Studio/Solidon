@@ -232,13 +232,14 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     abtragende Dichtnut und die separate Dichtung aus demselben geschlossenen
     Weg, dieselbe Bauart mit Zeichnung und Materialrolle.
 
-    ``lug`` kam am 02.10.2026 aus dem Nachbau-Test (RM-398): Laschen mit Loch
-    entstanden dort je aus Quader, Verschieben und Bohrung, an Schraubendreherhalter
-    und Kartuschendeckel.
+    ``lug`` und ``pipe_clamp`` kamen am 02.10.2026 aus dem Nachbau-Test
+    (RM-398): Laschen mit Loch und die Klemmschelle entstanden dort je aus
+    Grundkörpern, Verschieben und Bohrungen, an Schraubendreherhalter,
+    Kartuschendeckel und Klemmschelle.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 33
+    assert len(building) == 34
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -298,7 +299,7 @@ def test_range_corners_are_the_complete_cartesian_boundary() -> None:
     assert len({tuple(entry.items()) for entry in plan}) == len(plan)
 
 
-def test_the_library_really_has_2706_cartesian_boundaries() -> None:
+def test_the_library_really_has_3218_cartesian_boundaries() -> None:
     """Vollständige Grenzen einschließlich der 120 Organizer-Kombinationen.
 
     Die 312 seit dem 16.09.2026 sind die Klemmschale (32), ihre Einlage (256),
@@ -307,10 +308,11 @@ def test_the_library_really_has_2706_cartesian_boundaries() -> None:
     Klemmschale bietet vier Schraubengrößen statt einer (32 → 128), und der
     Überhangfächer hat für Breite und Auskraglänge eine Obergrenze (8 → 32).
     Die Lasche mit Loch (RM-398) bringt 40: fünf Schrauben mal Breite, Länge
-    und Dicke an je zwei Grenzen.
+    und Dicke an je zwei Grenzen. Die Rohrschelle bringt 512: acht Rohre mal
+    vier Schrauben mal eigener Durchmesser, Breite, Wand und Spiel an je zwei.
     """
 
-    assert sum(len(corners(spec)) for spec in PARTS.all()) == 2706
+    assert sum(len(corners(spec)) for spec in PARTS.all()) == 3218
 
 
 def test_a_range_limit_is_checked_before_materialising_combinations(
@@ -5244,6 +5246,120 @@ def test_a_lug_that_cannot_carry_its_screw_is_refused_with_advice(
         spec.fn(params)
     assert caught.value.field == field
     assert caught.value.constraint == "feasible"
+
+
+# --- Die Rohrschelle (insert_pipe_clamp, create_pipe_clamp, RM-398) ---------------
+
+
+def test_a_pipe_clamp_holds_the_klemmschelle_of_the_rebuild_on_a_side_wall(
+    profile: Profile,
+) -> None:
+    """Abnahme RM-398, Fall 1: die Klemmschelle aus dem Nachbau, Ring Ø 16,9 innen.
+
+    An eine senkrechte Wand gesetzt steht die Rohrachse senkrecht (``keeps_up``)
+    — wie im Original, und so laufen die Schichten mit dem Ring, nicht quer.
+    Das Spiel kommt aus dem Profil: 16,65 mm Rohr und PETG ergeben die 16,9.
+    """
+    values = {
+        "x": -20.0,
+        "y": 0.0,
+        "z": 10.0,
+        "nx": -1.0,
+        "ny": 0.0,
+        "nz": 0.0,
+        "size": "15",
+        "diameter": 16.65,
+        "width": 30.0,
+        "wall": 3.0,
+        "screw_size": "M5",
+    }
+    carrier = OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0})
+    body = _carrier_with(profile, carrier, "pipe_clamp", values)
+    assert body.mesh.is_watertight and body.mesh.component_count == 1
+    seat = next(f for name, f in body.features.items() if name.endswith("seat_1"))
+    assert seat.params["diameter"] == pytest.approx(16.65 + profile.material.clearance)
+    assert seat.params["diameter"] == pytest.approx(16.9)
+    assert np.abs(np.asarray(seat.params["axis"], dtype=float)) == pytest.approx((0.0, 0.0, 1.0))
+    bolt = next(f for name, f in body.features.items() if name.endswith("pipe_clamp_bore_1"))
+    assert bolt.params["diameter"] == pytest.approx(standards.screw("M5").clearance)
+
+
+def test_a_pipe_clamp_stands_alone_for_the_broom_handle_of_the_corpus(profile: Profile) -> None:
+    """Abnahme RM-398, Fall 2: der Besenhalter Ø 35 aus ``F:\\3D Dateien`` als eigenes Teil.
+
+    35 mm steht nicht in der Rohrreihe; der eigene Durchmesser trägt es. Die
+    Schelle steht mit dem Fuß auf dem Bett, die Rohrachse waagerecht.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Schelle",
+        [
+            OperationDraft(
+                op="create_pipe_clamp",
+                params={"size": "32", "diameter": 35.0, "width": 20.0, "screw_size": "M4"},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(finding.message) for finding in result.scene.report.findings]
+    clamp = result.scene.objects["obj_1"]
+    assert clamp.mesh.is_watertight and clamp.mesh.component_count == 1
+    assert float(clamp.mesh.bounds.minimum[2]) == pytest.approx(0.0, abs=1e-6)
+    seat = next(f for name, f in clamp.features.items() if name.endswith("seat_1"))
+    assert seat.params["diameter"] == pytest.approx(35.0 + profile.material.clearance)
+    assert abs(float(seat.params["axis"][2])) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_pipe_clamp_for_a_copper_pipe_sits_on_a_top_face(profile: Profile) -> None:
+    """Abnahme RM-398, Fall 3: Kupferrohr 22 aus der Rohrreihe auf einer Oberseite.
+
+    Das Rohr läuft parallel zur Fläche, der Ring wird mit dem Träger ein
+    Körper, und die Klemmschraube liegt über dem Ring, nicht im Rohr.
+    """
+    values = {"x": 0.0, "y": 0.0, "z": 20.0, "size": "22", "screw_size": "M4"}
+    carrier = OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 20.0})
+    body = _carrier_with(profile, carrier, "pipe_clamp", values)
+    assert body.mesh.is_watertight and body.mesh.component_count == 1
+    seat = next(f for name, f in body.features.items() if name.endswith("seat_1"))
+    bolt = next(f for name, f in body.features.items() if name.endswith("pipe_clamp_bore_1"))
+    assert seat.params["diameter"] == pytest.approx(22.0 + profile.material.clearance)
+    assert abs(float(seat.params["axis"][2])) == pytest.approx(0.0, abs=1e-6)
+    pipe_top = float(seat.params["centre"][2]) + 11.0
+    bolt_bottom = float(bolt.params["centre"][2]) - float(bolt.params["diameter"]) / 2.0
+    assert bolt_bottom > pipe_top + 3.0, "zwischen Rohr und Schraube steht die Ringwand"
+
+
+def test_a_pipe_clamp_leaves_a_gap_of_the_play_and_the_clamping_travel() -> None:
+    """Der Spalt schließt das Spiel (π mal Spiel) und klemmt danach noch einen
+    Millimeter — gemessen am Netz, in Höhe der Ohren, an zwei Spielen."""
+    from app.core.slice.analysis import cross_section
+
+    spec = PARTS.get("pipe_clamp")
+    for play in (0.2, 0.35):
+        params = spec.params(size="22", wall=3.0, width=15.0, screw_size="M4", play=play)
+        mesh = spec.fn(params).mesh
+        # Ein waagerechter Schnitt knapp unter der Oberkante trifft nur die
+        # Ohren: zwei Rechtecke, zwischen ihnen der Spalt.
+        top = float(mesh.bounds.maximum[2])
+        section = cross_section(mesh, top - 0.5)
+        assert section is not None
+        ears = sorted(getattr(section, "geoms", [section]), key=lambda ear: ear.bounds[0])
+        assert len(ears) == 2, f"play {play}: zwei Ohren, nicht {len(ears)}"
+        gap = float(ears[1].bounds[0]) - float(ears[0].bounds[2])
+        assert gap == pytest.approx(np.pi * play + 1.0, abs=1e-6), f"play {play}"
+
+
+def test_a_pipe_clamp_narrower_than_its_washer_is_refused_with_advice() -> None:
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("pipe_clamp")
+    params = spec.params(size="22", width=8.0, screw_size="M6", play=0.25)
+    assert spec.feasible is not None and spec.feasible(params) is not None
+    with pytest.raises(ValidationError) as caught:
+        spec.fn(params)
+    assert caught.value.field == "width"
+    assert caught.value.constraint == "feasible"
+    assert spec.fn(spec.params(size="22", width=12.0, screw_size="M6", play=0.25)).mesh.volume > 0
 
 
 # --- Der Kabelclip (insert_cable_clip) ------------------------------------------
