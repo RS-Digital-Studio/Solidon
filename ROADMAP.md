@@ -101,12 +101,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-410 — Die schnelle Orientierung rechnet am vollen Netz und ist an großen Baugruppen langsamer als die gründliche](#rm-410) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10. (Modelltest): schnelle Suche auf Ersatznetz und gleiche Körper teilen wie die gründliche |
 | [RM-411 — Langlöcher in Baugruppen gehen an schrägen oder gestuften Trägern nicht durch, und die Kerne rechnen verschieden](#rm-411) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-320 (archiviert); Träger über seine Hülle schneiden, Tiefe für fremde Körper aus der Wand, Stift nicht verschmelzen |
 | [RM-413 — Reste aus dem Review von `57848fa72` und `e3dff1907`](#rm-413) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: toter Code, abgelöster Merkmalarbeiter, doppelter Builder, falscher Absagegrund, Regel nicht nachgezogen |
-| [RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt](#rm-423) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-t`). Aus RM-386: `_place_oriented_feature` am exakten Körper — Ergebnis exakt rechnen oder als Netz kennzeichnen und `evaluate.exact_became_mesh` melden; Test beide Kerne |
 | [RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung](#rm-434) | Geometrie, Erkennung und Druckvorbereitung | Eingangsprüfung vor Bounds/Budget korrigiert; 24 Fachfälle und gezieltes Mypy grün, Code unabhängig freigegeben; Tor und Übernahme offen |
 | [RM-425 — Überlappende gespiegelte Formzüge verlieren ihre Symmetrie](#rm-425) | Geometrie, Erkennung und Druckvorbereitung | S01 aus dem Review von `48106c57a`: Spiegelrichtungen gemeinsam begrenzen; alle Achsen/Pinsel, drei Körper und alter gespeicherter Verlauf |
 | [RM-417 — Cura meldet „anderer Drucker aktiv“, obwohl es derselbe ist; zwei neue Fenstertests rot](#rm-417) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-s`). Review 02.10. (`4cf460e87`): Definition zusätzlich vergleichen; Testwettlauf und zu strenge Zusicherung berichtigen |
 | [RM-419 — Die neue Durchstichprüfung macht den Formschritt bis 130-mal langsamer](#rm-419) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10.: Folge zu RM-364 (archiviert); Schnittsuche nur um die bewegten Ecken, mit Fortschritt |
-| [RM-420 — `solidon import` liest eine Meter-Datei weiter still als Zoll](#rm-420) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-t`). Review 02.10.: Folge zu RM-353 (archiviert); Kommandozeile mit `plausible_reach` und Rückfrage bzw. `--unit`-Pflicht |
 | [RM-421 — Randprüfung der Bausteine übersieht Mündungsweite und Material hinter dem Rand](#rm-421) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-392 (archiviert); Senkung/Fase mitprüfen, Seitenwände prüfen, beide Kerne gleich |
 | [RM-422 — Reste aus RM-325 und RM-332: Drehtest an ±X, gespeicherte Lagen, Aushöhlen mit Entlüftung, `measured_frame` in Handbuch und CLI](#rm-422) | Geometrie, Erkennung und Druckvorbereitung | Review 02.10.: Folge zu RM-325/RM-332 (archiviert); Test, Migration statt stiller Lageänderung, Rückseite außen, Feld ausblenden |
 | [RM-427 — Entwurfsauflösung: Kegel und Torus ohne Befund, Budget zählt die Oberfläche nicht](#rm-427) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-y`). Review 02.10.: Folge zu RM-379 (archiviert); Budgetregel für jede Op mit Entwurfsfaktor, Oberflächenwolke mitzählen |
@@ -3032,18 +3030,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** je Rest ein Test bzw. die berichtigte Unterlage (Gegenprobe `_same_cylinder_axis`
   rot). Beleg: `F:\solidon-review-reports\review-e3dff1907.md`.
 
-<a id="rm-423"></a>
-
-- [ ] **RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt.**
-  Fund 02.10.2026 bei RM-386 (Claude, Unteragent), vorbestehend: *Merkmal verschieben* mit
-  Richtung (`nx`/`ny`/`nz`, `_place_oriented_feature` in `app/core/geom/prepare_ops.py`)
-  rechnet am exakten Körper über das Netz und gibt ein `MeshData` zurück, der Körper bleibt
-  aber als `brep` markiert. Folgeschritte des exakten Kerns treffen dann ein Netz. Im neuen
-  Test `test_every_closing_way_treats_touching_plates_as_one_printed_body` ist dieser eine
-  Fall deshalb ausgenommen. **Fix:** exakt rechnen oder `kind` auf `mesh` setzen und
-  `evaluate.exact_became_mesh` melden (`result_kind`). **Abnahme:** Test an beiden Kernen,
-  Ausnahme im RM-386-Test entfernt. Bauplan §21.
-
 <a id="rm-434"></a>
 
 - [~] **RM-434 — Das Entwurfsbudget von Weich verschmelzen übergeht die Eingangsprüfung.**
@@ -3129,20 +3115,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   **Abnahme:** Messung an Kugel (sechs Züge R 5) und der Korpusfigur: höchstens 25 % über dem Stand
   vor `cd4875450`; Befunde unverändert. Bauplan §31, §17.3, §2.7.
   Belege: `F:\solidon-review-reports\verif-4cf460e87-geometrie.md`, Sonden `v4g_rm364_*`.
-
-<a id="rm-420"></a>
-
-- [ ] **RM-420 — `solidon import` liest eine Meter-Datei weiter still als Zoll.**
-  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-353 (archiviert). Fenster- und Op-Weg
-  fragen jetzt richtig.
-  **Fehlerfall:** `solidon import` mit dem Helm 0,30 × 0,25 × 0,30 (Meter) liest still als Zoll und
-  speichert `unit: 'in'`. Ursache: `app/cli/main.py:504` ruft `detect_unit` ohne `plausible_reach`;
-  `tests/test_ingest.py:1777` sichert genau dieses Verhalten zu.
-  **Fix:** dieselbe Erkennung wie im Op-Weg; ist sie unsicher, bricht die Kommandozeile mit
-  Handlungsvorschlag ab („Geben Sie `--unit m|mm|cm|in` an“) statt zu raten (Regel 21); den Test
-  umkehren.
-  **Abnahme:** Test: Helm über die Kommandozeile → Abbruch mit Vorschlag bzw. mit `--unit m` richtig;
-  eindeutige Dateien wie bisher. Bauplan §17.1, Regel 21. Beleg: Sonde `v4g_rm353_cli.txt`.
 
 <a id="rm-421"></a>
 

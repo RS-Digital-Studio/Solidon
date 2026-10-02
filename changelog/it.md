@@ -101,7 +101,7 @@ scrive in `website/version.json`.
 - La finestra «Novità» e il sito mostrano le evidenziazioni come testo marcato invece che con asterischi.
 - Inglese e spagnolo usano una sola parola per il gioco di accoppiamento, e i messaggi seguono la punteggiatura di ogni lingua.
 - Gli spazi arrivano in ogni campo di testo, anche nel questionario di feedback e nella chat, mentre una finestra di dialogo mostra l'anteprima.
-- Un rilievo che riguarda un passo lo apre per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
+- Alcuni rilievi che riguardano un passo lo aprono per modificarlo, per esempio «Cambia dimensione» dopo «Porta a misura».
 - Una riga riassuntiva del rapporto come «Riduci al volume di stampa» è un solo passo di annullamento per tutti i corpi.
 - L'aiuto di un'operazione salta nel manuale direttamente alla sua voce, e il riferimento chiama campi e scelte come nella finestra di dialogo.
 

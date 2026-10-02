@@ -101,7 +101,7 @@ it into `website/version.json`.
 - The *What's new* window and the website show emphasis as styled text instead of asterisks.
 - English and Spanish use one word for fit clearance throughout, and messages use punctuation as each language requires.
 - Spaces reach every text field, including the feedback questionnaire and the chat, while a dialog shows its preview.
-- A finding that refers to a step opens it for changing, for example *Change size* after *Fit to size*.
+- Some findings that refer to a step open it for changing, for example *Change size* after *Fit to size*.
 - A summary row in the report such as *Scale down to the build volume* is a single undo step across all bodies.
 - Help for an operation jumps straight to its entry in the manual, and the reference names fields and choices as they appear in the dialog.
 

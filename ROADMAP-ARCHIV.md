@@ -31,6 +31,8 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)](#rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026) |
+| 2026-10-02 | [RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)](#rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026) |
 | 2026-10-02 | [RM-452: Ein anderes Projekt erbt keine abgelehnte Zahl der Parameterleiste (02.10.2026)](#rm-452-ein-anderes-projekt-erbt-keine-abgelehnte-zahl-der-parameterleiste-02102026) |
 | 2026-10-02 | [RM-453: *Eingabe korrigieren* führt einen zusammengesetzten Ausdruck in den Schritt (02.10.2026)](#rm-453-eingabe-korrigieren-führt-einen-zusammengesetzten-ausdruck-in-den-schritt-02102026) |
 | 2026-10-02 | [RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)](#rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026) |
@@ -35926,7 +35928,7 @@ fünf stabile Hashes je Lauf und Ruff/Format grün. Die kumulative
   davon abdeckt, ist noch nicht geprüft. Bauplan §21.1, §25, §30, Regel 17.
   Belege: `F:\solidon-review-reports\review-3fd3b1ace.md`, Sonden `r_beruehrplatten_*.txt`.
 
-**Abschluss:** `merge_face_contacts` an jeder schließenden Vereinigung am Netz (Versetzen, Versetzen mit Richtung, Entfernen, Kippen, `_section_closed`, Senkung ändern, Einlauf mitnehmen, Wulst/Kehle als Hohlraum, Musterzellen); am exakten Kern `_exact_closing_base`, `_exact_closing_chain` und `_exact_entrance_context`, der Langlochzug läuft über denselben Helfer. Zwei parametrisierte Tests an beiden Kernen (30 Fälle, am Stand davor 21 rot). Laufzeit am Besenhalter unverändert. Vorbestehender Fund am exakten Versetzen mit Richtung unter [RM-423](ROADMAP.md#rm-423). Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
+**Abschluss:** `merge_face_contacts` an jeder schließenden Vereinigung am Netz (Versetzen, Versetzen mit Richtung, Entfernen, Kippen, `_section_closed`, Senkung ändern, Einlauf mitnehmen, Wulst/Kehle als Hohlraum, Musterzellen); am exakten Kern `_exact_closing_base`, `_exact_closing_chain` und `_exact_entrance_context`, der Langlochzug läuft über denselben Helfer. Zwei parametrisierte Tests an beiden Kernen (30 Fälle, am Stand davor 21 rot). Laufzeit am Besenhalter unverändert. Vorbestehender Fund am exakten Versetzen mit Richtung unter [RM-423](#rm-423). Umgesetzt von Claude, in main mit `1df39e7b3`; Entwicklungstor auf dem zusammengeführten Stand grün.
 
 ## RM-414: Creality Print 7.3 rückt auch eine haltende Anordnung zur Mitte, und Solidon sagt es nicht (02.10.2026)
 
@@ -36565,6 +36567,42 @@ Entwicklungstor grün (19732 bestanden, ruff, format und mypy ohne Befund).
   Quellenbefund, noch keine ausgeführte Gegenprobe am aktuellen Hauptzweig.
 
 **Abschluss:** Am Fenster nachgestellt (Stand `bd7f11180`): Projekte A und B mit *Breite* 60, Obergrenze 100, Quader an `=@breite`; in A 150 + Enter abgelehnt, nach dem Öffnen von B stand „150“ samt „150,00 mm liegt über der Obergrenze 100,00 mm.“ in der Leiste, und drei ↑ in B ergaben 62 statt 63. `ParameterPanel.show_document` merkt sich das gezeigte Dokument; ein anderes Dokumentobjekt (die Sitzung tauscht es nur beim Projektwechsel) baut die Zeilen neu, ohne Fokus mitzunehmen, innerhalb eines Dokuments bleiben Feld und Fokus (RM-355). Fenstertest `test_another_project_does_not_inherit_a_refused_number` (vor dem Fix rot), RM-355-Test `test_three_arrow_steps_in_the_parameter_bar_turn_the_number_by_three` grün. Fenstersonde: B zeigt 60 ohne Ablehnung, 3× ↑ ergibt 63 mit demselben Feld und Fokus; die Grenzablehnung (5000 bei Obergrenze 100) steht weiter unter dem Feld, das Dokument bleibt, 80 danach wird übernommen. Umgesetzt von Claude, Thread „Bedienung und KI“, in main mit `1f8d96f2c` (Merge `0e9cdc567`); Entwicklungstor grün.
+
+## RM-420: `solidon import` liest eine Meter-Datei weiter still als Zoll (02.10.2026)
+
+<a id="rm-420-solidon-import-liest-eine-meter-datei-weiter-still-als-zoll-02102026"></a>
+<a id="rm-420"></a>
+
+**RM-420 — `solidon import` liest eine Meter-Datei weiter still als Zoll.**
+  Review 02.10.2026 am Stand `4cf460e87`; Folgepunkt zu RM-353 (archiviert). Fenster- und Op-Weg
+  fragen jetzt richtig.
+  **Fehlerfall:** `solidon import` mit dem Helm 0,30 × 0,25 × 0,30 (Meter) liest still als Zoll und
+  speichert `unit: 'in'`. Ursache: `app/cli/main.py:504` ruft `detect_unit` ohne `plausible_reach`;
+  `tests/test_ingest.py:1777` sichert genau dieses Verhalten zu.
+  **Fix:** dieselbe Erkennung wie im Op-Weg; ist sie unsicher, bricht die Kommandozeile mit
+  Handlungsvorschlag ab („Geben Sie `--unit m|mm|cm|in` an“) statt zu raten (Regel 21); den Test
+  umkehren.
+  **Abnahme:** Test: Helm über die Kommandozeile → Abbruch mit Vorschlag bzw. mit `--unit m` richtig;
+  eindeutige Dateien wie bisher. Bauplan §17.1, Regel 21. Beleg: Sonde `v4g_rm353_cli.txt`.
+
+**Abschluss:** `solidon import` gibt der Einheitenerkennung die Reichweite aus dem Drucker des Projekts mit (`plausible_reach`), wie die Operation: Der Helm von 0,30 × 0,25 × 0,30 m wird gefragt, ohne Terminal endet der Lauf mit dem Ausweg „--unit“, mit „--unit m“ stimmt die Lesart. Test `test_a_file_in_metres_is_not_read_as_inches` (vor dem Fix rot). Umgesetzt von Claude, in main mit `a6bcd4652`; Entwicklungstor auf dem zusammengeführten Stand grün.
+
+## RM-423: *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt (02.10.2026)
+
+<a id="rm-423-merkmal-verschieben-mit-richtung-liefert-am-exakten-körper-ein-netz-das-weiter-als-exakt-gilt-02102026"></a>
+<a id="rm-423"></a>
+
+**RM-423 — *Merkmal verschieben* mit Richtung liefert am exakten Körper ein Netz, das weiter als exakt gilt.**
+  Fund 02.10.2026 bei RM-386 (Claude, Unteragent), vorbestehend: *Merkmal verschieben* mit
+  Richtung (`nx`/`ny`/`nz`, `_place_oriented_feature` in `app/core/geom/prepare_ops.py`)
+  rechnet am exakten Körper über das Netz und gibt ein `MeshData` zurück, der Körper bleibt
+  aber als `brep` markiert. Folgeschritte des exakten Kerns treffen dann ein Netz. Im neuen
+  Test `test_every_closing_way_treats_touching_plates_as_one_printed_body` ist dieser eine
+  Fall deshalb ausgenommen. **Fix:** exakt rechnen oder `kind` auf `mesh` setzen und
+  `evaluate.exact_became_mesh` melden (`result_kind`). **Abnahme:** Test an beiden Kernen,
+  Ausnahme im RM-386-Test entfernt. Bauplan §21.
+
+**Abschluss:** Eine einzelne Bohrung oder ein Langloch rechnet beim Versetzen und Verdoppeln mit Richtung am exakten Körper exakt (`_exact_place_oriented_cavity`: alte Stelle schließen, am Ziel mit gedrehtem Werkzeug schneiden), die um 10° gekippte Bohrung genau π r² · 20 / cos 10°; was weiter am Netz rechnet (Senkbohrungen, Zapfen), ist danach als Netz ausgewiesen, und die Auswertung meldet `evaluate.exact_became_mesh`. Ausnahme im RM-386-Test entfernt; vier Fälle vor dem Fix rot. Umgesetzt von Claude, in main mit `a6bcd4652`; Entwicklungstor auf dem zusammengeführten Stand grün.
 ## RM-455: Eigene Bausteine zeigen Bearbeiten, Weitergeben und Entfernen wieder offen (02.10.2026)
 
 <a id="rm-455-eigene-bausteine-zeigen-bearbeiten-weitergeben-und-entfernen-wieder-offen-02102026"></a>
