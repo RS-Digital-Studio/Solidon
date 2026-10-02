@@ -7431,5 +7431,10 @@
   "Einfügen beenden und übernehmen": "Finish inserting and apply",
   "Größe ändern": "Change size",
   "Reliefhöhe ändern": "Change relief height",
-  "Zellgröße ändern": "Change cell size"
+  "Zellgröße ändern": "Change cell size",
+  "{title} {number}": "{title} {number}",
+  "{name} ändern": "Change {name}",
+  "Einheit von {name}": "Unit of {name}",
+  "{name} als Regler": "{name} as slider",
+  "Von {low} bis {high}": "From {low} to {high}"
 }

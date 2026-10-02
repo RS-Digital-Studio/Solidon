@@ -247,7 +247,7 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import _, format_decimal, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
@@ -18296,6 +18296,11 @@ class MainWindow(QMainWindow):
             pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
             slots=self._slots_of_selection(),
             edges=self._edge_names(),
+            # Auch beim Ändern eines Grundkörpers (RM-359 F6, ``grenzen.md``):
+            # Wer seine Maße erst später benennen will, fand den Haken nur
+            # beim Anlegen.
+            offer_naming=offers_naming(spec),
+            naming_default=self.settings.name_dimensions,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
 
@@ -18330,7 +18335,17 @@ class MainWindow(QMainWindow):
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
-            self.session.change_params(op_id, fitted(dialog.values()))
+            params, changes = self._named_dimensions(
+                spec, fitted(dialog.values()), dialog.names_dimensions()
+            )
+            changed = self.session.change_params(op_id, params, changes)
+            if (
+                changed
+                and dialog.offers_naming()
+                and dialog.names_dimensions() != self.settings.name_dimensions
+            ):
+                self.settings.name_dimensions = dialog.names_dimensions()
+                self._store_settings()
 
         self._open_operation_dialog(dialog, apply_change)
         if field:
@@ -18362,6 +18377,13 @@ class MainWindow(QMainWindow):
         if not wanted:
             return values, None
         taken = set(self.session.project.document.parameters)
+        # **Zwei Quader, zweimal „Breite“** (RM-359 F5): Die Leiste zeigte drei
+        # gleiche Zeilen zweimal, ohne Bezug. Ein vergebener Titel bekommt die
+        # Nummer, die auch sein Name trägt — *Breite 2* zu ``breite_2``.
+        titles = {
+            str(parameter.title or parameter.name)
+            for parameter in self.session.project.document.parameters.values()
+        }
         created: dict[str, Parameter] = {}
         schema = spec.params.spec()
         for entry in schema:
@@ -18383,11 +18405,18 @@ class MainWindow(QMainWindow):
                 name = f"{stem}_{counter}"
                 counter += 1
             taken.add(name)
+            title: TranslatableText | str = entry.title
+            if str(title) in titles:
+                number = counter - 1 if name != stem else 2
+                while str(_("{title} {number}", title=entry.title, number=number)) in titles:
+                    number += 1
+                title = _("{title} {number}", title=entry.title, number=number)
+            titles.add(str(title))
             created[name] = Parameter(
                 name=name,
                 value=float(value),
                 unit="mm",
-                title=entry.title,
+                title=title,
                 minimum=entry.minimum,
                 maximum=entry.maximum,
             )

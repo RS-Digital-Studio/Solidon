@@ -7431,5 +7431,10 @@
   "Einfügen beenden und übernehmen": "Terminer l'insertion et appliquer",
   "Größe ändern": "Modifier la taille",
   "Reliefhöhe ändern": "Modifier la hauteur du relief",
-  "Zellgröße ändern": "Modifier la taille de cellule"
+  "Zellgröße ändern": "Modifier la taille de cellule",
+  "{title} {number}": "{title} {number}",
+  "{name} ändern": "Modifier {name}",
+  "Einheit von {name}": "Unité de {name}",
+  "{name} als Regler": "{name} en curseur",
+  "Von {low} bis {high}": "De {low} à {high}"
 }
