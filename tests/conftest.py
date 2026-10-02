@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -743,6 +744,42 @@ def _no_user_parts_stay_loaded() -> Iterator[None]:
     bootstrap._user_loaded = False
     bootstrap._user_findings = ()
     bootstrap._user_operations = ()
+
+
+def _profile_files() -> dict[Path, bytes]:
+    from app.core.paths import user_profiles_dir
+
+    folder = user_profiles_dir()
+    if not folder.is_dir():
+        return {}
+    return {path: path.read_bytes() for path in folder.iterdir() if path.is_file()}
+
+
+@pytest.fixture(autouse=True)
+def _user_profiles_stay_with_their_test() -> Iterator[None]:
+    """Ein Drucker oder Material, das ein Test ablegt, gilt nur in diesem Test.
+
+    Der Nutzerordner ist einer je Lauf, nicht je Test, und die Düsenwahl des
+    Druckdialogs schreibt **mit Absicht** sofort ins Druckerprofil
+    (``_nozzle_changed``: wer eine 0,6er aufschraubt, hat sie morgen noch).
+    ``test_the_printer_header_refuses_out_of_range_numbers`` ließ so die
+    größte erlaubte Düse auf dem Vorgabedrucker zurück, und jeder spätere
+    Test derselben Datei rechnete mit ihr: Bahnbreite 2,1 statt 0,42, Düse
+    0,4 statt 0,6, leere Ratschlagsliste — 25 rote Fälle im Lauf am Stück,
+    jeder einzeln grün. Zurückgestellt werden die Dateien, wie sie vor dem
+    Test lagen, und der Profilcache wird verworfen.
+    """
+    before = _profile_files()
+    yield
+    after = _profile_files()
+    if after == before:
+        return
+    for path in after.keys() - before.keys():
+        path.unlink(missing_ok=True)
+    for path, content in before.items():
+        if after.get(path) != content:
+            path.write_bytes(content)
+    profiles.reload()
 
 
 #: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.
