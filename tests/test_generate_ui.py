@@ -931,8 +931,11 @@ def test_leaving_a_verified_comfy_folder_does_not_repeat_the_check(
 def test_changing_the_comfy_folder_refreshes_model_status_and_keeps_choices(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Ordnerwahl und Tippen entwerten Bestände sofort, auch bei einer späten Antwort."""
+    from PySide6.QtWidgets import QFileDialog
+
     from app.core.backends import comfy_setup
-    from app.ui.comfy_dialog import ComfySetupDialog
+    from app.ui.comfy_dialog import ComfySetupDialog, _FolderProbeResult
 
     image_folder = tmp_path / "image"
     weights_folder = tmp_path / "weights"
@@ -958,16 +961,41 @@ def test_changing_the_comfy_folder_refreshes_model_status_and_keeps_choices(
         assert dialog.weights.isChecked()
 
         dialog.weights.setChecked(False)
-        dialog.folder.setText(str(weights_folder))
-        dialog.folder.editingFinished.emit()
+        image_generation = dialog._probe_generation
+        monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *_args: str(weights_folder))
+        dialog.choose.click()
+        assert dialog._probe_pending and not dialog.start_button.isEnabled()
+        assert dialog.image_model.text() == dialog._image_model_label
+        assert not dialog.weights.isEnabled() and not dialog.image_model.isEnabled()
+        dialog._probe_results.put(
+            _FolderProbeResult(
+                image_generation, str(image_folder), str(image_folder), image_model=True
+            )
+        )
+        dialog._collect_folder_probe()
+        assert dialog._probe_pending, "eine alte Antwort darf die neue Prüfung nicht beenden"
+        assert dialog.image_model.text() == dialog._image_model_label
         _wait_for_comfy_probe(dialog, qt_app)
         assert not dialog.weights.isEnabled()
         assert dialog.weights.text() == "Modell ist schon da"
         assert dialog.image_model.isEnabled() and dialog.image_model.isChecked()
 
-        dialog.folder.setText(str(image_folder))
-        dialog.folder.editingFinished.emit()
+        weights_generation = dialog._probe_generation
+        dialog.folder.selectAll()
+        dialog.folder.insert(str(image_folder))
+        assert dialog._probe_pending and not dialog.start_button.isEnabled()
+        assert dialog.weights.text() == dialog._weights_label
+        assert not dialog.weights.isEnabled() and not dialog.image_model.isEnabled()
         _wait_for_comfy_probe(dialog, qt_app)
+        dialog._probe_results.put(
+            _FolderProbeResult(
+                weights_generation, str(weights_folder), str(weights_folder), weights=True
+            )
+        )
+        dialog._collect_folder_probe()
+        assert dialog.folder.text() == str(image_folder)
+        assert dialog.start_button.isEnabled()
+        assert dialog.weights.text() == dialog._weights_label
         assert dialog.weights.isEnabled() and not dialog.weights.isChecked()
         assert not dialog.image_model.isEnabled()
         assert dialog.image_model.text() == "Bildmodell ist schon da"
