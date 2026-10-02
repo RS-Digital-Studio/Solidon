@@ -2382,6 +2382,7 @@ def _run_op(
     *,
     ask=None,
     quality: Quality = "fine",
+    cancelled=None,
     **params: object,
 ):
     """Eine Operation fahren, wie der Verlauf sie fährt.
@@ -2390,7 +2391,8 @@ def _run_op(
     nimmt — für die Operationen, die eine Mehrdeutigkeit wirklich fragen
     (Regel 21). Ohne Angabe bleibt es bei der ersten Antwort, damit die
     bestehenden Aufrufer nichts davon merken. ``quality="draft"`` ist die
-    Vorschau des Fensters.
+    Vorschau des Fensters. ``cancelled`` ist das Abbruchsignal des Laufs,
+    ohne Angabe eines, das nie abbricht.
     """
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import OpContext, Scene
@@ -2406,7 +2408,7 @@ def _run_op(
             seed=7,
             progress=lambda fraction, text: None,
             ask=ask or (lambda question, choices: choices[0]),
-            cancelled=NeverCancelled(),
+            cancelled=cancelled or NeverCancelled(),
         )
     )
 
@@ -2503,6 +2505,84 @@ def test_moving_a_bore_into_a_crossing_shell_stops_with_the_source_id(profile: P
 
     assert caught.value.object_id == entry.id
     assert caught.value.detail == CROSSING_SHELL_IN_THE_WAY
+
+
+@pytest.mark.parametrize(
+    ("way", "cut"),
+    [
+        ("drill_hole", "drill"),
+        ("countersink_hole", "countersink"),
+        ("plug_hole", "plug"),
+        ("slot_hole", "slot_bore"),
+        ("resize_hole", "resize_bore"),
+        ("resize_hole:versetzt", "drill"),
+        ("resize_hole:langloch", "slot_bore"),
+    ],
+)
+def test_a_cancel_at_the_cut_stops_every_bore_operation(
+    way: str, cut: str, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Jede Bohroperation reicht den Abbruch an ihren Schnitt weiter (RM-381, §2.8).
+
+    Bis RM-381 riefen die Operationen ``prepare`` ohne ``ctx.cancelled``: Am
+    Besenhalter liefen die Sekunden der Vorfrage weiter, nachdem der Kunde
+    abgebrochen hatte. Hier kommt der Abbruch, wenn der Schnitt beginnt — nach
+    dem Schließen der alten Stelle, wo die Operation eine schließt —, und der
+    Schnitt selbst endet daran, nicht erst ein späterer Schritt.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.geom import prepare_ops
+    from app.core.geom.prepare import drill
+    from app.core.scene.cancel import CancelSignal
+
+    token = CancelSignal()
+    original = getattr(prepare_ops, cut)
+    stopped: list[str] = []
+
+    def cancelled_at_the_cut(*args: object, **kwargs: object) -> object:
+        token.cancel()
+        try:
+            return original(*args, **kwargs)
+        except OperationCancelled:
+            stopped.append(cut)
+            raise
+
+    entry, hole = _block_with_a_bore(profile)
+    op, _sep, variant = way.partition(":")
+    params: dict[str, object] = {"at_feature": hole, "diameter": 10.0}
+    if op == "drill_hole":
+        params = {"diameter": 4.0, "x": 15.0, "y": 0.0, "z": 10.0, "nx": 0.0, "ny": 0.0}
+        params.update(nz=1.0, depth=0.0)
+    elif op == "countersink_hole":
+        params = {"diameter": 8.0, "x": 15.0, "y": 0.0, "z": 10.0, "axis": "z"}
+    elif op == "plug_hole":
+        params = {"diameter": 8.0, "x": -15.0, "y": 0.0, "z": 10.0, "axis": "z"}
+    elif op == "slot_hole":
+        params = {"at_feature": hole, "slot_length": 10.0}
+    elif variant == "versetzt":
+        centre = entry.features[hole].params["centre"]
+        params = {"at_feature": hole, "diameter": 8.0, "x": 15.0}
+        params.update(y=float(centre[1]), z=float(centre[2]))
+    elif variant == "langloch":
+        block = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
+        slotted = drill(
+            block,
+            position=(-15.0, 0.0, 10.0),
+            axis="z",
+            diameter=6.0,
+            profile=profile,
+            compensate=False,
+            slot_length=14.0,
+        ).mesh
+        entry = SceneObject(id="obj_1", name="Platte", mesh=slotted, features=detect(slotted))
+        slot = next(name for name, f in entry.features.items() if f.kind == "slot")
+        params = {"at_feature": slot, "diameter": 8.0}
+    monkeypatch.setattr(prepare_ops, cut, cancelled_at_the_cut)
+
+    with pytest.raises(OperationCancelled):
+        _run_op(op, entry, profile, cancelled=token, **params)
+
+    assert stopped == [cut], "der Schnitt selbst endet am Abbruch, nicht ein späterer Schritt"
 
 
 def test_moving_a_countersunk_bore_passes_the_source_id_to_its_chain_union(

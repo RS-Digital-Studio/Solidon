@@ -1457,7 +1457,7 @@ def test_an_emptied_body_says_so_instead_of_blaming_the_solver() -> None:
     assert "kein Körper" in title, title
 
 
-@pytest.mark.parametrize("way", ["drill", "slot_bore", "resize_bore"])
+@pytest.mark.parametrize("way", ["drill", "slot_bore", "resize_bore", "countersink", "plug"])
 def test_cancelling_during_the_parts_preflight_stops_the_bore(
     way: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1465,7 +1465,8 @@ def test_cancelling_during_the_parts_preflight_stops_the_bore(
 
     Am Besenhalter liefen die Sekunden der Vorfrage ungebremst, weil
     ``prepare.drill``, ``slot_bore`` und ``resize_bore`` kein ``cancelled``
-    an ``boolean()`` gaben. Hier wird während der Vorfrage abgebrochen.
+    an ``boolean()`` gaben; Senkung und Stopfen sind ihre Zwillinge. Hier wird
+    während der Vorfrage abgebrochen.
     """
     from app.core.geom import boolean as boolean_module
     from app.core.geom import prepare
@@ -1499,7 +1500,7 @@ def test_cancelling_during_the_parts_preflight_stops_the_bore(
                 overlap=0.0,
                 **common,
             )
-        else:
+        elif way == "resize_bore":
             prepare.resize_bore(
                 body,
                 position=(0.0, 0.0, 0.0),
@@ -1509,6 +1510,12 @@ def test_cancelling_during_the_parts_preflight_stops_the_bore(
                 depth=20.0,
                 through=True,
                 **common,
+            )
+        elif way == "countersink":
+            prepare.countersink(body, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, **common)
+        else:
+            prepare.plug(
+                body, position=(0.0, 0.0, 10.0), axis="z", diameter=3.0, depth=5.0, **common
             )
 
 
