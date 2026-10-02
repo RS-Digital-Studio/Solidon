@@ -247,7 +247,7 @@ from app.core.types import (
     vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close, match_tolerance
-from app.i18n import _, format_decimal, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui import first_run
 from app.ui import settings as settings_module
 from app.ui.ai_disclosure import (
@@ -18484,6 +18484,11 @@ class MainWindow(QMainWindow):
             pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
             slots=self._slots_of_selection(),
             edges=self._edge_names(),
+            # Auch beim Ändern eines Grundkörpers (RM-359 F6, ``grenzen.md``):
+            # Wer seine Maße erst später benennen will, fand den Haken nur
+            # beim Anlegen.
+            offer_naming=offers_naming(spec),
+            naming_default=self.settings.name_dimensions,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
 
@@ -18518,7 +18523,17 @@ class MainWindow(QMainWindow):
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
-            self.session.change_params(op_id, fitted(dialog.values()))
+            params, changes = self._named_dimensions(
+                spec, fitted(dialog.values()), dialog.names_dimensions()
+            )
+            changed = self.session.change_params(op_id, params, changes)
+            if (
+                changed
+                and dialog.offers_naming()
+                and dialog.names_dimensions() != self.settings.name_dimensions
+            ):
+                self.settings.name_dimensions = dialog.names_dimensions()
+                self._store_settings()
 
         self._open_operation_dialog(dialog, apply_change)
         if field:
@@ -18550,6 +18565,13 @@ class MainWindow(QMainWindow):
         if not wanted:
             return values, None
         taken = set(self.session.project.document.parameters)
+        # **Zwei Quader, zweimal „Breite“** (RM-359 F5): Die Leiste zeigte drei
+        # gleiche Zeilen zweimal, ohne Bezug. Ein vergebener Titel bekommt die
+        # Nummer, die auch sein Name trägt — *Breite 2* zu ``breite_2``.
+        titles = {
+            str(parameter.title or parameter.name)
+            for parameter in self.session.project.document.parameters.values()
+        }
         created: dict[str, Parameter] = {}
         schema = spec.params.spec()
         for entry in schema:
@@ -18571,11 +18593,18 @@ class MainWindow(QMainWindow):
                 name = f"{stem}_{counter}"
                 counter += 1
             taken.add(name)
+            title: TranslatableText | str = entry.title
+            if str(title) in titles:
+                number = counter - 1 if name != stem else 2
+                while str(_("{title} {number}", title=entry.title, number=number)) in titles:
+                    number += 1
+                title = _("{title} {number}", title=entry.title, number=number)
+            titles.add(str(title))
             created[name] = Parameter(
                 name=name,
                 value=float(value),
                 unit="mm",
-                title=entry.title,
+                title=title,
                 minimum=entry.minimum,
                 maximum=entry.maximum,
             )
@@ -20559,11 +20588,56 @@ class MainWindow(QMainWindow):
             and not self._picture_for(result).scene.objects
             and not self.session.busy
         )
-        self.viewport.invitation.set_chat_available(self.session.agent_backend is not None)
-        self.viewport.invitation.show_for(empty and not self._on_start_screen)
+        invitation = self.viewport.invitation
+        invitation.set_chat_available(self.session.agent_backend is not None)
+        halted = self._halted_before_a_body(result) if empty else None
+        if halted is not None and not self._on_start_screen:
+            # RM-458: Schritte da, Körper nicht — die Karte sagt, wo es hält.
+            number, step = halted
+            invitation.show_halted(
+                tr("Das Projekt hält an Schritt {number}: {step}").format(number=number, step=step),
+                tr("Noch ist kein Körper gerechnet. Den Grund nennt der Prüfbericht."),
+            )
+            self.object_tree.say_why_empty(
+                tr(
+                    "Noch kein Körper: Das Projekt hält an Schritt {number}. "
+                    "Ein Doppelklick im Verlauf öffnet ihn."
+                ).format(number=number)
+            )
+            return
+        self.object_tree.say_why_empty("")
+        invitation.show_for(empty and not self._on_start_screen)
+
+    def _halted_before_a_body(self, result: EvaluationResult | None) -> tuple[int, str] | None:
+        """Nummer und Titel des Schritts, an dem die Kette hält, wenn noch nichts im Bild ist.
+
+        ``None``, wenn nichts hält — oder wenn die Ansicht ohnehin den letzten
+        vollständigen Stand zeigt (§15.3, RM-354); dann ist die Szene nicht leer.
+        """
+        if result is None or result.stopped_at is None:
+            return None
+        if self._picture_for(result).scene.objects:
+            return None
+        try:
+            entry = self.session.history.operation(result.stopped_at)
+        except AppError:
+            return None
+        try:
+            step = str(REGISTRY.get(entry.op).title)
+        except AppError:
+            step = entry.op
+        return int(result.stopped_at), step
 
     def _on_invitation(self, chosen: str) -> None:
         """Ein Einstieg aus der leeren Szene — derselbe Weg wie Menü und Werkzeugzeile."""
+        result = self.session.last_result
+        if chosen == "correct_step":
+            if result is not None and result.stopped_at is not None:
+                self.edit_operation(result.stopped_at)
+            return
+        if chosen == "report":
+            self._focus_report(force=True)
+            return
         if chosen == "draw":
             self.action_sketch_free()
         elif chosen == "parts":

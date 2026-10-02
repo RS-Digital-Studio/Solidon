@@ -1876,13 +1876,31 @@ def localised_value(value: object) -> str:
     return localised(text) if _NUMBER.match(text) else choice_label(text)
 
 
-def value_line(key: str, value: object) -> str:
+#: Werte eines Befunds, die in der Einheit seines Feldes stehen, wenn er sie
+#: mitbringt (``values["unit"]``, RM-359 F7).
+UNIT_VALUES: Final = frozenset({"minimum", "maximum", "value"})
+
+
+def value_line(key: str, value: object, unit: str = "") -> str:
     """Eine Zeile „Beschriftung: Wert" für Tooltip und Einzelheiten.
 
     Die Zahl bekommt ihr Komma (§13) und ihre Einheit, der Rest bleibt, wie er
-    ist — siehe :func:`value_text` und :func:`localised_value`.
+    ist — siehe :func:`value_text` und :func:`localised_value`. ``unit`` ist
+    die Einheit des Feldes, die der Befund daneben nennt: Eine Grenze in
+    Millimetern folgt dann der Anzeigeeinheit wie jede andere Länge.
     """
-    return tr("{name}: {value}", name=value_label(key), value=value_text(key, value))
+    shown = value_text(key, value)
+    if unit and key in UNIT_VALUES and isinstance(value, int | float):
+        shown = value_text(f"{key}_mm", value) if unit == "mm" else f"{shown} {unit}"
+    return tr("{name}: {value}", name=value_label(key), value=shown)
+
+
+def unit_of(values: Mapping[str, object]) -> str:
+    """Die Einheit, die ein Befund für seine Grenzen nennt — leer ohne."""
+    unit = values.get("unit")
+    if isinstance(unit, str) and unit and any(key in values for key in UNIT_VALUES):
+        return unit
+    return ""
 
 
 def spoiled_the_exact_body(result: Any) -> str:

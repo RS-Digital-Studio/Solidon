@@ -158,6 +158,9 @@ def test_first_run_initial_width_after_screen_fit_is_not_treated_as_user_size() 
         def updateGeometry(self) -> None:  # noqa: N802 — Qt-Name
             pass
 
+        def widget(self) -> None:
+            return None
+
     class PrinterForm:
         def layout(self) -> None:
             return None

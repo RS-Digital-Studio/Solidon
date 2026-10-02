@@ -19290,6 +19290,141 @@ def test_naming_the_dimensions_makes_them_project_parameters(window: MainWindow)
     assert document.parameters == {}, "der Quader nimmt seine Maße mit"
 
 
+def test_editing_a_box_offers_to_name_its_dimensions_in_one_step(window: MainWindow) -> None:
+    """RM-359 F6: *Diesen Schritt ändern* an einem Grundkörper bietet den Haken an.
+
+    Wer seine Maße erst später benennen will, fand ihn nur beim Anlegen
+    (``grenzen.md``: in jedem Dialog der Kategorie ``primitive``). Schritt und
+    Maße kommen in **einer** Transaktion; ein Strg+Z nimmt beides zurück.
+    """
+    from app.core.scene.history import OperationDraft
+
+    assert window.session.apply(
+        "Quader",
+        [OperationDraft("create_box", params={"width": 30.0, "depth": 20.0, "height": 10.0})],
+    )
+    window.session.wait_for_idle()
+    step = window.session.project.document.ops[-1]
+    transactions = len(window.session.history.transactions)
+
+    window.edit_operation(step.id)
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.offers_naming(), "der Haken steht auch beim Ändern"
+    dialog._naming.setChecked(True)
+    _accept_after_preview(window, dialog)
+    QApplication.processEvents()
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert set(document.parameters) == {"breite", "tiefe", "hoehe"}
+    changed = next(entry for entry in document.ops if entry.id == step.id)
+    assert changed.params["width"] == "=@breite"
+    assert len(window.session.history.transactions) == transactions + 1, "eine Transaktion"
+
+    assert window.session.undo() is not None
+    window.session.wait_for_idle()
+    document = window.session.project.document
+    assert document.parameters == {}, "Strg+Z nimmt Maße und Schritt zusammen zurück"
+    restored = next(entry for entry in document.ops if entry.id == step.id)
+    assert restored.params["width"] == 30.0
+
+
+def test_a_bounded_parameter_has_a_slider_and_a_drag_is_one_change(
+    qt_app: QApplication,
+) -> None:
+    """RM-359 F8: Ein Maß mit eigener Unter- und Obergrenze hat einen Regler (§13).
+
+    Während des Ziehens zeigt das Feld die Zahl; übernommen wird beim
+    Loslassen — eine Änderung, ein Strg+Z. Eine Pfeiltaste ändert einmal.
+    Ohne beide Grenzen gibt es keinen Regler, denn es gibt keine Strecke.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.core.types import Document, Parameter
+    from app.ui.panels import SLIDER_STEPS, ParameterPanel
+
+    panel = ParameterPanel()
+    document = Document(format_version=1, app_version="0.0.1")
+    document.parameters["breite"] = Parameter(
+        name="breite", value=40.0, minimum=10.0, maximum=110.0, title="Breite"
+    )
+    document.parameters["hoehe"] = Parameter(name="hoehe", value=20.0, maximum=50.0)
+    # Die Grenzen eines Feldes, geerbt beim Benennen: kein Arbeitsbereich.
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=40.0, minimum=0.1, maximum=1000.0)
+    panel.show_document(document)
+    panel.show()
+    QApplication.processEvents()
+    edited: list[tuple[str, float]] = []
+    panel.parameterEdited.connect(lambda name, value: edited.append((name, value)))
+
+    assert set(panel._sliders) == {"breite"}, "nur das Maß mit einem Arbeitsbereich"
+    slider = panel._sliders["breite"]
+    assert slider.value() == round(0.3 * SLIDER_STEPS), "der Griff steht bei 40 von 10…110"
+    assert slider.accessibleName()
+
+    slider.setSliderDown(True)
+    for share in (0.4, 0.5, 0.6):
+        slider.setSliderPosition(round(share * SLIDER_STEPS))
+        QApplication.processEvents()
+    assert panel._editors["breite"].value() == pytest.approx(70.0), "das Feld zeigt mit"
+    assert edited == [], "während des Zugs keine Änderung"
+    slider.setSliderDown(False)
+    QApplication.processEvents()
+    QTest.qWait(10)
+    assert edited == [("breite", pytest.approx(70.0))], "Loslassen ist genau eine Änderung"
+
+    slider.setFocus()
+    QTest.keyClick(slider, Qt.Key.Key_Right)
+    QTest.qWait(10)
+    assert len(edited) == 2 and edited[-1][1] == pytest.approx(70.1), edited
+
+
+def test_two_named_boxes_get_distinct_rows_with_names(window: MainWindow) -> None:
+    """RM-359 F5 und F9: Zwei Quader mit benannten Maßen — sechs verschiedene Zeilen.
+
+    Vorher stand „Breite, Tiefe, Höhe“ zweimal ohne Bezug in der Leiste, und
+    die Felder hatten keinen Namen: dreimal „Einheit“, dreimal „Parameter
+    ändern“. Jetzt trägt der zweite Satz die Nummer seines Namens, und jedes
+    Feld, jede Einheit und jeder Knopf heißt nach seinem Maß.
+    """
+    from app.ui.labels import BoundedSpin
+
+    spec = REGISTRY.get("create_box")
+    for _round in range(2):
+        window.run_operation(spec)
+        dialog = window._op_dialog
+        assert dialog is not None
+        assert dialog._naming is not None
+        dialog._naming.setChecked(True)
+        _accept_after_preview(window, dialog)
+        QApplication.processEvents()
+        window.session.wait_for_idle()
+
+    document = window.session.project.document
+    titles = [str(parameter.title) for parameter in document.parameters.values()]
+    assert len(titles) == 6 and len(set(titles)) == 6, titles
+    assert str(tr("{title} {number}", title=tr("Breite"), number=2)) in titles
+
+    panel = window.parameters
+    QApplication.processEvents()
+    named = [
+        widget.accessibleName()
+        for widget in (
+            *panel._editors.values(),
+            *panel._unit_editors.values(),
+            *panel._detail_buttons.values(),
+        )
+    ]
+    assert all(named), "kein Feld ohne Namen"
+    assert len(named) == len(set(named)), f"doppelte Namen: {named}"
+    assert all(isinstance(editor, BoundedSpin) for editor in panel._editors.values())
+    assert all(panel._titles[name].buddy() is editor for name, editor in panel._editors.items()), (
+        "die Beschriftung zeigt auf ihr Feld"
+    )
+
+
 @pytest.mark.parametrize("name", ["create_box", "create_cylinder", "create_holder_u"])
 def test_the_naming_box_remembers_the_last_choice(window: MainWindow, name: str) -> None:
     """*Maße als Parameter anlegen* übernimmt die letzte Wahl (RM-369, §13, §2.4).
@@ -20688,6 +20823,62 @@ def test_a_halt_at_the_first_step_keeps_what_the_kept_picture_hid(window: MainWi
     QApplication.processEvents()
     assert hidden not in window._hidden, "eine echte Löschung räumt die Ausblendung weg"
     assert hidden not in window.viewport._hidden
+
+
+def test_a_project_halting_at_its_first_step_says_so_instead_of_inviting(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """RM-458: Eine Datei, deren Kette am ersten Schritt hält, ist kein leeres Projekt.
+
+    Geöffnet stand „Noch keine Objekte“ im Baum und „Womit fangen Sie an?“
+    über der Ansicht, obwohl ein Quader-Schritt da war. Jetzt sagen Ansicht und
+    Baum, dass das Projekt an Schritt 1 hält, und *Schritt korrigieren* öffnet
+    ihn (§2.7, §15.3). Der Weg ist der des Kunden: Datei öffnen.
+    """
+    import dataclasses
+
+    builder = Session()
+    high = _bound_width_project(builder)
+    document = builder.project.document
+    box = document.ops[0]
+    document.ops[0] = dataclasses.replace(
+        box, params={**box.params, "width": f"=max(@breite, {high + 1000.0:g})"}
+    )
+    stored = builder.save_project(tmp_path / "haelt.p3d")
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window.open_path(stored)
+        assert window.session.wait_for_idle(30_000)
+        for _ in range(8):
+            QApplication.processEvents()
+        result = window.session.last_result
+        assert result is not None and result.stopped_at == 1 and not result.scene.objects
+
+        card = window.viewport.invitation
+        assert card.isVisible()
+        assert "Womit" not in card.title.text()
+        assert "1" in card.title.text(), card.title.text()
+        assert not any(button.isVisibleTo(card) for button in card.buttons.values())
+        assert not card.drop_hint.isVisibleTo(card)
+        correct = card.halt_buttons["correct_step"]
+        assert correct.isVisibleTo(card) and card.halt_buttons["report"].isVisibleTo(card)
+
+        note = window.object_tree._empty.text()
+        assert "1" in note and "Erzeugen" not in note, note
+
+        correct.click()
+        QApplication.processEvents()
+        dialog = window._op_dialog
+        assert dialog is not None, "der Schritt ist zum Korrigieren offen"
+        dialog.reject()
+        QApplication.processEvents()
+    finally:
+        window.session.wait_for_idle()
+        window.close()
+        window.deleteLater()
+        builder.deleteLater()
 
 
 def _a_stored_width_beyond_its_field(window: MainWindow) -> float:

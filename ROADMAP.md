@@ -114,23 +114,23 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-450 — Abschneiden bestätigt eine mehrdeutige Restfläche als sicheren Nachfolger](#rm-450) | Geometrie, Erkennung und Druckvorbereitung | Quellenreview `6c9420b1f`, G-CUT-01: räumliche Herkunft und Gleichstände prüfen; Gegenfall noch auszuführen |
 | [RM-454 — Ein Spiegelzug kann die verformte Fläche erreichen und trotzdem wirkungslos bleiben](#rm-454) | Geometrie, Erkennung und Druckvorbereitung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Quellenreview der parallelen Claude-Lieferung `105b2ba0d`: Etappenentscheidung berücksichtigt Spiegelorte nicht; Gegenfall noch auszuführen |
 | [RM-459 — SuperSlicer stürzt ab, sobald Solidon die Schrägnaht übergibt](#rm-459) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `NOT_TAKEN_BY` je Programm statt je Familie, Beilage gegen den Optionsbestand des Programms filtern |
-| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
-| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
-| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
-| [RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht](#rm-463) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `small_perimeter_speed` als Folger der Außenwand deckeln, Rollen je Familie |
+| [RM-460 — Kammertemperatur wirkt in der Orca-Familie nirgends](#rm-460) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 9 von 16. G-Code-Prüfung 02.10.: Schlüssel je Programm, Schalter mitschreiben, Altschlüssel der Basis behandeln, Feld nur bei Kammerregelung |
+| [RM-461 — Füllmuster „Linien“ kommt in Bambu Studio und Creality Print als anderes Muster an](#rm-461) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 10 von 16. G-Code-Prüfung 02.10.: Aufzählungswerte je Programm übersetzen (`lines → zig-zag`), Bestand prüfen |
+| [RM-462 — Die Übergabe-Gegenprobe übersieht Schlüssel, die der Slicer verworfen hat](#rm-462) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 13 von 16. G-Code-Prüfung 02.10.: fehlender Schlüssel bei vollständig schreibenden Familien melden, `_RECOMPUTED` verkleinern |
+| [RM-463 — Eine langsamere Außenwand erreicht in PrusaSlicer die kleinen Umfänge nicht](#rm-463) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 11 von 16. G-Code-Prüfung 02.10.: `small_perimeter_speed` als Folger der Außenwand deckeln, Rollen je Familie |
 | [RM-464 — Die Filament-Vorwahl greift über Fremdmarken zum kürzesten Namen](#rm-464) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `default_materials` auch bei Orca lesen, Marke aus dem Unterordner, Generic vor Fremdmarke |
-| [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
-| [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
-| [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
-| [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
-| [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
-| [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
-| [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
-| [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
-| [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
-| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
-| [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
-| [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
+| [RM-465 — Die Zeit- und Material-Gegenprobe schlägt bei fast jedem Lauf an](#rm-465) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 14 von 16. G-Code-Prüfung 02.10.: Mindestschichtzeit und Startzeit in die Schätzung, Spülmenge getrennt ausweisen |
+| [RM-466 — Nach *Slicen* werden Stützmaterial und Schichtzahl nicht gegengeprüft (§28.1)](#rm-466) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 12 von 16. G-Code-Prüfung 02.10.: `_gcode_returned` ruft die Stütz- und Schichtgegenprobe wie der manuelle Weg |
+| [RM-475 — Stützdichte geht als Teilung statt als Lücke an Orca und PrusaSlicer, 0 % wird zur dichtesten Stütze](#rm-475) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 1 von 16. G-Code-Prüfung 02.10.: Abstand als Lücke schreiben und lesen, 0 % nie als `0` |
+| [RM-476 — Reinigungsturm liegt bei Mehrfarbdrucken auf Betten unter 235 mm außerhalb des Betts](#rm-476) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 2 von 16. G-Code-Prüfung 02.10.: Turmposition je Programm setzen, nicht nur für Creality Print |
+| [RM-477 — Cura findet das Modell nicht, wenn der Projektname Zeichen außerhalb der Windows-Codepage trägt](#rm-477) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 5 von 16. G-Code-Prüfung 02.10.: Dateien im Arbeitsordner technisch benennen |
+| [RM-478 — PrusaSlicer bekommt die Teile um den Ursprung, wenn Solidons Anordnung nicht hält](#rm-478) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 6 von 16. G-Code-Prüfung 02.10.: Programme ohne Konsolenanordnung vorher selbst anordnen |
+| [RM-479 — SuperSlicer stürzt ab, wenn die Teile nicht auf die Platte passen — Solidon wusste es vorher](#rm-479) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 3 von 16. G-Code-Prüfung 02.10.: Bauraumbefund hält die Übergabe vor dem Slicer an |
+| [RM-480 — SuperSlicer bekommt Werte, die nur PrusaSlicer kennt: Baumstütze stürzt ab, Naht „nächstgelegen“ wird „ignoriert“](#rm-480) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 4 von 16. G-Code-Prüfung 02.10.: Wertetabelle je Programm statt je Familie (mit RM-459) |
+| [RM-481 — TPU findet in PrusaSlicer und SuperSlicer kein Herstellerfilament, ohne Befund](#rm-481) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 7 von 16. G-Code-Prüfung 02.10.: Materialart je Familie übersetzen (TPU → `FLEX`), fehlende Vorwahl melden |
+| [RM-482 — Cura bekommt die Stufenbeschleunigung statt der Maschinengrenze, seine Druckzeit ist zu kurz](#rm-482) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 8 von 16. G-Code-Prüfung 02.10.: ohne Maschinenwert keine Stufenbeschleunigung an Cura, Grenzen der Definition übergeben |
+| [RM-483 — „no extrusions in the first layer“ der Prusa-Familie wird zu „keine Druckdatei“](#rm-483) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 15 von 16. G-Code-Prüfung 02.10.: Absagesätze mit Ursache übersetzen, Teil nennen |
+| [RM-484 — PrusaSlicers Warnungen aus gelungenen Läufen erreichen den Bericht nicht](#rm-484) | Geometrie, Erkennung und Druckvorbereitung | Übernommen: Claude, Slicer-Reihenfolge 16 von 16. G-Code-Prüfung 02.10.: Konsolenwarnungen als `gcode.warning` mit Herkunft Slicer |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -156,8 +156,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-306 — Zweites Modell in der Ecke oder zur Mitte](#rm-306) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Nach 0.5.1: Produktfrage an Robert |
 | [RM-312 — Die Düsengröße im Druckdialog kommt vom Drucker und ist eine Auswahl](#rm-312) | Bedienung und Darstellung | Düsenwahl mit 8374885ae integriert; Matrix abgeschlossen: 125 Aufträge, 124 Modelle mit Varianten, 426 Variantenfehler und 149 Ausgaben mit Fehlerbefund. Fehlerklärung und Release-Fensterabnahme offen |
 | [RM-321 — Die Vorschau von *Zum Langloch ziehen* liegt an einer Mündung auf der Gegenseite gespiegelt](#rm-321) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umsetzung und Geometrieprüfungen erledigt; native Viewport-Abnahme im Release |
-| [RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1](#rm-342) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. D-N1, die drei Zwillinge von D-N2 und die Tests zu C-N2 und D-N7 erledigt; offen D-N5 (eine Breitenfunktion für vier Dialoge) |
-| [RM-359 — Weg 2: Reste aus der Gebietsprüfung](#rm-359) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Review 02.10. (Weg 2): doppelte Leistenzeilen, Haken beim Ändern, Tooltip mit Codeadressen, Regler, Feldnamen, Parameterdialog vorn |
 | [RM-366 — Die Vorschau der Formsitzung rechnet die ganze Sitzung im Oberflächen-Thread nach jedem Zug](#rm-366) | Bedienung und Darstellung | In Arbeit: Claude (Worktree `F:/solidon-claude-r`). Review 02.10. (Weg 4): Vorschau inkrementell oder im Arbeiter mit Abbrechen; Messung bei 40 Etappen |
 | [RM-367 — Weg 4: Strichtext ohne Eingabeprüfung, Skelett unsichtbar, Knochen auf der Haut, Abnahme ohne Skelett](#rm-367) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. W4-3 und W4-8 erledigt (Claude, in main mit `38006b338`); offen W4-6 und W4-7 im Skeletteditor (`main_window.py`, `viewport.py`) |
 | [RM-368 — Schieberegler über den Verlauf (§18.7)](#rm-368) | Bedienung und Darstellung | Übernommen: Claude, Thread „Bedienung und KI“. Umfangsentscheidung Robert 02.10.: Regler je Transaktion in der Vorher/Nachher-Ansicht bauen |
@@ -4641,67 +4639,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   und Schnitt teilen den Rahmen der positiven Merkmalachse, auch an Gegenflächen und bei einer
   leicht geneigten Mündung. Die native Viewport-Abnahme bleibt dem Release vorbehalten.
 
-<a id="rm-342"></a>
-
-- [ ] **RM-342 — Oberfläche: Reste aus dem Review seit 0.5.1.**
-  Niedrige Befunde aus dem Review seit 0.5.1 (`bericht-C.md`, `bericht-D.md`), je einzeln abnehmbar:
-  - **C-N1/D-N3, `42253ae03` (Claude), `b1d5381ce` (Codex):** *Gegenstücke setzen* zeigt „Paar“
-    ohne und „Durchmesser:“, „Länge:“, „Form:“, „Spiel:“, „Fase:“ mit Doppelpunkt
-    (`app/ui/counterpart_dialog.py:95` gegen `:137` `tr("{name}:", …)`; `fenster.md:387`). Fix:
-    `self.form.addRow(str(entry.title), field)`, Katalogschlüssel `"{name}:"` entfernen, wenn
-    unbenutzt. Abnahme: Test der Beschriftungen ohne Doppelpunkt.
-  - **D-N1, `ae17a2c70` (Codex):** Im Merkmalfenster bleibt der Ablehnungssatz stehen, wenn sein
-    Feld ausgeblendet wird (`app/ui/panels.py:8101–8104`, `_follow_conditions` `:8181–8224`
-    schaltet nur Feld und Beschriftung). Fehlerfall: *Zum Langloch ziehen* X = 1500 mm → Satz,
-    dann Maßgruppe von *Bohrung ändern* → Satz ohne Feld. Fix: `row.refusals[name]` mitschalten.
-  - **D-N2, `d8e37581a` (Codex):** Der Sperrgrund an *Slicen*/*Im Slicer öffnen* nennt das Feld
-    nicht („95 °C liegt über der Obergrenze 90 °C.“; `_first_numeric_refusal`
-    `print_settings_dialog.py:6803`, `labels.py:503–507`). Fix: `tr("{name}: {value}", …)` mit
-    `setting_title(path)`, optional `_lift(path)` beim Klick.
-  - **D-N5, `88bb41ed8`, `c59ed62ca` (Codex):** Die natürliche Breite samt zugeklappter Zeilen
-    wird in vier Fassungen gerechnet (`settings_dialog._reserve_advanced_width`,
-    `first_run._grow_to_content`, `op_dialog` mit `form_natural_width`, Druckdialog
-    `_room_for_tabs`; `fenster.md:379–380` nennt `form_natural_width`). Fix: eine gemeinsame
-    Funktion in `style.py`.
-  - **D-N6, `ba8c08b14` (Claude):** fr „l’imprimante“, „n’a pas pu … l’attente“, it
-    „nell’elenco“ mit typografischem Apostroph (`uebersetzung.md`: neue Einträge gerade). Fix:
-    gerade schreiben; der Test prüft heute nur das Mischen innerhalb eines Eintrags.
-  - **C-N2, `0edb9cf3e` (Codex):** Das Entdoppeln der Paletten-Tooltips
-    (`app/ui/command_palette.py:503–512`) hat keinen Test. Fix: Eintrag mit `doc == title` und
-    mit `reason == doc`, Tooltip zeilengenau.
-  - **D-N7, `e969f88ce` (Claude):** Listenhaken (`style.check_files`, `_check_rules`) und runde
-    Farbpunkte (`swatch(..., ring_when_empty=…)`) haben keinen Test.
-  **Stand 02.10.2026:** C-N1, D-N2, C-N2 und D-N7 sind mit `7c8bd7892` in main (Claude); offen D-N1 und D-N5.
-  Bauplan §19, §4.1, §2.7.
-  Nachprüfung am Stand `6ce767031`: D-N6 behoben (fr.json 0 statt 1244, it.json 0 statt 492 typografische Apostrophe; Wächter in `test_translations.py`, `-k apostrophe` 7 passed, Exit 0). Weiter offen: C-N1 (Sonde d7), D-N1 (d3), D-N2 (d6), D-N5 (`settings_dialog.py:482`, `print_settings_dialog.py:4344`), C-N2 (kein Test für Paletten-Tooltips), D-N7 (`check_files`, `_check_rules`, `ring_when_empty` ohne Treffer in `tests/`).
-  Nachprüfung am Stand `70e9b3145` (nach `354cad78f`): C-N1 behoben (Beschriftungen ohne Doppelpunkt, auch en/fr, Test wirkt). D-N2 behoben (Sperrgrund mit Feldnamen), aber Regression im Release-Tor: `tests/test_print_settings_ui.py:1686` (`test_the_printer_header_refuses_out_of_range_numbers`) erwartet weiter den Satz ohne Feldnamen; drei Zwillinge nennen das Feld noch nicht (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2 behoben (Ränder ungeprüft; Nachbartest `test_dialog_layout_regressions.py:92` seit `0edb9cf3e` rot, sucht Text mit Leerzeichen am Ende). D-N7 unvollständig: Rundheitstest `test_list_marks.py:53` liest Pixel (0, 0), dort sind runder und eckiger Punkt gleich durchsichtig — Mutation „eckig“ bleibt grün. D-N1 und D-N5 offen. Beleg `F:\solidon-review-reports\verif-70e9b3145-oberflaeche.md`.
-  **Stand 02.10.2026 abends (Claude, Thread „Bedienung und KI“):** D-N1 behoben — der Ablehnungssatz geht mit seinem Feld, auch wenn die Maßgruppe im Bild die Felder übernimmt (`test_feature_panel.py::test_a_refusal_hides_with_its_field_and_returns_with_it`, am Stand davor rot). Die drei Zwillinge nennen das Feld vor dem Sperrgrund (`FilamentOverrideDialog._first_refusal`, `op_dialog._field_refusal`, `panels._active_field_refusal`). C-N2: Der Nachbartest vergleicht den abgeschnittenen Text. D-N7: Der Rundheitstest liest (2, 2), den ein eckiger Punkt füllen würde. Offen bleibt D-N5.
-
-<a id="rm-359"></a>
-
-- [ ] **RM-359 — Weg 2: Reste aus der Gebietsprüfung.**
-  Review 02.10.2026, Gebietsprüfung Weg 2, am HEAD `6ce767031`.
-  - **F5 — Zwei Grundkörper mit benannten Maßen ergeben doppelte Leistenzeilen** („Breite, Tiefe,
-    Höhe“ zweimal, ohne Körperbezug). `main_window.py:17973–17990`, Anzeige `panels.py:3596`,
-    `:3630`. Fix: bei Doppelung trägt der Titel den Körpernamen. Sonde `w2_fenster1.py` (3).
-  - **F6 — *Maße als Parameter anlegen* fehlt beim Ändern eines Grundkörpers** (`edit_operation`,
-    `main_window.py:17875–17900`, ohne `offer_naming`); `grenzen.md` verlangt den Haken in jedem
-    Dialog der Kategorie `primitive`. Fix: durchreichen, Parameter und Schritt als eine
-    Transaktion. Sonde `w2_nachtraeglich.py`.
-  - **F7 — Der Tooltip der Befundzeile nennt Codeadressen** („Feld: width · Bedingung: maximum ·
-    Höchstwert: 1000,0“, ohne Einheit). `_value_lines` (`panels.py:1301–1310`) filtert nicht, der
-    Zwilling `spoken_values` (`dialogs.py:3174–3193`, `_ADDRESSES`) schon. Sonde `w2_fenster4.py`.
-  - **F8 — Kein Schieberegler bei begrenztem Bereich**, den §13 verlangt (`panels.py:3601–3630`);
-    eine Gegenentscheidung ist nicht belegt. Ein Zug ist genau eine Transaktion.
-  - **F9 — Die Felder der Parameterleiste haben keinen Namen**: leerer `accessibleName`, kein
-    Buddy; Einheitenkästen dreimal „Einheit“, „…“ dreimal „Parameter ändern“
-    (`panels.py:3399–3409`, `:3480–3516`). Sonde `w2_namen.py`.
-  - **F11 — *Parameter anlegen* zeigt fünf Felder vorn** ohne *Weitere Einstellungen*
-    (`dialogs.py:654–662`), §2.4; die leer vorbelegten Grenzen machen RM-354 erst möglich.
-  **Abnahme:** je Rest ein Test (sechs verschiedene Titel bei zwei Quadern; Haken beim Ändern und
-  ein Strg+Z; Tooltip ohne „width“, mit „1000 mm“; Regler an begrenztem Maß; keine leeren oder
-  doppelten zugänglichen Namen; vorn nur Name, Wert, Einheit). Bauplan §2.4, §13, Regel 18.
-  Beleg: `F:\solidon-review-reports\gebiet-weg2.md`.
 
 <a id="rm-366"></a>
 
