@@ -31,6 +31,7 @@ entfernt hat.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-10-02 | [RM-225: Muster auf importierten Zylinderfacetten bleiben bearbeitbar (02.10.2026)](#rm-225-muster-auf-importierten-zylinderfacetten-bleiben-bearbeitbar-02102026) |
 | 2026-10-02 | [RM-347: Offene Punkte tragen ihre Nachweise im Repository (02.10.2026)](#rm-347-offene-punkte-tragen-ihre-nachweise-im-repository-02102026) |
 | 2026-10-02 | [RM-290: Übersetzungen und Wortlaute sind abgeschlossen (02.10.2026)](#rm-290-übersetzungen-und-wortlaute-sind-abgeschlossen-02102026) |
 | 2026-10-02 | [RM-324: Inventarkennung ohne Druckeinstellungen bleibt dialoglokal (02.10.2026)](#rm-324-inventarkennung-ohne-druckeinstellungen-bleibt-dialoglokal-02102026) |
@@ -33143,7 +33144,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
 - [x] **RM-275 — Der Bezug eines Musters auf einem runden Träger kippt zwischen gleichen
   Zellen.** Aus der Durchsicht v0.5.1 (rest-merker, Korpusfolge
   `F:\3D Druck\.claude\.state\release-0.5.1\sonden\rest-merker\k51_vergleich.txt`). Auf einem runden Träger,
-  dem Rändel am Gewürzdeckel (derselbe Deckel wie [RM-225](ROADMAP.md#rm-225)), sind alle Zellen
+  dem Rändel am Gewürzdeckel (derselbe Deckel wie [RM-225](#rm-225-muster-auf-importierten-zylinderfacetten-bleiben-bearbeitbar-02102026)), sind alle Zellen
   gleich, und welche davon Mitte und Richtung des Musters stellt, entscheidet in
   `perceive/patterns.py` ein Knick, der an der Darstellung des Netzes hängt: Vor
   `e6e6f3ba0` drehte der Bezug beim Bohren weit weg vom Muster, danach an zwei Deckeln
@@ -34622,3 +34623,47 @@ blieben während dieses Laufs unverändert. Ruff und Format des neuen Testcodes
 sowie der begrenzte Diffcheck endeten jeweils mit Exit 0. Der erste Ruff-Fund
 PIE810 betraf ausschließlich die doppelte startswith-Abfrage; sie verwendet jetzt
 den gleichwertigen Tupelaufruf. Das ist kein Entwicklungs- oder Release-Gesamttor.
+
+## RM-225: Muster auf importierten Zylinderfacetten bleiben bearbeitbar (02.10.2026)
+
+<a id="rm-225-muster-auf-importierten-zylinderfacetten-bleiben-bearbeitbar-02102026"></a>
+
+Seit der Durchsicht 0.5.0 (erkennung B9) ist die Riffelung der Gewürzregal-Deckel
+ein Muster; damals wurden 24 Mulden um Ø 40 mit 5,237 mm Teilung protokolliert.
+Die frühere Vermutung, das Neuzeichnungsfeld reiche zu tief und Stirnkappen
+müssten mit dem Träger verschmolzen werden, war falsch. Beim echten binären
+STL lagen Mantelpunkte durch die 32-Bit-Rundung neben den Ebenen der
+rekonstruierten Facetten. Werkzeuge auf diesen Ebenen schnitten deshalb den
+Mantel. `prepare_ops._pattern_source_on_measured_facets` richtet die Quelle
+an den aus ihren ursprünglichen Punkten gemessenen Ebenen und gemeinsamen
+Schnittkanten aus. Stopfen und Neuzeichnen nutzen dieselbe ausgerichtete Quelle.
+
+Die Ausrichtung rechnet plattformgleich und verwendet dieselbe
+Facettengruppierung wie der Stopfen, einschließlich der Winkelnaht. Slots und
+bitgleich unberührte Verfeinerungsherkunft bleiben erhalten; der alte
+Innenraumbeleg verfällt. Beide Schleifen beachten den Abbruch. Ein zusätzlicher
+Gegenfall zeigte knapp 5 mm falschen Axialhub aus nur 0,8 nm Rundungsrauschen.
+Deshalb korrigiert der Ausgleich ausschließlich quer zur Zylinderachse.
+Operationsversionen bei dieser Integration: `remove_feature` 14,
+`resize_feature` 13 und `detect_region` 1.
+
+13 gezielte Schlussfälle und anschließend 298 betroffene Tests bestanden.
+Zusätzlich bestanden 32 Roadmap- und Dokumentkartenprüfungen. Am unverändert
+gelesenen echten Deckel ergeben Entfernen und Ändern in `draft` und `fine`
+jeweils ein dichtes, selbstschnittfreies Netz mit einer Komponente. Nach dem
+Ändern werden 21 Zellen mit 5,983986 mm Teilung erkannt. Die größte aktuelle
+Punktkorrektur beträgt rund 9,38 nm; die frühere Mikrometerangabe wird nicht
+übernommen. Ruff, Format und mypy bestanden. Der unabhängige Schlussreview
+und die zentrale zweite Prüfung fanden keine offenen RM225-Befunde.
+
+**Integration:** Commit `1da871c5acaa89755a24d71dcd46eb9bce49413d` ist auf
+`main` und `origin/main`. Das vollständige Entwicklungstor der exakt
+ausgewählten Integrationsrunde bestand mit **19 059 Tests und 62
+übersprungenen Tests**; Suite, Ruff, Format und mypy endeten jeweils mit
+Exit 0, ohne Änderung des Prüfstands während des Laufs. Der Remote-Stand und
+die Abstammung des Commits wurden nach dem Push unabhängig geprüft.
+
+Der [portable Nachweis](konzepte/nachweise-release-0.5.1/reports/rm225-facetten-2026-10-02.md)
+enthält die Gegenfälle, den Eingangs-Hash, die genaue Kundenmessung und die
+Wiederholung. Fenster-, Renderer- und Leistungsprüfungen bleiben gemäß
+Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
