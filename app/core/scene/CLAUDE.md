@@ -59,7 +59,18 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   `_needed_after`, `_checked_continuations`, `_unchanged_continuations`,
   `_unproven_native_references`, `blocked_references` →
   `orphans.check(blocked=)`; ausgestellt von `_preserved_exact_features` und
-  `prepare_ops._exact_features_after`. Unbelegtes wählt der Kunde
+  `prepare_ops._exact_features_after`. Ein Schritt, der Merkmale einführt,
+  bewahrt eindeutig zugeordnete, geometrisch unveränderte Vorgänger unter ihrer
+  bisherigen Kennung, wenn beide Merkmalsmengen höchstens
+  `FEATURE_LIMIT_COUNT` Einträge enthalten — auch ohne bekannten Folgebezug;
+  sonst kann eine neu gelesene Bohrung eine bestehende Kennung übernehmen.
+  Eine von der Operation belegte `FeatureContinuation` wird nach dem allgemeinen
+  Matcher erzwungen und hält auch absichtlich geänderte Merkmale unter ihrer
+  Kennung. Beim Umbenennen unveränderter Nachbarn und nach einer ausdrücklichen
+  Neuwahl nimmt `_native_alias_mapping` alle bereits gleichnamig belegten
+  Merkmale in die Teilzuordnung mit, damit neue Merkmale deren Namen nicht
+  zuerst beanspruchen. Andere offene Zuordnungen bleiben unbelegt.
+  Unbelegtes wählt der Kunde
   (`_native_reselection`): Die neu zu wählenden Namen verlassen vorher die
   Zuordnung, ihr geometrischer Nachfolger steht als erste Antwort da; eine
   `group:`-Antwort gibt native Konkurrenz nie frei.
@@ -116,6 +127,11 @@ beeinflusst, lebt nie nur in der Sitzung; eine Antwort kommt über
   `MAX_FACET_SAG`, Zahlen erst in der Karte. Lagebefunde eines Schritts fallen,
   wo `check_placement` sie am Endstand nicht bestätigt
   (`_without_undone_placements`), der Plattenrat mit ihnen.
+  `_without_repeats` erhält unterschiedliche Merkmalziele, Orte und Konturen;
+  identische Befunddaten bleiben zuletzt, in der bisherigen Berichtsfolge.
+  Das ist Datenidentität ohne geometrische Näherung oder Rundung.
+  Rohe Operationsbefunde bleiben unverändert,
+  auch beim erneuten Abschluss aus dem Cache.
 - **Darstellungswechsel** melden sich erst nach vollständig vorbereiteten
   Ausgaben; unveränderte Eingangskennungen belegen Nachfolger (ein neuer Deckel
   ist kein Verlust seines Trägers); ganz vernetzt bekommt jedes verbrauchte

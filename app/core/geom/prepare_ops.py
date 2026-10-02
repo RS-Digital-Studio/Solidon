@@ -51,7 +51,7 @@ from app.core.geom.boolean import (
     without_effect,
 )
 from app.core.geom.hollow import VENT_DIAMETER, HollowResult, below_printable_wall, hollow
-from app.core.geom.mesh import MeshData, as_mesh_data, face_components, lifted_caps
+from app.core.geom.mesh import MeshData, as_mesh_data, face_components, lifted_caps, signed_volume
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import (
     NoFittingOrientationError,
@@ -2168,6 +2168,7 @@ def _closed_at(
     object_id: ObjectId,
     alone: bool = False,
     whole: bool = False,
+    separate_contents: bool = False,
 ) -> BooleanOutcome:
     """Das Merkmal an dieser Stelle schließen: gefüllt, wenn es ein Hohlraum
     ist, abgetragen, wenn es Material ist.
@@ -2223,9 +2224,18 @@ def _closed_at(
                     merge_face_contacts=True,
                 )
             )
-    tool = _tool_for(
-        mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
-    )
+    if (
+        cavity
+        and separate_contents
+        and hole_has_separate_contents(mesh, feature, cancelled=cancelled)
+    ):
+        # Nur der Langlochzug darf fremde Körper innerhalb der Bohrung schneiden.
+        # Sein Stopfen wird unten wie jede Bohrung an den eigenen Rändern gekappt.
+        tool = _feature_solid(feature, centre)
+    else:
+        tool = _tool_for(
+            mesh, feature, centre, alone=alone, quality=quality, seed=seed, cancelled=cancelled
+        )
     # **Wo die Bohrung wirklich endet, sagen ihre Randringe** (22.09.2026). Ein
     # Stopfen aus Kennzahlen hat Deckel quer zu seiner Achse; eine schräge
     # Bohrung mündet aber in den Plattenflächen, und die Achsspanne ihrer Wand
@@ -3615,6 +3625,153 @@ def hole_is_clear(mesh: MeshData, feature: Feature) -> bool:
 def _hole_is_clear_read(mesh: MeshData, feature: Feature, radius: float, depth: float) -> bool:
     """Der Rumpf von :func:`hole_is_clear` — die Rechnung über die Dreiecksmitten."""
     return not len(_inside_the_bore(mesh, feature, radius, depth))
+
+
+def hole_has_separate_contents(
+    mesh: MeshData, feature: Feature, *, cancelled: CancelToken | None = None
+) -> bool:
+    """Ob nur getrennte Körper in einer sonst freien Bohrung stehen.
+
+    Der Langlochzug schneidet die ganze Baugruppe innerhalb der gemessenen
+    Bohrungstiefe. Dafür müssen alle Mantelflächen zu einem geschlossenen
+    Körper gehören, dessen Bohrung selbst frei ist. Eine verbundene Nabe
+    bleibt Material im eigenen Hohlraum; ein weiterer Körper daneben hebt
+    diese Sperre nicht auf. Innere Hohlschalen sind keine fremden Körper.
+    Kontakt und Materialeinschließung müssen vollständig ausgeschlossen sein:
+    Zwei geschlossene Häute können sich berühren, überschneiden oder ganz
+    ineinanderliegen und dadurch zum Material desselben Körpers gehören.
+    Die allgemeine Frage :func:`hole_is_clear` bleibt bewusst unverändert.
+    """
+    from app.core.perceive.features import remembered
+
+    check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else lambda: None
+    check_cancelled()
+    if feature.kind != "hole" or not feature.face_indices:
+        return False
+    result: bool = remembered(
+        "hole_has_separate_contents",
+        mesh.raw,
+        feature.face_indices,
+        lambda: _hole_has_separate_contents_read(mesh, feature, cancelled=cancelled),
+        extra=(
+            feature.kind,
+            tuple(feature.params["centre"]),
+            tuple(feature.params.get("axis", (0.0, 0.0, 1.0))),
+            float(feature.params.get("diameter", 0.0)),
+            float(feature.params.get("depth", 0.0)),
+        ),
+        check_cancelled=check_cancelled,
+    )
+    check_cancelled()
+    return result
+
+
+def _hole_has_separate_contents_read(
+    mesh: MeshData, feature: Feature, *, cancelled: CancelToken | None
+) -> bool:
+    """Der abbrechbare geometrische Beleg hinter der gemerkten Auskunft."""
+    from app.core.geom.repair import (
+        CROSSING_SEARCH_INCOMPLETE_DETAIL,
+        material_part_families,
+        parts_that_cross,
+    )
+
+    check_cancelled = cancelled.raise_if_cancelled if cancelled is not None else lambda: None
+    check_cancelled()
+    clear = hole_is_clear(mesh, feature)
+    check_cancelled()
+    if clear:
+        return False
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if int(chosen.min()) < 0 or int(chosen.max()) >= mesh.triangle_count:
+        return False
+    groups = face_components(mesh.raw)
+    check_cancelled()
+    if len(groups) < 2:
+        return False
+    welded = _welded(mesh)
+    check_cancelled()
+    faces = np.asarray(welded.faces)
+    vertices = np.asarray(welded.vertices)
+    host_found = False
+    for group in groups:
+        check_cancelled()
+        indices = np.sort(group)
+        part = trimesh.Trimesh(vertices=vertices, faces=faces[indices], process=False)
+        volume = signed_volume(part)
+        valid = (
+            part.is_watertight
+            and part.is_winding_consistent
+            and np.isfinite(volume)
+            and abs(volume) > 0.0
+        )
+        check_cancelled()
+        if not valid:
+            return False
+        if volume > 0.0 and np.isin(chosen, indices).all():
+            host_found = True
+    if not host_found:
+        return False
+    check_cancelled()
+    try:
+        contact = parts_that_cross(
+            mesh.raw,
+            groups,
+            cancelled=cancelled,
+            max_pairs=None,
+            include_face_contacts=True,
+            require_complete=True,
+        )
+    except GeometryError as error:
+        check_cancelled()
+        if error.detail != CROSSING_SEARCH_INCOMPLETE_DETAIL:
+            raise
+        return False
+    check_cancelled()
+    if contact is not None:
+        return False
+    # Auch ohne Oberflächenschnitt kann ein Körper in fremdem Material liegen.
+    # Nur entschiedene Materialfamilien tragen die Ausnahme; Innenhäute gehören
+    # zu ihrem Träger und werden bei dessen Bohrung mitgeprüft.
+    families = material_part_families(mesh.raw, cancelled=cancelled)
+    check_cancelled()
+    if families is None or len(families) < 2:
+        return False
+    for family in families:
+        check_cancelled()
+        indices = np.sort(family)
+        if np.isin(chosen, indices).all():
+            part = trimesh.Trimesh(vertices=vertices, faces=faces[indices], process=False)
+            own_feature = dataclasses.replace(
+                feature,
+                face_indices=tuple(int(value) for value in np.searchsorted(indices, chosen)),
+            )
+            clear = hole_is_clear(MeshData.of(part), own_feature)
+            check_cancelled()
+            return clear
+    return False
+
+
+def _slot_has_multiple_bodies(mesh: MeshData, cancelled: CancelToken) -> bool:
+    """Negative Innenhäute gehören zu ihrem Körper und sind kein weiteres Teil."""
+    cancelled.raise_if_cancelled()
+    groups = face_components(mesh.raw)
+    cancelled.raise_if_cancelled()
+    if len(groups) < 2:
+        return False
+    positive = 0
+    for indices in groups:
+        cancelled.raise_if_cancelled()
+        part = trimesh.Trimesh(
+            vertices=np.asarray(mesh.raw.vertices),
+            faces=np.asarray(mesh.raw.faces)[indices],
+            process=False,
+        )
+        positive += int(signed_volume(part) > 0.0)
+        cancelled.raise_if_cancelled()
+        if positive > 1:
+            return True
+    return False
 
 
 def _inside_the_bore(
@@ -6713,7 +6870,8 @@ class ResizeFeatureParams(BaseParams):
     # 10: Flächenkontakt wird beim Schließen berücksichtigt (RM-319).
     # 12: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
     # 13: STL-gerundete Musterträger werden auf ihre gemessenen Facetten ausgerichtet.
-    cache_version="13",
+    # 14: exakte Rundungen führen ihre Kennung nur mit eindeutigem Flächenbeleg fort (RM-284).
+    cache_version="14",
     title=_("Merkmal ändern"),
     category="holes",
     params=ResizeFeatureParams,
@@ -8232,9 +8390,11 @@ SLOT_FEATURE_RENAMED: Final = _(
     # 10: der Winkel zählt gegen ``prepare.slot_frame`` statt gegen das Rauschen
     #     der gemessenen Achse (30.09.2026).
     # 11: berührende B-Rep-Körper werden vor dem Schließen vereinigt (RM-319).
+    # 12: der Durchzug endet an der gemessenen Bohrung in einer Baugruppe (RM-320).
     # 13: die alte Winkelbedeutung bleibt an Projektparametern gebunden (RM-323).
     # 14: eine fehlerhafte Vorvereinigung bindet die Handlung an den Ursprungskörper.
-    cache_version="14",
+    # 15: Baugruppen enden an der Bohrung; getrennte Stifte sind auch beidseitig schneidbar.
+    cache_version="15",
     # **Kein „Bohrung zum Langloch".** Der Titel stand so, solange die
     # Operation nur an einer Bohrung galt; seit die Erkennung Langlöcher findet
     # (:mod:`app.core.perceive.slots`), gilt sie auch an einem und hieße dort
@@ -8305,6 +8465,18 @@ def slot_hole(ctx: OpContext) -> OpResult:
             # An einer Kette mit Verengung deren Satz, nicht der über eine
             # Senkung — wie im Panel (Durchsicht 0.5.1).
             detail=narrowing_reason("slot_hole", state.chain) or NEEDS_A_PLAIN_BORE,
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    if (
+        feature.kind == "hole"
+        and not hole_is_clear(body, feature)
+        and not hole_has_separate_contents(body, feature, cancelled=ctx.cancelled)
+    ):
+        raise ValidationError(
+            field="at_feature",
+            detail=HOLE_IS_NOT_EMPTY,
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
     # **Die Stelle kommt aus den Feldern, wo welche stehen** (Robert,
@@ -8496,7 +8668,15 @@ def slot_hole(ctx: OpContext) -> OpResult:
                 )
             else:
                 started = _exact_cavity_filled(started, feature)
-        cut_depth = _through_bore_depth(started, centre, axis) if through else depth
+        # ``through`` beschreibt die Bohrung im Körper, der sie trägt. Bei
+        # mehreren Körpern in einer Baugruppe darf der Hüllquader den Zug nicht
+        # über die gemessene Bohrung hinaus durch weitere Teile verlängern
+        # (RM-320).
+        cut_depth = (
+            _through_bore_depth(started, centre, axis)
+            if through and source.mesh.solid_count == 1
+            else depth
+        )
         if rounded:
             solid = edit.unified(
                 edit.cut_bore(
@@ -8626,6 +8806,7 @@ def slot_hole(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
+    original_body = body
     # Am Original gemessen, nicht am gestopften Körper — die Begründung steht
     # bei derselben Zeile in `resize_hole`.
     exact_depth = _mesh_bore_depth(body, feature, axis, depth)
@@ -8641,11 +8822,19 @@ def slot_hole(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
             object_id=source.id,
+            separate_contents=True,
         )
         body = closing.mesh
         filled = list(closing.findings)
         closing_solver = closing.solver
-    mesh_depth = _through_bore_depth(body, centre, axis) if through else exact_depth
+    # Auch das Netz begrenzt einen Durchgang in einer Baugruppe auf die Tiefe
+    # des gewählten Merkmals. Der Gesamthüllquader kann ein anderes Teil hinter
+    # der Platte einschließen (RM-320).
+    mesh_depth = (
+        _through_bore_depth(body, centre, axis)
+        if through and not _slot_has_multiple_bodies(original_body, ctx.cancelled)
+        else exact_depth
+    )
     result = slot_bore(
         body,
         position=centre,
@@ -18178,16 +18367,38 @@ def _exact_fillet(ctx: OpContext, source: SceneObject, name: str, radius: float 
         solid = edit.unround(
             body, spot, was, selected_faces=selected_faces, cancelled=ctx.cancelled
         )
+        created_triangles: tuple[int, ...] = ()
     else:
-        solid = edit.reround(
+        solid, created_triangles = edit.reround_with_created_triangles(
             body, spot, was, radius, selected_faces=selected_faces, cancelled=ctx.cancelled
         )
+    features = features_of(solid, cancelled=ctx.cancelled)
+    continued: tuple[FeatureContinuation, ...] = ()
+    if created_triangles:
+        from app.core.perceive.matching import MatchResult, apply_mapping
+
+        detected_fillets = {
+            identifier: candidate
+            for identifier, candidate in features.items()
+            if candidate.kind == "fillet"
+        }
+        generated = set(created_triangles)
+        # Die Builder-Historie benennt die neue Fläche direkt. Ihr
+        # Schwerpunkt wandert mit dem Radius und ist deshalb kein
+        # verlässlicher Maßstab für diesen belegten Übergang. Ohne genau
+        # einen Flächentreffer bleibt die allgemeine Auswertung zuständig.
+        targets = tuple(
+            identifier
+            for identifier, candidate in detected_fillets.items()
+            if generated.intersection(candidate.face_indices)
+        )
+        if len(targets) == 1:
+            matched = MatchResult(mapping={name: targets[0]})
+            features = apply_mapping(features, matched, previous=source.features)
+            continued = (FeatureContinuation(FeatureRef(source.id, name), name),)
     return OpResult(
-        outputs=[
-            dataclasses.replace(
-                exact, mesh=solid, kind="brep", features=features_of(solid, cancelled=ctx.cancelled)
-            )
-        ]
+        outputs=[dataclasses.replace(exact, mesh=solid, kind="brep", features=features)],
+        feature_continuations=(continued,) if continued else (),
     )
 
 

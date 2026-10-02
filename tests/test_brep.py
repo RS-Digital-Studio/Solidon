@@ -1398,8 +1398,10 @@ def test_a_selection_that_matches_nothing_says_so() -> None:
 def test_both_kernels_ask_the_same_question_of_a_thin_walled_box(profile: Profile) -> None:
     """Derselbe Radius, dieselbe Frage — am Netz wie am exakten Körper.
 
-    Gemessen am 14.09.2026 an einem Hohlkasten 40 x 30 x 20 mit 3 mm Wand
-    (offen nach oben): Über **alle** Kanten nahm das Netz einen Radius von
+    Der Prüfkörper misst 40 x 30 x 20 mm: 3 mm Boden, zwei 6 mm dicke
+    Seitenwände, die übrigen Seiten sind offen. Die um (3, 3, 3) versetzte
+    Aussparung liegt dort bündig, weil ``box`` in XY zentriert ist.
+    Am 14.09.2026 nahm das Netz über **alle** Kanten einen Radius von
     2 mm an, der exakte Kern sagte ihn ab, und ein Vorbehalt im Register
     erklärte den Unterschied. Am 22.09.2026 gemessen, *wie* das Netz ihn
     annahm: Zwei Bänder zu je 2 mm auf einer 3 mm breiten Stirnfläche
@@ -1412,10 +1414,15 @@ def test_both_kernels_ask_the_same_question_of_a_thin_walled_box(profile: Profil
     Kundensicht, Robert gemeldet): Die Frage ist an beiden Kernen dieselbe
     (``edges.contact_band_limits``). Das Netz rundet hier 17 Kanten und nennt
     die vier ausgelassenen mit 1,5 mm; die Wand bleibt 20 mm hoch. Der exakte
-    Kern fragt dasselbe, aber OpenCASCADE baut die verbleibenden 17 Kanten an
-    diesem Kasten nicht — dort bleibt es bei der Absage mit demselben größten
-    Wert (gemessen am 28.09.2026).
+    Kern fragt dasselbe. Weil OpenCASCADE die verbleibenden 17 Kanten nicht
+    gemeinsam baut, probiert RM-284 einzelne Auslassungen auf frischer Form:
+    Hier werden 16 Kanten verrundet und eine mit ihrem Ort genannt. Der direkte
+    Aufruf der B-Rep-Hilfsfunktion bleibt streng und lehnt die ganze Gruppe ab.
     """
+    from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.gp import gp_Pnt
+    from OCP.TopAbs import TopAbs_IN
+
     from app.core.geom.edges import round_edges
     from app.core.geom.mesh import MeshData
 
@@ -1427,9 +1434,45 @@ def test_both_kernels_ask_the_same_question_of_a_thin_walled_box(profile: Profil
         edit.fillet(kasten, 2.0, "all")
 
     exakt = SceneObject(id="obj_1", name="Kasten", mesh=kasten, kind="brep")
-    with pytest.raises(GeometryError) as abgesagt:
-        run("fillet_edges", exakt, profile, radius=2.0, edges="all")
-    assert abgesagt.value.values["largest_mm"] == pytest.approx(1.5, abs=0.01)
+    exact_result = run("fillet_edges", exakt, profile, radius=2.0, edges="all")
+    exact_body = exact_result.outputs[0].mesh
+    assert isinstance(exact_body, Solid)
+    assert exact_body.solid_count == 1
+    assert exact_body.is_closed
+    assert kasten.volume == pytest.approx(40.0 * 30.0 * 20.0 - 34.0 * 24.0 * 17.0, abs=EPS_GEOM)
+    assert exact_body.bounds.size == pytest.approx((40.0, 30.0, 20.0), abs=EPS_GEOM)
+    fillets = [feature for feature in features_of(exact_body).values() if feature.kind == "fillet"]
+    assert fillets
+    assert all(
+        float(feature.params["radius"]) == pytest.approx(2.0, abs=EPS_GEOM) for feature in fillets
+    )
+    # Unabhängige Materialproben: Wandmitten bleiben, der Hohlraum bleibt
+    # frei. Bei z=10 liegt der R2-Kreis außen um (-18, -13), innen um
+    # (-12, -7); Quadratpunkte auf beiden Seiten des Kreisbogens prüfen
+    # Abtrag und Füllung. Alle Proben liegen deutlich neben der Oberfläche.
+    for point, before, after in (
+        ((-17.0, 0.0, 10.0), True, True),
+        ((0.0, -12.0, 10.0), True, True),
+        ((0.0, 0.0, 1.5), True, True),
+        ((0.0, 0.0, 10.0), False, False),
+        ((-19.9, -14.9, 10.0), True, False),
+        ((-19.0, -14.0, 10.0), True, True),
+        ((-13.9, -8.9, 10.0), False, True),
+        ((-13.0, -8.0, 10.0), False, False),
+    ):
+        for body, expected in ((kasten, before), (exact_body, after)):
+            actual = BRepClass3d_SolidClassifier(body.shape, gp_Pnt(*point), EPS_GEOM)
+            assert (actual.State() == TopAbs_IN) is expected, point
+    exact_skipped = next(
+        finding for finding in exact_result.findings if finding.code == "edges.exact_group_skipped"
+    )
+    assert exact_skipped.values["skipped"] == 1
+    assert exact_skipped.values["worked"] == 16
+    assert exact_skipped.location is not None
+    too_narrow = next(
+        finding for finding in exact_result.findings if finding.code == "edges.too_narrow"
+    )
+    assert (too_narrow.values["skipped"], too_narrow.values["worked"]) == (4, 16)
 
     netz = MeshData.of(tessellate(kasten.shape, 0.05).raw)
     teils = round_edges(netz, 2.0, "all", quality="draft")
@@ -1448,6 +1491,337 @@ def test_both_kernels_ask_the_same_question_of_a_thin_walled_box(profile: Profil
 
     grenze = str(REGISTRY.get("fillet_edges").caveat)
     assert "3 mm" not in grenze, f"der Vorbehalt über zwei Antworten ist gefallen: {grenze}"
+
+
+def test_a_fillet_group_builds_each_candidate_on_its_own_native_copy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein abgewiesener Builder darf die native Form des nächsten Versuchs nicht berühren."""
+    solid = _coloured_block()
+    entries = edit.choose(solid, "vertical")
+    selected_edges = solid.checked_edge_indices(edit.native_edge_indices(solid, entries))
+    points = tuple(entry.middle for entry in edit._edges_at(solid, selected_edges))
+    before = solid.mesh.to_bytes()
+    attempts: list[Solid] = []
+    original_build = edit._build_constant_fillet
+
+    def build_candidate(
+        working: Solid, chosen: list[edit.EdgeInfo], radius: float, **kwargs: Any
+    ) -> Solid:
+        assert not working.shape.IsPartner(solid.shape), "der Eingang bleibt privat"
+        assert not any(working.shape.IsPartner(previous.shape) for previous in attempts), (
+            "jeder neue Kandidat braucht eine eigene native Form"
+        )
+        assert len(edit.native_edge_indices(working, chosen)) == len(chosen)
+        attempts.append(working)
+        if len(attempts) == 1:
+            raise GeometryError("Erste Kombination absichtlich abgewiesen.")
+        return original_build(working, chosen, radius, **kwargs)
+
+    monkeypatch.setattr(edit, "_build_constant_fillet", build_candidate)
+
+    result, skipped = edit.fillet_group(solid, 1.0, selected_edges)
+
+    assert len(attempts) == 2
+    assert skipped == (points[0],)
+    assert result.is_closed and result.is_watertight and result.solid_count == 1
+    # Drei senkrechte Kanten verlieren je Quadrat minus Viertelkreis, über 20 mm.
+    assert result.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - 3.0 * (1.0 - math.pi / 4.0) * HEIGHT,
+        abs=EPS_GEOM,
+        rel=0.0,
+    )
+    assert {2, 3}.issubset(result.face_slots)
+    assert solid.mesh.to_bytes() == before
+
+
+def test_a_fillet_group_omits_each_individually_open_edge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine Gruppe mit zwei offenen Einzelkanten bleibt nach ihrem Ausschluss geschlossen."""
+    solid = block()
+    entries = edit.choose(solid, "vertical")
+    selected_edges = edit.native_edge_indices(solid, entries)
+    points = tuple(entry.middle for entry in entries)
+    open_points = set(points[-2:])
+    attempts: list[tuple[tuple[float, float, float], ...]] = []
+
+    class Candidate:
+        def __init__(self, is_watertight: bool) -> None:
+            self.is_watertight = is_watertight
+
+    def build_candidate(
+        _solid: Solid, chosen: list[edit.EdgeInfo], _radius: float, **_kwargs: Any
+    ) -> Any:
+        candidate_points = tuple(entry.middle for entry in chosen)
+        attempts.append(candidate_points)
+        if len(candidate_points) == 1:
+            return Candidate(candidate_points[0] not in open_points)
+        return Candidate(set(candidate_points) == set(points[:-2]))
+
+    monkeypatch.setattr(edit, "_fits_the_wall", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(edit, "_build_constant_fillet", build_candidate)
+
+    result, skipped = edit.fillet_group(solid, 1.0, selected_edges)
+
+    assert result.is_watertight
+    assert skipped == points[-2:]
+    assert attempts[0] == points
+    assert attempts[-1] == points[:-2]
+    assert len(attempts) == 1 + len(entries) + 1
+
+
+def test_a_failed_single_edge_exclusion_is_not_built_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine fehlgeschlagene Auslassung bleibt im Einzelauslassungslauf übersprungen."""
+    solid = block()
+    entries = edit.choose(solid, "vertical")
+    selected_edges = edit.native_edge_indices(solid, entries)
+    points = tuple(entry.middle for entry in entries)
+    open_point = points[-1]
+    attempts: list[tuple[tuple[float, float, float], ...]] = []
+
+    class Candidate:
+        def __init__(self, is_watertight: bool) -> None:
+            self.is_watertight = is_watertight
+
+    def build_candidate(
+        _solid: Solid, chosen: list[edit.EdgeInfo], _radius: float, **_kwargs: Any
+    ) -> Candidate:
+        candidate_points = tuple(entry.middle for entry in chosen)
+        attempts.append(candidate_points)
+        if len(candidate_points) == 1:
+            return Candidate(candidate_points[0] != open_point)
+        return Candidate(False)
+
+    monkeypatch.setattr(edit, "_fits_the_wall", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(edit, "_build_constant_fillet", build_candidate)
+
+    with pytest.raises(GeometryError):
+        edit.fillet_group(solid, 1.0, selected_edges)
+
+    assert attempts[0] == points
+    assert attempts.count(points[:-1]) == 1
+    assert len(attempts) == 1 + 2 * len(entries)
+
+
+def test_a_single_edge_probe_is_reused_by_the_group_exclusion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die offene Einzelkante schließt die Gruppe ohne erneuten nativen Bau aus."""
+    solid = block()
+    entries = edit.choose(solid, "vertical")[:2]
+    selected_edges = solid.checked_edge_indices(edit.native_edge_indices(solid, entries))
+    points = tuple(entry.middle for entry in edit._edges_at(solid, selected_edges))
+    open_point = points[-1]
+    attempts: list[tuple[tuple[float, float, float], ...]] = []
+
+    class Candidate:
+        def __init__(self, is_watertight: bool) -> None:
+            self.is_watertight = is_watertight
+
+    def build_candidate(
+        _solid: Solid, chosen: list[edit.EdgeInfo], _radius: float, **_kwargs: Any
+    ) -> Candidate:
+        candidate_points = tuple(entry.middle for entry in chosen)
+        attempts.append(candidate_points)
+        if len(candidate_points) == 1:
+            return Candidate(candidate_points[0] != open_point)
+        return Candidate(False)
+
+    monkeypatch.setattr(edit, "_fits_the_wall", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(edit, "_build_constant_fillet", build_candidate)
+
+    result, skipped = edit.fillet_group(solid, 1.0, selected_edges)
+
+    assert result.is_watertight
+    assert skipped == (open_point,)
+    assert attempts == [points, (points[0],), (points[1],)]
+
+
+def test_a_fillet_group_omits_two_edges_that_the_kernel_cannot_build(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei echte B-Rep-Kandidaten können aus einer getrennten Gruppe entfallen."""
+    from dataclasses import replace
+
+    from OCP.BRep import BRep_Builder
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.TopoDS import TopoDS_Compound
+
+    from app.core.geom import edge_ops
+    from app.core.registry import Registry
+    from app.core.scene import ResultCache
+    from app.core.types import Finding, OpResult
+
+    def cylinder(radius: float, height: float, x: float, y: float, z: float) -> Solid:
+        axis = gp_Ax2(gp_Pnt(x, y, z), gp_Dir(0.0, 0.0, 1.0), gp_Dir(0.0, 1.0, 0.0))
+        return Solid(BRepPrimAPI_MakeCylinder(axis, radius, height).Shape())
+
+    parts = []
+    expected_bad = []
+    expected_good = []
+    for offset in (0.0, 40.0):
+        large = cylinder(5.0, 10.0, offset, 0.0, 0.0)
+        small = cylinder(2.5, 30.0, offset - 5.24187234, -3.84353671, -20.0)
+        parts.append(edit.boolean("union", [large, small]))
+        expected_good.append((offset - 2.762923404947445, -4.167283798638342, 5.0))
+        expected_bad.append((offset - 4.805223638300356, -1.3819644662289552, 5.0))
+
+    compound = TopoDS_Compound()
+    builder = BRep_Builder()
+    builder.MakeCompound(compound)
+    for part in parts:
+        builder.Add(compound, part.shape)
+    solid = Solid(compound)
+    candidates = edit.choose(solid, "vertical")
+    points = (*expected_good, *expected_bad)
+    chosen = tuple(
+        min(candidates, key=lambda entry: math.dist(entry.middle, point)) for point in points
+    )
+    assert all(
+        math.dist(entry.middle, point) < 1e-5 for entry, point in zip(chosen, points, strict=True)
+    )
+    chosen_indices = edit.native_edge_indices(solid, chosen)
+    individually_rounded_volumes = tuple(
+        edit.fillet(solid, 1.0, "vertical", selected_edges=(index,)).volume
+        for index in chosen_indices[: len(expected_good)]
+    )
+    assert all(
+        not math.isclose(volume, solid.volume, rel_tol=0.0, abs_tol=1e-5)
+        for volume in individually_rounded_volumes
+    )
+    expected_volume = solid.volume - sum(
+        solid.volume - volume for volume in individually_rounded_volumes
+    )
+
+    result, skipped = edit.fillet_group(solid, 1.0, chosen_indices)
+
+    assert result.is_closed and result.is_watertight
+    assert result.component_count == 2
+    assert result.volume == pytest.approx(expected_volume, abs=1e-5)
+    assert len(skipped) == 2
+    assert all(
+        any(math.dist(actual, expected) < 1e-5 for actual in skipped) for expected in expected_bad
+    )
+    assert all(
+        not any(math.dist(actual, expected) < 1e-5 for actual in skipped)
+        for expected in expected_good
+    )
+
+    # Der Anschluss beginnt an dieser belegten nativen Auswahl. Nur die
+    # vorgelagerte Netzzug-Zuordnung ist festgelegt; Gruppenbau, Befundfabrik
+    # und Auswertung bleiben echt, einschließlich der Wiederholung aus dem Cache.
+    monkeypatch.setattr(
+        edge_ops, "_group_that_fits", lambda *_args, **_kwargs: (chosen_indices, [])
+    )
+    own = Registry()
+    own.register(
+        replace(
+            REGISTRY.get("create_brep_box"),
+            name="rounding_source",
+            fn=lambda _ctx: OpResult(
+                outputs=[SceneObject(id="", name="Rundungsprobe", mesh=solid, kind="brep")]
+            ),
+        )
+    )
+    fillet = REGISTRY.get("fillet_edges")
+    raw_results: list[OpResult] = []
+    raw_findings_before: list[tuple[Finding, ...]] = []
+
+    def recorded_fillet(ctx: OpContext) -> OpResult:
+        output = fillet.fn(ctx)
+        raw_results.append(output)
+        raw_findings_before.append(
+            tuple(replace(entry, values=dict(entry.values)) for entry in output.findings)
+        )
+        return output
+
+    own.register(replace(fillet, fn=recorded_fillet))
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document, registry=own)
+    history.apply("Prüfkörper", [OperationDraft(op="rounding_source")])
+    target = project.document.ops[-1].outputs[0]
+    history.apply(
+        "Rundungsgruppe",
+        [
+            OperationDraft(
+                op="fillet_edges", inputs=(target,), params={"radius": 1.0, "edges": "vertical"}
+            )
+        ],
+    )
+    cache = ResultCache()
+    for _pass in range(2):
+        evaluated = evaluate(
+            project.document,
+            profile,
+            registry=own,
+            cache=cache,
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Frage: {question}"),
+        )
+        assert evaluated.complete
+        assert len(raw_results) == 1, "der warme Lauf verwendet den rohen Operationscache"
+        assert tuple(raw_results[0].findings) == raw_findings_before[0]
+        raw_findings = [
+            entry for entry in raw_results[0].findings if entry.code == "edges.exact_group_skipped"
+        ]
+        reported = [
+            entry
+            for entry in evaluated.scene.report.findings
+            if entry.code == "edges.exact_group_skipped"
+        ]
+        assert len(raw_findings) == 2
+        assert all(entry.op_id is None for entry in raw_findings), (
+            "die Auswertung ändert keine Rohbefunde"
+        )
+        assert len(reported) == 2, "jede ausgelassene Kante behält ihre eigene Stelle"
+        for expected in expected_bad:
+            assert any(
+                entry.location is not None
+                and entry.location == pytest.approx(expected, abs=1e-5, rel=0.0)
+                for entry in reported
+            )
+        assert all(entry.op_id == project.document.ops[-1].id for entry in reported)
+        assert all(entry.object_id == target for entry in reported)
+        assert all(
+            entry.values["worked"] == 2 and entry.values["skipped"] == 1 for entry in reported
+        )
+
+
+def test_a_failed_combined_fillet_exclusion_is_not_built_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine erfolglose gemeinsame Auslassung wird nicht nochmals aufgebaut."""
+    solid = block()
+    entries = edit.choose(solid, "vertical")
+    selected_edges = edit.native_edge_indices(solid, entries)
+    points = tuple(entry.middle for entry in entries)
+    open_points = set(points[-2:])
+    attempts: list[tuple[tuple[float, float, float], ...]] = []
+
+    class Candidate:
+        is_watertight = False
+
+    def build_candidate(
+        _solid: Solid, chosen: list[edit.EdgeInfo], _radius: float, **_kwargs: Any
+    ) -> Candidate:
+        candidate_points = tuple(entry.middle for entry in chosen)
+        attempts.append(candidate_points)
+        if len(candidate_points) == 1:
+            candidate = Candidate()
+            candidate.is_watertight = candidate_points[0] not in open_points
+            return candidate
+        return Candidate()
+
+    monkeypatch.setattr(edit, "_fits_the_wall", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(edit, "_build_constant_fillet", build_candidate)
+
+    with pytest.raises(GeometryError):
+        edit.fillet_group(solid, 1.0, selected_edges)
+
+    assert attempts[0] == points
+    assert attempts.count(points[:-2]) == 1
+    assert len(attempts) == 1 + len(entries) + 1 + len(entries)
 
 
 # --- which edges ----------------------------------------------------------------

@@ -69,7 +69,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-259 — Eine Mündungsrundung in einer gekrümmten Fläche reist nicht mit ihrer Senkbohrung](#rm-259) | Geometrie, Erkennung und Druckvorbereitung | In einer ebenen Fläche gebaut (`202d5133a`: Versetzen ±0,000 mm³, Entfernen genau die Platte, beide Kerne); gekrümmt offen: am Netz die Senkung hinter einer Rollkugelrundung erkennen und eine Fläche aus mehreren Grundformen über die Öffnung fortsetzen, am exakten Kern den Prototyp `m19_exakt_band.py` samt Bandkennung übernehmen. Abnahme neu gegen den Sollwert −2,97 / +0,29 / −4,56 mm³ an gs-100 |
 | [RM-262 — Die Erkennung liest eine gekippte Haltelippe nicht](#rm-262) | Geometrie, Erkennung und Druckvorbereitung | Die Absage bleibt (rest-muendung): Mit dem Drehweg liest der exakte Kern Tasche, angeschnittenen Kegel ohne Verengung und Schacht als Zylinderstück, das Netz nur eine gerundete Seite. Erst beide Erkennungen und `bore_entrance` mit schräger Mündung hinter einer Verengung, dann *Merkmal drehen* freigeben; der Drehweg liegt auf heutigem Stand als `prepare_ops_mit_drehen_heute.patch` bereit |
 | [RM-273 — Das Übernehmen rechnet die Operation noch einmal](#rm-273) | Geometrie, Erkennung und Druckvorbereitung | Gartenschlauchhalter, Versetzen einer Bohrung übernehmen: 16 bis 17,5 s unter Last, davon 9 bis 10 s die Operation in voller Güte nach der Vorschau in Entwurfsgüte (rund 5 s ihre örtliche Nachmessung) — das Vorschauergebnis übernehmen, wo beide Güten dieselbe Geometrie liefern, sonst die Nachmessung im Übernehmen auslassen |
-| [RM-284 — Der exakte Kern baut eine verkleinerte Kantengruppe nicht immer](#rm-284) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Kanten, die OpenCASCADE zusammen nicht baut, einzeln bauen oder wie am Netz auslassen und nennen |
+| [RM-284 — Exakte Rundungsgruppen und ihre Merkmalskennungen](#rm-284) | Geometrie, Erkennung und Druckvorbereitung | Rundungsgruppen und beide Identitätsanschlüsse korrigiert; 1209 Fachtests grün und unabhängiger Review ohne offene Codebefunde. Zentrales Tor und Integration stehen aus |
+| [RM-322 — Tragende Netzkanten am exakten Körper wiederfinden](#rm-322) | Geometrie, Erkennung und Druckvorbereitung | Am gs-100-STEP die sechs tragenden Netzrundungen einer exakten Kante zuordnen oder sie einzeln mit Stelle auslassen; R 1 und R 2 |
 | [RM-287 — Stücknummern eines Auto-Split-Laufs: alte Läufe und gelöschte Schnitte](#rm-287) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: Zählung beim Löschen nachführen; Entscheidung zu alten Läufen (Migration) |
 | [RM-289 — Übergabe je Teil: Reste aus dem Review der Stufe E](#rm-289) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: B6–B13 je Befund |
 | [RM-292 — Laufzeitreste der Durchsicht 0.5.1](#rm-292) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: am HEAD nachmessen |
@@ -82,7 +83,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-307 — Auto Split: Reste aus dem Review der Vorauswahl](#rm-307) | Geometrie, Erkennung und Druckvorbereitung | Nach 0.5.1: teure stehende Vorauswahl, Gegentest, Rückfallweg |
 | [RM-317 — Welche Objektwerte nimmt jeder Slicer an?](#rm-317) | Geometrie, Erkennung und Druckvorbereitung | Je Slicer am Konsolenlauf messen, welche Pfade aus `PART_PATHS` je Objekt ankommen; was nicht ankommt, geht über `unavailable` an die Platte |
 | [RM-318 — Schlanke Teile: Brim fest am Teil, Anordnen weg vom Rand](#rm-318) | Geometrie, Erkennung und Druckvorbereitung | Pfad für den Brim-Abstand mit Vorschlag 0 am schlanken Teil; *Auf dem Bett anordnen* hält hohe, schlanke Körper vom Rand fern |
-| [RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am Netz bleibt sein Überstand](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Beide Kerne schneiden die gemessene Länge der Bohrung, wie das Netz |
+| [RM-320 — Ein zweiter Körper in einer Bohrung](#rm-320) | Geometrie, Erkennung und Druckvorbereitung | Arbeiterabbruch und gültige Innenkammer mit freiem Stift korrigiert; 1010 Fachtests und sechs Kundenrechnungen grün, unabhängiger Review ohne offene Codebefunde. Tor und Integration stehen aus |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Die Rampe ist stetig und getestet, die Bildrate an 815 104 Dreiecken gemessen (`7ff34c67`: 16,7 → 8,7 ms im Median); offen bleiben Linux, die 3DxWare-Mausemulation, das Gerät selbst und die Rampe im Skizzenmodus (aus RM-183) |
 | [RM-204 — Ein Merkmalklick baut alle Handlungen des Fensters neu](#rm-204) | Bedienung und Darstellung | Abnahme am echten Fenster beim Release (RM-213) |
 | [RM-283 — Ein Handbuch, das man ohne Ausprobieren versteht](#rm-283) | Bedienung und Darstellung | Feldabnahme nach §11 des Konzepts; die Nummern der Bildanleitungen nicht auf Text setzen (zwei Bilder) |
@@ -2102,21 +2103,58 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-284"></a>
 
-- [ ] **RM-284 — Der exakte Kern baut eine verkleinerte Kantengruppe nicht immer.** Aus dem Release 0.5.1 (Paket kanten, Teil 2 von
-  [RM-279](ROADMAP-ARCHIV.md#rm-279)). Seit 0.5.1 bearbeitet eine Kantengruppe am Netz die
-  Kanten, die das Maß tragen, und nennt die übrigen (`edges.too_narrow`). Der exakte Kern
-  stellt dieselbe Frage und gibt OpenCASCADE nur die tragenden Kanten; baut OpenCASCADE den
-  Rest nicht oder offen, bleibt es dort bei der Absage mit der größten Zahl. Gemessen:
-  Hohlkasten 3 mm, „alle“, R 2 (17 Kanten, jede einzeln baubar, zusammen nicht);
-  pegboard-goot Verrunden (zwei Rundungen, Kanten 212 und 221 tesselliert OpenCASCADE offen,
-  bei jedem Radius und auch einzeln — vorbestehend); gs-100 und pb3041 (die Kanten der
-  Tessellierung decken sich nicht mit den exakten). Ein halbierendes Neubauen war zu langsam
-  (15 bis 37 s je Vorschau) und lieferte an pb3041 einen offenen Körper. Sonden
-  `konzepte/nachweise-release-0.5.1/sonden/kanten/`, Bericht `konzepte/nachweise-release-0.5.1/reports/kanten-schluss.md` §6–7. Weg:
-  die Kanten, die OpenCASCADE zusammen nicht baut, einzeln oder in kleineren Gruppen bauen,
-  oder am exakten Körper dieselbe Auslassung wie am Netz mit Befund. Abnahme: Hohlkasten
-  3 mm „alle“ R 2 rundet am exakten Kern, was am Netz gerundet wird, oder nennt die
-  ausgelassenen Kanten wie das Netz.
+- [~] **RM-284 — Exakte Rundungsgruppen und ihre Merkmalskennungen.** Der
+  Gruppenfix und die erste Herkunftsfortführung stehen mit ihren früheren
+  Nachweisen im [Archiv](ROADMAP-ARCHIV.md#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026).
+  Die Nachprüfung korrigierte Kantenumordnung nach nativer Kopie, gemeinsam
+  verwendete Formen zwischen Kandidaten und eine unbelegte Fortführung ohne
+  Flächenhistorie. 973 betroffene Tests und vier Rechnungen am unveränderten
+  pegboard-goot-STEP sind grün; der frühere abgeschriebene Volumensollwert ist
+  durch hergeleitete Material-, Radius- und Hüllmaßprüfungen ersetzt.
+  **Wieder offen nach Schlussreview:** Der folgende
+  `_unchanged_continuations`-Schritt reserviert belegte Selbstzuordnungen
+  nicht. Eine neue Rundung kann dadurch die Kennung der gerade geänderten
+  Rundung erhalten, während die belegte Rundung umbenannt wird. Dieser
+  Anschluss ist am tatsächlichen `_with_features`- und
+  `History → evaluate`-Weg test-first korrigiert und mit 1206 Fachprüfungen
+  belegt. Der anschließende vollständige Aufruferabgleich fand denselben
+  Aliasfehler noch nach einer korrekten manuellen Merkmalswahl in
+  `_native_reselection`. Der gemeinsame `_native_alias_mapping` schützt jetzt
+  die belegten Selbstzuordnungen und offenen Kennungen in beiden Wegen.
+  Sechs direkte Fälle prüfen echte Auswahl, Lage, Folgeoperationen mit
+  analytischem Volumen sowie den kalten und warmen Verlauf. Der erneute
+  13-Dateien-Fachlauf besteht mit 1209 Tests, 104 releasebedingt abgewählt;
+  der unabhängige Review ist einschließlich notwendiger RM218-Hunks ohne
+  offene Codebefunde. Die zentrale Gegenprüfung fand anschließend automatische
+  Antworten in zwei echten Verlaufstests. Beide sind verschärft; eine
+  unabhängig entzogene Builder-Historie lässt sie genau an der unerwarteten
+  Neuwahl scheitern. Der abschließende kleine Lauf besteht mit 13 Fällen;
+  der enge unabhängige Nachreview ist ebenfalls ohne Befund. Ein weiterer
+  Anschlussfix verhindert, dass verschiedene ausgelassene Stellen im
+  Abschlussbericht zusammenfallen. Der vollständige Befundschlüssel enthält
+  nun Ort, Rand und Zielmerkmale; 21 gezielte Fälle einschließlich echter
+  kalter/warmer Auswertung sowie 610 Sprach-/Wertprüfungen sind grün.
+  Der unabhängige Nachreview ist ohne Befund. Die vorhandene UI-Bündelung
+  bleibt erhalten; neue Mehrstellen-Navigation gehört nicht zu diesem Fix.
+  Die Operationsversionen
+  `fillet_edges` 13 und `resize_feature` 14 sind nach der RM225-Integration
+  eingetragen und über das Register gelesen. Entwicklungstor
+  und Integration stehen aus. RM-322 bleibt ein eigener Zuordnungsrest.
+  [Reproduzierbare bisherige Nachweise](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md).
+
+<a id="rm-322"></a>
+
+- [ ] **RM-322 — Tragende Netzkanten am exakten Körper wiederfinden.** Rest aus RM-284,
+  gemessen an `pegboard-gs-100-v2.step`: bei „senkrecht“, R 1 und R 2 tragen sechs der zehn
+  Netzkanten das Maß; die Mesh-Op rundet sie geschlossen (Volumenänderung bei R 1:
+  −0,009763 mm³). `_group_that_fits` findet für diese sechs keine exakten Gegenkanten und
+  fällt auf alle 18 exakten Senkrechten zurück. Dort lehnt der B-Rep-Kern R 1 ab. Die
+  Messung steht in `konzepte/nachweise-release-0.5.1/laeufe/kanten-gruppe-brep2.txt`; den
+  heutigen Gegenfall hält der Probeaufruf an der Stelle fest. Weg: die tragenden Netzzüge
+  stabil an exakte Kanten binden; wo kein eindeutiger Partner besteht, die betreffende
+  Rundung mit ihrer Stelle melden und die übrigen weiterbauen. Abnahme: bei R 1 und R 2
+  werden die sechs passenden Rundungen nicht mehr durch den Fehlschlag aller 18 Kanten
+  verhindert; das Ergebnis bleibt geschlossen und jede ausgelassene Stelle ist sichtbar.
 
 <a id="rm-287"></a>
 
@@ -2359,7 +2397,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-320"></a>
 
-- [ ] **RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am
+- [~] **RM-320 — Ein zweiter Körper in einer Bohrung: exakt weggeschnitten, am
   Netz bleibt sein Überstand.** Gemessen am 30.09.2026: Platte 40 x 20 x 10
   mit Bohrung Ø 6, darin ein Stift Ø 5 x 15 als zweiter Körper (Verbund bzw.
   dessen Tessellierung). *Zum Langloch ziehen* auf 12 mm: exakt ein Teil,
@@ -2367,8 +2405,59 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   zwei Teile, Platte 7 357,6 und Stiftrest 97,6 mm³ (z 10,01 bis 15). Beide
   Kerne sagen nicht dasselbe. Der Fall steht für eine Baugruppe aus einem STEP
   mit Schraube in der Bohrung. Weg: Beide schneiden die gemessene Länge
-  der Bohrung wie das Netz, nicht durch alles in der Flucht. Abnahme: an
-  beiden Kernen zwei Teile, Stiftrest gleich auf 0,1 mm³.
+  der Bohrung wie das Netz, nicht durch alles in der Flucht. **Erledigt:** Bei
+  mehreren Körpern begrenzt *Zum Langloch ziehen* den Durchgang auf die
+  gemessene Bohrungstiefe; der Hüllkörperdurchgang bleibt dem Einzelkörper
+  vorbehalten. Beide Kerne erhalten zwei Körper, und der obere Stiftrest liegt
+  von z = 10 bis 15 mm (±0,02 mm). Die Volumenerwartungen sind je Kern
+  getrennt und analytisch hergeleitet: am Netz π × 2,5² × 5 mm³ für den
+  Stift (±1 mm³) und 8000 − (36 + 9π) × 10 mm³ für die Platte (±2 mm³);
+  am exakten Kern π × 2,5² × 5 mm³ für den Stift (±0,000001 mm³).
+  Die Volumenabweichung kommt aus der Facettierung und der 0,02-mm-Verlängerung
+  des Netz-Durchzugs, die 0,01 mm zusätzlich am Stiftende abträgt.
+  **Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests;
+  unabhängiges Review nach Korrektur der Abnahme ohne weitere Findings.
+  **Nachprüfung 02.10.2026:** Der einseitige Erstfall war kein vollständiger
+  Beleg. Ein durch beide Plattenseiten ragender Stift wurde am Netz abgelehnt;
+  die gemeinsame Freigabe in Menü und Operation prüft jetzt den freien
+  Bohrungsträger getrennt. Weitere rote Gegenproben zeigten acht falsche
+  Freigaben an überlappenden oder flächig angeschlossenen Naben und einen
+  verkürzten Durchzug am Einzelkörper mit innerer Hohlschale. Der Nachgang
+  verlangt deshalb einen vollständigen geometrischen Trennungsbeleg, prüft
+  den Abbruch und zählt positive Außenkörper für die Baugruppenfrage.
+  Dieser Nachgang besteht mit 373 betroffenen Tests, ergänzenden Sicherheits-
+  und Merkerfällen sowie sechs Rechnungen an unveränderten Kundenmodellen.
+  Der unabhängige Nachreview fand jedoch noch vollständige positive
+  Einschließung: Oberflächenkontaktfreiheit allein beweist keine getrennten
+  Materialvolumen. Der neue Gegenfall ist an Menü und Ausführung beider Kerne
+  mit sechs roten Fällen belegt und korrigiert. Der gemeinsame strenge
+  Einschließungsbeleg erlaubt nur ein entschieden freies Materialvolumen;
+  offene Strahlenfragen sperren. Ein zuletzt fehlender Abbruchcallback in der
+  Gitterprüfung ist ebenfalls mit rotem Gegenfall korrigiert. Der endgültige
+  Fachlauf besteht mit 569 Tests, drei abgewählt; weitere 420 Boolean- und
+  Sprachprüfungen sind grün. Sechs Kundenrechnungen, Ruff, Format und mypy
+  sind grün. Der unabhängige Nachreview dieses Kerns war ohne offene Befunde.
+  **Zentrale Zweitprüfung:** Die tatsächlichen Erkennungsarbeiter verloren
+  ihren Abbruchtoken vor der neuen vollständigen Prüfung; der Panelarbeiter
+  besaß keinen Abbruchschalter. Beide Wege reichen ihn jetzt durch
+  `actions_for`/`feature_answers` weiter, Ersatzauftrag und Fensterende brechen
+  ihn ab. Acht rote Gegenfälle stehen grün, einschließlich Abbruch unmittelbar
+  vor der Merkerspeicherung. Sechs weitere rote Fälle belegten die falsche
+  Ablehnung einer gültigen Innenkammer mit freiem Stift. Der neue lesende
+  Materialfamilienbeleg ordnet negative Innenhäute dem positiven Träger zu;
+  unentschiedene Beziehungen und ungültige Vorzeichenketten sperren weiterhin.
+  19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsgegenfälle sind grün.
+  Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt abgewählt;
+  sechs Kundenrechnungen am eingefrorenen Endstand sind ebenfalls grün.
+  Der unabhängige Schlussreview ist ohne offene Codebefunde;
+  zentrales Tor und Integration stehen aus.
+  Die gezielten Belege stehen im
+  [portablen Bericht](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
+  Reproduzierbare Gegenfälle stehen in `tests/test_slot_features.py`
+  (`test_a_fixed_boss_is_not_a_separate_pin_for_the_slot`,
+  `test_an_inner_void_does_not_shorten_a_single_body_slot`).
+  Nachprüfung am Stand `3fd3b1ace`: nicht behoben, die Korrektur aus dem Arbeitsbaum ist nicht committet. Durchgesteckter Stift am Netz abgelehnt („In dieser Bohrung steht Material …“), exakt 1 Teil und Stift weg; auch der Eintragsfall unterscheidet sich weiter zwischen den Kernen.
+
 
 ## Bedienung und Darstellung
 

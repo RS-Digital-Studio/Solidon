@@ -1893,8 +1893,12 @@ def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
     *Auf das Bett setzen* rührt die Dreieckszahl an, also ist es dreimal
     dieselbe Zahl über denselben Körper.
 
-    **Verglichen wird alles außer der Schrittnummer** — Code, Körper, Schwere
-    und die Werte. Ändert eine Operation die Zahl, sagen die beiden Befunde
+    **Verglichen werden Code, Körper, Schwere, Werte und Merkmalverweise**,
+    dazu die unveränderten Orts- und Konturdaten. Das ist Datenidentität,
+    kein numerischer Geometrievergleich: Auch sehr nahe verschiedene Orte
+    dürfen nicht durch Rundung oder eine Toleranz zusammenfallen. Die
+    Schrittnummer gehört nicht zur Aussage. Ändert eine Operation die Zahl
+    oder die Stelle, sagen die beiden Befunde
     Verschiedenes und bleiben beide stehen; das ist der Fall, in dem eine
     Dezimierung das Ziel nicht erreicht hat und `SETTLED_BY` bewusst nichts
     aufhebt. Behalten wird der **letzte**: Ein Prüfbericht beschreibt den
@@ -1911,6 +1915,9 @@ def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
             entry.object_id,
             entry.severity,
             tuple(sorted((name, str(value)) for name, value in (entry.values or {}).items())),
+            entry.feature_ids,
+            entry.location,
+            entry.outline,
         )
         last[key] = index
     keep = set(last.values())
@@ -2599,11 +2606,72 @@ def _checked_continuations(
     return tuple(checked)
 
 
+def _continued_match_result(matched: MatchResult, continued: Collection[FeatureId]) -> MatchResult:
+    """Belegte Übergänge der Operation schlagen die allgemeine Geometriezuordnung.
+
+    Ein absichtlich geändertes Merkmal kann nach seinem neuen Maß nicht mehr
+    als unverändert gelten. Sein Erzeuger kennt den Übergang trotzdem genau;
+    der Matcher darf diese Kennung deshalb weder als Waisen melden noch einem
+    anderen Merkmal geben.
+    """
+    if not continued:
+        return matched
+    mapping = dict(matched.mapping)
+    orphaned = set(matched.orphaned)
+    ambiguous = dict(matched.ambiguous)
+    fresh = set(matched.fresh)
+    for name in sorted(continued):
+        for old, target in tuple(mapping.items()):
+            if old != name and target == name:
+                del mapping[old]
+                orphaned.add(old)
+        for old, candidates in tuple(ambiguous.items()):
+            if old == name or name not in candidates:
+                continue
+            remaining = tuple(candidate for candidate in candidates if candidate != name)
+            if remaining:
+                ambiguous[old] = remaining
+            else:
+                del ambiguous[old]
+                orphaned.add(old)
+        displaced = mapping.get(name)
+        if (
+            displaced is not None
+            and displaced != name
+            and not any(old != name and target == displaced for old, target in mapping.items())
+        ):
+            fresh.add(displaced)
+        mapping[name] = name
+        orphaned.discard(name)
+        ambiguous.pop(name, None)
+        fresh.discard(name)
+    return dataclasses.replace(
+        matched,
+        mapping=mapping,
+        orphaned=tuple(sorted(orphaned)),
+        ambiguous=ambiguous,
+        fresh=tuple(sorted(fresh)),
+    )
+
+
 def _selectable(feature: Feature, triangles: int) -> bool:
     """Ob ein aktuelles Merkmal eine gültige Auswahl am aktuellen Körper trägt."""
     return bool(feature.face_indices) and all(
         0 <= index < triangles for index in feature.face_indices
     )
+
+
+def _native_alias_mapping(
+    matched: MatchResult, aliases: Mapping[FeatureId, FeatureId]
+) -> MatchResult:
+    """Teilumbenennung mit bereits belegten gleichnamigen Merkmalen verbinden.
+
+    Sonst kann ein neues Merkmal deren Namen zuerst beanspruchen und den
+    belegten Nachfolger verdrängen. Andere Zuordnungen werden erst mit einem
+    eigenen Beleg oder einer ausdrücklichen Wahl zu Aliasen.
+    """
+    preserved = {name: found for name, found in matched.mapping.items() if name == found}
+    return dataclasses.replace(matched, mapping=preserved | dict(aliases))
 
 
 def _native_reselection(
@@ -2707,7 +2775,7 @@ def _native_reselection(
     # gezielten Bohrungswechsel; kein zweiter Eintrag unter dem frischen Namen.
     aliased = apply_mapping(
         dict(current.features),
-        MatchResult(mapping=chosen, orphaned=question.orphaned),
+        _native_alias_mapping(question, chosen),
         previous=previous,
     )
     return dataclasses.replace(current, features=aliased), question
@@ -2737,7 +2805,7 @@ def _unchanged(old: Feature, new: Feature) -> bool:
     :data:`EPS_GEOM`, und was eines trägt, trägt auch das andere. Gemessen an
     ``carpet-corner-clip.step``, ``build_tray_v3.step`` und am exakten Quader mit
     Sackbohrung (23.09.2026): Eine Fläche, die der Umbau nicht berührt, kommt
-    bitgleich zurück.
+    bis auf die Toleranz ``EPS_GEOM`` zurück.
 
     **Unberührt heißt wirklich unberührt.** Versetzt man die rechte Seite eines
     Quaders, wachsen Deck, Boden, Vorder- und Rückseite um den Versatz mit; sie
@@ -2779,10 +2847,10 @@ def _unchanged(old: Feature, new: Feature) -> bool:
 def _unchanged_continuations(
     current: SceneObject,
     reference: Mapping[FeatureId, Feature],
-    unproven: Collection[FeatureId],
+    considered: Collection[FeatureId],
     matched: MatchResult,
 ) -> tuple[SceneObject, MatchResult]:
-    """Alte Bezüge, deren eindeutiger Partner unverändert ist, unter ihrem Namen fortführen.
+    """Unveränderte Merkmale unter ihrer bisherigen Kennung fortführen.
 
     Beleg nach P1.4c.2 war nur die Zuordnung auf **denselben** Namen. Die native
     Erkennung nummeriert nach jedem Umbau neu, und eine Fläche, die der Schritt
@@ -2794,6 +2862,8 @@ def _unchanged_continuations(
     dieselbe Geometrie (:func:`_unchanged`), ist das ein Beleg — strenger als
     die Zuordnung, die §21.2 für „ID bleibt“ genügt. Der Partner wird wie bei
     der Neuwahl unter dem alten Namen veröffentlicht (``apply_mapping``).
+    ``considered`` umfasst bei einem Schritt, der Merkmale einführt, alle
+    bisherigen Merkmale; sonst nur die noch gebrauchten Bezüge.
 
     Die Zuordnung danach führt diese Namen auf sich selbst; was auf einen
     umbenannten Partner zeigte, fällt heraus und bleibt damit unbelegt — gefragt
@@ -2801,7 +2871,7 @@ def _unchanged_continuations(
     """
     unchanged = {
         name: found
-        for name in sorted(unproven)
+        for name in sorted(considered)
         if (found := matched.mapping.get(name)) is not None
         and found != name
         and name not in matched.ambiguous
@@ -2813,9 +2883,7 @@ def _unchanged_continuations(
         return current, matched
     aliased = apply_mapping(
         dict(current.features),
-        MatchResult(
-            mapping=unchanged, orphaned=matched.orphaned, ambiguous=dict(matched.ambiguous)
-        ),
+        _native_alias_mapping(matched, unchanged),
         previous=reference,
     )
     renamed = set(unchanged.values()) | set(unchanged) | set(matched.orphaned)
@@ -3654,6 +3722,7 @@ def _with_features(
                 mesh.bounds.diagonal,
                 check_cancelled=watch.raise_if_cancelled,
             )
+            matched = _continued_match_result(matched, continued)
             watch.raise_if_cancelled()
             if set(matched.ambiguous) & referenced:
                 # Ein gleichlautender nativer Topologiename ist kein Beleg
@@ -3677,15 +3746,21 @@ def _with_features(
                         True,
                     ),
                 )
-        if matched is not None and unproven:
-            # **Was der Umbau nicht berührt hat, trägt seinen Namen weiter.** Die
-            # native Erkennung nummeriert neu, und eine unberührte Fläche kam
-            # unter anderem Namen zurück — gefragt wurde nach jeder, auf die eine
-            # Passung zeigte, etwa nach einer Sackbohrung in eine andere Seite.
-            # Bitgleich gemessen, ist sie ein Beleg
-            # (:func:`_unchanged_continuations`, 23.09.2026).
+        if matched is not None and (touches_features or unproven):
+            # **Ein neuer Name darf kein altes Merkmal übernehmen.** Der exakte
+            # Leser nummeriert Bohrungen räumlich: Kommt eine Bohrung links von
+            # einer bestehenden hinzu, wechselt deren rohe Kennung. Ohne
+            # Folgebezug wurde die eindeutige Geometrie bisher nicht unter dem
+            # alten Namen veröffentlicht; beim späteren Umsortieren geriet die
+            # Verlaufsprüfung dann in wechselnde Zuordnungen (RM-218). Schritte,
+            # die Merkmale einführen, bewahren deshalb alle eindeutig
+            # geometrisch unveränderten Vorgänger innerhalb der EPS_GEOM-
+            # Toleranz. Bei anderen Umbauten genügt die Menge der noch
+            # gebrauchten Bezüge. Veränderte Geometrie bleibt unbelegt und
+            # läuft weiter durch die Frage nach §21.3.
+            considered = reference_features if touches_features else unproven
             exact_entry, matched = _unchanged_continuations(
-                exact_entry, reference_features, unproven, matched
+                exact_entry, reference_features, considered, matched
             )
         lost = _unproven_native_references(unproven, exact_entry, matched)
         if lost and matched is not None and scope is not None:

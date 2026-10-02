@@ -38,6 +38,8 @@ entfernt hat.
 | 2026-10-02 | [RM-323: Ältere Langlöcher behalten ihre parametergebundene Richtung (02.10.2026)](#rm-323-ältere-langlöcher-behalten-ihre-parametergebundene-richtung-02102026) |
 | 2026-10-02 | [RM-297: Stapel der Erkennung: Reste aus dem Review (02.10.2026)](#rm-297-stapel-der-erkennung-reste-aus-dem-review-02102026) |
 | 2026-10-02 | [RM-295: Testqualität: Reste aus den Code-Reviews 0.5.1 (02.10.2026)](#rm-295-testqualität-reste-aus-den-code-reviews-051-02102026) |
+| 2026-10-01 | [RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)](#rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-erhalten-01102026) |
+| 2026-10-01 | [RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)](#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026) |
 | 2026-10-01 | [RM-311: SuperSlicer vergleicht G-Code-Werte semantisch (01.10.2026)](#rm-311-superslicer-vergleicht-g-code-werte-semantisch-01102026) |
 | 2026-10-01 | [RM-293: Kleine Härtungen und veraltete Kommentare aus der Durchsicht (01.10.2026)](#rm-293-kleine-härtungen-und-veraltete-kommentare-aus-der-durchsicht-01102026) |
 | 2026-10-01 | [RM-300: Nach dem ersten *Im Slicer öffnen* rechnet der Verlauf neu (01.10.2026)](#rm-300-nach-dem-ersten-im-slicer-öffnen-rechnet-der-verlauf-neu-01102026) |
@@ -33275,7 +33277,7 @@ die Reste stehen als RM-284 bis RM-295 in `ROADMAP.md`.
   `test_brep.py::test_both_kernels_ask_the_same_question_of_a_thin_walled_box`,
   `test_operation_ui.py::test_the_rim_switch_sits_at_the_back_and_follows_the_group`.
   `6e8d0bedc`, `4e145c801`, `53ad8b785`, `81b797456`; Merges `9f19b44d6`, `cbef27715`.
-  Rest am exakten Kern: [RM-284](ROADMAP.md#rm-284).
+  Rest am exakten Kern: [RM-284](ROADMAP-ARCHIV.md#rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026).
 
 ## Release-Sitzung 0.5.1, zweite Runde: zwei Punkte geschlossen (28.09.2026)
 
@@ -34667,3 +34669,161 @@ Der [portable Nachweis](konzepte/nachweise-release-0.5.1/reports/rm225-facetten-
 enthält die Gegenfälle, den Eingangs-Hash, die genaue Kundenmessung und die
 Wiederholung. Fenster-, Renderer- und Leistungsprüfungen bleiben gemäß
 Projektregel Release-Abnahmen; dieser Entwicklungsabschluss ersetzt sie nicht.
+
+## RM-284: Der exakte Kern baut die Rundungsgruppe mit einer gezielten Auslassung (01.10.2026)
+
+<a id="rm-284-der-exakte-kern-baut-die-rundungsgruppe-mit-einer-gezielten-auslassung-01102026"></a>
+
+Beim seitlich offenen Prüfkasten, Radius 2 mm und Auswahl „alle“ konnte
+OpenCASCADE die 17 tragenden Kanten gemeinsam nicht bauen, obwohl jede
+einzeln baubar war. Der reproduzierende Körper ist ein 40 × 30 × 20 mm
+Quader mit einem um (3; 3) mm versetzten Innenraum 34 × 24 × 17 mm:
+3 mm Boden, zwei 6-mm-Seitenwände und zwei offene Seiten. Die frühere
+Beschreibung als Kasten mit durchgehend 3 mm Wand war falsch.
+`fillet_group` baut den vollständigen Satz zuerst auf
+frischer Form, baut jede Kantenkombination im Rückfall höchstens einmal und
+lässt bei Bedarf jeweils eine einzelne Kante aus. Der
+Prüfkasten ergibt nun einen geschlossenen Körper mit unverändert einer
+Komponente und dem gemessenen Volumen 9 951,972135 mm³: 16 Kanten werden
+gerundet, die eine zusätzliche Auslassung wird mit ihrem Ort gemeldet. Die
+ursprünglich zu schmalen vier Kanten behalten ihren eigenen Befund. Direkte
+exakte Einzelwahl und veränderlicher Radius bleiben strikt.
+Das Ergebnisvolumen ist ein Messwert, kein unabhängig hergeleiteter Sollwert.
+Die Abnahme prüft stattdessen das aus den Quadern hergeleitete Quellvolumen
+10 128 mm³, erhaltene Außenmaße und Höhe, native R2-Rundungen sowie acht
+Materialproben an Wandmitten, Hohlraum und beiden Seiten der Kreisquerschnitte.
+
+Am pegboard-goot (senkrechte Kanten, R 1) blieb die ganze Gruppe zwar gültig,
+aber die Tessellierung war offen. Auch jede Gruppe mit einer einzelnen
+Auslassung blieb offen. Die Einzelprüfung erkannte die zwei problematischen
+Kanten 212 und 221; nach ihrem gemeinsamen Ausschluss sind die übrigen sechs
+geschlossen. Der aktuelle STEP-Probeaufruf ergibt ein geschlossenes Bauteil mit
+einer Komponente, Volumen 26 798,415436 mm³ und zwei ausgelassenen Stellen.
+Andere Kanten, die das Netz rundet, finden auf `pegboard-gs-100-v2.step` bei
+R 1 und R 2 noch keine exakte Gegenkante; dieser abgetrennte Zuordnungsrest ist
+als RM-322 offen.
+
+Der Schlusslauf deckte außerdem auf, dass große exakte Radiusänderungen an
+kantengestützten und radialen NURBS-Rundungen ihre Merkmalskennung verlieren
+konnten. Der Builder-Beleg aus `Generated` beziehungsweise die eindeutig
+ermittelte Zylinderfläche samt `Modified`/`Generated` wird über die Kopie auf
+die Ausgabedreiecke abgebildet. `resize_feature` setzt die Kennung nur fort,
+wenn genau ein passendes gerundetes Merkmal belegt ist; ohne eindeutigen
+Flächenbeleg bleibt die allgemeine Zuordnung zuständig. Beide Varianten
+behalten ihren Namen über zwei aufeinanderfolgende Radiusänderungen.
+
+**Nachweis:** `test_both_kernels_ask_the_same_question_of_a_thin_walled_box`,
+`test_a_fillet_group_omits_each_individually_open_edge`,
+`test_a_failed_single_edge_exclusion_is_not_built_twice`,
+`test_a_single_edge_probe_is_reused_by_the_group_exclusion`,
+`test_a_fillet_group_omits_two_edges_that_the_kernel_cannot_build` und
+`test_a_failed_combined_fillet_exclusion_is_not_built_twice` in
+`tests/test_brep.py`,
+`test_a_changed_fillet_keeps_its_name_for_the_next_step` (beide Kernvarianten)
+und `test_a_radially_changed_brep_fillet_keeps_its_name_for_the_next_step` in
+`tests/test_mesh_edges.py`,
+`test_nurbs_radial_edits_keep_the_selected_angular_wall` in
+`tests/test_brep_canonical_surfaces.py` und
+`test_operation_continuation_releases_the_displaced_match_candidate` in
+`tests/test_native_references.py` bestanden gezielt. Der echte pegboard-goot-STEP
+wurde separat geprüft: R 1, acht ausgewählte Rundungen, sechs umgesetzt, zwei
+einzeln offene ausgelassen; das Ergebnis blieb mit einer Komponente
+wasserdicht. Der vollständige Entwicklungslauf und das unabhängige Schlussreview
+stehen noch aus. Fenster- und Leistungsläufe bleiben gemäß Projektregel
+Release-Abnahmen.
+
+**Nachprüfung 02.10.2026:** Drei weitere Fehler wurden vor der Korrektur
+reproduziert: Eine echte native Kopie konnte die ausgewählten Kanten umordnen;
+mehrere Bauversuche teilten dieselbe native Form; ohne Flächenhistorie wurde
+eine allgemeine Merkmalszuordnung als verbindlicher Herkunftsbeleg ausgegeben.
+Jeder neue Kandidat nutzt jetzt eine frische Kopie und deren Kantenhistorie.
+Eine Fortführung entsteht nur aus einem nichtleeren Flächenbeleg mit genau
+einem passenden Merkmal. Die fünf direkten Gegenfälle bestanden nach der
+Korrektur. Der betroffene Fachlauf bestand mit 973 Tests, 104 releasebedingt
+abgewählten Fällen und Exit 0; Ruff und Format für neun Dateien waren grün.
+Der unveränderte pegboard-goot-STEP bestand in beiden Kernen und beiden Güten:
+jeweils dicht und eine Komponente; exakt sechs gerundete und zwei zusätzlich
+ausgelassene Stellen, am Netz acht gerundete Stellen mit Solver `direct`.
+Nach der bestätigten RM225-Integration sind die Cacheversionen `fillet_edges`
+13 und `resize_feature` 14 eingetragen. Der unabhängige Schlussreview fand
+noch Kennungskollisionen beim folgenden Umbenennen unveränderter Nachbarn
+und nach ausdrücklicher Merkmalswahl. Beide Anschlüsse sind test-first
+korrigiert; ein gemeinsamer Helfer schützt belegte Selbstzuordnungen und
+offene Namen. Sechs direkte Fälle prüfen die tatsächlichen Folgeoperationen,
+deren Lage und analytisches Volumen sowie kalten und warmen Verlauf.
+Der aktuelle Abschlussrest ist als [RM-284](ROADMAP.md#rm-284) geführt.
+Der erneute Fachlauf bestand mit 1209 Tests, 104 releasebedingt abgewählt;
+der unabhängige Schlussreview gab die Einheit einschließlich ihres notwendigen
+RM218-Anschlusses ohne offene Codebefunde frei. Eine zentrale Gegenprüfung
+entdeckte danach noch automatische Antworten in zwei Verlaufstests. Beide
+Normalwege sind nun strikt; ein unabhängig entzogener Builder-Beleg lässt
+sie genau an der unerwarteten Neuwahl scheitern. 13 abschließende gezielte
+Fälle und der unabhängige enge Nachreview sind grün. Der anschließende
+Berichtsfix erhält verschiedene Orte, Ränder und Zielmerkmale bei der
+Entdoppelung. Der echte native Zwei-Auslassungen-Fall prüft die registrierte
+Operation und den kalten/warmen Abschlussbericht; 21 gezielte Fälle und
+610 Sprach-/Wertprüfungen sind grün, der unabhängige Nachreview ist ohne
+Befund. Die bestehende Sammelzeile der Oberfläche bleibt erhalten; eine neue
+Mehrstellenanzeige wird nicht behauptet. Entwicklungstor und Integration
+stehen aus; RM-322 bleibt daneben offen.
+Konstruktion, Gegenfälle und Kundenmodell sind im
+[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm284-rundungsgruppen-2026-10-02.md)
+wiederholbar beschrieben.
+
+## RM-320: Ein Stift über der Bohrung bleibt beim Langlochzug erhalten (01.10.2026)
+
+<a id="rm-320-ein-stift-über-der-bohrung-bleibt-beim-langlochzug-01102026"></a>
+
+Beim Ziehen einer Bohrung im Langloch über mehrere Körper nutzte der exakte
+Kern die ganze Baugruppen-Hülltiefe. Ein zweiter Stift in der Bohrung wurde
+deshalb auch oberhalb der Platte abgeschnitten; am Netz blieb sein Überstand.
+Bei mehreren Körpern nutzt *Zum Langloch ziehen* jetzt die gemessene
+Bohrungstiefe. Den Hüllkörperdurchgang behält der Einzelkörperweg.
+
+Die Regression baut eine Platte 40 × 20 × 10 mm mit Bohrung Ø 6 mm und einen
+Stift Ø 5 × 15 mm. Beide Kerne liefern danach zwei Körper, der Stift reicht
+von z = 10 bis 15 mm. Die Erstprobe maß am Netz 97,6 mm³ für den Stift und
+7 357,6 mm³ für die Platte. Diese Messwerte sind keine unabhängigen Sollwerte;
+die Nachprüfung vom 02.10. verwendet π × 2,5² × 5 mm³ für den Stift
+(Netz ±1 mm³, exakt ±0,000001 mm³) und 8000 − (36 + 9π) × 10 mm³ für die
+Netzplatte (±2 mm³). Die Abweichung umfasst Facettierung und die
+0,02-mm-Verlängerung des Netz-Durchzugs, die am Stiftende 0,01 mm zusätzlich
+abträgt.
+
+**Nachweis:** 895 gezielte Tests bestanden, darunter 200 Slot-Tests.
+Unabhängiges Review nach Korrektur der Volumenabnahme ohne weitere Findings.
+Der vollständige Entwicklungslauf ist noch nicht erneut gelaufen; ein Commit
+bleibt bis zu seinem grünen Lauf aus.
+
+**Nachprüfung 02.10.2026:** Die einseitige Erstprobe deckte den Sicherheitsweg
+nicht vollständig ab. Der beidseitige Stift, angeschlossene Naben, eine
+negative Innenhaut und vollständig ineinanderliegende positive Körper
+ergaben weitere rote Gegenfälle. Der gemeinsame Menü-/Operationsbeleg prüft
+jetzt den freien Bohrungsträger, vollständige Kontaktfreiheit und die
+dreiwertige Materialeinschließung; nur ein entschieden freier Beleg erlaubt
+den Schnitt. Die Einzelkörperfrage zählt positive Außenkörper. Der Abbruch
+erreicht auch das vorhandene Gitterzertifikat, wofür zuletzt ein eigener
+roter Gegenfall ergänzt wurde. Die allgemeine Bohrungssicherheitsfrage bleibt
+unverändert; nur `slot_hole` nutzt die Sonderfreigabe, mit Cacheversion 15.
+
+Der abschließende betroffene Lauf bestand mit 569 Tests, drei abgewählten
+Fällen und Exit 0. Drei Boolean-Gegenfälle und 417 Sprachprüfungen bestanden
+zusätzlich. Sechs Rechnungen an unveränderten Kundenmodellen sowie Ruff,
+Format und mypy waren grün. Der unabhängige Schlussreview hat keine offenen
+Befunde. Der aktuelle [RM-320](ROADMAP.md#rm-320) bleibt bis zum zentralen
+Entwicklungstor und der tatsächlichen Integration offen. Eingangs-Hashes,
+analytische Sollwerte, historische Fehlannahmen und Wiederholung stehen im
+[portablen Nachweis](konzepte/nachweise-release-0.5.1/reports/rm320-baugruppen-2026-10-02.md).
+
+Die nachfolgende zentrale Zweitprüfung fand noch den fehlenden Tokenanschluss
+aus den tatsächlichen Erkennungsarbeitern durch `actions_for` und
+`feature_answers`. Acht direkte Arbeiterfälle belegen jetzt Abbruch während
+Kontakt-/Einschließungsprüfung, vor der Merkerspeicherung sowie beim
+Ersatzauftrag und Fensterende. Ein weiterer Nachgang erlaubt eine gültige
+negative Innenhaut zusammen mit einem freien Stift über entschiedene
+Materialfamilien. 19 Familien-/Kammer-/Abbruchfälle und 30 Sicherheitsfälle
+sind grün. Der erneute Fachlauf besteht mit 1010 Tests, 708 releasebedingt
+abgewählt; die sechs Kundenrechnungen am Endstand sind ebenfalls grün.
+Der unabhängige Schlussreview hat die vollständigen RM320-Hunks ohne offene
+Codebefunde freigegeben. Diese Nachgänge bleiben bis zu Entwicklungstor und
+Integration unter dem aktiven RM-320 geführt.

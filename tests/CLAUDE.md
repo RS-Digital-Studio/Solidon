@@ -54,7 +54,7 @@ Fassungen: `konzepte/begruendungen/karte-tests.md`.
 | Entstehen Grundkörper ohne Kernwahl-Haken im richtigen Kern, und wechselt der Verlauf einen Schritt? | `test_kernel_switch.py` |
 | Baut jeder mitgelieferte Baustein am exakten Träger exakt? Merkmalszusagen und Determinismus? | `test_exact_parts.py` · `test_parts.py` (zwei unabhängige Bauten) |
 | Liest der exakte Kern ein importiertes Gewinde ohne Erzeugerwissen? | `test_thread_import.py`, Basiskörper in `data/threads/` |
-| Verrunden, Fase, Wulst, Rundung zurücknehmen · Fläche versetzen, Formschräge — an beiden Kernen? | `test_mesh_edges.py` · `test_mesh_faces.py` |
+| Verrunden, Fase, Wulst, Rundung zurücknehmen · Fläche versetzen, Formschräge — an beiden Kernen, bleiben Rundungsgruppen am exakten Kern geschlossen und bleibt eine geänderte Rundung über den Folgeschritt dieselbe? | `test_brep.py` · `test_mesh_edges.py` · `test_mesh_faces.py` |
 | Lassen Merkmalshandlungen den Körper ohne Narben und alte Dreiecksnummern? | `test_feature_moves_keep_shape.py` |
 | Bleibt beim Bohren in freier Richtung jede Ecke außerhalb des Schnitts Bit für Bit, und öffnet sich die Mündung an einer schrägen STL-Fläche? | `test_cut_in_world.py` |
 | Findet die vektorisierte Selbstdurchdringung dieselben Paare wie der skalare Weg? | `test_self_intersections.py` |

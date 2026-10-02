@@ -269,6 +269,12 @@ dessen Handlungen (`perceive.actions.part_actions`), und die Werte gehen über
 - **Späte Antworten verfallen.** Arbeiteraufträge binden `project_generation`,
   Dokument, Anfrage oder Revision; Antworten nach einem Wechsel werden
   verworfen. `release()` wartet über die Leine aufs Threadende (`wartezeit.md`).
+- **Merkmalantworten tragen den Abbruch bis in den Kern.** Der örtliche
+  Erkennungsarbeiter reicht seinen Token an `actions_for`; der Arbeiter des
+  Merkmalfensters teilt ihn über `feature_answers` mit derselben Auskunft.
+  Neuer Arbeiterauftrag und Fensterende brechen den bisherigen Antwortauftrag
+  ab. Ein Abbruch liefert weder eine Antwort ans Panel noch einen neuen
+  gemeinsamen Sicherheitsbeleg im Merker.
 
 ## Stolperfallen
 

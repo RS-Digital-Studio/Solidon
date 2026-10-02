@@ -7040,6 +7040,7 @@ SHARED_ANSWERS: Final[frozenset[str]] = frozenset(
         "cavity_surface",
         "same_surface_patch",
         "hole_is_clear",
+        "hole_has_separate_contents",
         "has_own_body",
         "voids",
     }
@@ -7294,6 +7295,8 @@ def remembered(
             answers.move_to_end(key)
             return answers[key]
     value = compute()
+    if check_cancelled is not None:
+        check_cancelled()
     with _MEMORY_LOCK:
         answers = _SUPPORT_CACHE.setdefault(name, OrderedDict())
         answers[key] = value

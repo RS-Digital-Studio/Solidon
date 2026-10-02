@@ -85,6 +85,13 @@ def _name_at(result: object, x: float) -> str:
     )
 
 
+def _document_without_numbering(history: History) -> dict[str, object]:
+    """Der Projektinhalt nach Strg+Z; fortlaufende Zähler sind kein Zustand."""
+    data = document_to_data(history.document)
+    data.pop("numbering", None)
+    return data
+
+
 def _widen(history: History, name: str) -> None:
     history.apply(
         "Vergrößern",
@@ -98,19 +105,25 @@ def _widen(history: History, name: str) -> None:
     )
 
 
-def test_moving_a_hole_before_another_keeps_the_resize_on_its_hole(profile: Profile) -> None:
-    """P7.2 am Netz: Die Namen tauschen, der Verweis folgt seiner Bohrung.
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_moving_a_hole_before_another_keeps_the_resize_on_its_hole(
+    profile: Profile, kernel: str
+) -> None:
+    """P7.2: Die Namen tauschen, der Verweis folgt seiner Bohrung.
 
     **Die Gegenprobe steht im Test.** Derselbe Plan ohne Prüfung übernommen
-    vergrößert still die andere Bohrung — genau das „still umbiegen", das
-    §21.3 verbietet. Mit Prüfung folgt der Verweis, und ein Befund sagt es.
+    vergrößert am Netz und am exakten Körper still die andere Bohrung — genau
+    das „still umbiegen", das §21.3 verbietet. Mit Prüfung folgt der Verweis,
+    und ein Befund sagt es.
     """
-    history = _plate("mesh")
+    history = _plate(kernel)
     _cache, run = _runner(profile)
     base = run(history.document)
     _widen(history, _name_at(base, LEFT_X))
     base = run(history.document)
     assert _holes(base)[LEFT_X] > WIDENED - 0.5 > _holes(base)[RIGHT_X]
+    before = _document_without_numbering(history)
+    before_hashes = dict(base.object_hashes)
     ops = history.operations
     left, right = ops[1], ops[2]
     context = dependencies(history.document, base)
@@ -120,6 +133,7 @@ def test_moving_a_hole_before_another_keeps_the_resize_on_its_hole(profile: Prof
     unchecked = _holes(run(history.document))
     assert unchecked[RIGHT_X] > WIDENED - 0.5, "ohne Prüfung trifft der Verweis still die andere"
     history.undo()
+    assert _document_without_numbering(history) == before
 
     plan = history.plan_move([right.id], left.id, context)
     revision = revise(history, plan, evaluate=run, baseline=base, context=context)
@@ -128,6 +142,9 @@ def test_moving_a_hole_before_another_keeps_the_resize_on_its_hole(profile: Prof
     moved = _holes(run(history.document))
     assert moved[LEFT_X] > WIDENED - 0.5, "die linke Bohrung bleibt die vergrößerte"
     assert moved[RIGHT_X] < DRILLED + 0.5
+    history.undo()
+    assert _document_without_numbering(history) == before
+    assert dict(run(history.document).object_hashes) == before_hashes
 
 
 @pytest.mark.parametrize("kernel", ["mesh", "brep"])
@@ -208,9 +225,71 @@ def test_inserting_a_hole_early_keeps_a_later_resize_on_its_hole(profile: Profil
     assert _holes(run(history.document)) == _holes(base), "Strg+Z stellt die alte Folge her"
 
 
-def test_a_fit_follows_its_hole_when_the_names_swap(profile: Profile) -> None:
+@pytest.mark.parametrize("insert_x", [0.0, 30.0], ids=["zwischen", "rechts"])
+def test_inserting_an_exact_bore_between_steps_keeps_the_later_reference(
+    profile: Profile, insert_x: float
+) -> None:
+    """P7.1: Eine Bohrung zwischen zwei Schritten darf keinen alten Namen übernehmen.
+
+    Bei ``insert_x=0`` liegt das neue Loch auch geometrisch zwischen beiden.
+    Bei ``insert_x=30`` wird der neue Schritt vor die rechte Bohrung gesetzt,
+    seine Geometrie liegt aber rechts davon — der Erkennungsschlüssel wechselt.
+    In beiden Fällen folgt die spätere Vergrößerung der rechten Bohrung.
+    """
+    history = _plate("brep")
+    _cache, run = _runner(profile)
+    base = run(history.document)
+    _widen(history, _name_at(base, RIGHT_X))
+    base = run(history.document)
+    assert _holes(base)[RIGHT_X] > WIDENED - 0.5 > _holes(base)[LEFT_X]
+    before = _document_without_numbering(history)
+    before_hashes = dict(base.object_hashes)
+    right = history.operations[2]
+    plan = history.plan_insert(
+        right.id,
+        "Bohrung einfügen",
+        [
+            OperationDraft(
+                op="drill_brep_hole",
+                inputs=("obj_1",),
+                params={
+                    "diameter": DRILLED,
+                    "x": insert_x,
+                    "y": 0.0,
+                    "z": 10.0,
+                    "depth": 10.0,
+                },
+            )
+        ],
+    )
+
+    revision = revise(
+        history,
+        plan,
+        evaluate=run,
+        baseline=base,
+        context=dependencies(history.document, base),
+    )
+    assert [finding.code for finding in revision.findings] == ["history.reference_followed"]
+    commit(history, revision)
+    after = run(history.document)
+    holes = _holes(after)
+    assert set(holes) == {LEFT_X, insert_x, RIGHT_X}
+    assert holes[LEFT_X] < DRILLED + 0.5
+    assert holes[insert_x] < DRILLED + 0.5
+    assert holes[RIGHT_X] > WIDENED - 0.5
+    resize = history.operations[-1]
+    assert resize.params["at_feature"] == _name_at(after, RIGHT_X)
+
+    history.undo()
+    assert _document_without_numbering(history) == before
+    assert dict(run(history.document).object_hashes) == before_hashes
+
+
+@pytest.mark.parametrize("kernel", ["mesh", "brep"])
+def test_a_fit_follows_its_hole_when_the_names_swap(profile: Profile, kernel: str) -> None:
     """Eine Passung am Endstand folgt ihrem Merkmal wie ein Schritt (§14)."""
-    history = _plate("mesh")
+    history = _plate(kernel)
     _cache, run = _runner(profile)
     base = run(history.document)
     name = _name_at(base, LEFT_X)
@@ -274,28 +353,6 @@ def test_a_lost_reference_asks_and_a_refusal_changes_nothing(profile: Profile) -
     revision = revise(history, plan, evaluate=run, baseline=base, ask=lambda q, c: c[0])
     commit(history, revision)
     assert _holes(run(history.document))[RIGHT_X] > WIDENED - 0.5
-
-
-def test_an_exact_body_that_would_halt_is_refused_without_change(profile: Profile) -> None:
-    """Hält der Vorschlag an, wird abgesagt, und das Dokument bleibt unberührt.
-
-    Am exakten Körper verschiebt ``drill_brep_hole`` die Namen vorhandener
-    Bohrungen (vorbestehender Befund, Bericht p7verlauf §3); die Umstellung
-    hält im Vorschlag an — und wird deshalb nicht übernommen.
-    """
-    history = _plate("brep")
-    _cache, run = _runner(profile)
-    base = run(history.document)
-    _widen(history, _name_at(base, LEFT_X))
-    base = run(history.document)
-    before = document_to_data(history.document)
-    ops = history.operations
-    context = dependencies(history.document, base)
-    plan = history.plan_move([ops[2].id], ops[1].id, context)
-    with pytest.raises(UserError) as caught:
-        revise(history, plan, evaluate=run, baseline=base, context=context)
-    assert caught.value.suggestions
-    assert document_to_data(history.document) == before
 
 
 def test_a_resting_step_survives_saving_and_reopens_to_the_same_part(

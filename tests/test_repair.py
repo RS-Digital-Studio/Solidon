@@ -2011,6 +2011,164 @@ def test_a_part_inside_a_part_is_named_and_left_as_it_is() -> None:
     assert result.mesh.volume == pytest.approx(9000.0, rel=1e-12)
 
 
+@pytest.mark.parametrize("case", ["buried", "apart", "cavity", "rattle", "undecided"])
+def test_the_nested_parts_question_keeps_material_and_uncertainty_apart(
+    monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Nur ein entschiedenes Nein belegt freie Teile; eine Rassel liegt in Luft."""
+    from app.core.geom import repair as repair_module
+    from app.core.geom.repair import has_nested_parts, parts_inside_parts
+
+    inner = _box(10.0, at=(2.0, 1.0, 0.5))
+    pieces = [_box(20.0), inner]
+    if case == "apart":
+        inner.apply_translation((40.0, 0.0, 0.0))
+    elif case == "cavity":
+        inner.invert()
+    elif case == "rattle":
+        inner.invert()
+        pieces.append(_box(2.0, at=(2.0, 1.0, 0.5)))
+    elif case == "undecided":
+        monkeypatch.setattr(repair_module._Shells, "inside", lambda *args: None)
+    body = trimesh.util.concatenate(pieces)
+    expected = None if case == "undecided" else case == "buried"
+
+    assert has_nested_parts(body) is expected
+    assert len(parts_inside_parts(body)) == int(case == "buried")
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["cavity", "rattle", "negative_root", "negative_child", "positive_child", "undecided"],
+)
+def test_material_families_assign_only_direct_void_skins(
+    monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """Innenhaut und Materialinsel bleiben getrennt; ungültige Elternketten sperren."""
+    from app.core.geom import repair as repair_module
+
+    outer = _box(20.0)
+    cavity = _box(10.0, at=(2.0, 1.0, 0.5))
+    cavity.invert()
+    island = _box(2.0, at=(2.0, 1.0, 0.5))
+    pieces = [outer, cavity]
+    if case == "rattle":
+        pieces.append(island)
+    elif case == "negative_root":
+        cavity.apply_translation((40.0, 0.0, 0.0))
+    elif case == "negative_child":
+        island.invert()
+        pieces.append(island)
+    elif case == "positive_child":
+        cavity.invert()
+    elif case == "undecided":
+        monkeypatch.setattr(repair_module._Shells, "inside", lambda *args: None)
+    body = trimesh.util.concatenate(pieces)
+
+    families = repair_module.material_part_families(body)
+
+    if case not in ("cavity", "rattle"):
+        assert families is None
+        return
+    assert families is not None
+    assert len(families) == (2 if case == "rattle" else 1)
+    assert sorted(np.concatenate(families).tolist()) == list(range(len(body.faces)))
+    volumes = sorted(
+        float(
+            trimesh.Trimesh(vertices=body.vertices, faces=body.faces[faces], process=False).volume
+        )
+        for faces in families
+    )
+    expected = [2.0**3, 20.0**3 - 10.0**3] if case == "rattle" else [20.0**3 - 10.0**3]
+    assert volumes == pytest.approx(expected, abs=1e-9)
+
+
+def test_material_families_cancel_while_assigning_a_negative_skin(monkeypatch):
+    """Auch die neu befragte negative Innenhaut bekommt den Schalter des Aufrufers."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import repair as repair_module
+    from app.core.scene.cancel import CancelSignal
+
+    cavity = _box(10.0, at=(2.0, 1.0, 0.5))
+    cavity.invert()
+    body = trimesh.util.concatenate([_box(20.0), cavity])
+    token = CancelSignal()
+    original = repair_module._Shells.inside
+    calls = 0
+
+    def stop_at_the_inner_skin(shells, inner, outer):
+        nonlocal calls
+        calls += 1
+        assert shells.volumes[inner] < 0.0
+        assert shells._cancelled is token
+        token.cancel()
+        return original(shells, inner, outer)
+
+    monkeypatch.setattr(repair_module._Shells, "inside", stop_at_the_inner_skin)
+    with pytest.raises(OperationCancelled):
+        repair_module.material_part_families(body, cancelled=token)
+    assert calls == 1
+
+
+@pytest.mark.parametrize("phase", ["shells", "ray", "certificate", "crossing"])
+def test_the_nested_parts_question_can_cancel_during_its_geometric_proof(
+    monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    """Schalenaufbau, Strahl, Gitterzertifikat und genaue Suche tragen den Abbruch."""
+    from app.core.errors import OperationCancelled
+    from app.core.geom import repair as repair_module
+    from app.core.perceive import features
+    from app.core.scene.cancel import CancelSignal
+
+    body = trimesh.util.concatenate([_box(20.0), _box(10.0, at=(2.0, 1.0, 0.5))])
+    token = CancelSignal()
+    if phase == "shells":
+        module, name = repair_module, "_labelled_shells"
+    elif phase == "ray":
+        module, name = features, "_point_inside_shell"
+    else:
+        crossing, _plate_faces = _block_across_a_bore(inverted=False)
+        body = crossing.raw
+        if phase == "certificate":
+            module, name = features, "_shells_do_not_cross"
+        else:
+            module, name = repair_module, "_first_crossing_between"
+            monkeypatch.setattr(features, "_shells_do_not_cross", lambda *args, **kwargs: False)
+    original = getattr(module, name)
+    calls = 0
+    certificate_checks = 0
+
+    def stopped(*args, **kwargs):
+        nonlocal calls, certificate_checks
+        calls += 1
+        if phase == "certificate":
+            supplied_check = kwargs.get("check_cancelled")
+
+            def cancelled_during_grid():
+                nonlocal certificate_checks
+                certificate_checks += 1
+                if certificate_checks == 2:
+                    token.cancel()
+                if supplied_check is not None:
+                    supplied_check()
+
+            kwargs["check_cancelled"] = cancelled_during_grid
+            original(*args, **kwargs)
+            pytest.fail("Das Gitterzertifikat lief trotz Abbruch bis zu seiner Antwort.")
+        if phase == "crossing":
+            assert kwargs["cancelled"] is token
+        result = original(*args, **kwargs)
+        token.cancel()
+        return result
+
+    monkeypatch.setattr(module, name, stopped)
+    with pytest.raises(OperationCancelled):
+        repair_module.has_nested_parts(body, cancelled=token)
+    assert calls == 1, "Der Abbruch muss an der gewählten Geometriephase ankommen."
+    if phase == "certificate":
+        assert certificate_checks == 2, "Der Abbruch muss während der Gitterprüfung erfolgen."
+
+
 def test_parts_that_all_face_outward_shoot_no_ray_to_be_turned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

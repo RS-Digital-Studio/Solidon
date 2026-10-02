@@ -2244,20 +2244,246 @@ def test_a_changed_fillet_keeps_its_name_for_the_next_step(kernel: str) -> None:
             profile,
             registry=registry,
             sources=ProjectSources(project),
-            ask=lambda question, choices: choices[0],
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Zuordnungsfrage: {question}"),
         )
         assert result.complete, [
             (finding.code, str(finding.message)) for finding in result.scene.report.findings
         ]
+        assert not result.matches and not result.blocked_references
         return result.scene.objects[target]
 
     rounded = step("fillet_edges", radius=2.0, edges="vertical")
     name = min(n for n, f in rounded.features.items() if f.kind == "fillet")
-    wider = step("resize_feature", at_feature=name, diameter=6.0)
+    wider_radius = 12.0 if kernel == "brep" else 3.0
+    next_radius = 10.0 if kernel == "brep" else 2.5
+    wider = step("resize_feature", at_feature=name, diameter=wider_radius * 2.0)
     assert name in wider.features, sorted(wider.features)
-    assert float(wider.features[name].params["radius"]) == pytest.approx(3.0, abs=0.05)
-    again = step("resize_feature", at_feature=name, diameter=5.0)
-    assert float(again.features[name].params["radius"]) == pytest.approx(2.5, abs=0.05)
+    assert float(wider.features[name].params["radius"]) == pytest.approx(wider_radius, abs=0.05)
+    again = step("resize_feature", at_feature=name, diameter=next_radius * 2.0)
+    assert float(again.features[name].params["radius"]) == pytest.approx(next_radius, abs=0.05)
+    if kernel == "brep":
+        for changed, radius in ((wider, wider_radius), (again, next_radius)):
+            feature = changed.features[name]
+            assert feature.params["radius"] == pytest.approx(radius, abs=1e-6, rel=0.0)
+            assert all(
+                feature.params["centre"][axis] * rounded.features[name].params["centre"][axis] > 0.0
+                for axis in (0, 1)
+            )
+            neighbours = [
+                entry
+                for identifier, entry in changed.features.items()
+                if entry.kind == "fillet" and identifier != name
+            ]
+            assert len(neighbours) == 3
+            assert all(
+                entry.params["radius"] == pytest.approx(2.0, abs=1e-6, rel=0.0)
+                for entry in neighbours
+            )
+            assert changed.mesh.volume == pytest.approx(
+                40.0 * 30.0 * 20.0 - (3.0 * 4.0 + radius**2) * (1.0 - math.pi / 4.0) * 20.0,
+                abs=1e-6,
+                rel=0.0,
+            )
+            assert changed.mesh.is_closed and changed.mesh.is_watertight
+            assert changed.mesh.solid_count == 1
+
+
+@pytest.mark.parametrize("history", ["missing", "ambiguous"])
+def test_a_changed_brep_fillet_without_unique_face_history_leaves_matching_to_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+    history: str,
+) -> None:
+    """Nähe zu vier Nachbarrundungen ersetzt keinen eindeutigen Builder-Flächenbeleg."""
+    import dataclasses
+
+    exact_kernel()
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+
+    solid = edit.fillet(edit.box(WIDTH, DEPTH, HEIGHT), 2.0, "vertical")
+    features = features_of(solid)
+    fillets = [feature for feature in features.values() if feature.kind == "fillet"]
+    assert len(fillets) == 4
+    selected = fillets[0]
+    name = "selected_rounding"
+    del features[selected.id]
+    features[name] = dataclasses.replace(selected, id=name)
+    source = SceneObject(id="obj_1", name="Quader", mesh=solid, kind="brep", features=features)
+    original_reround = edit.reround_with_created_triangles
+
+    def uncertain_history(*args: Any, **kwargs: Any) -> Any:
+        changed, triangles = original_reround(*args, **kwargs)
+        assert triangles, "der echte Builder muss den positiven Kontrollfall belegen"
+        if history == "missing":
+            return changed, ()
+        ambiguous = tuple(
+            index
+            for feature in features_of(changed).values()
+            if feature.kind == "fillet"
+            for index in feature.face_indices
+        )
+        assert set(ambiguous) > set(triangles)
+        return changed, ambiguous
+
+    monkeypatch.setattr(edit, "reround_with_created_triangles", uncertain_history)
+
+    result = run("resize_feature", source, at_feature=name, diameter=5.0)
+
+    assert not result.feature_continuations
+    changed = result.outputs[0].mesh
+    assert result.outputs[0].features == features_of(changed)
+    # Genau eine von vier Rundungen wechselt von R 2 auf R 2,5; Höhe 20 mm.
+    assert changed.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - (3.0 * 4.0 + 6.25) * (1.0 - math.pi / 4.0) * HEIGHT,
+        abs=1e-6,
+        rel=0.0,
+    )
+
+
+@pytest.mark.parametrize("with_history", [False, True], ids=["history_missing", "history_present"])
+def test_a_radially_changed_brep_fillet_keeps_its_name_for_the_next_step(
+    monkeypatch: pytest.MonkeyPatch, with_history: bool
+) -> None:
+    """Nur belegte radiale NURBS-Flächen tragen ihren Bezug über zwei Radiuswechsel."""
+    import dataclasses as _dataclasses
+
+    exact_kernel()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_NurbsConvert
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+    from app.core.registry import OperationSpec, Registry
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import FeatureRef
+
+    turn = math.radians(184.0)
+    analytic = edit.boolean(
+        "difference",
+        [
+            Solid(BRepPrimAPI_MakeCylinder(16.0, 17.0, turn).Shape()),
+            Solid(BRepPrimAPI_MakeCylinder(12.0, 17.0, turn).Shape()),
+        ],
+    )
+    body = Solid(BRepBuilderAPI_NurbsConvert(analytic.shape, True).Shape())
+    load_operations()
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    project = new_project("centauri-carbon-2", "petg")
+    registry = Registry()
+    for spec in REGISTRY.all():
+        registry.register(spec)
+    features = features_of(body)
+    selected = min(
+        (feature for feature in features.values() if feature.kind == "fillet"),
+        key=lambda feature: feature.params["radius"],
+    )
+    assert selected.params["radius"] == pytest.approx(12.0, abs=1e-6)
+    # Die bisherige Kennung ist kein frisch gelesener Topologiename. Nur die
+    # tatsächliche Flächenhistorie darf sie nach dem Radiuswechsel bestätigen.
+    name = "selected_radial_rounding"
+    del features[selected.id]
+    features[name] = _dataclasses.replace(selected, id=name)
+    seed = SceneObject(id="", name="Kreissektor", mesh=body, kind="brep", features=features)
+    registry.register(
+        OperationSpec(
+            name="probe_body",
+            title="Kreissektor",
+            category="primitive",
+            params=BaseParams,
+            fn=lambda ctx: OpResult(outputs=[_dataclasses.replace(seed)]),
+            consumes=0,
+            produces=1,
+        )
+    )
+    history = History(project.document, registry=registry)
+    history.apply("Kreissektor", [OperationDraft(op="probe_body")])
+    target = project.document.ops[0].outputs[0]
+    base = evaluate(
+        project.document,
+        profile,
+        registry=registry,
+        sources=ProjectSources(project),
+        ask=lambda question, choices: pytest.fail(f"Unerwartete Zuordnungsfrage: {question}"),
+    )
+    assert base.complete
+    assert not base.matches and not base.blocked_references
+
+    if not with_history:
+        original_reround = edit.reround_with_created_triangles
+        witnessed: list[tuple[int, ...]] = []
+
+        def without_history(*args: Any, **kwargs: Any) -> Any:
+            changed, triangles = original_reround(*args, **kwargs)
+            assert triangles, "der echte radiale Builder muss den Kontrollfall belegen"
+            witnessed.append(triangles)
+            return changed, ()
+
+        monkeypatch.setattr(edit, "reround_with_created_triangles", without_history)
+        for diameter in (26.0, 22.0):
+            history.apply(
+                "Radiale Rundung ändern",
+                [
+                    OperationDraft(
+                        op="resize_feature",
+                        inputs=(target,),
+                        params={"at_feature": name, "diameter": diameter},
+                        seed=1,
+                    )
+                ],
+            )
+        stopped = evaluate(
+            project.document,
+            profile,
+            registry=registry,
+            sources=ProjectSources(project),
+        )
+        assert len(witnessed) == 1, "die zweite Änderung darf den verlorenen Bezug nicht benutzen"
+        assert not stopped.complete
+        assert stopped.stopped_at == project.document.ops[-2].id
+        assert stopped.blocked_references == (FeatureRef(target, name),)
+        assert not stopped.matches
+        assert any(
+            finding.code == "op.resize_feature.NativeReferenceLost"
+            for finding in stopped.scene.report.findings
+        )
+        unchanged = stopped.scene.objects[target]
+        assert unchanged.features[name].params["radius"] == pytest.approx(12.0, abs=1e-6)
+        assert unchanged.mesh.volume == pytest.approx(
+            (16.0**2 - 12.0**2) * turn / 2.0 * 17.0, abs=1e-6, rel=0.0
+        )
+        return
+
+    def step(op: str, **params: Any) -> SceneObject:
+        history.apply(op, [OperationDraft(op=op, inputs=(target,), params=params, seed=1)])
+        result = evaluate(
+            project.document,
+            profile,
+            registry=registry,
+            sources=ProjectSources(project),
+            ask=lambda question, choices: pytest.fail(f"Unerwartete Zuordnungsfrage: {question}"),
+        )
+        assert result.complete, [
+            (finding.code, str(finding.message)) for finding in result.scene.report.findings
+        ]
+        assert not result.matches and not result.blocked_references
+        return result.scene.objects[target]
+
+    changed = step("resize_feature", at_feature=name, diameter=26.0)
+    assert name in changed.features, sorted(changed.features)
+    assert float(changed.features[name].params["radius"]) == pytest.approx(13.0, abs=1e-6)
+    assert changed.mesh.volume == pytest.approx(
+        (16.0**2 - 13.0**2) * turn / 2.0 * 17.0, abs=1e-6, rel=0.0
+    )
+    changed_again = step("resize_feature", at_feature=name, diameter=22.0)
+    assert float(changed_again.features[name].params["radius"]) == pytest.approx(11.0, abs=1e-6)
+    assert changed_again.mesh.volume == pytest.approx(
+        (16.0**2 - 11.0**2) * turn / 2.0 * 17.0, abs=1e-6, rel=0.0
+    )
+    for result in (changed, changed_again):
+        assert result.mesh.is_closed and result.mesh.is_watertight
+        assert result.mesh.solid_count == 1
 
 
 def test_the_top_edges_of_a_hip_roof_house_are_its_eaves() -> None:

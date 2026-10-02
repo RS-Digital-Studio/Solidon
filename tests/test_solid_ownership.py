@@ -1192,8 +1192,10 @@ def test_a_copy_maps_every_native_edge_by_history_not_by_visiting_order(
         )
 
 
+@pytest.mark.parametrize("operation", ["fillet", "fillet_group"])
 def test_an_explicit_edge_selection_survives_a_genuine_copy_edge_reordering(
     monkeypatch: pytest.MonkeyPatch,
+    operation: str,
 ) -> None:
     """Die am Eigentümer gewählte Kante wird an der vertauschten Arbeitskopie verrundet —
     nicht ihr Zwilling am anderen Körper."""
@@ -1212,7 +1214,11 @@ def test_an_explicit_edge_selection_survives_a_genuine_copy_edge_reordering(
     before = _native_selection_state(source)
     edge_mappings = _reversing_copy(monkeypatch, builder)
 
-    result = edit.fillet(source, 3.0, "vertical", selected_edges=chosen)
+    if operation == "fillet_group":
+        result, skipped = edit.fillet_group(source, 3.0, chosen)
+        assert not skipped
+    else:
+        result = edit.fillet(source, 3.0, "vertical", selected_edges=chosen)
 
     assert len(edge_mappings) >= 1
     assert edge_mappings[0] != tuple(range(source.edge_count))

@@ -1041,8 +1041,14 @@ class _Shells:
     zusammengefasst, ohne Kopie der Ecken (Review R20).
     """
 
-    def __init__(self, body: trimesh.Trimesh) -> None:
+    def __init__(self, body: trimesh.Trimesh, *, cancelled: CancelToken | None = None) -> None:
+        self._cancelled = cancelled
+        self._check_cancelled = (
+            cancelled.raise_if_cancelled if cancelled is not None else lambda: None
+        )
+        self._check_cancelled()
         self.components, labels, self.volumes = _labelled_shells(body)
+        self._check_cancelled()
         count = len(self.components)
         self.faces = np.asarray(body.faces, dtype=np.int64)
         self.triangles = np.asarray(body.triangles, dtype=np.float64)
@@ -1054,6 +1060,7 @@ class _Shells:
         self._outer: dict[int, tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]] = {}
         self._inner: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         self._per_triangle: tuple[np.ndarray, np.ndarray] | None = None
+        self._check_cancelled()
 
     def containers_of(
         self, inners: Sequence[int]
@@ -1071,17 +1078,22 @@ class _Shells:
         wanted = np.asarray(inners, dtype=np.int64)
         rows = max(1, _SHELL_BLOCK // max(1, len(self.low)))
         for start in range(0, len(wanted), rows):
+            self._check_cancelled()
             block = wanted[start : start + rows]
             boxed = np.ones((len(block), len(self.low)), dtype=bool)
             for axis in range(3):
+                self._check_cancelled()
                 boxed &= self.low[None, :, axis] <= self.low[block, None, axis]
                 boxed &= self.high[None, :, axis] >= self.high[block, None, axis]
             for row, inner in enumerate(block.tolist()):
+                self._check_cancelled()
                 found: list[tuple[int, bool | None]] = []
                 for other in np.flatnonzero(boxed[row]).tolist():
+                    self._check_cancelled()
                     if other == inner:
                         continue
                     answer = self.inside(inner, other)
+                    self._check_cancelled()
                     if answer is not False:
                         found.append((other, answer))
                 yield inner, found
@@ -1111,18 +1123,25 @@ class _Shells:
             _triangle_bounds,
         )
 
+        self._check_cancelled()
         if outer not in self._outer:
             shell = self.triangles[self.components[outer]]
             self._outer[outer] = (shell, _triangle_bounds(shell))
         shell, bounds = self._outer[outer]
         point = self.triangles[self.components[inner][0], 0]
+        self._check_cancelled()
         answer = _point_inside_shell(point, shell, bounds)
+        self._check_cancelled()
         if answer is False:
             # Außen oder quer durch die Wand — ganz darin liegt es jedenfalls nicht.
             return False
         if inner not in self._inner:
             self._inner[inner] = _triangle_bounds(self.triangles[self.components[inner]])
-        if not _shells_do_not_cross(self._inner[inner], bounds):
+        disjoint = _shells_do_not_cross(
+            self._inner[inner], bounds, check_cancelled=self._check_cancelled
+        )
+        self._check_cancelled()
+        if not disjoint:
             crossing = self._crosses(inner, outer)
             if crossing is None:
                 return None
@@ -1137,6 +1156,7 @@ class _Shells:
         ``inner``; das Budget ist das der Frage beim Einlesen
         (:data:`CROSSING_PARTS_PAIRS`).
         """
+        self._check_cancelled()
         if self._per_triangle is None:
             self._per_triangle = (self.triangles.min(axis=1), self.triangles.max(axis=1))
         low, high = self._per_triangle
@@ -1150,8 +1170,16 @@ class _Shells:
         if not len(near):
             return False
         found, _spent, complete = _first_crossing_between(
-            self.triangles, self.faces, low, high, one, near, CROSSING_PARTS_PAIRS
+            self.triangles,
+            self.faces,
+            low,
+            high,
+            one,
+            near,
+            CROSSING_PARTS_PAIRS,
+            cancelled=self._cancelled,
         )
+        self._check_cancelled()
         if found is not None:
             return True
         return False if complete else None
@@ -1236,19 +1264,94 @@ def parts_inside_parts(body: trimesh.Trimesh) -> list[tuple[float, float, float]
     aller belegt umschließenden Schalen: ab eins liegt die Schale im Material.
     Gefragt nach :func:`turn_shells_outward`, am geschlossenen Netz.
     """
+    return [place for place, depth, _undecided in _part_containment(body) if depth >= 1]
+
+
+def has_nested_parts(body: trimesh.Trimesh, *, cancelled: CancelToken | None = None) -> bool | None:
+    """Ob eine positive Schale im Material einer anderen liegt; ``None`` ohne Beleg.
+
+    Dieselbe Materialtiefe wie :func:`parts_inside_parts`, aber eine unsichere
+    Einschließung wird nicht als freie Baugruppe ausgegeben. Nur ``False``
+    belegt, dass keine positive Schale ganz in fremdem Material liegt.
+    Wie die Diagnose setzt die Frage ein geschlossenes, konsistent gerichtetes
+    Netz voraus.
+    Überschneidung und Kontakt bleiben die eigene Frage :func:`parts_that_cross`.
+    """
+    undecided = False
+    for _place, depth, unknown in _part_containment(body, cancelled=cancelled):
+        if unknown:
+            undecided = True
+        elif depth >= 1:
+            return True
+    return None if undecided else False
+
+
+def material_part_families(
+    body: trimesh.Trimesh, *, cancelled: CancelToken | None = None
+) -> list[np.ndarray] | None:
+    """Positive Körper mit ihren direkten negativen Innenhäuten; ``None`` ohne Beleg.
+
+    Wie bei der Luftkammererkennung gehört eine Schale zum kleinsten belegt
+    umfassenden Elternteil. Wurzeln sind positiv, Material und Luft wechseln
+    entlang jeder Elternkette. Eine positive Insel in einer Kammer ist ein
+    eigener Körper und gehört nicht zur Familie ihres äußeren Trägers.
+    Unsichere Beziehungen oder widersprüchliche Elternketten sperren.
+
+    Der Aufrufer belegt vorher geschlossene, konsistent gerichtete Schalen
+    und schließt ihre Kontakte mit :func:`parts_that_cross` vollständig aus.
+    Die Strahlen und Einschließungszertifikate teilt dieser Weg über
+    :class:`_Shells` mit der Reparatur und der Booleschen Vorprüfung.
+    """
+    shells = _Shells(body, cancelled=cancelled)
+    if not np.isfinite(shells.volumes).all() or np.any(np.abs(shells.volumes) <= 0.0):
+        return None
+    count = len(shells.components)
+    containers: dict[int, set[int]] = {}
+    for index, found in shells.containers_of(range(count)):
+        if any(answer is None for _other, answer in found):
+            return None
+        containers[index] = {other for other, answer in found if answer is True}
+    parents: list[int | None] = [None] * count
+    for index, outside in containers.items():
+        shells._check_cancelled()
+        if not outside:
+            if shells.volumes[index] < 0.0:
+                return None
+            continue
+        parent = min(outside, key=lambda other: abs(shells.volumes[other]))
+        if (
+            abs(shells.volumes[parent]) <= abs(shells.volumes[index])
+            or outside - {parent} != containers[parent]
+            or (shells.volumes[index] > 0.0) == (shells.volumes[parent] > 0.0)
+        ):
+            return None
+        parents[index] = parent
+    families = []
+    for index in np.flatnonzero(shells.volumes > 0.0).tolist():
+        shells._check_cancelled()
+        members = [index] + [child for child, parent in enumerate(parents) if parent == index]
+        families.append(np.concatenate([shells.components[member] for member in members]))
+    shells._check_cancelled()
+    return families
+
+
+def _part_containment(
+    body: trimesh.Trimesh, *, cancelled: CancelToken | None = None
+) -> Iterator[tuple[Vec3, int, bool]]:
+    """Ort, belegte Materialtiefe und offene Strahlenfrage je positiver Schale."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if not len(body.faces):
-        return []
-    shells = _Shells(body)
+        return
+    shells = _Shells(body, cancelled=cancelled)
     positive = np.flatnonzero(shells.volumes > 0.0)
     if len(positive) < 2:
-        return []
-    places = []
+        return
     for index, found in shells.containers_of(positive.tolist()):
         depth = sum(1 if shells.volumes[other] > 0.0 else -1 for other, answer in found if answer)
-        if depth >= 1:
-            middle = (shells.low[index] + shells.high[index]) / 2.0
-            places.append((float(middle[0]), float(middle[1]), float(middle[2])))
-    return places
+        middle = (shells.low[index] + shells.high[index]) / 2.0
+        place = (float(middle[0]), float(middle[1]), float(middle[2]))
+        yield place, depth, any(answer is None for _other, answer in found)
 
 
 def nested_part_families(body: trimesh.Trimesh) -> list[np.ndarray]:
