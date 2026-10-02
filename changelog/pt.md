@@ -22,7 +22,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Nova é a forma base «Criar um tubo»: diâmetro exterior e altura, mais espessura de parede ou diâmetro interior, num só passo.
 - Novo é o bloco «Patilha com furo»: uma patilha plana em qualquer face, com furo e medidas à medida do parafuso de M3 a M8.
 - Nova é a «Abraçadeira de tubo» para tubos comuns de 15 a 40 mm ou qualquer medida própria até 110 mm, com parafuso de aperto M3 a M6 e a folga do seu material.
-- Quatro suportes nascem num passo: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, patilhas, gancho de painel ou grampo.
+- Quatro suportes nascem num passo com faces e arestas verdadeiras: em U, redondo, em forquilha e com prateleira, fixados com buraco de fechadura, patilhas, gancho de painel ou grampo.
 - Uma cena vazia mostra como começar: paralelepípedo, cilindro, desenho, blocos ou um ficheiro que arraste para dentro.
 - Os corpos novos aparecem na mesa ou na face plana escolhida, já não onde estava um corpo selecionado antes, e ficam selecionados.
 

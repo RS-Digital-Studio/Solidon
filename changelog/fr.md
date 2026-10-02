@@ -23,7 +23,7 @@ dans `website/version.json`.
 - Nouvelle forme de base « Ajouter un tube » : diamètre extérieur et hauteur, plus épaisseur de paroi ou diamètre intérieur, en une étape.
 - Nouveau bloc « Patte percée » : une patte plate sur n'importe quelle face, trou et cotes adaptés à la vis de M3 à M8.
 - Nouveau « Collier de tube » pour les tubes courants de 15 à 40 mm ou toute cote personnelle jusqu'à 110 mm, avec vis de serrage M3 à M6 et le jeu de votre matériau.
-- Quatre supports se créent en une étape : en U, rond, à fourche et à tablette, fixés par trou de serrure, pattes à vis, crochet de panneau ou pince.
+- Quatre supports se créent en une étape avec de vraies faces et arêtes : en U, rond, à fourche et à tablette, fixés par trou de serrure, pattes à vis, crochet de panneau ou pince.
 - Une scène vide montre comment commencer : pavé, cylindre, dessin, blocs ou un fichier que vous y glissez.
 - Les nouveaux corps apparaissent sur le plateau ou sur la face plane choisie, plus à l'endroit d'un corps sélectionné avant, et sont ensuite sélectionnés.
 

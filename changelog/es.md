@@ -23,7 +23,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Nueva es la forma básica «Añadir un tubo»: diámetro exterior y altura, y además espesor de pared o diámetro interior, en un solo paso.
 - Nuevo es el bloque «Pestaña con agujero»: una pestaña plana en cualquier cara, con agujero y medidas según el tornillo de M3 a M8.
 - Nueva es la «Abrazadera de tubo» para tubos habituales de 15 a 40 mm o cualquier medida propia hasta 110 mm, con tornillo de apriete M3 a M6 y la holgura de su material.
-- Cuatro soportes se crean en un paso: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, pestañas, gancho de panel o pinza.
+- Cuatro soportes se crean en un paso con caras y aristas reales: en U, redondo, de horquilla y con repisa, fijados con ojo de cerradura, pestañas, gancho de panel o pinza.
 - Una escena vacía muestra cómo empezar: caja, cilindro, dibujo, bloques o un archivo que arrastre dentro.
 - Los cuerpos nuevos aparecen sobre la cama o sobre la cara plana elegida, ya no donde estaba un cuerpo seleccionado antes, y quedan seleccionados.
 

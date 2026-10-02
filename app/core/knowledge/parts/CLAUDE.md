@@ -13,7 +13,7 @@ Paketdocstring). Wer hier Code hinzufügt, prüft, dass er unter MIT stehen darf
 | Datei | Rolle |
 |---|---|
 | `fasteners.py` · `mechanics.py` · `mounting.py` · `structure.py` | Die Gruppen Verbindungen (Schrauben, Muttern, Senkungen), Mechanik (Scharniere, Gewinde), Halterungen, Struktur (versteifen, hindurchführen, anbinden); jede zählt ihre Bausteine im Docstring auf |
-| `holders.py` | Die Halter-Vorlage (RM-399): U-Form, rund, Gabel, Ablage (L/Z) — je Form ein Baustein, gemeinsame Rückwand mit Schlüsselloch, Schraublaschen, Lochwand-Haken oder Klemme aus `keyhole`, `screw_hole` und `pegboard_hook` (`_assembled`) |
+| `holders.py` | Die Halter-Vorlage (RM-399): U-Form, rund, Gabel, Ablage (L/Z) — je Form ein Baustein, gemeinsame Rückwand mit Schlüsselloch (zwei, wo die Breite reicht, sonst eines mittig), Schraublaschen, Lochwand-Haken oder Klemme aus `keyhole`, `screw_hole` und `pegboard_hook` (`_assembled`) |
 | `containers.py` | Organizer-Wanne, Teilungswand, Rand, separater Steckfuß; ebene Merkmalsflächen am Netz gezählt (`facets`), exakt als Integral (`native`, `brep.canonical.horizontal_area`); die Wanne rundet `shapes.rounded_box` |
 | `profile_clamps.py` | Klemmschale und wechselbare Einlage mit gezeichneter Gegen- bzw. Sitzkontur; der Vierkörperweg liegt in `geom/profile_clamp_ops.py` |
 | `seals.py` | Dichtnut und separate rechteckige/runde Dichtung aus einem Skizzenweg (`geom/seal.py`: `Section`, `round_cord`); ebene Flächen exakt (`native`) |
@@ -41,7 +41,7 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
 (`shapes.building(kernel)`, Regel in `bausteine.md`). Drei Grenzen:
 
 - **Wer ein Netz direkt anfasst, sagt es** (`shapes.mesh_only`). Am Netz
-  rechnen noch die Erzeuger (`create_*`, der Organizer in `organizer/build.py`,
+  rechnen noch die Erzeuger außer den Vorlagen (`create_*`, der Organizer in `organizer/build.py`,
   die Dichtung aus `geom/seal_ops.py`) und sagen es; die Paritätstabelle
   (`tests/test_exact_body_parity.py`, `KEEP` statt `MESH`) ist die Abnahme je
   Gruppe.
@@ -178,7 +178,8 @@ Ein Baustein sagt nur, **was** er ist; den Kern wählt der Aufrufer
   (`creation_name()`), `insert_<name>` bleibt lesbar; Erzeuger übernehmen die
   freie Normale und sinken ohne Träger nicht ein. **`template`** (nur mit
   `standalone`) lässt den Erzeuger *Maße als Parameter anlegen* anbieten wie
-  einen Grundkörper (`offers_naming`, Regel in `grenzen.md`). Die Toleranzleiter erklärt
+  einen Grundkörper (`offers_naming`, Regel in `grenzen.md`) und baut ihn wie einen
+  Grundkörper exakt, wo der Kern da ist (`ops._creates_exactly`). Die Toleranzleiter erklärt
   zwei Leisten, der Bereichstest prüft Teilezahl und Abstand.
 - **`host_add`** ergänzt tragendes Material vor dem Schnitt, mit demselben
   Parametersatz und Rahmen in einer Operation; der Fertigungstest belegt den

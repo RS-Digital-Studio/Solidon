@@ -22,7 +22,7 @@ scrive in `website/version.json`.
 - Nuova è la forma di base «Crea un tubo»: diametro esterno e altezza, più spessore di parete o diametro interno, in un solo passo.
 - Nuovo è il blocco «Aletta con foro»: un'aletta piatta su qualsiasi faccia, con foro e misure adatti alla vite da M3 a M8.
 - Nuova è la «Fascetta per tubo» per i tubi comuni da 15 a 40 mm o qualsiasi misura tua fino a 110 mm, con vite di serraggio da M3 a M6 e il gioco del tuo materiale.
-- Quattro supporti nascono in un passo: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, alette a vite, gancio per pannello o morsetto.
+- Quattro supporti nascono in un passo con facce e spigoli veri: a U, rotondo, a forcella e a mensola, fissati con buco di serratura, alette a vite, gancio per pannello o morsetto.
 - Una scena vuota mostra come iniziare: parallelepipedo, cilindro, disegno, blocchi o un file che trascini dentro.
 - I nuovi corpi nascono sul piano o sulla faccia piana scelta, non più dove stava un corpo selezionato prima, e restano selezionati.
 

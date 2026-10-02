@@ -47,7 +47,7 @@ Nutzen da und sonst nichts.
 - Neu ist die Grundform *Rohr anlegen*: Außendurchmesser und Höhe, dazu wahlweise Wandstärke oder Innendurchmesser, in einem Schritt.
 - Neu ist der Baustein *Lasche mit Loch*: eine flache Lasche an jeder Fläche, Loch und Maße passend zur Schraube von M3 bis M8.
 - Neu ist die *Rohrschelle* für gängige Rohre von 15 bis 40 mm oder jedes eigene Maß bis 110 mm, mit Klemmschraube M3 bis M6 und dem Spiel aus Ihrem Material.
-- Vier Halter entstehen in einem Schritt: U-Form, rund, Gabel und Ablage, befestigt mit Schlüsselloch, Schraublaschen, Lochwand-Haken oder Klemme.
+- Vier Halter entstehen in einem Schritt mit echten Flächen und Kanten: U-Form, rund, Gabel und Ablage, befestigt mit Schlüsselloch, Schraublaschen, Lochwand-Haken oder Klemme.
 - Eine leere Szene zeigt, wie Sie anfangen: Quader, Zylinder, Zeichnen, Bausteine oder eine Datei, die Sie hineinziehen.
 - Neue Körper entstehen auf dem Bett oder auf der gewählten ebenen Fläche, nicht mehr an der Stelle eines zuvor gewählten Körpers, und sind danach gewählt.
 

@@ -22,7 +22,7 @@ it into `website/version.json`.
 - New is the basic shape *Add a tube*: outer diameter and height, plus either wall thickness or inner diameter, in one step.
 - New is the part *Tab with hole*: a flat tab on any face, with hole and size matching the screw from M3 to M8.
 - New is the *Pipe clamp* for common pipes from 15 to 40 mm or any size of your own up to 110 mm, with an M3 to M6 clamping screw and the clearance from your material.
-- Four holders are made in one step: U-shaped, round, fork and shelf, fixed with a keyhole, screw tabs, a pegboard hook or a clamp.
+- Four holders are made in one step with true faces and edges: U-shaped, round, fork and shelf, fixed with a keyhole, screw tabs, a pegboard hook or a clamp.
 - An empty scene shows how to start: box, cylinder, drawing, parts or a file you drag in.
 - New bodies appear on the bed or on the chosen flat face, no longer where a previously selected body was, and are selected afterwards.
 

@@ -5544,6 +5544,72 @@ def test_catalog_standalone_choice_creates_one_undoable_object(
     assert not window.session.last_result.scene.objects
 
 
+def test_model_1_is_rebuilt_in_five_clicks_as_an_exact_holder_with_named_dimensions(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Fünf-Klick-Weg des Nachbaus von Modell 1, am Fenster belegt (RM-443, §2.2).
+
+    Katalog → Suche „Halter“ → Kachel *Halter U-Form* → Maße → Einfügen. Heraus
+    kommt der Halter 20 mm breit mit einem Schlüsselloch in der Mitte, wie
+    ``grenuttags_hallare_modell_40x47.stl`` aus dem Korpus, exakt (der Kern ist
+    in dieser Umgebung da), und seine Maße stehen als Projektparameter in der
+    Leiste — in einer Transaktion mit dem Schritt.
+    """
+    exact_kernel()
+    from app.core.geom.mesh import as_mesh_data
+
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    # 1: Katalog
+    catalog = window._make_catalog()
+    catalog.release()
+    # 2: Suche „Halter“
+    catalog.search.setText("Halter")
+    shown = {
+        catalog.list.item(index).data(Qt.ItemDataRole.UserRole)
+        for index in range(catalog.list.count())
+        if not catalog.list.item(index).isHidden()
+    } - {None}
+    assert {"holder_u", "holder_ring", "holder_fork", "holder_shelf"} <= shown
+    # 3: Kachel *Halter U-Form*
+    item = next(
+        catalog.list.item(index)
+        for index in range(catalog.list.count())
+        if catalog.list.item(index).data(Qt.ItemDataRole.UserRole) == "holder_u"
+    )
+    catalog.list.setCurrentItem(item)
+    catalog._insert.click()
+    monkeypatch.setattr(catalog, "exec", lambda: catalog.result())
+    window._exec_catalog(catalog)
+    dialog = window._op_dialog
+    assert dialog is not None and dialog.spec.name == "create_holder_u"
+    # 4: Maße — Modell 1 ist außen 20 mm breit, 47 mm tief, 53 mm hoch.
+    play = window.session.profile.material.clearance
+    wall = 3.0
+    for name, value in (("width", 20.0 - 2.0 * wall - play), ("depth", 41.0), ("height", 53.0)):
+        editor = dialog._editors[name]
+        assert isinstance(editor, ValueField)
+        editor.set_value(value)
+    assert dialog._naming is not None, "eine Vorlage bietet an, ihre Maße zu benennen"
+    dialog._naming.setChecked(True)
+    # 5: Einfügen
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None and result.complete
+    (body,) = result.scene.objects.values()
+    assert body.kind == "brep", "der Kundenweg baut den exakten Halter"
+    assert as_mesh_data(body.mesh).bounds.size[0] == pytest.approx(20.0)
+    assert "holder_u_keyhole_1" in body.features
+    assert "holder_u_keyhole_2" not in body.features
+    assert {"breite", "tiefe", "hoehe"} <= set(window.session.project.document.parameters)
+    window.session.undo()
+    assert window.session.wait_for_idle()
+    assert not window.session.last_result.scene.objects
+    assert not window.session.project.document.parameters, "Schritt und Maße, ein Undo"
+
+
 @pytest.mark.parametrize("field_name", ["top_sketch", "path"])
 def test_space_editor_returns_the_named_sketch_parameter(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch, field_name: str

@@ -28,6 +28,7 @@ from app.core.knowledge.parts.shapes import building
 from app.core.knowledge.parts.structure import MIN_RIB, RIB_SHARE
 from app.core.knowledge.parts.testbodies import LABEL_DEPTH
 from app.core.types import Profile, SceneObject
+from app.core.units import MAX_FACET_SAG
 from tests.helpers import exact_kernel, thread_volume
 from tests.helpers import run_operation as run
 
@@ -2058,3 +2059,54 @@ def test_holder_ring_exact_with_a_clamp_is_a_ring_on_the_plate_and_a_clip_behind
     assert produced.features["seat_1"].params["through"] is False
     _against_mesh("holder_ring", body, values)
     _roundtrip(body)
+
+
+@pytest.mark.parametrize("name", ["holder_u", "holder_ring", "holder_fork", "holder_shelf"])
+def test_the_holder_creator_builds_the_exact_holder_where_the_kernel_is_there(
+    name: str, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kundenweg erreicht den exakten Halter (RM-443), wie ein Grundkörper.
+
+    Katalog, Agent und Kommandozeile setzen einen Halter über ``create_…``.
+    Dieser Erzeuger baute bis hierher immer im Netzkern; die exakte Fassung
+    gab es nur in den Tests oben. Jetzt entsteht eine Vorlage wie ein
+    Grundkörper exakt, wo der Kern da ist — mit denselben Maßen und Merkmalen
+    wie das Netz —, und als Netz, wo er fehlt.
+    """
+    exact_kernel()
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.parts import ops as part_ops
+
+    builtin.load()
+    first = "diameter" if name == "holder_ring" else "width"
+    values: dict[str, object] = {first: 30.0, "height": 40.0, "mount": "screws"}
+    exact = run(f"create_{name}", None, profile, **values)
+    (body,) = exact.outputs
+    assert body.kind == "brep", "wo der Kern da ist, entsteht der Halter exakt"
+    solid = _sound(body.mesh)
+    assert f"{name}_plate_1" in body.features
+    monkeypatch.setattr(part_ops, "_exact_kernel_here", lambda: False)
+    meshed = run(f"create_{name}", None, profile, **values)
+    (twin,) = meshed.outputs
+    assert twin.kind == "mesh", "ohne den Kern bleibt der Netzweg"
+    mesh = as_mesh_data(twin.mesh)
+    assert mesh.is_watertight and mesh.component_count == 1
+    # Rund ist das Netz ein Sehnenzug, der höchstens ``MAX_FACET_SAG`` innen liegt.
+    assert solid.bounds.size == pytest.approx(mesh.bounds.size, abs=MAX_FACET_SAG)
+    # Das Volumen weicht höchstens um den Sehnenabstand über die Oberfläche ab.
+    assert abs(mesh.volume - solid.volume) <= MAX_FACET_SAG * float(mesh.raw.area)
+    declared = {key for key in twin.features if key.startswith(name)}
+    assert declared and declared <= set(body.features), "dieselben erklärten Merkmale"
+
+
+def test_a_part_creator_that_is_no_template_stays_on_the_mesh(profile: Profile) -> None:
+    """Nur die Vorlagen entstehen exakt; die übrigen Erzeuger bleiben, wie sie waren.
+
+    Ein Prüfkörper oder eine Organizerschale ist kein Anfang einer Konstruktion
+    wie ein Grundkörper oder Halter, und ihr gespeicherter Schritt rechnet
+    weiter genau so wie in 0.5.1.
+    """
+    exact_kernel()
+    builtin.load()
+    outcome = run("create_fit_ladder", None, profile)
+    assert outcome.outputs[0].kind == "mesh"
