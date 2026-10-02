@@ -70,6 +70,7 @@ scrive in `website/version.json`.
 - Una misura digitata come lunghezza 40 allunga lo schizzo solo in quella direzione. Il corpo che ne nasce resta chiuso e appoggiato sul piano.
 - La destinazione di «Allinea alla caratteristica» parte vuota. La scegli nel campo «Destinazione», e «Applica» aspetta fino ad allora invece di mettere il corpo dal lato sbagliato.
 - Un file in metri che starebbe sul piano anche letto in pollici non viene più letto in modo sbagliato senza avviso. Solidon chiede l'unità.
+- Un altro tratto in una cavità appena scavata la rende più profonda, anche con un pennello piccolo. Finora restava senza effetto e contava come mancato.
 
 ### Generare con l'IA
 

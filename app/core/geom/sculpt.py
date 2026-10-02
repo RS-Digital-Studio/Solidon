@@ -309,6 +309,7 @@ def stroke_at(
     tool: str = "draw",
     symmetry: int = 0,
     cut: bool = False,
+    before: Sequence[Stroke] = (),
 ) -> Stroke:
     """Aus einem angeklickten Punkt einen Strich machen.
 
@@ -317,14 +318,23 @@ def stroke_at(
     Eckpunkts: Bei einem Pinsel von einigen Millimetern ist das genau genug,
     und es geht ohne den Abstandsindex, der auf dieser Maschine danebengreift.
 
+    ``before`` sind die Züge, die schon in der Sitzung stehen, so wie die
+    Vorschau sie rechnet. Geklickt wird auf die Fläche, die sie zeigt; ein
+    Zug wirkt aber auf die Fläche, an der seine Etappe beginnt. Greift er die
+    nicht — ein Zug in die Mulde, die ein Zug derselben Etappe gegraben hat,
+    bei einer Stärke über dem Radius —, beginnt er eine eigene Etappe
+    (``cut``). Sonst wirkte er nicht und hieße verfehlt (RM-438). Die
+    Entscheidung reist im Zug mit; die Operation rechnet sie nicht nach.
+
     Im Kern und nicht in der Oberfläche, weil es Geometrie ist. Was das Fenster
     beisteuert, sind zwei Zahlen und ein Klick.
     """
-    points = np.asarray(mesh.raw.vertices, dtype=float)
+    surface, cut = _surface_for(mesh, before, point, radius, tool=tool, cut=cut)
+    points = np.asarray(surface.raw.vertices, dtype=float)
     if not len(points):
         return Stroke(point=point, normal=(0.0, 0.0, 1.0), radius=radius, strength=strength)
     _away, index = cKDTree(points).query(np.asarray(point, dtype=float))
-    normal = np.asarray(mesh.raw.vertex_normals, dtype=float)[int(index)]
+    normal = np.asarray(surface.raw.vertex_normals, dtype=float)[int(index)]
     return Stroke(
         point=point,
         normal=(float(normal[0]), float(normal[1]), float(normal[2])),
@@ -334,6 +344,70 @@ def stroke_at(
         symmetry=symmetry,
         cut=cut,
     )
+
+
+def _surface_for(
+    mesh: MeshData,
+    before: Sequence[Stroke],
+    point: Vec3,
+    radius: float,
+    *,
+    tool: str,
+    cut: bool,
+) -> tuple[MeshData, bool]:
+    """Die Fläche, auf die ein neuer Zug wirkt, und ob er dafür eine Etappe
+    beginnen muss.
+
+    Die Etappe, der er sich anschließt, beginnt nach den abgeschlossenen
+    Etappen davor. Beginnt er ohnehin eine neue — erzwungen, als Werkzeug
+    aus :data:`ORDERED_TOOLS` oder nach einem solchen —, wirkt er auf die
+    Fläche nach allen Zügen. Sonst entscheidet, ob seine Kugel einen
+    Eckpunkt der Etappenfläche greift: dieselbe Frage, an der
+    :func:`_offsets` einen Zug verfehlt nennt.
+    """
+    if not before:
+        return mesh, cut
+    centre = mirror_centre(mesh)
+    plane: Vec3 = (float(centre[0]), float(centre[1]), float(centre[2]))
+    current = stages(before)[-1]
+    fresh = cut or tool in ORDERED_TOOLS or current[-1].tool in ORDERED_TOOLS
+    start = len(before) if fresh else len(before) - len(current)
+    surface = _completed(mesh, tuple(before[:start]), plane)
+    if fresh:
+        return surface, cut
+    vertices = np.asarray(surface.raw.vertices, dtype=float)
+    if len(vertices):
+        away, _index = cKDTree(vertices).query(np.asarray(point, dtype=float))
+        if float(away) <= radius * FALLOFF:
+            return surface, False
+    return apply_strokes(surface, before[start:], centre=plane), True
+
+
+#: Die zuletzt gerechnete Etappenfläche: Netz, Züge bis zu ihr, Ergebnis.
+#: Abgeschlossene Etappen ändern sich zwischen zwei Klicks fast nie, und ohne
+#: das Gedächtnis kostete jeder Klick einer großen Sitzung eine zweite volle
+#: Auswertung neben der Vorschau — gemessen 615 ms bei 20 Etappen auf
+#: 40 962 Eckpunkten.
+_last_stage: list[tuple[MeshData, tuple[Stroke, ...], MeshData]] = []
+
+
+def _completed(mesh: MeshData, done: tuple[Stroke, ...], plane: Vec3) -> MeshData:
+    """Die Fläche nach den abgeschlossenen Etappen ``done``.
+
+    Eine gemerkte Fläche desselben Netzes, deren Züge am Anfang von ``done``
+    stehen und dort an einer Etappengrenze enden, wird weitergerechnet: Von
+    einer Grenze aus rechnen die übrigen Züge dasselbe wie die ganze Liste.
+    """
+    surface: MeshData | None = None
+    if _last_stage:
+        source, known, remembered = _last_stage[0]
+        borders = set(np.cumsum([0, *(len(part) for part in stages(done))]).tolist())
+        if source is mesh and len(known) in borders and done[: len(known)] == known:
+            surface = apply_strokes(remembered, done[len(known) :], centre=plane)
+    if surface is None:
+        surface = apply_strokes(mesh, done, centre=plane)
+    _last_stage[:] = [(mesh, done, surface)]
+    return surface
 
 
 def apply_strokes(
@@ -747,9 +821,10 @@ def _sculpting_findings(
                 code="sculpt.strokes_missed",
                 severity="warning",
                 message=_(
-                    "Ein Teil der Züge hat den Körper nicht erreicht und trägt nichts ab. Ein "
-                    "Zug bleibt an seiner Stelle im Raum — wer die Form darunter nachträglich "
-                    "verschiebt, lässt ihn in der Luft stehen. Erst konstruieren, dann formen."
+                    "Ein Teil der Züge hat die Fläche nicht erreicht und trägt nichts ab. "
+                    "Meist wurde die Form darunter nachträglich verschoben. In älteren "
+                    "Sitzungen wirkte auch ein Zug nicht, der in eine eben gegrabene Mulde "
+                    "gesetzt wurde. Diese Stellen neu formen."
                 ),
                 object_id=object_id,
                 values={"missed": len(missed), "strokes": len(strokes)},

@@ -11692,6 +11692,10 @@ class MainWindow(QMainWindow):
                 # Zoll ein Pinsel von 0,2 mm, wo 5 mm eingestellt waren —
                 # Geometrie ins Dokument, aus einem Anzeigewert.
                 **bar.values(),
+                # Geklickt wird auf die Vorschau, also nach diesen Zügen. Ob
+                # der neue Zug dort noch wirkt oder eine Etappe braucht, weiß
+                # nur, wer sie kennt (RM-438).
+                before=self._sculpt_shown(),
             )
         )
         # Der Schalter gilt für **einen** Zug. Stehen zu bleiben hieße, dass
@@ -11750,9 +11754,16 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.refine,
         ):
             self._clear_preview()
+        self.viewport.show_preview_mesh(
+            self._sculpt_target, apply_strokes(mesh, self._sculpt_shown())
+        )
+
+    def _sculpt_shown(self) -> list[Stroke]:
+        """Die Züge der Sitzung mit der gewählten Symmetrie — wie die Vorschau
+        sie rechnet und die Operation beim Verlassen."""
         plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
-        shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
-        self.viewport.show_preview_mesh(self._sculpt_target, apply_strokes(mesh, shown))
+        strokes = list(self._sculpt_strokes)
+        return [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
 
     def _check_sculpted_walls(self) -> None:
         """Entscheidung L: Was der Pinsel zu dünn gemacht hat, sagt es selbst.
@@ -11776,12 +11787,12 @@ class MainWindow(QMainWindow):
         mesh = self._sculpt_mesh(self._sculpt_target)
         if mesh is None:
             return
-        plane = SYMMETRY_BITS.get(self.sculpt_bar.plane(), 0)
-        strokes = list(self._sculpt_strokes)
-        shown = [replace(s, symmetry=s.symmetry | plane) for s in strokes] if plane else strokes
         self._sculpt_wall_number += 1
         worker = _SculptWallWorker(
-            self._sculpt_wall_number, mesh, shown, self.session.profile.minimum_wall_thickness
+            self._sculpt_wall_number,
+            mesh,
+            self._sculpt_shown(),
+            self.session.profile.minimum_wall_thickness,
         )
         worker.done.connect(self._sculpt_walls_checked)
         worker.crashed.connect(self._sculpt_walls_crashed)
