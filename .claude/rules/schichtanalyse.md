@@ -71,7 +71,7 @@ G-Code zurück.
 **Der Bauraum wird an den Bahnen nachgemessen** (`gcode.printed_extent`,
 `handover.off_the_bed`), denn CuraEngine prüft ihn nicht. `G2`/`G3` zählen
 mit; die Stelle wird über alle Bewegungen nachgeführt. Geprüft wird in
-Maschinenkoordinaten, Ursprung an der Bettecke, getrennt von der Verschiebung
+Maschinenkoordinaten, Ursprung wie die Maschine, getrennt von der Verschiebung
 der Eingabe (CuraEngine verschiebt selbst, Prusa- und Orca-Projekte enthalten
 sie); eine Bettkontur in der Druckdatei geht dem Druckerprofil vor. Gemeldet,
 nicht gesperrt (§29) — unter einer Bahnbreite gar nicht, die Bahn liegt

@@ -1071,6 +1071,9 @@ def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
 
     Die Gegenprobe prüft Maschinenkoordinaten. Die Verschiebung der
     Eingabegeometrie ist davon getrennt: CuraEngine führt sie selbst aus.
+    Eine einzelne Cura-Maschine kann ihren Ursprung in die Bettmitte legen
+    (``machine_center_is_zero``); das ist eine Eigenschaft der Maschine, nicht
+    der Familie, und reist als ``handover.CuraMachine.origin_at_centre``.
     """
     return True
 

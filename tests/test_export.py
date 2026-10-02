@@ -1735,6 +1735,20 @@ def test_the_print_file_is_checked_in_machine_coordinates(
             assert finding.source == "gcode"
 
 
+def test_a_machine_with_its_origin_in_the_middle_is_checked_around_it(profile: Profile) -> None:
+    """Eine Cura-Maschine mit ``machine_center_is_zero`` misst von der Bettmitte (RM-330)."""
+    width, depth, height = profile.printer.build_volume
+    start = "G90\nM83\n;LAYER:0\n"
+    corner, opposite = f"X{-width / 2} Y{-depth / 2}", f"X{width / 2} Y{depth / 2}"
+    around = start + f"G0 {corner} Z0\nG1 {opposite} Z{height} E1\n"
+
+    assert handover.off_the_bed(around, profile, "cura", origin_at_centre=True) is None
+    assert handover.off_the_bed(around, profile, "cura") is not None, "ab der Ecke ragt es hinaus"
+    beyond = start + f"G0 X0 Y0 Z0\nG1 X{width / 2 + 2.0} Y1 E1\n"
+    finding = handover.off_the_bed(beyond, profile, "cura", origin_at_centre=True)
+    assert finding is not None and finding.values["excess_mm"] == pytest.approx(2.0)
+
+
 def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:
     """Ein Körper, der seine Flächen kennt — als Attrappe, ohne OpenCASCADE.
 
